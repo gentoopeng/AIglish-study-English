@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Core System V4</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <button id="scrollToTopBtn" class="scroll-to-top-btn" onclick="scrollToTop()">
+        <i data-lucide="arrow-up" size="22"></i>
+    </button>
+
+    <div id="auth-gate-screen">
+        <div class="auth-card">
+            <div class="auth-logo"><i data-lucide="shield-check" size="32"></i></div>
+            <div style="font-size: 18px; font-weight: 800; color: white; margin-bottom: 4px;">CORE SYSTEM GATE</div>
+            <div style="font-size: 11px; color: var(--text-sub); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">ユーザー認証管理</div>
+            
+            <div class="auth-tabs">
+                <button class="auth-tab-btn active" id="authTabLogin" onclick="switchAuthMode('login')">ログイン</button>
+                <button class="auth-tab-btn" id="authTabRegister" onclick="switchAuthMode('register')">新規作成</button>
+            </div>
+
+            <div class="auth-error" id="authErrorMsg"></div>
+            
+            <input type="text" id="gateUserIdInput" class="search-input" style="text-align: center; height: 44px; font-weight: 700; letter-spacing: 1px; margin-bottom: 14px;" placeholder="ユーザーIDを入力">
+            
+            <div id="registerExtraFields" style="display: none;">
+                <input type="text" id="gateUserNameInput" class="search-input" style="text-align: center;" placeholder="プレイヤーネーム（任意）">
+                <input type="text" id="gateUserTargetInput" class="search-input" style="text-align: center;" placeholder="学習目標（任意）">
+            </div>
+
+            <button class="modern-btn" id="authSubmitBtn" onclick="handleAuthSubmit()">
+                システムへログインする <i data-lucide="arrow-right" size="16"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="app-header">
+        <button class="menu-trigger" onclick="toggleSidebar(true)"><i data-lucide="menu" size="20"></i></button>
+        <span id="headerTitleText">ダッシュボード</span>
+    </div>
+
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar(false)"></div>
+    <div class="sidebar" id="sidebarMenu">
+        <div class="sidebar-header">
+            <div class="avatar-glow" style="width:38px; height:38px; font-size:12px; box-shadow:none;">RANK</div>
+            <div>
+                <div style="font-weight:700; font-size:15px;" id="sideOptPlayerName">プレイヤー1</div>
+                <div style="font-size:11px; color:var(--text-sub);" id="sideOptGroupName">ID: 未設定</div>
+            </div>
+        </div>
+        
+        <div style="padding: 16px; flex:1; overflow-y: auto; display:flex; flex-direction:column; gap:16px;">
+            <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+                <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">👤 プレイヤー名変更</div>
+                <input type="text" id="sideInputName" class="search-input" style="height:34px; margin-bottom:8px; font-size:12px;" placeholder="名前を入力">
+                
+                <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">🎯 現在の学習目標</div>
+                <input type="text" id="sideInputTarget" class="search-input" style="height:34px; margin-bottom:8px; font-size:12px;" placeholder="目標を入力">
+                
+                <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">🏅 称号の変更</div>
+                <select id="sideSelectTitle" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px; background:var(--input-bg); color:white;">
+                    <option value="称号なし">称号なし</option>
+                    <option value="単語の探求者">単語の探求者</option>
+                    <option value="シスタマスター">シスタマスター</option>
+                    <option value="解読の達人">解読の達人</option>
+                </select>
+
+                <div style="font-size: 11px; font-weight:700; color:var(--accent); margin-top:4px; margin-bottom:8px;">🤖 Gemini AI APIキー</div>
+                <input type="password" id="sidebarApiKeyInput" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px;" placeholder="AI用APIキーを入力...">
+                
+                <button class="modern-btn" style="height:32px; font-size:12px;" onclick="saveSidebarProfile()">
+                    設定を保存して適用
+                </button>
+            </div>
+
+            <div>
+                <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
+                <button class="sidebar-item" style="color:var(--accent); font-weight: 700; padding:10px 0;" onclick="logoutToGate()">
+                    <i data-lucide="log-out" size="16"></i> 🔐 別のIDでログイン
+                </button>
+                <button class="sidebar-item" style="color:var(--admin-accent); font-weight: 800; padding:10px 0;" onclick="enterAdminModeDirect()">
+                    <i data-lucide="shield-alert" size="16"></i> 🛠️ 製作者専用メニュー (直通)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <div id="view-home" class="tab-view active">
+            <div class="home-cover-image-container" style="text-align: center;">
+                <img src="aiglish.png" alt="App Title Logo" style="width: 100%; max-width: 280px; margin-bottom: 8px; display: inline-block;">
+                
+                <div class="hero-slider-container">
+                    <div class="hero-slider-track" id="heroSliderTrack">
+                        <div class="hero-slide">
+                            <div class="slide-title-readable">勉強に飽きない新感覚のアプリケーション</div>
+                            <div class="slide-desc-readable">友達と競ったり一人で勉強したりと<br>使い方はいろいろ</div>
+                        </div>
+                        <div class="hero-slide">
+                            <div class="slide-title-readable">AI搭載により自動で英文を和訳</div>
+                            <div class="slide-desc-readable">重要なところをチェック<br>スマホだけで勉強できる</div>
+                        </div>
+                        <div class="hero-slide">
+                            <div class="slide-title-readable">リアルタイムマッチングで友達とバトル</div>
+                            <div class="slide-desc-readable">ランキング機能で競争心を高めて<br>学力もアップ</div>
+                        </div>
+                        <div class="hero-slide">
+                            <div class="slide-title-readable">やり込み機能が満載</div>
+                            <div class="slide-desc-readable">イベントも定期的に行われるので<br>飽きないシステム</div>
+                        </div>
+                        <div class="hero-slide">
+                            <div class="slide-title-readable">完全無料で誰でも使える</div>
+                            <div class="slide-desc-readable">単語を極めるには<br>もってこいの逸品</div>
+                        </div>
+                    </div>
+                </div>
+
+                <img src="Header.png" alt="App Mascot Cover" class="home-cover-image" style="border-radius: 12px; margin-top: 4px;">
+            </div>
+
+            <div class="card">
+                <div class="profile-row">
+                    <div class="avatar-glow">
+                        <i data-lucide="crown" class="avatar-deco-crown" size="18"></i>
+                        <span id="profAvatarText">U</span>
+                    </div>
+                    <div style="flex:1;">
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span style="font-weight:700; font-size:16px;" id="profPlayerName">プレイヤー1</span>
+                            <span class="badge-lvl" id="profTitleLabel">称号なし ⚡</span>
+                        </div>
+                        <div class="frame-badge" id="profTargetLabel">目標: 未設定</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="coin-badge">
+                            <i data-lucide="zap" size="14"></i>
+                            <span id="profCoinCount">0</span>
+                        </div>
+                        <div style="font-size:10px; color:var(--text-sub); font-weight:700; margin-top:4px;">TOTAL EXP</div>
+                    </div>
+                </div>
+
+                <h2><i data-lucide="trending-up" size="14"></i> 最近7日間の学習アクティビティ</h2>
+                <div class="bar-chart-container" id="activityBarChart"></div>
+            </div>
+
+            <div class="card admin-card-border" id="homeEventCampaignBanner" style="display:none; background:rgba(236,72,153,0.05); cursor:pointer;" onclick="switchTab('admin')">
+                <span style="color:var(--admin-accent); font-weight:700; font-size:13px;">❖ 限定イベント適用中：獲得学習経験値が 2.0倍 にスケールアップされています</span>
+            </div>
+
+            <h2><i data-lucide="compass" size="14"></i> クイックアクセス</h2>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div class="card" style="margin-bottom:0; cursor:pointer; text-align:center; padding:14px;" onclick="switchTab('vocab')">
+                    <i data-lucide="book-open" style="color:var(--accent); margin-bottom:6px;" size="24"></i>
+                    <div style="font-size:13px; font-weight:700;">カスタム単語帳</div>
+                </div>
+                <div class="card" style="margin-bottom:0; cursor:pointer; text-align:center; padding:14px;" onclick="switchTab('reader')">
+                    <i data-lucide="file-text" style="color:#10B981; margin-bottom:6px;" size="24"></i>
+                    <div style="font-size:13px; font-weight:700;">スマート長文リーダー</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-vocab" class="tab-view">
+            <div class="card" id="bulkImportToggleSection" style="display: none; border-top: 2px solid var(--accent);">
+                <h2><i data-lucide="file-spreadsheet" size="14"></i> 単語を一括登録・インポートする</h2>
+                <textarea id="bulkWordInput" class="modern-textarea" style="height: 100px;" placeholder="番号:英単語:メイン意味:サブ情報&#10;例:&#10;1:follow:①〜に従う②〜に続く:as follow 次のように..."></textarea>
+                <button class="modern-btn" onclick="handleBulkWordImport()" style="margin-bottom: 16px;">
+                    <i data-lucide="sparkles" size="16"></i> まとめて一括インポート
+                </button>
+
+                <h2 style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; color: var(--admin-accent);">
+                    <i data-lucide="check-square" size="14"></i> 登録単語の一括管理
+                </h2>
+                <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+                    <button class="list-action-link" onclick="selectAllBulkDelete(true)">すべて選択</button>
+                    <button class="list-action-link" onclick="selectAllBulkDelete(false)">解除</button>
+                    
+                    <div style="margin-left: auto; display: flex; gap: 8px;">
+                        <button class="list-action-link" style="background: rgba(16, 185, 129, 0.2); color: #10B981; border-color: #10B981;" onclick="handleBulkResetExecute()">
+                            <i data-lucide="rotate-ccw" size="12" style="vertical-align: middle;"></i> 理解度リセット
+                        </button>
+                        <button class="list-action-link" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border-color: #EF4444;" onclick="handleBulkDeleteExecute()">
+                            <i data-lucide="trash-2" size="12" style="vertical-align: middle;"></i> 削除
+                        </button>
+                    </div>
+                </div>
+                <div id="bulkDeleteListContainer" style="max-height: 200px; overflow-y: auto; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--border); padding: 8px;"></div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h2 style="margin-bottom: 0;"><i data-lucide="layers" size="14"></i> 単語コレクション</h2>
+                <button class="list-action-link" onclick="toggleBulkImportCard()"><i data-lucide="settings" size="12" style="vertical-align: middle; margin-right:4px;"></i>管理・一括登録</button>
+            </div>
+
+            <div class="range-box">
+                <i data-lucide="filter" size="14" style="color:var(--text-sub);"></i>
+                <span style="font-size:12px; font-weight:700; color:var(--text-sub);">番号範囲:</span>
+                <input type="number" id="vocabRangeStart" class="range-input" placeholder="1" oninput="renderVocabList()">
+                <span style="color:var(--text-sub);">〜</span>
+                <input type="number" id="vocabRangeEnd" class="range-input" placeholder="2000" oninput="renderVocabList()">
+            </div>
+
+            <div class="search-box">
+                <input type="text" class="search-input" id="vocabSearchInput" placeholder="キーワード・意味・サブ情報で検索..." oninput="renderVocabList()">
+            </div>
+
+            <div class="filter-scroller">
+                <button class="pill-btn active" id="filter-all" onclick="setVocabFilter('all')">すべて</button>
+                <button class="pill-btn" id="filter-ok" onclick="setVocabFilter('ok')">⚪︎ 定着</button>
+                <button class="pill-btn" id="filter-so" onclick="setVocabFilter('so')">△ 曖昧</button>
+                <button class="pill-btn" id="filter-bad" onclick="setVocabFilter('bad')">✕ 不可</button>
+            </div>
+
+            <div id="vocabListContainer"></div>
+        </div>
+
+        <div id="view-reader" class="tab-view">
+            <div id="text-input-view">
+                <div class="card">
+                    <h2><i data-lucide="plus-circle" size="14"></i> 新規テキスト構文解析</h2>
+                    
+                    <div style="margin-bottom: 14px;">
+                        <label for="customTextTitle" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">文書タイトル（未入力時は自動日時割り当て）</label>
+                        <input type="text" id="customTextTitle" class="search-input" style="margin-bottom: 0;" placeholder="タイトルを識別用に設定...">
+                    </div>
+
+                    <label for="englishTextarea" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">解析用英文データ入力</label>
+                    <textarea id="englishTextarea" class="modern-textarea" style="height: 120px;" placeholder="ここに英語のドキュメントを直接ペーストまたは手入力してください。改行は無視され、AIがピリオド基準で自動分割します。"></textarea>
+                    
+                    <label for="customJapanesetextarea" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">手動和訳入力（任意：空欄ならAIが高精度な和訳を自動生成します）</label>
+                    <textarea id="customJapanesetextarea" class="modern-textarea" style="height: 90px;" placeholder="手動で和訳を割り当てたい場合は、英文の行数に合わせて改行しながら入力してください。"></textarea>
+
+                    <button class="modern-btn reader-analysis-neon-btn" id="analysisSubmitBtn" onclick="startAnalysisWithEmbeddedTitle()">
+                        <i data-lucide="wand-2" size="16"></i> 英文解析
+                    </button>
+                </div>
+
+                <div class="card">
+                    <h2><i data-lucide="history" size="14"></i> 履歴ログストック</h2>
+                    <div id="historyListContainer" style="font-size:13px;"></div>
+                </div>
+
+                <div class="card">
+                    <h2><i data-lucide="bookmark" size="14"></i> お気に入りストック文節</h2>
+                    <div id="savedSentencesContainer" style="font-size:13px;"></div>
+                </div>
+            </div>
+
+            <div id="text-reader-view" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap: 10px;">
+                    <button class="pill-btn" style="padding: 6px 12px;" onclick="closeReader()">
+                        <i data-lucide="arrow-left" size="14" style="vertical-align:middle; margin-right:2px;"></i> 閉じる
+                    </button>
+                    <div style="flex:1; text-align:center; font-size:13px; font-weight:700; color:var(--text-sub);" id="readerCurrentTitle">📖 テキストストリーム</div>
+                    <div style="display:flex; background:var(--input-bg); padding:2px; border-radius:8px; border:1px solid var(--border);">
+                        <button id="toggle-inline" class="pill-btn active" style="padding:4px 10px; border:none; border-radius:6px;" onclick="setTranslationMode('inline')">インライン訳</button>
+                        <button id="toggle-bottom" class="pill-btn" style="padding:4px 10px; border:none; border-radius:6px;" onclick="setTranslationMode('bottom')">下部固定訳</button>
+                    </div>
+                </div>
+
+                <div class="card" id="englishContainer"></div>
+
+                <div class="card" id="summary-ja-card" style="display:none;">
+                    <h2>ドキュメント総和訳</h2>
+                    <div id="summaryJaContainer" style="font-size:14px; line-height:1.6; color:var(--text-sub);"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-community" class="tab-view">
+            <div class="social-switch-wrapper">
+                <button class="social-switch-btn active" id="social-tab-rank" onclick="setSocialTab('rank')">グループ順位</button>
+            </div>
+            <div id="social-content-rank">
+                <div class="card">
+                    <h2><i data-lucide="award" size="14"></i> 所属グループ内経験値ランキング</h2>
+                    <div id="leaderboardContainer"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-game" class="tab-view">
+            <div id="cosmic-game-wrapper" class="cosmic-game-bg">
+                
+                <div id="game-start-screen" style="display:flex; flex-direction:column; gap:16px; height:100%;">
+                    <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; padding:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h1 class="game-normal-title" style="margin:0; font-size:20px; text-align:left;"><i data-lucide="sparkles" style="vertical-align:middle;"></i> 単語テスト</h1>
+                            <button class="modern-btn" style="width:auto; padding:0 20px; height:36px;" onclick="showModeSelectScreen()">
+                                START <i data-lucide="play" size="14"></i>
+                            </button>
+                        </div>
+                        
+                        <div style="margin-top:16px; flex:1; display:flex; flex-direction:column; min-height:0;">
+                            <div class="auth-tabs" style="margin-bottom:8px; padding:2px;">
+                                <button class="auth-tab-btn active" id="lbTabMine" onclick="switchLeaderboard('mine')" style="padding:4px; font-size:11px;">マイベスト</button>
+                                <button class="auth-tab-btn" id="lbTabComm" onclick="switchLeaderboard('comm')" style="padding:4px; font-size:11px;">コミュニティ</button>
+                            </div>
+
+                            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                                <select id="lbModeSelect" class="search-input" style="height:30px; font-size:11px; margin-bottom:0; padding:0 8px; flex:1;" onchange="renderGameLeaderboard()">
+                                    <option value="ja2en">英訳 (和→英)</option>
+                                    <option value="en2ja">和訳 (英→和)</option>
+                                    <option value="mixed">まぜまぜ</option>
+                                </select>
+                                <select id="lbDiffSelect" class="search-input" style="height:30px; font-size:11px; margin-bottom:0; padding:0 8px; flex:1;" onchange="renderGameLeaderboard()">
+                                    <option value="normal">ノーマル</option>
+                                    <option value="hard">ハード</option>
+                                    <option value="expert">エキスパート</option>
+                                    <option value="endless">エンドレス</option>
+                                </select>
+                            </div>
+
+                            <div id="leaderboardListContainer" style="flex:1; overflow-y:auto; background:rgba(7, 11, 25, 0.6); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:4px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.7;">
+                        <i data-lucide="lock" size="32" style="color:var(--text-sub); margin-bottom:8px;"></i>
+                        <h2 style="color:var(--text-sub); margin:0;">NEW GAME<br><span style="font-size:10px;">(Coming Soon)</span></h2>
+                    </div>
+                </div>
+
+                <div id="game-mode-select-screen" style="display:none;">
+                    <div class="card game-mode-card game-cosmic-glow-box" style="padding: 24px 16px;">
+                        <h2 style="color:white; text-align:center; margin-bottom:16px;">
+                            <i data-lucide="settings-2" class="cosmic-neon-text-glow"></i> テスト設定
+                        </h2>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:8px; text-align:left;">① 出題モードを選択</div>
+                            <div style="display:grid; grid-template-columns:1fr; gap:8px;">
+                                <button class="modern-btn" id="btnModeJa" onclick="selectGameMode('ja2en')">英訳モード (和→英)</button>
+                                <button class="modern-btn" id="btnModeEn" onclick="selectGameMode('en2ja')">和訳モード (英→和)</button>
+                                <button class="modern-btn" id="btnModeMix" onclick="selectGameMode('mixed')">まぜまぜモード (ランダム)</button>
+                            </div>
+                        </div>
+
+                        <div id="difficulty-section" style="display:none; margin-bottom: 20px;">
+                            <div style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; margin-bottom:8px; text-align:left;">② 難易度(制限時間)を選択</div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                                <button class="modern-btn" onclick="startActualGame('normal')">ノーマル (1分)</button>
+                                <button class="modern-btn" onclick="startActualGame('hard')">ハード (3分)</button>
+                                <button class="modern-btn" onclick="startActualGame('expert')">エキスパート(5分)</button>
+                                <button class="modern-btn" onclick="startActualGame('endless')">エンドレス</button>
+                            </div>
+                        </div>
+
+                        <button class="game-finish-inline-btn" style="margin: 0 auto;" onclick="backToGameMenu()">
+                            <i data-lucide="arrow-left" size="12"></i> メニューへ戻る
+                        </button>
+                    </div>
+                </div>
+
+                <div id="game-play-screen" style="display:none;">
+                    
+                    <div class="game-header-console-row">
+                        <div>
+                            <button class="game-finish-inline-btn" id="gameFinishBtn" onclick="endGameSession()">
+                                <i data-lucide="check" size="12"></i> 終了
+                            </button>
+                        </div>
+                        
+                        <div class="game-unified-console game-cosmic-glow-box" id="gameTimerFrame">
+                            <div class="console-segment">
+                                <span class="console-label">TIME / LIFE</span>
+                                <span class="console-val cosmic-neon-blue-text" id="gameTimerNum">45</span>
+                            </div>
+                            <div class="console-divider"></div>
+                            <div class="console-segment">
+                                <span class="console-label">SCORE</span>
+                                <span class="console-val cosmic-neon-purple-text" id="gameScoreNum">0000</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="game-scrollable-content">
+                        <div class="card game-main-play-card game-cosmic-glow-box" style="padding: 24px 16px; margin-bottom: 16px; position: relative;">
+                            
+                            <div id="giantJudgmentOverlay" class="giant-judgment-overlay">
+                                <div id="giantScorePopup" class="giant-score-popup"></div>
+                                <div class="giant-mark" id="giantJudgmentMark">◎</div>
+                                <div class="giant-text" id="giantJudgmentText">正解</div>
+                            </div>
+
+                            <div class="game-word-display cosmic-neon-text-glow" id="gameWordTarget">---</div>
+
+                            <input type="text" id="gameAnswerInput" class="search-input game-cosmic-input-glow" style="height:46px; font-size:16px; text-align:center; margin-bottom:16px; background:rgba(7, 11, 25, 0.95);" onkeydown="if(event.key === 'Enter') submitGameAnswer()">
+                            
+                            <button class="modern-btn" id="gameSubmitBtn" style="height:44px; width:100%; font-size:14px;" onclick="submitGameAnswer()">
+                                OK
+                            </button>
+
+                            <div id="persistentComboContainer" class="persistent-combo-container" style="display:none;">
+                                <span id="persistentComboText" class="combo-text"></span>
+                                <span id="persistentComboScore" class="combo-score"></span>
+                            </div>
+                        </div>
+
+                        <div id="gameJudgingIndicator" class="game-judging-loader" style="display:none; margin-top: 8px;">
+                            <i data-lucide="loader" class="animate-spin" size="14"></i> 判定中...
+                        </div>
+
+                        <div id="gameDetailFeedback" style="font-size: 12px; line-height: 1.5; margin-bottom: 20px;">
+                            <div id="feedbackWaiting" style="display:none;"></div> 
+                            
+                            <div id="feedbackContent" style="display:none; background: rgba(7, 11, 25, 0.85); padding: 16px; padding-bottom: 60px; border-radius: 12px; border: 1px solid var(--cosmic-cyan); position: relative; box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);">
+                                <div style="margin-bottom:10px;">
+                                    <span class="title-label" style="color:var(--cosmic-cyan); font-weight:700; font-size:11px;">あなたの入力</span> 
+                                    <div id="feedbackUserAns" style="font-weight:700; color:white; margin-top:2px; font-size:14px;">-</div>
+                                </div>
+                                <div style="margin-bottom:10px;">
+                                    <span class="title-label" style="color:var(--word-ok); font-weight:700; font-size:11px;">正答</span> 
+                                    <div id="feedbackCorrectAns" class="ans-main" style="margin-top:2px; font-weight:700; color:var(--word-ok); font-size:14px;"></div>
+                                </div>
+                                <div id="feedbackDiffAnswersRow" style="display:none;">
+                                    <span class="title-label" style="color:var(--cosmic-purple-light); font-weight:700; font-size:11px;">AI解説</span> 
+                                    <div id="feedbackOtherAns" class="ans-others" style="margin-top:2px; color:#A5B4FC; font-size:11.5px;">-</div>
+                                </div>
+
+                                <button class="modern-btn" id="gameNextBtn" style="position: absolute; bottom: 12px; right: 12px; height: 36px; width: auto; padding: 0 16px; display:none; border-image: linear-gradient(135deg, #10B981, #34D399) 1 !important; z-index: 10;" onclick="goToNextGameWord()">
+                                    次の問題へ <i data-lucide="arrow-right" size="14"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div id="game-result-screen" style="display:none;">
+                    <div class="card game-result-card game-cosmic-glow-box" style="padding:20px 16px;">
+                        <div style="text-align:center;">
+                            <i data-lucide="trophy" class="cosmic-neon-text-glow" size="40" style="margin: 0 auto 8px auto;"></i>
+                            <h2 style="justify-content:center; font-size:18px; color:white; margin-bottom:14px;">RESULT</h2>
+                        </div>
+
+                        <div class="cosmic-stats-grid">
+                            <div class="stat-box game-cosmic-glow-box">
+                                <div class="stat-lbl">SCORE</div>
+                                <div class="stat-val cosmic-neon-purple-text" id="resScore">0</div>
+                            </div>
+                            <div class="stat-box game-cosmic-glow-box">
+                                <div class="stat-lbl">ACCURACY</div>
+                                <div class="stat-val cosmic-neon-blue-text" id="resAccuracy">0%</div>
+                            </div>
+                            <div class="stat-box game-cosmic-glow-box">
+                                <div class="stat-lbl">MY BEST</div>
+                                <div class="stat-val cosmic-neon-blue-text" id="resBestScore">0</div>
+                            </div>
+                            <div class="stat-box game-cosmic-glow-box">
+                                <div class="stat-lbl">HIGH SCORE</div>
+                                <div class="stat-val cosmic-neon-purple-text" id="resCommBest">0</div>
+                            </div>
+                        </div>
+
+                        <h3 class="cosmic-list-title"><i data-lucide="list-ordered" size="14"></i> LOG</h3>
+                        <div class="cosmic-history-scroll game-cosmic-glow-box" id="gameHistoryListContainer"></div>
+
+                        <button class="modern-btn" style="margin-top:16px;" onclick="backToGameMenu()">
+                            CLOSE
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="view-admin" class="tab-view">
+            <div class="card admin-card-border">
+                <h2 style="color:var(--admin-accent);"><i data-lucide="shield" style="color:var(--admin-accent);"></i> 🛠️ コアシステム管理設定パネル</h2>
+                <div style="margin-bottom:14px;">
+                    <label style="font-size:12px; font-weight:700; display:block; margin-top: 14px; margin-bottom:6px; color:var(--cosmic-cyan);">📝 ダッシュボードのタイトル設定</label>
+                    <input type="text" id="adminDashboardTitleInput" class="search-input" placeholder="例: ダッシュボード">
+                    <button class="modern-btn" style="margin-bottom: 24px;" onclick="saveAdminDashboardTitle()">
+                        タイトルを変更・保存する
+                    </button>
+
+                    <label style="font-size:12px; font-weight:700; display:block; margin-bottom:6px;">全ユーザー向け配信アナウンスメッセージ</label>
+                    <input type="text" id="adminNoticeInput" class="search-input" placeholder="表示したいお知らせメッセージを入力...">
+                    <button class="modern-btn" onclick="saveAdminSystemSettings()">設定を配信・適用する</button>
+                    
+                    <label style="font-size:12px; font-weight:700; display:block; margin-top: 24px; margin-bottom:6px; color:#F87171;">⚠️ スコア管理（リセット機能）</label>
+                    <button class="modern-btn" style="margin-bottom: 10px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="resetLeaderboard()">
+                        <i data-lucide="trash-2" size="16"></i> ランキング履歴をリセット
+                    </button>
+                    <button class="modern-btn" style="border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="resetBestScore()">
+                        <i data-lucide="trash-2" size="16"></i> ベストスコアをリセット
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="nav-bar">
+        <button class="nav-item active" id="nav-home" onclick="switchTab('home')">
+            <i data-lucide="layout-dashboard" size="18"></i> ホーム
+        </button>
+        <button class="nav-item" id="nav-vocab" onclick="switchTab('vocab')">
+            <i data-lucide="layers" size="18"></i> 単語帳
+        </button>
+        <button class="nav-item" id="nav-reader" onclick="switchTab('reader')">
+            <i data-lucide="file-text" size="18"></i> リーダー
+        </button>
+        <button class="nav-item" id="nav-community" onclick="switchTab('community')">
+            <i data-lucide="users" size="18"></i> 共有同期
+        </button>
+        <button class="nav-item" id="nav-game" onclick="switchTab('game')">
+            <i data-lucide="gamepad-2" size="18"></i> ゲーム
+        </button>
+    </div>
+
+    <div id="wordPopover" class="popover">
+        <div class="popover-word">
+            <span id="popWord"></span>
+            <span id="popWordNum" style="font-size:12px; color:var(--accent); font-weight:700; background:var(--input-bg); padding:2px 8px; border-radius:4px; border:1px solid var(--border);"></span>
+        </div>
+        <div class="popover-meaning" id="popMeaning"></div>
+        <div class="popover-btns" id="popoverStatusBtns">
+            <button class="pop-btn" style="background:var(--word-ok-bg); color:var(--word-ok);" onclick="setWordStatusFromReader('ok')">○ 習得</button>
+            <button class="pop-btn" style="background:var(--word-so-bg); color:var(--word-so);" onclick="setWordStatusFromReader('so')">Delta 保留</button>
+            <button class="pop-btn" style="background:var(--word-bad-bg); color:var(--word-bad);" onclick="setWordStatusFromReader('bad')">× 未習</button>
+        </div>
+        <div style="text-align: right; width: 100%;">
+            <button class="pop-btn" style="background:var(--border); color:var(--text-main); max-width: 64px; display: inline-block;" id="popDetailsLink" onclick="closeWordPopover()">閉じる</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
