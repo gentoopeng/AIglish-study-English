@@ -779,7 +779,7 @@ async function analyzeText(rawText, assignedTitle = null) {
                 } else if(dictMatch) {
                     span.classList.add('registered');
                     if(wordMemory[cleanKey]) span.classList.add(`status-${wordMemory[cleanKey]}`);
-                    span.onclick = (e) => openWordPopover(e, cleanKey, wStr);
+                    span.onclick = (e) => openWordPopover(e, targetLookupKey, wStr);
                 }
                 mainContent.appendChild(span);
             }

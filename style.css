@@ -286,29 +286,49 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     border-radius: 4px;
 }
 
-/* 🌟 ポップオーバー配置調整 (bottom: 60px) */
+/* 🌟 ポップオーバー配置調整 (スマホでの見切れ防止・スクロール対応) */
 .popover { 
     position: fixed; 
-    bottom: 60px;
+    bottom: 0; /* 画面最下部に固定 */
     left: 0; 
     width: 100%; 
-    z-index: 3000; 
+    max-height: 80vh; /* スマホ画面の80%までに高さを抑える */
+    z-index: 5000; /* ナビゲーションバー(1000)より上に表示 */
     background: #1E293B; 
     border-top: 1px solid var(--border); 
     color: white; 
-    padding: 16px 18px 20px 18px; 
+    padding: 18px 18px calc(18px + env(safe-area-inset-bottom)) 18px; /* 下部のスワイプバー領域を確保 */
     border-radius: 20px 20px 0 0; 
     display: none; 
     flex-direction: column; 
     gap: 12px; 
     box-sizing: border-box; 
-    box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.7);
 }
-.popover.show { display: flex; }
-.popover-word { font-family: "Times New Roman", serif; font-size: 20px; font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 8px; color: var(--text-main); display: flex; justify-content: space-between; align-items: center; }
-.popover-meaning { font-size: 14px; color: var(--text-sub); line-height: 1.4; white-space: pre-line; }
-.popover-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.popover.show { 
+    display: flex; 
+    animation: popoverSlideUp 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+@keyframes popoverSlideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+.popover-word { 
+    font-family: "Times New Roman", serif; font-size: 20px; font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 8px; color: var(--text-main); display: flex; justify-content: space-between; align-items: center; 
+    flex-shrink: 0; /* 絶対に縮ませない */
+}
+.popover-meaning { 
+    font-size: 14px; color: var(--text-sub); line-height: 1.5; white-space: pre-line; 
+    flex: 1; /* 余ったスペースを埋める */
+    overflow-y: auto; /* 文章が長ければスクロール */
+    padding-right: 8px;
+}
+.popover-btns { 
+    display: flex; gap: 8px; flex-wrap: wrap; 
+    flex-shrink: 0; /* 絶対に縮ませない */
+}
 .pop-btn { flex: 1; border: none; height: 38px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; min-width: 22%; }
+
 
 /* ==========================================================================
    🌌 ゲーム画面用：元のシンプルな縦積みネオンデザインに完全修正
