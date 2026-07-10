@@ -1,3 +1,6 @@
+// ==========================================================================
+// 🌟 グローバル変数（システム全体で使うデータ）
+// ==========================================================================
 let myId = "";
 let myName = "プレイヤー1";
 let myTarget = "未設定";
@@ -7,7 +10,7 @@ let vocabList = [];
 let vocabFilter = "all";
 let geminiApiKey = ""; 
 
-// ゲーム用の追加設定変数
+// ゲーム用のステータス変数
 let selectedQuestionMode = 'ja2en'; 
 let currentQuestionType = 'ja2en'; 
 let currentGameDifficulty = 'normal';
@@ -20,16 +23,20 @@ let activeCharacter = "";
 let activeWeapon = ""; 
 let activeArmor = "";  
 
+// リーダーボード専用のステータス変数
+let currentLbMode = 'ja2en';
+let currentLbDiff = 'normal';
+let currentLbType = 'mine';
+
 const SHARED_DEFAULT_VOCAB_DATA = [];
 let dictionaryData = [];
 const customSamples = {}; 
 for(let i = 1; i <= 100; i++) {
-    dictionaryData.push({ num: i, en: customSamples[i] ? customSamples[i].en : `token-${i}`, ja: customSamples[i] ? customSamples[i].ja : `単語インデックス No.${i} に紐付く日本語対訳データ` });
+    dictionaryData.push({ num: String(i), en: customSamples[i] ? customSamples[i].en : `token-${i}`, ja: customSamples[i] ? customSamples[i].ja : `単語インデックス No.${i} に紐付く日本語対訳データ` });
 }
 
 let wordMemory = JSON.parse(localStorage.getItem('wordMemory')) || {};
 let textHistory = JSON.parse(localStorage.getItem('textHistory')) || [];
-
 let myBookshelf = JSON.parse(localStorage.getItem('myBookshelf')) || [];
 let myFolders = JSON.parse(localStorage.getItem('myFolders')) || ['未分類'];
 
@@ -61,27 +68,33 @@ let flickStartY = 0;
 let isFlicking = false;
 let currentFlickChoice = -1;
 
-window.addEventListener('DOMContentLoaded', () => {
-    initLucide();
-    loadLocalState();
-    renderActivityChart();
-    initHeroSlider();
-    window.addEventListener('scroll', () => {
-        const topBtn = document.getElementById('scrollToTopBtn');
-        if (window.scrollY > 300) topBtn.classList.add('show'); else topBtn.classList.remove('show');
-    });
-});
+// ==========================================================================
+// 🌟 魔法（関数）の完全グローバル登録
+// ==========================================================================
 
-function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); }
-function initLucide() { if(window.lucide) { window.lucide.createIcons(); } }
+window.initLucide = function() { 
+    if(window.lucide) { window.lucide.createIcons(); } 
+};
+
+window.scrollToTop = function() { 
+    window.scrollTo({ top: 0, behavior: 'smooth' }); 
+};
+
 window.initHeroSlider = function() {
     const track = document.getElementById('heroSliderTrack');
     if (!track) return;
     let currentSlide = 0;
-    setInterval(() => { currentSlide = (currentSlide + 1) % 5; track.style.transform = `translateX(-${currentSlide * 20}%)`; }, 4000);
-}
+    setInterval(() => { 
+        currentSlide = (currentSlide + 1) % 5; 
+        track.style.transform = `translateX(-${currentSlide * 20}%)`; 
+    }, 4000);
+};
 
-function migrateVocabData(words) {
+window.saveVocabToStorage = function() { 
+    localStorage.setItem('core_v4_custom_words_' + myId, JSON.stringify(vocabList)); 
+};
+
+window.migrateVocabData = function(words) {
     return words.map(w => {
         if (!w.meanings || w.meanings.length === 0) {
             w.meanings = [];
@@ -96,18 +109,189 @@ function migrateVocabData(words) {
         }
         return w;
     });
-}
+};
 
-function saveVocabToStorage() { localStorage.setItem('core_v4_custom_words_' + myId, JSON.stringify(vocabList)); }
-
-function formatWordForDisplay(str) {
+window.formatWordForDisplay = function(str) {
     return str.replace(/(動|名|形|副|代|接|前|自動|他動)[:：]\s*/g, '')
               .replace(/〜[をにがとへでや]\s*/g, '')
               .replace(/^[ ,　]+/, '')
               .trim();
-}
+};
 
-function loadLocalState() {
+window.getAllUsers = function() {
+    return JSON.parse(localStorage.getItem('core_v4_users') || "[]");
+};
+
+window.saveAllUsers = function(users) {
+    localStorage.setItem('core_v4_users', JSON.stringify(users));
+};
+
+window.generateUserId = function() {
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let id = "";
+    for(let i=0; i<7; i++) id += letters.charAt(Math.floor(Math.random() * letters.length));
+    for(let i=0; i<3; i++) id += Math.floor(Math.random() * 10);
+    return id;
+};
+
+window.switchAuthMode = function(mode) {
+    const tabLogin = document.getElementById('authTabLogin');
+    const tabReg = document.getElementById('authTabRegister');
+    const loginFields = document.getElementById('authLoginFields');
+    const regFields = document.getElementById('authRegisterFields');
+    const btn = document.getElementById('authSubmitBtn');
+    const errorMsg = document.getElementById('authErrorMsg');
+    
+    if (errorMsg) errorMsg.style.display = 'none';
+
+    if(mode === 'login') {
+        if(tabLogin) tabLogin.classList.add('active'); 
+        if(tabReg) tabReg.classList.remove('active');
+        if (loginFields) loginFields.style.display = 'block';
+        if (regFields) regFields.style.display = 'none';
+        if(btn) btn.innerHTML = 'システムへログイン <i data-lucide="arrow-right" size="16"></i>';
+    } else {
+        if(tabLogin) tabLogin.classList.remove('active'); 
+        if(tabReg) tabReg.classList.add('active');
+        if (loginFields) loginFields.style.display = 'none';
+        if (regFields) regFields.style.display = 'block';
+        if(btn) btn.innerHTML = 'アカウントを作成 <i data-lucide="sparkles" size="16"></i>';
+    }
+    window.initLucide();
+};
+
+window.handleAuthSubmit = function() {
+    const authReg = document.getElementById('authTabRegister');
+    const isRegister = authReg ? authReg.classList.contains('active') : false;
+    const errorMsg = document.getElementById('authErrorMsg');
+    if (errorMsg) errorMsg.style.display = 'none';
+    
+    if(isRegister) {
+        const pName = document.getElementById('regPlayerName').value.trim();
+        const rName = document.getElementById('regRealName').value.trim();
+        const age = document.getElementById('regAge').value.trim();
+        const pin = document.getElementById('regPin').value.trim();
+        
+        if(!pName || !rName || !age || !pin) {
+            if(errorMsg) { errorMsg.innerText = "すべての項目を入力してください！"; errorMsg.style.display = 'block'; }
+            return;
+        }
+        if(!/^\d{4}$/.test(pin)) {
+            if(errorMsg) { errorMsg.innerText = "暗証番号は4桁の数字で設定してください！"; errorMsg.style.display = 'block'; }
+            return;
+        }
+        
+        const newId = window.generateUserId();
+        const users = window.getAllUsers();
+        users.push({ id: newId, playerName: pName, realName: rName, age: age, pin: pin });
+        window.saveAllUsers(users);
+        
+        alert(`🎉 アカウント作成成功！\nあなたのログインIDは【 ${newId} 】です。\nログインに必要なので必ずメモしてください！`);
+        
+        localStorage.setItem('core_v4_userId', newId);
+        localStorage.setItem('core_v4_userName', pName);
+        localStorage.setItem('core_v4_userTarget', "未設定");
+        localStorage.setItem('core_v4_totalExp', "0");
+        window.loadLocalState();
+        
+    } else {
+        const idInput = document.getElementById('loginIdInput').value.trim();
+        const pinInput = document.getElementById('loginPinInput').value.trim();
+        
+        if(!idInput || !pinInput) {
+            if(errorMsg) { errorMsg.innerText = "IDと暗証番号を入力してください！"; errorMsg.style.display = 'block'; }
+            return;
+        }
+        
+        const users = window.getAllUsers();
+        const user = users.find(u => u.id === idInput && u.pin === pinInput);
+        
+        if(user) {
+            window.showLoginConfirmPopup(user);
+        } else {
+            if(errorMsg) { errorMsg.innerText = "IDまたは暗証番号が間違っています！"; errorMsg.style.display = 'block'; }
+        }
+    }
+};
+
+window.handleGuestLogin = function() {
+    const errorMsg = document.getElementById('authErrorMsg');
+    if (errorMsg) errorMsg.style.display = 'none';
+    
+    const guestId = "GUEST-000";
+    localStorage.setItem('core_v4_userId', guestId);
+    localStorage.setItem('core_v4_userName', "ゲストプレイヤー");
+    localStorage.setItem('core_v4_userTarget', "テストプレイ中");
+    if(!localStorage.getItem('core_v4_totalExp')) localStorage.setItem('core_v4_totalExp', "0");
+    
+    window.loadLocalState();
+};
+
+window.showLoginConfirmPopup = function(user) {
+    if(document.getElementById('loginOverlayLayer')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'loginOverlayLayer';
+    overlay.className = 'login-confirm-overlay';
+    
+    const box = document.createElement('div');
+    box.className = 'login-confirm-card';
+    
+    box.innerHTML = `
+        <div class="login-confirm-avatar"><i data-lucide="user" size="32"></i></div>
+        <div style="color:white; font-size:18px; font-weight:800; margin-bottom:8px;">認証確認</div>
+        <div style="color:var(--text-sub); font-size:13px; margin-bottom:16px; line-height:1.6;">
+            以下のプロファイルでログインしますか？<br>
+            <div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; margin-top:8px; text-align:left;">
+                <strong>プレイヤー名:</strong> <span style="color:white;">${user.playerName}</span><br>
+                <strong>本名:</strong> <span style="color:white;">${user.realName}</span><br>
+                <strong>年齢:</strong> <span style="color:white;">${user.age}歳</span>
+            </div>
+        </div>
+        <div style="display:flex; gap:12px;">
+            <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--input-bg); color:var(--text-main); font-weight:700; cursor:pointer;" id="cancelLoginBtn">キャンセル</button>
+            <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--cosmic-cyan); color:#000; font-weight:700; cursor:pointer;" id="confirmLoginBtn">ログイン</button>
+        </div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    window.initLucide();
+    
+    document.getElementById('cancelLoginBtn').onclick = () => { document.body.removeChild(overlay); };
+    document.getElementById('confirmLoginBtn').onclick = () => {
+        localStorage.setItem('core_v4_userId', user.id);
+        localStorage.setItem('core_v4_userName', user.playerName);
+        if(!localStorage.getItem('core_v4_userTarget')) localStorage.setItem('core_v4_userTarget', "未設定");
+        if(!localStorage.getItem('core_v4_totalExp')) localStorage.setItem('core_v4_totalExp', "0");
+        document.body.removeChild(overlay);
+        window.loadLocalState();
+    };
+};
+
+window.renderAdminUserList = function() {
+    const container = document.getElementById('adminUserListContainer');
+    if(!container) return;
+    container.innerHTML = "";
+    const users = window.getAllUsers();
+    
+    if(users.length === 0) {
+        container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding: 10px;'>ユーザーが登録されていません。</div>";
+        return;
+    }
+    
+    users.forEach(u => {
+        const div = document.createElement('div');
+        div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px;";
+        div.innerHTML = `
+            <div style="flex:1;">
+                <div style="color:var(--cosmic-cyan); font-family:monospace; font-weight:bold; letter-spacing:1px;">ID: ${u.id}</div>
+                <div style="color:white; font-weight:bold; margin-top:2px;">${u.playerName} <span style="color:var(--text-sub); font-weight:normal; font-size:10px;">(${u.realName} / ${u.age}歳)</span></div>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+};
+
+window.loadLocalState = function() {
     const savedId = localStorage.getItem('core_v4_userId');
     geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
     const apiKeyInput = document.getElementById('sidebarApiKeyInput');
@@ -119,7 +303,9 @@ function loadLocalState() {
     
     if(savedId) {
         myId = savedId;
-        document.getElementById('auth-gate-screen').style.display = 'none';
+        const gateScreen = document.getElementById('auth-gate-screen');
+        if(gateScreen) gateScreen.style.display = 'none';
+        
         myName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
         myTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
         selectedTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
@@ -131,94 +317,83 @@ function loadLocalState() {
         let storedWords = [];
         try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e) {}
         
-        vocabList = migrateVocabData(storedWords); 
-        saveVocabToStorage();
+        vocabList = window.migrateVocabData(storedWords); 
+        window.saveVocabToStorage();
         
-        applyProfileToUi();
-        updatePartySlotsUi(); 
-        renderVocabList();
-        renderLeaderboard();
-        renderHistoryList();
-        renderBookshelf(); 
-        renderGameLeaderboard('mine');
+        window.applyProfileToUi();
+        if(typeof window.updatePartySlotsUi === 'function') window.updatePartySlotsUi(); 
+        window.renderVocabList();
+        window.renderLeaderboard();
+        window.renderHistoryList();
+        window.renderBookshelf(); 
+        window.renderAdminUserList(); 
+        window.renderGameLeaderboard('mine');
     } else {
-        document.getElementById('auth-gate-screen').style.display = 'flex';
+        const gateScreen = document.getElementById('auth-gate-screen');
+        if(gateScreen) gateScreen.style.display = 'flex';
     }
-}
+};
 
-window.switchAuthMode = function(mode) {
-    const tabLogin = document.getElementById('authTabLogin'), tabReg = document.getElementById('authTabRegister');
-    const extra = document.getElementById('registerExtraFields'), btn = document.getElementById('authSubmitBtn');
-    if(mode === 'login') {
-        tabLogin.classList.add('active'); tabReg.classList.remove('active'); extra.style.display = 'none';
-        btn.innerHTML = 'システムへログインする <i data-lucide="arrow-right" size="16"></i>';
-    } else {
-        tabLogin.classList.remove('active'); tabReg.classList.add('active'); extra.style.display = 'block';
-        btn.innerHTML = 'アカウントを作成 <i data-lucide="sparkles" size="16"></i>';
-    }
-    initLucide();
-}
-
-window.handleAuthSubmit = function() {
-    const idInput = document.getElementById('gateUserIdInput').value.trim();
-    if(!idInput) return alert("ユーザーIDを入力してください。");
-    
-    localStorage.setItem('core_v4_userId', idInput);
-    const isRegister = document.getElementById('authTabRegister').classList.contains('active');
-    
-    if(isRegister) {
-        localStorage.setItem('core_v4_userName', document.getElementById('gateUserNameInput').value.trim() || "プレイヤー1");
-        localStorage.setItem('core_v4_userTarget', document.getElementById('gateUserTargetInput').value.trim() || "未設定");
-    } else {
-        if(!localStorage.getItem('core_v4_userName')) localStorage.setItem('core_v4_userName', "プレイヤー1");
-        if(!localStorage.getItem('core_v4_userTarget')) localStorage.setItem('core_v4_userTarget', "未設定");
-    }
-    if(!localStorage.getItem('core_v4_totalExp')) localStorage.setItem('core_v4_totalExp', "0");
-    
-    loadLocalState();
-}
-
-function applyProfileToUi() {
-    document.getElementById('sideOptPlayerName').innerText = myName;
-    document.getElementById('sideOptGroupName').innerText = "ID: " + myId;
-    document.getElementById('profPlayerName').innerText = myName;
-    document.getElementById('profTitleLabel').innerText = selectedTitle + " ⚡";
-    document.getElementById('profTargetLabel').innerText = "目標: " + myTarget;
-    document.getElementById('profCoinCount').innerText = totalExp;
-}
+window.applyProfileToUi = function() {
+    const pNameEl = document.getElementById('sideOptPlayerName');
+    if(pNameEl) pNameEl.innerText = myName;
+    const gNameEl = document.getElementById('sideOptGroupName');
+    if(gNameEl) gNameEl.innerText = "ID: " + myId;
+    const profNameEl = document.getElementById('profPlayerName');
+    if(profNameEl) profNameEl.innerText = myName;
+    const profTitleEl = document.getElementById('profTitleLabel');
+    if(profTitleEl) profTitleEl.innerText = selectedTitle + " ⚡";
+    const profTargetEl = document.getElementById('profTargetLabel');
+    if(profTargetEl) profTargetEl.innerText = "目標: " + myTarget;
+    const profCoinEl = document.getElementById('profCoinCount');
+    if(profCoinEl) profCoinEl.innerText = totalExp;
+};
 
 window.toggleSidebar = function(open) {
-    document.getElementById('sidebarMenu').classList.toggle('open', open);
-    document.getElementById('sidebarOverlay').style.display = open ? 'block' : 'none';
-}
+    const menu = document.getElementById('sidebarMenu');
+    const overlay = document.getElementById('sidebarOverlay');
+    if(menu) menu.classList.toggle('open', open);
+    if(overlay) overlay.style.display = open ? 'block' : 'none';
+};
 
 window.switchTab = function(tabId) {
     document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
-    document.getElementById('view-' + tabId).classList.add('active');
+    const view = document.getElementById('view-' + tabId);
+    if(view) view.classList.add('active');
+    
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('nav-' + tabId).classList.add('active');
-    toggleSidebar(false);
-    if(tabId !== 'reader') closeReader();
-    if(tabId === 'game') renderGameLeaderboard('mine');
-}
+    const nav = document.getElementById('nav-' + tabId);
+    if(nav) nav.classList.add('active');
+    
+    window.toggleSidebar(false);
+    if(tabId !== 'reader' && typeof window.closeReader === 'function') window.closeReader();
+    if(tabId === 'game') window.renderGameLeaderboard('mine');
+    if(tabId === 'admin') window.renderAdminUserList(); 
+};
 
+// ==========================================================================
+// 📖 単語帳関連
+// ==========================================================================
 window.toggleBulkImportCard = function() {
     const sec = document.getElementById('bulkImportToggleSection');
+    if(!sec) return;
     sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
-    if(sec.style.display === 'block') renderBulkDeleteList();
-}
+    if(sec.style.display === 'block') window.renderBulkDeleteList();
+};
 
 window.handleBulkWordImport = function() {
-    const text = document.getElementById('bulkWordInput').value.trim();
+    const input = document.getElementById('bulkWordInput');
+    if(!input) return;
+    const text = input.value.trim();
     if(!text) return;
     if (text.startsWith("[") && text.endsWith("]")) {
         try {
             const parsed = JSON.parse(text);
             if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].word) {
                 if (confirm("バックアップデータで完全に上書きしますか？")) {
-                    vocabList = migrateVocabData(parsed);
-                    saveVocabToStorage(); renderVocabList(); renderBulkDeleteList();
-                    document.getElementById('bulkWordInput').value = ""; alert("統合完了しました！"); return;
+                    vocabList = window.migrateVocabData(parsed);
+                    window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
+                    input.value = ""; alert("統合完了しました！"); return;
                 }
             }
         } catch(e) { }
@@ -231,32 +406,37 @@ window.handleBulkWordImport = function() {
             if(num && word && meaning) {
                 const existingIdx = vocabList.findIndex(w => String(w.num) === String(num));
                 let newWord = { num, word, meaning, sub, status: "none", history: [] };
-                newWord = migrateVocabData([newWord])[0]; 
+                newWord = window.migrateVocabData([newWord])[0]; 
                 if(existingIdx >= 0) vocabList[existingIdx] = newWord;
                 else vocabList.push(newWord);
             }
         }
     });
     vocabList.sort((a,b) => parseInt(a.num) - parseInt(b.num));
-    saveVocabToStorage(); renderVocabList(); renderBulkDeleteList();
-    document.getElementById('bulkWordInput').value = ""; alert("一括インポートが完了しました。");
-}
+    window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
+    input.value = ""; alert("一括インポートが完了しました。");
+};
 
-function renderBulkDeleteList() {
-    const c = document.getElementById('bulkDeleteListContainer'); c.innerHTML = "";
+window.renderBulkDeleteList = function() {
+    const c = document.getElementById('bulkDeleteListContainer'); 
+    if(!c) return;
+    c.innerHTML = "";
     vocabList.forEach(w => {
         const row = document.createElement('div'); row.style.cssText = "display:flex; align-items:center; gap:8px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;";
         row.innerHTML = `<input type="checkbox" class="bulk-delete-chk" value="${w.num}"><span style="color:var(--text-sub);">#${w.num}</span><strong>${w.word}</strong>`;
         c.appendChild(row);
     });
-}
-window.selectAllBulkDelete = function(checked) { document.querySelectorAll('.bulk-delete-chk').forEach(chk => chk.checked = checked); }
+};
+
+window.selectAllBulkDelete = function(checked) { 
+    document.querySelectorAll('.bulk-delete-chk').forEach(chk => chk.checked = checked); 
+};
 
 window.showCustomBulkDeleteConfirm = function(count, numsToDelete) {
     if(document.getElementById('bulkDelOverlayLayer')) return;
     const overlay = document.createElement('div');
     overlay.id = 'bulkDelOverlayLayer';
-    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(5px);";
+    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(5px);";
     const box = document.createElement('div');
     box.style.cssText = "background:var(--card-bg); border:1px solid #EF4444; border-radius:16px; padding:24px; width:85%; max-width:320px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.6);";
     box.innerHTML = `
@@ -272,22 +452,23 @@ window.showCustomBulkDeleteConfirm = function(count, numsToDelete) {
     document.getElementById('cancelBulkDelBtn').onclick = () => { document.body.removeChild(overlay); };
     document.getElementById('confirmBulkDelBtn').onclick = () => {
         vocabList = vocabList.filter(w => !numsToDelete.includes(String(w.num)));
-        saveVocabToStorage(); renderVocabList(); renderBulkDeleteList();
+        window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
         document.body.removeChild(overlay);
     };
-}
+};
+
 window.handleBulkDeleteExecute = function() {
     const checkedBoxes = document.querySelectorAll('.bulk-delete-chk:checked');
     if(checkedBoxes.length === 0) return alert("削除したい単語にチェックを入れてください。");
     const nums = Array.from(checkedBoxes).map(chk => String(chk.value));
-    showCustomBulkDeleteConfirm(checkedBoxes.length, nums);
-}
+    window.showCustomBulkDeleteConfirm(checkedBoxes.length, nums);
+};
 
 window.showCustomBulkResetConfirm = function(count, numsToReset) {
     if(document.getElementById('bulkResetOverlayLayer')) return;
     const overlay = document.createElement('div');
     overlay.id = 'bulkResetOverlayLayer';
-    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(5px);";
+    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(5px);";
     const box = document.createElement('div');
     box.style.cssText = "background:var(--card-bg); border:1px solid #10B981; border-radius:16px; padding:24px; width:85%; max-width:320px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.6);";
     box.innerHTML = `
@@ -308,29 +489,31 @@ window.showCustomBulkResetConfirm = function(count, numsToReset) {
                 if(w.meanings) w.meanings.forEach(m => { m.status = "none"; m.history = []; });
             }
         });
-        saveVocabToStorage(); renderVocabList(); renderBulkDeleteList();
+        window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
         document.body.removeChild(overlay);
     };
-}
+};
+
 window.handleBulkResetExecute = function() {
     const checkedBoxes = document.querySelectorAll('.bulk-delete-chk:checked');
     if(checkedBoxes.length === 0) return alert("リセットしたい単語にチェックを入れてください。");
     const nums = Array.from(checkedBoxes).map(chk => String(chk.value));
-    showCustomBulkResetConfirm(checkedBoxes.length, nums);
-}
+    window.showCustomBulkResetConfirm(checkedBoxes.length, nums);
+};
 
 window.setVocabFilter = function(filter) {
     vocabFilter = filter;
     document.querySelectorAll('.filter-scroller .pill-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('filter-' + filter).classList.add('active');
-    renderVocabList();
-}
+    const fBtn = document.getElementById('filter-' + filter);
+    if(fBtn) fBtn.classList.add('active');
+    window.renderVocabList();
+};
 
 window.showCustomDeleteConfirm = function(numStr) {
     if(document.getElementById('delOverlayLayer')) return;
     const overlay = document.createElement('div');
     overlay.id = 'delOverlayLayer';
-    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(5px);";
+    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(5px);";
     const box = document.createElement('div');
     box.style.cssText = "background:var(--card-bg); border:1px solid #EF4444; border-radius:16px; padding:24px; width:85%; max-width:320px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.6);";
     box.innerHTML = `
@@ -346,12 +529,12 @@ window.showCustomDeleteConfirm = function(numStr) {
     document.getElementById('cancelDelBtn').onclick = () => { document.body.removeChild(overlay); };
     document.getElementById('confirmDelBtn').onclick = () => {
         vocabList = vocabList.filter(w => String(w.num) !== String(numStr));
-        saveVocabToStorage(); renderVocabList(); renderBulkDeleteList();
+        window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
         document.body.removeChild(overlay);
     };
-}
+};
 
-function getCardStyleByHistory(wordObj) {
+window.getCardStyleByHistory = function(wordObj) {
     const defaultBg = "rgba(30, 41, 59, 0.85)";
     let allHistory = [];
     if (wordObj.meanings && wordObj.meanings.length > 0) {
@@ -383,7 +566,7 @@ function getCardStyleByHistory(wordObj) {
         b = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio);
     }
     return `background: linear-gradient(135deg, rgba(${r}, ${g}, ${b}, 0.22) 0%, rgba(30, 41, 59, 0.9) 75%);`;
-}
+};
 
 window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
     if(event) event.stopPropagation();
@@ -403,11 +586,11 @@ window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
                 const coinEl = document.getElementById('profCoinCount');
                 if(coinEl) coinEl.innerText = totalExp;
             }
-            saveVocabToStorage(); 
-            renderVocabList();
+            window.saveVocabToStorage(); 
+            window.renderVocabList();
         }
     }
-}
+};
 
 window.coreSystemToggleExpand = function(event, btn) {
     if(event) event.stopPropagation();
@@ -419,11 +602,12 @@ window.coreSystemToggleExpand = function(event, btn) {
         ex.style.display = 'none';
         btn.innerHTML = `サブ情報を展開 <i data-lucide="chevron-down" size="12"></i>`;
     }
-    initLucide();
+    window.initLucide();
 };
 
 window.renderVocabList = function() {
     const container = document.getElementById('vocabListContainer'); 
+    if(!container) return;
     container.innerHTML = "";
     
     const startRange = parseInt(document.getElementById('vocabRangeStart').value) || 0;
@@ -441,11 +625,11 @@ window.renderVocabList = function() {
     filtered.forEach(w => {
         const card = document.createElement('div'); 
         card.className = "word-row-container";
-        card.setAttribute('style', getCardStyleByHistory(w));
+        card.setAttribute('style', window.getCardStyleByHistory(w));
         
         card.onclick = (e) => {
             if (e.target.closest('button') || e.target.closest('.word-expand-toggle')) return; 
-            openWordPopoverFromVocab(e, w, w.word);
+            window.openWordPopoverFromVocab(e, w, w.word);
         };
         
         let hasAnyHistory = w.meanings && w.meanings.some(m => m.history && m.history.length > 0);
@@ -488,17 +672,17 @@ window.renderVocabList = function() {
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;">
                     <span style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4;">${m.text}</span>
                     <div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;">
-                        <button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='ok'?'var(--word-ok)':'rgba(0,0,0,0.5)'}; color:${m.status==='ok'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="updateMeaningStatus('${w.num}', '${m.id}', 'ok', event)">⚪︎</button>
-                        <button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='so'?'var(--word-so)':'rgba(0,0,0,0.5)'}; color:${m.status==='so'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="updateMeaningStatus('${w.num}', '${m.id}', 'so', event)">△</button>
-                        <button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='bad'?'var(--word-bad)':'rgba(0,0,0,0.5)'}; color:${m.status==='bad'?'#FFF':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="updateMeaningStatus('${w.num}', '${m.id}', 'bad', event)">✕</button>
-                        <button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='none'?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.5)'}; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="updateMeaningStatus('${w.num}', '${m.id}', 'none', event)">ー</button>
+                        <button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='ok'?'var(--word-ok)':'rgba(0,0,0,0.5)'}; color:${m.status==='ok'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus('${w.num}', '${m.id}', 'ok', event)">⚪︎</button>
+                        <button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='so'?'var(--word-so)':'rgba(0,0,0,0.5)'}; color:${m.status==='so'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus('${w.num}', '${m.id}', 'so', event)">△</button>
+                        <button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='bad'?'var(--word-bad)':'rgba(0,0,0,0.5)'}; color:${m.status==='bad'?'#FFF':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus('${w.num}', '${m.id}', 'bad', event)">✕</button>
+                        <button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='none'?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.5)'}; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus('${w.num}', '${m.id}', 'none', event)">ー</button>
                     </div>
                 </div>`;
         });
         meaningsHtml += `</div>`;
 
         card.innerHTML = `
-            <button class="card-delete-btn" style="position:absolute; right:8px; top:8px; background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer; z-index:100;" onclick="event.stopPropagation(); showCustomDeleteConfirm('${w.num}')">
+            <button class="card-delete-btn" style="position:absolute; right:8px; top:8px; background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer; z-index:100;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm('${w.num}')">
                 <i data-lucide="trash-2" size="18"></i>
             </button>
             <div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:36px;">
@@ -510,7 +694,7 @@ window.renderVocabList = function() {
             ${meaningsHtml}
             ${w.sub ? `
             <div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;">
-                <button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="coreSystemToggleExpand(event, this)">
+                <button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">
                     サブ情報を展開 <i data-lucide="chevron-down" size="12"></i>
                 </button>
                 <div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;">
@@ -521,10 +705,13 @@ window.renderVocabList = function() {
         `;
         container.appendChild(card);
     });
-    initLucide();
-}
+    window.initLucide();
+};
 
-async function callGeminiAnalyzer(rawText) {
+// ==========================================================================
+// 📖 リーダー＆AI解析処理
+// ==========================================================================
+window.callGeminiAnalyzer = async function(rawText) {
     if (!geminiApiKey) return null;
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
     const safeText = rawText.replace(/\n/g, ' ');
@@ -540,7 +727,7 @@ async function callGeminiAnalyzer(rawText) {
         const jsonMatch = text.match(/\{[\s\S]*\}/); if (jsonMatch) text = jsonMatch[0];
         return JSON.parse(text);
     } catch (e) { return null; }
-}
+};
 
 window.startAnalysisWithEmbeddedTitle = async function() {
     const rawText = document.getElementById('englishTextarea').value.trim(); 
@@ -548,36 +735,39 @@ window.startAnalysisWithEmbeddedTitle = async function() {
     const submitBtn = document.getElementById('analysisSubmitBtn'); 
     submitBtn.disabled = true;
     submitBtn.innerHTML = `<i data-lucide="loader" class="animate-spin" size="16"></i> 英文解析中...`; 
-    initLucide();
-    try { await analyzeText(rawText, document.getElementById('customTextTitle').value.trim() || `解析_${new Date().toLocaleDateString()}`); } 
+    window.initLucide();
+    try { await window.analyzeText(rawText, document.getElementById('customTextTitle').value.trim() || `解析_${new Date().toLocaleDateString()}`); } 
     catch(err) {} 
-    finally { submitBtn.disabled = false; submitBtn.innerHTML = `<i data-lucide="wand-2" size="16"></i> 英文解析`; initLucide(); }
-}
+    finally { submitBtn.disabled = false; submitBtn.innerHTML = `<i data-lucide="wand-2" size="16"></i> 英文解析`; window.initLucide(); }
+};
 
-async function analyzeText(rawText, assignedTitle = null) {
+window.analyzeText = async function(rawText, assignedTitle = null) {
     if(!rawText) return; currentActiveReaderText = rawText; currentActiveTitle = assignedTitle || "無題のテキスト";
-    const customJaLines = document.getElementById('customJapanesetextarea').value.trim().split('\n').filter(l => l.trim() !== '');
+    const customJaEl = document.getElementById('customJapanesetextarea');
+    const customJaLines = customJaEl ? customJaEl.value.trim().split('\n').filter(l => l.trim() !== '') : [];
     if(assignedTitle) {
         textHistory = textHistory.filter(h => h.text !== rawText); 
         textHistory.unshift({ id: Date.now(), title: assignedTitle, text: rawText });
-        localStorage.setItem('textHistory', JSON.stringify(textHistory)); renderHistoryList();
+        localStorage.setItem('textHistory', JSON.stringify(textHistory)); window.renderHistoryList();
     }
     document.getElementById('text-input-view').style.display = 'none'; document.getElementById('text-reader-view').style.display = 'block';
     const englishContainer = document.getElementById('englishContainer'); 
     englishContainer.innerHTML = '<div style="text-align:center; padding: 60px 20px; color: var(--cosmic-cyan); font-weight: bold; font-size: 16px; display:flex; flex-direction:column; align-items:center;"><i data-lucide="loader" class="animate-spin" size="36" style="margin-bottom:16px;"></i><span>🌀 AI構文解析・和訳取得中...</span></div>';
-    initLucide();
+    window.initLucide();
     
-    let aiAnalysisResult = geminiApiKey ? await callGeminiAnalyzer(rawText) : null;
+    let aiAnalysisResult = geminiApiKey ? await window.callGeminiAnalyzer(rawText) : null;
     const safeTextForBtn = rawText.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+    const safeTitleForBtn = currentActiveTitle.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+
     document.getElementById('readerCurrentTitle').innerHTML = `
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:100%;">
             <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; max-width:260px;">📖 ${currentActiveTitle}</span>
-            <button style="padding:6px 12px; font-size:11px; font-weight:bold; border-radius:6px; background:rgba(255,255,255,0.1); color:#E2E8F0; border:1px solid rgba(255,255,255,0.3); cursor:pointer; white-space:nowrap; transition:all 0.2s;" onclick="showCustomSaveBookshelfPrompt(\`${safeTextForBtn}\`, '${currentActiveTitle}')">
+            <button style="padding:6px 12px; font-size:11px; font-weight:bold; border-radius:6px; background:rgba(255,255,255,0.1); color:#E2E8F0; border:1px solid rgba(255,255,255,0.3); cursor:pointer; white-space:nowrap; transition:all 0.2s;" onclick="window.showCustomSaveBookshelfPrompt(\`${safeTextForBtn}\`, '${safeTitleForBtn}')">
                 <i data-lucide="folder-plus" size="12" style="vertical-align:middle; margin-right:2px;"></i> 本棚に保存する
             </button>
         </div>
     `;
-    initLucide();
+    window.initLucide();
 
     englishContainer.innerHTML = ''; let totalSummaryJa = "";
     let fallbackSentences = rawText.replace(/\n/g, ' ').match(/[^.?!]+[.?!]+|[^.?!]+$/g) || [rawText];
@@ -603,7 +793,7 @@ async function analyzeText(rawText, assignedTitle = null) {
             let wordContainer = mainContent;
             if (isGrammar && grammarData) {
                 const gSpan = document.createElement('span'); gSpan.className = 'grammar-span'; 
-                gSpan.onclick = (e) => { if (e.target.classList.contains('word-span')) return; openGrammarPopover(e, grammarData.phrase, grammarData.meaning); };
+                gSpan.onclick = (e) => { if (e.target.classList.contains('word-span')) return; window.openGrammarPopover(e, grammarData.phrase, grammarData.meaning); };
                 mainContent.appendChild(gSpan); wordContainer = gSpan;
             }
             const subTokens = isGrammar ? wStr.split(' ') : [wStr];
@@ -615,12 +805,12 @@ async function analyzeText(rawText, assignedTitle = null) {
                     span.classList.add('registered'); let hasOk = false, hasBad = false, hasSo = false, hasAnyHistory = false;
                     vocabMatch.meanings.forEach(m => { if(m.history && m.history.length > 0) hasAnyHistory = true; if(m.status === 'ok') hasOk = true; if(m.status === 'so') hasSo = true; if(m.status === 'bad') hasBad = true; });
                     if(!hasAnyHistory) span.classList.add(`status-none`); else if(hasBad) span.classList.add(`status-bad`); else if(hasSo) span.classList.add(`status-so`); else if(hasOk) span.classList.add(`status-ok`);
-                    span.onclick = (e) => openWordPopoverFromVocab(e, vocabMatch, subToken);
+                    span.onclick = (e) => window.openWordPopoverFromVocab(e, vocabMatch, subToken);
                 } else {
                     const dictMatch = dictionaryData.find(d => d.en === cleanKey);
                     if(dictMatch) {
                         span.classList.add('registered'); span.classList.add(wordMemory[cleanKey] ? `status-${wordMemory[cleanKey]}` : `status-none`);
-                        span.onclick = (e) => openWordPopover(e, cleanKey, subToken);
+                        span.onclick = (e) => window.openWordPopover(e, cleanKey, subToken);
                     }
                 }
                 wordContainer.appendChild(span);
@@ -630,14 +820,14 @@ async function analyzeText(rawText, assignedTitle = null) {
         const jaSpan = document.createElement('span'); jaSpan.className = 'sentence-ja'; jaSpan.innerText = finalJaText; mainContent.appendChild(jaSpan);
         block.appendChild(mainContent); englishContainer.appendChild(block);
     });
-    document.getElementById('summaryJaContainer').innerHTML = totalSummaryJa; setTranslationMode(currentTranslationMode); initLucide();
-}
+    document.getElementById('summaryJaContainer').innerHTML = totalSummaryJa; window.setTranslationMode(currentTranslationMode); window.initLucide();
+};
 
 window.showCustomSaveBookshelfPrompt = function(text, title) {
     if(document.getElementById('saveBookshelfOverlay')) return;
     const overlay = document.createElement('div');
     overlay.id = 'saveBookshelfOverlay';
-    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:9999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(5px);";
+    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(5px);";
     const box = document.createElement('div');
     box.style.cssText = "background:var(--card-bg); border:1px solid var(--cosmic-cyan); border-radius:16px; padding:24px; width:85%; max-width:320px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.6);";
     let folderOptions = myFolders.map(f => `<option value="${f}">${f}</option>`).join('');
@@ -661,9 +851,9 @@ window.showCustomSaveBookshelfPrompt = function(text, title) {
         if(!myFolders.includes(folder)) { myFolders.push(folder); localStorage.setItem('myFolders', JSON.stringify(myFolders)); }
         if(myBookshelf.some(item => item.text === text && item.folder === folder)) { alert("すでに保存されています！"); document.body.removeChild(overlay); return; }
         myBookshelf.push({ id: Date.now(), folder: folder, title: title || "無題のテキスト", text: text });
-        localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); alert(`保存しました！`); renderBookshelf(); document.body.removeChild(overlay);
+        localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); alert(`保存しました！`); window.renderBookshelf(); document.body.removeChild(overlay);
     };
-}
+};
 
 window.renderBookshelf = function() {
     const container = document.getElementById('myBookshelfContainer'); if(!container) return; container.innerHTML = "";
@@ -675,43 +865,78 @@ window.renderBookshelf = function() {
             <h3 style="color:var(--cosmic-cyan); font-size:15px; border-bottom:1px dashed rgba(0,240,255,0.3); padding-bottom:6px; margin-top:0; margin-bottom:12px; display:flex; align-items:center; gap:6px;"><i data-lucide="folder" size="16"></i> ${folderName}</h3>`;
         foldersData[folderName].forEach(item => {
             const safeText = item.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+            const safeTitle = item.title ? item.title.replace(/'/g, "\\'").replace(/"/g, "&quot;") : "無題";
             folderHtml += `
                 <div class="list-item-row" style="background:rgba(255,255,255,0.05); padding:10px 14px; border-radius:8px; margin-bottom:8px;">
                     <div class="list-item-title" style="flex:1;"><span><i data-lucide="file-text" size="12" style="color:var(--text-sub); margin-right:4px;"></i>${item.title}</span></div>
                     <div style="display:flex; gap:8px;">
-                        <button class="list-action-link" style="background:var(--accent); border:none;" onclick="analyzeText(\`${safeText}\`, '${item.title}')">開く</button>
-                        <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:#EF4444; padding:4px; cursor:pointer;" onclick="showCustomDeleteBookshelfConfirm(${item.id})"><i data-lucide="trash-2" size="14"></i></button>
+                        <button class="list-action-link" style="background:var(--accent); border:none;" onclick="window.analyzeText(\`${safeText}\`, '${safeTitle}')">開く</button>
+                        <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:#EF4444; padding:4px; cursor:pointer;" onclick="window.showCustomDeleteBookshelfConfirm(${item.id})"><i data-lucide="trash-2" size="14"></i></button>
                     </div>
                 </div>`;
         });
         folderHtml += `</div>`; container.innerHTML += folderHtml;
     }
-    initLucide();
-}
+    window.initLucide();
+};
 
 window.showCustomDeleteBookshelfConfirm = function(id) {
-    if(confirm("本棚から削除しますか？")) { myBookshelf = myBookshelf.filter(item => item.id !== id); localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); renderBookshelf(); }
-}
-window.showCustomDeleteHistoryConfirm = function(id) {
-    if(confirm("履歴から削除しますか？")) { textHistory = textHistory.filter(h => h.id !== id); localStorage.setItem('textHistory', JSON.stringify(textHistory)); renderHistoryList(); }
-}
+    if(confirm("本棚から削除しますか？")) { myBookshelf = myBookshelf.filter(item => item.id !== id); localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); window.renderBookshelf(); }
+};
 
-function renderHistoryList() {
+window.showCustomDeleteHistoryConfirm = function(id) {
+    if(confirm("履歴から削除しますか？")) { textHistory = textHistory.filter(h => h.id !== id); localStorage.setItem('textHistory', JSON.stringify(textHistory)); window.renderHistoryList(); }
+};
+
+window.renderHistoryList = function() {
     const container = document.getElementById('historyListContainer');
     if(!container) return; container.innerHTML = '';
     if(textHistory.length === 0) { container.innerHTML = `<div style="color:var(--text-sub); font-size:12px;">ログがありません</div>`; return; }
     textHistory.forEach(h => {
         const row = document.createElement('div'); row.className = 'list-item-row';
         const safeText = h.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+        const safeTitle = h.title ? h.title.replace(/'/g, "\\'").replace(/"/g, "&quot;") : "無題";
         row.innerHTML = `<div class="list-item-title"><span>${h.title}</span></div>
             <div style="display:flex; gap:8px;">
-                <button class="list-action-link" onclick="analyzeText(\`${safeText}\`, '${h.title}')">開く</button>
-                <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:var(--text-sub);" onclick="showCustomDeleteHistoryConfirm(${h.id})"><i data-lucide="trash-2" size="14"></i></button>
+                <button class="list-action-link" onclick="window.analyzeText(\`${safeText}\`, '${safeTitle}')">開く</button>
+                <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:var(--text-sub);" onclick="window.showCustomDeleteHistoryConfirm(${h.id})"><i data-lucide="trash-2" size="14"></i></button>
             </div>`;
         container.appendChild(row);
     });
-    initLucide();
-}
+    window.initLucide();
+};
+
+window.updateReaderWordColors = function() {
+    document.querySelectorAll('.word-span').forEach(span => {
+        let text = span.innerText.trim();
+        let cleanKey = text.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g,"");
+        if(!cleanKey) return;
+        
+        span.classList.remove('status-ok', 'status-so', 'status-bad', 'status-none');
+        
+        const vocabMatch = vocabList.find(v => v.word.toLowerCase() === cleanKey);
+        if(vocabMatch) {
+            span.classList.add('registered'); 
+            let hasOk = false, hasBad = false, hasSo = false, hasAnyHistory = false;
+            vocabMatch.meanings.forEach(m => { 
+                if(m.history && m.history.length > 0) hasAnyHistory = true; 
+                if(m.status === 'ok') hasOk = true; 
+                if(m.status === 'so') hasSo = true; 
+                if(m.status === 'bad') hasBad = true; 
+            });
+            if(!hasAnyHistory) span.classList.add(`status-none`); 
+            else if(hasBad) span.classList.add(`status-bad`); 
+            else if(hasSo) span.classList.add(`status-so`); 
+            else if(hasOk) span.classList.add(`status-ok`);
+        } else {
+            const dictMatch = dictionaryData.find(d => d.en === cleanKey);
+            if(dictMatch) {
+                span.classList.add('registered'); 
+                span.classList.add(wordMemory[cleanKey] ? `status-${wordMemory[cleanKey]}` : `status-none`);
+            }
+        }
+    });
+};
 
 window.openGrammarPopover = function(event, phrase, meaning) {
     if(event) event.stopPropagation(); currentTargetWordToken = null; currentTargetVocabNum = null;
@@ -729,22 +954,25 @@ window.openWordPopoverFromVocab = function(event, vocabItem, originalText) {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.2); padding-bottom:6px;">
                 <span style="font-size:14px; color:white; flex:1; line-height:1.4;">${m.text}</span>
                 <div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;">
-                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='ok'?'var(--word-ok)':'rgba(0,0,0,0.5)'}; color:${m.status==='ok'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'ok', event)">⚪︎</button>
-                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='so'?'var(--word-so)':'rgba(0,0,0,0.5)'}; color:${m.status==='so'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'so', event)">△</button>
-                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='bad'?'var(--word-bad)':'rgba(0,0,0,0.5)'}; color:${m.status==='bad'?'#FFF':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'bad', event)">✕</button>
-                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='none'?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.5)'}; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'none', event)">ー</button>
+                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='ok'?'var(--word-ok)':'rgba(0,0,0,0.5)'}; color:${m.status==='ok'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'ok', event)">⚪︎</button>
+                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='so'?'var(--word-so)':'rgba(0,0,0,0.5)'}; color:${m.status==='so'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'so', event)">△</button>
+                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='bad'?'var(--word-bad)':'rgba(0,0,0,0.5)'}; color:${m.status==='bad'?'#FFF':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'bad', event)">✕</button>
+                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='none'?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.5)'}; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'none', event)">ー</button>
                 </div>
             </div>`;
     });
     document.getElementById('popMeaning').innerHTML = meaningHtml; document.getElementById('popoverStatusBtns').style.display = "none"; 
     const pop = document.getElementById('wordPopover'); pop.style.display = 'flex'; pop.classList.add('show');
-}
+};
 
 window.updateMeaningStatusFromPopover = function(wordNum, meaningId, status, event) {
     if(event) event.stopPropagation(); window.updateMeaningStatus(wordNum, meaningId, status, null); 
     const vocabItem = vocabList.find(w => String(w.num) === String(wordNum));
-    if(vocabItem) { openWordPopoverFromVocab(null, vocabItem, document.getElementById('popWord').innerText); if(currentActiveReaderText) analyzeText(currentActiveReaderText, currentActiveTitle); }
-}
+    if(vocabItem) { 
+        window.openWordPopoverFromVocab(null, vocabItem, document.getElementById('popWord').innerText); 
+        window.updateReaderWordColors(); 
+    }
+};
 
 window.openWordPopover = function(event, cleanKey, originalText) {
     if(event) event.stopPropagation(); currentTargetWordToken = cleanKey; currentTargetVocabNum = null;
@@ -752,29 +980,33 @@ window.openWordPopover = function(event, cleanKey, originalText) {
     document.getElementById('popWord').innerText = originalText; document.getElementById('popWordNum').innerText = "";
     document.getElementById('popMeaning').innerText = match ? match.ja : '未登録'; document.getElementById('popoverStatusBtns').style.display = "flex"; 
     const pop = document.getElementById('wordPopover'); pop.style.display = 'flex'; pop.classList.add('show');
-}
+};
 
 window.setWordStatusFromReader = function(status) {
     if(currentTargetWordToken && !currentTargetVocabNum) {
         wordMemory[currentTargetWordToken] = status; localStorage.setItem('wordMemory', JSON.stringify(wordMemory));
         totalExp += 10; localStorage.setItem('core_v4_totalExp', totalExp);
         const coinEl = document.getElementById('profCoinCount'); if(coinEl) coinEl.innerText = totalExp;
-        if(currentActiveReaderText) analyzeText(currentActiveReaderText, currentActiveTitle);
+        window.updateReaderWordColors(); 
     }
-    closeWordPopover();
-}
+    window.closeWordPopover();
+};
 
-window.closeWordPopover = function() { document.getElementById('wordPopover').classList.remove('show'); document.getElementById('wordPopover').style.display = 'none'; }
-window.closeReader = function() { document.getElementById('text-input-view').style.display = 'block'; document.getElementById('text-reader-view').style.display = 'none'; }
+window.closeWordPopover = function() { document.getElementById('wordPopover').classList.remove('show'); document.getElementById('wordPopover').style.display = 'none'; };
+window.closeReader = function() { document.getElementById('text-input-view').style.display = 'block'; document.getElementById('text-reader-view').style.display = 'none'; };
 window.setTranslationMode = function(mode) {
     currentTranslationMode = mode;
     document.getElementById('toggle-inline').classList.toggle('active', mode === 'inline'); document.getElementById('toggle-bottom').classList.toggle('active', mode === 'bottom');
     document.querySelectorAll('.sentence-ja').forEach(el => el.style.display = mode === 'inline' ? 'block' : 'none');
     document.getElementById('summary-ja-card').style.display = mode === 'bottom' ? 'block' : 'none';
-}
+};
 
-function renderLeaderboard() { const container = document.getElementById('leaderboardContainer'); if(container) container.innerHTML = `<div style="padding:10px; font-size:14px; font-weight:700; color:#FFF;">プレイヤー名: ${myName} / 合計スコア: ${totalExp} PTS</div>`; }
-function renderActivityChart() {
+window.renderLeaderboard = function() { 
+    const container = document.getElementById('leaderboardContainer'); 
+    if(container) container.innerHTML = `<div style="padding:10px; font-size:14px; font-weight:700; color:#FFF;">プレイヤー名: ${myName} / 合計スコア: ${totalExp} PTS</div>`; 
+};
+
+window.renderActivityChart = function() {
     const chart = document.getElementById('activityBarChart'); if(!chart) return; chart.innerHTML = "";
     ["月", "火", "水", "木", "金", "土", "日"].forEach(d => {
         const wrap = document.createElement('div'); wrap.className = "bar-wrapper";
@@ -782,34 +1014,128 @@ function renderActivityChart() {
         const lbl = document.createElement('div'); lbl.className = "bar-label"; lbl.innerText = d;
         wrap.appendChild(fill); wrap.appendChild(lbl); chart.appendChild(wrap);
     });
-}
+};
 window.saveSidebarProfile = function() {
     geminiApiKey = document.getElementById('sidebarApiKeyInput').value.trim(); localStorage.setItem('core_v4_geminiKey', geminiApiKey);
     myName = document.getElementById('sideInputName').value.trim() || myName; myTarget = document.getElementById('sideInputTarget').value.trim() || myTarget;
-    selectedTitle = document.getElementById('sideSelectTitle').value; applyProfileToUi(); toggleSidebar(false);
-}
-window.enterAdminModeDirect = function() { switchTab('admin'); }
-window.saveAdminSystemSettings = function() { switchTab('home'); }
-window.logoutToGate = function() { localStorage.clear(); location.reload(); }
-window.resetLeaderboard = function() { if(confirm("ランキング履歴を一括で削除しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['normal', 'hard', 'expert', 'endless'].forEach(d => { localStorage.removeItem(`cosmic_score_${m}_${d}`); }); }); renderGameLeaderboard('mine'); } }
-window.resetBestScore = function() { if(confirm("ベストスコアを0に戻しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['normal', 'hard', 'expert', 'endless'].forEach(d => { localStorage.removeItem(`cosmic_best_${m}_${d}`); }); }); } }
-function resetScorePopup(popupEl) { popupEl.className = "giant-score-popup"; void popupEl.offsetWidth; }
+    selectedTitle = document.getElementById('sideSelectTitle').value; window.applyProfileToUi(); window.toggleSidebar(false);
+};
 
-window.renderGameLeaderboard = function(type = 'mine') {
-    const modeEl = document.getElementById('lbModeSelect'), diffEl = document.getElementById('lbDiffSelect');
-    const mode = modeEl ? modeEl.value : 'ja2en', diff = diffEl ? diffEl.value : 'normal';
-    const container = document.getElementById('leaderboardListContainer'); if(!container) return; container.innerHTML = "";
-    if (type === 'mine') {
-        let history = JSON.parse(localStorage.getItem(`cosmic_score_${mode}_${diff}`) || "[]");
-        if (history.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px; margin-top:20px;">記録はありません</div>`; return; }
-        history.forEach((record, index) => {
-            container.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;"><div>#${index+1} <strong>${record.score}</strong></div><div style="color:var(--text-sub); font-size:11px;">${record.date}</div></div>`;
-        });
+// 🌟 管理者ツールのパスワード保護 (モーダル版)
+window.enterAdminModeDirect = function() { 
+    const overlay = document.getElementById('adminPassOverlay');
+    const input = document.getElementById('adminPassInput');
+    if (overlay && input) {
+        input.value = "";
+        overlay.style.display = 'flex';
+        input.focus();
+    } else {
+        // もしHTMLにモーダルがなかった場合の予備手段
+        const pass = prompt("管理者専用アクセスです。\nパスワードを入力してください。");
+        if (pass === "tutinokopanda") { window.switchTab('admin'); } 
+        else if (pass !== null) { alert("⚠️ パスワードが違います。アクセスが拒否されました。"); }
     }
-}
-window.switchLeaderboard = function(type) { document.getElementById('lbTabMine').classList.toggle('active', type === 'mine'); renderGameLeaderboard(type); }
+};
 
-async function callGeminiGameJudge(questionText, correctAnswer, userInput, qType) {
+window.checkAdminPassword = function() {
+    const input = document.getElementById('adminPassInput');
+    const overlay = document.getElementById('adminPassOverlay');
+    if (input && input.value === "tutinokopanda") {
+        overlay.style.display = 'none';
+        window.switchTab('admin');
+    } else {
+        alert("⚠️ パスワードが違います。アクセスが拒否されました。");
+        if(input) input.value = "";
+    }
+};
+
+window.saveAdminSystemSettings = function() { window.switchTab('home'); };
+window.logoutToGate = function() { localStorage.clear(); location.reload(); };
+window.resetLeaderboard = function() { if(confirm("ランキング履歴を一括で削除しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['normal', 'hard', 'expert', 'endless'].forEach(d => { localStorage.removeItem(`cosmic_score_${m}_${d}`); }); }); window.renderGameLeaderboard('mine'); } };
+window.resetBestScore = function() { if(confirm("ベストスコアを0に戻しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['normal', 'hard', 'expert', 'endless'].forEach(d => { localStorage.removeItem(`cosmic_best_${m}_${d}`); }); }); } };
+window.resetScorePopup = function(popupEl) { popupEl.className = "giant-score-popup"; void popupEl.offsetWidth; };
+
+window.setLbMode = function(mode) {
+    currentLbMode = mode;
+    ['lbBtnModeJa', 'lbBtnModeEn', 'lbBtnModeMix'].forEach(id => {
+        let el = document.getElementById(id);
+        if(el) {
+            el.style.background = 'rgba(7, 11, 25, 0.85)';
+            el.style.boxShadow = '0 0 12px rgba(0, 240, 255, 0.2)';
+        }
+    });
+    let targetId = mode === 'ja2en' ? 'lbBtnModeJa' : mode === 'en2ja' ? 'lbBtnModeEn' : 'lbBtnModeMix';
+    let targetEl = document.getElementById(targetId);
+    if(targetEl) {
+        targetEl.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)';
+        targetEl.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.6)';
+    }
+    window.renderGameLeaderboard();
+};
+
+window.setLbDiff = function(diff) {
+    currentLbDiff = diff;
+    ['lbBtnDiffNormal', 'lbBtnDiffHard', 'lbBtnDiffExpert', 'lbBtnDiffEndless'].forEach(id => {
+        let el = document.getElementById(id);
+        if(el) {
+            el.style.background = 'rgba(7, 11, 25, 0.85)';
+            el.style.boxShadow = '0 0 12px rgba(0, 240, 255, 0.2)';
+        }
+    });
+    let targetId = diff === 'normal' ? 'lbBtnDiffNormal' : diff === 'hard' ? 'lbBtnDiffHard' : diff === 'expert' ? 'lbBtnDiffExpert' : diff === 'endless' ? 'lbBtnDiffEndless' : '';
+    let targetEl = document.getElementById(targetId);
+    if(targetEl) {
+        targetEl.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)';
+        targetEl.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.6)';
+    }
+    window.renderGameLeaderboard();
+};
+
+window.renderGameLeaderboard = function(type = currentLbType) {
+    currentLbType = type;
+    const container = document.getElementById('leaderboardListContainer');
+    if(!container) return;
+    container.innerHTML = "";
+    
+    if (type === 'mine') {
+        const keyHistory = `cosmic_score_${currentLbMode}_${currentLbDiff}`;
+        let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
+
+        if (history.length === 0) {
+            container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px; margin-top:20px;">このモードの記録はありません</div>`;
+            return;
+        }
+        
+        const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "var(--cosmic-cyan)", "var(--cosmic-cyan)"];
+        history.forEach((record, index) => {
+            const row = document.createElement('div');
+            row.style.cssText = `display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;`;
+            row.innerHTML = `
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:15px; width:20px; text-align:center;">${index + 1}</span>
+                    <span style="color:white; font-weight:800; letter-spacing:1px;">${record.score}</span>
+                </div>
+                <div style="color:var(--text-sub); font-size:11px;">${record.date}</div>
+            `;
+            container.appendChild(row);
+        });
+    } else {
+        container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px; margin-top:20px;"><i data-lucide="server-off" size="16" style="margin-bottom:4px;"></i><br>コミュニティデータ準備中...</div>`;
+        window.initLucide();
+    }
+};
+
+window.switchLeaderboard = function(type) {
+    document.getElementById('lbTabMine').classList.toggle('active', type === 'mine');
+    if(document.getElementById('lbTabComm')) document.getElementById('lbTabComm').classList.toggle('active', type === 'comm');
+    window.renderGameLeaderboard(type);
+};
+
+// ==========================================================================
+// 🎮 ゲーム (ソロテスト・マルチバトル)
+// ==========================================================================
+
+window.callGeminiGameJudge = async function(questionText, correctAnswer, userInput, qType) {
     const cLow = correctAnswer.toLowerCase().trim(), uLow = userInput.toLowerCase().trim();
     let isLocalMatch = false;
     if (qType === 'en2ja') {
@@ -828,58 +1154,95 @@ async function callGeminiGameJudge(questionText, correctAnswer, userInput, qType
         const data = await response.json(); let text = data.candidates[0].content.parts[0].text.trim().match(/\{[\s\S]*\}/)[0];
         return { status: JSON.parse(text).judgment === "OK" ? "OK" : "BAD", alternatives: "" };
     } catch (e) { return { status: "BAD", alternatives: "" }; }
-}
+};
 
 window.showModeSelectScreen = function() {
-    if (vocabList.length === 0) return alert("単語が登録されていません。");
-    document.getElementById('gameLeaderboardArea').style.display = 'none'; 
-    document.getElementById('game-mode-select-screen').style.display = 'block';
-}
+    if (vocabList.length === 0) {
+        alert("⚠️ 単語帳が空のため、テスト用の単語を自動追加してテスト画面を開きます！");
+        vocabList.push({num: "1", word: "apple", meanings: [{id: "1-0", text: "りんご", status: "none", history: []}], sub: "", status: "none", history: []});
+        window.saveVocabToStorage();
+        window.renderVocabList();
+    }
+    const startScreen = document.getElementById('game-start-screen');
+    if (startScreen) startScreen.style.display = 'none';
 
-window.selectGameMode = function(mode) {
-    selectedQuestionMode = mode; 
-    ['btnModeJa', 'btnModeEn', 'btnModeMix'].forEach(id => { document.getElementById(id).style.boxShadow = ''; document.getElementById(id).style.background = ''; });
-    let targetId = mode === 'ja2en' ? 'btnModeJa' : mode === 'en2ja' ? 'btnModeEn' : 'btnModeMix';
-    document.getElementById(targetId).style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)';
-    document.getElementById('difficulty-section').style.display = 'block';
-}
+    const diffScreen = document.getElementById('game-difficulty-select-screen');
+    if (diffScreen) diffScreen.style.display = 'none';
+    
+    const modeScreen = document.getElementById('game-mode-select-screen');
+    if (modeScreen) modeScreen.style.display = 'block';
+};
+
+window.goToDifficultySelect = function(mode) {
+    selectedQuestionMode = mode;
+    document.getElementById('game-mode-select-screen').style.display = 'none';
+    document.getElementById('game-difficulty-select-screen').style.display = 'block';
+};
+
+window.backToModeSelect = function() {
+    document.getElementById('game-difficulty-select-screen').style.display = 'none';
+    document.getElementById('game-mode-select-screen').style.display = 'block';
+};
 
 window.startActualGame = function(difficulty) {
-    currentGameDifficulty = difficulty; gameScoreCount = 0; gameCurrentIndex = 0; gameMistakeCount = 0; gameComboCount = 0; gameComboTotalScore = 0; gameHistoryLog = []; isGameProcessingAnswer = false; isGameTimerPaused = false;
+    currentGameDifficulty = difficulty; 
+    document.getElementById('game-difficulty-select-screen').style.display = 'none';
+    
+    gameScoreCount = 0; gameCurrentIndex = 0; gameMistakeCount = 0; gameComboCount = 0; gameComboTotalScore = 0; gameHistoryLog = []; isGameProcessingAnswer = false; isGameTimerPaused = false;
     gameCurrentWordsQueue = [];
     vocabList.forEach(w => {
         if(w.meanings && w.meanings.length > 0) {
             let qMode = selectedQuestionMode === 'mixed' ? (Math.random() > 0.5 ? 'en2ja' : 'ja2en') : selectedQuestionMode;
-            if(qMode === 'en2ja') gameCurrentWordsQueue.push({ type: 'en2ja', wordNum: w.num, word: w.word, meaningId: null, correctAnswers: w.meanings.map(m => formatWordForDisplay(m.text)) });
-            else w.meanings.forEach(m => { gameCurrentWordsQueue.push({ type: 'ja2en', wordNum: w.num, word: w.word, meaningId: m.id, display: formatWordForDisplay(m.text) }); });
+            if(qMode === 'en2ja') gameCurrentWordsQueue.push({ type: 'en2ja', wordNum: w.num, word: w.word, meaningId: null, correctAnswers: w.meanings.map(m => window.formatWordForDisplay(m.text)) });
+            else w.meanings.forEach(m => { gameCurrentWordsQueue.push({ type: 'ja2en', wordNum: w.num, word: w.word, meaningId: m.id, display: window.formatWordForDisplay(m.text) }); });
         }
     });
     gameCurrentWordsQueue.sort(() => Math.random() - 0.5);
     gameRemainingTime = difficulty === 'normal' ? 60 : difficulty === 'hard' ? 180 : 300;
 
-    document.getElementById('game-start-screen').style.display = 'none'; document.getElementById('game-play-screen').style.display = 'block';
-    document.getElementById('gameNextBtn').style.display = 'none'; document.getElementById('feedbackContent').style.display = "none";
+    document.getElementById('game-start-screen').style.display = 'none'; 
+    document.getElementById('game-play-screen').style.display = 'block';
+    document.getElementById('gameNextBtn').style.display = 'none'; 
+    document.getElementById('feedbackContent').style.display = "none";
     document.getElementById('giantJudgmentOverlay').classList.remove('show');
     
     if (activeCharacter === 'tangon') { document.getElementById('gameActiveCharacterContainer').style.display = 'flex'; document.getElementById('gameActiveCharacterImg').src = 'tangon.png'; } 
     else { document.getElementById('gameActiveCharacterContainer').style.display = 'none'; }
 
     clearInterval(gameTimerInterval);
-    if (difficulty !== 'endless') { gameTimerInterval = setInterval(() => { if (isGameTimerPaused) return; gameRemainingTime--; document.getElementById('gameTimerNum').innerText = gameRemainingTime; if (gameRemainingTime <= 0) endGameSession(); }, 1000); }
-    showNextGameWord();
-}
+    if (difficulty !== 'endless') { gameTimerInterval = setInterval(() => { if (isGameTimerPaused) return; gameRemainingTime--; document.getElementById('gameTimerNum').innerText = gameRemainingTime; if (gameRemainingTime <= 0) window.endGameSession(); }, 1000); }
+    window.showNextGameWord();
+};
 
-function showNextGameWord() {
-    if (gameCurrentIndex >= gameCurrentWordsQueue.length) { gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0; }
-    const q = gameCurrentWordsQueue[gameCurrentIndex]; currentQuestionType = q.type;
+window.showNextGameWord = function() {
+    if (gameCurrentIndex >= gameCurrentWordsQueue.length) { 
+        gameCurrentWordsQueue.sort(() => Math.random() - 0.5); 
+        gameCurrentIndex = 0; 
+    }
+    const q = gameCurrentWordsQueue[gameCurrentIndex];
+    currentQuestionType = q.type;
+
     const wordEl = document.getElementById('gameWordTarget');
-    if (q.type === 'en2ja') { wordEl.innerText = q.word; document.getElementById('gameAnswerInput').placeholder = "和訳を入力..."; } 
-    else { wordEl.innerText = q.display; document.getElementById('gameAnswerInput').placeholder = "英単語を入力..."; }
-    document.getElementById('gameAnswerInput').value = ""; document.getElementById('gameAnswerInput').focus(); isGameProcessingAnswer = false;
-}
+    if (q.type === 'en2ja') {
+        wordEl.innerText = q.word; 
+        document.getElementById('gameAnswerInput').placeholder = "和訳を入力...";
+    } else {
+        wordEl.innerText = q.display; 
+        document.getElementById('gameAnswerInput').placeholder = "英単語を入力...";
+    }
+    
+    // 🌟 変更点: フォントサイズを結構下げる
+    if (wordEl.innerText.length > 30) wordEl.style.fontSize = '11px';
+    else if (wordEl.innerText.length > 15) wordEl.style.fontSize = '15px';
+    else wordEl.style.fontSize = '20px'; 
+    
+    document.getElementById('gameAnswerInput').value = ""; 
+    document.getElementById('gameAnswerInput').focus();
+    isGameProcessingAnswer = false;
+};
 
 window.submitGameAnswer = async function() {
-    if (isGameProcessingAnswer) return; if (document.getElementById('gameNextBtn').style.display === 'flex') return goToNextGameWord();
+    if (isGameProcessingAnswer) return; if (document.getElementById('gameNextBtn').style.display === 'flex') return window.goToNextGameWord();
     const userInput = document.getElementById('gameAnswerInput').value.trim(); if (!userInput) return;
     isGameProcessingAnswer = true; isGameTimerPaused = true;
     document.getElementById('gameAnswerInput').blur(); document.getElementById('gameSubmitBtn').style.display = 'none'; document.getElementById('gameJudgingIndicator').style.display = 'flex';
@@ -887,15 +1250,15 @@ window.submitGameAnswer = async function() {
     const q = gameCurrentWordsQueue[gameCurrentIndex]; let isCorrect = false, alternatives = "";
     if (q.type === 'en2ja') {
         isCorrect = q.correctAnswers.some(ans => userInput.includes(ans) || ans.includes(userInput) || userInput === ans);
-        if(!isCorrect && geminiApiKey) { const res = await callGeminiGameJudge(q.word, q.correctAnswers.join(' / '), userInput, 'en2ja'); isCorrect = res.status === "OK"; alternatives = res.alternatives; }
+        if(!isCorrect && geminiApiKey) { const res = await window.callGeminiGameJudge(q.word, q.correctAnswers.join(' / '), userInput, 'en2ja'); isCorrect = res.status === "OK"; alternatives = res.alternatives; }
     } else {
         isCorrect = (userInput.toLowerCase() === q.word.toLowerCase());
-        if(!isCorrect && geminiApiKey) { const res = await callGeminiGameJudge(q.display, q.word, userInput, 'ja2en'); isCorrect = res.status === "OK"; alternatives = res.alternatives; }
+        if(!isCorrect && geminiApiKey) { const res = await window.callGeminiGameJudge(q.display, q.word, userInput, 'ja2en'); isCorrect = res.status === "OK"; alternatives = res.alternatives; }
     }
 
     document.getElementById('gameJudgingIndicator').style.display = 'none'; document.getElementById('gameNextBtn').style.display = 'flex';
     const overlay = document.getElementById('giantJudgmentOverlay'), popupEl = document.getElementById('giantScorePopup'), comboContainer = document.getElementById('persistentComboContainer');
-    resetScorePopup(popupEl);
+    window.resetScorePopup(popupEl);
     
     let updatedStatus = "bad";
     if (isCorrect) {
@@ -916,20 +1279,21 @@ window.submitGameAnswer = async function() {
     if(targetVocab) {
         if(q.type === 'ja2en' && q.meaningId) { const m = targetVocab.meanings.find(x => x.id === q.meaningId); if(m) { m.status = updatedStatus; if(!m.history) m.history=[]; m.history.push(updatedStatus); } }
         else if(targetVocab.meanings.length > 0) { targetVocab.meanings[0].status = updatedStatus; if(!targetVocab.meanings[0].history) targetVocab.meanings[0].history = []; targetVocab.meanings[0].history.push(updatedStatus); }
-        targetVocab.status = updatedStatus; if(!targetVocab.history) targetVocab.history = []; targetVocab.history.push(updatedStatus); saveVocabToStorage();
+        targetVocab.status = updatedStatus; if(!targetVocab.history) targetVocab.history = []; targetVocab.history.push(updatedStatus); window.saveVocabToStorage();
     }
 
     gameHistoryLog.push({ word: q.type === 'en2ja' ? q.word : q.display, user: userInput, correct: q.type === 'en2ja' ? q.correctAnswers.join(', ') : q.word, isCorrect: isCorrect });
     document.getElementById('feedbackContent').style.display = "block"; document.getElementById('feedbackUserAns').innerText = userInput; document.getElementById('feedbackCorrectAns').innerText = q.type === 'en2ja' ? q.correctAnswers.join(', ') : q.word;
     if (alternatives && alternatives !== "特になし") { document.getElementById('feedbackOtherAns').innerText = alternatives; document.getElementById('feedbackDiffAnswersRow').style.display = "block"; } 
     else { document.getElementById('feedbackDiffAnswersRow').style.display = "none"; }
-}
+    window.scrollTo(0, 0);
+};
 
 window.goToNextGameWord = function() {
-    if (currentGameDifficulty === 'endless' && gameMistakeCount >= 5) return endGameSession();
+    if (currentGameDifficulty === 'endless' && gameMistakeCount >= 5) return window.endGameSession();
     document.getElementById('gameNextBtn').style.display = 'none'; document.getElementById('gameSubmitBtn').style.display = 'flex'; document.getElementById('feedbackContent').style.display = "none"; 
     document.getElementById('giantJudgmentOverlay').classList.remove('show'); document.getElementById('persistentComboContainer').style.display = "none"; document.getElementById('persistentComboContainer').classList.remove('combo-blink');
-    isGameTimerPaused = false; gameCurrentIndex++; showNextGameWord();
+    isGameTimerPaused = false; gameCurrentIndex++; window.showNextGameWord();
 };
 
 window.endGameSession = function() {
@@ -944,10 +1308,22 @@ window.endGameSession = function() {
     const listContainer = document.getElementById('gameHistoryListContainer'); listContainer.innerHTML = "";
     if (gameHistoryLog.length === 0) listContainer.innerHTML = `<div style="text-align:center; color:var(--text-sub); padding:12px; font-size:12px;">ログがありません</div>`;
     else gameHistoryLog.forEach(item => { listContainer.innerHTML += `<div class="cosmic-history-item"><span class="cosmic-res-mark ${item.isCorrect ? 'ok' : 'bad'}">${item.isCorrect ? '◎' : '✕'}</span><div style="flex:1;"><div style="font-weight:800; color:white; font-size:13px;">${item.word.replace(/\n/g, ' ')}</div><div style="color:var(--text-sub); margin-top:2px;">あなたの回答: <span style="color:white;">${item.user || '(空欄)'}</span></div><div style="color:var(--word-ok); font-size:11px; margin-top:1px;">正答: ${item.correct}</div></div></div>`; });
-    renderVocabList(); initLucide();
-}
+    window.renderVocabList(); window.initLucide();
+};
 
-window.backToGameMenu = function() { document.getElementById('game-mode-select-screen').style.display = 'none'; document.getElementById('game-result-screen').style.display = 'none'; document.getElementById('game-start-screen').style.display = 'flex'; document.getElementById('gameLeaderboardArea').style.display = 'flex'; renderGameLeaderboard('mine'); }
+window.backToGameMenu = function() { 
+    document.getElementById('game-mode-select-screen').style.display = 'none'; 
+    document.getElementById('game-difficulty-select-screen').style.display = 'none';
+    document.getElementById('game-result-screen').style.display = 'none'; 
+    
+    const startScreen = document.getElementById('game-start-screen');
+    if (startScreen) startScreen.style.display = 'flex'; 
+    
+    const lbArea = document.getElementById('gameLeaderboardArea');
+    if (lbArea) lbArea.style.display = 'flex';
+    
+    window.renderGameLeaderboard(); 
+};
 
 // ==========================================================================
 // ⚔️ パーティ・装備編成とマルチバトル
@@ -955,10 +1331,10 @@ window.backToGameMenu = function() { document.getElementById('game-mode-select-s
 window.switchPartySubCategory = function(category) {
     document.getElementById('partyTabChar').classList.toggle('active', category === 'character'); document.getElementById('partyTabWeapon').classList.toggle('active', category === 'weapon'); document.getElementById('partyTabArmor').classList.toggle('active', category === 'armor');
     document.getElementById('partyBoxCharacter').style.display = category === 'character' ? 'grid' : 'none'; document.getElementById('partyBoxWeapon').style.display = category === 'weapon' ? 'grid' : 'none'; document.getElementById('partyBoxArmor').style.display = category === 'armor' ? 'grid' : 'none';
-}
-window.selectCharacter = function(charId) { activeCharacter = charId; localStorage.setItem('core_v4_active_char', charId); updatePartySlotsUi(); alert(charId ? 'キャラクターをセットしたよ！' : 'キャラクターの編成を外したよ。'); }
-window.selectWeapon = function(weaponId) { activeWeapon = weaponId; localStorage.setItem('core_v4_active_weapon', weaponId); updatePartySlotsUi(); alert(weaponId ? '武器を装備したよ！' : '武器を外したよ。'); }
-window.selectArmor = function(armorId) { activeArmor = armorId; localStorage.setItem('core_v4_active_armor', armorId); updatePartySlotsUi(); alert(armorId ? '防具を装備したよ！' : '防具を外したよ。'); }
+};
+window.selectCharacter = function(charId) { activeCharacter = charId; localStorage.setItem('core_v4_active_char', charId); window.updatePartySlotsUi(); alert(charId ? 'キャラクターをセットしたよ！' : 'キャラクターの編成を外したよ。'); };
+window.selectWeapon = function(weaponId) { activeWeapon = weaponId; localStorage.setItem('core_v4_active_weapon', weaponId); window.updatePartySlotsUi(); alert(weaponId ? '武器を装備したよ！' : '武器を外したよ。'); };
+window.selectArmor = function(armorId) { activeArmor = armorId; localStorage.setItem('core_v4_active_armor', armorId); window.updatePartySlotsUi(); alert(armorId ? '防具を装備したよ！' : '防具を外したよ。'); };
 
 window.updatePartySlotsUi = function() {
     const charImgFrame = document.getElementById('slotCharImgContainer'), charNameLbl = document.getElementById('slotCharName');
@@ -969,48 +1345,139 @@ window.updatePartySlotsUi = function() {
     if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "🔮🛡️"; armorNameLbl.innerText = "星屑の盾"; } else { armorImgFrame.innerHTML = "🛡️"; armorNameLbl.innerText = "布の服"; }
     const battleThumb = document.getElementById('multiAllyCharThumbnail');
     if (battleThumb) { battleThumb.innerHTML = activeCharacter === 'tangon' ? `<img src="tangon.png" alt="thumb">` : "👤"; }
-}
+};
 
-window.showMultiBattleSetup = function() { if (vocabList.length === 0) return alert("単語が登録されていません。"); document.getElementById('game-start-screen').style.display = 'none'; document.getElementById('multi-battle-setup-screen').style.display = 'block'; document.getElementById('multi-battle-matching-screen').style.display = 'none'; document.getElementById('multi-battle-play-screen').style.display = 'none'; window.selectMultiMode('coop'); }
+window.showMultiBattleSetup = function() { 
+    if (vocabList.length === 0) {
+        alert("⚠️ 単語帳が空のため、お試し用の単語を自動追加してバトル画面を開きます！");
+        vocabList.push({num: "1", word: "apple", meanings: [{id: "1-0", text: "りんご", status: "none", history: []}], sub: "", status: "none", history: []});
+        window.saveVocabToStorage();
+        window.renderVocabList();
+    }
+    
+    window.proceedToMultiSetup();
+};
+
+window.proceedToMultiSetup = function() {
+    const lbArea = document.getElementById('gameLeaderboardArea');
+    if (lbArea) lbArea.style.display = 'none';
+    const startScreen = document.getElementById('game-start-screen');
+    if (startScreen) startScreen.style.display = 'none';
+    const setupScreen = document.getElementById('multi-battle-setup-screen');
+    if (setupScreen) setupScreen.style.display = 'block';
+    const matchScreen = document.getElementById('multi-battle-matching-screen');
+    if (matchScreen) matchScreen.style.display = 'none';
+    const playScreen = document.getElementById('multi-battle-play-screen');
+    if (playScreen) playScreen.style.display = 'none';
+    
+    window.selectMultiMode('coop');
+};
+
 window.selectMultiMode = function(mode) { 
     currentMultiMode = mode; 
-    document.getElementById('btnMultiCoop').style.background = ''; document.getElementById('btnMultiCoop').style.boxShadow = ''; document.getElementById('btnMultiPvp').style.background = ''; document.getElementById('btnMultiPvp').style.boxShadow = '';
-    if (mode === 'coop') { document.getElementById('btnMultiCoop').style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)'; document.getElementById('btnMultiCoop').style.boxShadow = '0 0 20px rgba(0, 240, 255, 0.6)'; } 
-    else { document.getElementById('btnMultiPvp').style.background = 'linear-gradient(135deg, rgba(236, 72, 153, 0.4) 0%, rgba(244, 63, 94, 0.4) 100%)'; document.getElementById('btnMultiPvp').style.boxShadow = '0 0 20px rgba(236, 72, 153, 0.6)'; }
-}
-window.cancelMultiBattleSetup = function() { document.getElementById('multi-battle-setup-screen').style.display = 'none'; document.getElementById('game-start-screen').style.display = 'flex'; }
-window.startMultiBattleMatching = function() { document.getElementById('multi-battle-setup-screen').style.display = 'none'; document.getElementById('multi-battle-matching-screen').style.display = 'flex'; setTimeout(() => { if (document.getElementById('multi-battle-matching-screen').style.display === 'flex') { startMultiBattlePlay(); } }, 2000); }
-window.cancelMultiBattleMatching = function() { document.getElementById('multi-battle-matching-screen').style.display = 'none'; document.getElementById('multi-battle-setup-screen').style.display = 'block'; }
+    let btnC = document.getElementById('btnMultiCoop');
+    let btnP = document.getElementById('btnMultiPvp');
+    if(btnC) { btnC.style.background = ''; btnC.style.boxShadow = ''; }
+    if(btnP) { btnP.style.background = ''; btnP.style.boxShadow = ''; }
+    if (mode === 'coop') { 
+        if(btnC) { btnC.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)'; btnC.style.boxShadow = '0 0 20px rgba(0, 240, 255, 0.6)'; }
+    } else { 
+        if(btnP) { btnP.style.background = 'linear-gradient(135deg, rgba(236, 72, 153, 0.4) 0%, rgba(244, 63, 94, 0.4) 100%)'; btnP.style.boxShadow = '0 0 20px rgba(236, 72, 153, 0.6)'; }
+    }
+};
+
+window.cancelMultiBattleSetup = function() { 
+    document.getElementById('multi-battle-setup-screen').style.display = 'none'; 
+    const startScreen = document.getElementById('game-start-screen');
+    if (startScreen) startScreen.style.display = 'flex'; 
+    const lbArea = document.getElementById('gameLeaderboardArea');
+    if (lbArea) lbArea.style.display = 'flex';
+};
+
+// 🌟 マッチング開始時に動画再生を仕込む
+window.startMultiBattleMatching = function() { 
+    document.getElementById('multi-battle-setup-screen').style.display = 'none'; 
+    document.getElementById('multi-battle-matching-screen').style.display = 'flex'; 
+    
+    // マッチング演出後（2秒後）に、バトル開始ではなく「動画再生」を呼ぶ
+    setTimeout(() => { 
+        if (document.getElementById('multi-battle-matching-screen').style.display === 'flex') { 
+            window.playIntroVideoBeforeBattle(); 
+        } 
+    }, 2000); 
+};
+
+window.cancelMultiBattleMatching = function() { 
+    document.getElementById('multi-battle-matching-screen').style.display = 'none'; 
+    document.getElementById('multi-battle-setup-screen').style.display = 'block'; 
+};
+
+// 🌟 新設：マッチング直後に動画を流す関数
+window.playIntroVideoBeforeBattle = function() {
+    // マッチング画面を非表示にする
+    document.getElementById('multi-battle-matching-screen').style.display = 'none';
+    
+    const overlay = document.getElementById('video-overlay');
+    const video = document.getElementById('introVideo');
+    
+    if (overlay && video) {
+        overlay.style.display = 'flex'; 
+        video.currentTime = 0; 
+        
+        video.play().catch(e => {
+            console.log("動画の自動再生がブロックされました", e);
+            window.skipIntroVideo();
+        });
+        
+        video.onended = window.skipIntroVideo;
+    } else {
+        // 動画がない場合はすぐにバトル画面へ
+        window.startMultiBattlePlay();
+    }
+};
+
+// 動画のスキップ処理（終わったらバトルへ行く）
+window.skipIntroVideo = function() {
+    const overlay = document.getElementById('video-overlay');
+    const video = document.getElementById('introVideo');
+    if(video) video.pause(); 
+    if(overlay) overlay.style.display = 'none'; 
+    
+    window.startMultiBattlePlay();
+};
 
 window.startMultiBattlePlay = function() {
-    document.getElementById('multi-battle-matching-screen').style.display = 'none'; document.getElementById('multi-battle-play-screen').style.display = 'flex'; window.setMultiStance('atk'); gameComboCount = 0; updatePartySlotsUi();
+    document.getElementById('multi-battle-play-screen').style.display = 'flex'; 
+    window.setMultiStance('atk'); gameComboCount = 0; window.updatePartySlotsUi();
     const playerCount = parseInt(document.getElementById('multiPlayerCount').value) || 2;
     multiBossMaxHp = 100000 * playerCount; multiBossHp = multiBossMaxHp; multiAllyMaxHp = 3500 * playerCount; multiAllyHp = multiAllyMaxHp; multiEnemyTimeLeft = 10;
-    updateMultiHpBars();
-    gameCurrentWordsQueue = []; vocabList.forEach(w => { if(w.meanings && w.meanings.length > 0) gameCurrentWordsQueue.push({ wordNum: w.num, word: w.word, meaning: formatWordForDisplay(w.meanings[0].text) }); });
+    window.updateMultiHpBars();
+    gameCurrentWordsQueue = []; 
+    vocabList.forEach(w => { if(w.meanings && w.meanings.length > 0) gameCurrentWordsQueue.push({ wordNum: w.num, word: w.word, meaning: window.formatWordForDisplay(w.meanings[0].text) }); });
     gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0;
-    clearInterval(gameTimerInterval); gameTimerInterval = setInterval(handleMultiBattleTimer, 100); showNextMultiWord(); initMultiBattleEvents();
-}
+    clearInterval(gameTimerInterval); gameTimerInterval = setInterval(window.handleMultiBattleTimer, 100); 
+    window.showNextMultiWord(); window.initMultiBattleEvents();
+};
 
-function updateMultiHpBars() {
+window.updateMultiHpBars = function() {
     const ally = document.getElementById('multiAllyHpFill'); if(ally) ally.style.width = Math.max(0, (multiAllyHp / multiAllyMaxHp) * 100) + "%";
     const allyTxt = document.getElementById('multiAllyHpText'); if(allyTxt) allyTxt.innerText = `HP: ${Math.max(0, Math.floor(multiAllyHp))} / ${multiAllyMaxHp}`;
     const boss = document.getElementById('multiBossHpFill'); if(boss) boss.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
-    const bossTxt = document.getElementById('multiEnemyHpText'); if(bossTxt) bossTxt.innerText = `HP: ${Math.max(0, Math.floor(multiBossHp))} / ${multiBossMaxHp}`;
-}
+    const bossTxt = document.getElementById('multiEnemyHpText'); if(bossTxt) bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))} / ${multiBossMaxHp}`;
+};
 
-function handleMultiBattleTimer() {
+window.handleMultiBattleTimer = function() {
     multiEnemyTimeLeft -= 0.1;
     if(multiEnemyTimeLeft <= 0) {
         multiEnemyTimeLeft = 10; let damage = currentStance === 'def' ? 400 : 800; multiAllyHp -= damage;
         document.body.classList.add('boss-damage-shake'); setTimeout(() => document.body.classList.remove('boss-damage-shake'), 300);
-        if(multiAllyHp <= 0) { clearInterval(gameTimerInterval); alert("全滅しました..."); cancelMultiBattlePlay(true); return; }
+        if(multiAllyHp <= 0) { clearInterval(gameTimerInterval); alert("全滅しました..."); window.cancelMultiBattlePlay(true); return; }
     }
-    const timerDisplay = document.getElementById('multiEnemyTimerDisplay'); if(timerDisplay) timerDisplay.innerText = `敵の攻撃まで: ${Math.max(0, multiEnemyTimeLeft).toFixed(1)}秒`;
-    updateMultiHpBars();
-}
+    const timerDisplay = document.getElementById('multiEnemyTimerDisplay'); if(timerDisplay) timerDisplay.innerText = `行動: ${Math.max(0, multiEnemyTimeLeft).toFixed(1)}秒`;
+    window.updateMultiHpBars();
+};
 
-function showNextMultiWord() {
+window.showNextMultiWord = function() {
     if(gameCurrentIndex >= gameCurrentWordsQueue.length) { gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0; }
     const target = gameCurrentWordsQueue[gameCurrentIndex]; document.getElementById('flickTargetWord').innerText = target.word;
     let choices = [target.meaning]; let dummies = [...gameCurrentWordsQueue].filter(w => w.word !== target.word).map(w => w.meaning);
@@ -1018,23 +1485,37 @@ function showNextMultiWord() {
     currentMultiCorrectIndex = choices.indexOf(target.meaning);
     for(let i=0; i<8; i++) { let el = document.getElementById('multiChoice-' + i); if(el) { el.innerText = choices[i]; el.classList.remove('highlight'); } }
     const icon = document.getElementById('flickWeaponIcon'); if(icon) { icon.style.left = '50%'; icon.style.top = '50%'; }
-}
+};
 
-window.cancelMultiBattlePlay = function(force = false) { if(force || confirm("バトルから逃走しますか？")) { clearInterval(gameTimerInterval); document.getElementById('multi-battle-play-screen').style.display = 'none'; document.getElementById('game-start-screen').style.display = 'flex'; } }
-window.setMultiStance = function(stance) { currentStance = stance; document.getElementById('stanceAtkBtn').classList.toggle('active', stance === 'atk'); document.getElementById('stanceDefBtn').classList.toggle('active', stance === 'def'); }
+window.cancelMultiBattlePlay = function(force = false) { 
+    if(force || confirm("バトルから逃走しますか？")) { 
+        clearInterval(gameTimerInterval); 
+        document.getElementById('multi-battle-play-screen').style.display = 'none'; 
+        const startScreen = document.getElementById('game-start-screen');
+        if (startScreen) startScreen.style.display = 'flex'; 
+        const lbArea = document.getElementById('gameLeaderboardArea');
+        if (lbArea) lbArea.style.display = 'flex';
+    } 
+};
 
-function initMultiBattleEvents() {
+window.setMultiStance = function(stance) { 
+    currentStance = stance; 
+    document.getElementById('stanceAtkBtn').classList.toggle('active', stance === 'atk'); 
+    document.getElementById('stanceDefBtn').classList.toggle('active', stance === 'def'); 
+};
+
+window.initMultiBattleEvents = function() {
     const pad = document.getElementById('flickPadArea');
     if(pad && !pad.dataset.eventsBound) {
         pad.dataset.eventsBound = "true";
-        pad.addEventListener('touchstart', handleFlickStart, {passive: false});
-        pad.addEventListener('touchmove', handleFlickMove, {passive: false});
-        pad.addEventListener('touchend', handleFlickEnd);
+        pad.addEventListener('touchstart', window.handleFlickStart, {passive: false});
+        pad.addEventListener('touchmove', window.handleFlickMove, {passive: false});
+        pad.addEventListener('touchend', window.handleFlickEnd);
     }
-}
+};
 
-function handleFlickStart(e) { e.preventDefault(); const touch = e.touches[0]; const rect = document.getElementById('flickPadArea').getBoundingClientRect(); flickStartX = touch.clientX - rect.left; flickStartY = touch.clientY - rect.top; isFlicking = true; currentFlickChoice = -1; }
-function handleFlickMove(e) {
+window.handleFlickStart = function(e) { e.preventDefault(); const touch = e.touches[0]; const rect = document.getElementById('flickPadArea').getBoundingClientRect(); flickStartX = touch.clientX - rect.left; flickStartY = touch.clientY - rect.top; isFlicking = true; currentFlickChoice = -1; };
+window.handleFlickMove = function(e) {
     if(!isFlicking) return; e.preventDefault(); const touch = e.touches[0]; const rect = document.getElementById('flickPadArea').getBoundingClientRect();
     let dx = (touch.clientX - rect.left) - flickStartX, dy = (touch.clientY - rect.top) - flickStartY, distance = Math.sqrt(dx*dx + dy*dy);
     const icon = document.getElementById('flickWeaponIcon'); if(icon) { icon.style.left = `calc(50% + ${dx}px)`; icon.style.top = `calc(50% + ${dy}px)`; }
@@ -1044,36 +1525,33 @@ function handleFlickMove(e) {
         let sector = Math.round(angle / 45) % 8; let choiceMap = { 0: 4, 1: 7, 2: 6, 3: 5, 4: 3, 5: 0, 6: 1, 7: 2 };
         currentFlickChoice = choiceMap[sector]; let el = document.getElementById('multiChoice-' + currentFlickChoice); if(el) el.classList.add('highlight');
     } else { currentFlickChoice = -1; }
-}
+};
 
-function handleFlickEnd(e) {
+window.handleFlickEnd = function(e) {
     if(!isFlicking) return; isFlicking = false;
     for(let i=0; i<8; i++) { let el = document.getElementById('multiChoice-' + i); if(el) el.classList.remove('highlight'); }
-    if(currentFlickChoice !== -1) { processMultiFlickAnswer(currentFlickChoice); } 
+    if(currentFlickChoice !== -1) { window.processMultiFlickAnswer(currentFlickChoice); } 
     else { const icon = document.getElementById('flickWeaponIcon'); if(icon) { icon.style.transition = 'all 0.15s cubic-bezier(0.25, 1, 0.5, 1)'; icon.style.left = '50%'; icon.style.top = '50%'; setTimeout(() => { icon.style.transition = 'none'; }, 150); } }
-}
+};
 
-function processMultiFlickAnswer(choiceIndex) {
+window.processMultiFlickAnswer = function(choiceIndex) {
     if(choiceIndex === currentMultiCorrectIndex) {
-        gameComboCount++; createFireballEffect();
+        gameComboCount++; window.createFireballEffect();
         const thumb = document.getElementById('multiAllyCharThumbnail');
         if(thumb) { thumb.classList.remove('companion-attack-active'); void thumb.offsetWidth; thumb.classList.add('companion-attack-active'); setTimeout(() => thumb.classList.remove('companion-attack-active'), 450); }
         
-        // 攻撃時の画面の揺れ（boss-damage-shake）をオフにしました。
-        // （ダメージを受けた時のみ揺れるようにしています）
-
         let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5;
         if(currentStance === 'atk') multiBossHp -= 400 * comboMulti; else multiAllyHp = Math.min(multiAllyMaxHp, multiAllyHp + 100 * comboMulti); 
         if (multiBossHp <= 0) { clearInterval(gameTimerInterval); alert("🎉 BOSS討伐完了！クエストクリア！"); window.cancelMultiBattlePlay(true); return; }
     } else { gameComboCount = 0; multiEnemyTimeLeft = Math.max(0, multiEnemyTimeLeft - 3); }
-    updateMultiHpBars(); gameCurrentIndex++; showNextMultiWord();
-}
+    window.updateMultiHpBars(); gameCurrentIndex++; window.showNextMultiWord();
+};
 
-function createFireballEffect() {
+window.createFireballEffect = function() {
     const layer = document.getElementById('battle-effects-layer'); if(!layer) return;
     const p = document.createElement('div'); p.className = 'fireball-particle';
     const pad = document.getElementById('flickPadArea'); const rect = pad.getBoundingClientRect();
     p.style.left = (rect.left + rect.width/2) + 'px'; p.style.top = (rect.top + rect.height/2) + 'px';
     p.style.setProperty('--tx', (Math.random() * 80 - 40) + 'px'); p.style.setProperty('--ty', '-160px'); 
     layer.appendChild(p); setTimeout(() => { p.remove(); }, 400);
-}
+};
