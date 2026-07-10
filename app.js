@@ -58,7 +58,7 @@ let isGameTimerPaused = false;
 let currentMultiMode = 'coop'; 
 let multiBossMaxHp = 100000;
 let multiBossHp = 100000;
-let multiPartyMembers = []; // パーティメンバーの個別HP管理用配列
+let multiPartyMembers = []; 
 let multiEnemyTimeLeft = 10;
 let currentMultiCorrectIndex = -1;
 
@@ -710,7 +710,6 @@ window.renderVocabList = function() {
     });
     window.initLucide();
 };
-
 // ==========================================================================
 // 📖 リーダー＆AI解析処理
 // ==========================================================================
@@ -1187,6 +1186,8 @@ window.backToModeSelect = function() {
 };
 
 window.startActualGame = function(difficulty) {
+    document.body.classList.add('in-game-active');
+
     currentGameDifficulty = difficulty; 
     document.getElementById('game-difficulty-select-screen').style.display = 'none';
     
@@ -1298,6 +1299,8 @@ window.goToNextGameWord = function() {
 };
 
 window.endGameSession = function() {
+    document.body.classList.remove('in-game-active');
+
     clearInterval(gameTimerInterval); document.getElementById('game-play-screen').style.display = 'none'; document.getElementById('game-result-screen').style.display = 'block';
     if (gameScoreCount > 0) {
         let history = JSON.parse(localStorage.getItem(`cosmic_score_${selectedQuestionMode}_${currentGameDifficulty}`) || "[]");
@@ -1313,6 +1316,8 @@ window.endGameSession = function() {
 };
 
 window.backToGameMenu = function() { 
+    document.body.classList.remove('in-game-active');
+
     document.getElementById('game-mode-select-screen').style.display = 'none'; 
     document.getElementById('game-difficulty-select-screen').style.display = 'none';
     document.getElementById('game-result-screen').style.display = 'none'; 
@@ -1374,6 +1379,7 @@ window.updatePartySlotsUi = function() {
 
 window.initMultiParty = function(playerCount) {
     multiPartyMembers = [];
+    const colors = ['🔵', '🟢', '🟡', '🟣'];
     for(let i = 0; i < playerCount; i++) {
         let isMe = (i === 0);
         multiPartyMembers.push({
@@ -1382,7 +1388,8 @@ window.initMultiParty = function(playerCount) {
             char: isMe ? activeCharacter : '', 
             maxHp: 3500,
             hp: 3500,
-            isMe: isMe
+            isMe: isMe,
+            colorIcon: colors[i]
         });
     }
     window.renderMultiParty();
@@ -1400,7 +1407,7 @@ window.renderMultiParty = function() {
         
         let html = `
             <div class="multi-party-member" id="partyMember-${m.id}">
-                <div style="font-size:9px; color:${color}; font-weight:bold; margin-bottom:2px;">${label}</div>
+                <div style="font-size:9px; color:${color}; font-weight:bold; margin-bottom:2px;">${label} ${m.colorIcon}</div>
                 <div class="multi-party-icon">${charImg}</div>
                 <div class="multi-party-hp-bar">
                     <div class="multi-party-hp-fill" id="partyMemberHpFill-${m.id}" style="width:${hpPercent}%;"></div>
@@ -1409,6 +1416,45 @@ window.renderMultiParty = function() {
         `;
         container.innerHTML += html;
     });
+};
+
+// 🌟 キャラから吹き出し or V字ダメージを出す魔法
+window.showCharacterPopup = function(memberId, amount, type) {
+    const memberEl = document.getElementById('partyMember-' + memberId);
+    if(!memberEl) return;
+    
+    const popup = document.createElement('div');
+    if(type === 'attack') {
+        popup.className = 'popup-bubble-atk';
+        popup.innerText = amount;
+    } else if(type === 'damage') {
+        popup.className = 'popup-v-dmg';
+        popup.innerHTML = `<div class="v-mark"></div><div class="v-dmg-text">${amount}</div>`;
+    }
+    
+    memberEl.appendChild(popup);
+    
+    // 🌟 アニメーション時間に合わせて消去タイミングを1.5秒(1500ms)に延長！
+    setTimeout(() => {
+        if(popup.parentNode) popup.remove();
+    }, 1500);
+};
+
+// 🌟 スマート1行ログシステム
+window.addBattleLog = function(text, type = 'system') {
+    const logContainer = document.getElementById('multiBattleLog');
+    if(!logContainer) return;
+    
+    let color = 'white';
+    let fontWeight = '700';
+    
+    if(type === 'me') { color = '#3B82F6'; fontWeight = '900'; } 
+    if(type === 'boss_single_me') { color = '#EF4444'; fontWeight = '900'; } 
+    if(type === 'boss_all') { color = '#A855F7'; fontWeight = '900'; } 
+    if(type === 'limit') { color = '#FBBF24'; fontWeight = '900'; } 
+    if(type === 'system') { color = '#94A3B8'; }
+    
+    logContainer.innerHTML = `<div class="log-item-new" style="color:${color}; font-weight:${fontWeight}; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:right;">${text}</div>`;
 };
 
 window.showMultiBattleSetup = function() { 
@@ -1504,12 +1550,17 @@ window.skipIntroVideo = function() {
 };
 
 window.startMultiBattlePlay = function() {
+    document.body.classList.add('in-game-active');
+
     document.getElementById('multi-battle-play-screen').style.display = 'flex'; 
     gameComboCount = 0; 
-    multiLimitAmount = 0; // 必殺技ゲージ初期化
+    multiLimitAmount = 0; 
     
     document.getElementById('multiComboCountText').innerText = "0";
     document.getElementById('multiDamagePopupText').innerText = "";
+    
+    const logContainer = document.getElementById('multiBattleLog');
+    if(logContainer) logContainer.innerHTML = "";
     
     window.updatePartySlotsUi();
     
@@ -1533,19 +1584,19 @@ window.startMultiBattlePlay = function() {
 };
 
 window.updateMultiHpBars = function() {
-    // 敵HPバー
     const boss = document.getElementById('multiBossHpFill'); 
     if(boss) boss.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
+    
     const bossTxt = document.getElementById('multiEnemyHpText'); 
-    if(bossTxt) bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))} / ${multiBossMaxHp}`;
+    if(bossTxt) {
+        bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))}`;
+    }
 
-    // 各キャラの個別HPバー
     multiPartyMembers.forEach(m => {
         let fill = document.getElementById(`partyMemberHpFill-${m.id}`);
         if (fill) fill.style.width = Math.max(0, (m.hp / m.maxHp) * 100) + "%";
     });
 
-    // 🌟 LIMIT BREAK ゲージの更新
     const limitFill = document.getElementById('multiLimitGaugeFill');
     const limitText = document.getElementById('multiLimitGaugeText');
     if (limitFill) {
@@ -1558,28 +1609,19 @@ window.updateMultiHpBars = function() {
     }
 };
 
-window.showDamagePopup = function(text, color) {
-    const el = document.getElementById('multiDamagePopupText');
-    if(el) {
-        el.innerText = text;
-        el.style.color = color;
-        el.style.animation = 'none';
-        void el.offsetWidth;
-        el.style.animation = 'floatUpFade 1s ease-out forwards';
-    }
-};
-
-// 🌟 タイマー切れ＝敵の全体攻撃！
 window.handleMultiBattleTimer = function() {
     multiEnemyTimeLeft -= 0.1;
     if(multiEnemyTimeLeft <= 0) {
         multiEnemyTimeLeft = 10; 
         
-        let baseDamage = 400; // パーティ全員にダメージ
+        let baseDamage = 400; 
         multiPartyMembers.forEach(m => {
             if (m.hp > 0) {
                 m.hp -= baseDamage;
                 if (m.hp < 0) m.hp = 0;
+                
+                // 🌟 パーティ全員の頭上にV字ダメージポップアップ
+                window.showCharacterPopup(m.id, baseDamage, 'damage');
             }
         });
 
@@ -1587,12 +1629,17 @@ window.handleMultiBattleTimer = function() {
         setTimeout(() => document.body.classList.remove('boss-damage-shake'), 300);
         
         window.showDamagePopup("全体攻撃!!", "#EF4444");
+        
+        // 🌟 ボスの全体攻撃 スマートログ
+        window.addBattleLog(`【ボス > ${baseDamage} 全体】`, "boss_all");
 
-        // 全滅判定 (全員のHPが0以下か)
         if(multiPartyMembers.every(m => m.hp <= 0)) { 
             clearInterval(gameTimerInterval); 
-            alert("全滅しました..."); 
-            window.cancelMultiBattlePlay(true); 
+            window.addBattleLog("💀 全滅...", "system");
+            setTimeout(() => {
+                alert("全滅しました..."); 
+                window.cancelMultiBattlePlay(true); 
+            }, 500);
             return; 
         }
     }
@@ -1613,6 +1660,8 @@ window.showNextMultiWord = function() {
 
 window.cancelMultiBattlePlay = function(force = false) { 
     if(force || confirm("バトルから逃走しますか？")) { 
+        document.body.classList.remove('in-game-active');
+
         clearInterval(gameTimerInterval); 
         document.getElementById('multi-battle-play-screen').style.display = 'none'; 
         const startScreen = document.getElementById('game-start-screen');
@@ -1653,64 +1702,70 @@ window.handleFlickEnd = function(e) {
 };
 
 window.processMultiFlickAnswer = function(choiceIndex) {
+    let me = multiPartyMembers.find(m => m.isMe);
+    let myColorIcon = me ? me.colorIcon : '🔵';
+
     if(choiceIndex === currentMultiCorrectIndex) {
         gameComboCount++; 
         window.createFireballEffect();
         
-        // 攻撃アニメーション（自分のキャラが動く）
         const myThumb = document.querySelector('.multi-party-member:first-child .multi-party-icon');
         if(myThumb) { 
             myThumb.classList.remove('companion-attack-active'); 
             void myThumb.offsetWidth; 
             myThumb.classList.add('companion-attack-active'); 
-            setTimeout(() => myThumb.classList.remove('companion-attack-active'), 450); 
+            setTimeout(() => myThumb.classList.remove('companion-attack-active'), 500); 
         }
         
         let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5;
         let damage = 400 * comboMulti;
 
         document.getElementById('multiComboCountText').innerText = gameComboCount;
-
         multiBossHp -= damage; 
-        window.showDamagePopup(damage + " DMG!", "white");
         
-        // 🌟 必殺技ゲージ増加
+        // 🌟 自分のキャラから「青い吹き出し」でダメージ量をポップアップ！
+        if(me) window.showCharacterPopup(me.id, damage, 'attack');
+
+        window.addBattleLog(`ボス < ${damage} ${myColorIcon}`, "me");
+        
         multiLimitAmount = Math.min(multiLimitMax, multiLimitAmount + 15);
         window.updateMultiHpBars();
         
-        // 🌟 必殺技発動！
         if(multiLimitAmount >= multiLimitMax) {
             setTimeout(() => {
-                window.showDamagePopup("LIMIT BREAK!!", "#A855F7");
-                multiBossHp -= 5000; // 超特大ダメージ
-                multiLimitAmount = 0; // ゲージリセット
+                window.addBattleLog(`【ボス < 5000 LIMIT】`, "limit");
+                
+                multiBossHp -= 5000; 
+                multiLimitAmount = 0; 
                 window.updateMultiHpBars();
+                
                 if (multiBossHp <= 0) { 
                     clearInterval(gameTimerInterval); 
-                    alert("🎉 BOSS討伐完了！クエストクリア！"); 
-                    window.cancelMultiBattlePlay(true); 
+                    setTimeout(() => {
+                        alert("🎉 BOSS討伐完了！クエストクリア！"); 
+                        window.cancelMultiBattlePlay(true); 
+                    }, 500);
                 }
             }, 500);
         }
 
         if (multiBossHp <= 0) { 
             clearInterval(gameTimerInterval); 
-            alert("🎉 BOSS討伐完了！クエストクリア！"); 
-            window.cancelMultiBattlePlay(true); 
+            setTimeout(() => {
+                alert("🎉 BOSS討伐完了！クエストクリア！"); 
+                window.cancelMultiBattlePlay(true); 
+            }, 500);
             return; 
         }
 
     } else { 
-        // 🌟 自分のミスの場合は、自分だけがダメージを受ける
         gameComboCount = 0; 
         document.getElementById('multiComboCountText').innerText = gameComboCount;
         
-        let me = multiPartyMembers.find(m => m.isMe);
         if (me && me.hp > 0) {
-            me.hp -= 300; // 自己責任ダメージ
+            me.hp -= 300; 
             if (me.hp < 0) me.hp = 0;
             
-            // 自分のアイコンを赤く光らせる
             let myEl = document.getElementById('partyMember-' + me.id);
             if(myEl) {
                 let iconEl = myEl.querySelector('.multi-party-icon');
@@ -1718,13 +1773,20 @@ window.processMultiFlickAnswer = function(choiceIndex) {
                 void iconEl.offsetWidth;
                 iconEl.classList.add('player-damage-flash');
             }
+            
+            // 🌟 自分のキャラに「V字」でダメージ数値をポップアップ！
+            window.showCharacterPopup(me.id, 300, 'damage');
+
+            window.addBattleLog(`ボス > 300 ${myColorIcon}`, "boss_single_me");
         }
 
-        // 自分が死んだら全滅か判定
         if(multiPartyMembers.every(m => m.hp <= 0)) { 
             clearInterval(gameTimerInterval); 
-            alert("全滅しました..."); 
-            window.cancelMultiBattlePlay(true); 
+            window.addBattleLog("💀 全滅...", "system");
+            setTimeout(() => {
+                alert("全滅しました..."); 
+                window.cancelMultiBattlePlay(true); 
+            }, 500);
             return; 
         }
     }
