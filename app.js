@@ -54,14 +54,17 @@ let gameCurrentIndex = 0;
 let isGameProcessingAnswer = false;
 let isGameTimerPaused = false;
 
+// 🌟 マルチバトル用変数
 let currentMultiMode = 'coop'; 
-let currentStance = 'atk';
 let multiBossMaxHp = 100000;
 let multiBossHp = 100000;
-let multiAllyMaxHp = 3500;
-let multiAllyHp = 3500;
+let multiPartyMembers = []; // パーティメンバーの個別HP管理用配列
 let multiEnemyTimeLeft = 10;
 let currentMultiCorrectIndex = -1;
+
+// 🌟 LIMIT BREAK (必殺技) ゲージ用変数
+let multiLimitAmount = 0;
+const multiLimitMax = 100;
 
 let flickStartX = 0;
 let flickStartY = 0;
@@ -1030,7 +1033,6 @@ window.enterAdminModeDirect = function() {
         overlay.style.display = 'flex';
         input.focus();
     } else {
-        // もしHTMLにモーダルがなかった場合の予備手段
         const pass = prompt("管理者専用アクセスです。\nパスワードを入力してください。");
         if (pass === "tutinokopanda") { window.switchTab('admin'); } 
         else if (pass !== null) { alert("⚠️ パスワードが違います。アクセスが拒否されました。"); }
@@ -1132,7 +1134,7 @@ window.switchLeaderboard = function(type) {
 };
 
 // ==========================================================================
-// 🎮 ゲーム (ソロテスト・マルチバトル)
+// 🎮 ゲーム (ソロテスト)
 // ==========================================================================
 
 window.callGeminiGameJudge = async function(questionText, correctAnswer, userInput, qType) {
@@ -1231,7 +1233,6 @@ window.showNextGameWord = function() {
         document.getElementById('gameAnswerInput').placeholder = "英単語を入力...";
     }
     
-    // 🌟 変更点: フォントサイズを結構下げる
     if (wordEl.innerText.length > 30) wordEl.style.fontSize = '11px';
     else if (wordEl.innerText.length > 15) wordEl.style.fontSize = '15px';
     else wordEl.style.fontSize = '20px'; 
@@ -1332,19 +1333,82 @@ window.switchPartySubCategory = function(category) {
     document.getElementById('partyTabChar').classList.toggle('active', category === 'character'); document.getElementById('partyTabWeapon').classList.toggle('active', category === 'weapon'); document.getElementById('partyTabArmor').classList.toggle('active', category === 'armor');
     document.getElementById('partyBoxCharacter').style.display = category === 'character' ? 'grid' : 'none'; document.getElementById('partyBoxWeapon').style.display = category === 'weapon' ? 'grid' : 'none'; document.getElementById('partyBoxArmor').style.display = category === 'armor' ? 'grid' : 'none';
 };
-window.selectCharacter = function(charId) { activeCharacter = charId; localStorage.setItem('core_v4_active_char', charId); window.updatePartySlotsUi(); alert(charId ? 'キャラクターをセットしたよ！' : 'キャラクターの編成を外したよ。'); };
-window.selectWeapon = function(weaponId) { activeWeapon = weaponId; localStorage.setItem('core_v4_active_weapon', weaponId); window.updatePartySlotsUi(); alert(weaponId ? '武器を装備したよ！' : '武器を外したよ。'); };
-window.selectArmor = function(armorId) { activeArmor = armorId; localStorage.setItem('core_v4_active_armor', armorId); window.updatePartySlotsUi(); alert(armorId ? '防具を装備したよ！' : '防具を外したよ。'); };
+
+window.selectCharacter = function(charId) { 
+    activeCharacter = charId; localStorage.setItem('core_v4_active_char', charId); 
+    window.updatePartySlotsUi(); 
+    alert(charId ? 'キャラクターをセットしたよ！' : 'キャラクターの編成を外したよ。'); 
+};
+
+window.selectWeapon = function(weaponId) { 
+    activeWeapon = weaponId; localStorage.setItem('core_v4_active_weapon', weaponId); 
+    window.updatePartySlotsUi(); 
+    alert(weaponId ? '武器を装備したよ！' : '武器を外したよ。'); 
+};
+
+window.selectArmor = function(armorId) { 
+    activeArmor = armorId; localStorage.setItem('core_v4_active_armor', armorId); 
+    window.updatePartySlotsUi(); 
+    alert(armorId ? '防具を装備したよ！' : '防具を外したよ。'); 
+};
 
 window.updatePartySlotsUi = function() {
     const charImgFrame = document.getElementById('slotCharImgContainer'), charNameLbl = document.getElementById('slotCharName');
     if (activeCharacter === 'tangon') { charImgFrame.innerHTML = `<img src="tangon.png" alt="tangon" style="width:100%;height:100%;object-fit:cover;">`; charNameLbl.innerText = "タンゴン"; } else { charImgFrame.innerHTML = "🫙"; charNameLbl.innerText = "未編成"; }
+    
     const weaponImgFrame = document.getElementById('slotWeaponImgContainer'), weaponNameLbl = document.getElementById('slotWeaponName');
     if (activeWeapon === 'fire_sword') { weaponImgFrame.innerHTML = "🔥🗡️"; weaponNameLbl.innerText = "業火の大剣"; } else { weaponImgFrame.innerHTML = "🗡️"; weaponNameLbl.innerText = "素手"; }
+    
     const armorImgFrame = document.getElementById('slotArmorImgContainer'), armorNameLbl = document.getElementById('slotArmorName');
     if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "🔮🛡️"; armorNameLbl.innerText = "星屑の盾"; } else { armorImgFrame.innerHTML = "🛡️"; armorNameLbl.innerText = "布の服"; }
-    const battleThumb = document.getElementById('multiAllyCharThumbnail');
-    if (battleThumb) { battleThumb.innerHTML = activeCharacter === 'tangon' ? `<img src="tangon.png" alt="thumb">` : "👤"; }
+    
+    const bChar = document.getElementById('multiEquipCharIcon');
+    if(bChar) bChar.innerHTML = activeCharacter === 'tangon' ? `<img src="tangon.png" style="width:100%;height:100%;object-fit:cover;border-radius:4px;">` : "👤";
+    
+    const bWep = document.getElementById('multiEquipWeaponIcon');
+    if(bWep) bWep.innerHTML = activeWeapon === 'fire_sword' ? "🔥" : "🗡️";
+
+    const bArm = document.getElementById('multiEquipArmorIcon');
+    if(bArm) bArm.innerHTML = activeArmor === 'cosmic_shield' ? "🔮" : "🛡️";
+};
+
+window.initMultiParty = function(playerCount) {
+    multiPartyMembers = [];
+    for(let i = 0; i < playerCount; i++) {
+        let isMe = (i === 0);
+        multiPartyMembers.push({
+            id: i,
+            name: isMe ? myName : `ALLY ${i}`,
+            char: isMe ? activeCharacter : '', 
+            maxHp: 3500,
+            hp: 3500,
+            isMe: isMe
+        });
+    }
+    window.renderMultiParty();
+};
+
+window.renderMultiParty = function() {
+    const container = document.getElementById('multiPartyContainer');
+    if(!container) return;
+    container.innerHTML = "";
+    multiPartyMembers.forEach(m => {
+        let charImg = m.char === 'tangon' ? `<img src="tangon.png" alt="tangon" style="width:100%;height:100%;object-fit:cover;">` : `👤`;
+        let hpPercent = Math.max(0, (m.hp / m.maxHp) * 100);
+        let label = m.isMe ? "YOU" : "ALLY";
+        let color = m.isMe ? "var(--cosmic-purple-light)" : "var(--cosmic-cyan)";
+        
+        let html = `
+            <div class="multi-party-member" id="partyMember-${m.id}">
+                <div style="font-size:9px; color:${color}; font-weight:bold; margin-bottom:2px;">${label}</div>
+                <div class="multi-party-icon">${charImg}</div>
+                <div class="multi-party-hp-bar">
+                    <div class="multi-party-hp-fill" id="partyMemberHpFill-${m.id}" style="width:${hpPercent}%;"></div>
+                </div>
+            </div>
+        `;
+        container.innerHTML += html;
+    });
 };
 
 window.showMultiBattleSetup = function() { 
@@ -1354,7 +1418,6 @@ window.showMultiBattleSetup = function() {
         window.saveVocabToStorage();
         window.renderVocabList();
     }
-    
     window.proceedToMultiSetup();
 };
 
@@ -1394,12 +1457,10 @@ window.cancelMultiBattleSetup = function() {
     if (lbArea) lbArea.style.display = 'flex';
 };
 
-// 🌟 マッチング開始時に動画再生を仕込む
 window.startMultiBattleMatching = function() { 
     document.getElementById('multi-battle-setup-screen').style.display = 'none'; 
     document.getElementById('multi-battle-matching-screen').style.display = 'flex'; 
     
-    // マッチング演出後（2秒後）に、バトル開始ではなく「動画再生」を呼ぶ
     setTimeout(() => { 
         if (document.getElementById('multi-battle-matching-screen').style.display === 'flex') { 
             window.playIntroVideoBeforeBattle(); 
@@ -1412,9 +1473,7 @@ window.cancelMultiBattleMatching = function() {
     document.getElementById('multi-battle-setup-screen').style.display = 'block'; 
 };
 
-// 🌟 新設：マッチング直後に動画を流す関数
 window.playIntroVideoBeforeBattle = function() {
-    // マッチング画面を非表示にする
     document.getElementById('multi-battle-matching-screen').style.display = 'none';
     
     const overlay = document.getElementById('video-overlay');
@@ -1431,12 +1490,10 @@ window.playIntroVideoBeforeBattle = function() {
         
         video.onended = window.skipIntroVideo;
     } else {
-        // 動画がない場合はすぐにバトル画面へ
         window.startMultiBattlePlay();
     }
 };
 
-// 動画のスキップ処理（終わったらバトルへ行く）
 window.skipIntroVideo = function() {
     const overlay = document.getElementById('video-overlay');
     const video = document.getElementById('introVideo');
@@ -1448,32 +1505,99 @@ window.skipIntroVideo = function() {
 
 window.startMultiBattlePlay = function() {
     document.getElementById('multi-battle-play-screen').style.display = 'flex'; 
-    window.setMultiStance('atk'); gameComboCount = 0; window.updatePartySlotsUi();
+    gameComboCount = 0; 
+    multiLimitAmount = 0; // 必殺技ゲージ初期化
+    
+    document.getElementById('multiComboCountText').innerText = "0";
+    document.getElementById('multiDamagePopupText').innerText = "";
+    
+    window.updatePartySlotsUi();
+    
     const playerCount = parseInt(document.getElementById('multiPlayerCount').value) || 2;
-    multiBossMaxHp = 100000 * playerCount; multiBossHp = multiBossMaxHp; multiAllyMaxHp = 3500 * playerCount; multiAllyHp = multiAllyMaxHp; multiEnemyTimeLeft = 10;
+    window.initMultiParty(playerCount);
+
+    multiBossMaxHp = 100000 * playerCount; 
+    multiBossHp = multiBossMaxHp; 
+    multiEnemyTimeLeft = 10;
+    
     window.updateMultiHpBars();
+    
     gameCurrentWordsQueue = []; 
     vocabList.forEach(w => { if(w.meanings && w.meanings.length > 0) gameCurrentWordsQueue.push({ wordNum: w.num, word: w.word, meaning: window.formatWordForDisplay(w.meanings[0].text) }); });
     gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0;
-    clearInterval(gameTimerInterval); gameTimerInterval = setInterval(window.handleMultiBattleTimer, 100); 
-    window.showNextMultiWord(); window.initMultiBattleEvents();
+    
+    clearInterval(gameTimerInterval); 
+    gameTimerInterval = setInterval(window.handleMultiBattleTimer, 100); 
+    window.showNextMultiWord(); 
+    window.initMultiBattleEvents();
 };
 
 window.updateMultiHpBars = function() {
-    const ally = document.getElementById('multiAllyHpFill'); if(ally) ally.style.width = Math.max(0, (multiAllyHp / multiAllyMaxHp) * 100) + "%";
-    const allyTxt = document.getElementById('multiAllyHpText'); if(allyTxt) allyTxt.innerText = `HP: ${Math.max(0, Math.floor(multiAllyHp))} / ${multiAllyMaxHp}`;
-    const boss = document.getElementById('multiBossHpFill'); if(boss) boss.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
-    const bossTxt = document.getElementById('multiEnemyHpText'); if(bossTxt) bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))} / ${multiBossMaxHp}`;
+    // 敵HPバー
+    const boss = document.getElementById('multiBossHpFill'); 
+    if(boss) boss.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
+    const bossTxt = document.getElementById('multiEnemyHpText'); 
+    if(bossTxt) bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))} / ${multiBossMaxHp}`;
+
+    // 各キャラの個別HPバー
+    multiPartyMembers.forEach(m => {
+        let fill = document.getElementById(`partyMemberHpFill-${m.id}`);
+        if (fill) fill.style.width = Math.max(0, (m.hp / m.maxHp) * 100) + "%";
+    });
+
+    // 🌟 LIMIT BREAK ゲージの更新
+    const limitFill = document.getElementById('multiLimitGaugeFill');
+    const limitText = document.getElementById('multiLimitGaugeText');
+    if (limitFill) {
+        limitFill.style.width = Math.max(0, (multiLimitAmount / multiLimitMax) * 100) + "%";
+        if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max');
+        else limitFill.classList.remove('max');
+    }
+    if (limitText) {
+        limitText.innerText = Math.floor(Math.max(0, (multiLimitAmount / multiLimitMax) * 100)) + "%";
+    }
 };
 
+window.showDamagePopup = function(text, color) {
+    const el = document.getElementById('multiDamagePopupText');
+    if(el) {
+        el.innerText = text;
+        el.style.color = color;
+        el.style.animation = 'none';
+        void el.offsetWidth;
+        el.style.animation = 'floatUpFade 1s ease-out forwards';
+    }
+};
+
+// 🌟 タイマー切れ＝敵の全体攻撃！
 window.handleMultiBattleTimer = function() {
     multiEnemyTimeLeft -= 0.1;
     if(multiEnemyTimeLeft <= 0) {
-        multiEnemyTimeLeft = 10; let damage = currentStance === 'def' ? 400 : 800; multiAllyHp -= damage;
-        document.body.classList.add('boss-damage-shake'); setTimeout(() => document.body.classList.remove('boss-damage-shake'), 300);
-        if(multiAllyHp <= 0) { clearInterval(gameTimerInterval); alert("全滅しました..."); window.cancelMultiBattlePlay(true); return; }
+        multiEnemyTimeLeft = 10; 
+        
+        let baseDamage = 400; // パーティ全員にダメージ
+        multiPartyMembers.forEach(m => {
+            if (m.hp > 0) {
+                m.hp -= baseDamage;
+                if (m.hp < 0) m.hp = 0;
+            }
+        });
+
+        document.body.classList.add('boss-damage-shake'); 
+        setTimeout(() => document.body.classList.remove('boss-damage-shake'), 300);
+        
+        window.showDamagePopup("全体攻撃!!", "#EF4444");
+
+        // 全滅判定 (全員のHPが0以下か)
+        if(multiPartyMembers.every(m => m.hp <= 0)) { 
+            clearInterval(gameTimerInterval); 
+            alert("全滅しました..."); 
+            window.cancelMultiBattlePlay(true); 
+            return; 
+        }
     }
-    const timerDisplay = document.getElementById('multiEnemyTimerDisplay'); if(timerDisplay) timerDisplay.innerText = `行動: ${Math.max(0, multiEnemyTimeLeft).toFixed(1)}秒`;
+    const timerDisplay = document.getElementById('multiEnemyTimerDisplay'); 
+    if(timerDisplay) timerDisplay.innerText = `行動: ${Math.max(0, multiEnemyTimeLeft).toFixed(1)}秒`;
     window.updateMultiHpBars();
 };
 
@@ -1496,12 +1620,6 @@ window.cancelMultiBattlePlay = function(force = false) {
         const lbArea = document.getElementById('gameLeaderboardArea');
         if (lbArea) lbArea.style.display = 'flex';
     } 
-};
-
-window.setMultiStance = function(stance) { 
-    currentStance = stance; 
-    document.getElementById('stanceAtkBtn').classList.toggle('active', stance === 'atk'); 
-    document.getElementById('stanceDefBtn').classList.toggle('active', stance === 'def'); 
 };
 
 window.initMultiBattleEvents = function() {
@@ -1536,15 +1654,84 @@ window.handleFlickEnd = function(e) {
 
 window.processMultiFlickAnswer = function(choiceIndex) {
     if(choiceIndex === currentMultiCorrectIndex) {
-        gameComboCount++; window.createFireballEffect();
-        const thumb = document.getElementById('multiAllyCharThumbnail');
-        if(thumb) { thumb.classList.remove('companion-attack-active'); void thumb.offsetWidth; thumb.classList.add('companion-attack-active'); setTimeout(() => thumb.classList.remove('companion-attack-active'), 450); }
+        gameComboCount++; 
+        window.createFireballEffect();
+        
+        // 攻撃アニメーション（自分のキャラが動く）
+        const myThumb = document.querySelector('.multi-party-member:first-child .multi-party-icon');
+        if(myThumb) { 
+            myThumb.classList.remove('companion-attack-active'); 
+            void myThumb.offsetWidth; 
+            myThumb.classList.add('companion-attack-active'); 
+            setTimeout(() => myThumb.classList.remove('companion-attack-active'), 450); 
+        }
         
         let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5;
-        if(currentStance === 'atk') multiBossHp -= 400 * comboMulti; else multiAllyHp = Math.min(multiAllyMaxHp, multiAllyHp + 100 * comboMulti); 
-        if (multiBossHp <= 0) { clearInterval(gameTimerInterval); alert("🎉 BOSS討伐完了！クエストクリア！"); window.cancelMultiBattlePlay(true); return; }
-    } else { gameComboCount = 0; multiEnemyTimeLeft = Math.max(0, multiEnemyTimeLeft - 3); }
-    window.updateMultiHpBars(); gameCurrentIndex++; window.showNextMultiWord();
+        let damage = 400 * comboMulti;
+
+        document.getElementById('multiComboCountText').innerText = gameComboCount;
+
+        multiBossHp -= damage; 
+        window.showDamagePopup(damage + " DMG!", "white");
+        
+        // 🌟 必殺技ゲージ増加
+        multiLimitAmount = Math.min(multiLimitMax, multiLimitAmount + 15);
+        window.updateMultiHpBars();
+        
+        // 🌟 必殺技発動！
+        if(multiLimitAmount >= multiLimitMax) {
+            setTimeout(() => {
+                window.showDamagePopup("LIMIT BREAK!!", "#A855F7");
+                multiBossHp -= 5000; // 超特大ダメージ
+                multiLimitAmount = 0; // ゲージリセット
+                window.updateMultiHpBars();
+                if (multiBossHp <= 0) { 
+                    clearInterval(gameTimerInterval); 
+                    alert("🎉 BOSS討伐完了！クエストクリア！"); 
+                    window.cancelMultiBattlePlay(true); 
+                }
+            }, 500);
+        }
+
+        if (multiBossHp <= 0) { 
+            clearInterval(gameTimerInterval); 
+            alert("🎉 BOSS討伐完了！クエストクリア！"); 
+            window.cancelMultiBattlePlay(true); 
+            return; 
+        }
+
+    } else { 
+        // 🌟 自分のミスの場合は、自分だけがダメージを受ける
+        gameComboCount = 0; 
+        document.getElementById('multiComboCountText').innerText = gameComboCount;
+        
+        let me = multiPartyMembers.find(m => m.isMe);
+        if (me && me.hp > 0) {
+            me.hp -= 300; // 自己責任ダメージ
+            if (me.hp < 0) me.hp = 0;
+            
+            // 自分のアイコンを赤く光らせる
+            let myEl = document.getElementById('partyMember-' + me.id);
+            if(myEl) {
+                let iconEl = myEl.querySelector('.multi-party-icon');
+                iconEl.classList.remove('player-damage-flash');
+                void iconEl.offsetWidth;
+                iconEl.classList.add('player-damage-flash');
+            }
+        }
+
+        // 自分が死んだら全滅か判定
+        if(multiPartyMembers.every(m => m.hp <= 0)) { 
+            clearInterval(gameTimerInterval); 
+            alert("全滅しました..."); 
+            window.cancelMultiBattlePlay(true); 
+            return; 
+        }
+    }
+    
+    window.updateMultiHpBars(); 
+    gameCurrentIndex++; 
+    window.showNextMultiWord();
 };
 
 window.createFireballEffect = function() {

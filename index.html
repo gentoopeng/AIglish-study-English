@@ -362,7 +362,7 @@
                                 <button class="modern-btn" id="btnMultiPvp" onclick="selectMultiMode('pvp')">⚔️ 対人戦</button>
                             </div>
                             <select id="multiPlayerCount" class="search-input">
-                                <option value="2">2人パーティ</option><option value="3">3人パーティ</option><option value="4">4人パーティ</option>
+                                <option value="2">2人パーティ</option><option value="3">3人パーティ</option><option value="4" selected>4人パーティ</option>
                             </select>
                         </div>
 
@@ -421,15 +421,29 @@
                         <img src="boss1.png" alt="Boss" class="multi-boss-image">
                     </div>
 
-                    <div class="multi-action-area" style="margin-top: auto; padding: 8px; flex: none; background: transparent; border: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;">
-                        <div class="multi-hp-box" style="background: rgba(0,0,0,0.4); padding: 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
-                            <div style="display:flex; align-items:center; gap:6px;">
-                                <div id="multiAllyCharThumbnail" class="multi-char-thumb-hp" style="width:32px; height:32px; font-size:16px;"></div>
-                                <div style="flex:1;">
-                                    <div style="font-size:10px; color:var(--cosmic-cyan); font-weight:bold; letter-spacing:0.5px;">ALLY TEAM</div>
-                                    <div class="multi-hp-bar" style="margin-top:4px;"><div class="multi-hp-fill" id="multiAllyHpFill" style="width:100%;"></div></div>
-                                    <div style="font-size:11px; color:white; font-weight:bold; font-family:monospace;" id="multiAllyHpText">HP: 3500 / 3500</div>
-                                </div>
+                    <div class="multi-party-status-area">
+                        <div id="multiPartyContainer" class="multi-party-grid">
+                            </div>
+
+                        <div style="margin-top: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2px;">
+                                <div style="font-size: 10px; font-weight: 800; color: #FBBF24; letter-spacing: 1px; text-shadow: 0 0 5px #F59E0B;">LIMIT BREAK</div>
+                                <div style="font-size: 10px; font-family: monospace; color: white;" id="multiLimitGaugeText">0%</div>
+                            </div>
+                            <div class="multi-hp-bar" style="height: 14px; margin: 0; border-color: #F59E0B; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);">
+                                <div class="multi-hp-fill multi-limit-fill" id="multiLimitGaugeFill" style="width:0%;"></div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px;">
+                            <div style="display: flex; gap: 6px;">
+                                <div class="multi-equip-icon" id="multiEquipCharIcon">👤</div>
+                                <div class="multi-equip-icon" id="multiEquipWeaponIcon">🗡️</div>
+                                <div class="multi-equip-icon" id="multiEquipArmorIcon">🛡️</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div id="multiDamagePopupText" style="font-size: 12px; color: #EF4444; font-weight: 900; height: 16px;"></div>
+                                <div style="font-size: 13px; font-weight: 900; color: #FBBF24; text-shadow: 0 0 5px #F59E0B;">COMBO <span id="multiComboCountText" style="font-size: 16px;">0</span></div>
                             </div>
                         </div>
                     </div>
