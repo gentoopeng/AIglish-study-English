@@ -212,7 +212,7 @@
                     
                     <div style="margin-left: auto; display: flex; gap: 8px;">
                         <button class="list-action-link" style="background: rgba(16, 185, 129, 0.2); color: #10B981; border-color: #10B981;" onclick="handleBulkResetExecute()">
-                            <i data-lucide="rotate-ccw" size="12" style="vertical-align: middle;"></i> 理解度リセット
+                            <i data-lucide="rotate-ccw" size="12" style="vertical-align: middle;"></i> 理解度リreset
                         </button>
                         <button class="list-action-link" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border-color: #EF4444;" onclick="handleBulkDeleteExecute()">
                             <i data-lucide="trash-2" size="12" style="vertical-align: middle;"></i> 削除
@@ -260,10 +260,10 @@
                     </div>
 
                     <label for="englishTextarea" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">解析用英文データ入力</label>
-                    <textarea id="englishTextarea" class="modern-textarea" style="height: 120px;" placeholder="ここに英語のドキュメントを直接ペーストまたは手入力してください。改行は無視され、AIがピリオド基準で自動分割します。"></textarea>
+                    <textarea id="englishTextarea" class="modern-textarea" style="height: 120px;" placeholder="ここに英語 of information は直接ペーストしてください。"></textarea>
                     
-                    <label for="customJapanesetextarea" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">手動和訳入力（任意：空欄ならAIが高精度な和訳を自動生成します）</label>
-                    <textarea id="customJapanesetextarea" class="modern-textarea" style="height: 90px;" placeholder="手動で和訳を割り当てたい場合は、英文の行数に合わせて改行しながら入力してください。"></textarea>
+                    <label for="customJapanesetextarea" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">手動和訳入力（任意）</label>
+                    <textarea id="customJapanesetextarea" class="modern-textarea" style="height: 90px;" placeholder="手動で和訳を割り当てたい場合はこちら。"></textarea>
 
                     <button class="modern-btn reader-analysis-neon-btn" id="analysisSubmitBtn" onclick="startAnalysisWithEmbeddedTitle()">
                         <i data-lucide="wand-2" size="16"></i> 英文解析
@@ -350,7 +350,7 @@
                     <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; border-color:var(--admin-accent) !important; box-shadow: 0 0 15px rgba(236,72,153,0.3) !important; cursor:pointer;" onclick="showMultiBattleSetup()">
                         <i data-lucide="swords" size="36" style="color:var(--admin-accent); margin-bottom:12px; filter: drop-shadow(0 0 8px rgba(236,72,153,0.6));"></i>
                         <h2 style="color:white; margin:0; font-size:20px; letter-spacing:1px; text-shadow: 0 0 8px rgba(236,72,153,0.8);">マルチバトル <span style="font-size:10px; color:var(--text-sub); vertical-align:top;">(β)</span></h2>
-                        <p style="font-size:11px; color:var(--text-sub); margin-top:8px;">協力討伐 / 対人バトル</p>
+                        <p style="font-size:11px; color:var(--text-sub); margin-top:8px;">協力討伐 / 对人バトル</p>
                     </div>
                 </div>
 
@@ -426,14 +426,14 @@
                             <img src="boss1.png" alt="Boss" class="multi-boss-image" id="multiBossImage" style="max-width: 100%; max-height: 180px; object-fit: contain;">
                         </div>
 
-                        <!-- 🌟 仲間エリアの絶対固定レイアウト受け皿 -->
+                        <!-- 🌟 仲間エリアの絶対固定レイアウト受け皿 (並び順改修対応) -->
                         <div id="multiPartyContainer" class="multi-party-grid-horizontal" style="width: 100%; padding: 0 10px; margin-bottom: 4px; z-index: 20;">
                         </div>
                     </div>
 
                     <div class="multi-party-status-area" style="padding: 6px 10px; margin-bottom: 8px; flex-shrink: 0; z-index: 10;">
                         
-                        <!-- 🌟 新設要件：操作者自身のHP状況表示バー（他パーティと混ざらない独立した専用配置） -->
+                        <!-- 🌟 操作者自身のHP状況表示バー（共通下部用、不変） -->
                         <div class="multi-player-own-hp-frame" style="margin-bottom: 4px; display: none;" id="multiPlayerOwnHpFrame">
                             <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; position: relative;">
                                 <div class="multi-party-hp-fill" id="multiPlayerOwnHpFill" style="width: 100%;"></div>
@@ -442,29 +442,26 @@
                         </div>
 
                         <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 4px;">
-                            <div style="font-size: 11px; font-family: monospace; font-weight: bold; color: white; flex-shrink: 0; margin-left: auto;" id="multiLimitGaugeText">0%</div>
+                            <div id="multiBattleLog" style="flex: 1; margin-right: 10px; font-size: 12px; line-height: 1.2; text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 5px rgba(0,0,0,1);">
+                            </div>
+                            <div style="font-size: 11px; font-family: monospace; font-weight: bold; color: white; flex-shrink: 0;" id="multiLimitGaugeText">0%</div>
                         </div>
                         <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; margin-bottom: 6px; border-color: #F59E0B; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);">
                             <div class="multi-hp-fill multi-limit-fill" id="multiLimitGaugeFill" style="width:0%;"></div>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-                            <div style="display: flex; gap: 6px;">
-                                <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipCharIcon">👤</div>
-                                <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipWeaponIcon">🗡️</div>
-                                <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipArmorIcon">🛡️</div>
+                            <div style="display: flex; gap: 6px; visibility: hidden; opacity: 0; pointer-events: none;">
+                                <!-- 旧スロット配置は非表示化 -->
                             </div>
                             <div style="text-align: right;">
                                 <div id="multiDamagePopupText" style="font-size: 10px; color: #EF4444; font-weight: 900; height: 12px; margin-bottom: 2px;"></div>
-                                <div style="font-size: 12px; font-weight: 900; color: #FBBF24; text-shadow: 0 0 5px #F59E0B;">COMBO <span id="multiComboCountText" style="font-size: 14px;">0</span></div>
+                                <div style="display: none;" id="multiComboCountText">0</div>
                             </div>
                         </div>
                     </div>
 
+                    <!-- 🌟 フリック入力エリア (見切れ完全解消対応) -->
                     <div class="multi-flick-area" style="margin-top: auto; height: 250px; flex-shrink: 0;">
-                        <div class="multi-question-header-panel">
-                            <span class="multi-quest-lbl">TARGET WORD</span><br>
-                            <div class="flick-center-word" id="flickTargetWord">Word</div>
-                        </div>
                         <div class="flick-pad-container" id="flickPadArea">
                             <div id="flickWeaponIcon" class="flick-weapon-icon">🔥</div>
                             <div class="multi-grid-3x3">
@@ -472,7 +469,9 @@
                                 <div class="flick-choice" id="multiChoice-1">---</div>
                                 <div class="flick-choice" id="multiChoice-2">---</div>
                                 <div class="flick-choice" id="multiChoice-3">---</div>
-                                <div class="flick-choice-center-blank"></div> 
+                                <div class="flick-choice-center-question-box">
+                                    <div class="flick-center-word" id="flickTargetWord">Word</div>
+                                </div>
                                 <div class="flick-choice" id="multiChoice-4">---</div>
                                 <div class="flick-choice" id="multiChoice-5">---</div>
                                 <div class="flick-choice" id="multiChoice-6">---</div>
@@ -719,7 +718,7 @@
 
     </div>
 
-    <!-- 🌟 修正：ナビバーのID重複・アンカータイポを完全修正。ライフサイクルがこれで安全に回ります -->
+    <!-- 🌟 ナビバーのID重複・アンカータイポを完全修正 -->
     <div class="nav-bar" id="appMainBottomNavBar">
         <button class="nav-item active" id="nav-home" onclick="window.switchTab('home')"><i data-lucide="layout-dashboard" size="18"></i> ホーム</button>
         <button class="nav-item" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
