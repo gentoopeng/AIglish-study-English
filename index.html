@@ -18,7 +18,7 @@
 </head>
 <body>
 
-    <!-- 🌟 コンボ（2以上）の時に全画面を優しく包む、金色の明滅キラキラネオン枠レイヤー -->
+    <!-- 🌟 新設：2コンボ以上発生時に画面全体の最外周を包み込んで明滅する金色ネオンオーバーレイ枠 -->
     <div id="combo-sparkle-border" class="combo-sparkle-overlay"></div>
 
     <button id="scrollToTopBtn" class="scroll-to-top-btn" onclick="scrollToTop()">
@@ -48,7 +48,6 @@
         </div>
     </div>
 
-    <!-- 🌟 認証ゲートスクリーン（ロードエラーを完全に防ぐセーフガード付きイベントコール） -->
     <div id="auth-gate-screen">
         <div class="auth-card">
             <div class="auth-logo"><i data-lucide="shield-check" size="32"></i></div>
@@ -56,8 +55,8 @@
             <div style="font-size: 11px; color: var(--text-sub); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">ユーザー認証管理</div>
             
             <div class="auth-tabs">
-                <button class="auth-tab-btn active" id="authTabLogin" onclick="if(window.switchAuthMode) { window.switchAuthMode('login'); } else { switchAuthMode('login'); }">ログイン</button>
-                <button class="auth-tab-btn" id="authTabRegister" onclick="if(window.switchAuthMode) { window.switchAuthMode('register'); } else { switchAuthMode('register'); }">新規作成</button>
+                <button class="auth-tab-btn active" id="authTabLogin" onclick="switchAuthMode('login')">ログイン</button>
+                <button class="auth-tab-btn" id="authTabRegister" onclick="switchAuthMode('register')">新規作成</button>
             </div>
 
             <div class="auth-error" id="authErrorMsg"></div>
@@ -74,12 +73,12 @@
                 <input type="password" id="regPin" class="search-input" style="text-align: center; margin-bottom: 14px; letter-spacing: 4px;" placeholder="4桁の暗証番号を設定" maxlength="4">
             </div>
 
-            <button class="modern-btn" id="authSubmitBtn" onclick="if(window.handleAuthSubmit) { window.handleAuthSubmit(); } else { handleAuthSubmit(); }">
+            <button class="modern-btn" id="authSubmitBtn" onclick="handleAuthSubmit()">
                 システムへログイン <i data-lucide="arrow-right" size="16"></i>
             </button>
 
             <div style="margin-top: 16px; border-top: 1px dashed var(--border); padding-top: 16px;">
-                <button class="modern-btn" style="background: rgba(255,255,255,0.05) !important; border: 1px solid var(--border) !important; color: var(--text-sub) !important; box-shadow: none !important; height: 38px; font-size: 12px;" onclick="if(window.handleGuestLogin) { window.handleGuestLogin(); } else { handleGuestLogin(); }">
+                <button class="modern-btn" style="background: rgba(255,255,255,0.05) !important; border: 1px solid var(--border) !important; color: var(--text-sub) !important; box-shadow: none !important; height: 38px; font-size: 12px;" onclick="handleGuestLogin()">
                     <i data-lucide="user" size="14"></i> ゲストとしてテストプレイ
                 </button>
             </div>
@@ -120,9 +119,11 @@
                 <div style="font-size: 11px; font-weight:700; color:var(--accent); margin-top:4px; margin-bottom:8px;">🤖 Gemini AI APIキー</div>
                 <input type="password" id="sidebarApiKeyInput" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px;" placeholder="AI用APIキーを入力...">
                 
-                <button class="modern-btn" style="height:32px; font-size:12px;" onclick="saveSidebarProfile()">
-                    設定を保存して適用
-                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="modern-btn" style="height:32px; font-size:12px;" onclick="saveSidebarProfile()">
+                        設定を保存して適用
+                    </button>
+                </div>
             </div>
 
             <div>
@@ -275,7 +276,7 @@
                 </div>
 
                 <div class="card" style="border:1px solid rgba(0,240,255,0.3); background:linear-gradient(180deg, rgba(15,23,42,0.9) 0%, rgba(7,11,25,0.9) 100%) !important;">
-                    <h2 style="color:var(--cosmic-cyan);"><i data-lucide="book-open" size="14"></i> 本棚</h2>
+                    <h2><i data-lucide="book-open" size="14"></i> 本棚</h2>
                     <p style="font-size:11px; color:var(--text-sub); margin-bottom:16px;">保存した長文をフォルダごとに整理・閲覧できます。</p>
                     <div id="myBookshelfContainer"></div>
                 </div>
@@ -319,7 +320,7 @@
                 <div id="game-start-screen" style="display:flex; flex-direction:column; gap:16px; height:100%;">
                     <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; padding:16px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h1 class="game-normal-title" style="margin:0; font-size:18px; text-align:left;"><i data-lucide="book" style="vertical-align:middle;"></i> 所論学習テスト</h1>
+                            <h1 class="game-normal-title" style="margin:0; font-size:18px; text-align:left;"><i data-lucide="book" style="vertical-align:middle;"></i> ソロ学習テスト</h1>
                             <button class="modern-btn" style="width:auto; padding:0 20px; height:36px;" onclick="showModeSelectScreen()">START</button>
                         </div>
                         
@@ -347,7 +348,7 @@
                     </div>
 
                     <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; border-color:var(--admin-accent) !important; box-shadow: 0 0 15px rgba(236,72,153,0.3) !important; cursor:pointer;" onclick="showMultiBattleSetup()">
-                        <i data-lucide="swords" size="36" style="color:var(--text-sub); margin-bottom:12px; filter: drop-shadow(0 0 8px rgba(236,72,153,0.6));"></i>
+                        <i data-lucide="swords" size="36" style="color:var(--admin-accent); margin-bottom:12px; filter: drop-shadow(0 0 8px rgba(236,72,153,0.6));"></i>
                         <h2 style="color:white; margin:0; font-size:20px; letter-spacing:1px; text-shadow: 0 0 8px rgba(236,72,153,0.8);">マルチバトル <span style="font-size:10px; color:var(--text-sub); vertical-align:top;">(β)</span></h2>
                         <p style="font-size:11px; color:var(--text-sub); margin-top:8px;">協力討伐 / 対人バトル</p>
                     </div>
@@ -362,7 +363,7 @@
                         <div style="text-align:left; margin-bottom:16px;">
                             <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">① モード・人数</div>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
-                                <button class="modern-btn" id="btnMultiCoop" onclick="selectMultiMode('coop')" style="background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%);">🤝 協力討伐</button>
+                                <button class="modern-btn" id="btnMultiCoop" onclick="selectMultiMode('coop')">🤝 協力討伐</button>
                                 <button class="modern-btn" id="btnMultiPvp" onclick="selectMultiMode('pvp')">⚔️ 対人戦</button>
                             </div>
                             <select id="multiPlayerCount" class="search-input">
@@ -425,14 +426,14 @@
                             <img src="boss1.png" alt="Boss" class="multi-boss-image" id="multiBossImage" style="max-width: 100%; max-height: 180px; object-fit: contain;">
                         </div>
 
-                        <!-- 🌟 構造固定配置：顔画像が上、HPバー・名前文字列が確実に「下側」へ配置固定される仲間エリアの描画受け皿 -->
+                        <!-- 🌟 仲間エリアの絶対固定レイアウト受け皿 -->
                         <div id="multiPartyContainer" class="multi-party-grid-horizontal" style="width: 100%; padding: 0 10px; margin-bottom: 4px; z-index: 20;">
                         </div>
                     </div>
 
                     <div class="multi-party-status-area" style="padding: 6px 10px; margin-bottom: 8px; flex-shrink: 0; z-index: 10;">
                         
-                        <!-- 🌟 操作者自身のHP状況表示（左起算減少連動） -->
+                        <!-- 🌟 新設要件：操作者自身のHP状況表示バー（他パーティと混ざらない独立した専用配置） -->
                         <div class="multi-player-own-hp-frame" style="margin-bottom: 4px; display: none;" id="multiPlayerOwnHpFrame">
                             <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; position: relative;">
                                 <div class="multi-party-hp-fill" id="multiPlayerOwnHpFill" style="width: 100%;"></div>
@@ -445,12 +446,9 @@
                             </div>
                             <div style="font-size: 11px; font-family: monospace; font-weight: bold; color: white; flex-shrink: 0;" id="multiLimitGaugeText">0%</div>
                         </div>
-                        
-                        <!-- 🌟 必殺（LIMIT BREAK）ゲージ用コンテナ（左詰め蓄積ベース） -->
                         <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; margin-bottom: 6px; border-color: #F59E0B; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);">
                             <div class="multi-hp-fill multi-limit-fill" id="multiLimitGaugeFill" style="width:0%;"></div>
                         </div>
-
                         <div style="display: flex; justify-content: space-between; align-items: flex-end;">
                             <div style="display: flex; gap: 6px;">
                                 <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipCharIcon">👤</div>
@@ -723,7 +721,8 @@
 
     </div>
 
-    <div class="nav-bar">
+    <!-- 🌟 修正：ナビバーのID重複・アンカータイポを完全修正。ライフサイクルがこれで安全に回ります -->
+    <div class="nav-bar" id="appMainBottomNavBar">
         <button class="nav-item active" id="nav-home" onclick="window.switchTab('home')"><i data-lucide="layout-dashboard" size="18"></i> ホーム</button>
         <button class="nav-item" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
         <button class="nav-item" id="nav-reader" onclick="window.switchTab('reader')"><i data-lucide="file-text" size="18"></i> リーダー</button>

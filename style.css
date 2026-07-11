@@ -51,7 +51,7 @@ body::after {
 }
 #view-home::before { background-image: url('homenohaikei.png'); }
 #view-vocab::before { background-image: url('tango.png'); }
-#view-reader::before { background-image: url('tyoubun.png'); }
+#view-reader::before { background-image: url('friend.png'); } /* 🌟 元ファイル準拠 */
 #view-community::before { background-image: url('friend.png'); }
 #view-party::before { background-image: url('haikei.png'); }
 
@@ -97,20 +97,14 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .scroll-to-top-btn { position: fixed; bottom: 76px; right: 20px; width: 46px; height: 46px; background: var(--accent); color: white; border: none; border-radius: 50%; box-shadow: 0 4px 14px var(--accent-glow); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2000; opacity: 0; visibility: hidden; transform: translateY(10px); transition: all 0.3s ease; }
 .scroll-to-top-btn.show { opacity: 1; visibility: visible; transform: translateY(0); }
 
-/* 🌟 ログインゲート画面の最前面露出・回り込み遮断用最上位レイヤースタイル */
-#auth-gate-screen { 
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
-    background: linear-gradient(135deg, #0F172A 0%, #0A0F1D 50%, #1E1B4B 100%) !important; 
-    z-index: 99999 !important; /* 他のすべての要素（ナビバー、コンテナ）を背面へ強制遮断 */
-    display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; 
-}
-.auth-card { width: 100%; max-width: 360px; background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 24px; padding: 28px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); text-align: center; box-sizing: border-box; }
+#auth-gate-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 100%); z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
+.auth-card { width: 100%; max-width: 360px; background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 24px; padding: 28px; backdrop-filter: blur(16px); text-align: center; box-sizing: border-box; }
 .auth-error { color: #F87171; font-size: 12px; font-weight: 700; margin-bottom: 12px; display: none; background: rgba(239, 68, 68, 0.1); padding: 8px 12px; border-radius: 8px; }
 .auth-tabs { display: flex; background: var(--input-bg); padding: 4px; border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--border); gap: 4px; }
 .auth-tab-btn { flex: 1; border: none; background: none; padding: 8px 4px; font-size: 12px; font-weight: 700; color: var(--text-sub); cursor: pointer; border-radius: 7px; }
 .auth-tab-btn.active { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); }
 
-.login-confirm-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100000 !important; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+.login-confirm-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 6000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
 .login-confirm-card { background: var(--card-bg); border: 2px solid var(--cosmic-cyan); border-radius: 16px; padding: 24px; width: 85%; max-width: 320px; text-align: center; box-shadow: 0 10px 40px rgba(0, 240, 255, 0.3); }
 .login-confirm-avatar { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--cosmic-cyan), var(--cosmic-blue)); margin: 0 auto 12px auto; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; color: white; box-shadow: 0 0 15px rgba(0,240,255,0.5); }
 
@@ -162,7 +156,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .range-box { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; background: rgba(255,255,255,0.15); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.3); padding: 8px 12px; border-radius: 10px; }
 .range-input { width: 70px; height: 32px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; color: white; text-align: center; }
 .filter-scroller { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; }
-.pill-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2); color: #FFF; font-size: 11px; padding: 6px 12px; border-radius: 20px; cursor: pointer; white-space: nowrap; }
+.pill-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.25); color: #FFF; font-size: 11px; padding: 6px 12px; border-radius: 20px; cursor: pointer; white-space: nowrap; }
 .pill-btn.active { background: var(--accent); border-color: var(--accent); }
 
 .popover { position: fixed; bottom: 0; left: 0; width: 100%; max-height: 80vh; z-index: 5000; background: #1E293B; border-top: 1px solid var(--border); color: white; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)) 18px; border-radius: 20px 20px 0 0; display: none; flex-direction: column; gap: 12px; box-sizing: border-box; box-shadow: 0 -10px 40px rgba(0,0,0,0.7); }
@@ -215,6 +209,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 #feedbackUserAns, #feedbackCorrectAns { font-size: 13px !important; word-break: break-word; }
 #feedbackOtherAns { font-size: 11px !important; word-break: break-word; }
 .game-scrollable-content { max-height: calc(100vh - 160px); overflow-y: auto; padding-bottom: 24px; }
+.game-scrollable-content::-webkit-scrollbar { display: none; } /* 🌟 スクロールバー非表示による美麗化 */
 .game-header-console-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; position: relative; z-index: 50; }
 .game-finish-inline-btn { height: 38px; padding: 0 16px; border: 1px solid var(--cosmic-cyan); background: linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(192, 132, 252, 0.2) 100%); color: #FFFFFF; font-size: 12px; font-weight: 700; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 0 12px rgba(0, 240, 255, 0.4); text-shadow: 0 0 4px #00F0FF; transition: all 0.2s ease; }
 .game-finish-inline-btn:active { transform: scale(0.95); }
@@ -252,32 +247,8 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* ==========================================================================
-   🌟 新マルチバトルUI用 追加CSS (省スペース＆横長ボスバー＆左詰め徹底版)
+   🌟 新マルチバトルUI用 追加CSS (省スペース＆横長ボスバー版)
    ========================================================================= */
-
-/* 🌟 新設：コンボ中に画面全体の外周を優しく包み込んで明滅するゴールドネオン外枠レイヤー */
-.combo-sparkle-overlay {
-    position: fixed;
-    top: 0; left: 0; width: 100vw; height: 100vh;
-    pointer-events: none;
-    z-index: 6500 !important; /* ナビバー(7000)の直下レイヤーに割り当て */
-    box-shadow: inset 0 0 0px transparent;
-    opacity: 0;
-    transition: opacity 0.3s ease, box-shadow 0.3s ease;
-}
-.combo-sparkle-overlay.active {
-    opacity: 1;
-    animation: goldenGlow 1.5s ease-in-out infinite alternate;
-}
-
-@keyframes goldenGlow {
-    0% {
-        box-shadow: inset 0 0 12px rgba(251, 191, 36, 0.2), 0 0 6px rgba(251, 191, 36, 0.1) inset;
-    }
-    100% {
-        box-shadow: inset 0 0 28px rgba(251, 191, 36, 0.6), 0 0 12px rgba(251, 191, 36, 0.3) inset;
-    }
-}
 
 /* ボスの横型HPバー（画面上部） */
 .multi-boss-full-bar {
@@ -296,7 +267,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     left: 0;
     height: 100%;
     background: linear-gradient(90deg, #7f1d1d, #ef4444);
-    transform-origin: left !important;
+    transform-origin: left !important; /* 🌟 左詰め起算点減少の厳格保証 */
     transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
 }
@@ -318,7 +289,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     pointer-events: none;
 }
 
-/* ボス本体のアニメーション */
+/* ボス本体の巨大化 ＆ 超禍々しいアニメーション */
 .multi-boss-image {
     animation: ominousAura 3.5s ease-in-out infinite;
 }
@@ -335,9 +306,10 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 }
 
 /* ==========================================================================
-   🌟 パーティエリア（横一列・透過拡大配置）
+   🌟 パーティエリア（横一列・顔アイコン逆順フレックス固定）
    ========================================================================= */
 
+/* パーティ・ステータス全体の枠 */
 .multi-party-status-area {
     background: rgba(15, 23, 42, 0.6);
     border: 1px solid rgba(236, 72, 153, 0.4);
@@ -347,6 +319,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     -webkit-backdrop-filter: blur(8px);
 }
 
+/* 仲間キャラを横に広げて並べるグリッド */
 .multi-party-grid-horizontal {
     display: flex;
     justify-content: space-around;
@@ -354,17 +327,18 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     align-items: flex-end;
 }
 
-/* 🌟 配置固定：顔画像が上、HPバー・名前文字列が確実に「下側」へ配置固定されるレイアウト構造 */
+/* 各キャラのコンテナ構造 */
 .multi-party-member {
     position: relative;
     display: flex;
-    flex-direction: column-reverse; /* 子要素の並び順を強固に逆転 */
+    /* 🌟 改良：縦方向を逆転させることでHTML構造に依らず「顔が上、ステータスが下」をCSSから絶対固定する */
+    flex-direction: column-reverse;
     align-items: center;
     flex: 1;
     max-width: 80px; 
 }
 
-/* キャラの顔アイコン（背景色＆枠線を完全撤廃・サイズ拡大・透過化） */
+/* キャラの顔アイコン枠 */
 .multi-party-icon {
     width: 60px;
     height: 60px;
@@ -379,7 +353,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     overflow: hidden;
 }
 
-/* キャラに直接ポップアップ（V字ダメージ用） */
+/* キャラに直接ポップアップ（被ダメージ・V字用） */
 .popup-v-dmg {
     position: absolute;
     top: -40px;
@@ -408,7 +382,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     text-shadow: 2px 2px 0 #FFF, -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF;
 }
 
-/* 🌟 相手に向かって飛んでいく攻撃吹き出し（主体の固有ネオンカラーと動的同期） */
+/* 🌟 追加要件：解答成功時にプレイヤーカラーをまとってボスへ高速追従巡航する吹き出しレイアウト */
 .popup-bubble-flying-atk {
     position: fixed;
     background: white;
@@ -423,10 +397,10 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     border: 2px solid var(--cosmic-purple-light);
     box-shadow: 0 4px 12px rgba(192, 132, 252, 0.4);
     color: #1E293B;
-    animation: flyToBoss 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+    animation: flyToBossTrack 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
 
-/* 吹き出しの矢印（下向き尻尾） */
+/* 吹き出しのインジケータ尾 */
 .popup-bubble-flying-atk::after {
     content: '';
     position: absolute;
@@ -438,7 +412,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     border-color: inherit transparent transparent transparent;
 }
 
-/* 着弾大爆発エフェクト */
+/* ボス着弾時専用の衝撃大爆発レイヤー */
 .popup-hit-explosion {
     position: fixed;
     width: 50px;
@@ -448,47 +422,20 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     z-index: 310;
     pointer-events: none;
     transform: translate(-50%, -50%);
-    animation: hitExplode 0.4s ease-out forwards;
+    animation: hitExplosionBurst 0.4s ease-out forwards;
 }
 
-/* キーフレーム */
-@keyframes flyToBoss {
-    0% {
-        top: var(--start-y);
-        left: var(--start-x);
-        transform: translate(-50%, -50%) scale(0.6);
-        opacity: 0;
-    }
-    15% {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1.1);
-    }
-    85% {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1.0);
-    }
-    100% {
-        top: var(--target-y);
-        left: var(--target-x);
-        transform: translate(-50%, -50%) scale(0.7);
-        opacity: 0;
-    }
+@keyframes flyToBossTrack {
+    0% { top: var(--start-y); left: var(--start-x); transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+    15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    85% { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+    100% { top: var(--target-y); left: var(--target-x); transform: translate(-50%, -50%) scale(0.7); opacity: 0; }
 }
 
-@keyframes hitExplode {
-    0% {
-        transform: translate(-50%, -50%) scale(0.2);
-        opacity: 1;
-        filter: brightness(2);
-    }
-    50% {
-        transform: translate(-50%, -50%) scale(1.4);
-        opacity: 0.8;
-    }
-    100% {
-        transform: translate(-50%, -50%) scale(1.8);
-        opacity: 0;
-    }
+@keyframes hitExplosionBurst {
+    0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; filter: brightness(2); }
+    50% { transform: translate(-50%, -50%) scale(1.4); opacity: 0.8; }
+    100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
 }
 
 @keyframes smashDownV {
@@ -499,7 +446,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     100% { opacity: 0; transform: translate(-50%, 15px) scale(0.8); }
 }
 
-/* ダメージ時の赤点滅 */
+/* 自分がダメージを受けたときの赤く光るアニメーション */
 .player-damage-flash {
     animation: flashRed 0.4s ease-out;
 }
@@ -508,40 +455,51 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     100% { transform: scale(1); filter: none; }
 }
 
-/* 攻撃時のジャンプモーション */
+/* 攻撃モーションを右ではなく「上」へ指定時間(0.5s)で跳ね上げる */
 .companion-attack-active { animation: companionDash 0.5s ease-in-out; }
 @keyframes companionDash { 
     0% { transform: translateY(0) scale(1); } 
-    50% { transform: translateY(-24px) scale(1.08); } 
+    50% { transform: translateY(-30px) scale(1.1); } 
     100% { transform: translateY(0) scale(1); } 
 }
 
-/* 仲間・各自の個別HPミニバー */
+/* キャラの下にある個別のHPバー */
 .multi-party-hp-bar {
     width: 100%;
-    height: 6px;
+    height: 5px;
     background: rgba(0,0,0,0.8);
+    border: 1px solid rgba(255,255,255,0.2);
     border-radius: 4px;
     overflow: hidden;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
-    box-sizing: border-box;
     margin-bottom: 2px;
 }
 .multi-party-hp-fill {
     height: 100%;
     background: linear-gradient(90deg, #10B981, #34D399);
     width: 100%;
-    /* 🌟 修正：左詰め起算による減少・蓄積を100%保証 */
-    transform-origin: left !important;
+    transform-origin: left !important; /* 🌟 左詰め起点減少の厳格保証 */
     transition: width 0.3s ease;
     box-shadow: 0 0 5px #10B981;
 }
 
-/* 🌟 バーの内部へテキスト数値を完全に重ねる共通カプセルレイアウトスタイル */
+/* キャラ・武器・防具のアイコン */
+.multi-equip-icon {
+    border-radius: 4px;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* 🌟 バーのコズミック構造体内部へ完全にテキストを重ね合わせる調整 */
 .inner-text-hp-bar {
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
 }
 .hp-bar-inner-text-layer {
     position: absolute;
@@ -567,13 +525,12 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     box-shadow: inset 0 2px 5px rgba(0,0,0,0.8);
 }
 
-/* 🌟 LIMIT BREAK (必殺技) ゲージ：左起算減少・蓄積を徹底保証 */
+/* LIMIT BREAK (必殺技) ゲージ用のスタイル */
 .multi-limit-fill {
     height: 100%;
     background: linear-gradient(90deg, #F59E0B, #EF4444, #8B5CF6, #3B82F6, #10B981, #F59E0B);
     background-size: 200% 100%;
-    /* 🌟 修正：左起算溜まりを100%保証 */
-    transform-origin: left !important;
+    transform-origin: left !important; /* 🌟 左詰め起算点蓄積の厳格保証 */
     transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
 }
@@ -587,6 +544,25 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 @keyframes rainbowGlow {
     0% { background-position: 0% 50%; }
     100% { background-position: 200% 50%; }
+}
+
+/* 🌟 追加要件：2コンボ以上発生中、下部ナビバー等を含むアプリ最外周全体を包み込んでゴールド明滅するネオンレイヤー */
+.combo-sparkle-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    pointer-events: none;
+    z-index: 6500 !important; /* ナビバーの z-index: 4000 を完全に包含する最前面 */
+    box-shadow: inset 0 0 0px transparent;
+    opacity: 0;
+    transition: opacity 0.3s ease, box-shadow 0.3s ease;
+}
+.combo-sparkle-overlay.active {
+    opacity: 1;
+    animation: goldenNeonFlash 1.5s ease-in-out infinite alternate;
+}
+@keyframes goldenNeonFlash {
+    0% { box-shadow: inset 0 0 12px rgba(251, 191, 36, 0.25), 0 0 6px rgba(251, 191, 36, 0.15) inset; }
+    100% { box-shadow: inset 0 0 35px rgba(251, 191, 36, 0.7), 0 0 15px rgba(251, 191, 36, 0.4) inset; }
 }
 
 /* フリック入力エリア */
@@ -619,7 +595,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .flick-choice-center-blank { min-height: 40px; }
 .flick-center-word { font-size: 20px; font-weight: 900; color: white; text-shadow: 0 0 15px rgba(255,255,255,0.8), 0 0 5px rgba(0,240,255,0.5); font-family: "Times New Roman", serif; background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%); padding: 2px 14px; border-radius: 10px; display: inline-block; margin-top: 0; border: 1px solid rgba(0,240,255,0.4); box-shadow: 0 4px 15px rgba(0,0,0,0.5), inset 0 0 10px rgba(0,240,255,0.1); }
 
-/* 🌟 1問ごとにJavaScriptでパッと50%に強制リセットされるためトランジションを削除 */
+/* 🌟 JS側の座標リセット（left=50%, top=50%）を遅延させないため、アニメーションtransitionは不付与 */
 .flick-weapon-icon { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 28px; pointer-events: none; z-index: 50; filter: drop-shadow(0 0 8px rgba(255,100,0,0.8)); }
 
 /* ==========================================================================

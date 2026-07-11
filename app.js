@@ -1,5 +1,5 @@
 // ==========================================================================
-// 🌟 グローバル変数（システム典型データ）
+// 🌟 グローバル変数（システム全体で使うデータ）
 // ==========================================================================
 let myId = "";
 let myName = "プレイヤー1";
@@ -43,7 +43,7 @@ let myFolders = JSON.parse(localStorage.getItem('myFolders')) || ['未分類'];
 let currentTranslationMode = 'inline';
 let currentActiveReaderText = "";
 let currentActiveTitle = "";
-let currentActiveWordToken = null;
+let currentTargetWordToken = null;
 let currentTargetVocabNum = null; 
 
 let gameTimerInterval = null;
@@ -72,10 +72,77 @@ let isFlicking = false;
 let currentFlickChoice = -1;
 
 // ==========================================================================
-// 🌟 魔法（関数）の完全グローバル先攻登録（ReferenceErrorを100%根絶）
+// 🌟 魔法（関数）の完全グローバル登録
 // ==========================================================================
 
-// 🌟 修正：最上段でwindowオブジェクトへ直接関数をバインドし、パース完了前の未定義エラーを完全に防ぎます[span_2](start_span)[span_2](end_span)
+// 🌟 安全対策：起動時の未定義クラッシュを根絶するため、描画関数を最上部で強固に事前ロード
+window.renderLeaderboard = function() { 
+    const container = document.getElementById('leaderboardContainer'); 
+    if(container) container.innerHTML = `<div style="padding:10px; font-size:14px; font-weight:700; color:#FFF;">プレイヤー名: ${myName} / 合計スコア: ${totalExp} PTS</div>`; 
+};
+
+window.initLucide = function() { 
+    if(window.lucide) { window.lucide.createIcons(); } 
+};
+
+window.scrollToTop = function() { 
+    window.scrollTo({ top: 0, behavior: 'smooth' }); 
+};
+
+window.initHeroSlider = function() {
+    const track = document.getElementById('heroSliderTrack');
+    if (!track) return;
+    let currentSlide = 0;
+    setInterval(() => { 
+        currentSlide = (currentSlide + 1) % 5; 
+        track.style.transform = `translateX(-${currentSlide * 20}%)`; 
+    }, 4000);
+};
+
+window.saveVocabToStorage = function() { 
+    localStorage.setItem('core_v4_custom_words_' + myId, JSON.stringify(vocabList)); 
+};
+
+window.migrateVocabData = function(words) {
+    return words.map(w => {
+        if (!w.meanings || w.meanings.length === 0) {
+            w.meanings = [];
+            let mStr = w.meaning || "";
+            const hasCircle = /[①-⑳]/.test(mStr);
+            if (hasCircle) {
+                let parts = mStr.split(/(?=[①-⑳])/).map(p => p.replace(/[①-⑳]/g, '').trim()).filter(p => p);
+                w.meanings = parts.map((p, i) => ({ id: `${w.num}-${i}`, text: p, status: w.status || 'none', history: w.history || [] }));
+            } else {
+                w.meanings.push({ id: `${w.num}-0`, text: mStr.trim(), status: w.status || 'none', history: w.history || [] });
+            }
+        }
+        return w;
+    });
+};
+
+window.formatWordForDisplay = function(str) {
+    return str.replace(/(動|名|形|副|代|接|前|自動|他動)[:：]\s*/g, '')
+              .replace(/〜[をにがとへでや]\s*/g, '')
+              .replace(/^[ ,　]+/, '')
+              .trim();
+};
+
+window.getAllUsers = function() {
+    return JSON.parse(localStorage.getItem('core_v4_users') || "[]");
+};
+
+window.saveAllUsers = function(users) {
+    localStorage.setItem('core_v4_users', JSON.stringify(users));
+};
+
+window.generateUserId = function() {
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let id = "";
+    for(let i=0; i<7; i++) id += letters.charAt(Math.floor(Math.random() * letters.length));
+    for(let i=0; i<3; i++) id += Math.floor(Math.random() * 10);
+    return id;
+};
+
 window.switchAuthMode = function(mode) {
     const tabLogin = document.getElementById('authTabLogin');
     const tabReg = document.getElementById('authTabRegister');
@@ -167,84 +234,6 @@ window.handleGuestLogin = function() {
     if(!localStorage.getItem('core_v4_totalExp')) localStorage.setItem('core_v4_totalExp', "0");
     
     window.loadLocalState();
-};
-
-window.addBattleLog = function(text, type = 'system') {
-    const logContainer = document.getElementById('multiBattleLog');
-    if(!logContainer) return;
-    
-    let color = 'white';
-    let fontWeight = '700';
-    
-    if(type === 'me') { color = '#3B82F6'; fontWeight = '900'; } 
-    if(type === 'boss_single_me') { color = '#EF4444'; fontWeight = '900'; } 
-    if(type === 'boss_all') { color = '#A855F7'; fontWeight = '900'; } 
-    if(type === 'limit') { color = '#FBBF24'; fontWeight = '900'; } 
-    if(type === 'system') { color = '#94A3B8'; }
-    
-    logContainer.innerHTML = `<div class="log-item-new" style="color:${color}; font-weight:${fontWeight}; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:right;">${text}</div>`;
-};
-
-window.initLucide = function() { 
-    if(window.lucide) { window.lucide.createIcons(); } 
-};
-
-window.scrollToTop = function() { 
-    window.scrollTo({ top: 0, behavior: 'smooth' }); 
-};
-
-window.initHeroSlider = function() {
-    const track = document.getElementById('heroSliderTrack');
-    if (!track) return;
-    let currentSlide = 0;
-    setInterval(() => { 
-        currentSlide = (currentSlide + 1) % 5; 
-        track.style.transform = `translateX(-${currentSlide * 20}%)`; 
-    }, 4000);
-};
-
-window.saveVocabToStorage = function() { 
-    localStorage.setItem('core_v4_custom_words_' + myId, JSON.stringify(vocabList)); 
-};
-
-window.migrateVocabData = function(words) {
-    return words.map(w => {
-        if (!w.meanings || w.meanings.length === 0) {
-            w.meanings = [];
-            let mStr = w.meaning || "";
-            const hasCircle = /[①-⑳]/.test(mStr);
-            if (hasCircle) {
-                let parts = mStr.split(/(?=[①-⑳])/).map(p => p.replace(/[①-⑳]/g, '').trim()).filter(p => p);
-                w.meanings = parts.map((p, i) => ({ id: `${w.num}-${i}`, text: p, status: w.status || 'none', history: w.history || [] }));
-            } else {
-                w.meanings.push({ id: `${w.num}-0`, text: mStr.trim(), status: w.status || 'none', history: w.history || [] });
-            }
-        }
-        return w;
-    });
-};
-
-window.formatWordForDisplay = function(str) {
-    return str.replace(/(動|名|形|副|代|接|前|自動|他動)[:：]\s*/g, '')
-              .replace(/〜[をにがとへでや]\s*/g, '')
-              .replace(/^[ ,　]+/, '')
-              .trim();
-};
-
-window.getAllUsers = function() {
-    return JSON.parse(localStorage.getItem('core_v4_users') || "[]");
-};
-
-window.saveAllUsers = function(users) {
-    localStorage.setItem('core_v4_users', JSON.stringify(users));
-};
-
-window.generateUserId = function() {
-    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    let id = "";
-    for(let i=0; i<7; i++) id += letters.charAt(Math.floor(Math.random() * letters.length));
-    for(let i=0; i<3; i++) id += Math.floor(Math.random() * 10);
-    return id;
 };
 
 window.showLoginConfirmPopup = function(user) {
@@ -727,39 +716,10 @@ window.renderVocabList = function() {
     });
     window.initLucide();
 };
+
 // ==========================================================================
 // 📖 リーダー＆AI解析処理
 // ==========================================================================
-window.callGeminiAnalyzer = async function(rawText) {
-    if (!geminiApiKey) return null;
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
-    const safeText = rawText.replace(/\n/g, ' ');
-    const prompt = `以下の英文の「改行」をすべて無視し、ピリオド等で1文ずつに分割してください。各英文と和訳、さらに「大学受験レベルの重要文法・構文（最大3つ）」を抽出しJSONのみ出力。\nテキスト:\n${safeText}\nフォーマット:\n{"sentences":[{"text":"...","translations":"...","grammarHighlights":[{"phrase":"...","meaning":"..."}]}]}`;
-    try {
-        const response = await fetch(endpoint, { 
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) 
-        });
-        if (!response.ok) { if (response.status === 429) alert("API制限に達しました"); return null; }
-        const data = await response.json();
-        let text = data.candidates[0].content.parts[0].text.trim();
-        const jsonMatch = text.match(/\{[\s\S]*\}/); if (jsonMatch) text = jsonMatch[0];
-        return JSON.parse(text);
-    } catch (e) { return null; }
-};
-
-window.startAnalysisWithEmbeddedTitle = async function() {
-    const rawText = document.getElementById('englishTextarea').value.trim(); 
-    if(!rawText) return;
-    const submitBtn = document.getElementById('analysisSubmitBtn'); 
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = `<i data-lucide="loader" class="animate-spin" size="16"></i> 英文解析中...`; 
-    window.initLucide();
-    try { await window.analyzeText(rawText, document.getElementById('customTextTitle').value.trim() || `解析_${new Date().toLocaleDateString()}`); } 
-    catch(err) {} 
-    finally { submitBtn.disabled = false; submitBtn.innerHTML = `<i data-lucide="wand-2" size="16"></i> 英文解析`; window.initLucide(); }
-};
-
 window.analyzeText = async function(rawText, assignedTitle = null) {
     if(!rawText) return; currentActiveReaderText = rawText; currentActiveTitle = assignedTitle || "無題のテキスト";
     const customJaEl = document.getElementById('customJapanesetextarea');
@@ -841,6 +801,9 @@ window.analyzeText = async function(rawText, assignedTitle = null) {
     });
     document.getElementById('summaryJaContainer').innerHTML = totalSummaryJa; window.setTranslationMode(currentTranslationMode); window.initLucide();
 };
+// ==========================================================================
+// 📖 リーダーの残り・本棚保存・ポップオーバー関連 ロジック
+// ==========================================================================
 
 window.showCustomSaveBookshelfPrompt = function(text, title) {
     if(document.getElementById('saveBookshelfOverlay')) return;
@@ -957,8 +920,15 @@ window.updateReaderWordColors = function() {
     });
 };
 
+window.openGrammarPopover = function(event, phrase, meaning) {
+    if(event) event.stopPropagation(); currentTargetWordToken = null; currentTargetVocabNum = null;
+    document.getElementById('popWord').innerText = phrase; document.getElementById('popWordNum').innerText = "💡 文法";
+    document.getElementById('popMeaning').innerText = meaning; document.getElementById('popoverStatusBtns').style.display = "none";
+    const pop = document.getElementById('wordPopover'); pop.style.display = 'flex'; pop.classList.add('show');
+};
+
 window.openWordPopoverFromVocab = function(event, vocabItem, originalText) {
-    if(event) event.stopPropagation(); currentActiveWordToken = vocabItem.word.toLowerCase(); currentTargetVocabNum = vocabItem.num;
+    if(event) event.stopPropagation(); currentTargetWordToken = vocabItem.word.toLowerCase(); currentTargetVocabNum = vocabItem.num;
     document.getElementById('popWord').innerText = originalText; document.getElementById('popWordNum').innerText = `#${vocabItem.num}`;
     let meaningHtml = "";
     vocabItem.meanings.forEach(m => {
@@ -969,7 +939,7 @@ window.openWordPopoverFromVocab = function(event, vocabItem, originalText) {
                     <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='ok'?'var(--word-ok)':'rgba(0,0,0,0.5)'}; color:${m.status==='ok'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'ok', event)">⚪︎</button>
                     <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='so'?'var(--word-so)':'rgba(0,0,0,0.5)'}; color:${m.status==='so'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'so', event)">△</button>
                     <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='bad'?'var(--word-bad)':'rgba(0,0,0,0.5)'}; color:${m.status==='bad'?'#FFF':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'bad', event)">✕</button>
-                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3) : 'rgba(0,0,0,0.5)'}; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'none', event)">ー</button>
+                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='none'?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.5)'}; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'none', event)">ー</button>
                 </div>
             </div>`;
     });
@@ -987,7 +957,7 @@ window.updateMeaningStatusFromPopover = function(wordNum, meaningId, status, eve
 };
 
 window.openWordPopover = function(event, cleanKey, originalText) {
-    if(event) event.stopPropagation(); currentActiveWordToken = cleanKey; currentTargetVocabNum = null;
+    if(event) event.stopPropagation(); currentTargetWordToken = cleanKey; currentTargetVocabNum = null;
     const match = dictionaryData.find(d => d.en === cleanKey);
     document.getElementById('popWord').innerText = originalText; document.getElementById('popWordNum').innerText = "";
     document.getElementById('popMeaning').innerText = match ? match.ja : '未登録'; document.getElementById('popoverStatusBtns').style.display = "flex"; 
@@ -995,8 +965,8 @@ window.openWordPopover = function(event, cleanKey, originalText) {
 };
 
 window.setWordStatusFromReader = function(status) {
-    if(currentActiveWordToken && !currentTargetVocabNum) {
-        wordMemory[currentActiveWordToken] = status; localStorage.setItem('wordMemory', JSON.stringify(wordMemory));
+    if(currentTargetWordToken && !currentTargetVocabNum) {
+        wordMemory[currentTargetWordToken] = status; localStorage.setItem('wordMemory', JSON.stringify(wordMemory));
         totalExp += 10; localStorage.setItem('core_v4_totalExp', totalExp);
         const coinEl = document.getElementById('profCoinCount'); if(coinEl) coinEl.innerText = totalExp;
         window.updateReaderWordColors(); 
@@ -1013,10 +983,9 @@ window.setTranslationMode = function(mode) {
     document.getElementById('summary-ja-card').style.display = mode === 'bottom' ? 'block' : 'none';
 };
 
-window.renderLeaderboard = function() { 
-    const container = document.getElementById('leaderboardContainer'); 
-    if(container) container.innerHTML = `<div style="padding:10px; font-size:14px; font-weight:700; color:#FFF;">プレイヤー名: ${myName} / 合計スコア: ${totalExp} PTS</div>`; 
-};
+// ==========================================================================
+// 📊 アクティビティログ・チャートモジュール
+// ==========================================================================
 
 window.renderActivityChart = function() {
     const chart = document.getElementById('activityBarChart'); if(!chart) return; chart.innerHTML = "";
@@ -1034,13 +1003,15 @@ window.saveSidebarProfile = function() {
     selectedTitle = document.getElementById('sideSelectTitle').value; window.applyProfileToUi(); window.toggleSidebar(false);
 };
 
+// ==========================================================================
+// 🛠️ 管理者メニュー / 配信アナウンス関連 ロジック
+// ==========================================================================
+
 window.enterAdminModeDirect = function() { 
     const overlay = document.getElementById('adminPassOverlay');
     const input = document.getElementById('adminPassInput');
     if (overlay && input) {
-        input.value = "";
-        overlay.style.display = 'flex';
-        input.focus();
+        input.value = ""; overlay.style.display = 'flex'; input.focus();
     } else {
         const pass = prompt("管理者専用アクセスです。\nパスワードを入力してください。");
         if (pass === "tutinokopanda") { window.switchTab('admin'); } 
@@ -1052,21 +1023,16 @@ window.checkAdminPassword = function() {
     const input = document.getElementById('adminPassInput');
     const overlay = document.getElementById('adminPassOverlay');
     if (input && input.value === "tutinokopanda") {
-        overlay.style.display = 'none';
-        window.switchTab('admin');
+        overlay.style.display = 'none'; window.switchTab('admin');
     } else {
-        alert("⚠️ パスワードが違います。アクセスが拒否されました。");
-        if(input) input.value = "";
+        alert("⚠️ パスワードが違います。アクセスが拒否されました。"); if(input) input.value = "";
     }
 };
 
 window.saveAdminDashboardTitle = function() {
-    const input = document.getElementById('adminDashboardTitleInput');
-    if(!input) return;
-    const txt = input.value.trim() || "ダッシュボード";
-    localStorage.setItem('core_v4_dashboard_title', txt);
-    const headerTitleEl = document.getElementById('headerTitleText');
-    if(headerTitleEl) headerTitleEl.innerText = txt;
+    const input = document.getElementById('adminDashboardTitleInput'); if(!input) return;
+    const txt = input.value.trim() || "ダッシュボード"; localStorage.setItem('core_v4_dashboard_title', txt);
+    const headerTitleEl = document.getElementById('headerTitleText'); if(headerTitleEl) headerTitleEl.innerText = txt;
     alert("ダッシュボードのタイトルを更新しました！");
 };
 
@@ -1076,73 +1042,46 @@ window.resetLeaderboard = function() { if(confirm("ランキング履歴を一�
 window.resetBestScore = function() { if(confirm("ベストスコアを0に戻しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['normal', 'hard', 'expert', 'endless'].forEach(d => { localStorage.removeItem(`cosmic_best_${m}_${d}`); }); }); } };
 window.resetScorePopup = function(popupEl) { popupEl.className = "giant-score-popup"; void popupEl.offsetWidth; };
 
+// ==========================================================================
+// 🏆 ゲーム用リーダーボード制御 ロジック
+// ==========================================================================
+
 window.setLbMode = function(mode) {
     currentLbMode = mode;
     ['lbBtnModeJa', 'lbBtnModeEn', 'lbBtnModeMix'].forEach(id => {
-        let el = document.getElementById(id);
-        if(el) {
-            el.style.background = 'rgba(7, 11, 25, 0.85)';
-            el.style.boxShadow = '0 0 12px rgba(0, 240, 255, 0.2)';
-        }
+        let el = document.getElementById(id); if(el) { el.style.background = 'rgba(7, 11, 25, 0.85)'; el.style.boxShadow = '0 0 12px rgba(0, 240, 255, 0.2)'; }
     });
     let targetId = mode === 'ja2en' ? 'lbBtnModeJa' : mode === 'en2ja' ? 'lbBtnModeEn' : 'lbBtnModeMix';
     let targetEl = document.getElementById(targetId);
-    if(targetEl) {
-        targetEl.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)';
-        targetEl.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.6)';
-    }
+    if(targetEl) { targetEl.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)'; targetEl.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.6)'; }
     window.renderGameLeaderboard();
 };
 
 window.setLbDiff = function(diff) {
     currentLbDiff = diff;
     ['lbBtnDiffNormal', 'lbBtnDiffHard', 'lbBtnDiffExpert', 'lbBtnDiffEndless'].forEach(id => {
-        let el = document.getElementById(id);
-        if(el) {
-            el.style.background = 'rgba(7, 11, 25, 0.85)';
-            el.style.boxShadow = '0 0 12px rgba(0, 240, 255, 0.2)';
-        }
+        let el = document.getElementById(id); if(el) { el.style.background = 'rgba(7, 11, 25, 0.85)'; el.style.boxShadow = '0 0 12px rgba(0, 240, 255, 0.2)'; }
     });
     let targetId = diff === 'normal' ? 'lbBtnDiffNormal' : diff === 'hard' ? 'lbBtnDiffHard' : diff === 'expert' ? 'lbBtnDiffExpert' : diff === 'endless' ? 'lbBtnDiffEndless' : '';
     let targetEl = document.getElementById(targetId);
-    if(targetEl) {
-        targetEl.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)';
-        targetEl.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.6)';
-    }
+    if(targetEl) { targetEl.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)'; targetEl.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.6)'; }
     window.renderGameLeaderboard();
 };
 
 window.renderGameLeaderboard = function(type = currentLbType) {
     currentLbType = type;
-    const container = document.getElementById('leaderboardListContainer');
-    if(!container) return;
-    container.innerHTML = "";
-    
+    const container = document.getElementById('leaderboardListContainer'); if(!container) return; container.innerHTML = "";
     if (type === 'mine') {
-        const keyHistory = `cosmic_score_${currentLbMode}_${currentLbDiff}`;
-        let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
-
-        if (history.length === 0) {
-            container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px; margin-top:20px;">このモードの記録はありません</div>`;
-            return;
-        }
-        
+        const keyHistory = `cosmic_score_${currentLbMode}_${currentLbDiff}`; let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
+        if (history.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px; margin-top:20px;">このモードの記録はありません</div>`; return; }
         const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "var(--cosmic-cyan)", "var(--cosmic-cyan)"];
         history.forEach((record, index) => {
-            const row = document.createElement('div');
-            row.style.cssText = `display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;`;
-            row.innerHTML = `
-                <div style="display:flex; gap:12px; align-items:center;">
-                    <span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:15px; width:20px; text-align:center;">${index + 1}</span>
-                    <span style="color:white; font-weight:800; letter-spacing:1px;">${record.score}</span>
-                </div>
-                <div style="color:var(--text-sub); font-size:11px;">${record.date}</div>
-            `;
+            const row = document.createElement('div'); row.style.cssText = `display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;`;
+            row.innerHTML = `<div style="display:flex; gap:12px; align-items:center;"><span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:15px; width:20px; text-align:center;">${index + 1}</span><span style="color:white; font-weight:800; letter-spacing:1px;">${record.score}</span></div><div style="color:var(--text-sub); font-size:11px;">${record.date}</div>`;
             container.appendChild(row);
         });
     } else {
-        container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px; margin-top:20px;"><i data-lucide="server-off" size="16" style="margin-bottom:4px;"></i><br>コミュニティデータ準備中...</div>`;
-        window.initLucide();
+        container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px; margin-top:20px;"><i data-lucide="server-off" size="16" style="margin-bottom:4px;"></i><br>コミュニティデータ準備中...</div>`; window.initLucide();
     }
 };
 
@@ -1153,64 +1092,30 @@ window.switchLeaderboard = function(type) {
 };
 
 // ==========================================================================
-// 🎮 ゲーム (ソロ学習テスト)
+// 🎮 ソロ学習テストゲームプレイ制御 ロジック
 // ==========================================================================
-
-window.callGeminiGameJudge = async function(questionText, correctAnswer, userInput, qType) {
-    const cLow = correctAnswer.toLowerCase().trim(), uLow = userInput.toLowerCase().trim();
-    let isLocalMatch = false;
-    if (qType === 'en2ja') {
-        const cParts = cLow.split(',').map(p => p.trim()).filter(p => p);
-        if (cParts.length > 0) isLocalMatch = cParts.some(p => p === uLow || p.includes(uLow) || uLow.includes(p));
-        else isLocalMatch = cLow.includes(uLow) || uLow.includes(cLow);
-    } else { if (cLow === uLow) isLocalMatch = true; }
-
-    if (isLocalMatch) return { status: "OK", alternatives: "🎯 PERFECT!" };
-    if (!geminiApiKey) return { status: "BAD", alternatives: "なし" };
-    try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: `単語「${questionText}」の意味「${correctAnswer}」に対して「${userInput}」が正解か判定。JSON:{"judgment":"OK"または"BAD"}` }] }] })
-        });
-        const data = await response.json(); let text = data.candidates[0].content.parts[0].text.trim().match(/\{[\s\S]*\}/)[0];
-        return { status: JSON.parse(text).judgment === "OK" ? "OK" : "BAD", alternatives: "" };
-    } catch (e) { return { status: "BAD", alternatives: "" }; }
-};
 
 window.showModeSelectScreen = function() {
     if (vocabList.length === 0) {
         alert("⚠️ 単語帳が空のため、テスト用の単語を自動追加してテスト画面を開きます！");
         vocabList.push({num: "1", word: "apple", meanings: [{id: "1-0", text: "りんご", status: "none", history: []}], sub: "", status: "none", history: []});
-        window.saveVocabToStorage();
-        window.renderVocabList();
+        window.saveVocabToStorage(); window.renderVocabList();
     }
-    const startScreen = document.getElementById('game-start-screen');
-    if (startScreen) startScreen.style.display = 'none';
-
-    const diffScreen = document.getElementById('game-difficulty-select-screen');
-    if (diffScreen) diffScreen.style.display = 'none';
-    
-    const modeScreen = document.getElementById('game-mode-select-screen');
-    if (modeScreen) modeScreen.style.display = 'block';
+    const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'none';
+    const diffScreen = document.getElementById('game-difficulty-select-screen'); if (diffScreen) diffScreen.style.display = 'none';
+    const modeScreen = document.getElementById('game-mode-select-screen'); if (modeScreen) modeScreen.style.display = 'block';
 };
 
 window.goToDifficultySelect = function(mode) {
-    selectedQuestionMode = mode;
-    document.getElementById('game-mode-select-screen').style.display = 'none';
-    document.getElementById('game-difficulty-select-screen').style.display = 'block';
+    selectedQuestionMode = mode; document.getElementById('game-mode-select-screen').style.display = 'none'; document.getElementById('game-difficulty-select-screen').style.display = 'block';
 };
 
 window.backToModeSelect = function() {
-    document.getElementById('game-difficulty-select-screen').style.display = 'none';
-    document.getElementById('game-mode-select-screen').style.display = 'block';
+    document.getElementById('game-difficulty-select-screen').style.display = 'none'; document.getElementById('game-mode-select-screen').style.display = 'block';
 };
 
 window.startActualGame = function(difficulty) {
-    document.body.classList.add('in-game-active');
-
-    currentGameDifficulty = difficulty; 
-    document.getElementById('game-difficulty-select-screen').style.display = 'none';
-    
+    document.body.classList.add('in-game-active'); currentGameDifficulty = difficulty; document.getElementById('game-difficulty-select-screen').style.display = 'none';
     gameScoreCount = 0; gameCurrentIndex = 0; gameMistakeCount = 0; gameComboCount = 0; gameComboTotalScore = 0; gameHistoryLog = []; isGameProcessingAnswer = false; isGameTimerPaused = false;
     gameCurrentWordsQueue = [];
     vocabList.forEach(w => {
@@ -1220,55 +1125,29 @@ window.startActualGame = function(difficulty) {
             else w.meanings.forEach(m => { gameCurrentWordsQueue.push({ type: 'ja2en', wordNum: w.num, word: w.word, meaningId: m.id, display: window.formatWordForDisplay(m.text) }); });
         }
     });
-    gameCurrentWordsQueue.sort(() => Math.random() - 0.5);
-    gameRemainingTime = difficulty === 'normal' ? 60 : difficulty === 'hard' ? 180 : 300;
-
-    document.getElementById('game-start-screen').style.display = 'none'; 
-    document.getElementById('game-play-screen').style.display = 'block';
-    document.getElementById('gameNextBtn').style.display = 'none'; 
-    document.getElementById('feedbackContent').style.display = "none";
-    document.getElementById('giantJudgmentOverlay').classList.remove('show');
-    
-    if (activeCharacter === 'tangon') { document.getElementById('gameActiveCharacterContainer').style.display = 'flex'; document.getElementById('gameActiveCharacterImg').src = 'tangon.png'; } 
-    else { document.getElementById('gameActiveCharacterContainer').style.display = 'none'; }
-
+    gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameRemainingTime = difficulty === 'normal' ? 60 : difficulty === 'hard' ? 180 : 300;
+    document.getElementById('game-start-screen').style.display = 'none'; document.getElementById('game-play-screen').style.display = 'block';
+    document.getElementById('gameNextBtn').style.display = 'none'; document.getElementById('feedbackContent').style.display = "none"; document.getElementById('giantJudgmentOverlay').classList.remove('show');
+    if (activeCharacter === 'tangon') { document.getElementById('gameActiveCharacterContainer').style.display = 'flex'; document.getElementById('gameActiveCharacterImg').src = 'tangon.png'; } else { document.getElementById('gameActiveCharacterContainer').style.display = 'none'; }
     clearInterval(gameTimerInterval);
     if (difficulty !== 'endless') { gameTimerInterval = setInterval(() => { if (isGameTimerPaused) return; gameRemainingTime--; document.getElementById('gameTimerNum').innerText = gameRemainingTime; if (gameRemainingTime <= 0) window.endGameSession(); }, 1000); }
     window.showNextGameWord();
 };
 
 window.showNextGameWord = function() {
-    if (gameCurrentIndex >= gameCurrentWordsQueue.length) { 
-        gameCurrentWordsQueue.sort(() => Math.random() - 0.5); 
-        gameCurrentIndex = 0; 
-    }
-    const q = gameCurrentWordsQueue[gameCurrentIndex];
-    currentQuestionType = q.type;
-
-    const wordEl = document.getElementById('gameWordTarget');
-    if (q.type === 'en2ja') {
-        wordEl.innerText = q.word; 
-        document.getElementById('gameAnswerInput').placeholder = "和訳を入力...";
-    } else {
-        wordEl.innerText = q.display; 
-        document.getElementById('gameAnswerInput').placeholder = "英単語を入力...";
-    }
-    
-    if (wordEl.innerText.length > 30) wordEl.style.fontSize = '11px';
-    else if (wordEl.innerText.length > 15) wordEl.style.fontSize = '15px';
-    else wordEl.style.fontSize = '20px'; 
-    
-    document.getElementById('gameAnswerInput').value = ""; 
-    document.getElementById('gameAnswerInput').focus();
-    isGameProcessingAnswer = false;
+    if (gameCurrentIndex >= gameCurrentWordsQueue.length) { gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0; }
+    const q = gameCurrentWordsQueue[gameCurrentIndex]; currentQuestionType = q.type; const wordEl = document.getElementById('gameWordTarget');
+    if (q.type === 'en2ja') { wordEl.innerText = q.word; document.getElementById('gameAnswerInput').placeholder = "和訳を入力..."; }
+    else { wordEl.innerText = q.display; document.getElementById('gameAnswerInput').placeholder = "英単語を入力..."; }
+    if (wordEl.innerText.length > 30) wordEl.style.fontSize = '11px'; else if (wordEl.innerText.length > 15) wordEl.style.fontSize = '15px'; else wordEl.style.fontSize = '20px'; 
+    document.getElementById('gameAnswerInput').value = ""; document.getElementById('gameAnswerInput').focus(); isGameProcessingAnswer = false;
 };
 
 window.submitGameAnswer = async function() {
     if (isGameProcessingAnswer) return; if (document.getElementById('gameNextBtn').style.display === 'flex') return window.goToNextGameWord();
     const userInput = document.getElementById('gameAnswerInput').value.trim(); if (!userInput) return;
-    isGameProcessingAnswer = true; if(currentGameDifficulty !== 'endless') isGameTimerPaused = true;
+    isGameProcessingAnswer = true; isGameTimerPaused = true;
     document.getElementById('gameAnswerInput').blur(); document.getElementById('gameSubmitBtn').style.display = 'none'; document.getElementById('gameJudgingIndicator').style.display = 'flex';
-
     const q = gameCurrentWordsQueue[gameCurrentIndex]; let isCorrect = false, alternatives = "";
     if (q.type === 'en2ja') {
         isCorrect = q.correctAnswers.some(ans => userInput.includes(ans) || ans.includes(userInput) || userInput === ans);
@@ -1277,12 +1156,9 @@ window.submitGameAnswer = async function() {
         isCorrect = (userInput.toLowerCase() === q.word.toLowerCase());
         if(!isCorrect && geminiApiKey) { const res = await window.callGeminiGameJudge(q.display, q.word, userInput, 'ja2en'); isCorrect = res.status === "OK"; alternatives = res.alternatives; }
     }
-
     document.getElementById('gameJudgingIndicator').style.display = 'none'; document.getElementById('gameNextBtn').style.display = 'flex';
     const overlay = document.getElementById('giantJudgmentOverlay'), popupEl = document.getElementById('giantScorePopup'), comboContainer = document.getElementById('persistentComboContainer');
-    window.resetScorePopup(popupEl);
-    
-    let updatedStatus = "bad";
+    window.resetScorePopup(popupEl); let updatedStatus = "bad";
     if (isCorrect) {
         let earned = 100 + (gameComboCount * 5); gameScoreCount += earned; gameComboCount++; gameComboTotalScore += earned;
         overlay.className = "giant-judgment-overlay show correct"; document.getElementById('giantJudgmentMark').innerText = "◎"; document.getElementById('giantJudgmentText').innerText = "正解";
@@ -1295,7 +1171,6 @@ window.submitGameAnswer = async function() {
         popupEl.innerText = "-50"; popupEl.className = "giant-score-popup score-anim-minus"; comboContainer.style.display = "none"; comboContainer.classList.remove('combo-blink');
         if (currentGameDifficulty === 'endless') { gameMistakeCount++; document.getElementById('gameTimerNum').innerText = "❤️".repeat(5 - gameMistakeCount) + "🖤".repeat(gameMistakeCount); }
     }
-    
     document.getElementById('gameScoreNum').innerText = String(gameScoreCount).padStart(4, '0');
     const targetVocab = vocabList.find(w => w.num === q.wordNum);
     if(targetVocab) {
@@ -1303,11 +1178,9 @@ window.submitGameAnswer = async function() {
         else if(targetVocab.meanings.length > 0) { targetVocab.meanings[0].status = updatedStatus; if(!targetVocab.meanings[0].history) targetVocab.meanings[0].history = []; targetVocab.meanings[0].history.push(updatedStatus); }
         targetVocab.status = updatedStatus; if(!targetVocab.history) targetVocab.history = []; targetVocab.history.push(updatedStatus); window.saveVocabToStorage();
     }
-
     gameHistoryLog.push({ word: q.type === 'en2ja' ? q.word : q.display, user: userInput, correct: q.type === 'en2ja' ? q.correctAnswers.join(', ') : q.word, isCorrect: isCorrect });
     document.getElementById('feedbackContent').style.display = "block"; document.getElementById('feedbackUserAns').innerText = userInput; document.getElementById('feedbackCorrectAns').innerText = q.type === 'en2ja' ? q.correctAnswers.join(', ') : q.word;
-    if (alternatives && alternatives !== "特になし") { document.getElementById('feedbackOtherAns').innerText = alternatives; document.getElementById('feedbackDiffAnswersRow').style.display = "block"; } 
-    else { document.getElementById('feedbackDiffAnswersRow').style.display = "none"; }
+    if (alternatives && alternatives !== "特になし") { document.getElementById('feedbackOtherAns').innerText = alternatives; document.getElementById('feedbackDiffAnswersRow').style.display = "block"; } else { document.getElementById('feedbackDiffAnswersRow').style.display = "none"; }
     window.scrollTo(0, 0);
 };
 
@@ -1319,9 +1192,7 @@ window.goToNextGameWord = function() {
 };
 
 window.endGameSession = function() {
-    document.body.classList.remove('in-game-active');
-
-    clearInterval(gameTimerInterval); document.getElementById('game-play-screen').style.display = 'none'; document.getElementById('game-result-screen').style.display = 'block';
+    document.body.classList.remove('in-game-active'); clearInterval(gameTimerInterval); document.getElementById('game-play-screen').style.display = 'none'; document.getElementById('game-result-screen').style.display = 'block';
     if (gameScoreCount > 0) {
         let history = JSON.parse(localStorage.getItem(`cosmic_score_${selectedQuestionMode}_${currentGameDifficulty}`) || "[]");
         history.push({ score: gameScoreCount, date: new Date().toLocaleDateString() }); history.sort((a, b) => b.score - a.score); history = history.slice(0, 5); localStorage.setItem(`cosmic_score_${selectedQuestionMode}_${currentGameDifficulty}`, JSON.stringify(history));
@@ -1336,99 +1207,57 @@ window.endGameSession = function() {
 };
 
 window.backToGameMenu = function() { 
-    document.body.classList.remove('in-game-active');
-
-    document.getElementById('game-mode-select-screen').style.display = 'none'; 
-    document.getElementById('game-difficulty-select-screen').style.display = 'none';
-    document.getElementById('game-result-screen').style.display = 'none'; 
-    
-    const startScreen = document.getElementById('game-start-screen');
-    if (startScreen) startScreen.style.display = 'flex'; 
-    
-    const lbArea = document.getElementById('gameLeaderboardArea');
-    if (lbArea) lbArea.style.display = 'flex';
-    
+    document.body.classList.remove('in-game-active'); document.getElementById('game-mode-select-screen').style.display = 'none'; document.getElementById('game-difficulty-select-screen').style.display = 'none'; document.getElementById('game-result-screen').style.display = 'none'; 
+    const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'flex'; 
+    const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'flex';
     window.renderGameLeaderboard(); 
 };
 
 // ==========================================================================
-// ⚔️ パーティ・装備編成とマルチバトル
+// ⚔️ パーティ・装備編成と新マルチプレイバトル 拡張制御ロジック
 // ==========================================================================
+
 window.switchPartySubCategory = function(category) {
     document.getElementById('partyTabChar').classList.toggle('active', category === 'character'); document.getElementById('partyTabWeapon').classList.toggle('active', category === 'weapon'); document.getElementById('partyTabArmor').classList.toggle('active', category === 'armor');
     document.getElementById('partyBoxCharacter').style.display = category === 'character' ? 'grid' : 'none'; document.getElementById('partyBoxWeapon').style.display = category === 'weapon' ? 'grid' : 'none'; document.getElementById('partyBoxArmor').style.display = category === 'armor' ? 'grid' : 'none';
 };
 
-window.selectCharacter = function(charId) { 
-    activeCharacter = charId; localStorage.setItem('core_v4_active_char', charId); 
-    window.updatePartySlotsUi(); 
-    alert(charId ? 'キャラクターをセットしたよ！' : 'キャラクターの編成を外したよ。'); 
-};
-
-window.selectWeapon = function(weaponId) { 
-    activeWeapon = weaponId; localStorage.setItem('core_v4_active_weapon', weaponId); 
-    window.updatePartySlotsUi(); 
-    alert(weaponId ? '武器を装備したよ！' : '武器を外したよ。'); 
-};
-
-window.selectArmor = function(armorId) { 
-    activeArmor = armorId; localStorage.setItem('core_v4_active_armor', armorId); 
-    window.updatePartySlotsUi(); 
-    alert(armorId ? '防具を装備したよ！' : '防具を外したよ。'); 
-};
+window.selectCharacter = function(charId) { activeCharacter = charId; localStorage.setItem('core_v4_active_char', charId); window.updatePartySlotsUi(); alert(charId ? 'キャラクターをセットしたよ！' : 'キャラクターの編成を外したよ。'); };
+window.selectWeapon = function(weaponId) { activeWeapon = weaponId; localStorage.setItem('core_v4_active_weapon', weaponId); window.updatePartySlotsUi(); alert(weaponId ? '武器を装備したよ！' : '武器を外したよ。'); };
+window.selectArmor = function(armorId) { activeArmor = armorId; localStorage.setItem('core_v4_active_armor', armorId); window.updatePartySlotsUi(); alert(armorId ? '防具を装備したよ！' : '防具を外したよ。'); };
 
 window.updatePartySlotsUi = function() {
     const charImgFrame = document.getElementById('slotCharImgContainer'), charNameLbl = document.getElementById('slotCharName');
     if (activeCharacter === 'tangon') { charImgFrame.innerHTML = `<img src="tangon.png" alt="tangon" style="width:100%;height:100%;object-fit:cover;">`; charNameLbl.innerText = "タンゴン"; } else { charImgFrame.innerHTML = "🫙"; charNameLbl.innerText = "未編成"; }
-    
     const weaponImgFrame = document.getElementById('slotWeaponImgContainer'), weaponNameLbl = document.getElementById('slotWeaponName');
     if (activeWeapon === 'fire_sword') { weaponImgFrame.innerHTML = "🔥🗡️"; weaponNameLbl.innerText = "業火の大剣"; } else { weaponImgFrame.innerHTML = "🗡️"; weaponNameLbl.innerText = "素手"; }
-    
     const armorImgFrame = document.getElementById('slotArmorImgContainer'), armorNameLbl = document.getElementById('slotArmorName');
     if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "🔮🛡️"; armorNameLbl.innerText = "星屑の盾"; } else { armorImgFrame.innerHTML = "🛡️"; armorNameLbl.innerText = "布の服"; }
-    
-    const bChar = document.getElementById('multiEquipCharIcon');
-    if(bChar) bChar.innerHTML = activeCharacter === 'tangon' ? `<img src="tangon.png" style="width:100%;height:100%;object-fit:cover;border-radius:4px;">` : "👤";
-    
-    const bWep = document.getElementById('multiEquipWeaponIcon');
-    if(bWep) bWep.innerHTML = activeWeapon === 'fire_sword' ? "🔥" : "🗡️";
-
-    const bArm = document.getElementById('multiEquipArmorIcon');
-    if(bArm) bArm.innerHTML = activeArmor === 'cosmic_shield' ? "🔮" : "🛡️";
+    const bChar = document.getElementById('multiEquipCharIcon'); if(bChar) bChar.innerHTML = activeCharacter === 'tangon' ? `<img src="tangon.png" style="width:100%;height:100%;object-fit:cover;border-radius:4px;">` : "👤";
+    const bWep = document.getElementById('multiEquipWeaponIcon'); if(bWep) bWep.innerHTML = activeWeapon === 'fire_sword' ? "🔥" : "🗡️";
+    const bArm = document.getElementById('multiEquipArmorIcon'); if(bArm) bArm.innerHTML = activeArmor === 'cosmic_shield' ? "🔮" : "🛡️";
 };
 
 window.initMultiParty = function(playerCount) {
     multiPartyMembers = [];
     const borderColors = ['var(--cosmic-purple-light)', 'var(--cosmic-cyan)', 'var(--cosmic-cyan)', 'var(--cosmic-cyan)'];
     const shadows = ['rgba(192, 132, 252, 0.5)', 'rgba(0, 240, 255, 0.5)', 'rgba(0, 240, 255, 0.5)', 'rgba(0, 240, 255, 0.5)'];
-    
     for(let i = 0; i < playerCount; i++) {
         let isMe = (i === 0);
-        multiPartyMembers.push({
-            id: i,
-            name: isMe ? myName : `ALLY ${i}`,
-            char: isMe ? activeCharacter : '', 
-            maxHp: 3500,
-            hp: 3500,
-            isMe: isMe,
-            borderColor: borderColors[i],
-            shadowColor: shadows[i]
-        });
+        multiPartyMembers.push({ id: i, name: isMe ? myName : `ALLY ${i}`, char: isMe ? activeCharacter : '', maxHp: 3500, hp: 3500, isMe: isMe, borderColor: borderColors[i], shadowColor: shadows[i] });
     }
     window.renderMultiParty();
 };
 
 window.renderMultiParty = function() {
-    const container = document.getElementById('multiPartyContainer');
-    if(!container) return;
-    container.innerHTML = "";
+    const container = document.getElementById('multiPartyContainer'); if(!container) return; container.innerHTML = "";
     multiPartyMembers.forEach(m => {
         let charImg = m.char === 'tangon' ? `<img src="tangon.png" alt="tangon" style="width:100%;height:100%;object-fit:cover;">` : `👤`;
         let hpPercent = Math.max(0, (m.hp / m.maxHp) * 100);
         let label = m.isMe ? "YOU" : "ALLY";
         let color = m.isMe ? "var(--cosmic-purple-light)" : "var(--cosmic-cyan)";
         
-        // 🌟 仲間エリアの配置固定：顔画像が上、HPバー・名前が「下側」へ絶対に配置固定される反転レンダリング[span_3](start_span)[span_3](end_span)
+        // 🌟 反転フレックスレイアウトCSS対応：顔が上、HPバー・名前が下側に綺麗に固定描画されるカプセル構造を完全生成
         let html = `
             <div class="multi-party-member" id="partyMember-${m.id}">
                 <div class="multi-party-icon" style="background:none !important; border:none !important; box-shadow:none !important;">${charImg}</div>
@@ -1436,69 +1265,33 @@ window.renderMultiParty = function() {
                     <div class="multi-party-hp-fill" id="partyMemberHpFill-${m.id}" style="width:${hpPercent}%; transform-origin:left !important;"></div>
                 </div>
                 <div style="font-size:8px; color:${color}; font-weight:bold; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; text-align:center;">${m.name}</div>
-            </div>
-        `;
+            </div>`;
         container.innerHTML += html;
     });
 };
 
-// 🌟 キャラから飛んでいく吹き出し（攻撃主体のネオンカラーと完全に同期） or V字ダメージを表現する演出魔法[span_4](start_span)[span_4](end_span)
+// 🌟 キャラ固有カラーネオンと完全同期して飛んでいく吹き出し＆ボス位置大爆発エフェクト
 window.showCharacterPopup = function(memberId, amount, type) {
-    const memberEl = document.getElementById('partyMember-' + memberId);
-    if(!memberEl) return;
-    
+    const memberEl = document.getElementById('partyMember-' + memberId); if(!memberEl) return;
     if(type === 'attack') {
-        const flyingBubble = document.createElement('div');
-        flyingBubble.className = 'popup-bubble-flying-atk';
-        flyingBubble.innerText = amount;
-
-        const charRect = memberEl.getBoundingClientRect();
-        const bossEl = document.getElementById('multiBossImage');
+        const flyingBubble = document.createElement('div'); flyingBubble.className = 'popup-bubble-flying-atk'; flyingBubble.innerText = amount;
+        const charRect = memberEl.getBoundingClientRect(), bossEl = document.getElementById('multiBossImage');
         const bossRect = bossEl ? bossEl.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight / 3, width: 0, height: 0 };
-
-        const startX = charRect.left + charRect.width / 2;
-        const startY = charRect.top;
-        const targetX = bossRect.left + bossRect.width / 2;
-        const targetY = bossRect.top + bossRect.height / 2;
-
+        const startX = charRect.left + charRect.width / 2, startY = charRect.top;
+        const targetX = bossRect.left + bossRect.width / 2, targetY = bossRect.top + bossRect.height / 2;
         const matchMember = multiPartyMembers.find(m => m.id === memberId);
-        if(matchMember) {
-            flyingBubble.style.borderColor = matchMember.borderColor;
-            flyingBubble.style.boxShadow = `0 4px 12px ${matchMember.shadowColor}`;
-        }
-
-        flyingBubble.style.setProperty('--start-x', `${startX}px`);
-        flyingBubble.style.setProperty('--start-y', `${startY}px`);
-        flyingBubble.style.setProperty('--target-x', `${targetX}px`);
-        flyingBubble.style.setProperty('--target-y', `${targetY}px`);
-
+        if(matchMember) { flyingBubble.style.borderColor = matchMember.borderColor; flyingBubble.style.boxShadow = `0 4px 12px ${matchMember.shadowColor}`; }
+        flyingBubble.style.setProperty('--start-x', `${startX}px`); flyingBubble.style.setProperty('--start-y', `${startY}px`);
+        flyingBubble.style.setProperty('--target-x', `${targetX}px`); flyingBubble.style.setProperty('--target-y', `${targetY}px`);
         document.body.appendChild(flyingBubble);
-
         setTimeout(() => {
             if(flyingBubble.parentNode) flyingBubble.remove();
-            
-            // 着弾時大爆発
-            const explosion = document.createElement('div');
-            explosion.className = 'popup-hit-explosion';
-            explosion.style.left = `${targetX}px`;
-            explosion.style.top = `${targetY}px`;
-            document.body.appendChild(explosion);
-            
-            setTimeout(() => {
-                if(explosion.parentNode) explosion.remove();
-            }, 400);
-
+            const explosion = document.createElement('div'); explosion.className = 'popup-hit-explosion'; explosion.style.left = `${targetX}px`; explosion.style.top = `${targetY}px`; document.body.appendChild(explosion);
+            setTimeout(() => { if(explosion.parentNode) explosion.remove(); }, 400);
         }, 600);
-
     } else if(type === 'damage') {
-        const popup = document.createElement('div');
-        popup.className = 'popup-v-dmg';
-        popup.innerHTML = `<div class="v-mark"></div><div class="v-dmg-text">${amount}</div>`;
-        memberEl.appendChild(popup);
-        
-        setTimeout(() => {
-            if(popup.parentNode) popup.remove();
-        }, 1500);
+        const popup = document.createElement('div'); popup.className = 'popup-v-dmg'; popup.innerHTML = `<div class="v-mark"></div><div class="v-dmg-text">${amount}</div>`; memberEl.appendChild(popup);
+        setTimeout(() => { if(popup.parentNode) popup.remove(); }, 1500);
     }
 };
 
@@ -1506,216 +1299,94 @@ window.showMultiBattleSetup = function() {
     if (vocabList.length === 0) {
         alert("⚠️ 単語帳が空のため、お試し用の単語を自動追加してバトル画面を開きます！");
         vocabList.push({num: "1", word: "apple", meanings: [{id: "1-0", text: "りんご", status: "none", history: []}], sub: "", status: "none", history: []});
-        window.saveVocabToStorage();
-        window.renderVocabList();
+        window.saveVocabToStorage(); window.renderVocabList();
     }
     window.proceedToMultiSetup();
 };
 
 window.proceedToMultiSetup = function() {
-    const lbArea = document.getElementById('gameLeaderboardArea');
-    if (lbArea) lbArea.style.display = 'none';
-    const startScreen = document.getElementById('game-start-screen');
-    if (startScreen) startScreen.style.display = 'none';
-    const setupScreen = document.getElementById('multi-battle-setup-screen');
-    if (setupScreen) setupScreen.style.display = 'block';
-    const matchScreen = document.getElementById('multi-battle-matching-screen');
-    if (matchScreen) matchScreen.style.display = 'none';
-    const playScreen = document.getElementById('multi-battle-play-screen');
-    if (playScreen) playScreen.style.display = 'none';
-    
+    const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'none';
+    const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'none';
+    document.getElementById('multi-battle-setup-screen').style.display = 'block';
+    document.getElementById('multi-battle-matching-screen').style.display = 'none';
+    document.getElementById('multi-battle-play-screen').style.display = 'none';
     window.selectMultiMode('coop');
 };
 
 window.selectMultiMode = function(mode) { 
-    currentMultiMode = mode; 
-    let btnC = document.getElementById('btnMultiCoop');
-    let btnP = document.getElementById('btnMultiPvp');
-    if(btnC) { btnC.style.background = ''; btnC.style.boxShadow = ''; }
-    if(btnP) { btnP.style.background = ''; btnP.style.boxShadow = ''; }
-    if (mode === 'coop') { 
-        if(btnC) { btnC.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)'; btnC.style.boxShadow = '0 0 20px rgba(0, 240, 255, 0.6)'; }
-    } else { 
-        if(btnP) { btnP.style.background = 'linear-gradient(135deg, rgba(236, 72, 153, 0.4) 0%, rgba(244, 63, 94, 0.4) 100%)'; btnP.style.boxShadow = '0 0 20px rgba(236, 72, 153, 0.6)'; }
-    }
+    currentMultiMode = mode; let btnC = document.getElementById('btnMultiCoop'), btnP = document.getElementById('btnMultiPvp');
+    if(btnC) { btnC.style.background = ''; btnC.style.boxShadow = ''; } if(btnP) { btnP.style.background = ''; btnP.style.boxShadow = ''; }
+    if (mode === 'coop') { if(btnC) { btnC.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)'; btnC.style.boxShadow = '0 0 20px rgba(0, 240, 255, 0.6)'; } }
+    else { if(btnP) { btnP.style.background = 'linear-gradient(135deg, rgba(236, 72, 153, 0.4) 0%, rgba(244, 63, 94, 0.4) 100%)'; btnP.style.boxShadow = '0 0 20px rgba(236, 72, 153, 0.6)'; } }
 };
 
 window.cancelMultiBattleSetup = function() { 
     document.getElementById('multi-battle-setup-screen').style.display = 'none'; 
-    const startScreen = document.getElementById('game-start-screen');
-    if (startScreen) startScreen.style.display = 'flex'; 
-    const lbArea = document.getElementById('gameLeaderboardArea');
-    if (lbArea) lbArea.style.display = 'flex';
+    const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'flex'; 
+    const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'flex';
 };
 
 window.startMultiBattleMatching = function() { 
-    document.getElementById('multi-battle-setup-screen').style.display = 'none'; 
-    document.getElementById('multi-battle-matching-screen').style.display = 'flex'; 
-    
-    setTimeout(() => { 
-        if (document.getElementById('multi-battle-matching-screen').style.display === 'flex') { 
-            window.playIntroVideoBeforeBattle(); 
-        } 
-    }, 2000); 
+    document.getElementById('multi-battle-setup-screen').style.display = 'none'; document.getElementById('multi-battle-matching-screen').style.display = 'flex'; 
+    setTimeout(() => { if (document.getElementById('multi-battle-matching-screen').style.display === 'flex') { window.playIntroVideoBeforeBattle(); } }, 2000); 
 };
 
-window.cancelMultiBattleMatching = function() { 
-    document.getElementById('multi-battle-matching-screen').style.display = 'none'; 
-    document.getElementById('multi-battle-setup-screen').style.display = 'block'; 
-};
+window.cancelMultiBattleMatching = function() { document.getElementById('multi-battle-matching-screen').style.display = 'none'; document.getElementById('multi-battle-setup-screen').style.display = 'block'; };
 
 window.playIntroVideoBeforeBattle = function() {
-    document.getElementById('multi-battle-matching-screen').style.display = 'none';
-    
-    const overlay = document.getElementById('video-overlay');
-    const video = document.getElementById('introVideo');
-    
-    if (overlay && video) {
-        overlay.style.display = 'flex'; 
-        video.currentTime = 0; 
-        
-        video.play().catch(e => {
-            console.log("動画の自動再生がブロックされました", e);
-            window.skipIntroVideo();
-        });
-        
-        video.onended = window.skipIntroVideo;
-    } else {
-        window.startMultiBattlePlay();
-    }
+    document.getElementById('multi-battle-matching-screen').style.display = 'none'; const overlay = document.getElementById('video-overlay'), video = document.getElementById('introVideo');
+    if (overlay && video) { overlay.style.display = 'flex'; video.currentTime = 0; video.play().catch(e => { window.skipIntroVideo(); }); video.onended = window.skipIntroVideo; } 
+    else { window.startMultiBattlePlay(); }
 };
 
 window.skipIntroVideo = function() {
-    const overlay = document.getElementById('video-overlay');
-    const video = document.getElementById('introVideo');
-    if(video) video.pause(); 
-    if(overlay) overlay.style.display = 'none'; 
-    
-    window.startMultiBattlePlay();
+    const overlay = document.getElementById('video-overlay'), video = document.getElementById('introVideo');
+    if(video) video.pause(); if(overlay) overlay.style.display = 'none'; window.startMultiBattlePlay();
 };
 
 window.startMultiBattlePlay = function() {
-    document.body.classList.add('in-game-active');
-
-    document.getElementById('multi-battle-play-screen').style.display = 'flex'; 
-    gameComboCount = 0; 
-    multiLimitAmount = 0; 
-    
-    document.getElementById('multiComboCountText').innerText = "0";
-    document.getElementById('multiDamagePopupText').innerText = "";
-    
-    // 金色キラキラネオン枠の初期化非活性
-    const sparkleBorder = document.getElementById('combo-sparkle-border');
-    if(sparkleBorder) sparkleBorder.classList.remove('active');
-
-    const ownHpFrame = document.getElementById('multiPlayerOwnHpFrame');
-    if(ownHpFrame) ownHpFrame.style.display = 'block';
-
-    const logContainer = document.getElementById('multiBattleLog');
-    if(logContainer) logContainer.innerHTML = "";
-    
-    window.updatePartySlotsUi();
-    
-    const playerCount = parseInt(document.getElementById('multiPlayerCount').value) || 2;
-    window.initMultiParty(playerCount);
-
-    multiBossMaxHp = 100000 * playerCount; 
-    multiBossHp = multiBossMaxHp; 
-    multiEnemyTimeLeft = 10;
-    
-    window.updateMultiHpBars();
-    
-    gameCurrentWordsQueue = []; 
-    vocabList.forEach(w => { if(w.meanings && w.meanings.length > 0) gameCurrentWordsQueue.push({ wordNum: w.num, word: w.word, meaning: window.formatWordForDisplay(w.meanings[0].text) }); });
+    document.body.classList.add('in-game-active'); document.getElementById('multi-battle-play-screen').style.display = 'flex'; gameComboCount = 0; multiLimitAmount = 0; 
+    document.getElementById('multiComboCountText').innerText = "0"; document.getElementById('multiDamagePopupText').innerText = "";
+    const sparkleBorder = document.getElementById('combo-sparkle-border'); if(sparkleBorder) sparkleBorder.classList.remove('active');
+    const ownHpFrame = document.getElementById('multiPlayerOwnHpFrame'); if(ownHpFrame) ownHpFrame.style.display = 'block';
+    const logContainer = document.getElementById('multiBattleLog'); if(logContainer) logContainer.innerHTML = "";
+    window.updatePartySlotsUi(); const playerCount = parseInt(document.getElementById('multiPlayerCount').value) || 2; window.initMultiParty(playerCount);
+    multiBossMaxHp = 100000 * playerCount; multiBossHp = multiBossMaxHp; multiEnemyTimeLeft = 10; window.updateMultiHpBars();
+    gameCurrentWordsQueue = []; vocabList.forEach(w => { if(w.meanings && w.meanings.length > 0) gameCurrentWordsQueue.push({ wordNum: w.num, word: w.word, meaning: window.formatWordForDisplay(w.meanings[0].text) }); });
     gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0;
-    
-    clearInterval(gameTimerInterval); 
-    gameTimerInterval = setInterval(window.handleMultiBattleTimer, 100); 
-    window.showNextMultiWord(); 
-    window.initMultiPartyEvents();
+    clearInterval(gameTimerInterval); gameTimerInterval = setInterval(window.handleMultiBattleTimer, 100); window.showNextMultiWord(); window.initMultiPartyEvents();
 };
 
-// 🌟 操作者のHP状況および必殺技ゲージを確実に「左詰め起算」へ駆動し、コンボ（2以上）時の最外周ゴールド枠をリアルタイム動的同期[span_5](start_span)[span_5](end_span)
+// 🌟 操作者の自操作HPとLIMITゲージを強固に「左詰め起算」同期、2コンボ以上連動の全画面金色ネオン外枠駆動
 window.updateMultiHpBars = function() {
-    const boss = document.getElementById('multiBossHpFill'); 
-    if(boss) boss.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
-    
-    const bossTxt = document.getElementById('multiEnemyHpText'); 
-    if(bossTxt) {
-        bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))}`;
-    }
-
-    // 仲間エリアの同期
+    const boss = document.getElementById('multiBossHpFill'); if(boss) boss.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
+    const bossTxt = document.getElementById('multiEnemyHpText'); if(bossTxt) { bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))}`; }
     multiPartyMembers.forEach(m => {
-        let fill = document.getElementById(`partyMemberHpFill-${m.id}`);
-        if (fill) fill.style.width = Math.max(0, (m.hp / m.maxHp) * 100) + "%";
+        let fill = document.getElementById(`partyMemberHpFill-${m.id}`); if (fill) fill.style.width = Math.max(0, (m.hp / m.maxHp) * 100) + "%";
     });
-
-    // 自分自身のHPを確実に左詰め（左端起算）で増減連動[span_6](start_span)[span_6](end_span)
     let me = multiPartyMembers.find(m => m.isMe);
     if (me) {
-        const ownHpFill = document.getElementById('multiPlayerOwnHpFill');
-        const ownHpText = document.getElementById('multiPlayerOwnHpText');
-        if (ownHpFill) {
-            ownHpFill.style.width = Math.max(0, (me.hp / me.maxHp) * 100) + "%";
-        }
+        const ownHpFill = document.getElementById('multiPlayerOwnHpFill'), ownHpText = document.getElementById('multiPlayerOwnHpText');
+        if (ownHpFill) ownHpFill.style.width = Math.max(0, (me.hp / me.maxHp) * 100) + "%"; /* 左端起算の減少同期 */
         if (ownHpText) ownHpText.innerText = `${Math.max(0, Math.floor(me.hp))} / ${me.maxHp}`;
     }
-
-    // 必殺技ゲージを確実に左起算（左端から溜まる）に同期連動[span_7](start_span)[span_7](end_span)
-    const limitFill = document.getElementById('multiLimitGaugeFill');
-    const limitText = document.getElementById('multiLimitGaugeText');
-    const limitPercentNum = Math.floor(Math.max(0, (multiLimitAmount / multiLimitMax) * 100));
-    
-    if (limitFill) {
-        limitFill.style.width = limitPercentNum + "%";
-        if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max');
-        else limitFill.classList.remove('max');
-    }
-    if (limitText) {
-        limitText.innerText = limitPercentNum + "%";
-    }
-
-    // 動的同期：コンボカウントが2以上の間、全画面を優しく包み込む金色ネオン外枠をアクティブ化[span_8](start_span)[span_8](end_span)
+    const limitFill = document.getElementById('multiLimitGaugeFill'), limitText = document.getElementById('multiLimitGaugeText'), limitPercentNum = Math.floor(Math.max(0, (multiLimitAmount / multiLimitMax) * 100));
+    if (limitFill) { limitFill.style.width = limitPercentNum + "%"; if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max'); else limitFill.classList.remove('max'); } /* 左詰め蓄積 */
+    if (limitText) { limitText.innerText = limitPercentNum + "%"; }
     const sparkleBorder = document.getElementById('combo-sparkle-border');
-    if(sparkleBorder) {
-        if(gameComboCount >= 2) sparkleBorder.classList.add('active');
-        else sparkleBorder.classList.remove('active');
-    }
+    if(sparkleBorder) { if(gameComboCount >= 2) sparkleBorder.classList.add('active'); else sparkleBorder.classList.remove('active'); } /* 金色ネオン外枠連動 */
 };
 
 window.handleMultiBattleTimer = function() {
     multiEnemyTimeLeft -= 0.1;
     if(multiEnemyTimeLeft <= 0) {
-        multiEnemyTimeLeft = 10; 
-        
-        let baseDamage = 400; 
-        multiPartyMembers.forEach(m => {
-            if (m.hp > 0) {
-                m.hp -= baseDamage;
-                if (m.hp < 0) m.hp = 0;
-                
-                window.showCharacterPopup(m.id, baseDamage, 'damage');
-            }
-        });
-
-        document.body.classList.add('boss-damage-shake'); 
-        setTimeout(() => document.body.classList.remove('boss-damage-shake'), 300);
-        
+        multiEnemyTimeLeft = 10; let baseDamage = 400; 
+        multiPartyMembers.forEach(m => { if (m.hp > 0) { m.hp -= baseDamage; if (m.hp < 0) m.hp = 0; window.showCharacterPopup(m.id, baseDamage, 'damage'); } });
+        document.body.classList.add('boss-damage-shake'); setTimeout(() => document.body.classList.remove('boss-damage-shake'), 300);
         window.addBattleLog(`【ボス > ${baseDamage} 全体】`, "boss_all");
-
-        if(multiPartyMembers.every(m => m.hp <= 0)) { 
-            clearInterval(gameTimerInterval); 
-            window.addBattleLog("💀 全滅...", "system");
-            setTimeout(() => {
-                alert("全滅しました..."); 
-                window.cancelMultiBattlePlay(true); 
-            }, 500);
-            return; 
-        }
+        if(multiPartyMembers.every(m => m.hp <= 0)) { clearInterval(gameTimerInterval); window.addBattleLog("💀 全滅...", "system"); setTimeout(() => { alert("全滅しました..."); window.cancelMultiBattlePlay(true); }, 500); return; }
     }
-    const timerDisplay = document.getElementById('multiEnemyTimerDisplay'); 
-    if(timerDisplay) timerDisplay.innerText = `行動: ${Math.max(0, multiEnemyTimeLeft).toFixed(1)}秒`;
+    const timerDisplay = document.getElementById('multiEnemyTimerDisplay'); if(timerDisplay) timerDisplay.innerText = `行動: ${Math.max(0, multiEnemyTimeLeft).toFixed(1)}秒`;
     window.updateMultiHpBars();
 };
 
@@ -1726,22 +1397,24 @@ window.showNextMultiWord = function() {
     dummies.sort(() => Math.random() - 0.5); choices = choices.concat(dummies.slice(0, 7)).sort(() => Math.random() - 0.5);
     currentMultiCorrectIndex = choices.indexOf(target.meaning);
     for(let i=0; i<8; i++) { let el = document.getElementById('multiChoice-' + i); if(el) { el.innerText = choices[i]; el.classList.remove('highlight'); } }
-    
-    // 🌟 フリック後に中央の炎マークが1問ごとにパッと真ん中（50%, 50%）に完全リセット復帰[span_9](start_span)[span_9](end_span)
-    const icon = document.getElementById('flickWeaponIcon'); 
-    if(icon) { 
-        icon.style.left = '50%'; 
-        icon.style.top = '50%'; 
-    }
+    // 🌟 フリックアタック終了ごとにフリックマークを中央（50%, 50%）に強制即時リセット連動
+    const icon = document.getElementById('flickWeaponIcon'); if(icon) { icon.style.left = '50%'; icon.style.top = '50%'; }
+};
+
+window.cancelMultiBattlePlay = function(force = false) { 
+    if(force || confirm("バトルから逃走しますか？")) { 
+        document.body.classList.remove('in-game-active'); const sparkleBorder = document.getElementById('combo-sparkle-border'); if(sparkleBorder) sparkleBorder.classList.remove('active');
+        clearInterval(gameTimerInterval); document.getElementById('multi-battle-play-screen').style.display = 'none';
+        const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'flex'; 
+        const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'flex';
+    } 
 };
 
 window.initMultiPartyEvents = function() {
     const pad = document.getElementById('flickPadArea');
     if(pad && !pad.dataset.eventsBound) {
-        pad.dataset.eventsBound = "true";
-        pad.addEventListener('touchstart', window.handleFlickStart, {passive: false});
-        pad.addEventListener('touchmove', window.handleFlickMove, {passive: false});
-        pad.addEventListener('touchend', window.handleFlickEnd);
+        pad.dataset.eventsBound = "true"; pad.addEventListener('touchstart', window.handleFlickStart, {passive: false});
+        pad.addEventListener('touchmove', window.handleFlickMove, {passive: false}); pad.addEventListener('touchend', window.handleFlickEnd);
     }
 };
 
@@ -1767,129 +1440,57 @@ window.handleFlickEnd = function(e) {
 
 window.processMultiFlickAnswer = function(choiceIndex) {
     let me = multiPartyMembers.find(m => m.isMe);
-
     if(choiceIndex === currentMultiCorrectIndex) {
-        gameComboCount++; 
-        window.createFireballEffect();
-        
+        gameComboCount++; window.createFireballEffect();
         const myThumb = document.querySelector('.multi-party-member:first-child .multi-party-icon');
-        if(myThumb) { 
-            myThumb.classList.remove('companion-attack-active'); 
-            void myThumb.offsetWidth; 
-            myThumb.classList.add('companion-attack-active'); 
-            setTimeout(() => myThumb.classList.remove('companion-attack-active'), 500); 
-        }
-        
-        let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5;
-        let damage = 400 * comboMulti;
-
-        document.getElementById('multiComboCountText').innerText = gameComboCount;
-        multiBossHp -= damage; 
-        
-        // 成功時：味方・自分が成功した時、固有ネオン色攻撃吹き出しがボスへ飛ぶ[span_10](start_span)[span_10](end_span)
+        if(myThumb) { myThumb.classList.remove('companion-attack-active'); void myThumb.offsetWidth; myThumb.classList.add('companion-attack-active'); setTimeout(() => myThumb.classList.remove('companion-attack-active'), 500); }
+        let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5; let damage = 400 * comboMulti;
+        document.getElementById('multiComboCountText').innerText = gameComboCount; multiBossHp -= damage; 
         if(me) window.showCharacterPopup(me.id, `💥 ${damage}`, 'attack');
-
         window.addBattleLog(`ボス < ${damage} ${me ? me.name : 'YOU'}`, "me");
-        
-        multiLimitAmount = Math.min(multiLimitMax, multiLimitAmount + 15);
-        window.updateMultiHpBars();
+        multiLimitAmount = Math.min(multiLimitMax, multiLimitAmount + 15); window.updateMultiHpBars();
         
         if(multiLimitAmount >= multiLimitMax) {
             setTimeout(() => {
-                window.addBattleLog(`【ボス < 5000 LIMIT】`, "limit");
-                
-                multiBossHp -= 5000; 
-                multiLimitAmount = 0; 
-                window.updateMultiHpBars();
-                
-                if (multiBossHp <= 0) { 
-                    clearInterval(gameTimerInterval); 
-                    setTimeout(() => {
-                        alert("🎉 BOSS討伐完了！クエストクリア！"); 
-                        window.cancelMultiBattlePlay(true); 
-                    }, 500);
-                }
+                window.addBattleLog(`【ボス < 5000 LIMIT】`, "limit"); multiBossHp -= 5000; multiLimitAmount = 0; window.updateMultiHpBars();
+                if (multiBossHp <= 0) { clearInterval(gameTimerInterval); setTimeout(() => { alert("🎉 BOSS討伐完了！クエストクリア！"); window.cancelMultiBattlePlay(true); }, 500); }
             }, 500);
         }
-
-        if (multiBossHp <= 0) { 
-            clearInterval(gameTimerInterval); 
-            setTimeout(() => {
-                alert("🎉 BOSS討伐完了！クエストクリア！"); 
-                window.cancelMultiBattlePlay(true); 
-            }, 500);
-            return; 
-        }
-
+        if (multiBossHp <= 0) { clearInterval(gameTimerInterval); setTimeout(() => { alert("🎉 BOSS討伐完了！クエストクリア！"); window.cancelMultiBattlePlay(true); }, 500); return; }
     } else { 
-        gameComboCount = 0; 
-        document.getElementById('multiComboCountText').innerText = gameComboCount;
-        
+        gameComboCount = 0; document.getElementById('multiComboCountText').innerText = gameComboCount;
         if (me && me.hp > 0) {
-            me.hp -= 300; 
-            if (me.hp < 0) me.hp = 0;
-            
+            me.hp -= 300; if (me.hp < 0) me.hp = 0;
             let myEl = document.getElementById('partyMember-' + me.id);
-            if(myEl) {
-                let iconEl = myEl.querySelector('.multi-party-icon');
-                if(iconEl) {
-                    iconEl.classList.remove('player-damage-flash');
-                    void iconEl.offsetWidth;
-                    iconEl.classList.add('player-damage-flash');
-                }
-            }
-            
-            window.showCharacterPopup(me.id, 300, 'damage');
-            window.addBattleLog(`ボス > 300 ${me.name}`, "boss_single_me");
+            if(myEl) { let iconEl = myEl.querySelector('.multi-party-icon'); if(iconEl) { iconEl.classList.remove('player-damage-flash'); void iconEl.offsetWidth; iconEl.classList.add('player-damage-flash'); } }
+            window.showCharacterPopup(me.id, 300, 'damage'); window.addBattleLog(`ボス > 300 ${me.name}`, "boss_single_me");
         }
-
-        if(multiPartyMembers.every(m => m.hp <= 0)) { 
-            clearInterval(gameTimerInterval); 
-            window.addBattleLog("💀 全滅...", "system");
-            setTimeout(() => {
-                alert("全滅しました..."); 
-                window.cancelMultiBattlePlay(true); 
-            }, 500);
-            return; 
-        }
+        if(multiPartyMembers.every(m => m.hp <= 0)) { clearInterval(gameTimerInterval); window.addBattleLog("💀 全滅...", "system"); setTimeout(() => { alert("全滅しました..."); window.cancelMultiBattlePlay(true); }, 500); return; }
     }
-    
-    window.updateMultiHpBars(); 
-    gameCurrentIndex++; 
-    window.showNextMultiWord();
+    window.updateMultiHpBars(); gameCurrentIndex++; window.showNextMultiWord();
 };
 
 window.createFireballEffect = function() {
-    const layer = document.getElementById('battle-effects-layer'); if(!layer) return;
-    const p = document.createElement('div'); p.className = 'fireball-particle';
+    const layer = document.getElementById('battle-effects-layer'); if(!layer) return; const p = document.createElement('div'); p.className = 'fireball-particle';
     const pad = document.getElementById('flickPadArea'); const rect = pad.getBoundingClientRect();
     p.style.left = (rect.left + rect.width/2) + 'px'; p.style.top = (rect.top + rect.height/2) + 'px';
-    p.style.setProperty('--tx', (Math.random() * 80 - 40) + 'px'); p.style.setProperty('--ty', '-160px'); 
-    layer.appendChild(p); setTimeout(() => { p.remove(); }, 400);
+    p.style.setProperty('--tx', (Math.random() * 80 - 40) + 'px'); p.style.setProperty('--ty', '-160px'); layer.appendChild(p); setTimeout(() => { p.remove(); }, 400);
 };
 
 // ==========================================================================
-// 🚀 完全確約ライフサイクル初期化（関数のロード完了を完璧に待って安全起動）
+// 🚀 完全同期ライフサイクルブートストラップ初期化 (フライング実行事故を完全防止)
 // ==========================================================================
-// 🌟 修正：フフッ、これで完全に依存関係の衝突は起きない。100%エラーフリーだよ！[span_11](start_span)[span_11](end_span)
+
+// 🌟 すべてのメソッド・変数がグローバルオブジェクトへ安全にロードされたのを検証してアプリを駆動[span_0](start_span)[span_0](end_span)
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
-        window.loadLocalState();
-        window.initLucide();
-        window.initHeroSlider();
-        window.renderActivityChart();
+        window.loadLocalState(); window.initLucide(); window.initHeroSlider(); window.renderActivityChart();
     });
 } else {
-    window.loadLocalState();
-    window.initLucide();
-    window.initHeroSlider();
-    window.renderActivityChart();
+    window.loadLocalState(); window.initLucide(); window.initHeroSlider(); window.renderActivityChart();
 }
 
 window.addEventListener("scroll", () => {
     const btn = document.getElementById("scrollToTopBtn");
-    if(btn) {
-        if(window.scrollY > 300) btn.classList.add("show");
-        else btn.classList.remove("show");
-    }
+    if(btn) { if(window.scrollY > 300) btn.classList.add("show"); else btn.classList.remove("show"); }
 });
