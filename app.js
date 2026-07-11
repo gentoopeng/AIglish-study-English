@@ -843,7 +843,7 @@ window.renderBookshelf = function() {
     const foldersData = {};
     myBookshelf.forEach(item => { if(!foldersData[item.folder]) foldersData[item.folder] = []; foldersData[item.folder].push(item); });
     for(let folderName in foldersData) {
-        let folderHtml = `<div style="margin-bottom:20px; background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; border:1px solid rgba(255,255,255,0.1);">
+        let folderHtml = `<div style="margin-bottom:20px; background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; border:1px solid rgba(255,255,255,0.15);">
             <h3 style="color:var(--cosmic-cyan); font-size:15px; border-bottom:1px dashed rgba(0,240,255,0.3); padding-bottom:6px; margin-top:0; margin-bottom:12px; display:flex; align-items:center; gap:6px;"><i data-lucide="folder" size="16"></i> ${folderName}</h3>`;
         foldersData[folderName].forEach(item => {
             const safeText = item.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
@@ -984,7 +984,7 @@ window.setTranslationMode = function(mode) {
 };
 
 // ==========================================================================
-// 📊 アクティビティログ・チャートモジュール
+// 🌟 アクティビティログ・チャートモジュール
 // ==========================================================================
 
 window.renderActivityChart = function() {
@@ -1129,6 +1129,7 @@ window.startActualGame = function(difficulty) {
     document.getElementById('game-start-screen').style.display = 'none'; document.getElementById('game-play-screen').style.display = 'block';
     document.getElementById('gameNextBtn').style.display = 'none'; document.getElementById('feedbackContent').style.display = "none"; document.getElementById('giantJudgmentOverlay').classList.remove('show');
     if (activeCharacter === 'tangon') { document.getElementById('gameActiveCharacterContainer').style.display = 'flex'; document.getElementById('gameActiveCharacterImg').src = 'tangon.png'; } else { document.getElementById('gameActiveCharacterContainer').style.display = 'none'; }
+    const paddingVal = null;
     clearInterval(gameTimerInterval);
     if (difficulty !== 'endless') { gameTimerInterval = setInterval(() => { if (isGameTimerPaused) return; gameRemainingTime--; document.getElementById('gameTimerNum').innerText = gameRemainingTime; if (gameRemainingTime <= 0) window.endGameSession(); }, 1000); }
     window.showNextGameWord();
@@ -1254,10 +1255,8 @@ window.renderMultiParty = function() {
     multiPartyMembers.forEach(m => {
         let charImg = m.char === 'tangon' ? `<img src="tangon.png" alt="tangon" style="width:100%;height:100%;object-fit:cover;">` : `👤`;
         let hpPercent = Math.max(0, (m.hp / m.maxHp) * 100);
-        let label = m.isMe ? "YOU" : "ALLY";
         let color = m.isMe ? "var(--cosmic-purple-light)" : "var(--cosmic-cyan)";
         
-        // 🌟 反転フレックスレイアウトCSS対応：顔が上、HPバー・名前が下側に綺麗に固定描画されるカプセル構造を完全生成
         let html = `
             <div class="multi-party-member" id="partyMember-${m.id}">
                 <div class="multi-party-icon" style="background:none !important; border:none !important; box-shadow:none !important;">${charImg}</div>
@@ -1270,7 +1269,6 @@ window.renderMultiParty = function() {
     });
 };
 
-// 🌟 キャラ固有カラーネオンと完全同期して飛んでいく吹き出し＆ボス位置大爆発エフェクト
 window.showCharacterPopup = function(memberId, amount, type) {
     const memberEl = document.getElementById('partyMember-' + memberId); if(!memberEl) return;
     if(type === 'attack') {
@@ -1293,6 +1291,30 @@ window.showCharacterPopup = function(memberId, amount, type) {
         const popup = document.createElement('div'); popup.className = 'popup-v-dmg'; popup.innerHTML = `<div class="v-mark"></div><div class="v-dmg-text">${amount}</div>`; memberEl.appendChild(popup);
         setTimeout(() => { if(popup.parentNode) popup.remove(); }, 1500);
     }
+};
+
+window.showEnemyAttackPopup = function(memberId, amount) {
+    const memberEl = document.getElementById('partyMember-' + memberId); if(!memberEl) return;
+    const bossEl = document.getElementById('multiBossImage');
+    const bossRect = bossEl ? bossEl.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight / 3, width: 0, height: 0 };
+    const charRect = memberEl.getBoundingClientRect();
+    
+    const startX = bossRect.left + bossRect.width / 2, startY = bossRect.top + bossRect.height / 2;
+    const targetX = charRect.left + charRect.width / 2, targetY = charRect.top;
+    
+    const flyingBubble = document.createElement('div');
+    flyingBubble.className = 'popup-bubble-flying-enemy-atk';
+    flyingBubble.innerText = amount;
+    
+    flyingBubble.style.setProperty('--start-x', `${startX}px`);
+    flyingBubble.style.setProperty('--start-y', `${startY}px`);
+    flyingBubble.style.setProperty('--target-x', `${targetX}px`);
+    flyingBubble.style.setProperty('--target-y', `${targetY}px`);
+    
+    document.body.appendChild(flyingBubble);
+    setTimeout(() => {
+        if(flyingBubble.parentNode) flyingBubble.remove();
+    }, 600);
 };
 
 window.showMultiBattleSetup = function() { 
@@ -1349,7 +1371,6 @@ window.startMultiBattlePlay = function() {
     document.getElementById('multiComboCountText').innerText = "0"; document.getElementById('multiDamagePopupText').innerText = "";
     const sparkleBorder = document.getElementById('combo-sparkle-border'); if(sparkleBorder) sparkleBorder.classList.remove('active');
     const ownHpFrame = document.getElementById('multiPlayerOwnHpFrame'); if(ownHpFrame) ownHpFrame.style.display = 'block';
-    const logContainer = document.getElementById('multiBattleLog'); if(logContainer) logContainer.innerHTML = "";
     window.updatePartySlotsUi(); const playerCount = parseInt(document.getElementById('multiPlayerCount').value) || 2; window.initMultiParty(playerCount);
     multiBossMaxHp = 100000 * playerCount; multiBossHp = multiBossMaxHp; multiEnemyTimeLeft = 10; window.updateMultiHpBars();
     gameCurrentWordsQueue = []; vocabList.forEach(w => { if(w.meanings && w.meanings.length > 0) gameCurrentWordsQueue.push({ wordNum: w.num, word: w.word, meaning: window.formatWordForDisplay(w.meanings[0].text) }); });
@@ -1357,7 +1378,6 @@ window.startMultiBattlePlay = function() {
     clearInterval(gameTimerInterval); gameTimerInterval = setInterval(window.handleMultiBattleTimer, 100); window.showNextMultiWord(); window.initMultiPartyEvents();
 };
 
-// 🌟 操作者の自操作HPとLIMITゲージを強固に「左詰め起算」同期、2コンボ以上連動の全画面金色ネオン外枠駆動
 window.updateMultiHpBars = function() {
     const boss = document.getElementById('multiBossHpFill'); if(boss) boss.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
     const bossTxt = document.getElementById('multiEnemyHpText'); if(bossTxt) { bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))}`; }
@@ -1367,24 +1387,33 @@ window.updateMultiHpBars = function() {
     let me = multiPartyMembers.find(m => m.isMe);
     if (me) {
         const ownHpFill = document.getElementById('multiPlayerOwnHpFill'), ownHpText = document.getElementById('multiPlayerOwnHpText');
-        if (ownHpFill) ownHpFill.style.width = Math.max(0, (me.hp / me.maxHp) * 100) + "%"; /* 左端起算の減少同期 */
+        if (ownHpFill) ownHpFill.style.width = Math.max(0, (me.hp / me.maxHp) * 100) + "%";
         if (ownHpText) ownHpText.innerText = `${Math.max(0, Math.floor(me.hp))} / ${me.maxHp}`;
     }
     const limitFill = document.getElementById('multiLimitGaugeFill'), limitText = document.getElementById('multiLimitGaugeText'), limitPercentNum = Math.floor(Math.max(0, (multiLimitAmount / multiLimitMax) * 100));
-    if (limitFill) { limitFill.style.width = limitPercentNum + "%"; if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max'); else limitFill.classList.remove('max'); } /* 左詰め蓄積 */
+    if (limitFill) { limitFill.style.width = limitPercentNum + "%"; if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max'); else limitFill.classList.remove('max'); }
     if (limitText) { limitText.innerText = limitPercentNum + "%"; }
     const sparkleBorder = document.getElementById('combo-sparkle-border');
-    if(sparkleBorder) { if(gameComboCount >= 2) sparkleBorder.classList.add('active'); else sparkleBorder.classList.remove('active'); } /* 金色ネオン外枠連動 */
+    if(sparkleBorder) { if(gameComboCount >= 2) sparkleBorder.classList.add('active'); else sparkleBorder.classList.remove('active'); }
 };
 
 window.handleMultiBattleTimer = function() {
     multiEnemyTimeLeft -= 0.1;
+    
+    if (multiEnemyTimeLeft > 0.9 && multiEnemyTimeLeft <= 1.0) {
+        let baseDamage = 400;
+        multiPartyMembers.forEach(m => {
+            if (m.hp > 0) {
+                window.showEnemyAttackPopup(m.id, baseDamage);
+            }
+        });
+    }
+    
     if(multiEnemyTimeLeft <= 0) {
         multiEnemyTimeLeft = 10; let baseDamage = 400; 
         multiPartyMembers.forEach(m => { if (m.hp > 0) { m.hp -= baseDamage; if (m.hp < 0) m.hp = 0; window.showCharacterPopup(m.id, baseDamage, 'damage'); } });
         document.body.classList.add('boss-damage-shake'); setTimeout(() => document.body.classList.remove('boss-damage-shake'), 300);
-        window.addBattleLog(`【ボス > ${baseDamage} 全体】`, "boss_all");
-        if(multiPartyMembers.every(m => m.hp <= 0)) { clearInterval(gameTimerInterval); window.addBattleLog("💀 全滅...", "system"); setTimeout(() => { alert("全滅しました..."); window.cancelMultiBattlePlay(true); }, 500); return; }
+        if(multiPartyMembers.every(m => m.hp <= 0)) { clearInterval(gameTimerInterval); setTimeout(() => { alert("全滅しました..."); window.cancelMultiBattlePlay(true); }, 500); return; }
     }
     const timerDisplay = document.getElementById('multiEnemyTimerDisplay'); if(timerDisplay) timerDisplay.innerText = `行動: ${Math.max(0, multiEnemyTimeLeft).toFixed(1)}秒`;
     window.updateMultiHpBars();
@@ -1397,7 +1426,6 @@ window.showNextMultiWord = function() {
     dummies.sort(() => Math.random() - 0.5); choices = choices.concat(dummies.slice(0, 7)).sort(() => Math.random() - 0.5);
     currentMultiCorrectIndex = choices.indexOf(target.meaning);
     for(let i=0; i<8; i++) { let el = document.getElementById('multiChoice-' + i); if(el) { el.innerText = choices[i]; el.classList.remove('highlight'); } }
-    // 🌟 フリックアタック終了ごとにフリックマークを中央（50%, 50%）に強制即時リセット連動
     const icon = document.getElementById('flickWeaponIcon'); if(icon) { icon.style.left = '50%'; icon.style.top = '50%'; }
 };
 
@@ -1447,12 +1475,11 @@ window.processMultiFlickAnswer = function(choiceIndex) {
         let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5; let damage = 400 * comboMulti;
         document.getElementById('multiComboCountText').innerText = gameComboCount; multiBossHp -= damage; 
         if(me) window.showCharacterPopup(me.id, `💥 ${damage}`, 'attack');
-        window.addBattleLog(`ボス < ${damage} ${me ? me.name : 'YOU'}`, "me");
         multiLimitAmount = Math.min(multiLimitMax, multiLimitAmount + 15); window.updateMultiHpBars();
         
         if(multiLimitAmount >= multiLimitMax) {
             setTimeout(() => {
-                window.addBattleLog(`【ボス < 5000 LIMIT】`, "limit"); multiBossHp -= 5000; multiLimitAmount = 0; window.updateMultiHpBars();
+                multiBossHp -= 5000; multiLimitAmount = 0; window.updateMultiHpBars();
                 if (multiBossHp <= 0) { clearInterval(gameTimerInterval); setTimeout(() => { alert("🎉 BOSS討伐完了！クエストクリア！"); window.cancelMultiBattlePlay(true); }, 500); }
             }, 500);
         }
@@ -1463,9 +1490,15 @@ window.processMultiFlickAnswer = function(choiceIndex) {
             me.hp -= 300; if (me.hp < 0) me.hp = 0;
             let myEl = document.getElementById('partyMember-' + me.id);
             if(myEl) { let iconEl = myEl.querySelector('.multi-party-icon'); if(iconEl) { iconEl.classList.remove('player-damage-flash'); void iconEl.offsetWidth; iconEl.classList.add('player-damage-flash'); } }
-            window.showCharacterPopup(me.id, 300, 'damage'); window.addBattleLog(`ボス > 300 ${me.name}`, "boss_single_me");
+            window.showCharacterPopup(me.id, 300, 'damage');
+            
+            setTimeout(() => {
+                if (me.hp >= 0) {
+                    window.showEnemyAttackPopup(me.id, 300);
+                }
+            }, 100);
         }
-        if(multiPartyMembers.every(m => m.hp <= 0)) { clearInterval(gameTimerInterval); window.addBattleLog("💀 全滅...", "system"); setTimeout(() => { alert("全滅しました..."); window.cancelMultiBattlePlay(true); }, 500); return; }
+        if(multiPartyMembers.every(m => m.hp <= 0)) { clearInterval(gameTimerInterval); setTimeout(() => { alert("全滅しました..."); window.cancelMultiBattlePlay(true); }, 500); return; }
     }
     window.updateMultiHpBars(); gameCurrentIndex++; window.showNextMultiWord();
 };
@@ -1481,7 +1514,6 @@ window.createFireballEffect = function() {
 // 🚀 完全同期ライフサイクルブートストラップ初期化 (フライング実行事故を完全防止)
 // ==========================================================================
 
-// 🌟 すべてのメソッド・変数がグローバルオブジェクトへ安全にロードされたのを検証してアプリを駆動[span_0](start_span)[span_0](end_span)
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
         window.loadLocalState(); window.initLucide(); window.initHeroSlider(); window.renderActivityChart();
