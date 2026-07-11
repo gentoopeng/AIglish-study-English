@@ -18,6 +18,9 @@
 </head>
 <body>
 
+    <!-- 🌟 コンボ（2以上）の時に全画面を優しく包む、金色の明滅キラキラネオン枠レイヤー -->
+    <div id="combo-sparkle-border" class="combo-sparkle-overlay"></div>
+
     <button id="scrollToTopBtn" class="scroll-to-top-btn" onclick="scrollToTop()">
         <i data-lucide="arrow-up" size="22"></i>
     </button>
@@ -45,6 +48,7 @@
         </div>
     </div>
 
+    <!-- 🌟 認証ゲートスクリーン（ロードエラーを完全に防ぐセーフガード付きイベントコール） -->
     <div id="auth-gate-screen">
         <div class="auth-card">
             <div class="auth-logo"><i data-lucide="shield-check" size="32"></i></div>
@@ -52,8 +56,8 @@
             <div style="font-size: 11px; color: var(--text-sub); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">ユーザー認証管理</div>
             
             <div class="auth-tabs">
-                <button class="auth-tab-btn active" id="authTabLogin" onclick="switchAuthMode('login')">ログイン</button>
-                <button class="auth-tab-btn" id="authTabRegister" onclick="switchAuthMode('register')">新規作成</button>
+                <button class="auth-tab-btn active" id="authTabLogin" onclick="if(window.switchAuthMode) { window.switchAuthMode('login'); } else { switchAuthMode('login'); }">ログイン</button>
+                <button class="auth-tab-btn" id="authTabRegister" onclick="if(window.switchAuthMode) { window.switchAuthMode('register'); } else { switchAuthMode('register'); }">新規作成</button>
             </div>
 
             <div class="auth-error" id="authErrorMsg"></div>
@@ -70,12 +74,12 @@
                 <input type="password" id="regPin" class="search-input" style="text-align: center; margin-bottom: 14px; letter-spacing: 4px;" placeholder="4桁の暗証番号を設定" maxlength="4">
             </div>
 
-            <button class="modern-btn" id="authSubmitBtn" onclick="handleAuthSubmit()">
+            <button class="modern-btn" id="authSubmitBtn" onclick="if(window.handleAuthSubmit) { window.handleAuthSubmit(); } else { handleAuthSubmit(); }">
                 システムへログイン <i data-lucide="arrow-right" size="16"></i>
             </button>
 
             <div style="margin-top: 16px; border-top: 1px dashed var(--border); padding-top: 16px;">
-                <button class="modern-btn" style="background: rgba(255,255,255,0.05) !important; border: 1px solid var(--border) !important; color: var(--text-sub) !important; box-shadow: none !important; height: 38px; font-size: 12px;" onclick="handleGuestLogin()">
+                <button class="modern-btn" style="background: rgba(255,255,255,0.05) !important; border: 1px solid var(--border) !important; color: var(--text-sub) !important; box-shadow: none !important; height: 38px; font-size: 12px;" onclick="if(window.handleGuestLogin) { window.handleGuestLogin(); } else { handleGuestLogin(); }">
                     <i data-lucide="user" size="14"></i> ゲストとしてテストプレイ
                 </button>
             </div>
@@ -315,7 +319,7 @@
                 <div id="game-start-screen" style="display:flex; flex-direction:column; gap:16px; height:100%;">
                     <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; padding:16px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h1 class="game-normal-title" style="margin:0; font-size:18px; text-align:left;"><i data-lucide="book" style="vertical-align:middle;"></i> ソロ学習テスト</h1>
+                            <h1 class="game-normal-title" style="margin:0; font-size:18px; text-align:left;"><i data-lucide="book" style="vertical-align:middle;"></i> 所論学習テスト</h1>
                             <button class="modern-btn" style="width:auto; padding:0 20px; height:36px;" onclick="showModeSelectScreen()">START</button>
                         </div>
                         
@@ -343,7 +347,7 @@
                     </div>
 
                     <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; border-color:var(--admin-accent) !important; box-shadow: 0 0 15px rgba(236,72,153,0.3) !important; cursor:pointer;" onclick="showMultiBattleSetup()">
-                        <i data-lucide="swords" size="36" style="color:var(--admin-accent); margin-bottom:12px; filter: drop-shadow(0 0 8px rgba(236,72,153,0.6));"></i>
+                        <i data-lucide="swords" size="36" style="color:var(--text-sub); margin-bottom:12px; filter: drop-shadow(0 0 8px rgba(236,72,153,0.6));"></i>
                         <h2 style="color:white; margin:0; font-size:20px; letter-spacing:1px; text-shadow: 0 0 8px rgba(236,72,153,0.8);">マルチバトル <span style="font-size:10px; color:var(--text-sub); vertical-align:top;">(β)</span></h2>
                         <p style="font-size:11px; color:var(--text-sub); margin-top:8px;">協力討伐 / 対人バトル</p>
                     </div>
@@ -418,22 +422,35 @@
                         <div id="multiEnemyTimerDisplay" style="position: absolute; top: 10px; font-size: 16px; font-weight: 900; color: #EF4444; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 0 10px #EF4444; z-index: 15; letter-spacing: 1px;">行動: --秒</div>
                         
                         <div style="flex:1; display:flex; align-items:center; justify-content:center; width: 100%;">
-                            <img src="boss1.png" alt="Boss" class="multi-boss-image" style="max-width: 100%; max-height: 180px; object-fit: contain;">
+                            <img src="boss1.png" alt="Boss" class="multi-boss-image" id="multiBossImage" style="max-width: 100%; max-height: 180px; object-fit: contain;">
                         </div>
 
+                        <!-- 🌟 構造固定配置：顔画像が上、HPバー・名前文字列が確実に「下側」へ配置固定される仲間エリアの描画受け皿 -->
                         <div id="multiPartyContainer" class="multi-party-grid-horizontal" style="width: 100%; padding: 0 10px; margin-bottom: 4px; z-index: 20;">
-                            </div>
+                        </div>
                     </div>
 
                     <div class="multi-party-status-area" style="padding: 6px 10px; margin-bottom: 8px; flex-shrink: 0; z-index: 10;">
+                        
+                        <!-- 🌟 操作者自身のHP状況表示（左起算減少連動） -->
+                        <div class="multi-player-own-hp-frame" style="margin-bottom: 4px; display: none;" id="multiPlayerOwnHpFrame">
+                            <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; position: relative;">
+                                <div class="multi-party-hp-fill" id="multiPlayerOwnHpFill" style="width: 100%;"></div>
+                                <div class="hp-bar-inner-text-layer" id="multiPlayerOwnHpText">3500 / 3500</div>
+                            </div>
+                        </div>
+
                         <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 4px;">
                             <div id="multiBattleLog" style="flex: 1; margin-right: 10px; font-size: 12px; line-height: 1.2; text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 5px rgba(0,0,0,1);">
-                                </div>
+                            </div>
                             <div style="font-size: 11px; font-family: monospace; font-weight: bold; color: white; flex-shrink: 0;" id="multiLimitGaugeText">0%</div>
                         </div>
-                        <div class="multi-hp-bar" style="height: 10px; margin-bottom: 6px; border-color: #F59E0B; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);">
+                        
+                        <!-- 🌟 必殺（LIMIT BREAK）ゲージ用コンテナ（左詰め蓄積ベース） -->
+                        <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; margin-bottom: 6px; border-color: #F59E0B; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);">
                             <div class="multi-hp-fill multi-limit-fill" id="multiLimitGaugeFill" style="width:0%;"></div>
                         </div>
+
                         <div style="display: flex; justify-content: space-between; align-items: flex-end;">
                             <div style="display: flex; gap: 6px;">
                                 <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipCharIcon">👤</div>
@@ -686,7 +703,7 @@
                 
                 <h2 style="color:var(--admin-accent); margin-top:24px;"><i data-lucide="users"></i> ユーザー管理 (全プレイヤー一覧)</h2>
                 <div id="adminUserListContainer" style="max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 8px; border: 1px solid var(--border); margin-bottom: 20px;">
-                    </div>
+                </div>
 
                 <div style="margin-bottom:14px;">
                     <label style="font-size:12px; font-weight:700; display:block; margin-top: 14px; margin-bottom:6px; color:var(--cosmic-cyan);">📝 ダッシュボードのタイトル設定</label>
@@ -697,7 +714,7 @@
                     <input type="text" id="adminNoticeInput" class="search-input" placeholder="表示したいお知らせメッセージを入力...">
                     <button class="modern-btn" onclick="window.saveAdminSystemSettings()">設定を配信・適用する</button>
                     
-                    <label style="font-size:12px; font-weight:700; display:block; margin-top: 24px; margin-bottom:6px; color:#F87171;">⚠️ スコア管理（リreset機能）</label>
+                    <label style="font-size:12px; font-weight:700; display:block; margin-top: 24px; margin-bottom:6px; color:#F87171;">⚠️ スコア管理（リセット機能）</label>
                     <button class="modern-btn" style="margin-bottom: 10px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetLeaderboard()"><i data-lucide="trash-2" size="16"></i> ランキング履歴をリセット</button>
                     <button class="modern-btn" style="border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetBestScore()"><i data-lucide="trash-2" size="16"></i> ベストスコアをリセット</button>
                 </div>
