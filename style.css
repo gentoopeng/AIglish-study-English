@@ -260,14 +260,16 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     position: relative;
     overflow: hidden;
     box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+    display: flex;
+    justify-content: flex-end; /* 🌟 左端から削れて右起点に集まるよう調整 */
 }
 .multi-boss-hp-fill {
     position: absolute;
     top: 0;
-    left: 0;
+    right: 0; /* 🌟 起点を右端に固定 */
     height: 100%;
     background: linear-gradient(90deg, #7f1d1d, #ef4444);
-    transform-origin: left !important; /* 🌟 左詰め起算点減少の厳格保証 */
+    transform-origin: right !important; /* 🌟 右詰め起算点減少の厳格保証 */
     transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
 }
@@ -382,7 +384,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     text-shadow: 2px 2px 0 #FFF, -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF;
 }
 
-/* 🌟 追加要件：解答成功時にプレイヤーカラーをまとってボスへ高速追従巡航する吹き出しレイアウト */
+/* 🌟 解答成功時にプレイヤーカラーをまとってボスへ高速追従巡航する吹き出しレイアウト */
 .popup-bubble-flying-atk {
     position: fixed;
     background: white;
@@ -400,27 +402,8 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     animation: flyToBossTrack 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
 
-/* 🌟 新設：ボス側からプレイヤー側へ向けて飛んでいく禍々しい追撃吹き出し */
-.popup-bubble-flying-enemy-atk {
-    position: fixed;
-    background: #111827;
-    font-size: 12px;
-    font-weight: 900;
-    padding: 5px 10px;
-    border-radius: 12px;
-    white-space: nowrap;
-    z-index: 300;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    border: 2px solid #EF4444;
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.7);
-    color: #EF4444;
-    text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
-    animation: flyToBossTrack 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-}
-
-/* 禍々しい吹き出しのインジケータ尾 */
-.popup-bubble-flying-enemy-atk::after {
+/* 吹き出しのインジケータ尾 */
+.popup-bubble-flying-atk::after {
     content: '';
     position: absolute;
     bottom: -6px;
@@ -428,7 +411,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     transform: translateX(-50%);
     border-width: 6px 6px 0;
     border-style: solid;
-    border-color: #EF4444 transparent transparent transparent;
+    border-color: inherit transparent transparent transparent;
 }
 
 /* ボス着弾時専用の衝撃大爆発レイヤー */
@@ -492,12 +475,14 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     overflow: hidden;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
     margin-bottom: 2px;
+    display: flex;
+    justify-content: flex-end; /* 🌟 左側から減るように変更 */
 }
 .multi-party-hp-fill {
     height: 100%;
     background: linear-gradient(90deg, #10B981, #34D399);
     width: 100%;
-    transform-origin: left !important; /* 🌟 左詰め起点減少の厳格保証 */
+    transform-origin: right !important; /* 🌟 右起点で減少するように変更 */
     transition: width 0.3s ease;
     box-shadow: 0 0 5px #10B981;
 }
@@ -541,6 +526,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     overflow: hidden;
     border: 1px solid rgba(255,255,255,0.2);
     display: flex;
+    justify-content: flex-end; /* 🌟 左側から減る（右起点）ように調整 */
     box-shadow: inset 0 2px 5px rgba(0,0,0,0.8);
 }
 
@@ -549,7 +535,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     height: 100%;
     background: linear-gradient(90deg, #F59E0B, #EF4444, #8B5CF6, #3B82F6, #10B981, #F59E0B);
     background-size: 200% 100%;
-    transform-origin: left !important; /* 🌟 左詰め起算点蓄積の厳格保証 */
+    transform-origin: left !important; /* LIMITゲージは蓄積演出のため左起点維持 */
     transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
 }
@@ -587,12 +573,17 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 /* フリック入力エリア */
 .multi-flick-area { 
     background: radial-gradient(circle at center, rgba(15,23,42,0.2) 0%, rgba(7,11,25,0.4) 100%); 
-    border-radius: 16px; border: 1px solid var(--admin-accent); position: relative; 
+    position: relative; 
     box-shadow: 0 0 25px rgba(236,72,153,0.3), inset 0 0 30px rgba(236,72,153,0.1); 
     display: flex; flex-direction: column; align-items: center; 
     padding-top: 6px; padding-bottom: 8px; 
     overflow: hidden; 
     backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); 
+    /* 🌟 全面に回答エリアを広げるための調整。枠や角丸・外側の余白をカット */
+    width: 100% !important;
+    border: none !important;
+    border-top: 1px solid var(--admin-accent) !important;
+    border-radius: 0 !important;
 }
 .multi-flick-area::before { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: linear-gradient(rgba(236,72,153,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(236,72,153,0.1) 1px, transparent 1px); background-size: 20px 20px; pointer-events: none; z-index: 0; }
 .multi-question-header-panel { text-align: center; margin-bottom: 4px; z-index: 10; }
