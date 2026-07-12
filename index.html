@@ -212,7 +212,7 @@
                     
                     <div style="margin-left: auto; display: flex; gap: 8px;">
                         <button class="list-action-link" style="background: rgba(16, 185, 129, 0.2); color: #10B981; border-color: #10B981;" onclick="handleBulkResetExecute()">
-                            <i data-lucide="rotate-ccw" size="12" style="vertical-align: middle;"></i> 理解度リreset
+                            <i data-lucide="rotate-ccw" size="12" style="vertical-align: middle;"></i> 理解度リセット
                         </button>
                         <button class="list-action-link" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border-color: #EF4444;" onclick="handleBulkDeleteExecute()">
                             <i data-lucide="trash-2" size="12" style="vertical-align: middle;"></i> 削除
@@ -260,10 +260,10 @@
                     </div>
 
                     <label for="englishTextarea" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">解析用英文データ入力</label>
-                    <textarea id="englishTextarea" class="modern-textarea" style="height: 120px;" placeholder="ここに英語 of information は直接ペーストしてください。"></textarea>
+                    <textarea id="englishTextarea" class="modern-textarea" style="height: 120px;" placeholder="ここに英語のドキュメントを直接ペーストまたは手入力してください。改行は無視され、AIがピリオド基準で自動分割します。"></textarea>
                     
-                    <label for="customJapanesetextarea" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">手動和訳入力（任意）</label>
-                    <textarea id="customJapanesetextarea" class="modern-textarea" style="height: 90px;" placeholder="手動で和訳を割り当てたい場合はこちら。"></textarea>
+                    <label for="customJapanesetextarea" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">手動和訳入力（任意：空欄ならAIが高精度な和訳を自動生成します）</label>
+                    <textarea id="customJapanesetextarea" class="modern-textarea" style="height: 90px;" placeholder="手動で和訳を割り当てたい場合は、英文の行数に合わせて改行しながら入力してください。"></textarea>
 
                     <button class="modern-btn reader-analysis-neon-btn" id="analysisSubmitBtn" onclick="startAnalysisWithEmbeddedTitle()">
                         <i data-lucide="wand-2" size="16"></i> 英文解析
@@ -317,41 +317,51 @@
         <div id="view-game" class="tab-view">
             <div id="cosmic-game-wrapper" class="cosmic-game-bg">
                 
-                <div id="game-start-screen" style="display:flex; flex-direction:column; gap:16px; height:100%;">
-                    <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; padding:16px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h1 class="game-normal-title" style="margin:0; font-size:18px; text-align:left;"><i data-lucide="book" style="vertical-align:middle;"></i> ソロ学習テスト</h1>
-                            <button class="modern-btn" style="width:auto; padding:0 20px; height:36px;" onclick="showModeSelectScreen()">START</button>
-                        </div>
-                        
-                        <div id="gameLeaderboardArea" style="margin-top:16px; flex:1; display:flex; flex-direction:column; min-height:0;">
-                            <div class="auth-tabs" style="margin-bottom:8px; padding:2px;">
-                                <button class="auth-tab-btn active" id="lbTabMine" onclick="switchLeaderboard('mine')" style="padding:4px; font-size:11px;">マイベスト</button>
+                <!-- 🌟 縦並びだったソロとマルチを横スワイプに変更、余白を完全に消すため固定配置[span_1](start_span)[span_1](end_span) -->
+                <div id="game-start-screen" class="game-swipe-container" style="display:flex; position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10;">
+                    
+                    <!-- ソロ学習テストスライド -->
+                    <div style="flex: 0 0 100vw; scroll-snap-align: center; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
+                        <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; padding:16px; margin-bottom:0; box-sizing: border-box;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <h1 class="game-normal-title" style="margin:0; font-size:18px; text-align:left;"><i data-lucide="book" style="vertical-align:middle;"></i> ソロ学習テスト</h1>
+                                <button class="modern-btn" style="width:auto; padding:0 20px; height:36px;" onclick="showModeSelectScreen()">START</button>
                             </div>
                             
-                            <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
-                                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
-                                    <button class="modern-btn" id="lbBtnModeJa" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbMode('ja2en')">英訳</button>
-                                    <button class="modern-btn" id="lbBtnModeEn" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('en2ja')">和訳</button>
-                                    <button class="modern-btn" id="lbBtnModeMix" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('mixed')">まぜ</button>
+                            <div id="gameLeaderboardArea" style="margin-top:16px; flex:1; display:flex; flex-direction:column; min-height:0;">
+                                <div class="auth-tabs" style="margin-bottom:8px; padding:2px;">
+                                    <button class="auth-tab-btn active" id="lbTabMine" onclick="switchLeaderboard('mine')" style="padding:4px; font-size:11px;">マイベスト</button>
                                 </div>
-                                <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px;">
-                                    <button class="modern-btn" id="lbBtnDiffNormal" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbDiff('normal')">NML</button>
-                                    <button class="modern-btn" id="lbBtnDiffHard" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('hard')">HRD</button>
-                                    <button class="modern-btn" id="lbBtnDiffExpert" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('expert')">EXP</button>
-                                    <button class="modern-btn" id="lbBtnDiffEndless" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('endless')">∞</button>
+                                
+                                <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
+                                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
+                                        <button class="modern-btn" id="lbBtnModeJa" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbMode('ja2en')">英訳</button>
+                                        <button class="modern-btn" id="lbBtnModeEn" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('en2ja')">和訳</button>
+                                        <button class="modern-btn" id="lbBtnModeMix" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('mixed')">まぜ</button>
+                                    </div>
+                                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px;">
+                                        <button class="modern-btn" id="lbBtnDiffNormal" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbDiff('normal')">NML</button>
+                                        <button class="modern-btn" id="lbBtnDiffHard" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('hard')">HRD</button>
+                                        <button class="modern-btn" id="lbBtnDiffExpert" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('expert')">EXP</button>
+                                        <button class="modern-btn" id="lbBtnDiffEndless" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('endless')">∞</button>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div id="leaderboardListContainer" style="flex:1; overflow-y:auto; background:rgba(7, 11, 25, 0.6); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:4px;"></div>
+                                <div id="leaderboardListContainer" style="flex:1; overflow-y:auto; background:rgba(7, 11, 25, 0.6); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:4px;"></div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; border-color:var(--admin-accent) !important; box-shadow: 0 0 15px rgba(236,72,153,0.3) !important; cursor:pointer;" onclick="showMultiBattleSetup()">
-                        <i data-lucide="swords" size="36" style="color:var(--admin-accent); margin-bottom:12px; filter: drop-shadow(0 0 8px rgba(236,72,153,0.6));"></i>
-                        <h2 style="color:white; margin:0; font-size:20px; letter-spacing:1px; text-shadow: 0 0 8px rgba(236,72,153,0.8);">マルチバトル <span style="font-size:10px; color:var(--text-sub); vertical-align:top;">(β)</span></h2>
-                        <p style="font-size:11px; color:var(--text-sub); margin-top:8px;">協力討伐 / 对人バトル</p>
+                    <!-- マルチバトルスライド（画像全画面化＆ネオンSTARTボタン、上部表示固定） -->
+                    <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('tawa.png'); background-size: cover; background-position: top center; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding-bottom: 80px; box-sizing: border-box;">
+                        <!-- 🌟 追加：単語の迷宮 タイトル -->
+                        <div class="tower-title-container">
+                            <div class="tower-title-text">単語の迷宮</div>
+                            <div class="tower-title-line"></div>
+                        </div>
+                        <button class="multi-start-btn" onclick="showMultiBattleSetup()">START</button>
                     </div>
+
                 </div>
 
                 <div id="multi-battle-setup-screen" style="display:none; height:100%;">
@@ -364,7 +374,7 @@
                             <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">① モード・人数</div>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
                                 <button class="modern-btn" id="btnMultiCoop" onclick="selectMultiMode('coop')">🤝 協力討伐</button>
-                                <button class="modern-btn" id="btnMultiPvp" onclick="selectMultiMode('pvp')">⚔️ 対人戦</button>
+                                <button class="modern-btn" id="btnMultiPvp" onclick="selectMultiMode('pvp')">⚔️ 对人戦</button>
                             </div>
                             <select id="multiPlayerCount" class="search-input">
                                 <option value="2">2人パーティ</option><option value="3">3人パーティ</option><option value="4" selected>4人パーティ</option>
@@ -426,14 +436,14 @@
                             <img src="boss1.png" alt="Boss" class="multi-boss-image" id="multiBossImage" style="max-width: 100%; max-height: 180px; object-fit: contain;">
                         </div>
 
-                        <!-- 🌟 仲間エリアの絶対固定レイアウト受け皿 (並び順改修対応) -->
+                        <!-- 🌟 仲間エリアの絶対固定レイアウト受け皿 -->
                         <div id="multiPartyContainer" class="multi-party-grid-horizontal" style="width: 100%; padding: 0 10px; margin-bottom: 4px; z-index: 20;">
                         </div>
                     </div>
 
                     <div class="multi-party-status-area" style="padding: 6px 10px; margin-bottom: 8px; flex-shrink: 0; z-index: 10;">
                         
-                        <!-- 🌟 操作者自身のHP状況表示バー（共通下部用、不変） -->
+                        <!-- 🌟 新設要件：操作者自身のHP状況表示バー（他パーティと混ざらない独立した専用配置） -->
                         <div class="multi-player-own-hp-frame" style="margin-bottom: 4px; display: none;" id="multiPlayerOwnHpFrame">
                             <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; position: relative;">
                                 <div class="multi-party-hp-fill" id="multiPlayerOwnHpFill" style="width: 100%;"></div>
@@ -450,18 +460,23 @@
                             <div class="multi-hp-fill multi-limit-fill" id="multiLimitGaugeFill" style="width:0%;"></div>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-                            <div style="display: flex; gap: 6px; visibility: hidden; opacity: 0; pointer-events: none;">
-                                <!-- 旧スロット配置は非表示化 -->
+                            <div style="display: flex; gap: 6px;">
+                                <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipCharIcon">👤</div>
+                                <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipWeaponIcon">🗡️</div>
+                                <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipArmorIcon">🛡️</div>
                             </div>
                             <div style="text-align: right;">
                                 <div id="multiDamagePopupText" style="font-size: 10px; color: #EF4444; font-weight: 900; height: 12px; margin-bottom: 2px;"></div>
-                                <div style="display: none;" id="multiComboCountText">0</div>
+                                <div style="font-size: 12px; font-weight: 900; color: #FBBF24; text-shadow: 0 0 5px #F59E0B;">COMBO <span id="multiComboCountText" style="font-size: 14px;">0</span></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 🌟 フリック入力エリア (見切れ完全解消対応) -->
                     <div class="multi-flick-area" style="margin-top: auto; height: 250px; flex-shrink: 0;">
+                        <div class="multi-question-header-panel">
+                            <span class="multi-quest-lbl">TARGET WORD</span><br>
+                            <div class="flick-center-word" id="flickTargetWord">Word</div>
+                        </div>
                         <div class="flick-pad-container" id="flickPadArea">
                             <div id="flickWeaponIcon" class="flick-weapon-icon">🔥</div>
                             <div class="multi-grid-3x3">
@@ -469,9 +484,7 @@
                                 <div class="flick-choice" id="multiChoice-1">---</div>
                                 <div class="flick-choice" id="multiChoice-2">---</div>
                                 <div class="flick-choice" id="multiChoice-3">---</div>
-                                <div class="flick-choice-center-question-box">
-                                    <div class="flick-center-word" id="flickTargetWord">Word</div>
-                                </div>
+                                <div class="flick-choice-center-blank"></div> 
                                 <div class="flick-choice" id="multiChoice-4">---</div>
                                 <div class="flick-choice" id="multiChoice-5">---</div>
                                 <div class="flick-choice" id="multiChoice-6">---</div>
@@ -718,7 +731,7 @@
 
     </div>
 
-    <!-- 🌟 ナビバーのID重複・アンカータイポを完全修正 -->
+    <!-- 🌟 修正：ナビバーのID重複・アンカータイポを完全修正。ライフサイクルがこれで安全に回ります -->
     <div class="nav-bar" id="appMainBottomNavBar">
         <button class="nav-item active" id="nav-home" onclick="window.switchTab('home')"><i data-lucide="layout-dashboard" size="18"></i> ホーム</button>
         <button class="nav-item" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
@@ -740,6 +753,9 @@
             <button class="pop-btn" style="background:var(--border); color:var(--text-main); max-width: 64px; display: inline-block;" id="popDetailsLink" onclick="window.closeWordPopover()">閉じる</button>
         </div>
     </div>
+
+    <!-- 🌟 マルチバトルプレイ中専用の背景画像レイヤーを追加 -->
+    <div id="multi-battle-play-bg"></div>
 
     <script src="app.js"></script>
 </body>

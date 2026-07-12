@@ -143,7 +143,6 @@ window.generateUserId = function() {
     return id;
 };
 
-// 🌟 復元ブロック：認証モード切り替え
 window.switchAuthMode = function(mode) {
     const tabLogin = document.getElementById('authTabLogin');
     const tabReg = document.getElementById('authTabRegister');
@@ -170,7 +169,6 @@ window.switchAuthMode = function(mode) {
     window.initLucide();
 };
 
-// 🌟 復元ブロック：ログイン・新規登録送信
 window.handleAuthSubmit = function() {
     const authReg = document.getElementById('authTabRegister');
     const isRegister = authReg ? authReg.classList.contains('active') : false;
@@ -225,7 +223,6 @@ window.handleAuthSubmit = function() {
     }
 };
 
-// 🌟 復元ブロック：ゲストログイン
 window.handleGuestLogin = function() {
     const errorMsg = document.getElementById('authErrorMsg');
     if (errorMsg) errorMsg.style.display = 'none';
@@ -239,7 +236,6 @@ window.handleGuestLogin = function() {
     window.loadLocalState();
 };
 
-// 🌟 復元ブロック：プロファイル確認ポップアップ
 window.showLoginConfirmPopup = function(user) {
     if(document.getElementById('loginOverlayLayer')) return;
     const overlay = document.createElement('div');
@@ -280,7 +276,6 @@ window.showLoginConfirmPopup = function(user) {
     };
 };
 
-// 🌟 復元ブロック：管理者ユーザーリスト描画
 window.renderAdminUserList = function() {
     const container = document.getElementById('adminUserListContainer');
     if(!container) return;
@@ -531,7 +526,7 @@ window.showCustomDeleteConfirm = function(numStr) {
     const box = document.createElement('div');
     box.style.cssText = "background:var(--card-bg); border:1px solid #EF4444; border-radius:16px; padding:24px; width:85%; max-width:320px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.6);";
     box.innerHTML = `
-        <div style="color:white; font-size:18px; font-weight:800; margin-bottom:12px;">⚠️ 補足削除</div>
+        <div style="color:white; font-size:18px; font-weight:800; margin-bottom:12px;">⚠️ 単語の削除</div>
         <div style="color:var(--text-sub); font-size:13px; margin-bottom:24px; line-height:1.5;">単語 <strong style="color:white;">#${numStr}</strong> を完全に削除しますか？</div>
         <div style="display:flex; gap:12px;">
             <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--input-bg); color:var(--text-main); font-weight:700; cursor:pointer;" id="cancelDelBtn">やめる</button>
@@ -746,7 +741,7 @@ window.analyzeText = async function(rawText, assignedTitle = null) {
     document.getElementById('readerCurrentTitle').innerHTML = `
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:100%;">
             <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; max-width:260px;">📖 ${currentActiveTitle}</span>
-            <button style="padding:6px 12px; font-size:11px; font-weight:bold; border-radius:6px; background:rgba(255,255,255,0.1); color:#E2E8F0; border:1px solid rgba(255,255,255,0.3); cursor:pointer; white-space:nowrap; transition:all 0.2s;" onclick="window.showCustomSaveBookshelfPrompt(\` ${safeTextForBtn}\`, '${safeTitleForBtn}')">
+            <button style="padding:6px 12px; font-size:11px; font-weight:bold; border-radius:6px; background:rgba(255,255,255,0.1); color:#E2E8F0; border:1px solid rgba(255,255,255,0.3); cursor:pointer; white-space:nowrap; transition:all 0.2s;" onclick="window.showCustomSaveBookshelfPrompt(\`${safeTextForBtn}\`, '${safeTitleForBtn}')">
                 <i data-lucide="folder-plus" size="12" style="vertical-align:middle; margin-right:2px;"></i> 本棚に保存する
             </button>
         </div>
@@ -806,6 +801,9 @@ window.analyzeText = async function(rawText, assignedTitle = null) {
     });
     document.getElementById('summaryJaContainer').innerHTML = totalSummaryJa; window.setTranslationMode(currentTranslationMode); window.initLucide();
 };
+// ==========================================================================
+// 📖 リーダーの残り・本棚保存・ポップオーバー関連 ロジック
+// ==========================================================================
 
 window.showCustomSaveBookshelfPrompt = function(text, title) {
     if(document.getElementById('saveBookshelfOverlay')) return;
@@ -875,7 +873,7 @@ window.showCustomDeleteHistoryConfirm = function(id) {
 window.renderHistoryList = function() {
     const container = document.getElementById('historyListContainer');
     if(!container) return; container.innerHTML = '';
-    if(textHistory.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px;">ログがありません</div>`; return; }
+    if(textHistory.length === 0) { container.innerHTML = `<div style="color:var(--text-sub); font-size:12px;">ログがありません</div>`; return; }
     textHistory.forEach(h => {
         const row = document.createElement('div'); row.className = 'list-item-row';
         const safeText = h.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
@@ -1234,17 +1232,10 @@ window.updatePartySlotsUi = function() {
     const weaponImgFrame = document.getElementById('slotWeaponImgContainer'), weaponNameLbl = document.getElementById('slotWeaponName');
     if (activeWeapon === 'fire_sword') { weaponImgFrame.innerHTML = "🔥🗡️"; weaponNameLbl.innerText = "業火の大剣"; } else { weaponImgFrame.innerHTML = "🗡️"; weaponNameLbl.innerText = "素手"; }
     const armorImgFrame = document.getElementById('slotArmorImgContainer'), armorNameLbl = document.getElementById('slotArmorName');
-    if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "星屑の盾"; } else { armorImgFrame.innerHTML = "布の服"; }
-    
-    // 🌟 改善：新スロット規則（2コンボ以上で表示）に基づき、自分のスロットパーツを更新
-    const comboLabel = document.getElementById('playerSlotComboTextMe');
-    if(comboLabel) {
-        comboLabel.innerText = gameComboCount >= 2 ? `COMBO ${gameComboCount}` : "";
-    }
-    
-    const bChar = document.getElementById('playerSlotCharMe'); if(bChar) bChar.innerHTML = activeCharacter === 'tangon' ? `<img src="tangon.png" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : "👤";
-    const bWep = document.getElementById('playerSlotWeaponMe'); if(bWep) bWep.innerHTML = activeWeapon === 'fire_sword' ? "🔥" : "🗡️";
-    const bArm = document.getElementById('playerSlotArmorMe'); if(bArm) bArm.innerHTML = activeArmor === 'cosmic_shield' ? "🔮" : "🛡️";
+    if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "🔮🛡️"; armorNameLbl.innerText = "星屑の盾"; } else { armorImgFrame.innerHTML = "🛡️"; armorNameLbl.innerText = "布の服"; }
+    const bChar = document.getElementById('multiEquipCharIcon'); if(bChar) bChar.innerHTML = activeCharacter === 'tangon' ? `<img src="tangon.png" style="width:100%;height:100%;object-fit:cover;border-radius:4px;">` : "👤";
+    const bWep = document.getElementById('multiEquipWeaponIcon'); if(bWep) bWep.innerHTML = activeWeapon === 'fire_sword' ? "🔥" : "🗡️";
+    const bArm = document.getElementById('multiEquipArmorIcon'); if(bArm) bArm.innerHTML = activeArmor === 'cosmic_shield' ? "🔮" : "🛡️";
 };
 
 window.initMultiParty = function(playerCount) {
@@ -1258,50 +1249,28 @@ window.initMultiParty = function(playerCount) {
     window.renderMultiParty();
 };
 
-// 🌟 改修：すべてのパーティスロットを新しい順番（①2以上のコンボ ➔ ②顔 ➔ ③装備2つ ➔ ④名前 ➔ ⑤HPバー）に完全リビルド[span_1](start_span)[span_1](end_span)
 window.renderMultiParty = function() {
     const container = document.getElementById('multiPartyContainer'); if(!container) return; container.innerHTML = "";
     multiPartyMembers.forEach(m => {
+        let charImg = m.char === 'tangon' ? `<img src="tangon.png" alt="tangon" style="width:100%;height:100%;object-fit:cover;">` : `👤`;
         let hpPercent = Math.max(0, (m.hp / m.maxHp) * 100);
+        let label = m.isMe ? "YOU" : "ALLY";
         let color = m.isMe ? "var(--cosmic-purple-light)" : "var(--cosmic-cyan)";
         
-        let comboText = "";
-        let charImg = m.char === 'tangon' ? `<img src="tangon.png" alt="tangon" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : `👤`;
-        let wepIcon = "🗡️";
-        let armIcon = "🛡️";
-        
-        if (m.isMe) {
-            comboText = gameComboCount >= 2 ? `COMBO ${gameComboCount}` : "";
-            wepIcon = activeWeapon === 'fire_sword' ? "🔥" : "🗡️";
-            armIcon = activeArmor === 'cosmic_shield' ? "🔮" : "🛡️";
-        }
-        
+        // 🌟 反転フレックスレイアウトCSS対応：顔が上、HPバー・名前が下側に綺麗に固定描画されるカプセル構造を完全生成
         let html = `
             <div class="multi-party-member" id="partyMember-${m.id}">
-                <!-- ① コンボ行 -->
-                <div id="${m.isMe ? 'playerSlotComboTextMe' : 'comboText-' + m.id}" class="player-slot-combo-lbl">${comboText}</div>
-                
-                <!-- ② キャラの顔アイコン -->
-                <div id="${m.isMe ? 'playerSlotCharMe' : 'charIcon-' + m.id}" class="multi-party-icon">${charImg}</div>
-                
-                <!-- ③ 装備2つ並び -->
-                <div class="player-slot-equip-row">
-                    <div id="${m.isMe ? 'playerSlotWeaponMe' : 'wepIcon-' + m.id}" class="multi-equip-icon" style="width:18px; height:18px; font-size:10px;">${wepIcon}</div>
-                    <div id="${m.isMe ? 'playerSlotArmorMe' : 'armIcon-' + m.id}" class="multi-equip-icon" style="width:18px; height:18px; font-size:10px;">${armIcon}</div>
-                </div>
-                
-                <!-- ④ プレイヤーネーム -->
-                <div style="font-size:8px; color:${color}; font-weight:bold; margin-top:2px; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; text-align:center;">${m.name}</div>
-                
-                <!-- ⑤ HPバー -->
+                <div class="multi-party-icon" style="background:none !important; border:none !important; box-shadow:none !important;">${charImg}</div>
                 <div class="multi-party-hp-bar" style="border: 1px solid ${m.borderColor}; box-shadow: 0 0 5px ${m.shadowColor};">
-                    <div class="multi-party-hp-fill" id="partyMemberHpFill-${m.id}" style="width:${hpPercent}%;"></div>
+                    <div class="multi-party-hp-fill" id="partyMemberHpFill-${m.id}" style="width:${hpPercent}%; transform-origin:left !important;"></div>
                 </div>
+                <div style="font-size:8px; color:${color}; font-weight:bold; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; text-align:center;">${m.name}</div>
             </div>`;
         container.innerHTML += html;
     });
 };
 
+// 🌟 キャラ固有カラーネオンと完全同期して飛んでいく吹き出し＆ボス位置大爆発エフェクト
 window.showCharacterPopup = function(memberId, amount, type) {
     const memberEl = document.getElementById('partyMember-' + memberId); if(!memberEl) return;
     if(type === 'attack') {
@@ -1377,20 +1346,18 @@ window.skipIntroVideo = function() {
 
 window.startMultiBattlePlay = function() {
     document.body.classList.add('in-game-active'); document.getElementById('multi-battle-play-screen').style.display = 'flex'; gameComboCount = 0; multiLimitAmount = 0; 
-    document.getElementById('multiDamagePopupText').innerText = "";
+    document.getElementById('multiComboCountText').innerText = "0"; document.getElementById('multiDamagePopupText').innerText = "";
     const sparkleBorder = document.getElementById('combo-sparkle-border'); if(sparkleBorder) sparkleBorder.classList.remove('active');
     const ownHpFrame = document.getElementById('multiPlayerOwnHpFrame'); if(ownHpFrame) ownHpFrame.style.display = 'block';
     const logContainer = document.getElementById('multiBattleLog'); if(logContainer) logContainer.innerHTML = "";
-    
-    const playerCount = parseInt(document.getElementById('multiPlayerCount').value) || 2; window.initMultiParty(playerCount);
-    window.updatePartySlotsUi(); 
-    
+    window.updatePartySlotsUi(); const playerCount = parseInt(document.getElementById('multiPlayerCount').value) || 2; window.initMultiParty(playerCount);
     multiBossMaxHp = 100000 * playerCount; multiBossHp = multiBossMaxHp; multiEnemyTimeLeft = 10; window.updateMultiHpBars();
     gameCurrentWordsQueue = []; vocabList.forEach(w => { if(w.meanings && w.meanings.length > 0) gameCurrentWordsQueue.push({ wordNum: w.num, word: w.word, meaning: window.formatWordForDisplay(w.meanings[0].text) }); });
     gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0;
     clearInterval(gameTimerInterval); gameTimerInterval = setInterval(window.handleMultiBattleTimer, 100); window.showNextMultiWord(); window.initMultiPartyEvents();
 };
 
+// 🌟 操作者の自操作HPとLIMITゲージを強固に「左詰め起算」同期、2コンボ以上連動の全画面金色ネオン外枠駆動
 window.updateMultiHpBars = function() {
     const boss = document.getElementById('multiBossHpFill'); if(boss) boss.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
     const bossTxt = document.getElementById('multiEnemyHpText'); if(bossTxt) { bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))}`; }
@@ -1400,16 +1367,15 @@ window.updateMultiHpBars = function() {
     let me = multiPartyMembers.find(m => m.isMe);
     if (me) {
         const ownHpFill = document.getElementById('multiPlayerOwnHpFill'), ownHpText = document.getElementById('multiPlayerOwnHpText');
-        if (ownHpFill) ownHpFill.style.width = Math.max(0, (me.hp / me.maxHp) * 100) + "%"; 
+        if (ownHpFill) ownHpFill.style.width = Math.max(0, (me.hp / me.maxHp) * 100) + "%"; /* 左端起算の減少同期 */
         if (ownHpText) ownHpText.innerText = `${Math.max(0, Math.floor(me.hp))} / ${me.maxHp}`;
     }
     const limitFill = document.getElementById('multiLimitGaugeFill'), limitText = document.getElementById('multiLimitGaugeText'), limitPercentNum = Math.floor(Math.max(0, (multiLimitAmount / multiLimitMax) * 100));
-    if (limitFill) { limitFill.style.width = limitPercentNum + "%"; if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max'); else limitFill.classList.remove('max'); } 
+    if (limitFill) { limitFill.style.width = limitPercentNum + "%"; if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max'); else limitFill.classList.remove('max'); } /* 左詰め蓄積 */
     if (limitText) { limitText.innerText = limitPercentNum + "%"; }
     const sparkleBorder = document.getElementById('combo-sparkle-border');
-    if(sparkleBorder) { if(gameComboCount >= 2) sparkleBorder.classList.add('active'); else sparkleBorder.classList.remove('active'); } 
+    if(sparkleBorder) { if(gameComboCount >= 2) sparkleBorder.classList.add('active'); else sparkleBorder.classList.remove('active'); } /* 金色ネオン外枠連動 */
 };
-
 window.handleMultiBattleTimer = function() {
     multiEnemyTimeLeft -= 0.1;
     if(multiEnemyTimeLeft <= 0) {
@@ -1429,6 +1395,7 @@ window.showNextMultiWord = function() {
     dummies.sort(() => Math.random() - 0.5); choices = choices.concat(dummies.slice(0, 7)).sort(() => Math.random() - 0.5);
     currentMultiCorrectIndex = choices.indexOf(target.meaning);
     for(let i=0; i<8; i++) { let el = document.getElementById('multiChoice-' + i); if(el) { el.innerText = choices[i]; el.classList.remove('highlight'); } }
+    // 🌟 フリックアタック終了ごとにフリックマークを中央（50%, 50%）に強制即時リセット連動
     const icon = document.getElementById('flickWeaponIcon'); if(icon) { icon.style.left = '50%'; icon.style.top = '50%'; }
 };
 
@@ -1451,6 +1418,7 @@ window.initMultiPartyEvents = function() {
 
 window.handleFlickStart = function(e) { e.preventDefault(); const touch = e.touches[0]; const rect = document.getElementById('flickPadArea').getBoundingClientRect(); flickStartX = touch.clientX - rect.left; flickStartY = touch.clientY - rect.top; isFlicking = true; currentFlickChoice = -1; };
 
+// 🌟 改良要件：上下左右・斜め45度の完全な8方向の直線上のみしかフリックマーク（アイコン）が物理的に移動しないよう厳格ロック
 window.handleFlickMove = function(e) {
     if(!isFlicking) return; e.preventDefault(); const touch = e.touches[0]; const rect = document.getElementById('flickPadArea').getBoundingClientRect();
     let dx = (touch.clientX - rect.left) - flickStartX, dy = (touch.clientY - rect.top) - flickStartY, distance = Math.sqrt(dx*dx + dy*dy);
@@ -1458,11 +1426,13 @@ window.handleFlickMove = function(e) {
     const icon = document.getElementById('flickWeaponIcon'); 
     if(icon) { 
         if (distance > 5) {
+            // 角度(0-360)を算出して正確な45度区切りのスナップ角を算出
             let angle = Math.atan2(dy, dx);
             let degree = angle * 180 / Math.PI; if(degree < 0) degree += 360;
             let sector = Math.round(degree / 45) % 8;
             let snapAngle = (sector * 45) * Math.PI / 180;
             
+            // 算出した直線ベクトル方向にのみ、実際の指の移動距離をスライド投影固定
             let constrainedDx = distance * Math.cos(snapAngle);
             let constrainedDy = distance * Math.sin(snapAngle);
             icon.style.left = `calc(50% + ${constrainedDx}px)`; 
@@ -1494,14 +1464,7 @@ window.processMultiFlickAnswer = function(choiceIndex) {
         const myThumb = document.querySelector('.multi-party-member:first-child .multi-party-icon');
         if(myThumb) { myThumb.classList.remove('companion-attack-active'); void myThumb.offsetWidth; myThumb.classList.add('companion-attack-active'); setTimeout(() => myThumb.classList.remove('companion-attack-active'), 500); }
         let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5; let damage = 400 * comboMulti;
-        
-        // 🌟 改善：2コンボ以上続いた時のみ引っ越し先コンボテキストへ動的反映（1コンボの時は空文字にする）
-        const meComboText = document.getElementById('playerSlotComboTextMe');
-        if(meComboText) {
-            meComboText.innerText = gameComboCount >= 2 ? `COMBO ${gameComboCount}` : "";
-        }
-        
-        multiBossHp -= damage; 
+        document.getElementById('multiComboCountText').innerText = gameComboCount; multiBossHp -= damage; 
         if(me) window.showCharacterPopup(me.id, `💥 ${damage}`, 'attack');
         multiLimitAmount = Math.min(multiLimitMax, multiLimitAmount + 15); window.updateMultiHpBars();
         
@@ -1513,10 +1476,7 @@ window.processMultiFlickAnswer = function(choiceIndex) {
         }
         if (multiBossHp <= 0) { clearInterval(gameTimerInterval); setTimeout(() => { alert("🎉 BOSS討伐完了！クエストクリア！"); window.cancelMultiBattlePlay(true); }, 500); return; }
     } else { 
-        gameComboCount = 0; 
-        const meComboText = document.getElementById('playerSlotComboTextMe');
-        if(meComboText) meComboText.innerText = ""; // ミス時は消去
-        
+        gameComboCount = 0; document.getElementById('multiComboCountText').innerText = gameComboCount;
         if (me && me.hp > 0) {
             me.hp -= 300; if (me.hp < 0) me.hp = 0;
             let myEl = document.getElementById('partyMember-' + me.id);
@@ -1538,6 +1498,7 @@ window.createFireballEffect = function() {
 // ==========================================================================
 // 🚀 完全同期ライフサイクルブートストラップ初期化 (フライング実行事故を完全防止)
 // ==========================================================================
+
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
         window.loadLocalState(); window.initLucide(); window.initHeroSlider(); window.renderActivityChart();

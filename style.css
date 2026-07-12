@@ -51,14 +51,38 @@ body::after {
 }
 #view-home::before { background-image: url('homenohaikei.png'); }
 #view-vocab::before { background-image: url('tango.png'); }
-#view-reader::before { background-image: url('friend.png'); } 
+#view-reader::before { background-image: url('friend.png'); } /* 🌟 元ファイル準拠 */
 #view-community::before { background-image: url('friend.png'); }
 #view-party::before { background-image: url('haikei.png'); }
 
+/* 🌟 全体的なぼかしを 3px から 1px に薄く調整 */
 #view-game::before { 
     background-image: url('utyuusen.png'); 
-    filter: blur(3px) brightness(0.65); 
+    filter: blur(1px) brightness(0.65); 
     transform: scale(1.05); 
+}
+
+/* 🌟 新設：マルチバトルプレイ中専用の背景画像レイヤー (1pxの薄いぼかしを適用) */
+#multi-battle-play-bg {
+    position: fixed;
+    top: 56px;
+    bottom: 60px;
+    left: 0;
+    width: 100vw;
+    background-image: url('sentou.png');
+    background-size: cover;
+    background-position: center;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    filter: blur(1px) brightness(0.7);
+    transition: opacity 0.3s ease;
+}
+
+/* 🌟 マルチプレイ画面がアクティブになった時だけ sentou.png を浮き上がらせる */
+body.in-game-active #multi-battle-play-screen:not([style*="display: none"]) ~ #multi-battle-play-bg {
+    opacity: 1;
+    z-index: 5; /* 既存コンテンツの背後、コンテナの内側に美しく差し込む */
 }
 
 .card {
@@ -159,7 +183,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .pill-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.25); color: #FFF; font-size: 11px; padding: 6px 12px; border-radius: 20px; cursor: pointer; white-space: nowrap; }
 .pill-btn.active { background: var(--accent); border-color: var(--accent); }
 
-.popover { position: fixed; bottom: 0; left: 0; width: 100%; max-height: 80vh; z-index: 5000; background: #1E293B; border-top: 1px solid var(--border); color: white; padding: 18px 18px calc(18px; + env(safe-area-inset-bottom)) 18px; border-radius: 20px 20px 0 0; display: none; flex-direction: column; gap: 12px; box-sizing: border-box; box-shadow: 0 -10px 40px rgba(0,0,0,0.7); }
+.popover { position: fixed; bottom: 0; left: 0; width: 100%; max-height: 80vh; z-index: 5000; background: #1E293B; border-top: 1px solid var(--border); color: white; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)) 18px; border-radius: 20px 20px 0 0; display: none; flex-direction: column; gap: 12px; box-sizing: border-box; box-shadow: 0 -10px 40px rgba(0,0,0,0.7); }
 .popover.show { display: flex; animation: popoverSlideUp 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
 @keyframes popoverSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .popover-word { font-family: "Times New Roman", serif; font-size: 20px; font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 8px; color: var(--text-main); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
@@ -209,7 +233,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 #feedbackUserAns, #feedbackCorrectAns { font-size: 13px !important; word-break: break-word; }
 #feedbackOtherAns { font-size: 11px !important; word-break: break-word; }
 .game-scrollable-content { max-height: calc(100vh - 160px); overflow-y: auto; padding-bottom: 24px; }
-.game-scrollable-content::-webkit-scrollbar { display: none; } 
+.game-scrollable-content::-webkit-scrollbar { display: none; } /* 🌟 スクロールバー非表示による美麗化 */
 .game-header-console-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; position: relative; z-index: 50; }
 .game-finish-inline-btn { height: 38px; padding: 0 16px; border: 1px solid var(--cosmic-cyan); background: linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(192, 132, 252, 0.2) 100%); color: #FFFFFF; font-size: 12px; font-weight: 700; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 0 12px rgba(0, 240, 255, 0.4); text-shadow: 0 0 4px #00F0FF; transition: all 0.2s ease; }
 .game-finish-inline-btn:active { transform: scale(0.95); }
@@ -247,7 +271,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* ==========================================================================
-   🌟 新マルチバトルUI用 追加CSS (省スペース＆横長ボスバー版)
+   🎮 新マルチバトルUI用 追加CSS (省スペース＆横長ボスバー版)
    ========================================================================= */
 
 /* ボスの横型HPバー（画面上部） */
@@ -267,7 +291,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     left: 0;
     height: 100%;
     background: linear-gradient(90deg, #7f1d1d, #ef4444);
-    transform-origin: left !important; 
+    transform-origin: left !important; /* 🌟 左詰め起算点減少の厳格保証 */
     transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
 }
@@ -309,13 +333,14 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
    🌟 パーティエリア（横一列・顔アイコン逆順フレックス固定）
    ========================================================================= */
 
-/* パーティ・ステータス全体の枠 (背景の透明度を上げてスッキリ化) */
+/* パーティ・ステータス全体の枠 */
 .multi-party-status-area {
-    background: rgba(15, 23, 42, 0.3) !important;
-    border: none !important;
-    box-shadow: none !important;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(236, 72, 153, 0.4);
+    border-radius: 12px;
+    box-shadow: 0 0 15px rgba(236,72,153,0.15) inset, 0 4px 15px rgba(0,0,0,0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 /* 仲間キャラを横に広げて並べるグリッド */
@@ -324,57 +349,32 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     justify-content: space-around;
     gap: 8px;
     align-items: flex-end;
-    box-sizing: border-box;
-    width: 100% !important;
 }
 
-/* 🌟 改修：新しいコンボ、顔、装備、名前、HPバーの縦並びをCSSから強固に制御する構造 */
+/* 各キャラのコンテナ構造 */
 .multi-party-member {
     position: relative;
     display: flex;
-    flex-direction: column !important; /* 新指定順：上から配置 */
+    /* 🌟 改良：縦方向を逆転させることでHTML構造に依らず「顔が上、ステータスが下」をCSSから絶対固定する */
+    flex-direction: column-reverse;
     align-items: center;
     flex: 1;
     max-width: 80px; 
-    box-sizing: border-box;
-}
-
-/* 🌟 動的コンボテキスト用のラベル配置 */
-.player-slot-combo-lbl {
-    font-size: 11px;
-    font-weight: 900;
-    color: #FBBF24;
-    text-shadow: 0 0 5px #F59E0B;
-    margin-bottom: 2px;
-    height: 14px; /* 高さを確保してガタつきを防止 */
-    text-align: center;
-    white-space: nowrap;
 }
 
 /* キャラの顔アイコン枠 */
 .multi-party-icon {
     width: 60px;
     height: 60px;
-    background: rgba(0,0,0,0.5) !important;
-    border: 1px solid rgba(255,255,255,0.2) !important;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.5) !important;
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 32px;
     margin-bottom: 4px;
     overflow: hidden;
-    border-radius: 50% !important; /* 円形化 */
-}
-
-/* 🌟 新設：装備スロット2つを横一列に並べる受け皿 */
-.player-slot-equip-row {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 4px;
-    justify-content: center;
-    align-items: center;
-    height: 20px;
 }
 
 /* キャラに直接ポップアップ（被ダメージ・V字用） */
@@ -406,6 +406,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     text-shadow: 2px 2px 0 #FFF, -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF;
 }
 
+/* 🌟 追加要件：解答成功時にプレイヤーカラーをまとってボスへ高速追従巡航する吹き出しレイアウト */
 .popup-bubble-flying-atk {
     position: fixed;
     background: white;
@@ -423,6 +424,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     animation: flyToBossTrack 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
 
+/* 吹き出しのインジケータ尾 */
 .popup-bubble-flying-atk::after {
     content: '';
     position: absolute;
@@ -477,6 +479,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     100% { transform: scale(1); filter: none; }
 }
 
+/* 攻撃モーションを右ではなく「上」へ指定時間(0.5s)で跳ね上げる */
 .companion-attack-active { animation: companionDash 0.5s ease-in-out; }
 @keyframes companionDash { 
     0% { transform: translateY(0) scale(1); } 
@@ -488,27 +491,26 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .multi-party-hp-bar {
     width: 100%;
     height: 5px;
-    background: rgba(0, 0, 0, 0.4) !important;
+    background: rgba(0,0,0,0.8);
     border: 1px solid rgba(255,255,255,0.2);
     border-radius: 4px;
     overflow: hidden;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
-    margin-top: 4px;
     margin-bottom: 2px;
 }
 .multi-party-hp-fill {
     height: 100%;
     background: linear-gradient(90deg, #10B981, #34D399);
     width: 100%;
-    transform-origin: left !important; 
+    transform-origin: left !important; /* 🌟 左詰め起点減少の厳格保証 */
     transition: width 0.3s ease;
     box-shadow: 0 0 5px #10B981;
 }
 
-/* キャラ・武器・防具のアイコン枠 */
+/* キャラ・武器・防具のアイコン */
 .multi-equip-icon {
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.4) !important;
+    background: rgba(0,0,0,0.5);
     border: 1px solid rgba(255,255,255,0.2);
     display: flex;
     align-items: center;
@@ -516,6 +518,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     box-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
+/* 🌟 バーのコズミック構造体内部へ完全にテキストを重ね合わせる調整 */
 .inner-text-hp-bar {
     display: flex;
     align-items: center;
@@ -536,8 +539,9 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     letter-spacing: 0.5px;
 }
 
+/* 共通バーのベース枠 */
 .multi-hp-bar {
-    background: rgba(0, 0, 0, 0.4) !important;
+    background: rgba(0,0,0,0.6);
     border-radius: 6px;
     overflow: hidden;
     border: 1px solid rgba(255,255,255,0.2);
@@ -550,11 +554,12 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     height: 100%;
     background: linear-gradient(90deg, #F59E0B, #EF4444, #8B5CF6, #3B82F6, #10B981, #F59E0B);
     background-size: 200% 100%;
-    transform-origin: left !important; 
+    transform-origin: left !important; /* 🌟 左詰め起算点蓄積の厳格保証 */
     transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
 }
 
+/* ゲージMAX時に虹色に輝くアニメーション */
 .multi-limit-fill.max {
     animation: rainbowGlow 2s linear infinite;
     box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
@@ -565,11 +570,12 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     100% { background-position: 200% 50%; }
 }
 
+/* 🌟 追加要件：2コンボ以上発生中、下部ナビバー等を含むアプリ最外周全体を包み込んでゴールド明滅するネオンレイヤー */
 .combo-sparkle-overlay {
     position: fixed;
     top: 0; left: 0; width: 100vw; height: 100vh;
     pointer-events: none;
-    z-index: 6500 !important; 
+    z-index: 6500 !important; /* ナビバーの z-index: 4000 を完全に包含する最前面 */
     box-shadow: inset 0 0 0px transparent;
     opacity: 0;
     transition: opacity 0.3s ease, box-shadow 0.3s ease;
@@ -583,114 +589,102 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     100% { box-shadow: inset 0 0 35px rgba(251, 191, 36, 0.7), 0 0 15px rgba(251, 191, 36, 0.4) inset; }
 }
 
-/* 🌟 フリック入力エリア (枠を完全に背景透過、横幅見切れを完全解消) */
+/* フリック入力エリア */
 .multi-flick-area { 
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    position: relative; 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    padding-top: 0; 
-    padding-bottom: 0; 
-    overflow: visible; 
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    box-sizing: border-box;
-    width: 100vw !important; /* 画面に完全ロック */
+    background: radial-gradient(circle at center, rgba(15,23,42,0.2) 0%, rgba(7,11,25,0.4) 100%); 
+    border-radius: 16px; border: 1px solid var(--admin-accent); position: relative; 
+    box-shadow: 0 0 25px rgba(236,72,153,0.3), inset 0 0 30px rgba(236,72,153,0.1); 
+    display: flex; flex-direction: column; align-items: center; 
+    padding-top: 6px; padding-bottom: 8px; 
+    overflow: hidden; 
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); 
 }
-.multi-flick-area::before { display: none !important; }
+.multi-flick-area::before { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: linear-gradient(rgba(236,72,153,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(236,72,153,0.1) 1px, transparent 1px); background-size: 20px 20px; pointer-events: none; z-index: 0; }
+.multi-question-header-panel { text-align: center; margin-bottom: 4px; z-index: 10; }
+.multi-quest-lbl { font-size: 9px; color: var(--cosmic-purple-light); font-weight: 800; letter-spacing: 1px; }
 
-/* 見切れ防止用の左右パディング安全仕様 */
-.flick-pad-container { 
-    position: relative; 
-    width: 100%; 
-    flex: 1; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    z-index: 10; 
-    box-sizing: border-box;
-    padding: 0 16px !important; /* クッションを確保 */
-}
+.flick-pad-container { position: relative; width: 100%; flex: 1; display: flex; align-items: center; justify-content: center; z-index: 10; }
+.multi-grid-3x3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 100%; max-width: 280px; margin: 0 auto; padding: 2px; }
 
-/* 3x3グリッド幅 */
-.multi-grid-3x3 { 
-    display: grid; 
-    grid-template-columns: repeat(3, 1fr); 
-    grid-template-rows: repeat(3, 1fr);
-    width: 100% !important; 
-    max-width: 100% !important; 
-    height: 100% !important;
-    box-sizing: border-box;
-    gap: 6px !important;
-}
-
-/* 🌟 改修：フォントを大きく見やすく引き上げ、上下左右中央揃えを完全適用 */
 .flick-choice { 
-    background: rgba(15, 23, 42, 0.55) !important; 
+    background: rgba(30, 41, 59, 0.25); 
     backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); 
-    border: 1px solid rgba(255,255,255,0.18); border-radius: 12px; 
-    padding: 4px 6px; 
-    text-align: center; 
-    font-size: clamp(10px, 3.2vw, 14px) !important; /* 🌟 基本サイズアップ＋流動調整 */
-    font-weight: 800; 
-    color: #F1F5F9; 
-    display: flex; 
-    align-items: center;      /* 🌟 上下中央揃え */
-    justify-content: center;   /* 🌟 左右中央揃え */
-    word-break: break-all; 
-    transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1); 
-    box-shadow: 0 4px 10px rgba(0,0,0,0.6); 
-    text-shadow: 0 1px 2px rgba(0,0,0,0.8); 
-    max-height: 100% !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important; 
-    display: -webkit-box !important;
-    -webkit-line-clamp: 3; 
-    -webkit-box-orient: vertical;
-    line-height: 1.25;
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; 
+    padding: 4px; 
+    text-align: center; font-size: 10px; font-weight: 800; color: #E2E8F0; display: flex; align-items: center; justify-content: center; 
+    min-height: 40px; 
+    word-break: break-word; transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1); box-shadow: 0 4px 10px rgba(0,0,0,0.5); text-shadow: 0 1px 2px rgba(0,0,0,0.8); 
 }
-.flick-choice.highlight { background: rgba(0, 240, 255, 0.35); color: #FFF; box-shadow: 0 0 25px rgba(0, 240, 255, 0.9), inset 0 0 10px rgba(0, 240, 255, 0.5); border: 2px solid #00F0FF; transform: scale(1.06); z-index: 20; text-shadow: 0 0 5px #00F0FF; }
+.flick-choice.highlight { background: rgba(0, 240, 255, 0.25); color: #FFF; box-shadow: 0 0 20px rgba(0, 240, 255, 0.8), inset 0 0 10px rgba(0, 240, 255, 0.4); border: 2px solid #00F0FF; transform: scale(1.1); z-index: 20; text-shadow: 0 0 5px #00F0FF; }
+.flick-choice-center-blank { min-height: 40px; }
+.flick-center-word { font-size: 20px; font-weight: 900; color: white; text-shadow: 0 0 15px rgba(255,255,255,0.8), 0 0 5px rgba(0,240,255,0.5); font-family: "Times New Roman", serif; background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%); padding: 2px 14px; border-radius: 10px; display: inline-block; margin-top: 0; border: 1px solid rgba(0,240,255,0.4); box-shadow: 0 4px 15px rgba(0,0,0,0.5), inset 0 0 10px rgba(0,240,255,0.1); }
 
-/* 中央の問題（単語）を綺麗に配置するためのマス */
-.flick-choice-center-question-box {
-    grid-column: 2;
-    grid-row: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px !important;
-    box-sizing: border-box;
-}
-
-/* 🌟 改修：問題が絶対に改行せず、かつ文字数に合わせて最適サイズになるよう調整 */
-.flick-center-word { 
-    font-size: clamp(10px, 4.5vw, 18px) !important; /* 🌟 動的フォント縮小 */
-    font-weight: 900; 
-    color: #FFFFFF; 
-    text-shadow: 0 0 8px rgba(220, 38, 38, 0.8), 2px 2px 2px #000; 
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-    background: rgba(127, 29, 29, 0.55) !important; 
-    padding: 0 6px !important; 
-    border-radius: 10px; 
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    width: calc(100% - 4px) !important;
-    height: calc(100% - 4px) !important;
-    margin: 2px !important;
-    border: 1.5px solid #DC2626 !important; 
-    box-shadow: 0 0 15px rgba(220, 38, 38, 0.4), inset 0 0 10px rgba(220, 38, 38, 0.2); 
-    box-sizing: border-box !important;
-    white-space: nowrap !important; /* 🌟 絶対に改行させない */
-    overflow: hidden !important;
-    text-overflow: clip !important;
-}
-
+/* 🌟 JS側の座標リセット（left=50%, top=50%）を遅延させないため、アニメーションtransitionは不付与 */
 .flick-weapon-icon { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 28px; pointer-events: none; z-index: 50; filter: drop-shadow(0 0 8px rgba(255,100,0,0.8)); }
 
+/* ==========================================================================
+   🌟 ゲームプレイ中の全画面化（UI非表示）
+   ========================================================================= */
 body.in-game-active .app-header { display: none !important; }
 body.in-game-active .nav-bar { display: none !important; }
 body.in-game-active .container { padding-top: 16px !important; padding-bottom: 16px !important; }
+
+/* 🌟 ゲームタブ横スワイプ用のスクロールバー非表示設定 */
+.game-swipe-container::-webkit-scrollbar {
+    display: none;
+}
+.game-swipe-container {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* 🌟 マルチバトルスタートボタン（ネオンレッド） */
+.multi-start-btn {
+    background: transparent;
+    color: #EF4444;
+    font-family: 'Times New Roman', serif;
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    border: 2px solid #EF4444;
+    padding: 12px 48px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-shadow: 0 0 10px #EF4444, 0 0 20px #EF4444;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4), inset 0 0 15px rgba(239, 68, 68, 0.4);
+    transition: all 0.2s ease;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.multi-start-btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.8), inset 0 0 25px rgba(239, 68, 68, 0.8);
+}
+
+/* 🌟 単語の迷宮 タイトル装飾 */
+.tower-title-container {
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    width: 100%;
+    pointer-events: none;
+}
+.tower-title-text {
+    font-family: 'Times New Roman', serif;
+    font-size: 32px;
+    font-weight: 900;
+    color: #DC2626;
+    letter-spacing: 12px;
+    text-shadow: 0 4px 15px rgba(0, 0, 0, 0.9), 0 1px 3px rgba(0, 0, 0, 0.8);
+    margin-left: 12px; /* letter-spacingによる中央ズレの補正 */
+}
+.tower-title-line {
+    margin: 10px auto 0 auto;
+    width: 60%;
+    max-width: 240px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, #DC2626 50%, transparent 100%);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.8);
+}
