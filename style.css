@@ -733,7 +733,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     background: none !important;
     border: none !important;
     box-shadow: none !important;
-    height: 300px !important;
+    height: 160px !important; /* 🌟 上下の取りすぎな余白を消すため、高さを300pxから160pxへ最適スリム化 */
     padding: 0 !important;
     display: flex !important;
     align-items: center !important;
@@ -745,7 +745,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     display: none !important;
 }
 #multiModeDisplayImage {
-    height: 280px !important;
+    height: 150px !important; /* 🌟 エリアの縮小に合わせ、画像自体の高さも280pxから150pxへジャストフィット同期 */
     width: 100% !important;
     object-fit: contain !important;
     pointer-events: none;
@@ -961,7 +961,7 @@ body.in-game-active #game-result-screen:not([style*="display: none"])::before {
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95) !important;
 }
 
-/* 🌟 プレイ中画面：固有の石板化微調整 */
+/* 🌟 プレイ中画面：固有 of 石板化微調整 */
 #game-play-screen .game-unified-console {
     height: 54px !important;
     padding: 0 32px !important;

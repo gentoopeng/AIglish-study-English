@@ -111,7 +111,7 @@
                 <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">🏅 称号の変更</div>
                 <select id="sideSelectTitle" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px; background:var(--input-bg); color:white;">
                     <option value="称号なし">称号なし</option>
-                    <option value="単語の探求者">単語の探求者</option>
+                    <option value="単語の探求者">単語 openings</option>
                     <option value="シスタマスター">シスタマスター</option>
                     <option value="解読の達人">解読の達人</option>
                 </select>
@@ -360,9 +360,50 @@
                             <div class="tower-title-text">単語の迷宮</div>
                             <div class="tower-title-line"></div>
                         </div>
-                        <button class="multi-start-btn" onclick="showMultiBattleSetup()">START</button>
+                        <button class="multi-start-btn" onclick="showMultiBattleChoice()">START</button>
                     </div>
 
+                </div>
+
+                <!-- 🌟 新設：マルチ選択画面（結成 or 参加） -->
+                <div id="multi-battle-choice-screen" style="display:none; height:100%;">
+                    <div class="card game-mode-card game-cosmic-glow-box" style="padding: 20px 16px;">
+                        <h2 style="color:var(--cosmic-cyan); justify-content:center; margin-bottom:20px; font-size:18px;">
+                            <i data-lucide="users"></i> パーティ選択
+                        </h2>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            <button class="modern-btn" onclick="showMultiSetup()">チームを結成する</button>
+                            <button class="modern-btn" onclick="showMultiTeamList()">チームに参加する</button>
+                        </div>
+                        <button class="game-finish-inline-btn" style="margin: 24px auto 0 auto; background:none; border:none; box-shadow:none;" onclick="cancelMultiBattleChoice()">
+                            <i data-lucide="arrow-left" size="12"></i> 戻る
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 🌟 新設：チーム一覧画面 -->
+                <div id="multi-battle-team-list-screen" style="display:none; height:100%;">
+                    <div class="card game-mode-card game-cosmic-glow-box" style="padding: 20px 16px;">
+                        <h2 style="color:var(--cosmic-cyan); justify-content:center; margin-bottom:12px; font-size:18px;">
+                            <i data-lucide="list"></i> 募集中チーム一覧
+                        </h2>
+                        <button class="list-action-link" style="margin-bottom:16px; width:100%; text-align:center; height:32px;" onclick="alert('部屋ルーム情報を更新しました！')">
+                            <i data-lucide="refresh-cw" size="12" style="vertical-align: middle;"></i> 部屋情報を更新する
+                        </button>
+                        <div style="display:flex; flex-direction:column; gap:10px; width:100%; max-height:220px; overflow-y:auto; padding-right:4px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
+                                <span style="font-size:13px; font-weight:bold; color:white;">チーム・タンゴン (2/4人)</span>
+                                <button class="list-action-link" style="background:var(--cosmic-cyan); color:black; border:none; font-weight:bold;" onclick="joinMultiTeam('チーム・タンゴン')">参加</button>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
+                                <span style="font-size:13px; font-weight:bold; color:white;">コズミック部屋 (1/2人)</span>
+                                <button class="list-action-link" style="background:var(--cosmic-cyan); color:black; border:none; font-weight:bold;" onclick="joinMultiTeam('コズミック部屋')">参加</button>
+                            </div>
+                        </div>
+                        <button class="game-finish-inline-btn" style="margin: 24px auto 0 auto; background:none; border:none; box-shadow:none;" onclick="backToMultiChoiceFromList()">
+                            <i data-lucide="arrow-left" size="12"></i> 戻る
+                        </button>
+                    </div>
                 </div>
 
                 <div id="multi-battle-setup-screen" style="display:none; height:100%;">
@@ -372,12 +413,14 @@
                         </h2>
                         
                         <div style="text-align:left; margin-bottom:16px;">
-                            <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">① モード・人数</div>
-                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
-                                <button class="modern-btn" id="btnMultiCoop" onclick="selectMultiMode('coop')">🤝 協力討伐</button>
-                                <button class="modern-btn" id="btnMultiPvp" onclick="selectMultiMode('pvp')">⚔️ 对人戦</button>
+                            <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">① モードスワイプ選択</div>
+                            
+                            <!-- 🌟 スワイプ画像選択コンポーネントエリア -->
+                            <div id="multiModeSwipeArea" class="multi-flick-area">
+                                <img id="multiModeDisplayImage" src="kyouryoku.png" alt="協力戦">
                             </div>
-                            <select id="multiPlayerCount" class="search-input">
+
+                            <select id="multiPlayerCount" class="search-input" style="margin-top: 12px;">
                                 <option value="2">2人パーティ</option><option value="3">3人パーティ</option><option value="4" selected>4人パーティ</option>
                             </select>
                         </div>
@@ -396,9 +439,9 @@
                         </div>
 
                         <button class="modern-btn" style="height:48px; font-size:16px; border-color:var(--admin-accent) !important; color:var(--admin-accent) !important; text-shadow:0 0 5px rgba(236,72,153,0.5);" onclick="startMultiBattleMatching()">
-                            マッチング開始 <i data-lucide="radio-receiver" size="16"></i>
+                            チームを結成する <i data-lucide="radio-receiver" size="16"></i>
                         </button>
-                        <button class="game-finish-inline-btn" style="margin: 16px auto 0 auto; background:none; border:none; box-shadow:none;" onclick="cancelMultiBattleSetup()">
+                        <button class="game-finish-inline-btn" style="margin: 16px auto 0 auto; background:none; border:none; box-shadow:none;" onclick="backToMultiChoiceFromSetup()">
                             <i data-lucide="arrow-left" size="12"></i> 戻る
                         </button>
                     </div>
@@ -407,7 +450,7 @@
                 <div id="multi-battle-matching-screen" style="display:none; height:100%; flex-direction:column; align-items:center; justify-content:center;">
                     <div style="text-align:center;">
                         <i data-lucide="loader" class="animate-spin" size="48" style="color:var(--cosmic-cyan); margin-bottom:16px;"></i>
-                        <div style="font-size:18px; font-weight:800; color:white; margin-bottom:8px;">マッチング中...</div>
+                        <div id="waitingRoomText" style="font-size:18px; font-weight:800; color:white; margin-bottom:8px;">他のプレイヤーの参加を待っています</div>
                         <div style="font-size:12px; color:var(--text-sub);">サーバーとの通信を待機しています</div>
                     </div>
                     <button class="game-finish-inline-btn" style="margin-top:32px;" onclick="cancelMultiBattleMatching()">キャンセル</button>
@@ -444,7 +487,7 @@
 
                     <div class="multi-party-status-area" style="padding: 6px 10px; margin-bottom: 8px; flex-shrink: 0; z-index: 10;">
                         
-                        <!-- 🌟 新設要件：操作者自身のHP状況表示バー（他パーティと混ざらない独立した専用配置） -->
+                        <!-- 🌟 HP状況表示バー -->
                         <div class="multi-player-own-hp-frame" style="margin-bottom: 4px; display: none;" id="multiPlayerOwnHpFrame">
                             <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; position: relative;">
                                 <div class="multi-party-hp-fill" id="multiPlayerOwnHpFill" style="width: 100%;"></div>
