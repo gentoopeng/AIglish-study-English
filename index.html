@@ -312,49 +312,50 @@
                 <h2><i data-lucide="award" size="14"></i> 所属グループ内経験値ランキング</h2>
                 <div id="leaderboardContainer"></div>
             </div>
+
+            <!-- 🌟 移動してきたゲームスコアランキング -->
+            <div class="card" id="gameLeaderboardArea" style="display:flex; flex-direction:column; min-height:350px;">
+                <h2 style="margin-bottom: 12px;"><i data-lucide="trophy" size="14"></i> ゲームスコアランキング</h2>
+                <div class="auth-tabs" style="margin-bottom:8px; padding:2px;">
+                    <button class="auth-tab-btn active" id="lbTabMine" onclick="switchLeaderboard('mine')" style="padding:4px; font-size:11px;">マイベスト</button>
+                </div>
+                
+                <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
+                        <button class="modern-btn" id="lbBtnModeJa" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbMode('ja2en')">英訳</button>
+                        <button class="modern-btn" id="lbBtnModeEn" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('en2ja')">和訳</button>
+                        <button class="modern-btn" id="lbBtnModeMix" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('mixed')">まぜ</button>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px;">
+                        <button class="modern-btn" id="lbBtnDiffNormal" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbDiff('normal')">NML</button>
+                        <button class="modern-btn" id="lbBtnDiffHard" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('hard')">HRD</button>
+                        <button class="modern-btn" id="lbBtnDiffExpert" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('expert')">EXP</button>
+                        <button class="modern-btn" id="lbBtnDiffEndless" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('endless')">∞</button>
+                    </div>
+                </div>
+
+                <div id="leaderboardListContainer" style="flex:1; overflow-y:auto; background:rgba(7, 11, 25, 0.6); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:4px;"></div>
+            </div>
         </div>
 
         <div id="view-game" class="tab-view">
             <div id="cosmic-game-wrapper" class="cosmic-game-bg">
                 
-                <!-- 🌟 縦並びだったソロとマルチを横スワイプに変更、余白を完全に消すため固定配置[span_1](start_span)[span_1](end_span) -->
+                <!-- 🌟 縦並びだったソロとマルチを横スワイプに変更、余白を完全に消すため固定配置 -->
                 <div id="game-start-screen" class="game-swipe-container" style="display:flex; position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10;">
                     
-                    <!-- ソロ学習テストスライド -->
-                    <div style="flex: 0 0 100vw; scroll-snap-align: center; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
-                        <div class="card game-mode-card game-cosmic-glow-box" style="flex:1; display:flex; flex-direction:column; padding:16px; margin-bottom:0; box-sizing: border-box;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <h1 class="game-normal-title" style="margin:0; font-size:18px; text-align:left;"><i data-lucide="book" style="vertical-align:middle;"></i> ソロ学習テスト</h1>
-                                <button class="modern-btn" style="width:auto; padding:0 20px; height:36px;" onclick="showModeSelectScreen()">START</button>
-                            </div>
-                            
-                            <div id="gameLeaderboardArea" style="margin-top:16px; flex:1; display:flex; flex-direction:column; min-height:0;">
-                                <div class="auth-tabs" style="margin-bottom:8px; padding:2px;">
-                                    <button class="auth-tab-btn active" id="lbTabMine" onclick="switchLeaderboard('mine')" style="padding:4px; font-size:11px;">マイベスト</button>
-                                </div>
-                                
-                                <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
-                                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
-                                        <button class="modern-btn" id="lbBtnModeJa" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbMode('ja2en')">英訳</button>
-                                        <button class="modern-btn" id="lbBtnModeEn" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('en2ja')">和訳</button>
-                                        <button class="modern-btn" id="lbBtnModeMix" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('mixed')">まぜ</button>
-                                    </div>
-                                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px;">
-                                        <button class="modern-btn" id="lbBtnDiffNormal" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbDiff('normal')">NML</button>
-                                        <button class="modern-btn" id="lbBtnDiffHard" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('hard')">HRD</button>
-                                        <button class="modern-btn" id="lbBtnDiffExpert" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('expert')">EXP</button>
-                                        <button class="modern-btn" id="lbBtnDiffEndless" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('endless')">∞</button>
-                                    </div>
-                                </div>
-
-                                <div id="leaderboardListContainer" style="flex:1; overflow-y:auto; background:rgba(7, 11, 25, 0.6); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:4px;"></div>
-                            </div>
+                    <!-- 🌟 ソロ学習テストスライド (単語の試練に名称変更・背景をhaikei.pngへ最適化し復元) -->
+                    <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('haikei.png'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 80px; box-sizing: border-box;">
+                        <!-- 🌟 追加：単語の試練 タイトル装飾 -->
+                        <div class="tower-title-container">
+                            <div class="tower-title-text" style="color: var(--cosmic-cyan); text-shadow: 0 4px 15px rgba(0, 240, 255, 0.6);">単語の試練</div>
+                            <div class="tower-title-line" style="background: linear-gradient(90deg, transparent 0%, var(--cosmic-cyan) 50%, transparent 100%);"></div>
                         </div>
+                        <button class="multi-start-btn" style="color: var(--cosmic-cyan); border-color: var(--cosmic-cyan); text-shadow: 0 0 10px var(--cosmic-cyan), 0 0 20px var(--cosmic-cyan); box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 0 15px rgba(0, 240, 255, 0.4);" onclick="showModeSelectScreen()">START</button>
                     </div>
 
-                    <!-- マルチバトルスライド（画像全画面化＆ネオンSTARTボタン、上部表示固定） -->
+                    <!-- マルチバトルスライド -->
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('tawa.png'); background-size: cover; background-position: top center; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding-bottom: 80px; box-sizing: border-box;">
-                        <!-- 🌟 追加：単語の迷宮 タイトル -->
                         <div class="tower-title-container">
                             <div class="tower-title-text">単語の迷宮</div>
                             <div class="tower-title-line"></div>
@@ -497,25 +498,31 @@
                 <div id="game-mode-select-screen" style="display:none; margin-top: 14px;">
                     <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-cyan);">
                         <h2 style="color:white; justify-content:center; margin-bottom:12px;"><i data-lucide="settings-2"></i> 出題モード選択</h2>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                            <button class="modern-btn" style="height:44px; font-size:12px;" onclick="goToDifficultySelect('ja2en')">英訳 (和→英)</button>
-                            <button class="modern-btn" style="height:44px; font-size:12px;" onclick="goToDifficultySelect('en2ja')">和訳 (英→和)</button>
-                            <button class="modern-btn" style="grid-column: span 2; height:44px; font-size:12px;" onclick="goToDifficultySelect('mixed')">まぜまぜ (ランダム)</button>
+                        
+                        <!-- 🌟 縦に並べる形に変更 -->
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            <button class="modern-btn" onclick="goToDifficultySelect('ja2en')">英訳 (和→英)</button>
+                            <button class="modern-btn" onclick="goToDifficultySelect('en2ja')">和訳 (英→和)</button>
+                            <button class="modern-btn" onclick="goToDifficultySelect('mixed')">まぜまぜ (ランダム)</button>
                         </div>
-                        <button class="game-finish-inline-btn" style="margin: 12px auto 0 auto; height:30px; font-size:11px;" onclick="backToGameMenu()"><i data-lucide="arrow-left" size="10"></i> 戻る</button>
+                        
+                        <button class="game-finish-inline-btn" style="margin: 16px auto 0 auto; height:36px; font-size:12px;" onclick="backToGameMenu()"><i data-lucide="arrow-left" size="14"></i> 戻る</button>
                     </div>
                 </div>
 
                 <div id="game-difficulty-select-screen" style="display:none; margin-top: 14px;">
                     <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-purple-light);">
                         <h2 style="color:white; justify-content:center; margin-bottom:12px;"><i data-lucide="zap"></i> 難易度選択</h2>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                            <button class="modern-btn" style="height:44px; font-size:12px;" onclick="startActualGame('normal')">ノーマル (1分)</button>
-                            <button class="modern-btn" style="height:44px; font-size:12px;" onclick="startActualGame('hard')">ハード (3分)</button>
-                            <button class="modern-btn" style="height:44px; font-size:12px;" onclick="startActualGame('expert')">エキスパート</button>
-                            <button class="modern-btn" style="height:44px; font-size:12px;" onclick="startActualGame('endless')">エンドレス</button>
+                        
+                        <!-- 🌟 縦に並べる形に変更 -->
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            <button class="modern-btn" onclick="startActualGame('normal')">ノーマル (1分)</button>
+                            <button class="modern-btn" onclick="startActualGame('hard')">ハード (3分)</button>
+                            <button class="modern-btn" onclick="startActualGame('expert')">エキスパート</button>
+                            <button class="modern-btn" onclick="startActualGame('endless')">エンドレス</button>
                         </div>
-                        <button class="game-finish-inline-btn" style="margin: 12px auto 0 auto; height:30px; font-size:11px;" onclick="backToModeSelect()"><i data-lucide="arrow-left" size="10"></i> モード選択へ戻る</button>
+                        
+                        <button class="game-finish-inline-btn" style="margin: 16px auto 0 auto; height:36px; font-size:12px;" onclick="backToModeSelect()"><i data-lucide="arrow-left" size="14"></i> モード選択へ戻る</button>
                     </div>
                 </div>
 

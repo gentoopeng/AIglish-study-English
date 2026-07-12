@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&display=swap');
+
 :root {
     --bg-color: #0F172A;
     --card-bg: #1E293B; 
@@ -105,7 +107,7 @@ body.in-game-active #multi-battle-play-screen:not([style*="display: none"]) ~ #m
 h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 14px 0; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
 .bar-fill { background: rgba(255, 255, 255, 0.15) !important; width: 100%; border-radius: 4px; transition: height 0.5s ease; }
 .bar-fill.active { background: linear-gradient(to top, var(--accent), #818CF8); }
-.bar-label { color: #FFFFFF !important; font-size: 10px; }
+.bar-width { color: #FFFFFF !important; font-size: 10px; }
 
 .hero-slider-container {
     width: 100%; max-width: 320px; margin: 0 auto 16px auto; overflow: hidden; position: relative;
@@ -235,7 +237,29 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .game-scrollable-content { max-height: calc(100vh - 160px); overflow-y: auto; padding-bottom: 24px; }
 .game-scrollable-content::-webkit-scrollbar { display: none; } /* 🌟 スクロールバー非表示による美麗化 */
 .game-header-console-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; position: relative; z-index: 50; }
-.game-finish-inline-btn { height: 38px; padding: 0 16px; border: 1px solid var(--cosmic-cyan); background: linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(192, 132, 252, 0.2) 100%); color: #FFFFFF; font-size: 12px; font-weight: 700; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 4px; box-shadow: 0 0 12px rgba(0, 240, 255, 0.4); text-shadow: 0 0 4px #00F0FF; transition: all 0.2s ease; }
+
+/* 🌟 改良：「終了」ボタンの青ネオン枠線を完全に廃止し、石板の質感に完全同期 */
+.game-finish-inline-btn { 
+    height: 38px; 
+    padding: 0 16px; 
+    font-family: 'Noto Serif JP', serif !important;
+    background-image: url('stone.png') !important;
+    background-size: 100% 100% !important;
+    background-position: center !important;
+    background-color: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    color: #FFFFFF !important; 
+    font-size: 12px; 
+    font-weight: 700; 
+    cursor: pointer; 
+    display: flex; 
+    align-items: center; 
+    gap: 4px; 
+    box-shadow: none !important;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95), -1px -1px 1px rgba(0, 0, 0, 0.8) !important;
+    transition: all 0.2s ease; 
+}
 .game-finish-inline-btn:active { transform: scale(0.95); }
 .game-cosmic-glow-box { border-image: linear-gradient(135deg, var(--cosmic-cyan), var(--cosmic-purple-light)) 1 !important; border-width: 1.5px !important; border-style: solid !important; border-radius: 1px; box-shadow: 0 0 18px rgba(0, 240, 255, 0.45), 0 0 8px rgba(192, 132, 252, 0.3) !important; }
 .cosmic-neon-text-glow { background: linear-gradient(135deg, #FFF 20%, var(--cosmic-purple-light) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.6)) drop-shadow(0 0 3px rgba(192, 132, 252, 0.5)); }
@@ -247,8 +271,23 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .console-val { font-size: 18px; font-weight: 800; font-family: monospace; }
 .console-divider { width: 1px; height: 18px; background: var(--border); }
 .game-word-display { font-size: 36px; font-weight: 800; text-align: center; margin: 10px 0 18px 0; font-family: "Times New Roman", serif; word-break: break-word; line-height: 1.2; }
-.game-cosmic-input-glow { border: 1px solid var(--cosmic-cyan) !important; border-radius: 8px !important; box-shadow: 0 0 10px rgba(0, 240, 255, 0.15) inset, 0 0 8px rgba(0, 240, 255, 0.2); transition: all 0.2s ease; }
-.game-cosmic-input-glow:focus { box-shadow: 0 0 14px rgba(0, 240, 255, 0.5), 0 0 8px rgba(192, 132, 252, 0.4) !important; border-color: var(--cosmic-purple-light) !important; background: rgba(0,0,0,0.5) !important; }
+
+/* 🌟 改良：解答入力欄のアウトライン・影・背景を完全消去。フォーカス時も含め完全な100%透過固定へ変更 */
+.game-cosmic-input-glow { 
+    border: none !important; 
+    border-radius: 0 !important; 
+    box-shadow: none !important; 
+    outline: none !important;
+    background: transparent !important;
+    color: #FFFFFF !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+.game-cosmic-input-glow:focus { 
+    box-shadow: none !important; 
+    outline: none !important;
+    background: transparent !important; 
+    border: none !important; 
+}
 
 .giant-judgment-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transform: scale(1.05); background: rgba(7, 11, 25, 0.85) !important; z-index: 1000 !important; transition: all 0.15s ease-out; border-radius: 12px; }
 .giant-judgment-overlay.show { opacity: 1; transform: scale(1); }
@@ -687,4 +726,348 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     height: 1px;
     background: linear-gradient(90deg, transparent 0%, #DC2626 50%, transparent 100%);
     box-shadow: 0 2px 5px rgba(0,0,0,0.8);
+}
+
+/* 🌟 マルチプレイのモード選択スワイプエリア（限界まで画像拡大・判定最適化） */
+#multiModeSwipeArea.multi-flick-area {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    height: 300px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: relative !important;
+    overflow: visible !important;
+}
+#multiModeSwipeArea.multi-flick-area::before {
+    display: none !important;
+}
+#multiModeDisplayImage {
+    height: 280px !important;
+    width: 100% !important;
+    object-fit: contain !important;
+    pointer-events: none;
+}
+
+/* 🌟 シングルプレイ：モード選択・難易度選択の石板風巨大ボタン */
+#game-mode-select-screen .modern-btn,
+#game-difficulty-select-screen .modern-btn {
+    height: 90px !important; /* 1画面に収まるように高さを固定調整 */
+    width: 100% !important;
+    max-width: 320px !important;
+    margin: 0 auto !important;
+    font-size: 22px !important;
+    font-weight: 900 !important;
+    
+    /* 🌟 トメ・ハネ・ハライが力強く残る「Noto Serif JP」を設定 */
+    font-family: 'Noto Serif JP', serif !important;
+    
+    /* 🌟 彫り込み風テキスト設定（白彫り調に統一） */
+    color: #FFFFFF !important;
+    letter-spacing: 2px !important;
+    text-shadow: 
+        1px 1px 2px rgba(0, 0, 0, 0.95),
+        -1px -1px 1px rgba(0, 0, 0, 0.8) !important;
+        
+    background-image: url('stone.png') !important;
+    background-size: 100% 100% !important;
+    background-position: center !important;
+    background-color: transparent !important;
+    
+    /* 🌟 枠や影を完全に消して石板画像をそのまま見せる */
+    box-shadow: none !important; 
+    border: none !important; 
+    border-radius: 0 !important; 
+    
+    transition: transform 0.1s ease !important;
+    white-space: normal !important;
+    line-height: 1.3 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#game-mode-select-screen .modern-btn:active,
+#game-difficulty-select-screen .modern-btn:active {
+    transform: translateY(3px) scale(0.98) !important;
+    box-shadow: none !important;
+}
+
+/* 戻るボタンの調整 */
+#game-mode-select-screen .game-finish-inline-btn,
+#game-difficulty-select-screen .game-finish-inline-btn {
+    margin-top: 40px !important; 
+}
+
+/* 🌟 シングルプレイ：テスト解答プレイ中の全画面背景化 (haikei.pngに統一) */
+body.in-game-active #game-play-screen:not([style*="display: none"])::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background-image: url('haikei.png');
+    background-size: cover;
+    background-position: center;
+    filter: blur(1px) brightness(0.7);
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* 🌟 仲間UIの縦並び順を通常（顔→バー→名前）に完全復元 */
+.multi-party-member {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    max-width: 80px; 
+}
+
+/* 🌟 シングルプレイ：テスト結果リザルト画面の全画面背景化 (kekka.png・ぼかし少なめ) */
+body.in-game-active #game-result-screen:not([style*="display: none"])::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background-image: url('kekka.png');
+    background-size: cover;
+    background-position: center;
+    filter: blur(0.5px) brightness(0.7);
+    z-index: -1;
+    pointer-events: none;
+}
+
+/* 🌟 シングルプレイ：リザルト画面内の外枠カード自体を非表示にし全画面化、およびネオン感の完全排除 */
+#game-result-screen {
+    position: fixed !important;
+    top: 56px !important;
+    bottom: 60px !important;
+    left: 0 !important;
+    width: 100vw !important;
+    z-index: 35 !important;
+    overflow-y: auto !important;
+    padding: 20px 24px !important;
+    box-sizing: border-box !important;
+}
+
+#game-result-screen .game-result-card.card {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    text-shadow: none !important;
+}
+
+/* 🌟 シングルプレイ：リザルト画面 ＆ プレイ中画面内のあらゆる要素を石板(stone.png)化 */
+#game-result-screen h2,
+#game-result-screen .stat-box,
+#game-result-screen h3.cosmic-list-title,
+#game-result-screen .cosmic-history-scroll,
+#game-result-screen .modern-btn,
+#game-play-screen .game-unified-console,
+#game-play-screen .game-main-play-card,
+#game-play-screen #feedbackContent,
+#game-play-screen .modern-btn {
+    width: 100% !important;
+    max-width: 320px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    font-family: 'Noto Serif JP', serif !important;
+    background-image: url('stone.png') !important;
+    background-size: 100% 100% !important;
+    background-position: center !important;
+    background-color: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    
+    /* 白彫り調の雰囲気重視な高級文字表現（ネオン排除、はみ出しマージン徹底防衛） */
+    color: #FFFFFF !important;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95), -1px -1px 1px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* 各パーツの固有レイアウト調整（左右はみ出し防止用の内側余白を大幅に拡張固定） */
+#game-result-screen h2 {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 54px !important;
+    font-size: 24px !important;
+    font-weight: 900 !important;
+    letter-spacing: 2px !important;
+    margin-bottom: 16px !important;
+}
+
+/* スコア表示グリッドを石板に馴染む縦並びリスト状に最適化 */
+.cosmic-stats-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    margin-bottom: 16px !important;
+}
+
+#game-result-screen .stat-box {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    height: 48px !important;
+    /* 🌟 改良：単語と数値を真ん中に寄せるため、左右余白（padding）を 32px から 64px へ大幅拡張 */
+    padding: 0 64px !important; 
+}
+
+#game-result-screen .stat-lbl {
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    color: #E2E8F0 !important; /* 読みやすい明るい白 */
+    text-shadow: inherit !important;
+}
+
+#game-result-screen .stat-val {
+    font-size: 18px !important;
+    font-weight: 900 !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: initial !important;
+    color: #FFFFFF !important; /* 黄色を完全に排除し、純白化 */
+    text-shadow: inherit !important;
+    filter: none !important;
+}
+
+/* 🌟 改良：「1 2 LOG」の細い石板見出し（h3.cosmic-list-title）を丸ごと非表示消去 */
+#game-result-screen h3.cosmic-list-title {
+    display: none !important;
+}
+
+#game-result-screen .cosmic-history-scroll {
+    max-height: 180px !important;
+    overflow-y: auto !important;
+    /* 🌟 改良：ログ内の単語も真ん中へ寄せるため、左右余白（padding）を 28px から 48px へ拡張 */
+    padding: 14px 48px !important; 
+    margin-bottom: 24px !important;
+}
+
+/* 履歴ログ内のテキスト色も石板の世界観に完全同期 */
+#game-result-screen .cosmic-history-item,
+#game-result-screen .cosmic-history-item div,
+#game-result-screen .cosmic-history-item span {
+    font-family: 'Noto Serif JP', serif !important;
+    color: #FFFFFF !important;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95) !important;
+}
+
+/* 🌟 プレイ中画面：固有の石板化微調整 */
+#game-play-screen .game-unified-console {
+    height: 54px !important;
+    padding: 0 32px !important;
+}
+
+#game-play-screen .console-label {
+    color: #E2E8F0 !important;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.95) !important;
+}
+
+#game-play-screen .console-val {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: initial !important;
+    color: #FFFFFF !important;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.95) !important;
+}
+
+#game-play-screen .console-divider {
+    background: rgba(0, 0, 0, 0.4) !important;
+}
+
+#game-play-screen .game-main-play-card {
+    padding: 24px 28px !important; /* ガード余白 */
+}
+
+/* 中央問題テキストの色 */
+#game-play-screen .game-word-display {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: initial !important;
+    color: #FFFFFF !important;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.95) !important;
+    filter: none !important;
+    font-family: 'Noto Serif JP', serif !important;
+}
+
+/* 🌟 改良：右側のペンギンキャラクターの青いネオン枠線を完全消去 */
+#gameActiveCharacterContainer {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+/* 🌟 改良：詳細フィードバック枠（解説石板）の横幅と強力な配置ロックを適用し、下の「次の問題へ」ボタンとぴったり同調 */
+#game-play-screen #feedbackContent {
+    width: 100% !important;
+    max-width: 320px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 20px 24px 75px 24px !important; /* ボタンと完全に重なるよう余白を一致 */
+}
+
+#game-play-screen #feedbackContent div {
+    color: #FFFFFF !important;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95) !important;
+}
+
+#game-play-screen #feedbackContent .title-label {
+    color: #E2E8F0 !important;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.9) !important;
+}
+
+/* 🌟 判定時のオーバーレイ調整（白い背景を完全排除し、まるばつ文字だけを美しく特大描画） */
+#game-play-screen .giant-judgment-overlay {
+    background: none !important; /* 白い背景はいらない、完全透明化 */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+#game-play-screen .giant-judgment-overlay .giant-mark,
+#game-play-screen .giant-judgment-overlay .giant-text {
+    font-family: 'Noto Serif JP', serif !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: initial !important;
+}
+
+#game-play-screen .giant-judgment-overlay .giant-mark {
+    font-size: 110px !important; /* 存在感のある特大サイズ */
+}
+
+#game-play-screen .giant-judgment-overlay.correct .giant-mark,
+#game-play-screen .giant-judgment-overlay.correct .giant-text {
+    color: #10B981 !important; /* 漆黒に映える鮮明な緑 */
+    text-shadow: 0 0 20px rgba(16, 185, 129, 0.8), 2px 2px 4px #000000 !important;
+}
+
+#game-play-screen .giant-judgment-overlay.incorrect .giant-mark,
+#game-play-screen .giant-judgment-overlay.incorrect .giant-text {
+    color: #EF4444 !important; /* 漆黒に映える鮮明な赤 */
+    text-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 2px 2px 4px #000000 !important;
+}
+
+/* ボタン */
+#game-result-screen .modern-btn,
+#game-play-screen .modern-btn {
+    height: 50px !important;
+    font-size: 16px !important;
+    font-weight: 900 !important;
+    letter-spacing: 1px !important;
+}
+
+#game-result-screen .modern-btn:active,
+#game-play-screen .modern-btn:active {
+    transform: translateY(2px) !important;
 }

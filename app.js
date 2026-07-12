@@ -71,6 +71,9 @@ let flickStartY = 0;
 let isFlicking = false;
 let currentFlickChoice = -1;
 
+// 🌟 モードスワイプ用の変数
+let modeSwipeStartX = 0;
+
 // ==========================================================================
 // 🌟 魔法（関数）の完全グローバル登録
 // ==========================================================================
@@ -121,7 +124,10 @@ window.migrateVocabData = function(words) {
 };
 
 window.formatWordForDisplay = function(str) {
-    return str.replace(/(動|名|形|副|代|接|前|自動|他動)[:：]\s*/g, '')
+    return str.replace(/[;；].*/g, '')
+              .replace(/\([^)]*\)/g, '')
+              .replace(/（[^）]*）/g, '')
+              .replace(/(動|名|形|副|代|接|前|自動|他動)[:：]\s*/g, '')
               .replace(/〜[をにがとへでや]\s*/g, '')
               .replace(/^[ ,　]+/, '')
               .trim();
@@ -832,7 +838,7 @@ window.showCustomSaveBookshelfPrompt = function(text, title) {
         if (folder === 'new_folder') { folder = newFolderInput.value.trim(); if (!folder) folder = "未分類"; }
         if(!myFolders.includes(folder)) { myFolders.push(folder); localStorage.setItem('myFolders', JSON.stringify(myFolders)); }
         if(myBookshelf.some(item => item.text === text && item.folder === folder)) { alert("すでに保存されています！"); document.body.removeChild(overlay); return; }
-        myBookshelf.push({ id: Date.now(), folder: folder, title: title || "無題のテキスト", text: text });
+        myBookshelf.push({ id: Date.now(), folder: folder, title: title || "無題 Graves", text: text });
         localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); alert(`保存しました！`); window.renderBookshelf(); document.body.removeChild(overlay);
     };
 };
@@ -1280,8 +1286,8 @@ window.renderMultiParty = function() {
                 </div>
                 <!-- 4. 名前 -->
                 <div style="font-size:8px; color:${color}; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; text-align:center;">${m.name}</div>
-                <!-- 5. HP (アイコン・パーセントなし) -->
-                <div class="multi-party-hp-bar" style="width: 100%; height: 5px; background: rgba(0,0,0,0.8); border: 1px solid ${m.borderColor}; box-shadow: 0 0 5px ${m.shadowColor}; border-radius: 4px; overflow: hidden;">
+                <!-- 5. HP -->
+                <div class="multi-party-hp-bar" style="width: 100%; height: 5px; background: rgba(0,0,0,0.8); border: 1px solid ${m.borderColor}; box-shadow: 0 0 5px ${m.shadowColor}; border-radius: 4px; overflow: hidden; display: flex; justify-content: flex-start;">
                     <div class="multi-party-hp-fill" id="partyMemberHpFill-${m.id}" style="width:${hpPercent}%; height: 100%; background: linear-gradient(90deg, #10B981, #34D399); transform-origin:left !important;"></div>
                 </div>
             </div>`;
@@ -1314,43 +1320,112 @@ window.showCharacterPopup = function(memberId, amount, type) {
     }
 };
 
-window.showMultiBattleSetup = function() { 
+window.showMultiBattleChoice = function() { 
     if (vocabList.length === 0) {
         alert("⚠️ 単語帳が空のため、お試し用の単語を自動追加してバトル画面を開きます！");
         vocabList.push({num: "1", word: "apple", meanings: [{id: "1-0", text: "りんご", status: "none", history: []}], sub: "", status: "none", history: []});
         window.saveVocabToStorage(); window.renderVocabList();
     }
-    window.proceedToMultiSetup();
-};
-
-window.proceedToMultiSetup = function() {
     const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'none';
     const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'none';
-    document.getElementById('multi-battle-setup-screen').style.display = 'block';
+    
+    document.getElementById('multi-battle-choice-screen').style.display = 'block';
+    document.getElementById('multi-battle-team-list-screen').style.display = 'none';
+    document.getElementById('multi-battle-setup-screen').style.display = 'none';
     document.getElementById('multi-battle-matching-screen').style.display = 'none';
     document.getElementById('multi-battle-play-screen').style.display = 'none';
-    window.selectMultiMode('coop');
+
+    window.initMultiModeSwipe(); // 🌟 モード切り替え選択画面が開いた瞬間にスワイプイベントを初期化・紐付け！
 };
 
-window.selectMultiMode = function(mode) { 
-    currentMultiMode = mode; let btnC = document.getElementById('btnMultiCoop'), btnP = document.getElementById('btnMultiPvp');
-    if(btnC) { btnC.style.background = ''; btnC.style.boxShadow = ''; } if(btnP) { btnP.style.background = ''; btnP.style.boxShadow = ''; }
-    if (mode === 'coop') { if(btnC) { btnC.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)'; btnC.style.boxShadow = '0 0 20px rgba(0, 240, 255, 0.6)'; } }
-    else { if(btnP) { btnP.style.background = 'linear-gradient(135deg, rgba(236, 72, 153, 0.4) 0%, rgba(244, 63, 94, 0.4) 100%)'; btnP.style.boxShadow = '0 0 20px rgba(236, 72, 153, 0.6)'; } }
-};
-
-window.cancelMultiBattleSetup = function() { 
-    document.getElementById('multi-battle-setup-screen').style.display = 'none'; 
+window.cancelMultiBattleChoice = function() {
+    document.getElementById('multi-battle-choice-screen').style.display = 'none';
     const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'flex'; 
     const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'flex';
 };
 
-window.startMultiBattleMatching = function() { 
-    document.getElementById('multi-battle-setup-screen').style.display = 'none'; document.getElementById('multi-battle-matching-screen').style.display = 'flex'; 
+window.showMultiTeamList = function() {
+    document.getElementById('multi-battle-choice-screen').style.display = 'none';
+    document.getElementById('multi-battle-team-list-screen').style.display = 'block';
+};
+
+window.backToMultiChoiceFromList = function() {
+    document.getElementById('multi-battle-team-list-screen').style.display = 'none';
+    document.getElementById('multi-battle-choice-screen').style.display = 'block';
+};
+
+window.showMultiSetup = function() {
+    document.getElementById('multi-battle-choice-screen').style.display = 'none';
+    document.getElementById('multi-battle-setup-screen').style.display = 'block';
+    window.selectMultiMode('coop');
+};
+
+window.backToMultiChoiceFromSetup = function() {
+    document.getElementById('multi-battle-setup-screen').style.display = 'none';
+    document.getElementById('multi-battle-choice-screen').style.display = 'block';
+};
+
+window.joinMultiTeam = function(teamName) {
+    document.getElementById('multi-battle-team-list-screen').style.display = 'none';
+    document.getElementById('multi-battle-matching-screen').style.display = 'flex';
+    document.getElementById('waitingRoomText').innerText = `${teamName} に参加中...`;
     setTimeout(() => { if (document.getElementById('multi-battle-matching-screen').style.display === 'flex') { window.playIntroVideoBeforeBattle(); } }, 2000); 
 };
 
-window.cancelMultiBattleMatching = function() { document.getElementById('multi-battle-matching-screen').style.display = 'none'; document.getElementById('multi-battle-setup-screen').style.display = 'block'; };
+window.startMultiBattleMatching = function() { 
+    document.getElementById('multi-battle-setup-screen').style.display = 'none'; 
+    document.getElementById('multi-battle-matching-screen').style.display = 'flex'; 
+    document.getElementById('waitingRoomText').innerText = `他のプレイヤーの参加を待っています`;
+    setTimeout(() => { if (document.getElementById('multi-battle-matching-screen').style.display === 'flex') { window.playIntroVideoBeforeBattle(); } }, 2000); 
+};
+
+window.cancelMultiBattleMatching = function() { 
+    document.getElementById('multi-battle-matching-screen').style.display = 'none'; 
+    document.getElementById('multi-battle-choice-screen').style.display = 'block'; 
+};
+
+window.initMultiModeSwipe = function() {
+    const area = document.getElementById('multiModeSwipeArea');
+    if(!area || area.dataset.eventsBound) return;
+    area.dataset.eventsBound = "true";
+    
+    // 🌟 画像やテキストエリアどこを触っても確実に指の動きを検出する処理
+    area.addEventListener('touchstart', function(e) {
+        modeSwipeStartX = e.touches[0].clientX;
+    }, {passive: true});
+    
+    area.addEventListener('touchend', function(e) {
+        let endX = e.changedTouches[0].clientX;
+        let diff = modeSwipeStartX - endX;
+        
+        if (diff > 30) {
+            // 左に引っ張る -> 次のモード（対人戦）
+            window.selectMultiMode('pvp');
+        } else if (diff < -30) {
+            // 右に引っ張る -> 前のモード（協力戦）
+            window.selectMultiMode('coop');
+        }
+    });
+};
+
+window.selectMultiMode = function(mode) { 
+    currentMultiMode = mode; 
+    const imgEl = document.getElementById('multiModeDisplayImage');
+    const swipeArea = document.getElementById('multiModeSwipeArea');
+    if(!imgEl || !swipeArea) return;
+    
+    if (mode === 'coop') { 
+        imgEl.src = 'kyouryoku.png';
+        imgEl.alt = '協力戦';
+        swipeArea.style.borderColor = 'var(--cosmic-cyan)'; 
+        swipeArea.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.5)'; 
+    } else { 
+        imgEl.src = 'taizin.png';
+        imgEl.alt = '対人戦';
+        swipeArea.style.borderColor = 'var(--admin-accent)'; 
+        swipeArea.style.boxShadow = '0 0 15px rgba(236, 72, 153, 0.5)'; 
+    }
+};
 
 window.playIntroVideoBeforeBattle = function() {
     document.getElementById('multi-battle-matching-screen').style.display = 'none'; const overlay = document.getElementById('video-overlay'), video = document.getElementById('introVideo');
@@ -1365,7 +1440,7 @@ window.skipIntroVideo = function() {
 
 window.startMultiBattlePlay = function() {
     document.body.classList.add('in-game-active'); document.getElementById('multi-battle-play-screen').style.display = 'flex'; gameComboCount = 0; multiLimitAmount = 0; 
-    document.getElementById('multiComboCountText').innerText = ""; document.getElementById('multiDamagePopupText').innerText = "";
+    document.getElementById('multiComboCountText').innerText = "0"; document.getElementById('multiDamagePopupText').innerText = "";
     
     // 自画面ステータスコンポーネント消去用
     const multiComboParent = document.getElementById('multiComboCountText') ? document.getElementById('multiComboCountText').parentElement : null;
@@ -1385,8 +1460,12 @@ window.startMultiBattlePlay = function() {
 window.updateMultiHpBars = function() {
     const boss = document.getElementById('multiBossHpFill'); if(boss) boss.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
     const bossTxt = document.getElementById('multiEnemyHpText'); if(bossTxt) { bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))}`; }
+    
     multiPartyMembers.forEach(m => {
-        let fill = document.getElementById(`partyMemberHpFill-${m.id}`); if (fill) fill.style.width = Math.max(0, (m.hp / m.maxHp) * 100) + "%";
+        let fill = document.getElementById(`partyMemberHpFill-${m.id}`); 
+        if (fill) {
+            fill.style.width = Math.max(0, (m.hp / m.maxHp) * 100) + "%";
+        }
         
         // 各メンバーのコンボ表示枠を更新（自分がかつ2コンボ以上のときのみテキストを表示、それ以外は空に）
         let comboEl = document.getElementById(`multiPartyCombo-${m.id}`);
@@ -1394,16 +1473,25 @@ window.updateMultiHpBars = function() {
             comboEl.innerText = (m.isMe && gameComboCount >= 2) ? `${gameComboCount} COMBO!` : "";
         }
     });
+    
     let me = multiPartyMembers.find(m => m.isMe);
     if (me) {
         const ownHpFill = document.getElementById('multiPlayerOwnHpFill'), ownHpText = document.getElementById('multiPlayerOwnHpText');
-        if (ownHpFill) ownHpFill.style.width = Math.max(0, (me.hp / me.maxHp) * 100) + "%"; /* 左端起算の減少同期 */
+        if (ownHpFill) {
+            ownHpFill.style.width = Math.max(0, (me.hp / me.maxHp) * 100) + "%"; /* 左端起算の減少同期 */
+            ownHpFill.parentElement.style.justifyContent = 'flex-start'; /* 🌟 強制左詰めアンカー */
+        }
         if (ownHpText) ownHpText.innerText = `${Math.max(0, Math.floor(me.hp))} / ${me.maxHp}`;
     }
-    const limitFill = document.getElementById('multiLimitGaugeFill'), limitText = document.getElementById('multiLimitGaugeText'), limitPercentNum = Math.floor(Math.max(0, (multiLimitAmount / multiLimitMax) * 100));
-    if (limitFill) { limitFill.style.width = limitPercentNum + "%"; if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max'); else limitFill.classList.remove('max'); } /* 左詰め蓄積 */
     
-    // 🌟 パーセント表示を消去
+    const limitFill = document.getElementById('multiLimitGaugeFill'), limitText = document.getElementById('multiLimitGaugeText'), limitPercentNum = Math.floor(Math.max(0, (multiLimitAmount / multiLimitMax) * 100));
+    if (limitFill) { 
+        limitFill.style.width = limitPercentNum + "%"; 
+        if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max'); else limitFill.classList.remove('max'); 
+        limitFill.parentElement.style.justifyContent = 'flex-start'; /* 🌟 強制左詰めアンカー */
+    }
+    
+    // 🌟 パーメント表示を消去
     if (limitText) { limitText.innerText = ""; }
     
     // 🌟 COMBOコンポーネントエリア消去
@@ -1496,12 +1584,16 @@ window.handleFlickEnd = function(e) {
 
 window.processMultiFlickAnswer = function(choiceIndex) {
     let me = multiPartyMembers.find(m => m.isMe);
+    let q = gameCurrentWordsQueue[gameCurrentIndex];
+    let updatedStatus = "bad";
+
     if(choiceIndex === currentMultiCorrectIndex) {
+        updatedStatus = "ok";
         gameComboCount++; window.createFireballEffect();
         const myThumb = document.querySelector('.multi-party-member:first-child .multi-party-icon');
         if(myThumb) { myThumb.classList.remove('companion-attack-active'); void myThumb.offsetWidth; myThumb.classList.add('companion-attack-active'); setTimeout(() => myThumb.classList.remove('companion-attack-active'), 500); }
         let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5; let damage = 400 * comboMulti;
-        multiBossHp -= damage; 
+        document.getElementById('multiComboCountText').innerText = gameComboCount; multiBossHp -= damage; 
         if(me) window.showCharacterPopup(me.id, `💥 ${damage}`, 'attack');
         multiLimitAmount = Math.min(multiLimitMax, multiLimitAmount + 15); window.updateMultiHpBars();
         
@@ -1511,17 +1603,33 @@ window.processMultiFlickAnswer = function(choiceIndex) {
                 if (multiBossHp <= 0) { clearInterval(gameTimerInterval); setTimeout(() => { alert("🎉 BOSS討伐完了！クエストクリア！"); window.cancelMultiBattlePlay(true); }, 500); }
             }, 500);
         }
-        if (multiBossHp <= 0) { clearInterval(gameTimerInterval); setTimeout(() => { alert("🎉 BOSS討伐完了！クエストクリア！"); window.cancelMultiBattlePlay(true); }, 500); return; }
     } else { 
-        gameComboCount = 0;
+        gameComboCount = 0; document.getElementById('multiComboCountText').innerText = gameComboCount;
         if (me && me.hp > 0) {
             me.hp -= 300; if (me.hp < 0) me.hp = 0;
             let myEl = document.getElementById('partyMember-' + me.id);
             if(myEl) { let iconEl = myEl.querySelector('.multi-party-icon'); if(iconEl) { iconEl.classList.remove('player-damage-flash'); void iconEl.offsetWidth; iconEl.classList.add('player-damage-flash'); } }
             window.showCharacterPopup(me.id, 300, 'damage');
         }
-        if(multiPartyMembers.every(m => m.hp <= 0)) { clearInterval(gameTimerInterval); setTimeout(() => { alert("全滅しました..."); window.cancelMultiBattlePlay(true); }, 500); return; }
     }
+
+    // 🌟 単語帳の理解度ステータスを更新・保存
+    const targetVocab = vocabList.find(w => w.num === q.wordNum);
+    if(targetVocab) {
+        if(targetVocab.meanings.length > 0) {
+            targetVocab.meanings[0].status = updatedStatus;
+            if(!targetVocab.meanings[0].history) targetVocab.meanings[0].history = [];
+            targetVocab.meanings[0].history.push(updatedStatus);
+        }
+        targetVocab.status = updatedStatus;
+        if(!targetVocab.history) targetVocab.history = [];
+        targetVocab.history.push(updatedStatus);
+        window.saveVocabToStorage();
+    }
+
+    if (multiBossHp <= 0) { clearInterval(gameTimerInterval); setTimeout(() => { alert("🎉 BOSS討伐完了！クエストクリア！"); window.cancelMultiBattlePlay(true); }, 500); return; }
+    if(multiPartyMembers.every(m => m.hp <= 0)) { clearInterval(gameTimerInterval); setTimeout(() => { alert("全滅しました..."); window.cancelMultiBattlePlay(true); }, 500); return; }
+
     window.updateMultiHpBars(); gameCurrentIndex++; window.showNextMultiWord();
 };
 
@@ -1548,3 +1656,4 @@ window.addEventListener("scroll", () => {
     const btn = document.getElementById("scrollToTopBtn");
     if(btn) { if(window.scrollY > 300) btn.classList.add("show"); else btn.classList.remove("show"); }
 });
+
