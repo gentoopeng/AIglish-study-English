@@ -1233,9 +1233,11 @@ window.updatePartySlotsUi = function() {
     if (activeWeapon === 'fire_sword') { weaponImgFrame.innerHTML = "🔥🗡️"; weaponNameLbl.innerText = "業火の大剣"; } else { weaponImgFrame.innerHTML = "🗡️"; weaponNameLbl.innerText = "素手"; }
     const armorImgFrame = document.getElementById('slotArmorImgContainer'), armorNameLbl = document.getElementById('slotArmorName');
     if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "🔮🛡️"; armorNameLbl.innerText = "星屑の盾"; } else { armorImgFrame.innerHTML = "🛡️"; armorNameLbl.innerText = "布の服"; }
-    const bChar = document.getElementById('multiEquipCharIcon'); if(bChar) bChar.innerHTML = activeCharacter === 'tangon' ? `<img src="tangon.png" style="width:100%;height:100%;object-fit:cover;border-radius:4px;">` : "👤";
-    const bWep = document.getElementById('multiEquipWeaponIcon'); if(bWep) bWep.innerHTML = activeWeapon === 'fire_sword' ? "🔥" : "🗡️";
-    const bArm = document.getElementById('multiEquipArmorIcon'); if(bArm) bArm.innerHTML = activeArmor === 'cosmic_shield' ? "🔮" : "🛡️";
+    
+    // 🌟 自分の装備・キャラアイコン枠エリアを非表示化
+    const bChar = document.getElementById('multiEquipCharIcon'); if(bChar) bChar.style.display = 'none';
+    const bWep = document.getElementById('multiEquipWeaponIcon'); if(bWep) bWep.style.display = 'none';
+    const bArm = document.getElementById('multiEquipArmorIcon'); if(bArm) bArm.style.display = 'none';
 };
 
 window.initMultiParty = function(playerCount) {
@@ -1254,17 +1256,34 @@ window.renderMultiParty = function() {
     multiPartyMembers.forEach(m => {
         let charImg = m.char === 'tangon' ? `<img src="tangon.png" alt="tangon" style="width:100%;height:100%;object-fit:cover;">` : `👤`;
         let hpPercent = Math.max(0, (m.hp / m.maxHp) * 100);
-        let label = m.isMe ? "YOU" : "ALLY";
         let color = m.isMe ? "var(--cosmic-purple-light)" : "var(--cosmic-cyan)";
         
-        // 🌟 反転フレックスレイアウトCSS対応：顔が上、HPバー・名前が下側に綺麗に固定描画されるカプセル構造を完全生成
+        // 🌟 combo欄の表示判定：自分がかつ2コンボ以上続いている時のみテキストをセット
+        let comboText = "";
+        if (m.isMe && gameComboCount >= 2) {
+            comboText = `${gameComboCount} COMBO!`;
+        }
+
+        // 🌟 flex-direction: column に修正し、上からコンボ・キャラ・装備・名前・HPの順に配置
         let html = `
-            <div class="multi-party-member" id="partyMember-${m.id}">
-                <div class="multi-party-icon" style="background:none !important; border:none !important; box-shadow:none !important;">${charImg}</div>
-                <div class="multi-party-hp-bar" style="border: 1px solid ${m.borderColor}; box-shadow: 0 0 5px ${m.shadowColor};">
-                    <div class="multi-party-hp-fill" id="partyMemberHpFill-${m.id}" style="width:${hpPercent}%; transform-origin:left !important;"></div>
+            <div class="multi-party-member" id="partyMember-${m.id}" style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                <!-- 1. combo -->
+                <div class="multi-party-combo" id="multiPartyCombo-${m.id}" style="font-size: 9px; font-weight: 900; color: #FBBF24; text-shadow: 0 0 4px #F59E0B; min-height: 12px; text-align: center;">
+                    ${comboText}
                 </div>
-                <div style="font-size:8px; color:${color}; font-weight:bold; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; text-align:center;">${m.name}</div>
+                <!-- 2. キャラ -->
+                <div class="multi-party-icon" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: none !important; border: none !important; box-shadow: none !important;">${charImg}</div>
+                <!-- 3. 装備 -->
+                <div class="multi-party-equip-display" style="display: flex; gap: 2px; font-size: 10px; background: rgba(0,0,0,0.4); padding: 1px 4px; border-radius: 4px;">
+                    <span title="Weapon">${m.isMe && activeWeapon === 'fire_sword' ? '🔥' : '🗡️'}</span>
+                    <span title="Armor">${m.isMe && activeArmor === 'cosmic_shield' ? '🔮' : '🛡️'}</span>
+                </div>
+                <!-- 4. 名前 -->
+                <div style="font-size:8px; color:${color}; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; text-align:center;">${m.name}</div>
+                <!-- 5. HP (アイコン・パーセントなし) -->
+                <div class="multi-party-hp-bar" style="width: 100%; height: 5px; background: rgba(0,0,0,0.8); border: 1px solid ${m.borderColor}; box-shadow: 0 0 5px ${m.shadowColor}; border-radius: 4px; overflow: hidden;">
+                    <div class="multi-party-hp-fill" id="partyMemberHpFill-${m.id}" style="width:${hpPercent}%; height: 100%; background: linear-gradient(90deg, #10B981, #34D399); transform-origin:left !important;"></div>
+                </div>
             </div>`;
         container.innerHTML += html;
     });
@@ -1346,7 +1365,12 @@ window.skipIntroVideo = function() {
 
 window.startMultiBattlePlay = function() {
     document.body.classList.add('in-game-active'); document.getElementById('multi-battle-play-screen').style.display = 'flex'; gameComboCount = 0; multiLimitAmount = 0; 
-    document.getElementById('multiComboCountText').innerText = "0"; document.getElementById('multiDamagePopupText').innerText = "";
+    document.getElementById('multiComboCountText').innerText = ""; document.getElementById('multiDamagePopupText').innerText = "";
+    
+    // 自画面ステータスコンポーネント消去用
+    const multiComboParent = document.getElementById('multiComboCountText') ? document.getElementById('multiComboCountText').parentElement : null;
+    if(multiComboParent) multiComboParent.style.display = 'none';
+    
     const sparkleBorder = document.getElementById('combo-sparkle-border'); if(sparkleBorder) sparkleBorder.classList.remove('active');
     const ownHpFrame = document.getElementById('multiPlayerOwnHpFrame'); if(ownHpFrame) ownHpFrame.style.display = 'block';
     const logContainer = document.getElementById('multiBattleLog'); if(logContainer) logContainer.innerHTML = "";
@@ -1363,6 +1387,12 @@ window.updateMultiHpBars = function() {
     const bossTxt = document.getElementById('multiEnemyHpText'); if(bossTxt) { bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))}`; }
     multiPartyMembers.forEach(m => {
         let fill = document.getElementById(`partyMemberHpFill-${m.id}`); if (fill) fill.style.width = Math.max(0, (m.hp / m.maxHp) * 100) + "%";
+        
+        // 各メンバーのコンボ表示枠を更新（自分がかつ2コンボ以上のときのみテキストを表示、それ以外は空に）
+        let comboEl = document.getElementById(`multiPartyCombo-${m.id}`);
+        if (comboEl) {
+            comboEl.innerText = (m.isMe && gameComboCount >= 2) ? `${gameComboCount} COMBO!` : "";
+        }
     });
     let me = multiPartyMembers.find(m => m.isMe);
     if (me) {
@@ -1372,7 +1402,14 @@ window.updateMultiHpBars = function() {
     }
     const limitFill = document.getElementById('multiLimitGaugeFill'), limitText = document.getElementById('multiLimitGaugeText'), limitPercentNum = Math.floor(Math.max(0, (multiLimitAmount / multiLimitMax) * 100));
     if (limitFill) { limitFill.style.width = limitPercentNum + "%"; if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max'); else limitFill.classList.remove('max'); } /* 左詰め蓄積 */
-    if (limitText) { limitText.innerText = limitPercentNum + "%"; }
+    
+    // 🌟 パーセント表示を消去
+    if (limitText) { limitText.innerText = ""; }
+    
+    // 🌟 COMBOコンポーネントエリア消去
+    const multiComboParent = document.getElementById('multiComboCountText') ? document.getElementById('multiComboCountText').parentElement : null;
+    if(multiComboParent) multiComboParent.style.display = 'none';
+
     const sparkleBorder = document.getElementById('combo-sparkle-border');
     if(sparkleBorder) { if(gameComboCount >= 2) sparkleBorder.classList.add('active'); else sparkleBorder.classList.remove('active'); } /* 金色ネオン外枠連動 */
 };
@@ -1464,7 +1501,7 @@ window.processMultiFlickAnswer = function(choiceIndex) {
         const myThumb = document.querySelector('.multi-party-member:first-child .multi-party-icon');
         if(myThumb) { myThumb.classList.remove('companion-attack-active'); void myThumb.offsetWidth; myThumb.classList.add('companion-attack-active'); setTimeout(() => myThumb.classList.remove('companion-attack-active'), 500); }
         let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5; let damage = 400 * comboMulti;
-        document.getElementById('multiComboCountText').innerText = gameComboCount; multiBossHp -= damage; 
+        multiBossHp -= damage; 
         if(me) window.showCharacterPopup(me.id, `💥 ${damage}`, 'attack');
         multiLimitAmount = Math.min(multiLimitMax, multiLimitAmount + 15); window.updateMultiHpBars();
         
@@ -1476,7 +1513,7 @@ window.processMultiFlickAnswer = function(choiceIndex) {
         }
         if (multiBossHp <= 0) { clearInterval(gameTimerInterval); setTimeout(() => { alert("🎉 BOSS討伐完了！クエストクリア！"); window.cancelMultiBattlePlay(true); }, 500); return; }
     } else { 
-        gameComboCount = 0; document.getElementById('multiComboCountText').innerText = gameComboCount;
+        gameComboCount = 0;
         if (me && me.hp > 0) {
             me.hp -= 300; if (me.hp < 0) me.hp = 0;
             let myEl = document.getElementById('partyMember-' + me.id);
