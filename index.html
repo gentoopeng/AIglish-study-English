@@ -111,7 +111,7 @@
                 <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">🏅 称号の変更</div>
                 <select id="sideSelectTitle" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px; background:var(--input-bg); color:white;">
                     <option value="称号なし">称号なし</option>
-                    <option value="単語の探求者">単語 openings</option>
+                    <option value="単語の探求者">単語の探求者</option>
                     <option value="シスタマスター">シスタマスター</option>
                     <option value="解読の達人">解読の達人</option>
                 </select>
@@ -199,9 +199,7 @@
             <div class="card" id="bulkImportToggleSection" style="display: none; border-top: 2px solid var(--accent);">
                 <h2><i data-lucide="file-spreadsheet" size="14"></i> 単語を一括登録・インポートする</h2>
                 <textarea id="bulkWordInput" class="modern-textarea" style="height: 100px;" placeholder="番号:英単語:メイン意味:サブ情報&#10;例:&#10;1:follow:①〜に従う②〜に続く:as follow 次のように..."></textarea>
-                <button class="modern-btn" onclick="handleBulkWordImport()" style="margin-bottom: 16px;">
-                    <i data-lucide="sparkles" size="16"></i> まとめて一括インポート
-                </button>
+                <textarea id="customJapanesetextarea" class="modern-textarea" style="height: 90px;" placeholder="手動で和訳を割り当てたい場合は、英文の行数に合わせて改行しながら入力してください。"></textarea>
 
                 <h2 style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; color: var(--admin-accent);">
                     <i data-lucide="check-square" size="14"></i> 登録単語の一括管理
@@ -344,9 +342,8 @@
                 <!-- 🌟 縦並びだったソロとマルチを横スワイプに変更、余白を完全に消すため固定配置 -->
                 <div id="game-start-screen" class="game-swipe-container" style="display:flex; position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10;">
                     
-                    <!-- 🌟 ソロ学習テストスライド (単語の試練に名称変更・背景をhaikei.pngへ最適化し復元) -->
+                    <!-- 🌟 ソロ学習テストスライド -->
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('haikei.png'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 80px; box-sizing: border-box;">
-                        <!-- 🌟 追加：単語の試練 タイトル装飾 -->
                         <div class="tower-title-container">
                             <div class="tower-title-text" style="color: var(--cosmic-cyan); text-shadow: 0 4px 15px rgba(0, 240, 255, 0.6);">単語の試練</div>
                             <div class="tower-title-line" style="background: linear-gradient(90deg, transparent 0%, var(--cosmic-cyan) 50%, transparent 100%);"></div>
@@ -387,7 +384,7 @@
                         <h2 style="color:var(--cosmic-cyan); justify-content:center; margin-bottom:12px; font-size:18px;">
                             <i data-lucide="list"></i> 募集中チーム一覧
                         </h2>
-                        <button class="list-action-link" style="margin-bottom:16px; width:100%; text-align:center; height:32px;" onclick="alert('部屋ルーム情報を更新しました！')">
+                        <button class="list-action-link" style="margin-bottom:16px; width:100%; text-align:center; height:32px;" onclick="alert('ルーム情報を更新しました！')">
                             <i data-lucide="refresh-cw" size="12" style="vertical-align: middle;"></i> 部屋情報を更新する
                         </button>
                         <div style="display:flex; flex-direction:column; gap:10px; width:100%; max-height:220px; overflow-y:auto; padding-right:4px;">
@@ -413,14 +410,12 @@
                         </h2>
                         
                         <div style="text-align:left; margin-bottom:16px;">
-                            <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">① モードスワイプ選択</div>
-                            
-                            <!-- 🌟 スワイプ画像選択コンポーネントエリア -->
-                            <div id="multiModeSwipeArea" class="multi-flick-area">
-                                <img id="multiModeDisplayImage" src="kyouryoku.png" alt="協力戦">
+                            <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">① モード・人数</div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+                                <button class="modern-btn" id="btnMultiCoop" onclick="selectMultiMode('coop')">🤝 協力討伐</button>
+                                <button class="modern-btn" id="btnMultiPvp" onclick="selectMultiMode('pvp')">⚔️ 对人戦</button>
                             </div>
-
-                            <select id="multiPlayerCount" class="search-input" style="margin-top: 12px;">
+                            <select id="multiPlayerCount" class="search-input">
                                 <option value="2">2人パーティ</option><option value="3">3人パーティ</option><option value="4" selected>4人パーティ</option>
                             </select>
                         </div>
@@ -781,7 +776,7 @@
 
     </div>
 
-    <!-- 🌟 修正：ナビバーのID重複・アンカータイポを完全修正。ライフサイクルがこれで安全に回ります -->
+    <!-- 🌟 ナビバーのID重複・アンカータイポを完全修正。ライフサイクルがこれで安全に回ります -->
     <div class="nav-bar" id="appMainBottomNavBar">
         <button class="nav-item active" id="nav-home" onclick="window.switchTab('home')"><i data-lucide="layout-dashboard" size="18"></i> ホーム</button>
         <button class="nav-item" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>

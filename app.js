@@ -78,6 +78,87 @@ let modeSwipeStartX = 0;
 // 🌟 魔法（関数）の完全グローバル登録
 // ==========================================================================
 
+// 新設：英文解析ボタン押下時に呼び出されるメイン処理関数
+window.startAnalysisWithEmbeddedTitle = function() {
+    const textareaEl = document.getElementById('englishTextarea');
+    if (!textareaEl) return;
+    
+    const rawText = textareaEl.value.trim();
+    if (!rawText) {
+        alert("英文を入力してください");
+        return;
+    }
+    
+    const titleInputEl = document.getElementById('customTextTitle');
+    let assignedTitle = titleInputEl ? titleInputEl.value.trim() : "";
+    
+    if (!assignedTitle) {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        assignedTitle = `${yyyy}/${mm}/${dd} ${hh}:${min}:${ss}`;
+    }
+    
+    window.analyzeText(rawText, assignedTitle);
+};
+
+// 新設：Gemini AIにリクエストを送信して英文・和訳・重要文法をJSONで解析する関数
+window.callGeminiAnalyzer = async function(text) {
+    if (!geminiApiKey) return null;
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+        const prompt = `以下の英文をパースし、指定のJSONスキーマ形式のみで返答してください。余計な説明文やマークダウンの\`\`\`jsonタグは一切含めず、純粋なJSON文字列オブジェクトとして出力してください。
+
+英文:
+${text}
+
+出力JSON形式:
+{
+  "sentences": [
+    {
+      "text": "元の英語の1文（ピリオドまで。前後の空白は詰める）",
+      "translation": "その文の正確な日本語訳",
+      "grammarHighlights": [
+        {
+          "phrase": "文の中で重要、または初心者が躓きやすい実在する単語・熟語・文法フレーズ（正確に一致するもの）",
+          "meaning": "そのフレーズの簡潔な日本語解説・意味"
+        }
+      ]
+    }
+  ]
+}`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }]
+            })
+        });
+
+        if (!response.ok) return null;
+        const data = await response.json();
+        const responseText = data.candidates[0].content.parts[0].text.trim();
+        
+        // マークダウンのコードブロックなどを綺麗にクレンジングしてパース
+        const cleanJsonText = responseText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+        return JSON.parse(cleanJsonText);
+    } catch (e) {
+        console.error("Gemini Analyzer Error:", e);
+        return null;
+    }
+};
+
+// 新設：ソロゲーム内でのAI誤答・別名判定用ダミーセキュリティ関数
+window.callGeminiGameJudge = async function(question, correctAnswer, userAns, mode) {
+    // 現在のコードがクラッシュするのを防ぐためのスタブ実装
+    return { status: "NG", alternatives: "特になし" };
+};
+
 // 🌟 安全対策：起動時の未定義クラッシュを根絶するため、描画関数を最上部で強固に事前ロード
 window.renderLeaderboard = function() { 
     const container = document.getElementById('leaderboardContainer'); 
@@ -756,7 +837,7 @@ window.analyzeText = async function(rawText, assignedTitle = null) {
 
     englishContainer.innerHTML = ''; let totalSummaryJa = "";
     let fallbackSentences = rawText.replace(/\n/g, ' ').match(/[^.?!]+[.?!]+|[^.?!]+$/g) || [rawText];
-    let sentencesData = (aiAnalysisResult && aiAnalysisResult.sentences) ? aiAnalysisResult.sentences : fallbackSentences.map(s => ({ text: s.trim(), translations: "（和訳未取得）", grammarHighlights: [] }));
+    let sentencesData = (aiAnalysisResult && aiAnalysisResult.sentences) ? aiAnalysisResult.sentences : fallbackSentences.map(s => ({ text: s.trim(), translation: "（和訳未取得）", grammarHighlights: [] }));
 
     sentencesData.forEach((sData, sIdx) => {
         let sentenceText = sData.text || ""; if(!sentenceText.trim()) return;
@@ -801,7 +882,10 @@ window.analyzeText = async function(rawText, assignedTitle = null) {
                 wordContainer.appendChild(span);
             });
         });
-        let finalJaText = customJaLines[sIdx] || sData.translations; totalSummaryJa += `${sIdx+1}. ${finalJaText}<br>`;
+        
+        // 🌟 バグ修正：スキーマ指示の 'translations' に完全追従、未取得時はフォールバックに同期
+        let finalJaText = customJaLines[sIdx] || sData.translation || sData.translations || "（和訳未取得）"; 
+        totalSummaryJa += `${sIdx+1}. ${finalJaText}<br>`;
         const jaSpan = document.createElement('span'); jaSpan.className = 'sentence-ja'; jaSpan.innerText = finalJaText; mainContent.appendChild(jaSpan);
         block.appendChild(mainContent); englishContainer.appendChild(block);
     });
@@ -1643,7 +1727,6 @@ window.createFireballEffect = function() {
 // ==========================================================================
 // 🚀 完全同期ライフサイクルブートストラップ初期化 (フライング実行事故を完全防止)
 // ==========================================================================
-
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
         window.loadLocalState(); window.initLucide(); window.initHeroSlider(); window.renderActivityChart();
