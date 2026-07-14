@@ -25,7 +25,7 @@ let activeArmor = "";
 
 // リーダーボード専用のステータス変数
 let currentLbMode = 'ja2en';
-let currentLbDiff = 'normal';
+let currentLbDiff = 'endless';
 let currentLbType = 'mine';
 
 const SHARED_DEFAULT_VOCAB_DATA = [];
@@ -255,7 +255,7 @@ window.formatWordForDisplay = function(str) {
               .replace(/\([^)]*\)/g, '')
               .replace(/（[^）]*）/g, '')
               .replace(/(動|名|形|副|代|接|前|自動|他動)[:：]\s*/g, '')
-              .replace(/〜[突破にがとへでや]\s*/g, '')
+              .replace(/〜[をにがとへでや]\s*/g, '')
               .replace(/^[ ,　]+/, '')
               .trim();
 };
@@ -704,7 +704,7 @@ window.getCardStyleByHistory = function(wordObj) {
     } else {
         const ratio = (avg - 5) / (9 - 5);
         r = Math.round(yellow[0] + (red[0] - yellow[0]) * ratio);
-        g = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio);
+        g = Math.round(yellow[1] + (red[1] - yellow[1]) * ratio);
         b = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio);
     }
     return `background: linear-gradient(135deg, rgba(${r}, ${g}, ${b}, 0.22) 0%, rgba(30, 41, 59, 0.9) 75%);`;
@@ -733,8 +733,6 @@ window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
         }
     }
 };
-
-window.parent = null;
 
 window.coreSystemToggleExpand = function(event, btn) {
     if(event) event.stopPropagation();
@@ -829,7 +827,7 @@ window.saveInlineWordEdit = function(event, wordNum) {
     mInputs.forEach((inp, idx) => {
         const txt = inp.value.trim();
         if(txt) {
-            // 既存 of ステータス等を引き継ぐか新規作成
+            // 既存のステータス等を引き継ぐか新規作成
             const oldM = vocabList[wIdx].meanings[idx];
             updatedMeanings.push({
                 id: oldM ? oldM.id : `${wordNum}-${idx}-${Date.now()}`,
@@ -1129,14 +1127,14 @@ window.renderBookshelf = function() {
         let folderHtml = `<div style="margin-bottom:20px; background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; border:1px solid rgba(255,255,255,0.1);">
             <h3 style="color:var(--cosmic-cyan); font-size:15px; border-bottom:1px dashed rgba(0,240,255,0.3); padding-bottom:6px; margin-top:0; margin-bottom:12px; display:flex; align-items:center; gap:6px;"><i data-lucide="folder" size="16"></i> ${folderName}</h3>`;
         foldersData[folderName].forEach(item => {
-            const escapedText = encodeURIComponent(item.text);
-            const escapedTitle = encodeURIComponent(item.title || "無題");
+            const safeText = item.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+            const safeTitle = item.title ? item.title.replace(/'/g, "\\'").replace(/"/g, "&quot;") : "無題";
             folderHtml += `
                 <div class="list-item-row" style="background:rgba(255,255,255,0.05); padding:10px 14px; border-radius:8px; margin-bottom:8px;">
                     <div class="list-item-title" style="flex:1;"><span><i data-lucide="file-text" size="12" style="color:var(--text-sub); margin-right:4px;"></i>${item.title}</span></div>
                     <div style="display:flex; gap:8px;">
-                        <button class="list-action-link" style="background:var(--accent); border:none;" onclick="window.analyzeText(decodeURIComponent('${escapedText}'), decodeURIComponent('${escapedTitle}'))">開く</button>
-                        <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:#EF4444; padding:4px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteBookshelfConfirm(${item.id})"><i data-lucide="trash-2" size="14"></i></button>
+                        <button class="list-action-link" style="background:var(--accent); border:none;" onclick="window.analyzeText(\`${safeText}\`, '${safeTitle}')">開く</button>
+                        <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:#EF4444; padding:4px; cursor:pointer;" onclick="event.stopPropagation(); event.preventDefault(); window.showCustomDeleteBookshelfConfirm('${item.id}')"><i data-lucide="trash-2" size="14"></i></button>
                     </div>
                 </div>`;
         });
@@ -1145,17 +1143,17 @@ window.renderBookshelf = function() {
     window.initLucide();
 };
 
-window.showCustomDeleteBookshelfConfirm = function(id) {
-    if(confirm("本棚から削除しますか？")) { myBookshelf = myBookshelf.filter(item => item.id !== id); localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); window.renderBookshelf(); }
+window.showCustomDeleteBookshelfConfirm = function(idString) {
+    myBookshelf = myBookshelf.filter(item => String(item.id) !== String(idString)); 
+    localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); 
+    window.renderBookshelf(); 
 };
 
 // 🌟 不具合修正：長文履歴をダイアログ確認付きでローカルストレージから完全消去する高速関数
-window.showCustomDeleteHistoryConfirm = function(id) {
-    if(confirm("履歴から削除しますか？")) { 
-        textHistory = textHistory.filter(h => h.id !== id); 
-        localStorage.setItem('textHistory', JSON.stringify(textHistory)); 
-        window.renderHistoryList(); 
-    }
+window.showCustomDeleteHistoryConfirm = function(idString) {
+    textHistory = textHistory.filter(h => String(h.id) !== String(idString)); 
+    localStorage.setItem('textHistory', JSON.stringify(textHistory)); 
+    window.renderHistoryList(); 
 };
 
 window.renderHistoryList = function() {
@@ -1163,13 +1161,13 @@ window.renderHistoryList = function() {
     if(!container) return; container.innerHTML = '';
     if(textHistory.length === 0) { container.innerHTML = `<div style="color:var(--text-sub); font-size:12px;">ログがありません</div>`; return; }
     textHistory.forEach(h => {
+        const safeText = h.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+        const safeTitle = h.title ? h.title.replace(/'/g, "\\'").replace(/"/g, "&quot;") : "無題";
         const row = document.createElement('div'); row.className = 'list-item-row';
-        const escapedText = encodeURIComponent(h.text);
-        const escapedTitle = encodeURIComponent(h.title || "無題");
         row.innerHTML = `<div class="list-item-title"><span>${h.title}</span></div>
             <div style="display:flex; gap:8px;">
-                <button class="list-action-link" onclick="window.analyzeText(decodeURIComponent('${escapedText}'), decodeURIComponent('${escapedTitle}'))">開く</button>
-                <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:var(--text-sub);" onclick="event.stopPropagation(); window.showCustomDeleteHistoryConfirm(${h.id})"><i data-lucide="trash-2" size="14"></i></button>
+                <button class="list-action-link" onclick="window.analyzeText(\`${safeText}\`, '${safeTitle}')">開く</button>
+                <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:var(--text-sub); padding:4px; cursor:pointer;" onclick="event.stopPropagation(); event.preventDefault(); window.showCustomDeleteHistoryConfirm('${h.id}')"><i data-lucide="trash-2" size="14"></i></button>
             </div>`;
         container.appendChild(row);
     });
@@ -1326,8 +1324,8 @@ window.saveAdminDashboardTitle = function() {
 
 window.saveAdminSystemSettings = function() { window.switchTab('home'); };
 window.logoutToGate = function() { localStorage.clear(); location.reload(); };
-window.resetLeaderboard = function() { if(confirm("ランキング履歴を一括で削除しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['normal', 'hard', 'expert', 'endless'].forEach(d => { localStorage.removeItem(`cosmic_score_${m}_${d}`); }); }); window.renderGameLeaderboard('mine'); } };
-window.resetBestScore = function() { if(confirm("ベストスコアを0に戻しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['normal', 'hard', 'expert', 'endless'].forEach(d => { localStorage.removeItem(`cosmic_best_${m}_${d}`); }); }); } };
+window.resetLeaderboard = function() { if(confirm("ランキング履歴を一括で削除しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['endless'].forEach(d => { localStorage.removeItem(`cosmic_score_${m}_${d}`); }); }); window.renderGameLeaderboard('mine'); } };
+window.resetBestScore = function() { if(confirm("ベストスコアを0に戻しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['endless'].forEach(d => { localStorage.removeItem(`cosmic_best_${m}_${d}`); }); }); } };
 window.resetScorePopup = function(popupEl) { popupEl.className = "giant-score-popup"; void popupEl.offsetWidth; };
 
 // ==========================================================================
@@ -1360,7 +1358,7 @@ window.renderGameLeaderboard = function(type = currentLbType) {
     currentLbType = type;
     const container = document.getElementById('leaderboardListContainer'); if(!container) return; container.innerHTML = "";
     if (type === 'mine') {
-        const keyHistory = `cosmic_score_${currentLbMode}_${currentLbDiff}`; let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
+        const keyHistory = `cosmic_score_${currentLbMode}_endless`; let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
         if (history.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px; margin-top:20px;">このモードの記録はありません</div>`; return; }
         const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "var(--cosmic-cyan)", "var(--cosmic-cyan)"];
         history.forEach((record, index) => {
@@ -1413,7 +1411,8 @@ window.startActualGame = function(difficulty) {
             else w.meanings.forEach(m => { gameCurrentWordsQueue.push({ type: 'ja2en', wordNum: w.num, word: w.word, meaningId: m.id, display: window.formatWordForDisplay(m.text) }); });
         }
     });
-    gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameRemainingTime = difficulty === 'normal' ? 60 : difficulty === 'hard' ? 180 : 300;
+    gameCurrentWordsQueue.sort(() => Math.random() - 0.5); 
+    gameRemainingTime = difficulty === 'normal' ? 180 : difficulty === 'hard' ? 420 : 900;
     document.getElementById('game-start-screen').style.display = 'none'; document.getElementById('game-play-screen').style.display = 'block';
     document.getElementById('gameNextBtn').style.display = 'none'; document.getElementById('feedbackContent').style.display = "none"; document.getElementById('giantJudgmentOverlay').classList.remove('show');
     if (activeCharacter === 'tangon') { document.getElementById('gameActiveCharacterContainer').style.display = 'flex'; document.getElementById('gameActiveCharacterImg').src = 'tangon.png'; } else { document.getElementById('gameActiveCharacterContainer').style.display = 'none'; }
@@ -1516,16 +1515,19 @@ window.goToNextGameWord = function() {
     document.getElementById('giantJudgmentMark').style.textShadow = "";
     document.getElementById('giantJudgmentText').style.color = "";
     
-    isGameTimerPaused = false; gameCurrentIndex++; window.showNextMultiWord();
+    isGameTimerPaused = false; gameCurrentIndex++; window.showNextGameWord();
 };
 
 window.endGameSession = function() {
     document.body.classList.remove('in-game-active'); clearInterval(gameTimerInterval); document.getElementById('game-play-screen').style.display = 'none'; document.getElementById('game-result-screen').style.display = 'block';
-    if (gameScoreCount > 0) {
-        let history = JSON.parse(localStorage.getItem(`cosmic_score_${selectedQuestionMode}_${currentGameDifficulty}`) || "[]");
-        history.push({ score: gameScoreCount, date: new Date().toLocaleDateString() }); history.sort((a, b) => b.score - a.score); history = history.slice(0, 5); localStorage.setItem(`cosmic_score_${selectedQuestionMode}_${currentGameDifficulty}`, JSON.stringify(history));
-        gameBestScore = parseInt(localStorage.getItem(`cosmic_best_${selectedQuestionMode}_${currentGameDifficulty}`) || "0"); if (gameScoreCount > gameBestScore) { localStorage.setItem(`cosmic_best_${selectedQuestionMode}_${currentGameDifficulty}`, gameScoreCount); gameBestScore = gameScoreCount; }
+    
+    gameBestScore = 0;
+    if (gameScoreCount > 0 && currentGameDifficulty === 'endless') {
+        let history = JSON.parse(localStorage.getItem(`cosmic_score_${selectedQuestionMode}_endless`) || "[]");
+        history.push({ score: gameScoreCount, date: new Date().toLocaleDateString() }); history.sort((a, b) => b.score - a.score); history = history.slice(0, 5); localStorage.setItem(`cosmic_score_${selectedQuestionMode}_endless`, JSON.stringify(history));
+        gameBestScore = parseInt(localStorage.getItem(`cosmic_best_${selectedQuestionMode}_endless`) || "0"); if (gameScoreCount > gameBestScore) { localStorage.setItem(`cosmic_best_${selectedQuestionMode}_endless`, gameScoreCount); gameBestScore = gameScoreCount; }
     }
+    
     const accuracy = gameHistoryLog.length > 0 ? Math.round((gameHistoryLog.filter(h => h.isCorrect).length / gameHistoryLog.length) * 100) : 0;
     document.getElementById('resScore').innerText = gameScoreCount; document.getElementById('resAccuracy').innerText = `${accuracy}%`; document.getElementById('resBestScore').innerText = gameBestScore; document.getElementById('resCommBest').innerText = Math.max(gameBestScore, 2800);
     const listContainer = document.getElementById('gameHistoryListContainer'); listContainer.innerHTML = "";
@@ -1560,7 +1562,7 @@ window.updatePartySlotsUi = function() {
     const weaponImgFrame = document.getElementById('slotWeaponImgContainer'), weaponNameLbl = document.getElementById('slotWeaponName');
     if (activeWeapon === 'fire_sword') { weaponImgFrame.innerHTML = "🔥🗡️"; weaponNameLbl.innerText = "業火の大剣"; } else { weaponImgFrame.innerHTML = "🗡️"; weaponNameLbl.innerText = "素手"; }
     const armorImgFrame = document.getElementById('slotArmorImgContainer'), armorNameLbl = document.getElementById('slotArmorName');
-    if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "星屑の盾"; } else { armorImgFrame.innerHTML = "🛡️"; armorNameLbl.innerText = "布の服"; }
+    if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "🔮🛡️"; armorNameLbl.innerText = "星屑の盾"; } else { armorImgFrame.innerHTML = "🛡️"; armorNameLbl.innerText = "布の服"; }
     
     // 🌟 自分の装備・キャラアイコン枠エリアを非表示化
     const bChar = document.getElementById('multiEquipCharIcon'); if(bChar) bChar.style.display = 'none';
@@ -1576,6 +1578,7 @@ window.initMultiParty = function(playerCount) {
         let isMe = (i === 0);
         multiPartyMembers.push({ id: i, name: isMe ? myName : `ALLY ${i}`, char: isMe ? activeCharacter : '', maxHp: 3500, hp: 3500, isMe: isMe, borderColor: borderColors[i], shadowColor: shadows[i] });
     }
+    window.openMultiParty();
 };
 
 window.renderMultiParty = function() {
@@ -1603,7 +1606,7 @@ window.renderMultiParty = function() {
                 <!-- 3. 装備 -->
                 <div class="multi-party-equip-display" style="display: flex; gap: 2px; font-size: 10px; background: rgba(0,0,0,0.4); padding: 1px 4px; border-radius: 4px;">
                     <span title="Weapon">${m.isMe && activeWeapon === 'fire_sword' ? '🔥' : '🗡️'}</span>
-                    <span title="Armor">${m.isMe && activeArmor === 'cosmic_shield' ? '🔮' : '星屑の盾'}</span>
+                    <span title="Armor">${m.isMe && activeArmor === 'cosmic_shield' ? '🔮' : '🛡️'}</span>
                 </div>
                 <!-- 4. 名前 -->
                 <div style="font-size:8px; color:${color}; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; text-align:center;">${m.name}</div>
@@ -1811,6 +1814,9 @@ window.updateMultiHpBars = function() {
         if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max'); else limitFill.classList.remove('max'); 
         limitFill.parentElement.style.justifyContent = 'flex-start'; /* 🌟 強制左詰めアンカー */
     }
+    
+    // 🌟 パーメント表示を消去
+    if (limitText) { limitText.innerText = ""; }
     
     // 🌟 COMBOコンポーネントエリア消去
     const multiComboParent = document.getElementById('multiComboCountText') ? document.getElementById('multiComboCountText').parentElement : null;

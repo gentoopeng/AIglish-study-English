@@ -327,12 +327,6 @@
                         <button class="modern-btn" id="lbBtnModeEn" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('en2ja')">和訳</button>
                         <button class="modern-btn" id="lbBtnModeMix" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('mixed')">まぜ</button>
                     </div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px;">
-                        <button class="modern-btn" id="lbBtnDiffNormal" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbDiff('normal')">NML</button>
-                        <button class="modern-btn" id="lbBtnDiffHard" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('hard')">HRD</button>
-                        <button class="modern-btn" id="lbBtnDiffExpert" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('expert')">EXP</button>
-                        <button class="modern-btn" id="lbBtnDiffEndless" style="height:28px; font-size:11px; padding:0;" onclick="setLbDiff('endless')">∞</button>
-                    </div>
                 </div>
 
                 <div id="leaderboardListContainer" style="flex:1; overflow-y:auto; background:rgba(7, 11, 25, 0.6); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:4px;"></div>
@@ -555,9 +549,9 @@
                         <h2 style="color:white; justify-content:center; margin-bottom:12px;"><i data-lucide="zap"></i> 難易度選択</h2>
                         
                         <div style="display:flex; flex-direction:column; gap:12px;">
-                            <button class="modern-btn" onclick="startActualGame('normal')">ノーマル (1分)</button>
-                            <button class="modern-btn" onclick="startActualGame('hard')">ハード (3分)</button>
-                            <button class="modern-btn" onclick="startActualGame('expert')">エキスパート</button>
+                            <button class="modern-btn" onclick="startActualGame('normal')">ノーマル (3分)</button>
+                            <button class="modern-btn" onclick="startActualGame('hard')">ハード (7分)</button>
+                            <button class="modern-btn" onclick="startActualGame('expert')">エキスパート (15分)</button>
                             <button class="modern-btn" onclick="startActualGame('endless')">エンドレス</button>
                         </div>
                         
