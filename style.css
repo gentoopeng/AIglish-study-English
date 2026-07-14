@@ -52,7 +52,20 @@ body::after {
     z-index: -1; pointer-events: none; opacity: 0.85;
 }
 #view-home::before { background-image: url('homenohaikei.png'); }
-#view-vocab::before { background-image: url('tango.png'); }
+
+/* 🌟 単語帳背景のループアニメーション設定 */
+@keyframes vocabBgScroll {
+    from { background-position: 0 center; }
+    to { background-position: -100vw center; }
+}
+
+#view-vocab::before { 
+    background-image: url('tango.png'); 
+    background-size: auto 100vh;
+    background-repeat: repeat-x;
+    animation: vocabBgScroll 120s linear infinite;
+}
+
 #view-reader::before { background-image: url('friend.png'); } /* 🌟 元ファイル準拠 */
 #view-community::before { background-image: url('friend.png'); }
 #view-party::before { background-image: url('haikei.png'); }
@@ -90,7 +103,7 @@ body.in-game-active #multi-battle-play-screen:not([style*="display: none"]) ~ #m
 .card {
     background: rgba(15, 23, 42, 0.8) !important; 
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); 
-    border: 1px solid rgba(255, 255, 255, 0.15) !important; 
+    border: 1px solid rgba(15, 23, 42, 0.15) !important; 
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4) !important; 
     text-shadow: 0 1px 5px rgba(0, 0, 0, 0.9); 
     border-radius: 16px; padding: 18px; margin-bottom: 16px;
@@ -220,8 +233,8 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 #game-mode-select-screen > div,
 #game-difficulty-select-screen > div {
     background: rgba(10, 15, 30, 0.15) !important; 
-    backdrop-filter: none !important; /* 🌟 ぼかし効果を完全に無効化 */
-    -webkit-backdrop-filter: none !important; /* 🌟 ぼかし効果を完全に無効化 */
+    backdrop-filter: none !important; 
+    -webkit-backdrop-filter: none !important; 
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.2) !important;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
@@ -235,10 +248,9 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 #feedbackUserAns, #feedbackCorrectAns { font-size: 13px !important; word-break: break-word; }
 #feedbackOtherAns { font-size: 11px !important; word-break: break-word; }
 .game-scrollable-content { max-height: calc(100vh - 160px); overflow-y: auto; padding-bottom: 24px; }
-.game-scrollable-content::-webkit-scrollbar { display: none; } /* 🌟 スクロールバー非表示による美麗化 */
+.game-scrollable-content::-webkit-scrollbar { display: none; } 
 .game-header-console-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; position: relative; z-index: 50; }
 
-/* 🌟 改良：「終了」ボタンの青ネオン枠線を完全に廃止し、石板の質感に完全同期 */
 .game-finish-inline-btn { 
     height: 38px; 
     padding: 0 16px; 
@@ -272,7 +284,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .console-divider { width: 1px; height: 18px; background: var(--border); }
 .game-word-display { font-size: 36px; font-weight: 800; text-align: center; margin: 10px 0 18px 0; font-family: "Times New Roman", serif; word-break: break-word; line-height: 1.2; }
 
-/* 🌟 改良：解答入力欄のアウトライン・影・背景を完全消去。フォーカス時も含め完全な100%透過固定へ変更 */
 .game-cosmic-input-glow { 
     border: none !important; 
     border-radius: 0 !important; 
@@ -313,7 +324,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
    🎮 新マルチバトルUI用 追加CSS (省スペース＆横長ボスバー版)
    ========================================================================= */
 
-/* ボスの横型HPバー（画面上部） */
 .multi-boss-full-bar {
     width: 100%;
     height: 20px;
@@ -330,7 +340,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     left: 0;
     height: 100%;
     background: linear-gradient(90deg, #7f1d1d, #ef4444);
-    transform-origin: left !important; /* 🌟 左詰め起算点減少の厳格保証 */
+    transform-origin: left !important; 
     transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
 }
@@ -352,7 +362,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     pointer-events: none;
 }
 
-/* ボス本体の巨大化 ＆ 超禍々しいアニメーション */
 .multi-boss-image {
     animation: ominousAura 3.5s ease-in-out infinite;
 }
@@ -372,7 +381,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
    🌟 パーティエリア（横一列・顔アイコン逆順フレックス固定）
    ========================================================================= */
 
-/* パーティ・ステータス全体の枠 */
 .multi-party-status-area {
     background: rgba(15, 23, 42, 0.6);
     border: 1px solid rgba(236, 72, 153, 0.4);
@@ -382,7 +390,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     -webkit-backdrop-filter: blur(8px);
 }
 
-/* 仲間キャラを横に広げて並べるグリッド */
 .multi-party-grid-horizontal {
     display: flex;
     justify-content: space-around;
@@ -390,18 +397,15 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     align-items: flex-end;
 }
 
-/* 各キャラのコンテナ構造 */
 .multi-party-member {
     position: relative;
     display: flex;
-    /* 🌟 改良：縦方向を逆転させることでHTML構造に依らず「顔が上、ステータスが下」をCSSから絶対固定する */
     flex-direction: column-reverse;
     align-items: center;
     flex: 1;
     max-width: 80px; 
 }
 
-/* キャラの顔アイコン枠 */
 .multi-party-icon {
     width: 60px;
     height: 60px;
@@ -416,7 +420,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     overflow: hidden;
 }
 
-/* キャラに直接ポップアップ（被ダメージ・V字用） */
 .popup-v-dmg {
     position: absolute;
     top: -40px;
@@ -445,7 +448,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     text-shadow: 2px 2px 0 #FFF, -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF;
 }
 
-/* 🌟 追加要件：解答成功時にプレイヤーカラーをまとってボスへ高速追従巡航する吹き出しレイアウト */
 .popup-bubble-flying-atk {
     position: fixed;
     background: white;
@@ -463,7 +465,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     animation: flyToBossTrack 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
 
-/* 吹き出しのインジケータ尾 */
 .popup-bubble-flying-atk::after {
     content: '';
     position: absolute;
@@ -475,7 +476,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     border-color: inherit transparent transparent transparent;
 }
 
-/* ボス着弾時専用の衝撃大爆発レイヤー */
 .popup-hit-explosion {
     position: fixed;
     width: 50px;
@@ -509,7 +509,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     100% { opacity: 0; transform: translate(-50%, 15px) scale(0.8); }
 }
 
-/* 自分がダメージを受けたときの赤く光るアニメーション */
 .player-damage-flash {
     animation: flashRed 0.4s ease-out;
 }
@@ -518,7 +517,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     100% { transform: scale(1); filter: none; }
 }
 
-/* 攻撃モーションを右ではなく「上」へ指定時間(0.5s)で跳ね上げる */
 .companion-attack-active { animation: companionDash 0.5s ease-in-out; }
 @keyframes companionDash { 
     0% { transform: translateY(0) scale(1); } 
@@ -526,7 +524,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     100% { transform: translateY(0) scale(1); } 
 }
 
-/* キャラの下にある個別のHPバー */
 .multi-party-hp-bar {
     width: 100%;
     height: 5px;
@@ -541,12 +538,11 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     height: 100%;
     background: linear-gradient(90deg, #10B981, #34D399);
     width: 100%;
-    transform-origin: left !important; /* 🌟 左詰め起点減少の厳格保証 */
+    transform-origin: left !important; 
     transition: width 0.3s ease;
     box-shadow: 0 0 5px #10B981;
 }
 
-/* キャラ・武器・防具のアイコン */
 .multi-equip-icon {
     border-radius: 4px;
     background: rgba(0,0,0,0.5);
@@ -557,7 +553,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     box-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
-/* 🌟 バーのコズミック構造体内部へ完全にテキストを重ね合わせる調整 */
 .inner-text-hp-bar {
     display: flex;
     align-items: center;
@@ -578,7 +573,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     letter-spacing: 0.5px;
 }
 
-/* 共通バーのベース枠 */
 .multi-hp-bar {
     background: rgba(0,0,0,0.6);
     border-radius: 6px;
@@ -588,17 +582,15 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     box-shadow: inset 0 2px 5px rgba(0,0,0,0.8);
 }
 
-/* LIMIT BREAK (必殺技) ゲージ用のスタイル */
 .multi-limit-fill {
     height: 100%;
     background: linear-gradient(90deg, #F59E0B, #EF4444, #8B5CF6, #3B82F6, #10B981, #F59E0B);
     background-size: 200% 100%;
-    transform-origin: left !important; /* 🌟 左詰め起算点蓄積の厳格保証 */
+    transform-origin: left !important; 
     transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
 }
 
-/* ゲージMAX時に虹色に輝くアニメーション */
 .multi-limit-fill.max {
     animation: rainbowGlow 2s linear infinite;
     box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
@@ -609,12 +601,11 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     100% { background-position: 200% 50%; }
 }
 
-/* 🌟 追加要件：2コンボ以上発生中、下部ナビバー等を含むアプリ最外周全体を包み込んでゴールド明滅するネオンレイヤー */
 .combo-sparkle-overlay {
     position: fixed;
     top: 0; left: 0; width: 100vw; height: 100vh;
     pointer-events: none;
-    z-index: 6500 !important; /* ナビバーの z-index: 4000 を完全に包含する最前面 */
+    z-index: 6500 !important; 
     box-shadow: inset 0 0 0px transparent;
     opacity: 0;
     transition: opacity 0.3s ease, box-shadow 0.3s ease;
@@ -628,7 +619,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     100% { box-shadow: inset 0 0 35px rgba(251, 191, 36, 0.7), 0 0 15px rgba(251, 191, 36, 0.4) inset; }
 }
 
-/* フリック入力エリア */
 .multi-flick-area { 
     background: radial-gradient(circle at center, rgba(15,23,42,0.2) 0%, rgba(7,11,25,0.4) 100%); 
     border-radius: 16px; border: 1px solid var(--admin-accent); position: relative; 
@@ -658,17 +648,12 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .flick-choice-center-blank { min-height: 40px; }
 .flick-center-word { font-size: 20px; font-weight: 900; color: white; text-shadow: 0 0 15px rgba(255,255,255,0.8), 0 0 5px rgba(0,240,255,0.5); font-family: "Times New Roman", serif; background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%); padding: 2px 14px; border-radius: 10px; display: inline-block; margin-top: 0; border: 1px solid rgba(0,240,255,0.4); box-shadow: 0 4px 15px rgba(0,0,0,0.5), inset 0 0 10px rgba(0,240,255,0.1); }
 
-/* 🌟 JS側の座標リセット（left=50%, top=50%）を遅延させないため、アニメーションtransitionは不付与 */
 .flick-weapon-icon { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 28px; pointer-events: none; z-index: 50; filter: drop-shadow(0 0 8px rgba(255,100,0,0.8)); }
 
-/* ==========================================================================
-   🌟 ゲームプレイ中の全画面化（UI非表示）
-   ========================================================================= */
 body.in-game-active .app-header { display: none !important; }
 body.in-game-active .nav-bar { display: none !important; }
 body.in-game-active .container { padding-top: 16px !important; padding-bottom: 16px !important; }
 
-/* 🌟 ゲームタブ横スワイプ用のスクロールバー非表示設定 */
 .game-swipe-container::-webkit-scrollbar {
     display: none;
 }
@@ -677,7 +662,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     scrollbar-width: none;
 }
 
-/* 🌟 マルチバトルスタートボタン（ネオンレッド） */
 .multi-start-btn {
     background: transparent;
     color: #EF4444;
@@ -700,7 +684,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-shadow: 0 0 25px rgba(239, 68, 68, 0.8), inset 0 0 25px rgba(239, 68, 68, 0.8);
 }
 
-/* 🌟 単語の迷宮 タイトル装飾 */
 .tower-title-container {
     position: absolute;
     top: 40px;
@@ -717,7 +700,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     color: #DC2626;
     letter-spacing: 12px;
     text-shadow: 0 4px 15px rgba(0, 0, 0, 0.9), 0 1px 3px rgba(0, 0, 0, 0.8);
-    margin-left: 12px; /* letter-spacingによる中央ズレの補正 */
+    margin-left: 12px; 
 }
 .tower-title-line {
     margin: 10px auto 0 auto;
@@ -728,7 +711,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-shadow: 0 2px 5px rgba(0,0,0,0.8);
 }
 
-/* 🌟 マルチプレイのモード選択スワイプエリア（限界まで画像拡大・判定最適化） */
 #multiModeSwipeArea.multi-flick-area {
     background: none !important;
     border: none !important;
@@ -751,20 +733,17 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     pointer-events: none;
 }
 
-/* 🌟 シングルプレイ：モード選択・難易度選択の石板風巨大ボタン */
 #game-mode-select-screen .modern-btn,
 #game-difficulty-select-screen .modern-btn {
-    height: 90px !important; /* 1画面に収まるように高さを固定調整 */
+    height: 90px !important; 
     width: 100% !important;
     max-width: 320px !important;
     margin: 0 auto !important;
     font-size: 22px !important;
     font-weight: 900 !important;
     
-    /* 🌟 トメ・ハネ・ハライが力強く残る「Noto Serif JP」を設定 */
     font-family: 'Noto Serif JP', serif !important;
     
-    /* 🌟 彫り込み風テキスト設定（白彫り調に統一） */
     color: #FFFFFF !important;
     letter-spacing: 2px !important;
     text-shadow: 
@@ -776,7 +755,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     background-position: center !important;
     background-color: transparent !important;
     
-    /* 🌟 枠や影を完全に消して石板画像をそのまま見せる */
     box-shadow: none !important; 
     border: none !important; 
     border-radius: 0 !important; 
@@ -795,13 +773,11 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-shadow: none !important;
 }
 
-/* 戻るボタンの調整 */
 #game-mode-select-screen .game-finish-inline-btn,
 #game-difficulty-select-screen .game-finish-inline-btn {
     margin-top: 40px !important; 
 }
 
-/* 🌟 シングルプレイ：モード選択・テスト解答プレイ中の全画面背景化 (haikei.pngに統一) */
 #game-mode-select-screen:not([style*="display: none"])::before,
 #game-difficulty-select-screen:not([style*="display: none"])::before,
 #game-play-screen:not([style*="display: none"])::before {
@@ -816,7 +792,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     pointer-events: none;
 }
 
-/* 🌟 仲間UIの縦並び順を通常（顔→バー→名前）に完全復元 */
 .multi-party-member {
     position: relative;
     display: flex;
@@ -826,7 +801,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     max-width: 80px; 
 }
 
-/* 🌟 シングルプレイ：テスト結果リザルト画面の全画面背景化 (kekka.png・ぼかし少なめ) */
 #game-result-screen:not([style*="display: none"])::before {
     content: "";
     position: fixed;
@@ -839,7 +813,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     pointer-events: none;
 }
 
-/* 🌟 シングルプレイ：リザルト画面内の外枠カード自体を非表示にし全画面化、およびネオン感の完全排除 */
 #game-result-screen {
     position: fixed !important;
     top: 56px !important;
@@ -863,7 +836,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: none !important;
 }
 
-/* 🌟 シングルプレイ：リザルト画面 ＆ プレイ中画面内のあらゆる要素を石板(stone.png)化 */
 #game-result-screen h2,
 #game-result-screen .stat-box,
 #game-result-screen h3.cosmic-list-title,
@@ -888,12 +860,10 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     
-    /* 白彫り調の雰囲気重視な高級文字表現（ネオン排除、はみ出しマージン徹底防衛） */
     color: #FFFFFF !important;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95), -1px -1px 1px rgba(0, 0, 0, 0.8) !important;
 }
 
-/* 🌟 新設：シングルプレイのモード選択および難易度選択画面自体の大きな黒いカード枠と背景を完全に透明化（枠線、影、半透明色を完全除去） */
 #game-mode-select-screen > div,
 #game-difficulty-select-screen > div {
     background: transparent !important;
@@ -901,7 +871,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-shadow: none !important;
 }
 
-/* 各パーツの固有レイアウト調整（左右はみ出し防止用の内側余白を大幅に拡張固定） */
 #game-result-screen h2 {
     display: flex !important;
     align-items: center !important;
@@ -913,7 +882,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     margin-bottom: 16px !important;
 }
 
-/* スコア表示グリッドを石板に馴染む縦並びリスト状に最適化 */
 .cosmic-stats-grid {
     display: flex !important;
     flex-direction: column !important;
@@ -926,14 +894,13 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     justify-content: space-between !important;
     align-items: center !important;
     height: 48px !important;
-    /* 🌟 改良：単語と数値を真ん中に寄せるため、左右余白（padding）を 32px から 64px へ大幅拡張 */
     padding: 0 64px !important; 
 }
 
 #game-result-screen .stat-lbl {
     font-size: 13px !important;
     font-weight: 700 !important;
-    color: #E2E8F0 !important; /* 読みやすい明るい白 */
+    color: #E2E8F0 !important; 
     text-shadow: inherit !important;
 }
 
@@ -943,12 +910,11 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     background: none !important;
     -webkit-background-clip: unset !important;
     -webkit-text-fill-color: initial !important;
-    color: #FFFFFF !important; /* 黄色を完全に排除し、純白化 */
+    color: #FFFFFF !important; 
     text-shadow: inherit !important;
     filter: none !important;
 }
 
-/* 🌟 改良：「1 2 LOG」の細い石板見出し（h3.cosmic-list-title）を丸ごと非表示消去 */
 #game-result-screen h3.cosmic-list-title {
     display: none !important;
 }
@@ -956,12 +922,10 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 #game-result-screen .cosmic-history-scroll {
     max-height: 180px !important;
     overflow-y: auto !important;
-    /* 🌟 改良：ログ内の単語も真ん中へ寄せるため、左右余白（padding）を 28px から 48px へ拡張 */
     padding: 14px 48px !important; 
     margin-bottom: 24px !important;
 }
 
-/* 履歴ログ内のテキスト色も石板の世界観に完全同期 */
 #game-result-screen .cosmic-history-item,
 #game-result-screen .cosmic-history-item div,
 #game-result-screen .cosmic-history-item span {
@@ -970,7 +934,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95) !important;
 }
 
-/* 🌟 プレイ中画面：固有の石板化微調整 */
 #game-play-screen .game-unified-console {
     height: 54px !important;
     padding: 0 32px !important;
@@ -994,10 +957,9 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 }
 
 #game-play-screen .game-main-play-card {
-    padding: 24px 28px !important; /* ガード余白 */
+    padding: 24px 28px !important; 
 }
 
-/* 中央問題テキストの色 */
 #game-play-screen .game-word-display {
     background: none !important;
     -webkit-background-clip: unset !important;
@@ -1008,24 +970,20 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     font-family: 'Noto Serif JP', serif !important;
 }
 
-/* 🌟 改良：右側のペンギンキャラクターの青いネオン枠線を完全消去 */
 #gameActiveCharacterContainer {
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
 }
 
-/* 🌟 改良：詳細フィードバック枠（解説石板）の横幅と強力な配置ロックを適用し、下の「次の問題へ」ボタンとぴったり同調 */
 #game-play-screen #feedbackContent {
     width: 100% !important;
     max-width: 320px !important;
     margin-left: auto !important;
     margin-right: auto !important;
-    /* 🌟 position: relative に変更し、内部の絶対配置ボタン（#gameNextBtn）の親基準となるように設定 */
     position: relative !important;
     box-sizing: border-box !important;
-    /* 🌟 内側の左右余白（padding）を完全に指定。テキストが石板外へはみ出さないようにガード */
-    padding: 20px 24px 75px 24px !important; 
+    padding: 20px 24px 75px 52px !important; 
     font-family: 'Noto Serif JP', serif !important;
     background-image: url('stone.png') !important;
     background-size: 100% 100% !important;
@@ -1050,13 +1008,12 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: 1px 1px 1px rgba(0,0,0,0.9) !important;
 }
 
-/* 🌟 「次の問題へ」ボタンの位置とサイズを解説カードの枠線（下部・横幅）へ完璧にシンクロさせる調整 */
 #game-play-screen #gameNextBtn {
     position: absolute !important;
-    bottom: 12px !important; /* カードの内側の床底にぴったり合わせる */
-    left: 12px !important;   /* 左のラインを揃える */
-    right: 12px !important;  /* 右のラインを揃えて横幅100%に追従させる */
-    width: calc(100% - 24px) !important; /* 左右の余白を差し引いた正確な100%でカードと同調 */
+    bottom: 12px !important; 
+    left: 12px !important;   
+    right: 12px !important;  
+    width: calc(100% - 24px) !important; 
     margin: 0 !important;
     height: 44px !important;
     font-family: 'Noto Serif JP', serif !important;
@@ -1071,9 +1028,8 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95), -1px -1px 1px rgba(0, 0, 0, 0.8) !important;
 }
 
-/* 🌟 判定時のオーバーレイ調整（白い背景を完全排除し、まるばつ文字だけを美しく特大描画） */
 #game-play-screen .giant-judgment-overlay {
-    background: none !important; /* 白い背景はいらない、完全透明化 */
+    background: none !important; 
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     box-shadow: none !important;
@@ -1089,22 +1045,21 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 }
 
 #game-play-screen .giant-judgment-overlay .giant-mark {
-    font-size: 110px !important; /* 存在感のある特大サイズ */
+    font-size: 110px !important; 
 }
 
 #game-play-screen .giant-judgment-overlay.correct .giant-mark,
 #game-play-screen .giant-judgment-overlay.correct .giant-text {
-    color: #10B981 !important; /* 漆黒に映える鮮明な緑 */
+    color: #10B981 !important; 
     text-shadow: 0 0 20px rgba(16, 185, 129, 0.8), 2px 2px 4px #000000 !important;
 }
 
 #game-play-screen .giant-judgment-overlay.incorrect .giant-mark,
 #game-play-screen .giant-judgment-overlay.incorrect .giant-text {
-    color: #EF4444 !important; /* 漆黒に映える鮮明な赤 */
+    color: #EF4444 !important; 
     text-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 2px 2px 4px #000000 !important;
 }
 
-/* ボタン */
 #game-result-screen .modern-btn,
 #game-play-screen .modern-btn {
     height: 50px !important;

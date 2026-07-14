@@ -108,9 +108,12 @@ window.startAnalysisWithEmbeddedTitle = function() {
 
 // 新設：Gemini AIにリクエストを送信して英文・和訳・重要文法をJSONで解析する関数
 window.callGeminiAnalyzer = async function(text) {
-    if (!geminiApiKey) return null;
+    if (!geminiApiKey) {
+        alert("【デバッグ情報】\nAPIキーが設定されていないため、AI通信をスキップしました。");
+        return null;
+    }
     try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
         const prompt = `以下の英文をパースし、指定のJSONスキーマ形式のみで返答してください。余計な説明文やマークダウンの\`\`\`jsonタグは一切含めず、純粋なJSON文字列オブジェクトとして出力してください。
 
 英文:
@@ -140,23 +143,66 @@ ${text}
             })
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) {
+            const errorData = await response.text();
+            console.error("Gemini API Error details:", errorData);
+            
+            if (response.status === 429) {
+                alert("本日のAI利用回数の上限に達しました。時間を置いて再度お試しいただくか、手動入力をご利用ください。");
+            } else {
+                alert(`【Gemini API エラー】\nステータスコード: ${response.status}\n\n詳細な理由:\n${errorData}`);
+            }
+            return null;
+        }
         const data = await response.json();
         const responseText = data.candidates[0].content.parts[0].text.trim();
         
-        // マークダウンのコードブロックなどを綺麗にクレンジングしてパース
         const cleanJsonText = responseText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
         return JSON.parse(cleanJsonText);
     } catch (e) {
         console.error("Gemini Analyzer Error:", e);
+        alert(`【プログラム エラー】\nAIとの通信中、または解析結果の処理中にエラーが発生しました。\n\n詳細:\n${e.message}`);
         return null;
     }
 };
 
-// 新設：ソロゲーム内でのAI誤答・別名判定用ダミーセキュリティ関数
+// 🌟 新設・改良：ソロゲーム内でのAI判定関数（スペルミス1文字などを許容し △ を返す）
 window.callGeminiGameJudge = async function(question, correctAnswer, userAns, mode) {
-    // 現在のコードがクラッシュするのを防ぐためのスタブ実装
-    return { status: "NG", alternatives: "特になし" };
+    if (!geminiApiKey) return { status: "NG", alternatives: "特になし" };
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
+        const prompt = `あなたは語学学習アプリの採点AIです。
+ユーザーの回答を評価し、以下のJSONフォーマットで返してください。余計なテキストは含めないでください。
+
+【問題（${mode === 'en2ja' ? '英語' : '日本語'}）】: ${question}
+【模範解答】: ${correctAnswer}
+【ユーザーの回答】: ${userAns}
+
+【判定基準】
+- "OK": 完全に正解、または意味が完全に一致している場合。
+- "SO": スペルミスやタイプミスが1文字だけの場合、または意味は通じるが惜しい・少し不自然な場合。
+- "NG": 全く違う、または意味が通じない場合。
+
+出力JSON形式:
+{
+  "status": "OK", "SO", または "NG",
+  "alternatives": "ユーザーの回答以外に正解となる別解があれば1〜2個提示（なければ「特になし」）"
+}`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+
+        if (!response.ok) return { status: "NG", alternatives: "特になし" };
+        const data = await response.json();
+        const cleanJsonText = data.candidates[0].content.parts[0].text.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+        return JSON.parse(cleanJsonText);
+    } catch (e) {
+        console.error("Gemini Judge Error:", e);
+        return { status: "NG", alternatives: "特になし" };
+    }
 };
 
 // 🌟 安全対策：起動時の未定義クラッシュを根絶するため、描画関数を最上部で強固に事前ロード
@@ -209,7 +255,7 @@ window.formatWordForDisplay = function(str) {
               .replace(/\([^)]*\)/g, '')
               .replace(/（[^）]*）/g, '')
               .replace(/(動|名|形|副|代|接|前|自動|他動)[:：]\s*/g, '')
-              .replace(/〜[をにがとへでや]\s*/g, '')
+              .replace(/〜[突破にがとへでや]\s*/g, '')
               .replace(/^[ ,　]+/, '')
               .trim();
 };
@@ -658,7 +704,7 @@ window.getCardStyleByHistory = function(wordObj) {
     } else {
         const ratio = (avg - 5) / (9 - 5);
         r = Math.round(yellow[0] + (red[0] - yellow[0]) * ratio);
-        g = Math.round(yellow[1] + (red[1] - yellow[1]) * ratio);
+        g = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio);
         b = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio);
     }
     return `background: linear-gradient(135deg, rgba(${r}, ${g}, ${b}, 0.22) 0%, rgba(30, 41, 59, 0.9) 75%);`;
@@ -688,6 +734,8 @@ window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
     }
 };
 
+window.parent = null;
+
 window.coreSystemToggleExpand = function(event, btn) {
     if(event) event.stopPropagation();
     const ex = btn.nextElementSibling;
@@ -699,6 +747,107 @@ window.coreSystemToggleExpand = function(event, btn) {
         btn.innerHTML = `サブ情報を展開 <i data-lucide="chevron-down" size="12"></i>`;
     }
     window.initLucide();
+};
+
+// 🌟 単語帳インライン編集モード制御関数
+window.toggleInlineWordEdit = function(event, wordNum) {
+    if(event) event.stopPropagation();
+    const cardBody = document.getElementById(`wordCardBody-${wordNum}`);
+    const cardForm = document.getElementById(`wordCardForm-${wordNum}`);
+    if(cardBody && cardForm) {
+        if(cardForm.style.display === 'none' || !cardForm.style.display) {
+            cardBody.style.display = 'none';
+            cardForm.style.display = 'block';
+            window.renderInlineEditFormMeanings(wordNum);
+        } else {
+            cardBody.style.display = 'block';
+            cardForm.style.display = 'none';
+        }
+    }
+    window.initLucide();
+};
+
+// 🌟 編集フォーム内の意味リスト(案B：独立入力欄パーツ化)の描画関数
+window.renderInlineEditFormMeanings = function(wordNum) {
+    const listContainer = document.getElementById(`inlineEditMeaningsList-${wordNum}`);
+    if(!listContainer) return;
+    listContainer.innerHTML = "";
+    
+    const wEl = vocabList.find(w => String(w.num) === String(wordNum));
+    if(!wEl || !wEl.meanings) return;
+    
+    wEl.meanings.forEach((m, index) => {
+        const itemRow = document.createElement('div');
+        itemRow.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:8px;";
+        itemRow.innerHTML = `
+            <input type="text" class="search-input inline-m-input-${wordNum}" style="margin:0; flex:1; height:36px;" value="${m.text}">
+            <button class="list-action-link" style="background:#EF4444; color:white; border:none; padding:0 10px; height:36px; display:flex; align-items:center;" onclick="window.removeInlineMeaningField(event, '${wordNum}', ${index})">
+                <i data-lucide="trash-2" size="14"></i>
+            </button>
+        `;
+        listContainer.appendChild(itemRow);
+    });
+    window.initLucide();
+};
+
+// 🌟 フォーム内の特定の意味フィールド削除
+window.removeInlineMeaningField = function(event, wordNum, index) {
+    if(event) event.stopPropagation();
+    const wEl = vocabList.find(w => String(w.num) === String(wordNum));
+    if(wEl && wEl.meanings) {
+        wEl.meanings.splice(index, 1);
+        window.renderInlineEditFormMeanings(wordNum);
+    }
+};
+
+// 🌟 フォーム内への新規意味フィールド追加
+window.addInlineMeaningField = function(event, wordNum) {
+    if(event) event.stopPropagation();
+    const wEl = vocabList.find(w => String(w.num) === String(wordNum));
+    if(wEl) {
+        if(!wEl.meanings) wEl.meanings = [];
+        wEl.meanings.push({ id: `${wordNum}-${Date.now()}`, text: "", status: "none", history: [] });
+        window.renderInlineEditFormMeanings(wordNum);
+    }
+};
+
+// 🌟 編集内容の保存処理
+window.saveInlineWordEdit = function(event, wordNum) {
+    if(event) event.stopPropagation();
+    const wIdx = vocabList.findIndex(w => String(w.num) === String(wordNum));
+    if(wIdx === -1) return;
+    
+    const wordInput = document.getElementById(`inlineEditWordInput-${wordNum}`);
+    const subInput = document.getElementById(`inlineEditSubInput-${wordNum}`);
+    const mInputs = document.querySelectorAll(`.inline-m-input-${wordNum}`);
+    
+    if(wordInput) vocabList[wIdx].word = wordInput.value.trim();
+    if(subInput) vocabList[wIdx].sub = subInput.value.trim();
+    
+    // パーツ化された各入力欄の値を再回収
+    const updatedMeanings = [];
+    mInputs.forEach((inp, idx) => {
+        const txt = inp.value.trim();
+        if(txt) {
+            // 既存 of ステータス等を引き継ぐか新規作成
+            const oldM = vocabList[wIdx].meanings[idx];
+            updatedMeanings.push({
+                id: oldM ? oldM.id : `${wordNum}-${idx}-${Date.now()}`,
+                text: txt,
+                status: oldM ? oldM.status : "none",
+                history: oldM ? oldM.history : []
+            });
+        }
+    });
+    
+    vocabList[wIdx].meanings = updatedMeanings;
+    
+    // 後方互換性用の単一文字列フィールドも再構成して合成
+    vocabList[wIdx].meaning = updatedMeanings.map((m, i) => updatedMeanings.length > 1 ? `①②③④⑤⑥⑦⑧⑨⑩`[i] + m.text : m.text).join("");
+    
+    window.saveVocabToStorage();
+    window.renderVocabList();
+    alert("単語情報を更新しました！");
 };
 
 window.renderVocabList = function() {
@@ -724,7 +873,7 @@ window.renderVocabList = function() {
         card.setAttribute('style', window.getCardStyleByHistory(w));
         
         card.onclick = (e) => {
-            if (e.target.closest('button') || e.target.closest('.word-expand-toggle')) return; 
+            if (e.target.closest('button') || e.target.closest('.word-expand-toggle') || e.target.closest('input') || e.target.closest('textarea')) return; 
             window.openWordPopoverFromVocab(e, w, w.word);
         };
         
@@ -778,26 +927,65 @@ window.renderVocabList = function() {
         meaningsHtml += `</div>`;
 
         card.innerHTML = `
-            <button class="card-delete-btn" style="position:absolute; right:8px; top:8px; background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer; z-index:100;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm('${w.num}')">
-                <i data-lucide="trash-2" size="18"></i>
-            </button>
-            <div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:36px;">
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#${w.num}</span>
-                    <span style="font-size:18px; font-weight:800; color:white;">${w.word}</span>
+            <div style="position:absolute; right:8px; top:8px; display:flex; gap:2px; z-index:100;">
+                <button class="card-edit-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="window.toggleInlineWordEdit(event, '${w.num}')">
+                    <i data-lucide="edit-3" size="18"></i>
+                </button>
+                <button class="card-delete-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm('${w.num}')">
+                    <i data-lucide="trash-2" size="18"></i>
+                </button>
+            </div>
+            
+            <!-- 🌟 通常カードボディ表示領域 -->
+            <div id="wordCardBody-${w.num}">
+                <div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#${w.num}</span>
+                        <span style="font-size:18px; font-weight:800; color:white;">${w.word}</span>
+                    </div>
+                </div>
+                ${meaningsHtml}
+                ${w.sub ? `
+                <div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;">
+                    <button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">
+                        サブ情報を展開 <i data-lucide="chevron-down" size="12"></i>
+                    </button>
+                    <div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;">
+                        <div class="sub-info-block" style="background:rgba(0,0,0,0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">${w.sub}</div>
+                    </div>
+                </div>` : ''}
+                <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">${dotsHtml}</div>
+            </div>
+
+            <!-- 🌟 新設：パッと切り替わるインライン高速編集フォームエリア -->
+            <div id="wordCardForm-${w.num}" style="display:none; padding-top:32px;">
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; display:block; margin-bottom:4px;">単語</label>
+                    <input type="text" id="inlineEditWordInput-${w.num}" class="search-input" style="margin:0;" value="${w.word}">
+                </div>
+                
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label>
+                    <div id="inlineEditMeaningsList-${w.num}"></div>
+                    <button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, '${w.num}')">
+                        <i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加
+                    </button>
+                </div>
+
+                <div style="margin-bottom:14px;">
+                    <label style="font-size:11px; color:var(--text-sub); font-weight:700; display:block; margin-bottom:4px;">サブ情報</label>
+                    <textarea id="inlineEditSubInput-${w.num}" class="modern-textarea" style="height:60px; margin:0;">${w.sub || ""}</textarea>
+                </div>
+
+                <div style="display:flex; gap:8px;">
+                    <button class="list-action-link" style="flex:1; text-align:center; height:36px; background:rgba(255,255,255,0.05); border:1px solid var(--border);" onclick="window.toggleInlineWordEdit(event, '${w.num}')">
+                        キャンセル
+                    </button>
+                    <button class="list-action-link" style="flex:1; text-align:center; height:36px; background:var(--accent); color:white; border:none;" onclick="window.saveInlineWordEdit(event, '${w.num}')">
+                        保存する
+                    </button>
                 </div>
             </div>
-            ${meaningsHtml}
-            ${w.sub ? `
-            <div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;">
-                <button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">
-                    サブ情報を展開 <i data-lucide="chevron-down" size="12"></i>
-                </button>
-                <div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;">
-                    <div class="sub-info-block" style="background:rgba(0,0,0,0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">${w.sub}</div>
-                </div>
-            </div>` : ''}
-            <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">${dotsHtml}</div>
         `;
         container.appendChild(card);
     });
@@ -822,6 +1010,12 @@ window.analyzeText = async function(rawText, assignedTitle = null) {
     window.initLucide();
     
     let aiAnalysisResult = geminiApiKey ? await window.callGeminiAnalyzer(rawText) : null;
+    
+    if (geminiApiKey && !aiAnalysisResult) {
+        window.closeReader();
+        return;
+    }
+
     const safeTextForBtn = rawText.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
     const safeTitleForBtn = currentActiveTitle.replace(/'/g, "\\'").replace(/"/g, "&quot;");
 
@@ -837,7 +1031,7 @@ window.analyzeText = async function(rawText, assignedTitle = null) {
 
     englishContainer.innerHTML = ''; let totalSummaryJa = "";
     let fallbackSentences = rawText.replace(/\n/g, ' ').match(/[^.?!]+[.?!]+|[^.?!]+$/g) || [rawText];
-    let sentencesData = (aiAnalysisResult && aiAnalysisResult.sentences) ? aiAnalysisResult.sentences : fallbackSentences.map(s => ({ text: s.trim(), translation: "（和訳未取得）", grammarHighlights: [] }));
+    let sentencesData = (aiAnalysisResult && aiAnalysisResult.sentences) ? aiAnalysisResult.sentences : fallbackSentences.map(s => ({ text: s.trim(), translations: "（和訳未取得）", grammarHighlights: [] }));
 
     sentencesData.forEach((sData, sIdx) => {
         let sentenceText = sData.text || ""; if(!sentenceText.trim()) return;
@@ -868,7 +1062,7 @@ window.analyzeText = async function(rawText, assignedTitle = null) {
                 const span = document.createElement('span'); span.className = 'word-span'; span.innerText = subToken + (index < subTokens.length - 1 ? ' ' : (isGrammar ? ' ' : ' '));
                 const vocabMatch = vocabList.find(v => v.word.toLowerCase() === cleanKey);
                 if(vocabMatch) {
-                    span.classList.add('registered'); let hasOk = false, hasBad = false, hasSo = false, hasAnyHistory = false;
+                    span.classList.add('registered'); let hasOk = false; let hasBad = false; let hasSo = false; let hasAnyHistory = false;
                     vocabMatch.meanings.forEach(m => { if(m.history && m.history.length > 0) hasAnyHistory = true; if(m.status === 'ok') hasOk = true; if(m.status === 'so') hasSo = true; if(m.status === 'bad') hasBad = true; });
                     if(!hasAnyHistory) span.classList.add(`status-none`); else if(hasBad) span.classList.add(`status-bad`); else if(hasSo) span.classList.add(`status-so`); else if(hasOk) span.classList.add(`status-ok`);
                     span.onclick = (e) => window.openWordPopoverFromVocab(e, vocabMatch, subToken);
@@ -883,7 +1077,6 @@ window.analyzeText = async function(rawText, assignedTitle = null) {
             });
         });
         
-        // 🌟 バグ修正：スキーマ指示の 'translations' に完全追従、未取得時はフォールバックに同期
         let finalJaText = customJaLines[sIdx] || sData.translation || sData.translations || "（和訳未取得）"; 
         totalSummaryJa += `${sIdx+1}. ${finalJaText}<br>`;
         const jaSpan = document.createElement('span'); jaSpan.className = 'sentence-ja'; jaSpan.innerText = finalJaText; mainContent.appendChild(jaSpan);
@@ -936,14 +1129,14 @@ window.renderBookshelf = function() {
         let folderHtml = `<div style="margin-bottom:20px; background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; border:1px solid rgba(255,255,255,0.1);">
             <h3 style="color:var(--cosmic-cyan); font-size:15px; border-bottom:1px dashed rgba(0,240,255,0.3); padding-bottom:6px; margin-top:0; margin-bottom:12px; display:flex; align-items:center; gap:6px;"><i data-lucide="folder" size="16"></i> ${folderName}</h3>`;
         foldersData[folderName].forEach(item => {
-            const safeText = item.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
-            const safeTitle = item.title ? item.title.replace(/'/g, "\\'").replace(/"/g, "&quot;") : "無題";
+            const escapedText = encodeURIComponent(item.text);
+            const escapedTitle = encodeURIComponent(item.title || "無題");
             folderHtml += `
                 <div class="list-item-row" style="background:rgba(255,255,255,0.05); padding:10px 14px; border-radius:8px; margin-bottom:8px;">
                     <div class="list-item-title" style="flex:1;"><span><i data-lucide="file-text" size="12" style="color:var(--text-sub); margin-right:4px;"></i>${item.title}</span></div>
                     <div style="display:flex; gap:8px;">
-                        <button class="list-action-link" style="background:var(--accent); border:none;" onclick="window.analyzeText(\`${safeText}\`, '${safeTitle}')">開く</button>
-                        <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:#EF4444; padding:4px; cursor:pointer;" onclick="window.showCustomDeleteBookshelfConfirm(${item.id})"><i data-lucide="trash-2" size="14"></i></button>
+                        <button class="list-action-link" style="background:var(--accent); border:none;" onclick="window.analyzeText(decodeURIComponent('${escapedText}'), decodeURIComponent('${escapedTitle}'))">開く</button>
+                        <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:#EF4444; padding:4px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteBookshelfConfirm(${item.id})"><i data-lucide="trash-2" size="14"></i></button>
                     </div>
                 </div>`;
         });
@@ -956,8 +1149,13 @@ window.showCustomDeleteBookshelfConfirm = function(id) {
     if(confirm("本棚から削除しますか？")) { myBookshelf = myBookshelf.filter(item => item.id !== id); localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); window.renderBookshelf(); }
 };
 
+// 🌟 不具合修正：長文履歴をダイアログ確認付きでローカルストレージから完全消去する高速関数
 window.showCustomDeleteHistoryConfirm = function(id) {
-    if(confirm("履歴から削除しますか？")) { textHistory = textHistory.filter(h => h.id !== id); localStorage.setItem('textHistory', JSON.stringify(textHistory)); window.renderHistoryList(); }
+    if(confirm("履歴から削除しますか？")) { 
+        textHistory = textHistory.filter(h => h.id !== id); 
+        localStorage.setItem('textHistory', JSON.stringify(textHistory)); 
+        window.renderHistoryList(); 
+    }
 };
 
 window.renderHistoryList = function() {
@@ -966,12 +1164,12 @@ window.renderHistoryList = function() {
     if(textHistory.length === 0) { container.innerHTML = `<div style="color:var(--text-sub); font-size:12px;">ログがありません</div>`; return; }
     textHistory.forEach(h => {
         const row = document.createElement('div'); row.className = 'list-item-row';
-        const safeText = h.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
-        const safeTitle = h.title ? h.title.replace(/'/g, "\\'").replace(/"/g, "&quot;") : "無題";
+        const escapedText = encodeURIComponent(h.text);
+        const escapedTitle = encodeURIComponent(h.title || "無題");
         row.innerHTML = `<div class="list-item-title"><span>${h.title}</span></div>
             <div style="display:flex; gap:8px;">
-                <button class="list-action-link" onclick="window.analyzeText(\`${safeText}\`, '${safeTitle}')">開く</button>
-                <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:var(--text-sub);" onclick="window.showCustomDeleteHistoryConfirm(${h.id})"><i data-lucide="trash-2" size="14"></i></button>
+                <button class="list-action-link" onclick="window.analyzeText(decodeURIComponent('${escapedText}'), decodeURIComponent('${escapedTitle}'))">開く</button>
+                <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:var(--text-sub);" onclick="event.stopPropagation(); window.showCustomDeleteHistoryConfirm(${h.id})"><i data-lucide="trash-2" size="14"></i></button>
             </div>`;
         container.appendChild(row);
     });
@@ -989,7 +1187,7 @@ window.updateReaderWordColors = function() {
         const vocabMatch = vocabList.find(v => v.word.toLowerCase() === cleanKey);
         if(vocabMatch) {
             span.classList.add('registered'); 
-            let hasOk = false, hasBad = false, hasSo = false, hasAnyHistory = false;
+            let hasOk = false; let hasBad = false; let hasSo = false; let hasAnyHistory = false;
             vocabMatch.meanings.forEach(m => { 
                 if(m.history && m.history.length > 0) hasAnyHistory = true; 
                 if(m.status === 'ok') hasOk = true; 
@@ -1029,7 +1227,7 @@ window.openWordPopoverFromVocab = function(event, vocabItem, originalText) {
                     <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='ok'?'var(--word-ok)':'rgba(0,0,0,0.5)'}; color:${m.status==='ok'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'ok', event)">⚪︎</button>
                     <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='so'?'var(--word-so)':'rgba(0,0,0,0.5)'}; color:${m.status==='so'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'so', event)">△</button>
                     <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='bad'?'var(--word-bad)':'rgba(0,0,0,0.5)'}; color:${m.status==='bad'?'#FFF':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'bad', event)">✕</button>
-                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='none'?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.5)'}; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'none', event)">ー</button>
+                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3)':'rgba(0,0,0,0.5)'}; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'none', event)">ー</button>
                 </div>
             </div>`;
     });
@@ -1233,34 +1431,68 @@ window.showNextGameWord = function() {
     document.getElementById('gameAnswerInput').value = ""; document.getElementById('gameAnswerInput').focus(); isGameProcessingAnswer = false;
 };
 
+// 🌟 改良：AI判定を組み込み、△(SO)の場合はスコア+50＆コンボ継続＆単語帳に△を記録する処理を追加
 window.submitGameAnswer = async function() {
     if (isGameProcessingAnswer) return; if (document.getElementById('gameNextBtn').style.display === 'flex') return window.goToNextGameWord();
     const userInput = document.getElementById('gameAnswerInput').value.trim(); if (!userInput) return;
     isGameProcessingAnswer = true; isGameTimerPaused = true;
     document.getElementById('gameAnswerInput').blur(); document.getElementById('gameSubmitBtn').style.display = 'none'; document.getElementById('gameJudgingIndicator').style.display = 'flex';
-    const q = gameCurrentWordsQueue[gameCurrentIndex]; let isCorrect = false, alternatives = "";
+    const q = gameCurrentWordsQueue[gameCurrentIndex]; let isCorrect = false, isSo = false, alternatives = "";
+    
     if (q.type === 'en2ja') {
         isCorrect = q.correctAnswers.some(ans => userInput.includes(ans) || ans.includes(userInput) || userInput === ans);
-        if(!isCorrect && geminiApiKey) { const res = await window.callGeminiGameJudge(q.word, q.correctAnswers.join(' / '), userInput, 'en2ja'); isCorrect = res.status === "OK"; alternatives = res.alternatives; }
+        if(!isCorrect && geminiApiKey) { 
+            const res = await window.callGeminiGameJudge(q.word, q.correctAnswers.join(' / '), userInput, 'en2ja'); 
+            if(res.status === "OK") isCorrect = true;
+            else if(res.status === "SO") isSo = true;
+            alternatives = res.alternatives; 
+        }
     } else {
         isCorrect = (userInput.toLowerCase() === q.word.toLowerCase());
-        if(!isCorrect && geminiApiKey) { const res = await window.callGeminiGameJudge(q.display, q.word, userInput, 'ja2en'); isCorrect = res.status === "OK"; alternatives = res.alternatives; }
+        if(!isCorrect && geminiApiKey) { 
+            const res = await window.callGeminiGameJudge(q.display, q.word, userInput, 'ja2en'); 
+            if(res.status === "OK") isCorrect = true;
+            else if(res.status === "SO") isSo = true;
+            alternatives = res.alternatives; 
+        }
     }
+    
     document.getElementById('gameJudgingIndicator').style.display = 'none'; document.getElementById('gameNextBtn').style.display = 'flex';
     const overlay = document.getElementById('giantJudgmentOverlay'), popupEl = document.getElementById('giantScorePopup'), comboContainer = document.getElementById('persistentComboContainer');
     window.resetScorePopup(popupEl); let updatedStatus = "bad";
+    
+    // 🌟 表示リセット（前回のSOのオレンジ色などをクリアしておく）
+    document.getElementById('giantJudgmentMark').style.color = "";
+    document.getElementById('giantJudgmentMark').style.textShadow = "";
+    document.getElementById('giantJudgmentText').style.color = "";
+
     if (isCorrect) {
         let earned = 100 + (gameComboCount * 5); gameScoreCount += earned; gameComboCount++; gameComboTotalScore += earned;
         overlay.className = "giant-judgment-overlay show correct"; document.getElementById('giantJudgmentMark').innerText = "◎"; document.getElementById('giantJudgmentText').innerText = "正解";
         popupEl.innerText = "+" + gameComboTotalScore; popupEl.className = "giant-score-popup score-anim-plus";
         if(gameComboCount > 1) { document.getElementById('persistentComboText').innerText = `${gameComboCount} COMBO!`; document.getElementById('persistentComboScore').innerText = `+${gameComboTotalScore}`; comboContainer.style.display = "flex"; comboContainer.classList.add('combo-blink'); }
         updatedStatus = "ok";
+    } else if (isSo) {
+        let earned = 50; gameScoreCount += earned; // コンボは増やさずリセットもせず維持
+        overlay.className = "giant-judgment-overlay show"; 
+        document.getElementById('giantJudgmentMark').innerText = "△"; 
+        document.getElementById('giantJudgmentText').innerText = "おしい";
+        // △専用のオレンジ色を指定
+        document.getElementById('giantJudgmentMark').style.color = "#F59E0B"; 
+        document.getElementById('giantJudgmentMark').style.textShadow = "0 0 20px rgba(245, 158, 11, 0.8), 2px 2px 4px #000000";
+        document.getElementById('giantJudgmentText').style.color = "#F59E0B";
+        
+        popupEl.innerText = "+" + earned; popupEl.className = "giant-score-popup score-anim-plus";
+        // コンボが2以上続いていれば表示は維持
+        if(gameComboCount > 1) { document.getElementById('persistentComboText').innerText = `${gameComboCount} COMBO!`; document.getElementById('persistentComboScore').innerText = `+${gameComboTotalScore}`; comboContainer.style.display = "flex"; comboContainer.classList.add('combo-blink'); } else { comboContainer.style.display = "none"; }
+        updatedStatus = "so";
     } else {
         gameScoreCount = Math.max(0, gameScoreCount - 50); gameComboCount = 0; gameComboTotalScore = 0;
         overlay.className = "giant-judgment-overlay show incorrect"; document.getElementById('giantJudgmentMark').innerText = "✕"; document.getElementById('giantJudgmentText').innerText = "不正解";
         popupEl.innerText = "-50"; popupEl.className = "giant-score-popup score-anim-minus"; comboContainer.style.display = "none"; comboContainer.classList.remove('combo-blink');
         if (currentGameDifficulty === 'endless') { gameMistakeCount++; document.getElementById('gameTimerNum').innerText = "❤️".repeat(5 - gameMistakeCount) + "🖤".repeat(gameMistakeCount); }
     }
+    
     document.getElementById('gameScoreNum').innerText = String(gameScoreCount).padStart(4, '0');
     const targetVocab = vocabList.find(w => w.num === q.wordNum);
     if(targetVocab) {
@@ -1268,17 +1500,23 @@ window.submitGameAnswer = async function() {
         else if(targetVocab.meanings.length > 0) { targetVocab.meanings[0].status = updatedStatus; if(!targetVocab.meanings[0].history) targetVocab.meanings[0].history = []; targetVocab.meanings[0].history.push(updatedStatus); }
         targetVocab.status = updatedStatus; if(!targetVocab.history) targetVocab.history = []; targetVocab.history.push(updatedStatus); window.saveVocabToStorage();
     }
-    gameHistoryLog.push({ word: q.type === 'en2ja' ? q.word : q.display, user: userInput, correct: q.type === 'en2ja' ? q.correctAnswers.join(', ') : q.word, isCorrect: isCorrect });
+    gameHistoryLog.push({ word: q.type === 'en2ja' ? q.word : q.display, user: userInput, correct: q.type === 'en2ja' ? q.correctAnswers.join(', ') : q.word, isCorrect: isCorrect || isSo });
     document.getElementById('feedbackContent').style.display = "block"; document.getElementById('feedbackUserAns').innerText = userInput; document.getElementById('feedbackCorrectAns').innerText = q.type === 'en2ja' ? q.correctAnswers.join(', ') : q.word;
     if (alternatives && alternatives !== "特になし") { document.getElementById('feedbackOtherAns').innerText = alternatives; document.getElementById('feedbackDiffAnswersRow').style.display = "block"; } else { document.getElementById('feedbackDiffAnswersRow').style.display = "none"; }
     window.scrollTo(0, 0);
 };
 
+// 🌟 改良：次の問題へ行く際に、△用に書き換えたインラインスタイルをリセット
 window.goToNextGameWord = function() {
     if (currentGameDifficulty === 'endless' && gameMistakeCount >= 5) return window.endGameSession();
     document.getElementById('gameNextBtn').style.display = 'none'; document.getElementById('gameSubmitBtn').style.display = 'flex'; document.getElementById('feedbackContent').style.display = "none"; 
     document.getElementById('giantJudgmentOverlay').classList.remove('show'); document.getElementById('persistentComboContainer').style.display = "none"; document.getElementById('persistentComboContainer').classList.remove('combo-blink');
-    isGameTimerPaused = false; gameCurrentIndex++; window.showNextGameWord();
+    
+    document.getElementById('giantJudgmentMark').style.color = "";
+    document.getElementById('giantJudgmentMark').style.textShadow = "";
+    document.getElementById('giantJudgmentText').style.color = "";
+    
+    isGameTimerPaused = false; gameCurrentIndex++; window.showNextMultiWord();
 };
 
 window.endGameSession = function() {
@@ -1322,7 +1560,7 @@ window.updatePartySlotsUi = function() {
     const weaponImgFrame = document.getElementById('slotWeaponImgContainer'), weaponNameLbl = document.getElementById('slotWeaponName');
     if (activeWeapon === 'fire_sword') { weaponImgFrame.innerHTML = "🔥🗡️"; weaponNameLbl.innerText = "業火の大剣"; } else { weaponImgFrame.innerHTML = "🗡️"; weaponNameLbl.innerText = "素手"; }
     const armorImgFrame = document.getElementById('slotArmorImgContainer'), armorNameLbl = document.getElementById('slotArmorName');
-    if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "🔮🛡️"; armorNameLbl.innerText = "星屑の盾"; } else { armorImgFrame.innerHTML = "🛡️"; armorNameLbl.innerText = "布の服"; }
+    if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "星屑の盾"; } else { armorImgFrame.innerHTML = "🛡️"; armorNameLbl.innerText = "布の服"; }
     
     // 🌟 自分の装備・キャラアイコン枠エリアを非表示化
     const bChar = document.getElementById('multiEquipCharIcon'); if(bChar) bChar.style.display = 'none';
@@ -1338,7 +1576,6 @@ window.initMultiParty = function(playerCount) {
         let isMe = (i === 0);
         multiPartyMembers.push({ id: i, name: isMe ? myName : `ALLY ${i}`, char: isMe ? activeCharacter : '', maxHp: 3500, hp: 3500, isMe: isMe, borderColor: borderColors[i], shadowColor: shadows[i] });
     }
-    window.renderMultiParty();
 };
 
 window.renderMultiParty = function() {
@@ -1366,7 +1603,7 @@ window.renderMultiParty = function() {
                 <!-- 3. 装備 -->
                 <div class="multi-party-equip-display" style="display: flex; gap: 2px; font-size: 10px; background: rgba(0,0,0,0.4); padding: 1px 4px; border-radius: 4px;">
                     <span title="Weapon">${m.isMe && activeWeapon === 'fire_sword' ? '🔥' : '🗡️'}</span>
-                    <span title="Armor">${m.isMe && activeArmor === 'cosmic_shield' ? '🔮' : '🛡️'}</span>
+                    <span title="Armor">${m.isMe && activeArmor === 'cosmic_shield' ? '🔮' : '星屑の盾'}</span>
                 </div>
                 <!-- 4. 名前 -->
                 <div style="font-size:8px; color:${color}; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; text-align:center;">${m.name}</div>
@@ -1575,9 +1812,6 @@ window.updateMultiHpBars = function() {
         limitFill.parentElement.style.justifyContent = 'flex-start'; /* 🌟 強制左詰めアンカー */
     }
     
-    // 🌟 パーメント表示を消去
-    if (limitText) { limitText.innerText = ""; }
-    
     // 🌟 COMBOコンポーネントエリア消去
     const multiComboParent = document.getElementById('multiComboCountText') ? document.getElementById('multiComboCountText').parentElement : null;
     if(multiComboParent) multiComboParent.style.display = 'none';
@@ -1727,6 +1961,7 @@ window.createFireballEffect = function() {
 // ==========================================================================
 // 🚀 完全同期ライフサイクルブートストラップ初期化 (フライング実行事故を完全防止)
 // ==========================================================================
+
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
         window.loadLocalState(); window.initLucide(); window.initHeroSlider(); window.renderActivityChart();
@@ -1739,4 +1974,3 @@ window.addEventListener("scroll", () => {
     const btn = document.getElementById("scrollToTopBtn");
     if(btn) { if(window.scrollY > 300) btn.classList.add("show"); else btn.classList.remove("show"); }
 });
-

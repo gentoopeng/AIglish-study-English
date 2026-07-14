@@ -199,7 +199,10 @@
             <div class="card" id="bulkImportToggleSection" style="display: none; border-top: 2px solid var(--accent);">
                 <h2><i data-lucide="file-spreadsheet" size="14"></i> 単語を一括登録・インポートする</h2>
                 <textarea id="bulkWordInput" class="modern-textarea" style="height: 100px;" placeholder="番号:英単語:メイン意味:サブ情報&#10;例:&#10;1:follow:①〜に従う②〜に続く:as follow 次のように..."></textarea>
-                <textarea id="customJapanesetextarea" class="modern-textarea" style="height: 90px;" placeholder="手動で和訳を割り当てたい場合は、英文の行数に合わせて改行しながら入力してください。"></textarea>
+                
+                <button class="modern-btn" onclick="handleBulkWordImport()">
+                    まとめて登録
+                </button>
 
                 <h2 style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; color: var(--admin-accent);">
                     <i data-lucide="check-square" size="14"></i> 登録単語の一括管理
@@ -537,7 +540,6 @@
                     <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-cyan);">
                         <h2 style="color:white; justify-content:center; margin-bottom:12px;"><i data-lucide="settings-2"></i> 出題モード選択</h2>
                         
-                        <!-- 🌟 縦に並べる形に変更 -->
                         <div style="display:flex; flex-direction:column; gap:12px;">
                             <button class="modern-btn" onclick="goToDifficultySelect('ja2en')">英訳 (和→英)</button>
                             <button class="modern-btn" onclick="goToDifficultySelect('en2ja')">和訳 (英→和)</button>
@@ -552,7 +554,6 @@
                     <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-purple-light);">
                         <h2 style="color:white; justify-content:center; margin-bottom:12px;"><i data-lucide="zap"></i> 難易度選択</h2>
                         
-                        <!-- 🌟 縦に並べる形に変更 -->
                         <div style="display:flex; flex-direction:column; gap:12px;">
                             <button class="modern-btn" onclick="startActualGame('normal')">ノーマル (1分)</button>
                             <button class="modern-btn" onclick="startActualGame('hard')">ハード (3分)</button>
@@ -776,7 +777,6 @@
 
     </div>
 
-    <!-- 🌟 ナビバーのID重複・アンカータイポを完全修正。ライフサイクルがこれで安全に回ります -->
     <div class="nav-bar" id="appMainBottomNavBar">
         <button class="nav-item active" id="nav-home" onclick="window.switchTab('home')"><i data-lucide="layout-dashboard" size="18"></i> ホーム</button>
         <button class="nav-item" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
@@ -799,7 +799,6 @@
         </div>
     </div>
 
-    <!-- 🌟 マルチバトルプレイ中専用の背景画像レイヤーを追加 -->
     <div id="multi-battle-play-bg"></div>
 
     <script src="app.js"></script>
