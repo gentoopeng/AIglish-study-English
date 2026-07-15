@@ -66,7 +66,7 @@ body::after {
     animation: vocabBgScroll 120s linear infinite;
 }
 
-#view-reader::before { background-image: url('friend.png'); } /* 🌟 元ファイル準拠 */
+#view-reader::before { background-image: url('friend.png'); } 
 #view-community::before { background-image: url('friend.png'); }
 #view-party::before { background-image: url('haikei.png'); }
 
@@ -94,10 +94,17 @@ body::after {
     transition: opacity 0.3s ease;
 }
 
-/* 🌟 マルチプレイ画面がアクティブになった時だけ sentou.png を浮き上がらせる */
-body.in-game-active #multi-battle-play-screen:not([style*="display: none"]) ~ #multi-battle-play-bg {
+/* 🌟 新設：対人戦専用背景画像レイヤー */
+body.in-game-active.multi-pvp-active #multi-battle-play-screen:not([style*="display: none"]) ~ #multi-battle-play-bg {
+    background-image: url('dojo.png') !important;
     opacity: 1;
-    z-index: 5; /* Existing content background */
+    z-index: 5;
+}
+
+/* 🌟 マルチプレイ画面がアクティブになった時だけ sentou.png を浮き上がらせる */
+body.in-game-active:not(.multi-pvp-active) #multi-battle-play-screen:not([style*="display: none"]) ~ #multi-battle-play-bg {
+    opacity: 1;
+    z-index: 5; 
 }
 
 .card {
@@ -141,7 +148,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .auth-error { color: #F87171; font-size: 12px; font-weight: 700; margin-bottom: 12px; display: none; background: rgba(239, 68, 68, 0.1); padding: 8px 12px; border-radius: 8px; }
 .auth-tabs { display: flex; background: var(--input-bg); padding: 4px; border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--border); gap: 4px; }
 .auth-tab-btn { flex: 1; border: none; background: none; padding: 8px 4px; font-size: 12px; font-weight: 700; color: var(--text-sub); cursor: pointer; border-radius: 7px; }
-.auth-tab-btn.active { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); }
+.nav-item.active { color: var(--cosmic-cyan) !important; text-shadow: 0 0 8px rgba(0, 240, 255, 0.5); }
 
 .login-confirm-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 6000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
 .login-confirm-card { background: var(--card-bg); border: 2px solid var(--cosmic-cyan); border-radius: 16px; padding: 24px; width: 85%; max-width: 320px; text-align: center; box-shadow: 0 10px 40px rgba(0, 240, 255, 0.3); }
@@ -192,7 +199,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .word-row-container { border-radius: 12px; padding: 14px; margin-bottom: 10px; cursor: pointer; position: relative; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.25); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); box-sizing: border-box; }
 .word-meaning-extra { font-size: 12.5px; color: #FFF; line-height: 1.6; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.25); white-space: pre-line; display: none; }
 .sub-info-block { background: rgba(0, 0, 0, 0.45); padding: 6px 10px; border-radius: 6px; font-size: 12px; color: #FFF; margin-top: 4px; }
-.range-box { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; background: rgba(255,255,255,0.15); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.3); padding: 8px 12px; border-radius: 10px; }
+.range-box { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; background: rgba(255,255,255,0.15); backdrop-filter: blur(5px); border: 1px solid rgba(255, 255, 255, 0.25); padding: 8px 12px; border-radius: 10px; }
 .range-input { width: 70px; height: 32px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; color: white; text-align: center; }
 .filter-scroller { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; }
 .pill-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.25); color: #FFF; font-size: 11px; padding: 6px 12px; border-radius: 20px; cursor: pointer; white-space: nowrap; }
@@ -278,7 +285,9 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .cosmic-neon-blue-text { color: var(--cosmic-cyan); text-shadow: 0 0 10px rgba(0, 240, 255, 0.8), 0 0 4px rgba(0, 240, 255, 0.5); }
 .cosmic-neon-purple-text { color: var(--cosmic-purple-light); text-shadow: 0 0 10px rgba(192, 132, 252, 0.8), 0 0 4px rgba(192, 132, 252, 0.5); }
 .game-unified-console { flex: 1; display: flex; align-items: center; justify-content: space-around; background: rgba(15, 23, 42, 0.9); border-radius: 8px; padding: 4px 10px; }
-.console-segment { display: flex; flex-direction: column; align-items: center; flex: 1; }
+.combo-segment { display: flex; flex-direction: column; align-items: center; flex: 1; }
+.combo-text { font-size: 16px; font-weight: 900; color: #FBBF24; text-shadow: 0 0 10px #F59E0B, 0 0 4px #FFFFFF; font-style: italic; letter-spacing: 1px; }
+.combo-score { font-size: 14px; font-weight: 800; color: var(--cosmic-cyan); text-shadow: 0 0 8px var(--cosmic-cyan); }
 .console-label { font-size: 9px; font-weight: 700; color: var(--text-sub); }
 .console-val { font-size: 18px; font-weight: 800; font-family: monospace; }
 .console-divider { width: 1px; height: 18px; background: var(--border); }
@@ -307,8 +316,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .incorrect .giant-mark { color: var(--word-bad); text-shadow: 0 0 15px var(--word-bad); }
 .giant-text { font-size: 14px; font-weight: 700; margin-top: 4px; }
 .persistent-combo-container { margin-top: 12px; display: flex; justify-content: center; align-items: baseline; gap: 8px; z-index: 900; }
-.combo-text { font-size: 16px; font-weight: 900; color: #FBBF24; text-shadow: 0 0 10px #F59E0B, 0 0 4px #FFFFFF; font-style: italic; letter-spacing: 1px; }
-.combo-score { font-size: 14px; font-weight: 800; color: var(--cosmic-cyan); text-shadow: 0 0 8px var(--cosmic-cyan); }
 .combo-blink { animation: gentleBlink 1.5s infinite alternate ease-in-out; }
 @keyframes gentleBlink { 0% { opacity: 0.6; transform: scale(0.95); } 100% { opacity: 1; transform: scale(1.02); } }
 .giant-score-popup { position: absolute; top: 15%; font-size: 28px; font-weight: 900; opacity: 0; pointer-events: none; z-index: 1001; }
@@ -373,7 +380,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     }
     50% {
         transform: scale(1.08) translateY(-3px); 
-        filter: drop-shadow(0 0 40px rgba(255, 0, 0, 1)) drop-shadow(0 0 80px rgba(128, 0, 128, 0.8)) brightness(1.25) contrast(1.3) sepia(15deg);
+        filter: drop-shadow(0 0 40px rgba(255, 0, 0, 1)) drop-shadow(0 0 80px rgba(128, 0, 128, 0.8)) brightness(1.25) contrast(1.3) xsepia(15deg);
     }
 }
 
@@ -627,6 +634,17 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     padding-top: 6px; padding-bottom: 8px; 
     overflow: hidden; 
     backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); 
+}
+.multi-flick-area {
+    border-color: var(--admin-accent);
+}
+body.in-game-active.multi-pvp-active .multi-flick-area {
+    border-color: var(--admin-accent);
+    box-shadow: 0 0 25px rgba(236,72,153,0.3), inset 0 0 30px rgba(236,72,153,0.1);
+}
+body.in-game-active:not(.multi-pvp-active) .multi-flick-area {
+    border-color: var(--cosmic-cyan);
+    box-shadow: 0 0 25px rgba(0,240,255,0.3), inset 0 0 30px rgba(0,240,255,0.1);
 }
 .multi-flick-area::before { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: linear-gradient(rgba(236,72,153,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(236,72,153,0.1) 1px, transparent 1px); background-size: 20px 20px; pointer-events: none; z-index: 0; }
 .multi-question-header-panel { text-align: center; margin-bottom: 4px; z-index: 10; }
@@ -1071,4 +1089,231 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 #game-result-screen .modern-btn:active,
 #game-play-screen .modern-btn:active {
     transform: translateY(2px) !important;
+}
+
+/* ==========================================================================
+   🎨 🌟 大改造：単語フラッシュ（フラッシュカード）極上ビジュアルモジュール
+   ========================================================================= */
+
+/* 選択設定画面からプレイ画面の最奥まで一貫して流れる、美しくシックな地味目の黒〜紫グラデーション */
+#flashcard-setup-screen,
+#flashcard-play-screen {
+    background: linear-gradient(135deg, #090514 0%, #110c1f 100%) !important;
+    box-sizing: border-box;
+}
+
+/* 🌟 操作性バグ修正：上にスワイプした時に画面全体が引っ張られないよう、プレイ画面表示中のみタッチスクロールを完全無効化 */
+#flashcard-play-screen {
+    position: fixed !important;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    z-index: 4500 !important;
+    touch-action: none !important;
+    overflow: hidden !important;
+}
+
+/* 中央ステージ配置枠 */
+#flashcardDeckStage {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+    height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible !important; /* 🌟 拡散余韻がちぎれないように保証 */
+}
+
+/* 🌟 デザイン大改造：四角いカードから一回り小ぶりな上品サイズの「完全正円形カード(240px)」へアジャスト */
+.flashcard-wrapper-3d {
+    position: absolute;
+    width: 240px;
+    height: 240px;
+    perspective: 1200px;
+    cursor: pointer;
+    z-index: 10;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 文字被りバグの原因となっていた不要な背面シャドウスタック用ダミー要素を100%完全抹消 */
+.flashcard-wrapper-3d.stack-shadow-1,
+.flashcard-wrapper-3d.stack-shadow-2,
+.flashcard-wrapper-3d.stack-shadow-3 {
+    display: none !important;
+}
+
+/* くるっと180度滑らかに回転するインナー軸 */
+.flashcard-inner-rotator {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    transform-style: preserve-3d;
+    z-index: 2;
+}
+
+/* 反転アニメーションバインディング */
+.flashcard-wrapper-3d.flipped .flashcard-inner-rotator {
+    transform: rotateY(180deg);
+}
+
+/* 🌟 不具合修正：表面・裏面を背面同士で完全隔離保護し、文字被りが絶対に発生しないよう backface-visibility を徹底適用 */
+.flashcard-face-front,
+.flashcard-face-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50% !important; /* 完全な美しい正円 */
+    border: none !important; /* 🌟 外周の硬い枠線を完全消去 */
+    padding: 24px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    backface-visibility: hidden !important;
+    -webkit-backface-visibility: hidden !important;
+    color: #FFFFFF !important; /* 文字の色は基本的に白に一貫統一 */
+    text-shadow: 0 2px 5px rgba(0,0,0,0.9);
+    z-index: 5;
+    /* 🌟 境界線・立体感用の影をすべて完全消去 */
+    box-shadow: none !important;
+    /* 🌟 JavaScriptによる動的フェードアウトを活かすためベース背景を完全に透明化 */
+    background: transparent !important;
+}
+
+/* 裏面はあらかじめ180度回転させて隔離 */
+.flashcard-face-back {
+    transform: rotateY(180deg);
+}
+
+/* 🌟 ご要望通り：外側の光彩や内側の立体用インセット影などの影定義（box-shadow）をクラスごとに100%完全抹消 */
+.flashcard-wrapper-3d.status-ok .flashcard-face-front,
+.flashcard-wrapper-3d.status-ok .flashcard-face-back,
+.flashcard-wrapper-3d.status-so .flashcard-face-front,
+.flashcard-wrapper-3d.status-so .flashcard-face-back,
+.flashcard-wrapper-3d.status-bad .flashcard-face-front,
+.flashcard-wrapper-3d.status-bad .flashcard-face-back,
+.flashcard-wrapper-3d.status-none .flashcard-face-front,
+.flashcard-wrapper-3d.status-none .flashcard-face-back {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+/* 慣性付きスワイプ高速射出アニメーション定義（シルクのような滑らかさへ） */
+.flashcard-wrapper-3d.slide-right {
+    transform: translate(220%, 15px) rotate(40deg) !important;
+    opacity: 0;
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.35s ease;
+}
+.flashcard-wrapper-3d.slide-left {
+    transform: translate(-220%, 15px) rotate(-40deg) !important;
+    opacity: 0;
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.35s ease;
+}
+.flashcard-wrapper-3d.slide-up {
+    transform: translate(0, -220%) scale(0.7) !important;
+    opacity: 0;
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.35s ease;
+}
+
+/* 🌟 バグ根換：肉厚背景をブチ抜いてカード表面の最前面へ浮き上がらせるライブ波紋用絶対レイヤー設定 */
+#flashcardLiveRippleLayer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50% !important;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 30 !important; /* カードフェイス背景(z-index: 5)を完全超越 */
+    mix-blend-mode: screen; /* 透過ブレンドによる超発光ネオン */
+    transition: opacity 0.1s ease;
+}
+
+/* 🌟 バグ根絶：最上位レイヤー強度(z-index: 9999)を乗せた打ち上げ花火ポスト余韻拡散エフェクト */
+.flashcard-post-ripple {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999 !important; /* 全てのUI要素の手前に出現 */
+    opacity: 0;
+    width: 240px;
+    height: 240px;
+    transform: translate(-50%, -50%);
+    top: 50%;
+    left: 50%;
+}
+
+/* 花火の消えゆく余韻スピードを 350ms の高速一瞬フェードアウトに完全チューニング最適化 */
+.flashcard-post-ripple.firework-余韻-right {
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.85) 0%, rgba(16, 185, 129, 0.35) 40%, rgba(16, 185, 129, 0) 70%);
+    animation: fcFireworkSparkle 0.35s cubic-bezier(0.1, 0.8, 0.25, 1) forwards;
+}
+
+.flashcard-post-ripple.firework-余韻-up {
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.8) 0%, rgba(245, 158, 11, 0.3) 40%, rgba(245, 158, 11, 0) 70%);
+    animation: fcFireworkSparkle 0.35s cubic-bezier(0.1, 0.8, 0.25, 1) forwards;
+}
+
+.flashcard-post-ripple.firework-余韻-left {
+    background: radial-gradient(circle, rgba(239, 68, 68, 0.85) 0%, rgba(239, 68, 68, 0.35) 40%, rgba(239, 68, 68, 0) 70%);
+    animation: fcFireworkSparkle 0.35s cubic-bezier(0.1, 0.8, 0.25, 1) forwards;
+}
+
+@keyframes fcFireworkSparkle {
+    0% {
+        transform: scale(0.5);
+        opacity: 1;
+        filter: brightness(1.6) blur(0px);
+    }
+    30% {
+        transform: scale(1.5);
+        opacity: 0.8;
+        filter: brightness(1.3) blur(1px);
+    }
+    60% {
+        transform: scale(2.2);
+        opacity: 0.4;
+        filter: brightness(0.9) blur(2px);
+    }
+    80% {
+        transform: scale(2.6);
+        opacity: 0.15;
+        filter: brightness(0.6) blur(4px);
+    }
+    100% {
+        transform: scale(3.0);
+        opacity: 0;
+        filter: brightness(0) blur(6px);
+    }
+}
+
+/* 🌟 画面端のオーラ波紋エフェクト（指の距離に連動して端がネオン発光） */
+.flashcard-edge-ripple {
+    position: fixed;
+    pointer-events: none;
+    z-index: 4400 !important;
+    opacity: 0;
+    transition: opacity 0.7s cubic-bezier(0.1, 0.8, 0.25, 1), transform 0.7s cubic-bezier(0.1, 0.8, 0.25, 1); 
+}
+
+.flashcard-edge-ripple.edge-right {
+    top: 0; right: 0; width: 120px; height: 100vh;
+    background: linear-gradient(to left, rgba(16, 185, 129, 0.5) 0%, rgba(16, 185, 129, 0.2) 40%, rgba(16, 185, 129, 0) 100%);
+    transform-origin: right center;
+}
+
+.flashcard-edge-ripple.edge-left {
+    top: 0; left: 0; width: 120px; height: 100vh;
+    background: linear-gradient(to right, rgba(239, 68, 68, 0.5) 0%, rgba(239, 68, 68, 0.2) 40%, rgba(239, 68, 68, 0) 100%);
+    transform-origin: left center;
+}
+
+.flashcard-edge-ripple.edge-top {
+    top: 0; left: 0; width: 100vw; height: 120px;
+    background: linear-gradient(to bottom, rgba(245, 158, 11, 0.5) 0%, rgba(245, 158, 11, 0.2) 40%, rgba(245, 158, 11, 0) 100%);
+    transform-origin: center top;
 }
