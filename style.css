@@ -148,7 +148,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .auth-error { color: #F87171; font-size: 12px; font-weight: 700; margin-bottom: 12px; display: none; background: rgba(239, 68, 68, 0.1); padding: 8px 12px; border-radius: 8px; }
 .auth-tabs { display: flex; background: var(--input-bg); padding: 4px; border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--border); gap: 4px; }
 .auth-tab-btn { flex: 1; border: none; background: none; padding: 8px 4px; font-size: 12px; font-weight: 700; color: var(--text-sub); cursor: pointer; border-radius: 7px; }
-.nav-item.active { color: var(--cosmic-cyan) !important; text-shadow: 0 0 8px rgba(0, 240, 255, 0.5); }
+.auth-tab-btn.active { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); }
 
 .login-confirm-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 6000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
 .login-confirm-card { background: var(--card-bg); border: 2px solid var(--cosmic-cyan); border-radius: 16px; padding: 24px; width: 85%; max-width: 320px; text-align: center; box-shadow: 0 10px 40px rgba(0, 240, 255, 0.3); }
@@ -1095,10 +1095,12 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
    🎨 🌟 大改造：単語フラッシュ（フラッシュカード）極上ビジュアルモジュール
    ========================================================================= */
 
-/* 選択設定画面からプレイ画面の最奥まで一貫して流れる、美しくシックな地味目の黒〜紫グラデーション */
+/* 🌟 深海背景画像(sinkai.png)を極上の形でセット！ 🌟 */
 #flashcard-setup-screen,
 #flashcard-play-screen {
-    background: linear-gradient(135deg, #090514 0%, #110c1f 100%) !important;
+    background-image: url('sinkai.png') !important;
+    background-size: cover !important;
+    background-position: center !important;
     box-sizing: border-box;
 }
 
@@ -1316,4 +1318,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     top: 0; left: 0; width: 100vw; height: 120px;
     background: linear-gradient(to bottom, rgba(245, 158, 11, 0.5) 0%, rgba(245, 158, 11, 0.2) 40%, rgba(245, 158, 11, 0) 100%);
     transform-origin: center top;
+}
+
 }
