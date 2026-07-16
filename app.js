@@ -55,7 +55,10 @@ let currentTranslationMode = 'inline';
 let currentActiveReaderText = "";
 let currentActiveTitle = "";
 let currentTargetWordToken = null;
-let currentTargetVocabNum = null; 
+let currentActiveTitleVocabNum = null; 
+
+// 🌟 新設：現在画面上に展開されているAI解析結果の一時キャッシュメモリ
+let currentActiveAiAnalysisCache = null;
 
 let gameTimerInterval = null;
 let gameRemainingTime = 45; 
@@ -84,6 +87,15 @@ let currentFlickChoice = -1;
 
 // 🌟 モードスワイプ用の変数
 let modeSwipeStartX = 0;
+
+// 🌟 新設：リアルタイム勉強時間および週間アクティビティ管理システム用データ
+let currentActiveTabId = "home"; 
+let todayStudySeconds = parseInt(localStorage.getItem('core_v4_study_today_secs') || "0");
+let lastAccessDateStr = localStorage.getItem('core_v4_study_last_date') || "";
+let weeklyStudyMinutesLog = JSON.parse(localStorage.getItem('core_v4_study_weekly_log') || "[0, 0, 0, 0, 0, 0, 0]"); 
+
+// 🌟 新設：フレンド機能ローカルモックデータベース配列
+let myFriendList = JSON.parse(localStorage.getItem('core_v4_friend_list') || "[]");
 
 // ==========================================================================
 // 🌟 魔法（関数）の完全グローバル登録
@@ -117,7 +129,7 @@ window.startAnalysisWithEmbeddedTitle = function() {
     window.analyzeText(rawText, assignedTitle);
 };
 
-// 新設：Gemini AIにリクエストを送信して英文・和訳・重要文法をJSONで解析する関数
+// 新設：Gemini AIにリクエストを送信して英文・和訳・重要文法および全文要約をJSONで一括解析する関数
 window.callGeminiAnalyzer = async function(text) {
     if (!geminiApiKey) {
         alert("【デバッグ情報】\nAPIキーが設定されていないため、AI通信をスキップしました。");
@@ -125,7 +137,7 @@ window.callGeminiAnalyzer = async function(text) {
     }
     try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
-        const prompt = "以下の英文をパースし、指定のJSONスキーマ形式のみで返答してください。余計な説明文やマークダウン of JSONタグは一切含めず、純粋なJSON文字列オブジェクトとして出力してください。\n\n英文:\n" + text + "\n\n出力JSON形式:\n{\n  \"sentences\": [\n    {\n      \"text\": \"元の英語の1文\",\n      \"translation\": \"その文の正確な日本語訳\",\n      \"grammarHighlights\": [\n        {\n          \"phrase\": \"フレーズ\",\n          \"meaning\": \"意味\"\n        }\n      ]\n    }\n  ]\n}";
+        const prompt = "以下の英文をパースし、指定のJSONスキーマ形式のみで返答してください。余計な説明文やマークダウンのJSONタグは一切含めず、純粋なJSON文字列オブジェクトとして出力してください。\n\n英文:\n" + text + "\n\n出力JSON形式:\n{\n  \"fullSummaryAbstract\": \"英文全体のシンプルな日本語要約(3文以内。無駄なトークンを削減するため簡潔に記述すること)\",\n  \"sentences\": [\n    {\n      \"text\": \"元の英語の1文\",\n      \"translation\": \"その文の正確な日本語訳\",\n      \"grammarHighlights\": [\n        {\n          \"phrase\": \"フレーズ\",\n          \"meaning\": \"意味\"\n        }\n      ]\n    }\n  ]\n}";
 
         const response = await fetch(url, {
             method: 'POST',
@@ -181,10 +193,56 @@ window.callGeminiGameJudge = async function(question, correctAnswer, userAns, mo
     }
 };
 
-// 安全対策：描画関数を最上部で強固に事前ロード
+// 大改造・連動：ページスライドの2ページ目に展開する「自分とユーザー全員（疑似）が入ったEXPランキング」を生成計算して美しく描画
 window.renderLeaderboard = function() { 
     const container = document.getElementById('leaderboardContainer'); 
-    if(container) container.innerHTML = `<div style="padding:10px; font-size:14px; font-weight:700; color:#FFF;">プレイヤー名: ${myName} / 合計スコア: ${totalExp} PTS</div>`; 
+    if(!container) return; 
+
+    // あらかじめサーバー通信を想定した実力派のライバル疑似データ配列を定義
+    let mockUsers = [
+        { name: "タンゴン校長", title: "シスタマスター", exp: 85000, lvl: 75, icon: "🧙‍♂️" },
+        { name: "アルファ英語王", title: "解読の達人", exp: 42000, lvl: 52, icon: "👑" },
+        { name: "たくみん", title: "単語の探求者", exp: 28000, lvl: 39, icon: "⚔️" },
+        { name: "シスタ見習い", title: "称号なし", exp: 12500, lvl: 18, icon: "🔰" },
+        { name: "ペンギン騎士", title: "単語の探求者", exp: 9800, lvl: 15, icon: "🐧" },
+        { name: "英語の達人M", title: "解読 of 神", exp: 130000, lvl: 99, icon: "⚡" },
+        { name: "ぽんぽこ", title: "称号なし", exp: 4500, lvl: 8, icon: "🍃" }
+    ];
+
+    // あなた（現在のプレイヤー）の実データをマージ追加
+    let calculatedLvl = Math.floor(totalExp / 1500) + 1;
+    mockUsers.push({
+        name: `${myName} (あなた)`,
+        title: selectedTitle,
+        exp: totalExp,
+        lvl: calculatedLvl,
+        icon: "👤",
+        isMe: true
+    });
+
+    // 経験値（EXP）順で綺麗に降順ソート
+    mockUsers.sort((a, b) => b.exp - a.exp);
+
+    let html = "";
+    mockUsers.forEach((u, idx) => {
+        let rankColor = idx === 0 ? "#FBBF24" : idx === 1 ? "#94A3B8" : idx === 2 ? "#D97706" : "#FFFFFF";
+        let bgStyle = u.isMe ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);" : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
+        
+        html += `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin-bottom:4px; ${bgStyle} font-size:12px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="color:${rankColor}; font-weight:900; font-size:14px; width:18px; text-align:center;">${idx + 1}</span>
+                    <span style="font-size:16px;">${u.icon}</span>
+                    <div>
+                        <div style="font-weight:bold; color:white;">${u.name} <span style="font-size:9px; color:var(--cosmic-cyan); font-weight:normal; margin-left:4px;">LV.${u.lvl}</span></div>
+                        <div style="font-size:9px; color:var(--text-sub); margin-top:1px;">${u.title}</div>
+                    </div>
+                </div>
+                <div style="text-align:right; font-weight:900; color:var(--word-so); font-family:monospace;">${u.exp} <span style="font-size:8px; color:var(--text-sub); font-weight:normal;">EXP</span></div>
+            </div>`;
+    });
+
+    container.innerHTML = html;
 };
 
 window.initLucide = function() { 
@@ -214,7 +272,7 @@ window.migrateVocabData = function(words) {
         if (!w.meanings || w.meanings.length === 0) {
             w.meanings = [];
             let mStr = w.meaning || "";
-            const hasCircle = /[①-⑳]/.test(mStr);
+            const hasCircle = /[i-⑳]/.test(mStr);
             if (hasCircle) {
                 let parts = mStr.split(/(?=[①-⑳])/).map(p => p.replace(/[①-⑳]/g, '').trim()).filter(p => p);
                 w.meanings = parts.map((p, i) => ({ id: `${w.num}-${i}`, text: p, status: w.status || 'none', history: w.history || [] }));
@@ -417,7 +475,7 @@ window.loadLocalState = function() {
 
     const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダッシュボード";
     const headerTitleEl = document.getElementById('headerTitleText');
-    if(headerTitleEl) headerTitleEl.innerText = savedTitleText; // 🌟 修正：バグを引き起こしていた「txt」記述を「savedTitleText」へ安全修正
+    if(headerTitleEl) headerTitleEl.innerText = savedTitleText;
     
     if(savedId) {
         myId = savedId;
@@ -446,6 +504,10 @@ window.loadLocalState = function() {
         window.renderBookshelf(); 
         window.renderAdminUserList(); 
         window.renderGameLeaderboard('mine');
+        
+        window.initStudyTimerAndDataRotation();
+        const codeBadge = document.getElementById('myFriendCodeDisplay');
+        if(codeBadge) codeBadge.innerText = myId;
     } else {
         const gateScreen = document.getElementById('auth-gate-screen');
         if(gateScreen) gateScreen.style.display = 'flex';
@@ -487,6 +549,9 @@ window.switchTab = function(tabId) {
     if(tabId !== 'reader' && typeof window.closeReader === 'function') window.closeReader();
     if(tabId === 'game') window.renderGameLeaderboard('mine');
     if(tabId === 'admin') window.renderAdminUserList(); 
+    
+    currentActiveTabId = tabId;
+    if(tabId === 'community') window.sortAndRenderFriendList();
 };
 
 // ==========================================================================
@@ -706,7 +771,6 @@ window.getCardStyleByHistory = function(wordObj) {
     return `background: linear-gradient(135deg, rgba(${r}, ${g}, ${b}, 0.22) 0%, rgba(30, 41, 59, 0.9) 75%);`;
 };
 
-// 🌟 新設：フラッシュカード用の動的グラデーションスタイル取得関数
 window.getFlashcardStyleByHistory = function(wordData) {
     const cleanKey = wordData.en.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g,"");
     const vocabMatch = vocabList.find(v => v.word.toLowerCase() === cleanKey);
@@ -754,9 +818,7 @@ window.getFlashcardStyleByHistory = function(wordData) {
         b = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio);
     }
 
-    // 🌟 修正：不自然に濃い「真っ刻な塊」や不自然な凹みを完全に排除！
-    // 単語帳カードの半透明仕様（最高透明度0.22）と完全に統一し、そこからシームレスに外周0.0へ溶け込ませる。
-    return `background: radial-gradient(circle at center, rgba(${r}, ${g}, ${b}, 0.22) 0%, rgba(${r}, ${g}, ${b}, 0.12) 50%, rgba(${r}, ${g}, ${b}, 0) 100%) !important; border: none !important; box-shadow: none !important;`;
+    return `background: radial-gradient(circle at center, rgba(${r}, ${g}, ${b}, 0.22) 0%, rgba(${r}, ${g}, ${b}, 0.12) 50%, rgba(${r}, ${g}, ${b}, 0) 100%);`;
 };
 
 window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
@@ -988,7 +1050,7 @@ window.renderVocabList = function() {
                         サブ情報を展開 <i data-lucide="chevron-down" size="12"></i>
                     </button>
                     <div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;">
-                        <div class="sub-info-block" style="background:rgba(0, 1, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">${w.sub}</div>
+                        <div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">${w.sub}</div>
                     </div>
                 </div>` : ''}
                 <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">${dotsHtml}</div>
@@ -1002,7 +1064,7 @@ window.renderVocabList = function() {
                 
                 <div style="margin-bottom:12px;">
                     <label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label>
-                    <div id="inlineEditMeaningsList-${w.num}".></div>
+                    <div id="inlineEditMeaningsList-${w.num}"></div>
                     <button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, '${w.num}')">
                         <i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加
                     </button>
@@ -1031,26 +1093,40 @@ window.renderVocabList = function() {
 // ==========================================================================
 // 📖 リーダー＆AI解析処理
 // ==========================================================================
-window.analyzeText = async function(rawText, assignedTitle = null) {
+window.analyzeText = async function(rawText, assignedTitle = null, preParsedData = null) {
     if(!rawText) return; currentActiveReaderText = rawText; currentActiveTitle = assignedTitle || "無題のテキスト";
     const customJaEl = document.getElementById('customJapanesetextarea');
     const customJaLines = customJaEl ? customJaEl.value.trim().split('\n').filter(l => l.trim() !== '') : [];
-    if(assignedTitle) {
-        textHistory = textHistory.filter(h => h.text !== rawText); 
-        textHistory.unshift({ id: Date.now(), title: assignedTitle, text: rawText });
-        localStorage.setItem('textHistory', JSON.stringify(textHistory)); window.renderHistoryList();
-    }
+    
+    textHistory = textHistory.filter(h => h.text !== rawText); 
+    textHistory.unshift({ id: Date.now(), title: currentActiveTitle, text: rawText });
+    localStorage.setItem('textHistory', JSON.stringify(textHistory)); window.renderHistoryList();
+
     document.getElementById('text-input-view').style.display = 'none'; document.getElementById('text-reader-view').style.display = 'block';
+    
     const englishContainer = document.getElementById('englishContainer'); 
-    englishContainer.innerHTML = '<div style="text-align:center; padding: 60px 20px; color: var(--cosmic-cyan); font-weight: bold; font-size: 16px; display:flex; flex-direction:column; align-items:center;"><i data-lucide="loader" class="animate-spin" size="36" style="margin-bottom:16px;"></i><span>🌀 AI構文解析・和訳取得中...</span></div>';
+    englishContainer.innerHTML = '<div style="text-align:center; padding: 60px 20px; color: var(--cosmic-cyan); font-weight: bold; font-size: 16px; display:flex; flex-direction:column; align-items:center;"><i data-lucide="loader" class="animate-spin" size="36" style="margin-bottom:16px;"></i><span>🌀 AI構文解析・全文要約取得中...</span></div>';
+    
+    const abstractCard = document.getElementById('summary-abstract-card');
+    const abstractContainer = document.getElementById('summaryAbstractContainer');
+    if (abstractCard) abstractCard.style.display = 'none';
+    if (abstractContainer) abstractContainer.innerText = "要約データを生成しています...";
+    
     window.initLucide();
     
-    let aiAnalysisResult = geminiApiKey ? await window.callGeminiAnalyzer(rawText) : null;
+    let aiAnalysisResult = null;
+    if (preParsedData) {
+        aiAnalysisResult = preParsedData;
+    } else {
+        aiAnalysisResult = geminiApiKey ? await window.callGeminiAnalyzer(rawText) : null;
+    }
     
     if (geminiApiKey && !aiAnalysisResult) {
         window.closeReader();
         return;
     }
+
+    currentActiveAiAnalysisCache = aiAnalysisResult;
 
     const safeTextForBtn = rawText.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
     const safeTitleForBtn = currentActiveTitle.replace(/'/g, "\\'").replace(/"/g, "&quot;");
@@ -1068,6 +1144,11 @@ window.analyzeText = async function(rawText, assignedTitle = null) {
     englishContainer.innerHTML = ''; let totalSummaryJa = "";
     let fallbackSentences = rawText.replace(/\n/g, ' ').match(/[^.?!]+[.?!]+|[^.?!]+$/g) || [rawText];
     let sentencesData = (aiAnalysisResult && aiAnalysisResult.sentences) ? aiAnalysisResult.sentences : fallbackSentences.map(s => ({ text: s.trim(), translations: "（和訳未取得）", grammarHighlights: [] }));
+
+    if (aiAnalysisResult && aiAnalysisResult.fullSummaryAbstract) {
+        if (abstractContainer) abstractContainer.innerText = aiAnalysisResult.fullSummaryAbstract;
+        if (abstractCard) abstractCard.style.display = 'block';
+    }
 
     sentencesData.forEach((sData, sIdx) => {
         let sentenceText = sData.text || ""; if(!sentenceText.trim()) return;
@@ -1152,7 +1233,15 @@ window.showCustomSaveBookshelfPrompt = function(text, title) {
         if (folder === 'new_folder') { folder = newFolderInput.value.trim(); if (!folder) folder = "未分類"; }
         if(!myFolders.includes(folder)) { myFolders.push(folder); localStorage.setItem('myFolders', JSON.stringify(myFolders)); }
         if(myBookshelf.some(item => item.text === text && item.folder === folder)) { alert("すでに保存されています！"); document.body.removeChild(overlay); return; }
-        myBookshelf.push({ id: Date.now(), folder: folder, title: title || "無題 Graves", text: text });
+        
+        myBookshelf.push({ 
+            id: Date.now(), 
+            folder: folder, 
+            title: title || "無題 Graves", 
+            text: text,
+            aiAnalysisData: currentActiveAiAnalysisCache ? JSON.parse(JSON.stringify(currentActiveAiAnalysisCache)) : null
+        });
+        
         localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); alert(`保存しました！`); window.renderBookshelf(); document.body.removeChild(overlay);
     };
 };
@@ -1163,16 +1252,20 @@ window.renderBookshelf = function() {
     const foldersData = {};
     myBookshelf.forEach(item => { if(!foldersData[item.folder]) foldersData[item.folder] = []; foldersData[item.folder].push(item); });
     for(let folderName in foldersData) {
-        let folderHtml = `<div style="margin-bottom:20px; background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; border:1px solid rgba(255,255,255,0.1);">
+        let folderHtml = `<div style="margin-bottom:20px; background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; border:1px solid rgba(255,255,255,0.15);">
             <h3 style="color:var(--cosmic-cyan); font-size:15px; border-bottom:1px dashed rgba(0,240,255,0.3); padding-bottom:6px; margin-top:0; margin-bottom:12px; display:flex; align-items:center; gap:6px;"><i data-lucide="folder" size="16"></i> ${folderName}</h3>`;
         foldersData[folderName].forEach(item => {
             const safeText = item.text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
             const safeTitle = item.title ? item.title.replace(/'/g, "\\'").replace(/"/g, "&quot;") : "無題";
+            
+            let itemIndex = myBookshelf.findIndex(b => b.id === item.id);
+            let parseCallParam = item.aiAnalysisData ? `myBookshelf[${itemIndex}].aiAnalysisData` : 'null';
+
             folderHtml += `
                 <div class="list-item-row" style="background:rgba(255,255,255,0.05); padding:10px 14px; border-radius:8px; margin-bottom:8px;">
                     <div class="list-item-title" style="flex:1;"><span><i data-lucide="file-text" size="12" style="color:var(--text-sub); margin-right:4px;"></i>${item.title}</span></div>
                     <div style="display:flex; gap:8px;">
-                        <button class="list-action-link" style="background:var(--accent); border:none;" onclick="window.analyzeText(\`${safeText}\`, '${safeTitle}')">開く</button>
+                        <button class="list-action-link" onclick="window.analyzeText(\`${safeText}\`, '${safeTitle}', ${parseCallParam})">開く</button>
                         <button class="word-delete-btn" style="display:flex !important; background:none; border:none; color:#EF4444; padding:4px; cursor:pointer;" onclick="event.stopPropagation(); event.preventDefault(); window.showCustomDeleteBookshelfConfirm('${item.id}')"><i data-lucide="trash-2" size="14"></i></button>
                     </div>
                 </div>`;
@@ -1279,12 +1372,16 @@ window.setWordStatusFromReader = function(status) {
 };
 
 window.closeWordPopover = function() { document.getElementById('wordPopover').classList.remove('show'); document.getElementById('wordPopover').style.display = 'none'; };
-window.closeReader = function() { document.getElementById('text-input-view').style.display = 'block'; document.getElementById('text-reader-view').style.display = 'none'; };
+window.closeReader = function() { document.getElementById('text-input-view').style.display = 'block'; document.getElementById('text-reader-view').style.display = 'none'; currentActiveAiAnalysisCache = null; };
 window.setTranslationMode = function(mode) {
     currentTranslationMode = mode;
     document.getElementById('toggle-inline').classList.toggle('active', mode === 'inline'); document.getElementById('toggle-bottom').classList.toggle('active', mode === 'bottom');
     document.querySelectorAll('.sentence-ja').forEach(el => el.style.display = mode === 'inline' ? 'block' : 'none');
     document.getElementById('summary-ja-card').style.display = mode === 'bottom' ? 'block' : 'none';
+    const abstractCard = document.getElementById('summary-abstract-card');
+    if (abstractCard && document.getElementById('summaryAbstractContainer').innerText !== "要約データを生成しています...") {
+        abstractCard.style.display = 'block';
+    }
 };
 
 // ==========================================================================
@@ -1293,18 +1390,230 @@ window.setTranslationMode = function(mode) {
 
 window.renderActivityChart = function() {
     const chart = document.getElementById('activityBarChart'); if(!chart) return; chart.innerHTML = "";
-    ["月", "火", "水", "木", "金", "土", "日"].forEach(d => {
+    
+    const now = new Date();
+    let currentDayIdx = now.getDay() - 1; 
+    if(currentDayIdx < 0) currentDayIdx = 6; 
+
+    const currentTodayMinutes = todayStudySeconds / 60;
+    weeklyStudyMinutesLog[currentDayIdx] = currentTodayMinutes;
+
+    const daysLabels = ["月", "火", "水", "木", "金", "土", "日"];
+    daysLabels.forEach((d, idx) => {
         const wrap = document.createElement('div'); wrap.className = "bar-wrapper";
-        const fill = document.createElement('div'); fill.className = "bar-fill active"; fill.style.height = "50%";
+        wrap.style.cssText = "display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; flex: 1;";
+        
+        let rawMin = weeklyStudyMinutesLog[idx] || 0;
+        let fillHeightPercent = Math.min(100, Math.max(4, Math.round((rawMin / 60) * 100)));
+        
+        const fill = document.createElement('div'); fill.className = "bar-fill active"; fill.style.height = `${fillHeightPercent}%`;
+        
+        const valLbl = document.createElement('div'); valLbl.className = "bar-width";
+        valLbl.style.cssText = "font-size: 8px; font-weight: 700; color: #FFFFFF; margin-bottom: 2px;";
+        valLbl.innerText = `${Math.floor(rawMin)}分`;
+
         const lbl = document.createElement('div'); lbl.className = "bar-label"; lbl.innerText = d;
+        lbl.style.cssText = "font-size: 10px; color: var(--text-sub); margin-top: 4px; font-weight: bold;";
+        
+        wrap.appendChild(valLbl);
         wrap.appendChild(fill); wrap.appendChild(lbl); chart.appendChild(wrap);
     });
+};
+
+window.initStudyTimerAndDataRotation = function() {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;
+    
+    if (lastAccessDateStr && lastAccessDateStr !== todayStr) {
+        let oldDate = new Date(lastAccessDateStr);
+        let oldDayIdx = oldDate.getDay() - 1;
+        if(oldDayIdx < 0) oldDayIdx = 6;
+        
+        weeklyStudyMinutesLog[oldDayIdx] = todayStudySeconds / 60;
+        localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+        
+        todayStudySeconds = 0;
+        localStorage.setItem('core_v4_study_today_secs', "0");
+    }
+    
+    lastAccessDateStr = todayStr;
+    localStorage.setItem('core_v4_study_last_date', todayStr);
+
+    setInterval(() => {
+        let shouldCount = false;
+        
+        if (currentActiveTabId === "vocab") {
+            shouldCount = true;
+        }
+        else if (currentActiveTabId === "reader") {
+            shouldCount = true;
+        }
+        else if (currentActiveTabId === "game") {
+            const isFcardPlay = (document.getElementById('flashcard-play-screen') && document.getElementById('flashcard-play-screen').style.display === 'flex');
+            const isSoloPlay = (document.getElementById('game-play-screen') && document.getElementById('game-play-screen').style.display === 'block');
+            const isMultiPlay = (document.getElementById('multi-battle-play-screen') && document.getElementById('multi-battle-play-screen').style.display === 'flex');
+            
+            if (isFcardPlay || isSoloPlay || isMultiPlay) {
+                shouldCount = true;
+            }
+        }
+
+        if (shouldCount) {
+            todayStudySeconds++;
+            localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
+
+            const minStr = String(Math.floor(todayStudySeconds / 60)).padStart(2, '0');
+            const secStr = String(todayStudySeconds % 60).padStart(2, '0');
+            const timeDisplayEl = document.getElementById('todayStudyTimeDisplay');
+            if (timeDisplayEl) {
+                timeDisplayEl.innerText = `${minStr}分${secStr}秒`;
+            }
+
+            window.renderActivityChart();
+        }
+    }, 1000);
+
+    const minStr = String(Math.floor(todayStudySeconds / 60)).padStart(2, '0');
+    const secStr = String(todayStudySeconds % 60).padStart(2, '0');
+    const timeDisplayEl = document.getElementById('todayStudyTimeDisplay');
+    if (timeDisplayEl) {
+        timeDisplayEl.innerText = `${minStr}分${secStr}秒`;
+    }
+    window.renderActivityChart();
+};
+
+// ==========================================================================
+// 🤝 🌟 新設：フレンドシステム・ロジックモジュール
+// ==========================================================================
+
+window.searchAndAddFriend = function() {
+    const inputEl = document.getElementById('friendSearchInput');
+    if (!inputEl) return;
+    const targetCode = inputEl.value.trim().toUpperCase();
+
+    if (!targetCode) {
+        alert("追加したい相手のIDコードを入力してください。");
+        return;
+    }
+    if (targetCode === myId) {
+        alert("自分自身のコードを追加することはできません。");
+        return;
+    }
+    if (myFriendList.some(f => f.code === targetCode)) {
+        alert("このフレンドは既に登録されています！");
+        return;
+    }
+
+    const randomNames = ["たくみ", "アリス", "ボブ", "ケン", "ソラ", "さくら", "リン", "ダイキ", "れん", "みう", "レオ"];
+    const titlePool = ["単語の探求者", "シスタマスター", "解読の達人", "称号なし"];
+    const avatars = ["🦊", "🐼", "🦁", "🐰", "🦄", "🦅", "🐸", "🐱", "🐶"];
+
+    const rName = randomNames[Math.floor(Math.random() * randomNames.length)] + "#" + Math.floor(Math.random() * 900 + 100);
+    const rTitle = titlePool[Math.floor(Math.random() * titlePool.length)];
+    const rAvatar = avatars[Math.floor(Math.random() * avatars.length)];
+    
+    const rLevel = Math.floor(Math.random() * 49) + 1; 
+    const rStudyMinutes = Math.floor(Math.random() * 291) + 10; 
+    
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - Math.floor(Math.random() * 5000));
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const rLoginStr = `${y}/${m}/${d} ${hh}:${mm}`;
+
+    const newFriend = {
+        code: targetCode,
+        name: rName,
+        title: rTitle,
+        avatar: rAvatar,
+        level: rLevel,
+        studyTime: rStudyMinutes,
+        lastLoginStr: rLoginStr,
+        timestamp: now.getTime() 
+    };
+
+    myFriendList.push(newFriend);
+    localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+
+    alert(`🎉 フレンドの追加に成功しました！\nニックネーム: ${rName}`);
+    inputEl.value = "";
+    
+    window.sortAndRenderFriendList();
+};
+
+window.sortAndRenderFriendList = function() {
+    const container = document.getElementById('friendListContainer');
+    if (!container) return;
+    container.innerHTML = "";
+
+    if (myFriendList.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:30px; color:var(--text-sub); font-size:12px;">
+                <i data-lucide="user-plus" size="24" style="margin-bottom:6px; opacity:0.5;"></i><br>
+                まだフレンドが登録されていません。<br>上部からIDで検索して追加してみましょう！
+            </div>`;
+        window.initLucide();
+        return;
+    }
+
+    const sortType = document.getElementById('friendSortSelect').value;
+
+    let sortedList = [...myFriendList];
+    if (sortType === "login") {
+        sortedList.sort((a, b) => b.timestamp - a.timestamp); 
+    } else if (sortType === "level") {
+        sortedList.sort((a, b) => b.level - a.level); 
+    } else if (sortType === "studyTime") {
+        sortedList.sort((a, b) => b.studyTime - a.studyTime); 
+    }
+
+    sortedList.forEach(f => {
+        const item = document.createElement('div');
+        item.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:10px 14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);";
+        
+        item.innerHTML = `
+            <div style="display:flex; align-items:center; gap:12px; flex:1; min-width:0;">
+                <span style="font-size:24px; flex-shrink:0;">${f.avatar}</span>
+                <div style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:baseline; gap:6px;">
+                        <span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
+                        <span style="font-size:10px; font-weight:900; color:var(--cosmic-cyan); flex-shrink:0;">LV.${f.level}</span>
+                    </div>
+                    <div style="font-size:10px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">${f.title}</div>
+                    <div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">
+                        <span>⏱️ 勉強時間: <strong style="color:white;">${f.studyTime}分</strong></span>
+                        <span>🔑 ID: ${f.code}</span>
+                    </div>
+                </div>
+            </div>
+            <div style="text-align:right; flex-shrink:0; margin-left:8px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+                <div style="font-size:9px; color:var(--text-sub);">ログイン:<br><span style="color:#FFF; font-weight:600;">${f.lastLoginStr.split(' ')[0]}</span></div>
+                <button style="background:none; border:none; color:var(--word-bad); padding:2px; cursor:pointer;" onclick="window.removeFriendDirect('${f.code}', event)"><i data-lucide="user-x" size="14"></i></button>
+            </div>`;
+        container.appendChild(item);
+    });
+
+    window.initLucide();
+};
+
+// 🌟 修正：フレンドを「本当に削除するか」のポップアップ確認付きで安全にフィルタリング破棄するロジック
+window.removeFriendDirect = function(code, event) {
+    if(event) event.stopPropagation();
+    if (confirm("このフレンドをリストから削除しますか？")) {
+        myFriendList = myFriendList.filter(f => f.code !== code);
+        localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+        window.sortAndRenderFriendList();
+    }
 };
 
 window.saveSidebarProfile = function() {
     geminiApiKey = document.getElementById('sidebarApiKeyInput').value.trim(); localStorage.setItem('core_v4_geminiKey', geminiApiKey);
     myName = document.getElementById('sideInputName').value.trim() || myName; myTarget = document.getElementById('sideInputTarget').value.trim() || myTarget;
     selectedTitle = document.getElementById('sideSelectTitle').value; window.applyProfileToUi(); window.toggleSidebar(false);
+    window.renderLeaderboard(); 
 };
 
 // ==========================================================================
@@ -1372,26 +1681,47 @@ window.setLbDiff = function(diff) {
     window.renderGameLeaderboard();
 };
 
-window.renderGameLeaderboard = function(type = currentLbType) {
+window.renderGameLeaderboard = function() {
     const container = document.getElementById('leaderboardListContainer'); if(!container) return; container.innerHTML = "";
-    if (type === 'mine') {
-        const keyHistory = `cosmic_score_${currentLbMode}_endless`; let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
-        if (history.length === 0) { container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px; margin-top:20px;">このモードの記録はありません</div>`; return; }
-        const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "var(--cosmic-cyan)", "var(--cosmic-cyan)"];
-        history.forEach((record, index) => {
-            const row = document.createElement('div'); row.style.cssText = `display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;`;
-            row.innerHTML = `<div style="display:flex; gap:12px; align-items:center;"><span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:15px; width:20px; text-align:center;">${index + 1}</span><span style="color:white; font-weight:800; letter-spacing:1px;">${record.score}</span></div><div style="color:var(--text-sub); font-size:11px;">${record.date}</div>`;
-            container.appendChild(row);
-        });
-    } else {
-        container.innerHTML = `<div style="text-align:center; color:var(--text-sub); font-size:12px; margin-top:20px;"><i data-lucide="server-off" size="16" style="margin-bottom:4px;"></i><br>コミュニティデータ準備中...</div>`; window.initLucide();
-    }
-};
+    
+    const keyHistory = `cosmic_score_${currentLbMode}_endless`; 
+    let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
+    let myBestScoreCurrent = history.length > 0 ? history[0].score : 0;
 
-window.switchLeaderboard = function(type) {
-    document.getElementById('lbTabMine').classList.toggle('active', type === 'mine');
-    if(document.getElementById('lbTabComm')) document.getElementById('lbTabComm').classList.toggle('active', type === 'comm');
-    window.renderGameLeaderboard(type);
+    let mockGameRankings = [
+        { name: "タンゴン開発者", score: 8500, date: "07/15 14:32" },
+        { name: "たくみん", score: 5200, date: "07/16 23:01" },
+        { name: "アルファ英語王", score: 4800, date: "07/14 09:12" },
+        { name: "ペンギンエース", score: 3100, date: "07/17 01:45" },
+        { name: "修行者X", score: 1200, date: "07/16 11:54" }
+    ];
+
+    mockGameRankings.push({
+        name: `${myName} (あなた)`,
+        score: myBestScoreCurrent,
+        date: history.length > 0 ? history[0].date : "記録なし",
+        isMe: true
+    });
+
+    mockGameRankings.sort((a, b) => b.score - a.score);
+
+    const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "white", "white", "white"];
+    mockGameRankings.forEach((record, index) => {
+        const row = document.createElement('div');
+        let bgStyle = record.isMe ? "background: linear-gradient(90deg, rgba(192, 132, 252, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border-left: 3px solid var(--cosmic-purple-light);" : "border-bottom:1px solid rgba(255,255,255,0.05);";
+        row.style.cssText = `display:flex; justify-content:space-between; align-items:center; padding:6px 8px; ${bgStyle}`;
+        
+        row.innerHTML = `
+            <div style="display:flex; gap:12px; align-items:center;">
+                <span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:14px; width:18px; text-align:center;">${index + 1}</span>
+                <span style="color:white; font-weight:800; letter-spacing:0.5px;">${record.name}</span>
+            </div>
+            <div style="text-align:right;">
+                <span style="color:var(--cosmic-cyan); font-weight:900; font-family:monospace; font-size:13px; margin-right:8px;">${record.score} <span style="font-size:8px; font-weight:normal; color:var(--text-sub);">PTS</span></span>
+                <span style="color:var(--text-sub); font-size:9px; display:block; margin-top:1px;">${record.date}</span>
+            </div>`;
+        container.appendChild(row);
+    });
 };
 
 // ==========================================================================
@@ -1473,7 +1803,6 @@ window.startFlashcardSession = function() {
     window.renderFlashcardDeck();
 };
 
-// 🌟 改良：単語固有の過去の理解度ログ（◯、△、✕）を取得して最初から泡を着色
 window.renderFlashcardHistoryBubbles = function(wordData) {
     const container = document.getElementById('fcHistoryContainer');
     if (!container) return;
@@ -1511,7 +1840,6 @@ window.renderFlashcardHistoryBubbles = function(wordData) {
     });
 };
 
-// リアルタイム指追従用のパーティクルエフェクト
 window.createFlickTrailParticle = function(x, y, type) {
     const stage = document.getElementById('flashcard-play-screen');
     if (!stage) return;
@@ -1592,7 +1920,6 @@ window.renderFlashcardDeck = function() {
         let dx = e.touches[0].clientX - cardTouchStartX;
         let dy = e.touches[0].clientY - cardTouchStartY;
         
-        // 🌟 修正：指の動きに合わせて円形の親要素全体を完全に追従移動
         cardWrap.style.transform = "translate3d(" + dx + "px, " + dy + "px, 0) rotate(" + (dx * 0.05) + "deg)";
         
         let distance = Math.sqrt(dx * dx + dy * dy);
@@ -1695,7 +2022,6 @@ window.swipeFlashcard = function(direction, finalDx = 0, finalDy = 0) {
     let cleanKey = currentWord.en.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g,"");
     let status = 'none';
     
-    // 🌟 エフェクトの発生位置を、画面中央ではなく「指を離した先」にするための絶対座標計算
     const stage = document.getElementById('flashcardDeckStage');
     let baseLeft = window.innerWidth / 2;
     let baseTop = window.innerHeight / 2.2;
@@ -1713,7 +2039,6 @@ window.swipeFlashcard = function(direction, finalDx = 0, finalDy = 0) {
         }, i * 15);
     }
 
-    // 🌟 大幅軽量化：カクつきの原因になる重い blur や brightness フィルターを完全撤廃し、GPUアクセラレーションを効かせた変形処理のみに
     card.style.animation = "none"; 
     card.style.transition = "transform 0.8s cubic-bezier(0.1, 0.8, 0.25, 1), opacity 0.8s ease";
     card.style.transform = `translate3d(${finalDx}px, ${finalDy}px, 0) scale(0) rotate(${finalDx * 0.05}deg)`;
@@ -1749,7 +2074,6 @@ window.swipeFlashcard = function(direction, finalDx = 0, finalDy = 0) {
 
     window.renderFlashcardHistoryBubbles(currentWord);
 
-    // 🌟 リップルエフェクトも極限まで軽量化し、800msかけてじんわり優しく広げる
     if (stage) {
         const ripple = document.createElement('div');
         ripple.className = `flashcard-post-ripple firework-余韻-${direction}`;
@@ -1763,13 +2087,12 @@ window.swipeFlashcard = function(direction, finalDx = 0, finalDy = 0) {
     window.applyProfileToUi();
     window.updateReaderWordColors();
     window.renderVocabList();
+    window.renderLeaderboard(); 
     
-    // 次のカードロードまでの待機時間を800msに完全同調
     setTimeout(() => {
         flashcardCurrentIndex++;
         window.renderFlashcardDeck();
         
-        // 画面端のリップルをリセット
         const rightEdge = document.getElementById('fcEdgeRippleRight');
         const leftEdge = document.getElementById('fcEdgeRippleLeft');
         const topEdge = document.getElementById('fcEdgeRippleTop');
@@ -1795,7 +2118,6 @@ window.quitFlashcardSession = function() {
     window.renderGameLeaderboard();
 };
 
-// 🌟 復活：シングルプレイ（単語の試練）の開始用画面制御関数
 window.showModeSelectScreen = function() {
     const startScreen = document.getElementById('game-start-screen');
     const lbArea = document.getElementById('gameLeaderboardArea');
@@ -1806,7 +2128,6 @@ window.showModeSelectScreen = function() {
     if (modeSelectScreen) modeSelectScreen.style.display = 'block';
 };
 
-// 🌟 追加サポート関数：モード選択画面からの遷移ロジック群
 window.goToDifficultySelect = function(mode) {
     selectedQuestionMode = mode;
     document.getElementById('game-mode-select-screen').style.display = 'none';
@@ -1942,7 +2263,6 @@ window.submitGameAnswer = function() {
     }
 };
 
-// 🌟 新設：パスボタン押した時のMISS処理ロジック (指定通りオーバーレイを完全に排除)
 window.skipGameWordWithPass = function() {
     if(isGameProcessingAnswer) return;
     
@@ -1950,7 +2270,6 @@ window.skipGameWordWithPass = function() {
     const currentQ = gameCurrentWordsQueue[gameCurrentIndex];
     let correctTarget = currentQuestionType === 'ja2en' ? currentQ.word : currentQ.meaning;
     
-    // 指示の通り、パス時は空文字入力で即座にMISS判定ステップへ送る
     processJudgmentResult("NG", correctTarget, "（パス）", "", true);
 };
 
@@ -1998,7 +2317,6 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
     
     document.getElementById('gameScoreNum').innerText = String(gameScoreCount).padStart(4, '0');
     
-    // 🌟 コンボ演出
     const comboContainer = document.getElementById('persistentComboContainer');
     if(gameComboCount >= 2) {
         comboContainer.style.display = 'flex';
@@ -2007,12 +2325,10 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
         comboContainer.style.display = 'none';
     }
     
-    // 🌟 修正：パス時（isPass === true）は、画面を覆う黒いオーバーレイを一切表示しない
     if (!isPass) {
         overlay.classList.add('show');
     }
     
-    // 解説表示
     document.getElementById('feedbackUserAns').innerText = userAns;
     document.getElementById('feedbackCorrectAns').innerText = correctTarget;
     if(alternatives) {
@@ -2029,7 +2345,6 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
         status: status
     });
     
-    // 🌟 修正：パス時はオーバーレイの余韻を待つ必要がないため、即座に（10ms）解説枠を開放して入力処理を完了
     let feedbackDelay = isPass ? 10 : 800;
     setTimeout(() => {
         document.getElementById('feedbackContent').style.display = 'block';
@@ -2055,7 +2370,6 @@ window.endGameSession = function() {
     let accuracy = totalQ > 0 ? Math.round((correctQ / totalQ) * 100) : 0;
     document.getElementById('resAccuracy').innerText = `${accuracy}%`;
     
-    // スコアセーブ
     let keyBest = `cosmic_best_${selectedQuestionMode}_endless`;
     let oldBest = parseInt(localStorage.getItem(keyBest) || "0");
     if(gameScoreCount > oldBest) {
@@ -2074,7 +2388,6 @@ window.endGameSession = function() {
     history.sort((a, b) => b.score - a.score);
     localStorage.setItem(logKey, JSON.stringify(history.slice(0, 5)));
     
-    // ログリスト出力
     const container = document.getElementById('gameHistoryListContainer');
     container.innerHTML = "";
     gameHistoryLog.forEach(h => {
@@ -2088,6 +2401,8 @@ window.endGameSession = function() {
     totalExp += gameScoreCount;
     localStorage.setItem('core_v4_totalExp', totalExp);
     window.applyProfileToUi();
+    window.renderLeaderboard(); 
+    window.renderGameLeaderboard(); 
 };
 
 // ==========================================================================
@@ -2417,7 +2732,7 @@ window.startMultiBattlePlay = function() {
     multiEnemyTimeLeft = 10; 
     window.updateMultiHpBars();
     
-    gameCurrentWordsQueue = []; vocabList.forEach(w => { if(w.meanings && w.meanings.length > 0) gameCurrentWordsQueue.push({ wordNum: w.num, word: w.word, meaning: window.formatWordForDisplay(w.meanings[0].text) }); });
+    gameCurrentWordsQueue = []; vocabList.forEach(w => { if(w.meanings && w.meanings.length > 0) gameCurrentWordsQueue.push({ wordNum: w.wordNum, word: w.word, meaning: window.formatWordForDisplay(w.meanings[0].text) }); });
     if(gameCurrentWordsQueue.length === 0) {
         gameCurrentWordsQueue.push({ wordNum: "0", word: "cosmic", meaning: "宇宙の" });
     }

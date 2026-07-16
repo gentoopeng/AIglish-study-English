@@ -178,6 +178,15 @@
                     </div>
                 </div>
 
+                <!-- 🌟 新設：本日の総勉強時間（リアルタイム）グラデーションバッジ枠 -->
+                <div id="studyTimeLiveBadgeFrame" style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.6) 100%); border: 1px solid rgba(245, 158, 11, 0.4); box-shadow: 0 0 10px rgba(245, 158, 11, 0.15); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="timer" style="color: #F59E0B; width: 16px; height: 16px;"></i>
+                        <span style="font-size: 11px; font-weight: 800; color: #E2E8F0; letter-spacing: 0.5px;">本日の総勉強時間 (リアルタイム)</span>
+                    </div>
+                    <span id="todayStudyTimeDisplay" style="font-size: 15px; font-weight: 900; color: #FFFFFF; font-family: monospace; text-shadow: 0 0 8px #F59E0B;">00分00秒</span>
+                </div>
+
                 <h2><i data-lucide="trending-up" size="14"></i> 最近7日間の学習アクティビティ</h2>
                 <div class="bar-chart-container" id="activityBarChart"></div>
             </div>
@@ -305,32 +314,82 @@
                     <h2>ドキュメント総和訳</h2>
                     <div id="summaryJaContainer" style="font-size:14px; line-height:1.6; color:var(--text-sub);"></div>
                 </div>
+
+                <!-- 🌟 新設：パターンAに基づき、「ドキュメント総和訳」の真下に完全独立配置した全文要約表示カード -->
+                <div class="card" id="summary-abstract-card" style="display:none; border-top: 2px solid var(--cosmic-purple-light); box-shadow: 0 0 15px rgba(192, 132, 252, 0.25) !important;">
+                    <h2><i data-lucide="sparkles" style="color:var(--cosmic-purple-light);"></i> 全文要約 (AI Abstract)</h2>
+                    <div id="summaryAbstractContainer" style="font-size:14px; line-height:1.6; color:white; white-space:pre-line;">要約データを生成しています...</div>
+                </div>
             </div>
         </div>
 
-        <div id="view-community" class="tab-view">
-            <div class="card">
-                <h2><i data-lucide="award" size="14"></i> 所属グループ内経験値ランキング</h2>
-                <div id="leaderboardContainer"></div>
-            </div>
-
-            <!-- 🌟 移動してきたゲームスコアランキング -->
-            <div class="card" id="gameLeaderboardArea" style="display:flex; flex-direction:column; min-height:350px;">
-                <h2 style="margin-bottom: 12px;"><i data-lucide="trophy" size="14"></i> ゲームスコアランキング</h2>
-                <div class="auth-tabs" style="margin-bottom:8px; padding:2px;">
-                    <button class="auth-tab-btn active" id="lbTabMine" onclick="switchLeaderboard('mine')" style="padding:4px; font-size:11px;">マイベスト</button>
+        <!-- 🌟 大改造：「共有同期」から名実ともに「フレンド」へと転生した2ページ横スライド式メインコンテナ -->
+        <div id="view-community" class="tab-view" style="position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10; padding: 0 !important;">
+            
+            <!-- 1ページ目：フレンド一覧管理ページ -->
+            <div style="flex: 0 0 100vw; width: 100vw; height: 100%; scroll-snap-align: center; box-sizing: border-box; padding: 20px 16px; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid var(--cosmic-cyan); padding-bottom: 6px;">
+                    <h2 style="margin-bottom: 0; font-size: 15px; color: var(--cosmic-cyan) !important;"><i data-lucide="users"></i> フレンドリスト (1 / 2)</h2>
+                    <span style="font-size: 10px; color: var(--text-sub); font-weight: 800;">👉 スワイプでスコアボード</span>
                 </div>
-                
-                <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
-                        <button class="modern-btn" id="lbBtnModeJa" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbMode('ja2en')">英訳</button>
-                        <button class="modern-btn" id="lbBtnModeEn" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('en2ja')">和訳</button>
-                        <button class="modern-btn" id="lbBtnModeMix" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('mixed')">まぜ</button>
+
+                <!-- フレンド検索・追加モジュール -->
+                <div class="card" style="border: 1px dashed var(--cosmic-cyan); margin-bottom: 14px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 6px;">
+                        <span style="color: var(--text-sub);">あなたのフレンドコード:</span>
+                        <span id="myFriendCodeDisplay" style="color: var(--cosmic-cyan); font-family: monospace; font-weight: 900; letter-spacing: 1px;">--------</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="friendSearchInput" class="search-input" style="margin-bottom: 0; height: 38px; font-size: 12px; letter-spacing: 1px; font-weight: bold; text-align: center; font-family: monospace;" placeholder="フレンドのIDコードを入力...">
+                        <button class="modern-btn" style="width: auto; height: 38px; padding: 0 14px; font-size: 12px; border-image: linear-gradient(135deg, var(--cosmic-cyan), var(--cosmic-blue)) 1 !important; box-shadow: 0 0 8px rgba(0,240,255,0.3) !important;" onclick="window.searchAndAddFriend()">探す・追加</button>
                     </div>
                 </div>
 
-                <div id="leaderboardListContainer" style="flex:1; overflow-y:auto; background:rgba(7, 11, 25, 0.6); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:4px;"></div>
+                <!-- 並び替え（ソート条件選択）ヘッダー -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);">
+                    <span style="font-size: 11px; font-weight: bold; color: var(--text-sub);"><i data-lucide="arrow-down-up" size="12" style="vertical-align:middle; margin-right:2px;"></i> 表示並び替え</span>
+                    <select id="friendSortSelect" class="search-input" style="width: 140px; height: 28px; font-size: 11px; font-weight: bold; padding: 0 6px; margin-bottom: 0; background: var(--input-bg); color: white;" onchange="window.sortAndRenderFriendList()">
+                        <option value="login" selected>最終ログイン順</option>
+                        <option value="level">レベル順</option>
+                        <option value="studyTime">勉強時間順</option>
+                    </select>
+                </div>
+
+                <!-- 動的フレンド一覧描画コンテナ -->
+                <div id="friendListContainer" style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 40px;">
+                    <!-- JS処理によって、アイコン・ニックネーム・称号・レベルを含む美しいリスト形式のフレンド行が描画される -->
+                </div>
             </div>
+
+            <!-- 2ページ目：ページスライド式 総合スコアボードランキング -->
+            <div style="flex: 0 0 100vw; width: 100vw; height: 100%; scroll-snap-align: center; box-sizing: border-box; padding: 20px 16px; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid var(--cosmic-purple-light); padding-bottom: 6px;">
+                    <span style="font-size: 10px; color: var(--text-sub); font-weight: 800;">👈 スワイプでフレンド</span>
+                    <h2 style="margin-bottom: 0; font-size: 15px; color: var(--cosmic-purple-light) !important;"><i data-lucide="trophy"></i> 総合スコアボード (2 / 2)</h2>
+                </div>
+
+                <!-- 所属グループ内経験値ランキング（自分を含むユーザー全員の総合ランキング） -->
+                <div class="card" style="margin-bottom: 14px; padding: 14px;">
+                    <h2 style="font-size: 12px; color: var(--cosmic-cyan) !important; margin-bottom: 10px;"><i data-lucide="award"></i> 修行者EXPランキング (自分と全ユーザー)</h2>
+                    <div id="leaderboardContainer" style="display: flex; flex-direction: column; gap: 4px;"></div>
+                </div>
+
+                <!-- ゲームスコアランキング -->
+                <div class="card" id="gameLeaderboardArea" style="display:flex; flex-direction:column; padding: 14px;">
+                    <h2 style="margin-bottom: 10px; font-size: 12px; color: var(--cosmic-purple-light) !important;"><i data-lucide="medal"></i> 単語テスト ハイスコアランキング</h2>
+                    
+                    <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
+                            <button class="modern-btn" id="lbBtnModeJa" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbMode('ja2en')">英訳</button>
+                            <button class="modern-btn" id="lbBtnModeEn" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('en2ja')">和訳</button>
+                            <button class="modern-btn" id="lbBtnModeMix" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('mixed')">まぜ</button>
+                        </div>
+                    </div>
+
+                    <div id="leaderboardListContainer" style="min-height: 140px; background:rgba(7, 11, 25, 0.6); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:4px; font-size:12px;"></div>
+                </div>
+            </div>
+
         </div>
 
         <div id="view-game" class="tab-view">
@@ -340,6 +399,7 @@
                 <div id="game-start-screen" class="game-swipe-container" style="display:flex; position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10;">
                     
                     <!-- 🌟 フラッシュ単語スライド（一番左へ配置） -->
+                    <!-- 🌟 背景を haikei.png から sinkai.png に変更しました 🌟 -->
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('sinkai.png'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 80px; box-sizing: border-box;">
                         <div class="tower-title-container">
                             <div class="tower-title-text" style="color: var(--cosmic-purple-light); text-shadow: 0 4px 15px rgba(192, 132, 252, 0.6);">フラッシュ単語</div>
@@ -354,7 +414,8 @@
                             <div class="tower-title-text" style="color: var(--cosmic-cyan); text-shadow: 0 4px 15px rgba(0, 240, 255, 0.6);">単語の試練</div>
                             <div class="tower-title-line" style="background: linear-gradient(90deg, transparent 0%, var(--cosmic-cyan) 50%, transparent 100%);"></div>
                         </div>
-                        <button class="multi-start-btn" style="color: var(--cosmic-cyan); border-color: var(--cosmic-cyan); text-shadow: 0 0 10px var(--cosmic-cyan), 0 0 20px var(--cosmic-cyan); box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 0 15px rgba(0, 240, 255, 0.4);" onclick="showModeSelectScreen()">START</button>
+                        <div style="position: absolute; bottom: 145px; color: rgba(255,255,255,0.7); font-size: 11px; font-weight: bold; letter-spacing: 0.5px; animation: gentleBlink 1.5s infinite alternate ease-in-out;">← スワイプでモード切替 →</div>
+                        <button class="multi-start-btn" style="color: var(--cosmic-cyan); border-color: var(--cosmic-cyan); text-shadow: 0 0 10px var(--cosmic-cyan), 0 0 20px var(--cosmic-cyan); box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 0 15px rgba(0, 240, 255, 0.4) !important;" onclick="showModeSelectScreen()">START</button>
                     </div>
 
                     <!-- マルチバトルスライド -->
@@ -494,7 +555,7 @@
                             
                             <div id="multiModeSwipeArea" class="multi-flick-area" style="position:relative; margin-bottom:12px;">
                                 <div id="multiCoopActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--cosmic-cyan); color:var(--cosmic-cyan); background:rgba(0,240,255,0.15); z-index:20; font-weight:900;">選択中 🤝 協力戦</div>
-                                <div id="multiPvpActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--admin-accent); color:var(--admin-accent); background:rgba(236,72,153,0.15); z-index:20; font-weight:900; display:none;">選択中 ⚔️ 对人戦</div>
+                                <div id="multiPvpActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--admin-accent); color:var(--admin-accent); background:rgba(236,72,153,0.15); z-index:20; font-weight:900; display:none;">選択中 ⚔️ 対人戦</div>
                                 <img id="multiModeDisplayImage" src="kyouryoku.png" alt="協力戦" style="width:100%; height:180px; object-fit:contain;">
                             </div>
 
@@ -713,15 +774,9 @@
                                 </div>
                             </div>
                             
-                            <!-- 🌟 修正：OKボタンとパスボタンを横並び（50%ずつ分配）になるようラップ -->
-                            <div style="display: flex; gap: 12px; width: 100%;">
-                                <button class="modern-btn" id="gameSubmitBtn" style="height:44px; flex: 1; font-size:14px;" onclick="submitGameAnswer()">
-                                    OK
-                                </button>
-                                <button class="modern-btn" id="gamePassBtn" style="height:44px; flex: 1; font-size:14px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important; box-shadow: 0 0 12px rgba(239, 68, 68, 0.2) !important;" onclick="window.skipGameWordWithPass()">
-                                    パス
-                                </button>
-                            </div>
+                            <button class="modern-btn" id="gameSubmitBtn" style="height:44px; width:100%; font-size:14px;" onclick="submitGameAnswer()">
+                                OK
+                            </button>
 
                             <div id="persistentComboContainer" class="persistent-combo-container" style="display:none;">
                                 <span id="persistentComboText" class="combo-text"></span>
@@ -895,7 +950,7 @@
         <button class="nav-item active" id="nav-home" onclick="window.switchTab('home')"><i data-lucide="layout-dashboard" size="18"></i> ホーム</button>
         <button class="nav-item" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
         <button class="nav-item" id="nav-reader" onclick="window.switchTab('reader')"><i data-lucide="file-text" size="18"></i> リーダー</button>
-        <button class="nav-item" id="nav-community" onclick="window.switchTab('community')"><i data-lucide="users" size="18"></i> 共有同期</button>
+        <button class="nav-item" id="nav-community" onclick="window.switchTab('community')"><i data-lucide="users" size="18"></i> フレンド</button>
         <button class="nav-item" id="nav-game" onclick="window.switchTab('game')"><i data-lucide="gamepad-2" size="18"></i> ゲーム</button>
         <button class="nav-item" id="nav-party" onclick="window.switchTab('party')"><i data-lucide="swords" size="18"></i> 編成</button>
     </div>

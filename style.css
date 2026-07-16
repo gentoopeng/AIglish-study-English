@@ -236,7 +236,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 
 .game-mode-card,
 .game-main-play-card,
-.game-result-card,
 #game-mode-select-screen > div,
 #game-difficulty-select-screen > div {
     background: rgba(10, 15, 30, 0.15) !important; 
@@ -292,6 +291,10 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .console-val { font-size: 18px; font-weight: 800; font-family: monospace; }
 .console-divider { width: 1px; height: 18px; background: var(--border); }
 .game-word-display { font-size: 20px; font-weight: 800; text-align: center; margin: 10px 0 18px 0; font-family: "Times New Roman", serif; word-break: break-word; line-height: 1.2; }
+
+.game-cosmic-glow-box {
+    border-image: linear-gradient(135deg, var(--cosmic-cyan), var(--cosmic-purple-light)) 1 !important;
+}
 
 .game-cosmic-input-glow { 
     border: none !important; 
@@ -854,11 +857,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: none !important;
 }
 
-#game-result-screen h2,
-#game-result-screen .stat-box,
-#game-result-screen h3.cosmic-list-title,
-#game-result-screen .cosmic-history-scroll,
-#game-result-screen .modern-btn,
+/* 🌟 強制設定からリザルト画面関連要素を切り離して除外しました */
 #game-play-screen .game-unified-console,
 #game-play-screen .game-main-play-card,
 #game-play-screen .modern-btn {
@@ -889,6 +888,28 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-shadow: none !important;
 }
 
+/* 🌟 新設：クリアリザルト画面専用の美しいシックネオンオレンジデザイン定義（石板を100%排除） */
+#game-result-screen h2,
+#game-result-screen .stat-box,
+#game-result-screen .cosmic-history-scroll,
+#game-result-screen .modern-btn {
+    width: 100% !important;
+    max-width: 320px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    background-image: none !important;
+    background: rgba(15, 23, 42, 0.75) !important; /* 夕暮れ背景が綺麗に透き通るシックな黒基調半透明 */
+    border: 1.5px solid #F59E0B !important; /* 輪郭を鮮やかなネオンオレンジに */
+    border-radius: 12px !important; /* 角を滑らかに丸める */
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.45) !important; /* 個々別々にまとわせる温かいオレンジの残光 */
+    box-sizing: border-box !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    color: #FFFFFF !important;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8) !important;
+}
+
 #game-result-screen h2 {
     display: flex !important;
     align-items: center !important;
@@ -896,8 +917,8 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     height: 54px !important;
     font-size: 24px !important;
     font-weight: 900 !important;
-    letter-spacing: 2px !important;
-    margin-bottom: 16px !important;
+    letter-spacing: 4px !important;
+    margin-bottom: 20px !important;
 }
 
 .cosmic-stats-grid {
@@ -912,14 +933,14 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     justify-content: space-between !important;
     align-items: center !important;
     height: 48px !important;
-    padding: 0 64px !important; 
+    padding: 0 32px !important; 
 }
 
 #game-result-screen .stat-lbl {
     font-size: 13px !important;
     font-weight: 700 !important;
     color: #E2E8F0 !important; 
-    text-shadow: inherit !important;
+    text-shadow: none !important;
 }
 
 #game-result-screen .stat-val {
@@ -929,7 +950,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     -webkit-background-clip: unset !important;
     -webkit-text-fill-color: initial !important;
     color: #FFFFFF !important; 
-    text-shadow: inherit !important;
+    text-shadow: 0 0 8px #F59E0B !important; /* 数値だけをさらにオレンジ発光 */
     filter: none !important;
 }
 
@@ -940,16 +961,32 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 #game-result-screen .cosmic-history-scroll {
     max-height: 180px !important;
     overflow-y: auto !important;
-    padding: 14px 48px !important; 
-    margin-bottom: 24px !important;
+    padding: 14px 24px !important; 
+    margin-bottom: 20px !important;
 }
 
 #game-result-screen .cosmic-history-item,
 #game-result-screen .cosmic-history-item div,
 #game-result-screen .cosmic-history-item span {
-    font-family: 'Noto Serif JP', serif !important;
     color: #FFFFFF !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95) !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+}
+
+#game-result-screen .modern-btn {
+    height: 50px !important;
+    font-size: 16px !important;
+    font-weight: 900 !important;
+    letter-spacing: 2px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+}
+
+#game-result-screen .modern-btn:active {
+    transform: scale(0.98) !important;
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.8) !important;
 }
 
 #game-play-screen .game-unified-console {
@@ -1078,19 +1115,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 2px 2px 4px #000000 !important;
 }
 
-#game-result-screen .modern-btn,
-#game-play-screen .modern-btn {
-    height: 50px !important;
-    font-size: 16px !important;
-    font-weight: 900 !important;
-    letter-spacing: 1px !important;
-}
-
-#game-result-screen .modern-btn:active,
-#game-play-screen .modern-btn:active {
-    transform: translateY(2px) !important;
-}
-
 /* ==========================================================================
    🎨 🌟 大改造：単語フラッシュ（フラッシュカード）極上ビジュアルモジュール
    ========================================================================= */
@@ -1210,16 +1234,16 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: 1px 1px 3px rgba(0,0,0,1), -1px -1px 3px rgba(0,0,0,1), 1px -1px 3px rgba(0,0,0,1), -1px 1px 3px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,0.9) !important; 
     z-index: 5;
     
-    /* 🫧 シャボン玉ガラス風グラデーション：ほんのり七色に偏光する神秘的な反射光 */
-    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.03) 50%, rgba(0, 240, 255, 0.05) 70%, rgba(192, 132, 252, 0.05) 90%, rgba(255, 255, 255, 0.1) 100%) !important;
+    /* 🌟 改良：JS側の動的バックグラウンド（理解度の色）を綺麗に透かしてブレンドするため、シャボン玉自体の初期背景を重ね掛け。 */
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 50%, rgba(0, 240, 255, 0.04) 70%, rgba(192, 132, 252, 0.04) 90%, rgba(255, 255, 255, 0.1) 100%);
     
-    /* シャボン玉ならではの光沢エフェクト（インセット光） */
+    /* シャボン玉ならではのクリアな光沢エフェクト（インセット光）を履歴泡をベースに美しく統合 */
     box-shadow: 
-        inset 0 15px 25px rgba(255, 255, 255, 0.3), 
-        inset 10px 0 15px rgba(0, 240, 255, 0.15), 
-        inset -10px 0 15px rgba(192, 132, 252, 0.15), 
-        inset 0 -15px 25px rgba(255, 255, 255, 0.2), 
-        0 8px 25px rgba(0, 0, 0, 0.3) !important;
+        inset 0 12px 20px rgba(255, 255, 255, 0.35), 
+        inset 8px 0 12px rgba(0, 240, 255, 0.15), 
+        inset -8px 0 12px rgba(192, 132, 252, 0.15), 
+        inset 0 -12px 20px rgba(255, 255, 255, 0.2), 
+        0 6px 20px rgba(0, 0, 0, 0.45) !important;
         
     animation: bubbleReshape 6s ease-in-out infinite alternate; /* ぽよんぽよんと少し形が歪む */
 }
@@ -1446,4 +1470,96 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
         inset 0 3px 5px rgba(255, 255, 255, 0.6), 
         inset 0 -3px 5px rgba(245, 158, 11, 0.4), 
         0 0 8px rgba(245, 158, 11, 0.6) !important;
+}
+
+/* ==========================================================================
+   🏛️ 🌟 追加：大学受験最重要構文タイプ別・個々別々シックネオンカラー着色定義
+   ========================================================================= */
+
+/* ① 時制・進行形・受動態（変化系）: シックなコズミックブルー */
+.grammar-span.grammar-type-clock,
+.grammar-span.grammar-type-clock .word-span {
+    color: #93C5FD !important; /* 淡いコズミックブルー */
+}
+.grammar-span.grammar-type-clock i {
+    color: #3B82F6 !important; /* clockアイコンをコズミックブルーに */
+}
+
+/* ② 不定詞: シックなエメラルドグリーン */
+.grammar-span.grammar-type-link,
+.grammar-span.grammar-type-link .word-span {
+    color: #6EE7B7 !important; /* 淡いエメラルドグリーン */
+}
+.grammar-span.grammar-type-link i {
+    color: #10B981 !important; /* linkアイコンをエメラルドグリーンに */
+}
+
+/* ③ 関係代名詞・関係副詞（カッコ内）: シックなコズミックパープル */
+.grammar-span.grammar-type-relative,
+.grammar-span.grammar-type-relative .word-span {
+    color: #DDD6FE !important; /* 淡いコズミックパープル */
+}
+.grammar-span.grammar-type-relative i {
+    color: #C084FC !important; /* git-branchアイコンをコズミックパープルに */
+}
+
+/* ④ 仮定法: シックなアンバーゴールド */
+.grammar-span.grammar-type-hypothetical,
+.grammar-span.grammar-type-hypothetical .word-span {
+    color: #FDE68A !important; /* 淡いアンバーゴールド */
+}
+.grammar-span.grammar-type-hypothetical i {
+    color: #F59E0B !important; /* help-circleアイコンをアンバーゴールドに */
+}
+
+/* ⑤ 倒置・強調構文: シックなネオンピンク */
+.grammar-span.grammar-type-exclamation,
+.grammar-span.grammar-type-exclamation .word-span {
+    color: #FBCFE8 !important; /* 淡いネオンピンク */
+}
+.grammar-span.grammar-type-exclamation i {
+    color: #EC4899 !important; /* alert-triangleアイコンをネオンピンクに */
+}
+
+/* ⑥ 名詞節のthat / 同格のthat: シックなコズミックシアン */
+.grammar-span.grammar-type-box,
+.grammar-span.grammar-type-box .word-span {
+    color: #A5F3FC !important; /* 淡いコズミックシアン */
+}
+.grammar-span.grammar-type-box i {
+    color: #00F0FF !important; /* boxアイコンをコズミックシアンに */
+}
+
+/* 英文読解時のノイズになる下線をクリア化 */
+.grammar-span {
+    border-bottom: none !important;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+
+/* ==========================================================================
+   👥 🌟 大改造：フレンド＆スコアボード用 2ページ横スライド構造モジュール
+   ========================================================================= */
+
+/* フレンドタブ用のスライド外周（横並び強制 ＆ スナップスクロール定義） */
+#view-community.tab-view.active {
+    display: flex !important;
+}
+
+/* フレンドリストカードにおけるアバター泡アニメーション */
+@keyframes friendAvatarPulse {
+    0% { box-shadow: 0 0 8px rgba(0, 240, 255, 0.2); transform: scale(1); }
+    100% { box-shadow: 0 0 16px rgba(0, 240, 255, 0.5); transform: scale(1.03); }
+}
+
+/* 登録されたフレンドのアバター外枠装飾 */
+.friend-avatar-circle-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.15) 0%, rgba(7,11,25,0.4) 80%);
+    border: 1.5px solid rgba(0, 240, 255, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: friendAvatarPulse 3s ease-in-out infinite alternate;
 }
