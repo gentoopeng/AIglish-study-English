@@ -291,7 +291,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .console-label { font-size: 9px; font-weight: 700; color: var(--text-sub); }
 .console-val { font-size: 18px; font-weight: 800; font-family: monospace; }
 .console-divider { width: 1px; height: 18px; background: var(--border); }
-.game-word-display { font-size: 36px; font-weight: 800; text-align: center; margin: 10px 0 18px 0; font-family: "Times New Roman", serif; word-break: break-word; line-height: 1.2; }
+.game-word-display { font-size: 20px; font-weight: 800; text-align: center; margin: 10px 0 18px 0; font-family: "Times New Roman", serif; word-break: break-word; line-height: 1.2; }
 
 .game-cosmic-input-glow { 
     border: none !important; 
@@ -1104,6 +1104,22 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-sizing: border-box;
 }
 
+/* 🌟 内側の黒枠を透明化し、深海画像をクリアに表示 */
+#flashcard-setup-screen > div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 🌟 隙間から裏の背景が見えないよう、設定画面も全画面の固定配置へアップグレード */
+#flashcard-setup-screen {
+    position: fixed !important;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    z-index: 4500 !important;
+    overflow-y: auto !important;
+    padding-top: 40px !important;
+}
+
 /* 🌟 操作性バグ修正：上にスワイプした時に画面全体が引っ張られないよう、プレイ画面表示中のみタッチスクロールを完全無効化 */
 #flashcard-play-screen {
     position: fixed !important;
@@ -1122,10 +1138,10 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: visible !important; /* 🌟 拡散余韻がちぎれないように保証 */
+    overflow: visible !important; 
 }
 
-/* 🌟 デザイン大改造：四角いカードから一回り小ぶりな上品サイズの「完全正円形カード(240px)」へアジャスト */
+/* 🌟 デザイン大改造：本物のシャボン玉（🫧）デザインカード */
 .flashcard-wrapper-3d {
     position: absolute;
     width: 240px;
@@ -1134,9 +1150,24 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     cursor: pointer;
     z-index: 10;
     -webkit-tap-highlight-color: transparent;
+    animation: bubbleFloatAnim 4s ease-in-out infinite; /* 水中でぷかぷかと漂う動き */
 }
 
-/* 文字被りバグの原因となっていた不要な背面シャドウスタック用ダミー要素を100%完全抹消 */
+/* ぷかぷか漂う動き */
+@keyframes bubbleFloatAnim {
+    0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+    33% { transform: translateY(-8px) scale(1.02) rotate(-1deg); }
+    66% { transform: translateY(4px) scale(0.98) rotate(1deg); }
+}
+
+/* スワイプ中などは漂うアニメーションを解除 */
+.flashcard-wrapper-3d.slide-right,
+.flashcard-wrapper-3d.slide-left,
+.flashcard-wrapper-3d.slide-up {
+    animation: none !important; 
+}
+
+/* 文字被りバグ用の背面シャドウ定義を削除 */
 .flashcard-wrapper-3d.stack-shadow-1,
 .flashcard-wrapper-3d.stack-shadow-2,
 .flashcard-wrapper-3d.stack-shadow-3 {
@@ -1154,19 +1185,18 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     z-index: 2;
 }
 
-/* 反転アニメーションバインディング */
 .flashcard-wrapper-3d.flipped .flashcard-inner-rotator {
     transform: rotateY(180deg);
 }
 
-/* 🌟 不具合修正：表面・裏面を背面同士で完全隔離保護し、文字被りが絶対に発生しないよう backface-visibility を徹底適用 */
+/* 🌟 🫧（リアルなシャボン玉：七色の光彩、白いハイライト反射、ガラス透明感、ぽよんとする伸縮） */
 .flashcard-face-front,
 .flashcard-face-back {
     position: absolute;
     width: 100%;
     height: 100%;
-    border-radius: 50% !important; /* 完全な美しい正円 */
-    border: none !important; /* 🌟 外周の硬い枠線を完全消去 */
+    border-radius: 50% !important; /* 完全な美しい円 */
+    border: 2px solid rgba(255, 255, 255, 0.45) !important; /* 輪郭線のクリアな光沢 */
     padding: 24px;
     box-sizing: border-box;
     display: flex;
@@ -1175,13 +1205,31 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     justify-content: center;
     backface-visibility: hidden !important;
     -webkit-backface-visibility: hidden !important;
-    color: #FFFFFF !important; /* 文字の色は基本的に白に一貫統一 */
-    text-shadow: 0 2px 5px rgba(0,0,0,0.9);
+    color: #FFFFFF !important;
+    /* シャボン玉背景が透過しても文字が見えるよう、強力な影を適用 */
+    text-shadow: 1px 1px 3px rgba(0,0,0,1), -1px -1px 3px rgba(0,0,0,1), 1px -1px 3px rgba(0,0,0,1), -1px 1px 3px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,0.9) !important; 
     z-index: 5;
-    /* 🌟 境界線・立体感用の影をすべて完全消去 */
-    box-shadow: none !important;
-    /* 🌟 JavaScriptによる動的フェードアウトを活かすためベース背景を完全に透明化 */
-    background: transparent !important;
+    
+    /* 🫧 シャボン玉ガラス風グラデーション：ほんのり七色に偏光する神秘的な反射光 */
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.03) 50%, rgba(0, 240, 255, 0.05) 70%, rgba(192, 132, 252, 0.05) 90%, rgba(255, 255, 255, 0.1) 100%) !important;
+    
+    /* シャボン玉ならではの光沢エフェクト（インセット光） */
+    box-shadow: 
+        inset 0 15px 25px rgba(255, 255, 255, 0.3), 
+        inset 10px 0 15px rgba(0, 240, 255, 0.15), 
+        inset -10px 0 15px rgba(192, 132, 252, 0.15), 
+        inset 0 -15px 25px rgba(255, 255, 255, 0.2), 
+        0 8px 25px rgba(0, 0, 0, 0.3) !important;
+        
+    animation: bubbleReshape 6s ease-in-out infinite alternate; /* ぽよんぽよんと少し形が歪む */
+}
+
+/* シャボン玉がぽよんぽよんと歪む動き */
+@keyframes bubbleReshape {
+    0% { border-radius: 50% 50% 50% 50% !important; }
+    33% { border-radius: 48% 52% 49% 51% !important; }
+    66% { border-radius: 51% 49% 52% 48% !important; }
+    100% { border-radius: 49% 51% 48% 52% !important; }
 }
 
 /* 裏面はあらかじめ180度回転させて隔離 */
@@ -1189,21 +1237,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     transform: rotateY(180deg);
 }
 
-/* 🌟 ご要望通り：外側の光彩や内側の立体用インセット影などの影定義（box-shadow）をクラスごとに100%完全抹消 */
-.flashcard-wrapper-3d.status-ok .flashcard-face-front,
-.flashcard-wrapper-3d.status-ok .flashcard-face-back,
-.flashcard-wrapper-3d.status-so .flashcard-face-front,
-.flashcard-wrapper-3d.status-so .flashcard-face-back,
-.flashcard-wrapper-3d.status-bad .flashcard-face-front,
-.flashcard-wrapper-3d.status-bad .flashcard-face-back,
-.flashcard-wrapper-3d.status-none .flashcard-face-front,
-.flashcard-wrapper-3d.status-none .flashcard-face-back {
-    border: none !important;
-    box-shadow: none !important;
-    background: transparent !important;
-}
-
-/* 慣性付きスワイプ高速射出アニメーション定義（シルクのような滑らかさへ） */
+/* スワイプ時：慣性付きスワイプ高速射出アニメーション */
 .flashcard-wrapper-3d.slide-right {
     transform: translate(220%, 15px) rotate(40deg) !important;
     opacity: 0;
@@ -1220,7 +1254,31 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.35s ease;
 }
 
-/* 🌟 バグ根換：肉厚背景をブチ抜いてカード表面の最前面へ浮き上がらせるライブ波紋用絶対レイヤー設定 */
+/* 🌟 スワイプ直後の「花火のように儚く散る」縮小消滅専用アニメーション */
+.flashcard-wrapper-3d.firework-vanish {
+    animation: fireworkVanishAnim 0.35s cubic-bezier(0.1, 0.8, 0.25, 1) forwards !important;
+    pointer-events: none;
+}
+
+@keyframes fireworkVanishAnim {
+    0% {
+        transform: scale(1) translateZ(0);
+        opacity: 1;
+        filter: brightness(1);
+    }
+    40% {
+        transform: scale(0.7) translateZ(0);
+        opacity: 0.8;
+        filter: brightness(1.5) blur(1px);
+    }
+    100% {
+        transform: scale(0) translateZ(0);
+        opacity: 0;
+        filter: brightness(2) blur(4px);
+    }
+}
+
+/* 🌟 バグ防止：肉厚背景をブチ抜いてカード表面の最前面へ浮き上がらせるライブ波紋用絶対レイヤー設定 */
 #flashcardLiveRippleLayer {
     position: absolute;
     top: 0;
@@ -1230,17 +1288,17 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     border-radius: 50% !important;
     pointer-events: none;
     opacity: 0;
-    z-index: 30 !important; /* カードフェイス背景(z-index: 5)を完全超越 */
-    mix-blend-mode: screen; /* 透過ブレンドによる超発光ネオン */
+    z-index: 30 !important; 
+    mix-blend-mode: screen; 
     transition: opacity 0.1s ease;
 }
 
-/* 🌟 バグ根絶：最上位レイヤー強度(z-index: 9999)を乗せた打ち上げ花火ポスト余韻拡散エフェクト */
+/* 🌟 バグ防止：最上位レイヤー強度(z-index: 9999)を乗せた打ち上げ花火ポスト余韻拡散エフェクト */
 .flashcard-post-ripple {
     position: absolute;
     border-radius: 50%;
     pointer-events: none;
-    z-index: 9999 !important; /* 全てのUI要素の手前に出現 */
+    z-index: 9999 !important; 
     opacity: 0;
     width: 240px;
     height: 240px;
@@ -1249,7 +1307,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     left: 50%;
 }
 
-/* 花火の消えゆく余韻スピードを 350ms の高速一瞬フェードアウトに完全チューニング最適化 */
+/* 花火の消えゆく余韻アニメーション */
 .flashcard-post-ripple.firework-余韻-right {
     background: radial-gradient(circle, rgba(16, 185, 129, 0.85) 0%, rgba(16, 185, 129, 0.35) 40%, rgba(16, 185, 129, 0) 70%);
     animation: fcFireworkSparkle 0.35s cubic-bezier(0.1, 0.8, 0.25, 1) forwards;
@@ -1293,7 +1351,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     }
 }
 
-/* 🌟 画面端のオーラ波紋エフェクト（指の距離に連動して端がネオン発光） */
+/* 🌟 画面端のオーラ波紋エフェクト */
 .flashcard-edge-ripple {
     position: fixed;
     pointer-events: none;
@@ -1320,4 +1378,72 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     transform-origin: center top;
 }
 
+/* ==========================================================================
+   🫧 画面下部：過去5回の履歴用 ぷかぷか色付きバブル履歴UI
+   ========================================================================= */
+
+.fc-history-container {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+    margin-bottom: 8px;
+    z-index: 100;
+}
+
+/* 🫧 履歴の丸印をリアルなちいさいシャボン玉にする */
+.fc-history-bubble {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.05) 70%, rgba(255, 255, 255, 0.2) 100%);
+    box-shadow: 
+        inset 0 3px 5px rgba(255, 255, 255, 0.5), 
+        inset 0 -3px 5px rgba(0, 0, 0, 0.2), 
+        0 2px 4px rgba(0,0,0,0.5);
+    animation: historyBubbleFloat 3s ease-in-out infinite alternate;
+}
+
+/* それぞれ異なる時間でゆらゆら動くためのディレイ（タイミングのずれ） */
+.fc-history-bubble:nth-child(1) { animation-delay: 0s; }
+.fc-history-bubble:nth-child(2) { animation-delay: 0.4s; }
+.fc-history-bubble:nth-child(3) { animation-delay: 0.8s; }
+.fc-history-bubble:nth-child(4) { animation-delay: 1.2s; }
+.fc-history-bubble:nth-child(5) { animation-delay: 1.6s; }
+
+/* 小さな泡用ぷかぷかアニメーション */
+@keyframes historyBubbleFloat {
+    0% { transform: translateY(0) scale(1); }
+    100% { transform: translateY(-4px) scale(1.05); }
+}
+
+/* 🟢 定着・OKのシャボン玉（緑にほんのり輝く） */
+.fc-history-bubble.ok {
+    border-color: rgba(16, 185, 129, 0.85) !important;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4) 0%, rgba(16, 185, 129, 0.1) 60%, rgba(16, 185, 129, 0.3) 100%) !important;
+    box-shadow: 
+        inset 0 3px 5px rgba(255, 255, 255, 0.6), 
+        inset 0 -3px 5px rgba(16, 185, 129, 0.4), 
+        0 0 8px rgba(16, 185, 129, 0.6) !important;
+}
+
+/* 🔴 不可・BADのシャボン玉（赤にほんのり輝く） */
+.fc-history-bubble.bad {
+    border-color: rgba(239, 68, 68, 0.85) !important;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4) 0%, rgba(239, 68, 68, 0.1) 60%, rgba(239, 68, 68, 0.3) 100%) !important;
+    box-shadow: 
+        inset 0 3px 5px rgba(255, 255, 255, 0.6), 
+        inset 0 -3px 5px rgba(239, 68, 68, 0.4), 
+        0 0 8px rgba(239, 68, 68, 0.6) !important;
+}
+
+/* 🟡 曖昧・SOのシャボン玉（黄にほんのり輝く） */
+.fc-history-bubble.so {
+    border-color: rgba(245, 158, 11, 0.85) !important;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4) 0%, rgba(245, 158, 11, 0.1) 60%, rgba(245, 158, 11, 0.3) 100%) !important;
+    box-shadow: 
+        inset 0 3px 5px rgba(255, 255, 255, 0.6), 
+        inset 0 -3px 5px rgba(245, 158, 11, 0.4), 
+        0 0 8px rgba(245, 158, 11, 0.6) !important;
 }

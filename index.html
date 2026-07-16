@@ -18,6 +18,7 @@
 </head>
 <body>
 
+    <!-- 🌟 新設：2コンボ以上発生時に画面全体の最外周を包み込んで明滅する金色ネオンオーバーレイ枠 -->
     <div id="combo-sparkle-border" class="combo-sparkle-overlay"></div>
 
     <button id="scrollToTopBtn" class="scroll-to-top-btn" onclick="scrollToTop()">
@@ -313,6 +314,7 @@
                 <div id="leaderboardContainer"></div>
             </div>
 
+            <!-- 🌟 移動してきたゲームスコアランキング -->
             <div class="card" id="gameLeaderboardArea" style="display:flex; flex-direction:column; min-height:350px;">
                 <h2 style="margin-bottom: 12px;"><i data-lucide="trophy" size="14"></i> ゲームスコアランキング</h2>
                 <div class="auth-tabs" style="margin-bottom:8px; padding:2px;">
@@ -334,8 +336,10 @@
         <div id="view-game" class="tab-view">
             <div id="cosmic-game-wrapper" class="cosmic-game-bg">
                 
+                <!-- 🌟 縦並びだったソロとマルチを横スワイプに変更、余白を完全に消すため固定配置 -->
                 <div id="game-start-screen" class="game-swipe-container" style="display:flex; position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10;">
                     
+                    <!-- 🌟 フラッシュ単語スライド（一番左へ配置） -->
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('sinkai.png'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 80px; box-sizing: border-box;">
                         <div class="tower-title-container">
                             <div class="tower-title-text" style="color: var(--cosmic-purple-light); text-shadow: 0 4px 15px rgba(192, 132, 252, 0.6);">フラッシュ単語</div>
@@ -344,6 +348,7 @@
                         <button class="multi-start-btn" style="color: var(--cosmic-purple-light); border-color: var(--cosmic-purple-light); text-shadow: 0 0 10px var(--cosmic-purple-light), 0 0 20px var(--cosmic-purple-light); box-shadow: 0 0 15px rgba(192, 132, 252, 0.4), inset 0 0 15px rgba(192, 132, 252, 0.4) !important;" onclick="showFlashcardSetupScreen()">START</button>
                     </div>
 
+                    <!-- ソロ学習テストスライド -->
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('haikei.png'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 80px; box-sizing: border-box;">
                         <div class="tower-title-container">
                             <div class="tower-title-text" style="color: var(--cosmic-cyan); text-shadow: 0 4px 15px rgba(0, 240, 255, 0.6);">単語の試練</div>
@@ -352,6 +357,7 @@
                         <button class="multi-start-btn" style="color: var(--cosmic-cyan); border-color: var(--cosmic-cyan); text-shadow: 0 0 10px var(--cosmic-cyan), 0 0 20px var(--cosmic-cyan); box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 0 15px rgba(0, 240, 255, 0.4);" onclick="showModeSelectScreen()">START</button>
                     </div>
 
+                    <!-- マルチバトルスライド -->
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('tawa.png'); background-size: cover; background-position: top center; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding-bottom: 80px; box-sizing: border-box;">
                         <div class="tower-title-container">
                             <div class="tower-title-text">単語の迷宮</div>
@@ -362,10 +368,12 @@
 
                 </div>
 
+                <!-- フラッシュカード専用 設定画面 -->
                 <div id="flashcard-setup-screen" style="display:none; margin-top: 14px;">
                     <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-purple-light);">
                         <h2 style="color:white; justify-content:center; margin-bottom:16px;"><i data-lucide="settings"></i> カード学習設定</h2>
                         
+                        <!-- 🌟 教材指定：英訳和訳のすぐ上へとマッピング配置 -->
                         <div style="text-align:left; margin-bottom:16px;">
                             <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">教材指定</div>
                             <select id="flashcardSourceSelect" class="search-input" style="background:var(--input-bg); color:white; font-weight:600; border-radius:10px; height:40px; padding:0 12px;">
@@ -400,6 +408,7 @@
                     </div>
                 </div>
 
+                <!-- フラッシュカード学習メインプレイ画面 -->
                 <div id="flashcard-play-screen" style="display:none; height:100%; flex-direction:column; position:relative; overflow:hidden; padding-top:4px; box-sizing:border-box;">
                     <div style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:0 4px; margin-bottom:12px; z-index:100;">
                         <button class="game-finish-inline-btn" style="background:rgba(0,0,0,0.6);" onclick="quitFlashcardSession()">戻る</button>
@@ -418,14 +427,22 @@
                             <i data-lucide="check-circle" size="16"></i><span>覚えた</span>
                         </div>
 
+                        <!-- 🌟 文字被りを消去し上品なサイズ（直径240px）の正円形カードをどっしり構えるクリーンコンテナ -->
                         <div id="flashcardDeckStage"></div>
                     </div>
 
                     <div class="card" style="padding:10px; margin-bottom:4px; text-align:center; background:rgba(15,23,42,0.8) !important;">
                         <div style="font-size:10px; color:#FFFFFF; font-weight:bold;" id="flashcardProgressText">表示中の覚えた単語: --%</div>
+                        
+                        <!-- 🌟 追加：過去5回のバブル履歴を表示する枠 -->
+                        <div id="fcHistoryContainer" class="fc-history-container">
+                            <!-- JS側で泡（.fc-history-bubble）が動的に入ります -->
+                        </div>
+                        
                     </div>
                 </div>
 
+                <!-- マルチ選択画面（結成 or 参加） -->
                 <div id="multi-battle-choice-screen" style="display:none; height:100%;">
                     <div class="card game-mode-card game-cosmic-glow-box" style="padding: 20px 16px;">
                         <h2 style="color:var(--cosmic-cyan); justify-content:center; margin-bottom:20px; font-size:18px;">
@@ -441,6 +458,7 @@
                     </div>
                 </div>
 
+                <!-- チーム一覧画面 -->
                 <div id="multi-battle-team-list-screen" style="display:none; height:100%;">
                     <div class="card game-mode-card game-cosmic-glow-box" style="padding: 20px 16px;">
                         <h2 style="color:var(--cosmic-cyan); justify-content:center; margin-bottom:12px; font-size:18px;">
@@ -476,7 +494,7 @@
                             
                             <div id="multiModeSwipeArea" class="multi-flick-area" style="position:relative; margin-bottom:12px;">
                                 <div id="multiCoopActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--cosmic-cyan); color:var(--cosmic-cyan); background:rgba(0,240,255,0.15); z-index:20; font-weight:900;">選択中 🤝 協力戦</div>
-                                <div id="multiPvpActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--admin-accent); color:var(--admin-accent); background:rgba(236,72,153,0.15); z-index:20; font-weight:900; display:none;">選択中 ⚔️ 対人戦</div>
+                                <div id="multiPvpActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--admin-accent); color:var(--admin-accent); background:rgba(236,72,153,0.15); z-index:20; font-weight:900; display:none;">選択中 ⚔️ 对人戦</div>
                                 <img id="multiModeDisplayImage" src="kyouryoku.png" alt="協力戦" style="width:100%; height:180px; object-fit:contain;">
                             </div>
 
@@ -695,9 +713,15 @@
                                 </div>
                             </div>
                             
-                            <button class="modern-btn" id="gameSubmitBtn" style="height:44px; width:100%; font-size:14px;" onclick="submitGameAnswer()">
-                                OK
-                            </button>
+                            <!-- 🌟 修正：OKボタンとパスボタンを横並び（50%ずつ分配）になるようラップ -->
+                            <div style="display: flex; gap: 12px; width: 100%;">
+                                <button class="modern-btn" id="gameSubmitBtn" style="height:44px; flex: 1; font-size:14px;" onclick="submitGameAnswer()">
+                                    OK
+                                </button>
+                                <button class="modern-btn" id="gamePassBtn" style="height:44px; flex: 1; font-size:14px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important; box-shadow: 0 0 12px rgba(239, 68, 68, 0.2) !important;" onclick="window.skipGameWordWithPass()">
+                                    パス
+                                </button>
+                            </div>
 
                             <div id="persistentComboContainer" class="persistent-combo-container" style="display:none;">
                                 <span id="persistentComboText" class="combo-text"></span>

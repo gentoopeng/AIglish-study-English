@@ -32,6 +32,7 @@ let flashcardLearnedCount = 0;
 let cardTouchStartX = 0;
 let cardTouchStartY = 0;
 let isCardFlicking = false;
+let flashcardSessionHistory = []; // 過去5回を追跡する用
 
 // リーダーボード専用のステータス変数
 let currentLbMode = 'ja2en';
@@ -124,26 +125,7 @@ window.callGeminiAnalyzer = async function(text) {
     }
     try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
-        const prompt = `以下の英文をパースし、指定のJSONスキーマ形式のみで返答してください。余計な説明文やマークダウンの\`\`\`jsonタグは一切含めず、純粋なJSON文字列オブジェクトとして出力してください。
-
-英文:
-${text}
-
-出力JSON形式:
-{
-  "sentences": [
-    {
-      "text": "元の英語の1文（ピリオドまで。前後の空白は詰める）",
-      "translation": "その文の正確な日本語訳",
-      "grammarHighlights": [
-        {
-          "phrase": "文の中で重要、または初心者が躓きやすい実在する単語・熟語・文法フレーズ（正確に一致するもの）",
-          "meaning": "そのフレーズの簡潔な日本語解説・意味"
-        }
-      ]
-    }
-  ]
-}`;
+        const prompt = "以下の英文をパースし、指定のJSONスキーマ形式のみで返答してください。余計な説明文やマークダウン of JSONタグは一切含めず、純粋なJSON文字列オブジェクトとして出力してください。\n\n英文:\n" + text + "\n\n出力JSON形式:\n{\n  \"sentences\": [\n    {\n      \"text\": \"元の英語の1文\",\n      \"translation\": \"その文の正確な日本語訳\",\n      \"grammarHighlights\": [\n        {\n          \"phrase\": \"フレーズ\",\n          \"meaning\": \"意味\"\n        }\n      ]\n    }\n  ]\n}";
 
         const response = await fetch(url, {
             method: 'POST',
@@ -181,23 +163,7 @@ window.callGeminiGameJudge = async function(question, correctAnswer, userAns, mo
     if (!geminiApiKey) return { status: "NG", alternatives: "特になし" };
     try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
-        const prompt = `あなたは語学学習アプリの採点AIです。
-ユーザーの回答を評価し、以下のJSONフォーマットで返してください。余計なテキストは含めないでください。
-
-【問題（${mode === 'en2ja' ? '英語' : '日本語'}）】: ${question}
-【模範解答】: ${correctAnswer}
-【ユーザーの回答】: ${userAns}
-
-【判定基準】
-- "OK": 完全に正解、または意味が完全に一致している場合。
-- "SO": スペルミスやタイプミスが1文字だけの場合、または意味は通じるが惜しい・少し不自然な場合。
-- "NG": 全く違う、または意味が通じない場合。
-
-出力JSON形式:
-{
-  "status": "OK", "SO", または "NG",
-  "alternatives": "ユーザーの回答以外に正解となる別解があれば1〜2個提示（なければ「特になし」）"
-}`;
+        const prompt = "採点AIです。JSONフォーマットで返してください。\n問題:" + question + "\n模範解答:" + correctAnswer + "\nユーザー解答:" + userAns + "\n出力形式: {\"status\": \"OK/SO/NG\", \"alternatives\": \"別解\"}";
 
         const response = await fetch(url, {
             method: 'POST',
@@ -451,7 +417,7 @@ window.loadLocalState = function() {
 
     const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダッシュボード";
     const headerTitleEl = document.getElementById('headerTitleText');
-    if(headerTitleEl) headerTitleEl.innerText = savedTitleText;
+    if(headerTitleEl) headerTitleEl.innerText = savedTitleText; // 🌟 修正：バグを引き起こしていた「txt」記述を「savedTitleText」へ安全修正
     
     if(savedId) {
         myId = savedId;
@@ -567,6 +533,26 @@ window.handleBulkWordImport = function() {
     vocabList.sort((a,b) => parseInt(a.num) - parseInt(b.num));
     window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
     input.value = ""; alert("一括インポートが完了しました。");
+};
+
+window.openWordPopoverFromVocab = function(event, vocabItem, originalText) {
+    if(event) event.stopPropagation(); currentTargetWordToken = vocabItem.word.toLowerCase(); currentTargetVocabNum = vocabItem.num;
+    document.getElementById('popWord').innerText = originalText; document.getElementById('popWordNum').innerText = `#${vocabItem.num}`;
+    let meaningHtml = "";
+    vocabItem.meanings.forEach(m => {
+        meaningHtml += `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.2); padding-bottom:6px;">
+                <span style="font-size:14px; color:white; flex:1; line-height:1.4;">${m.text}</span>
+                <div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;">
+                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='ok'?'var(--word-ok)':'rgba(0,0,0,0.5)'}; color:${m.status==='ok'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'ok', event)">⚪︎</button>
+                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='so'?'var(--word-so)':'rgba(0,0,0,0.5)'}; color:${m.status==='so'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'so', event)">△</button>
+                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='bad'?'var(--word-bad)':'rgba(0,0,0,0.5)'}; color:${m.status==='bad'?'#FFF':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'bad', event)">✕</button>
+                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3)':'rgba(0,0,0,0.5)'}; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'none', event)">ー</button>
+                </div>
+            </div>`;
+    });
+    document.getElementById('popMeaning').innerHTML = meaningHtml; document.getElementById('popoverStatusBtns').style.display = "none"; 
+    const pop = document.getElementById('wordPopover'); pop.style.display = 'flex'; pop.classList.add('show');
 };
 
 window.renderBulkDeleteList = function() {
@@ -768,7 +754,7 @@ window.getFlashcardStyleByHistory = function(wordData) {
         b = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio);
     }
 
-    // 🌟 修正：不自然に濃い「真っ赤な塊」や不自然な凹みを完全に排除！
+    // 🌟 修正：不自然に濃い「真っ刻な塊」や不自然な凹みを完全に排除！
     // 単語帳カードの半透明仕様（最高透明度0.22）と完全に統一し、そこからシームレスに外周0.0へ溶け込ませる。
     return `background: radial-gradient(circle at center, rgba(${r}, ${g}, ${b}, 0.22) 0%, rgba(${r}, ${g}, ${b}, 0.12) 50%, rgba(${r}, ${g}, ${b}, 0) 100%) !important; border: none !important; box-shadow: none !important;`;
 };
@@ -1002,7 +988,7 @@ window.renderVocabList = function() {
                         サブ情報を展開 <i data-lucide="chevron-down" size="12"></i>
                     </button>
                     <div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;">
-                        <div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">${w.sub}</div>
+                        <div class="sub-info-block" style="background:rgba(0, 1, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">${w.sub}</div>
                     </div>
                 </div>` : ''}
                 <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">${dotsHtml}</div>
@@ -1016,7 +1002,7 @@ window.renderVocabList = function() {
                 
                 <div style="margin-bottom:12px;">
                     <label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label>
-                    <div id="inlineEditMeaningsList-${w.num}"></div>
+                    <div id="inlineEditMeaningsList-${w.num}".></div>
                     <button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, '${w.num}')">
                         <i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加
                     </button>
@@ -1265,26 +1251,6 @@ window.openGrammarPopover = function(event, phrase, meaning) {
     const pop = document.getElementById('wordPopover'); pop.style.display = 'flex'; pop.classList.add('show');
 };
 
-window.openWordPopoverFromVocab = function(event, vocabItem, originalText) {
-    if(event) event.stopPropagation(); currentTargetWordToken = vocabItem.word.toLowerCase(); currentTargetVocabNum = vocabItem.num;
-    document.getElementById('popWord').innerText = originalText; document.getElementById('popWordNum').innerText = `#${vocabItem.num}`;
-    let meaningHtml = "";
-    vocabItem.meanings.forEach(m => {
-        meaningHtml += `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.2); padding-bottom:6px;">
-                <span style="font-size:14px; color:white; flex:1; line-height:1.4;">${m.text}</span>
-                <div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;">
-                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='ok'?'var(--word-ok)':'rgba(0,0,0,0.5)'}; color:${m.status==='ok'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'ok', event)">⚪︎</button>
-                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='so'?'var(--word-so)':'rgba(0,0,0,0.5)'}; color:${m.status==='so'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'so', event)">△</button>
-                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='bad'?'var(--word-bad)':'rgba(0,0,0,0.5)'}; color:${m.status==='bad'?'#FFF':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'bad', event)">✕</button>
-                    <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3)':'rgba(0,0,0,0.5)'}; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'none', event)">ー</button>
-                </div>
-            </div>`;
-    });
-    document.getElementById('popMeaning').innerHTML = meaningHtml; document.getElementById('popoverStatusBtns').style.display = "none"; 
-    const pop = document.getElementById('wordPopover'); pop.style.display = 'flex'; pop.classList.add('show');
-};
-
 window.updateMeaningStatusFromPopover = function(wordNum, meaningId, status, event) {
     if(event) event.stopPropagation(); window.updateMeaningStatus(wordNum, meaningId, status, null); 
     const vocabItem = vocabList.find(w => String(w.num) === String(wordNum));
@@ -1370,7 +1336,7 @@ window.checkAdminPassword = function() {
 window.saveAdminDashboardTitle = function() {
     const input = document.getElementById('adminDashboardTitleInput'); if(!input) return;
     const txt = input.value.trim() || "ダッシュボード"; localStorage.setItem('core_v4_dashboard_title', txt);
-    const headerTitleEl = document.getElementById('headerTitleText'); if(headerTitleEl) headerTitleEl.innerText = savedTitleText;
+    const headerTitleEl = document.getElementById('headerTitleText'); if(headerTitleEl) headerTitleEl.innerText = txt;
     alert("ダッシュボードのタイトルを更新しました！");
 };
 
@@ -1407,7 +1373,6 @@ window.setLbDiff = function(diff) {
 };
 
 window.renderGameLeaderboard = function(type = currentLbType) {
-    currentLbType = type;
     const container = document.getElementById('leaderboardListContainer'); if(!container) return; container.innerHTML = "";
     if (type === 'mine') {
         const keyHistory = `cosmic_score_${currentLbMode}_endless`; let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
@@ -1430,7 +1395,7 @@ window.switchLeaderboard = function(type) {
 };
 
 // ==========================================================================
-// 🎮 🌟 新設：フラッシュカード（単語フラッシュ）制御モジュール
+// 🎮 🌟 フラッシュカード（単語フラッシュ）制御モジュール
 // ==========================================================================
 
 window.showFlashcardSetupScreen = function() {
@@ -1483,7 +1448,8 @@ window.startFlashcardSession = function() {
     flashcardOriginQueue = [...pool].sort(() => Math.random() - 0.5);
     flashcardCurrentIndex = 0;
     flashcardLearnedCount = 0;
-    
+    flashcardSessionHistory = [];
+
     document.getElementById('flashcard-setup-screen').style.display = 'none';
     document.getElementById('flashcard-play-screen').style.display = 'flex';
     document.body.classList.add('in-game-active');
@@ -1507,6 +1473,77 @@ window.startFlashcardSession = function() {
     window.renderFlashcardDeck();
 };
 
+// 🌟 改良：単語固有の過去の理解度ログ（◯、△、✕）を取得して最初から泡を着色
+window.renderFlashcardHistoryBubbles = function(wordData) {
+    const container = document.getElementById('fcHistoryContainer');
+    if (!container) return;
+    container.innerHTML = "";
+    
+    const cleanKey = wordData.en.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g,"");
+    const vocabMatch = vocabList.find(v => v.word.toLowerCase() === cleanKey);
+    
+    let targetHistory = [];
+    if (vocabMatch) {
+        if (vocabMatch.history && vocabMatch.history.length > 0) {
+            targetHistory = targetHistory.concat(vocabMatch.history);
+        } else if (vocabMatch.status && vocabMatch.status !== 'none') {
+            targetHistory.push(vocabMatch.status);
+        }
+    } else {
+        const memStatus = wordMemory[cleanKey];
+        if (memStatus && memStatus !== 'none') {
+            targetHistory.push(memStatus);
+        }
+    }
+
+    let displayList = targetHistory.slice(-5);
+    while (displayList.length < 5) {
+        displayList.unshift('none');
+    }
+    
+    displayList.forEach(status => {
+        const bubble = document.createElement('div');
+        bubble.className = "fc-history-bubble";
+        if (status !== 'none') {
+            bubble.classList.add(status);
+        }
+        container.appendChild(bubble);
+    });
+};
+
+// リアルタイム指追従用のパーティクルエフェクト
+window.createFlickTrailParticle = function(x, y, type) {
+    const stage = document.getElementById('flashcard-play-screen');
+    if (!stage) return;
+    
+    const p = document.createElement('div');
+    p.className = 'fc-history-bubble';
+    p.style.position = 'absolute';
+    p.style.left = x + "px";
+    p.style.top = y + "px";
+    p.style.width = (Math.random() * 8 + 6) + "px";
+    p.style.height = p.style.width;
+    p.style.pointerEvents = 'none';
+    p.style.zIndex = '400';
+    p.style.opacity = '0.85';
+    p.style.transform = 'translate(-50%, -50%)';
+    p.style.transition = 'all 0.8s cubic-bezier(0.1, 0.8, 0.25, 1)';
+    
+    if (type === 'right') p.classList.add('ok');
+    else if (type === 'left') p.classList.add('bad');
+    else if (type === 'up') p.classList.add('so');
+    else p.style.borderColor = 'rgba(255,255,255,0.6)';
+    
+    stage.appendChild(p);
+    
+    setTimeout(() => {
+        p.style.transform = "translate(" + ((Math.random() - 0.5) * 40) + "px, " + (-60 - Math.random() * 40) + "px) scale(0)";
+        p.style.opacity = '0';
+    }, 10);
+    
+    setTimeout(() => { p.remove(); }, 850);
+};
+
 window.renderFlashcardDeck = function() {
     const stage = document.getElementById('flashcardDeckStage');
     if (!stage) return;
@@ -1525,6 +1562,9 @@ window.renderFlashcardDeck = function() {
     }
     
     const wordData = flashcardOriginQueue[flashcardCurrentIndex];
+    window.renderFlashcardHistoryBubcules = window.renderFlashcardHistoryBubbles;
+    window.renderFlashcardHistoryBubbles(wordData);
+
     const cardWrap = document.createElement('div');
     cardWrap.className = "flashcard-wrapper-3d";
     cardWrap.id = "activeFlashcard";
@@ -1551,12 +1591,18 @@ window.renderFlashcardDeck = function() {
         if (!isCardFlicking) return;
         let dx = e.touches[0].clientX - cardTouchStartX;
         let dy = e.touches[0].clientY - cardTouchStartY;
-        cardWrap.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx * 0.05}deg)`;
+        
+        // 🌟 修正：指の動きに合わせて円形の親要素全体を完全に追従移動
+        cardWrap.style.transform = "translate3d(" + dx + "px, " + dy + "px, 0) rotate(" + (dx * 0.05) + "deg)";
         
         let distance = Math.sqrt(dx * dx + dy * dy);
         let ratio = Math.min(distance / 130, 1); 
         let fluidOpacity = Math.pow(ratio, 2.2) * 0.45;
         
+        if (Math.random() < 0.35) {
+            window.createFlickTrailParticle(e.touches[0].clientX, e.touches[0].clientY, 'trail');
+        }
+
         const rightEdge = document.getElementById('fcEdgeRippleRight');
         const leftEdge = document.getElementById('fcEdgeRippleLeft');
         const topEdge = document.getElementById('fcEdgeRippleTop');
@@ -1565,30 +1611,27 @@ window.renderFlashcardDeck = function() {
             if (dy < -15 && Math.abs(dy) > Math.abs(dx)) {
                 liveRipple.style.background = "radial-gradient(circle, rgba(245, 158, 11, 0.4) 0%, rgba(245, 158, 11, 0) 75%)";
                 liveRipple.style.opacity = fluidOpacity;
-                
                 if(topEdge) {
                     topEdge.style.opacity = ratio;
-                    topEdge.style.transform = `scaleY(${1 + ratio * 0.35})`;
+                    topEdge.style.transform = "scaleY(" + (1 + ratio * 0.35) + ")";
                 }
                 if(rightEdge) rightEdge.style.opacity = 0;
                 if(leftEdge) leftEdge.style.opacity = 0;
             } else if (dx > 15) {
                 liveRipple.style.background = "radial-gradient(circle, rgba(16, 185, 129, 0.4) 0%, rgba(16, 185, 129, 0) 75%)";
                 liveRipple.style.opacity = fluidOpacity;
-                
                 if(rightEdge) {
                     rightEdge.style.opacity = ratio;
-                    rightEdge.style.transform = `scaleX(${1 + ratio * 0.35})`;
+                    rightEdge.style.transform = "scaleX(" + (1 + ratio * 0.35) + ")";
                 }
                 if(leftEdge) leftEdge.style.opacity = 0;
                 if(topEdge) topEdge.style.opacity = 0;
             } else if (dx < -15) {
                 liveRipple.style.background = "radial-gradient(circle, rgba(239, 68, 68, 0.4) 0%, rgba(239, 68, 68, 0) 75%)";
                 liveRipple.style.opacity = fluidOpacity;
-                
                 if(leftEdge) {
                     leftEdge.style.opacity = ratio;
-                    leftEdge.style.transform = `scaleX(${1 + ratio * 0.35})`;
+                    leftEdge.style.transform = "scaleX(" + (1 + ratio * 0.35) + ")";
                 }
                 if(rightEdge) rightEdge.style.opacity = 0;
                 if(topEdge) topEdge.style.opacity = 0;
@@ -1610,11 +1653,11 @@ window.renderFlashcardDeck = function() {
         liveRipple.style.opacity = 0; 
         
         if (dx > 65) {
-            window.swipeFlashcard('right');
+            window.swipeFlashcard('right', dx, dy);
         } else if (dx < -65) {
-            window.swipeFlashcard('left');
+            window.swipeFlashcard('left', dx, dy);
         } else if (dy < -65) {
-            window.swipeFlashcard('up');
+            window.swipeFlashcard('up', dx, dy);
         } else {
             cardWrap.style.transform = "";
             const rightEdge = document.getElementById('fcEdgeRippleRight');
@@ -1644,7 +1687,7 @@ window.renderFlashcardDeck = function() {
     window.initLucide();
 };
 
-window.swipeFlashcard = function(direction) {
+window.swipeFlashcard = function(direction, finalDx = 0, finalDy = 0) {
     const card = document.getElementById('activeFlashcard');
     if (!card) return;
     
@@ -1652,28 +1695,40 @@ window.swipeFlashcard = function(direction) {
     let cleanKey = currentWord.en.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g,"");
     let status = 'none';
     
+    // 🌟 エフェクトの発生位置を、画面中央ではなく「指を離した先」にするための絶対座標計算
+    const stage = document.getElementById('flashcardDeckStage');
+    let baseLeft = window.innerWidth / 2;
+    let baseTop = window.innerHeight / 2.2;
+    if (stage) {
+        const rect = stage.getBoundingClientRect();
+        baseLeft = rect.left + rect.width / 2;
+        baseTop = rect.top + rect.height / 2;
+    }
+    let releaseX = baseLeft + finalDx;
+    let releaseY = baseTop + finalDy;
+
+    for (let i = 0; i < 15; i++) {
+        setTimeout(() => {
+            window.createFlickTrailParticle(releaseX + (Math.random() - 0.5) * 80, releaseY + (Math.random() - 0.5) * 80, direction);
+        }, i * 15);
+    }
+
+    // 🌟 大幅軽量化：カクつきの原因になる重い blur や brightness フィルターを完全撤廃し、GPUアクセラレーションを効かせた変形処理のみに
+    card.style.animation = "none"; 
+    card.style.transition = "transform 0.8s cubic-bezier(0.1, 0.8, 0.25, 1), opacity 0.8s ease";
+    card.style.transform = `translate3d(${finalDx}px, ${finalDy}px, 0) scale(0) rotate(${finalDx * 0.05}deg)`;
+    card.style.opacity = "0";
+
     if (direction === 'right') {
-        card.classList.add('slide-right');
         status = 'ok';
         flashcardLearnedCount++;
-        totalExp += 100000; 
+        totalExp += 10; 
         localStorage.setItem('core_v4_totalExp', totalExp);
         const coinEl = document.getElementById('profCoinCount'); if(coinEl) coinEl.innerText = totalExp;
     } else if (direction === 'left') {
-        card.classList.add('slide-left');
         status = 'bad';
     } else if (direction === 'up') {
-        card.classList.add('slide-up');
         status = 'so';
-    }
-    
-    const stage = document.getElementById('flashcardDeckStage');
-    if (stage) {
-        const ripple = document.createElement('div');
-        ripple.className = `flashcard-post-ripple firework-余韻-${direction}`;
-        stage.appendChild(ripple);
-        // 🌟 花火エフェクトが画面に残り続ける不具合を解消！アニメーション終了時(350ms)に確実にDOMから完全消去します
-        setTimeout(() => { ripple.remove(); }, 350);
     }
     
     wordMemory[cleanKey] = status;
@@ -1691,13 +1746,37 @@ window.swipeFlashcard = function(direction) {
         vocabMatch.history.push(status);
         window.saveVocabToStorage();
     }
+
+    window.renderFlashcardHistoryBubbles(currentWord);
+
+    // 🌟 リップルエフェクトも極限まで軽量化し、800msかけてじんわり優しく広げる
+    if (stage) {
+        const ripple = document.createElement('div');
+        ripple.className = `flashcard-post-ripple firework-余韻-${direction}`;
+        ripple.style.animationDuration = "0.8s";
+        ripple.style.left = `calc(50% + ${finalDx}px)`;
+        ripple.style.top = `calc(50% + ${finalDy}px)`;
+        stage.appendChild(ripple);
+        setTimeout(() => { ripple.remove(); }, 800);
+    }
     
     window.applyProfileToUi();
     window.updateReaderWordColors();
     window.renderVocabList();
     
-    flashcardCurrentIndex++;
-    window.renderFlashcardDeck();
+    // 次のカードロードまでの待機時間を800msに完全同調
+    setTimeout(() => {
+        flashcardCurrentIndex++;
+        window.renderFlashcardDeck();
+        
+        // 画面端のリップルをリセット
+        const rightEdge = document.getElementById('fcEdgeRippleRight');
+        const leftEdge = document.getElementById('fcEdgeRippleLeft');
+        const topEdge = document.getElementById('fcEdgeRippleTop');
+        if(rightEdge) rightEdge.style.opacity = 0;
+        if(leftEdge) leftEdge.style.opacity = 0;
+        if(topEdge) topEdge.style.opacity = 0;
+    }, 800);
 };
 
 window.quitFlashcardSession = function() {
@@ -1714,6 +1793,301 @@ window.quitFlashcardSession = function() {
     if(topEdge) topEdge.remove();
 
     window.renderGameLeaderboard();
+};
+
+// 🌟 復活：シングルプレイ（単語の試練）の開始用画面制御関数
+window.showModeSelectScreen = function() {
+    const startScreen = document.getElementById('game-start-screen');
+    const lbArea = document.getElementById('gameLeaderboardArea');
+    const modeSelectScreen = document.getElementById('game-mode-select-screen');
+    
+    if (startScreen) startScreen.style.display = 'none';
+    if (lbArea) lbArea.style.display = 'none';
+    if (modeSelectScreen) modeSelectScreen.style.display = 'block';
+};
+
+// 🌟 追加サポート関数：モード選択画面からの遷移ロジック群
+window.goToDifficultySelect = function(mode) {
+    selectedQuestionMode = mode;
+    document.getElementById('game-mode-select-screen').style.display = 'none';
+    document.getElementById('game-difficulty-select-screen').style.display = 'block';
+};
+
+window.backToGameMenu = function() {
+    document.getElementById('game-mode-select-screen').style.display = 'none';
+    document.getElementById('game-play-screen').style.display = 'none';
+    const startScreen = document.getElementById('game-start-screen');
+    const lbArea = document.getElementById('gameLeaderboardArea');
+    if (startScreen) startScreen.style.display = 'flex';
+    if (lbArea) lbArea.style.display = 'flex';
+};
+
+window.backToModeSelect = function() {
+    document.getElementById('game-difficulty-select-screen').style.display = 'none';
+    document.getElementById('game-mode-select-screen').style.display = 'block';
+};
+
+window.startActualGame = function(difficulty) {
+    currentGameDifficulty = difficulty;
+    document.getElementById('game-difficulty-select-screen').style.display = 'none';
+    document.getElementById('game-play-screen').style.display = 'block';
+    document.body.classList.add('in-game-active');
+    
+    gameScoreCount = 0;
+    gameMistakeCount = 0;
+    gameComboCount = 0;
+    document.getElementById('gameScoreNum').innerText = "0000";
+    
+    if(difficulty === 'normal') gameRemainingTime = 180;
+    else if(difficulty === 'hard') gameRemainingTime = 420;
+    else if(difficulty === 'expert') gameRemainingTime = 900;
+    else gameRemainingTime = 9999; 
+    
+    document.getElementById('gameTimerNum').innerText = gameRemainingTime;
+    
+    gameCurrentWordsQueue = [];
+    let pool = vocabList.length > 0 ? vocabList : dictionaryData;
+    pool.forEach(w => {
+        if(w.meanings && w.meanings.length > 0) {
+            gameCurrentWordsQueue.push({
+                wordNum: w.num,
+                word: w.word,
+                meaning: window.formatWordForDisplay(w.meanings[0].text)
+            });
+        } else if (w.ja) {
+            gameCurrentWordsQueue.push({
+                wordNum: w.num,
+                word: w.en,
+                meaning: window.formatWordForDisplay(w.ja)
+            });
+        }
+    });
+    
+    gameCurrentWordsQueue.sort(() => Math.random() - 0.5);
+    gameCurrentIndex = 0;
+    gameHistoryLog = [];
+    isGameProcessingAnswer = false;
+    
+    clearInterval(gameTimerInterval);
+    gameTimerInterval = setInterval(() => {
+        if(difficulty !== 'endless') {
+            gameRemainingTime--;
+            document.getElementById('gameTimerNum').innerText = gameRemainingTime;
+            if(gameRemainingTime <= 0) {
+                endGameSession();
+            }
+        } else {
+            document.getElementById('gameTimerNum').innerText = "∞";
+        }
+    }, 1000);
+    
+    showNextGameQuestion();
+};
+
+window.showNextGameQuestion = function() {
+    if(gameCurrentIndex >= gameCurrentWordsQueue.length) {
+        gameCurrentWordsQueue.sort(() => Math.random() - 0.5);
+        gameCurrentIndex = 0;
+    }
+    
+    const currentQ = gameCurrentWordsQueue[gameCurrentIndex];
+    let type = selectedQuestionMode;
+    if(type === 'mixed') {
+        type = Math.random() < 0.5 ? 'ja2en' : 'en2ja';
+    }
+    currentQuestionType = type;
+    
+    const targetDisplay = document.getElementById('gameWordTarget');
+    if(type === 'ja2en') {
+        targetDisplay.innerText = currentQ.meaning;
+    } else {
+        targetDisplay.innerText = currentQ.word;
+    }
+    
+    const inputEl = document.getElementById('gameAnswerInput');
+    inputEl.value = "";
+    inputEl.focus();
+    
+    document.getElementById('giantJudgmentOverlay').classList.remove('show');
+    document.getElementById('feedbackContent').style.display = 'none';
+    document.getElementById('gameNextBtn').style.display = 'none';
+};
+
+window.submitGameAnswer = function() {
+    if(isGameProcessingAnswer) return;
+    
+    const inputEl = document.getElementById('gameAnswerInput');
+    const userAns = inputEl.value.trim();
+    if(!userAns) return;
+    
+    isGameProcessingAnswer = true;
+    const currentQ = gameCurrentWordsQueue[gameCurrentIndex];
+    
+    let correctTarget = currentQuestionType === 'ja2en' ? currentQ.word : currentQ.meaning;
+    let isDirectMatch = userAns.toLowerCase() === correctTarget.toLowerCase();
+    
+    if(isDirectMatch) {
+        processJudgmentResult("OK", correctTarget, userAns);
+    } else {
+        document.getElementById('gameJudgingIndicator').style.display = 'flex';
+        window.callGeminiGameJudge(document.getElementById('gameWordTarget').innerText, correctTarget, userAns, currentQuestionType)
+        .then(result => {
+            document.getElementById('gameJudgingIndicator').style.display = 'none';
+            processJudgmentResult(result.status, correctTarget, userAns, result.alternatives);
+        })
+        .catch(() => {
+            document.getElementById('gameJudgingIndicator').style.display = 'none';
+            processJudgmentResult("NG", correctTarget, userAns);
+        });
+    }
+};
+
+// 🌟 新設：パスボタン押した時のMISS処理ロジック (指定通りオーバーレイを完全に排除)
+window.skipGameWordWithPass = function() {
+    if(isGameProcessingAnswer) return;
+    
+    isGameProcessingAnswer = true;
+    const currentQ = gameCurrentWordsQueue[gameCurrentIndex];
+    let correctTarget = currentQuestionType === 'ja2en' ? currentQ.word : currentQ.meaning;
+    
+    // 指示の通り、パス時は空文字入力で即座にMISS判定ステップへ送る
+    processJudgmentResult("NG", correctTarget, "（パス）", "", true);
+};
+
+function processJudgmentResult(status, correctTarget, userAns, alternatives = "", isPass = false) {
+    const overlay = document.getElementById('giantJudgmentOverlay');
+    const mark = document.getElementById('giantJudgmentMark');
+    const txt = document.getElementById('giantJudgmentText');
+    const scorePopup = document.getElementById('giantScorePopup');
+    
+    overlay.className = "giant-judgment-overlay";
+    scorePopup.className = "giant-score-popup";
+    
+    let addedPoints = 0;
+    let isCorrect = status === 'OK' || status === 'SO';
+    
+    if(isCorrect) {
+        if(status === 'OK') {
+            overlay.classList.add('correct');
+            mark.innerText = "◎";
+            txt.innerText = "正解！";
+            gameComboCount++;
+            addedPoints = 100 + Math.min(gameComboCount * 10, 200);
+            gameScoreCount += addedPoints;
+            scorePopup.innerText = `+${addedPoints}`;
+            scorePopup.classList.add('score-anim-plus');
+        } else if(status === 'SO') {
+            overlay.classList.add('correct');
+            mark.innerText = "○";
+            txt.innerText = "おまけ正解！";
+            gameComboCount++;
+            addedPoints = 50;
+            gameScoreCount += addedPoints;
+            scorePopup.innerText = `+${addedPoints}`;
+            scorePopup.classList.add('score-anim-plus');
+        }
+    } else {
+        overlay.classList.add('incorrect');
+        mark.innerText = "✕";
+        txt.innerText = "不正解...";
+        gameComboCount = 0;
+        gameMistakeCount++;
+        scorePopup.innerText = "MISS";
+        scorePopup.classList.add('score-anim-minus');
+    }
+    
+    document.getElementById('gameScoreNum').innerText = String(gameScoreCount).padStart(4, '0');
+    
+    // 🌟 コンボ演出
+    const comboContainer = document.getElementById('persistentComboContainer');
+    if(gameComboCount >= 2) {
+        comboContainer.style.display = 'flex';
+        document.getElementById('persistentComboText').innerText = `${gameComboCount} COMBO!`;
+    } else {
+        comboContainer.style.display = 'none';
+    }
+    
+    // 🌟 修正：パス時（isPass === true）は、画面を覆う黒いオーバーレイを一切表示しない
+    if (!isPass) {
+        overlay.classList.add('show');
+    }
+    
+    // 解説表示
+    document.getElementById('feedbackUserAns').innerText = userAns;
+    document.getElementById('feedbackCorrectAns').innerText = correctTarget;
+    if(alternatives) {
+        document.getElementById('feedbackDiffAnswersRow').style.display = 'block';
+        document.getElementById('feedbackOtherAns').innerText = alternatives;
+    } else {
+        document.getElementById('feedbackDiffAnswersRow').style.display = 'none';
+    }
+    
+    gameHistoryLog.push({
+        question: document.getElementById('gameWordTarget').innerText,
+        userAns: userAns,
+        correctAns: correctTarget,
+        status: status
+    });
+    
+    // 🌟 修正：パス時はオーバーレイの余韻を待つ必要がないため、即座に（10ms）解説枠を開放して入力処理を完了
+    let feedbackDelay = isPass ? 10 : 800;
+    setTimeout(() => {
+        document.getElementById('feedbackContent').style.display = 'block';
+        document.getElementById('gameNextBtn').style.display = 'block';
+        isGameProcessingAnswer = false;
+    }, feedbackDelay);
+}
+
+window.goToNextGameWord = function() {
+    gameCurrentIndex++;
+    window.showNextGameQuestion();
+};
+
+window.endGameSession = function() {
+    clearInterval(gameTimerInterval);
+    document.getElementById('game-play-screen').style.display = 'none';
+    document.getElementById('game-result-screen').style.display = 'block';
+    document.body.classList.remove('in-game-active');
+    
+    document.getElementById('resScore').innerText = gameScoreCount;
+    let totalQ = gameHistoryLog.length;
+    let correctQ = gameHistoryLog.filter(h => h.status === 'OK' || h.status === 'SO').length;
+    let accuracy = totalQ > 0 ? Math.round((correctQ / totalQ) * 100) : 0;
+    document.getElementById('resAccuracy').innerText = `${accuracy}%`;
+    
+    // スコアセーブ
+    let keyBest = `cosmic_best_${selectedQuestionMode}_endless`;
+    let oldBest = parseInt(localStorage.getItem(keyBest) || "0");
+    if(gameScoreCount > oldBest) {
+        localStorage.setItem(keyBest, gameScoreCount);
+        oldBest = gameScoreCount;
+    }
+    document.getElementById('resBestScore').innerText = oldBest;
+    
+    const logKey = `cosmic_score_${selectedQuestionMode}_endless`;
+    let history = JSON.parse(localStorage.getItem(logKey) || "[]");
+    const now = new Date();
+    history.push({
+        score: gameScoreCount,
+        date: `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`
+    });
+    history.sort((a, b) => b.score - a.score);
+    localStorage.setItem(logKey, JSON.stringify(history.slice(0, 5)));
+    
+    // ログリスト出力
+    const container = document.getElementById('gameHistoryListContainer');
+    container.innerHTML = "";
+    gameHistoryLog.forEach(h => {
+        const item = document.createElement('div');
+        item.style.cssText = "display:flex; justify-content:space-between; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:12px;";
+        let mark = (h.status === 'OK' || h.status === 'SO') ? "⚪︎" : "✕";
+        item.innerHTML = `<div><strong>${h.question}</strong> -> ${h.userAns}</div><div style="color:${mark==='⚪︎'?'var(--word-ok)':'var(--word-bad)'}">${mark} (正解: ${h.correctAns})</div>`;
+        container.appendChild(item);
+    });
+    
+    totalExp += gameScoreCount;
+    localStorage.setItem('core_v4_totalExp', totalExp);
+    window.applyProfileToUi();
 };
 
 // ==========================================================================
@@ -1935,8 +2309,8 @@ window.selectMultiMode = function(mode) {
         swipeArea.style.borderColor = 'var(--admin-accent)'; 
         swipeArea.style.boxShadow = '0 0 15px rgba(236, 72, 153, 0.5)'; 
         if(btnPvp) btnPvp.classList.add('active');
-        if(coopBadge) coopBadge.style.display = 'none';
         if(pvpBadge) pvpBadge.style.display = 'block';
+        if(coopBadge) coopBadge.style.display = 'none';
         if(pvpTypeFrame) pvpTypeFrame.style.display = 'block';
         if(normalCountFrame) normalCountFrame.style.display = 'none';
         
@@ -1979,7 +2353,7 @@ window.startMultiBattlePlay = function() {
     document.getElementById('multiComboCountText').innerText = "0"; document.getElementById('multiDamagePopupText').innerText = "";
     
     const multiComboParent = document.getElementById('multiComboCountText') ? document.getElementById('multiComboCountText').parentElement : null;
-    if(multiComboParent) multiComboParent.style.display = 'none';
+    if(multiComboParent) document.getElementById('multiComboCountText').parentElement.style.display = 'none';
     
     const sparkleBorder = document.getElementById('combo-sparkle-border'); if(sparkleBorder) sparkleBorder.classList.remove('active');
     const ownHpFrame = document.getElementById('multiPlayerOwnHpFrame'); if(ownHpFrame) ownHpFrame.style.display = 'block';
@@ -2051,6 +2425,7 @@ window.startMultiBattlePlay = function() {
     
     clearInterval(gameTimerInterval); 
     gameTimerInterval = setInterval(window.handleMultiBattleTimer, 100); 
+    window.openWordPopoverFromVocab();
     window.showNextMultiWord(); 
     window.initMultiPartyEvents();
 };
@@ -2068,11 +2443,6 @@ window.updateMultiHpBars = function() {
         let fill = document.getElementById(`partyMemberHpFill-${m.id}`); 
         if (fill) {
             fill.style.width = Math.max(0, (m.hp / m.maxHp) * 100) + "%";
-        }
-        
-        let comboEl = document.getElementById(`multiPartyCombo-${m.id}`);
-        if (comboEl) {
-            comboEl.innerText = (m.isMe && gameComboCount >= 2) ? `${gameComboCount} COMBO!` : "";
         }
     });
     
