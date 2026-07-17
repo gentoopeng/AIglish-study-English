@@ -18,7 +18,7 @@
 </head>
 <body>
 
-    <!-- 🌟 新設：2コンボ以上発生時に画面全体の最外周を包み込んで明滅する金色ネオンオーバーレイ枠 -->
+    <!-- 2コンボ以上発生時に画面全体の最外周を包み込んで明滅する金色ネオンオーバーレイ枠 -->
     <div id="combo-sparkle-border" class="combo-sparkle-overlay"></div>
 
     <button id="scrollToTopBtn" class="scroll-to-top-btn" onclick="scrollToTop()">
@@ -85,15 +85,23 @@
         </div>
     </div>
 
+    <!-- ダッシュボード文字の右隣にリアルタイム同期レベル表示テキストを追加 -->
     <div class="app-header">
         <button class="menu-trigger" onclick="toggleSidebar(true)"><i data-lucide="menu" size="20"></i></button>
-        <span id="headerTitleText">ダッシュボード</span>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span id="headerTitleText">ダッシュボード</span>
+            <span id="headerLevelTextSlot" class="header-cosmic-level-badge">Lv.1</span>
+        </div>
+        <!-- リアルタイムレベル進捗グラデーションバーメーター -->
+        <div id="header-level-bar-container" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: rgba(255,255,255,0.1); overflow: hidden;">
+            <div id="header-level-bar-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--cosmic-cyan), var(--cosmic-purple-light)); transition: width 0.3s ease;"></div>
+        </div>
     </div>
 
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar(false)"></div>
     <div class="sidebar" id="sidebarMenu">
         <div class="sidebar-header">
-            <div class="avatar-glow" style="width:38px; height:38px; font-size:12px; box-shadow:none;">RANK</div>
+            <div class="avatar-glow" style="width:38px; height:38px; font-size:12px; box-shadow:none; overflow:hidden; display:flex; align-items:center; justify-content:center;">RANK</div>
             <div>
                 <div style="font-weight:700; font-size:15px;" id="sideOptPlayerName">プレイヤー1</div>
                 <div style="font-size:11px; color:var(--text-sub);" id="sideOptGroupName">ID: 未設定</div>
@@ -102,6 +110,10 @@
         
         <div style="padding: 16px; flex:1; overflow-y: auto; display:flex; flex-direction:column; gap:16px;">
             <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+                <!-- アバター写真登録ボタン -->
+                <div style="font-size: 11px; font-weight:700; color:var(--cosmic-cyan); margin-bottom:8px;">📸 アバター写真を登録</div>
+                <input type="file" id="avatarImageUploader" class="search-input" style="padding-top:8px; font-size:12px; height:38px;" accept="image/*" onchange="window.handleAvatarImageUpload(event)">
+                
                 <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">👤 プレイヤー名変更</div>
                 <input type="text" id="sideInputName" class="search-input" style="height:34px; margin-bottom:8px; font-size:12px;" placeholder="名前を入力">
                 
@@ -111,9 +123,9 @@
                 <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">🏅 称号の変更</div>
                 <select id="sideSelectTitle" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px; background:var(--input-bg); color:white;">
                     <option value="称号なし">称号なし</option>
-                    <option value="単語の探求者">単語の探求者</option>
+                    <option value="単語の探求者">単探求者</option>
                     <option value="シスタマスター">シスタマスター</option>
-                    <option value="解読の達人">解読の達人</option>
+                    <option value="解読の達人">解読 of 達人</option>
                 </select>
 
                 <div style="font-size: 11px; font-weight:700; color:var(--accent); margin-top:4px; margin-bottom:8px;">🤖 Gemini AI APIキー</div>
@@ -156,30 +168,42 @@
                 <img src="Header.png" alt="App Mascot Cover" class="home-cover-image" style="border-radius: 12px; margin-top: 4px;">
             </div>
 
-            <div class="card">
-                <div class="profile-row">
-                    <div class="avatar-glow">
-                        <i data-lucide="crown" class="avatar-deco-crown" size="18"></i>
-                        <span id="profAvatarText">U</span>
-                    </div>
-                    <div style="flex:1;">
-                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                            <span style="font-weight:700; font-size:16px;" id="profPlayerName">プレイヤー1</span>
-                            <span class="badge-lvl" id="profTitleLabel">称号なし ⚡</span>
+            <!-- 新設：シアン色のコズミックアナウンス（お知らせ）表示枠 -->
+            <div id="adminNoticeDisplayFrame" class="card cosmic-notice-board-card" style="display: none;">
+                <div class="notice-board-header">
+                    <i data-lucide="megaphone" size="14"></i>
+                    <span>📢 システム配信アナウンス</span>
+                </div>
+                <div id="adminNoticeTextContent" class="notice-board-body-text">現在、管理者からのお知らせはありません。</div>
+            </div>
+
+            <!-- 右端の経験値表示枠(TOTAL EXP)を完全撤廃し、空いた全領域をテキスト領域へ譲渡して横へ目物件伸ばした超ワイドプロフィールカード -->
+            <div class="card unified-profile-card">
+                <div class="profile-card-grid-layout">
+                    
+                    <!-- 左：正円アバター画像スロット -->
+                    <div class="profile-avatar-zone">
+                        <div class="avatar-glow-正円">
+                            <span id="profAvatarText">U</span>
                         </div>
-                        <div class="frame-badge" id="profTargetLabel">目標: 未設定</div>
                     </div>
-                    <div style="text-align:right;">
-                        <div class="coin-badge">
-                            <i data-lucide="zap" size="14"></i>
-                            <span id="profCoinCount">0</span>
+                    
+                    <!-- 中央：旧EXPバッジ領域のスペースもすべて吸収し、横幅最大で広々と伸びるネーム・称号・目標テキストエリア -->
+                    <div class="profile-text-content-zone">
+                        <div id="profPlayerName" class="player-name-neon-text">プレイヤー1</div>
+                        <div id="profTitleLabel" class="player-title-sub-text">称号なし ⚡</div>
+                        
+                        <!-- 統一ネオン仕様：親の横幅拡張に伴い、見切れ・縦潰れを起こさず最長で表示可能なカプセルバッジ -->
+                        <div class="target-capsule-neon-wrapper">
+                            <i data-lucide="target" size="11"></i>
+                            <span id="profTargetLabel">目標: 未設定</span>
                         </div>
-                        <div style="font-size:10px; color:var(--text-sub); font-weight:700; margin-top:4px;">TOTAL EXP</div>
                     </div>
+                    
                 </div>
 
-                <!-- 🌟 新設：本日の総勉強時間（リアルタイム）グラデーションバッジ枠 -->
-                <div id="studyTimeLiveBadgeFrame" style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.6) 100%); border: 1px solid rgba(245, 158, 11, 0.4); box-shadow: 0 0 10px rgba(245, 158, 11, 0.15); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;">
+                <!-- 本日の総勉強時間（リアルタイム）グラデーションバッジ枠 -->
+                <div id="studyTimeLiveBadgeFrame" style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.6) 100%); border: 1px solid rgba(245, 158, 11, 0.4); box-shadow: 0 0 10px rgba(245, 158, 11, 0.15); border-radius: 10px; padding: 10px 14px; margin-top: 14px; margin-bottom: 14px;">
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <i data-lucide="timer" style="color: #F59E0B; width: 16px; height: 16px;"></i>
                         <span style="font-size: 11px; font-weight: 800; color: #E2E8F0; letter-spacing: 0.5px;">本日の総勉強時間 (リアルタイム)</span>
@@ -193,15 +217,55 @@
 
             <h2><i data-lucide="compass" size="14"></i> クイックアクセス</h2>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                <div class="card" style="margin-bottom:0; cursor:pointer; text-align:center; padding:14px;" onclick="switchTab('vocab')">
+                <div class="card" style="margin-bottom:0; cursor:pointer; text-align:center; padding:14px;" onclick="window.switchTab('vocab')">
                     <i data-lucide="book-open" style="color:var(--accent); margin-bottom:6px;" size="24"></i>
                     <div style="font-size:13px; font-weight:700;">カスタム単語帳</div>
                 </div>
-                <div class="card" style="margin-bottom:0; cursor:pointer; text-align:center; padding:14px;" onclick="switchTab('reader')">
+                <div class="card" style="margin-bottom:0; cursor:pointer; text-align:center; padding:14px;" onclick="window.switchTab('reader')">
                     <i data-lucide="file-text" style="color:#10B981; margin-bottom:6px;" size="24"></i>
                     <div style="font-size:13px; font-weight:700;">スマート長文リーダー</div>
                 </div>
             </div>
+
+            <!-- 🛠️ 修正：独自の開閉文字切り替えシステムを持つ独立したアコーディオンカード構造 -->
+            <h2 style="margin-top:24px;"><i data-lucide="help-circle" size="14"></i> システムガイド ＆ 規約</h2>
+            
+            <div class="card" style="padding: 6px; margin-bottom: 8px;">
+                <button class="static-guide-expand-trigger" style="background:none; border:none; color:#FFFFFF; font-size:13px; font-weight:800; cursor:pointer; padding:10px; width:100%; display:flex; align-items:center; justify-content:space-between; box-sizing:border-box;" onclick="window.coreSystemStaticGuideToggle(event, this)">
+                    <span>📜 アプリケーション利用規約</span> <span class="guide-toggle-state-text" style="font-size:11px; color:var(--text-sub); font-weight:bold; display:flex; align-items:center; gap:4px;">開く <i data-lucide="chevron-down" size="12"></i></span>
+                </button>
+                <!-- 🛠️ 文面更新：将来的な外部サーバーアカウントストレージ構築の予定を明文化 -->
+                <div class="static-guide-content-box" style="display:none; padding:12px; font-size:12.5px; color:var(--text-main); line-height:1.6; border-top:1px dashed rgba(255,255,255,0.15);">
+                    本アプリは、ユーザーの皆様が安全かつ効果的に英語学習および単語テストを行えるよう開発されたシステムです。<br><br>
+                    <strong>【データ管理・将来のストレージ同期について】</strong><br>
+                    入力・登録された単語データや学習履歴は、現在はブラウザ内（ローカルストレージ）にのみ保管されます。システムデータがある程度完成した段階で、将来的には外部クラウドストレージ等へ安全にデータを同期・保存・移行できるアカウント同期システムを構築する予定です。<br><br>
+                    <strong>【APIキーの管理】</strong><br>ユーザー自身が設定したGemini APIキーは、本アプリの外部サーバーに送信・蓄積されることは一切なく、ブラウザから直接GoogleのAIモデルへ暗号化通信されます。管理は自己責任において行うものとします。
+                </div>
+            </div>
+
+            <div class="card" style="padding: 6px; margin-bottom: 8px;">
+                <button class="static-guide-expand-trigger" style="background:none; border:none; color:#FFFFFF; font-size:13px; font-weight:800; cursor:pointer; padding:10px; width:100%; display:flex; align-items:center; justify-content:space-between; box-sizing:border-box;" onclick="window.coreSystemStaticGuideToggle(event, this)">
+                    <span>🤖 Gemini AI APIキーの導入の仕方</span> <span class="guide-toggle-state-text" style="font-size:11px; color:var(--text-sub); font-weight:bold; display:flex; align-items:center; gap:4px;">開く <i data-lucide="chevron-down" size="12"></i></span>
+                </button>
+                <div class="static-guide-content-box" style="display:none; padding:12px; font-size:12.5px; color:var(--text-main); line-height:1.6; border-top:1px dashed rgba(255,255,255,0.15);">
+                    本アプリのスマート長文リーダー（自動和訳・要約）やAI採点機能を利用するには、Googleが提供する無料のAPIキーが必要です。<br><br>
+                    <strong>1. キーの新規発行</strong><br>Google AI Studioの公式サイトにアクセスし、お持ちのGoogleアカウントでログインして「Create API Key」ボタンを押します。<br><br>
+                    <strong>2. コードのコピー</strong><br>画面に表示される「AIzaSy...」から始まる長い文字列コードを丸ごとコピーします。<br><br>
+                    <strong>3. アプリへの保存</strong><br>アプリ左上のメニュー（三本線）を開き、「Gemini AI APIキー」の欄に貼り付けて「設定を保存して適用」を押せば接続完了です。
+                </div>
+            </div>
+
+            <div class="card" style="padding: 6px; margin-bottom: 8px;">
+                <button class="static-guide-expand-trigger" style="background:none; border:none; color:#FFFFFF; font-size:13px; font-weight:800; cursor:pointer; padding:10px; width:100%; display:flex; align-items:center; justify-content:space-between; box-sizing:border-box;" onclick="window.coreSystemStaticGuideToggle(event, this)">
+                    <span>📱 ホーム画面への追加の仕方 (アプリ化)</span> <span class="guide-toggle-state-text" style="font-size:11px; color:var(--text-sub); font-weight:bold; display:flex; align-items:center; gap:4px;">開く <i data-lucide="chevron-down" size="12"></i></span>
+                </button>
+                <div class="static-guide-content-box" style="display:none; padding:12px; font-size:12.5px; color:var(--text-main); line-height:1.6; border-top:1px dashed rgba(255,255,255,0.15);">
+                    本アプリはPWAに対応しています。スマホのデスクトップにアイコンを追加することで、ブラウザのURL枠を消して通常のアプリと同じ大画面で起動できます。<br><br>
+                    <strong>【iPhone (Safari) の手順】</strong><br>1. Safariブラウザで本アプリを開きます。<br>2. 画面下部にある「共有ボタン」（四角から矢印が飛び出しているアイコン）をタップします。<br>3. メニューをスクロールし、「ホーム画面に追加」を選択します。<br><br>
+                    <strong>【Android (Chrome) の手順】</strong><br>1. Chromeブラウザで本アプリを開きます。<br>2. 画面右上, または下部に表示される「ホーム画面に追加」または「アプリをインストール」のポップアップをタップします。
+                </div>
+            </div>
+
         </div>
 
         <div id="view-vocab" class="tab-view">
@@ -222,7 +286,7 @@
                     
                     <div style="margin-left: auto; display: flex; gap: 8px;">
                         <button class="list-action-link" style="background: rgba(16, 185, 129, 0.2); color: #10B981; border-color: #10B981;" onclick="handleBulkResetExecute()">
-                            <i data-lucide="rotate-ccw" size="12" style="vertical-align: middle;"></i> 理解度リセット
+                            <i data-lucide="rotate-ccw" size="12" style="vertical-align: middle;"></i> 理解度リreset
                         </button>
                         <button class="list-action-link" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border-color: #EF4444;" onclick="handleBulkDeleteExecute()">
                             <i data-lucide="trash-2" size="12" style="vertical-align: middle;"></i> 削除
@@ -315,7 +379,7 @@
                     <div id="summaryJaContainer" style="font-size:14px; line-height:1.6; color:var(--text-sub);"></div>
                 </div>
 
-                <!-- 🌟 新設：パターンAに基づき、「ドキュメント総和訳」の真下に完全独立配置した全文要約表示カード -->
+                <!-- パターンAに基づき、「ドキュメント総和訳」の真下に完全独立配置した全文要約表示カード -->
                 <div class="card" id="summary-abstract-card" style="display:none; border-top: 2px solid var(--cosmic-purple-light); box-shadow: 0 0 15px rgba(192, 132, 252, 0.25) !important;">
                     <h2><i data-lucide="sparkles" style="color:var(--cosmic-purple-light);"></i> 全文要約 (AI Abstract)</h2>
                     <div id="summaryAbstractContainer" style="font-size:14px; line-height:1.6; color:white; white-space:pre-line;">要約データを生成しています...</div>
@@ -323,7 +387,7 @@
             </div>
         </div>
 
-        <!-- 🌟 大改造：「共有同期」から名実ともに「フレンド」へと転生した2ページ横スライド式メインコンテナ -->
+        <!-- 「共有同期」から名実ともに「フレンド」へと転生した2ページ横スライド式メインコンテナ -->
         <div id="view-community" class="tab-view" style="position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10; padding: 0 !important;">
             
             <!-- 1ページ目：フレンド一覧管理ページ -->
@@ -357,7 +421,6 @@
 
                 <!-- 動的フレンド一覧描画コンテナ -->
                 <div id="friendListContainer" style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 40px;">
-                    <!-- JS処理によって、アイコン・ニックネーム・称号・レベルを含む美しいリスト形式のフレンド行が描画される -->
                 </div>
             </div>
 
@@ -392,14 +455,24 @@
 
         </div>
 
+        <!-- 完全復元：消失していた「称号進化コレクション」管理用コンテナ画面 -->
+        <div id="view-titles" class="tab-view">
+            <div class="card" style="border: 1.5px solid var(--cosmic-purple-light) !important; box-shadow: 0 0 15px rgba(192, 132, 252, 0.25) !important;">
+                <h2>🏅 称号進化コレクション進捗</h2>
+                <div style="font-size:12px; color:var(--text-sub); margin-bottom:6px;">総獲得数: <span id="title-progress-text" style="color:white; font-weight:bold;">0 / 0個</span></div>
+                <div class="multi-hp-bar" style="height:10px; border-color:var(--cosmic-purple-light);">
+                    <div id="title-progress-bar" class="multi-party-hp-fill" style="width:0%; background:linear-gradient(90deg, var(--cosmic-purple-light), var(--cosmic-purple-deep));"></div>
+                </div>
+                <div style="font-size:11px; color:var(--text-sub); margin-top:8px;">現在装備中: <strong id="equipped-title-display" style="color:var(--word-so);">称号なし</strong></div>
+            </div>
+            <div id="titles-list"></div>
+        </div>
+
         <div id="view-game" class="tab-view">
             <div id="cosmic-game-wrapper" class="cosmic-game-bg">
                 
-                <!-- 🌟 縦並びだったソロとマルチを横スワイプに変更、余白を完全に消すため固定配置 -->
                 <div id="game-start-screen" class="game-swipe-container" style="display:flex; position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10;">
                     
-                    <!-- 🌟 フラッシュ単語スライド（一番左へ配置） -->
-                    <!-- 🌟 背景を haikei.png から sinkai.png に変更しました 🌟 -->
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('sinkai.png'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 80px; box-sizing: border-box;">
                         <div class="tower-title-container">
                             <div class="tower-title-text" style="color: var(--cosmic-purple-light); text-shadow: 0 4px 15px rgba(192, 132, 252, 0.6);">フラッシュ単語</div>
@@ -408,7 +481,6 @@
                         <button class="multi-start-btn" style="color: var(--cosmic-purple-light); border-color: var(--cosmic-purple-light); text-shadow: 0 0 10px var(--cosmic-purple-light), 0 0 20px var(--cosmic-purple-light); box-shadow: 0 0 15px rgba(192, 132, 252, 0.4), inset 0 0 15px rgba(192, 132, 252, 0.4) !important;" onclick="showFlashcardSetupScreen()">START</button>
                     </div>
 
-                    <!-- ソロ学習テストスライド -->
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('haikei.png'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 80px; box-sizing: border-box;">
                         <div class="tower-title-container">
                             <div class="tower-title-text" style="color: var(--cosmic-cyan); text-shadow: 0 4px 15px rgba(0, 240, 255, 0.6);">単語の試練</div>
@@ -418,7 +490,6 @@
                         <button class="multi-start-btn" style="color: var(--cosmic-cyan); border-color: var(--cosmic-cyan); text-shadow: 0 0 10px var(--cosmic-cyan), 0 0 20px var(--cosmic-cyan); box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 0 15px rgba(0, 240, 255, 0.4) !important;" onclick="showModeSelectScreen()">START</button>
                     </div>
 
-                    <!-- マルチバトルスライド -->
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('tawa.png'); background-size: cover; background-position: top center; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding-bottom: 80px; box-sizing: border-box;">
                         <div class="tower-title-container">
                             <div class="tower-title-text">単語の迷宮</div>
@@ -434,7 +505,7 @@
                     <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-purple-light);">
                         <h2 style="color:white; justify-content:center; margin-bottom:16px;"><i data-lucide="settings"></i> カード学習設定</h2>
                         
-                        <!-- 🌟 教材指定：英訳和訳のすぐ上へとマッピング配置 -->
+                        <!-- 教材指定 -->
                         <div style="text-align:left; margin-bottom:16px;">
                             <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">教材指定</div>
                             <select id="flashcardSourceSelect" class="search-input" style="background:var(--input-bg); color:white; font-weight:600; border-radius:10px; height:40px; padding:0 12px;">
@@ -488,16 +559,14 @@
                             <i data-lucide="check-circle" size="16"></i><span>覚えた</span>
                         </div>
 
-                        <!-- 🌟 文字被りを消去し上品なサイズ（直径240px）の正円形カードをどっしり構えるクリーンコンテナ -->
                         <div id="flashcardDeckStage"></div>
                     </div>
 
                     <div class="card" style="padding:10px; margin-bottom:4px; text-align:center; background:rgba(15,23,42,0.8) !important;">
                         <div style="font-size:10px; color:#FFFFFF; font-weight:bold;" id="flashcardProgressText">表示中の覚えた単語: --%</div>
                         
-                        <!-- 🌟 追加：過去5回のバブル履歴を表示する枠 -->
+                        <!-- 過去5回のバブル履歴を表示する枠 -->
                         <div id="fcHistoryContainer" class="fc-history-container">
-                            <!-- JS側で泡（.fc-history-bubble）が動的に入ります -->
                         </div>
                         
                     </div>
@@ -667,7 +736,7 @@
                             </div>
                             <div style="font-size: 11px; font-family: monospace; font-weight: bold; color: white; flex-shrink: 0;" id="multiLimitGaugeText">0%</div>
                         </div>
-                        <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; margin-bottom: 6px; border-color: #F59E0B; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);">
+                        <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; margin-bottom: 6px; border-color: #F59E0B; box-shadow: 0 0 8px rgba(245, 158, 11, 0.455); division-edge: transform;">
                             <div class="multi-hp-fill multi-limit-fill" id="multiLimitGaugeFill" style="width:0%;"></div>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: flex-end;">
@@ -946,12 +1015,14 @@
 
     </div>
 
+    <!-- ゲームと編成の間に「称号」タブ選択用の物理切り替えネオンボタンを正確に追加復元 -->
     <div class="nav-bar" id="appMainBottomNavBar">
         <button class="nav-item active" id="nav-home" onclick="window.switchTab('home')"><i data-lucide="layout-dashboard" size="18"></i> ホーム</button>
         <button class="nav-item" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
         <button class="nav-item" id="nav-reader" onclick="window.switchTab('reader')"><i data-lucide="file-text" size="18"></i> リーダー</button>
         <button class="nav-item" id="nav-community" onclick="window.switchTab('community')"><i data-lucide="users" size="18"></i> フレンド</button>
         <button class="nav-item" id="nav-game" onclick="window.switchTab('game')"><i data-lucide="gamepad-2" size="18"></i> ゲーム</button>
+        <button class="nav-item" id="nav-titles" onclick="window.switchTab('titles')"><i data-lucide="award" size="18"></i> 称号</button>
         <button class="nav-item" id="nav-party" onclick="window.switchTab('party')"><i data-lucide="swords" size="18"></i> 編成</button>
     </div>
 

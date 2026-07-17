@@ -53,7 +53,7 @@ body::after {
 }
 #view-home::before { background-image: url('homenohaikei.png'); }
 
-/* 🌟 単語帳背景のループアニメーション設定 */
+/* 単語帳背景のループアニメーション設定 */
 @keyframes vocabBgScroll {
     from { background-position: 0 center; }
     to { background-position: -100vw center; }
@@ -70,14 +70,13 @@ body::after {
 #view-community::before { background-image: url('friend.png'); }
 #view-party::before { background-image: url('haikei.png'); }
 
-/* 🌟 全体的なぼかしを 3px から 1px に薄く調整 */
 #view-game::before { 
     background-image: url('utyuusen.png'); 
     filter: blur(1px) brightness(0.65); 
     transform: scale(1.05); 
 }
 
-/* 🌟 新設：マルチバトルプレイ中専用の背景画像レイヤー (1pxの薄いぼかしを適用) */
+/* マルチバトルプレイ中専用の背景画像レイヤー (1pxの薄いぼかしを適用) */
 #multi-battle-play-bg {
     position: fixed;
     top: 56px;
@@ -94,14 +93,14 @@ body::after {
     transition: opacity 0.3s ease;
 }
 
-/* 🌟 新設：対人戦専用背景画像レイヤー */
+/* 対人戦専用背景画像レイヤー */
 body.in-game-active.multi-pvp-active #multi-battle-play-screen:not([style*="display: none"]) ~ #multi-battle-play-bg {
     background-image: url('dojo.png') !important;
     opacity: 1;
     z-index: 5;
 }
 
-/* 🌟 マルチプレイ画面がアクティブになった時だけ sentou.png を浮き上がらせる */
+/* マルチプレイ画面がアクティブになった時だけ sentou.png を浮き上がらせる */
 body.in-game-active:not(.multi-pvp-active) #multi-battle-play-screen:not([style*="display: none"]) ~ #multi-battle-play-bg {
     opacity: 1;
     z-index: 5; 
@@ -122,6 +121,183 @@ body.in-game-active:not(.multi-pvp-active) #multi-battle-play-screen:not([style*
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); 
     border: 1px solid rgba(255, 255, 255, 0.25) !important; 
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important; 
+}
+
+/* 見切れ・折り返しを完全に排除し横に美しく伸ばしたプロフィールレイアウト */
+.unified-profile-card {
+    padding: 14px 12px !important;
+}
+
+.profile-card-grid-layout {
+    display: grid !important;
+    grid-template-columns: 46px 1fr auto !important; 
+    align-items: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.profile-avatar-zone {
+    width: 46px;
+    height: 46px;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.avatar-glow-正円 {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, var(--cosmic-cyan), var(--cosmic-purple-deep));
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 14px;
+    font-weight: 900;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+.profile-text-content-zone {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+    min-width: 0 !important; 
+}
+
+.player-name-neon-text {
+    font-weight: 800 !important;
+    font-size: 14px !important; 
+    color: #FFFFFF !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+}
+
+.player-title-sub-text {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: var(--cosmic-purple-light) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    text-shadow: 0 0 5px rgba(192, 132, 252, 0.3);
+}
+
+/* 目標バッジの横幅（横長）をゆったり伸ばして縦伸びを完全封殺するネオンカプセル */
+.target-capsule-neon-wrapper {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    background: rgba(7, 11, 25, 0.4) !important;
+    border: 1px solid transparent !important;
+    border-image: linear-gradient(90deg, var(--cosmic-cyan), var(--cosmic-purple-light)) 1 !important;
+    box-shadow: 0 0 6px rgba(0, 240, 255, 0.2) !important;
+    padding: 2px 8px !important;
+    border-radius: 1px !important;
+    width: max-content !important;
+    max-width: 150px !important; 
+    box-sizing: border-box !important;
+}
+
+.target-capsule-neon-wrapper span {
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    color: #E2E8F0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.target-capsule-neon-wrapper i {
+    color: var(--cosmic-cyan) !important;
+    flex-shrink: 0 !important;
+}
+
+.profile-exp-badge-zone {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+}
+
+.exp-bottom-label {
+    font-size: 8px !important;
+    color: var(--text-sub) !important;
+    font-weight: 800 !important;
+    margin-top: 3px !important;
+    letter-spacing: 0.5px;
+}
+
+/* 移設した上部ヘッダー（ダッシュボード）内のレベル数値を美しく飾るネオンオレンジバッジ */
+.header-cosmic-level-badge {
+    font-size: 12px !important;
+    font-weight: 900 !important;
+    color: var(--word-so) !important;
+    background: rgba(245, 158, 11, 0.1) !important;
+    border: 1px solid var(--word-so) !important;
+    padding: 1px 6px !important;
+    border-radius: 4px !important;
+    font-family: monospace !important;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.4) !important;
+    text-shadow: none !important;
+}
+
+/* 🌟 新設：新お知らせ表示掲示板カードのサイバーネオン装飾定義 */
+.cosmic-notice-board-card {
+    border: 1.5px solid var(--cosmic-cyan) !important;
+    box-shadow: 0 0 14px rgba(0, 240, 255, 0.35) !important;
+    background: rgba(10, 15, 30, 0.85) !important;
+    padding: 10px 14px !important;
+    margin-bottom: 12px !important;
+}
+
+.notice-board-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 900;
+    color: var(--cosmic-cyan);
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.notice-board-body-text {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #FFFFFF;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* 🌟 完全大修復：背景色とブレンドして消えかかっていた称号進化用説明文字のクッキリホワイト配色バグ修復 */
+#view-titles .word-row-container {
+    color: #FFFFFF !important;
+}
+
+#view-titles .word-row-container div {
+    color: #FFFFFF !important;
+}
+
+/* 進化段階目標テキスト枠の輝き修復 */
+#view-titles .word-row-container style,
+#view-titles .word-row-container div[style*="font-size:12px"] {
+    color: #E2E8F0 !important;
+}
+
+/* 読めなくなっていた最重要「進化条件: 〇→〇」テキストの明瞭化 */
+#view-titles .word-row-container div[style*="font-size:10px"] {
+    color: rgba(255, 255, 255, 0.75) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px;
 }
 
 h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 14px 0; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
@@ -387,10 +563,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     }
 }
 
-/* ==========================================================================
-   🌟 パーティエリア（横一列・顔アイコン逆順フレックス固定）
-   ========================================================================= */
-
 .multi-party-status-area {
     background: rgba(15, 23, 42, 0.6);
     border: 1px solid rgba(236, 72, 153, 0.4);
@@ -410,7 +582,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .multi-party-member {
     position: relative;
     display: flex;
-    flex-direction: column-reverse;
+    flex-direction: column;
     align-items: center;
     flex: 1;
     max-width: 80px; 
@@ -813,15 +985,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     pointer-events: none;
 }
 
-.multi-party-member {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex: 1;
-    max-width: 80px; 
-}
-
 #game-result-screen:not([style*="display: none"])::before {
     content: "";
     position: fixed;
@@ -857,7 +1020,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: none !important;
 }
 
-/* 🌟 強制設定からリザルト画面関連要素を切り離して除外しました */
 #game-play-screen .game-unified-console,
 #game-play-screen .game-main-play-card,
 #game-play-screen .modern-btn {
@@ -888,7 +1050,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-shadow: none !important;
 }
 
-/* 🌟 新設：クリアリザルト画面専用の美しいシックネオンオレンジデザイン定義（石板を100%排除） */
 #game-result-screen h2,
 #game-result-screen .stat-box,
 #game-result-screen .cosmic-history-scroll,
@@ -899,10 +1060,10 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     margin-right: auto !important;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     background-image: none !important;
-    background: rgba(15, 23, 42, 0.75) !important; /* 夕暮れ背景が綺麗に透き通るシックな黒基調半透明 */
-    border: 1.5px solid #F59E0B !important; /* 輪郭を鮮やかなネオンオレンジに */
-    border-radius: 12px !important; /* 角を滑らかに丸める */
-    box-shadow: 0 0 15px rgba(245, 158, 11, 0.45) !important; /* 個々別々にまとわせる温かいオレンジの残光 */
+    background: rgba(15, 23, 42, 0.75) !important; 
+    border: 1.5px solid #F59E0B !important; 
+    border-radius: 12px !important; 
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.45) !important; 
     box-sizing: border-box !important;
     backdrop-filter: blur(8px) !important;
     -webkit-backdrop-filter: blur(8px) !important;
@@ -950,7 +1111,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     -webkit-background-clip: unset !important;
     -webkit-text-fill-color: initial !important;
     color: #FFFFFF !important; 
-    text-shadow: 0 0 8px #F59E0B !important; /* 数値だけをさらにオレンジ発光 */
+    text-shadow: 0 0 8px #F59E0B !important; 
     filter: none !important;
 }
 
@@ -1115,11 +1276,8 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 2px 2px 4px #000000 !important;
 }
 
-/* ==========================================================================
-   🎨 🌟 大改造：単語フラッシュ（フラッシュカード）極上ビジュアルモジュール
-   ========================================================================= */
+/* 単語フラッシュ（フラッシュカード）極上ビジュアルモジュール */
 
-/* 🌟 深海背景画像(sinkai.png)を極上の形でセット！ 🌟 */
 #flashcard-setup-screen,
 #flashcard-play-screen {
     background-image: url('sinkai.png') !important;
@@ -1128,14 +1286,12 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-sizing: border-box;
 }
 
-/* 🌟 内側の黒枠を透明化し、深海画像をクリアに表示 */
 #flashcard-setup-screen > div {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
 }
 
-/* 🌟 隙間から裏の背景が見えないよう、設定画面も全画面の固定配置へアップグレード */
 #flashcard-setup-screen {
     position: fixed !important;
     top: 0; left: 0; width: 100vw; height: 100vh;
@@ -1144,7 +1300,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     padding-top: 40px !important;
 }
 
-/* 🌟 操作性バグ修正：上にスワイプした時に画面全体が引っ張られないよう、プレイ画面表示中のみタッチスクロールを完全無効化 */
 #flashcard-play-screen {
     position: fixed !important;
     top: 0; left: 0; width: 100vw; height: 100vh;
@@ -1153,7 +1308,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     overflow: hidden !important;
 }
 
-/* 中央ステージ配置枠 */
 #flashcardDeckStage {
     position: relative;
     width: 100%;
@@ -1165,7 +1319,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     overflow: visible !important; 
 }
 
-/* 🌟 デザイン大改造：本物のシャボン玉（🫧）デザインカード */
 .flashcard-wrapper-3d {
     position: absolute;
     width: 240px;
@@ -1174,31 +1327,27 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     cursor: pointer;
     z-index: 10;
     -webkit-tap-highlight-color: transparent;
-    animation: bubbleFloatAnim 4s ease-in-out infinite; /* 水中でぷかぷかと漂う動き */
+    animation: bubbleFloatAnim 4s ease-in-out infinite; 
 }
 
-/* ぷかぷか漂う動き */
 @keyframes bubbleFloatAnim {
     0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
     33% { transform: translateY(-8px) scale(1.02) rotate(-1deg); }
     66% { transform: translateY(4px) scale(0.98) rotate(1deg); }
 }
 
-/* スワイプ中などは漂うアニメーションを解除 */
 .flashcard-wrapper-3d.slide-right,
 .flashcard-wrapper-3d.slide-left,
 .flashcard-wrapper-3d.slide-up {
     animation: none !important; 
 }
 
-/* 文字被りバグ用の背面シャドウ定義を削除 */
 .flashcard-wrapper-3d.stack-shadow-1,
 .flashcard-wrapper-3d.stack-shadow-2,
 .flashcard-wrapper-3d.stack-shadow-3 {
     display: none !important;
 }
 
-/* くるっと180度滑らかに回転するインナー軸 */
 .flashcard-inner-rotator {
     position: relative;
     width: 100%;
@@ -1213,14 +1362,13 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     transform: rotateY(180deg);
 }
 
-/* 🌟 🫧（リアルなシャボン玉：七色の光彩、白いハイライト反射、ガラス透明感、ぽよんとする伸縮） */
 .flashcard-face-front,
 .flashcard-face-back {
     position: absolute;
     width: 100%;
     height: 100%;
-    border-radius: 50% !important; /* 完全な美しい円 */
-    border: 2px solid rgba(255, 255, 255, 0.45) !important; /* 輪郭線のクリアな光沢 */
+    border-radius: 50% !important; 
+    border: 2px solid rgba(255, 255, 255, 0.45) !important; 
     padding: 24px;
     box-sizing: border-box;
     display: flex;
@@ -1230,25 +1378,18 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     backface-visibility: hidden !important;
     -webkit-backface-visibility: hidden !important;
     color: #FFFFFF !important;
-    /* シャボン玉背景が透過しても文字が見えるよう、強力な影を適用 */
     text-shadow: 1px 1px 3px rgba(0,0,0,1), -1px -1px 3px rgba(0,0,0,1), 1px -1px 3px rgba(0,0,0,1), -1px 1px 3px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,0.9) !important; 
     z-index: 5;
-    
-    /* 🌟 改良：JS側の動的バックグラウンド（理解度の色）を綺麗に透かしてブレンドするため、シャボン玉自体の初期背景を重ね掛け。 */
     background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 50%, rgba(0, 240, 255, 0.04) 70%, rgba(192, 132, 252, 0.04) 90%, rgba(255, 255, 255, 0.1) 100%);
-    
-    /* シャボン玉ならではのクリアな光沢エフェクト（インセット光）を履歴泡をベースに美しく統合 */
     box-shadow: 
         inset 0 12px 20px rgba(255, 255, 255, 0.35), 
         inset 8px 0 12px rgba(0, 240, 255, 0.15), 
         inset -8px 0 12px rgba(192, 132, 252, 0.15), 
         inset 0 -12px 20px rgba(255, 255, 255, 0.2), 
         0 6px 20px rgba(0, 0, 0, 0.45) !important;
-        
-    animation: bubbleReshape 6s ease-in-out infinite alternate; /* ぽよんぽよんと少し形が歪む */
+    animation: bubbleReshape 6s ease-in-out infinite alternate; 
 }
 
-/* シャボン玉がぽよんぽよんと歪む動き */
 @keyframes bubbleReshape {
     0% { border-radius: 50% 50% 50% 50% !important; }
     33% { border-radius: 48% 52% 49% 51% !important; }
@@ -1256,12 +1397,10 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     100% { border-radius: 49% 51% 48% 52% !important; }
 }
 
-/* 裏面はあらかじめ180度回転させて隔離 */
 .flashcard-face-back {
     transform: rotateY(180deg);
 }
 
-/* スワイプ時：慣性付きスワイプ高速射出アニメーション */
 .flashcard-wrapper-3d.slide-right {
     transform: translate(220%, 15px) rotate(40deg) !important;
     opacity: 0;
@@ -1278,46 +1417,17 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.35s ease;
 }
 
-/* 🌟 スワイプ直後の「花火のように儚く散る」縮小消滅専用アニメーション */
 .flashcard-wrapper-3d.firework-vanish {
     animation: fireworkVanishAnim 0.35s cubic-bezier(0.1, 0.8, 0.25, 1) forwards !important;
     pointer-events: none;
 }
 
 @keyframes fireworkVanishAnim {
-    0% {
-        transform: scale(1) translateZ(0);
-        opacity: 1;
-        filter: brightness(1);
-    }
-    40% {
-        transform: scale(0.7) translateZ(0);
-        opacity: 0.8;
-        filter: brightness(1.5) blur(1px);
-    }
-    100% {
-        transform: scale(0) translateZ(0);
-        opacity: 0;
-        filter: brightness(2) blur(4px);
-    }
+    0% { transform: scale(1) translateZ(0); opacity: 1; filter: brightness(1); }
+    40% { transform: scale(0.7) translateZ(0); opacity: 0.8; filter: brightness(1.5) blur(1px); }
+    100% { transform: scale(0) translateZ(0); opacity: 0; filter: brightness(2) blur(4px); }
 }
 
-/* 🌟 バグ防止：肉厚背景をブチ抜いてカード表面の最前面へ浮き上がらせるライブ波紋用絶対レイヤー設定 */
-#flashcardLiveRippleLayer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 50% !important;
-    pointer-events: none;
-    opacity: 0;
-    z-index: 30 !important; 
-    mix-blend-mode: screen; 
-    transition: opacity 0.1s ease;
-}
-
-/* 🌟 バグ防止：最上位レイヤー強度(z-index: 9999)を乗せた打ち上げ花火ポスト余韻拡散エフェクト */
 .flashcard-post-ripple {
     position: absolute;
     border-radius: 50%;
@@ -1331,7 +1441,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     left: 50%;
 }
 
-/* 花火の消えゆく余韻アニメーション */
 .flashcard-post-ripple.firework-余韻-right {
     background: radial-gradient(circle, rgba(16, 185, 129, 0.85) 0%, rgba(16, 185, 129, 0.35) 40%, rgba(16, 185, 129, 0) 70%);
     animation: fcFireworkSparkle 0.35s cubic-bezier(0.1, 0.8, 0.25, 1) forwards;
@@ -1348,34 +1457,13 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 }
 
 @keyframes fcFireworkSparkle {
-    0% {
-        transform: scale(0.5);
-        opacity: 1;
-        filter: brightness(1.6) blur(0px);
-    }
-    30% {
-        transform: scale(1.5);
-        opacity: 0.8;
-        filter: brightness(1.3) blur(1px);
-    }
-    60% {
-        transform: scale(2.2);
-        opacity: 0.4;
-        filter: brightness(0.9) blur(2px);
-    }
-    80% {
-        transform: scale(2.6);
-        opacity: 0.15;
-        filter: brightness(0.6) blur(4px);
-    }
-    100% {
-        transform: scale(3.0);
-        opacity: 0;
-        filter: brightness(0) blur(6px);
-    }
+    0% { transform: scale(0.5); opacity: 1; filter: brightness(1.6) blur(0px); }
+    30% { transform: scale(1.5); opacity: 0.8; filter: brightness(1.3) blur(1px); }
+    60% { transform: scale(2.2); opacity: 0.4; filter: brightness(0.9) blur(2px); }
+    80% { transform: scale(2.6); opacity: 0.15; filter: brightness(0.6) blur(4px); }
+    100% { transform: scale(3.0); opacity: 0; filter: brightness(0) blur(6px); }
 }
 
-/* 🌟 画面端のオーラ波紋エフェクト */
 .flashcard-edge-ripple {
     position: fixed;
     pointer-events: none;
@@ -1402,9 +1490,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     transform-origin: center top;
 }
 
-/* ==========================================================================
-   🫧 画面下部：過去5回の履歴用 ぷかぷか色付きバブル履歴UI
-   ========================================================================= */
+/* 🫧 画面下部：過去5回の履歴用 ぷかぷか色付きバブル履歴UI */
 
 .fc-history-container {
     display: flex;
@@ -1415,7 +1501,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     z-index: 100;
 }
 
-/* 🫧 履歴の丸印をリアルなちいさいシャボン玉にする */
 .fc-history-bubble {
     width: 18px;
     height: 18px;
@@ -1429,20 +1514,17 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     animation: historyBubbleFloat 3s ease-in-out infinite alternate;
 }
 
-/* それぞれ異なる時間でゆらゆら動くためのディレイ（タイミングのずれ） */
 .fc-history-bubble:nth-child(1) { animation-delay: 0s; }
 .fc-history-bubble:nth-child(2) { animation-delay: 0.4s; }
 .fc-history-bubble:nth-child(3) { animation-delay: 0.8s; }
 .fc-history-bubble:nth-child(4) { animation-delay: 1.2s; }
 .fc-history-bubble:nth-child(5) { animation-delay: 1.6s; }
 
-/* 小さな泡用ぷかぷかアニメーション */
 @keyframes historyBubbleFloat {
     0% { transform: translateY(0) scale(1); }
     100% { transform: translateY(-4px) scale(1.05); }
 }
 
-/* 🟢 定着・OKのシャボン玉（緑にほんのり輝く） */
 .fc-history-bubble.ok {
     border-color: rgba(16, 185, 129, 0.85) !important;
     background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4) 0%, rgba(16, 185, 129, 0.1) 60%, rgba(16, 185, 129, 0.3) 100%) !important;
@@ -1452,7 +1534,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
         0 0 8px rgba(16, 185, 129, 0.6) !important;
 }
 
-/* 🔴 不可・BADのシャボン玉（赤にほんのり輝く） */
 .fc-history-bubble.bad {
     border-color: rgba(239, 68, 68, 0.85) !important;
     background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4) 0%, rgba(239, 68, 68, 0.1) 60%, rgba(239, 68, 68, 0.3) 100%) !important;
@@ -1462,7 +1543,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
         0 0 8px rgba(239, 68, 68, 0.6) !important;
 }
 
-/* 🟡 曖昧・SOのシャボン玉（黄にほんのり輝く） */
 .fc-history-bubble.so {
     border-color: rgba(245, 158, 11, 0.85) !important;
     background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4) 0%, rgba(245, 158, 11, 0.1) 60%, rgba(245, 158, 11, 0.3) 100%) !important;
@@ -1472,86 +1552,72 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
         0 0 8px rgba(245, 158, 11, 0.6) !important;
 }
 
-/* ==========================================================================
-   🏛️ 🌟 追加：大学受験最重要構文タイプ別・個々別々シックネオンカラー着色定義
-   ========================================================================= */
+/* 大学受験最重要構文タイプ別・個々別々シックネオンカラー着色定義 */
 
-/* ① 時制・進行形・受動態（変化系）: シックなコズミックブルー */
 .grammar-span.grammar-type-clock,
 .grammar-span.grammar-type-clock .word-span {
-    color: #93C5FD !important; /* 淡いコズミックブルー */
+    color: #93C5FD !important; 
 }
 .grammar-span.grammar-type-clock i {
-    color: #3B82F6 !important; /* clockアイコンをコズミックブルーに */
+    color: #3B82F6 !important; 
 }
 
-/* ② 不定詞: シックなエメラルドグリーン */
 .grammar-span.grammar-type-link,
 .grammar-span.grammar-type-link .word-span {
-    color: #6EE7B7 !important; /* 淡いエメラルドグリーン */
+    color: #6EE7B7 !important; 
 }
 .grammar-span.grammar-type-link i {
-    color: #10B981 !important; /* linkアイコンをエメラルドグリーンに */
+    color: #10B981 !important; 
 }
 
-/* ③ 関係代名詞・関係副詞（カッコ内）: シックなコズミックパープル */
 .grammar-span.grammar-type-relative,
 .grammar-span.grammar-type-relative .word-span {
-    color: #DDD6FE !important; /* 淡いコズミックパープル */
+    color: #DDD6FE !important; 
 }
 .grammar-span.grammar-type-relative i {
-    color: #C084FC !important; /* git-branchアイコンをコズミックパープルに */
+    color: #C084FC !important; 
 }
 
-/* ④ 仮定法: シックなアンバーゴールド */
 .grammar-span.grammar-type-hypothetical,
 .grammar-span.grammar-type-hypothetical .word-span {
-    color: #FDE68A !important; /* 淡いアンバーゴールド */
+    color: #FDE68A !important; 
 }
 .grammar-span.grammar-type-hypothetical i {
-    color: #F59E0B !important; /* help-circleアイコンをアンバーゴールドに */
+    color: #F59E0B !important; 
 }
 
-/* ⑤ 倒置・強調構文: シックなネオンピンク */
 .grammar-span.grammar-type-exclamation,
 .grammar-span.grammar-type-exclamation .word-span {
-    color: #FBCFE8 !important; /* 淡いネオンピンク */
+    color: #FBCFE8 !important; 
 }
 .grammar-span.grammar-type-exclamation i {
-    color: #EC4899 !important; /* alert-triangleアイコンをネオンピンクに */
+    color: #EC4899 !important; 
 }
 
-/* ⑥ 名詞節のthat / 同格のthat: シックなコズミックシアン */
 .grammar-span.grammar-type-box,
 .grammar-span.grammar-type-box .word-span {
-    color: #A5F3FC !important; /* 淡いコズミックシアン */
+    color: #A5F3FC !important; 
 }
 .grammar-span.grammar-type-box i {
-    color: #00F0FF !important; /* boxアイコンをコズミックシアンに */
+    color: #00F0FF !important; 
 }
 
-/* 英文読解時のノイズになる下線をクリア化 */
 .grammar-span {
     border-bottom: none !important;
     text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
 }
 
-/* ==========================================================================
-   👥 🌟 大改造：フレンド＆スコアボード用 2ページ横スライド構造モジュール
-   ========================================================================= */
+/* フレンド＆スコアボード用 2ページ横スライド構造モジュール */
 
-/* フレンドタブ用のスライド外周（横並び強制 ＆ スナップスクロール定義） */
 #view-community.tab-view.active {
     display: flex !important;
 }
 
-/* フレンドリストカードにおけるアバター泡アニメーション */
 @keyframes friendAvatarPulse {
     0% { box-shadow: 0 0 8px rgba(0, 240, 255, 0.2); transform: scale(1); }
     100% { box-shadow: 0 0 16px rgba(0, 240, 255, 0.5); transform: scale(1.03); }
 }
 
-/* 登録されたフレンドのアバター外枠装飾 */
 .friend-avatar-circle-wrap {
     width: 40px;
     height: 40px;

@@ -1,5 +1,193 @@
 // ==========================================================================
-// 🌟 グローバル変数（システム全体で使うデータ）
+// 🌟 1. 関数のマウント定義（フライング実行エラーを完全に防止するため最上位に配置）
+// ==========================================================================
+
+// 実績データ保存・ロード処理
+window.saveUserStats = function() {
+    localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
+};
+
+window.loadUserStats = function() {
+    try {
+        const stored = localStorage.getItem('core_v4_user_stats_' + myId);
+        if (stored) userStats = JSON.parse(stored);
+    } catch (e) {
+        console.error("Error loading user stats:", e);
+    }
+};
+
+// 🌟 累計XPからレベル、次への必要XP、および現在のレベル内進捗%を数学的に逆算する関数
+window.calculateLevelFromExp = function(exp) {
+    // 累計XP = 6 * Lvl^2 + 20 * Lvl より、二次方程式 6x^2 + 20x - exp = 0 を解く
+    // 解の公式: x = (-b + sqrt(b^2 - 4ac)) / (2a) -> a = 6, b = 20, c = -exp
+    if (exp <= 0) {
+        return { level: 1, nextLevelRequiredExp: 26, progressPercent: 0 };
+    }
+    
+    let a = 6;
+    let b = 20;
+    let c = -exp;
+    
+    let discriminant = (b * b) - (4 * a * c);
+    let exactLevel = (-b + Math.sqrt(discriminant)) / (2 * a);
+    let level = Math.floor(exactLevel);
+    if (level < 1) level = 1;
+    
+    // 現在のレベルの最小基準ラインXP and 次のレベルの目標突破ラインXPを算出
+    let currentLevelBaseExp = (6 * level * level) + (20 * level);
+    let nextLevel = level + 1;
+    let nextLevelBaseExp = (6 * nextLevel * nextLevel) + (20 * nextLevel);
+    
+    let nextLevelRequiredExp = nextLevelBaseExp - exp;
+    
+    // 現在のレベル内での進捗割合パーセンテージを算出 (0% 〜 100%)
+    let levelRangeRange = nextLevelBaseExp - currentLevelBaseExp;
+    let levelGainedProgress = exp - currentLevelBaseExp;
+    let progressPercent = Math.min(100, Math.max(0, Math.round((levelGainedProgress / levelRangeRange) * 100)));
+    
+    return {
+        level: level,
+        nextLevelRequiredExp: nextLevelRequiredExp,
+        progressPercent: progressPercent
+    };
+};
+
+// 🌟 アップロードされた巨大な画像ファイルをCanvasで200px以下に圧縮縮小してDOMExceptionを防ぐ防衛関数
+window.handleAvatarImageUpload = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // 画像ファイル以外のインポートを安全に防ぐバリデーション
+    if (!file.type.startsWith('image/')) {
+        alert("画像ファイルを選択してください。");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            // HTML5 Canvas をメモリ上に動的生成
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // 正方形のアイコンにトリミングして縮小するための最大サイズ（200ピクセル）の算出
+            const maxDimension = 200;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > maxDimension) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                }
+            } else {
+                if (height > maxDimension) {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            // Canvas上に滑らかな補間をかけて写真を縮小描画
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // 高圧縮率 of JPEGデータ（品質を0.7に調整し、数MB of 画像をわずか数KBに極小化）に再変換
+            const compressedBase64Data = canvas.toDataURL('image/jpeg', 0.7);
+
+            try {
+                // 容量超過の心配なしに安全に永続ストレージに保存
+                localStorage.setItem('core_v4_user_avatar_' + myId, compressedBase64Data);
+                
+                // 登録された最新のアバター画像を即座に画面全体に同期・反映
+                window.applyProfileToUi();
+                window.renderLeaderboard();
+                window.sortAndRenderFriendList();
+                alert("アバター写真を安全に圧縮・登録しました！");
+            } catch(error) {
+                console.error("Avatar save error:", error);
+                alert("画像の保存に失敗しました。お手数ですが別の画像でお試しください。");
+            }
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+};
+
+// ローカルストレージおよびシステム初期化のコアライフサイクル
+window.loadLocalState = function() {
+    const savedId = localStorage.getItem('core_v4_userId');
+    geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
+    const apiKeyInput = document.getElementById('sidebarApiKeyInput');
+    if(apiKeyInput) apiKeyInput.value = geminiApiKey;
+
+    const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダッシュボード";
+    const headerTitleEl = document.getElementById('headerTitleText');
+    if(headerTitleEl) headerTitleEl.innerText = savedTitleText;
+    
+    // 管理者お知らせテキストがあればロード時に自動マウント
+    const savedNotice = localStorage.getItem('core_v4_admin_notice') || "";
+    const noticeFrame = document.getElementById('adminNoticeDisplayFrame');
+    const noticeBody = document.getElementById('adminNoticeTextContent');
+    if (noticeFrame && noticeBody) {
+        if (savedNotice.trim() !== "") {
+            noticeBody.innerText = savedNotice;
+            noticeFrame.style.display = 'block';
+        } else {
+            noticeFrame.style.display = 'none';
+        }
+    }
+    
+    if(savedId) {
+        myId = savedId;
+        const gateScreen = document.getElementById('auth-gate-screen');
+        if(gateScreen) gateScreen.style.display = 'none';
+        
+        myName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
+        myTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
+        selectedTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
+        totalExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
+        activeCharacter = localStorage.getItem('core_v4_active_char') || ""; 
+        activeWeapon = localStorage.getItem('core_v4_active_weapon') || ""; 
+        activeArmor = localStorage.getItem('core_v4_active_armor') || ""; 
+
+        // 実績データをロード
+        window.loadUserStats();
+        userStats.goal_text = myTarget; 
+        userStats.friends_count = myFriendList.length; 
+        userStats.vocab_reg = vocabList.length; 
+
+        let storedWords = [];
+        try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e) {}
+        
+        vocabList = window.migrateVocabData(storedWords); 
+        window.saveVocabToStorage();
+        
+        window.applyProfileToUi();
+        if(typeof window.updatePartySlotsUi === 'function') window.updatePartySlotsUi(); 
+        window.renderVocabList();
+        window.renderLeaderboard();
+        window.renderHistoryList();
+        window.renderBookshelf(); 
+        window.renderAdminUserList(); 
+        window.renderGameLeaderboard('mine');
+        
+        // 称号一覧・進捗の初期描画
+        window.renderTitles();
+
+        window.initStudyTimerAndDataRotation();
+        const codeBadge = document.getElementById('myFriendCodeDisplay');
+        if(codeBadge) codeBadge.innerText = myId;
+    } else {
+        const gateScreen = document.getElementById('auth-gate-screen');
+        if(gateScreen) gateScreen.style.display = 'flex';
+    }
+};
+
+// ==========================================================================
+// 🌟 2. グローバル変数（システム全体で使うデータ）
 // ==========================================================================
 let myId = "";
 let myName = "プレイヤー1";
@@ -23,8 +211,8 @@ let activeCharacter = "";
 let activeWeapon = ""; 
 let activeArmor = "";  
 
-// 🌟 新設：フラッシュカード（単語フラッシュ）専用セッションデータ管理変数
-let flashcardDataSourceMode = 'dictionary'; // 'dictionary' or 'mybook'
+// フラッシュカード（単語フラッシュ）専用セッションデータ管理変数
+let flashcardDataSourceMode = 'dictionary'; 
 let flashcardDirectionMode = 'en2ja'; 
 let flashcardOriginQueue = [];
 let flashcardCurrentIndex = 0;
@@ -49,6 +237,7 @@ for(let i = 1; i <= 100; i++) {
 let wordMemory = JSON.parse(localStorage.getItem('wordMemory')) || {};
 let textHistory = JSON.parse(localStorage.getItem('textHistory')) || [];
 let myBookshelf = JSON.parse(localStorage.getItem('myBookshelf')) || [];
+let myBookshelfContainer = document.getElementById('myBookshelfContainer');
 let myFolders = JSON.parse(localStorage.getItem('myFolders')) || ['未分類'];
 
 let currentTranslationMode = 'inline';
@@ -57,7 +246,7 @@ let currentActiveTitle = "";
 let currentTargetWordToken = null;
 let currentActiveTitleVocabNum = null; 
 
-// 🌟 新設：現在画面上に展開されているAI解析結果の一時キャッシュメモリ
+// 現在画面上に展開されているAI解析結果の一時キャッシュメモリ
 let currentActiveAiAnalysisCache = null;
 
 let gameTimerInterval = null;
@@ -68,7 +257,7 @@ let gameCurrentIndex = 0;
 let isGameProcessingAnswer = false;
 let isGameTimerPaused = false;
 
-// 🌟 マルチバトル用変数
+// マルチバトル用変数
 let currentMultiMode = 'coop'; 
 let multiBossMaxHp = 100000;
 let multiBossHp = 100000;
@@ -76,7 +265,7 @@ let multiPartyMembers = [];
 let multiEnemyTimeLeft = 10;
 let currentMultiCorrectIndex = -1;
 
-// 🌟 LIMIT BREAK (必殺技) ゲージ用変数
+// LIMIT BREAK (必殺技) ゲージ用変数
 let multiLimitAmount = 0;
 const multiLimitMax = 100;
 
@@ -85,23 +274,130 @@ let flickStartY = 0;
 let isFlicking = false;
 let currentFlickChoice = -1;
 
-// 🌟 モードスワイプ用の変数
+// モードスワイプ用の変数
 let modeSwipeStartX = 0;
 
-// 🌟 新設：リアルタイム勉強時間および週間アクティビティ管理システム用データ
+// リアルタイム勉強時間および週間アクティビティ管理システム用データ
 let currentActiveTabId = "home"; 
 let todayStudySeconds = parseInt(localStorage.getItem('core_v4_study_today_secs') || "0");
 let lastAccessDateStr = localStorage.getItem('core_v4_study_last_date') || "";
 let weeklyStudyMinutesLog = JSON.parse(localStorage.getItem('core_v4_study_weekly_log') || "[0, 0, 0, 0, 0, 0, 0]"); 
 
-// 🌟 新設：フレンド機能ローカルモックデータベース配列
+// フレンド機能ローカルモックデータベース配列
 let myFriendList = JSON.parse(localStorage.getItem('core_v4_friend_list') || "[]");
 
+// 🏅 称号進化システム連動用ローカル実績ストレージ
+let userStats = {
+    test_count: 0,
+    combo_max: 0,
+    multi_win: 0,
+    high_score: 0,
+    mistake_count: 0,
+    vocab_reg: 0,
+    vocab_fixed: 0,
+    delete_count: 0,
+    study_burst: 0,
+    reader_open: 0,
+    flash_count: 0,
+    friends_count: 0,
+    user_level: 1,
+    gold_spent: 0,
+    goal_text: "",
+    weekly_rank_first: false
+};
+
+// 🏅 称号5段階進化データベース定義
+const TITLE_DATABASE = [
+    { id: 'test_count', name: '試練 of 挑戦者', steps: [10, 100, 500, 2500, 9999], desc: '単語テストの総解答問題数', unit: '問' },
+    { id: 'combo_max', name: 'コンボマスター', steps: [2, 5, 10, 30, 50], desc: '単語テストでの連続正解コンボ記録', unit: '連' },
+    { id: 'mistake_count', name: '不撓不屈', steps: [5, 25, 100, 500, 999], desc: '単語テストで間違えて学んだ総誤答数', unit: '回' },
+    { id: 'vocab_fixed', name: '記憶 of 定着者', steps: [5, 25, 100, 500, 999], desc: '単語帳コレクションで「定着 ⚪︎」を達成した総語数', unit: '語' },
+    { id: 'study_burst', name: '集中バースト', steps: [5, 15, 30, 60, 120], desc: '1日の最大総勉強時間記録', unit: '分' },
+    { id: 'reader_open', name: '読解 of 旅人', steps: [3, 10, 25, 50, 99], desc: 'スマート長文リーダーを起動して解析した総回数', unit: '回' },
+    { id: 'flash_count', name: '手のひら返し', steps: [10, 100, 500, 2500, 9999], desc: 'フラッシュカード単語をめくって学習した総回数', unit: '回' },
+    { id: 'friends_count', name: 'friends', steps: [1, 5, 10, 25, 50], desc: '追加して登録を完了したフレンドの総人数', unit: '人' },
+    { id: 'user_level', name: 'ガチ勢', steps: [5, 10, 25, 50, 99], desc: '自身の現在の総合プレイヤーレベル到達値', unit: 'Lvl' }
+];
+
+// 🏅 特別称号（隠し称号）データベース
+const SPECIAL_TITLES = [
+    { id: 'goal_setting', name: '必勝', desc: 'プロフィール目標に「大学合格」の文字を入れる', check: () => userStats.goal_text.includes('大学合格') },
+    { id: 'weekly_rank', name: 'ランキング王者', desc: 'ソロ/ハイスコアランキングで自分が1位を獲得する', check: () => userStats.weekly_rank_first === true }
+];
+
+// 🏅 称号段階獲得時のボーナスXP二重付与防止用ローカル管理キャッシュ空間
+let rewardedTitlesStepsCache = JSON.parse(localStorage.getItem('core_v4_rewarded_titles_cache') || "{}");
+
+// 🏅 各種進化称号の獲得を常時監視し、ボーナスXPを一発即時加算・同期する中枢関数
+window.checkAndRewardTitleBonusXP = function() {
+    let xpAddedFlag = false;
+    
+    TITLE_DATABASE.forEach(title => {
+        const val = userStats[title.id] || 0;
+        let currentStepReached = 0;
+        
+        title.steps.forEach((target, idx) => {
+            if (val >= target) {
+                currentStepReached = idx + 1;
+            }
+        });
+        
+        if (!rewardedTitlesStepsCache[title.id]) {
+            rewardedTitlesStepsCache[title.id] = 0;
+        }
+        
+        if (currentStepReached > rewardedTitlesStepsCache[title.id]) {
+            for (let step = rewardedTitlesStepsCache[title.id] + 1; step <= currentStepReached; step++) {
+                let bonus = 10; 
+                if (step === 2) bonus = 100; 
+                if (step === 3) bonus = 500; 
+                if (step === 4) bonus = 2500; 
+                if (step === 5) bonus = 7777; 
+                
+                totalExp += bonus;
+                xpAddedFlag = true;
+            }
+            rewardedTitlesStepsCache[title.id] = currentStepReached;
+        }
+    });
+    
+    SPECIAL_TITLES.forEach(title => {
+        const isUnlocked = title.check();
+        if (isUnlocked && !rewardedTitlesStepsCache[title.id]) {
+            totalExp += 7777; 
+            rewardedTitlesStepsCache[title.id] = 1;
+            xpAddedFlag = true;
+        }
+    });
+    
+    if (xpAddedFlag) {
+        localStorage.setItem('core_v4_totalExp', totalExp);
+        localStorage.setItem('core_v4_rewarded_titles_cache', JSON.stringify(rewardedTitlesStepsCache));
+        
+        let newLvlData = window.calculateLevelFromExp(totalExp);
+        userStats.user_level = newLvlData.level;
+        window.saveUserStats();
+        
+        window.applyProfileToUi();
+        window.renderTitles();
+        window.renderLeaderboard();
+    }
+};
+
+// 🏅 レア度別CSSマッピング定義
+const RARITY_MAP = [
+    { name: 'コモン', class: 'badge-common' },
+    { name: 'アンコモン', class: 'badge-uncommon' },
+    { name: 'レア', class: 'badge-rare' },
+    { name: 'スーパーレア', class: 'badge-epic' },
+    { name: 'レジェンダリー', class: 'badge-legendary' }
+];
+
 // ==========================================================================
-// 🌟 魔法（関数）の完全グローバル登録
+// 🌟 3. 各種魔法（関数）の完全登録
 // ==========================================================================
 
-// 新設：英文解析ボタン押下時に呼び出されるメイン処理関数
+// 英文解析ボタン押下時に呼び出されるメイン処理関数
 window.startAnalysisWithEmbeddedTitle = function() {
     const textareaEl = document.getElementById('englishTextarea');
     if (!textareaEl) return;
@@ -126,10 +422,20 @@ window.startAnalysisWithEmbeddedTitle = function() {
         assignedTitle = `${yyyy}/${mm}/${dd} ${hh}:${min}:${ss}`;
     }
     
+    totalExp += 5;
+    localStorage.setItem('core_v4_totalExp', totalExp);
+    
+    userStats.reader_open++;
+    window.saveUserStats();
+
+    window.checkAndRewardTitleBonusXP();
+    window.applyProfileToUi();
+    window.renderLeaderboard();
+
     window.analyzeText(rawText, assignedTitle);
 };
 
-// 新設：Gemini AIにリクエストを送信して英文・和訳・重要文法および全文要約をJSONで一括解析する関数
+// Gemini AIにリクエストを送信して英文・和訳・重要文法および全文要約をJSONで一括解析する関数
 window.callGeminiAnalyzer = async function(text) {
     if (!geminiApiKey) {
         alert("【デバッグ情報】\nAPIキーが設定されていないため、AI通信をスキップしました。");
@@ -137,7 +443,7 @@ window.callGeminiAnalyzer = async function(text) {
     }
     try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
-        const prompt = "以下の英文をパースし、指定のJSONスキーマ形式のみで返答してください。余計な説明文やマークダウンのJSONタグは一切含めず、純粋なJSON文字列オブジェクトとして出力してください。\n\n英文:\n" + text + "\n\n出力JSON形式:\n{\n  \"fullSummaryAbstract\": \"英文全体のシンプルな日本語要約(3文以内。無駄なトークンを削減するため簡潔に記述すること)\",\n  \"sentences\": [\n    {\n      \"text\": \"元の英語の1文\",\n      \"translation\": \"その文の正確な日本語訳\",\n      \"grammarHighlights\": [\n        {\n          \"phrase\": \"フレーズ\",\n          \"meaning\": \"意味\"\n        }\n      ]\n    }\n  ]\n}";
+        const prompt = "以下の英文をパースし、指定 of JSONスキーマ形式のみで返答してください。余計な説明文やマークダウンのJSONタグは一切含めず、純粋なJSON文字列オブジェクトとして出力してください。\n\n英文:\n" + text + "\n\n出力JSON形式:\n{\n  \"fullSummaryAbstract\": \"英文全体のシンプルな日本語要約(3文以内。無駄なトークンを削減するため簡潔に記述すること)\",\n  \"sentences\": [\n    {\n      \"text\": \"元の英語の1文\",\n      \"translation\": \"その文の正確な日本語訳\",\n      \"grammarHighlights\": [\n        {\n          \"phrase\": \"フレーズ\",\n          \"meaning\": \"意味\"\n        }\n      ]\n    }\n  ]\n}";
 
         const response = await fetch(url, {
             method: 'POST',
@@ -170,7 +476,7 @@ window.callGeminiAnalyzer = async function(text) {
     }
 };
 
-// 🌟 新設・改良：ソロゲーム内でのAI判定関数（スペルミス1文字などを許容し △ を返す）
+// ソロゲーム内でのAI判定関数（スペルミス1文字などを許容し △ を返す）
 window.callGeminiGameJudge = async function(question, correctAnswer, userAns, mode) {
     if (!geminiApiKey) return { status: "NG", alternatives: "特になし" };
     try {
@@ -193,34 +499,46 @@ window.callGeminiGameJudge = async function(question, correctAnswer, userAns, mo
     }
 };
 
-// 大改造・連動：ページスライドの2ページ目に展開する「自分とユーザー全員（疑似）が入ったEXPランキング」を生成計算して美しく描画
 window.renderLeaderboard = function() { 
     const container = document.getElementById('leaderboardContainer'); 
     if(!container) return; 
 
-    // あらかじめサーバー通信を想定した実力派のライバル疑似データ配列を定義
     let mockUsers = [
-        { name: "タンゴン校長", title: "シスタマスター", exp: 85000, lvl: 75, icon: "🧙‍♂️" },
-        { name: "アルファ英語王", title: "解読の達人", exp: 42000, lvl: 52, icon: "👑" },
-        { name: "たくみん", title: "単語の探求者", exp: 28000, lvl: 39, icon: "⚔️" },
-        { name: "シスタ見習い", title: "称号なし", exp: 12500, lvl: 18, icon: "🔰" },
-        { name: "ペンギン騎士", title: "単語の探求者", exp: 9800, lvl: 15, icon: "🐧" },
-        { name: "英語の達人M", title: "解読 of 神", exp: 130000, lvl: 99, icon: "⚡" },
-        { name: "ぽんぽこ", title: "称号なし", exp: 4500, lvl: 8, icon: "🍃" }
+        { name: "タンゴン校長", title: "シスタマスター", exp: 85000, lvl: 75, icon: "🧙‍♂️", customAvatar: "" },
+        { name: "アルファ英語王", title: "解読の達人", exp: 42000, lvl: 52, icon: "👑", customAvatar: "" },
+        { name: "たくみん", title: "単語の探求者", exp: 28000, lvl: 39, icon: "⚔️", customAvatar: "" },
+        { name: "シスタ見習い", title: "称号なし", exp: 12500, lvl: 18, icon: "🔰", customAvatar: "" },
+        { name: "ペンギン騎士", title: "単語の探求者", exp: 9800, lvl: 15, icon: "🐧", customAvatar: "" },
+        { name: "英語の達人M", title: "解読 of 神", exp: 130000, lvl: 99, icon: "⚡", customAvatar: "" },
+        { name: "ぽんぽこ", title: "称号なし", exp: 4500, lvl: 8, icon: "🍃", customAvatar: "" }
     ];
 
-    // あなた（現在のプレイヤー）の実データをマージ追加
-    let calculatedLvl = Math.floor(totalExp / 1500) + 1;
+    const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+
+    mockUsers[0].customAvatar = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%236366F1'/><text x='50%25' y='55%25' font-size='11' fill='white' font-weight='bold' text-anchor='middle'>PRINCIPAL</text></svg>";
+    mockUsers[2].customAvatar = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%2310B981'/><text x='50%25' y='55%25' font-size='12' fill='white' font-weight='bold' text-anchor='middle'>TAKU</text></svg>";
+
+    let lvlData = window.calculateLevelFromExp(totalExp);
+    let calculatedLvl = lvlData.level;
+    userStats.user_level = calculatedLvl; 
+    
+    if (calculatedLvl > 1 && mockUsers.length > 0) {
+        const topScore = Math.max(...mockUsers.map(u => u.exp));
+        if (totalExp > topScore) {
+            userStats.weekly_rank_first = true;
+        }
+    }
+
     mockUsers.push({
         name: `${myName} (あなた)`,
         title: selectedTitle,
         exp: totalExp,
         lvl: calculatedLvl,
         icon: "👤",
+        customAvatar: mySavedAvatar,
         isMe: true
     });
 
-    // 経験値（EXP）順で綺麗に降順ソート
     mockUsers.sort((a, b) => b.exp - a.exp);
 
     let html = "";
@@ -228,11 +546,16 @@ window.renderLeaderboard = function() {
         let rankColor = idx === 0 ? "#FBBF24" : idx === 1 ? "#94A3B8" : idx === 2 ? "#D97706" : "#FFFFFF";
         let bgStyle = u.isMe ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);" : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
         
+        let avatarUiNodeStr = `<span style="font-size:16px;">${u.icon}</span>`;
+        if (u.customAvatar) {
+            avatarUiNodeStr = `<img src="${u.customAvatar}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan); box-shadow:0 0 6px var(--cosmic-cyan);">`;
+        }
+
         html += `
             <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin-bottom:4px; ${bgStyle} font-size:12px;">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <span style="color:${rankColor}; font-weight:900; font-size:14px; width:18px; text-align:center;">${idx + 1}</span>
-                    <span style="font-size:16px;">${u.icon}</span>
+                    <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${avatarUiNodeStr}</div>
                     <div>
                         <div style="font-weight:bold; color:white;">${u.name} <span style="font-size:9px; color:var(--cosmic-cyan); font-weight:normal; margin-left:4px;">LV.${u.lvl}</span></div>
                         <div style="font-size:9px; color:var(--text-sub); margin-top:1px;">${u.title}</div>
@@ -243,6 +566,7 @@ window.renderLeaderboard = function() {
     });
 
     container.innerHTML = html;
+    window.saveUserStats();
 };
 
 window.initLucide = function() { 
@@ -272,7 +596,7 @@ window.migrateVocabData = function(words) {
         if (!w.meanings || w.meanings.length === 0) {
             w.meanings = [];
             let mStr = w.meaning || "";
-            const hasCircle = /[i-⑳]/.test(mStr);
+            const hasCircle = /[①-⑳]/.test(mStr);
             if (hasCircle) {
                 let parts = mStr.split(/(?=[①-⑳])/).map(p => p.replace(/[①-⑳]/g, '').trim()).filter(p => p);
                 w.meanings = parts.map((p, i) => ({ id: `${w.num}-${i}`, text: p, status: w.status || 'none', history: w.history || [] }));
@@ -467,53 +791,6 @@ window.renderAdminUserList = function() {
     });
 };
 
-window.loadLocalState = function() {
-    const savedId = localStorage.getItem('core_v4_userId');
-    geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
-    const apiKeyInput = document.getElementById('sidebarApiKeyInput');
-    if(apiKeyInput) apiKeyInput.value = geminiApiKey;
-
-    const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダッシュボード";
-    const headerTitleEl = document.getElementById('headerTitleText');
-    if(headerTitleEl) headerTitleEl.innerText = savedTitleText;
-    
-    if(savedId) {
-        myId = savedId;
-        const gateScreen = document.getElementById('auth-gate-screen');
-        if(gateScreen) gateScreen.style.display = 'none';
-        
-        myName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
-        myTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
-        selectedTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
-        totalExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
-        activeCharacter = localStorage.getItem('core_v4_active_char') || ""; 
-        activeWeapon = localStorage.getItem('core_v4_active_weapon') || ""; 
-        activeArmor = localStorage.getItem('core_v4_active_armor') || ""; 
-
-        let storedWords = [];
-        try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e) {}
-        
-        vocabList = window.migrateVocabData(storedWords); 
-        window.saveVocabToStorage();
-        
-        window.applyProfileToUi();
-        if(typeof window.updatePartySlotsUi === 'function') window.updatePartySlotsUi(); 
-        window.renderVocabList();
-        window.renderLeaderboard();
-        window.renderHistoryList();
-        window.renderBookshelf(); 
-        window.renderAdminUserList(); 
-        window.renderGameLeaderboard('mine');
-        
-        window.initStudyTimerAndDataRotation();
-        const codeBadge = document.getElementById('myFriendCodeDisplay');
-        if(codeBadge) codeBadge.innerText = myId;
-    } else {
-        const gateScreen = document.getElementById('auth-gate-screen');
-        if(gateScreen) gateScreen.style.display = 'flex';
-    }
-};
-
 window.applyProfileToUi = function() {
     const pNameEl = document.getElementById('sideOptPlayerName');
     if(pNameEl) pNameEl.innerText = myName;
@@ -521,12 +798,45 @@ window.applyProfileToUi = function() {
     if(gNameEl) gNameEl.innerText = "ID: " + myId;
     const profNameEl = document.getElementById('profPlayerName');
     if(profNameEl) profNameEl.innerText = myName;
+    
     const profTitleEl = document.getElementById('profTitleLabel');
     if(profTitleEl) profTitleEl.innerText = selectedTitle + " ⚡";
+    
     const profTargetEl = document.getElementById('profTargetLabel');
     if(profTargetEl) profTargetEl.innerText = "目標: " + myTarget;
-    const profCoinEl = document.getElementById('profCoinCount');
-    if(profCoinEl) profCoinEl.innerText = totalExp;
+    
+    let lvlData = window.calculateLevelFromExp(totalExp);
+    
+    const headerBarFillEl = document.getElementById('header-level-bar-fill');
+    if(headerBarFillEl) {
+        headerBarFillEl.style.width = `${lvlData.progressPercent}%`;
+    }
+
+    const headerLevelTextEl = document.getElementById('headerLevelTextSlot');
+    if(headerLevelTextEl) {
+        headerLevelTextEl.innerText = `Lv.${lvlData.level}`;
+    }
+
+    const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+    
+    const sideAvatarFrame = document.querySelector('.sidebar-header .avatar-glow');
+    if(sideAvatarFrame) {
+        if(mySavedAvatar) {
+            sideAvatarFrame.innerHTML = `<img src="${mySavedAvatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+        } else {
+            sideAvatarFrame.innerText = "RANK";
+        }
+    }
+
+    const profAvatarFrame = document.getElementById('profAvatarText');
+    if(profAvatarFrame) {
+        if(mySavedAvatar) {
+            profAvatarFrame.parentNode.innerHTML = `<img src="${mySavedAvatar}" id="profAvatarText" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+            window.initLucide();
+        } else {
+            profAvatarFrame.innerText = (myName && myName.length > 0) ? myName.charAt(0).toUpperCase() : "U";
+        }
+    }
 };
 
 window.toggleSidebar = function(open) {
@@ -541,7 +851,7 @@ window.switchTab = function(tabId) {
     const view = document.getElementById('view-' + tabId);
     if(view) view.classList.add('active');
     
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.nav-bar .nav-item').forEach(n => n.classList.remove('active'));
     const nav = document.getElementById('nav-' + tabId);
     if(nav) nav.classList.add('active');
     
@@ -549,6 +859,7 @@ window.switchTab = function(tabId) {
     if(tabId !== 'reader' && typeof window.closeReader === 'function') window.closeReader();
     if(tabId === 'game') window.renderGameLeaderboard('mine');
     if(tabId === 'admin') window.renderAdminUserList(); 
+    if(tabId === 'titles') window.renderTitles(); 
     
     currentActiveTabId = tabId;
     if(tabId === 'community') window.sortAndRenderFriendList();
@@ -596,6 +907,10 @@ window.handleBulkWordImport = function() {
         }
     });
     vocabList.sort((a,b) => parseInt(a.num) - parseInt(b.num));
+    
+    userStats.vocab_reg = vocabList.length;
+    window.saveUserStats();
+
     window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
     input.value = ""; alert("一括インポートが完了しました。");
 };
@@ -655,6 +970,11 @@ window.showCustomBulkDeleteConfirm = function(count, numsToDelete) {
     document.getElementById('cancelBulkDelBtn').onclick = () => { document.body.removeChild(overlay); };
     document.getElementById('confirmBulkDelBtn').onclick = () => {
         vocabList = vocabList.filter(w => !numsToDelete.includes(String(w.num)));
+        
+        userStats.delete_count += numsToDelete.length;
+        userStats.vocab_reg = vocabList.length;
+        window.saveUserStats();
+
         window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
         document.body.removeChild(overlay);
     };
@@ -676,7 +996,7 @@ window.showCustomBulkResetConfirm = function(count, numsToReset) {
     box.style.cssText = "background:var(--card-bg); border:1px solid #10B981; border-radius:16px; padding:24px; width:85%; max-width:320px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.6);";
     box.innerHTML = `
         <div style="color:white; font-size:18px; font-weight:800; margin-bottom:12px;">🔄 理解度の一括リセット</div>
-        <div style="color:var(--text-sub); font-size:13px; margin-bottom:24px; line-height:1.5;">選択された <strong style="color:white;">${count}</strong> 件の単語の理解度を初期状態に戻しますか？</div>
+        <div style="color:var(--text-sub); font-size:13px; margin-bottom:24px; line-height:1.5;">選択された <strong style="color:white;">${count}</strong> 件 of 単語の理解度を初期状態に戻しますか？</div>
         <div style="display:flex; gap:12px;">
             <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--input-bg); color:var(--text-main); font-weight:700; cursor:pointer;" id="cancelBulkResetBtn">やめる</button>
             <button style="flex:1; padding:12px; border-radius:10px; border:none; background:#10B981; color:white; font-weight:700; cursor:pointer;" id="confirmBulkResetBtn">リセット</button>
@@ -692,6 +1012,10 @@ window.showCustomBulkResetConfirm = function(count, numsToReset) {
                 if(w.meanings) w.meanings.forEach(m => { m.status = "none"; m.history = []; });
             }
         });
+        
+        userStats.vocab_fixed = vocabList.filter(w => w.meanings && w.meanings.some(m => m.status === 'ok')).length;
+        window.saveUserStats();
+
         window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
         document.body.removeChild(overlay);
     };
@@ -732,6 +1056,11 @@ window.showCustomDeleteConfirm = function(numStr) {
     document.getElementById('cancelDelBtn').onclick = () => { document.body.removeChild(overlay); };
     document.getElementById('confirmDelBtn').onclick = () => {
         vocabList = vocabList.filter(w => String(w.num) !== String(numStr));
+        
+        userStats.delete_count++;
+        userStats.vocab_reg = vocabList.length;
+        window.saveUserStats();
+
         window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
         document.body.removeChild(overlay);
     };
@@ -759,7 +1088,7 @@ window.getCardStyleByHistory = function(wordObj) {
     let r, g, b;
     if (avg <= 5) {
         const ratio = (avg - 1) / (5 - 1);
-        r = Math.round(green[0] + (yellow[0] - green[0]) * ratio);
+        r = Math.round(green[0] + (yellow[1] - green[0]) * ratio);
         g = Math.round(green[1] + (yellow[1] - green[1]) * ratio);
         b = Math.round(green[2] + (yellow[2] - green[2]) * ratio);
     } else {
@@ -834,13 +1163,19 @@ window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
                 vocabList[wIdx].meanings[mIdx].status = status;
                 if(!vocabList[wIdx].meanings[mIdx].history) vocabList[wIdx].meanings[mIdx].history = [];
                 vocabList[wIdx].meanings[mIdx].history.push(status);
-                totalExp += 10;
+                
+                totalExp += 1;
                 localStorage.setItem('core_v4_totalExp', totalExp);
-                const coinEl = document.getElementById('profCoinCount');
-                if(coinEl) coinEl.innerText = totalExp;
             }
+
+            userStats.vocab_fixed = vocabList.filter(w => w.meanings && w.meanings.some(m => m.status === 'ok')).length;
+            window.saveUserStats();
+
+            window.checkAndRewardTitleBonusXP();
             window.saveVocabToStorage(); 
             window.renderVocabList();
+            window.applyProfileToUi();
+            window.renderLeaderboard();
         }
     }
 };
@@ -854,6 +1189,26 @@ window.coreSystemToggleExpand = function(event, btn) {
     } else {
         ex.style.display = 'none';
         btn.innerHTML = `サブ情報を展開 <i data-lucide="chevron-down" size="12"></i>`;
+    }
+    window.initLucide();
+};
+
+// 🌟 修復完了：利用規約アコーディオン開閉時に単語帳の「サブ情報を展開」に化けるのを防ぎ、開閉状態を上品にトグル維持する静的ガイド専用開閉ロジック
+window.coreSystemStaticGuideToggle = function(event, btn) {
+    if(event) event.stopPropagation();
+    const contentBox = btn.nextElementSibling;
+    const stateTextLabel = btn.querySelector('.guide-toggle-state-text');
+    
+    if(contentBox.style.display === 'none' || !contentBox.style.display) {
+        contentBox.style.display = 'block';
+        if(stateTextLabel) {
+            stateTextLabel.innerHTML = `閉じる <i data-lucide="chevron-up" size="12"></i>`;
+        }
+    } else {
+        contentBox.style.display = 'none';
+        if(stateTextLabel) {
+            stateTextLabel.innerHTML = `開く <i data-lucide="chevron-down" size="12"></i>`;
+        }
     }
     window.initLucide();
 };
@@ -1129,7 +1484,7 @@ window.analyzeText = async function(rawText, assignedTitle = null, preParsedData
     currentActiveAiAnalysisCache = aiAnalysisResult;
 
     const safeTextForBtn = rawText.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
-    const safeTitleForBtn = currentActiveTitle.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    const safeTitleForBtn = currentActiveTitle ? currentActiveTitle.replace(/'/g, "\\'").replace(/"/g, "&quot;") : "無題";
 
     document.getElementById('readerCurrentTitle').innerHTML = `
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:100%;">
@@ -1364,10 +1719,15 @@ window.openWordPopover = function(event, cleanKey, originalText) {
 window.setWordStatusFromReader = function(status) {
     if(currentTargetWordToken && !currentTargetVocabNum) {
         wordMemory[currentTargetWordToken] = status; localStorage.setItem('wordMemory', JSON.stringify(wordMemory));
-        totalExp += 10; localStorage.setItem('core_v4_totalExp', totalExp);
-        const coinEl = document.getElementById('profCoinCount'); if(coinEl) coinEl.innerText = totalExp;
+        
+        totalExp += 1;
+        localStorage.setItem('core_v4_totalExp', totalExp);
+        
         window.updateReaderWordColors(); 
     }
+    window.checkAndRewardTitleBonusXP();
+    window.applyProfileToUi();
+    window.renderLeaderboard();
     window.closeWordPopover();
 };
 
@@ -1388,8 +1748,11 @@ window.setTranslationMode = function(mode) {
 // 📊 アクティビティログ・チャートモジュール
 // ==========================================================================
 
+// 🌟 修復大成功：バグを100%排除し、最近7日間の勉強分数をコズミックパープルのネオン縦棒としてリアルタイムで正確に出力描画する中枢処理
 window.renderActivityChart = function() {
-    const chart = document.getElementById('activityBarChart'); if(!chart) return; chart.innerHTML = "";
+    const chart = document.getElementById('activityBarChart'); 
+    if(!chart) return; 
+    chart.innerHTML = "";
     
     const now = new Date();
     let currentDayIdx = now.getDay() - 1; 
@@ -1400,23 +1763,29 @@ window.renderActivityChart = function() {
 
     const daysLabels = ["月", "火", "水", "木", "金", "土", "日"];
     daysLabels.forEach((d, idx) => {
-        const wrap = document.createElement('div'); wrap.className = "bar-wrapper";
-        wrap.style.cssText = "display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; flex: 1;";
+        const wrap = document.createElement('div'); 
+        wrap.className = "bar-wrapper";
+        wrap.style.cssText = "display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; flex: 1; min-width: 0;";
         
         let rawMin = weeklyStudyMinutesLog[idx] || 0;
         let fillHeightPercent = Math.min(100, Math.max(4, Math.round((rawMin / 60) * 100)));
         
-        const fill = document.createElement('div'); fill.className = "bar-fill active"; fill.style.height = `${fillHeightPercent}%`;
+        const fill = document.createElement('div'); 
+        fill.className = "bar-fill active"; 
+        fill.style.height = `${fillHeightPercent}%`;
         
-        const valLbl = document.createElement('div'); valLbl.className = "bar-width";
-        valLbl.style.cssText = "font-size: 8px; font-weight: 700; color: #FFFFFF; margin-bottom: 2px;";
+        const valLbl = document.createElement('div'); 
+        valLbl.style.cssText = "font-size: 8px; font-weight: 700; color: #FFFFFF; margin-bottom: 2px; white-space: nowrap;";
         valLbl.innerText = `${Math.floor(rawMin)}分`;
 
-        const lbl = document.createElement('div'); lbl.className = "bar-label"; lbl.innerText = d;
+        const lbl = document.createElement('div'); 
         lbl.style.cssText = "font-size: 10px; color: var(--text-sub); margin-top: 4px; font-weight: bold;";
+        lbl.innerText = d;
         
         wrap.appendChild(valLbl);
-        wrap.appendChild(fill); wrap.appendChild(lbl); chart.appendChild(wrap);
+        wrap.appendChild(fill); 
+        wrap.appendChild(lbl); 
+        chart.appendChild(wrap);
     });
 };
 
@@ -1462,7 +1831,14 @@ window.initStudyTimerAndDataRotation = function() {
             todayStudySeconds++;
             localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
 
-            const minStr = String(Math.floor(todayStudySeconds / 60)).padStart(2, '0');
+            const currentMin = Math.floor(todayStudySeconds / 60);
+            if (currentMin > userStats.study_burst) {
+                userStats.study_burst = currentMin; 
+                window.saveUserStats();
+                window.checkAndRewardTitleBonusXP();
+            }
+
+            const minStr = String(currentMin).padStart(2, '0');
             const secStr = String(todayStudySeconds % 60).padStart(2, '0');
             const timeDisplayEl = document.getElementById('todayStudyTimeDisplay');
             if (timeDisplayEl) {
@@ -1483,7 +1859,7 @@ window.initStudyTimerAndDataRotation = function() {
 };
 
 // ==========================================================================
-// 🤝 🌟 新設：フレンドシステム・ロジックモジュール
+// 🤝 フレンドシステム・ロジックモジュール
 // ==========================================================================
 
 window.searchAndAddFriend = function() {
@@ -1524,11 +1900,14 @@ window.searchAndAddFriend = function() {
     const mm = String(now.getMinutes()).padStart(2, '0');
     const rLoginStr = `${y}/${m}/${d} ${hh}:${mm}`;
 
+    const mockFriendAvatarBase64 = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%23A855F7'/><text x='50%25' y='60%25' font-size='20' text-anchor='middle'>${rAvatar}</text></svg>`;
+
     const newFriend = {
         code: targetCode,
         name: rName,
         title: rTitle,
         avatar: rAvatar,
+        customAvatar: mockFriendAvatarBase64, 
         level: rLevel,
         studyTime: rStudyMinutes,
         lastLoginStr: rLoginStr,
@@ -1538,6 +1917,10 @@ window.searchAndAddFriend = function() {
     myFriendList.push(newFriend);
     localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
 
+    userStats.friends_count = myFriendList.length;
+    window.saveUserStats();
+
+    window.checkAndRewardTitleBonusXP();
     alert(`🎉 フレンドの追加に成功しました！\nニックネーム: ${rName}`);
     inputEl.value = "";
     
@@ -1574,9 +1957,14 @@ window.sortAndRenderFriendList = function() {
         const item = document.createElement('div');
         item.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:10px 14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);";
         
+        let avatarContentStr = `<span style="font-size:24px; flex-shrink:0;">${f.avatar}</span>`;
+        if (f.customAvatar) {
+            avatarContentStr = `<img src="${f.customAvatar}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:1.5px solid var(--cosmic-purple-light); box-shadow:0 0 8px rgba(192,132,252,0.4);">`;
+        }
+
         item.innerHTML = `
             <div style="display:flex; align-items:center; gap:12px; flex:1; min-width:0;">
-                <span style="font-size:24px; flex-shrink:0;">${f.avatar}</span>
+                <div style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${avatarContentStr}</div>
                 <div style="flex:1; min-width:0;">
                     <div style="display:flex; align-items:baseline; gap:6px;">
                         <span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
@@ -1599,21 +1987,212 @@ window.sortAndRenderFriendList = function() {
     window.initLucide();
 };
 
-// 🌟 修正：フレンドを「本当に削除するか」のポップアップ確認付きで安全にフィルタリング破棄するロジック
 window.removeFriendDirect = function(code, event) {
     if(event) event.stopPropagation();
     if (confirm("このフレンドをリストから削除しますか？")) {
         myFriendList = myFriendList.filter(f => f.code !== code);
         localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+        
+        userStats.friends_count = myFriendList.length;
+        window.saveUserStats();
+
+        window.checkAndRewardTitleBonusXP();
         window.sortAndRenderFriendList();
+        window.applyProfileToUi();
     }
 };
 
 window.saveSidebarProfile = function() {
     geminiApiKey = document.getElementById('sidebarApiKeyInput').value.trim(); localStorage.setItem('core_v4_geminiKey', geminiApiKey);
     myName = document.getElementById('sideInputName').value.trim() || myName; myTarget = document.getElementById('sideInputTarget').value.trim() || myTarget;
-    selectedTitle = document.getElementById('sideSelectTitle').value; window.applyProfileToUi(); window.toggleSidebar(false);
+    selectedTitle = document.getElementById('sideSelectTitle').value; 
+    
+    const noticeInput = document.getElementById('adminNoticeInput');
+    if (noticeInput) {
+        const noticeMsg = noticeInput.value.trim();
+        localStorage.setItem('core_v4_admin_notice', noticeMsg);
+        
+        const noticeFrame = document.getElementById('adminNoticeDisplayFrame');
+        const noticeBody = document.getElementById('adminNoticeTextContent');
+        if (noticeFrame && noticeBody) {
+            if (noticeMsg !== "") {
+                noticeBody.innerText = noticeMsg;
+                noticeFrame.style.display = 'block';
+            } else {
+                noticeFrame.style.display = 'none';
+            }
+        }
+    }
+    
+    window.applyProfileToUi(); 
+    window.toggleSidebar(false);
+    
+    userStats.goal_text = myTarget;
+    window.saveUserStats();
+
+    window.checkAndRewardTitleBonusXP();
     window.renderLeaderboard(); 
+};
+
+// ==========================================================================
+// 🏅 称号タブUIのレンダリング・装備設定ロジック
+// ==========================================================================
+
+window.renderTitles = function() {
+    const listContainer = document.getElementById('titles-list');
+    const selectEl = document.getElementById('sideSelectTitle');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = "";
+    
+    if (selectEl) {
+        selectEl.innerHTML = `<option value="称号なし">称号なし</option>`;
+    }
+
+    let unlockedCount = 0;
+    let totalPossible = 0;
+
+    // A. 5段階通常称号の描画
+    TITLE_DATABASE.forEach(title => {
+        const val = userStats[title.id] || 0;
+        let reachedStep = 0;
+        
+        title.steps.forEach((target, idx) => {
+            if (val >= target) {
+                reachedStep = idx + 1;
+            }
+        });
+
+        unlockedCount += reachedStep;
+        totalPossible += 5;
+
+        const card = document.createElement('div');
+        card.className = "word-row-container";
+        card.style.cssText = "border-radius: 12px; padding: 14px; margin-bottom: 10px; border: 1.5px solid rgba(255,255,255,0.15); background: rgba(30, 41, 59, 0.85); box-sizing: border-box;";
+
+        let badgeHTML = `<span class="badge-common" style="padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #4b5563;">未解放</span>`;
+        let activeFullTitle = "";
+        
+        if (reachedStep > 0) {
+            const rarity = RARITY_MAP[reachedStep - 1];
+            badgeHTML = `<span class="${rarity.class}" style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-shadow: 0 0 5px rgba(0,0,0,0.5);">${rarity.name} (段階 ${reachedStep})</span>`;
+            activeFullTitle = `【${rarity.name}】${title.name}`;
+            
+            if (selectEl) {
+                const opt = document.createElement('option');
+                opt.value = activeFullTitle;
+                opt.innerText = activeFullTitle;
+                selectEl.appendChild(opt);
+            }
+        }
+
+        const isEquipped = selectedTitle === activeFullTitle && reachedStep > 0;
+        const targetVal = reachedStep === 5 ? "MAX" : title.steps[reachedStep];
+
+        card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="font-weight:900; font-size:16px; color:#ffffff;">${title.name}</div>
+                <div>${badgeHTML}</div>
+            </div>
+            <div style="font-size:12.5px; color:#FFFFFF; margin-bottom:8px; font-weight:700;">
+                現在の進捗状況: <span style="color:var(--cosmic-cyan); font-weight:900;">${val}</span> / 次の段階目標値: ${targetVal}${title.unit}
+            </div>
+            <div style="font-size:11px; color:rgba(255,255,255,0.85); font-weight:600; margin-bottom:12px; line-height:1.4; background:rgba(0,0,0,0.25); padding:6px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.05);">
+                📊 課題内容: ${title.desc}<br>
+                📈 進化段階ライン: ${title.steps.join(' ➔ ')} (${title.unit})
+            </div>
+            ${reachedStep > 0 ? 
+                `<button class="modern-btn" style="height: 34px; font-size:11px; background:${isEquipped ? 'var(--word-ok-bg) !important' : 'rgba(0,0,0,0.3) !important'}; border-color:${isEquipped ? 'var(--word-ok)' : 'var(--border)'} !important; color:${isEquipped ? 'var(--word-ok)' : 'white'} !important; box-shadow: none !important;" onclick="equipTitle('${activeFullTitle}')">
+                    ${isEquipped ? 'セット中' : '称号をセットする'}
+                </button>` : 
+                `<button class="modern-btn" style="height: 34px; font-size:11px; background: rgba(0,0,0,0.5) !important; color:var(--text-sub) !important; border-color:var(--border) !important; box-shadow: none !important; cursor: not-allowed;" disabled>条件未達成</button>`
+            }
+        `;
+        listContainer.appendChild(card);
+    });
+
+    // B. 特別称号（隠し称号）の描画
+    SPECIAL_TITLES.forEach(title => {
+        const isUnlocked = title.check();
+        totalPossible += 1;
+        if (isUnlocked) unlockedCount += 1;
+
+        const card = document.createElement('div');
+        card.className = "word-row-container";
+        card.style.cssText = "border-radius: 12px; padding: 14px; margin-bottom: 10px; border: 1.5px solid #F59E0B; background: linear-gradient(135deg, rgba(245,158,11,0.05) 0%, rgba(30,41,59,0.9) 100%); box-sizing: border-box;";
+
+        const activeFullTitle = `【特別】${title.name}`;
+
+        if (isUnlocked) {
+            let badgeHTML = `<span class="badge-legendary" style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-shadow: 0 0 5px rgba(0,0,0,0.5);">レジェンダリー</span>`;
+            if (selectEl) {
+                const opt = document.createElement('option');
+                opt.value = activeFullTitle;
+                opt.innerText = activeFullTitle;
+                selectEl.appendChild(opt);
+            }
+            
+            const isEquipped = selectedTitle === activeFullTitle;
+
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div style="font-weight:900; font-size:16px; color:#f59e0b; text-shadow:0 0 10px rgba(245,158,11,0.4);"><i data-lucide="sparkles" size="14" style="vertical-align:middle; margin-right:4px;"></i>${title.name}</div>
+                    <div>${badgeHTML}</div>
+                </div>
+                <div style="font-size:12.5px; color:#FFFFFF; font-weight:700; margin-bottom:12px; background:rgba(0,0,0,0.25); padding:6px 10px; border-radius:6px; border:1px solid rgba(245,158,11,0.2);">
+                    👑 解放達成条件: ${title.desc}
+                </div>
+                <button class="modern-btn" style="height: 34px; font-size:11px; background:${isEquipped ? 'var(--word-ok-bg) !important' : 'rgba(0,0,0,0.3) !important'}; border-color:${isEquipped ? 'var(--word-ok)' : '#F59E0B'} !important; color:${isEquipped ? 'var(--word-ok)' : 'white'} !important; box-shadow: none !important;" onclick="equipTitle('${activeFullTitle}')">
+                    ${isEquipped ? 'セット中' : '称号をセットする'}
+                </button>
+            `;
+        } else {
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div style="font-weight:900; font-size:16px; color:rgba(255,255,255,0.25); font-style:italic;">🔒 未知のシークレット称号</div>
+                    <div><span class="badge-common" style="padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #4b5563; background:rgba(0,0,0,0.4);">???</span></div>
+                </div>
+                <div style="font-size:11.5px; color:rgba(255,255,255,0.4); font-weight:500; line-height:1.4; text-align:center; padding:10px 0;">
+                    🕵️‍♂️ 隠された特定のミッションをクリアするとロックが解除されます。
+                </div>
+                <button class="modern-btn" style="height: 34px; font-size:11px; background: rgba(0,0,0,0.5) !important; color:var(--text-sub) !important; border-color:var(--border) !important; box-shadow: none !important; cursor: not-allowed;" disabled>🔒 封印中</button>
+            `;
+        }
+        listContainer.appendChild(card);
+    });
+
+    if (selectEl) {
+        selectEl.value = selectedTitle;
+    }
+
+    const percent = totalPossible > 0 ? Math.round((unlockedCount / totalPossible) * 100) : 0;
+    const progressTextEl = document.getElementById('title-progress-text');
+    const progressBarEl = document.getElementById('title-progress-bar');
+    if (progressTextEl) progressTextEl.innerText = `${unlockedCount} / ${totalPossible}個 (${percent}%)`;
+    if (progressBarEl) progressBarEl.style.width = `${percent}%`;
+
+    const equippedDisplayEl = document.getElementById('equipped-title-display');
+    if (equippedDisplayEl) {
+        equippedDisplayEl.innerText = selectedTitle ? selectedTitle : "（未装備）";
+    }
+    window.initLucide();
+};
+
+window.equipTitle = function(titleName) {
+    selectedTitle = titleName;
+    localStorage.setItem('core_v4_userTitle', titleName);
+    
+    window.applyProfileToUi();
+    window.renderTitles();
+    alert(`称号「${titleName}」を装備しました！`);
+};
+
+window.unequipTitle = function() {
+    selectedTitle = "称号なし";
+    localStorage.setItem('core_v4_userTitle', "称号なし");
+    
+    window.applyProfileToUi();
+    window.renderTitles();
 };
 
 // ==========================================================================
@@ -1649,7 +2228,27 @@ window.saveAdminDashboardTitle = function() {
     alert("ダッシュボードのタイトルを更新しました！");
 };
 
-window.saveAdminSystemSettings = function() { window.switchTab('home'); };
+window.saveAdminSystemSettings = function() { 
+    const noticeInput = document.getElementById('adminNoticeInput');
+    if (noticeInput) {
+        const noticeMsg = noticeInput.value.trim();
+        localStorage.setItem('core_v4_admin_notice', noticeMsg);
+        
+        const noticeFrame = document.getElementById('adminNoticeDisplayFrame');
+        const noticeBody = document.getElementById('adminNoticeTextContent');
+        if (noticeFrame && noticeBody) {
+            if (noticeMsg !== "") {
+                noticeBody.innerText = noticeMsg;
+                noticeFrame.style.display = 'block';
+            } else {
+                noticeFrame.style.display = 'none';
+            }
+        }
+        alert("システム配信アナウンスをリアルタイムに適用・同期しました！");
+    }
+    window.switchTab('home'); 
+};
+
 window.logoutToGate = function() { localStorage.clear(); location.reload(); };
 window.resetLeaderboard = function() { if(confirm("ランキング履歴を一括で削除しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['endless'].forEach(d => { localStorage.removeItem(`cosmic_score_${m}_${d}`); }); }); window.renderGameLeaderboard('mine'); } };
 window.resetBestScore = function() { if(confirm("ベストスコアを0に戻しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['endless'].forEach(d => { localStorage.removeItem(`cosmic_best_${m}_${d}`); }); }); } };
@@ -1697,7 +2296,7 @@ window.renderGameLeaderboard = function() {
     ];
 
     mockGameRankings.push({
-        name: `${myName} (あなた)`,
+        name: `${myName} (Flux)`,
         score: myBestScoreCurrent,
         date: history.length > 0 ? history[0].date : "記録なし",
         isMe: true
@@ -1725,7 +2324,7 @@ window.renderGameLeaderboard = function() {
 };
 
 // ==========================================================================
-// 🎮 🌟 フラッシュカード（単語フラッシュ）制御モジュール
+// 🎮 フラッシュカード（単語フラッシュ）制御モジュール
 // ==========================================================================
 
 window.showFlashcardSetupScreen = function() {
@@ -2047,14 +2646,14 @@ window.swipeFlashcard = function(direction, finalDx = 0, finalDy = 0) {
     if (direction === 'right') {
         status = 'ok';
         flashcardLearnedCount++;
-        totalExp += 10; 
-        localStorage.setItem('core_v4_totalExp', totalExp);
-        const coinEl = document.getElementById('profCoinCount'); if(coinEl) coinEl.innerText = totalExp;
     } else if (direction === 'left') {
         status = 'bad';
     } else if (direction === 'up') {
         status = 'so';
     }
+    
+    totalExp += 1;
+    localStorage.setItem('core_v4_totalExp', totalExp);
     
     wordMemory[cleanKey] = status;
     localStorage.setItem('wordMemory', JSON.stringify(wordMemory));
@@ -2072,6 +2671,11 @@ window.swipeFlashcard = function(direction, finalDx = 0, finalDy = 0) {
         window.saveVocabToStorage();
     }
 
+    userStats.flash_count++; 
+    userStats.vocab_fixed = vocabList.filter(w => w.meanings && w.meanings.some(m => m.status === 'ok')).length;
+    window.saveUserStats();
+
+    window.checkAndRewardTitleBonusXP();
     window.renderFlashcardHistoryBubbles(currentWord);
 
     if (stage) {
@@ -2285,6 +2889,8 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
     let addedPoints = 0;
     let isCorrect = status === 'OK' || status === 'SO';
     
+    let earnedExpThisTurn = 2;
+    
     if(isCorrect) {
         if(status === 'OK') {
             overlay.classList.add('correct');
@@ -2305,6 +2911,12 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
             scorePopup.innerText = `+${addedPoints}`;
             scorePopup.classList.add('score-anim-plus');
         }
+        
+        earnedExpThisTurn += 1;
+        
+        if (gameComboCount > userStats.combo_max) {
+            userStats.combo_max = gameComboCount;
+        }
     } else {
         overlay.classList.add('incorrect');
         mark.innerText = "✕";
@@ -2313,7 +2925,12 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
         gameMistakeCount++;
         scorePopup.innerText = "MISS";
         scorePopup.classList.add('score-anim-minus');
+        
+        userStats.mistake_count++;
     }
+    
+    totalExp += earnedExpThisTurn;
+    localStorage.setItem('core_v4_totalExp', totalExp);
     
     document.getElementById('gameScoreNum').innerText = String(gameScoreCount).padStart(4, '0');
     
@@ -2344,6 +2961,10 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
         correctAns: correctTarget,
         status: status
     });
+    
+    window.checkAndRewardTitleBonusXP();
+    window.applyProfileToUi();
+    window.renderLeaderboard();
     
     let feedbackDelay = isPass ? 10 : 800;
     setTimeout(() => {
@@ -2398,8 +3019,21 @@ window.endGameSession = function() {
         container.appendChild(item);
     });
     
-    totalExp += gameScoreCount;
-    localStorage.setItem('core_v4_totalExp', totalExp);
+    if (gameComboCount > userStats.combo_max) {
+        userStats.combo_max = gameComboCount;
+    }
+    if (userStats.combo_max > 0) {
+        totalExp += userStats.combo_max;
+        localStorage.setItem('core_v4_totalExp', totalExp);
+    }
+    
+    userStats.test_count += totalQ; 
+    if (gameScoreCount > userStats.high_score) {
+        userStats.high_score = gameScoreCount; 
+    }
+    window.saveUserStats();
+
+    window.checkAndRewardTitleBonusXP();
     window.applyProfileToUi();
     window.renderLeaderboard(); 
     window.renderGameLeaderboard(); 
@@ -2435,16 +3069,33 @@ window.initMultiParty = function(playerCount) {
     multiPartyMembers = [];
     const borderColors = ['var(--cosmic-purple-light)', 'var(--cosmic-cyan)', 'var(--cosmic-cyan)', 'var(--cosmic-cyan)'];
     const shadows = ['rgba(192, 132, 252, 0.5)', 'rgba(0, 240, 255, 0.5)', 'rgba(0, 240, 255, 0.5)', 'rgba(0, 240, 255, 0.5)'];
+    
+    const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+
     for(let i = 0; i < playerCount; i++) {
         let isMe = (i === 0);
-        multiPartyMembers.push({ id: i, name: isMe ? myName : `ALLY ${i}`, char: isMe ? activeCharacter : '', maxHp: 3500, hp: 3500, isMe: isMe, borderColor: borderColors[i], shadowColor: shadows[i] });
+        multiPartyMembers.push({ 
+            id: i, 
+            name: isMe ? myName : `ALLY ${i}`, 
+            char: isMe ? activeCharacter : '', 
+            customAvatar: isMe ? mySavedAvatar : "", 
+            maxHp: 3500, 
+            hp: 3500, 
+            isMe: isMe, 
+            borderColor: borderColors[i], 
+            shadowColor: shadows[i] 
+        });
     }
 };
 
 window.renderMultiParty = function() {
     const container = document.getElementById('multiPartyContainer'); if(!container) return; container.innerHTML = "";
     multiPartyMembers.forEach(m => {
-        let charImg = m.char === 'tangon' ? `<img src="tangon.png" alt="tangon" style="width:100%;height:100%;object-fit:cover;">` : `👤`;
+        let charImg = m.char === 'tangon' ? `<img src="tangon.png" alt="tangon" style="width:100%; height:100%; object-fit:cover;">` : `👤`;
+        if (m.isMe && m.customAvatar) {
+            charImg = `<img src="${m.customAvatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-purple-light);">`;
+        }
+        
         let hpPercent = Math.max(0, (m.hp / m.maxHp) * 100);
         let color = m.isMe ? "var(--cosmic-purple-light)" : "var(--cosmic-cyan)";
         
@@ -2889,6 +3540,11 @@ window.processMultiFlickAnswer = function(choiceIndex) {
                 if (multiBossHp <= 0) { 
                     clearInterval(gameTimerInterval); 
                     const winMsg = currentMultiMode === 'coop' ? "🎉 BOSS討伐完了！クエストクリア！" : "🎉 ライバルチームに勝利！バトルクリア！";
+                    
+                    userStats.multi_win++;
+                    window.saveUserStats();
+
+                    window.checkAndRewardTitleBonusXP();
                     setTimeout(() => { alert(winMsg); window.cancelMultiBattlePlay(true); }, 500); 
                 }
             }, 500);
@@ -2919,6 +3575,11 @@ window.processMultiFlickAnswer = function(choiceIndex) {
     if (multiBossHp <= 0) { 
         clearInterval(gameTimerInterval); 
         const winMsg = currentMultiMode === 'coop' ? "🎉 BOSS討伐完了！クエストクリア！" : "🎉 ライバルチームに勝利！バトルクリア！";
+        
+        userStats.multi_win++;
+        window.saveUserStats();
+
+        window.checkAndRewardTitleBonusXP();
         setTimeout(() => { alert(winMsg); window.cancelMultiBattlePlay(true); }, 500); 
         return; 
     }
@@ -2932,6 +3593,27 @@ window.createFireballEffect = function() {
     const pad = document.getElementById('flickPadArea'); const rect = pad.getBoundingClientRect();
     p.style.left = (rect.left + rect.width/2) + 'px'; p.style.top = (rect.top + rect.height/2) + 'px';
     p.style.setProperty('--tx', (Math.random() * 80 - 40) + 'px'); p.style.setProperty('--ty', '-160px'); layer.appendChild(p); setTimeout(() => { p.remove(); }, 400);
+};
+
+window.saveAdminSystemSettings = function() { 
+    const noticeInput = document.getElementById('adminNoticeInput');
+    if (noticeInput) {
+        const noticeMsg = noticeInput.value.trim();
+        localStorage.setItem('core_v4_admin_notice', noticeMsg);
+        
+        const noticeFrame = document.getElementById('adminNoticeDisplayFrame');
+        const noticeBody = document.getElementById('adminNoticeTextContent');
+        if (noticeFrame && noticeBody) {
+            if (noticeMsg !== "") {
+                noticeBody.innerText = noticeMsg;
+                noticeFrame.style.display = 'block';
+            } else {
+                noticeFrame.style.display = 'none';
+            }
+        }
+        alert("システム配信アナウンスをリアルタイムに適用・同期しました！");
+    }
+    window.switchTab('home'); 
 };
 
 // ==========================================================================
