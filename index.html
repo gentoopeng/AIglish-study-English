@@ -228,13 +228,12 @@
             </div>
 
             <!-- 🛠️ 修正：独自の開閉文字切り替えシステムを持つ独立したアコーディオンカード構造 -->
-            <h2 style="margin-top:24px;"><i data-lucide="help-circle" size="14"></i> システムガイド ＆ 規約</h2>
+            <h2><i data-lucide="help-circle" size="14"></i> システムガイド ＆ 規約</h2>
             
             <div class="card" style="padding: 6px; margin-bottom: 8px;">
                 <button class="static-guide-expand-trigger" style="background:none; border:none; color:#FFFFFF; font-size:13px; font-weight:800; cursor:pointer; padding:10px; width:100%; display:flex; align-items:center; justify-content:space-between; box-sizing:border-box;" onclick="window.coreSystemStaticGuideToggle(event, this)">
                     <span>📜 アプリケーション利用規約</span> <span class="guide-toggle-state-text" style="font-size:11px; color:var(--text-sub); font-weight:bold; display:flex; align-items:center; gap:4px;">開く <i data-lucide="chevron-down" size="12"></i></span>
                 </button>
-                <!-- 🛠️ 文面更新：将来的な外部サーバーアカウントストレージ構築の予定を明文化 -->
                 <div class="static-guide-content-box" style="display:none; padding:12px; font-size:12.5px; color:var(--text-main); line-height:1.6; border-top:1px dashed rgba(255,255,255,0.15);">
                     本アプリは、ユーザーの皆様が安全かつ効果的に英語学習および単語テストを行えるよう開発されたシステムです。<br><br>
                     <strong>【データ管理・将来のストレージ同期について】</strong><br>
@@ -261,7 +260,7 @@
                 </button>
                 <div class="static-guide-content-box" style="display:none; padding:12px; font-size:12.5px; color:var(--text-main); line-height:1.6; border-top:1px dashed rgba(255,255,255,0.15);">
                     本アプリはPWAに対応しています。スマホのデスクトップにアイコンを追加することで、ブラウザのURL枠を消して通常のアプリと同じ大画面で起動できます。<br><br>
-                    <strong>【iPhone (Safari) の手順】</strong><br>1. Safariブラウザで本アプリを開きます。<br>2. 画面下部にある「共有ボタン」（四角から矢印が飛び出しているアイコン）をタップします。<br>3. メニューをスクロールし、「ホーム画面に追加」を選択します。<br><br>
+                    <strong>【iPhone (Safari) の手順】</strong><br>1. Safariブラウザで本アプリを開きます。<br>2. 画面下部にある「共有ボタン」（四角から矢印が飛び出しているアイコン）をタップします。<br>3. メメニューをスクロールし、「ホーム画面に追加」を選択します。<br><br>
                     <strong>【Android (Chrome) の手順】</strong><br>1. Chromeブラウザで本アプリを開きます。<br>2. 画面右上, または下部に表示される「ホーム画面に追加」または「アプリをインストール」のポップアップをタップします。
                 </div>
             </div>
@@ -379,7 +378,6 @@
                     <div id="summaryJaContainer" style="font-size:14px; line-height:1.6; color:var(--text-sub);"></div>
                 </div>
 
-                <!-- パターンAに基づき、「ドキュメント総和訳」の真下に完全独立配置した全文要約表示カード -->
                 <div class="card" id="summary-abstract-card" style="display:none; border-top: 2px solid var(--cosmic-purple-light); box-shadow: 0 0 15px rgba(192, 132, 252, 0.25) !important;">
                     <h2><i data-lucide="sparkles" style="color:var(--cosmic-purple-light);"></i> 全文要約 (AI Abstract)</h2>
                     <div id="summaryAbstractContainer" style="font-size:14px; line-height:1.6; color:white; white-space:pre-line;">要約データを生成しています...</div>
@@ -387,17 +385,14 @@
             </div>
         </div>
 
-        <!-- 「共有同期」から名実ともに「フレンド」へと転生した2ページ横スライド式メインコンテナ -->
         <div id="view-community" class="tab-view" style="position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10; padding: 0 !important;">
             
-            <!-- 1ページ目：フレンド一覧管理ページ -->
             <div style="flex: 0 0 100vw; width: 100vw; height: 100%; scroll-snap-align: center; box-sizing: border-box; padding: 20px 16px; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid var(--cosmic-cyan); padding-bottom: 6px;">
                     <h2 style="margin-bottom: 0; font-size: 15px; color: var(--cosmic-cyan) !important;"><i data-lucide="users"></i> フレンドリスト (1 / 2)</h2>
                     <span style="font-size: 10px; color: var(--text-sub); font-weight: 800;">👉 スワイプでスコアボード</span>
                 </div>
 
-                <!-- フレンド検索・追加モジュール -->
                 <div class="card" style="border: 1px dashed var(--cosmic-cyan); margin-bottom: 14px; padding: 12px;">
                     <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 6px;">
                         <span style="color: var(--text-sub);">あなたのフレンドコード:</span>
@@ -409,7 +404,6 @@
                     </div>
                 </div>
 
-                <!-- 並び替え（ソート条件選択）ヘッダー -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);">
                     <span style="font-size: 11px; font-weight: bold; color: var(--text-sub);"><i data-lucide="arrow-down-up" size="12" style="vertical-align:middle; margin-right:2px;"></i> 表示並び替え</span>
                     <select id="friendSortSelect" class="search-input" style="width: 140px; height: 28px; font-size: 11px; font-weight: bold; padding: 0 6px; margin-bottom: 0; background: var(--input-bg); color: white;" onchange="window.sortAndRenderFriendList()">
@@ -419,25 +413,21 @@
                     </select>
                 </div>
 
-                <!-- 動的フレンド一覧描画コンテナ -->
                 <div id="friendListContainer" style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 40px;">
                 </div>
             </div>
 
-            <!-- 2ページ目：ページスライド式 総合スコアボードランキング -->
             <div style="flex: 0 0 100vw; width: 100vw; height: 100%; scroll-snap-align: center; box-sizing: border-box; padding: 20px 16px; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid var(--cosmic-purple-light); padding-bottom: 6px;">
                     <span style="font-size: 10px; color: var(--text-sub); font-weight: 800;">👈 スワイプでフレンド</span>
                     <h2 style="margin-bottom: 0; font-size: 15px; color: var(--cosmic-purple-light) !important;"><i data-lucide="trophy"></i> 総合スコアボード (2 / 2)</h2>
                 </div>
 
-                <!-- 所属グループ内経験値ランキング（自分を含むユーザー全員の総合ランキング） -->
                 <div class="card" style="margin-bottom: 14px; padding: 14px;">
                     <h2 style="font-size: 12px; color: var(--cosmic-cyan) !important; margin-bottom: 10px;"><i data-lucide="award"></i> 修行者EXPランキング (自分と全ユーザー)</h2>
                     <div id="leaderboardContainer" style="display: flex; flex-direction: column; gap: 4px;"></div>
                 </div>
 
-                <!-- ゲームスコアランキング -->
                 <div class="card" id="gameLeaderboardArea" style="display:flex; flex-direction:column; padding: 14px;">
                     <h2 style="margin-bottom: 10px; font-size: 12px; color: var(--cosmic-purple-light) !important;"><i data-lucide="medal"></i> 単語テスト ハイスコアランキング</h2>
                     
@@ -455,7 +445,6 @@
 
         </div>
 
-        <!-- 完全復元：消失していた「称号進化コレクション」管理用コンテナ画面 -->
         <div id="view-titles" class="tab-view">
             <div class="card" style="border: 1.5px solid var(--cosmic-purple-light) !important; box-shadow: 0 0 15px rgba(192, 132, 252, 0.25) !important;">
                 <h2>🏅 称号進化コレクション進捗</h2>
@@ -505,7 +494,6 @@
                     <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-purple-light);">
                         <h2 style="color:white; justify-content:center; margin-bottom:16px;"><i data-lucide="settings"></i> カード学習設定</h2>
                         
-                        <!-- 教材指定 -->
                         <div style="text-align:left; margin-bottom:16px;">
                             <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">教材指定</div>
                             <select id="flashcardSourceSelect" class="search-input" style="background:var(--input-bg); color:white; font-weight:600; border-radius:10px; height:40px; padding:0 12px;">
@@ -564,11 +552,7 @@
 
                     <div class="card" style="padding:10px; margin-bottom:4px; text-align:center; background:rgba(15,23,42,0.8) !important;">
                         <div style="font-size:10px; color:#FFFFFF; font-weight:bold;" id="flashcardProgressText">表示中の覚えた単語: --%</div>
-                        
-                        <!-- 過去5回のバブル履歴を表示する枠 -->
-                        <div id="fcHistoryContainer" class="fc-history-container">
-                        </div>
-                        
+                        <div id="fcHistoryContainer" class="fc-history-container"></div>
                     </div>
                 </div>
 
@@ -1007,7 +991,7 @@
                     <button class="modern-btn" onclick="window.saveAdminSystemSettings()">設定を配信・適用する</button>
                     
                     <label style="font-size:12px; font-weight:700; display:block; margin-top: 24px; margin-bottom:6px; color:#F87171;">⚠️ スコア管理（リセット機能）</label>
-                    <button class="modern-btn" style="margin-bottom: 10px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetLeaderboard()"><i data-lucide="trash-2" size="16"></i> ランキング履歴をリセット</button>
+                    <button class="modern-btn" style="margin-bottom: 10px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetLeaderboard()"><i data-lucide="trash-2" size="16"></i> ランキング履歴をリreset</button>
                     <button class="modern-btn" style="border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetBestScore()"><i data-lucide="trash-2" size="16"></i> ベストスコアをリセット</button>
                 </div>
             </div>
@@ -1015,7 +999,6 @@
 
     </div>
 
-    <!-- ゲームと編成の間に「称号」タブ選択用の物理切り替えネオンボタンを正確に追加復元 -->
     <div class="nav-bar" id="appMainBottomNavBar">
         <button class="nav-item active" id="nav-home" onclick="window.switchTab('home')"><i data-lucide="layout-dashboard" size="18"></i> ホーム</button>
         <button class="nav-item" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
@@ -1044,8 +1027,7 @@
     <!-- 🌌 Firebaseとの連携スクリプト -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
-      // データベース（Firestore）を使うための機能を追加
-      import { getFirestore } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+      import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 
       const firebaseConfig = {
         apiKey: "AIzaSyC19ImKVSr4_xWi3eGJbzmMFseePBDJxV8",
@@ -1057,13 +1039,15 @@
         measurementId: "G-FHL5MK26HN"
       };
 
-      // Firebaseの初期化
       const app = initializeApp(firebaseConfig);
       
-      // app.js のどこからでもデータベース（db）を使えるように、windowに保存する
       window.db = getFirestore(app);
+      window.fbDoc = doc;
+      window.fbSetDoc = setDoc;
+      window.fbGetDoc = getDoc;
     </script>
 
-    <script src="app.js"></script>
+    <!-- 💡 app.jsに defer を付けることで、Firebaseの読み込みを待ってから実行させます！ -->
+    <script src="app.js" defer></script>
 </body>
 </html>
