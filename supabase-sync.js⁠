@@ -1,187 +1,241 @@
 // ==========================================================================
-// 🌌 Supabase Cloud Sync Module V1
+// 🌌 Supabase Cosmic Realtime Sync Interceptor Module (決定版・全文)
 // ==========================================================================
 
 const SUPABASE_URL = "https://gdtgkgaioyssemekffhs.supabase.co";
 const SUPABASE_KEY = "EyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkdGdrZ2Fpb3lzc2VtZWtmZmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyOTU4NTMsImV4cCI6MjA5OTg3MTg1M30.x5W3F8FTXw_MruRypl3yxzXllYOI_Av_c2CGJ-72uh0";
 
-// Supabaseクライアントの初期化
+// Supabaseクライアントを最速でグローバル空間へ初期化マウント
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// --- ⚙️ 裏側でフック（横取り）する関数群 ---
+console.log("[Supabase Sync] クラウド同期拡張モジュールが正常にインジェクションされました。捕捉を開始します...");
 
-// 1. ログイン成功時または初期化時に、Supabaseからデータを自動ロード、またはローカルから引っ越し（アップロード）
-const originalLoadLocalState = window.loadLocalState;
-window.loadLocalState = async function() {
-    // まず既存のローカル処理を走らせて変数（myIdなど）を確定させる
-    originalLoadLocalState();
-    
-    if (!myId || myId === "GUEST-000") return;
+// ==========================================================================
+// 🛡️ タイミング完全克服：app.jsの関数定義をミリ秒単位で常時監視するインターセプター
+// ==========================================================================
+(function() {
+    let originalLoadLocalState = null;
+    let originalSaveVocabToStorage = null;
+    let originalApplyProfileToUi = null;
 
-    console.log(`[Supabase] ユーザー ${myId} のデータ同期を開始します...`);
-
-    try {
-        // クラウド側からユーザー情報を取得
-        const { data: userRow, error: userError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', myId)
-            .single();
-
-        if (userError && userError.code === 'PGRST116') {
-            // クラウドにまだ箱がない（新規ユーザー、またはローカルにしかデータがない既存ユーザー）
-            console.log("[Supabase] クラウドにデータがありません。既存データを引っ越し（アップロード）します...");
-            await syncAllLocalToSupabase();
-        } else if (userRow) {
-            // クラウドにデータがある場合、クラウド側の最新データをローカルに上書きマウント（同期）
-            console.log("[Supabase] クラウドから最新データをロードして同期しました。");
+    // 定期監視タイマー（app.jsのロード完了と関数マウントを確実に検知する）
+    const hookTimer = setInterval(() => {
+        if (typeof window.loadLocalState === 'function' && window.loadLocalState !== customLoadLocalState) {
+            console.log("[Supabase Sync] 中枢コア関数「window.loadLocalState」の定義を捕捉！処理を横取り上書きします。");
             
-            localStorage.setItem('core_v4_userName', userRow.player_name || "プレイヤー1");
-            localStorage.setItem('core_v4_userTarget', userRow.my_target || "未設定");
-            localStorage.setItem('core_v4_userTitle', userRow.selected_title || "称号なし");
-            localStorage.setItem('core_v4_totalExp', String(userRow.total_exp || 0));
-            localStorage.setItem('core_v4_active_char', userRow.active_char || "");
-            localStorage.setItem('core_v4_active_weapon', userRow.active_weapon || "");
-            localStorage.setItem('core_v4_active_armor', userRow.active_armor || "");
-            if (userRow.avatar_base64) {
-                localStorage.setItem('core_v4_user_avatar_' + myId, userRow.avatar_base64);
+            // 1. ライフサイクルロードの横取りマウント
+            originalLoadLocalState = window.loadLocalState;
+            window.loadLocalState = customLoadLocalState;
+
+            // 2. 単語帳ポチポチ保存処理の横取りマウント
+            if (typeof window.saveVocabToStorage === 'function') {
+                originalSaveVocabToStorage = window.saveVocabToStorage;
+                window.saveVocabToStorage = customSaveVocabToStorage;
             }
 
-            // 単語帳もクラウドから取得
-            const { data: vocabRow } = await supabase
-                .from('vocab_lists')
-                .select('vocab_data')
-                .eq('user_id', myId)
-                .single();
-            
-            if (vocabRow && vocabRow.vocab_data) {
-                localStorage.setItem('core_v4_custom_words_' + myId, JSON.stringify(vocabRow.vocab_data));
+            // 3. プロフィール・獲得XP・装備変更処理の横取りマウント
+            if (typeof window.applyProfileToUi === 'function') {
+                originalApplyProfileToUi = window.applyProfileToUi;
+                window.applyProfileToUi = customApplyProfileToUi;
             }
 
-            // 元の変数値をリロードして画面表示に適用
-            myName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
-            myTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
-            selectedTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
-            totalExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
-            activeCharacter = localStorage.getItem('core_v4_active_char') || "";
-            activeWeapon = localStorage.getItem('core_v4_active_weapon') || "";
-            activeArmor = localStorage.getItem('core_v4_active_armor') || "";
-            
-            let storedWords = [];
-            try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
-            vocabList = window.migrateVocabData(storedWords);
-
-            // アプリ側のUI描画関数を安全に再トリガー
-            if(typeof window.applyProfileToUi === 'function') window.applyProfileToUi();
-            if(typeof window.renderVocabList === 'function') window.renderVocabList();
-            if(typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
-            if(typeof window.renderTitles === 'function') window.renderTitles();
+            // 監視成功のためタイマーを安全に消去
+            clearInterval(hookTimer);
         }
-    } catch (err) {
-        console.error("[Supabase Sync Error]", err);
+    }, 5); // 5ミリ秒周期で超高速監視
+
+    // ==========================================================================
+    // 🔄 同期処理 A: アプリ起動時・ログイン時のデータロード＆自動引っ越し
+    // ==========================================================================
+    async function customLoadLocalState() {
+        // まず既存のローカル側ストレージ展開ロジックを実行し、myIdなどの基本メモリ変数を確定させる
+        if (typeof originalLoadLocalState === 'function') {
+            originalLoadLocalState();
+        }
+        
+        // ゲスト、または未ログイン（myIdが空）の場合はクラウド同期を行わない
+        if (!myId || myId === "GUEST-000") {
+            console.log("[Supabase Sync] ゲストアカウントまたは未ログインのため、クラウド同期をバイパスします。");
+            return;
+        }
+
+        console.log(`[Supabase Sync] 登録ユーザー「${myId}」のクラウド同期セッションを開始します...`);
+
+        try {
+            // クラウドの users テーブルからプロファイル・PIN・装備情報を直接取得
+            const { data: userRow, error: userError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', myId)
+                .single();
+
+            if (userError && userError.code === 'PGRST116') {
+                // クラウド側にまだデータ行が存在しない場合（新規作成者、または既存のローカル専用ユーザー）
+                console.log("[Supabase Sync] クラウドに格納データがありません。既存のローカルデータを全自動で引っ越し（アップロード）します...");
+                await syncAllLocalToSupabase();
+            } else if (userRow) {
+                // クラウド側に最新データがある場合、ローカルストレージへ強制同期上書き
+                console.log("[Supabase Sync] クラウド側から最新のマスターデータを検知。ローカルへ同期マウントします。");
+                
+                localStorage.setItem('core_v4_userName', userRow.player_name || "プレイヤー1");
+                localStorage.setItem('core_v4_userTarget', userRow.my_target || "未設定");
+                localStorage.setItem('core_v4_userTitle', userRow.selected_title || "称号なし");
+                localStorage.setItem('core_v4_totalExp', String(userRow.total_exp || 0));
+                localStorage.setItem('core_v4_active_char', userRow.active_char || "");
+                localStorage.setItem('core_v4_active_weapon', userRow.active_weapon || "");
+                localStorage.setItem('core_v4_active_armor', userRow.active_armor || "");
+                
+                if (userRow.avatar_base64) {
+                    localStorage.setItem('core_v4_user_avatar_' + myId, userRow.avatar_base64);
+                }
+
+                // クラウドからカスタム単語帳データ(JSONBカラム型)を直接ロード
+                const { data: vocabRow } = await supabase
+                    .from('vocab_lists')
+                    .select('vocab_data')
+                    .eq('user_id', myId)
+                    .single();
+                
+                if (vocabRow && vocabRow.vocab_data) {
+                    localStorage.setItem('core_v4_custom_words_' + myId, JSON.stringify(vocabRow.vocab_data));
+                }
+
+                // グローバルスコープのメモリ変数空間を完全にクラウド同期値へ書き換え
+                myName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
+                myTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
+                selectedTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
+                totalExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
+                activeCharacter = localStorage.getItem('core_v4_active_char') || "";
+                activeWeapon = localStorage.getItem('core_v4_active_weapon') || "";
+                activeArmor = localStorage.getItem('core_v4_active_armor') || "";
+                
+                let storedWords = [];
+                try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
+                vocabList = window.migrateVocabData(storedWords);
+
+                // アプリ側のUI更新中枢コア関数群を呼び出して画面表示を完全リフレッシュ
+                if(typeof originalApplyProfileToUi === 'function') originalApplyProfileToUi();
+                if(typeof window.renderVocabList === 'function') window.renderVocabList();
+                if(typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
+                if(typeof window.renderTitles === 'function') window.renderTitles();
+            }
+        } catch (err) {
+            console.error("[Supabase Sync Critical Error]", err);
+        }
     }
-};
 
-// 2. ローカルからSupabaseへ全てのデータを一括引っ越し（同期）させる関数
-async function syncAllLocalToSupabase() {
-    if (!myId || myId === "GUEST-000") return;
+    // ==========================================================================
+    // 🚀 同期処理 B: 既存のローカルデータをクラウドへ一括初回移行させる関数
+    // ==========================================================================
+    async function syncAllLocalToSupabase() {
+        if (!myId || myId === "GUEST-000") return;
 
-    // ローカルストレージにある全データを取得
-    const uName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
-    const uTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
-    const uTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
-    const uExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
-    const uChar = localStorage.getItem('core_v4_active_char') || "";
-    const uWeapon = localStorage.getItem('core_v4_active_weapon') || "";
-    const uArmor = localStorage.getItem('core_v4_active_armor') || "";
-    const uAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+        const uName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
+        const uTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
+        const uTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
+        const uExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
+        const uChar = localStorage.getItem('core_v4_active_char') || "";
+        const uWeapon = localStorage.getItem('core_v4_active_weapon') || "";
+        const uArmor = localStorage.getItem('core_v4_active_armor') || "";
+        const uAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
 
-    // 既存アカウント作成時の情報（リアル名、年齢、PIN）をローカルの全ユーザーリストから探す
-    const allUsers = window.getAllUsers();
-    const currentAccount = allUsers.find(u => u.id === myId) || {};
+        // app.jsにマウントされている全ユーザーリストからPINコード等のアカウント情報をサルベージ
+        let currentAccount = {};
+        if (typeof window.getAllUsers === 'function') {
+            const allUsers = window.getAllUsers();
+            currentAccount = allUsers.find(u => u.id === myId) || {};
+        }
 
-    const profileData = {
-        id: myId,
-        pin: currentAccount.pin || "0000", // 万が一なければ初期値
-        player_name: uName,
-        real_name: currentAccount.realName || uName,
-        age: parseInt(currentAccount.age) || null,
-        total_exp: uExp,
-        my_target: uTarget,
-        selected_title: uTitle,
-        active_char: uChar,
-        active_weapon: uWeapon,
-        active_armor: uArmor,
-        avatar_base64: uAvatar,
-        updated_at: new Date()
-    };
+        const profilePayload = {
+            id: myId,
+            pin: currentAccount.pin || "0000",
+            player_name: uName,
+            real_name: currentAccount.realName || uName,
+            age: parseInt(currentAccount.age) || null,
+            total_exp: uExp,
+            my_target: uTarget,
+            selected_title: uTitle,
+            active_char: uChar,
+            active_weapon: uWeapon,
+            active_armor: uArmor,
+            avatar_base64: uAvatar,
+            updated_at: new Date()
+        };
 
-    // 1. プロフィールの保存（upsert = なければ新規作成、あれば上書き）
-    await supabase.from('users').upsert(profileData);
+        // users テーブルへ upsert 同期
+        await supabase.from('users').upsert(profilePayload);
 
-    // 2. 単語帳の保存
-    let storedWords = [];
-    try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
-    
-    await supabase.from('vocab_lists').upsert({
-        user_id: myId,
-        vocab_data: storedWords,
-        updated_at: new Date()
-    });
+        // カスタム単語帳の配列データ構造を丸ごとJSONとして同期
+        let storedWords = [];
+        try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
+        
+        await supabase.from('vocab_lists').upsert({
+            user_id: myId,
+            vocab_data: storedWords,
+            updated_at: new Date()
+        });
 
-    console.log("[Supabase] 既存データの引っ越しアップロードが完了しました！");
-}
+        console.log("[Supabase Sync] クラウドデータベースへのデータ引っ越し移行に完全成功しました！");
+    }
 
-// 3. データ変更時に裏側で「全自動・超高速・非同期リアルタイム保存」を行うフック処理
-// 単語帳が変更された瞬間にクラウドにも自動保存
-const originalSaveVocabToStorage = window.saveVocabToStorage;
-window.saveVocabToStorage = function() {
-    // まず元のLocalStorageへの保存を即座に実行（ユーザーの操作感をカクつかせない！）
-    originalSaveVocabToStorage();
-    
-    if (!myId || myId === "GUEST-000") return;
+    // ==========================================================================
+    // ⚡ 同期処理 C: 単語帳ポチポチ変更時の裏側超高速自動同期フック
+    // ==========================================================================
+    function customSaveVocabToStorage() {
+        // 元のローカル保存処理を即座に動かして操作のカクつきを完全にゼロ化
+        if (typeof originalSaveVocabToStorage === 'function') {
+            originalSaveVocabToStorage();
+        }
+        
+        if (!myId || myId === "GUEST-000") return;
 
-    // 1歩遅れて裏側でSupabaseに非同期送信（自動保存）
-    let storedWords = [];
-    try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
-    
-    supabase.from('vocab_lists').upsert({
-        user_id: myId,
-        vocab_data: storedWords,
-        updated_at: new Date()
-    }).then(({ error }) => {
-        if (!error) console.log("[Supabase] 単語帳を自動同期しました。");
-    });
-};
+        let storedWords = [];
+        try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
+        
+        // 裏側のバックグラウンド通信でSupabaseのJSONBカラムへ瞬時にupsertを投げる
+        supabase.from('vocab_lists').upsert({
+            user_id: myId,
+            vocab_data: storedWords,
+            updated_at: new Date()
+        }).then(({ error }) => {
+            if (!error) console.log("[Supabase Sync] 単語帳の理解度変更をリアルタイムにクラウド同期しました。");
+            else console.error("[Supabase Sync Error]", error);
+        });
+    }
 
-// プロフィール情報やXPが変更（保存）された瞬間にクラウドにも自動保存
-const originalApplyProfileToUi = window.applyProfileToUi;
-window.applyProfileToUi = function() {
-    originalApplyProfileToUi();
-    
-    if (!myId || myId === "GUEST-000") return;
+    // ==========================================================================
+    // ⚡ 同期処理 D: XP獲得・プロフィール変更・装備・アバター登録時の全自動保存フック
+    // ==========================================================================
+    function customApplyProfileToUi() {
+        if (typeof originalApplyProfileToUi === 'function') {
+            originalApplyProfileToUi();
+        }
+        
+        if (!myId || myId === "GUEST-000") return;
 
-    const uName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
-    const uTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
-    const uTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
-    const uExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
-    const uChar = localStorage.getItem('core_v4_active_char') || "";
-    const uWeapon = localStorage.getItem('core_v4_active_weapon') || "";
-    const uArmor = localStorage.getItem('core_v4_active_armor') || "";
-    const uAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+        const uName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
+        const uTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
+        const uTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
+        const uExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
+        const uChar = localStorage.getItem('core_v4_active_char') || "";
+        const uWeapon = localStorage.getItem('core_v4_active_weapon') || "";
+        const uArmor = localStorage.getItem('core_v4_active_armor') || "";
+        const uAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
 
-    supabase.from('users').upsert({
-        id: myId,
-        player_name: uName,
-        my_target: uTarget,
-        selected_title: uTitle,
-        total_exp: uExp,
-        active_char: uChar,
-        active_weapon: uWeapon,
-        active_armor: uArmor,
-        avatar_base64: uAvatar,
-        updated_at: new Date()
-    }, { onConflict: 'id' }).then(({ error }) => {
-        if (!error) console.log("[Supabase] プロフィールとXPを自動同期しました。");
-    });
-};
+        supabase.from('users').upsert({
+            id: myId,
+            player_name: uName,
+            my_target: uTarget,
+            selected_title: uTitle,
+            total_exp: uExp,
+            active_char: uChar,
+            active_weapon: uWeapon,
+            active_armor: uArmor,
+            avatar_base64: uAvatar,
+            updated_at: new Date()
+        }, { onConflict: 'id' }).then(({ error }) => {
+            if (!error) console.log("[Supabase Sync] 獲得XP・プロファイル・アバター画像のクラウド同期が完了しました。");
+            else console.error("[Supabase Sync Error]", error);
+        });
+    }
+})();
