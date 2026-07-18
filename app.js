@@ -458,7 +458,7 @@ window.callGeminiAnalyzer = async function(text) {
             console.error("Gemini API Error details:", errorData);
             
             if (response.status === 429) {
-                alert("本日のAI利用回数の上限に達しました。時間を置いて再度お試しいただくか、手動入力をご利用ください。");
+                alert("本日のAI利用回数の上限に達しました。時間を置いて再度お試しいただくか、手手動入力をご利用ください。");
             } else {
                 alert(`【Gemini API エラー】\nステータスコード: ${response.status}\n\n詳細な理由:\n${errorData}`);
             }
@@ -587,9 +587,26 @@ window.initHeroSlider = function() {
     }, 4000);
 };
 
-window.saveVocabToStorage = function() { 
+// 🌟🌟🌟 Firebaseへの保存機能を追加した書き換え部分 🌟🌟🌟
+window.saveVocabToStorage = async function() { 
+    // 今までのローカルへの保存（バックアップとして残しておきます）
     localStorage.setItem('core_v4_custom_words_' + myId, JSON.stringify(vocabList)); 
+    
+    // Firebase（クラウド）への保存処理
+    if (window.db && window.fbSetDoc && window.fbDoc && myId) {
+        try {
+            // users というフォルダの中の、自分のIDの書類にデータを保存
+            const userRef = window.fbDoc(window.db, "users", myId);
+            await window.fbSetDoc(userRef, {
+                custom_words: vocabList
+            }, { merge: true }); // 他のデータを消さずに追記する
+            console.log("Firebaseに単語データを保存しました！");
+        } catch (error) {
+            console.error("Firebaseの保存に失敗しました:", error);
+        }
+    }
 };
+// 🌟🌟🌟 書き換え部分ここまで 🌟🌟🌟
 
 window.migrateVocabData = function(words) {
     return words.map(w => {
@@ -914,7 +931,6 @@ window.handleBulkWordImport = function() {
     window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
     input.value = ""; alert("一括インポートが完了しました。");
 };
-
 window.openWordPopoverFromVocab = function(event, vocabItem, originalText) {
     if(event) event.stopPropagation(); currentTargetWordToken = vocabItem.word.toLowerCase(); currentTargetVocabNum = vocabItem.num;
     document.getElementById('popWord').innerText = originalText; document.getElementById('popWordNum').innerText = `#${vocabItem.num}`;
@@ -2322,7 +2338,6 @@ window.renderGameLeaderboard = function() {
         container.appendChild(row);
     });
 };
-
 // ==========================================================================
 // 🎮 フラッシュカード（単語フラッシュ）制御モジュール
 // ==========================================================================

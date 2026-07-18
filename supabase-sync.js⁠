@@ -1,12 +1,12 @@
 // ==========================================================================
-// 🌌 Supabase Cosmic Realtime Sync Interceptor Module (決定版・全文)
+// 🌌 Supabase Cosmic Realtime Sync Interceptor Module (真の決定版・全文)
 // ==========================================================================
 
 const SUPABASE_URL = "https://gdtgkgaioyssemekffhs.supabase.co";
 const SUPABASE_KEY = "EyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkdGdrZ2Fpb3lzc2VtZWtmZmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyOTU4NTMsImV4cCI6MjA5OTg3MTg1M30.x5W3F8FTXw_MruRypl3yxzXllYOI_Av_c2CGJ-72uh0";
 
-// Supabaseクライアントを最速でグローバル空間へ初期化マウント
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// 変数名の衝突を回避するため「sbClient」としてSupabaseクライアントを最速マウント
+const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 console.log("[Supabase Sync] クラウド同期拡張モジュールが正常にインジェクションされました。捕捉を開始します...");
 
@@ -17,6 +17,7 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
     let originalLoadLocalState = null;
     let originalSaveVocabToStorage = null;
     let originalApplyProfileToUi = null;
+    let originalEndGameSession = null;
 
     // 定期監視タイマー（app.jsのロード完了と関数マウントを確実に検知する）
     const hookTimer = setInterval(() => {
@@ -39,21 +40,29 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
                 window.applyProfileToUi = customApplyProfileToUi;
             }
 
+            // 4. ソロゲーム終了（ハイスコア送信）時の横取りマウント
+            if (typeof window.endGameSession === 'function') {
+                originalEndGameSession = window.endGameSession;
+                window.endGameSession = customEndGameSession;
+            }
+
+            // 世界ランキング描画・スコアボード描画関数をSupabase本物データ通信用に完全に置き換える
+            window.renderLeaderboard = fetchAndRenderRealLeaderboard;
+            window.renderGameLeaderboard = fetchAndRenderRealGameLeaderboard;
+
             // 監視成功のためタイマーを安全に消去
             clearInterval(hookTimer);
         }
-    }, 5); // 5ミリ秒周期で超高速監視
+    }, 5);
 
     // ==========================================================================
     // 🔄 同期処理 A: アプリ起動時・ログイン時のデータロード＆自動引っ越し
     // ==========================================================================
     async function customLoadLocalState() {
-        // まず既存のローカル側ストレージ展開ロジックを実行し、myIdなどの基本メモリ変数を確定させる
         if (typeof originalLoadLocalState === 'function') {
             originalLoadLocalState();
         }
         
-        // ゲスト、または未ログイン（myIdが空）の場合はクラウド同期を行わない
         if (!myId || myId === "GUEST-000") {
             console.log("[Supabase Sync] ゲストアカウントまたは未ログインのため、クラウド同期をバイパスします。");
             return;
@@ -62,19 +71,16 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
         console.log(`[Supabase Sync] 登録ユーザー「${myId}」のクラウド同期セッションを開始します...`);
 
         try {
-            // クラウドの users テーブルからプロファイル・PIN・装備情報を直接取得
-            const { data: userRow, error: userError } = await supabase
+            const { data: userRow, error: userError } = await sbClient
                 .from('users')
                 .select('*')
                 .eq('id', myId)
                 .single();
 
             if (userError && userError.code === 'PGRST116') {
-                // クラウド側にまだデータ行が存在しない場合（新規作成者、または既存のローカル専用ユーザー）
                 console.log("[Supabase Sync] クラウドに格納データがありません。既存のローカルデータを全自動で引っ越し（アップロード）します...");
                 await syncAllLocalToSupabase();
             } else if (userRow) {
-                // クラウド側に最新データがある場合、ローカルストレージへ強制同期上書き
                 console.log("[Supabase Sync] クラウド側から最新のマスターデータを検知。ローカルへ同期マウントします。");
                 
                 localStorage.setItem('core_v4_userName', userRow.player_name || "プレイヤー1");
@@ -89,8 +95,7 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
                     localStorage.setItem('core_v4_user_avatar_' + myId, userRow.avatar_base64);
                 }
 
-                // クラウドからカスタム単語帳データ(JSONBカラム型)を直接ロード
-                const { data: vocabRow } = await supabase
+                const { data: vocabRow } = await sbClient
                     .from('vocab_lists')
                     .select('vocab_data')
                     .eq('user_id', myId)
@@ -100,7 +105,6 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
                     localStorage.setItem('core_v4_custom_words_' + myId, JSON.stringify(vocabRow.vocab_data));
                 }
 
-                // グローバルスコープのメモリ変数空間を完全にクラウド同期値へ書き換え
                 myName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
                 myTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
                 selectedTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
@@ -113,11 +117,13 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
                 try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
                 vocabList = window.migrateVocabData(storedWords);
 
-                // アプリ側のUI更新中枢コア関数群を呼び出して画面表示を完全リフレッシュ
                 if(typeof originalApplyProfileToUi === 'function') originalApplyProfileToUi();
                 if(typeof window.renderVocabList === 'function') window.renderVocabList();
-                if(typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
                 if(typeof window.renderTitles === 'function') window.renderTitles();
+                
+                // 本物のグローバルランキングデータを取得してUI反映
+                fetchAndRenderRealLeaderboard();
+                fetchAndRenderRealGameLeaderboard();
             }
         } catch (err) {
             console.error("[Supabase Sync Critical Error]", err);
@@ -139,7 +145,6 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
         const uArmor = localStorage.getItem('core_v4_active_armor') || "";
         const uAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
 
-        // app.jsにマウントされている全ユーザーリストからPINコード等のアカウント情報をサルベージ
         let currentAccount = {};
         if (typeof window.getAllUsers === 'function') {
             const allUsers = window.getAllUsers();
@@ -162,27 +167,25 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
             updated_at: new Date()
         };
 
-        // users テーブルへ upsert 同期
-        await supabase.from('users').upsert(profilePayload);
+        await sbClient.from('users').upsert(profilePayload);
 
-        // カスタム単語帳の配列データ構造を丸ごとJSONとして同期
         let storedWords = [];
         try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
         
-        await supabase.from('vocab_lists').upsert({
+        await sbClient.from('vocab_lists').upsert({
             user_id: myId,
             vocab_data: storedWords,
             updated_at: new Date()
         });
 
         console.log("[Supabase Sync] クラウドデータベースへのデータ引っ越し移行に完全成功しました！");
+        fetchAndRenderRealLeaderboard();
     }
 
     // ==========================================================================
     // ⚡ 同期処理 C: 単語帳ポチポチ変更時の裏側超高速自動同期フック
     // ==========================================================================
     function customSaveVocabToStorage() {
-        // 元のローカル保存処理を即座に動かして操作のカクつきを完全にゼロ化
         if (typeof originalSaveVocabToStorage === 'function') {
             originalSaveVocabToStorage();
         }
@@ -192,14 +195,12 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
         let storedWords = [];
         try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
         
-        // 裏側のバックグラウンド通信でSupabaseのJSONBカラムへ瞬時にupsertを投げる
-        supabase.from('vocab_lists').upsert({
+        sbClient.from('vocab_lists').upsert({
             user_id: myId,
             vocab_data: storedWords,
             updated_at: new Date()
         }).then(({ error }) => {
             if (!error) console.log("[Supabase Sync] 単語帳の理解度変更をリアルタイムにクラウド同期しました。");
-            else console.error("[Supabase Sync Error]", error);
         });
     }
 
@@ -222,7 +223,7 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
         const uArmor = localStorage.getItem('core_v4_active_armor') || "";
         const uAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
 
-        supabase.from('users').upsert({
+        sbClient.from('users').upsert({
             id: myId,
             player_name: uName,
             my_target: uTarget,
@@ -234,8 +235,139 @@ console.log("[Supabase Sync] クラウド同期拡張モジュールが正常に
             avatar_base64: uAvatar,
             updated_at: new Date()
         }, { onConflict: 'id' }).then(({ error }) => {
-            if (!error) console.log("[Supabase Sync] 獲得XP・プロファイル・アバター画像のクラウド同期が完了しました。");
-            else console.error("[Supabase Sync Error]", error);
+            if (!error) {
+                console.log("[Supabase Sync] 獲得XP・プロファイルのクラウド同期が完了しました。");
+                fetchAndRenderRealLeaderboard();
+            }
         });
+    }
+
+    // ==========================================================================
+    // 🏆 同期処理 E: ゲームセッション終了時のハイスコア自動クラウド送信
+    // ==========================================================================
+    function customEndGameSession() {
+        if (typeof originalEndGameSession === 'function') {
+            originalEndGameSession();
+        }
+
+        if (!myId || myId === "GUEST-000") return;
+
+        // 今回終了したモードのハイスコアデータを抽出してクラウドに送信
+        const keyBest = `cosmic_best_${selectedQuestionMode}_endless`;
+        const localBestScore = parseInt(localStorage.getItem(keyBest) || "0");
+
+        sbClient.from('game_scores').upsert({
+            user_id: myId,
+            player_name: myName,
+            game_mode: selectedQuestionMode,
+            high_score: localBestScore,
+            updated_at: new Date()
+        }, { onConflict: 'user_id, game_mode' }).then(({ error }) => {
+            if (!error) {
+                console.log(`[Supabase Sync] モード【${selectedQuestionMode}】のハイスコアを世界同期しました。`);
+                fetchAndRenderRealGameLeaderboard();
+            }
+        });
+    }
+
+    // ==========================================================================
+    // 🌐 本物化機能 1: 全リアルユーザーのXPデータベースから真の世界ランキングを描画
+    // ==========================================================================
+    async function fetchAndRenderRealLeaderboard() {
+        const container = document.getElementById('leaderboardContainer');
+        if (!container) return;
+
+        try {
+            // users テーブルからXPが多い順に上位50名を取得
+            const { data: serverUsers, error } = await sbClient
+                .from('users')
+                .select('id, player_name, selected_title, total_exp, avatar_base64')
+                .order('total_exp', { ascending: false })
+                .limit(50);
+
+            if (error) throw error;
+
+            let html = "";
+            serverUsers.forEach((u, idx) => {
+                let rankColor = idx === 0 ? "#FBBF24" : idx === 1 ? "#94A3B8" : idx === 2 ? "#D97706" : "#FFFFFF";
+                let isMe = (u.id === myId);
+                let bgStyle = isMe ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);" : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
+                
+                let lvlData = window.calculateLevelFromExp(u.total_exp || 0);
+                
+                let avatarUiNodeStr = `<span style="font-size:16px;">👤</span>`;
+                if (u.avatar_base64) {
+                    avatarUiNodeStr = `<img src="${u.avatar_base64}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan); box-shadow:0 0 6px var(--cosmic-cyan);">`;
+                }
+
+                html += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin-bottom:4px; ${bgStyle} font-size:12px;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="color:${rankColor}; font-weight:900; font-size:14px; width:18px; text-align:center;">${idx + 1}</span>
+                            <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${avatarUiNodeStr}</div>
+                            <div>
+                                <div style="font-weight:bold; color:white;">${u.player_name || "名無しの修行者"}${isMe ? " (あなた)" : ""} <span style="font-size:9px; color:var(--cosmic-cyan); font-weight:normal; margin-left:4px;">LV.${lvlData.level}</span></div>
+                                <div style="font-size:9px; color:var(--text-sub); margin-top:1px;">${u.selected_title || "称号なし"}</div>
+                            </div>
+                        </div>
+                        <div style="text-align:right; font-weight:900; color:var(--word-so); font-family:monospace;">${u.total_exp || 0} <span style="font-size:8px; color:var(--text-sub); font-weight:normal;">EXP</span></div>
+                    </div>`;
+            });
+
+            container.innerHTML = html;
+        } catch (err) {
+            console.error("Failed to fetch real leaderboard:", err);
+        }
+    }
+
+    // ==========================================================================
+    // 🌐 本物化機能 2: 各出題モードごとのリアル世界ハイスコアランキングの描画
+    // ==========================================================================
+    async function fetchAndRenderRealGameLeaderboard() {
+        const container = document.getElementById('leaderboardListContainer');
+        if (!container) return;
+
+        try {
+            // 現在選択されている出題モード（currentLbMode）のスコアを高い順に取得
+            const { data: scores, error } = await sbClient
+                .from('game_scores')
+                .select('user_id, player_name, high_score, updated_at')
+                .eq('game_mode', currentLbMode)
+                .order('high_score', { ascending: false })
+                .limit(25);
+
+            if (error) throw error;
+
+            container.innerHTML = "";
+            if (!scores || scores.length === 0) {
+                container.innerHTML = `<div style="color:var(--text-sub); text-align:center; padding:20px 0;">このモードの全国スコア記録はまだありません。</div>`;
+                return;
+            }
+
+            const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "white", "white"];
+            scores.forEach((record, index) => {
+                let isMe = (record.user_id === myId);
+                let bgStyle = isMe ? "background: linear-gradient(90deg, rgba(192, 132, 252, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border-left: 3px solid var(--cosmic-purple-light);" : "border-bottom:1px solid rgba(255,255,255,0.05);";
+                
+                let dateObj = new Date(record.updated_at);
+                let dateStr = `${dateObj.getMonth()+1}/${dateObj.getDate()} ${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2,'0')}`;
+
+                const row = document.createElement('div');
+                row.style.cssText = `display:flex; justify-content:space-between; align-items:center; padding:6px 8px; ${bgStyle}`;
+                
+                row.innerHTML = `
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:14px; width:18px; text-align:center;">${index + 1}</span>
+                        <span style="color:white; font-weight:800; letter-spacing:0.5px;">${record.player_name || "無名プレイヤー"}${isMe ? " (あなた)" : ""}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="color:var(--cosmic-cyan); font-weight:900; font-family:monospace; font-size:13px; margin-right:8px;">${record.high_score} <span style="font-size:8px; font-weight:normal; color:var(--text-sub);">PTS</span></span>
+                        <span style="color:var(--text-sub); font-size:9px; display:block; margin-top:1px;">${dateStr}</span>
+                    </div>`;
+                container.appendChild(row);
+            });
+        } catch (err) {
+            console.error("Failed to fetch real game leaderboard:", err);
+        }
     }
 })();

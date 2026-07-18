@@ -1041,9 +1041,28 @@
 
     <div id="multi-battle-play-bg"></div>
 
-    <!-- 🌌 Supabaseとの連携用CDNスクリプトの追加マウント -->
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    <script src="supabase-sync.js"></script>
+    <!-- 🌌 Firebaseとの連携スクリプト -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+      // データベース（Firestore）を使うための機能を追加
+      import { getFirestore } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyC19ImKVSr4_xWi3eGJbzmMFseePBDJxV8",
+        authDomain: "tangon-c83ca.firebaseapp.com",
+        projectId: "tangon-c83ca",
+        storageBucket: "tangon-c83ca.firebasestorage.app",
+        messagingSenderId: "96092419196",
+        appId: "1:96092419196:web:00fd48183e89bb342905f9",
+        measurementId: "G-FHL5MK26HN"
+      };
+
+      // Firebaseの初期化
+      const app = initializeApp(firebaseConfig);
+      
+      // app.js のどこからでもデータベース（db）を使えるように、windowに保存する
+      window.db = getFirestore(app);
+    </script>
 
     <script src="app.js"></script>
 </body>
