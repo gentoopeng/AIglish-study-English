@@ -260,7 +260,7 @@
                 </button>
                 <div class="static-guide-content-box" style="display:none; padding:12px; font-size:12.5px; color:var(--text-main); line-height:1.6; border-top:1px dashed rgba(255,255,255,0.15);">
                     本アプリはPWAに対応しています。スマホのデスクトップにアイコンを追加することで、ブラウザのURL枠を消して通常のアプリと同じ大画面で起動できます。<br><br>
-                    <strong>【iPhone (Safari) の手順】</strong><br>1. Safariブラウザで本アプリを開きます。<br>2. 画面下部にある「共有ボタン」（四角から矢印が飛び出しているアイコン）をタップします。<br>3. メメニューをスクロールし、「ホーム画面に追加」を選択します。<br><br>
+                    <strong>【iPhone (Safari) の手順】</strong><br>1. Safariブラウザで本アプリを開きます。<br>2. 画面下部にある「共有ボタン」（四角から矢印が飛び出しているアイコン）をタップします。<br>3. メニューをスクロールし、「ホーム画面に追加」を選択します。<br><br>
                     <strong>【Android (Chrome) の手順】</strong><br>1. Chromeブラウザで本アプリを開きます。<br>2. 画面右上, または下部に表示される「ホーム画面に追加」または「アプリをインストール」のポップアップをタップします。
                 </div>
             </div>
@@ -268,36 +268,8 @@
         </div>
 
         <div id="view-vocab" class="tab-view">
-            <div class="card" id="bulkImportToggleSection" style="display: none; border-top: 2px solid var(--accent);">
-                <h2><i data-lucide="file-spreadsheet" size="14"></i> 単語を一括登録・インポートする</h2>
-                <textarea id="bulkWordInput" class="modern-textarea" style="height: 100px;" placeholder="番号:英単語:メイン意味:サブ情報&#10;例:&#10;1:follow:①〜に従う②〜に続く:as follow 次のように..."></textarea>
-                
-                <button class="modern-btn" onclick="handleBulkWordImport()">
-                    まとめて登録
-                </button>
-
-                <h2 style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; color: var(--admin-accent);">
-                    <i data-lucide="check-square" size="14"></i> 登録単語の一括管理
-                </h2>
-                <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
-                    <button class="list-action-link" onclick="selectAllBulkDelete(true)">すべて選択</button>
-                    <button class="list-action-link" onclick="selectAllBulkDelete(false)">解除</button>
-                    
-                    <div style="margin-left: auto; display: flex; gap: 8px;">
-                        <button class="list-action-link" style="background: rgba(16, 185, 129, 0.2); color: #10B981; border-color: #10B981;" onclick="handleBulkResetExecute()">
-                            <i data-lucide="rotate-ccw" size="12" style="vertical-align: middle;"></i> 理解度リreset
-                        </button>
-                        <button class="list-action-link" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border-color: #EF4444;" onclick="handleBulkDeleteExecute()">
-                            <i data-lucide="trash-2" size="12" style="vertical-align: middle;"></i> 削除
-                        </button>
-                    </div>
-                </div>
-                <div id="bulkDeleteListContainer" style="max-height: 200px; overflow-y: auto; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--border); padding: 8px;"></div>
-            </div>
-
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h2 style="margin-bottom: 0;"><i data-lucide="layers" size="14"></i> 単語コレクション</h2>
-                <button class="list-action-link" onclick="toggleBulkImportCard()"><i data-lucide="settings" size="12" style="vertical-align: middle; margin-right:4px;"></i>管理・一括登録</button>
             </div>
 
             <div class="range-box">
@@ -988,8 +960,40 @@
 
                     <label style="font-size:12px; font-weight:700; display:block; margin-bottom:6px;">全ユーザー向け配信アナウンスメッセージ</label>
                     <input type="text" id="adminNoticeInput" class="search-input" placeholder="表示したいお知らせメッセージを入力...">
-                    <button class="modern-btn" onclick="window.saveAdminSystemSettings()">設定を配信・適用する</button>
+                    <button class="modern-btn" style="margin-bottom: 24px;" onclick="window.saveAdminSystemSettings()">設定を配信・適用する</button>
                     
+                    <!-- 🛠️ 管理者専用：インポート用パネルセクションを新設 -->
+                    <h2 style="color:var(--admin-accent); border-top:1px solid var(--border); padding-top:20px; margin-top:20px;">
+                        <i data-lucide="book-open"></i> 📖 単語配信データ一括管理
+                    </h2>
+                    <button class="modern-btn" style="border-color:var(--cosmic-cyan) !important; color:var(--cosmic-cyan) !important; margin-bottom: 16px;" onclick="toggleBulkImportCard()">
+                        🛠️ 単語データ一括配信・管理パネルを開く
+                    </button>
+
+                    <div class="card" id="bulkImportToggleSection" style="display: none; border: 1px solid var(--admin-accent); background:rgba(0,0,0,0.4) !important; padding:14px;">
+                        <h2 style="color:var(--cosmic-cyan);"><i data-lucide="file-spreadsheet" size="14"></i> 共通単語を一括登録・一斉配信する</h2>
+                        <textarea id="bulkWordInput" class="modern-textarea" style="height: 100px;" placeholder="番号:英単語:メイン意味:サブ情報&#10;例:&#10;1:follow:①〜に従う②〜に続く:as follow 次のように..."></textarea>
+                        
+                        <button class="modern-btn" style="background:var(--accent) !important; margin-bottom:16px;" onclick="handleBulkWordImport()">
+                            共通単語を一斉配信登録
+                        </button>
+
+                        <h2 style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; color: var(--admin-accent);">
+                            <i data-lucide="check-square" size="14"></i> 配信単語の一括削除・管理
+                        </h2>
+                        <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <button class="list-action-link" onclick="selectAllBulkDelete(true)">すべて選択</button>
+                            <button class="list-action-link" onclick="selectAllBulkDelete(false)">解除</button>
+                            
+                            <div style="margin-left: auto; display: flex; gap: 8px;">
+                                <button class="list-action-link" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border-color: #EF4444;" onclick="handleBulkDeleteExecute()">
+                                    <i data-lucide="trash-2" size="12" style="vertical-align: middle;"></i> 選択単語を削除
+                                </button>
+                            </div>
+                        </div>
+                        <div id="bulkDeleteListContainer" style="max-height: 200px; overflow-y: auto; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--border); padding: 8px;"></div>
+                    </div>
+
                     <label style="font-size:12px; font-weight:700; display:block; margin-top: 24px; margin-bottom:6px; color:#F87171;">⚠️ スコア管理（リセット機能）</label>
                     <button class="modern-btn" style="margin-bottom: 10px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetLeaderboard()"><i data-lucide="trash-2" size="16"></i> ランキング履歴をリreset</button>
                     <button class="modern-btn" style="border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetBestScore()"><i data-lucide="trash-2" size="16"></i> ベストスコアをリセット</button>
