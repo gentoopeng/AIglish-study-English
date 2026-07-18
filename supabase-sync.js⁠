@@ -1,0 +1,187 @@
+// ==========================================================================
+// 🌌 Supabase Cloud Sync Module V1
+// ==========================================================================
+
+const SUPABASE_URL = "https://gdtgkgaioyssemekffhs.supabase.co";
+const SUPABASE_KEY = "EyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkdGdrZ2Fpb3lzc2VtZWtmZmhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyOTU4NTMsImV4cCI6MjA5OTg3MTg1M30.x5W3F8FTXw_MruRypl3yxzXllYOI_Av_c2CGJ-72uh0";
+
+// Supabaseクライアントの初期化
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// --- ⚙️ 裏側でフック（横取り）する関数群 ---
+
+// 1. ログイン成功時または初期化時に、Supabaseからデータを自動ロード、またはローカルから引っ越し（アップロード）
+const originalLoadLocalState = window.loadLocalState;
+window.loadLocalState = async function() {
+    // まず既存のローカル処理を走らせて変数（myIdなど）を確定させる
+    originalLoadLocalState();
+    
+    if (!myId || myId === "GUEST-000") return;
+
+    console.log(`[Supabase] ユーザー ${myId} のデータ同期を開始します...`);
+
+    try {
+        // クラウド側からユーザー情報を取得
+        const { data: userRow, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', myId)
+            .single();
+
+        if (userError && userError.code === 'PGRST116') {
+            // クラウドにまだ箱がない（新規ユーザー、またはローカルにしかデータがない既存ユーザー）
+            console.log("[Supabase] クラウドにデータがありません。既存データを引っ越し（アップロード）します...");
+            await syncAllLocalToSupabase();
+        } else if (userRow) {
+            // クラウドにデータがある場合、クラウド側の最新データをローカルに上書きマウント（同期）
+            console.log("[Supabase] クラウドから最新データをロードして同期しました。");
+            
+            localStorage.setItem('core_v4_userName', userRow.player_name || "プレイヤー1");
+            localStorage.setItem('core_v4_userTarget', userRow.my_target || "未設定");
+            localStorage.setItem('core_v4_userTitle', userRow.selected_title || "称号なし");
+            localStorage.setItem('core_v4_totalExp', String(userRow.total_exp || 0));
+            localStorage.setItem('core_v4_active_char', userRow.active_char || "");
+            localStorage.setItem('core_v4_active_weapon', userRow.active_weapon || "");
+            localStorage.setItem('core_v4_active_armor', userRow.active_armor || "");
+            if (userRow.avatar_base64) {
+                localStorage.setItem('core_v4_user_avatar_' + myId, userRow.avatar_base64);
+            }
+
+            // 単語帳もクラウドから取得
+            const { data: vocabRow } = await supabase
+                .from('vocab_lists')
+                .select('vocab_data')
+                .eq('user_id', myId)
+                .single();
+            
+            if (vocabRow && vocabRow.vocab_data) {
+                localStorage.setItem('core_v4_custom_words_' + myId, JSON.stringify(vocabRow.vocab_data));
+            }
+
+            // 元の変数値をリロードして画面表示に適用
+            myName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
+            myTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
+            selectedTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
+            totalExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
+            activeCharacter = localStorage.getItem('core_v4_active_char') || "";
+            activeWeapon = localStorage.getItem('core_v4_active_weapon') || "";
+            activeArmor = localStorage.getItem('core_v4_active_armor') || "";
+            
+            let storedWords = [];
+            try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
+            vocabList = window.migrateVocabData(storedWords);
+
+            // アプリ側のUI描画関数を安全に再トリガー
+            if(typeof window.applyProfileToUi === 'function') window.applyProfileToUi();
+            if(typeof window.renderVocabList === 'function') window.renderVocabList();
+            if(typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
+            if(typeof window.renderTitles === 'function') window.renderTitles();
+        }
+    } catch (err) {
+        console.error("[Supabase Sync Error]", err);
+    }
+};
+
+// 2. ローカルからSupabaseへ全てのデータを一括引っ越し（同期）させる関数
+async function syncAllLocalToSupabase() {
+    if (!myId || myId === "GUEST-000") return;
+
+    // ローカルストレージにある全データを取得
+    const uName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
+    const uTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
+    const uTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
+    const uExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
+    const uChar = localStorage.getItem('core_v4_active_char') || "";
+    const uWeapon = localStorage.getItem('core_v4_active_weapon') || "";
+    const uArmor = localStorage.getItem('core_v4_active_armor') || "";
+    const uAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+
+    // 既存アカウント作成時の情報（リアル名、年齢、PIN）をローカルの全ユーザーリストから探す
+    const allUsers = window.getAllUsers();
+    const currentAccount = allUsers.find(u => u.id === myId) || {};
+
+    const profileData = {
+        id: myId,
+        pin: currentAccount.pin || "0000", // 万が一なければ初期値
+        player_name: uName,
+        real_name: currentAccount.realName || uName,
+        age: parseInt(currentAccount.age) || null,
+        total_exp: uExp,
+        my_target: uTarget,
+        selected_title: uTitle,
+        active_char: uChar,
+        active_weapon: uWeapon,
+        active_armor: uArmor,
+        avatar_base64: uAvatar,
+        updated_at: new Date()
+    };
+
+    // 1. プロフィールの保存（upsert = なければ新規作成、あれば上書き）
+    await supabase.from('users').upsert(profileData);
+
+    // 2. 単語帳の保存
+    let storedWords = [];
+    try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
+    
+    await supabase.from('vocab_lists').upsert({
+        user_id: myId,
+        vocab_data: storedWords,
+        updated_at: new Date()
+    });
+
+    console.log("[Supabase] 既存データの引っ越しアップロードが完了しました！");
+}
+
+// 3. データ変更時に裏側で「全自動・超高速・非同期リアルタイム保存」を行うフック処理
+// 単語帳が変更された瞬間にクラウドにも自動保存
+const originalSaveVocabToStorage = window.saveVocabToStorage;
+window.saveVocabToStorage = function() {
+    // まず元のLocalStorageへの保存を即座に実行（ユーザーの操作感をカクつかせない！）
+    originalSaveVocabToStorage();
+    
+    if (!myId || myId === "GUEST-000") return;
+
+    // 1歩遅れて裏側でSupabaseに非同期送信（自動保存）
+    let storedWords = [];
+    try { storedWords = JSON.parse(localStorage.getItem('core_v4_custom_words_' + myId) || "[]"); } catch(e){}
+    
+    supabase.from('vocab_lists').upsert({
+        user_id: myId,
+        vocab_data: storedWords,
+        updated_at: new Date()
+    }).then(({ error }) => {
+        if (!error) console.log("[Supabase] 単語帳を自動同期しました。");
+    });
+};
+
+// プロフィール情報やXPが変更（保存）された瞬間にクラウドにも自動保存
+const originalApplyProfileToUi = window.applyProfileToUi;
+window.applyProfileToUi = function() {
+    originalApplyProfileToUi();
+    
+    if (!myId || myId === "GUEST-000") return;
+
+    const uName = localStorage.getItem('core_v4_userName') || "プレイヤー1";
+    const uTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
+    const uTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
+    const uExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
+    const uChar = localStorage.getItem('core_v4_active_char') || "";
+    const uWeapon = localStorage.getItem('core_v4_active_weapon') || "";
+    const uArmor = localStorage.getItem('core_v4_active_armor') || "";
+    const uAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+
+    supabase.from('users').upsert({
+        id: myId,
+        player_name: uName,
+        my_target: uTarget,
+        selected_title: uTitle,
+        total_exp: uExp,
+        active_char: uChar,
+        active_weapon: uWeapon,
+        active_armor: uArmor,
+        avatar_base64: uAvatar,
+        updated_at: new Date()
+    }, { onConflict: 'id' }).then(({ error }) => {
+        if (!error) console.log("[Supabase] プロフィールとXPを自動同期しました。");
+    });
+};

@@ -624,7 +624,7 @@
                             
                             <div id="multiModeSwipeArea" class="multi-flick-area" style="position:relative; margin-bottom:12px;">
                                 <div id="multiCoopActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--cosmic-cyan); color:var(--cosmic-cyan); background:rgba(0,240,255,0.15); z-index:20; font-weight:900;">選択中 🤝 協力戦</div>
-                                <div id="multiPvpActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--admin-accent); color:var(--admin-accent); background:rgba(236,72,153,0.15); z-index:20; font-weight:900; display:none;">選択中 ⚔️ 対人戦</div>
+                                <div id="multiPvpActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--admin-accent); color:var(--admin-accent); background:rgba(236,72,153,0.15); z-index:20; font-weight:900; display:none;">選択中 ⚔️ 对人戦</div>
                                 <img id="multiModeDisplayImage" src="kyouryoku.png" alt="協力戦" style="width:100%; height:180px; object-fit:contain;">
                             </div>
 
@@ -1040,6 +1040,10 @@
     </div>
 
     <div id="multi-battle-play-bg"></div>
+
+    <!-- 🌌 Supabaseとの連携用CDNスクリプトの追加マウント -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="supabase-sync.js"></script>
 
     <script src="app.js"></script>
 </body>
