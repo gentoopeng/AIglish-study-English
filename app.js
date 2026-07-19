@@ -2400,7 +2400,33 @@ window.saveAdminDashboardTitle = function() {
 };
 
 window.logoutToGate = function() { localStorage.clear(); isAdminAuthenticated = false; location.reload(); };
-window.resetLeaderboard = function() { if(confirm("ランキング履歴を一括で削除しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['endless'].forEach(d => { localStorage.removeItem(`cosmic_score_${m}_${d}`); }); }); window.renderGameLeaderboard(); } };
+window.resetLeaderboard = async function() { 
+    if(confirm("ランキング履歴を一括で完全に削除しますか？（クラウド上のデータも消去されます）")) { 
+        // 1. ローカルデータを削除
+        ['ja2en', 'en2ja', 'mixed'].forEach(m => { 
+            ['endless'].forEach(d => { localStorage.removeItem(`cosmic_score_${m}_${d}`); }); 
+        }); 
+
+        // 2. Firebase(クラウド)上のランキングデータも空にする
+        if (window.db && window.fbSetDoc && window.fbDoc) {
+            try {
+                // 総合スコアボードのクリア
+                await window.fbSetDoc(window.fbDoc(window.db, "shared", "global_leaderboard"), { users: [] });
+                // 各ゲームモードのハイスコアのクリア
+                await window.fbSetDoc(window.fbDoc(window.db, "shared", "game_scores_ja2en"), { scores: [] });
+                await window.fbSetDoc(window.fbDoc(window.db, "shared", "game_scores_en2ja"), { scores: [] });
+                await window.fbSetDoc(window.fbDoc(window.db, "shared", "game_scores_mixed"), { scores: [] });
+            } catch(e) {
+                console.error("Firebaseランキング削除エラー:", e);
+            }
+        }
+
+        // 3. 画面の表示を更新
+        window.renderLeaderboard();
+        window.renderGameLeaderboard(); 
+        alert("ランキングのデータを完全にリセットしました！");
+    } 
+};
 window.resetBestScore = function() { if(confirm("ベストスコアを0に戻しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['endless'].forEach(d => { localStorage.removeItem(`cosmic_best_${m}_${d}`); }); }); } };
 window.resetScorePopup = function(popupEl) { popupEl.className = "giant-score-popup"; void popupEl.offsetWidth; };
 
