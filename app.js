@@ -642,7 +642,6 @@ window.loadCurrentTextbookData = async function() {
     
     vocabList = window.migrateVocabData(storedWords);
     userStats.vocab_reg = vocabList.length;
-    window.updateFlashcardSourceSelectOptions();
     window.renderVocabList();
     
     // 教材名・表紙のUI更新
@@ -788,7 +787,6 @@ window.saveOrUpdateTextbookFromAdmin = async function() {
             adminUploadedBookCoverBase64 = "";
             const fileInput = document.getElementById('adminBookCoverFileUploader');
             if(fileInput) fileInput.value = "";
-            window.updateFlashcardSourceSelectOptions();
             window.switchTab('home');
         } catch(e) {
             alert("Firebaseとの通信に失敗しました。");
@@ -818,7 +816,6 @@ window.deleteTextbookFromAdmin = async function() {
             const titleInput = document.getElementById('adminNewBookTitle');
             if(titleInput) titleInput.value = "";
             adminSelect.value = "";
-            window.updateFlashcardSourceSelectOptions();
             window.switchTextbookContext("textbook_default");
         } catch(e) {
             alert("Firebaseとの通信に失敗しました。");
@@ -1166,13 +1163,12 @@ window.handleBulkWordImport = function() {
     input.value = ""; alert("一括インポートが完了しました。");
 };
 window.openWordPopoverFromVocab = function(event, vocabItem, originalText) {
-    if(!vocabItem) return;
     if(event) event.stopPropagation(); currentTargetWordToken = vocabItem.word.toLowerCase(); currentTargetVocabNum = vocabItem.num;
     document.getElementById('popWord').innerText = originalText; document.getElementById('popWordNum').innerText = `#${vocabItem.num}`;
     let meaningHtml = "";
     vocabItem.meanings.forEach(m => {
         meaningHtml += `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px dashed rgba(255,255,255,0.2); padding-bottom:6px;">
                 <span style="font-size:14px; color:white; flex:1; line-height:1.4;">${m.text}</span>
                 <div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;">
                     <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:${m.status==='ok'?'var(--word-ok)':'rgba(0,0,0,0.5)'}; color:${m.status==='ok'?'#000':'white'}; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover('${vocabItem.num}', '${m.id}', 'ok', event)">⚪︎</button>
@@ -2377,7 +2373,7 @@ window.renderTitles = function() {
         } else {
             card.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <div style="font-weight:900; font-size:16px; color:rgba(255,255,255,0.25); font-style:italic;">🔒 未知のシークレット称号</div>
+                    <div style="font-weight:900; font-size:16px; colorrgba(255,255,255,0.25); font-style:italic;">🔒 未知のシークレット称号</div>
                     <div><span class="badge-common" style="padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #4b5563; background:rgba(0,0,0,0.4);">???</span></div>
                 </div>
                 <div style="font-size:11.5px; color:rgba(255,255,255,0.4); font-weight:500; line-height:1.4; text-align:center; padding:10px 0;">
@@ -2525,27 +2521,12 @@ window.renderGameLeaderboard = function() {
 // 🎮 フラッシュカード（単語フラッシュ）制御モジュール
 // ==========================================================================
 
-window.updateFlashcardSourceSelectOptions = function() {
-    const select = document.getElementById('flashcardSourceSelect');
-    if (!select) return;
-    select.innerHTML = "";
-    textbooksPool.forEach(book => {
-        const opt = document.createElement('option');
-        opt.value = book.id;
-        opt.innerText = book.name;
-        if (book.id === currentTextbook) {
-            opt.selected = true;
-        }
-        select.appendChild(opt);
-    });
-};
-
 window.showFlashcardSetupScreen = function() {
     const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'none';
     const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'none';
     document.getElementById('flashcard-setup-screen').style.display = 'block';
-    window.updateFlashcardSourceSelectOptions();
     window.setFlashcardDirection('en2ja');
+    flashcardDataSourceMode = 'dictionary'; 
 };
 
 window.setFlashcardDirection = function(mode) {
@@ -2570,16 +2551,16 @@ window.startFlashcardSession = function() {
     }
 
     let pool = [];
-    if (flashcardDataSourceMode === 'textbook_default' || flashcardDataSourceMode === 'dictionary') {
-        pool = dictionaryData.filter(d => {
-            let n = parseInt(d.num);
-            return n >= startNum && n <= endNum;
-        });
-    } else {
+    if (flashcardDataSourceMode === 'mybook') {
         pool = vocabList.filter(w => {
             let n = parseInt(w.num);
             return n >= startNum && n <= endNum;
         }).map(w => ({ num: w.num, en: w.word, ja: w.meanings && w.meanings[0] ? w.meanings[0].text : w.meaning }));
+    } else {
+        pool = dictionaryData.filter(d => {
+            let n = parseInt(d.num);
+            return n >= startNum && n <= endNum;
+        });
     }
     
     if (pool.length === 0) {
@@ -2975,19 +2956,12 @@ window.startActualGame = function(difficulty) {
     gameComboCount = 0;
     document.getElementById('gameScoreNum').innerText = "0000";
     
-    if(difficulty === 'normal') {
-        gameRemainingTime = 180;
-        document.getElementById('gameTimerNum').innerText = gameRemainingTime;
-    } else if(difficulty === 'hard') {
-        gameRemainingTime = 420;
-        document.getElementById('gameTimerNum').innerText = gameRemainingTime;
-    } else if(difficulty === 'expert') {
-        gameRemainingTime = 900;
-        document.getElementById('gameTimerNum').innerText = gameRemainingTime;
-    } else {
-        gameRemainingTime = 9999;
-        document.getElementById('gameTimerNum').innerText = "❤️×5";
-    }
+    if(difficulty === 'normal') gameRemainingTime = 180;
+    else if(difficulty === 'hard') gameRemainingTime = 420;
+    else if(difficulty === 'expert') gameRemainingTime = 900;
+    else gameRemainingTime = 9999; 
+    
+    document.getElementById('gameTimerNum').innerText = gameRemainingTime;
     
     gameCurrentWordsQueue = [];
     let pool = vocabList.length > 0 ? vocabList : dictionaryData;
@@ -3021,7 +2995,7 @@ window.startActualGame = function(difficulty) {
                 endGameSession();
             }
         } else {
-            document.getElementById('gameTimerNum').innerText = "❤️×5";
+            document.getElementById('gameTimerNum').innerText = "∞";
         }
     }, 1000);
     
@@ -3055,14 +3029,10 @@ window.showNextGameQuestion = function() {
     document.getElementById('giantJudgmentOverlay').classList.remove('show');
     document.getElementById('feedbackContent').style.display = 'none';
     document.getElementById('gameNextBtn').style.display = 'none';
-    isGameProcessingAnswer = false;
 };
 
 window.submitGameAnswer = function() {
     if(isGameProcessingAnswer) return;
-    
-    // フィードバックが表示されている間は解答送信をロック（二重加点防止インターロック）
-    if(document.getElementById('feedbackContent').style.display === 'block') return;
     
     const inputEl = document.getElementById('gameAnswerInput');
     const userAns = inputEl.value.trim();
@@ -3092,7 +3062,6 @@ window.submitGameAnswer = function() {
 
 window.skipGameWordWithPass = function() {
     if(isGameProcessingAnswer) return;
-    if(document.getElementById('feedbackContent').style.display === 'block') return;
     
     isGameProcessingAnswer = true;
     const currentQ = gameCurrentWordsQueue[gameCurrentIndex];
@@ -3194,6 +3163,7 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
     setTimeout(() => {
         document.getElementById('feedbackContent').style.display = 'block';
         document.getElementById('gameNextBtn').style.display = 'block';
+        isGameProcessingAnswer = false;
     }, feedbackDelay);
 }
 
@@ -4039,11 +4009,6 @@ window.closeReader = function() {
         document.head.appendChild(style);
 
         communityView.addEventListener('touchstart', e => {
-            // ランキングの英訳・和訳・まぜボタン付近のタッチは、スワイプ切り替えイベントを阻止する
-            if (e.target.closest('#gameLeaderboardArea button') || e.target.closest('#lbBtnModeJa') || e.target.closest('#lbBtnModeEn') || e.target.closest('#lbBtnModeMix')) {
-                isDragging = false;
-                return;
-            }
             startX = e.touches[0].clientX; startY = e.touches[0].clientY;
             isDragging = true; isHorizontal = null;
             const { rankArea, friendArea } = getAreas();
@@ -4188,7 +4153,7 @@ window.closeReader = function() {
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; ${bgStyle}">
                     <div style="display:flex; gap:12px; align-items:center;">
                         <span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:14px; width:18px; text-align:center;">${index + 1}</span>
-                        <span style="color:white; font-weight:800; letter-spacing:0.5px;">${record.name || "無名プレイヤー"}${record.isMe ? " (自然)" : ""}</span>
+                        <span style="color:white; font-weight:800; letter-spacing:0.5px;">${record.name || "無名プレイヤー"}${record.isMe ? " (あなた)" : ""}</span>
                     </div>
                     <div style="text-align:right;">
                         <span style="color:var(--cosmic-cyan); font-weight:900; font-family:monospace; font-size:13px; margin-right:8px;">${record.score} <span style="font-size:8px; font-weight:normal; color:var(--text-sub);">PTS</span></span>
