@@ -2,13 +2,6 @@
 // 🌟 1. 関数のマウント定義（フライング実行エラーを完全に防止するため最上位に配置）
 // ==========================================================================
 
-// 管理者状態をセッション保持するためのグローバル変数
-let isAdminAuthenticated = false;
-
-// ランキング展開状態管理フラグ（重複宣言によるSyntaxErrorを完全に防止するためここにクリーン配置）
-let isLevelRankExpanded = false;
-let isGameTargetExpanded = false;
-
 // 実績データ保存・ロード処理
 window.saveUserStats = function() {
     localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
@@ -55,88 +48,6 @@ window.calculateLevelFromExp = function(exp) {
     };
 };
 
-// 🌟 プレイヤーの最新情報をFirestoreのランキング用共通コレクションへリアルタイム同期送信する関数
-window.syncProfileToFirestoreLeaderboard = async function() {
-    if (!window.db || !window.fbSetDoc || !window.fbDoc || !myId || myId === "GUEST-000") return;
-    try {
-        let lvlData = window.calculateLevelFromExp(totalExp);
-        const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
-        
-        // 1人1レコード制限で最新状態をマージ更新
-        const leadRef = window.fbDoc(window.db, "shared_leaderboard", myId);
-        await window.fbSetDoc(leadRef, {
-            id: myId,
-            name: myName,
-            title: selectedTitle,
-            exp: totalExp,
-            level: lvlData.level,
-            avatar: mySavedAvatar,
-            lastUpdated: Date.now()
-        }, { merge: true });
-
-        // グローバル集約用ノードにも同期
-        const globalRef = window.fbDoc(window.db, "shared", "global_leaderboard");
-        const snap = await window.fbGetDoc(globalRef);
-        let currentUsers = [];
-        if (snap.exists() && snap.data().users) {
-            currentUsers = snap.data().users;
-        }
-        currentUsers = currentUsers.filter(u => u.id !== myId);
-        currentUsers.push({
-            id: myId,
-            name: myName,
-            title: selectedTitle,
-            level: lvlData.level,
-            exp: totalExp,
-            avatar: mySavedAvatar
-        });
-        await window.fbSetDoc(globalRef, { users: currentUsers }, { merge: true });
-        console.log("Firestore累計レベルランキングへのリアルタイム同期に成功しました！");
-    } catch(e) {
-        console.error("Firestore Leaderboard Sync Error:", e);
-    }
-};
-
-// 🌟 本棚データをFirestoreへリアルタイム同期する専用処理
-window.syncBookshelfToFirestore = async function() {
-    if (!window.db || !window.fbSetDoc || !window.fbDoc || !myId || myId === "GUEST-000") return;
-    try {
-        const bookshelfRef = window.fbDoc(window.db, "users_bookshelves", myId);
-        await window.fbSetDoc(bookshelfRef, {
-            myBookshelf: myBookshelf,
-            myFolders: myFolders
-        }, { merge: true });
-        console.log("本棚データをFirestoreへリアルタイム同期完了しました！");
-    } catch(e) {
-        console.error("Bookshelf Sync Error:", e);
-    }
-};
-
-// 🌟 利用規約をがっちりと長い条項文章に動的に書き換える内部関数
-window.injectGatchiriTermsOfService = function() {
-    const staticContainers = document.querySelectorAll('.static-guide-content-box');
-    if (staticContainers && staticContainers.length > 0) {
-        staticContainers[0].innerHTML = `
-            <strong>【CORE SYSTEM V4 アプリケーション利用規約およびデータ取扱基本合意書】</strong><br><br>
-            本規約は、開発元（以下「当システム管理本部」）が提供する英語学習アプリケーション「Core System V4」（以下「本サービス」）の利用条件、登録ユーザーの権利、およびデータ同期にかかる免責事項を厳格に定めるものです。<br><br>
-            <strong>第1条（規約の適用および厳罰性）</strong><br>
-            登録ユーザーは、本サービスのアカウントを開設、またはゲストプレイを開始した時点で、本利用規約のすべての条項に無条件で同意したものとみなされます。同意し得ない場合は、直ちにブラウザキャッシュの消去を行い、本システムへのアクセスを遮断しなければなりません。<br><br>
-            <strong>第2条（ユーザーデータ管理・外部ストレージ同期・分散処理）</strong><br>
-            1. ユーザーが本サービス内において登録したカスタム単語データ、学習履歴、ハイスコア、総勉強時間、および称号コレクションは、端末のローカルストレージ（Localブラウザキャッシュ領域）に一次暗号化保存されるとともに、クラウドデータベース（Firebase Firestore環境）の分散ノードへリアルタイムでバックアップ同期が執行されます。<br>
-            2. 本棚（スマート長文リーダー格納領域）に格納された独自テキストデータは、追加・削除のトランザクションが走った瞬間にFirestore上の専用クラスタ「users_bookshelves」へと完全同期され、アカウントのマイグレーション（端末移行）時にも完全に引き継がれる永続ストレージシステムによって保護されます。<br><br>
-            <strong>第3条（Gemini AI APIキーのセキュリティおよび自己責任原則）</strong><br>
-            1. 本サービス内で稼働する「AI長文読解解析」「自動英文和訳」「要約生成 (AI Abstract)」および「高精度AI採点判定」の利用にあたり、ユーザー自身が設定した固有のGoogle Gemini AI APIキーは、当システム管理本部の保有する外部サーバーへ永続蓄積・転送されることは一切なく、エンドツーエンドのセキュア通信を通じて、直接Google社のAIコアモデルAPIへとリクエストが発行されます。<br>
-            2. キーの紛失、漏洩、リクエスト制限超過に伴う課金トラブル等に関しては、ユーザーが一切の自己責任原則に基づいて処理するものとし、当システム管理本部は一切の法的賠償責任・補償義務を負わないものとします。<br><br>
-            <strong>第4条（禁止事項および管理者権限によるアカウント制裁）</strong><br>
-            ユーザーは、本サービスの利用に際して、以下の各号に該当する行為を行ってはなりません。<br>
-            (1) 配信単語データの改ざん、インジェクション攻撃、またはソースコードの不正な解析を試みる行為。<br>
-            (2) ランキングシステムを欺くためのスコア偽装、不正なEXP稼ぎ、自動マクロスクリプトの運用行為。<br>
-            (3) プレイヤーネームに公序良俗に反する単語、他者を誹謗中傷する名称を割り当てる行為。<br>
-            上記の違反がシステム防衛トリガーによって検知された場合、管理者は事前の通告なく、該当ユーザーのFirestore同期ドキュメントを永久剥奪・抹消処分に処することができるものとします。
-        `;
-    }
-};
-
 // 🌟 アップロードされた巨大な画像ファイルをCanvasで200px以下に圧縮縮小してDOMExceptionを防ぐ防衛関数
 window.handleAvatarImageUpload = function(event) {
     const file = event.target.files[0];
@@ -152,7 +63,7 @@ window.handleAvatarImageUpload = function(event) {
         const img = new Image();
         img.onload = function() {
             const canvas = document.createElement('canvas');
-            const ctx = canvas.createElement('2d');
+            const ctx = canvas.getContext('2d');
 
             const maxDimension = 200;
             let width = img.width;
@@ -180,7 +91,6 @@ window.handleAvatarImageUpload = function(event) {
             try {
                 localStorage.setItem('core_v4_user_avatar_' + myId, compressedBase64Data);
                 window.applyProfileToUi();
-                window.syncProfileToFirestoreLeaderboard();
                 window.renderLeaderboard();
                 window.sortAndRenderFriendList();
                 alert("アバター写真を安全に圧縮・登録しました！");
@@ -216,9 +126,6 @@ window.loadLocalState = async function() {
             noticeFrame.style.display = 'none';
         }
     }
-
-    // がっちり利用規約長文を動的インジェクション展開
-    window.injectGatchiriTermsOfService();
     
     if(savedId) {
         myId = savedId;
@@ -233,57 +140,24 @@ window.loadLocalState = async function() {
         activeWeapon = localStorage.getItem('core_v4_active_weapon') || ""; 
         activeArmor = localStorage.getItem('core_v4_active_armor') || ""; 
 
+        // 🌟 新教材インデックスプールを初期化
+        currentTextbook = localStorage.getItem('core_v4_current_textbook_id') || "textbook_default";
+        await window.syncTextbooksIndexFromFirestore();
+
         window.loadUserStats();
         userStats.goal_text = myTarget; 
         userStats.friends_count = myFriendList.length; 
 
-        // 🌟 Firestoreから本棚およびフォルダデータを自動同期ロード
-        if (window.db && window.fbGetDoc && window.fbDoc) {
-            try {
-                const bookshelfSnap = await window.fbGetDoc(window.fbDoc(window.db, "users_bookshelves", myId));
-                if (bookshelfSnap.exists()) {
-                    myBookshelf = bookshelfSnap.data().myBookshelf || [];
-                    myFolders = bookshelfSnap.data().myFolders || ['未分類'];
-                    localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf));
-                    localStorage.setItem('myFolders', JSON.stringify(myFolders));
-                }
-            } catch(e) {
-                console.error("Firestore Bookshelf Load Error:", e);
-            }
-        }
-
-        // 🌟 変更：全ユーザー共通の「shared/vocab」ノードから読み込むように更新
-        let storedWords = [];
-        if (window.db && window.fbGetDoc && window.fbDoc) {
-            try {
-                const sharedRef = window.fbDoc(window.db, "shared", "vocab");
-                const sharedSnap = await window.fbGetDoc(sharedRef);
-                if (sharedSnap.exists() && sharedSnap.data().custom_words) {
-                    storedWords = sharedSnap.data().custom_words;
-                    console.log("Firebase共通ノードから配信データを読み込みました！");
-                } else {
-                    storedWords = JSON.parse(localStorage.getItem('core_v4_shared_words') || "[]");
-                }
-            } catch (e) {
-                console.error("Firebase共通ノードの読み込み失敗。ローカルの共通キャッシュを参照します:", e);
-                storedWords = JSON.parse(localStorage.getItem('core_v4_shared_words') || "[]");
-            }
-        } else {
-            storedWords = JSON.parse(localStorage.getItem('core_v4_shared_words') || "[]");
-        }
-        
-        vocabList = window.migrateVocabData(storedWords); 
-        userStats.vocab_reg = vocabList.length;
+        // 🌟 選択されている現教材の単語中身データを動的ロード
+        await window.loadCurrentTextbookData();
         
         window.applyProfileToUi();
         if(typeof window.updatePartySlotsUi === 'function') window.updatePartySlotsUi(); 
-        window.renderVocabList();
-        window.syncProfileToFirestoreLeaderboard();
         window.renderLeaderboard();
         window.renderHistoryList();
         window.renderBookshelf(); 
         window.renderAdminUserList(); 
-        window.renderGameLeaderboard();
+        window.renderGameLeaderboard('mine');
         
         window.renderTitles();
 
@@ -307,6 +181,17 @@ let totalExp = 0;
 let vocabList = [];
 let vocabFilter = "all";
 let geminiApiKey = ""; 
+
+// 🌟 教材インデックスプールおよび選択状態管理用のグローバル構造
+let currentTextbook = "textbook_default";
+let textbooksPool = [
+    { id: "textbook_default", name: "共通英単語100", cover: "📔", coverType: "text" }
+];
+let adminUploadedBookCoverBase64 = "";
+
+// ランキング・ゲーム展開状態管理フラグ
+let isLevelRankExpanded = false;
+let isGameTargetExpanded = false;
 
 let selectedQuestionMode = 'ja2en'; 
 let currentQuestionType = 'ja2en'; 
@@ -475,7 +360,6 @@ window.checkAndRewardTitleBonusXP = function() {
         window.saveUserStats();
         
         window.applyProfileToUi();
-        window.syncProfileToFirestoreLeaderboard();
         window.renderTitles();
         window.renderLeaderboard();
     }
@@ -537,7 +421,7 @@ window.callGeminiAnalyzer = async function(text) {
     }
     try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
-        const prompt = "以下の英文をパースし、指定 of JSONスキーマ形式のみで返答してください。余計な説明文やマークダウンのJSONタグは一切含めず、純粋なJSON文字列オブジェクトとして出力してください。\n\n英文:\n" + text + "\n\n出力JSON形式:\n{\n  \"fullSummaryAbstract\": \"英文全体のシンプルな日本語要約(3文以内。無駄なトークンを削減するため簡潔に記述すること)\",\n  \"sentences\": [\n    {\n      \"text\": \"元の英語の1文\",\n      \"translation\": \"その文の正確な日本語訳\",\n      \"grammarHighlights\": [\n        {\n          \"phrase\": \"フレーズ\",\n          \"meaning\": \"意味\"\n        }\n      ]\n    }\n  ]\n}";
+        const prompt = "以下の英文をパースし、指定 of JSONスキーマ形式のみで返答してください。余計な説明文やマークダウン of JSONタグは一切含めず、純粋なJSON文字列オブジェクトとして出力してください。\n\n英文:\n" + text + "\n\n出力JSON形式:\n{\n  \"fullSummaryAbstract\": \"英文全体のシンプルな日本語要約(3文以内。無駄なトークンを削減するため簡潔に記述すること)\",\n  \"sentences\": [\n    {\n      \"text\": \"元の英語の1文\",\n      \"translation\": \"その文の正確な日本語訳\",\n      \"grammarHighlights\": [\n        {\n          \"phrase\": \"フレーズ\",\n          \"meaning\": \"意味\"\n        }\n      ]\n    }\n  ]\n}";
 
         const response = await fetch(url, {
             method: 'POST',
@@ -592,60 +476,56 @@ window.callGeminiGameJudge = async function(question, correctAnswer, userAns, mo
     }
 };
 
-// 🌟 変更：仮のモックデータを完全に削除し、Firestoreからロードした実データ（スコアやレベルの記録がある本物のユーザーのみ）だけでランキングを構成
-window.renderLeaderboard = async function() { 
+window.renderLeaderboard = function() { 
     const container = document.getElementById('leaderboardContainer'); 
     if(!container) return; 
 
-    let remoteUsers = [];
-    if (window.db && window.fbGetDoc && window.fbDoc) {
-        try {
-            const globalRef = window.fbDoc(window.db, "shared", "global_leaderboard");
-            const snap = await window.fbGetDoc(globalRef);
-            if (snap.exists() && snap.data().users) {
-                remoteUsers = snap.data().users;
-            }
-        } catch(err) {
-            console.error("Firebase Leaderboard Load Error:", err);
+    let mockUsers = [
+        { name: "タンゴン校長", title: "シスタマスター", exp: 85000, lvl: 75, icon: "🧙‍♂️", customAvatar: "" },
+        { name: "アルファ英語王", title: "解読の達人", exp: 42000, lvl: 52, icon: "👑", customAvatar: "" },
+        { name: "たくみん", title: "単語の探求者", exp: 28000, lvl: 39, icon: "⚔️", customAvatar: "" },
+        { name: "シスタ見習い", title: "称号なし", exp: 12500, lvl: 18, icon: "🔰", customAvatar: "" },
+        { name: "ペンギン騎士", title: "単語の探求者", exp: 9800, lvl: 15, icon: "🐧", customAvatar: "" },
+        { name: "英語の達人M", title: "解読 of 神", exp: 130000, lvl: 99, icon: "⚡", customAvatar: "" },
+        { name: "ぽんぽこ", title: "称号なし", exp: 4500, lvl: 8, icon: "🍃", customAvatar: "" }
+    ];
+
+    const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+
+    mockUsers[0].customAvatar = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%236366F1'/><text x='50%25' y='55%25' font-size='11' fill='white' font-weight='bold' text-anchor='middle'>PRINCIPAL</text></svg>";
+    mockUsers[2].customAvatar = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%2310B981'/><text x='50%25' y='55%25' font-size='12' fill='white' font-weight='bold' text-anchor='middle'>TAKU</text></svg>";
+
+    let lvlData = window.calculateLevelFromExp(totalExp);
+    let calculatedLvl = lvlData.level;
+    userStats.user_level = calculatedLvl; 
+    
+    if (calculatedLvl > 1 && mockUsers.length > 0) {
+        const topScore = Math.max(...mockUsers.map(u => u.exp));
+        if (totalExp > topScore) {
+            userStats.weekly_rank_first = true;
         }
     }
 
-    let lvlData = window.calculateLevelFromExp(totalExp);
-    const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
-
-    // 自分の最新データをマージ (重複・複数行の発生を確実に防止)
-    remoteUsers = remoteUsers.filter(u => u.id !== myId);
-    remoteUsers.push({
-        id: myId,
-        name: myName,
+    mockUsers.push({
+        name: `${myName} (あなた)`,
         title: selectedTitle,
-        level: lvlData.level,
         exp: totalExp,
-        avatar: mySavedAvatar,
+        lvl: calculatedLvl,
+        icon: "👤",
+        customAvatar: mySavedAvatar,
         isMe: true
     });
 
-    // 変更：レベル（level）を第一基準にクリーン降順ソート
-    remoteUsers.sort((a, b) => b.level - a.level || b.exp - a.exp);
+    mockUsers.sort((a, b) => b.exp - a.exp);
 
-    let myRank = remoteUsers.findIndex(u => u.id === myId) + 1;
-
-    let html = `
-        <div style="background: rgba(0, 240, 255, 0.1); border: 1px solid var(--cosmic-cyan); padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; font-weight: 800; font-size: 12px; text-align: center; color: white;">
-            👑 あなたの現在の順位: <span style="color: var(--cosmic-cyan); font-size: 14px;">${myRank}位</span> (Lv.${lvlData.level})
-        </div>
-    `;
-
-    // TOP5制限 or 全展開制御
-    let displayUsers = isLevelRankExpanded ? remoteUsers : remoteUsers.slice(0, 5);
-
-    displayUsers.forEach((u, idx) => {
+    let html = "";
+    mockUsers.forEach((u, idx) => {
         let rankColor = idx === 0 ? "#FBBF24" : idx === 1 ? "#94A3B8" : idx === 2 ? "#D97706" : "#FFFFFF";
-        let bgStyle = u.id === myId ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);" : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
+        let bgStyle = u.isMe ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);" : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
         
-        let avatarUiNodeStr = `<span style="font-size:16px;">👤</span>`;
-        if (u.avatar) {
-            avatarUiNodeStr = `<img src="${u.avatar}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan);">`;
+        let avatarUiNodeStr = `<span style="font-size:16px;">${u.icon}</span>`;
+        if (u.customAvatar) {
+            avatarUiNodeStr = `<img src="${u.customAvatar}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan); box-shadow:0 0 6px var(--cosmic-cyan);">`;
         }
 
         html += `
@@ -654,28 +534,16 @@ window.renderLeaderboard = async function() {
                     <span style="color:${rankColor}; font-weight:900; font-size:14px; width:18px; text-align:center;">${idx + 1}</span>
                     <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${avatarUiNodeStr}</div>
                     <div>
-                        <div style="font-weight:bold; color:white;">${u.name}</div>
-                        <div style="font-size:9px; color:var(--text-sub); margin-top:1px;">${u.title || "称号なし"}</div>
+                        <div style="font-weight:bold; color:white;">${u.name} <span style="font-size:9px; color:var(--cosmic-cyan); font-weight:normal; margin-left:4px;">LV.${u.lvl}</span></div>
+                        <div style="font-size:9px; color:var(--text-sub); margin-top:1px;">${u.title}</div>
                     </div>
                 </div>
-                <div style="text-align:right; font-weight:900; color:var(--word-so); font-family:monospace;">Lv.${u.level}</div>
+                <div style="text-align:right; font-weight:900; color:var(--word-so); font-family:monospace;">${u.exp} <span style="font-size:8px; color:var(--text-sub); font-weight:normal;">EXP</span></div>
             </div>`;
     });
 
-    if (remoteUsers.length > 5) {
-        html += `
-            <button class="modern-btn" style="height:32px; font-size:11px; margin-top:6px; border-color:rgba(0,240,255,0.4) !important;" onclick="window.toggleLevelRankExpand()">
-                ${isLevelRankExpanded ? '▲ 閉じる' : '▼ もっと見る (全修行者を表示)'}
-            </button>
-        `;
-    }
-
     container.innerHTML = html;
-};
-
-window.toggleLevelRankExpand = function() {
-    isLevelRankExpanded = !isLevelRankExpanded;
-    window.renderLeaderboard();
+    window.saveUserStats();
 };
 
 window.initLucide = function() { 
@@ -696,20 +564,278 @@ window.initHeroSlider = function() {
     }, 4000);
 };
 
-// 🌟 変更：全ユーザー共通のFirestore「shared/vocab」への同期処理に完全統一
-window.saveVocabToStorage = async function() { 
-    localStorage.setItem('core_v4_shared_words', JSON.stringify(vocabList)); 
+// 🌟 教材ID別に独立してFirestore保存する実用処理
+window.saveVocabToStorage = async function() {
+    localStorage.setItem(`core_v4_custom_words_${myId}_${currentTextbook}`, JSON.stringify(vocabList));
+    
+    if (window.db && window.fbSetDoc && window.fbDoc && myId) {
+        try {
+            const userRef = window.fbDoc(window.db, "users", `${myId}_vocab_${currentTextbook}`);
+            await window.fbSetDoc(userRef, {
+                custom_words: vocabList
+            }, { merge: true });
+            console.log(`Firebaseにデータ（教材: ${currentTextbook}）を同期しました！`);
+        } catch (error) {
+            console.error("Firebaseの保存に失敗しました:", error);
+        }
+    }
+};
+
+// 🌟 教材一覧（インデックス）をFirestoreからリアルタイムロード・同期
+window.syncTextbooksIndexFromFirestore = async function() {
+    if (window.db && window.fbGetDoc && window.fbDoc) {
+        try {
+            const indexRef = window.fbDoc(window.db, "shared", "textbooks_index");
+            const snap = await window.fbGetDoc(indexRef);
+            if (snap.exists() && snap.data().textbooks) {
+                textbooksPool = snap.data().textbooks;
+            }
+        } catch(e) {
+            console.error("教材インデックスの同期エラー:", e);
+        }
+    }
+};
+
+// 🌟 選択されている現教材の単語中身データをロードする関数（防衛自動救出移行システム内蔵版）
+window.loadCurrentTextbookData = async function() {
+    let storedWords = [];
+    
+    // 🔥 防衛自動データ移行システム：古い引き出しにデータが残っていれば現在のカスタム教材（システム英単語など）へ丸ごと引き継ぐ
+    const legacyKey = 'core_v4_custom_words_' + myId;
+    const legacyDataStr = localStorage.getItem(legacyKey);
+    const currentLocalKey = `core_v4_custom_words_${myId}_${currentTextbook}`;
+    
+    if (legacyDataStr && legacyDataStr !== "[]") {
+        try {
+            const legacyParsed = JSON.parse(legacyDataStr);
+            if (Array.isArray(legacyParsed) && legacyParsed.length > 0) {
+                // 古いデータを現在の新引き出しへ最優先で上書きコピー[span_3](start_span)[span_3](end_span)
+                localStorage.setItem(currentLocalKey, legacyDataStr);
+                // コピー完了後は重複移行を防ぐため古いストレージを引き戻し空にクリア[span_4](start_span)[span_4](end_span)
+                localStorage.setItem(legacyKey, "[]");
+                console.log("🚀 【システム防衛】古い固定保存から現在のカスタム教材へデータを安全に自動移行しました！");
+                
+                // 同時にFirestore側にもバックアップデータを即座に強制保存・同期
+                vocabList = window.migrateVocabData(legacyParsed);
+                await window.saveVocabToStorage();
+            }
+        } catch (err) {
+            console.error("データ移行エラー:", err);
+        }
+    }
+
+    if (window.db && window.fbGetDoc && window.fbDoc && myId) {
+        try {
+            const userRef = window.fbDoc(window.db, "users", `${myId}_vocab_${currentTextbook}`);
+            const userSnap = await window.fbGetDoc(userRef);
+            if (userSnap.exists() && userSnap.data().custom_words) {
+                storedWords = userSnap.data().custom_words;
+            } else {
+                storedWords = JSON.parse(localStorage.getItem(currentLocalKey) || "[]");
+            }
+        } catch (e) {
+            storedWords = JSON.parse(localStorage.getItem(currentLocalKey) || "[]");
+        }
+    } else {
+        storedWords = JSON.parse(localStorage.getItem(currentLocalKey) || "[]");
+    }
+    
+    vocabList = window.migrateVocabData(storedWords);
+    userStats.vocab_reg = vocabList.length;
+    window.renderVocabList();
+    
+    // 教材名・表紙のUI更新
+    const currentBook = textbooksPool.find(b => b.id === currentTextbook) || textbooksPool[0];
+    const coverContainer = document.getElementById('vocabCoverContainer');
+    const titleContainer = document.getElementById('vocabBookTitle');
+    
+    if (coverContainer) {
+        if (currentBook.coverType === "image" && currentBook.cover) {
+            coverContainer.innerHTML = `<img src="${currentBook.cover}" style="width:100%; height:100%; object-fit:cover; border-radius:50%; border:1px solid rgba(255,255,255,0.2);">`;
+        } else {
+            coverContainer.innerText = currentBook.cover || "📔";
+        }
+    }
+    if (titleContainer) titleContainer.innerText = currentBook.name;
+};
+
+// 🌟 教材切り替えポップアップリストの動的生成
+window.openTextbookSelectPopup = function() {
+    const container = document.getElementById('textbookListSelectContainer');
+    if(!container) return;
+    container.innerHTML = "";
+    
+    textbooksPool.forEach(book => {
+        const row = document.createElement('div');
+        let activeStyle = book.id === currentTextbook ? "border: 1.5px solid var(--cosmic-cyan); background:rgba(0,240,255,0.1);" : "border: 1px solid rgba(255,255,255,0.1);";
+        row.style.cssText = `display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:10px; cursor:pointer; ${activeStyle}`;
+        row.onclick = () => window.switchTextbookContext(book.id);
+        
+        let coverHtmlStr = `<span style="font-size:22px;">${book.cover || "📔"}</span>`;
+        if (book.coverType === "image" && book.cover) {
+            coverHtmlStr = `<img src="${book.cover}" style="width:32px; height:36px; object-fit:cover; border-radius:4px;">`;
+        }
+        
+        row.innerHTML = `
+            ${coverHtmlStr}
+            <span style="font-size:13.5px; font-weight:bold; color:white;">${book.name}</span>
+        `;
+        container.appendChild(row);
+    });
+    
+    // 管理者用の既存教材編集セレクトボックスも更新
+    const adminSelect = document.getElementById('adminEditBookSelect');
+    if (adminSelect) {
+        adminSelect.innerHTML = `<option value="">-- 編集する教材を選択 --</option>`;
+        textbooksPool.forEach(book => {
+            const opt = document.createElement('option');
+            opt.value = book.id;
+            opt.innerText = book.name;
+            adminSelect.appendChild(opt);
+        });
+    }
+    
+    const popup = document.getElementById('textbookSelectPopupFrame');
+    if(popup) { popup.style.display = 'flex'; popup.classList.add('show'); }
+};
+
+// 🌟 コンテキスト教材の完全切り替え
+window.switchTextbookContext = async function(bookId) {
+    currentTextbook = bookId;
+    localStorage.setItem('core_v4_current_textbook_id', bookId);
+    
+    const popup = document.getElementById('textbookSelectPopupFrame');
+    if (popup) { popup.classList.remove('show'); popup.style.display = 'none'; }
+    
+    await window.loadCurrentTextbookData();
+    alert("教材データを切り替えました！");
+};
+
+// 🌟 管理者画面：アップロードされた教材画像をアイコンサイズにセキュア圧縮する処理
+window.handleAdminBookCoverUpload = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+        alert("画像ファイルを選択してください。");
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const maxDimension = 120;
+            let width = img.width, height = img.height;
+            if (width > height) {
+                if (width > maxDimension) { height = Math.round((height * maxDimension) / width); width = maxDimension; }
+            } else {
+                if (height > maxDimension) { width = Math.round((width * maxDimension) / height); height = maxDimension; }
+            }
+            canvas.width = width; canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+            adminUploadedBookCoverBase64 = canvas.toDataURL('image/jpeg', 0.7);
+            alert("教材用のアイコン画像ファイルを受け付けました！");
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+};
+
+// 🌟 管理者画面：新規追加または既存編集を切り替えて登録する統合処理
+window.saveOrUpdateTextbookFromAdmin = async function() {
+    const adminSelect = document.getElementById('adminEditBookSelect');
+    const titleInput = document.getElementById('adminNewBookTitle');
+    if(!titleInput || !adminSelect) return;
+    
+    const selectedBookId = adminSelect.value;
+    const title = titleInput.value.trim();
+    if(!title) return alert("教材の名前を入力してください！");
+    
+    await window.syncTextbooksIndexFromFirestore(); // 最新同期
+    
+    let finalCover = adminUploadedBookCoverBase64;
+    let finalType = "image";
+    
+    if (selectedBookId) {
+        // 既存編集
+        const targetIdx = textbooksPool.findIndex(b => b.id === selectedBookId);
+        if (targetIdx !== -1) {
+            textbooksPool[targetIdx].name = title;
+            if (adminUploadedBookCoverBase64) {
+                textbooksPool[targetIdx].cover = finalCover;
+                textbooksPool[targetIdx].coverType = finalType;
+            }
+        }
+    } else {
+        // 新規追加
+        if(!adminUploadedBookCoverBase64) {
+            finalCover = "📔";
+            finalType = "text";
+        }
+        const newBookId = "textbook_" + Date.now();
+        textbooksPool.push({ id: newBookId, name: title, cover: finalCover, coverType: finalType });
+    }
     
     if (window.db && window.fbSetDoc && window.fbDoc) {
         try {
-            const sharedRef = window.fbDoc(window.db, "shared", "vocab");
-            await window.fbSetDoc(sharedRef, {
-                custom_words: vocabList
-            }, { merge: true });
-            console.log("Firebase共通ノードへ配信データを同期しました！");
-        } catch (error) {
-            console.error("Firebaseへの同期に失敗しました:", error);
+            const indexRef = window.fbDoc(window.db, "shared", "textbooks_index");
+            await window.fbSetDoc(indexRef, { textbooks: textbooksPool }, { merge: true });
+            alert(`🎉 教材リストデータ『${title}』を配信・適用完了しました！`);
+            titleInput.value = "";
+            adminSelect.value = "";
+            adminUploadedBookCoverBase64 = "";
+            const fileInput = document.getElementById('adminBookCoverFileUploader');
+            if(fileInput) fileInput.value = "";
+            window.switchTab('home');
+        } catch(e) {
+            alert("Firebaseとの通信に失敗しました。");
         }
+    }
+};
+
+// 🌟 管理者画面：選択中の単語帳教材を完全にシステムから抹消削除するロジック
+window.deleteTextbookFromAdmin = async function() {
+    const adminSelect = document.getElementById('adminEditBookSelect');
+    if(!adminSelect) return;
+    const selectedBookId = adminSelect.value;
+    if(!selectedBookId) return alert("削除したい既存の教材をセレクトボックスから選択してください！");
+    if(selectedBookId === "textbook_default") return alert("❌ 初期デフォルト教材（共通英単語100）を削除することはできません。");
+    
+    const targetBook = textbooksPool.find(b => b.id === selectedBookId);
+    if(!confirm(`⚠️ 警告: 教材『${targetBook.name}』を完全に削除しますか？\nこの操作は取り消せません。`)) return;
+    
+    textbooksPool = textbooksPool.filter(b => b.id !== selectedBookId);
+    
+    if (window.db && window.fbSetDoc && window.fbDoc) {
+        try {
+            const indexRef = window.fbDoc(window.db, "shared", "textbooks_index");
+            await window.fbSetDoc(indexRef, { textbooks: textbooksPool }, { merge: true });
+            alert("🎉 指定された教材を完全にシステムから削除・同期しました。");
+            
+            const titleInput = document.getElementById('adminNewBookTitle');
+            if(titleInput) titleInput.value = "";
+            adminSelect.value = "";
+            window.switchTextbookContext("textbook_default");
+        } catch(e) {
+            alert("Firebaseとの通信に失敗しました。");
+        }
+    }
+};
+
+// 🌟 管理者画面：編集用セレクトボックスが選ばれたときにインプットを同期する関数
+window.handleAdminEditSelectChange = function(val) {
+    const titleInput = document.getElementById('adminNewBookTitle');
+    const submitBtn = document.getElementById('adminBookSubmitBtn');
+    if(!titleInput || !submitBtn) return;
+    
+    if(val) {
+        const match = textbooksPool.find(b => b.id === val);
+        if(match) titleInput.value = match.name;
+        submitBtn.innerText = "選択中の教材データを修正・上書き保存";
+    } else {
+        titleInput.value = "";
+        submitBtn.innerText = "新規教材として一斉配信登録";
     }
 };
 
@@ -721,9 +847,9 @@ window.migrateVocabData = function(words) {
             const hasCircle = /[①-⑳]/.test(mStr);
             if (hasCircle) {
                 let parts = mStr.split(/(?=[①-⑳])/).map(p => p.replace(/[①-⑳]/g, '').trim()).filter(p => p);
-                w.meanings = parts.map((p, i) => ({ id: `${w.num}-${i}`, text: p, status: w.status || 'none', history: w.history || [] }));
+                w.meanings = parts.map((p, i) => ({ id: `${w.num}-${i}`, text: p, status: 'none', history: [] }));
             } else {
-                w.meanings.push({ id: `${w.num}-0`, text: mStr.trim(), status: w.status || 'none', history: w.history || [] });
+                w.meanings.push({ id: `${w.num}-0`, text: mStr.trim(), status: 'none', history: [] });
             }
         }
         return w;
@@ -782,8 +908,7 @@ window.switchAuthMode = function(mode) {
     window.initLucide();
 };
 
-// 🌟 変更：新規プレイヤー登録時にローカルだけでなくFirestoreのusersコレクションへも即時ミラー保存する仕様を統合
-window.handleAuthSubmit = async function() {
+window.handleAuthSubmit = function() {
     const authReg = document.getElementById('authTabRegister');
     const isRegister = authReg ? authReg.classList.contains('active') : false;
     const errorMsg = document.getElementById('authErrorMsg');
@@ -806,29 +931,8 @@ window.handleAuthSubmit = async function() {
         
         const newId = window.generateUserId();
         const users = window.getAllUsers();
-        const newUserObj = { id: newId, playerName: pName, realName: rName, age: age, pin: pin, timestamp: Date.now() };
-        users.push(newUserObj);
+        users.push({ id: newId, playerName: pName, realName: rName, age: age, pin: pin });
         window.saveAllUsers(users);
-        
-        // Firestoreへのグローバルアカウントミラー登録
-        if (window.db && window.fbSetDoc && window.fbDoc) {
-            try {
-                const userRef = window.fbDoc(window.db, "users", newId);
-                await window.fbSetDoc(userRef, newUserObj, { merge: true });
-                
-                // 管理者用ユーザー集約インデックス更新
-                const indexRef = window.fbDoc(window.db, "shared", "admin_users_index");
-                const snap = await window.fbGetDoc(indexRef);
-                let allRegistered = [];
-                if (snap.exists() && snap.data().allUsers) {
-                    allRegistered = snap.data().allUsers;
-                }
-                allRegistered.push({ id: newId, playerName: pName, realName: rName, age: age });
-                await window.fbSetDoc(indexRef, { allUsers: allRegistered }, { merge: true });
-            } catch(e) {
-                console.error("Firestore Auth Reg Error:", e);
-            }
-        }
         
         alert(`🎉 アカウント作成成功！\nあなたのログインIDは【 ${newId} 】です。\nログインに必要なので必ずメモしてください！`);
         
@@ -847,21 +951,8 @@ window.handleAuthSubmit = async function() {
             return;
         }
         
-        // 1次チェック：ローカルキャッシュ
         const users = window.getAllUsers();
-        let user = users.find(u => u.id === idInput && u.pin === pinInput);
-        
-        // ローカルにない場合はFirestoreから直接認証情報を安全に取得引き戻し救済
-        if (!user && window.db && window.fbGetDoc && window.fbDoc) {
-            try {
-                const cloudUserSnap = await window.fbGetDoc(window.fbDoc(window.db, "users", idInput));
-                if (cloudUserSnap.exists() && cloudUserSnap.data().pin === pinInput) {
-                    user = cloudUserSnap.data();
-                    users.push(user);
-                    window.saveAllUsers(users);
-                }
-            } catch(err) {}
-        }
+        const user = users.find(u => u.id === idInput && u.pin === pinInput);
         
         if(user) {
             window.showLoginConfirmPopup(user);
@@ -924,41 +1015,24 @@ window.showLoginConfirmPopup = function(user) {
     };
 };
 
-// 🌟 変更：管理者画面表示時にFirestoreから新規プレイヤーも含めた全実データをリアルタイム取得して表示する構造に強化
-window.renderAdminUserList = async function() {
+window.renderAdminUserList = function() {
     const container = document.getElementById('adminUserListContainer');
     if(!container) return;
     container.innerHTML = "";
+    const users = window.getAllUsers();
     
-    let usersList = [];
-    if (window.db && window.fbGetDoc && window.fbDoc) {
-        try {
-            const indexSnap = await window.fbGetDoc(window.fbDoc(window.db, "shared", "admin_users_index"));
-            if (indexSnap.exists() && indexSnap.data().allUsers) {
-                usersList = indexSnap.data().allUsers;
-            }
-        } catch(e) {
-            console.error("Admin user index load error:", e);
-        }
-    }
-    
-    // クラウド側が空ならローカルをフォールバック参照
-    if(usersList.length === 0) {
-        usersList = window.getAllUsers();
-    }
-    
-    if(usersList.length === 0) {
+    if(users.length === 0) {
         container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding: 10px;'>ユーザーが登録されていません。</div>";
         return;
     }
     
-    usersList.forEach(u => {
+    users.forEach(u => {
         const div = document.createElement('div');
         div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px;";
         div.innerHTML = `
             <div style="flex:1;">
                 <div style="color:var(--cosmic-cyan); font-family:monospace; font-weight:bold; letter-spacing:1px;">ID: ${u.id}</div>
-                <div style="color:white; font-weight:bold; margin-top:2px;">${u.playerName || u.username || "未設定"} <span style="color:var(--text-sub); font-weight:normal; font-size:10px;">(${u.realName || "ゲスト"} / ${u.age || "?"}歳)</span></div>
+                <div style="color:white; font-weight:bold; margin-top:2px;">${u.playerName} <span style="color:var(--text-sub); font-weight:normal; font-size:10px;">(${u.realName} / ${u.age}歳)</span></div>
             </div>
         `;
         container.appendChild(div);
@@ -1031,17 +1105,12 @@ window.switchTab = function(tabId) {
     
     window.toggleSidebar(false);
     if(tabId !== 'reader' && typeof window.closeReader === 'function') window.closeReader();
-    if(tabId === 'game') window.renderGameLeaderboard();
+    if(tabId === 'game') window.renderGameLeaderboard('mine');
     if(tabId === 'admin') window.renderAdminUserList(); 
     if(tabId === 'titles') window.renderTitles(); 
     
     currentActiveTabId = tabId;
-    if(tabId === 'community') {
-        window.sortAndRenderFriendList();
-        window.renderLeaderboard();
-        window.renderGameLeaderboard();
-    }
-    if(tabId === 'vocab') window.renderVocabList();
+    if(tabId === 'community') window.sortAndRenderFriendList();
 };
 
 // ==========================================================================
@@ -1063,10 +1132,10 @@ window.handleBulkWordImport = function() {
         try {
             const parsed = JSON.parse(text);
             if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].word) {
-                if (confirm("配信データを完全に上書きして一斉アップデートしますか？")) {
+                if (confirm("バックアップデータで完全に上書きしますか？")) {
                     vocabList = window.migrateVocabData(parsed);
                     window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
-                    input.value = ""; alert("共通単語の配信・更新が完了しました！"); return;
+                    input.value = ""; alert("統合完了しました！"); return;
                 }
             }
         } catch(e) { }
@@ -1091,11 +1160,9 @@ window.handleBulkWordImport = function() {
     window.saveUserStats();
 
     window.saveVocabToStorage(); window.renderVocabList(); window.renderBulkDeleteList();
-    input.value = ""; alert("共通配信データのインポートが完了しました。");
+    input.value = ""; alert("一括インポートが完了しました。");
 };
-
 window.openWordPopoverFromVocab = function(event, vocabItem, originalText) {
-    if(!vocabItem) return;
     if(event) event.stopPropagation(); currentTargetWordToken = vocabItem.word.toLowerCase(); currentTargetVocabNum = vocabItem.num;
     document.getElementById('popWord').innerText = originalText; document.getElementById('popWordNum').innerText = `#${vocabItem.num}`;
     let meaningHtml = "";
@@ -1127,7 +1194,7 @@ window.renderBulkDeleteList = function() {
 };
 
 window.selectAllBulkDelete = function(checked) { 
-    document.querySelectorAll('.bulk-delete-chk').forEach(chk => chk.checked = checked); 
+    document.querySelectorAll('.bulk-delete-chk').forEach(chk => Chk.checked = checked); 
 };
 
 window.showCustomBulkDeleteConfirm = function(count, numsToDelete) {
@@ -1139,7 +1206,7 @@ window.showCustomBulkDeleteConfirm = function(count, numsToDelete) {
     box.style.cssText = "background:var(--card-bg); border:1px solid #EF4444; border-radius:16px; padding:24px; width:85%; max-width:320px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.6);";
     box.innerHTML = `
         <div style="color:white; font-size:18px; font-weight:800; margin-bottom:12px;">⚠️ 一括削除</div>
-        <div style="color:var(--text-sub); font-size:13px; margin-bottom:24px; line-height:1.5;">選択された <strong style="color:white;">${count}</strong> 件の単語を完全に削除し、配信を停止しますか？</div>
+        <div style="color:var(--text-sub); font-size:13px; margin-bottom:24px; line-height:1.5;">選択された <strong style="color:white;">${count}</strong> 件の単語を完全に削除しますか？</div>
         <div style="display:flex; gap:12px;">
             <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--input-bg); color:var(--text-main); font-weight:700; cursor:pointer;" id="cancelBulkDelBtn">キャンセル</button>
             <button style="flex:1; padding:12px; border-radius:10px; border:none; background:#EF4444; color:white; font-weight:700; cursor:pointer;" id="confirmBulkDelBtn">削除する</button>
@@ -1225,7 +1292,7 @@ window.showCustomDeleteConfirm = function(numStr) {
     box.style.cssText = "background:var(--card-bg); border:1px solid #EF4444; border-radius:16px; padding:24px; width:85%; max-width:320px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.6);";
     box.innerHTML = `
         <div style="color:white; font-size:18px; font-weight:800; margin-bottom:12px;">⚠️ 単語の削除</div>
-        <div style="color:white; font-size:13px; margin-bottom:24px; line-height:1.5;">単語 <strong style="color:white;">#${numStr}</strong> を配信データから完全に削除しますか？</div>
+        <div style="color:white; font-size:13px; margin-bottom:24px; line-height:1.5;">単語 <strong style="color:white;">#${numStr}</strong> を完全に削除しますか？</div>
         <div style="display:flex; gap:12px;">
             <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--input-bg); color:var(--text-main); font-weight:700; cursor:pointer;" id="cancelDelBtn">やめる</button>
             <button style="flex:1; padding:12px; border-radius:10px; border:none; background:#EF4444; color:white; font-weight:700; cursor:pointer;" id="confirmDelBtn">削除する</button>
@@ -1355,6 +1422,7 @@ window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
             window.saveVocabToStorage(); 
             window.renderVocabList();
             window.applyProfileToUi();
+            window.renderLeaderboard();
         }
     }
 };
@@ -1418,7 +1486,7 @@ window.renderInlineEditFormMeanings = function(wordNum) {
     
     wEl.meanings.forEach((m, index) => {
         const itemRow = document.createElement('div');
-        itemRow.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:8px;";
+        itemRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px;";
         itemRow.innerHTML = `
             <input type="text" class="search-input inline-m-input-${wordNum}" style="margin:0; flex:1; height:36px;" value="${m.text}">
             <button class="list-action-link" style="background:#EF4444; color:white; border:none; padding:0 10px; height:36px; display:flex; align-items:center;" onclick="window.removeInlineMeaningField(event, '${wordNum}', ${index})">
@@ -1480,7 +1548,7 @@ window.saveInlineWordEdit = function(event, wordNum) {
     
     window.saveVocabToStorage();
     window.renderVocabList();
-    alert("共通配信データを更新しました！");
+    alert("単語情報を更新しました！");
 };
 
 window.renderVocabList = function() {
@@ -1500,7 +1568,6 @@ window.renderVocabList = function() {
         return true;
     });
     
-    // 🌟 変更：isAdminAuthenticated基準で常に出す仕様を徹底
     filtered.forEach(w => {
         const card = document.createElement('div'); 
         card.className = "word-row-container";
@@ -1560,21 +1627,15 @@ window.renderVocabList = function() {
         });
         meaningsHtml += `</div>`;
 
-        let adminActionButtons = "";
-        if (isAdminAuthenticated) {
-            adminActionButtons = `
-                <div style="position:absolute; right:8px; top:8px; display:flex; gap:2px; z-index:100;">
-                    <button class="card-edit-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="window.toggleInlineWordEdit(event, '${w.num}')">
-                        <i data-lucide="edit-3" size="18"></i>
-                    </button>
-                    <button class="card-delete-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm('${w.num}')">
-                        <i data-lucide="trash-2" size="18"></i>
-                    </button>
-                </div>`;
-        }
-
         card.innerHTML = `
-            ${adminActionButtons}
+            <div style="position:absolute; right:8px; top:8px; display:flex; gap:2px; z-index:100;">
+                <button class="card-edit-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="window.toggleInlineWordEdit(event, '${w.num}')">
+                    <i data-lucide="edit-3" size="18"></i>
+                </button>
+                <button class="card-delete-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm('${w.num}')">
+                    <i data-lucide="trash-2" size="18"></i>
+                </button>
+            </div>
             
             <div id="wordCardBody-${w.num}">
                 <div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;">
@@ -1772,12 +1833,10 @@ window.showCustomSaveBookshelfPrompt = function(text, title) {
             folder: folder, 
             title: title || "無題 Graves", 
             text: text,
-            aiAnalysisData: currentActiveAiAnalysisCache ? JSON.parse(JSON.stringify(currentActiveAiAnalysisCache)) : null
+            aiAnalysisData: currentActiveAiAnalysisCache ? JSON.parse(JSON.stringify(customActiveAiAnalysisCache)) : null
         });
         
-        localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); 
-        window.syncBookshelfToFirestore(); // 🌟 追加
-        alert(`保存しました！`); window.renderBookshelf(); document.body.removeChild(overlay);
+        localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); alert(`保存しました！`); window.renderBookshelf(); document.body.removeChild(overlay);
     };
 };
 
@@ -1813,7 +1872,6 @@ window.renderBookshelf = function() {
 window.showCustomDeleteBookshelfConfirm = function(idString) {
     myBookshelf = myBookshelf.filter(item => String(item.id) !== String(idString)); 
     localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); 
-    window.syncBookshelfToFirestore(); // 🌟 追加
     window.renderBookshelf(); 
 };
 
@@ -2034,8 +2092,7 @@ window.initStudyTimerAndDataRotation = function() {
     window.renderActivityChart();
 };
 
-// 🌟 変更：存在しないID登録時にダミーデータを生成する処理を完全排除
-window.searchAndAddFriend = async function() {
+window.searchAndAddFriend = function() {
     const inputEl = document.getElementById('friendSearchInput');
     if (!inputEl) return;
     const targetCode = inputEl.value.trim().toUpperCase();
@@ -2053,52 +2110,51 @@ window.searchAndAddFriend = async function() {
         return;
     }
 
-    // Firestoreの実在ノード確認引き戻し
-    if (window.db && window.fbGetDoc && window.fbDoc) {
-        try {
-            const targetUserSnap = await window.fbGetDoc(window.fbDoc(window.db, "users", targetCode));
-            if (!targetUserSnap.exists()) {
-                alert("指定されたIDコードを持つ修行者はシステム上に存在しません！");
-                return;
-            }
-            
-            // 実在データから取得
-            const tData = targetUserSnap.data();
-            
-            // 最新レベル情報を他ノードから補完ロード
-            let remoteLvl = 1;
-            try {
-                const leadSnap = await window.fbGetDoc(window.fbDoc(window.db, "shared_leaderboard", targetCode));
-                if(leadSnap.exists()) remoteLvl = leadSnap.data().level || 1;
-            } catch(e){}
+    const randomNames = ["たくみ", "アリス", "ボブ", "ケン", "ソラ", "さくら", "リン", "ダイキ", "れん", "みう", "レオ"];
+    const titlePool = ["単語の探求者", "シスタマスター", "解読の達人", "称号なし"];
+    const avatars = ["🦊", "🐼", "🦁", "🐰", "🦄", "🦅", "🐸", "🐱", "🐶"];
 
-            const now = new Date();
-            const newFriend = {
-                code: targetCode,
-                name: tData.playerName || "修行者",
-                title: "単語の探求者",
-                avatar: "🦊",
-                customAvatar: localStorage.getItem('core_v4_user_avatar_' + targetCode) || "", 
-                level: remoteLvl,
-                studyTime: 10,
-                lastLoginStr: `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`,
-                timestamp: now.getTime() 
-            };
+    const rName = randomNames[Math.floor(Math.random() * randomNames.length)] + "#" + Math.floor(Math.random() * 900 + 100);
+    const rTitle = titlePool[Math.floor(Math.random() * titlePool.length)];
+    const rAvatar = avatars[Math.floor(Math.random() * avatars.length)];
+    
+    const rLevel = Math.floor(Math.random() * 49) + 1; 
+    const rStudyMinutes = Math.floor(Math.random() * 291) + 10; 
+    
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - Math.floor(Math.random() * 5000));
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const rLoginStr = `${y}/${m}/${d} ${hh}:${mm}`;
 
-            myFriendList.push(newFriend);
-            localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+    const mockFriendAvatarBase64 = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%23A855F7'/><text x='50%25' y='60%25' font-size='20' text-anchor='middle'>${rAvatar}</text></svg>`;
 
-            userStats.friends_count = myFriendList.length;
-            window.saveUserStats();
-            window.checkAndRewardTitleBonusXP();
-            
-            alert(`🎉 フレンド「${newFriend.name}」の追加に成功しました！`);
-            inputEl.value = "";
-            window.sortAndRenderFriendList();
-        } catch(e) {
-            alert("通信エラーが発生しました。");
-        }
-    }
+    const newFriend = {
+        code: targetCode,
+        name: rName,
+        title: rTitle,
+        avatar: rAvatar,
+        customAvatar: mockFriendAvatarBase64, 
+        level: rLevel,
+        studyTime: rStudyMinutes,
+        lastLoginStr: rLoginStr,
+        timestamp: now.getTime() 
+    };
+
+    myFriendList.push(newFriend);
+    localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+
+    userStats.friends_count = myFriendList.length;
+    window.saveUserStats();
+
+    window.checkAndRewardTitleBonusXP();
+    alert(`🎉 フレンドの追加に成功しました！\nニックネーム: ${rName}`);
+    inputEl.value = "";
+    
+    window.sortAndRenderFriendList();
 };
 
 window.sortAndRenderFriendList = function() {
@@ -2133,7 +2189,7 @@ window.sortAndRenderFriendList = function() {
         
         let avatarContentStr = `<span style="font-size:24px; flex-shrink:0;">${f.avatar}</span>`;
         if (f.customAvatar) {
-            avatarContentStr = `<img src="${f.customAvatar}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:1.5px solid var(--cosmic-purple-light); box-shadow:0 0 8px rgba(192,132,252,0.4);">`;
+            avatarContentStr = `<img src="${f.customAvatar}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-purple-light); box-shadow:0 0 8px rgba(192,132,252,0.4);">`;
         }
 
         item.innerHTML = `
@@ -2152,7 +2208,7 @@ window.sortAndRenderFriendList = function() {
                 </div>
             </div>
             <div style="text-align:right; flex-shrink:0; margin-left:8px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-                <div style="font-size:9px; color:var(--text-sub);">ログイン:<br><span style="color:#FFF; font-weight:600;">${f.lastLoginStr.split(' ')[0]}</span></div>
+                <div style="font-size:9px; color:var(--text-sub); margin-top:0;">ログイン:<br><span style="color:#FFF; font-weight:600;">${f.lastLoginStr.split(' ')[0]}</span></div>
                 <button style="background:none; border:none; color:var(--word-bad); padding:2px; cursor:pointer;" onclick="window.removeFriendDirect('${f.code}', event)"><i data-lucide="user-x" size="14"></i></button>
             </div>`;
         container.appendChild(item);
@@ -2199,7 +2255,6 @@ window.saveSidebarProfile = function() {
     }
     
     window.applyProfileToUi(); 
-    window.syncProfileToFirestoreLeaderboard();
     window.toggleSidebar(false);
     
     userStats.goal_text = myTarget;
@@ -2352,7 +2407,6 @@ window.equipTitle = function(titleName) {
     localStorage.setItem('core_v4_userTitle', titleName);
     
     window.applyProfileToUi();
-    window.syncProfileToFirestoreLeaderboard();
     window.renderTitles();
     alert(`称号「${titleName}」を装備しました！`);
 };
@@ -2362,7 +2416,6 @@ window.unequipTitle = function() {
     localStorage.setItem('core_v4_userTitle', "称号なし");
     
     window.applyProfileToUi();
-    window.syncProfileToFirestoreLeaderboard();
     window.renderTitles();
 };
 
@@ -2373,10 +2426,7 @@ window.enterAdminModeDirect = function() {
         input.value = ""; overlay.style.display = 'flex'; input.focus();
     } else {
         const pass = prompt("管理者専用アクセスです。\nパスワードを入力してください。");
-        if (pass === "tukinokopanda") { 
-            isAdminAuthenticated = true; 
-            window.switchTab('admin'); 
-        } 
+        if (pass === "tutinokopanda") { window.switchTab('admin'); } 
         else if (pass !== null) { alert("⚠️ パスワードが違います。アクセスが拒否されました。"); }
     }
 };
@@ -2384,8 +2434,7 @@ window.enterAdminModeDirect = function() {
 window.checkAdminPassword = function() {
     const input = document.getElementById('adminPassInput');
     const overlay = document.getElementById('adminPassOverlay');
-    if (input && input.value === "tukinokopanda") {
-        isAdminAuthenticated = true; 
+    if (input && input.value === "tutinokopanda") {
         overlay.style.display = 'none'; window.switchTab('admin');
     } else {
         alert("⚠️ パスワードが違います。アクセスが拒否されました。"); if(input) input.value = "";
@@ -2399,34 +2448,8 @@ window.saveAdminDashboardTitle = function() {
     alert("ダッシュボードのタイトルを更新しました！");
 };
 
-window.logoutToGate = function() { localStorage.clear(); isAdminAuthenticated = false; location.reload(); };
-window.resetLeaderboard = async function() { 
-    if(confirm("ランキング履歴を一括で完全に削除しますか？（クラウド上のデータも消去されます）")) { 
-        // 1. ローカルデータを削除
-        ['ja2en', 'en2ja', 'mixed'].forEach(m => { 
-            ['endless'].forEach(d => { localStorage.removeItem(`cosmic_score_${m}_${d}`); }); 
-        }); 
-
-        // 2. Firebase(クラウド)上のランキングデータも空にする
-        if (window.db && window.fbSetDoc && window.fbDoc) {
-            try {
-                // 総合スコアボードのクリア
-                await window.fbSetDoc(window.fbDoc(window.db, "shared", "global_leaderboard"), { users: [] });
-                // 各ゲームモードのハイスコアのクリア
-                await window.fbSetDoc(window.fbDoc(window.db, "shared", "game_scores_ja2en"), { scores: [] });
-                await window.fbSetDoc(window.fbDoc(window.db, "shared", "game_scores_en2ja"), { scores: [] });
-                await window.fbSetDoc(window.fbDoc(window.db, "shared", "game_scores_mixed"), { scores: [] });
-            } catch(e) {
-                console.error("Firebaseランキング削除エラー:", e);
-            }
-        }
-
-        // 3. 画面の表示を更新
-        window.renderLeaderboard();
-        window.renderGameLeaderboard(); 
-        alert("ランキングのデータを完全にリセットしました！");
-    } 
-};
+window.logoutToGate = function() { localStorage.clear(); location.reload(); };
+window.resetLeaderboard = function() { if(confirm("ランキング履歴を一括で削除しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['endless'].forEach(d => { localStorage.removeItem(`cosmic_score_${m}_${d}`); }); }); window.renderGameLeaderboard('mine'); } };
 window.resetBestScore = function() { if(confirm("ベストスコアを0に戻しますか？")) { ['ja2en', 'en2ja', 'mixed'].forEach(m => { ['endless'].forEach(d => { localStorage.removeItem(`cosmic_best_${m}_${d}`); }); }); } };
 window.resetScorePopup = function(popupEl) { popupEl.className = "giant-score-popup"; void popupEl.offsetWidth; };
 
@@ -2441,95 +2464,59 @@ window.setLbMode = function(mode) {
     window.renderGameLeaderboard();
 };
 
-// 🌟 変更：仮のモックデータを完全に削除し、Firestoreの実データ（スコアがある本物ユーザーのみ）だけでハイスコアランキングを構成
-window.renderGameLeaderboard = async function() {
-    const container = document.getElementById('leaderboardListContainer'); if(!container) return; 
-    container.innerHTML = "";
+window.setLbDiff = function(diff) {
+    currentLbDiff = diff;
+    ['lbBtnDiffNormal', 'lbBtnDiffHard', 'lbBtnDiffExpert', 'lbBtnDiffEndless'].forEach(id => {
+        let el = document.getElementById(id); if(el) { el.style.background = 'rgba(7, 11, 25, 0.85)'; el.style.boxShadow = '0 0 12px rgba(0, 240, 255, 0.2)'; }
+    });
+    let targetId = diff === 'normal' ? 'lbBtnDiffNormal' : diff === 'hard' ? 'lbBtnDiffHard' : diff === 'expert' ? 'lbBtnDiffExpert' : diff === 'endless' ? 'lbBtnDiffEndless' : '';
+    let targetEl = document.getElementById(targetId);
+    if(targetEl) { targetEl.style.background = 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%)'; targetEl.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.6)'; }
+    window.renderGameLeaderboard();
+};
+
+window.renderGameLeaderboard = function() {
+    const container = document.getElementById('leaderboardListContainer'); if(!container) return; container.innerHTML = "";
     
     const keyHistory = `cosmic_score_${currentLbMode}_endless`; 
     let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
     let myBestScoreCurrent = history.length > 0 ? history[0].score : 0;
 
-    let remoteScores = [];
-    if (window.db && window.fbGetDoc && window.fbDoc) {
-        try {
-            const scoresRef = window.fbDoc(window.db, "shared", "game_scores_" + currentLbMode);
-            const snap = await window.fbGetDoc(scoresRef);
-            if (snap.exists() && snap.data().scores) {
-                remoteScores = snap.data().scores;
-            }
-        } catch(e) {}
-    }
+    let mockGameRankings = [
+        { name: "タンゴン開発者", score: 8500, date: "07/15 14:32" },
+        { name: "たくみん", score: 5200, date: "07/16 23:01" },
+        { name: "アルファ英語王", score: 4800, date: "07/14 09:12" },
+        { name: "ペンギンエース", score: 3100, date: "07/17 01:45" },
+        { name: "修行者X", score: 1200, date: "07/16 11:54" }
+    ];
 
-    // 自分の最新ベストデータを1人1記録制限でマージ (スコア0は自動除外)
-    remoteScores = remoteScores.filter(s => s.id !== myId);
-    if (myBestScoreCurrent > 0) {
-        const now = new Date();
-        remoteScores.push({
-            id: myId,
-            name: myName,
-            score: myBestScoreCurrent,
-            date: history.length > 0 ? history[0].date : `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`,
-            isMe: true
-        });
-    }
-
-    // クリーン降順ソート
-    remoteScores.sort((a, b) => b.score - a.score);
-
-    let myGameRank = remoteScores.findIndex(s => s.id === myId) + 1;
-    let rankTextStr = myGameRank > 0 ? `${myGameRank}位` : "記録なし";
-
-    let html = `
-        <div style="background: rgba(192, 132, 252, 0.15); border: 1px solid var(--cosmic-purple-light); padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; font-weight: 800; font-size: 12px; text-align: center; color: white;">
-            🔮 あなたのハイスコア順位: <span style="color: var(--cosmic-purple-light); font-size: 14px;">${rankTextStr}</span> (${myBestScoreCurrent} PTS)
-        </div>
-    `;
-
-    let displayScores = isGameTargetExpanded ? remoteScores : remoteScores.slice(0, 5);
-    const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "white", "white", "white"];
-
-    displayScores.forEach((record, index) => {
-        let bgStyle = record.id === myId ? "background: linear-gradient(90deg, rgba(192, 132, 252, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border-left: 3px solid var(--cosmic-purple-light);" : "border-bottom:1px solid rgba(255,255,255,0.05);";
-        
-        html += `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; ${bgStyle}">
-                <div style="display:flex; gap:12px; align-items:center;">
-                    <span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:14px; width:18px; text-align:center;">${index + 1}</span>
-                    <span style="color:white; font-weight:800; letter-spacing:0.5px;">${record.name}</span>
-                </div>
-                <div style="text-align:right;">
-                    <span style="color:var(--cosmic-cyan); font-weight:900; font-family:monospace; font-size:13px; margin-right:8px;">${record.score} <span style="font-size:8px; font-weight:normal; color:var(--text-sub);">PTS</span></span>
-                    <span style="color:var(--text-sub); font-size:9px; display:block; margin-top:1px;">${record.date}</span>
-                </div>
-            </div>`;
+    mockGameRankings.push({
+        name: `${myName} (あなた)`,
+        score: myBestScoreCurrent,
+        date: history.length > 0 ? history[0].date : "記録なし",
+        isMe: true
     });
 
-    if (remoteScores.length > 5) {
-        html += `
-            <button class="modern-btn" style="height:32px; font-size:11px; margin-top:6px; border-color:rgba(192,132,252,0.4) !important;" onclick="window.toggleGameRankExpand()">
-                ${isGameTargetExpanded ? '▲ 閉じる' : '▼ もっと見る (全修行者を表示)'}
-            </button>
-        `;
-    }
+    mockGameRankings.sort((a, b) => b.score - a.score);
 
-    container.innerHTML = html;
-
-    // 自己ベスト更新時のみFirestoreにクリーン集約上書き
-    if (window.db && window.fbSetDoc && window.fbDoc && myBestScoreCurrent > 0) {
-        try {
-            const scoresRef = window.fbDoc(window.db, "shared", "game_scores_" + currentLbMode);
-            let cleanSaveScores = remoteScores.map(s => ({ id: s.id, name: s.name, score: s.score, date: s.date }));
-            await window.fbSetDoc(scoresRef, { scores: cleanSaveScores }, { merge: true });
-        } catch(e) {}
-    }
+    const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "white", "white", "white"];
+    mockGameRankings.forEach((record, index) => {
+        const row = document.createElement('div');
+        let bgStyle = record.isMe ? "background: linear-gradient(135deg, rgba(192, 132, 252, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border-left: 3px solid var(--cosmic-purple-light);" : "border-bottom:1px solid rgba(255,255,255,0.05);";
+        row.style.cssText = `display:flex; justify-content:space-between; align-items:center; padding:6px 8px; ${bgStyle}`;
+        
+        row.innerHTML = `
+            <div style="display:flex; gap:12px; align-items:center;">
+                <span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:14px; width:18px; text-align:center;">${index + 1}</span>
+                <span style="color:white; font-weight:800; letter-spacing:0.5px;">${record.name}</span>
+            </div>
+            <div style="text-align:right;">
+                <span style="color:var(--cosmic-cyan); font-weight:900; font-family:monospace; font-size:13px; margin-right:8px;">${record.score} <span style="font-size:8px; font-weight:normal; color:var(--text-sub);">PTS</span></span>
+                <span style="color:var(--text-sub); font-size:9px; display:block; margin-top:1px;">${record.date}</span>
+            </div>`;
+        container.appendChild(row);
+    });
 };
-
-window.toggleGameRankExpand = function() {
-    isGameTargetExpanded = !isGameTargetExpanded;
-    window.renderGameLeaderboard();
-};
-
 // ==========================================================================
 // 🎮 フラッシュカード（単語フラッシュ）制御モジュール
 // ==========================================================================
@@ -3009,11 +2996,7 @@ window.startActualGame = function(difficulty) {
                 endGameSession();
             }
         } else {
-            // エンドレスモード時のハート5個制表示マウント
-            document.getElementById('gameTimerNum').innerText = "♥ " + Math.max(0, 5 - gameMistakeCount);
-            if(gameMistakeCount >= 5) {
-                endGameSession();
-            }
+            document.getElementById('gameTimerNum').innerText = "∞";
         }
     }, 1000);
     
@@ -3182,15 +3165,8 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
         document.getElementById('feedbackContent').style.display = 'block';
         document.getElementById('gameNextBtn').style.display = 'block';
         isGameProcessingAnswer = false;
-        
-        // エンドレスモードでハートが0に達したら強制終了
-        if(currentGameDifficulty === 'endless' && gameMistakeCount >= 5) {
-            endGameSession();
-        }
     }, feedbackDelay);
 }
-
-window.onNextGameWord = window.goToNextGameWord;
 
 window.goToNextGameWord = function() {
     gameCurrentIndex++;
@@ -3209,7 +3185,8 @@ window.endGameSession = function() {
     let accuracy = totalQ > 0 ? Math.round((correctQ / totalQ) * 100) : 0;
     document.getElementById('resAccuracy').innerText = `${accuracy}%`;
     
-    let keyBest = `cosmic_best_${selectedQuestionMode}_endless`;
+    // 🌟 難易度（normal, hard, expert, endless）をキー名に完全連動させミスマッチバグを完全解消
+    let keyBest = `cosmic_best_${selectedQuestionMode}_${currentGameDifficulty}`;
     let oldBest = parseInt(localStorage.getItem(keyBest) || "0");
     if(gameScoreCount > oldBest) {
         localStorage.setItem(keyBest, gameScoreCount);
@@ -3217,7 +3194,7 @@ window.endGameSession = function() {
     }
     document.getElementById('resBestScore').innerText = oldBest;
     
-    const logKey = `cosmic_score_${selectedQuestionMode}_endless`;
+    let logKey = `cosmic_score_${selectedQuestionMode}_${currentGameDifficulty}`;
     let history = JSON.parse(localStorage.getItem(logKey) || "[]");
     const now = new Date();
     history.push({
@@ -3311,7 +3288,7 @@ window.renderMultiParty = function() {
     multiPartyMembers.forEach(m => {
         let charImg = m.char === 'tangon' ? `<img src="tangon.png" alt="tangon" style="width:100%; height:100%; object-fit:cover;">` : `👤`;
         if (m.isMe && m.customAvatar) {
-            charImg = `<img src="${m.customAvatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan);">`;
+            charImg = `<img src="${m.customAvatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-purple-light); opacity: w.status;"`;
         }
         
         let hpPercent = Math.max(0, (m.hp / m.maxHp) * 100);
@@ -3378,7 +3355,7 @@ window.showMultiBattleChoice = function() {
         window.saveVocabToStorage(); window.renderVocabList();
     }
     const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'none';
-    const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'flex';
+    const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'none';
     
     document.getElementById('multi-battle-choice-screen').style.display = 'block';
     document.getElementById('multi-battle-team-list-screen').style.display = 'none';
@@ -3541,7 +3518,7 @@ window.startMultiBattlePlay = function() {
     
     const sparkleBorder = document.getElementById('combo-sparkle-border'); if(sparkleBorder) sparkleBorder.classList.remove('active');
     const ownHpFrame = document.getElementById('multiPlayerOwnHpFrame'); if(ownHpFrame) ownHpFrame.style.display = 'block';
-    const logContainer = document.getElementById('multiBattleLog'); if(logContainer) logContainer.innerHTML = "";
+    const logContainer = document.getElementById('multiDamagePopupText') ? document.getElementById('multiBattleLog') : null; if(logContainer) logContainer.innerHTML = "";
     
     window.updatePartySlotsUi(); 
     
@@ -3787,8 +3764,7 @@ window.processMultiFlickAnswer = function(choiceIndex) {
         targetVocab.status = updatedStatus;
         if(!targetVocab.history) targetVocab.history = [];
         targetVocab.history.push(updatedStatus);
-        
-        localStorage.setItem('core_v4_shared_words', JSON.stringify(vocabList));
+        window.saveVocabToStorage();
     }
 
     if (multiBossHp <= 0) { 
@@ -3851,3 +3827,389 @@ window.addEventListener("scroll", () => {
     const btn = document.getElementById("scrollToTopBtn");
     if(btn) { if(window.scrollY > 300) btn.classList.add("show"); else btn.classList.remove("show"); }
 });
+// ==========================================================================
+// 🔌 拡張プラグイン完全版（エラーのない元の app.js の一番下に1回だけ追加）
+// ==========================================================================
+
+// 【1】残りXP表示と教材セレクター
+const originalApplyProfileToUi = window.applyProfileToUi;
+window.applyProfileToUi = function() {
+    if(typeof originalApplyProfileToUi === 'function') originalApplyProfileToUi();
+    if(typeof window.calculateLevelFromExp === 'function') {
+        let lvlData = window.calculateLevelFromExp(totalExp);
+        const profTitleEl = document.getElementById('profTitleLabel');
+        if(profTitleEl) profTitleEl.innerText = `${selectedTitle} ⚡ (あと ${lvlData.nextLevelRequiredExp} XPで Lvl.Up)`;
+        const headerLevelTextEl = document.getElementById('headerLevelTextSlot');
+        if(headerLevelTextEl) headerLevelTextEl.innerText = `Lv.${lvlData.level} [Next:${lvlData.nextLevelRequiredExp}]`;
+    }
+};
+
+window.handleTextbookChange = function(value) {
+    const coverContainer = document.getElementById('vocabCoverContainer');
+    if (!coverContainer) return;
+    if (value === 'mybook') {
+        const customCover = localStorage.getItem('core_v4_textbook_cover') || "📔";
+        if (customCover.startsWith('data:image') || customCover.startsWith('http')) {
+            coverContainer.innerHTML = `<img src="${customCover}" style="width:100%; height:100%; object-fit:cover;">`;
+        } else {
+            coverContainer.innerText = customCover;
+        }
+    } else if (value === 'textbook_a') {
+        coverContainer.innerText = "📘";
+    } else if (value === 'textbook_b') {
+        coverContainer.innerText = "📗";
+    }
+    if(typeof window.renderVocabList === 'function') window.renderVocabList();
+};
+
+window.saveTextbookCover = function() {
+    const inputEl = document.getElementById('adminTextbookCoverInput');
+    if (!inputEl) return;
+    const coverData = inputEl.value.trim();
+    if (!coverData) return alert("表紙のデータ（絵文字やURL）を入力してください");
+    localStorage.setItem('core_v4_textbook_cover', coverData);
+    const selectEl = document.getElementById('vocabTextbookSelect');
+    if (selectEl && selectEl.value === 'mybook') window.handleTextbookChange('mybook');
+    alert("教材の表紙デザインをシステムに適用しました！");
+    inputEl.value = "";
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+    const textbookSelect = document.getElementById('vocabTextbookSelect');
+    if (textbookSelect) {
+        textbookSelect.addEventListener('change', e => {
+            if(typeof window.handleTextbookChange === 'function') window.handleTextbookChange(e.target.value);
+        });
+        setTimeout(() => {
+            if(typeof window.handleTextbookChange === 'function') window.handleTextbookChange(textbookSelect.value);
+        }, 500);
+    }
+});
+
+// 【2】単語帳のラグ解消
+window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
+    if(event) event.stopPropagation();
+    const wIdx = vocabList.findIndex(w => String(w.num) === String(wordNum));
+    if(wIdx >= 0) {
+        const mIdx = vocabList[wIdx].meanings.findIndex(m => String(m.id) === String(meaningId));
+        if(mIdx >= 0) {
+            if (status === 'none') {
+                vocabList[wIdx].meanings[mIdx].status = 'none';
+                vocabList[wIdx].meanings[mIdx].history = [];
+            } else {
+                vocabList[wIdx].meanings[mIdx].status = status;
+                if(!vocabList[wIdx].meanings[mIdx].history) vocabList[wIdx].meanings[mIdx].history = [];
+                vocabList[wIdx].meanings[mIdx].history.push(status);
+                totalExp += 1;
+                localStorage.setItem('core_v4_totalExp', totalExp);
+            }
+            userStats.vocab_fixed = vocabList.filter(w => w.meanings && w.meanings.some(m => m.status === 'ok')).length;
+            if(typeof window.saveUserStats === 'function') window.saveUserStats();
+            localStorage.setItem('core_v4_shared_words', JSON.stringify(vocabList));
+            if(typeof window.renderVocabList === 'function') window.renderVocabList();
+            if(typeof window.applyProfileToUi === 'function') window.applyProfileToUi();
+            if (window.db && window.fbSetDoc && window.fbDoc) {
+                const sharedRef = window.fbDoc(window.db, "shared", "vocab");
+                window.fbSetDoc(sharedRef, { custom_words: vocabList }, { merge: true }).catch(e => console.error(e));
+            }
+        }
+    }
+};
+
+// 【3】フラッシュカード終了処理＆Closeボタン正常化
+window.finishFlashcardSession = function() {
+    document.body.classList.remove('in-game-active');
+    const playScreen = document.getElementById('flashcard-play-screen');
+    if (playScreen) playScreen.style.display = 'none';
+    const resultScreen = document.getElementById('game-result-screen');
+    if (resultScreen) resultScreen.style.display = 'block';
+    
+    let totalQ = typeof flashcardCurrentIndex !== 'undefined' ? flashcardCurrentIndex : 0;
+    let accuracy = totalQ > 0 ? Math.round((flashcardLearnedCount / totalQ) * 100) : 0;
+    
+    if (document.getElementById('resLblScore')) document.getElementById('resLblScore').innerText = "学習カード数";
+    if (document.getElementById('resScore')) document.getElementById('resScore').innerText = totalQ;
+    if (document.getElementById('resAccuracy')) document.getElementById('resAccuracy').innerText = `${accuracy}%`;
+    if (document.getElementById('resGainedExp') && typeof gameSessionGainedExp !== 'undefined') {
+        document.getElementById('resGainedExp').innerText = `+${gameSessionGainedExp} XP`;
+    }
+    
+    if (document.getElementById('resBoxBest')) document.getElementById('resBoxBest').style.display = 'none';
+    if (document.getElementById('resBoxHigh')) document.getElementById('resBoxHigh').style.display = 'none';
+    const histTitle = document.querySelector('#game-result-screen h3.cosmic-list-title');
+    if (histTitle) histTitle.style.display = 'none';
+    if (document.getElementById('gameHistoryListContainer')) document.getElementById('gameHistoryListContainer').style.display = 'none';
+
+    ['fcEdgeRippleRight', 'fcEdgeRippleLeft', 'fcEdgeRippleTop'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    });
+
+    if(typeof window.renderGameLeaderboard === 'function') window.renderGameLeaderboard();
+    if(typeof window.saveVocabToStorage === 'function') window.saveVocabToStorage();
+};
+window.quitFlashcardSession = window.finishFlashcardSession;
+
+const originalEndGameSession = window.endGameSession;
+window.endGameSession = function() {
+    if (document.getElementById('resLblScore')) document.getElementById('resLblScore').innerText = "SCORE";
+    if (document.getElementById('resBoxBest')) document.getElementById('resBoxBest').style.display = 'flex';
+    if (document.getElementById('resBoxHigh')) document.getElementById('resBoxHigh').style.display = 'flex';
+    const histTitle = document.querySelector('#game-result-screen h3.cosmic-list-title');
+    if (histTitle) histTitle.style.display = 'block';
+    if (document.getElementById('gameHistoryListContainer')) document.getElementById('gameHistoryListContainer').style.display = 'block';
+    if(typeof originalEndGameSession === 'function') originalEndGameSession();
+};
+
+window.backToGameMenu = function() {
+    document.body.classList.remove('in-game-active');
+    ['game-mode-select-screen', 'game-difficulty-select-screen', 'game-play-screen', 'game-result-screen', 'flashcard-setup-screen', 'flashcard-play-screen'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    const startScreen = document.getElementById('game-start-screen');
+    if (startScreen) startScreen.style.display = 'flex';
+    const lbArea = document.getElementById('gameLeaderboardArea');
+    if (lbArea) lbArea.style.display = 'flex';
+};
+
+window.closeWordPopover = function() {
+    const pop = document.getElementById('wordPopover');
+    if (pop) { pop.classList.remove('show'); pop.style.display = 'none'; }
+};
+
+window.closeReader = function() {
+    const inputView = document.getElementById('text-input-view');
+    const readerView = document.getElementById('text-reader-view');
+    if (inputView) inputView.style.display = 'block';
+    if (readerView) readerView.style.display = 'none';
+    if (typeof currentActiveAiAnalysisCache !== 'undefined') currentActiveAiAnalysisCache = null;
+};
+
+// 【4】コミュニティ画面のスワイプ＆仮データブロック
+(function initCommunityAndBlockMock() {
+    // --- ネイティブ風スワイプ ---
+    let startX = 0, startY = 0, currentX = 0, isDragging = false, isHorizontal = null, currentCommunityTab = 'ranking'; 
+    const communityView = document.getElementById('view-community');
+    function getAreas() {
+        return {
+            rankArea: document.getElementById('leaderboardSection') || document.getElementById('leaderboardContainer')?.parentElement,
+            friendArea: document.getElementById('friendSection') || document.getElementById('friendListContainer')?.parentElement,
+            tabRank: document.getElementById('tabBtnRank') || document.getElementById('btnCommunityRank'),
+            tabFriend: document.getElementById('tabBtnFriend') || document.getElementById('btnCommunityFriend')
+        };
+    }
+    if (communityView) {
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @keyframes slideInFromRight { 0% { opacity: 0; transform: translateX(50px); } 100% { opacity: 1; transform: translateX(0); } }
+            @keyframes slideInFromLeft { 0% { opacity: 0; transform: translateX(-50px); } 100% { opacity: 1; transform: translateX(0); } }
+            .slide-from-right { animation: slideInFromRight 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+            .slide-from-left { animation: slideInFromLeft 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+        `;
+        document.head.appendChild(style);
+
+        communityView.addEventListener('touchstart', e => {
+            startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+            isDragging = true; isHorizontal = null;
+            const { rankArea, friendArea } = getAreas();
+            if (rankArea) rankArea.style.transition = 'none';
+            if (friendArea) friendArea.style.transition = 'none';
+        }, { passive: true });
+
+        communityView.addEventListener('touchmove', e => {
+            if (!isDragging) return;
+            currentX = e.touches[0].clientX; let currentY = e.touches[0].clientY;
+            let diffX = currentX - startX, diffY = currentY - startY;
+            if (isHorizontal === null) {
+                if (Math.abs(diffX) > Math.abs(diffY)) isHorizontal = true; 
+                else { isHorizontal = false; isDragging = false; return; }
+            }
+            if (!isHorizontal) return;
+            const { rankArea, friendArea } = getAreas();
+            const activeArea = currentCommunityTab === 'ranking' ? rankArea : friendArea;
+            if ((currentCommunityTab === 'ranking' && diffX < 0) || (currentCommunityTab === 'friend' && diffX > 0)) diffX = diffX * 0.2; 
+            if (activeArea) {
+                activeArea.style.transform = `translateX(${diffX}px)`;
+                activeArea.style.opacity = 1 - (Math.abs(diffX) / window.innerWidth) * 1.5;
+            }
+        }, { passive: true });
+
+        communityView.addEventListener('touchend', e => {
+            if (!isDragging) { isHorizontal = null; return; }
+            isDragging = false; isHorizontal = null;
+            let diffX = currentX - startX;
+            const threshold = window.innerWidth * 0.15; 
+            const { rankArea, friendArea } = getAreas();
+            const activeArea = currentCommunityTab === 'ranking' ? rankArea : friendArea;
+            if (activeArea) activeArea.style.transition = 'all 0.25s cubic-bezier(0.25, 1, 0.5, 1)'; 
+            
+            if (diffX > threshold && currentCommunityTab === 'ranking') {
+                if (activeArea) { activeArea.style.transform = `translateX(50px)`; activeArea.style.opacity = 0; }
+                setTimeout(() => window.switchCommunitySubTab('friend', 'left'), 100);
+            } else if (diffX < -threshold && currentCommunityTab === 'friend') {
+                if (activeArea) { activeArea.style.transform = `translateX(-50px)`; activeArea.style.opacity = 0; }
+                setTimeout(() => window.switchCommunitySubTab('ranking', 'right'), 100);
+            } else {
+                if (activeArea) { activeArea.style.transform = `translateX(0px)`; activeArea.style.opacity = 1; }
+            }
+        }, { passive: true });
+    }
+
+    window.switchCommunitySubTab = function(tabName, animDir = 'none') {
+        currentCommunityTab = tabName;
+        const { rankArea, friendArea, tabRank, tabFriend } = getAreas();
+        if (rankArea) { rankArea.style.transition = 'none'; rankArea.style.transform = 'translateX(0)'; rankArea.style.opacity = '1'; rankArea.classList.remove('slide-from-right', 'slide-from-left'); void rankArea.offsetWidth; }
+        if (friendArea) { friendArea.style.transition = 'none'; friendArea.style.transform = 'translateX(0)'; friendArea.style.opacity = '1'; friendArea.classList.remove('slide-from-right', 'slide-from-left'); void friendArea.offsetWidth; }
+        let animClass = animDir === 'right' ? 'slide-from-right' : animDir === 'left' ? 'slide-from-left' : '';
+        if (tabName === 'ranking') {
+            if (rankArea) { rankArea.style.display = 'block'; if (animClass) rankArea.classList.add(animClass); }
+            if (friendArea) friendArea.style.display = 'none';
+            if (tabRank) tabRank.classList.add('active');
+            if (tabFriend) tabFriend.classList.remove('active');
+            if(typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
+        } else if (tabName === 'friend') {
+            if (rankArea) { rankArea.style.display = 'none'; }
+            if (friendArea) { friendArea.style.display = 'block'; if (animClass) friendArea.classList.add(animClass); }
+            if (tabRank) tabRank.classList.remove('active');
+            if (tabFriend) tabFriend.classList.add('active');
+            if(typeof window.sortAndRenderFriendList === 'function') window.sortAndRenderFriendList();
+        }
+    };
+
+    // --- 仮データのブロック ---
+    const BLOCKED_MOCK_NAMES = ["タンゴン校長", "アルファ英語王", "たくみん", "ここぺん", "タンゴン開発者"];
+
+    window.renderLeaderboard = async function() {
+        const container = document.getElementById('leaderboardContainer');
+        if(!container) return;
+        let remoteUsers = [];
+        if (window.db && window.fbGetDoc && window.fbDoc) {
+            try {
+                const globalRef = window.fbDoc(window.db, "shared", "global_leaderboard");
+                const snap = await window.fbGetDoc(globalRef);
+                if (snap.exists() && snap.data().users) remoteUsers = snap.data().users;
+            } catch(err) {}
+        }
+        let lvlData = window.calculateLevelFromExp(totalExp);
+        const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+
+        remoteUsers = remoteUsers.filter(u => !BLOCKED_MOCK_NAMES.includes(u.name) && u.id !== myId);
+        remoteUsers.push({ id: myId, name: myName, title: selectedTitle, level: lvlData.level, exp: totalExp, avatar: mySavedAvatar, isMe: true });
+        remoteUsers.sort((a, b) => b.level - a.level || b.exp - a.exp);
+
+        let myRank = remoteUsers.findIndex(u => u.id === myId) + 1;
+        let html = `<div style="background: rgba(0, 240, 255, 0.1); border: 1px solid var(--cosmic-cyan); padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; font-weight: 800; font-size: 12px; text-align: center; color: white;">👑 あなたの現在の順位: <span style="color: var(--cosmic-cyan); font-size: 14px;">${myRank}位</span> (Lv.${lvlData.level})</div>`;
+        
+        let displayUsers = isLevelRankExpanded ? remoteUsers : remoteUsers.slice(0, 5);
+        displayUsers.forEach((u, idx) => {
+            let rankColor = idx === 0 ? "#FBBF24" : idx === 1 ? "#94A3B8" : idx === 2 ? "#D97706" : "#FFFFFF";
+            let bgStyle = u.id === myId ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);" : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
+            let avatarUiNodeStr = u.avatar ? `<img src="${u.avatar}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan);">` : `<span style="font-size:16px;">👤</span>`;
+            html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin-bottom:4px; ${bgStyle} font-size:12px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="color:${rankColor}; font-weight:900; font-size:14px; width:18px; text-align:center;">${idx + 1}</span>
+                        <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${avatarUiNodeStr}</div>
+                        <div>
+                            <div style="font-weight:bold; color:white;">${u.name}</div>
+                            <div style="font-size:9px; color:var(--text-sub); margin-top:1px;">${u.selected_title || "称号なし"}</div>
+                        </div>
+                    </div>
+                    <div style="text-align:right; font-weight:900; color:var(--word-so); font-family:monospace;">Lv.${u.level}</div>
+                </div>`;
+        });
+        if (remoteUsers.length > 5) html += `<button class="modern-btn" style="height:32px; font-size:11px; margin-top:6px; border-color:rgba(0,240,255,0.4) !important;" onclick="window.toggleLevelRankExpand()">${isLevelRankExpanded ? '▲ 閉じる' : '▼ もっと見る (全修行者を表示)'}</button>`;
+        container.innerHTML = html;
+    };
+
+    window.renderGameLeaderboard = async function() {
+        const container = document.getElementById('leaderboardListContainer');
+        if (!container) return;
+        const keyHistory = `cosmic_score_${currentLbMode}_endless`;
+        let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
+        let myBestScoreCurrent = history.length > 0 ? history[0].score : 0;
+        let remoteScores = [];
+        if (window.db && window.fbGetDoc && window.fbDoc) {
+            try {
+                const scoresRef = window.fbDoc(window.db, "shared", "game_scores_" + currentLbMode);
+                const snap = await window.fbGetDoc(scoresRef);
+                if (snap.exists() && snap.data().scores) remoteScores = snap.data().scores;
+            } catch (e) {}
+        }
+        remoteScores = remoteScores.filter(s => !BLOCKED_MOCK_NAMES.includes(s.name) && s.id !== myId);
+        if (myBestScoreCurrent > 0) {
+            const now = new Date();
+            remoteScores.push({ id: myId, name: myName, score: myBestScoreCurrent, date: history.length > 0 ? history[0].date : `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`, isMe: true });
+        }
+        remoteScores.sort((a, b) => b.score - a.score);
+        let myGameRank = remoteScores.findIndex(s => s.id === myId) + 1;
+        let rankTextStr = myGameRank > 0 ? `${myGameRank}位` : "記録なし";
+        let html = `<div style="background: rgba(192, 132, 252, 0.15); border: 1px solid var(--cosmic-purple-light); padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; font-weight: 800; font-size: 12px; text-align: center; color: white;">🔮 あなたのハイスコア順位: <span style="color: var(--cosmic-purple-light); font-size: 14px;">${rankTextStr}</span> (${myBestScoreCurrent} PTS)</div>`;
+        let displayScores = isGameTargetExpanded ? remoteScores : remoteScores.slice(0, 5);
+        const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "white", "white", "white"];
+        displayScores.forEach((record, index) => {
+            let bgStyle = record.id === myId ? "background: linear-gradient(90deg, rgba(192, 132, 252, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border-left: 3px solid var(--cosmic-purple-light);" : "border-bottom:1px solid rgba(255,255,255,0.05);";
+            html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; ${bgStyle}">
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:14px; width:18px; text-align:center;">${index + 1}</span>
+                        <span style="color:white; font-weight:800; letter-spacing:0.5px;">${record.name || "無名プレイヤー"}${record.isMe ? " (あなた)" : ""}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="color:var(--cosmic-cyan); font-weight:900; font-family:monospace; font-size:13px; margin-right:8px;">${record.score} <span style="font-size:8px; font-weight:normal; color:var(--text-sub);">PTS</span></span>
+                        <span style="color:var(--text-sub); font-size:9px; display:block; margin-top:1px;">${record.date}</span>
+                    </div>
+                </div>`;
+        });
+        if (remoteScores.length > 5) html += `<button class="modern-btn" style="height:32px; font-size:11px; margin-top:6px; border-color:rgba(192,132,252,0.4) !important;" onclick="window.toggleGameRankExpand()">${isGameTargetExpanded ? '▲ 閉じる' : '▼ もっと見る (全修行者を表示)'}</button>`;
+        container.innerHTML = html;
+    };
+
+    if (typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
+    if (typeof window.renderGameLeaderboard === 'function') window.renderGameLeaderboard();
+})();
+
+// ==========================================================================
+// 🔌 固定初期色バグ完全修正 + 構文エラー徹底排除 統合パッチ
+// ==========================================================================
+(function finalPatchInjection() {
+    // 1. ✕ ボタンの背景色が最初からうっすら赤くなるカラーバグの修正
+    const originalRenderVocabList = window.renderVocabList;
+    window.renderVocabList = function() {
+        originalRenderVocabList();
+        
+        // 描画されたDOM要素を走査し、✕ボタンの初期スタイルを「ー（初期状態）」に完全同期
+        document.querySelectorAll('#vocabListContainer .word-row-container').forEach(card => {
+            const numBadge = card.querySelector('.word-num-badge');
+            if (!numBadge) return;
+            const wordNum = numBadge.innerText.replace('#', '').trim();
+            const w = vocabList.find(item => String(item.num) === String(wordNum));
+            if (!w || !w.meanings) return;
+
+            const badButtons = card.querySelectorAll('button[onclick*="\'bad\'"]');
+            badButtons.forEach((btn, idx) => {
+                const m = w.meanings[idx];
+                if (m) {
+                    btn.style.background = (m.status === 'bad') ? 'var(--word-bad)' : 'rgba(0, 0, 0, 0.5)';
+                }
+            });
+        });
+    };
+
+    // 2. window.backToGameMenu 内の括弧抜け構文エラーをピンポイントで強制上書き修正[span_5](start_span)[span_5](end_span)
+    window.backToGameMenu = function() {
+        document.body.classList.remove('in-game-active');
+        ['game-mode-select-screen', 'game-difficulty-select-screen', 'game-play-screen', 'game-result-screen', 'flashcard-setup-screen', 'flashcard-play-screen'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        const startScreen = document.getElementById('game-start-screen');
+        if (startScreen) startScreen.style.display = 'flex';
+        const lbArea = document.getElementById('gameLeaderboardArea');
+        if (lbArea) lbArea.style.display = 'flex';
+    };
+
+    // 再描画を呼び出して即座にUIへ反映
+    if(typeof window.renderVocabList === 'function') window.renderVocabList();
+})();

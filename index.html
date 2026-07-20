@@ -15,6 +15,14 @@
 
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="style.css">
+    
+    <!-- 🔌 インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
+    <style>
+        #view-community.active {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+        }
+    </style>
 </head>
 <body>
 
@@ -227,7 +235,6 @@
                 </div>
             </div>
 
-            <!-- 🛠️ 修正：独自の開閉文字切り替えシステムを持つ独立したアコーディオンカード構造 -->
             <h2><i data-lucide="help-circle" size="14"></i> システムガイド ＆ 規約</h2>
             
             <div class="card" style="padding: 6px; margin-bottom: 8px;">
@@ -238,7 +245,7 @@
                     本アプリは、ユーザーの皆様が安全かつ効果的に英語学習および単語テストを行えるよう開発されたシステムです。<br><br>
                     <strong>【データ管理・将来のストレージ同期について】</strong><br>
                     入力・登録された単語データや学習履歴は、現在はブラウザ内（ローカルストレージ）にのみ保管されます。システムデータがある程度完成した段階で、将来的には外部クラウドストレージ等へ安全にデータを同期・保存・移行できるアカウント同期システムを構築する予定です。<br><br>
-                    <strong>【APIキーの管理】</strong><br>ユーザー自身が設定したGemini APIキーは、本アプリの外部サーバーに送信・蓄積されることは一切なく、ブラウザから直接GoogleのAIモデルへ暗号化通信されます。管理は自己責任において行うものとします。
+                    <strong>【APIキーの管理】</strong><br>ユーザー自身が設定したGemini AI APIキーは、本アプリの外部サーバーに送信・蓄積されることは一切なく、ブラウザから直接GoogleのAIモデルへ暗号化通信されます。管理は自己責任において行うものとします。
                 </div>
             </div>
 
@@ -268,8 +275,43 @@
         </div>
 
         <div id="view-vocab" class="tab-view">
+            <div class="card" id="bulkImportToggleSection" style="display: none; border-top: 2px solid var(--accent);">
+                <h2><i data-lucide="file-spreadsheet" size="14"></i> 単語を一括登録・インポートする</h2>
+                <textarea id="bulkWordInput" class="modern-textarea" style="height: 100px;" placeholder="番号:英単語:メイン意味:サブ情報&#10;例:&#10;1:follow:①〜に従う②〜に続く:as follow 次のように..."></textarea>
+                
+                <button class="modern-btn" onclick="handleBulkWordImport()">
+                    まとめて登録
+                </button>
+
+                <h2 style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; color: var(--admin-accent);">
+                    <i data-lucide="check-square" size="14"></i> 登録単語の一括管理
+                </h2>
+                <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+                    <button class="list-action-link" onclick="selectAllBulkDelete(true)">すべて選択</button>
+                    <button class="list-action-link" onclick="selectAllBulkDelete(false)">解除</button>
+                    
+                    <div style="margin-left: auto; display: flex; gap: 8px;">
+                        <button class="list-action-link" style="background: rgba(16, 185, 129, 0.2); color: #10B981; border-color: #10B981;" onclick="handleBulkResetExecute()">
+                            <i data-lucide="rotate-ccw" size="12" style="vertical-align: middle;"></i> 理解度リセット
+                        </button>
+                        <button class="list-action-link" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border-color: #EF4444;" onclick="handleBulkDeleteExecute()">
+                            <i data-lucide="trash-2" size="12" style="vertical-align: middle;"></i> 削除
+                        </button>
+                    </div>
+                </div>
+                <div id="bulkDeleteListContainer" style="max-height: 200px; overflow-y: auto; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--border); padding: 8px;"></div>
+            </div>
+
+            <!-- 🔄 複数単語帳（教材）切り替え機能マウント用レイアウト変更領域 -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h2 style="margin-bottom: 0;"><i data-lucide="layers" size="14"></i> 単語コレクション</h2>
+                <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="window.openTextbookSelectPopup()">
+                    <div id="vocabCoverContainer" style="width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); font-size:20px; overflow:hidden;">📔</div>
+                    <div>
+                        <h2 style="margin-bottom:2px; font-size:15px; color:#FFFFFF; display:flex; align-items:center; gap:6px;"><i data-lucide="layers" size="14"></i> <span id="vocabBookTitle">共通英単語100</span></h2>
+                        <span style="font-size:10px; color:var(--cosmic-cyan); font-weight:bold; display:block; margin-top:-2px;">タップして教材を切り替え 🔄</span>
+                    </div>
+                </div>
+                <button class="list-action-link" onclick="toggleBulkImportCard()"><i data-lucide="settings" size="12" style="vertical-align: middle; margin-right:4px;"></i>管理・一括登録</button>
             </div>
 
             <div class="range-box">
@@ -357,6 +399,7 @@
             </div>
         </div>
 
+        <!-- 🌟 インラインの display: flex; 記述を完全に削除し、バグを100%遮断した美しい全画面(fixed)コード -->
         <div id="view-community" class="tab-view" style="position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10; padding: 0 !important;">
             
             <div style="flex: 0 0 100vw; width: 100vw; height: 100%; scroll-snap-align: center; box-sizing: border-box; padding: 20px 16px; overflow-y: auto;">
@@ -469,6 +512,7 @@
                         <div style="text-align:left; margin-bottom:16px;">
                             <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">教材指定</div>
                             <select id="flashcardSourceSelect" class="search-input" style="background:var(--input-bg); color:white; font-weight:600; border-radius:10px; height:40px; padding:0 12px;">
+                                <option value="dictionary" selected>配信データ (1〜100)</option>
                                 <option value="mybook">マイ単語帳 (カスタム登録単語)</option>
                             </select>
                         </div>
@@ -829,7 +873,7 @@
                                     <div id="feedbackOtherAns" class="ans-others" style="margin-top:2px; color:#A5B4FC; font-size:11.5px;">-</div>
                                 </div>
 
-                                <button class="modern-btn" id="gameNextBtn" style="position: absolute; bottom: 12px; right: 12px; height: 36px; width: auto; padding: 0 16px; display:none; border-image: linear-gradient(135deg, #10B981, #34D399) 1 !important; z-index: 10;" onclick="goToNextGameWord()">
+                                <button class="modern-btn" id="gameNextBtn" style="position: absolute; bottom: 12px; right: 12px; height: 36px; width: auto; padding: 0 16px; display:none; border-image: linear-gradient(135deg, #10B981, #34D399) 1 !important; z-index: 10;" onclick="window.goToNextGameWord()">
                                     次の問題へ <i data-lucide="arrow-right" size="14"></i>
                                 </button>
                             </div>
@@ -863,7 +907,7 @@
                         </div>
                         <h3 class="cosmic-list-title"><i data-lucide="list-ordered" size="14"></i> LOG</h3>
                         <div class="cosmic-history-scroll game-cosmic-glow-box" id="gameHistoryListContainer"></div>
-                        <button class="modern-btn" style="margin-top:16px;" onclick="backToGameMenu()">CLOSE</button>
+                        <button class="modern-btn" style="margin-top:16px;" onclick="window.backToGameMenu()">CLOSE</button>
                     </div>
                 </div>
 
@@ -961,40 +1005,61 @@
                     <input type="text" id="adminNoticeInput" class="search-input" placeholder="表示したいお知らせメッセージを入力...">
                     <button class="modern-btn" style="margin-bottom: 24px;" onclick="window.saveAdminSystemSettings()">設定を配信・適用する</button>
                     
-                    <!-- 🛠️ 管理者専用：インポート用パネルセクションを新設 -->
+                    <!-- 🛠️ 統合・超強化版：単語帳・複数教材配下一括編集コントロールパネル -->
                     <h2 style="color:var(--admin-accent); border-top:1px solid var(--border); padding-top:20px; margin-top:20px;">
-                        <i data-lucide="book-open"></i> 📖 単語配信データ一括管理
+                        <i data-lucide="book-open"></i> 📖 教材・単語帳の管理配信システム
                     </h2>
+                    
+                    <div style="background:rgba(255,255,255,0.02); padding:14px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); margin-bottom:16px;">
+                        <label style="font-size:11px; font-weight:700; color:var(--text-sub); display:block; margin-bottom:4px;">対象単語帳の指定（新規 or 既存編集）</label>
+                        <select id="adminEditBookSelect" class="search-input" style="background:var(--input-bg); color:white; margin-bottom:12px;" onchange="window.handleAdminEditSelectChange(this.value)">
+                            <option value="">➕ 新規教材として一斉配信登録</option>
+                        </select>
+                        
+                        <label style="font-size:11px; font-weight:700; color:var(--cosmic-cyan); display:block; margin-bottom:4px;">単語帳の名前</label>
+                        <input type="text" id="adminNewBookTitle" class="search-input" placeholder="例: 歴史の重要単語帳" style="margin-bottom:12px;">
+                        
+                        <label style="font-size:11px; font-weight:700; color:var(--cosmic-purple-light); display:block; margin-bottom:4px;">単語帳の表紙アイコン画像 (Canvas高圧縮ミラー変換)</label>
+                        <input type="file" id="adminBookCoverFileUploader" class="search-input" accept="image/*" style="padding-top:8px; font-size:12px; height:38px; margin-bottom:16px;" onchange="window.handleAdminBookCoverUpload(event)">
+                        
+                        <button class="modern-btn" id="adminBookSubmitBtn" style="background:rgba(192,132,252,0.15) !important;" onclick="window.saveOrUpdateTextbookFromAdmin()">
+                            新規教材として一斉配信登録
+                        </button>
+                    </div>
+
                     <button class="modern-btn" style="border-color:var(--cosmic-cyan) !important; color:var(--cosmic-cyan) !important; margin-bottom: 16px;" onclick="toggleBulkImportCard()">
-                        🛠️ 単語データ一括配信・管理パネルを開く
+                        🛠️ 選択中単語帳の中身を一括登録（インポート）パネル
                     </button>
 
                     <div class="card" id="bulkImportToggleSection" style="display: none; border: 1px solid var(--admin-accent); background:rgba(0,0,0,0.4) !important; padding:14px;">
-                        <h2 style="color:var(--cosmic-cyan);"><i data-lucide="file-spreadsheet" size="14"></i> 共通単語を一括登録・一斉配信する</h2>
-                        <textarea id="bulkWordInput" class="modern-textarea" style="height: 100px;" placeholder="番号:英単語:メイン意味:サブ情報&#10;例:&#10;1:follow:①〜に従う②〜に続く:as follow 次のように..."></textarea>
+                        <h2 style="color:var(--cosmic-cyan);"><i data-lucide="file-spreadsheet" size="14"></i> 選択中教材への中身一括インポート</h2>
+                        <textarea id="bulkWordInput" class="modern-textarea" style="height: 100px;" placeholder="番号:単語:メイン意味:サブ情報&#10;例:&#10;1:follow:①〜に従う②〜に続く:as follow 次のように..."></textarea>
                         
                         <button class="modern-btn" style="background:var(--accent) !important; margin-bottom:16px;" onclick="handleBulkWordImport()">
-                            共通単語を一斉配信登録
+                            この教材に中身をまとめて流し込み登録
                         </button>
 
                         <h2 style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; color: var(--admin-accent);">
-                            <i data-lucide="check-square" size="14"></i> 配信単語の一括削除・管理
+                            <i data-lucide="check-square" size="14"></i> 中身の一括削除・リセット管理
                         </h2>
                         <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
                             <button class="list-action-link" onclick="selectAllBulkDelete(true)">すべて選択</button>
                             <button class="list-action-link" onclick="selectAllBulkDelete(false)">解除</button>
                             
                             <div style="margin-left: auto; display: flex; gap: 8px;">
+                                <button class="list-action-link" style="background: rgba(16, 185, 129, 0.2); color: #10B981; border-color: #10B981;" onclick="handleBulkResetExecute()">
+                                    理解度クリア
+                                </button>
                                 <button class="list-action-link" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border-color: #EF4444;" onclick="handleBulkDeleteExecute()">
-                                    <i data-lucide="trash-2" size="12" style="vertical-align: middle;"></i> 選択単語を削除
+                                    データ削除
                                 </button>
                             </div>
                         </div>
                         <div id="bulkDeleteListContainer" style="max-height: 200px; overflow-y: auto; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--border); padding: 8px;"></div>
                     </div>
 
-                    <label style="font-size:12px; font-weight:700; display:block; margin-top: 24px; margin-bottom:6px; color:#F87171;">⚠️ スコア管理（リreset機能）</label>
-                    <button class="modern-btn" style="margin-bottom: 10px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetLeaderboard()"><i data-lucide="trash-2" size="16"></i> ランキング履歴をリreset</button>
+                    <label style="font-size:12px; font-weight:700; display:block; margin-top: 24px; margin-bottom:6px; color:#F87171;">⚠️ スコア管理（リセット機能）</label>
+                    <button class="modern-btn" style="margin-bottom: 10px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetLeaderboard()"><i data-lucide="trash-2" size="16"></i> ランキング履歴をリセット</button>
                     <button class="modern-btn" style="border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetBestScore()"><i data-lucide="trash-2" size="16"></i> ベストスコアをリセット</button>
                 </div>
             </div>
@@ -1012,6 +1077,15 @@
         <button class="nav-item" id="nav-party" onclick="window.switchTab('party')"><i data-lucide="swords" size="18"></i> 編成</button>
     </div>
 
+    <!-- 🌟 新設：教材切り替えポップアップ（モーダル） -->
+    <div id="textbookSelectPopupFrame" class="popover">
+        <div class="popover-word"><span>📚 教材・単語帳の切り替え</span></div>
+        <div id="textbookListSelectContainer" style="display:flex; flex-direction:column; gap:10px; max-height:40vh; overflow-y:auto; padding-right:4px;"></div>
+        <div style="text-align: right; width: 100%; margin-top:8px;">
+            <button class="pop-btn" style="background:var(--border); color:var(--text-main); max-width: 64px;" onclick="document.getElementById('textbookSelectPopupFrame').classList.remove('show'); document.getElementById('textbookSelectPopupFrame').style.display='none';">閉じる</button>
+        </div>
+    </div>
+
     <div id="wordPopover" class="popover">
         <div class="popover-word"><span id="popWord"></span><span id="popWordNum" style="font-size:12px; color:var(--accent); font-weight:700; background:var(--input-bg); padding:2px 8px; border-radius:4px; border:1px solid var(--border);"></span></div>
         <div class="popover-meaning" id="popMeaning"></div>
@@ -1027,7 +1101,6 @@
 
     <div id="multi-battle-play-bg"></div>
 
-    <!-- 🌌 Firebaseとの連携スクリプト -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
       import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
@@ -1043,14 +1116,11 @@
       };
 
       const app = initializeApp(firebaseConfig);
-      
       window.db = getFirestore(app);
       window.fbDoc = doc;
       window.fbSetDoc = setDoc;
       window.fbGetDoc = getDoc;
     </script>
-
-    <!-- 💡 app.jsに defer を付けることで、Firebaseの読み込みを待ってから実行させます！ -->
     <script src="app.js" defer></script>
 </body>
 </html>

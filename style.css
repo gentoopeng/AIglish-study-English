@@ -76,7 +76,7 @@ body::after {
     transform: scale(1.05); 
 }
 
-/* マルチバトルプレイ中専用の背景画像レイヤー (1pxの薄いぼかしを適用) */
+/* マルチバトルプレイ中専用の背景画像レイヤー */
 #multi-battle-play-bg {
     position: fixed;
     top: 56px;
@@ -100,7 +100,6 @@ body.in-game-active.multi-pvp-active #multi-battle-play-screen:not([style*="disp
     z-index: 5;
 }
 
-/* マルチプレイ画面がアクティブになった時だけ sentou.png を浮き上がらせる */
 body.in-game-active:not(.multi-pvp-active) #multi-battle-play-screen:not([style*="display: none"]) ~ #multi-battle-play-bg {
     opacity: 1;
     z-index: 5; 
@@ -123,7 +122,6 @@ body.in-game-active:not(.multi-pvp-active) #multi-battle-play-screen:not([style*
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important; 
 }
 
-/* 見切れ・折り返しを完全に排除し横に美しく伸ばしたプロフィールレイアウト */
 .unified-profile-card {
     padding: 14px 12px !important;
 }
@@ -189,7 +187,6 @@ body.in-game-active:not(.multi-pvp-active) #multi-battle-play-screen:not([style*
     text-shadow: 0 0 5px rgba(192, 132, 252, 0.3);
 }
 
-/* 目標バッジの横幅（横長）をゆったり伸ばして縦伸びを完全封殺するネオンカプセル */
 .target-capsule-neon-wrapper {
     display: inline-flex !important;
     align-items: center !important;
@@ -235,7 +232,6 @@ body.in-game-active:not(.multi-pvp-active) #multi-battle-play-screen:not([style*
     letter-spacing: 0.5px;
 }
 
-/* 移設した上部ヘッダー（ダッシュボード）内のレベル数値を美しく飾るネオンオレンジバッジ */
 .header-cosmic-level-badge {
     font-size: 12px !important;
     font-weight: 900 !important;
@@ -249,7 +245,6 @@ body.in-game-active:not(.multi-pvp-active) #multi-battle-play-screen:not([style*
     text-shadow: none !important;
 }
 
-/* 🌟 新設：新お知らせ表示掲示板カードのサイバーネオン装飾定義 */
 .cosmic-notice-board-card {
     border: 1.5px solid var(--cosmic-cyan) !important;
     box-shadow: 0 0 14px rgba(0, 240, 255, 0.35) !important;
@@ -278,7 +273,6 @@ body.in-game-active:not(.multi-pvp-active) #multi-battle-play-screen:not([style*
     word-break: break-all;
 }
 
-/* 🌟 完全大修復：背景色とブレンドして消えかかっていた称号進化用説明文字のクッキリホワイト配色バグ修復 */
 #view-titles .word-row-container {
     color: #FFFFFF !important;
 }
@@ -287,13 +281,11 @@ body.in-game-active:not(.multi-pvp-active) #multi-battle-play-screen:not([style*
     color: #FFFFFF !important;
 }
 
-/* 進化段階目標テキスト枠の輝き修復 */
 #view-titles .word-row-container style,
 #view-titles .word-row-container div[style*="font-size:12px"] {
     color: #E2E8F0 !important;
 }
 
-/* 読めなくなっていた最重要「進化条件: 〇→〇」テキストの明瞭化 */
 #view-titles .word-row-container div[style*="font-size:10px"] {
     color: rgba(255, 255, 255, 0.75) !important;
     font-weight: 600 !important;
@@ -506,10 +498,6 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .animate-spin { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* ==========================================================================
-   🎮 新マルチバトルUI用 追加CSS (省スペース＆横長ボスバー版)
-   ========================================================================= */
-
 .multi-boss-full-bar {
     width: 100%;
     height: 20px;
@@ -559,7 +547,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     }
     50% {
         transform: scale(1.08) translateY(-3px); 
-        filter: drop-shadow(0 0 40px rgba(255, 0, 0, 1)) drop-shadow(0 0 80px rgba(128, 0, 128, 0.8)) brightness(1.25) contrast(1.3) xsepia(15deg);
+        filter: drop-shadow(0 0 40px rgba(255, 0, 0, 1)) drop-shadow(0 0 80px rgba(128, 0, 128, 0.8)) brightness(1.25) contrast(1.3);
     }
 }
 
@@ -667,7 +655,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     z-index: 310;
     pointer-events: none;
     transform: translate(-50%, -50%);
-    animation: hitExplosionBurst 0.4s ease-out forwards;
+    animation: iitExplosionBurst 0.4s ease-out forwards;
 }
 
 @keyframes flyToBossTrack {
@@ -837,7 +825,7 @@ body.in-game-active:not(.multi-pvp-active) .multi-flick-area {
     min-height: 40px; 
     word-break: break-word; transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1); box-shadow: 0 4px 10px rgba(0,0,0,0.5); text-shadow: 0 1px 2px rgba(0,0,0,0.8); 
 }
-.flick-choice.highlight { background: rgba(0, 240, 255, 0.25); color: #FFF; box-shadow: 0 0 20px rgba(0, 240, 255, 0.8), inset 0 0 10px rgba(0, 240, 255, 0.4); border: 2px solid #00F0FF; transform: scale(1.1); z-index: 20; text-shadow: 0 0 5px #00F0FF; }
+.flick-choice.highlight { background: rgba(0, 240, 255, 0.25); color: #FFF; box-shadow: 0 0 20px rgba(0, 240, 255, 0.8), inset 0 0 10px rgba(0, 240, 255, 0.4); border: 2px solid #00F0FF; transform: scale(1.1); z-index: 20; text-shadow: 0 0 5px #00F0FF; transform-origin: center; }
 .flick-choice-center-blank { min-height: 40px; }
 .flick-center-word { font-size: 20px; font-weight: 900; color: white; text-shadow: 0 0 15px rgba(255,255,255,0.8), 0 0 5px rgba(0,240,255,0.5); font-family: "Times New Roman", serif; background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%); padding: 2px 14px; border-radius: 10px; display: inline-block; margin-top: 0; border: 1px solid rgba(0,240,255,0.4); box-shadow: 0 4px 15px rgba(0,0,0,0.5), inset 0 0 10px rgba(0,240,255,0.1); }
 
@@ -934,24 +922,17 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     margin: 0 auto !important;
     font-size: 22px !important;
     font-weight: 900 !important;
-    
     font-family: 'Noto Serif JP', serif !important;
-    
     color: #FFFFFF !important;
     letter-spacing: 2px !important;
-    text-shadow: 
-        1px 1px 2px rgba(0, 0, 0, 0.95),
-        -1px -1px 1px rgba(0, 0, 0, 0.8) !important;
-        
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95), -1px -1px 1px rgba(0, 0, 0, 0.8) !important;
     background-image: url('stone.png') !important;
     background-size: 100% 100% !important;
     background-position: center !important;
     background-color: transparent !important;
-    
     box-shadow: none !important; 
     border: none !important; 
     border-radius: 0 !important; 
-    
     transition: transform 0.1s ease !important;
     white-space: normal !important;
     line-height: 1.3 !important;
@@ -1038,7 +1019,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-sizing: border-box !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    
     color: #FFFFFF !important;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95), -1px -1px 1px rgba(0, 0, 0, 0.8) !important;
 }
@@ -1276,8 +1256,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 2px 2px 4px #000000 !important;
 }
 
-/* 単語フラッシュ（フラッシュカード）極上ビジュアルモジュール */
-
 #flashcard-setup-screen,
 #flashcard-play-screen {
     background-image: url('sinkai.png') !important;
@@ -1381,12 +1359,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: 1px 1px 3px rgba(0,0,0,1), -1px -1px 3px rgba(0,0,0,1), 1px -1px 3px rgba(0,0,0,1), -1px 1px 3px rgba(0,0,0,1), 0 0 10px rgba(0,0,0,0.9) !important; 
     z-index: 5;
     background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 50%, rgba(0, 240, 255, 0.04) 70%, rgba(192, 132, 252, 0.04) 90%, rgba(255, 255, 255, 0.1) 100%);
-    box-shadow: 
-        inset 0 12px 20px rgba(255, 255, 255, 0.35), 
-        inset 8px 0 12px rgba(0, 240, 255, 0.15), 
-        inset -8px 0 12px rgba(192, 132, 252, 0.15), 
-        inset 0 -12px 20px rgba(255, 255, 255, 0.2), 
-        0 6px 20px rgba(0, 0, 0, 0.45) !important;
+    box-shadow: inset 0 12px 20px rgba(255, 255, 255, 0.35), inset 8px 0 12px rgba(0, 240, 255, 0.15), inset -8px 0 12px rgba(192, 132, 252, 0.15), inset 0 -12px 20px rgba(255, 255, 255, 0.2), 0 6px 20px rgba(0, 0, 0, 0.45) !important;
     animation: bubbleReshape 6s ease-in-out infinite alternate; 
 }
 
@@ -1490,8 +1463,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     transform-origin: center top;
 }
 
-/* 🫧 画面下部：過去5回の履歴用 ぷかぷか色付きバブル履歴UI */
-
 .fc-history-container {
     display: flex;
     justify-content: center;
@@ -1507,10 +1478,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.5);
     background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.05) 70%, rgba(255, 255, 255, 0.2) 100%);
-    box-shadow: 
-        inset 0 3px 5px rgba(255, 255, 255, 0.5), 
-        inset 0 -3px 5px rgba(0, 0, 0, 0.2), 
-        0 2px 4px rgba(0,0,0,0.5);
+    box-shadow: inset 0 3px 5px rgba(255, 255, 255, 0.5), inset 0 -3px 5px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0,0,0,0.5);
     animation: historyBubbleFloat 3s ease-in-out infinite alternate;
 }
 
@@ -1528,31 +1496,20 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 .fc-history-bubble.ok {
     border-color: rgba(16, 185, 129, 0.85) !important;
     background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4) 0%, rgba(16, 185, 129, 0.1) 60%, rgba(16, 185, 129, 0.3) 100%) !important;
-    box-shadow: 
-        inset 0 3px 5px rgba(255, 255, 255, 0.6), 
-        inset 0 -3px 5px rgba(16, 185, 129, 0.4), 
-        0 0 8px rgba(16, 185, 129, 0.6) !important;
+    box-shadow: inset 0 3px 5px rgba(255, 255, 255, 0.6), inset 0 -3px 5px rgba(16, 185, 129, 0.4), 0 0 8px rgba(16, 185, 129, 0.6) !important;
 }
 
 .fc-history-bubble.bad {
     border-color: rgba(239, 68, 68, 0.85) !important;
     background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4) 0%, rgba(239, 68, 68, 0.1) 60%, rgba(239, 68, 68, 0.3) 100%) !important;
-    box-shadow: 
-        inset 0 3px 5px rgba(255, 255, 255, 0.6), 
-        inset 0 -3px 5px rgba(239, 68, 68, 0.4), 
-        0 0 8px rgba(239, 68, 68, 0.6) !important;
+    box-shadow: inset 0 3px 5px rgba(255, 255, 255, 0.6), inset 0 -3px 5px rgba(239, 68, 68, 0.4), 0 0 8px rgba(239, 68, 68, 0.6) !important;
 }
 
 .fc-history-bubble.so {
     border-color: rgba(245, 158, 11, 0.85) !important;
     background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4) 0%, rgba(245, 158, 11, 0.1) 60%, rgba(245, 158, 11, 0.3) 100%) !important;
-    box-shadow: 
-        inset 0 3px 5px rgba(255, 255, 255, 0.6), 
-        inset 0 -3px 5px rgba(245, 158, 11, 0.4), 
-        0 0 8px rgba(245, 158, 11, 0.6) !important;
+    box-shadow: inset 0 3px 5px rgba(255, 255, 255, 0.6), inset 0 -3px 5px rgba(245, 158, 11, 0.4), 0 0 8px rgba(245, 158, 11, 0.6) !important;
 }
-
-/* 大学受験最重要構文タイプ別・個々別々シックネオンカラー着色定義 */
 
 .grammar-span.grammar-type-clock,
 .grammar-span.grammar-type-clock .word-span {
@@ -1607,12 +1564,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
 }
 
-/* フレンド＆スコアボード用 2ページ横スライド構造モジュール */
-
-#view-community.tab-view.active {
-    display: flex !important;
-}
-
 @keyframes friendAvatarPulse {
     0% { box-shadow: 0 0 8px rgba(0, 240, 255, 0.2); transform: scale(1); }
     100% { box-shadow: 0 0 16px rgba(0, 240, 255, 0.5); transform: scale(1.03); }
@@ -1628,4 +1579,14 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     align-items: center;
     justify-content: center;
     animation: friendAvatarPulse 3s ease-in-out infinite alternate;
+}
+
+/* 👇 新規追加：潰れていた勉強時間アクティビティグラフの描画コンテナのスタイル定義 */
+.bar-chart-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    height: 120px;
+    padding: 10px 0;
+    width: 100%;
 }
