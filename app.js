@@ -5,26 +5,48 @@
 // 管理者権限フラグ
 window.isAdmin = false;
 
-// 実績データおよびフレンドリストの保存・ロード処理 (Firebase優先・ローカルフォールバック)
+// 🌟 経験値・レベル・ユーザー統計・プロフィールおよびフレンドリストの包括的保存（Firebase即時同期＆ローカル保存）
 window.saveUserStats = async function() {
     try {
         localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
         localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+        localStorage.setItem('core_v4_totalExp', String(totalExp));
+        localStorage.setItem('core_v4_userName', myName);
+        localStorage.setItem('core_v4_userTarget', myTarget);
+        localStorage.setItem('core_v4_userTitle', selectedTitle);
     } catch(e) {}
     
-    if (window.db && window.fbSetDoc && window.fbDoc && myId) {
+    if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
         try {
             const userRef = window.fbDoc(window.db, "users", myId);
+            const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+            
             await window.fbSetDoc(userRef, { 
+                id: myId,
                 userStats: userStats,
                 friendList: myFriendList,
                 playerName: myName,
                 selectedTitle: selectedTitle,
                 userTarget: myTarget,
-                totalExp: totalExp
+                totalExp: totalExp,
+                avatar: mySavedAvatar,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            // 共有ランキングノードへも反映
+            const lbRef = window.fbDoc(window.db, "shared_leaderboard", myId);
+            let lvlData = window.calculateLevelFromExp(totalExp);
+            await window.fbSetDoc(lbRef, {
+                id: myId,
+                name: myName,
+                title: selectedTitle,
+                exp: totalExp,
+                level: lvlData.level,
+                avatar: mySavedAvatar,
+                updatedAt: new Date().toISOString()
             }, { merge: true });
         } catch (e) {
-            console.error("Firebaseへのユーザー統計・フレンドデータ保存エラー:", e);
+            console.error("Firebaseへのユーザーデータ即時保存エラー:", e);
         }
     }
 };
@@ -37,7 +59,7 @@ window.loadUserStats = async function() {
         const storedFriends = localStorage.getItem('core_v4_friend_list');
         if (storedFriends) myFriendList = JSON.parse(storedFriends);
         
-        if (window.db && window.fbGetDoc && window.fbDoc && myId) {
+        if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
             const userRef = window.fbDoc(window.db, "users", myId);
             const snap = await window.fbGetDoc(userRef);
             if (snap.exists()) {
@@ -49,6 +71,25 @@ window.loadUserStats = async function() {
                 if (data.friendList) {
                     myFriendList = data.friendList;
                     localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+                }
+                if (data.totalExp !== undefined && data.totalExp !== null) {
+                    totalExp = parseInt(data.totalExp) || totalExp;
+                    localStorage.setItem('core_v4_totalExp', String(totalExp));
+                }
+                if (data.playerName) {
+                    myName = data.playerName;
+                    localStorage.setItem('core_v4_userName', myName);
+                }
+                if (data.selectedTitle) {
+                    selectedTitle = data.selectedTitle;
+                    localStorage.setItem('core_v4_userTitle', selectedTitle);
+                }
+                if (data.userTarget) {
+                    myTarget = data.userTarget;
+                    localStorage.setItem('core_v4_userTarget', myTarget);
+                }
+                if (data.avatar) {
+                    localStorage.setItem('core_v4_user_avatar_' + myId, data.avatar);
                 }
             }
         }
@@ -89,7 +130,7 @@ window.calculateLevelFromExp = function(exp) {
     };
 };
 
-// 🌟 アバター画像のCanvas圧縮登録処理
+// 🌟 アバター画像のCanvas圧縮登録処理（Firebaseへ即時同期）
 window.handleAvatarImageUpload = function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -132,16 +173,11 @@ window.handleAvatarImageUpload = function(event) {
             try {
                 localStorage.setItem('core_v4_user_avatar_' + myId, compressedBase64Data);
                 
-                // Firebaseへアバター画像データを登録
-                if (window.db && window.fbSetDoc && window.fbDoc && myId) {
-                    const userRef = window.fbDoc(window.db, "users", myId);
-                    await window.fbSetDoc(userRef, { avatar: compressedBase64Data }, { merge: true });
-                }
-
+                await window.saveUserStats();
                 window.applyProfileToUi();
                 window.renderLeaderboard();
                 window.sortAndRenderFriendList();
-                alert("アバター写真を安全に圧縮・登録しました！");
+                alert("アバター写真を安全に圧縮・登録し、クラウドに同期しました！");
             } catch(error) {
                 console.error("Avatar save error:", error);
                 alert("画像の保存に失敗しました。お手数ですが別の画像でお試しください。");
@@ -189,7 +225,9 @@ window.loadLocalState = async function() {
         activeArmor = localStorage.getItem('core_v4_active_armor') || ""; 
 
         currentTextbook = localStorage.getItem('core_v4_current_textbook_id') || "";
-        await window.syncTextbooksIndexFromFirestore();
+        
+        // 🌟 起動時に全教材・全単語データをダウンロード＆キャッシュ化
+        await window.preloadAllTextbooksAndVocab();
 
         await window.loadUserStats();
         userStats.goal_text = myTarget; 
@@ -230,6 +268,7 @@ let geminiApiKey = "";
 
 let currentTextbook = "";
 let textbooksPool = [];
+let textbooksCacheMap = {}; // 単語データキャッシュ用のマップオブジェクト
 let adminUploadedBookCoverBase64 = "";
 
 let isLevelRankExpanded = false;
@@ -440,8 +479,6 @@ window.startAnalysisWithEmbeddedTitle = function() {
     }
     
     totalExp += 5;
-    localStorage.setItem('core_v4_totalExp', totalExp);
-    
     userStats.reader_open++;
     window.saveUserStats();
 
@@ -573,10 +610,30 @@ window.initHeroSlider = function() {
     }, 4000);
 };
 
-// 🌟 単語帳データをFirebase (Firestore) と同期・一括保存する処理
+// 🌟 全単語データ・教材の一括読み込み（爆速化キャッシュ）
+window.preloadAllTextbooksAndVocab = async function() {
+    await window.syncTextbooksIndexFromFirestore();
+    
+    if (window.db && window.fbGetDoc && window.fbDoc) {
+        for (const book of textbooksPool) {
+            try {
+                const docName = `vocab_${book.id}`;
+                const sharedRef = window.fbDoc(window.db, "shared", docName);
+                const sharedSnap = await window.fbGetDoc(sharedRef);
+                if (sharedSnap.exists() && sharedSnap.data().custom_words) {
+                    textbooksCacheMap[book.id] = sharedSnap.data().custom_words;
+                    localStorage.setItem(`core_v4_cache_${book.id}`, JSON.stringify(sharedSnap.data().custom_words));
+                }
+            } catch(e) {}
+        }
+    }
+};
+
+// 🌟 単語帳データをFirebase (Firestore) と同期・保存処理
 window.saveVocabToStorage = async function() {
     const bookKey = currentTextbook || "default";
     localStorage.setItem(`core_v4_custom_words_${myId}_${bookKey}`, JSON.stringify(vocabList));
+    textbooksCacheMap[bookKey] = vocabList;
     
     if (window.db && window.fbSetDoc && window.fbDoc) {
         try {
@@ -586,7 +643,6 @@ window.saveVocabToStorage = async function() {
                 custom_words: vocabList,
                 updatedAt: new Date().toISOString()
             }, { merge: true });
-            console.log("Firebaseクラウドに単語データを正常保存・同期しました！");
         } catch (error) {
             console.error("Firebaseの保存に失敗しました:", error);
         }
@@ -626,26 +682,21 @@ window.updateAdminEditBookSelectOptions = function() {
     adminSelect.value = currentVal;
 };
 
+// 🌟 キャッシュ優先で単語帳データを爆速ロードする関数
 window.loadCurrentTextbookData = async function() {
     let storedWords = [];
     const bookKey = currentTextbook || "default";
     const currentLocalKey = `core_v4_custom_words_${myId}_${bookKey}`;
 
-    if (window.db && window.fbGetDoc && window.fbDoc) {
-        try {
-            const docName = currentTextbook ? `vocab_${currentTextbook}` : "vocab";
-            const sharedRef = window.fbDoc(window.db, "shared", docName);
-            const sharedSnap = await window.fbGetDoc(sharedRef);
-            if (sharedSnap.exists() && sharedSnap.data().custom_words) {
-                storedWords = sharedSnap.data().custom_words;
-            } else {
-                storedWords = JSON.parse(localStorage.getItem(currentLocalKey) || "[]");
-            }
-        } catch (e) {
+    if (textbooksCacheMap[bookKey]) {
+        storedWords = textbooksCacheMap[bookKey];
+    } else {
+        const localCache = localStorage.getItem(`core_v4_cache_${bookKey}`);
+        if (localCache) {
+            storedWords = JSON.parse(localCache);
+        } else {
             storedWords = JSON.parse(localStorage.getItem(currentLocalKey) || "[]");
         }
-    } else {
-        storedWords = JSON.parse(localStorage.getItem(currentLocalKey) || "[]");
     }
     
     vocabList = window.migrateVocabData(storedWords);
@@ -710,7 +761,6 @@ window.switchTextbookContext = async function(bookId) {
     if (popup) { popup.classList.remove('show'); popup.style.display = 'none'; }
     
     await window.loadCurrentTextbookData();
-    alert("教材データを切り替えました！");
 };
 
 window.handleAdminBookCoverUpload = function(event) {
@@ -958,7 +1008,7 @@ window.handleAuthSubmit = async function() {
         users.push(newUserObj);
         await window.saveAllUsers(users);
 
-        // Firebase usersコレクションにも確実に登録（名前・実名・年齢・初期ステータス）
+        // Firebase usersコレクションに即時保存
         if (window.db && window.fbSetDoc && window.fbDoc) {
             try {
                 const userRef = window.fbDoc(window.db, "users", newId);
@@ -1122,30 +1172,36 @@ window.deleteUserByAdmin = function(targetUserId) {
     window.showCustomDeleteAdminUserConfirm(targetUserId);
 };
 
+// 🌟 管理者ユーザーリストレンダリング（安全な読み込み＆描画）
 window.renderAdminUserList = async function() {
     const container = document.getElementById('adminUserListContainer');
     if(!container) return;
     container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding: 10px;'>ユーザー一覧を取得中...</div>";
-    const users = await window.getAllUsers();
-    container.innerHTML = "";
     
-    if(users.length === 0) {
-        container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding: 10px;'>ユーザーが登録されていません。</div>";
-        return;
+    try {
+        const users = await window.getAllUsers();
+        container.innerHTML = "";
+        
+        if(!users || users.length === 0) {
+            container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding: 10px;'>ユーザーが登録されていません。</div>";
+            return;
+        }
+        
+        users.forEach(u => {
+            const div = document.createElement('div');
+            div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px;";
+            div.innerHTML = `
+                <div style="flex:1;">
+                    <div style="color:var(--cosmic-cyan); font-family:monospace; font-weight:bold; letter-spacing:1px;">ID: ${u.id}</div>
+                    <div style="color:white; font-weight:bold; margin-top:2px;">${u.playerName || '修行者'} <span style="color:var(--text-sub); font-weight:normal; font-size:10px;">(${u.realName || '-'} / ${u.age || '-'}歳)</span></div>
+                </div>
+                <button class="list-action-link" style="background:rgba(239,68,68,0.2); color:#EF4444; border-color:#EF4444; height:28px; padding:0 8px; font-size:11px;" onclick="window.deleteUserByAdmin('${u.id}')">削除</button>
+            `;
+            container.appendChild(div);
+        });
+    } catch(e) {
+        container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding: 10px;'>ユーザー情報の取得に失敗しました。</div>";
     }
-    
-    users.forEach(u => {
-        const div = document.createElement('div');
-        div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px;";
-        div.innerHTML = `
-            <div style="flex:1;">
-                <div style="color:var(--cosmic-cyan); font-family:monospace; font-weight:bold; letter-spacing:1px;">ID: ${u.id}</div>
-                <div style="color:white; font-weight:bold; margin-top:2px;">${u.playerName} <span style="color:var(--text-sub); font-weight:normal; font-size:10px;">(${u.realName} / ${u.age}歳)</span></div>
-            </div>
-            <button class="list-action-link" style="background:rgba(239,68,68,0.2); color:#EF4444; border-color:#EF4444; height:28px; padding:0 8px; font-size:11px;" onclick="window.deleteUserByAdmin('${u.id}')">削除</button>
-        `;
-        container.appendChild(div);
-    });
 };
 
 window.applyProfileToUi = function() {
@@ -1171,7 +1227,7 @@ window.applyProfileToUi = function() {
 
     const headerLevelTextEl = document.getElementById('headerLevelTextSlot');
     if(headerLevelTextEl) {
-        headerLevelTextEl.innerText = `Lv.${lvlData.level}`;
+        headerLevelTextEl.innerText = `Lv.${lvlData.level} [Next:${lvlData.nextLevelRequiredExp}]`;
     }
 
     const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
@@ -1508,6 +1564,7 @@ window.getFlashcardStyleByHistory = function(wordData) {
     return `background: radial-gradient(circle at center, rgba(${r}, ${g}, ${b}, 0.22) 0%, rgba(${r}, ${g}, ${b}, 0.12) 50%, rgba(${r}, ${g}, ${b}, 0) 100%);`;
 };
 
+// 🌟 単語ステータス更新（獲得EXPのリアルタイム反映処理）
 window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
     if(event) event.stopPropagation();
     const wIdx = vocabList.findIndex(w => String(w.num) === String(wordNum));
@@ -1522,12 +1579,11 @@ window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
                 if(!vocabList[wIdx].meanings[mIdx].history) vocabList[wIdx].meanings[mIdx].history = [];
                 vocabList[wIdx].meanings[mIdx].history.push(status);
                 totalExp += 1;
-                localStorage.setItem('core_v4_totalExp', totalExp);
             }
 
             userStats.vocab_fixed = vocabList.filter(w => w.meanings && w.meanings.some(m => m.status === 'ok')).length;
+            
             window.saveUserStats();
-
             window.checkAndRewardTitleBonusXP();
             window.saveVocabToStorage(); 
             window.renderVocabList();
@@ -2081,7 +2137,7 @@ window.setWordStatusFromReader = function(status) {
         wordMemory[currentTargetWordToken] = status; localStorage.setItem('wordMemory', JSON.stringify(wordMemory));
         
         totalExp += 1;
-        localStorage.setItem('core_v4_totalExp', totalExp);
+        window.saveUserStats();
         
         window.updateReaderWordColors(); 
     }
@@ -2210,7 +2266,7 @@ window.initStudyTimerAndDataRotation = function() {
     window.renderActivityChart();
 };
 
-// 🌟 修正：ダミーユーザー生成を完全に削除し、Firebaseに実在するユーザーのみを追加・取得するフレンド検索処理
+// 🌟 修正：実在ユーザー厳格判定＆本物プロフィール・アイコン取得フレンド追加処理
 window.searchAndAddFriend = async function() {
     const inputEl = document.getElementById('friendSearchInput');
     if (!inputEl) return;
@@ -2231,13 +2287,21 @@ window.searchAndAddFriend = async function() {
 
     if (window.db && window.fbGetDoc && window.fbDoc) {
         try {
-            const targetUserSnap = await window.fbGetDoc(window.fbDoc(window.db, "users", targetCode));
+            const targetUserRef = window.fbDoc(window.db, "users", targetCode);
+            const targetUserSnap = await window.fbGetDoc(targetUserRef);
+            
+            // 存在しないアカウントは確実に拒否
             if (!targetUserSnap.exists()) {
                 alert("指定されたIDコードを持つ修行者はシステム上に存在しません！");
                 return;
             }
             
             const tData = targetUserSnap.data();
+            
+            if (tData.deleted) {
+                alert("指定されたIDコードを持つ修行者はシステム上に存在しません！");
+                return;
+            }
             
             let remoteLvl = 1;
             let remoteStats = tData.userStats || {};
@@ -2256,10 +2320,12 @@ window.searchAndAddFriend = async function() {
             const mm = String(now.getMinutes()).padStart(2, '0');
             const loginStr = `${y}/${m}/${d} ${hh}:${mm}`;
 
+            const realPlayerName = tData.playerName || tData.realName || targetCode;
+
             const newFriend = {
                 code: targetCode,
-                name: tData.playerName || "修行者",
-                title: tData.selectedTitle || "単語の探求者",
+                name: realPlayerName,
+                title: tData.selectedTitle || "称号なし",
                 avatar: "👤",
                 customAvatar: tData.avatar || "", 
                 level: remoteLvl,
@@ -2360,6 +2426,7 @@ window.removeFriendDirect = async function(code, event) {
     }
 };
 
+// 🌟 プロフィール保存処理（Firebaseへ即時リアルタイム反映）
 window.saveSidebarProfile = async function() {
     geminiApiKey = document.getElementById('sidebarApiKeyInput').value.trim(); localStorage.setItem('core_v4_geminiKey', geminiApiKey);
     myName = document.getElementById('sideInputName').value.trim() || myName; myTarget = document.getElementById('sideInputTarget').value.trim() || myTarget;
@@ -2384,17 +2451,16 @@ window.saveSidebarProfile = async function() {
                 noticeFrame.style.display = 'none';
             }
         }
-        alert("システム配信アナウンスをリアルタイムに適用・同期しました！");
     }
-    
-    window.applyProfileToUi(); 
-    window.toggleSidebar(false);
     
     userStats.goal_text = myTarget;
     await window.saveUserStats();
 
+    window.applyProfileToUi(); 
+    window.toggleSidebar(false);
     window.checkAndRewardTitleBonusXP();
     window.renderLeaderboard(); 
+    alert("プロフィールを最新状態に同期・保存しました！");
 };
 
 window.renderTitles = function() {
@@ -2539,6 +2605,7 @@ window.equipTitle = function(titleName) {
     selectedTitle = titleName;
     localStorage.setItem('core_v4_userTitle', titleName);
     
+    window.saveUserStats();
     window.applyProfileToUi();
     window.renderTitles();
     alert(`称号「${titleName}」を装備しました！`);
@@ -2548,6 +2615,7 @@ window.unequipTitle = function() {
     selectedTitle = "称号なし";
     localStorage.setItem('core_v4_userTitle', "称号なし");
     
+    window.saveUserStats();
     window.applyProfileToUi();
     window.renderTitles();
 };
@@ -2995,7 +3063,6 @@ window.swipeFlashcard = function(direction, finalDx = 0, finalDy = 0) {
     }
     
     totalExp += 1;
-    localStorage.setItem('core_v4_totalExp', totalExp);
     
     wordMemory[cleanKey] = status;
     localStorage.setItem('wordMemory', JSON.stringify(wordMemory));
@@ -3015,8 +3082,8 @@ window.swipeFlashcard = function(direction, finalDx = 0, finalDy = 0) {
 
     userStats.flash_count++; 
     userStats.vocab_fixed = vocabList.filter(w => w.meanings && w.meanings.some(m => m.status === 'ok')).length;
+    
     window.saveUserStats();
-
     window.checkAndRewardTitleBonusXP();
     window.renderFlashcardHistoryBubbles(currentWord);
 
@@ -3094,7 +3161,7 @@ window.backToModeSelect = function() {
     document.getElementById('game-mode-select-screen').style.display = 'block';
 };
 
-// 🌟 修正：シングルプレイ開始処理（選択中の単語帳と連携）
+// 🌟 シングルプレイ開始処理（選択中の単語帳と連携）
 window.startActualGame = function(difficulty) {
     currentGameDifficulty = difficulty;
     document.getElementById('game-difficulty-select-screen').style.display = 'none';
@@ -3231,7 +3298,7 @@ window.skipGameWordWithPass = function() {
     processJudgmentResult("NG", correctTarget, "（パス）", "", true);
 };
 
-// 🌟 修正：正誤判定処理（単語帳・Firebaseへの保存およびエンドレスライフ減少）
+// 🌟 修正：正誤判定処理（獲得EXP保存・ヘッダーゲージ反映・エンドレスライフ減少）
 function processJudgmentResult(status, correctTarget, userAns, alternatives = "", isPass = false) {
     const overlay = document.getElementById('giantJudgmentOverlay');
     const mark = document.getElementById('giantJudgmentMark');
@@ -3288,7 +3355,6 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
     }
     
     totalExp += earnedExpThisTurn;
-    localStorage.setItem('core_v4_totalExp', totalExp);
     
     document.getElementById('gameScoreNum').innerText = String(gameScoreCount).padStart(4, '0');
     
@@ -3339,6 +3405,7 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
         }
     }
     
+    window.saveUserStats();
     window.checkAndRewardTitleBonusXP();
     window.applyProfileToUi();
     window.renderLeaderboard();
@@ -3418,14 +3485,13 @@ window.endGameSession = async function() {
     }
     if (userStats.combo_max > 0) {
         totalExp += userStats.combo_max;
-        localStorage.setItem('core_v4_totalExp', totalExp);
     }
     
     userStats.test_count += totalQ; 
     if (gameScoreCount > userStats.high_score) {
         userStats.high_score = gameScoreCount; 
     }
-    window.saveUserStats();
+    await window.saveUserStats();
 
     window.checkAndRewardTitleBonusXP();
     window.applyProfileToUi();
