@@ -2149,7 +2149,8 @@ window.initStudyTimerAndDataRotation = function() {
     window.renderActivityChart();
 };
 
-window.searchAndAddFriend = function() {
+// 🌟 修正：ダミーユーザー生成を排除し、Firebaseに実在するユーザーのみを追加するフレンド検索処理
+window.searchAndAddFriend = async function() {
     const inputEl = document.getElementById('friendSearchInput');
     if (!inputEl) return;
     const targetCode = inputEl.value.trim().toUpperCase();
@@ -2167,51 +2168,67 @@ window.searchAndAddFriend = function() {
         return;
     }
 
-    const randomNames = ["たくみ", "アリス", "ボブ", "ケン", "ソラ", "さくら", "リン", "ダイキ", "れん", "みう", "レオ"];
-    const titlePool = ["単語の探求者", "シスタマスター", "解読の達人", "称号なし"];
-    const avatars = ["🦊", "🐼", "🦁", "🐰", "🦄", "🦅", "🐸", "🐱", "🐶"];
+    if (window.db && window.fbGetDoc && window.fbDoc) {
+        try {
+            const targetUserSnap = await window.fbGetDoc(window.fbDoc(window.db, "users", targetCode));
+            if (!targetUserSnap.exists()) {
+                alert("指定されたIDコードを持つ修行者はシステム上に存在しません！");
+                return;
+            }
+            
+            const tData = targetUserSnap.data();
+            
+            let remoteLvl = 1;
+            let remoteStats = tData.userStats || {};
+            if (remoteStats.user_level) {
+                remoteLvl = remoteStats.user_level;
+            } else {
+                try {
+                    const leadSnap = await window.fbGetDoc(window.fbDoc(window.db, "shared_leaderboard", targetCode));
+                    if(leadSnap.exists()) remoteLvl = leadSnap.data().level || 1;
+                } catch(e){}
+            }
 
-    const rName = randomNames[Math.floor(Math.random() * randomNames.length)] + "#" + Math.floor(Math.random() * 900 + 100);
-    const rTitle = titlePool[Math.floor(Math.random() * titlePool.length)];
-    const rAvatar = avatars[Math.floor(Math.random() * avatars.length)];
-    
-    const rLevel = Math.floor(Math.random() * 49) + 1; 
-    const rStudyMinutes = Math.floor(Math.random() * 291) + 10; 
-    
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - Math.floor(Math.random() * 5000));
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    const rLoginStr = `${y}/${m}/${d} ${hh}:${mm}`;
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const loginStr = `${y}/${m}/${d} ${hh}:${mm}`;
 
-    const mockFriendAvatarBase64 = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='%23A855F7'/><text x='50%25' y='60%25' font-size='20' text-anchor='middle'>${rAvatar}</text></svg>`;
+            const userAvatar = localStorage.getItem('core_v4_user_avatar_' + targetCode) || "";
 
-    const newFriend = {
-        code: targetCode,
-        name: rName,
-        title: rTitle,
-        avatar: rAvatar,
-        customAvatar: mockFriendAvatarBase64, 
-        level: rLevel,
-        studyTime: rStudyMinutes,
-        lastLoginStr: rLoginStr,
-        timestamp: now.getTime() 
-    };
+            const newFriend = {
+                code: targetCode,
+                name: tData.playerName || "修行者",
+                title: tData.selectedTitle || "単語の探求者",
+                avatar: "👤",
+                customAvatar: userAvatar, 
+                level: remoteLvl,
+                studyTime: remoteStats.study_burst || 0,
+                lastLoginStr: loginStr,
+                timestamp: now.getTime() 
+            };
 
-    myFriendList.push(newFriend);
-    localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+            myFriendList.push(newFriend);
+            localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
 
-    userStats.friends_count = myFriendList.length;
-    window.saveUserStats();
+            userStats.friends_count = myFriendList.length;
+            window.saveUserStats();
 
-    window.checkAndRewardTitleBonusXP();
-    alert(`🎉 フレンドの追加に成功しました！\nニックネーム: ${rName}`);
-    inputEl.value = "";
-    
-    window.sortAndRenderFriendList();
+            window.checkAndRewardTitleBonusXP();
+            alert(`🎉 フレンド「${newFriend.name}」の追加に成功しました！`);
+            inputEl.value = "";
+            
+            window.sortAndRenderFriendList();
+        } catch(e) {
+            console.error("フレンド検索通信エラー:", e);
+            alert("通信エラーが発生しました。時間を置いて再度お試しください。");
+        }
+    } else {
+        alert("Firebaseが接続されていないため、ユーザーの検索ができません。");
+    }
 };
 
 window.sortAndRenderFriendList = function() {
