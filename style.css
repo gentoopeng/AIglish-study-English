@@ -1590,3 +1590,77 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     padding: 10px 0;
     width: 100%;
 }
+/* ==========================================================================
+   🔌 Coming Soon プラグイン（編成画面＆マルチプレイ選択エリアの仮閉鎖）
+   ※機能を公開する際は、このコメントブロック以下を削除またはコメントアウトしてください。
+   ========================================================================== */
+
+/* 1. 編成タブ画面 (#view-party) 全体のオーバーレイ表示 */
+#view-party {
+    position: relative !important;
+    min-height: 400px;
+}
+
+#view-party::after {
+    content: "🚀\A Coming Soon\A (近日公開)";
+    white-space: pre-wrap;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 24px;
+    font-weight: 900;
+    color: var(--cosmic-cyan, #00f0ff);
+    letter-spacing: 2px;
+    line-height: 1.6;
+    border-radius: 16px;
+    box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.2);
+    pointer-events: all;
+}
+
+/* 2. ゲームタブ内の「マルチプレイ」選択カード領域へのオーバーレイ表示 */
+/* マルチプレイ起動ボタン・カードを特定してマスクを被せます */
+[onclick*="showMultiBattleChoice"],
+#btn-multi-play,
+.multi-play-card {
+    position: relative !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    /* タップ操作を無効化 */
+}
+
+[onclick*="showMultiBattleChoice"]::after,
+#btn-multi-play::after,
+.multi-play-card::after {
+    content: "⚔️ Coming Soon (近日公開)";
+    white-space: nowrap;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.90);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 99;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 900;
+    color: var(--admin-accent, #ec4899);
+    letter-spacing: 1px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 15px rgba(236, 72, 153, 0.3);
+    pointer-events: all;
+}
