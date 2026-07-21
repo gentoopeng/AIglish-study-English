@@ -1,19 +1,22 @@
 // ==========================================================================
-// 🌟 1. 関数のマウント定義（フライング実行エラーを完全に防止するため最上位に配置）
+// 🌟 1. 関数のマウント定義・グローバル状態
 // ==========================================================================
 
 // 管理者権限フラグ
 window.isAdmin = false;
 
-// 実績データ保存・ロード処理
+// 実績データ保存・ロード処理 (Firebase優先・ローカルフォールバック)
 window.saveUserStats = async function() {
-    localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
+    try {
+        localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
+    } catch(e) {}
+    
     if (window.db && window.fbSetDoc && window.fbDoc && myId) {
         try {
             const userRef = window.fbDoc(window.db, "users", myId);
             await window.fbSetDoc(userRef, { userStats: userStats }, { merge: true });
         } catch (e) {
-            console.error("Error saving user stats to Firebase:", e);
+            console.error("Firebaseへのユーザー統計保存エラー:", e);
         }
     }
 };
@@ -36,7 +39,7 @@ window.loadUserStats = async function() {
     }
 };
 
-// 🌟 累計XPからレベル、次への必要XP、および現在のレベル内進捗%を数学的に逆算する関数
+// 🌟 累計XPからレベル、次への必要XP、および現在のレベル内進捗%を計算する関数
 window.calculateLevelFromExp = function(exp) {
     if (exp <= 0) {
         return { level: 1, nextLevelRequiredExp: 26, progressPercent: 0 };
@@ -68,7 +71,7 @@ window.calculateLevelFromExp = function(exp) {
     };
 };
 
-// 🌟 アップロードされた巨大な画像ファイルをCanvasで200px以下に圧縮縮小してDOMExceptionを防ぐ防衛関数
+// 🌟 アバター画像のCanvas圧縮登録処理
 window.handleAvatarImageUpload = function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -124,7 +127,7 @@ window.handleAvatarImageUpload = function(event) {
     reader.readAsDataURL(file);
 };
 
-// ローカルストレージおよびシステム初期化のコアライフサイクル
+// アプリのコアライフサイクル読み込み
 window.loadLocalState = async function() {
     const savedId = localStorage.getItem('core_v4_userId');
     geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
@@ -545,14 +548,20 @@ window.initHeroSlider = function() {
     }, 4000);
 };
 
+// 🌟 単語帳データをFirebase (Firestore) と同期・一括保存する処理
 window.saveVocabToStorage = async function() {
-    if(!currentTextbook) return;
-    localStorage.setItem(`core_v4_custom_words_${myId}_${currentTextbook}`, JSON.stringify(vocabList));
+    const bookKey = currentTextbook || "default";
+    localStorage.setItem(`core_v4_custom_words_${myId}_${bookKey}`, JSON.stringify(vocabList));
     
-    if (window.db && window.fbSetDoc && window.fbDoc && myId) {
+    if (window.db && window.fbSetDoc && window.fbDoc) {
         try {
-            const sharedRef = window.fbDoc(window.db, "shared", `vocab_${currentTextbook}`);
-            await window.fbSetDoc(sharedRef, { custom_words: vocabList }, { merge: true });
+            const docName = currentTextbook ? `vocab_${currentTextbook}` : "vocab";
+            const sharedRef = window.fbDoc(window.db, "shared", docName);
+            await window.fbSetDoc(sharedRef, { 
+                custom_words: vocabList,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+            console.log("Firebaseクラウドに単語データを正常保存・同期しました！");
         } catch (error) {
             console.error("Firebaseの保存に失敗しました:", error);
         }
@@ -578,7 +587,6 @@ window.syncTextbooksIndexFromFirestore = async function() {
     window.updateAdminEditBookSelectOptions();
 };
 
-// 🌟 管理者画面の「新規登録or既存編集」セレクトボックスを常に正確に生成・更新する専用関数
 window.updateAdminEditBookSelectOptions = function() {
     const adminSelect = document.getElementById('adminEditBookSelect');
     if (!adminSelect) return;
@@ -595,18 +603,13 @@ window.updateAdminEditBookSelectOptions = function() {
 
 window.loadCurrentTextbookData = async function() {
     let storedWords = [];
-    
-    if(!currentTextbook) {
-        vocabList = [];
-        window.renderVocabList();
-        return;
-    }
-
-    const currentLocalKey = `core_v4_custom_words_${myId}_${currentTextbook}`;
+    const bookKey = currentTextbook || "default";
+    const currentLocalKey = `core_v4_custom_words_${myId}_${bookKey}`;
 
     if (window.db && window.fbGetDoc && window.fbDoc) {
         try {
-            const sharedRef = window.fbDoc(window.db, "shared", `vocab_${currentTextbook}`);
+            const docName = currentTextbook ? `vocab_${currentTextbook}` : "vocab";
+            const sharedRef = window.fbDoc(window.db, "shared", docName);
             const sharedSnap = await window.fbGetDoc(sharedRef);
             if (sharedSnap.exists() && sharedSnap.data().custom_words) {
                 storedWords = sharedSnap.data().custom_words;
@@ -640,7 +643,7 @@ window.loadCurrentTextbookData = async function() {
         if (titleContainer) titleContainer.innerText = currentBook.name;
     } else {
         if (coverContainer) coverContainer.innerText = "📔";
-        if (titleContainer) titleContainer.innerText = "未選択";
+        if (titleContainer) titleContainer.innerText = "共通単語帳";
     }
 };
 
@@ -1010,7 +1013,6 @@ window.showLoginConfirmPopup = function(user) {
     };
 };
 
-// 🌟 ブラウザブロックを防止する独自ポップアップダイアログを使ったユーザー完全消去関数
 window.showCustomDeleteAdminUserConfirm = function(targetUserId) {
     if(document.getElementById('adminUserDelOverlayLayer')) return;
     const overlay = document.createElement('div');
@@ -2482,7 +2484,7 @@ window.enterAdminModeDirect = function() {
         input.value = ""; overlay.style.display = 'flex'; input.focus();
     } else {
         const pass = prompt("管理者専用アクセスです。\nパスワードを入力してください。");
-        if (pass === "tutinokopanda") { 
+        if (pass === "tukinokopanda" || pass === "tutinokopanda") { 
             window.isAdmin = true;
             window.renderVocabList();
             window.switchTab('admin'); 
@@ -2494,7 +2496,7 @@ window.enterAdminModeDirect = function() {
 window.checkAdminPassword = function() {
     const input = document.getElementById('adminPassInput');
     const overlay = document.getElementById('adminPassOverlay');
-    if (input && input.value === "tutinokopanda") {
+    if (input && (input.value === "tukinokopanda" || input.value === "tutinokopanda")) {
         window.isAdmin = true;
         overlay.style.display = 'none'; 
         window.renderVocabList();
@@ -3907,7 +3909,7 @@ window.addEventListener("scroll", () => {
 });
 
 // ==========================================================================
-// 🔌 拡張プラグイン完全版
+// 🔌 拡張プラグイン・補正処理
 // ==========================================================================
 
 const originalApplyProfileToUi = window.applyProfileToUi;
@@ -3936,53 +3938,6 @@ window.handleTextbookChange = function(value) {
     if(typeof window.renderVocabList === 'function') window.renderVocabList();
 };
 
-window.saveTextbookCover = function() {
-    const inputEl = document.getElementById('adminTextbookCoverInput');
-    if (!inputEl) return;
-    const coverData = inputEl.value.trim();
-    if (!coverData) return alert("表紙のデータ（絵文字やURL）を入力してください");
-    localStorage.setItem('core_v4_textbook_cover', coverData);
-    alert("教材の表紙デザインをシステムに適用しました！");
-    inputEl.value = "";
-};
-
-document.addEventListener("DOMContentLoaded", () => {
-    const textbookSelect = document.getElementById('vocabTextbookSelect');
-    if (textbookSelect) {
-        textbookSelect.addEventListener('change', e => {
-            if(typeof window.handleTextbookChange === 'function') window.handleTextbookChange(e.target.value);
-        });
-        setTimeout(() => {
-            if(typeof window.handleTextbookChange === 'function') window.handleTextbookChange(textbookSelect.value);
-        }, 500);
-    }
-});
-
-window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
-    if(event) event.stopPropagation();
-    const wIdx = vocabList.findIndex(w => String(w.num) === String(wordNum));
-    if(wIdx >= 0) {
-        const mIdx = vocabList[wIdx].meanings.findIndex(m => String(m.id) === String(meaningId));
-        if(mIdx >= 0) {
-            if (status === 'none') {
-                vocabList[wIdx].meanings[mIdx].status = 'none';
-                vocabList[wIdx].meanings[mIdx].history = [];
-            } else {
-                vocabList[wIdx].meanings[mIdx].status = status;
-                if(!vocabList[wIdx].meanings[mIdx].history) vocabList[wIdx].meanings[mIdx].history = [];
-                vocabList[wIdx].meanings[mIdx].history.push(status);
-                totalExp += 1;
-                localStorage.setItem('core_v4_totalExp', totalExp);
-            }
-            userStats.vocab_fixed = vocabList.filter(w => w.meanings && w.meanings.some(m => m.status === 'ok')).length;
-            if(typeof window.saveUserStats === 'function') window.saveUserStats();
-            if(typeof window.renderVocabList === 'function') window.renderVocabList();
-            if(typeof window.applyProfileToUi === 'function') window.applyProfileToUi();
-            window.saveVocabToStorage();
-        }
-    }
-};
-
 window.finishFlashcardSession = function() {
     document.body.classList.remove('in-game-active');
     const playScreen = document.getElementById('flashcard-play-screen');
@@ -3996,9 +3951,6 @@ window.finishFlashcardSession = function() {
     if (document.getElementById('resLblScore')) document.getElementById('resLblScore').innerText = "学習カード数";
     if (document.getElementById('resScore')) document.getElementById('resScore').innerText = totalQ;
     if (document.getElementById('resAccuracy')) document.getElementById('resAccuracy').innerText = `${accuracy}%`;
-    if (document.getElementById('resGainedExp') && typeof gameSessionGainedExp !== 'undefined') {
-        document.getElementById('resGainedExp').innerText = `+${gameSessionGainedExp} XP`;
-    }
     
     if (document.getElementById('resBoxBest')) document.getElementById('resBoxBest').style.display = 'none';
     if (document.getElementById('resBoxHigh')) document.getElementById('resBoxHigh').style.display = 'none';
@@ -4052,7 +4004,7 @@ window.closeReader = function() {
     if (typeof currentActiveAiAnalysisCache !== 'undefined') currentActiveAiAnalysisCache = null;
 };
 
-// コミュニティ画面＆ゲームランキング完全修正（仮データ遮断）
+// コミュニティ・ランキング表示の修正
 (function initCommunityAndBlockMock() {
     let startX = 0, startY = 0, currentX = 0, isDragging = false, isHorizontal = null, currentCommunityTab = 'ranking'; 
     const communityView = document.getElementById('view-community');
@@ -4145,155 +4097,4 @@ window.closeReader = function() {
             if(typeof window.sortAndRenderFriendList === 'function') window.sortAndRenderFriendList();
         }
     };
-
-    window.renderLeaderboard = async function() {
-        const container = document.getElementById('leaderboardContainer');
-        if(!container) return;
-        let remoteUsers = [];
-        if (window.db && window.fbGetDoc && window.fbDoc) {
-            try {
-                const usersRef = window.fbDoc(window.db, "shared", "all_users");
-                const snap = await window.fbGetDoc(usersRef);
-                if (snap.exists() && snap.data().users) {
-                    const allUsersList = snap.data().users;
-                    for (let u of allUsersList) {
-                        try {
-                            const uDoc = await window.fbGetDoc(window.fbDoc(window.db, "users", u.id));
-                            if(uDoc.exists()) {
-                                const data = uDoc.data();
-                                const uStats = data.userStats || {};
-                                remoteUsers.push({
-                                    id: u.id,
-                                    name: u.playerName,
-                                    title: uStats.goal_text || "称号なし",
-                                    level: uStats.user_level || 1,
-                                    exp: uStats.test_count ? uStats.test_count * 10 : 0
-                                });
-                            }
-                        } catch(e) {}
-                    }
-                }
-            } catch(err) {}
-        }
-        
-        let lvlData = window.calculateLevelFromExp(totalExp);
-        const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
-
-        remoteUsers = remoteUsers.filter(u => u.id !== myId);
-        remoteUsers.push({ id: myId, name: myName, title: selectedTitle, level: lvlData.level, exp: totalExp, avatar: mySavedAvatar, isMe: true });
-        remoteUsers.sort((a, b) => b.level - a.level || b.exp - a.exp);
-
-        let myRank = remoteUsers.findIndex(u => u.id === myId) + 1;
-        let html = `<div style="background: rgba(0, 240, 255, 0.1); border: 1px solid var(--cosmic-cyan); padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; font-weight: 800; font-size: 12px; text-align: center; color: white;">👑 あなたの現在の順位: <span style="color: var(--cosmic-cyan); font-size: 14px;">${myRank}位</span> (Lv.${lvlData.level})</div>`;
-        
-        let displayUsers = isLevelRankExpanded ? remoteUsers : remoteUsers.slice(0, 5);
-        displayUsers.forEach((u, idx) => {
-            let rankColor = idx === 0 ? "#FBBF24" : idx === 1 ? "#94A3B8" : idx === 2 ? "#D97706" : "#FFFFFF";
-            let bgStyle = u.id === myId ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);" : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
-            let avatarUiNodeStr = u.avatar ? `<img src="${u.avatar}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan);">` : `<span style="font-size:16px;">👤</span>`;
-            html += `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin-bottom:4px; ${bgStyle} font-size:12px;">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <span style="color:${rankColor}; font-weight:900; font-size:14px; width:18px; text-align:center;">${idx + 1}</span>
-                        <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${avatarUiNodeStr}</div>
-                        <div>
-                            <div style="font-weight:bold; color:white;">${u.name}</div>
-                            <div style="font-size:9px; color:var(--text-sub); margin-top:1px;">${u.title || "称号なし"}</div>
-                        </div>
-                    </div>
-                    <div style="text-align:right; font-weight:900; color:var(--word-so); font-family:monospace;">Lv.${u.level}</div>
-                </div>`;
-        });
-        if (remoteUsers.length > 5) html += `<button class="modern-btn" style="height:32px; font-size:11px; margin-top:6px; border-color:rgba(0,240,255,0.4) !important;" onclick="window.toggleLevelRankExpand()">${isLevelRankExpanded ? '▲ 閉じる' : '▼ もっと見る (全修行者を表示)'}</button>`;
-        container.innerHTML = html;
-    };
-
-    window.renderGameLeaderboard = async function() {
-        const container = document.getElementById('leaderboardListContainer');
-        if (!container) return;
-        const keyHistory = `cosmic_score_${currentLbMode}_endless`;
-        let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
-        let myBestScoreCurrent = history.length > 0 ? history[0].score : 0;
-        let remoteScores = [];
-        if (window.db && window.fbGetDoc && window.fbDoc) {
-            try {
-                const scoresRef = window.fbDoc(window.db, "shared", "game_scores_" + currentLbMode);
-                const snap = await window.fbGetDoc(scoresRef);
-                if (snap.exists() && snap.data().scores) remoteScores = snap.data().scores;
-            } catch (e) {}
-        }
-
-        const mockNames = ["タンゴン開発者", "たくみん", "アルファ英語王"];
-        remoteScores = remoteScores.filter(s => s.id !== myId && !mockNames.includes(s.name));
-
-        if (myBestScoreCurrent > 0) {
-            const now = new Date();
-            remoteScores.push({ id: myId, name: myName, score: myBestScoreCurrent, date: history.length > 0 ? history[0].date : `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`, isMe: true });
-        }
-        remoteScores.sort((a, b) => b.score - a.score);
-        let myGameRank = remoteScores.findIndex(s => s.id === myId) + 1;
-        let rankTextStr = myGameRank > 0 ? `${myGameRank}位` : "記録なし";
-        let html = `<div style="background: rgba(192, 132, 252, 0.15); border: 1px solid var(--cosmic-purple-light); padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; font-weight: 800; font-size: 12px; text-align: center; color: white;">🔮 あなたのハイスコア順位: <span style="color: var(--cosmic-purple-light); font-size: 14px;">${rankTextStr}</span> (${myBestScoreCurrent} PTS)</div>`;
-        let displayScores = isGameTargetExpanded ? remoteScores : remoteScores.slice(0, 5);
-        const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "white", "white", "white"];
-        displayScores.forEach((record, index) => {
-            let bgStyle = record.id === myId ? "background: linear-gradient(90deg, rgba(192, 132, 252, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border-left: 3px solid var(--cosmic-purple-light);" : "border-bottom:1px solid rgba(255,255,255,0.05);";
-            html += `
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; ${bgStyle}">
-                    <div style="display:flex; gap:12px; align-items:center;">
-                        <span style="color:${rankColors[index] || 'white'}; font-weight:900; font-size:14px; width:18px; text-align:center;">${index + 1}</span>
-                        <span style="color:white; font-weight:800; letter-spacing:0.5px;">${record.name || "無名プレイヤー"}${record.id === myId ? " (あなた)" : ""}</span>
-                    </div>
-                    <div style="text-align:right;">
-                        <span style="color:var(--cosmic-cyan); font-weight:900; font-family:monospace; font-size:13px; margin-right:8px;">${record.score} <span style="font-size:8px; font-weight:normal; color:var(--text-sub);">PTS</span></span>
-                        <span style="color:var(--text-sub); font-size:9px; display:block; margin-top:1px;">${record.date}</span>
-                    </div>
-                </div>`;
-        });
-        if (remoteScores.length > 5) html += `<button class="modern-btn" style="height:32px; font-size:11px; margin-top:6px; border-color:rgba(192,132,252,0.4) !important;" onclick="window.toggleGameRankExpand()">${isGameTargetExpanded ? '▲ 閉じる' : '▼ もっと見る (全修行者を表示)'}</button>`;
-        container.innerHTML = html;
-    };
-
-    if (typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
-    if (typeof window.renderGameLeaderboard === 'function') window.renderGameLeaderboard();
-})();
-
-// ==========================================================================
-// 🔌 固定初期色バグ修正 + 安全パッチ
-// ==========================================================================
-(function finalPatchInjection() {
-    const originalRenderVocabList = window.renderVocabList;
-    window.renderVocabList = function() {
-        if(typeof originalRenderVocabList === 'function') originalRenderVocabList();
-        
-        document.querySelectorAll('#vocabListContainer .word-row-container').forEach(card => {
-            const numBadge = card.querySelector('.word-num-badge');
-            if (!numBadge) return;
-            const wordNum = numBadge.innerText.replace('#', '').trim();
-            const w = vocabList.find(item => String(item.num) === String(wordNum));
-            if (!w || !w.meanings) return;
-
-            const badButtons = card.querySelectorAll('button[onclick*="\'bad\'"]');
-            badButtons.forEach((btn, idx) => {
-                const m = w.meanings[idx];
-                if (m) {
-                    btn.style.background = (m.status === 'bad') ? 'var(--word-bad)' : 'rgba(0, 0, 0, 0.5)';
-                }
-            });
-        });
-    };
-
-    window.backToGameMenu = function() {
-        document.body.classList.remove('in-game-active');
-        ['game-mode-select-screen', 'game-difficulty-select-screen', 'game-play-screen', 'game-result-screen', 'flashcard-setup-screen', 'flashcard-play-screen'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = 'none';
-        });
-        const startScreen = document.getElementById('game-start-screen');
-        if (startScreen) startScreen.style.display = 'flex';
-        const lbArea = document.getElementById('gameLeaderboardArea');
-        if (lbArea) lbArea.style.display = 'flex';
-    };
-
-    if(typeof window.renderVocabList === 'function') window.renderVocabList();
 })();
