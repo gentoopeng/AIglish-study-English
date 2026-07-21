@@ -5,33 +5,51 @@
 // 管理者権限フラグ
 window.isAdmin = false;
 
-// 実績データ保存・ロード処理 (Firebase優先・ローカルフォールバック)
+// 実績データおよびフレンドリストの保存・ロード処理 (Firebase優先・ローカルフォールバック)
 window.saveUserStats = async function() {
     try {
         localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
+        localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
     } catch(e) {}
     
     if (window.db && window.fbSetDoc && window.fbDoc && myId) {
         try {
             const userRef = window.fbDoc(window.db, "users", myId);
-            await window.fbSetDoc(userRef, { userStats: userStats }, { merge: true });
+            await window.fbSetDoc(userRef, { 
+                userStats: userStats,
+                friendList: myFriendList,
+                playerName: myName,
+                selectedTitle: selectedTitle,
+                userTarget: myTarget,
+                totalExp: totalExp
+            }, { merge: true });
         } catch (e) {
-            console.error("Firebaseへのユーザー統計保存エラー:", e);
+            console.error("Firebaseへのユーザー統計・フレンドデータ保存エラー:", e);
         }
     }
 };
 
 window.loadUserStats = async function() {
     try {
-        const stored = localStorage.getItem('core_v4_user_stats_' + myId);
-        if (stored) userStats = JSON.parse(stored);
+        const storedStats = localStorage.getItem('core_v4_user_stats_' + myId);
+        if (storedStats) userStats = JSON.parse(storedStats);
+        
+        const storedFriends = localStorage.getItem('core_v4_friend_list');
+        if (storedFriends) myFriendList = JSON.parse(storedFriends);
         
         if (window.db && window.fbGetDoc && window.fbDoc && myId) {
             const userRef = window.fbDoc(window.db, "users", myId);
             const snap = await window.fbGetDoc(userRef);
-            if (snap.exists() && snap.data().userStats) {
-                userStats = snap.data().userStats;
-                localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.userStats) {
+                    userStats = data.userStats;
+                    localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
+                }
+                if (data.friendList) {
+                    myFriendList = data.friendList;
+                    localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+                }
             }
         }
     } catch (e) {
@@ -84,7 +102,7 @@ window.handleAvatarImageUpload = function(event) {
     const reader = new FileReader();
     reader.onload = function(e) {
         const img = new Image();
-        img.onload = function() {
+        img.onload = async function() {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
@@ -113,6 +131,13 @@ window.handleAvatarImageUpload = function(event) {
 
             try {
                 localStorage.setItem('core_v4_user_avatar_' + myId, compressedBase64Data);
+                
+                // Firebaseへアバター画像データを登録
+                if (window.db && window.fbSetDoc && window.fbDoc && myId) {
+                    const userRef = window.fbDoc(window.db, "users", myId);
+                    await window.fbSetDoc(userRef, { avatar: compressedBase64Data }, { merge: true });
+                }
+
                 window.applyProfileToUi();
                 window.renderLeaderboard();
                 window.sortAndRenderFriendList();
@@ -483,14 +508,14 @@ window.renderLeaderboard = function() {
     const container = document.getElementById('leaderboardContainer'); 
     if(!container) return; 
 
-    let mockUsers = [];
+    let users = [];
     const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
 
     let lvlData = window.calculateLevelFromExp(totalExp);
     let calculatedLvl = lvlData.level;
     userStats.user_level = calculatedLvl; 
 
-    mockUsers.push({
+    users.push({
         name: `${myName} (あなた)`,
         title: selectedTitle,
         exp: totalExp,
@@ -500,10 +525,10 @@ window.renderLeaderboard = function() {
         isMe: true
     });
 
-    mockUsers.sort((a, b) => b.exp - a.exp);
+    users.sort((a, b) => b.exp - a.exp);
 
     let html = "";
-    mockUsers.forEach((u, idx) => {
+    users.forEach((u, idx) => {
         let rankColor = idx === 0 ? "#FBBF24" : idx === 1 ? "#94A3B8" : idx === 2 ? "#D97706" : "#FFFFFF";
         let bgStyle = u.isMe ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);" : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
         
@@ -929,8 +954,30 @@ window.handleAuthSubmit = async function() {
         
         const newId = window.generateUserId();
         const users = await window.getAllUsers();
-        users.push({ id: newId, playerName: pName, realName: rName, age: age, pin: pin });
+        const newUserObj = { id: newId, playerName: pName, realName: rName, age: age, pin: pin };
+        users.push(newUserObj);
         await window.saveAllUsers(users);
+
+        // Firebase usersコレクションにも確実に登録（名前・実名・年齢・初期ステータス）
+        if (window.db && window.fbSetDoc && window.fbDoc) {
+            try {
+                const userRef = window.fbDoc(window.db, "users", newId);
+                await window.fbSetDoc(userRef, {
+                    id: newId,
+                    playerName: pName,
+                    realName: rName,
+                    age: age,
+                    pin: pin,
+                    selectedTitle: "称号なし",
+                    userTarget: "未設定",
+                    totalExp: 0,
+                    avatar: "",
+                    userStats: { user_level: 1, study_burst: 0 }
+                }, { merge: true });
+            } catch(e) {
+                console.error("Firebaseへの新規ユーザー個別登録エラー:", e);
+            }
+        }
         
         alert(`🎉 アカウント作成成功！\nあなたのログインIDは【 ${newId} 】です。\nログインに必要なので必ずメモしてください！`);
         
@@ -950,7 +997,21 @@ window.handleAuthSubmit = async function() {
         }
         
         const users = await window.getAllUsers();
-        const user = users.find(u => u.id === idInput && u.pin === pinInput);
+        let user = users.find(u => u.id === idInput && u.pin === pinInput);
+
+        // クラウド側からの救済取得
+        if(!user && window.db && window.fbGetDoc && window.fbDoc) {
+            try {
+                const userRef = window.fbDoc(window.db, "users", idInput);
+                const snap = await window.fbGetDoc(userRef);
+                if(snap.exists()) {
+                    const data = snap.data();
+                    if(data.pin === pinInput) {
+                        user = { id: idInput, playerName: data.playerName || "修行者", realName: data.realName || "一般", age: data.age || "18", pin: data.pin };
+                    }
+                }
+            } catch(e){}
+        }
         
         if(user) {
             window.showLoginConfirmPopup(user);
@@ -2149,7 +2210,7 @@ window.initStudyTimerAndDataRotation = function() {
     window.renderActivityChart();
 };
 
-// 🌟 修正：ダミーユーザー生成を排除し、Firebaseに実在するユーザーのみを追加するフレンド検索処理
+// 🌟 修正：ダミーユーザー生成を完全に削除し、Firebaseに実在するユーザーのみを追加・取得するフレンド検索処理
 window.searchAndAddFriend = async function() {
     const inputEl = document.getElementById('friendSearchInput');
     if (!inputEl) return;
@@ -2182,11 +2243,9 @@ window.searchAndAddFriend = async function() {
             let remoteStats = tData.userStats || {};
             if (remoteStats.user_level) {
                 remoteLvl = remoteStats.user_level;
-            } else {
-                try {
-                    const leadSnap = await window.fbGetDoc(window.fbDoc(window.db, "shared_leaderboard", targetCode));
-                    if(leadSnap.exists()) remoteLvl = leadSnap.data().level || 1;
-                } catch(e){}
+            } else if (tData.totalExp) {
+                let calculated = window.calculateLevelFromExp(tData.totalExp);
+                remoteLvl = calculated.level;
             }
 
             const now = new Date();
@@ -2197,14 +2256,12 @@ window.searchAndAddFriend = async function() {
             const mm = String(now.getMinutes()).padStart(2, '0');
             const loginStr = `${y}/${m}/${d} ${hh}:${mm}`;
 
-            const userAvatar = localStorage.getItem('core_v4_user_avatar_' + targetCode) || "";
-
             const newFriend = {
                 code: targetCode,
                 name: tData.playerName || "修行者",
                 title: tData.selectedTitle || "単語の探求者",
                 avatar: "👤",
-                customAvatar: userAvatar, 
+                customAvatar: tData.avatar || "", 
                 level: remoteLvl,
                 studyTime: remoteStats.study_burst || 0,
                 lastLoginStr: loginStr,
@@ -2212,10 +2269,9 @@ window.searchAndAddFriend = async function() {
             };
 
             myFriendList.push(newFriend);
-            localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
-
+            
             userStats.friends_count = myFriendList.length;
-            window.saveUserStats();
+            await window.saveUserStats();
 
             window.checkAndRewardTitleBonusXP();
             alert(`🎉 フレンド「${newFriend.name}」の追加に成功しました！`);
@@ -2261,7 +2317,7 @@ window.sortAndRenderFriendList = function() {
         const item = document.createElement('div');
         item.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:10px 14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);";
         
-        let avatarContentStr = `<span style="font-size:24px; flex-shrink:0;">${f.avatar}</span>`;
+        let avatarContentStr = `<span style="font-size:24px; flex-shrink:0;">${f.avatar || "👤"}</span>`;
         if (f.customAvatar) {
             avatarContentStr = `<img src="${f.customAvatar}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-purple-light);">`;
         }
@@ -2282,7 +2338,7 @@ window.sortAndRenderFriendList = function() {
                 </div>
             </div>
             <div style="text-align:right; flex-shrink:0; margin-left:8px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-                <div style="font-size:9px; color:var(--text-sub); margin-top:0;">ログイン:<br><span style="color:#FFF; font-weight:600;">${f.lastLoginStr.split(' ')[0]}</span></div>
+                <div style="font-size:9px; color:var(--text-sub); margin-top:0;">ログイン:<br><span style="color:#FFF; font-weight:600;">${f.lastLoginStr ? f.lastLoginStr.split(' ')[0] : '-'}</span></div>
                 <button style="background:none; border:none; color:var(--word-bad); padding:2px; cursor:pointer;" onclick="window.removeFriendDirect('${f.code}', event)"><i data-lucide="user-x" size="14"></i></button>
             </div>`;
         container.appendChild(item);
@@ -2291,14 +2347,12 @@ window.sortAndRenderFriendList = function() {
     window.initLucide();
 };
 
-window.removeFriendDirect = function(code, event) {
+window.removeFriendDirect = async function(code, event) {
     if(event) event.stopPropagation();
     if (confirm("このフレンドをリストから削除しますか？")) {
         myFriendList = myFriendList.filter(f => f.code !== code);
-        localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
-        
         userStats.friends_count = myFriendList.length;
-        window.saveUserStats();
+        await window.saveUserStats();
 
         window.checkAndRewardTitleBonusXP();
         window.sortAndRenderFriendList();
@@ -2306,11 +2360,15 @@ window.removeFriendDirect = function(code, event) {
     }
 };
 
-window.saveSidebarProfile = function() {
+window.saveSidebarProfile = async function() {
     geminiApiKey = document.getElementById('sidebarApiKeyInput').value.trim(); localStorage.setItem('core_v4_geminiKey', geminiApiKey);
     myName = document.getElementById('sideInputName').value.trim() || myName; myTarget = document.getElementById('sideInputTarget').value.trim() || myTarget;
     selectedTitle = document.getElementById('sideSelectTitle').value; 
     
+    localStorage.setItem('core_v4_userName', myName);
+    localStorage.setItem('core_v4_userTarget', myTarget);
+    localStorage.setItem('core_v4_userTitle', selectedTitle);
+
     const noticeInput = document.getElementById('adminNoticeInput');
     if (noticeInput) {
         const noticeMsg = noticeInput.value.trim();
@@ -2333,7 +2391,7 @@ window.saveSidebarProfile = function() {
     window.toggleSidebar(false);
     
     userStats.goal_text = myTarget;
-    window.saveUserStats();
+    await window.saveUserStats();
 
     window.checkAndRewardTitleBonusXP();
     window.renderLeaderboard(); 
@@ -2564,10 +2622,10 @@ window.renderGameLeaderboard = function() {
     let history = JSON.parse(localStorage.getItem(keyHistory) || "[]");
     let myBestScoreCurrent = history.length > 0 ? history[0].score : 0;
 
-    let mockGameRankings = [];
+    let gameRankings = [];
 
     if (myBestScoreCurrent > 0) {
-        mockGameRankings.push({
+        gameRankings.push({
             name: `${myName} (あなた)`,
             score: myBestScoreCurrent,
             date: history.length > 0 ? history[0].date : "記録なし",
@@ -2575,10 +2633,10 @@ window.renderGameLeaderboard = function() {
         });
     }
 
-    mockGameRankings.sort((a, b) => b.score - a.score);
+    gameRankings.sort((a, b) => b.score - a.score);
 
     const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "white", "white", "white"];
-    mockGameRankings.forEach((record, index) => {
+    gameRankings.forEach((record, index) => {
         const row = document.createElement('div');
         let bgStyle = record.isMe ? "background: linear-gradient(135deg, rgba(192, 132, 252, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border-left: 3px solid var(--cosmic-purple-light);" : "border-bottom:1px solid rgba(255,255,255,0.05);";
         row.style.cssText = `display:flex; justify-content:space-between; align-items:center; padding:6px 8px; ${bgStyle}`;
@@ -3036,6 +3094,7 @@ window.backToModeSelect = function() {
     document.getElementById('game-mode-select-screen').style.display = 'block';
 };
 
+// 🌟 修正：シングルプレイ開始処理（選択中の単語帳と連携）
 window.startActualGame = function(difficulty) {
     currentGameDifficulty = difficulty;
     document.getElementById('game-difficulty-select-screen').style.display = 'none';
@@ -3092,7 +3151,9 @@ window.startActualGame = function(difficulty) {
                 endGameSession();
             }
         } else {
-            document.getElementById('gameTimerNum').innerText = "❤️×5";
+            // エンドレスモードのハートリアルタイム更新
+            let remainingHearts = Math.max(0, 5 - gameMistakeCount);
+            document.getElementById('gameTimerNum').innerText = "❤️×" + remainingHearts;
         }
     }, 1000);
     
@@ -3170,6 +3231,7 @@ window.skipGameWordWithPass = function() {
     processJudgmentResult("NG", correctTarget, "（パス）", "", true);
 };
 
+// 🌟 修正：正誤判定処理（単語帳・Firebaseへの保存およびエンドレスライフ減少）
 function processJudgmentResult(status, correctTarget, userAns, alternatives = "", isPass = false) {
     const overlay = document.getElementById('giantJudgmentOverlay');
     const mark = document.getElementById('giantJudgmentMark');
@@ -3217,6 +3279,12 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
         scorePopup.innerText = "MISS";
         scorePopup.classList.add('score-anim-minus');
         userStats.mistake_count++;
+
+        // エンドレスモード時、ハート（ライフ）を即座に減少
+        if(currentGameDifficulty === 'endless') {
+            let remainingHearts = Math.max(0, 5 - gameMistakeCount);
+            document.getElementById('gameTimerNum').innerText = "❤️×" + remainingHearts;
+        }
     }
     
     totalExp += earnedExpThisTurn;
@@ -3251,6 +3319,25 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
         correctAns: correctTarget,
         status: status
     });
+
+    // 解答結果を単語帳（vocabList）とFirebaseへ即時反映
+    const currentQ = gameCurrentWordsQueue[gameCurrentIndex];
+    if(currentQ) {
+        const targetVocab = vocabList.find(w => String(w.num) === String(currentQ.wordNum));
+        if(targetVocab) {
+            let wordStatus = isCorrect ? 'ok' : 'bad';
+            if(targetVocab.meanings && targetVocab.meanings.length > 0) {
+                targetVocab.meanings[0].status = wordStatus;
+                if(!targetVocab.meanings[0].history) targetVocab.meanings[0].history = [];
+                targetVocab.meanings[0].history.push(wordStatus);
+            }
+            targetVocab.status = wordStatus;
+            if(!targetVocab.history) targetVocab.history = [];
+            targetVocab.history.push(wordStatus);
+            
+            window.saveVocabToStorage();
+        }
+    }
     
     window.checkAndRewardTitleBonusXP();
     window.applyProfileToUi();
@@ -3258,6 +3345,12 @@ function processJudgmentResult(status, correctTarget, userAns, alternatives = ""
     
     let feedbackDelay = isPass ? 10 : 800;
     setTimeout(() => {
+        // エンドレスモードでハートが0になったらリザルト画面へ
+        if(currentGameDifficulty === 'endless' && gameMistakeCount >= 5) {
+            endGameSession();
+            return;
+        }
+
         document.getElementById('feedbackContent').style.display = 'block';
         document.getElementById('gameNextBtn').style.display = 'block';
     }, feedbackDelay);
