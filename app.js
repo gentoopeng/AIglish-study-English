@@ -4578,3 +4578,598 @@ if (document.readyState !== "loading") {
     }
   }, 150);
 }
+// ==========================================================================
+// ⚡ 軽量化＆フラッシュテンポ改善パッチ
+// ==========================================================================
+
+window.__vocabSaveTimer = null;
+window.__userStatsTimer = null;
+window.__vocabRenderTimer = null;
+window.__flashcardSessionActive = false;
+window.__flashcardNextDelay = 150;
+
+window.scheduleVocabProgressSave = function(delay) {
+  delay = delay || 500;
+
+  if (window.__vocabSaveTimer) {
+    clearTimeout(window.__vocabSaveTimer);
+  }
+
+  window.__vocabSaveTimer = setTimeout(async function() {
+    window.__vocabSaveTimer = null;
+
+    try {
+      if (typeof window.saveUserVocabProgress === "function") {
+        await window.saveUserVocabProgress();
+      } else if (typeof window.saveVocabToStorage === "function") {
+        await window.saveVocabToStorage();
+      }
+    } catch (e) {
+      console.error("単語進捗の遅延保存エラー:", e);
+    }
+  }, delay);
+};
+
+window.flushVocabProgressSave = async function() {
+  if (window.__vocabSaveTimer) {
+    clearTimeout(window.__vocabSaveTimer);
+    window.__vocabSaveTimer = null;
+  }
+
+  try {
+    if (typeof window.saveUserVocabProgress === "function") {
+      await window.saveUserVocabProgress();
+    } else if (typeof window.saveVocabToStorage === "function") {
+      await window.saveVocabToStorage();
+    }
+  } catch (e) {
+    console.error("単語進捗の即時保存エラー:", e);
+  }
+};
+
+window.scheduleUserStatsRefresh = function(delay) {
+  delay = delay || 500;
+
+  if (window.__userStatsTimer) {
+    clearTimeout(window.__userStatsTimer);
+  }
+
+  window.__userStatsTimer = setTimeout(function() {
+    window.__userStatsTimer = null;
+
+    userStats.vocab_fixed = vocabList.filter(function(w) {
+      return w.meanings && w.meanings.some(function(m) {
+        return m.status === "ok";
+      });
+    }).length;
+
+    window.saveUserStats();
+    window.checkAndRewardTitleBonusXP();
+    window.applyProfileToUi();
+    window.renderLeaderboard();
+  }, delay);
+};
+
+window.flushUserStatsRefresh = function() {
+  if (window.__userStatsTimer) {
+    clearTimeout(window.__userStatsTimer);
+    window.__userStatsTimer = null;
+  }
+
+  userStats.vocab_fixed = vocabList.filter(function(w) {
+    return w.meanings && w.meanings.some(function(m) {
+      return m.status === "ok";
+    });
+  }).length;
+
+  window.saveUserStats();
+  window.checkAndRewardTitleBonusXP();
+  window.applyProfileToUi();
+  window.renderLeaderboard();
+};
+
+window.scheduleVocabListRender = function(delay) {
+  delay = delay || 600;
+
+  if (window.__vocabRenderTimer) {
+    clearTimeout(window.__vocabRenderTimer);
+  }
+
+  window.__vocabRenderTimer = setTimeout(function() {
+    window.__vocabRenderTimer = null;
+
+    if (typeof window.renderVocabList === "function") {
+      window.renderVocabList();
+    }
+  }, delay);
+};
+
+window.vocabCardMatchesFilter = function(w) {
+  var startEl = document.getElementById("vocabRangeStart");
+  var endEl = document.getElementById("vocabRangeEnd");
+  var searchEl = document.getElementById("vocabSearchInput");
+
+  var startRange = startEl ? (parseInt(startEl.value) || 0) : 0;
+  var endRange = endEl ? (parseInt(endEl.value) || 99999) : 99999;
+  var searchKeyword = searchEl ? searchEl.value.toLowerCase().trim() : "";
+
+  var n = parseInt(w.num);
+  if (!isNaN(n) && (n < startRange || n > endRange)) return false;
+
+  if (vocabFilter !== "all") {
+    var hasFilterStatus = (w.meanings || []).some(function(m) {
+      return m.status === vocabFilter;
+    });
+
+    if (!hasFilterStatus) return false;
+  }
+
+  if (searchKeyword) {
+    var inWord = String(w.word || "").toLowerCase().includes(searchKeyword);
+    var inMeaning = String(w.meaning || "").includes(searchKeyword);
+
+    if (!inWord && !inMeaning) return false;
+  }
+
+  return true;
+};
+
+window.buildVocabDotsHtml = function(w) {
+  var hasAnyHistory = w.meanings && w.meanings.some(function(m) {
+    return m.history && m.history.length > 0;
+  });
+
+  var dotsHtml = "";
+
+  if (hasAnyHistory) {
+    var groupsHtml = [];
+
+    w.meanings.forEach(function(m) {
+      var groupHtml = '<div style="display:flex; gap:2px; align-items:center;">';
+
+      if (m.history && m.history.length > 0) {
+        m.history.slice(-5).forEach(function(h) {
+          var mark = h === "ok" ? "◯" : h === "so" ? "△" : "✕";
+          var bg = h === "ok" ? "#10B981" : h === "so" ? "#F59E0B" : "#EF4444";
+          var color = h === "so" ? "#0F172A" : "white";
+
+          groupHtml += '<span style="padding:2px 4px; border-radius:4px; font-size:9px; font-weight:800; background:' + bg + '; color:' + color + ';">' + mark + '</span>';
+        });
+      } else {
+        groupHtml += '<span style="color:var(--text-sub); font-size:10px; padding:0 4px;">-</span>';
+      }
+
+      groupHtml += '</div>';
+      groupsHtml.push(groupHtml);
+    });
+
+    dotsHtml = '<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center; justify-content:flex-end; margin-top:0;">';
+
+    groupsHtml.forEach(function(gh, i) {
+      dotsHtml += gh;
+
+      if (i < groupsHtml.length - 1) {
+        if ((i + 1) % 3 === 0) {
+          dotsHtml += '<div style="flex-basis:100%; height:0;"></div>';
+        } else {
+          dotsHtml += '<span style="color:rgba(255,255,255,0.2); font-size:12px; font-weight:bold;">/</span>';
+        }
+      }
+    });
+
+    dotsHtml += '</div>';
+  }
+
+  return '<div style="display:flex; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">' + dotsHtml + '</div>';
+};
+
+window.updateVocabCardUi = function(wordNum) {
+  var w = vocabList.find(function(item) {
+    return String(item.num) === String(wordNum);
+  });
+
+  if (!w) return;
+
+  var body = document.getElementById("wordCardBody-" + wordNum);
+
+  if (!body) {
+    if (window.vocabCardMatchesFilter(w)) {
+      window.scheduleVocabListRender(600);
+    }
+    return;
+  }
+
+  var card = body.closest(".word-row-container");
+  if (!card) return;
+
+  if (!window.vocabCardMatchesFilter(w)) {
+    card.style.transition = "opacity 0.35s ease, transform 0.35s ease";
+    card.style.opacity = "0";
+    card.style.transform = "scale(0.97)";
+
+    setTimeout(function() {
+      if (!window.vocabCardMatchesFilter(w)) {
+        card.remove();
+      }
+    }, 350);
+
+    return;
+  }
+
+  card.setAttribute("style", window.getCardStyleByHistory(w));
+  card.style.opacity = "";
+  card.style.transform = "";
+
+  var meaningsContainer = body.children[1];
+
+  if (meaningsContainer && meaningsContainer.children) {
+    var rows = meaningsContainer.children;
+
+    (w.meanings || []).forEach(function(m, idx) {
+      var row = rows[idx];
+      if (!row) return;
+
+      var btns = row.querySelectorAll("button");
+      if (!btns || btns.length < 4) return;
+
+      btns[0].style.background = m.status === "ok" ? "var(--word-ok)" : "rgba(0,0,0,0.5)";
+      btns[0].style.color = m.status === "ok" ? "#000" : "white";
+
+      btns[1].style.background = m.status === "so" ? "var(--word-so)" : "rgba(0,0,0,0.5)";
+      btns[1].style.color = m.status === "so" ? "#000" : "white";
+
+      btns[2].style.background = m.status === "bad" ? "var(--word-bad)" : "rgba(0,0,0,0.5)";
+      btns[2].style.color = m.status === "bad" ? "#FFF" : "white";
+
+      btns[3].style.background = m.status === "none" ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.5)";
+      btns[3].style.color = "white";
+    });
+  }
+
+  var lastChild = body.lastElementChild;
+
+  if (lastChild && lastChild.style && lastChild.style.justifyContent === "flex-end") {
+    lastChild.outerHTML = window.buildVocabDotsHtml(w);
+  }
+};
+
+window.getFlashcardStyleByHistory = function(wordData) {
+  var cleanKey = String(wordData.en || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+  var vocabMatch = vocabList.find(function(v) {
+    return v.word.toLowerCase() === cleanKey;
+  });
+
+  var allHistory = [];
+
+  if (vocabMatch) {
+    if (vocabMatch.history && vocabMatch.history.length > 0) {
+      allHistory = allHistory.concat(vocabMatch.history);
+    }
+
+    if (vocabMatch.meanings) {
+      vocabMatch.meanings.forEach(function(m) {
+        if (m.history && m.history.length > 0) {
+          allHistory = allHistory.concat(m.history);
+        }
+      });
+    }
+  } else {
+    var memStatus = wordMemory[cleanKey];
+
+    if (memStatus && memStatus !== "none") {
+      allHistory.push(memStatus);
+    }
+  }
+
+  if (allHistory.length === 0) {
+    return "background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0%, #130a24 75%, #090514 100%) !important; border: none !important; box-shadow: none !important;";
+  }
+
+  var totalScore = 0;
+
+  allHistory.forEach(function(h) {
+    if (h === "ok") totalScore += 1;
+    else if (h === "so") totalScore += 4;
+    else if (h === "bad") totalScore += 9;
+  });
+
+  var avg = totalScore / allHistory.length;
+
+  var green = [16, 185, 129];
+  var yellow = [245, 158, 11];
+  var red = [239, 68, 68];
+
+  var r, g, b;
+
+  if (avg <= 5) {
+    var ratio = (avg - 1) / (5 - 1);
+
+    r = Math.round(green[0] + (yellow[0] - green[0]) * ratio);
+    g = Math.round(green[1] + (yellow[1] - green[1]) * ratio);
+    b = Math.round(green[2] + (yellow[2] - green[2]) * ratio);
+  } else {
+    var ratio2 = (avg - 5) / (9 - 5);
+
+    r = Math.round(yellow[0] + (red[0] - yellow[0]) * ratio2);
+    g = Math.round(yellow[1] + (red[1] - yellow[1]) * ratio2);
+    b = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio2);
+  }
+
+  return "background: radial-gradient(circle at center, rgba(" + r + ", " + g + ", " + b + ", 0.22) 0%, rgba(" + r + ", " + g + ", " + b + ", 0.12) 50%, rgba(" + r + ", " + g + ", " + b + ", 0) 100%);";
+};
+
+window.createFlickTrailParticle = function(x, y, type) {
+  var p = document.createElement("div");
+
+  p.className = "fc-history-bubble";
+  p.style.position = "fixed";
+  p.style.left = x + "px";
+  p.style.top = y + "px";
+  p.style.width = (Math.random() * 8 + 6) + "px";
+  p.style.height = p.style.width;
+  p.style.pointerEvents = "none";
+  p.style.zIndex = "5000";
+  p.style.opacity = "0.85";
+  p.style.transform = "translate(-50%, -50%)";
+  p.style.transition = "all 0.8s cubic-bezier(0.1, 0.8, 0.25, 1)";
+
+  if (type === "right") {
+    p.classList.add("ok");
+  } else if (type === "left") {
+    p.classList.add("bad");
+  } else if (type === "up") {
+    p.classList.add("so");
+  } else {
+    p.style.borderColor = "rgba(255,255,255,0.6)";
+  }
+
+  document.body.appendChild(p);
+
+  setTimeout(function() {
+    var dx = (Math.random() - 0.5) * 40;
+    var dy = -60 - Math.random() * 40;
+
+    p.style.transform = "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px)) scale(0)";
+    p.style.opacity = "0";
+  }, 10);
+
+  setTimeout(function() {
+    p.remove();
+  }, 850);
+};
+
+window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
+  if (event) event.stopPropagation();
+
+  var wIdx = vocabList.findIndex(function(w) {
+    return String(w.num) === String(wordNum);
+  });
+
+  if (wIdx < 0) return;
+
+  var mIdx = vocabList[wIdx].meanings.findIndex(function(m) {
+    return String(m.id) === String(meaningId);
+  });
+
+  if (mIdx < 0) return;
+
+  if (status === "none") {
+    vocabList[wIdx].meanings[mIdx].status = "none";
+    vocabList[wIdx].meanings[mIdx].history = [];
+  } else {
+    vocabList[wIdx].meanings[mIdx].status = status;
+
+    if (!vocabList[wIdx].meanings[mIdx].history) {
+      vocabList[wIdx].meanings[mIdx].history = [];
+    }
+
+    vocabList[wIdx].meanings[mIdx].history.push(status);
+    totalExp += 1;
+  }
+
+  var aggregatedHistory = [];
+
+  vocabList[wIdx].meanings.forEach(function(m) {
+    if (m.history && m.history.length > 0) {
+      aggregatedHistory = aggregatedHistory.concat(m.history);
+    }
+  });
+
+  vocabList[wIdx].history = aggregatedHistory.slice(-20);
+  vocabList[wIdx].status = window.wordOverallStatus(vocabList[wIdx]);
+
+  userStats.vocab_fixed = vocabList.filter(function(w) {
+    return w.meanings && w.meanings.some(function(m) {
+      return m.status === "ok";
+    });
+  }).length;
+
+  window.updateVocabCardUi(wordNum);
+
+  window.scheduleVocabProgressSave(450);
+  window.scheduleUserStatsRefresh(600);
+};
+
+window.swipeFlashcard = function(direction, finalDx = 0, finalDy = 0) {
+  var card = document.getElementById("activeFlashcard");
+  if (!card || card.dataset.swiped === "1") return;
+
+  card.dataset.swiped = "1";
+
+  var currentWord = flashcardOriginQueue[flashcardCurrentIndex];
+  if (!currentWord) return;
+
+  var cleanKey = String(currentWord.en || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+  var status = "none";
+
+  var rect = card.getBoundingClientRect();
+  var releaseX = rect.left + rect.width / 2;
+  var releaseY = rect.top + rect.height / 2;
+
+  var ghost = card.cloneNode(true);
+
+  ghost.id = "flashcardGhost";
+  ghost.style.position = "fixed";
+  ghost.style.left = (rect.left - finalDx) + "px";
+  ghost.style.top = (rect.top - finalDy) + "px";
+  ghost.style.width = rect.width + "px";
+  ghost.style.height = rect.height + "px";
+  ghost.style.margin = "0";
+  ghost.style.zIndex = "5000";
+  ghost.style.pointerEvents = "none";
+  ghost.style.animation = "none";
+  ghost.style.transform = "translate3d(" + finalDx + "px, " + finalDy + "px, 0) rotate(" + (finalDx * 0.05) + "deg)";
+  ghost.style.opacity = "1";
+
+  document.body.appendChild(ghost);
+
+  requestAnimationFrame(function() {
+    ghost.style.transition = "transform 0.8s cubic-bezier(0.1, 0.8, 0.25, 1), opacity 0.8s ease";
+    ghost.style.transform = "translate3d(" + finalDx + "px, " + finalDy + "px, 0) scale(0) rotate(" + (finalDx * 0.05) + "deg)";
+    ghost.style.opacity = "0";
+  });
+
+  setTimeout(function() {
+    ghost.remove();
+  }, 850);
+
+  for (var i = 0; i < 15; i++) {
+    setTimeout(function() {
+      window.createFlickTrailParticle(
+        releaseX + (Math.random() - 0.5) * 80,
+        releaseY + (Math.random() - 0.5) * 80,
+        direction
+      );
+    }, i * 15);
+  }
+
+  var ripple = document.createElement("div");
+
+  ripple.className = "flashcard-post-ripple firework-余韻-" + direction;
+  ripple.style.position = "fixed";
+  ripple.style.left = (releaseX - 120) + "px";
+  ripple.style.top = (releaseY - 120) + "px";
+  ripple.style.width = "240px";
+  ripple.style.height = "240px";
+  ripple.style.transform = "none";
+  ripple.style.zIndex = "4999";
+  ripple.style.animationDuration = "0.8s";
+
+  document.body.appendChild(ripple);
+
+  setTimeout(function() {
+    ripple.remove();
+  }, 800);
+
+  card.remove();
+
+  if (direction === "right") {
+    status = "ok";
+    flashcardLearnedCount++;
+  } else if (direction === "left") {
+    status = "bad";
+  } else if (direction === "up") {
+    status = "so";
+  }
+
+  totalExp += 1;
+
+  wordMemory[cleanKey] = status;
+  localStorage.setItem("wordMemory", JSON.stringify(wordMemory));
+
+  var vocabMatch = vocabList.find(function(v) {
+    return v.word.toLowerCase() === cleanKey;
+  });
+
+  if (vocabMatch) {
+    vocabMatch.status = status;
+
+    if (vocabMatch.meanings && vocabMatch.meanings.length > 0) {
+      vocabMatch.meanings[0].status = status;
+
+      if (!vocabMatch.meanings[0].history) {
+        vocabMatch.meanings[0].history = [];
+      }
+
+      vocabMatch.meanings[0].history.push(status);
+    }
+
+    if (!vocabMatch.history) {
+      vocabMatch.history = [];
+    }
+
+    vocabMatch.history.push(status);
+  }
+
+  userStats.flash_count++;
+
+  userStats.vocab_fixed = vocabList.filter(function(w) {
+    return w.meanings && w.meanings.some(function(m) {
+      return m.status === "ok";
+    });
+  }).length;
+
+  window.scheduleVocabProgressSave(700);
+  window.scheduleUserStatsRefresh(700);
+
+  setTimeout(function() {
+    flashcardCurrentIndex++;
+
+    window.renderFlashcardDeck();
+
+    var rightEdge = document.getElementById("fcEdgeRippleRight");
+    var leftEdge = document.getElementById("fcEdgeRippleLeft");
+    var topEdge = document.getElementById("fcEdgeRippleTop");
+
+    if (rightEdge) rightEdge.style.opacity = 0;
+    if (leftEdge) leftEdge.style.opacity = 0;
+    if (topEdge) topEdge.style.opacity = 0;
+  }, window.__flashcardNextDelay);
+};
+
+const __originalStartFlashcardSession = window.startFlashcardSession;
+
+window.startFlashcardSession = function() {
+  window.__flashcardSessionActive = true;
+
+  if (typeof __originalStartFlashcardSession === "function") {
+    __originalStartFlashcardSession();
+  }
+};
+
+const __originalFinishFlashcardSession = window.finishFlashcardSession;
+
+window.finishFlashcardSession = function() {
+  window.__flashcardSessionActive = false;
+
+  window.flushVocabProgressSave();
+  window.flushUserStatsRefresh();
+
+  if (typeof __originalFinishFlashcardSession === "function") {
+    __originalFinishFlashcardSession();
+  }
+};
+
+window.quitFlashcardSession = window.finishFlashcardSession;
+
+window.addEventListener("pagehide", function() {
+  if (window.__vocabSaveTimer || window.__userStatsTimer || window.__flashcardSessionActive) {
+    window.flushVocabProgressSave();
+    window.flushUserStatsRefresh();
+  }
+});
+
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "hidden") {
+    if (window.__vocabSaveTimer || window.__userStatsTimer || window.__flashcardSessionActive) {
+      window.flushVocabProgressSave();
+      window.flushUserStatsRefresh();
+    }
+  }
+});
