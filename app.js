@@ -6033,3 +6033,610 @@ if (document.readyState !== "loading") {
     }
   }, 250);
 }
+// ==========================================================================
+// 🤝 フレンド最新化 & EXP全ユーザーランキング拡張
+// ==========================================================================
+
+window.__friendRefreshLastAt = 0;
+window.__friendRefreshButtonInjected = false;
+window.__leaderboardCache = null;
+window.__leaderboardCacheAt = 0;
+window.__leaderboardLoadingPromise = null;
+window.__lastLoginRecorded = false;
+
+window.formatFriendLastLogin = function(iso) {
+  if (!iso) return "";
+
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+
+  return `${y}/${m}/${day} ${hh}:${mm}`;
+};
+
+window.recordLastLoginOnce = async function() {
+  if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
+  if (window.__lastLoginRecorded) return;
+
+  window.__lastLoginRecorded = true;
+
+  try {
+    userStats.lastLoginAt = new Date().toISOString();
+    await window.saveUserStats();
+  } catch (e) {
+    console.error("最終ログイン記録エラー:", e);
+  }
+};
+
+window.injectFriendRefreshButton = function() {
+  if (window.__friendRefreshButtonInjected) return;
+
+  const container = document.getElementById("friendListContainer");
+  if (!container || !container.parentNode) return;
+
+  if (document.getElementById("friendRefreshButton")) {
+    window.__friendRefreshButtonInjected = true;
+    return;
+  }
+
+  const btn = document.createElement("button");
+  btn.id = "friendRefreshButton";
+  btn.type = "button";
+  btn.textContent = "🔄 最新情報に更新";
+  btn.style.cssText = "width:100%; height:38px; margin:8px 0 12px 0; background:rgba(0,240,255,0.12); color:var(--cosmic-cyan); border:1px solid var(--cosmic-cyan); border-radius:10px; font-weight:800; font-size:12px; cursor:pointer;";
+
+  btn.onclick = function() {
+    window.manualRefreshFriendList();
+  };
+
+  container.parentNode.insertBefore(btn, container);
+  window.__friendRefreshButtonInjected = true;
+};
+
+window.refreshFriendListFromFirebase = async function(force) {
+  if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
+  if (!window.db || !window.fbGetDoc || !window.fbDoc) return;
+  if (!Array.isArray(myFriendList) || myFriendList.length === 0) return;
+
+  const now = Date.now();
+
+  if (!force && window.__friendRefreshLastAt && now - window.__friendRefreshLastAt < 60000) {
+    return;
+  }
+
+  window.__friendRefreshLastAt = now;
+
+  let changed = false;
+
+  for (let i = 0; i < myFriendList.length; i++) {
+    const f = myFriendList[i];
+
+    try {
+      const ref = window.fbDoc(window.db, "users", f.code);
+      const snap = await window.fbGetDoc(ref);
+
+      if (!snap.exists()) continue;
+
+      const d = snap.data();
+      if (d.deleted) continue;
+
+      const stats = d.userStats || {};
+
+      let remoteLevel = f.level || 1;
+
+      if (stats.user_level) {
+        remoteLevel = parseInt(stats.user_level) || remoteLevel;
+      } else if (d.totalExp !== undefined && d.totalExp !== null) {
+        remoteLevel = window.calculateLevelFromExp(parseInt(d.totalExp) || 0).level;
+      }
+
+      const remoteName = d.playerName || f.name;
+      const remoteTitle = d.selectedTitle || f.title || "称号なし";
+      const remoteAvatar = (typeof d.avatar === "string") ? d.avatar : (f.customAvatar || "");
+      const remoteStudyTime = parseInt(stats.study_burst) || 0;
+
+      let remoteLastLoginStr = f.lastLoginStr || "";
+      const lastIso = stats.lastLoginAt || d.updatedAt || "";
+
+      if (lastIso) {
+        const formatted = window.formatFriendLastLogin(lastIso);
+        if (formatted) remoteLastLoginStr = formatted;
+      }
+
+      if (
+        f.name !== remoteName ||
+        f.title !== remoteTitle ||
+        f.customAvatar !== remoteAvatar ||
+        f.level !== remoteLevel ||
+        f.studyTime !== remoteStudyTime ||
+        f.lastLoginStr !== remoteLastLoginStr
+      ) {
+        f.name = remoteName;
+        f.title = remoteTitle;
+        f.customAvatar = remoteAvatar;
+        f.level = remoteLevel;
+        f.studyTime = remoteStudyTime;
+        f.lastLoginStr = remoteLastLoginStr;
+        changed = true;
+      }
+    } catch (e) {
+      console.error("フレンド最新化エラー:", e);
+    }
+  }
+
+  if (changed) {
+    try {
+      await window.saveUserStats();
+    } catch (e) {
+      console.error("フレンド一覧保存エラー:", e);
+    }
+  }
+
+  if (typeof window.sortAndRenderFriendList === "function") {
+    window.sortAndRenderFriendList();
+  }
+};
+
+window.manualRefreshFriendList = async function() {
+  const btn = document.getElementById("friendRefreshButton");
+
+  if (!window.db || !window.fbGetDoc || !window.fbDoc || typeof myId === "undefined" || myId === "GUEST-000") {
+    alert("Firebaseに接続されていないため更新できません。");
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "更新中...";
+  }
+
+  try {
+    await window.refreshFriendListFromFirebase(true);
+  } catch (e) {
+    console.error("フレンド手動更新エラー:", e);
+    alert("フレンド情報の更新に失敗しました。");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🔄 最新情報に更新";
+    }
+  }
+};
+
+window.fetchAllLeaderboardUsers = async function() {
+  const users = [];
+
+  if (!window.db || !window.fbGetDoc || !window.fbDoc) {
+    return users;
+  }
+
+  let allUsers = [];
+
+  try {
+    allUsers = await window.getAllUsers();
+  } catch (e) {
+    console.error("全ユーザー取得エラー:", e);
+  }
+
+  const ids = [];
+
+  (allUsers || []).forEach(function(u) {
+    if (u && u.id && u.id !== "GUEST-000" && ids.indexOf(u.id) === -1) {
+      ids.push(u.id);
+    }
+  });
+
+  for (const id of ids) {
+    try {
+      const basic = (allUsers || []).find(function(u) {
+        return u.id === id;
+      });
+
+      const ref = window.fbDoc(window.db, "users", id);
+      const snap = await window.fbGetDoc(ref);
+
+      if (!snap.exists()) continue;
+
+      const d = snap.data();
+      if (d.deleted) continue;
+
+      const stats = d.userStats || {};
+
+      let exp = parseInt(d.totalExp) || 0;
+      let level = 1;
+
+      if (stats.user_level) {
+        level = parseInt(stats.user_level) || 1;
+      } else {
+        level = window.calculateLevelFromExp(exp).level;
+      }
+
+      let name = d.playerName || "";
+
+      if (!name && basic) {
+        name = basic.playerName || basic.realName || "";
+      }
+
+      if (!name) {
+        name = "修行者";
+      }
+
+      const title = d.selectedTitle || "称号なし";
+      const avatar = (typeof d.avatar === "string") ? d.avatar : "";
+
+      users.push({
+        id: id,
+        name: name,
+        title: title,
+        exp: exp,
+        lvl: level,
+        icon: "👤",
+        customAvatar: avatar,
+        isMe: false
+      });
+    } catch (e) {
+      console.error("ランキングユーザー取得エラー:", e);
+    }
+  }
+
+  return users;
+};
+
+window.drawLeaderboardUsers = function(container, users) {
+  let html = "";
+
+  users.forEach(function(u, idx) {
+    let rankColor = idx === 0 ? "#FBBF24" : idx === 1 ? "#94A3B8" : idx === 2 ? "#D97706" : "#FFFFFF";
+
+    let bgStyle = u.isMe
+      ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);"
+      : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
+
+    let avatarUiNodeStr = `<span style="font-size:16px;">${u.icon || "👤"}</span>`;
+
+    if (u.customAvatar) {
+      avatarUiNodeStr = `<img src="${u.customAvatar}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan);">`;
+    }
+
+    html += `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin-bottom:4px; ${bgStyle} font-size:12px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="color:${rankColor}; font-weight:900; font-size:14px; width:18px; text-align:center;">${idx + 1}</span>
+          <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${avatarUiNodeStr}</div>
+          <div>
+            <div style="font-weight:bold; color:white;">${u.name} <span style="font-size:9px; color:var(--cosmic-cyan); font-weight:normal; margin-left:4px;">LV.${u.lvl}</span></div>
+            <div style="font-size:9px; color:var(--text-sub); margin-top:1px;">${u.title}</div>
+          </div>
+        </div>
+        <div style="text-align:right; font-weight:900; color:var(--word-so); font-family:monospace;">${u.exp} <span style="font-size:8px; color:var(--text-sub); font-weight:normal;">EXP</span></div>
+      </div>`;
+  });
+
+  container.innerHTML = html;
+};
+
+window.renderLeaderboard = async function(force) {
+  const container = document.getElementById("leaderboardContainer");
+  if (!container) return;
+
+  if (typeof myId === "undefined" || myId === "GUEST-000") {
+    container.innerHTML = `
+      <div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">
+        ゲストはランキング対象外です。
+      </div>`;
+    return;
+  }
+
+  let selfLevel = 1;
+
+  if (typeof window.calculateLevelFromExp === "function") {
+    selfLevel = window.calculateLevelFromExp(totalExp).level;
+  }
+
+  if (typeof userStats !== "undefined") {
+    userStats.user_level = selfLevel;
+  }
+
+  const selfAvatar = localStorage.getItem("core_v4_user_avatar_" + myId) || "";
+
+  const selfUser = {
+    id: myId,
+    name: `${myName} (あなた)`,
+    title: selectedTitle,
+    exp: totalExp,
+    lvl: selfLevel,
+    icon: "👤",
+    customAvatar: selfAvatar,
+    isMe: true
+  };
+
+  const now = Date.now();
+  const cacheValid = window.__leaderboardCache && (now - window.__leaderboardCacheAt < 60000);
+
+  if (cacheValid && !force) {
+    let users = window.__leaderboardCache.filter(function(u) {
+      return u.id !== myId;
+    }).map(function(u) {
+      return Object.assign({}, u);
+    });
+
+    users.push(selfUser);
+    users.sort(function(a, b) {
+      return b.exp - a.exp;
+    });
+
+    window.drawLeaderboardUsers(container, users);
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">
+      ランキングを取得中...
+    </div>`;
+
+  try {
+    if (!window.__leaderboardLoadingPromise) {
+      window.__leaderboardLoadingPromise = window.fetchAllLeaderboardUsers()
+        .then(function(users) {
+          window.__leaderboardCache = users;
+          window.__leaderboardCacheAt = Date.now();
+          return users;
+        })
+        .finally(function() {
+          window.__leaderboardLoadingPromise = null;
+        });
+    }
+
+    const remoteUsers = await window.__leaderboardLoadingPromise;
+
+    let users = (remoteUsers || []).filter(function(u) {
+      return u.id !== myId;
+    }).map(function(u) {
+      return Object.assign({}, u);
+    });
+
+    users.push(selfUser);
+
+    users.sort(function(a, b) {
+      return b.exp - a.exp;
+    });
+
+    users = users.slice(0, 50);
+
+    window.drawLeaderboardUsers(container, users);
+  } catch (e) {
+    console.error("ランキング描画エラー:", e);
+    window.drawLeaderboardUsers(container, [selfUser]);
+  }
+};
+
+const __prevSwitchTabForFriendRefresh = window.switchTab;
+
+window.switchTab = function(tabId) {
+  const res = __prevSwitchTabForFriendRefresh
+    ? __prevSwitchTabForFriendRefresh.apply(this, arguments)
+    : undefined;
+
+  if (tabId === "community") {
+    window.injectFriendRefreshButton();
+    window.refreshFriendListFromFirebase(false);
+    window.renderLeaderboard(false);
+  }
+
+  return res;
+};
+
+const __prevSwitchCommunitySubTabForFriendRefresh = window.switchCommunitySubTab;
+
+if (typeof __prevSwitchCommunitySubTabForFriendRefresh === "function") {
+  window.switchCommunitySubTab = function(tabName, animDir) {
+    const res = __prevSwitchCommunitySubTabForFriendRefresh.apply(this, arguments);
+
+    if (tabName === "friend") {
+      window.injectFriendRefreshButton();
+      window.refreshFriendListFromFirebase(false);
+    }
+
+    if (tabName === "ranking") {
+      window.renderLeaderboard(false);
+    }
+
+    return res;
+  };
+}
+
+const __prevLoadLocalStateForLastLogin = window.loadLocalState;
+
+window.loadLocalState = async function() {
+  const res = __prevLoadLocalStateForLastLogin
+    ? await __prevLoadLocalStateForLastLogin.apply(this, arguments)
+    : undefined;
+
+  await window.recordLastLoginOnce();
+
+  return res;
+};
+
+(function initFriendAndLeaderboardPatch() {
+  function boot() {
+    window.injectFriendRefreshButton();
+    window.recordLastLoginOnce();
+  }
+
+  if (document.readyState !== "loading") {
+    setTimeout(boot, 300);
+  } else {
+    document.addEventListener("DOMContentLoaded", boot);
+  }
+})();
+// ==========================================================================
+// 🔢 欠番検索パネル（単語インポート用）
+// ==========================================================================
+
+window.injectMissingNumberSearchPanel = function() {
+  if (document.getElementById("missingNumberSearchPanel")) return;
+
+  const anchor = document.getElementById("bulkWordInput");
+  if (!anchor || !anchor.parentNode) return;
+
+  const panel = document.createElement("div");
+  panel.id = "missingNumberSearchPanel";
+  panel.style.cssText = "margin:12px 0; padding:12px; border:1px dashed rgba(0,240,255,0.35); border-radius:12px; background:rgba(0,0,0,0.25);";
+
+  panel.innerHTML = `
+    <div style="font-size:12px; font-weight:800; color:var(--cosmic-cyan); margin-bottom:8px;">
+      🔢 欠番検索
+    </div>
+
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+      <input type="number" id="missingRangeStart" class="search-input" placeholder="開始" style="width:90px; height:36px; margin:0;">
+      <span style="color:var(--text-sub); font-size:12px;">〜</span>
+      <input type="number" id="missingRangeEnd" class="search-input" placeholder="終了" style="width:90px; height:36px; margin:0;">
+      <button class="list-action-link" style="height:36px;" onclick="window.runMissingNumberSearch()">
+        検索
+      </button>
+    </div>
+
+    <div style="font-size:11px; color:var(--text-sub); margin-bottom:8px;">
+      空欄の場合は 1〜登録最大番号 で検索します。
+    </div>
+
+    <div id="missingNumberResultSummary" style="font-size:12px; color:#fff; margin-bottom:8px;">
+    </div>
+
+    <textarea id="missingNumberCopyText" class="modern-textarea" readonly style="height:80px; margin:0 0 8px 0; font-size:12px;"></textarea>
+
+    <button class="list-action-link" style="height:36px; width:100%; text-align:center;" onclick="window.copyMissingNumberText()">
+      欠番をコピー
+    </button>
+  `;
+
+  anchor.parentNode.insertBefore(panel, anchor.nextSibling);
+};
+
+window.runMissingNumberSearch = function() {
+  const summary = document.getElementById("missingNumberResultSummary");
+  const copyArea = document.getElementById("missingNumberCopyText");
+
+  if (!summary || !copyArea) return;
+
+  const maxNum = (vocabList || []).reduce(function(max, w) {
+    const n = parseInt(w.num);
+    return isNaN(n) ? max : Math.max(max, n);
+  }, 0);
+
+  const startEl = document.getElementById("missingRangeStart");
+  const endEl = document.getElementById("missingRangeEnd");
+
+  const startIsBlank = !startEl || startEl.value.trim() === "";
+  const endIsBlank = !endEl || endEl.value.trim() === "";
+
+  let start = startIsBlank ? 1 : parseInt(startEl.value);
+  let end = endIsBlank ? maxNum : parseInt(endEl.value);
+
+  if (endIsBlank && maxNum <= 0) {
+    summary.innerText = "単語が登録されていないため、欠番を検索できません。";
+    copyArea.value = "";
+    return;
+  }
+
+  if (isNaN(start) || isNaN(end)) {
+    summary.innerText = "開始番号と終了番号を正しく入力してください。";
+    copyArea.value = "";
+    return;
+  }
+
+  if (start > end) {
+    const tmp = start;
+    start = end;
+    end = tmp;
+  }
+
+  if (end - start > 100000) {
+    summary.innerText = "検索範囲が広すぎます。100000件以内にしてください。";
+    copyArea.value = "";
+    return;
+  }
+
+  const existingNums = new Set();
+
+  (vocabList || []).forEach(function(w) {
+    const n = parseInt(w.num);
+    if (!isNaN(n)) existingNums.add(n);
+  });
+
+  const missing = [];
+
+  for (let n = start; n <= end; n++) {
+    if (!existingNums.has(n)) {
+      missing.push(n);
+    }
+  }
+
+  if (missing.length === 0) {
+    summary.innerText = `欠番はありません（${start}〜${end}）`;
+    copyArea.value = "";
+    return;
+  }
+
+  const preview = missing.slice(0, 200).join(", ") + (missing.length > 200 ? " ..." : "");
+
+  summary.innerHTML = `
+    欠番: <strong style="color:var(--cosmic-cyan);">${missing.length}件</strong>
+    （${start}〜${end}）<br>
+    <span style="color:var(--text-sub); font-size:11px;">${preview}</span>
+  `;
+
+  copyArea.value = missing.join("\n");
+};
+
+window.copyMissingNumberText = async function() {
+  const copyArea = document.getElementById("missingNumberCopyText");
+
+  if (!copyArea || !copyArea.value) {
+    alert("コピーする欠番がありません。先に検索してください。");
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(copyArea.value);
+    alert("欠番をコピーしました。");
+  } catch (e) {
+    copyArea.removeAttribute("readonly");
+    copyArea.select();
+    document.execCommand("copy");
+    copyArea.setAttribute("readonly", "");
+    alert("欠番をコピーしました。");
+  }
+};
+
+const __prevSwitchTabForMissingNumberSearch = window.switchTab;
+
+window.switchTab = function(tabId) {
+  const res = __prevSwitchTabForMissingNumberSearch
+    ? __prevSwitchTabForMissingNumberSearch.apply(this, arguments)
+    : undefined;
+
+  if (tabId === "admin") {
+    window.injectMissingNumberSearchPanel();
+  }
+
+  return res;
+};
+
+if (document.readyState !== "loading") {
+  setTimeout(function() {
+    window.injectMissingNumberSearchPanel();
+  }, 300);
+} else {
+  document.addEventListener("DOMContentLoaded", function() {
+    setTimeout(function() {
+      window.injectMissingNumberSearchPanel();
+    }, 300);
+  });
+}
