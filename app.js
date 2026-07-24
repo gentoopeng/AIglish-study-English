@@ -5173,3 +5173,863 @@ document.addEventListener("visibilitychange", function() {
     }
   }
 });
+// ==========================================================================
+// 🏆 殿堂＆シーズンランキング拡張
+// ==========================================================================
+
+window.__gameLbTab = window.__gameLbTab || "hall";
+window.__seasonLbView = window.__seasonLbView || "current";
+
+// 第1シーズン開始: 2026/07/27（月）0:00
+window.__seasonRankingAnchor = window.__seasonRankingAnchor || new Date(2026, 6, 27, 0, 0, 0);
+
+window.getSeasonModeOrder = function() {
+  return ["ja2en", "en2ja", "mixed"];
+};
+
+window.getSeasonModeLabel = function(mode) {
+  if (mode === "ja2en") return "英訳";
+  if (mode === "en2ja") return "和訳";
+  return "まぜ";
+};
+
+window.getCurrentSeasonNo = function() {
+  const now = new Date();
+  const anchor = window.__seasonRankingAnchor;
+
+  if (now < anchor) return 0;
+
+  const diffMs = now.getTime() - anchor.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  return Math.floor(diffDays / 7) + 1;
+};
+
+window.getSeasonStart = function(seasonNo) {
+  const anchor = window.__seasonRankingAnchor;
+  return new Date(anchor.getTime() + (seasonNo - 1) * 7 * 24 * 60 * 60 * 1000);
+};
+
+window.getSeasonEnd = function(seasonNo) {
+  const anchor = window.__seasonRankingAnchor;
+  return new Date(anchor.getTime() + seasonNo * 7 * 24 * 60 * 60 * 1000 - 1000);
+};
+
+window.getSeasonMode = function(seasonNo) {
+  const modes = window.getSeasonModeOrder();
+  if (seasonNo <= 0) return modes[0];
+  return modes[(seasonNo - 1) % modes.length];
+};
+
+window.formatSeasonDate = function(dateObj) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const d = String(dateObj.getDate()).padStart(2, "0");
+  return `${y}/${m}/${d}`;
+};
+
+window.formatSeasonDateTime = function(dateObj) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const d = String(dateObj.getDate()).padStart(2, "0");
+  const hh = String(dateObj.getHours()).padStart(2, "0");
+  const mm = String(dateObj.getMinutes()).padStart(2, "0");
+  return `${y}/${m}/${d} ${hh}:${mm}`;
+};
+
+window.getSeasonRemainingText = function(seasonNo) {
+  const end = window.getSeasonEnd(seasonNo);
+  const now = new Date();
+  const diff = end.getTime() - now.getTime();
+
+  if (diff <= 0) return "終了";
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (days > 0) return `残り ${days}日${hours}時間`;
+  return `残り ${hours}時間${minutes}分`;
+};
+
+window.getSeasonStartCountdownText = function() {
+  const start = window.getSeasonStart(1);
+  const now = new Date();
+  const diff = start.getTime() - now.getTime();
+
+  if (diff <= 0) return "シーズン開始済み";
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+  if (days > 0) return `第1シーズン開始まで あと ${days}日${hours}時間`;
+  return `第1シーズン開始まで あと ${hours}時間`;
+};
+
+window.ensureSeasonUserStats = function() {
+  if (!userStats) return;
+
+  if (!Array.isArray(userStats.seasonTitles)) {
+    userStats.seasonTitles = [];
+  }
+
+  if (!Array.isArray(userStats.settledSeasons)) {
+    userStats.settledSeasons = [];
+  }
+};
+
+window.sortRankingScores = function(scores) {
+  return (scores || []).slice().sort(function(a, b) {
+    if (b.score !== a.score) return b.score - a.score;
+
+    const aTime = a.timestamp || 0;
+    const bTime = b.timestamp || 0;
+
+    return aTime - bTime;
+  });
+};
+
+window.makeRankingDateStr = function(dateObj) {
+  const m = dateObj.getMonth() + 1;
+  const d = dateObj.getDate();
+  const hh = String(dateObj.getHours()).padStart(2, "0");
+  const mm = String(dateObj.getMinutes()).padStart(2, "0");
+  return `${m}/${d} ${hh}:${mm}`;
+};
+
+window.submitHallScore = async function(mode, score, oldBest) {
+  if (!mode || score <= 0) return;
+  if (!myId || myId === "GUEST-000") return;
+
+  const bestKey = `cosmic_best_${mode}_endless`;
+
+  if (!window.db || !window.fbSetDoc || !window.fbDoc || !window.fbGetDoc) {
+    if (score > oldBest) {
+      localStorage.setItem(bestKey, String(score));
+    }
+    return;
+  }
+
+  try {
+    const docName = `game_hall_${mode}`;
+    const ref = window.fbDoc(window.db, "shared", docName);
+    const snap = await window.fbGetDoc(ref);
+
+    let scores = snap.exists() && snap.data().scores ? snap.data().scores : [];
+    const existing = scores.find(function(s) {
+      return s.id === myId;
+    });
+
+    const currentBest = existing ? Math.max(existing.score, oldBest) : oldBest;
+
+    if (score <= currentBest) {
+      if (existing) {
+        localStorage.setItem(bestKey, String(existing.score));
+      }
+      return;
+    }
+
+    localStorage.setItem(bestKey, String(score));
+
+    const now = new Date();
+
+    scores = scores.filter(function(s) {
+      return s.id !== myId;
+    });
+
+    scores.push({
+      id: myId,
+      name: myName,
+      score: score,
+      timestamp: now.getTime(),
+      date: window.makeRankingDateStr(now)
+    });
+
+    scores = window.sortRankingScores(scores).slice(0, 20);
+
+    await window.fbSetDoc(ref, {
+      scores: scores,
+      updatedAt: now.toISOString()
+    }, { merge: true });
+  } catch (e) {
+    console.error("殿堂ランキング保存エラー:", e);
+  }
+};
+
+window.submitSeasonScore = async function(mode, score) {
+  if (!mode || score <= 0) return;
+  if (!myId || myId === "GUEST-000") return;
+
+  const seasonNo = window.getCurrentSeasonNo();
+  if (seasonNo <= 0) return;
+
+  const seasonMode = window.getSeasonMode(seasonNo);
+  if (mode !== seasonMode) return;
+
+  const bestKey = `season_best_${seasonNo}_${mode}_${myId}`;
+  const oldBest = parseInt(localStorage.getItem(bestKey) || "0");
+
+  if (!window.db || !window.fbSetDoc || !window.fbDoc || !window.fbGetDoc) {
+    if (score > oldBest) {
+      localStorage.setItem(bestKey, String(score));
+    }
+    return;
+  }
+
+  try {
+    const docName = `game_season_${seasonNo}_${mode}`;
+    const ref = window.fbDoc(window.db, "shared", docName);
+    const snap = await window.fbGetDoc(ref);
+
+    let scores = snap.exists() && snap.data().scores ? snap.data().scores : [];
+    const existing = scores.find(function(s) {
+      return s.id === myId;
+    });
+
+    const currentBest = existing ? Math.max(existing.score, oldBest) : oldBest;
+
+    if (score <= currentBest) {
+      if (existing) {
+        localStorage.setItem(bestKey, String(existing.score));
+      }
+      return;
+    }
+
+    localStorage.setItem(bestKey, String(score));
+
+    const now = new Date();
+
+    scores = scores.filter(function(s) {
+      return s.id !== myId;
+    });
+
+    scores.push({
+      id: myId,
+      name: myName,
+      score: score,
+      timestamp: now.getTime(),
+      date: window.makeRankingDateStr(now)
+    });
+
+    scores = window.sortRankingScores(scores).slice(0, 20);
+
+    await window.fbSetDoc(ref, {
+      seasonNo: seasonNo,
+      mode: mode,
+      scores: scores,
+      updatedAt: now.toISOString()
+    }, { merge: true });
+  } catch (e) {
+    console.error("シーズンランキング保存エラー:", e);
+  }
+};
+
+window.checkAndSettleSeasonTitles = async function() {
+  if (!myId || myId === "GUEST-000") return;
+
+  window.ensureSeasonUserStats();
+
+  const currentSeasonNo = window.getCurrentSeasonNo();
+  if (currentSeasonNo <= 1) return;
+
+  let changed = false;
+
+  for (let seasonNo = 1; seasonNo < currentSeasonNo; seasonNo++) {
+    if (userStats.settledSeasons.includes(seasonNo)) continue;
+
+    const mode = window.getSeasonMode(seasonNo);
+
+    try {
+      if (window.db && window.fbGetDoc && window.fbDoc) {
+        const docName = `game_season_${seasonNo}_${mode}`;
+        const ref = window.fbDoc(window.db, "shared", docName);
+        const snap = await window.fbGetDoc(ref);
+
+        if (snap.exists() && snap.data().scores) {
+          const scores = window.sortRankingScores(snap.data().scores);
+          const myIndex = scores.findIndex(function(s) {
+            return s.id === myId;
+          });
+
+          if (myIndex >= 0 && myIndex < 3) {
+            const rank = myIndex + 1;
+            const modeLabel = window.getSeasonModeLabel(mode);
+            const titleName = `第${seasonNo}シーズン${modeLabel}ランキング${rank}位`;
+
+            if (!userStats.seasonTitles.includes(titleName)) {
+              userStats.seasonTitles.push(titleName);
+              changed = true;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("シーズン称号確定エラー:", e);
+    }
+
+    userStats.settledSeasons.push(seasonNo);
+    changed = true;
+  }
+
+  if (changed) {
+    await window.saveUserStats();
+
+    if (typeof window.renderTitles === "function") {
+      window.renderTitles();
+    }
+  }
+};
+
+window.setGameLbTab = function(tab) {
+  window.__gameLbTab = tab;
+  window.renderGameLeaderboard();
+};
+
+window.setSeasonLbView = function(view) {
+  window.__seasonLbView = view;
+  window.renderGameLeaderboard();
+};
+
+window.injectGameLbControls = function() {
+  const container = document.getElementById("leaderboardListContainer");
+  if (!container || !container.parentNode) return;
+
+  let ctrl = document.getElementById("gameLbTabControl");
+
+  if (!ctrl) {
+    ctrl = document.createElement("div");
+    ctrl.id = "gameLbTabControl";
+    container.parentNode.insertBefore(ctrl, container);
+  }
+
+  const seasonNo = window.getCurrentSeasonNo();
+
+  const tabButtonStyle = function(active) {
+    return `
+      flex:1;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid ${active ? "var(--cosmic-cyan)" : "rgba(255,255,255,0.15)"};
+      background:${active ? "linear-gradient(135deg, rgba(0,240,255,0.25) 0%, rgba(192,132,252,0.25) 100%)" : "rgba(7,11,25,0.6)"};
+      color:${active ? "#FFFFFF" : "var(--text-sub)"};
+      font-size:12px;
+      font-weight:900;
+      cursor:pointer;
+    `;
+  };
+
+  const subButtonStyle = function(active) {
+    return `
+      flex:1;
+      padding:6px 8px;
+      border-radius:8px;
+      border:1px solid ${active ? "var(--cosmic-purple-light)" : "rgba(255,255,255,0.12)"};
+      background:${active ? "rgba(192,132,252,0.22)" : "rgba(0,0,0,0.35)"};
+      color:${active ? "#FFFFFF" : "var(--text-sub)"};
+      font-size:11px;
+      font-weight:800;
+      cursor:pointer;
+    `;
+  };
+
+  let seasonControls = "";
+
+  if (window.__gameLbTab === "season") {
+    const currentActive = window.__seasonLbView === "current";
+    const previousActive = window.__seasonLbView === "previous";
+
+    let infoHtml = "";
+
+    if (seasonNo <= 0) {
+      infoHtml = `
+        <div style="margin-top:8px; font-size:11px; color:var(--cosmic-cyan); font-weight:800;">
+          ${window.getSeasonStartCountdownText()}
+        </div>
+      `;
+    } else {
+      const viewSeasonNo = currentActive ? seasonNo : seasonNo - 1;
+
+      if (viewSeasonNo <= 0) {
+        infoHtml = `
+          <div style="margin-top:8px; font-size:11px; color:var(--text-sub); font-weight:700;">
+            前シーズンはありません。
+          </div>
+        `;
+      } else {
+        const mode = window.getSeasonMode(viewSeasonNo);
+        const modeLabel = window.getSeasonModeLabel(mode);
+        const start = window.getSeasonStart(viewSeasonNo);
+        const end = window.getSeasonEnd(viewSeasonNo);
+
+        const statusText = currentActive
+          ? window.getSeasonRemainingText(viewSeasonNo)
+          : "終了";
+
+        infoHtml = `
+          <div style="margin-top:8px; font-size:11px; color:var(--text-sub); line-height:1.5;">
+            <div style="color:var(--cosmic-cyan); font-weight:900;">
+              第${viewSeasonNo}シーズン（${modeLabel}）
+            </div>
+            <div>
+              ${window.formatSeasonDate(start)} 〜 ${window.formatSeasonDate(end)}
+            </div>
+            <div style="color:#FFFFFF; font-weight:800;">
+              ${statusText}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    seasonControls = `
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button style="${subButtonStyle(currentActive)}" onclick="window.setSeasonLbView('current')">
+          現在のシーズン
+        </button>
+        <button style="${subButtonStyle(previousActive)}" onclick="window.setSeasonLbView('previous')">
+          前シーズン
+        </button>
+      </div>
+      ${infoHtml}
+    `;
+  }
+
+  ctrl.innerHTML = `
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <button style="${tabButtonStyle(window.__gameLbTab === "hall")}" onclick="window.setGameLbTab('hall')">
+        殿堂
+      </button>
+      <button style="${tabButtonStyle(window.__gameLbTab === "season")}" onclick="window.setGameLbTab('season')">
+        シーズン
+      </button>
+    </div>
+    ${seasonControls}
+  `;
+};
+
+window.buildRankingRowHtml = function(record, index) {
+  const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "white", "white", "white"];
+  const rankColor = rankColors[index] || "white";
+
+  const isMe = record.id === myId;
+
+  const bgStyle = isMe
+    ? "background: linear-gradient(135deg, rgba(192, 132, 252, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border-left: 3px solid var(--cosmic-purple-light);"
+    : "border-bottom:1px solid rgba(255,255,255,0.05);";
+
+  const displayName = isMe ? `${record.name} (あなた)` : record.name;
+
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; ${bgStyle}">
+      <div style="display:flex; gap:12px; align-items:center;">
+        <span style="color:${rankColor}; font-weight:900; font-size:14px; width:18px; text-align:center;">${index + 1}</span>
+        <span style="color:white; font-weight:800; letter-spacing:0.5px;">${displayName}</span>
+      </div>
+      <div style="text-align:right;">
+        <span style="color:var(--cosmic-cyan); font-weight:900; font-family:monospace; font-size:13px; margin-right:8px;">
+          ${record.score} <span style="font-size:8px; font-weight:normal; color:var(--text-sub);">PTS</span>
+        </span>
+        <span style="color:var(--text-sub); font-size:9px; display:block; margin-top:1px;">${record.date || ""}</span>
+      </div>
+    </div>
+  `;
+};
+
+window.renderHallLeaderboard = async function(container) {
+  const mode = currentLbMode || "ja2en";
+
+  let scores = [];
+
+  if (window.db && window.fbGetDoc && window.fbDoc) {
+    try {
+      const docName = `game_hall_${mode}`;
+      const ref = window.fbDoc(window.db, "shared", docName);
+      const snap = await window.fbGetDoc(ref);
+
+      if (snap.exists() && snap.data().scores) {
+        scores = window.sortRankingScores(snap.data().scores);
+      }
+    } catch (e) {
+      console.error("殿堂ランキング取得エラー:", e);
+    }
+  }
+
+  container.innerHTML = "";
+
+  if (scores.length === 0) {
+    const localBest = parseInt(localStorage.getItem(`cosmic_best_${mode}_endless`) || "0");
+
+    if (localBest > 0 && myId && myId !== "GUEST-000") {
+      scores = [{
+        id: myId,
+        name: myName,
+        score: localBest,
+        date: "ローカル記録",
+        timestamp: 0
+      }];
+    }
+  }
+
+  if (scores.length === 0) {
+    container.innerHTML = `
+      <div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">
+        まだランキング記録がありません。
+      </div>
+    `;
+    return;
+  }
+
+  scores.forEach(function(record, index) {
+    container.innerHTML += window.buildRankingRowHtml(record, index);
+  });
+};
+
+window.renderSeasonLeaderboard = async function(container) {
+  const seasonNo = window.getCurrentSeasonNo();
+
+  container.innerHTML = "";
+
+  if (seasonNo <= 0) {
+    container.innerHTML = `
+      <div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">
+        ${window.getSeasonStartCountdownText()}
+      </div>
+    `;
+    return;
+  }
+
+  const viewSeasonNo = window.__seasonLbView === "previous" ? seasonNo - 1 : seasonNo;
+
+  if (viewSeasonNo <= 0) {
+    container.innerHTML = `
+      <div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">
+        前シーズンはありません。
+      </div>
+    `;
+    return;
+  }
+
+  const mode = window.getSeasonMode(viewSeasonNo);
+  const modeLabel = window.getSeasonModeLabel(mode);
+
+  let scores = [];
+
+  if (window.db && window.fbGetDoc && window.fbDoc) {
+    try {
+      const docName = `game_season_${viewSeasonNo}_${mode}`;
+      const ref = window.fbDoc(window.db, "shared", docName);
+      const snap = await window.fbGetDoc(ref);
+
+      if (snap.exists() && snap.data().scores) {
+        scores = window.sortRankingScores(snap.data().scores);
+      }
+    } catch (e) {
+      console.error("シーズンランキング取得エラー:", e);
+    }
+  }
+
+  if (scores.length === 0) {
+    container.innerHTML = `
+      <div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">
+        第${viewSeasonNo}シーズン（${modeLabel}）のランキングはまだありません。
+      </div>
+    `;
+    return;
+  }
+
+  scores.forEach(function(record, index) {
+    container.innerHTML += window.buildRankingRowHtml(record, index);
+  });
+};
+
+const __originalRenderGameLeaderboardForSeason = window.renderGameLeaderboard;
+
+window.renderGameLeaderboard = async function(type) {
+  const container = document.getElementById("leaderboardListContainer");
+  if (!container) return;
+
+  window.injectGameLbControls();
+
+  if (myId === "GUEST-000") {
+    container.innerHTML = `
+      <div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">
+        ゲストはランキング対象外です。
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">
+      ランキングを読み込み中...
+    </div>
+  `;
+
+  if (window.__gameLbTab === "season") {
+    await window.renderSeasonLeaderboard(container);
+  } else {
+    await window.renderHallLeaderboard(container);
+  }
+};
+
+const __originalSetLbModeForSeason = window.setLbMode;
+
+window.setLbMode = function(mode) {
+  window.__gameLbTab = "hall";
+
+  if (typeof __originalSetLbModeForSeason === "function") {
+    __originalSetLbModeForSeason(mode);
+  }
+};
+
+const __originalEndGameSessionForSeason = window.endGameSession;
+
+window.endGameSession = async function() {
+  const mode = selectedQuestionMode;
+  const score = gameScoreCount;
+  const isEndless = currentGameDifficulty === "endless";
+  const oldBest = parseInt(localStorage.getItem(`cosmic_best_${mode}_endless`) || "0");
+
+  if (typeof __originalEndGameSessionForSeason === "function") {
+    __originalEndGameSessionForSeason.apply(this, arguments);
+  }
+
+  if (isEndless && score > 0 && myId && myId !== "GUEST-000") {
+    await window.submitHallScore(mode, score, oldBest);
+    await window.submitSeasonScore(mode, score);
+
+    if (typeof window.renderGameLeaderboard === "function") {
+      window.renderGameLeaderboard();
+    }
+  }
+};
+
+window.resetLeaderboard = async function() {
+  const seasonNo = window.getCurrentSeasonNo();
+
+  if (seasonNo <= 0) {
+    alert("シーズンがまだ開始されていません。");
+    return;
+  }
+
+  const mode = window.getSeasonMode(seasonNo);
+  const modeLabel = window.getSeasonModeLabel(mode);
+
+  if (!window.isAdmin) {
+    if (!confirm(`現在のシーズン（第${seasonNo}シーズン / ${modeLabel}）から自分の記録だけ削除しますか？`)) {
+      return;
+    }
+
+    if (window.db && window.fbGetDoc && window.fbSetDoc && window.fbDoc) {
+      try {
+        const docName = `game_season_${seasonNo}_${mode}`;
+        const ref = window.fbDoc(window.db, "shared", docName);
+        const snap = await window.fbGetDoc(ref);
+
+        if (snap.exists() && snap.data().scores) {
+          const scores = snap.data().scores.filter(function(s) {
+            return s.id !== myId;
+          });
+
+          await window.fbSetDoc(ref, {
+            scores: scores,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      } catch (e) {
+        console.error("シーズン自分の記録削除エラー:", e);
+      }
+    }
+
+    localStorage.removeItem(`season_best_${seasonNo}_${mode}_${myId}`);
+    window.renderGameLeaderboard();
+    alert("自分のシーズン記録を削除しました。");
+    return;
+  }
+
+  if (!confirm(`⚠️ 現在のシーズンランキング（第${seasonNo}シーズン / ${modeLabel}）を全ユーザー分リセットしますか？`)) {
+    return;
+  }
+
+  if (window.db && window.fbSetDoc && window.fbDoc) {
+    try {
+      const docName = `game_season_${seasonNo}_${mode}`;
+      const ref = window.fbDoc(window.db, "shared", docName);
+
+      await window.fbSetDoc(ref, {
+        seasonNo: seasonNo,
+        mode: mode,
+        scores: [],
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {
+      console.error("シーズンランキングリセットエラー:", e);
+      alert("Firebaseとの通信に失敗しました。");
+      return;
+    }
+  }
+
+  localStorage.removeItem(`season_best_${seasonNo}_${mode}_${myId}`);
+
+  ["ja2en", "en2ja", "mixed"].forEach(function(m) {
+    localStorage.removeItem(`cosmic_score_${m}_endless`);
+  });
+
+  window.renderGameLeaderboard();
+  alert("現在のシーズンランキングをリセットしました。");
+};
+
+window.resetBestScore = async function() {
+  if (!confirm("自分のベストスコアを3モードすべてでリセットしますか？\nFirebaseの殿堂ランキングからも自分の記録を削除します。")) {
+    return;
+  }
+
+  const modes = ["ja2en", "en2ja", "mixed"];
+
+  for (const mode of modes) {
+    localStorage.removeItem(`cosmic_best_${mode}_endless`);
+
+    if (window.db && window.fbGetDoc && window.fbSetDoc && window.fbDoc) {
+      try {
+        const docName = `game_hall_${mode}`;
+        const ref = window.fbDoc(window.db, "shared", docName);
+        const snap = await window.fbGetDoc(ref);
+
+        if (snap.exists() && snap.data().scores) {
+          const scores = snap.data().scores.filter(function(s) {
+            return s.id !== myId;
+          });
+
+          await window.fbSetDoc(ref, {
+            scores: scores,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      } catch (e) {
+        console.error("殿堂ベストスコアリセットエラー:", e);
+      }
+    }
+  }
+
+  window.renderGameLeaderboard();
+  alert("自分のベストスコアをリセットしました。");
+};
+
+const __originalRenderTitlesForSeason = window.renderTitles;
+
+window.renderTitles = function() {
+  if (typeof __originalRenderTitlesForSeason === "function") {
+    __originalRenderTitlesForSeason();
+  }
+
+  window.renderSeasonTitles();
+};
+
+window.renderSeasonTitles = function() {
+  const listContainer = document.getElementById("titles-list");
+  const selectEl = document.getElementById("sideSelectTitle");
+
+  if (!listContainer) return;
+
+  window.ensureSeasonUserStats();
+
+  const oldSection = document.getElementById("seasonTitlesSection");
+  if (oldSection) oldSection.remove();
+
+  if (!userStats.seasonTitles || userStats.seasonTitles.length === 0) return;
+
+  const section = document.createElement("div");
+  section.id = "seasonTitlesSection";
+
+  let html = `
+    <div style="margin:18px 0 10px 0; font-size:14px; font-weight:900; color:var(--cosmic-cyan);">
+      🏆 シーズン称号
+    </div>
+  `;
+
+  userStats.seasonTitles.forEach(function(titleName) {
+    if (selectEl) {
+      const exists = Array.from(selectEl.options).some(function(opt) {
+        return opt.value === titleName;
+      });
+
+      if (!exists) {
+        const opt = document.createElement("option");
+        opt.value = titleName;
+        opt.innerText = titleName;
+        selectEl.appendChild(opt);
+      }
+    }
+
+    const isEquipped = selectedTitle === titleName;
+
+    html += `
+      <div class="word-row-container" style="border-radius:12px; padding:14px; margin-bottom:10px; border:1.5px solid #FBBF24; background:linear-gradient(135deg, rgba(251,191,36,0.08) 0%, rgba(30,41,59,0.9) 100%); box-sizing:border-box;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div style="font-weight:900; font-size:15px; color:#FBBF24;">
+            ${titleName}
+          </div>
+          <span class="badge-legendary" style="padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">
+            シーズン
+          </span>
+        </div>
+        <button class="modern-btn" style="height:34px; font-size:11px; background:${isEquipped ? "var(--word-ok-bg)" : "rgba(0,0,0,0.3)"}; border-color:${isEquipped ? "var(--word-ok)" : "#FBBF24"}; color:${isEquipped ? "var(--word-ok)" : "white"}; box-shadow:none;" onclick="window.equipTitle('${titleName}')">
+          ${isEquipped ? "セット中" : "称号をセットする"}
+        </button>
+      </div>
+    `;
+  });
+
+  section.innerHTML = html;
+  listContainer.appendChild(section);
+
+  if (selectEl) {
+    selectEl.value = selectedTitle;
+  }
+};
+
+const __originalLoadLocalStateForSeason = window.loadLocalState;
+
+window.loadLocalState = async function() {
+  const result = __originalLoadLocalStateForSeason
+    ? await __originalLoadLocalStateForSeason.apply(this, arguments)
+    : undefined;
+
+  if (myId && myId !== "GUEST-000") {
+    window.ensureSeasonUserStats();
+    await window.checkAndSettleSeasonTitles();
+
+    if (typeof window.renderGameLeaderboard === "function") {
+      window.renderGameLeaderboard();
+    }
+  }
+
+  return result;
+};
+
+if (!window.__seasonRankingIntervalStarted) {
+  window.__seasonRankingIntervalStarted = true;
+
+  setInterval(function() {
+    if (myId && myId !== "GUEST-000") {
+      window.checkAndSettleSeasonTitles();
+
+      if (window.__gameLbTab === "season" && typeof window.renderGameLeaderboard === "function") {
+        window.renderGameLeaderboard();
+      }
+    }
+  }, 60000);
+}
+
+if (document.readyState !== "loading") {
+  setTimeout(function() {
+    if (myId && myId !== "GUEST-000") {
+      window.ensureSeasonUserStats();
+      window.checkAndSettleSeasonTitles();
+
+      if (typeof window.renderGameLeaderboard === "function") {
+        window.renderGameLeaderboard();
+      }
+    }
+  }, 250);
+}
