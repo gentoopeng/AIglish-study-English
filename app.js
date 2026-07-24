@@ -6439,3 +6439,282 @@ window.__renderPenguinOverlay = function(message) {
 // ※ __updatePenguinText は .penguin-loading-text を探すのでそのまま互換（再定義不要）
 
 console.log("🎩 タンゴン差し替えパッチ（踊るタンゴンローディング）適用完了");
+// ==========================================================================
+// 🎯 第3回パッチ：別教材フラッシュカードの理解度反映 ＋ ランキング非消失
+//                ＋ ヘッダー保存ボタン ＋ 画面上部トースト
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// A. 画面上部トースト通知（保存結果などのフィードバック）
+// ------------------------------------------------------------------
+window.showToast = function(msg, type) {
+  var host = document.getElementById('toastHost');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'toastHost';
+    host.style.cssText = "position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:99997; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; width:90%; max-width:340px;";
+    document.body.appendChild(host);
+  }
+  var t = document.createElement('div');
+  var bg = type === 'err' ? 'rgba(239,68,68,0.96)' : type === 'warn' ? 'rgba(245,158,11,0.96)' : 'rgba(16,185,129,0.96)';
+  var bd = type === 'err' ? '#EF4444' : type === 'warn' ? '#F59E0B' : '#10B981';
+  t.style.cssText = "background:" + bg + "; color:#fff; font-size:13px; font-weight:800; padding:10px 18px; border-radius:12px; border:1px solid " + bd + "; box-shadow:0 6px 20px rgba(0,0,0,0.5), 0 0 14px " + bd + "66; opacity:0; transform:translateY(-12px); transition:all 0.3s cubic-bezier(0.25,1,0.5,1); pointer-events:auto; text-align:center; letter-spacing:0.3px;";
+  t.textContent = msg;
+  host.appendChild(t);
+  requestAnimationFrame(function() { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+  setTimeout(function() {
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(-12px)';
+    setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+  }, 2200);
+};
+
+// ------------------------------------------------------------------
+// B. ヘッダー右上の保存ボタン（ログイン中のみ表示）
+// ------------------------------------------------------------------
+window.injectHeaderSaveButton = function() {
+  var header = document.querySelector('.app-header');
+  if (!header) return;
+  var btn = document.getElementById('headerSaveBtn');
+  var isLoggedIn = (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000');
+  if (!isLoggedIn) { if (btn) btn.style.display = 'none'; return; }
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'headerSaveBtn';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'データを保存');
+    btn.innerHTML = '💾';
+    btn.style.cssText = "position:absolute; right:16px; top:50%; transform:translateY(-50%); width:36px; height:36px; border-radius:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(0,240,255,0.4); color:var(--cosmic-cyan); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; box-shadow:0 0 10px rgba(0,240,255,0.2); transition:background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s; z-index:1001; line-height:1;";
+    btn.onclick = function() { window.manualSaveAll(); };
+    header.appendChild(btn);
+  }
+  btn.style.display = 'flex';
+};
+
+// 手動保存：デバウンス待ちをすべてフラッシュ＋明示保存＋フィードバック
+window.manualSaveAll = async function() {
+  var btn = document.getElementById('headerSaveBtn');
+  if (btn) { btn.classList.add('header-save-spin'); btn.disabled = true; }
+  if (typeof window.showPenguinLoading === 'function') window.showPenguinLoading('保存中');
+  try {
+    if (typeof window.flushVocabProgressSave === 'function') { try { await window.flushVocabProgressSave(); } catch (e) {} }
+    if (typeof window.flushUserStatsRefresh === 'function') { try { window.flushUserStatsRefresh(); } catch (e) {} }
+    if (typeof window.saveUserVocabProgress === 'function') { try { await window.saveUserVocabProgress(); } catch (e) {} }
+    if (typeof window.saveUserStats === 'function') { try { await window.saveUserStats(); } catch (e) {} }
+    window.showToast('💾 保存しました', 'ok');
+    if (btn) { btn.classList.add('header-save-done'); setTimeout(function() { btn.classList.remove('header-save-done'); }, 700); }
+  } catch (e) {
+    console.error('manualSaveAll error:', e);
+    window.showToast('⚠️ 保存に失敗しました', 'err');
+  } finally {
+    if (typeof window.hidePenguinLoading === 'function') window.hidePenguinLoading();
+    if (btn) { btn.disabled = false; setTimeout(function() { btn.classList.remove('header-save-spin'); }, 300); }
+  }
+};
+
+// ------------------------------------------------------------------
+// C. 別教材フラッシュカード：開始時に教材を差し替え、終了時に復元
+//    （スワイプ書き込み・履歴・色付けが全部その教材に正しく向く）
+// ------------------------------------------------------------------
+window.__fcSessionActive = false;
+window.__fcSaved = null;
+
+// 指定教材のマスター単語をキャッシュ→ローカル→Firebaseの順で取得
+window.__fetchMasterWordsForBook = async function(bookKey) {
+  var master = null;
+  try { if (textbooksCacheMap && textbooksCacheMap[bookKey]) master = textbooksCacheMap[bookKey]; } catch (e) {}
+  if (!master) {
+    try {
+      var localCache = localStorage.getItem('core_v4_cache_' + bookKey);
+      if (localCache) master = JSON.parse(localCache);
+    } catch (e) {}
+  }
+  if (!master && window.db && window.fbGetDoc && window.fbDoc) {
+    try {
+      var ref = window.fbDoc(window.db, 'shared', 'vocab_' + bookKey);
+      var snap = await window.fbGetDoc(ref);
+      if (snap.exists() && snap.data() && snap.data().custom_words) {
+        master = snap.data().custom_words;
+        try { textbooksCacheMap[bookKey] = window.stripVocabProgressFromWords ? window.stripVocabProgressFromWords(master) : master; } catch (e) {}
+        try { localStorage.setItem('core_v4_cache_' + bookKey, JSON.stringify(master)); } catch (e) {}
+      }
+    } catch (e) {}
+  }
+  if (!master) master = [];
+  if (window.stripVocabProgressFromWords) master = window.stripVocabProgressFromWords(master);
+  return master;
+};
+
+// セッション教材へ差し替えた後、範囲内に単語があるか事前チェック用のプール
+window.__buildFlashcardPool = function() {
+  var startEl = document.getElementById('flashcardRangeStart');
+  var endEl = document.getElementById('flashcardRangeEnd');
+  var startNum = startEl ? (parseInt(startEl.value) || 1) : 1;
+  var endNum = endEl ? (parseInt(endEl.value) || 100) : 100;
+  return vocabList.filter(function(w) {
+    var n = parseInt(w.num);
+    return n >= startNum && n <= endNum;
+  });
+};
+
+// 退避した状態を元へ戻す
+window.__restoreFlashcardSession = function() {
+  if (window.__fcSaved) {
+    try { vocabList = window.__fcSaved.vocabList; } catch (e) {}
+    try { currentTextbook = window.__fcSaved.bookKey; } catch (e) {}
+    try { currentUserVocabProgress = window.__fcSaved.progress; } catch (e) {}
+    if (typeof window.rebuildVocabStemIndex === 'function') window.rebuildVocabStemIndex();
+    window.__fcSaved = null;
+  }
+  window.__fcSessionActive = false;
+};
+
+var __prevStartFlashcardSessionForBookFix = window.startFlashcardSession;
+window.startFlashcardSession = async function() {
+  var sourceSelector = document.getElementById('flashcardSourceSelect');
+  var chosenBookKey = sourceSelector ? (sourceSelector.value || currentTextbook || 'default') : (currentTextbook || 'default');
+  var currentBookKey = currentTextbook || 'default';
+  var isCurrent = (chosenBookKey === currentBookKey);
+
+  if (!isCurrent) {
+    // 現在の状態を退避
+    window.__fcSaved = {
+      vocabList: vocabList,
+      bookKey: currentTextbook,
+      progress: (typeof currentUserVocabProgress !== 'undefined') ? currentUserVocabProgress : {}
+    };
+    window.__fcSessionActive = true;
+
+    // セッション教材のマスター単語を取得して vocabList にセット
+    var master = await window.__fetchMasterWordsForBook(chosenBookKey);
+    vocabList = window.migrateVocabData ? window.migrateVocabData(master) : master;
+    currentTextbook = chosenBookKey;
+
+    // その教材の“自分の理解度”を読み込んで適用
+    if (typeof window.loadUserVocabProgress === 'function') {
+      try { await window.loadUserVocabProgress(chosenBookKey); } catch (e) {}
+    }
+    if (typeof window.applyUserProgressToVocabList === 'function') {
+      try { window.applyUserProgressToVocabList(); } catch (e) {}
+    } else if (typeof window.rebuildVocabStemIndex === 'function') {
+      window.rebuildVocabStemIndex();
+    }
+
+    // 範囲内に単語が無ければ復元して終了（元の関数のalertと二重にしない）
+    if (window.__buildFlashcardPool().length === 0) {
+      window.__restoreFlashcardSession();
+      alert('指定された範囲または教材にデータが存在しません。単語登録を確認してください。');
+      return;
+    }
+  } else {
+    window.__fcSessionActive = false;
+    window.__fcSaved = null;
+  }
+
+  // 元の実行（pool は差し替え後の vocabList から作られる＝選択教材で出題＆保存）
+  return __prevStartFlashcardSessionForBookFix.apply(this, arguments);
+};
+
+// 終了時に必ず復元（finish / quit 両方をカバー）
+var __prevFinishFlashcardSessionForBookFix = window.finishFlashcardSession;
+window.finishFlashcardSession = function() {
+  if (window.__fcSessionActive || window.__fcSaved) {
+    window.__restoreFlashcardSession();
+  }
+  if (typeof __prevFinishFlashcardSessionForBookFix === 'function') {
+    return __prevFinishFlashcardSessionForBookFix.apply(this, arguments);
+  }
+};
+window.quitFlashcardSession = window.finishFlashcardSession;
+
+// ------------------------------------------------------------------
+// D. ランキングを“消さない”描画に上書き
+//    （取得中は既存の中身を保持。初回だけ「取得中」。失敗時も自分だけは残す）
+// ------------------------------------------------------------------
+window.renderLeaderboard = async function(force) {
+  var container = document.getElementById('leaderboardContainer');
+  if (!container) return;
+  if (typeof myId === 'undefined' || myId === 'GUEST-000') {
+    container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ゲストはランキング対象外です。</div>';
+    return;
+  }
+  var lvlData = window.calculateLevelFromExp(totalExp);
+  userStats.user_level = lvlData.level;
+  var selfAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || '';
+  var selfUser = { id: myId, name: myName + ' (あなた)', title: selectedTitle, exp: totalExp, lvl: lvlData.level, icon: '👤', customAvatar: selfAvatar, isMe: true };
+
+  var drawWithSelf = function(remoteUsers) {
+    var users = (remoteUsers || []).filter(function(u) { return u.id !== myId; }).map(function(u) { return Object.assign({}, u); });
+    users.push(selfUser);
+    users.sort(function(a, b) { return b.exp - a.exp; });
+    window.drawExpLeaderboard(container, users.slice(0, 50));
+  };
+
+  var now = Date.now();
+  var cacheValid = window.__leaderboardCache && (now - window.__leaderboardCacheAt < 60000);
+  if (cacheValid && !force) {
+    delete container.dataset.lbLoading;
+    drawWithSelf(window.__leaderboardCache);
+    return;
+  }
+
+  // 既にランキングが描画済みなら、取得中も消さない
+  var hasExisting = container.children.length > 0 && !container.dataset.lbLoading;
+  if (!hasExisting) {
+    container.dataset.lbLoading = '1';
+    container.innerHTML = '<div class="__lb_loading" style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ランキングを取得中...</div>';
+  }
+  try {
+    if (!window.__leaderboardLoadingPromise) {
+      window.__leaderboardLoadingPromise = window.fetchAllExpLeaderboardUsers()
+        .then(function(users) { window.__leaderboardCache = users; window.__leaderboardCacheAt = Date.now(); return users; })
+        .finally(function() { window.__leaderboardLoadingPromise = null; });
+    }
+    var remoteUsers = await window.__leaderboardLoadingPromise;
+    delete container.dataset.lbLoading;
+    drawWithSelf(remoteUsers);
+  } catch (e) {
+    delete container.dataset.lbLoading;
+    if (!hasExisting) drawWithSelf([]); // 既存が無い時だけ自分を描画（既存は消さない）
+  }
+};
+
+// ------------------------------------------------------------------
+// E. switchTab 上書き：コミュニティ切替後の transform/opacity 残留を解消
+//    ＋ 保存ボタンの表示状態を同期
+// ------------------------------------------------------------------
+var __prevSwitchTabForRankReset = window.switchTab;
+window.switchTab = function(tabId) {
+  var res = __prevSwitchTabForRankReset ? __prevSwitchTabForRankReset.apply(this, arguments) : undefined;
+  if (tabId === 'community') {
+    var ra = document.getElementById('leaderboardSection') || (document.getElementById('leaderboardContainer') ? document.getElementById('leaderboardContainer').parentElement : null);
+    var fa = document.getElementById('friendSection') || (document.getElementById('friendListContainer') ? document.getElementById('friendListContainer').parentElement : null);
+    [ra, fa].forEach(function(el) {
+      if (el) { el.style.transform = ''; el.style.opacity = ''; el.style.transition = ''; el.classList.remove('slide-from-right', 'slide-from-left'); }
+    });
+  }
+  window.injectHeaderSaveButton();
+  return res;
+};
+
+// ------------------------------------------------------------------
+// F. loadLocalState 上書き：起動／ログイン後に保存ボタンを注入
+// ------------------------------------------------------------------
+var __prevLoadLocalStateForSaveBtn = window.loadLocalState;
+window.loadLocalState = async function() {
+  var r = __prevLoadLocalStateForSaveBtn ? await __prevLoadLocalStateForSaveBtn.apply(this, arguments) : undefined;
+  window.injectHeaderSaveButton();
+  return r;
+};
+
+// ------------------------------------------------------------------
+// G. 起動時注入
+// ------------------------------------------------------------------
+(function initSaveButtonPatch() {
+  function boot() { window.injectHeaderSaveButton(); }
+  if (document.readyState !== 'loading') { setTimeout(boot, 300); }
+  else { document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 300); }); }
+})();
+
+console.log('🎯 第3回パッチ（別教材FC理解度＋ランキング非消失＋保存ボタン＋トースト）適用完了');

@@ -1941,3 +1941,24 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
   .tangon-img { width: 140px; }
   .tangon-spotlight { width: 190px; height: 190px; }
 }
+/* ==========================================================================
+   💾 ヘッダー保存ボタンのフィードバック（第3回パッチ）
+   ========================================================================== */
+#headerSaveBtn.header-save-spin {
+  animation: headerSaveSpin 0.8s linear infinite;
+  pointer-events: none;
+}
+@keyframes headerSaveSpin {
+  from { transform: translateY(-50%) rotate(0deg); }
+  to   { transform: translateY(-50%) rotate(360deg); }
+}
+#headerSaveBtn.header-save-done {
+  background: rgba(16, 185, 129, 0.35) !important;
+  border-color: #10B981 !important;
+  color: #10B981 !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.7) !important;
+}
+#headerSaveBtn:active {
+  transform: translateY(-50%) scale(0.9);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.5) !important;
+}
