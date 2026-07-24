@@ -6640,3 +6640,91 @@ if (document.readyState !== "loading") {
     }, 300);
   });
 }
+// ==========================================================================
+// 📚 管理画面の教材選択で現在の単語帳も切り替えるパッチ
+// ==========================================================================
+
+if (!window.__adminCurrentTextbookPatchApplied) {
+  window.__adminCurrentTextbookPatchApplied = true;
+
+  window.setCurrentTextbookAndReload = async function(bookId) {
+    if (!bookId) return;
+
+    if (typeof textbooksPool === "undefined" || !Array.isArray(textbooksPool)) {
+      return;
+    }
+
+    const book = textbooksPool.find(function(b) {
+      return b.id === bookId;
+    });
+
+    if (!book) return;
+
+    currentTextbook = bookId;
+
+    try {
+      localStorage.setItem("core_v4_current_textbook", currentTextbook);
+    } catch (e) {
+      console.error("現在の単語帳ID保存エラー:", e);
+    }
+
+    if (typeof window.loadCurrentTextbookData === "function") {
+      await window.loadCurrentTextbookData();
+    }
+
+    if (typeof window.updateFlashcardSourceSelectOptions === "function") {
+      window.updateFlashcardSourceSelectOptions();
+    }
+
+    if (typeof window.renderBookshelf === "function") {
+      window.renderBookshelf();
+    }
+  };
+
+  const __prevHandleAdminEditSelectChangeForCurrentBook = window.handleAdminEditSelectChange;
+
+  window.handleAdminEditSelectChange = async function(val) {
+    if (typeof __prevHandleAdminEditSelectChangeForCurrentBook === "function") {
+      __prevHandleAdminEditSelectChangeForCurrentBook(val);
+    }
+
+    if (!val) return;
+
+    await window.setCurrentTextbookAndReload(val);
+  };
+
+  const __prevSaveOrUpdateTextbookFromAdminForCurrentBook = window.saveOrUpdateTextbookFromAdmin;
+
+  window.saveOrUpdateTextbookFromAdmin = async function() {
+    const selectEl = document.getElementById("adminEditBookSelect");
+    const selectedBefore = selectEl ? selectEl.value : "";
+
+    const wasExisting = selectedBefore && Array.isArray(textbooksPool) && textbooksPool.some(function(b) {
+      return b.id === selectedBefore;
+    });
+
+    if (typeof __prevSaveOrUpdateTextbookFromAdminForCurrentBook === "function") {
+      await __prevSaveOrUpdateTextbookFromAdminForCurrentBook.apply(this, arguments);
+    }
+
+    if (wasExisting && selectedBefore) {
+      await window.setCurrentTextbookAndReload(selectedBefore);
+    }
+  };
+
+  const __prevSwitchTabForAdminCurrentBookSync = window.switchTab;
+
+  window.switchTab = function(tabId) {
+    const res = __prevSwitchTabForAdminCurrentBookSync
+      ? __prevSwitchTabForAdminCurrentBookSync.apply(this, arguments)
+      : undefined;
+
+    if (tabId === "admin") {
+      if (typeof window.updateAdminEditBookSelectOptions === "function") {
+        window.updateAdminEditBookSelectOptions(currentTextbook || "");
+      }
+    }
+
+    return res;
+  };
+}
