@@ -1664,3 +1664,280 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-shadow: inset 0 0 15px rgba(236, 72, 153, 0.3);
     pointer-events: all;
 }
+/* ==========================================================================
+   🐧 ペンギンローディングオーバーレイ（第2回パッチ）
+   ========================================================================== */
+#penguinLoadingOverlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(7, 11, 25, 0.82);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  z-index: 99998;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: all;
+}
+#penguinLoadingOverlay.penguin-visible { opacity: 1; }
+#penguinLoadingOverlay.penguin-fade-out { opacity: 0; pointer-events: none; }
+
+/* ペンギンが歩くステージ */
+.penguin-loader-stage {
+  position: relative;
+  width: 220px; height: 130px;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+/* 光る氷の地面 */
+.penguin-ice-ground {
+  position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+  width: 200px; height: 10px;
+  background: linear-gradient(90deg, transparent, rgba(0,240,255,0.55), rgba(192,132,252,0.45), transparent);
+  border-radius: 50%;
+  filter: blur(2px);
+  box-shadow: 0 0 18px rgba(0,240,255,0.5);
+}
+/* 左右に歩く軌道（折り返しで向きも反転） */
+.penguin-walk-track {
+  position: relative;
+  z-index: 2;
+  animation: pgWalkAcross 2.4s ease-in-out infinite;
+}
+@keyframes pgWalkAcross {
+  0%   { transform: translateX(-70px) scaleX(1); }
+  42%  { transform: translateX(70px) scaleX(1); }
+  50%  { transform: translateX(70px) scaleX(-1); }
+  92%  { transform: translateX(-70px) scaleX(-1); }
+  100% { transform: translateX(-70px) scaleX(1); }
+}
+/* よちよち揺れ */
+.penguin-waddle {
+  animation: pgWaddle 0.5s ease-in-out infinite;
+  transform-origin: bottom center;
+  filter: drop-shadow(0 0 12px rgba(0,240,255,0.35));
+}
+@keyframes pgWaddle {
+  0%,100% { transform: rotate(-5deg) translateY(0); }
+  25%     { transform: rotate(0deg) translateY(-4px); }
+  50%     { transform: rotate(5deg) translateY(0); }
+  75%     { transform: rotate(0deg) translateY(-4px); }
+}
+/* 足のステップ（左右交互） */
+.pg-foot-l, .pg-foot-r, .pg-wing-l, .pg-wing-r { transform-box: fill-box; }
+.pg-foot-l { animation: pgStepL 0.5s ease-in-out infinite; }
+.pg-foot-r { animation: pgStepR 0.5s ease-in-out infinite; }
+@keyframes pgStepL {
+  0%,100% { transform: translateY(0) translateX(0); }
+  50%     { transform: translateY(-7px) translateX(5px); }
+}
+@keyframes pgStepR {
+  0%,100% { transform: translateY(-7px) translateX(5px); }
+  50%     { transform: translateY(0) translateX(0); }
+}
+/* 羽のパタパタ */
+.pg-wing-l { animation: pgFlapL 0.5s ease-in-out infinite; transform-origin: 50% 0%; }
+.pg-wing-r { animation: pgFlapR 0.5s ease-in-out infinite; transform-origin: 50% 0%; }
+@keyframes pgFlapL {
+  0%,100% { transform: rotate(8deg); }
+  50%     { transform: rotate(-14deg); }
+}
+@keyframes pgFlapR {
+  0%,100% { transform: rotate(-8deg); }
+  50%     { transform: rotate(14deg); }
+}
+/* ローディングテキスト */
+.penguin-loading-text {
+  font-size: 14px; font-weight: 800;
+  color: var(--cosmic-cyan);
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 10px rgba(0,240,255,0.6);
+}
+.pg-dot { animation: pgDotBlink 1.4s infinite; opacity: 0; }
+.pg-dot:nth-of-type(2) { animation-delay: 0.2s; }
+.pg-dot:nth-of-type(3) { animation-delay: 0.4s; }
+@keyframes pgDotBlink {
+  0%,60%,100% { opacity: 0; }
+  30%         { opacity: 1; }
+}
+/* ==========================================================================
+   🐧 リアルペンギンのパーツアニメーション（差し替えパッチ）
+   ※既存のペンギンCSS（.pg-wing-* / .pg-foot-*）は自動的に使われなくなるので
+     そのまま残して大丈夫です（削除の必要はありません）。
+   ========================================================================== */
+.rpg-flipper-l, .rpg-flipper-r, .rpg-foot-l, .rpg-foot-r {
+  transform-box: fill-box;
+}
+/* フリッパー（ひれ状の翼）のパタパタ */
+.rpg-flipper-l { transform-origin: 60% 8%; animation: rpgFlapL 0.55s ease-in-out infinite; }
+.rpg-flipper-r { transform-origin: 40% 8%; animation: rpgFlapR 0.55s ease-in-out infinite; }
+@keyframes rpgFlapL {
+  0%,100% { transform: rotate(7deg); }
+  50%     { transform: rotate(-11deg); }
+}
+@keyframes rpgFlapR {
+  0%,100% { transform: rotate(-7deg); }
+  50%     { transform: rotate(11deg); }
+}
+/* 水かき足のステップ（左右交互） */
+.rpg-foot-l { animation: rpgStepL 0.55s ease-in-out infinite; }
+.rpg-foot-r { animation: rpgStepR 0.55s ease-in-out infinite; }
+@keyframes rpgStepL {
+  0%,100% { transform: translateY(0) translateX(0); }
+  50%     { transform: translateY(-6px) translateX(4px); }
+}
+@keyframes rpgStepR {
+  0%,100% { transform: translateY(-6px) translateX(4px); }
+  50%     { transform: translateY(0) translateX(0); }
+}
+/* ==========================================================================
+   🎩 踊るタンゴン ローディング演出（差し替えパッチ）
+   ※既存の歩くペンギン用CSSは自動で使われなくなるので残してOK（削除不要）。
+   ========================================================================== */
+
+/* ステージ全体 */
+.tangon-stage {
+  position: relative;
+  width: min(260px, 72vw);
+  height: min(260px, 72vw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+/* 背後のネオンスポットライト（2層で奥行き） */
+.tangon-spotlight {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 230px; height: 230px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%,
+    rgba(0,240,255,0.30) 0%,
+    rgba(124,58,237,0.22) 38%,
+    rgba(124,58,237,0.06) 62%,
+    transparent 75%);
+  filter: blur(2px);
+  animation: tangonPulse 2.6s ease-in-out infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+.tangon-spotlight-2 {
+  width: 150px; height: 150px;
+  background: radial-gradient(circle at 50% 45%,
+    rgba(255,255,255,0.22) 0%,
+    rgba(0,240,255,0.12) 45%,
+    transparent 72%);
+  animation: tangonPulse 2.6s ease-in-out infinite reverse;
+}
+@keyframes tangonPulse {
+  0%,100% { transform: translate(-50%, -50%) scale(1);    opacity: 0.62; }
+  50%     { transform: translate(-50%, -50%) scale(1.10); opacity: 0.92; }
+}
+
+/* 舞うバラの花びら */
+.tangon-petals { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.tangon-petal {
+  position: absolute;
+  top: -16px;
+  border-radius: 60% 0 60% 0;
+  box-shadow: 0 0 6px rgba(244,114,182,0.45);
+  opacity: 0;
+  animation-name: tangonPetalFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes tangonPetalFall {
+  0%   { transform: translate(0, -16px) rotate(0deg);    opacity: 0; }
+  10%  { opacity: 0.9; }
+  50%  { transform: translate(18px, 130px) rotate(200deg); opacity: 0.85; }
+  90%  { opacity: 0.7; }
+  100% { transform: translate(-12px, 270px) rotate(420deg); opacity: 0; }
+}
+
+/* 上昇する光の粒 */
+.tangon-sparks { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.tangon-spark {
+  position: absolute;
+  bottom: 18%;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+  opacity: 0;
+  animation-name: tangonSparkRise;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+}
+@keyframes tangonSparkRise {
+  0%   { transform: translateY(0) scale(0.6); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translateY(-150px) scale(1.1); opacity: 0; }
+}
+
+/* ダンサー本体：時々スッと横にステップ（移動） */
+.tangon-dancer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: tangonSlide 3.8s ease-in-out infinite;
+}
+@keyframes tangonSlide {
+  0%,18%   { transform: translateX(0); }
+  28%,44%  { transform: translateX(26px); }
+  54%,70%  { transform: translateX(-26px); }
+  82%,100% { transform: translateX(0); }
+}
+
+/* 画像：タンゴのリズムで体を揺らす（掲げた手は絵として固定、体だけが踊る） */
+.tangon-img {
+  width: min(168px, 46vw);
+  height: auto;
+  display: block;
+  transform-origin: 50% 92%;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,0.55))
+          drop-shadow(0 0 16px rgba(0,240,255,0.30));
+  animation: tangonSway 1.15s ease-in-out infinite;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+@keyframes tangonSway {
+  0%,100% { transform: rotate(-4deg) translateY(0); }
+  25%     { transform: rotate(2deg)  translateY(-7px); }
+  50%     { transform: rotate(4deg)  translateY(0); }
+  75%     { transform: rotate(-2deg) translateY(-7px); }
+}
+
+/* 足元の影：体が浮くタイミングで縮む・薄くなる */
+.tangon-shadow {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  width: 110px; height: 16px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 45%, transparent 72%);
+  filter: blur(2px);
+  animation: tangonShadow 1.15s ease-in-out infinite;
+  z-index: -1;
+}
+@keyframes tangonShadow {
+  0%,50%,100% { transform: translateX(-50%) scale(1);   opacity: 0.6; }
+  25%,75%     { transform: translateX(-50%) scale(0.78); opacity: 0.32; }
+}
+
+/* ローディングテキストにほんのり呼吸感（既存クラスを拡張） */
+#penguinLoadingOverlay .penguin-loading-text {
+  margin-top: 4px;
+  animation: tangonTextGlow 2.2s ease-in-out infinite;
+}
+@keyframes tangonTextGlow {
+  0%,100% { text-shadow: 0 0 8px rgba(0,240,255,0.45); }
+  50%     { text-shadow: 0 0 16px rgba(0,240,255,0.85), 0 0 26px rgba(192,132,252,0.45); }
+}
+
+/* モバイル微調整 */
+@media (max-width: 420px) {
+  .tangon-img { width: 140px; }
+  .tangon-spotlight { width: 190px; height: 190px; }
+}

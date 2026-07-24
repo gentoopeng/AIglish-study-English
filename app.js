@@ -5799,3 +5799,643 @@ console.log("🔐 ログイン安定化＆自動復旧パッチ 適用完了");
   }
 
 })();
+// ==========================================================================
+// 🔄 第1回パッチ：同期ズレ解消 ＋ レベル1バグ修正 ＋ データ保存の確実性向上
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// ヘルパー①：Firebase書き込みを3回リトライ（通信失敗しても諦めない）
+// ------------------------------------------------------------------
+window.fbSetDocWithRetry = async function(ref, data, options, retries) {
+    retries = retries || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+            await window.fbSetDoc(ref, data, options);
+            return true;
+        } catch (e) {
+            lastError = e;
+            console.error("fbSetDoc 試行 " + (attempt + 1) + " 回目失敗:", e);
+            if (attempt < retries - 1) {
+                await new Promise(function(r) { setTimeout(r, 500 * (attempt + 1)); });
+            }
+        }
+    }
+    throw lastError;
+};
+
+// ------------------------------------------------------------------
+// ヘルパー②：totalExp からレベルを安全に計算（単一の信頼できる情報源）
+// ------------------------------------------------------------------
+window.computeLevelSafe = function(exp) {
+    try {
+        return window.calculateLevelFromExp(parseInt(exp) || 0).level;
+    } catch (e) {
+        return 1;
+    }
+};
+
+// ------------------------------------------------------------------
+// Phase 1-A：saveUserStats を上書き
+//   ・保存前に totalExp から user_level を必ず再計算（古いレベル1を防止）
+//   ・users/{id} と shared_leaderboard/{id} へリトライ付き書き込み
+//   ・自分のプレイヤー名を all_users へ60秒スロットルで同期
+// ------------------------------------------------------------------
+window.__lastAllUsersSyncAt = 0;
+
+window.syncMyEntryToAllUsers = async function(force) {
+    if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
+    if (!window.db || !window.fbGetDoc || !window.fbSetDoc || !window.fbDoc) return;
+    const now = Date.now();
+    if (!force && window.__lastAllUsersSyncAt && (now - window.__lastAllUsersSyncAt) < 60000) return;
+    window.__lastAllUsersSyncAt = now;
+    try {
+        const ref = window.fbDoc(window.db, "shared", "all_users");
+        const snap = await window.fbGetDoc(ref);
+        let users = (snap.exists() && snap.data().users && Array.isArray(snap.data().users)) ? snap.data().users : [];
+        const idx = users.findIndex(function(u) { return u && u.id === myId; });
+        if (idx === -1) return; // 未登録の場合は既存の復旧パッチに任せる
+        if (users[idx].playerName === myName) return; // 変更なしなら書かない
+        users[idx].playerName = myName;
+        await window.fbSetDocWithRetry(ref, { users: users }, { merge: true });
+    } catch (e) {
+        console.error("syncMyEntryToAllUsers エラー:", e);
+    }
+};
+
+window.saveUserStats = async function() {
+    // ✅ 保存前に必ず totalExp からレベルを再計算（古い user_level を上書き）
+    try {
+        let lvlData = window.calculateLevelFromExp(totalExp);
+        userStats.user_level = lvlData.level;
+    } catch (e) {}
+
+    try {
+        localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
+        localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+        localStorage.setItem('core_v4_totalExp', String(totalExp));
+        localStorage.setItem('core_v4_userName', myName);
+        localStorage.setItem('core_v4_userTarget', myTarget);
+        localStorage.setItem('core_v4_userTitle', selectedTitle);
+    } catch(e) {}
+
+    if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
+        try {
+            const userRef = window.fbDoc(window.db, "users", myId);
+            const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+            let lvlData = window.calculateLevelFromExp(totalExp);
+            await window.fbSetDocWithRetry(userRef, {
+                id: myId,
+                userStats: userStats,
+                friendList: myFriendList,
+                playerName: myName,
+                selectedTitle: selectedTitle,
+                userTarget: myTarget,
+                totalExp: totalExp,
+                avatar: mySavedAvatar,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            const lbRef = window.fbDoc(window.db, "shared_leaderboard", myId);
+            await window.fbSetDocWithRetry(lbRef, {
+                id: myId,
+                name: myName,
+                title: selectedTitle,
+                exp: totalExp,
+                level: lvlData.level,
+                avatar: mySavedAvatar,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            // プレイヤー名を all_users へバックグラウンド同期（60秒スロットル）
+            window.syncMyEntryToAllUsers(false);
+        } catch (e) {
+            console.error("Firebaseユーザーデータ保存エラー（リトライ後）:", e);
+        }
+    }
+};
+
+// ------------------------------------------------------------------
+// Phase 1-B：loadUserStats を上書き
+//   ・totalExp は「ローカルとクラウドの大きい方」を採用（古いデータで上書きされて消えるのを防止）
+//   ・読み込み後にレベルを再計算
+// ------------------------------------------------------------------
+window.loadUserStats = async function() {
+    try {
+        const storedStats = localStorage.getItem('core_v4_user_stats_' + myId);
+        if (storedStats) userStats = JSON.parse(storedStats);
+        const storedFriends = localStorage.getItem('core_v4_friend_list');
+        if (storedFriends) myFriendList = JSON.parse(storedFriends);
+        if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
+            const userRef = window.fbDoc(window.db, "users", myId);
+            const snap = await window.fbGetDoc(userRef);
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.userStats) {
+                    userStats = data.userStats;
+                    localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
+                }
+                if (data.friendList) {
+                    myFriendList = data.friendList;
+                    localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+                }
+                // ✅ totalExp はローカルとクラウドの大きい方を採用（データ消失防止）
+                if (data.totalExp !== undefined && data.totalExp !== null) {
+                    const cloudExp = parseInt(data.totalExp) || 0;
+                    const localExp = totalExp || 0;
+                    totalExp = Math.max(cloudExp, localExp);
+                    localStorage.setItem('core_v4_totalExp', String(totalExp));
+                }
+                if (data.playerName) {
+                    myName = data.playerName;
+                    localStorage.setItem('core_v4_userName', myName);
+                }
+                if (data.selectedTitle) {
+                    selectedTitle = data.selectedTitle;
+                    localStorage.setItem('core_v4_userTitle', selectedTitle);
+                }
+                if (data.userTarget) {
+                    myTarget = data.userTarget;
+                    localStorage.setItem('core_v4_userTarget', myTarget);
+                }
+                if (data.avatar) {
+                    localStorage.setItem('core_v4_user_avatar_' + myId, data.avatar);
+                }
+                // ✅ 統合後の totalExp からレベルを再計算
+                userStats.user_level = window.computeLevelSafe(totalExp);
+            }
+        }
+    } catch (e) {
+        console.error("Error loading user stats:", e);
+    }
+};
+
+// ------------------------------------------------------------------
+// Phase 2-A：EXP全ユーザーランキングのレベル優先順を修正
+//   （古い user_level を信じず、必ず totalExp から計算する）
+// ------------------------------------------------------------------
+window.fetchAllExpLeaderboardUsers = async function() {
+    const users = [];
+    if (!window.db || !window.fbGetDoc || !window.fbDoc) return users;
+    let allUsers = [];
+    try { allUsers = await window.getAllUsers(); } catch (e) {}
+    const ids = [];
+    (allUsers || []).forEach(function(u) {
+        if (u && u.id && u.id !== "GUEST-000" && ids.indexOf(u.id) === -1) ids.push(u.id);
+    });
+    if (typeof myId !== "undefined" && myId && myId !== "GUEST-000" && ids.indexOf(myId) === -1) ids.push(myId);
+    for (const id of ids) {
+        try {
+            const ref = window.fbDoc(window.db, "users", id);
+            const snap = await window.fbGetDoc(ref);
+            if (!snap.exists()) continue;
+            const d = snap.data();
+            if (d.deleted) continue;
+            let exp = parseInt(d.totalExp) || 0;
+            // ✅ 修正：totalExp からレベルを計算（古い user_level を使わない）
+            let level = window.computeLevelSafe(exp);
+            let name = d.playerName || "";
+            if (!name) {
+                const basic = (allUsers || []).find(function(u) { return u.id === id; });
+                name = basic ? (basic.playerName || basic.realName || "修行者") : "修行者";
+            }
+            users.push({
+                id: id, name: name, title: d.selectedTitle || "称号なし",
+                exp: exp, lvl: level, icon: "👤",
+                customAvatar: (typeof d.avatar === "string") ? d.avatar : "",
+                isMe: id === myId
+            });
+        } catch (e) {}
+    }
+    return users;
+};
+
+// ------------------------------------------------------------------
+// Phase 2-B：フレンド最新化のレベル優先順を修正
+//   （古い user_level を信じず、必ず totalExp から計算する）
+// ------------------------------------------------------------------
+window.refreshFriendListFromFirebase = async function(force) {
+    if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
+    if (!window.db || !window.fbGetDoc || !window.fbDoc) return;
+    if (!Array.isArray(myFriendList) || myFriendList.length === 0) return;
+    const now = Date.now();
+    if (!force && window.__friendRefreshLastAt && now - window.__friendRefreshLastAt < 60000) return;
+    window.__friendRefreshLastAt = now;
+    let changed = false;
+    for (let i = 0; i < myFriendList.length; i++) {
+        const f = myFriendList[i];
+        try {
+            const ref = window.fbDoc(window.db, "users", f.code);
+            const snap = await window.fbGetDoc(ref);
+            if (!snap.exists()) continue;
+            const d = snap.data();
+            if (d.deleted) continue;
+            const stats = d.userStats || {};
+            // ✅ 修正：totalExp からレベルを計算（古い user_level を使わない）
+            let remoteLevel = f.level || 1;
+            if (d.totalExp !== undefined && d.totalExp !== null) {
+                remoteLevel = window.computeLevelSafe(d.totalExp);
+            } else if (stats.user_level) {
+                remoteLevel = parseInt(stats.user_level) || remoteLevel;
+            }
+            const remoteName = d.playerName || f.name;
+            const remoteTitle = d.selectedTitle || f.title || "称号なし";
+            const remoteAvatar = (typeof d.avatar === "string") ? d.avatar : (f.customAvatar || "");
+            const remoteStudyTime = parseInt(stats.study_burst) || 0;
+            let remoteLastLoginStr = f.lastLoginStr || "";
+            const lastIso = stats.lastLoginAt || d.updatedAt || "";
+            if (lastIso) { const formatted = window.formatFriendLastLogin(lastIso); if (formatted) remoteLastLoginStr = formatted; }
+            let remoteTimestamp = f.timestamp || now;
+            if (lastIso) { const t = new Date(lastIso).getTime(); if (!isNaN(t)) remoteTimestamp = t; }
+            if (f.name !== remoteName || f.title !== remoteTitle || f.customAvatar !== remoteAvatar || f.level !== remoteLevel || f.studyTime !== remoteStudyTime || f.lastLoginStr !== remoteLastLoginStr || f.timestamp !== remoteTimestamp) {
+                f.name = remoteName; f.title = remoteTitle; f.customAvatar = remoteAvatar;
+                f.level = remoteLevel; f.studyTime = remoteStudyTime; f.lastLoginStr = remoteLastLoginStr; f.timestamp = remoteTimestamp;
+                changed = true;
+            }
+        } catch (e) {}
+    }
+    if (changed) { try { await window.saveUserStats(); } catch (e) {} }
+    if (typeof window.sortAndRenderFriendList === "function") window.sortAndRenderFriendList();
+};
+
+console.log("🔄 第1回パッチ（同期ズレ解消＋レベル1バグ修正＋保存信頼性向上）適用完了");
+// ==========================================================================
+// 🐧 第2回パッチ：ペンギンローディング ＋ 単語帳詳細ボタン修正
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// Phase 3-A：ローディングオーバーレイ本体（表示/非表示マネージャー）
+//   ・280ms以上かかる処理だけ表示（チラつき防止）
+//   ・一度出たら最低450ms表示（チラつき防止）
+//   ・複数処理が重なっても正しく動く（カウンター管理）
+// ------------------------------------------------------------------
+window.__pgLoad = window.__pgLoad || {
+  count: 0,
+  pendingTimer: null,
+  visible: false,
+  shownAt: 0,
+  overlay: null,
+  message: '読み込み中'
+};
+
+window.__renderPenguinOverlay = function(message) {
+  if (window.__pgLoad.overlay) return;
+  var ov = document.createElement('div');
+  ov.id = 'penguinLoadingOverlay';
+  var penguinSvg =
+    '<svg viewBox="0 0 120 122" width="88" height="90" xmlns="http://www.w3.org/2000/svg">' +
+      '<ellipse class="pg-wing-l" cx="24" cy="66" rx="10" ry="22" fill="#16213E"/>' +
+      '<ellipse class="pg-wing-r" cx="96" cy="66" rx="10" ry="22" fill="#16213E"/>' +
+      '<path d="M60 12 C 35 12, 22 33, 22 58 C 22 89, 37 112, 60 112 C 83 112, 98 89, 98 58 C 98 33, 85 12, 60 12 Z" fill="#1B2A4A"/>' +
+      '<ellipse cx="60" cy="75" rx="26" ry="31" fill="#F1F5F9"/>' +
+      '<ellipse cx="47" cy="41" rx="11" ry="13" fill="#F1F5F9"/>' +
+      '<ellipse cx="73" cy="41" rx="11" ry="13" fill="#F1F5F9"/>' +
+      '<circle cx="48" cy="41" r="3.2" fill="#0F172A"/>' +
+      '<circle cx="72" cy="41" r="3.2" fill="#0F172A"/>' +
+      '<circle cx="49" cy="40" r="1.1" fill="#FFFFFF"/>' +
+      '<circle cx="73" cy="40" r="1.1" fill="#FFFFFF"/>' +
+      '<circle cx="39" cy="50" r="4.5" fill="rgba(236,72,153,0.4)"/>' +
+      '<circle cx="81" cy="50" r="4.5" fill="rgba(236,72,153,0.4)"/>' +
+      '<path d="M53 49 L67 49 L60 58 Z" fill="#F59E0B"/>' +
+      '<ellipse class="pg-foot-l" cx="45" cy="113" rx="13" ry="5.5" fill="#F59E0B"/>' +
+      '<ellipse class="pg-foot-r" cx="75" cy="113" rx="13" ry="5.5" fill="#F59E0B"/>' +
+    '</svg>';
+  ov.innerHTML =
+    '<div class="penguin-loader-stage">' +
+      '<div class="penguin-ice-ground"></div>' +
+      '<div class="penguin-walk-track">' +
+        '<div class="penguin-waddle">' + penguinSvg + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
+      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
+  document.body.appendChild(ov);
+  window.__pgLoad.overlay = ov;
+  requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
+};
+
+window.__updatePenguinText = function(message) {
+  var st = window.__pgLoad;
+  if (!st.overlay) return;
+  var txt = st.overlay.querySelector('.penguin-loading-text');
+  if (txt) {
+    txt.innerHTML = '🐧 ' + (message || '読み込み中') +
+      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span>';
+  }
+};
+
+window.showPenguinLoading = function(message) {
+  var st = window.__pgLoad;
+  st.count++;
+  if (message) st.message = message;
+  if (st.visible) {
+    window.__updatePenguinText(st.message);
+    return;
+  }
+  if (st.pendingTimer) return;
+  // 280ms以内に終わる高速処理は表示しない（チラつき防止）
+  st.pendingTimer = setTimeout(function() {
+    st.pendingTimer = null;
+    if (st.count > 0 && !st.visible) {
+      window.__renderPenguinOverlay(st.message);
+      st.visible = true;
+      st.shownAt = Date.now();
+    }
+  }, 280);
+};
+
+window.__actuallyHidePenguin = function() {
+  var st = window.__pgLoad;
+  if (st.count > 0) return;
+  st.visible = false;
+  if (st.overlay) {
+    var ov = st.overlay;
+    st.overlay = null;
+    ov.classList.add('penguin-fade-out');
+    ov.classList.remove('penguin-visible');
+    setTimeout(function(){ if (ov.parentNode) ov.parentNode.removeChild(ov); }, 300);
+  }
+};
+
+window.hidePenguinLoading = function() {
+  var st = window.__pgLoad;
+  if (st.count > 0) st.count--;
+  if (st.count > 0) return; // まだ他の処理が動いている
+  if (st.pendingTimer) { clearTimeout(st.pendingTimer); st.pendingTimer = null; }
+  if (!st.visible) return;
+  // 一度表示したら最低450msは出す（チラつき防止）
+  var elapsed = Date.now() - st.shownAt;
+  var minDisplay = 450;
+  if (elapsed < minDisplay) {
+    setTimeout(function(){ window.__actuallyHidePenguin(); }, minDisplay - elapsed);
+  } else {
+    window.__actuallyHidePenguin();
+  }
+};
+
+// ------------------------------------------------------------------
+// Phase 3-B：時間がかかる処理をペンギンローディングで包むヘルパー
+// ------------------------------------------------------------------
+window.__wrapWithPenguin = function(fnName) {
+  var prev = window[fnName];
+  if (typeof prev !== 'function') return;
+  if (prev.__penguinWrapped) return; // 二重ラップ防止
+  var wrapped = async function() {
+    window.showPenguinLoading();
+    try {
+      return await prev.apply(this, arguments);
+    } finally {
+      window.hidePenguinLoading();
+    }
+  };
+  wrapped.__penguinWrapped = true;
+  window[fnName] = wrapped;
+};
+
+// ローディングを適用する関数一覧（既存の機能を上書きせず包むだけ）
+[
+  'loadLocalState',               // 起動時の初回読み込み
+  'switchTextbookContext',        // 単語帳を切り替えた時
+  'loadCurrentTextbookData',      // 単語帳データ読み込み
+  'refreshFriendListFromFirebase',// フレンドリスト更新時
+  'handleAuthSubmit',             // ログイン処理
+  'startActualGame',              // ゲーム開始時
+  'startFlashcardSession',        // フラッシュカード開始時
+  'analyzeText',                  // 長文解析時
+  'endGameSession',               // ゲーム終了時
+  'saveSidebarProfile',           // プロフィール保存時
+  'searchAndAddFriend'            // フレンド追加時
+].forEach(function(fn){ window.__wrapWithPenguin(fn); });
+
+// ------------------------------------------------------------------
+// Phase 4：単語帳詳細ボタン（📊）修正
+//   ・単語帳切り替え時に必ず再バインド（古いデータを参照しないように）
+//   ・ポップアップに「現在の単語帳名」を表示（全体ではなく今の単語帳であることが分かる）
+// ------------------------------------------------------------------
+window.injectVocabStatsButton = function() {
+  var titleEl = document.getElementById('vocabBookTitle');
+  if (!titleEl) return;
+  var parent = titleEl.parentElement;
+  if (!parent) return;
+  var btn = document.getElementById('vocabStatsBtn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'vocabStatsBtn';
+    btn.type = 'button';
+    btn.style.cssText = "margin-left:auto; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:11px; font-weight:700; padding:6px 10px; border-radius:20px; cursor:pointer; white-space:nowrap; flex-shrink:0;";
+    if (getComputedStyle(parent).display === 'block') {
+      parent.style.display = 'flex';
+      parent.style.alignItems = 'center';
+      parent.style.gap = '8px';
+    }
+    parent.appendChild(btn);
+  }
+  // クリック時に最新の vocabList（現在の単語帳）を読むように毎回再バインド
+  btn.textContent = '📊 詳細';
+  btn.onclick = function(e) { e.stopPropagation(); window.showVocabStatsPopup(); };
+};
+
+window.showVocabStatsPopup = function() {
+  var old = document.getElementById('vocabStatsOverlay'); if (old) old.remove();
+  // ✅ 現在の単語帳名を取得
+  var currentBook = (typeof textbooksPool !== 'undefined' && Array.isArray(textbooksPool))
+    ? textbooksPool.find(function(b){ return b.id === currentTextbook; })
+    : null;
+  var bookName = currentBook ? currentBook.name : '共通単語帳';
+  // ✅ 現在の単語帳（vocabList）のみを集計
+  var total = vocabList.length;
+  var ok = 0, so = 0, bad = 0, none = 0;
+  vocabList.forEach(function(w){
+    var s = window.wordOverallStatus(w);
+    if (s === 'ok') ok++; else if (s === 'so') so++; else if (s === 'bad') bad++; else none++;
+  });
+  var denom = total || 1;
+  var pct = function(v){ return total ? Math.round(v / denom * 100) : 0; };
+  var segs = [
+    { value: ok, color: '#10B981', label: '⚪︎ 定着' },
+    { value: so, color: '#F59E0B', label: '△ 曖昧' },
+    { value: bad, color: '#EF4444', label: '✕ 不可' },
+    { value: none, color: '#64748B', label: '未学習' }
+  ];
+  var r = 42, c = 2 * Math.PI * r, offset = 0, circles = '';
+  segs.forEach(function(seg){
+    var frac = seg.value / denom; var len = frac * c;
+    if (len > 0) circles += '<circle r="' + r + '" cx="60" cy="60" fill="none" stroke="' + seg.color + '" stroke-width="14" stroke-dasharray="' + len + ' ' + (c - len) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 60 60)"/>';
+    offset += len;
+  });
+  if (total === 0) circles = '<circle r="' + r + '" cx="60" cy="60" fill="none" stroke="#334155" stroke-width="14"/>';
+  var listHtml = '';
+  segs.forEach(function(seg){
+    listHtml += '<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08); font-size:13px;">' +
+      '<span style="display:flex; align-items:center; gap:8px;"><span style="width:12px; height:12px; border-radius:3px; background:' + seg.color + '; display:inline-block;"></span>' + seg.label + '</span>' +
+      '<span style="font-weight:800;">' + seg.value + '語 <span style="color:var(--text-sub); font-weight:600;">(' + pct(seg.value) + '%)</span></span></div>';
+  });
+  var ov = document.createElement('div');
+  ov.id = 'vocabStatsOverlay';
+  ov.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(5px);";
+  var box = document.createElement('div');
+  box.style.cssText = "background:var(--card-bg); border:1px solid var(--cosmic-cyan); border-radius:16px; padding:20px; width:88%; max-width:340px; color:#fff; box-shadow:0 10px 30px rgba(0,0,0,0.6);";
+  box.innerHTML =
+    '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">' +
+      '<div style="font-size:16px; font-weight:900;">📊 単語帳の詳細</div>' +
+      '<button id="vocabStatsClose" style="background:none; border:none; color:var(--text-sub); font-size:20px; cursor:pointer; line-height:1;">×</button>' +
+    '</div>' +
+    '<div style="text-align:center; font-size:12px; color:var(--cosmic-purple-light); font-weight:800; margin-bottom:8px;">📔 ' + bookName + '</div>' +
+    '<div style="text-align:center; font-size:13px; margin-bottom:12px;">登録単語数: <strong style="color:var(--cosmic-cyan); font-size:18px;">' + total + '</strong> 語</div>' +
+    '<div style="display:flex; justify-content:center; margin-bottom:14px;">' +
+      '<svg width="120" height="120" viewBox="0 0 120 120">' + circles + '<text x="60" y="64" text-anchor="middle" fill="#fff" font-size="16" font-weight="900">' + total + '</text></svg>' +
+    '</div>' + listHtml;
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  ov.querySelector('#vocabStatsClose').onclick = function(){ ov.remove(); };
+  ov.onclick = function(e){ if (e.target === ov) ov.remove(); };
+};
+
+console.log("🐧 第2回パッチ（ペンギンローディング＋単語帳詳細ボタン修正）適用完了");
+// ==========================================================================
+// 🐧 ペンギン差し替えパッチ：リアル版（アデリー/コウテイペンギン風）
+//    ※このファイルの末尾にそのまま貼り付けてください。
+//    ※第2回パッチの __renderPenguinOverlay を自動で上書きします。
+// ==========================================================================
+window.__renderPenguinOverlay = function(message) {
+  if (window.__pgLoad.overlay) return;
+  var ov = document.createElement('div');
+  ov.id = 'penguinLoadingOverlay';
+  var penguinSvg =
+    '<svg viewBox="0 0 120 132" width="92" height="101" xmlns="http://www.w3.org/2000/svg">' +
+      '<defs>' +
+        '<linearGradient id="rpgBodyGrad" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0" stop-color="#2d3b52"/>' +
+          '<stop offset="1" stop-color="#1a2333"/>' +
+        '</linearGradient>' +
+        '<linearGradient id="rpgBellyGrad" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0" stop-color="#f7f9fb"/>' +
+          '<stop offset="1" stop-color="#dde4ea"/>' +
+        '</linearGradient>' +
+        '<radialGradient id="rpgChestGrad" cx="0.5" cy="0.35" r="0.75">' +
+          '<stop offset="0" stop-color="rgba(251,191,36,0.32)"/>' +
+          '<stop offset="1" stop-color="rgba(251,191,36,0)"/>' +
+        '</radialGradient>' +
+      '</defs>' +
+      '<path class="rpg-flipper-l" d="M27 56 C 18 64, 15 84, 22 98 C 27 102, 32 94, 31 80 C 30 68, 29 60, 27 56 Z" fill="#1c2534"/>' +
+      '<path class="rpg-flipper-r" d="M93 56 C 102 64, 105 84, 98 98 C 93 102, 88 94, 89 80 C 90 68, 91 60, 93 56 Z" fill="#1c2534"/>' +
+      '<path d="M60 12 C 38 12, 26 32, 25 55 C 24 86, 36 114, 60 114 C 84 114, 96 86, 95 55 C 94 32, 82 12, 60 12 Z" fill="url(#rpgBodyGrad)"/>' +
+      '<path d="M60 32 C 50 32, 44 36, 42 44 C 38 48, 36 56, 37 66 C 36 88, 44 108, 60 112 C 76 108, 84 88, 83 66 C 84 56, 82 48, 78 44 C 76 36, 70 32, 60 32 Z" fill="url(#rpgBellyGrad)"/>' +
+      '<ellipse cx="60" cy="58" rx="19" ry="14" fill="url(#rpgChestGrad)"/>' +
+      '<circle cx="47" cy="42" r="3.2" fill="#0d1220"/>' +
+      '<circle cx="73" cy="42" r="3.2" fill="#0d1220"/>' +
+      '<circle cx="48" cy="41" r="1.1" fill="#ffffff"/>' +
+      '<circle cx="74" cy="41" r="1.1" fill="#ffffff"/>' +
+      '<path d="M55 46 L65 46 L60 58 Z" fill="#2e3a4f"/>' +
+      '<path d="M57 46 L63 46 L60 52 Z" fill="#3d4a61"/>' +
+      '<path class="rpg-foot-l" d="M38 112 C 36 119, 40 124, 46 124 C 52 124, 54 118, 52 112 Z" fill="#46536b"/>' +
+      '<path class="rpg-foot-r" d="M68 112 C 66 118, 68 124, 74 124 C 80 124, 84 119, 82 112 Z" fill="#46536b"/>' +
+    '</svg>';
+  ov.innerHTML =
+    '<div class="penguin-loader-stage">' +
+      '<div class="penguin-ice-ground"></div>' +
+      '<div class="penguin-walk-track">' +
+        '<div class="penguin-waddle">' + penguinSvg + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
+      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
+  document.body.appendChild(ov);
+  window.__pgLoad.overlay = ov;
+  requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
+};
+console.log("🐧 リアルペンギン差し替えパッチ 適用完了");
+// ==========================================================================
+// 🎩 タンゴン差し替えパッチ：本物のタンゴンがタンゴを踊るローディング
+//    ※このファイルの末尾にそのまま貼り付けてください。
+//    ※第2回パッチ／リアル差し替えパッチの __renderPenguinOverlay を自動上書き。
+//    ※表示の安定ロジック（カウンター・チラつき防止・280ms/450ms閾値）は
+//      そのまま流用するので、__wrapWithPenguin 等の適用範囲は不変。
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// ヘルパー：アプリ内で実際に読めている tangon.png のパスをDOMから検出
+//   見つからなければ既定候補を返し、さらに img.onerror で連鎖フォールバック
+// ------------------------------------------------------------------
+window.__tangonSrcCache = null;
+window.__detectTangonSrc = function() {
+  if (window.__tangonSrcCache) return window.__tangonSrcCache;
+  try {
+    var imgs = document.querySelectorAll('img');
+    for (var i = 0; i < imgs.length; i++) {
+      var s = (imgs[i].getAttribute('src') || imgs[i].src || '');
+      if (/tangon/i.test(s)) { window.__tangonSrcCache = s; return s; }
+    }
+  } catch (e) {}
+  window.__tangonSrcCache = 'tangon.png';
+  return 'tangon.png';
+};
+
+// ------------------------------------------------------------------
+// メイン：ローディングオーバーレイを「踊るタンゴン」に差し替え
+// ------------------------------------------------------------------
+window.__renderPenguinOverlay = function(message) {
+  if (window.__pgLoad.overlay) return;
+  var ov = document.createElement('div');
+  ov.id = 'penguinLoadingOverlay';
+
+  // 画像パス候補（重複除去）。DOM検出値を先頭に。
+  var base = window.__detectTangonSrc();
+  var raw = [base, 'tangon.png', './tangon.png', 'assets/tangon.png', '../tangon.png', 'img/tangon.png'];
+  var seen = {}, chain = [];
+  raw.forEach(function(p) { if (p && !seen[p]) { seen[p] = 1; chain.push(p); } });
+
+  // 舞うバラの花びら（タンゴンのくわえたバラに呼应）
+  var petals = '';
+  for (var p = 0; p < 8; p++) {
+    var left = Math.round(Math.random() * 100);
+    var delay = (Math.random() * 4).toFixed(2);
+    var dur = (4 + Math.random() * 4).toFixed(2);
+    var size = (7 + Math.round(Math.random() * 9));
+    var hue = Math.random() < 0.5 ? 'rgba(225,29,72,0.85)' : 'rgba(244,114,182,0.78)';
+    petals += '<span class="tangon-petal" style="left:' + left + '%; width:' + size + 'px; height:' + size + 'px; background:' + hue + '; animation-delay:' + delay + 's; animation-duration:' + dur + 's;"></span>';
+  }
+  // 上昇するネオンの光の粒
+  var sparks = '';
+  for (var s2 = 0; s2 < 12; s2++) {
+    var l2 = Math.round(Math.random() * 100);
+    var d2 = (Math.random() * 5).toFixed(2);
+    var du2 = (2.5 + Math.random() * 3.5).toFixed(2);
+    var c2 = Math.random() < 0.5 ? 'rgba(0,240,255,0.9)' : 'rgba(192,132,252,0.9)';
+    sparks += '<span class="tangon-spark" style="left:' + l2 + '%; background:' + c2 + '; animation-delay:' + d2 + 's; animation-duration:' + du2 + 's;"></span>';
+  }
+
+  ov.innerHTML =
+    '<div class="tangon-stage">' +
+      '<div class="tangon-spotlight"></div>' +
+      '<div class="tangon-spotlight tangon-spotlight-2"></div>' +
+      '<div class="tangon-petals">' + petals + '</div>' +
+      '<div class="tangon-sparks">' + sparks + '</div>' +
+      '<div class="tangon-dancer">' +
+        '<img class="tangon-img" alt="タンゴン" />' +
+        '<div class="tangon-shadow"></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
+      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
+
+  document.body.appendChild(ov);
+
+  // 画像に src と onerror 連鎖をセット（全部失敗したら画像だけ隠す）
+  var img = ov.querySelector('.tangon-img');
+  var idx = 0;
+  function tryNext() {
+    if (idx >= chain.length) { img.style.display = 'none'; return; }
+    img.src = chain[idx++];
+  }
+  img.onerror = function() { tryNext(); };
+  tryNext();
+
+  window.__pgLoad.overlay = ov;
+  requestAnimationFrame(function() { ov.classList.add('penguin-visible'); });
+};
+// ※ __updatePenguinText は .penguin-loading-text を探すのでそのまま互換（再定義不要）
+
+console.log("🎩 タンゴン差し替えパッチ（踊るタンゴンローディング）適用完了");
