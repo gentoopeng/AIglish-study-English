@@ -3897,52 +3897,61 @@ window.applyUserProgressToVocabList = function() {
     return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
   }).length;
 };
-
 window.loadUserVocabProgress = async function(bookKey) {
-  bookKey = bookKey || currentTextbook || "default";
-  currentUserVocabProgress = {};
-  if (typeof myId === "undefined" || !myId) return;
-  if (myId === "GUEST-000" || !window.db || !window.fbGetDoc || !window.fbDoc) {
-    try {
-      var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
-      if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
-    } catch (e) {}
-    return;
-  }
-  try {
-    const ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-    const snap = await window.fbGetDoc(ref);
-    if (snap.exists() && snap.data() && snap.data().words) {
-      currentUserVocabProgress = snap.data().words;
-    }
-  } catch (e) {
-    try {
-      var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
-      if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
-    } catch (err) {}
-  }
+bookKey = bookKey || currentTextbook || "default";
+currentUserVocabProgress = {};
+if (typeof myId === "undefined" || !myId) return;
+// ✅ 常に localStorage を先に読み込んでベースにする（Firebase失敗時の保険）
+try {
+var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
+if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
+} catch (e) {}
+// ゲスト、または Firebase 未接続ならローカルのみで終了
+if (myId === "GUEST-000" || !window.db || !window.fbGetDoc || !window.fbDoc) {
+return;
+}
+// Firebase にデータがあれば、それで上書き（クラウド優先）
+try {
+const ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+const snap = await window.fbGetDoc(ref);
+if (snap.exists() && snap.data() && snap.data().words) {
+currentUserVocabProgress = snap.data().words;
+}
+// ※ Firebase が空でも、上で読み込んだ localStorage のデータを維持する
+} catch (e) {
+// ※ 例外時も、上で読み込んだ localStorage のデータを維持する
+console.error("loadUserVocabProgress Firebase読み込みエラー（ローカルデータで継続）:", e);
+}
 };
-
 window.saveUserVocabProgress = async function() {
-  if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
-  if (typeof myId === "undefined" || !myId) return;
-  const bookKey = currentTextbook || "default";
-  currentUserVocabProgress = window.extractUserProgressFromVocabList();
-  const payload = { words: currentUserVocabProgress, updatedAt: new Date().toISOString() };
-  try {
-    localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
-  } catch (e) {}
-  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
-    try {
-      const ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-      await window.fbSetDoc(ref, payload);
-    } catch (e) {}
-  }
-  userStats.vocab_fixed = vocabList.filter(function(w) {
-    return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
-  }).length;
+if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
+if (typeof myId === "undefined" || !myId) return;
+const bookKey = currentTextbook || "default";
+currentUserVocabProgress = window.extractUserProgressFromVocabList();
+const payload = { words: currentUserVocabProgress, updatedAt: new Date().toISOString() };
+// ✅ ローカル保存（最優先・確実に）
+try {
+localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
+} catch (e) {
+console.error("saveUserVocabProgress ローカル保存エラー:", e);
+}
+// ✅ Firebase保存（リトライ付き・エラー可視化）
+if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
+try {
+const ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+if (typeof window.fbSetDocWithRetry === "function") {
+await window.fbSetDocWithRetry(ref, payload);
+} else {
+await window.fbSetDoc(ref, payload);
+}
+} catch (e) {
+console.error("saveUserVocabProgress Firebase保存エラー（ローカルには保存済み）:", e);
+}
+}
+userStats.vocab_fixed = vocabList.filter(function(w) {
+return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
+}).length;
 };
-
 window.saveVocabMasterToStorage = async function() {
   if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
   const bookKey = currentTextbook || "default";
