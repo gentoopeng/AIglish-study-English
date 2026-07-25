@@ -8669,3 +8669,583 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
 };
 
 console.log('🗜️ 第9回パッチ（Firestore index entry 上限エラー根絶：wordsJson 形式）適用完了');
+// ==========================================================================
+// 📚 本棚タブパッチ：スワイプ切替（解析 ⇔ 本棚）＋ 教材本棚システム
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※index.html / style.css の編集は不要です（DOMを自動で組み替えます）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【0】パッチ専用スタイルの注入（タブボタン＋スライドアニメーション）
+// ------------------------------------------------------------------
+(function injectShelfTabPatchCss() {
+  if (document.getElementById('shelfTabPatchCss')) return;
+  var st = document.createElement('style');
+  st.id = 'shelfTabPatchCss';
+  st.textContent = [
+    '.reader-subtab-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 0;border-radius:10px;font-size:12px;font-weight:900;letter-spacing:1px;cursor:pointer;transition:all 0.25s ease;border:1px solid rgba(255,255,255,0.15);background:rgba(7,11,25,0.6);color:var(--text-sub);-webkit-tap-highlight-color:transparent;}',
+    '.reader-subtab-btn.reader-subtab-active{border-color:var(--cosmic-cyan);background:linear-gradient(135deg, rgba(0,240,255,0.25) 0%, rgba(192,132,252,0.25) 100%);color:#FFFFFF;box-shadow:0 0 15px rgba(0,240,255,0.35);text-shadow:0 0 8px rgba(0,240,255,0.5);}',
+    '.shelf-book-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);margin-bottom:8px;cursor:pointer;transition:all 0.2s ease;}',
+    '.shelf-book-row:active{transform:scale(0.98);border-color:var(--cosmic-cyan);background:rgba(0,240,255,0.08);}',
+    '.shelf-item-row{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.05);padding:10px 14px;border-radius:8px;margin-bottom:8px;}',
+    '@keyframes shelfSlideInFromRight{0%{opacity:0;transform:translateX(50px);}100%{opacity:1;transform:translateX(0);}}',
+    '@keyframes shelfSlideInFromLeft{0%{opacity:0;transform:translateX(-50px);}100%{opacity:1;transform:translateX(0);}}',
+    '.shelf-slide-from-right{animation:shelfSlideInFromRight 0.3s cubic-bezier(0.25,1,0.5,1) forwards;}',
+    '.shelf-slide-from-left{animation:shelfSlideInFromLeft 0.3s cubic-bezier(0.25,1,0.5,1) forwards;}'
+  ].join('\n');
+  document.head.appendChild(st);
+})();
+
+// ------------------------------------------------------------------
+// 【1】本棚教材データ（単語帳の textbooksPool とは完全独立）
+// ------------------------------------------------------------------
+let bookshelfBooks = [];
+try { bookshelfBooks = JSON.parse(localStorage.getItem('core_v4_bookshelf_books') || "[]"); } catch (e) { bookshelfBooks = []; }
+let adminUploadedShelfCoverBase64 = "";
+let currentShelfView = 'list'; // 'list' or 教材id or 'unclassified'
+let currentReaderSubTab = 'analysis'; // 'analysis' or 'bookshelf'
+
+window.syncBookshelfIndexFromFirestore = async function() {
+  try {
+    var c = localStorage.getItem('core_v4_bookshelf_books');
+    if (c) bookshelfBooks = JSON.parse(c) || [];
+  } catch (e) {}
+  if (window.db && window.fbGetDoc && window.fbDoc) {
+    try {
+      var ref = window.fbDoc(window.db, "shared", "bookshelf_index");
+      var snap = await window.fbGetDoc(ref);
+      if (snap.exists() && snap.data().books) {
+        bookshelfBooks = snap.data().books;
+        localStorage.setItem('core_v4_bookshelf_books', JSON.stringify(bookshelfBooks));
+      }
+    } catch (e) {
+      console.error("本棚教材インデックスの同期エラー:", e);
+    }
+  }
+  window.updateAdminEditShelfSelectOptions();
+};
+
+window.saveBookshelfIndexToFirestore = async function() {
+  try { localStorage.setItem('core_v4_bookshelf_books', JSON.stringify(bookshelfBooks)); } catch (e) {}
+  if (window.db && window.fbSetDoc && window.fbDoc) {
+    var ref = window.fbDoc(window.db, "shared", "bookshelf_index");
+    await window.fbSetDoc(ref, { books: bookshelfBooks, updatedAt: new Date().toISOString() }, { merge: true });
+  }
+};
+
+// ------------------------------------------------------------------
+// 【2】管理者画面：本棚教材の管理配信パネル（自動注入）
+// ------------------------------------------------------------------
+window.handleAdminShelfCoverUpload = function(event) {
+  var file = event.target.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      var ctx = canvas.getContext('2d');
+      var maxDimension = 120;
+      var width = img.width, height = img.height;
+      if (width > height) {
+        if (width > maxDimension) { height = Math.round((height * maxDimension) / width); width = maxDimension; }
+      } else {
+        if (height > maxDimension) { width = Math.round((width * maxDimension) / height); height = maxDimension; }
+      }
+      canvas.width = width; canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+      adminUploadedShelfCoverBase64 = canvas.toDataURL('image/jpeg', 0.7);
+      alert("本棚教材用の表紙画像ファイルを受け付けました！");
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.updateAdminEditShelfSelectOptions = function() {
+  var sel = document.getElementById('adminEditShelfSelect');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">➕ 新規教材として登録</option>';
+  bookshelfBooks.forEach(function(b) {
+    var o = document.createElement('option');
+    o.value = b.id;
+    o.innerText = b.name;
+    sel.appendChild(o);
+  });
+  sel.value = cur;
+};
+
+window.handleAdminShelfEditSelectChange = function(val) {
+  var titleInput = document.getElementById('adminNewShelfTitle');
+  var submitBtn = document.getElementById('adminShelfSubmitBtn');
+  if (!titleInput || !submitBtn) return;
+  if (val) {
+    var match = bookshelfBooks.find(function(b) { return b.id === val; });
+    if (match) titleInput.value = match.name;
+    submitBtn.innerText = "選択中の教材データを修正・上書き保存";
+  } else {
+    titleInput.value = "";
+    submitBtn.innerText = "新規教材として登録";
+  }
+};
+
+window.saveOrUpdateShelfBookFromAdmin = async function() {
+  var sel = document.getElementById('adminEditShelfSelect');
+  var titleInput = document.getElementById('adminNewShelfTitle');
+  if (!sel || !titleInput) return;
+  var title = titleInput.value.trim();
+  if (!title) return alert("教材の名前を入力してください！");
+  var selectedId = sel.value;
+  var finalCover = adminUploadedShelfCoverBase64;
+  var finalType = "image";
+  if (selectedId) {
+    var idx = bookshelfBooks.findIndex(function(b) { return b.id === selectedId; });
+    if (idx !== -1) {
+      bookshelfBooks[idx].name = title;
+      if (adminUploadedShelfCoverBase64) {
+        bookshelfBooks[idx].cover = finalCover;
+        bookshelfBooks[idx].coverType = finalType;
+      }
+    }
+  } else {
+    if (!adminUploadedShelfCoverBase64) {
+      finalCover = "📚";
+      finalType = "text";
+    }
+    bookshelfBooks.push({ id: "shelfbook_" + Date.now(), name: title, cover: finalCover, coverType: finalType });
+  }
+  try {
+    await window.saveBookshelfIndexToFirestore();
+    alert("🎉 本棚教材『" + title + "』を配信・適用完了しました！");
+    titleInput.value = "";
+    sel.value = "";
+    adminUploadedShelfCoverBase64 = "";
+    var fi = document.getElementById('adminShelfCoverFileUploader');
+    if (fi) fi.value = "";
+    window.updateAdminEditShelfSelectOptions();
+    window.renderBookshelf();
+  } catch (e) {
+    alert("Firebaseとの通信に失敗しました。");
+  }
+};
+
+window.deleteShelfBookFromAdmin = async function() {
+  var sel = document.getElementById('adminEditShelfSelect');
+  if (!sel) return;
+  var selectedId = sel.value;
+  if (!selectedId) return alert("削除したい既存の本棚教材をセレクトボックスから選択してください！");
+  var target = bookshelfBooks.find(function(b) { return b.id === selectedId; });
+  if (!target) return;
+  if (!confirm("⚠️ 警告: 本棚教材『" + target.name + "』を削除しますか？\n※保存済みの長文は「未分類」に移動します。")) return;
+  bookshelfBooks = bookshelfBooks.filter(function(b) { return b.id !== selectedId; });
+  try {
+    await window.saveBookshelfIndexToFirestore();
+    alert("🎉 指定された本棚教材を削除・同期しました。");
+    var titleInput = document.getElementById('adminNewShelfTitle');
+    if (titleInput) titleInput.value = "";
+    sel.value = "";
+    window.updateAdminEditShelfSelectOptions();
+    window.renderBookshelf();
+  } catch (e) {
+    alert("Firebaseとの通信に失敗しました。");
+  }
+};
+
+window.injectShelfAdminPanel = function() {
+  if (document.getElementById('shelfAdminPanelCard')) return;
+  var anchor = document.getElementById('adminEditBookSelect');
+  if (!anchor) return;
+  var card = anchor.closest('.card');
+  if (!card || !card.parentNode) return;
+  var panel = document.createElement('div');
+  panel.id = 'shelfAdminPanelCard';
+  panel.className = 'card';
+  panel.style.cssText = "border:1px solid rgba(0,240,255,0.35);box-shadow:0 0 15px rgba(0,240,255,0.15);";
+  panel.innerHTML =
+    '<h2 style="color:var(--cosmic-cyan);">📚 本棚教材の管理配信システム</h2>' +
+    '<div style="font-size:11px;color:var(--text-sub);margin-bottom:10px;">リーダータブの「本棚」に表示される教材（表紙付き）を登録します。単語帳の教材とは別の独立システムです。</div>' +
+    '<label style="font-size:11px;color:var(--cosmic-cyan);font-weight:700;display:block;margin-bottom:4px;">対象の本棚教材を指定（新規 or 既存編集）</label>' +
+    '<select id="adminEditShelfSelect" class="search-input" onchange="window.handleAdminShelfEditSelectChange(this.value)"></select>' +
+    '<label style="font-size:11px;color:var(--cosmic-cyan);font-weight:700;display:block;margin-bottom:4px;">教材の名前</label>' +
+    '<input type="text" id="adminNewShelfTitle" class="search-input" placeholder="例: 長文問題集 Vol.1">' +
+    '<label style="font-size:11px;color:var(--cosmic-cyan);font-weight:700;display:block;margin-bottom:4px;">教材の表紙アイコン画像 (Canvas高圧縮変換)</label>' +
+    '<input type="file" id="adminShelfCoverFileUploader" accept="image/*" onchange="window.handleAdminShelfCoverUpload(event)" class="search-input" style="padding:8px 12px;height:auto;">' +
+    '<button id="adminShelfSubmitBtn" class="modern-btn" onclick="window.saveOrUpdateShelfBookFromAdmin()">新規教材として登録</button>' +
+    '<button class="modern-btn" style="margin-top:8px;background:rgba(239,68,68,0.12);color:#EF4444;border:1px solid #EF4444;" onclick="window.deleteShelfBookFromAdmin()">選択中の教材を削除</button>';
+  card.parentNode.insertBefore(panel, card.nextSibling);
+  window.updateAdminEditShelfSelectOptions();
+};
+
+// ------------------------------------------------------------------
+// 【3】保存ポップアップ上書き（フォルダ選択 → 教材選択）
+// ------------------------------------------------------------------
+window.showCustomSaveBookshelfPrompt = function(text, title) {
+  if (document.getElementById('saveBookshelfOverlay')) return;
+  var overlay = document.createElement('div');
+  overlay.id = 'saveBookshelfOverlay';
+  overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(5px);";
+  var box = document.createElement('div');
+  box.style.cssText = "background:var(--card-bg);border:1px solid var(--cosmic-cyan);border-radius:16px;padding:24px;width:85%;max-width:320px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.6);";
+  var optionsHtml = '';
+  bookshelfBooks.forEach(function(b) {
+    optionsHtml += '<option value="' + b.id + '">📖 ' + b.name + '</option>';
+  });
+  optionsHtml += '<option value="">🗂️ 未分類</option>';
+  box.innerHTML =
+    '<div style="color:white;font-size:18px;font-weight:800;margin-bottom:12px;">📚 本棚に保存</div>' +
+    '<div style="font-size:11px;color:var(--text-sub);margin-bottom:8px;text-align:left;">保存先の教材を選択</div>' +
+    '<select id="selectBookshelfBook" class="search-input" style="width:100%;margin-bottom:16px;">' + optionsHtml + '</select>' +
+    '<div style="display:flex;gap:12px;">' +
+    '<button style="flex:1;padding:12px;border-radius:10px;border:none;background:var(--input-bg);color:var(--text-main);font-weight:700;cursor:pointer;" id="cancelSaveBookshelfBtn">キャンセル</button>' +
+    '<button style="flex:1;padding:12px;border-radius:10px;border:none;background:var(--cosmic-cyan);color:#000;font-weight:700;cursor:pointer;" id="confirmSaveBookshelfBtn">保存</button>' +
+    '</div>';
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  document.getElementById('cancelSaveBookshelfBtn').onclick = function() { document.body.removeChild(overlay); };
+  document.getElementById('confirmSaveBookshelfBtn').onclick = function() {
+    var selVal = document.getElementById('selectBookshelfBook').value;
+    var bookId = selVal || null;
+    var dup = myBookshelf.some(function(item) {
+      return item.text === text && String(item.bookId || '') === String(bookId || '');
+    });
+    if (dup) { alert("すでに保存されています！"); document.body.removeChild(overlay); return; }
+    myBookshelf.push({
+      id: Date.now(),
+      bookId: bookId,
+      title: title || "無題",
+      text: text,
+      aiAnalysisData: currentActiveAiAnalysisCache ? JSON.parse(JSON.stringify(currentActiveAiAnalysisCache)) : null
+    });
+    localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf));
+    alert("保存しました！");
+    window.renderBookshelf();
+    document.body.removeChild(overlay);
+  };
+};
+
+// ------------------------------------------------------------------
+// 【4】本棚描画上書き（2階層：教材リスト → 長文タイトルリスト）
+// ------------------------------------------------------------------
+window.renderBookshelf = function() {
+  var container = document.getElementById('myBookshelfContainer');
+  if (!container) return;
+  container.innerHTML = "";
+  // 旧フォルダデータ・削除済み教材のデータは「未分類」扱い
+  var isOrphan = function(item) {
+    return !item.bookId || !bookshelfBooks.some(function(b) { return b.id === item.bookId; });
+  };
+  // 表示状態のガード
+  if (currentShelfView !== 'list' && currentShelfView !== 'unclassified') {
+    if (!bookshelfBooks.some(function(b) { return b.id === currentShelfView; })) currentShelfView = 'list';
+  }
+
+  // ---------------- 1階層目：教材リスト ----------------
+  if (currentShelfView === 'list') {
+    if (bookshelfBooks.length === 0 && myBookshelf.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:var(--text-sub);font-size:12px;padding:20px;">本棚は空です。<br>管理者が配信した教材がここに表示されます。</div>';
+      return;
+    }
+    bookshelfBooks.forEach(function(book) {
+      var count = myBookshelf.filter(function(i) { return i.bookId === book.id; }).length;
+      var row = document.createElement('div');
+      row.className = 'shelf-book-row';
+      var coverWrap = document.createElement('div');
+      coverWrap.style.cssText = "width:42px;height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:6px;background:linear-gradient(160deg, rgba(0,240,255,0.15), rgba(192,132,252,0.15));border:1px solid rgba(255,255,255,0.25);overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.4);";
+      if (book.coverType === 'image' && book.cover) {
+        coverWrap.innerHTML = '<img src="' + book.cover + '" style="width:100%;height:100%;object-fit:cover;">';
+      } else {
+        coverWrap.innerHTML = '<span style="font-size:22px;">' + (book.cover || '📚') + '</span>';
+      }
+      var nameWrap = document.createElement('div');
+      nameWrap.style.cssText = "flex:1;min-width:0;";
+      nameWrap.innerHTML = '<div style="font-size:14px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + book.name + '</div>' +
+        '<div style="font-size:10px;color:var(--text-sub);margin-top:2px;">' + count + ' 本の長文を保存済み</div>';
+      var arrow = document.createElement('div');
+      arrow.style.cssText = "color:var(--cosmic-cyan);flex-shrink:0;";
+      arrow.innerHTML = '<i data-lucide="chevron-right" size="18"></i>';
+      row.appendChild(coverWrap);
+      row.appendChild(nameWrap);
+      row.appendChild(arrow);
+      row.onclick = function() { currentShelfView = book.id; window.renderBookshelf(); };
+      container.appendChild(row);
+    });
+    var uncount = myBookshelf.filter(isOrphan).length;
+    if (uncount > 0) {
+      var urow = document.createElement('div');
+      urow.className = 'shelf-book-row';
+      urow.innerHTML =
+        '<div style="width:42px;height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:6px;background:rgba(255,255,255,0.06);border:1px dashed rgba(255,255,255,0.3);font-size:22px;">🗂️</div>' +
+        '<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:800;color:#fff;">未分類</div>' +
+        '<div style="font-size:10px;color:var(--text-sub);margin-top:2px;">' + uncount + ' 本の長文を保存済み</div></div>' +
+        '<div style="color:var(--cosmic-cyan);flex-shrink:0;"><i data-lucide="chevron-right" size="18"></i></div>';
+      urow.onclick = function() { currentShelfView = 'unclassified'; window.renderBookshelf(); };
+      container.appendChild(urow);
+    }
+    window.initLucide();
+    return;
+  }
+
+  // ---------------- 2階層目：長文タイトルリスト ----------------
+  var isUnclassified = (currentShelfView === 'unclassified');
+  var book = isUnclassified ? null : bookshelfBooks.find(function(b) { return b.id === currentShelfView; });
+  var items = myBookshelf.filter(function(i) {
+    return isUnclassified ? isOrphan(i) : (i.bookId === currentShelfView);
+  });
+  var header = document.createElement('div');
+  header.style.cssText = "display:flex;align-items:center;gap:10px;margin-bottom:12px;";
+  var backBtn = document.createElement('button');
+  backBtn.className = 'list-action-link';
+  backBtn.style.cssText = "height:32px;padding:0 10px;font-size:11px;flex-shrink:0;";
+  backBtn.innerHTML = '<i data-lucide="arrow-left" size="13" style="vertical-align:middle;margin-right:2px;"></i>戻る';
+  backBtn.onclick = function() { currentShelfView = 'list'; window.renderBookshelf(); };
+  var titleEl = document.createElement('div');
+  titleEl.style.cssText = "flex:1;min-width:0;font-size:15px;font-weight:900;color:var(--cosmic-cyan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+  titleEl.innerText = isUnclassified ? '🗂️ 未分類' : ('📖 ' + (book ? book.name : ''));
+  header.appendChild(backBtn);
+  header.appendChild(titleEl);
+  container.appendChild(header);
+  if (items.length === 0) {
+    var empty = document.createElement('div');
+    empty.style.cssText = "text-align:center;color:var(--text-sub);font-size:12px;padding:20px;";
+    empty.innerText = '保存された長文はありません。';
+    container.appendChild(empty);
+    window.initLucide();
+    return;
+  }
+  items.forEach(function(item) {
+    var row = document.createElement('div');
+    row.className = 'shelf-item-row';
+    var titleWrap = document.createElement('div');
+    titleWrap.style.cssText = "flex:1;min-width:0;font-size:13px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    titleWrap.innerHTML = '<i data-lucide="file-text" size="12" style="color:var(--text-sub);margin-right:4px;vertical-align:middle;"></i>';
+    titleWrap.appendChild(document.createTextNode(item.title || '無題'));
+    var openBtn = document.createElement('button');
+    openBtn.className = 'list-action-link';
+    openBtn.innerText = '開く';
+    openBtn.onclick = function() {
+      window.switchReaderSubTab('analysis', 'none');
+      window.analyzeText(item.text, item.title || '無題', item.aiAnalysisData ? JSON.parse(JSON.stringify(item.aiAnalysisData)) : null);
+    };
+    var delBtn = document.createElement('button');
+    delBtn.className = 'word-delete-btn';
+    delBtn.style.cssText = "display:flex !important;background:none;border:none;color:#EF4444;padding:4px;cursor:pointer;";
+    delBtn.innerHTML = '<i data-lucide="trash-2" size="14"></i>';
+    delBtn.onclick = function(e) {
+      e.stopPropagation();
+      myBookshelf = myBookshelf.filter(function(b) { return b.id !== item.id; });
+      localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf));
+      window.renderBookshelf();
+    };
+    row.appendChild(titleWrap);
+    row.appendChild(openBtn);
+    row.appendChild(delBtn);
+    container.appendChild(row);
+  });
+  window.initLucide();
+};
+
+// ------------------------------------------------------------------
+// 【5】リーダータブの構造組み替え＋サブタブボタン（解析 / 本棚）
+// ------------------------------------------------------------------
+window.initReaderSubTabStructure = function() {
+  var view = document.getElementById('view-reader');
+  var inputView = document.getElementById('text-input-view');
+  if (!view || document.getElementById('readerSubTabBar')) return;
+  var analysisCard = null, historyCard = null, shelfCard = null;
+  var ta = document.getElementById('englishTextarea');
+  if (ta) analysisCard = ta.closest('.card');
+  var hl = document.getElementById('historyListContainer');
+  if (hl) historyCard = hl.closest('.card');
+  var bc = document.getElementById('myBookshelfContainer');
+  if (bc) shelfCard = bc.closest('.card');
+  if (!analysisCard || !shelfCard) return;
+  var host = (inputView && inputView.contains(analysisCard) && inputView.contains(shelfCard)) ? inputView : view;
+
+  // サブタブボタンバー
+  var bar = document.createElement('div');
+  bar.id = 'readerSubTabBar';
+  bar.style.cssText = "display:flex;gap:8px;margin-bottom:14px;";
+  var btnA = document.createElement('button');
+  btnA.id = 'readerTabBtnAnalysis';
+  btnA.className = 'reader-subtab-btn reader-subtab-active';
+  btnA.innerHTML = '<i data-lucide="scan-text" size="14"></i> 解析';
+  var btnB = document.createElement('button');
+  btnB.id = 'readerTabBtnBookshelf';
+  btnB.className = 'reader-subtab-btn';
+  btnB.innerHTML = '<i data-lucide="library" size="14"></i> 本棚';
+  btnA.onclick = function() { window.switchReaderSubTab('analysis', 'left'); };
+  btnB.onclick = function() { window.switchReaderSubTab('bookshelf', 'right'); };
+  bar.appendChild(btnA);
+  bar.appendChild(btnB);
+  host.insertBefore(bar, host.firstChild);
+
+  // セクションラップ（解析側：新規解析＋履歴ログ / 本棚側：本棚カード）
+  var aSec = document.createElement('div');
+  aSec.id = 'readerAnalysisSection';
+  var bSec = document.createElement('div');
+  bSec.id = 'readerBookshelfSection';
+  bSec.style.display = 'none';
+  analysisCard.parentNode.insertBefore(aSec, analysisCard);
+  aSec.appendChild(analysisCard);
+  if (historyCard && historyCard.parentNode) aSec.appendChild(historyCard);
+  aSec.parentNode.insertBefore(bSec, aSec.nextSibling);
+  if (shelfCard && shelfCard.parentNode) bSec.appendChild(shelfCard);
+
+  // 説明文の「フォルダ」→「教材」更新
+  try {
+    var walker = document.createTreeWalker(bSec, NodeFilter.SHOW_TEXT, null);
+    var n, targets = [];
+    while ((n = walker.nextNode())) {
+      if (n.nodeValue.indexOf('フォルダ') !== -1) targets.push(n);
+    }
+    targets.forEach(function(t) { t.nodeValue = t.nodeValue.split('フォルダ').join('教材'); });
+  } catch (e) {}
+  window.initLucide();
+};
+
+window.switchReaderSubTab = function(tabName, animDir) {
+  animDir = animDir || 'none';
+  var aSec = document.getElementById('readerAnalysisSection');
+  var bSec = document.getElementById('readerBookshelfSection');
+  var btnA = document.getElementById('readerTabBtnAnalysis');
+  var btnB = document.getElementById('readerTabBtnBookshelf');
+  if (!aSec || !bSec) return;
+  currentReaderSubTab = tabName;
+  [aSec, bSec].forEach(function(s) {
+    s.style.transition = 'none';
+    s.style.transform = 'translateX(0)';
+    s.style.opacity = '1';
+    s.classList.remove('shelf-slide-from-right', 'shelf-slide-from-left');
+    void s.offsetWidth;
+  });
+  var animClass = animDir === 'right' ? 'shelf-slide-from-right' : (animDir === 'left' ? 'shelf-slide-from-left' : '');
+  var setActive = function(btn, on) {
+    if (btn) {
+      if (on) btn.classList.add('reader-subtab-active');
+      else btn.classList.remove('reader-subtab-active');
+    }
+  };
+  if (tabName === 'analysis') {
+    aSec.style.display = 'block';
+    if (animClass) aSec.classList.add(animClass);
+    bSec.style.display = 'none';
+    setActive(btnA, true);
+    setActive(btnB, false);
+  } else {
+    aSec.style.display = 'none';
+    bSec.style.display = 'block';
+    if (animClass) bSec.classList.add(animClass);
+    setActive(btnA, false);
+    setActive(btnB, true);
+    window.renderBookshelf();
+  }
+};
+
+// ------------------------------------------------------------------
+// 【6】スワイプ処理（フレンドタブと同一挙動・リーダー画面表示中は無効）
+// ------------------------------------------------------------------
+(function initReaderSubTabSwipe() {
+  var rStartX = 0, rStartY = 0, rCurrentX = 0, rDragging = false, rIsHorizontal = null;
+  function attach() {
+    var view = document.getElementById('view-reader');
+    if (!view || view.dataset.shelfSwipeBound) return;
+    view.dataset.shelfSwipeBound = "true";
+    view.addEventListener('touchstart', function(e) {
+      if (!document.getElementById('readerSubTabBar')) window.initReaderSubTabStructure();
+      var readerView = document.getElementById('text-reader-view');
+      if (readerView && readerView.style.display === 'block') { rDragging = false; return; }
+      if (e.target.closest('button, select, input, textarea, a, .word-span, .grammar-span')) { rDragging = false; return; }
+      rStartX = e.touches[0].clientX;
+      rStartY = e.touches[0].clientY;
+      rCurrentX = rStartX;
+      rDragging = true;
+      rIsHorizontal = null;
+      var aSec = document.getElementById('readerAnalysisSection');
+      var bSec = document.getElementById('readerBookshelfSection');
+      if (aSec) aSec.style.transition = 'none';
+      if (bSec) bSec.style.transition = 'none';
+    }, { passive: true });
+    view.addEventListener('touchmove', function(e) {
+      if (!rDragging) return;
+      rCurrentX = e.touches[0].clientX;
+      var diffX = rCurrentX - rStartX;
+      var diffY = e.touches[0].clientY - rStartY;
+      if (rIsHorizontal === null) {
+        if (Math.abs(diffX) > Math.abs(diffY)) rIsHorizontal = true;
+        else { rIsHorizontal = false; rDragging = false; return; }
+      }
+      if (!rIsHorizontal) return;
+      var activeSec = document.getElementById(currentReaderSubTab === 'analysis' ? 'readerAnalysisSection' : 'readerBookshelfSection');
+      if (!activeSec) return;
+      if ((currentReaderSubTab === 'analysis' && diffX < 0) || (currentReaderSubTab === 'bookshelf' && diffX > 0)) diffX = diffX * 0.2;
+      activeSec.style.transform = 'translateX(' + diffX + 'px)';
+      activeSec.style.opacity = 1 - (Math.abs(diffX) / window.innerWidth) * 1.5;
+    }, { passive: true });
+    view.addEventListener('touchend', function() {
+      if (!rDragging) { rIsHorizontal = null; return; }
+      rDragging = false;
+      rIsHorizontal = null;
+      var diffX = rCurrentX - rStartX;
+      var threshold = window.innerWidth * 0.15;
+      var activeSec = document.getElementById(currentReaderSubTab === 'analysis' ? 'readerAnalysisSection' : 'readerBookshelfSection');
+      if (activeSec) activeSec.style.transition = 'all 0.25s cubic-bezier(0.25, 1, 0.5, 1)';
+      if (diffX < -threshold && currentReaderSubTab === 'analysis') {
+        if (activeSec) { activeSec.style.transform = 'translateX(-50px)'; activeSec.style.opacity = 0; }
+        setTimeout(function() { window.switchReaderSubTab('bookshelf', 'right'); }, 100);
+      } else if (diffX > threshold && currentReaderSubTab === 'bookshelf') {
+        if (activeSec) { activeSec.style.transform = 'translateX(50px)'; activeSec.style.opacity = 0; }
+        setTimeout(function() { window.switchReaderSubTab('analysis', 'left'); }, 100);
+      } else {
+        if (activeSec) { activeSec.style.transform = 'translateX(0px)'; activeSec.style.opacity = 1; }
+      }
+    }, { passive: true });
+    view.addEventListener('touchcancel', function() {
+      rDragging = false;
+      rIsHorizontal = null;
+    }, { passive: true });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(attach, 300); });
+  } else {
+    setTimeout(attach, 300);
+  }
+})();
+
+// ------------------------------------------------------------------
+// 【7】loadLocalState 上書き（教材同期＋構造初期化）
+// ------------------------------------------------------------------
+var __prevLoadLocalStateForShelfTabPatch = window.loadLocalState;
+window.loadLocalState = async function() {
+  var r = __prevLoadLocalStateForShelfTabPatch ? await __prevLoadLocalStateForShelfTabPatch.apply(this, arguments) : undefined;
+  try {
+    window.initReaderSubTabStructure();
+    window.injectShelfAdminPanel();
+    await window.syncBookshelfIndexFromFirestore();
+    window.updateAdminEditShelfSelectOptions();
+    window.renderBookshelf();
+  } catch (e) {
+    console.error("本棚タブパッチ初期化エラー:", e);
+  }
+  return r;
+};
+
+// ------------------------------------------------------------------
+// 【8】起動時注入
+// ------------------------------------------------------------------
+(function initShelfTabPatch() {
+  function boot() {
+    window.initReaderSubTabStructure();
+    window.injectShelfAdminPanel();
+    window.syncBookshelfIndexFromFirestore().then(function() {
+      window.updateAdminEditShelfSelectOptions();
+      window.renderBookshelf();
+    }).catch(function() {});
+  }
+  if (document.readyState !== 'loading') {
+    setTimeout(boot, 400);
+  } else {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); });
+  }
+})();
+console.log("📚 本棚タブパッチ（スワイプ切替＋教材本棚システム＋管理パネル）適用完了");
