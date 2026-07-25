@@ -9542,3 +9542,499 @@ window.saveUserVocabProgress = async function() {
 };
 
 console.log("🔄 同期修正パッチ②（レベル収束＋理解度リセット防止＋書き戻し）適用完了");
+// ==========================================================================
+// 🔄 同期修正パッチ③：設定まるごと同期 ＋ 表示強化
+//    【個人ごと同期】APIキー／ロード時単語帳／パーティ編成／選択中教材／
+//                    称号解除進捗（XP二重付与根絶）／リーダー単語メモリ
+//    【全員で共有】  ダッシュボードタイトル／配信アナウンス
+//    【表示強化】    フレンドログイン履歴を分単位まで／自分の総勉強時間
+//    【保護】        totalExp・総勉強時間の巻き戻り防止／理解度リセット防止
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【A】全員共有設定（ダッシュボードタイトル／配信アナウンス）
+// ------------------------------------------------------------------
+window.__loadGlobalSettings = async function() {
+    if (!window.db || !window.fbGetDoc || !window.fbDoc) return;
+    try {
+        var ref = window.fbDoc(window.db, "shared", "app_settings");
+        var snap = await window.fbGetDoc(ref);
+        if (snap.exists() && snap.data()) {
+            var d = snap.data();
+            if (typeof d.dashboardTitle === "string" && d.dashboardTitle !== "") {
+                localStorage.setItem('core_v4_dashboard_title', d.dashboardTitle);
+                var el = document.getElementById('headerTitleText');
+                if (el) el.innerText = d.dashboardTitle;
+            }
+            if (typeof d.adminNotice === "string") {
+                localStorage.setItem('core_v4_admin_notice', d.adminNotice);
+                var frame = document.getElementById('adminNoticeDisplayFrame');
+                var body = document.getElementById('adminNoticeTextContent');
+                if (frame && body) {
+                    if (d.adminNotice.trim() !== "") { body.innerText = d.adminNotice; frame.style.display = 'block'; }
+                    else { frame.style.display = 'none'; }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("global settings load error:", e);
+    }
+};
+
+window.__pushGlobalSettings = async function() {
+    if (!window.db || !window.fbSetDoc || !window.fbDoc) return;
+    try {
+        var title = localStorage.getItem('core_v4_dashboard_title') || "ダッシュボード";
+        var notice = localStorage.getItem('core_v4_admin_notice') || "";
+        var ref = window.fbDoc(window.db, "shared", "app_settings");
+        var payload = { dashboardTitle: title, adminNotice: notice, updatedAt: new Date().toISOString() };
+        var safe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(payload) : payload;
+        if (typeof window.fbSetDocWithRetry === "function") await window.fbSetDocWithRetry(ref, safe, { merge: true });
+        else await window.fbSetDoc(ref, safe, { merge: true });
+    } catch (e) {
+        console.error("global settings push error:", e);
+    }
+};
+
+// 管理者がタイトル／アナウンスを変えたら全員共有へ即反映
+var __prevSaveAdminDashboardTitleForSync3 = window.saveAdminDashboardTitle;
+window.saveAdminDashboardTitle = async function() {
+    var r = __prevSaveAdminDashboardTitleForSync3 ? __prevSaveAdminDashboardTitleForSync3.apply(this, arguments) : undefined;
+    try { await window.__pushGlobalSettings(); } catch (e) {}
+    return r;
+};
+var __prevSaveAdminSystemSettingsForSync3 = window.saveAdminSystemSettings;
+window.saveAdminSystemSettings = async function() {
+    var r = __prevSaveAdminSystemSettingsForSync3 ? __prevSaveAdminSystemSettingsForSync3.apply(this, arguments) : undefined;
+    try { await window.__pushGlobalSettings(); } catch (e) {}
+    return r;
+};
+var __prevSaveSidebarProfileForSync3 = window.saveSidebarProfile;
+window.saveSidebarProfile = async function() {
+    var r = __prevSaveSidebarProfileForSync3 ? await __prevSaveSidebarProfileForSync3.apply(this, arguments) : undefined;
+    try { await window.__pushGlobalSettings(); } catch (e) {}
+    return r;
+};
+
+// ------------------------------------------------------------------
+// 【B】個人ごとの設定まとまり（収集／マージ／適用／保存）
+// ------------------------------------------------------------------
+window.__collectLocalSettings = function() {
+    var wm = {};
+    try {
+        wm = (typeof wordMemory !== "undefined" && wordMemory) ? wordMemory : (JSON.parse(localStorage.getItem('wordMemory') || "{}"));
+    } catch (e) {}
+    var tc = {};
+    try {
+        tc = (typeof rewardedTitlesStepsCache !== "undefined" && rewardedTitlesStepsCache) ? rewardedTitlesStepsCache : (JSON.parse(localStorage.getItem('core_v4_rewarded_titles_cache') || "{}"));
+    } catch (e) {}
+    return {
+        geminiKey: localStorage.getItem('core_v4_geminiKey') || "",
+        loadQuizBook: localStorage.getItem('core_v4_loadquiz_book') || "auto",
+        activeChar: localStorage.getItem('core_v4_active_char') || "",
+        activeWeapon: localStorage.getItem('core_v4_active_weapon') || "",
+        activeArmor: localStorage.getItem('core_v4_active_armor') || "",
+        currentTextbook: localStorage.getItem('core_v4_current_textbook_id') || "",
+        wordMemory: wm,
+        titlesCache: tc
+    };
+};
+
+window.__mergeSettings = function(local, cloud, localIsNewer) {
+    var merged = {};
+    var scalarKeys = ['geminiKey', 'loadQuizBook', 'activeChar', 'activeWeapon', 'activeArmor', 'currentTextbook'];
+    var src = localIsNewer ? local : cloud;   // 新しい方のスナップショットを優先
+    var alt = localIsNewer ? cloud : local;   // 空欄はもう一方で補完
+    scalarKeys.forEach(function(k) {
+        merged[k] = (src[k] !== undefined && src[k] !== "") ? src[k] : (alt[k] || "");
+    });
+    // 単語メモリ：合体（進捗が深い方を採用。ok > so > bad > none）
+    var rank = { 'ok': 3, 'so': 2, 'bad': 1, 'none': 0 };
+    merged.wordMemory = {};
+    var wKeys = {};
+    Object.keys(local.wordMemory || {}).forEach(function(k) { wKeys[k] = true; });
+    Object.keys(cloud.wordMemory || {}).forEach(function(k) { wKeys[k] = true; });
+    Object.keys(wKeys).forEach(function(k) {
+        var lv = (local.wordMemory || {})[k];
+        var cv = (cloud.wordMemory || {})[k];
+        var lr = (lv && rank[lv] !== undefined) ? rank[lv] : -1;
+        var cr = (cv && rank[cv] !== undefined) ? rank[cv] : -1;
+        merged.wordMemory[k] = (lr >= cr) ? lv : cv;
+    });
+    // 称号解除進捗：各称号の「より高い段階」を採用（XP二重付与を根絶）
+    merged.titlesCache = {};
+    var tKeys = {};
+    Object.keys(local.titlesCache || {}).forEach(function(k) { tKeys[k] = true; });
+    Object.keys(cloud.titlesCache || {}).forEach(function(k) { tKeys[k] = true; });
+    Object.keys(tKeys).forEach(function(k) {
+        var lv = parseInt((local.titlesCache || {})[k]) || 0;
+        var cv = parseInt((cloud.titlesCache || {})[k]) || 0;
+        merged.titlesCache[k] = Math.max(lv, cv);
+    });
+    return merged;
+};
+
+window.__applySettingsToLocal = function(s) {
+    var changedTextbook = false;
+    try {
+        if (typeof s.geminiKey === "string") {
+            localStorage.setItem('core_v4_geminiKey', s.geminiKey);
+            geminiApiKey = s.geminiKey;
+            var aki = document.getElementById('sidebarApiKeyInput');
+            if (aki) aki.value = s.geminiKey;
+        }
+        if (typeof s.loadQuizBook === "string") localStorage.setItem('core_v4_loadquiz_book', s.loadQuizBook || "auto");
+        if (typeof s.activeChar === "string") { localStorage.setItem('core_v4_active_char', s.activeChar); activeCharacter = s.activeChar; }
+        if (typeof s.activeWeapon === "string") { localStorage.setItem('core_v4_active_weapon', s.activeWeapon); activeWeapon = s.activeWeapon; }
+        if (typeof s.activeArmor === "string") { localStorage.setItem('core_v4_active_armor', s.activeArmor); activeArmor = s.activeArmor; }
+        if (typeof s.currentTextbook === "string" && s.currentTextbook !== "") {
+            if (currentTextbook !== s.currentTextbook) changedTextbook = true;
+            localStorage.setItem('core_v4_current_textbook_id', s.currentTextbook);
+            currentTextbook = s.currentTextbook;
+        }
+        if (s.wordMemory && typeof s.wordMemory === "object") {
+            wordMemory = s.wordMemory;
+            try { localStorage.setItem('wordMemory', JSON.stringify(wordMemory)); } catch (e) {}
+            if (typeof window.updateReaderWordColors === "function") { try { window.updateReaderWordColors(); } catch (e) {} }
+        }
+        if (s.titlesCache && typeof s.titlesCache === "object") {
+            rewardedTitlesStepsCache = s.titlesCache;
+            try { localStorage.setItem('core_v4_rewarded_titles_cache', JSON.stringify(rewardedTitlesStepsCache)); } catch (e) {}
+        }
+        if (typeof window.updatePartySlotsUi === "function") { try { window.updatePartySlotsUi(); } catch (e) {} }
+    } catch (e) {
+        console.error("applySettingsToLocal error:", e);
+    }
+    return changedTextbook;
+};
+
+window.__saveUserSettings = async function(settings) {
+    if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
+    var s = settings || window.__collectLocalSettings();
+    var nowMs = Date.now();
+    var nowIso = new Date(nowMs).toISOString();
+    try { localStorage.setItem('core_v4_sync_settings_ts_' + myId, String(nowMs)); } catch (e) {}
+    window.__lastSavedSettingsJson = JSON.stringify(s);
+    if (window.db && window.fbSetDoc && window.fbDoc) {
+        try {
+            var ref = window.fbDoc(window.db, "users", myId, "sync", "settings");
+            var payload = { settingsJson: JSON.stringify(s), updatedAt: nowIso };
+            var safe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(payload) : payload;
+            if (typeof window.fbSetDocWithRetry === "function") await window.fbSetDocWithRetry(ref, safe);
+            else await window.fbSetDoc(ref, safe);
+        } catch (e) {
+            console.error("saveUserSettings cloud write error:", e);
+        }
+    }
+};
+
+window.__loadUserSettings = async function() {
+    if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
+    window.__lastSavedSettingsJson = null;   // ログイン直後の誤保存を防ぐ
+    var local = window.__collectLocalSettings();
+    var localTs = parseInt(localStorage.getItem('core_v4_sync_settings_ts_' + myId) || "0");
+    var cloud = null;
+    var cloudTs = 0;
+    if (window.db && window.fbGetDoc && window.fbDoc) {
+        try {
+            var ref = window.fbDoc(window.db, "users", myId, "sync", "settings");
+            var snap = await window.fbGetDoc(ref);
+            if (snap.exists() && snap.data() && snap.data().settingsJson) {
+                cloud = JSON.parse(snap.data().settingsJson);
+                cloudTs = snap.data().updatedAt ? (new Date(snap.data().updatedAt).getTime() || 0) : 0;
+            }
+        } catch (e) {
+            console.error("loadUserSettings cloud read error:", e);
+        }
+    }
+    if (!cloud) {
+        // クラウドにまだ無い → ローカルを初回アップロード
+        try { await window.__saveUserSettings(local); } catch (e) {}
+        return;
+    }
+    var localIsNewer = localTs >= cloudTs;
+    var merged = window.__mergeSettings(local, cloud, localIsNewer);
+    var changedTextbook = window.__applySettingsToLocal(merged);
+    try { await window.__saveUserSettings(merged); } catch (e) {}
+    if (changedTextbook && typeof window.loadCurrentTextbookData === "function") {
+        try { window.loadCurrentTextbookData(); } catch (e) {}
+    }
+};
+
+// ------------------------------------------------------------------
+// 【C】変更の自動検知（20秒ごと＋画面を閉じる時）→ クラウドへ保存
+// ------------------------------------------------------------------
+window.__startSettingsSyncLoop = function() {
+    if (window.__settingsSyncLoopStarted) return;
+    window.__settingsSyncLoopStarted = true;
+    setInterval(function() {
+        if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
+        if (window.__lastSavedSettingsJson === null) return;
+        try {
+            var cur = JSON.stringify(window.__collectLocalSettings());
+            if (cur !== window.__lastSavedSettingsJson) window.__saveUserSettings();
+        } catch (e) {}
+    }, 20000);
+    var flush = function() {
+        if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
+        if (window.__lastSavedSettingsJson === null) return;
+        try {
+            var cur = JSON.stringify(window.__collectLocalSettings());
+            if (cur !== window.__lastSavedSettingsJson) window.__saveUserSettings();
+        } catch (e) {}
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'hidden') flush(); });
+};
+
+// ------------------------------------------------------------------
+// 【D】loadUserStats 保護：totalExp と総勉強時間が「減る」のを防ぐ
+// ------------------------------------------------------------------
+var __prevLoadUserStatsForSync3 = window.loadUserStats;
+window.loadUserStats = async function() {
+    var localExpBefore = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
+    var localStudyBefore = parseInt(localStorage.getItem('core_v4_study_total_secs') || "0");
+    var r = __prevLoadUserStatsForSync3 ? await __prevLoadUserStatsForSync3.apply(this, arguments) : undefined;
+    try {
+        var needWriteBack = false;
+        if (localExpBefore > totalExp) { totalExp = localExpBefore; needWriteBack = true; }
+        if (localStudyBefore > (userStats.study_total_secs || 0)) { userStats.study_total_secs = localStudyBefore; needWriteBack = true; }
+        try { localStorage.setItem('core_v4_totalExp', String(totalExp)); } catch (e) {}
+        if (typeof window.computeLevelSafe === "function") userStats.user_level = window.computeLevelSafe(totalExp);
+        else userStats.user_level = window.calculateLevelFromExp(totalExp).level;
+        if (needWriteBack && myId && myId !== "GUEST-000") { try { window.saveUserStats(); } catch (e) {} }
+    } catch (e) {
+        console.error("loadUserStats sync3 protection error:", e);
+    }
+    return r;
+};
+
+// ------------------------------------------------------------------
+// 【E】理解度リセット防止：タイムスタンプで「新しい方」を採用
+// ------------------------------------------------------------------
+window.saveUserVocabProgress = async function() {
+    if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
+    if (typeof myId === "undefined" || !myId) return;
+    var bookKey = (typeof currentTextbook !== "undefined" && currentTextbook) ? currentTextbook : "default";
+    currentUserVocabProgress = window.extractUserProgressFromVocabList();
+    var nowMs = Date.now();
+    var nowIso = new Date(nowMs).toISOString();
+    try {
+        localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
+        localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + "__ts", String(nowMs));
+    } catch (e) {}
+    if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
+        try {
+            var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+            var payload = { wordsJson: JSON.stringify(currentUserVocabProgress), updatedAt: nowIso };
+            var safe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(payload) : payload;
+            if (typeof window.fbSetDocWithRetry === "function") await window.fbSetDocWithRetry(ref, safe);
+            else await window.fbSetDoc(ref, safe);
+        } catch (e) {
+            console.error("saveUserVocabProgress error:", e);
+        }
+    }
+    userStats.vocab_fixed = vocabList.filter(function(w) {
+        return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
+    }).length;
+};
+
+window.loadUserVocabProgress = async function(bookKey) {
+    bookKey = bookKey || (typeof currentTextbook !== "undefined" ? currentTextbook : "default");
+    currentUserVocabProgress = {};
+    if (typeof myId === "undefined" || !myId) return;
+    var localTs = 0;
+    try {
+        var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
+        if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
+        localTs = parseInt(localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + "__ts") || "0");
+    } catch (e) {}
+    if (myId === "GUEST-000" || !window.db || !window.fbGetDoc || !window.fbDoc) return;
+    try {
+        var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+        var snap = await window.fbGetDoc(ref);
+        if (snap.exists() && snap.data()) {
+            var data = snap.data();
+            var cloudProgress = null;
+            if (data.wordsJson) { try { cloudProgress = JSON.parse(data.wordsJson); } catch (e) { cloudProgress = null; } }
+            else if (data.words) cloudProgress = data.words;
+            var cloudTs = data.updatedAt ? (new Date(data.updatedAt).getTime() || 0) : 0;
+            if (cloudProgress && typeof cloudProgress === "object") {
+                if (cloudTs >= localTs) {
+                    // クラウドが新しい → 採用
+                    currentUserVocabProgress = cloudProgress;
+                    try {
+                        localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(cloudProgress));
+                        localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + "__ts", String(cloudTs));
+                    } catch (e) {}
+                } else {
+                    // ローカルが新しい → 維持してクラウドへ書き戻し
+                    try {
+                        var wref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+                        var wpayload = { wordsJson: JSON.stringify(currentUserVocabProgress), updatedAt: new Date().toISOString() };
+                        var wsafe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(wpayload) : wpayload;
+                        if (typeof window.fbSetDocWithRetry === "function") window.fbSetDocWithRetry(wref, wsafe);
+                        else window.fbSetDoc(wref, wsafe);
+                    } catch (e) {}
+                }
+            }
+        }
+    } catch (e) {
+        console.error("loadUserVocabProgress error:", e);
+    }
+};
+
+// ------------------------------------------------------------------
+// 【F】フレンドのログイン履歴を「分」単位まで表示
+// ------------------------------------------------------------------
+window.sortAndRenderFriendList = function() {
+    var container = document.getElementById('friendListContainer');
+    if (!container) return;
+    container.innerHTML = "";
+    if (myFriendList.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-sub); font-size:12px;"> <i data-lucide="user-plus" size="24" style="margin-bottom:6px; opacity:0.5;"></i><br> まだフレンドが登録されていません。<br>上部からIDで検索して追加してみましょう！ </div>';
+        window.initLucide();
+        return;
+    }
+    var sortType = document.getElementById('friendSortSelect').value;
+    var sortedList = myFriendList.slice();
+    if (sortType === "login") {
+        sortedList.sort(function(a, b) { return b.timestamp - a.timestamp; });
+    } else if (sortType === "level") {
+        sortedList.sort(function(a, b) { return b.level - a.level; });
+    } else if (sortType === "studyTime") {
+        sortedList.sort(function(a, b) { return (b.studyTotalSecs || 0) - (a.studyTotalSecs || 0); });
+    }
+    sortedList.forEach(function(f) {
+        var item = document.createElement('div');
+        item.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:10px 14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);";
+        var avatarContentStr = '<span style="font-size:24px; flex-shrink:0;">' + (f.avatar || "👤") + '</span>';
+        if (f.customAvatar) {
+            avatarContentStr = '<img src="' + f.customAvatar + '" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-purple-light);">';
+        }
+        var studyLabel = (typeof window.__formatStudyTotal === "function") ? window.__formatStudyTotal(f.studyTotalSecs) : ((f.studyTotalSecs || 0) + "分");
+        var loginParts = (f.lastLoginStr || "").split(' ');
+        var loginDate = loginParts[0] || "-";
+        var loginTime = loginParts[1] || "";
+        var loginHtml = 'ログイン:<br><span style="color:#FFF; font-weight:600;">' + loginDate + '</span>';
+        if (loginTime) loginHtml += '<br><span style="color:var(--cosmic-cyan); font-weight:700;">' + loginTime + '</span>';
+        item.innerHTML =
+            '<div style="display:flex; align-items:center; gap:12px; flex:1; min-width:0;">' +
+            '<div style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">' + avatarContentStr + '</div>' +
+            '<div style="flex:1; min-width:0;">' +
+            '<div style="display:flex; align-items:baseline; gap:6px;">' +
+            '<span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.name + '</span>' +
+            '<span style="font-size:10px; font-weight:900; color:var(--cosmic-cyan); flex-shrink:0;">LV.' + f.level + '</span>' +
+            '</div>' +
+            '<div style="font-size:10px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">' + f.title + '</div>' +
+            '<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">' +
+            '<span>⏱️ 総勉強: <strong style="color:white;">' + studyLabel + '</strong></span>' +
+            '<span>🔑 ID: ' + f.code + '</span>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div style="text-align:right; flex-shrink:0; margin-left:8px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">' +
+            '<div style="font-size:9px; color:var(--text-sub); margin-top:0; line-height:1.5;">' + loginHtml + '</div>' +
+            '<button style="background:none; border:none; color:var(--word-bad); padding:2px; cursor:pointer;" onclick="window.removeFriendDirect(\'' + f.code + '\', event)"><i data-lucide="user-x" size="14"></i></button>' +
+            '</div>';
+        container.appendChild(item);
+    });
+    window.initLucide();
+};
+
+// ------------------------------------------------------------------
+// 【G】ホームに「自分の総勉強時間」を表示
+// ------------------------------------------------------------------
+window.__formatTotalStudy3 = function(secs) {
+    var totalMin = Math.floor((secs || 0) / 60);
+    if (totalMin >= 60) {
+        var h = Math.floor(totalMin / 60);
+        var m = totalMin % 60;
+        return h + "時間" + (m > 0 ? m + "分" : "");
+    }
+    return totalMin + "分";
+};
+window.__updateTotalStudyDisplay = function() {
+    var el = document.getElementById('totalStudyTimeValue');
+    if (!el) return;
+    var secs = (typeof userStats !== "undefined" && userStats.study_total_secs) ? userStats.study_total_secs : (parseInt(localStorage.getItem('core_v4_study_total_secs') || "0"));
+    el.innerText = window.__formatTotalStudy3(secs);
+};
+window.__injectTotalStudyDisplay = function() {
+    if (document.getElementById('totalStudyTimeRow')) { window.__updateTotalStudyDisplay(); return; }
+    var anchor = document.getElementById('todayStudyTimeDisplay');
+    if (!anchor) return;
+    var row = document.createElement('div');
+    row.id = 'totalStudyTimeRow';
+    row.style.cssText = "margin-top:6px; font-size:12px; color:var(--text-sub); display:flex; align-items:center; gap:6px;";
+    row.innerHTML = '⏱️ 総勉強時間 (全期間): <strong id="totalStudyTimeValue" style="color:var(--cosmic-cyan); font-size:14px;">--</strong>';
+    var target = anchor.closest('div') || anchor.parentElement;
+    if (target && target.parentElement) target.parentElement.insertBefore(row, target.nextSibling);
+    else if (anchor.parentElement) anchor.parentElement.appendChild(row);
+    window.__updateTotalStudyDisplay();
+};
+window.__startTotalStudyDisplayLoop = function() {
+    if (window.__totalStudyLoopStarted) return;
+    window.__totalStudyLoopStarted = true;
+    setInterval(function() { window.__updateTotalStudyDisplay(); }, 1000);
+};
+
+// ------------------------------------------------------------------
+// 【H】loadLocalState につなげて全体を起動
+// ------------------------------------------------------------------
+var __prevLoadLocalStateForSync3 = window.loadLocalState;
+window.loadLocalState = async function() {
+    var r = __prevLoadLocalStateForSync3 ? await __prevLoadLocalStateForSync3.apply(this, arguments) : undefined;
+    try {
+        await window.__loadGlobalSettings();
+        await window.__loadUserSettings();
+        window.__startSettingsSyncLoop();
+        window.__injectTotalStudyDisplay();
+        window.__startTotalStudyDisplayLoop();
+    } catch (e) {
+        console.error("sync3 loadLocalState error:", e);
+    }
+    return r;
+};
+
+// ------------------------------------------------------------------
+// 【I】起動時注入（loadLocalState の保険）
+// ------------------------------------------------------------------
+(function initSync3Patch() {
+    function boot() {
+        window.__injectTotalStudyDisplay();
+        window.__startTotalStudyDisplayLoop();
+    }
+    if (document.readyState !== "loading") { setTimeout(boot, 400); }
+    else { document.addEventListener("DOMContentLoaded", function() { setTimeout(boot, 400); }); }
+})();
+
+console.log("🔄 同期修正パッチ③（設定まるごと同期＋全員共有＋分単位ログイン履歴＋総勉強時間表示）適用完了");
+// ==========================================================================
+// 🔧 修正パッチ：管理者メニューが押せない問題（サイドバー圧迫＆下部隠れ）
+//    原因: サイドバーに「🎴 ロード画面クイズ設定」パネルが追加されたことで
+//          中身が100vhを超え、flexがボタンを圧縮。最下部の「🛠️ 管理者メニュー」が
+//          画面外（下部ナビの裏）に押し出されてタップできなくなっていた
+//    修正: ① サイドバーを指でスクロール可能にする
+//          ② 中身ボタン類の圧縮（flex-shrink）を禁止して元の高さを確保
+//          ③ 下部ナビバー(60px)に隠れないよう底に余白を確保
+//    使い方: このブロックを app.js の末尾にそのまま貼り付けてください
+// ==========================================================================
+(function fixSidebarAdminMenuPatch() {
+    if (document.getElementById('sidebarAdminFixCss')) return;
+    var st = document.createElement('style');
+    st.id = 'sidebarAdminFixCss';
+    st.textContent = [
+        /* サイドバー本体：縦スクロールを許可＋下部ナビぶんの余白 */
+        '#sidebarMenu{overflow-y:auto !important;-webkit-overflow-scrolling:touch;box-sizing:border-box;padding-bottom:96px !important;}',
+        /* 中身（ボタン・パネル類）が縦に潰れるのを防ぐ */
+        '#sidebarMenu > *{flex-shrink:0 !important;}',
+        /* スクロールバーを細く目立たなく（コズミックシアン） */
+        '#sidebarMenu::-webkit-scrollbar{width:4px;}',
+        '#sidebarMenu::-webkit-scrollbar-track{background:transparent;}',
+        '#sidebarMenu::-webkit-scrollbar-thumb{background:rgba(0,240,255,0.35);border-radius:2px;}'
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(st);
+})();
+console.log('🔧 サイドバー管理者メニュー修正パッチ（スクロール化＋圧縮防止＋下部余白）適用完了');
