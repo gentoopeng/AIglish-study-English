@@ -9249,3 +9249,296 @@ window.loadLocalState = async function() {
   }
 })();
 console.log("📚 本棚タブパッチ（スワイプ切替＋教材本棚システム＋管理パネル）適用完了");
+// ==========================================================================
+// 🔄 同期修正パッチ②：レベルバラバラ＆理解度リセット 根本修正
+//    ① saveUserStats：書き込み前にクラウドと照合して「大きい方」を採用
+//       → 古い環境がクラウドを引き下げるのを防止（レベルが二度と下がらない）
+//    ② loadUserStats：起動時にローカルとクラウドをマージし、
+//       ローカルが新しければ即クラウドへ書き戻す → 全環境が最高値に収束
+//    ③ vocabProgress：タイムスタンプ方式で「最新のスナップショット」を採用
+//       → 古いクラウドデータによる理解度の巻き戻り（リセット）を防止
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 共通：ユーザー統計の「数値カウンタ」キー一覧（マージ対象）
+// ------------------------------------------------------------------
+window.__STATS_COUNTER_KEYS = [
+    'test_count', 'combo_max', 'multi_win', 'high_score', 'mistake_count',
+    'vocab_reg', 'vocab_fixed', 'delete_count', 'study_burst', 'reader_open',
+    'flash_count', 'friends_count', 'user_level', 'gold_spent', 'study_total_secs'
+];
+
+// ------------------------------------------------------------------
+// 【A】saveUserStats 上書き：書き込み前にクラウドの値で引き上げる
+//     （8秒スロットル付きでクラウドを参照し、古い値での巻き戻りを防止）
+// ------------------------------------------------------------------
+window.__statsCloudMergeAllowed = function() {
+    const now = Date.now();
+    if (!window.__statsMergeCache || window.__statsMergeCache.id !== myId) {
+        window.__statsMergeCache = { id: myId, at: 0 };
+    }
+    if (now - window.__statsMergeCache.at < 8000) return false;
+    window.__statsMergeCache.at = now;
+    return true;
+};
+
+window.__statsMergeCloudFloor = async function() {
+    if (!window.db || !window.fbGetDoc || !window.fbDoc || !myId || myId === "GUEST-000") return;
+    if (!window.__statsCloudMergeAllowed()) return;
+    try {
+        const ref = window.fbDoc(window.db, "users", myId);
+        const snap = await window.fbGetDoc(ref);
+        if (snap.exists()) {
+            const d = snap.data() || {};
+            const cloudExp = parseInt(d.totalExp) || 0;
+            if (cloudExp > totalExp) {
+                totalExp = cloudExp;
+                try { localStorage.setItem('core_v4_totalExp', String(totalExp)); } catch (e) {}
+            }
+            if (d.userStats && typeof d.userStats === 'object') {
+                window.__STATS_COUNTER_KEYS.forEach(function(k) {
+                    const cv = parseInt(d.userStats[k]) || 0;
+                    const lv = parseInt(userStats[k]) || 0;
+                    if (cv > lv) userStats[k] = cv;
+                });
+            }
+            try { userStats.user_level = window.computeLevelSafe(totalExp); } catch (e) {}
+        }
+    } catch (e) {
+        console.error("stats cloud floor merge error:", e);
+    }
+};
+
+window.saveUserStats = async function() {
+    // 保存前に totalExp からレベルを再計算
+    try { userStats.user_level = window.calculateLevelFromExp(totalExp).level; } catch (e) {}
+    // ★ クラウドの値で引き上げてから保存（巻き戻り防止）
+    try { await window.__statsMergeCloudFloor(); } catch (e) {}
+    try { userStats.user_level = window.calculateLevelFromExp(totalExp).level; } catch (e) {}
+    // ローカル保存
+    try {
+        localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
+        localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+        localStorage.setItem('core_v4_totalExp', String(totalExp));
+        localStorage.setItem('core_v4_userName', myName);
+        localStorage.setItem('core_v4_userTarget', myTarget);
+        localStorage.setItem('core_v4_userTitle', selectedTitle);
+    } catch (e) {}
+    // Firebase保存
+    if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
+        try {
+            const userRef = window.fbDoc(window.db, "users", myId);
+            const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
+            const lvlData = window.calculateLevelFromExp(totalExp);
+            await window.fbSetDocWithRetry(userRef, {
+                id: myId,
+                userStats: userStats,
+                friendList: myFriendList,
+                playerName: myName,
+                selectedTitle: selectedTitle,
+                userTarget: myTarget,
+                totalExp: totalExp,
+                avatar: mySavedAvatar,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+            const lbRef = window.fbDoc(window.db, "shared_leaderboard", myId);
+            await window.fbSetDocWithRetry(lbRef, {
+                id: myId,
+                name: myName,
+                title: selectedTitle,
+                exp: totalExp,
+                level: lvlData.level,
+                avatar: mySavedAvatar,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+            if (typeof window.syncMyEntryToAllUsers === 'function') window.syncMyEntryToAllUsers(false);
+        } catch (e) {
+            console.error("Firebaseユーザーデータ保存エラー（リトライ後）:", e);
+        }
+    }
+};
+
+// ------------------------------------------------------------------
+// 【B】loadUserStats 上書き：マージ＋クラウドへの書き戻し（全環境収束）
+// ------------------------------------------------------------------
+window.loadUserStats = async function() {
+    let needWriteBack = false;
+    try {
+        const storedStats = localStorage.getItem('core_v4_user_stats_' + myId);
+        if (storedStats) userStats = JSON.parse(storedStats);
+        const storedFriends = localStorage.getItem('core_v4_friend_list');
+        if (storedFriends) myFriendList = JSON.parse(storedFriends);
+        if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
+            const userRef = window.fbDoc(window.db, "users", myId);
+            const snap = await window.fbGetDoc(userRef);
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.userStats) {
+                    // ★ カウンタは「ローカルとクラウドの大きい方」を採用
+                    const merged = data.userStats;
+                    window.__STATS_COUNTER_KEYS.forEach(function(k) {
+                        const cv = parseInt(merged[k]) || 0;
+                        const lv = parseInt(userStats[k]) || 0;
+                        if (lv > cv) needWriteBack = true;
+                        merged[k] = Math.max(cv, lv);
+                    });
+                    if (!merged.goal_text && userStats.goal_text) {
+                        merged.goal_text = userStats.goal_text;
+                        needWriteBack = true;
+                    }
+                    if (userStats.weekly_rank_first === true && merged.weekly_rank_first !== true) {
+                        merged.weekly_rank_first = true;
+                        needWriteBack = true;
+                    }
+                    // シーズン称号・確定済みシーズンの統合（消えないように）
+                    ['seasonTitles', 'settledSeasons'].forEach(function(arrKey) {
+                        const cloudArr = Array.isArray(merged[arrKey]) ? merged[arrKey] : [];
+                        const localArr = Array.isArray(userStats[arrKey]) ? userStats[arrKey] : [];
+                        const union = cloudArr.slice();
+                        localArr.forEach(function(item) {
+                            if (union.indexOf(item) === -1) { union.push(item); needWriteBack = true; }
+                        });
+                        merged[arrKey] = union;
+                    });
+                    userStats = merged;
+                    localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
+                }
+                if (data.friendList) {
+                    myFriendList = data.friendList;
+                    localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
+                }
+                // ★ totalExp は大きい方を採用
+                if (data.totalExp !== undefined && data.totalExp !== null) {
+                    const cloudExp = parseInt(data.totalExp) || 0;
+                    const localExp = totalExp || 0;
+                    totalExp = Math.max(cloudExp, localExp);
+                    if (localExp > cloudExp) needWriteBack = true;
+                    localStorage.setItem('core_v4_totalExp', String(totalExp));
+                }
+                if (data.playerName) { myName = data.playerName; localStorage.setItem('core_v4_userName', myName); }
+                if (data.selectedTitle) { selectedTitle = data.selectedTitle; localStorage.setItem('core_v4_userTitle', selectedTitle); }
+                if (data.userTarget) { myTarget = data.userTarget; localStorage.setItem('core_v4_userTarget', myTarget); }
+                if (data.avatar) { localStorage.setItem('core_v4_user_avatar_' + myId, data.avatar); }
+                userStats.user_level = window.computeLevelSafe(totalExp);
+            }
+        }
+    } catch (e) {
+        console.error("Error loading user stats:", e);
+    }
+    // ★ 書き戻し：ローカルの方が新しい/多い場合、クラウドに反映して全環境を収束させる
+    if (needWriteBack) {
+        try { window.saveUserStats(); } catch (e) {}
+    }
+};
+
+// ------------------------------------------------------------------
+// 【C】理解度（vocabProgress）のローカルスナップショット読み書きヘルパー
+//     ※本体データは従来どおりの形式で保存し、タイムスタンプだけ別キーに保存
+//       （ロードクイズの別教材保存処理との互換性を保つため）
+// ------------------------------------------------------------------
+window.__readLocalVocabSnapshot = function(bookKey) {
+    let words = {};
+    let ts = 0;
+    try {
+        const raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') words = parsed;
+        }
+    } catch (e) {}
+    try {
+        const t = localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + '__ts');
+        if (t) ts = parseInt(t) || 0;
+    } catch (e) {}
+    return { words: words, updatedAt: ts };
+};
+
+window.__writeLocalVocabSnapshot = function(bookKey, words, ms) {
+    try { localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(words)); } catch (e) {}
+    try { localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + '__ts', String(ms)); } catch (e) {}
+};
+
+// ------------------------------------------------------------------
+// 【D】loadUserVocabProgress 上書き：タイムスタンプで「最新」を採用
+//     （古いクラウドによる理解度の巻き戻りを防止＋クラウドへ書き戻し）
+// ------------------------------------------------------------------
+window.loadUserVocabProgress = async function(bookKey) {
+    bookKey = bookKey || (typeof currentTextbook !== 'undefined' ? currentTextbook : "default");
+    currentUserVocabProgress = {};
+    if (typeof myId === "undefined" || !myId) return;
+    const localSnap = window.__readLocalVocabSnapshot(bookKey);
+    let bestWords = localSnap.words || {};
+    let bestMs = localSnap.updatedAt || 0;
+    let localIsNewest = true;
+    let cloudExisted = false;
+    if (myId !== "GUEST-000" && window.db && window.fbGetDoc && window.fbDoc) {
+        try {
+            const ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+            const snap = await window.fbGetDoc(ref);
+            if (snap.exists() && snap.data()) {
+                cloudExisted = true;
+                const data = snap.data();
+                let cloudWords = null;
+                if (data.wordsJson) {
+                    try { cloudWords = JSON.parse(data.wordsJson); } catch (e) { cloudWords = null; }
+                } else if (data.words) {
+                    cloudWords = data.words;
+                }
+                if (cloudWords && typeof cloudWords === 'object') {
+                    const cloudMs = data.updatedAt ? (new Date(data.updatedAt).getTime() || 0) : 0;
+                    if (cloudMs >= bestMs) {
+                        bestWords = cloudWords;
+                        bestMs = cloudMs;
+                        localIsNewest = false;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("loadUserVocabProgress Firebase読み込みエラー（ローカルデータで継続）:", e);
+        }
+    }
+    currentUserVocabProgress = bestWords || {};
+    // 採用したスナップショットでローカルキャッシュを揃える
+    window.__writeLocalVocabSnapshot(bookKey, currentUserVocabProgress, bestMs);
+    // ★ 書き戻し：ローカルが新しい（またはクラウドが空）ならクラウドへ反映
+    const hasData = currentUserVocabProgress && Object.keys(currentUserVocabProgress).length > 0;
+    if (hasData && (localIsNewest || !cloudExisted) && myId !== "GUEST-000" && window.db && window.fbSetDoc && window.fbDoc) {
+        try {
+            const wref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+            const wpayload = { wordsJson: JSON.stringify(currentUserVocabProgress), updatedAt: new Date().toISOString() };
+            if (typeof window.fbSetDocWithRetry === "function") window.fbSetDocWithRetry(wref, wpayload);
+            else window.fbSetDoc(wref, wpayload);
+        } catch (e) {}
+    }
+};
+
+// ------------------------------------------------------------------
+// 【E】saveUserVocabProgress 上書き：タイムスタンプ付きで保存
+// ------------------------------------------------------------------
+window.saveUserVocabProgress = async function() {
+    if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
+    if (typeof myId === "undefined" || !myId) return;
+    const bookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : "default";
+    currentUserVocabProgress = window.extractUserProgressFromVocabList();
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    // ローカル保存（タイムスタンプ付き）
+    window.__writeLocalVocabSnapshot(bookKey, currentUserVocabProgress, nowMs);
+    // Firebase保存
+    if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
+        try {
+            const ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+            const payload = { wordsJson: JSON.stringify(currentUserVocabProgress), updatedAt: nowIso };
+            if (typeof window.fbSetDocWithRetry === "function") await window.fbSetDocWithRetry(ref, payload);
+            else await window.fbSetDoc(ref, payload);
+        } catch (e) {
+            console.error("saveUserVocabProgress Firebase保存エラー（ローカルには保存済み）:", e);
+        }
+    }
+    userStats.vocab_fixed = vocabList.filter(function(w) {
+        return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
+    }).length;
+};
+
+console.log("🔄 同期修正パッチ②（レベル収束＋理解度リセット防止＋書き戻し）適用完了");
