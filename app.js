@@ -6730,3 +6730,1942 @@ window.loadLocalState = async function() {
 })();
 
 console.log('🎯 第3回パッチ（別教材FC理解度＋ランキング非消失＋保存ボタン＋トースト）適用完了');
+// ==========================================================================
+// 🎴 第4回パッチ：ロード画面を単語テストに（タンゴン削除）
+//    ＋ 理解度保存の確実化 ＋ 勉強時間の安定化 ＋ フレンド勉強時間「総計」化
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【0】パッチ専用スタイルの注入（1回だけ）
+// ------------------------------------------------------------------
+(function injectPatch4Css() {
+  if (document.getElementById('patch4Css')) return;
+  var st = document.createElement('style');
+  st.id = 'patch4Css';
+  st.textContent = [
+    '#penguinLoadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;',
+    'background:radial-gradient(circle at 50% 38%, rgba(30,27,75,0.97) 0%, rgba(15,23,42,0.985) 72%);',
+    'z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;',
+    'opacity:0;transition:opacity .25s ease;overflow:hidden;}',
+    '#penguinLoadingOverlay.penguin-visible{opacity:1;}',
+    '#penguinLoadingOverlay.penguin-fade-out{opacity:0;}',
+    '.lq-spark{position:absolute;width:4px;height:4px;border-radius:50%;pointer-events:none;opacity:0;animation:lqSparkFloat linear infinite;}',
+    '@keyframes lqSparkFloat{0%{transform:translateY(20px) scale(.6);opacity:0;}20%{opacity:.9;}80%{opacity:.6;}100%{transform:translateY(-90vh) scale(1);opacity:0;}}',
+    '.lq-area{display:flex;flex-direction:column;align-items:center;gap:14px;z-index:2;}',
+    '.lq-score{font-size:13px;font-weight:800;color:#E2E8F0;letter-spacing:.5px;display:flex;gap:10px;align-items:center;',
+    'background:rgba(7,11,25,.55);border:1px solid rgba(0,240,255,.35);padding:6px 14px;border-radius:20px;box-shadow:0 0 12px rgba(0,240,255,.25);}',
+    '.lq-score .lq-ok{color:#34D399;}.lq-score .lq-bad{color:#F87171;}.lq-score .lq-so{color:#FBBF24;}',
+    '.lq-card-wrap{position:relative;width:230px;height:230px;perspective:1000px;touch-action:none;}',
+    '.lq-card{position:absolute;width:100%;height:100%;transform-style:preserve-3d;transition:transform .4s cubic-bezier(.25,1,.5,1);}',
+    '.lq-card.flipped{transform:rotateY(180deg);}',
+    '.lq-face{position:absolute;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden;',
+    'border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:26px;box-sizing:border-box;',
+    'color:#fff;text-align:center;border:2px solid rgba(255,255,255,.4);',
+    'background:radial-gradient(circle at 30% 28%, rgba(255,255,255,.14) 0%, rgba(0,240,255,.06) 55%, rgba(192,132,252,.08) 88%);',
+    'box-shadow:inset 0 12px 22px rgba(255,255,255,.28), inset 0 -10px 18px rgba(0,0,0,.25), 0 8px 24px rgba(0,0,0,.5), 0 0 22px rgba(0,240,255,.22);}',
+    '.lq-face.back{transform:rotateY(180deg);}',
+    '.lq-word{font-size:24px;font-weight:900;font-family:"Times New Roman",serif;word-break:break-word;line-height:1.25;text-shadow:0 1px 4px rgba(0,0,0,.8);}',
+    '.lq-meaning{font-size:15px;font-weight:700;line-height:1.5;word-break:break-word;color:#F1F5F9;text-shadow:0 1px 3px rgba(0,0,0,.8);}',
+    '.lq-num{position:absolute;top:22px;font-size:10px;font-weight:800;color:rgba(255,255,255,.55);}',
+    '.lq-hint{font-size:10px;color:rgba(255,255,255,.5);font-weight:700;letter-spacing:.5px;z-index:2;}',
+    '.lq-card-wrap.glow-ok .lq-face{border-color:#10B981;box-shadow:0 0 30px rgba(16,185,129,.6), inset 0 0 20px rgba(16,185,129,.3);}',
+    '.lq-card-wrap.glow-bad .lq-face{border-color:#EF4444;box-shadow:0 0 30px rgba(239,68,68,.6), inset 0 0 20px rgba(239,68,68,.3);}',
+    '.lq-card-wrap.glow-so .lq-face{border-color:#F59E0B;box-shadow:0 0 30px rgba(245,158,11,.6), inset 0 0 20px rgba(245,158,11,.3);}',
+    '.penguin-loading-text{font-size:13px;font-weight:800;color:#00F0FF;letter-spacing:1px;z-index:2;text-shadow:0 0 10px rgba(0,240,255,.5);display:flex;align-items:center;gap:2px;}',
+    '.pg-dot{animation:lqDotBlink 1.2s infinite;}',
+    '.pg-dot:nth-of-type(2){animation-delay:.2s;}.pg-dot:nth-of-type(3){animation-delay:.4s;}',
+    '@keyframes lqDotBlink{0%,80%,100%{opacity:.2;}40%{opacity:1;}}'
+  ].join('\n');
+  document.head.appendChild(st);
+})();
+
+// ------------------------------------------------------------------
+// 【1】ロード画面の単語テスト（タンゴン削除）
+// ------------------------------------------------------------------
+window.__loadQuiz = window.__loadQuiz || { active:false, words:[], index:0, answers:[], ok:0, bad:0, so:0 };
+
+window.__renderPenguinOverlay = function(message) {
+  if (window.__pgLoad.overlay) return;
+  var ov = document.createElement('div');
+  ov.id = 'penguinLoadingOverlay';
+  var sparks = '';
+  for (var i = 0; i < 14; i++) {
+    var left = Math.round(Math.random() * 100);
+    var delay = (Math.random() * 6).toFixed(2);
+    var dur = (5 + Math.random() * 6).toFixed(2);
+    var c = Math.random() < 0.5 ? 'rgba(0,240,255,.8)' : 'rgba(192,132,252,.8)';
+    sparks += '<span class="lq-spark" style="left:' + left + '%;bottom:-10px;background:' + c + ';animation-delay:' + delay + 's;animation-duration:' + dur + 's;"></span>';
+  }
+  ov.innerHTML =
+    sparks +
+    '<div class="lq-area">' +
+      '<div class="lq-score" id="lqScore" style="display:none;">' +
+        '<span id="lqCount">0問</span>' +
+        '<span class="lq-ok" id="lqOk">⚪︎0</span>' +
+        '<span class="lq-so" id="lqSo">△0</span>' +
+        '<span class="lq-bad" id="lqBad">✕0</span>' +
+      '</div>' +
+      '<div class="lq-card-wrap" id="lqCardWrap" style="display:none;"></div>' +
+      '<div class="lq-hint" id="lqHint" style="display:none;">タップでめくる ／ 右⚪︎ ・ 左✕ ・ 上△</div>' +
+    '</div>' +
+    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
+      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
+  document.body.appendChild(ov);
+  window.__pgLoad.overlay = ov;
+  requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
+  window.__initLoadQuiz(ov);
+};
+
+window.__initLoadQuiz = function(ov) {
+  var q = window.__loadQuiz;
+  q.answers = []; q.ok = 0; q.bad = 0; q.so = 0; q.index = 0; q.words = []; q.active = false;
+  if (typeof vocabList !== 'undefined' && vocabList.length > 0) {
+    q.words = vocabList.slice().sort(function(){ return Math.random() - 0.5; }).slice(0, 20);
+    q.active = q.words.length > 0;
+  }
+  var scoreEl = ov.querySelector('#lqScore');
+  var wrapEl = ov.querySelector('#lqCardWrap');
+  var hintEl = ov.querySelector('#lqHint');
+  if (q.active) {
+    if (scoreEl) scoreEl.style.display = 'flex';
+    if (wrapEl) wrapEl.style.display = 'block';
+    if (hintEl) hintEl.style.display = 'block';
+    window.__renderLoadQuizCard(ov);
+    window.__updateLoadQuizScore(ov);
+  } else {
+    if (scoreEl) scoreEl.style.display = 'none';
+    if (wrapEl) wrapEl.style.display = 'none';
+    if (hintEl) hintEl.style.display = 'none';
+  }
+};
+
+window.__updateLoadQuizScore = function(ov) {
+  var q = window.__loadQuiz;
+  var total = q.ok + q.bad + q.so;
+  var c = ov.querySelector('#lqCount'); if (c) c.textContent = total + '問';
+  var o = ov.querySelector('#lqOk'); if (o) o.textContent = '⚪︎' + q.ok;
+  var s = ov.querySelector('#lqSo'); if (s) s.textContent = '△' + q.so;
+  var b = ov.querySelector('#lqBad'); if (b) b.textContent = '✕' + q.bad;
+};
+
+window.__renderLoadQuizCard = function(ov) {
+  var q = window.__loadQuiz;
+  if (!q.active || q.words.length === 0) return;
+  if (q.index >= q.words.length) {
+    q.words = q.words.sort(function(){ return Math.random() - 0.5; });
+    q.index = 0;
+  }
+  var w = q.words[q.index];
+  var meaning = (w.meanings && w.meanings[0]) ? w.meanings[0].text : (w.meaning || '');
+  var wrap = ov.querySelector('#lqCardWrap');
+  if (!wrap) return;
+  wrap.className = 'lq-card-wrap';
+  wrap.style.display = 'block';
+  wrap.style.transform = '';
+  wrap.style.opacity = '1';
+  wrap.style.transition = '';
+  wrap.innerHTML =
+    '<div class="lq-card" id="lqCard">' +
+      '<div class="lq-face front"><span class="lq-num">#' + w.num + '</span><div class="lq-word">' + w.word + '</div></div>' +
+      '<div class="lq-face back"><span class="lq-num">#' + w.num + '</span><div class="lq-meaning">' + meaning + '</div></div>' +
+    '</div>';
+  window.__bindLoadQuizCard(ov, wrap, w);
+};
+
+window.__bindLoadQuizCard = function(ov, wrap, w) {
+  var card = wrap.querySelector('#lqCard');
+  var startX = 0, startY = 0, dragging = false;
+  wrap.addEventListener('touchstart', function(e) {
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY; dragging = true;
+    wrap.style.transition = 'none';
+  }, { passive: true });
+  wrap.addEventListener('touchmove', function(e) {
+    if (!dragging) return;
+    var dx = e.touches[0].clientX - startX;
+    var dy = e.touches[0].clientY - startY;
+    wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (dx * 0.05) + 'deg)';
+    wrap.classList.remove('glow-ok','glow-bad','glow-so');
+    if (dy < -15 && Math.abs(dy) > Math.abs(dx)) wrap.classList.add('glow-so');
+    else if (dx > 15) wrap.classList.add('glow-ok');
+    else if (dx < -15) wrap.classList.add('glow-bad');
+  }, { passive: true });
+  wrap.addEventListener('touchend', function(e) {
+    if (!dragging) return; dragging = false;
+    var dx = e.changedTouches[0].clientX - startX;
+    var dy = e.changedTouches[0].clientY - startY;
+    wrap.classList.remove('glow-ok','glow-bad','glow-so');
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      wrap.style.transition = 'transform .2s ease';
+      wrap.style.transform = '';
+      if (card) card.classList.toggle('flipped');
+    } else if (dx > 60) {
+      window.__answerLoadQuiz(ov, wrap, w, 'ok', dx, dy);
+    } else if (dx < -60) {
+      window.__answerLoadQuiz(ov, wrap, w, 'bad', dx, dy);
+    } else if (dy < -60) {
+      window.__answerLoadQuiz(ov, wrap, w, 'so', dx, dy);
+    } else {
+      wrap.style.transition = 'transform .25s ease';
+      wrap.style.transform = '';
+    }
+  });
+};
+
+window.__answerLoadQuiz = function(ov, wrap, w, status, dx, dy) {
+  var q = window.__loadQuiz;
+  q.answers.push({ num: w.num, word: w.word, status: status });
+  if (status === 'ok') q.ok++;
+  else if (status === 'bad') q.bad++;
+  else if (status === 'so') q.so++;
+  window.__updateLoadQuizScore(ov);
+  wrap.style.transition = 'transform .35s cubic-bezier(.1,.8,.25,1), opacity .35s ease';
+  wrap.style.transform = 'translate(' + (dx * 2.2) + 'px,' + (dy * 2.2 - 40) + 'px) scale(.5) rotate(' + (dx * 0.08) + 'deg)';
+  wrap.style.opacity = '0';
+  q.index++;
+  setTimeout(function() {
+    if (window.__pgLoad.overlay === ov) window.__renderLoadQuizCard(ov);
+  }, 200);
+};
+
+// ロード完了時：退避していた答えを単語帳へ反映して保存
+window.__finalizeLoadQuiz = function() {
+  var q = window.__loadQuiz;
+  if (!q) return;
+  if (q.answers && q.answers.length > 0 && typeof vocabList !== 'undefined') {
+    var applied = 0;
+    q.answers.forEach(function(ans) {
+      var w = vocabList.find(function(v){ return String(v.num) === String(ans.num); });
+      if (w && String(w.word) === String(ans.word)) {
+        w.status = ans.status;
+        if (w.meanings && w.meanings.length > 0) {
+          w.meanings[0].status = ans.status;
+          if (!w.meanings[0].history) w.meanings[0].history = [];
+          w.meanings[0].history.push(ans.status);
+        }
+        if (!w.history) w.history = [];
+        w.history.push(ans.status);
+        applied++;
+      }
+    });
+    if (applied > 0) {
+      if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(300);
+      if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(300);
+    }
+  }
+  q.answers = [];
+  q.active = false;
+};
+
+var __prevActuallyHidePenguinForQuiz = window.__actuallyHidePenguin;
+window.__actuallyHidePenguin = function() {
+  window.__finalizeLoadQuiz();
+  if (typeof __prevActuallyHidePenguinForQuiz === 'function') __prevActuallyHidePenguinForQuiz();
+};
+
+// ------------------------------------------------------------------
+// 【2】理解度保存の確実化（ローカル常時ベース＋Firebaseリトライ）
+// ------------------------------------------------------------------
+window.loadUserVocabProgress = async function(bookKey) {
+  bookKey = bookKey || currentTextbook || 'default';
+  currentUserVocabProgress = {};
+  if (typeof myId === 'undefined' || !myId) return;
+  try {
+    var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
+    if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
+  } catch (e) {}
+  if (myId === 'GUEST-000' || !window.db || !window.fbGetDoc || !window.fbDoc) return;
+  try {
+    const ref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookKey);
+    const snap = await window.fbGetDoc(ref);
+    if (snap.exists() && snap.data() && snap.data().words) {
+      currentUserVocabProgress = snap.data().words;
+    }
+  } catch (e) {
+    console.error('loadUserVocabProgress Firebase読み込みエラー（ローカルデータで継続）:', e);
+  }
+};
+
+window.saveUserVocabProgress = async function() {
+  if (typeof window.rebuildVocabStemIndex === 'function') window.rebuildVocabStemIndex();
+  if (typeof myId === 'undefined' || !myId) return;
+  const bookKey = currentTextbook || 'default';
+  currentUserVocabProgress = window.extractUserProgressFromVocabList();
+  const payload = { words: currentUserVocabProgress, updatedAt: new Date().toISOString() };
+  try {
+    localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
+  } catch (e) {
+    console.error('saveUserVocabProgress ローカル保存エラー:', e);
+  }
+  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
+    try {
+      const ref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookKey);
+      if (typeof window.fbSetDocWithRetry === 'function') {
+        await window.fbSetDocWithRetry(ref, payload);
+      } else {
+        await window.fbSetDoc(ref, payload);
+      }
+    } catch (e) {
+      console.error('saveUserVocabProgress Firebase保存エラー（ローカルには保存済み）:', e);
+    }
+  }
+  userStats.vocab_fixed = vocabList.filter(function(w) {
+    return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; });
+  }).length;
+};
+
+// ------------------------------------------------------------------
+// 【3】勉強時間の安定化（二重起動防止・毎秒表示・継続保存・総計記録）
+// ------------------------------------------------------------------
+window.__studyTimerIntervalId = null;
+window.initStudyTimerAndDataRotation = function() {
+  if (window.__studyTimerIntervalId) {
+    clearInterval(window.__studyTimerIntervalId);
+    window.__studyTimerIntervalId = null;
+  }
+  var now = new Date();
+  var todayStr = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
+  if (lastAccessDateStr && lastAccessDateStr !== todayStr) {
+    var oldDate = new Date(lastAccessDateStr);
+    var oldDayIdx = oldDate.getDay() - 1;
+    if (oldDayIdx < 0) oldDayIdx = 6;
+    weeklyStudyMinutesLog[oldDayIdx] = todayStudySeconds / 60;
+    localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+    todayStudySeconds = 0;
+    localStorage.setItem('core_v4_study_today_secs', '0');
+  }
+  lastAccessDateStr = todayStr;
+  localStorage.setItem('core_v4_study_last_date', todayStr);
+  var localTotal = parseInt(localStorage.getItem('core_v4_study_total_secs') || '0');
+  if (typeof userStats.study_total_secs === 'undefined' || userStats.study_total_secs === null || localTotal > userStats.study_total_secs) {
+    userStats.study_total_secs = localTotal;
+  }
+  var updateDisplay = function() {
+    var minStr = String(Math.floor(todayStudySeconds / 60)).padStart(2, '0');
+    var secStr = String(todayStudySeconds % 60).padStart(2, '0');
+    var el = document.getElementById('todayStudyTimeDisplay');
+    if (el) el.innerText = minStr + '分' + secStr + '秒';
+  };
+  window.__studyTimerIntervalId = setInterval(function() {
+    var shouldCount = false;
+    if (currentActiveTabId === 'vocab' || currentActiveTabId === 'reader') {
+      shouldCount = true;
+    } else if (currentActiveTabId === 'game') {
+      var isFcardPlay = (document.getElementById('flashcard-play-screen') && document.getElementById('flashcard-play-screen').style.display === 'flex');
+      var isSoloPlay = (document.getElementById('game-play-screen') && document.getElementById('game-play-screen').style.display === 'block');
+      var isMultiPlay = (document.getElementById('multi-battle-play-screen') && document.getElementById('multi-battle-play-screen').style.display === 'flex');
+      if (isFcardPlay || isSoloPlay || isMultiPlay) shouldCount = true;
+    }
+    if (window.__loadQuiz && window.__loadQuiz.active) shouldCount = true;
+    if (shouldCount) {
+      todayStudySeconds++;
+      userStats.study_total_secs = (userStats.study_total_secs || 0) + 1;
+      localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
+      localStorage.setItem('core_v4_study_total_secs', String(userStats.study_total_secs));
+      var currentMin = Math.floor(todayStudySeconds / 60);
+      if (currentMin > userStats.study_burst) {
+        userStats.study_burst = currentMin;
+        window.saveUserStats();
+        window.checkAndRewardTitleBonusXP();
+      }
+      if (todayStudySeconds % 10 === 0) {
+        var d = new Date();
+        var dayIdx = d.getDay() - 1; if (dayIdx < 0) dayIdx = 6;
+        weeklyStudyMinutesLog[dayIdx] = todayStudySeconds / 60;
+        localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+      }
+      if (todayStudySeconds % 60 === 0) {
+        try { window.saveUserStats(); } catch (e) {}
+      }
+    }
+    updateDisplay();
+    if (shouldCount) window.renderActivityChart();
+  }, 1000);
+  updateDisplay();
+  window.renderActivityChart();
+};
+
+// ログアウトしても勉強時間データは消さない
+window.logoutToGate = function() {
+  try {
+    var keysToRemove = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (!key) continue;
+      if (key.indexOf('core_v4_study_') === 0) continue;
+      if (key === 'core_v4_userId' || key === 'core_v4_userName' || key === 'core_v4_userTarget' || key === 'core_v4_userTitle' ||
+          key === 'core_v4_totalExp' || key === 'core_v4_friend_list' || key === 'core_v4_rewarded_titles_cache' ||
+          key === 'core_v4_active_char' || key === 'core_v4_active_weapon' || key === 'core_v4_active_armor' ||
+          key === 'core_v4_current_textbook_id' || key.indexOf('core_v4_user_stats_') === 0 ||
+          key.indexOf('core_v4_user_avatar_') === 0 || key.indexOf('core_v4_user_vocab_progress_') === 0) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(function(key) { localStorage.removeItem(key); });
+  } catch (e) { localStorage.clear(); }
+  location.reload();
+};
+
+// ------------------------------------------------------------------
+// 【4】フレンド勉強時間を「全期間総計」に
+// ------------------------------------------------------------------
+window.__formatStudyTotal = function(secs) {
+  var totalMin = Math.floor((secs || 0) / 60);
+  if (totalMin >= 60) {
+    var h = Math.floor(totalMin / 60);
+    var m = totalMin % 60;
+    return h + '時間' + (m > 0 ? m + '分' : '');
+  }
+  return totalMin + '分';
+};
+
+window.refreshFriendListFromFirebase = async function(force) {
+  if (typeof myId === 'undefined' || !myId || myId === 'GUEST-000') return;
+  if (!window.db || !window.fbGetDoc || !window.fbDoc) return;
+  if (!Array.isArray(myFriendList) || myFriendList.length === 0) return;
+  var now = Date.now();
+  if (!force && window.__friendRefreshLastAt && now - window.__friendRefreshLastAt < 60000) return;
+  window.__friendRefreshLastAt = now;
+  var changed = false;
+  for (var i = 0; i < myFriendList.length; i++) {
+    var f = myFriendList[i];
+    try {
+      var ref = window.fbDoc(window.db, 'users', f.code);
+      var snap = await window.fbGetDoc(ref);
+      if (!snap.exists()) continue;
+      var d = snap.data();
+      if (d.deleted) continue;
+      var stats = d.userStats || {};
+      var remoteLevel = f.level || 1;
+      if (d.totalExp !== undefined && d.totalExp !== null) {
+        remoteLevel = window.computeLevelSafe(d.totalExp);
+      } else if (stats.user_level) {
+        remoteLevel = parseInt(stats.user_level) || remoteLevel;
+      }
+      var remoteName = d.playerName || f.name;
+      var remoteTitle = d.selectedTitle || f.title || '称号なし';
+      var remoteAvatar = (typeof d.avatar === 'string') ? d.avatar : (f.customAvatar || '');
+      var remoteTotalSecs = parseInt(stats.study_total_secs) || 0;
+      var remoteLastLoginStr = f.lastLoginStr || '';
+      var lastIso = stats.lastLoginAt || d.updatedAt || '';
+      if (lastIso) { var formatted = window.formatFriendLastLogin(lastIso); if (formatted) remoteLastLoginStr = formatted; }
+      var remoteTimestamp = f.timestamp || now;
+      if (lastIso) { var t = new Date(lastIso).getTime(); if (!isNaN(t)) remoteTimestamp = t; }
+      if (f.name !== remoteName || f.title !== remoteTitle || f.customAvatar !== remoteAvatar ||
+          f.level !== remoteLevel || f.studyTotalSecs !== remoteTotalSecs ||
+          f.lastLoginStr !== remoteLastLoginStr || f.timestamp !== remoteTimestamp) {
+        f.name = remoteName; f.title = remoteTitle; f.customAvatar = remoteAvatar;
+        f.level = remoteLevel; f.studyTotalSecs = remoteTotalSecs;
+        f.lastLoginStr = remoteLastLoginStr; f.timestamp = remoteTimestamp;
+        changed = true;
+      }
+    } catch (e) {}
+  }
+  if (changed) { try { await window.saveUserStats(); } catch (e) {} }
+  if (typeof window.sortAndRenderFriendList === 'function') window.sortAndRenderFriendList();
+};
+
+window.sortAndRenderFriendList = function() {
+  var container = document.getElementById('friendListContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  if (myFriendList.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-sub); font-size:12px;"> <i data-lucide="user-plus" size="24" style="margin-bottom:6px; opacity:0.5;"></i><br> まだフレンドが登録されていません。<br>上部からIDで検索して追加してみましょう！ </div>';
+    window.initLucide();
+    return;
+  }
+  var sortType = document.getElementById('friendSortSelect').value;
+  var sortedList = myFriendList.slice();
+  if (sortType === 'login') {
+    sortedList.sort(function(a,b){ return b.timestamp - a.timestamp; });
+  } else if (sortType === 'level') {
+    sortedList.sort(function(a,b){ return b.level - a.level; });
+  } else if (sortType === 'studyTime') {
+    sortedList.sort(function(a,b){ return (b.studyTotalSecs||0) - (a.studyTotalSecs||0); });
+  }
+  sortedList.forEach(function(f) {
+    var item = document.createElement('div');
+    item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:10px 14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);';
+    var avatarContentStr = '<span style="font-size:24px; flex-shrink:0;">' + (f.avatar || '👤') + '</span>';
+    if (f.customAvatar) {
+      avatarContentStr = '<img src="' + f.customAvatar + '" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-purple-light);">';
+    }
+    var studyLabel = window.__formatStudyTotal(f.studyTotalSecs);
+    item.innerHTML =
+      '<div style="display:flex; align-items:center; gap:12px; flex:1; min-width:0;">' +
+        '<div style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">' + avatarContentStr + '</div>' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="display:flex; align-items:baseline; gap:6px;">' +
+            '<span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.name + '</span>' +
+            '<span style="font-size:10px; font-weight:900; color:var(--cosmic-cyan); flex-shrink:0;">LV.' + f.level + '</span>' +
+          '</div>' +
+          '<div style="font-size:10px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">' + f.title + '</div>' +
+          '<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">' +
+            '<span>⏱️ 総勉強: <strong style="color:white;">' + studyLabel + '</strong></span>' +
+            '<span>🔑 ID: ' + f.code + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="text-align:right; flex-shrink:0; margin-left:8px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">' +
+        '<div style="font-size:9px; color:var(--text-sub); margin-top:0;">ログイン:<br><span style="color:#FFF; font-weight:600;">' + (f.lastLoginStr ? f.lastLoginStr.split(' ')[0] : '-') + '</span></div>' +
+        '<button style="background:none; border:none; color:var(--word-bad); padding:2px; cursor:pointer;" onclick="window.removeFriendDirect(\'' + f.code + '\', event)"><i data-lucide="user-x" size="14"></i></button>' +
+      '</div>';
+    container.appendChild(item);
+  });
+  window.initLucide();
+};
+
+console.log('🎴 第4回パッチ（ロード画面単語テスト＋理解度保存＋勉強時間安定化＋フレンド総計）適用完了');
+// ==========================================================================
+// 🎴 第5回パッチ：ロード画面クイズ改善
+//    ① カードの「#31」などの番号表示を削除
+//    ② 設定画面に「出題元の単語帳」選択を追加（答えは選んだ単語帳に保存）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【0】パッチ専用スタイルの注入（1回だけ）
+// ------------------------------------------------------------------
+(function injectPatch5Css() {
+  if (document.getElementById('patch5Css')) return;
+  var st = document.createElement('style');
+  st.id = 'patch5Css';
+  st.textContent = [
+    '.lq-book-label{font-size:10px;font-weight:800;color:var(--cosmic-purple-light);background:rgba(192,132,252,0.1);border:1px solid rgba(192,132,252,0.3);padding:3px 10px;border-radius:12px;letter-spacing:0.5px;margin-top:2px;box-shadow:0 0 8px rgba(192,132,252,0.2);text-shadow:0 0 6px rgba(192,132,252,0.4);}'
+  ].join('\n');
+  document.head.appendChild(st);
+})();
+
+// ------------------------------------------------------------------
+// 【1】指定教材のマスター単語を取得（キャッシュ→ローカル→Firebase）
+// ------------------------------------------------------------------
+window.__getBookMasterWords = async function(bookId) {
+  if (typeof window.__fetchMasterWordsForBook === 'function') {
+    try { return await window.__fetchMasterWordsForBook(bookId); } catch(e){}
+  }
+  var master = null;
+  try { if (typeof textbooksCacheMap !== 'undefined' && textbooksCacheMap && textbooksCacheMap[bookId]) master = textbooksCacheMap[bookId]; } catch(e){}
+  if (!master) {
+    try { var lc = localStorage.getItem('core_v4_cache_' + bookId); if (lc) master = JSON.parse(lc); } catch(e){}
+  }
+  if (!master && window.db && window.fbGetDoc && window.fbDoc) {
+    try {
+      var ref = window.fbDoc(window.db, 'shared', 'vocab_' + bookId);
+      var snap = await window.fbGetDoc(ref);
+      if (snap.exists() && snap.data() && snap.data().custom_words) master = snap.data().custom_words;
+    } catch(e){}
+  }
+  return master || [];
+};
+
+// ------------------------------------------------------------------
+// 【2】出題元単語帳ラベルの表示ヘルパー
+// ------------------------------------------------------------------
+window.__setLoadQuizBookLabel = function(ov, name, show) {
+  var label = document.getElementById('lqBookLabel');
+  if (!label) {
+    label = document.createElement('div');
+    label.id = 'lqBookLabel';
+    label.className = 'lq-book-label';
+    var area = ov.querySelector('.lq-area');
+    if (!area) return;
+    area.appendChild(label);
+  }
+  if (show && name) {
+    label.textContent = '📔 ' + name;
+    label.style.display = 'block';
+  } else {
+    label.style.display = 'none';
+  }
+};
+
+// ------------------------------------------------------------------
+// 【3】クイズ初期化の上書き（出題元単語帳の選択に対応）
+// ------------------------------------------------------------------
+window.__initLoadQuiz = function(ov) {
+  var q = window.__loadQuiz;
+  q.answers = []; q.ok = 0; q.bad = 0; q.so = 0; q.index = 0; q.words = []; q.active = false; q.bookId = null;
+  var scoreEl = ov.querySelector('#lqScore');
+  var wrapEl = ov.querySelector('#lqCardWrap');
+  var hintEl = ov.querySelector('#lqHint');
+  var hideAll = function() {
+    q.active = false;
+    if (scoreEl) scoreEl.style.display = 'none';
+    if (wrapEl) wrapEl.style.display = 'none';
+    if (hintEl) hintEl.style.display = 'none';
+    window.__setLoadQuizBookLabel(ov, '', false);
+  };
+  var setup = function(words, bookId, name) {
+    if (!words || words.length === 0) { hideAll(); return; }
+    q.words = words.slice().sort(function(){ return Math.random() - 0.5; }).slice(0, 20);
+    q.active = true;
+    q.bookId = bookId;
+    if (scoreEl) scoreEl.style.display = 'flex';
+    if (wrapEl) wrapEl.style.display = 'block';
+    if (hintEl) hintEl.style.display = 'block';
+    window.__setLoadQuizBookLabel(ov, name, true);
+    window.__renderLoadQuizCard(ov);
+    window.__updateLoadQuizScore(ov);
+  };
+  var sel = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
+  var curBook = (typeof currentTextbook !== 'undefined') ? currentTextbook : 'default';
+  var useCurrent = (sel === 'auto' || sel === '' || sel === curBook);
+  if (useCurrent) {
+    var name = '今の単語帳';
+    if (typeof textbooksPool !== 'undefined' && textbooksPool) {
+      var cb = textbooksPool.find(function(b){ return b.id === curBook; });
+      if (cb) name = cb.name;
+    }
+    setup(vocabList, curBook, name);
+  } else {
+    var book = null;
+    if (typeof textbooksPool !== 'undefined' && textbooksPool) {
+      book = textbooksPool.find(function(b){ return b.id === sel; });
+    }
+    var bname = book ? book.name : sel;
+    window.__getBookMasterWords(sel).then(function(master){
+      if (window.__pgLoad.overlay !== ov) return;
+      var words = window.migrateVocabData((master || []).map(function(w){ return Object.assign({}, w); }));
+      setup(words, sel, bname);
+    }).catch(function(){
+      if (window.__pgLoad.overlay === ov) hideAll();
+    });
+  }
+};
+
+// ------------------------------------------------------------------
+// 【4】カード描画の上書き（番号表示を削除）
+// ------------------------------------------------------------------
+window.__renderLoadQuizCard = function(ov) {
+  var q = window.__loadQuiz;
+  if (!q.active || q.words.length === 0) return;
+  if (q.index >= q.words.length) {
+    q.words = q.words.sort(function(){ return Math.random() - 0.5; });
+    q.index = 0;
+  }
+  var w = q.words[q.index];
+  var meaning = (w.meanings && w.meanings[0]) ? w.meanings[0].text : (w.meaning || '');
+  var wrap = ov.querySelector('#lqCardWrap');
+  if (!wrap) return;
+  wrap.className = 'lq-card-wrap';
+  wrap.style.display = 'block';
+  wrap.style.transform = '';
+  wrap.style.opacity = '1';
+  wrap.style.transition = '';
+  wrap.innerHTML =
+    '<div class="lq-card" id="lqCard">' +
+      '<div class="lq-face front"><div class="lq-word">' + w.word + '</div></div>' +
+      '<div class="lq-face back"><div class="lq-meaning">' + meaning + '</div></div>' +
+    '</div>';
+  window.__bindLoadQuizCard(ov, wrap, w);
+};
+
+// ------------------------------------------------------------------
+// 【5】別教材の理解度へ答えを反映して保存
+// ------------------------------------------------------------------
+window.__applyQuizAnswersToBook = async function(bookId, answers) {
+  var master = await window.__getBookMasterWords(bookId);
+  if (!master || master.length === 0) return 0;
+  var words = window.migrateVocabData(master.map(function(w){ return Object.assign({}, w); }));
+  var progress = {};
+  var pkey = window.getVocabProgressStorageKey(bookId);
+  try { progress = JSON.parse(localStorage.getItem(pkey)) || {}; } catch(e){}
+  if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
+    try {
+      var pref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
+      var psnap = await window.fbGetDoc(pref);
+      if (psnap.exists() && psnap.data() && psnap.data().words) progress = psnap.data().words;
+    } catch(e){}
+  }
+  words.forEach(function(w){
+    var key = String(w.num);
+    var p = progress[key];
+    w.status = 'none'; w.history = [];
+    w.meanings = (w.meanings||[]).map(function(m){ return {id:m.id, text:m.text, status:'none', history:[]}; });
+    if (p && p.sig === window.buildWordSignature(w)) {
+      w.status = p.status || 'none';
+      w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
+      w.meanings = w.meanings.map(function(m){
+        var mp = p.meanings ? p.meanings[m.id] : null;
+        if (mp) return {id:m.id, text:m.text, status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[]};
+        return m;
+      });
+    }
+  });
+  var applied = 0;
+  answers.forEach(function(ans){
+    var w = words.find(function(v){ return String(v.num) === String(ans.num); });
+    if (w && String(w.word) === String(ans.word)) {
+      w.status = ans.status;
+      if (w.meanings && w.meanings.length > 0) {
+        w.meanings[0].status = ans.status;
+        if (!w.meanings[0].history) w.meanings[0].history = [];
+        w.meanings[0].history.push(ans.status);
+      }
+      if (!w.history) w.history = [];
+      w.history.push(ans.status);
+      applied++;
+    }
+  });
+  if (applied === 0) return 0;
+  var newProgress = {};
+  words.forEach(function(w){
+    var key = String(w.num);
+    var wp = {
+      sig: window.buildWordSignature(w),
+      status: w.status || 'none',
+      history: Array.isArray(w.history) ? w.history.slice(-20) : [],
+      meanings: {}
+    };
+    (w.meanings||[]).forEach(function(m){
+      wp.meanings[m.id] = { status: m.status||'none', history: Array.isArray(m.history)?m.history.slice(-20):[] };
+    });
+    newProgress[key] = wp;
+  });
+  try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch(e){}
+  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
+    try {
+      var sref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
+      var payload = { words: newProgress, updatedAt: new Date().toISOString() };
+      if (typeof window.fbSetDocWithRetry === 'function') await window.fbSetDocWithRetry(sref, payload);
+      else await window.fbSetDoc(sref, payload);
+    } catch(e){}
+  }
+  return applied;
+};
+
+// ------------------------------------------------------------------
+// 【6】クイズ終了処理の上書き（選んだ単語帳へ保存）
+// ------------------------------------------------------------------
+window.__finalizeLoadQuiz = function() {
+  var q = window.__loadQuiz;
+  if (!q) return;
+  var answers = (q.answers || []).slice();
+  q.answers = [];
+  q.active = false;
+  if (answers.length > 0) {
+    var curBook = (typeof currentTextbook !== 'undefined') ? currentTextbook : 'default';
+    var bookId = q.bookId || curBook;
+    if (bookId === curBook) {
+      var applied = 0;
+      answers.forEach(function(ans){
+        var w = vocabList.find(function(v){ return String(v.num) === String(ans.num); });
+        if (w && String(w.word) === String(ans.word)) {
+          w.status = ans.status;
+          if (w.meanings && w.meanings.length > 0) {
+            w.meanings[0].status = ans.status;
+            if (!w.meanings[0].history) w.meanings[0].history = [];
+            w.meanings[0].history.push(ans.status);
+          }
+          if (!w.history) w.history = [];
+          w.history.push(ans.status);
+          applied++;
+        }
+      });
+      if (applied > 0) {
+        if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(300);
+        if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(300);
+      }
+    } else {
+      window.__applyQuizAnswersToBook(bookId, answers);
+    }
+  }
+};
+
+// ------------------------------------------------------------------
+// 【7】非表示時に答えを確定する処理を確実に呼び出す
+// ------------------------------------------------------------------
+var __prevActuallyHidePenguinForQuiz5 = window.__actuallyHidePenguin;
+window.__actuallyHidePenguin = function() {
+  window.__finalizeLoadQuiz();
+  if (typeof __prevActuallyHidePenguinForQuiz5 === 'function') __prevActuallyHidePenguinForQuiz5();
+};
+
+// ------------------------------------------------------------------
+// 【8】設定画面に「出題元の単語帳」セクションを注入
+// ------------------------------------------------------------------
+window.injectLoadQuizSettings = function() {
+  var sidebar = document.getElementById('sidebarMenu');
+  if (!sidebar) return;
+  if (!document.getElementById('loadQuizSettingsSection')) {
+    var section = document.createElement('div');
+    section.id = 'loadQuizSettingsSection';
+    section.style.cssText = "margin:8px 16px;padding:12px;background:rgba(0,240,255,0.06);border:1px solid rgba(0,240,255,0.25);border-radius:10px;box-shadow:0 0 10px rgba(0,240,255,0.1);";
+    section.innerHTML =
+      '<div style="font-size:11px;font-weight:800;color:var(--cosmic-cyan);margin-bottom:8px;letter-spacing:0.5px;">🎴 ロード画面クイズ設定</div>' +
+      '<div style="font-size:10px;color:var(--text-sub);margin-bottom:6px;">出題元の単語帳</div>' +
+      '<select id="loadQuizBookSelect" class="search-input" style="width:100%;margin:0;height:36px;"></select>' +
+      '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:6px;line-height:1.4;">ロード中の単語クイズが、選んだ単語帳から出題されます。答えはその単語帳の理解度に保存されます。</div>';
+    var anchor = null;
+    var children = sidebar.children;
+    for (var i = 0; i < children.length; i++) {
+      if ((children[i].textContent || '').indexOf('ログアウト') !== -1) { anchor = children[i]; break; }
+    }
+    if (anchor) sidebar.insertBefore(section, anchor);
+    else sidebar.appendChild(section);
+  }
+  window.updateLoadQuizBookSelect();
+};
+
+window.updateLoadQuizBookSelect = function() {
+  var sel = document.getElementById('loadQuizBookSelect');
+  if (!sel) return;
+  var current = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
+  var html = '<option value="auto">自動（今の単語帳）</option>';
+  var pool = (typeof textbooksPool !== 'undefined' && textbooksPool) ? textbooksPool : [];
+  pool.forEach(function(b){
+    html += '<option value="' + b.id + '">' + b.name + '</option>';
+  });
+  sel.innerHTML = html;
+  sel.value = current;
+  sel.onchange = function() {
+    localStorage.setItem('core_v4_loadquiz_book', sel.value);
+    if (typeof window.showToast === 'function') window.showToast('🎴 ロードクイズの出題元を設定しました', 'ok');
+  };
+};
+
+// ------------------------------------------------------------------
+// 【9】loadLocalState 上書き（設定セクションの注入）
+// ------------------------------------------------------------------
+var __prevLoadLocalStateForQuizSettings = window.loadLocalState;
+window.loadLocalState = async function() {
+  var r = __prevLoadLocalStateForQuizSettings ? await __prevLoadLocalStateForQuizSettings.apply(this, arguments) : undefined;
+  window.injectLoadQuizSettings();
+  return r;
+};
+
+// ------------------------------------------------------------------
+// 【10】起動時注入
+// ------------------------------------------------------------------
+(function initLoadQuizSettingsPatch() {
+  function boot() { window.injectLoadQuizSettings(); }
+  if (document.readyState !== 'loading') { setTimeout(boot, 400); }
+  else { document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 400); }); }
+})();
+
+console.log('🎴 第5回パッチ（ロードクイズ番号削除＋出題元単語帳選択）適用完了');
+// ==========================================================================
+// 🎴 第6回パッチ：ロード画面クイズ 完全修正版（自己完結）
+//    ① 耳の増殖バグ根絶（1カード=1リスナー） ② スコアバー削除 ③ 番号削除
+//    ④ 記録B（⚪︎△✕全部） ⑤ 出題元単語帳選択＋別教材へ正しく保存
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【0】スタイル補完（出題元ラベル。主要スタイルは既存パッチで定義済み）
+// ------------------------------------------------------------------
+(function injectPatch6Css() {
+  if (document.getElementById('patch6Css')) return;
+  var st = document.createElement('style');
+  st.id = 'patch6Css';
+  st.textContent = '.lq-book-label{font-size:10px;font-weight:800;color:var(--cosmic-purple-light);background:rgba(192,132,252,0.1);border:1px solid rgba(192,132,252,0.3);padding:3px 10px;border-radius:12px;letter-spacing:0.5px;margin-top:2px;box-shadow:0 0 8px rgba(192,132,252,0.2);text-shadow:0 0 6px rgba(192,132,252,0.4);}';
+  document.head.appendChild(st);
+})();
+
+// ------------------------------------------------------------------
+// 【1】共有状態
+// ------------------------------------------------------------------
+window.__loadQuiz = window.__loadQuiz || { active:false, words:[], index:0, answers:[], ok:0, bad:0, so:0, bookId:null };
+window.__lqCurrent = window.__lqCurrent || null;
+
+// ------------------------------------------------------------------
+// 【2】ローディング描画（スコアバー無し・クイズ枠＋ヒントのみ）
+// ------------------------------------------------------------------
+window.__renderPenguinOverlay = function(message) {
+  if (window.__pgLoad.overlay) return;
+  var ov = document.createElement('div');
+  ov.id = 'penguinLoadingOverlay';
+  var sparks = '';
+  for (var i = 0; i < 14; i++) {
+    var left = Math.round(Math.random() * 100);
+    var delay = (Math.random() * 6).toFixed(2);
+    var dur = (5 + Math.random() * 6).toFixed(2);
+    var c = Math.random() < 0.5 ? 'rgba(0,240,255,.8)' : 'rgba(192,132,252,.8)';
+    sparks += '<span class="lq-spark" style="left:' + left + '%;bottom:-10px;background:' + c + ';animation-delay:' + delay + 's;animation-duration:' + dur + 's;"></span>';
+  }
+  ov.innerHTML =
+    sparks +
+    '<div class="lq-area">' +
+      '<div class="lq-card-wrap" id="lqCardWrap" style="display:none;"></div>' +
+      '<div class="lq-hint" id="lqHint" style="display:none;">タップでめくる ／ 右⚪︎ ・ 左✕ ・ 上△</div>' +
+    '</div>' +
+    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
+      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
+  document.body.appendChild(ov);
+  window.__pgLoad.overlay = ov;
+  requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
+  window.__initLoadQuiz(ov);
+};
+
+// ------------------------------------------------------------------
+// 【3】出題元ラベル
+// ------------------------------------------------------------------
+window.__setLoadQuizBookLabel = function(ov, name, show) {
+  var label = document.getElementById('lqBookLabel');
+  if (!label) {
+    label = document.createElement('div');
+    label.id = 'lqBookLabel';
+    label.className = 'lq-book-label';
+    var area = ov.querySelector('.lq-area');
+    if (!area) return;
+    area.appendChild(label);
+  }
+  if (show && name) { label.textContent = '📔 ' + name; label.style.display = 'block'; }
+  else { label.style.display = 'none'; }
+};
+
+// ------------------------------------------------------------------
+// 【4】クイズ初期化（出題元選択込み・スコアバー参照なし）
+// ------------------------------------------------------------------
+window.__initLoadQuiz = function(ov) {
+  var q = window.__loadQuiz;
+  q.answers = []; q.ok = 0; q.bad = 0; q.so = 0; q.index = 0; q.words = []; q.active = false; q.bookId = null;
+  var wrapEl = ov.querySelector('#lqCardWrap');
+  var hintEl = ov.querySelector('#lqHint');
+  var hideAll = function() {
+    q.active = false;
+    if (wrapEl) wrapEl.style.display = 'none';
+    if (hintEl) hintEl.style.display = 'none';
+    window.__setLoadQuizBookLabel(ov, '', false);
+  };
+  var setup = function(words, bookId, name) {
+    if (!words || words.length === 0) { hideAll(); return; }
+    q.words = words.slice().sort(function(){ return Math.random() - 0.5; }).slice(0, 20);
+    q.active = true;
+    q.bookId = bookId;
+    if (wrapEl) wrapEl.style.display = 'block';
+    if (hintEl) hintEl.style.display = 'block';
+    window.__setLoadQuizBookLabel(ov, name, true);
+    window.__renderLoadQuizCard(ov);
+  };
+  var sel = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
+  var curBook = (typeof currentTextbook !== 'undefined') ? currentTextbook : 'default';
+  var useCurrent = (sel === 'auto' || sel === '' || sel === curBook);
+  if (useCurrent) {
+    var name = '今の単語帳';
+    if (typeof textbooksPool !== 'undefined' && textbooksPool) {
+      var cb = textbooksPool.find(function(b){ return b.id === curBook; });
+      if (cb) name = cb.name;
+    }
+    setup((typeof vocabList !== 'undefined' ? vocabList : []), curBook, name);
+  } else {
+    var book = null;
+    if (typeof textbooksPool !== 'undefined' && textbooksPool) {
+      book = textbooksPool.find(function(b){ return b.id === sel; });
+    }
+    var bname = book ? book.name : sel;
+    window.__getBookMasterWords(sel).then(function(master){
+      if (window.__pgLoad.overlay !== ov) return;
+      var words = (typeof window.migrateVocabData === 'function') ? window.migrateVocabData((master || []).map(function(w){ return Object.assign({}, w); })) : (master || []);
+      setup(words, sel, bname);
+    }).catch(function(){
+      if (window.__pgLoad.overlay === ov) hideAll();
+    });
+  }
+};
+
+// ------------------------------------------------------------------
+// 【5】スコア表示更新（表示要素が無いので無害なno-op）
+// ------------------------------------------------------------------
+window.__updateLoadQuizScore = function() { /* スコアバーは表示しない */ };
+
+// ------------------------------------------------------------------
+// 【6】カード描画（番号なし・現在の単語を共有状態へ）
+// ------------------------------------------------------------------
+window.__renderLoadQuizCard = function(ov) {
+  var q = window.__loadQuiz;
+  if (!q.active || q.words.length === 0) return;
+  if (q.index >= q.words.length) {
+    q.words = q.words.sort(function(){ return Math.random() - 0.5; });
+    q.index = 0;
+  }
+  var w = q.words[q.index];
+  var meaning = (w.meanings && w.meanings[0]) ? w.meanings[0].text : (w.meaning || '');
+  var wrap = ov.querySelector('#lqCardWrap');
+  if (!wrap) return;
+  wrap.className = 'lq-card-wrap';
+  wrap.style.display = 'block';
+  wrap.style.transform = '';
+  wrap.style.opacity = '1';
+  wrap.style.transition = '';
+  wrap.innerHTML =
+    '<div class="lq-card" id="lqCard">' +
+      '<div class="lq-face front"><div class="lq-word">' + w.word + '</div></div>' +
+      '<div class="lq-face back"><div class="lq-meaning">' + meaning + '</div></div>' +
+    '</div>';
+  window.__lqCurrent = { word: w, ov: ov };
+  window.__bindLoadQuizCard(ov, wrap);
+};
+
+// ------------------------------------------------------------------
+// 【7】スワイプ判定（★増殖防止：カード枠に1組だけ固定）
+// ------------------------------------------------------------------
+window.__bindLoadQuizCard = function(ov, wrap) {
+  if (wrap.dataset.lqBound === '1') return;
+  wrap.dataset.lqBound = '1';
+  var startX = 0, startY = 0, dragging = false;
+  wrap.addEventListener('touchstart', function(e) {
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY; dragging = true;
+    wrap.style.transition = 'none';
+  }, { passive: true });
+  wrap.addEventListener('touchmove', function(e) {
+    if (!dragging) return;
+    var dx = e.touches[0].clientX - startX;
+    var dy = e.touches[0].clientY - startY;
+    wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (dx * 0.05) + 'deg)';
+    wrap.classList.remove('glow-ok','glow-bad','glow-so');
+    if (dy < -15 && Math.abs(dy) > Math.abs(dx)) wrap.classList.add('glow-so');
+    else if (dx > 15) wrap.classList.add('glow-ok');
+    else if (dx < -15) wrap.classList.add('glow-bad');
+  }, { passive: true });
+  wrap.addEventListener('touchend', function(e) {
+    if (!dragging) return; dragging = false;
+    var dx = e.changedTouches[0].clientX - startX;
+    var dy = e.changedTouches[0].clientY - startY;
+    wrap.classList.remove('glow-ok','glow-bad','glow-so');
+    var cur = window.__lqCurrent;
+    if (!cur || !cur.word) return;
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      wrap.style.transition = 'transform .2s ease';
+      wrap.style.transform = '';
+      var card = wrap.querySelector('#lqCard');
+      if (card) card.classList.toggle('flipped');
+    } else if (dx > 60) {
+      window.__answerLoadQuiz(ov, wrap, cur.word, 'ok', dx, dy);
+    } else if (dx < -60) {
+      window.__answerLoadQuiz(ov, wrap, cur.word, 'bad', dx, dy);
+    } else if (dy < -60) {
+      window.__answerLoadQuiz(ov, wrap, cur.word, 'so', dx, dy);
+    } else {
+      wrap.style.transition = 'transform .25s ease';
+      wrap.style.transform = '';
+    }
+  });
+};
+
+// ------------------------------------------------------------------
+// 【8】回答処理（記録B：⚪︎△✕全部を退避）
+// ------------------------------------------------------------------
+window.__answerLoadQuiz = function(ov, wrap, w, status, dx, dy) {
+  var q = window.__loadQuiz;
+  q.answers.push({ num: w.num, word: w.word, status: status });
+  if (status === 'ok') q.ok++;
+  else if (status === 'bad') q.bad++;
+  else if (status === 'so') q.so++;
+  wrap.style.transition = 'transform .35s cubic-bezier(.1,.8,.25,1), opacity .35s ease';
+  wrap.style.transform = 'translate(' + (dx * 2.2) + 'px,' + (dy * 2.2 - 40) + 'px) scale(.5) rotate(' + (dx * 0.08) + 'deg)';
+  wrap.style.opacity = '0';
+  q.index++;
+  setTimeout(function() {
+    if (window.__pgLoad.overlay === ov) window.__renderLoadQuizCard(ov);
+  }, 200);
+};
+
+// ------------------------------------------------------------------
+// 【9】指定教材のマスター単語取得
+// ------------------------------------------------------------------
+window.__getBookMasterWords = async function(bookId) {
+  var master = null;
+  try { if (typeof textbooksCacheMap !== 'undefined' && textbooksCacheMap && textbooksCacheMap[bookId]) master = textbooksCacheMap[bookId]; } catch(e){}
+  if (!master) {
+    try { var lc = localStorage.getItem('core_v4_cache_' + bookId); if (lc) master = JSON.parse(lc); } catch(e){}
+  }
+  if (!master && window.db && window.fbGetDoc && window.fbDoc) {
+    try {
+      var ref = window.fbDoc(window.db, 'shared', 'vocab_' + bookId);
+      var snap = await window.fbGetDoc(ref);
+      if (snap.exists() && snap.data() && snap.data().custom_words) master = snap.data().custom_words;
+    } catch(e){}
+  }
+  return master || [];
+};
+
+// ------------------------------------------------------------------
+// 【10】別教材の理解度へ反映して保存
+// ------------------------------------------------------------------
+window.__applyQuizAnswersToBook = async function(bookId, answers) {
+  var master = await window.__getBookMasterWords(bookId);
+  if (!master || master.length === 0) return 0;
+  var words = (typeof window.migrateVocabData === 'function') ? window.migrateVocabData(master.map(function(w){ return Object.assign({}, w); })) : master.map(function(w){ return Object.assign({}, w); });
+  var progress = {};
+  var pkey = window.getVocabProgressStorageKey(bookId);
+  try { progress = JSON.parse(localStorage.getItem(pkey)) || {}; } catch(e){}
+  if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
+    try {
+      var pref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
+      var psnap = await window.fbGetDoc(pref);
+      if (psnap.exists() && psnap.data() && psnap.data().words) progress = psnap.data().words;
+    } catch(e){}
+  }
+  words.forEach(function(w){
+    var key = String(w.num);
+    var p = progress[key];
+    w.status = 'none'; w.history = [];
+    w.meanings = (w.meanings || []).map(function(m){ return { id:m.id, text:m.text, status:'none', history:[] }; });
+    if (p && p.sig === window.buildWordSignature(w)) {
+      w.status = p.status || 'none';
+      w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
+      w.meanings = w.meanings.map(function(m){
+        var mp = p.meanings ? p.meanings[m.id] : null;
+        if (mp) return { id:m.id, text:m.text, status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[] };
+        return m;
+      });
+    }
+  });
+  var applied = 0;
+  answers.forEach(function(ans){
+    var w = words.find(function(v){ return String(v.num) === String(ans.num); });
+    if (w && String(w.word) === String(ans.word)) {
+      w.status = ans.status;
+      if (w.meanings && w.meanings.length > 0) {
+        w.meanings[0].status = ans.status;
+        if (!w.meanings[0].history) w.meanings[0].history = [];
+        w.meanings[0].history.push(ans.status);
+      }
+      if (!w.history) w.history = [];
+      w.history.push(ans.status);
+      applied++;
+    }
+  });
+  if (applied === 0) return 0;
+  var newProgress = {};
+  words.forEach(function(w){
+    var key = String(w.num);
+    var wp = { sig: window.buildWordSignature(w), status: w.status || 'none', history: Array.isArray(w.history) ? w.history.slice(-20) : [], meanings: {} };
+    (w.meanings || []).forEach(function(m){ wp.meanings[m.id] = { status: m.status || 'none', history: Array.isArray(m.history) ? m.history.slice(-20) : [] }; });
+    newProgress[key] = wp;
+  });
+  try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch(e){}
+  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
+    try {
+      var sref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
+      var payload = { words: newProgress, updatedAt: new Date().toISOString() };
+      if (typeof window.fbSetDocWithRetry === 'function') await window.fbSetDocWithRetry(sref, payload);
+      else await window.fbSetDoc(sref, payload);
+    } catch(e){}
+  }
+  return applied;
+};
+
+// ------------------------------------------------------------------
+// 【11】クイズ終了：退避した答えを選んだ単語帳へ反映
+// ------------------------------------------------------------------
+window.__finalizeLoadQuiz = function() {
+  var q = window.__loadQuiz;
+  if (!q) return;
+  var answers = (q.answers || []).slice();
+  q.answers = [];
+  q.active = false;
+  if (answers.length > 0) {
+    var curBook = (typeof currentTextbook !== 'undefined') ? currentTextbook : 'default';
+    var bookId = q.bookId || curBook;
+    if (bookId === curBook) {
+      var applied = 0;
+      answers.forEach(function(ans){
+        var w = (typeof vocabList !== 'undefined' ? vocabList : []).find(function(v){ return String(v.num) === String(ans.num); });
+        if (w && String(w.word) === String(ans.word)) {
+          w.status = ans.status;
+          if (w.meanings && w.meanings.length > 0) {
+            w.meanings[0].status = ans.status;
+            if (!w.meanings[0].history) w.meanings[0].history = [];
+            w.meanings[0].history.push(ans.status);
+          }
+          if (!w.history) w.history = [];
+          w.history.push(ans.status);
+          applied++;
+        }
+      });
+      if (applied > 0) {
+        if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(300);
+        if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(300);
+      }
+    } else {
+      window.__applyQuizAnswersToBook(bookId, answers);
+    }
+  }
+};
+
+// ------------------------------------------------------------------
+// 【12】ロード終了時に答えを確定
+// ------------------------------------------------------------------
+var __prevActuallyHidePenguinForQuiz6 = window.__actuallyHidePenguin;
+window.__actuallyHidePenguin = function() {
+  window.__finalizeLoadQuiz();
+  if (typeof __prevActuallyHidePenguinForQuiz6 === 'function') __prevActuallyHidePenguinForQuiz6();
+};
+
+// ------------------------------------------------------------------
+// 【13】設定画面：出題元の単語帳を選択
+// ------------------------------------------------------------------
+window.injectLoadQuizSettings = function() {
+  var sidebar = document.getElementById('sidebarMenu');
+  if (!sidebar) return;
+  if (!document.getElementById('loadQuizSettingsSection')) {
+    var section = document.createElement('div');
+    section.id = 'loadQuizSettingsSection';
+    section.style.cssText = "margin:8px 16px;padding:12px;background:rgba(0,240,255,0.06);border:1px solid rgba(0,240,255,0.25);border-radius:10px;box-shadow:0 0 10px rgba(0,240,255,0.1);";
+    section.innerHTML =
+      '<div style="font-size:11px;font-weight:800;color:var(--cosmic-cyan);margin-bottom:8px;letter-spacing:0.5px;">🎴 ロード画面クイズ設定</div>' +
+      '<div style="font-size:10px;color:var(--text-sub);margin-bottom:6px;">出題元の単語帳</div>' +
+      '<select id="loadQuizBookSelect" class="search-input" style="width:100%;margin:0;height:36px;"></select>' +
+      '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:6px;line-height:1.4;">ロード中の単語クイズが、選んだ単語帳から出題されます。答えはその単語帳の理解度に保存されます。</div>';
+    var anchor = null;
+    var children = sidebar.children;
+    for (var i = 0; i < children.length; i++) {
+      if ((children[i].textContent || '').indexOf('ログアウト') !== -1) { anchor = children[i]; break; }
+    }
+    if (anchor) sidebar.insertBefore(section, anchor);
+    else sidebar.appendChild(section);
+  }
+  window.updateLoadQuizBookSelect();
+};
+
+window.updateLoadQuizBookSelect = function() {
+  var sel = document.getElementById('loadQuizBookSelect');
+  if (!sel) return;
+  var current = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
+  var html = '<option value="auto">自動（今の単語帳）</option>';
+  var pool = (typeof textbooksPool !== 'undefined' && textbooksPool) ? textbooksPool : [];
+  pool.forEach(function(b){ html += '<option value="' + b.id + '">' + b.name + '</option>'; });
+  sel.innerHTML = html;
+  sel.value = current;
+  sel.onchange = function() {
+    localStorage.setItem('core_v4_loadquiz_book', sel.value);
+    if (typeof window.showToast === 'function') window.showToast('🎴 ロードクイズの出題元を設定しました', 'ok');
+  };
+};
+
+var __prevLoadLocalStateForQuiz6 = window.loadLocalState;
+window.loadLocalState = async function() {
+  var r = __prevLoadLocalStateForQuiz6 ? await __prevLoadLocalStateForQuiz6.apply(this, arguments) : undefined;
+  window.injectLoadQuizSettings();
+  return r;
+};
+
+(function initPatch6() {
+  function boot() { window.injectLoadQuizSettings(); }
+  if (document.readyState !== 'loading') { setTimeout(boot, 400); }
+  else { document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 400); }); }
+})();
+
+console.log('🎴 第6回パッチ（ロードクイズ完全修正：増殖根絶＋スコアバー削除＋番号削除＋出題元選択）適用完了');
+// ==========================================================================
+// 🛡️ 第7回パッチ：Firestore invalid-argument 根絶
+//    ・保存データから undefined / NaN / Infinity / 関数 / 循環参照 を自動除去
+//    ・生 Date を ISO 文字列へ正規化
+//    ・理解度保存の教材キー(パス)を安全化
+//    ・window.fbSetDoc を横断ラップし、全保存を自動で掃除
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【0】Firestore 用に値を掃除する（再帰・循環参照対応）
+// ------------------------------------------------------------------
+window.__sanitizeForFirestore = function sanitize(val, seen) {
+  if (val === null) return null;
+  if (val === undefined) return undefined;
+  var t = typeof val;
+  if (t === "function" || t === "symbol") return undefined;
+  if (t === "number") {
+    if (isNaN(val) || !isFinite(val)) return null;
+    return val;
+  }
+  if (t === "string" || t === "boolean") return val;
+  if (val instanceof Date) {
+    var iso = val.toISOString();
+    return isNaN(val.getTime()) ? null : iso;
+  }
+  if (t === "object") {
+    if (!seen) { try { seen = new WeakSet(); } catch (e) { seen = null; } }
+    if (seen) {
+      try { if (seen.has(val)) return Array.isArray(val) ? [] : null; } catch (e) {}
+      try { seen.add(val); } catch (e) {}
+    }
+    if (Array.isArray(val)) {
+      var arr = [];
+      for (var i = 0; i < val.length; i++) {
+        var av = sanitize(val[i], seen);
+        arr.push(av === undefined ? null : av);
+      }
+      return arr;
+    }
+    var obj = {};
+    var keys = Object.keys(val);
+    for (var k = 0; k < keys.length; k++) {
+      var key = keys[k];
+      var cv = sanitize(val[key], seen);
+      if (cv !== undefined) obj[key] = cv;
+    }
+    return obj;
+  }
+  return undefined;
+};
+
+// ------------------------------------------------------------------
+// 【1】教材キー(パス)を安全化するヘルパー
+// ------------------------------------------------------------------
+window.__safeBookKey = function(raw) {
+  var key = (typeof raw === "string") ? raw.trim() : "";
+  if (!key) key = "default";
+  if (key.indexOf("/") !== -1) key = key.replace(/\//g, "_");
+  return key;
+};
+
+// ------------------------------------------------------------------
+// 【2】理解度保存を上書き（パス安全化＋掃除＋リトライ）
+// ------------------------------------------------------------------
+window.saveUserVocabProgress = async function() {
+  if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
+  if (typeof myId === "undefined" || !myId) return;
+  var bookKey = window.__safeBookKey(currentTextbook || "default");
+  currentUserVocabProgress = window.extractUserProgressFromVocabList();
+  var payload = { words: currentUserVocabProgress, updatedAt: new Date().toISOString() };
+  try {
+    localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
+  } catch (e) {
+    console.error("saveUserVocabProgress ローカル保存エラー:", e);
+  }
+  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
+    try {
+      var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+      var safe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(payload) : payload;
+      if (typeof window.fbSetDocWithRetry === "function") {
+        await window.fbSetDocWithRetry(ref, safe);
+      } else {
+        await window.fbSetDoc(ref, safe);
+      }
+    } catch (e) {
+      console.error("saveUserVocabProgress Firebase保存エラー（ローカルには保存済み）:", e);
+    }
+  }
+  userStats.vocab_fixed = vocabList.filter(function(w) {
+    return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
+  }).length;
+};
+
+// ------------------------------------------------------------------
+// 【3】window.fbSetDoc を横断ラップ（全保存を自動で掃除）
+//     ※Firebase 初期化のタイミングに左右されず、複数回試行して確実にフック
+// ------------------------------------------------------------------
+window.__installFbSetDocSanitize = function() {
+  if (window.__fbSetDocSanitized) return;
+  if (typeof window.fbSetDoc !== "function") return;
+  var orig = window.fbSetDoc;
+  if (orig && orig.__sanitizedWrap) return;
+  var wrapped = function(ref, data, options) {
+    var safe = data;
+    try {
+      if (window.__sanitizeForFirestore) safe = window.__sanitizeForFirestore(data);
+    } catch (e) {}
+    return orig.call(this, ref, safe, options);
+  };
+  wrapped.__sanitizedWrap = true;
+  window.fbSetDoc = wrapped;
+  window.__fbSetDocSanitized = true;
+  console.log("🛡️ fbSetDoc 掃除ラップを装着しました");
+};
+
+window.__installFbSetDocSanitize();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", function() { window.__installFbSetDocSanitize(); });
+} else {
+  setTimeout(window.__installFbSetDocSanitize, 0);
+}
+setTimeout(window.__installFbSetDocSanitize, 800);
+setTimeout(window.__installFbSetDocSanitize, 2500);
+
+console.log("🛡️ 第7回パッチ（Firestore invalid-argument 根絶：undefined/NaN 除去＋パス安全化＋横断ラップ）適用完了");
+// ==========================================================================
+// 🎴 第8回パッチ：ロード画面クイズ 完全自己完結版
+//    ① 耳の増殖を根絶（枠に生涯1リスナー＝委譲方式）→ 1スワイプ=1回答
+//    ② スコアバー削除 ③ カード番号削除
+//    ④ 出題元の単語帳を選択（設定画面） ⑤ 記録B（⚪︎△✕全部をその単語帳へ）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【0】スタイル注入（自己完結：主要スタイルをここで確定）
+// ------------------------------------------------------------------
+(function injectPatch8Css() {
+  if (document.getElementById('patch8Css')) return;
+  var st = document.createElement('style');
+  st.id = 'patch8Css';
+  st.textContent = [
+    '#penguinLoadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;',
+    'background:radial-gradient(circle at 50% 38%, rgba(30,27,75,0.97) 0%, rgba(15,23,42,0.985) 72%);',
+    'z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;',
+    'opacity:0;transition:opacity .25s ease;overflow:hidden;}',
+    '#penguinLoadingOverlay.penguin-visible{opacity:1;}',
+    '#penguinLoadingOverlay.penguin-fade-out{opacity:0;}',
+    '.lq-spark{position:absolute;width:4px;height:4px;border-radius:50%;pointer-events:none;opacity:0;animation:lqSparkFloat linear infinite;}',
+    '@keyframes lqSparkFloat{0%{transform:translateY(20px) scale(.6);opacity:0;}20%{opacity:.9;}80%{opacity:.6;}100%{transform:translateY(-90vh) scale(1);opacity:0;}}',
+    '.lq-area{display:flex;flex-direction:column;align-items:center;gap:14px;z-index:2;}',
+    '.lq-card-wrap{position:relative;width:230px;height:230px;perspective:1000px;touch-action:none;-webkit-tap-highlight-color:transparent;}',
+    '.lq-card{position:absolute;width:100%;height:100%;transform-style:preserve-3d;transition:transform .4s cubic-bezier(.25,1,.5,1);}',
+    '.lq-card.flipped{transform:rotateY(180deg);}',
+    '.lq-face{position:absolute;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden;',
+    'border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:26px;box-sizing:border-box;',
+    'color:#fff;text-align:center;border:2px solid rgba(255,255,255,.4);',
+    'background:radial-gradient(circle at 30% 28%, rgba(255,255,255,.14) 0%, rgba(0,240,255,.06) 55%, rgba(192,132,252,.08) 88%);',
+    'box-shadow:inset 0 12px 22px rgba(255,255,255,.28), inset 0 -10px 18px rgba(0,0,0,.25), 0 8px 24px rgba(0,0,0,.5), 0 0 22px rgba(0,240,255,.22);',
+    'transition:border-color .15s ease, box-shadow .15s ease;}',
+    '.lq-face.back{transform:rotateY(180deg);}',
+    '.lq-word{font-size:24px;font-weight:900;font-family:"Times New Roman",serif;word-break:break-word;line-height:1.25;text-shadow:0 1px 4px rgba(0,0,0,.8);}',
+    '.lq-meaning{font-size:15px;font-weight:700;line-height:1.5;word-break:break-word;color:#F1F5F9;text-shadow:0 1px 3px rgba(0,0,0,.8);}',
+    '.lq-hint{font-size:10px;color:rgba(255,255,255,.5);font-weight:700;letter-spacing:.5px;z-index:2;}',
+    '.lq-card-wrap.glow-ok .lq-face{border-color:#10B981;box-shadow:0 0 30px rgba(16,185,129,.6), inset 0 0 20px rgba(16,185,129,.3);}',
+    '.lq-card-wrap.glow-bad .lq-face{border-color:#EF4444;box-shadow:0 0 30px rgba(239,68,68,.6), inset 0 0 20px rgba(239,68,68,.3);}',
+    '.lq-card-wrap.glow-so .lq-face{border-color:#F59E0B;box-shadow:0 0 30px rgba(245,158,11,.6), inset 0 0 20px rgba(245,158,11,.3);}',
+    '.lq-book-label{font-size:10px;font-weight:800;color:var(--cosmic-purple-light);background:rgba(192,132,252,0.1);border:1px solid rgba(192,132,252,0.3);padding:3px 10px;border-radius:12px;letter-spacing:0.5px;margin-top:2px;box-shadow:0 0 8px rgba(192,132,252,0.2);text-shadow:0 0 6px rgba(192,132,252,0.4);}',
+    '.penguin-loading-text{font-size:13px;font-weight:800;color:#00F0FF;letter-spacing:1px;z-index:2;text-shadow:0 0 10px rgba(0,240,255,.5);display:flex;align-items:center;gap:2px;}',
+    '.pg-dot{animation:lqDotBlink 1.2s infinite;}',
+    '.pg-dot:nth-of-type(2){animation-delay:.2s;}.pg-dot:nth-of-type(3){animation-delay:.4s;}',
+    '@keyframes lqDotBlink{0%,80%,100%{opacity:.2;}40%{opacity:1;}}'
+  ].join('\n');
+  document.head.appendChild(st);
+})();
+
+// ------------------------------------------------------------------
+// 【1】共有状態（今のカード／退避した答え／出題元）
+// ------------------------------------------------------------------
+window.__loadQuiz = window.__loadQuiz || { active:false, words:[], index:0, answers:[], ok:0, bad:0, so:0, bookId:null };
+window.__lqCurrent = window.__lqCurrent || null; // { word, ov }
+
+// ------------------------------------------------------------------
+// 【2】ローディング描画（★スコアバー無し／クイズ枠＋ヒント＋出題元ラベルのみ）
+// ------------------------------------------------------------------
+window.__renderPenguinOverlay = function(message) {
+  if (window.__pgLoad.overlay) return;
+  var ov = document.createElement('div');
+  ov.id = 'penguinLoadingOverlay';
+  var sparks = '';
+  for (var i = 0; i < 14; i++) {
+    var left = Math.round(Math.random() * 100);
+    var delay = (Math.random() * 6).toFixed(2);
+    var dur = (5 + Math.random() * 6).toFixed(2);
+    var c = Math.random() < 0.5 ? 'rgba(0,240,255,.8)' : 'rgba(192,132,252,.8)';
+    sparks += '<span class="lq-spark" style="left:' + left + '%;bottom:-10px;background:' + c + ';animation-delay:' + delay + 's;animation-duration:' + dur + 's;"></span>';
+  }
+  ov.innerHTML =
+    sparks +
+    '<div class="lq-area">' +
+      '<div class="lq-card-wrap" id="lqCardWrap" style="display:none;"></div>' +
+      '<div class="lq-hint" id="lqHint" style="display:none;">タップでめくる ／ 右⚪︎ ・ 左✕ ・ 上△</div>' +
+    '</div>' +
+    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
+      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
+  document.body.appendChild(ov);
+  window.__pgLoad.overlay = ov;
+  requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
+  window.__initLoadQuiz(ov);
+};
+
+// ------------------------------------------------------------------
+// 【3】出題元ラベル表示
+// ------------------------------------------------------------------
+window.__setLoadQuizBookLabel = function(ov, name, show) {
+  var label = document.getElementById('lqBookLabel');
+  if (!label) {
+    label = document.createElement('div');
+    label.id = 'lqBookLabel';
+    label.className = 'lq-book-label';
+    var area = ov.querySelector('.lq-area');
+    if (!area) return;
+    area.appendChild(label);
+  }
+  if (show && name) { label.textContent = '📔 ' + name; label.style.display = 'block'; }
+  else { label.style.display = 'none'; }
+};
+
+// ------------------------------------------------------------------
+// 【4】クイズ初期化（出題元選択込み）
+// ------------------------------------------------------------------
+window.__initLoadQuiz = function(ov) {
+  var q = window.__loadQuiz;
+  q.answers = []; q.ok = 0; q.bad = 0; q.so = 0; q.index = 0; q.words = []; q.active = false; q.bookId = null;
+  window.__lqCurrent = null;
+  var wrapEl = ov.querySelector('#lqCardWrap');
+  var hintEl = ov.querySelector('#lqHint');
+  var hideAll = function() {
+    q.active = false;
+    if (wrapEl) wrapEl.style.display = 'none';
+    if (hintEl) hintEl.style.display = 'none';
+    window.__setLoadQuizBookLabel(ov, '', false);
+  };
+  var setup = function(words, bookId, name) {
+    if (!words || words.length === 0) { hideAll(); return; }
+    q.words = words.slice().sort(function(){ return Math.random() - 0.5; }).slice(0, 20);
+    q.active = true;
+    q.bookId = bookId;
+    if (wrapEl) { wrapEl.style.display = 'block'; window.__bindLoadQuizCardOnce(wrapEl); }
+    if (hintEl) hintEl.style.display = 'block';
+    window.__setLoadQuizBookLabel(ov, name, true);
+    window.__renderLoadQuizCard(ov);
+  };
+  var sel = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
+  var curBook = (typeof currentTextbook !== 'undefined') ? currentTextbook : 'default';
+  var useCurrent = (sel === 'auto' || sel === '' || sel === curBook);
+  if (useCurrent) {
+    var name = '今の単語帳';
+    if (typeof textbooksPool !== 'undefined' && textbooksPool) {
+      var cb = textbooksPool.find(function(b){ return b.id === curBook; });
+      if (cb) name = cb.name;
+    }
+    setup((typeof vocabList !== 'undefined' ? vocabList : []), curBook, name);
+  } else {
+    var book = null;
+    if (typeof textbooksPool !== 'undefined' && textbooksPool) {
+      book = textbooksPool.find(function(b){ return b.id === sel; });
+    }
+    var bname = book ? book.name : sel;
+    window.__getBookMasterWords(sel).then(function(master){
+      if (window.__pgLoad.overlay !== ov) return;
+      var words = (typeof window.migrateVocabData === 'function') ? window.migrateVocabData((master || []).map(function(w){ return Object.assign({}, w); })) : (master || []);
+      setup(words, sel, bname);
+    }).catch(function(){
+      if (window.__pgLoad.overlay === ov) hideAll();
+    });
+  }
+};
+
+// ------------------------------------------------------------------
+// 【5】カード描画（★番号なし・現在の単語を共有状態へ）
+// ------------------------------------------------------------------
+window.__renderLoadQuizCard = function(ov) {
+  var q = window.__loadQuiz;
+  if (!q.active || q.words.length === 0) return;
+  if (q.index >= q.words.length) {
+    q.words = q.words.sort(function(){ return Math.random() - 0.5; });
+    q.index = 0;
+  }
+  var w = q.words[q.index];
+  var meaning = (w.meanings && w.meanings[0]) ? w.meanings[0].text : (w.meaning || '');
+  var wrap = ov.querySelector('#lqCardWrap');
+  if (!wrap) return;
+  wrap.className = 'lq-card-wrap';
+  wrap.style.display = 'block';
+  wrap.style.transform = '';
+  wrap.style.opacity = '1';
+  wrap.style.transition = '';
+  wrap.innerHTML =
+    '<div class="lq-card" id="lqCard">' +
+      '<div class="lq-face front"><div class="lq-word">' + w.word + '</div></div>' +
+      '<div class="lq-face back"><div class="lq-meaning">' + meaning + '</div></div>' +
+    '</div>';
+  window.__lqCurrent = { word: w, ov: ov };
+  window.__bindLoadQuizCardOnce(wrap);
+};
+
+// ------------------------------------------------------------------
+// 【6】★増殖根絶：枠に“生涯1組だけ”リスナーを貼る（委譲方式）
+//     現在の単語は window.__lqCurrent から参照する
+// ------------------------------------------------------------------
+window.__bindLoadQuizCardOnce = function(wrap) {
+  if (!wrap || wrap.dataset.lqBound === '1') return;
+  wrap.dataset.lqBound = '1';
+  var startX = 0, startY = 0, dragging = false;
+  wrap.addEventListener('touchstart', function(e) {
+    if (!window.__lqCurrent) return;
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY; dragging = true;
+    wrap.style.transition = 'none';
+  }, { passive: true });
+  wrap.addEventListener('touchmove', function(e) {
+    if (!dragging || !window.__lqCurrent) return;
+    var dx = e.touches[0].clientX - startX;
+    var dy = e.touches[0].clientY - startY;
+    wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (dx * 0.05) + 'deg)';
+    wrap.classList.remove('glow-ok','glow-bad','glow-so');
+    if (dy < -15 && Math.abs(dy) > Math.abs(dx)) wrap.classList.add('glow-so');
+    else if (dx > 15) wrap.classList.add('glow-ok');
+    else if (dx < -15) wrap.classList.add('glow-bad');
+  }, { passive: true });
+  wrap.addEventListener('touchend', function(e) {
+    if (!dragging) return; dragging = false;
+    var dx = e.changedTouches[0].clientX - startX;
+    var dy = e.changedTouches[0].clientY - startY;
+    wrap.classList.remove('glow-ok','glow-bad','glow-so');
+    var cur = window.__lqCurrent;
+    if (!cur || !cur.word) return;
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      wrap.style.transition = 'transform .2s ease';
+      wrap.style.transform = '';
+      var card = wrap.querySelector('#lqCard');
+      if (card) card.classList.toggle('flipped');
+    } else if (dx > 60) {
+      window.__answerLoadQuiz(cur.ov, wrap, cur.word, 'ok', dx, dy);
+    } else if (dx < -60) {
+      window.__answerLoadQuiz(cur.ov, wrap, cur.word, 'bad', dx, dy);
+    } else if (dy < -60) {
+      window.__answerLoadQuiz(cur.ov, wrap, cur.word, 'so', dx, dy);
+    } else {
+      wrap.style.transition = 'transform .25s ease';
+      wrap.style.transform = '';
+    }
+  });
+};
+
+// ------------------------------------------------------------------
+// 【7】回答処理（記録B：⚪︎△全部を退避）
+// ------------------------------------------------------------------
+window.__answerLoadQuiz = function(ov, wrap, w, status, dx, dy) {
+  var q = window.__loadQuiz;
+  q.answers.push({ num: w.num, word: w.word, status: status });
+  if (status === 'ok') q.ok++;
+  else if (status === 'bad') q.bad++;
+  else if (status === 'so') q.so++;
+  window.__lqCurrent = null; // 二重反応を物理的に遮断
+  wrap.style.transition = 'transform .35s cubic-bezier(.1,.8,.25,1), opacity .35s ease';
+  wrap.style.transform = 'translate(' + (dx * 2.2) + 'px,' + (dy * 2.2 - 40) + 'px) scale(.5) rotate(' + (dx * 0.08) + 'deg)';
+  wrap.style.opacity = '0';
+  q.index++;
+  setTimeout(function() {
+    if (window.__pgLoad.overlay === ov) window.__renderLoadQuizCard(ov);
+  }, 200);
+};
+
+// ------------------------------------------------------------------
+// 【8】指定教材のマスター単語取得（キャッシュ→ローカル→Firebase）
+// ------------------------------------------------------------------
+window.__getBookMasterWords = async function(bookId) {
+  var master = null;
+  try { if (typeof textbooksCacheMap !== 'undefined' && textbooksCacheMap && textbooksCacheMap[bookId]) master = textbooksCacheMap[bookId]; } catch(e){}
+  if (!master) {
+    try { var lc = localStorage.getItem('core_v4_cache_' + bookId); if (lc) master = JSON.parse(lc); } catch(e){}
+  }
+  if (!master && window.db && window.fbGetDoc && window.fbDoc) {
+    try {
+      var ref = window.fbDoc(window.db, 'shared', 'vocab_' + bookId);
+      var snap = await window.fbGetDoc(ref);
+      if (snap.exists() && snap.data() && snap.data().custom_words) master = snap.data().custom_words;
+    } catch(e){}
+  }
+  if (!master) master = [];
+  if (typeof window.stripVocabProgressFromWords === 'function') master = window.stripVocabProgressFromWords(master);
+  return master;
+};
+
+// ------------------------------------------------------------------
+// 【9】別教材の理解度へ反映して保存（記録B）
+// ------------------------------------------------------------------
+window.__applyQuizAnswersToBook = async function(bookId, answers) {
+  var master = await window.__getBookMasterWords(bookId);
+  if (!master || master.length === 0) return 0;
+  var words = (typeof window.migrateVocabData === 'function') ? window.migrateVocabData(master.map(function(w){ return Object.assign({}, w); })) : master.map(function(w){ return Object.assign({}, w); });
+  var progress = {};
+  var pkey = (typeof window.getVocabProgressStorageKey === 'function') ? window.getVocabProgressStorageKey(bookId) : ('core_v4_user_vocab_progress_' + myId + '_' + bookId);
+  try { progress = JSON.parse(localStorage.getItem(pkey)) || {}; } catch(e){}
+  if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
+    try {
+      var pref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
+      var psnap = await window.fbGetDoc(pref);
+      if (psnap.exists() && psnap.data() && psnap.data().words) progress = psnap.data().words;
+    } catch(e){}
+  }
+  var sig = (typeof window.buildWordSignature === 'function') ? window.buildWordSignature : function(w){ return String(w.num)+'::'+String(w.word||'').toLowerCase(); };
+  words.forEach(function(w){
+    var key = String(w.num);
+    var p = progress[key];
+    w.status = 'none'; w.history = [];
+    w.meanings = (w.meanings || []).map(function(m){ return { id:m.id, text:m.text, status:'none', history:[] }; });
+    if (p && p.sig === sig(w)) {
+      w.status = p.status || 'none';
+      w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
+      w.meanings = w.meanings.map(function(m){
+        var mp = p.meanings ? p.meanings[m.id] : null;
+        if (mp) return { id:m.id, text:m.text, status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[] };
+        return m;
+      });
+    }
+  });
+  var applied = 0;
+  answers.forEach(function(ans){
+    var w = words.find(function(v){ return String(v.num) === String(ans.num); });
+    if (w && String(w.word) === String(ans.word)) {
+      w.status = ans.status;
+      if (w.meanings && w.meanings.length > 0) {
+        w.meanings[0].status = ans.status;
+        if (!w.meanings[0].history) w.meanings[0].history = [];
+        w.meanings[0].history.push(ans.status);
+      }
+      if (!w.history) w.history = [];
+      w.history.push(ans.status);
+      applied++;
+    }
+  });
+  if (applied === 0) return 0;
+  var newProgress = {};
+  words.forEach(function(w){
+    var key = String(w.num);
+    var wp = { sig: sig(w), status: w.status || 'none', history: Array.isArray(w.history) ? w.history.slice(-20) : [], meanings: {} };
+    (w.meanings || []).forEach(function(m){ wp.meanings[m.id] = { status: m.status || 'none', history: Array.isArray(m.history) ? m.history.slice(-20) : [] }; });
+    newProgress[key] = wp;
+  });
+  try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch(e){}
+  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
+    try {
+      var sref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
+      var payload = { words: newProgress, updatedAt: new Date().toISOString() };
+      if (typeof window.fbSetDocWithRetry === 'function') await window.fbSetDocWithRetry(sref, payload);
+      else await window.fbSetDoc(sref, payload);
+    } catch(e){}
+  }
+  return applied;
+};
+
+// ------------------------------------------------------------------
+// 【10】クイズ終了：退避した答えを選んだ単語帳へ反映（記録B）
+// ------------------------------------------------------------------
+window.__finalizeLoadQuiz = function() {
+  var q = window.__loadQuiz;
+  if (!q) return;
+  var answers = (q.answers || []).slice();
+  q.answers = [];
+  q.active = false;
+  window.__lqCurrent = null;
+  if (answers.length > 0) {
+    var curBook = (typeof currentTextbook !== 'undefined') ? currentTextbook : 'default';
+    var bookId = q.bookId || curBook;
+    if (bookId === curBook) {
+      var applied = 0;
+      answers.forEach(function(ans){
+        var w = (typeof vocabList !== 'undefined' ? vocabList : []).find(function(v){ return String(v.num) === String(ans.num); });
+        if (w && String(w.word) === String(ans.word)) {
+          w.status = ans.status;
+          if (w.meanings && w.meanings.length > 0) {
+            w.meanings[0].status = ans.status;
+            if (!w.meanings[0].history) w.meanings[0].history = [];
+            w.meanings[0].history.push(ans.status);
+          }
+          if (!w.history) w.history = [];
+          w.history.push(ans.status);
+          applied++;
+        }
+      });
+      if (applied > 0) {
+        if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(300);
+        if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(300);
+      }
+    } else {
+      window.__applyQuizAnswersToBook(bookId, answers);
+    }
+  }
+};
+
+// ------------------------------------------------------------------
+// 【11】ロード終了時に答えを確定（二重呼び出し防止ガード付き）
+// ------------------------------------------------------------------
+var __prevActuallyHidePenguinForQuiz8 = window.__actuallyHidePenguin;
+window.__actuallyHidePenguin = function() {
+  if (!window.__lqFinalized) {
+    window.__lqFinalized = true;
+    try { window.__finalizeLoadQuiz(); } catch(e){}
+    setTimeout(function(){ window.__lqFinalized = false; }, 50);
+  }
+  if (typeof __prevActuallyHidePenguinForQuiz8 === 'function') __prevActuallyHidePenguinForQuiz8();
+};
+
+// ------------------------------------------------------------------
+// 【12】設定画面：出題元の単語帳を選択
+// ------------------------------------------------------------------
+window.injectLoadQuizSettings = function() {
+  var sidebar = document.getElementById('sidebarMenu');
+  if (!sidebar) return;
+  if (!document.getElementById('loadQuizSettingsSection')) {
+    var section = document.createElement('div');
+    section.id = 'loadQuizSettingsSection';
+    section.style.cssText = "margin:8px 16px;padding:12px;background:rgba(0,240,255,0.06);border:1px solid rgba(0,240,255,0.25);border-radius:10px;box-shadow:0 0 10px rgba(0,240,255,0.1);";
+    section.innerHTML =
+      '<div style="font-size:11px;font-weight:800;color:var(--cosmic-cyan);margin-bottom:8px;letter-spacing:0.5px;">🎴 ロード画面クイズ設定</div>' +
+      '<div style="font-size:10px;color:var(--text-sub);margin-bottom:6px;">出題元の単語帳</div>' +
+      '<select id="loadQuizBookSelect" class="search-input" style="width:100%;margin:0;height:36px;"></select>' +
+      '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:6px;line-height:1.4;">ロード中の単語クイズが、選んだ単語帳から出題されます。答えはその単語帳の理解度に保存されます。</div>';
+    var anchor = null;
+    var children = sidebar.children;
+    for (var i = 0; i < children.length; i++) {
+      if ((children[i].textContent || '').indexOf('ログアウト') !== -1) { anchor = children[i]; break; }
+    }
+    if (anchor) sidebar.insertBefore(section, anchor);
+    else sidebar.appendChild(section);
+  }
+  window.updateLoadQuizBookSelect();
+};
+
+window.updateLoadQuizBookSelect = function() {
+  var sel = document.getElementById('loadQuizBookSelect');
+  if (!sel) return;
+  var current = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
+  var html = '<option value="auto">自動（今の単語帳）</option>';
+  var pool = (typeof textbooksPool !== 'undefined' && textbooksPool) ? textbooksPool : [];
+  pool.forEach(function(b){ html += '<option value="' + b.id + '">' + b.name + '</option>'; });
+  sel.innerHTML = html;
+  sel.value = current;
+  sel.onchange = function() {
+    localStorage.setItem('core_v4_loadquiz_book', sel.value);
+    if (typeof window.showToast === 'function') window.showToast('🎴 ロードクイズの出題元を設定しました', 'ok');
+  };
+};
+
+var __prevLoadLocalStateForQuiz8 = window.loadLocalState;
+window.loadLocalState = async function() {
+  var r = __prevLoadLocalStateForQuiz8 ? await __prevLoadLocalStateForQuiz8.apply(this, arguments) : undefined;
+  window.injectLoadQuizSettings();
+  return r;
+};
+
+(function initPatch8() {
+  function boot() { window.injectLoadQuizSettings(); }
+  if (document.readyState !== 'loading') { setTimeout(boot, 400); }
+  else { document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 400); }); }
+})();
+
+console.log('🎴 第8回パッチ（ロードクイズ完全版：増殖根絶＋スコアバー削除＋番号削除＋出題元選択＋記録B）適用完了');
+// ==========================================================================
+// 🗜️ 第9回パッチ：Firestore index entry 上限エラー根絶
+//    vocabProgress を JSON 文字列で保存（index entry 数を激減）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【1】saveUserVocabProgress 上書き（wordsJson 形式で保存）
+// ------------------------------------------------------------------
+window.saveUserVocabProgress = async function() {
+  if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
+  if (typeof myId === "undefined" || !myId) return;
+  var bookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : "default";
+  currentUserVocabProgress = window.extractUserProgressFromVocabList();
+  
+  // ローカル保存（従来通りオブジェクト形式）
+  try {
+    localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
+  } catch (e) {}
+  
+  // Firebase保存（JSON文字列化して index entry を激減）
+  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
+    try {
+      var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+      var payload = {
+        wordsJson: JSON.stringify(currentUserVocabProgress),
+        updatedAt: new Date().toISOString()
+      };
+      if (typeof window.fbSetDocWithRetry === "function") {
+        await window.fbSetDocWithRetry(ref, payload);
+      } else {
+        await window.fbSetDoc(ref, payload);
+      }
+    } catch (e) {
+      console.error("saveUserVocabProgress Firebase保存エラー（ローカルには保存済み）:", e);
+    }
+  }
+  
+  userStats.vocab_fixed = vocabList.filter(function(w) {
+    return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
+  }).length;
+};
+
+// ------------------------------------------------------------------
+// 【2】loadUserVocabProgress 上書き（新形式 wordsJson 優先、旧形式 words も対応）
+// ------------------------------------------------------------------
+window.loadUserVocabProgress = async function(bookKey) {
+  bookKey = bookKey || (typeof currentTextbook !== 'undefined' ? currentTextbook : "default");
+  currentUserVocabProgress = {};
+  if (typeof myId === "undefined" || !myId) return;
+  
+  // ローカルをベースに読み込み
+  try {
+    var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
+    if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
+  } catch (e) {}
+  
+  if (myId === "GUEST-000" || !window.db || !window.fbGetDoc || !window.fbDoc) return;
+  
+  // Firebase から読み込み（新形式 wordsJson 優先、旧形式 words も後方互換）
+  try {
+    var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+    var snap = await window.fbGetDoc(ref);
+    if (snap.exists() && snap.data()) {
+      var data = snap.data();
+      if (data.wordsJson) {
+        currentUserVocabProgress = JSON.parse(data.wordsJson);
+      } else if (data.words) {
+        currentUserVocabProgress = data.words;
+      }
+    }
+  } catch (e) {
+    // Firebase 読み込み失敗時はローカルデータで継続
+  }
+};
+
+// ------------------------------------------------------------------
+// 【3】__applyQuizAnswersToBook 上書き（ロードクイズの別教材保存も wordsJson に）
+// ------------------------------------------------------------------
+window.__applyQuizAnswersToBook = async function(bookId, answers) {
+  var master = await window.__getBookMasterWords(bookId);
+  if (!master || master.length === 0) return 0;
+  var words = (typeof window.migrateVocabData === 'function') ? window.migrateVocabData(master.map(function(w) { return Object.assign({}, w); })) : master.map(function(w) { return Object.assign({}, w); });
+  var progress = {};
+  var pkey = (typeof window.getVocabProgressStorageKey === 'function') ? window.getVocabProgressStorageKey(bookId) : ('core_v4_user_vocab_progress_' + myId + '_' + bookId);
+  try { progress = JSON.parse(localStorage.getItem(pkey)) || {}; } catch (e) {}
+  if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
+    try {
+      var pref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
+      var psnap = await window.fbGetDoc(pref);
+      if (psnap.exists() && psnap.data()) {
+        var pdata = psnap.data();
+        if (pdata.wordsJson) { progress = JSON.parse(pdata.wordsJson); }
+        else if (pdata.words) { progress = pdata.words; }
+      }
+    } catch (e) {}
+  }
+  var sig = (typeof window.buildWordSignature === 'function') ? window.buildWordSignature : function(w) { return String(w.num) + '::' + String(w.word || '').toLowerCase(); };
+  words.forEach(function(w) {
+    var key = String(w.num);
+    var p = progress[key];
+    w.status = 'none';
+    w.history = [];
+    w.meanings = (w.meanings || []).map(function(m) { return { id: m.id, text: m.text, status: 'none', history: [] }; });
+    if (p && p.sig === sig(w)) {
+      w.status = p.status || 'none';
+      w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
+      w.meanings = w.meanings.map(function(m) {
+        var mp = p.meanings ? p.meanings[m.id] : null;
+        if (mp) return { id: m.id, text: m.text, status: mp.status || 'none', history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
+        return m;
+      });
+    }
+  });
+  var applied = 0;
+  answers.forEach(function(ans) {
+    var w = words.find(function(v) { return String(v.num) === String(ans.num); });
+    if (w && String(w.word) === String(ans.word)) {
+      w.status = ans.status;
+      if (w.meanings && w.meanings.length > 0) {
+        w.meanings[0].status = ans.status;
+        if (!w.meanings[0].history) w.meanings[0].history = [];
+        w.meanings[0].history.push(ans.status);
+      }
+      if (!w.history) w.history = [];
+      w.history.push(ans.status);
+      applied++;
+    }
+  });
+  if (applied === 0) return 0;
+  var newProgress = {};
+  words.forEach(function(w) {
+    var key = String(w.num);
+    var wp = { sig: sig(w), status: w.status || 'none', history: Array.isArray(w.history) ? w.history.slice(-20) : [], meanings: {} };
+    (w.meanings || []).forEach(function(m) { wp.meanings[m.id] = { status: m.status || 'none', history: Array.isArray(m.history) ? m.history.slice(-20) : [] }; });
+    newProgress[key] = wp;
+  });
+  try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch (e) {}
+  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
+    try {
+      var sref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
+      var payload = { wordsJson: JSON.stringify(newProgress), updatedAt: new Date().toISOString() };
+      if (typeof window.fbSetDocWithRetry === 'function') await window.fbSetDocWithRetry(sref, payload);
+      else await window.fbSetDoc(sref, payload);
+    } catch (e) {}
+  }
+  return applied;
+};
+
+console.log('🗜️ 第9回パッチ（Firestore index entry 上限エラー根絶：wordsJson 形式）適用完了');
