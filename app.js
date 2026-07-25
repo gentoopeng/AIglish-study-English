@@ -4253,7 +4253,7 @@ window.swipeFlashcard = function(direction, finalDx, finalDy) {
   card.dataset.swiped = "1";
   var currentWord = flashcardOriginQueue[flashcardCurrentIndex];
   if (!currentWord) return;
-  var cleanKey = String(currentWord.en || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  var cleanKey = String(currentWord.en || "").toLowerCase().replace(/[^a-z0-9\u0080-\uffff]/g, "");
   var status = "none";
   var rect = card.getBoundingClientRect();
   var releaseX = rect.left + rect.width / 2;
@@ -4306,7 +4306,10 @@ window.swipeFlashcard = function(direction, finalDx, finalDy) {
   totalExp += 1;
   wordMemory[cleanKey] = status;
   localStorage.setItem("wordMemory", JSON.stringify(wordMemory));
-  var vocabMatch = vocabList.find(function(v) { return v.word.toLowerCase() === cleanKey; });
+  var vocabMatch = vocabList.find(function(v) { return String(v.num) === String(currentWord.num); });
+if (!vocabMatch) {
+vocabMatch = vocabList.find(function(v) { return v.word.toLowerCase() === cleanKey; });
+}
   if (vocabMatch) {
     vocabMatch.status = status;
     if (vocabMatch.meanings && vocabMatch.meanings.length > 0) {
