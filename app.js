@@ -11945,3 +11945,122 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     
     console.log('📊 第15回パッチ（勉強時間グラフ同期＋復元＋秒表示＋週最大値基準）適用完了');
 })();
+// ==========================================================================
+// 📊 第16回パッチ：勉強時間グラフ“描画トリガー”根治
+//    第15回パッチの取りこぼし2点を、既存コード0行変更で是正する
+//    ① ホーム画面でもグラフを毎秒再描画（shouldCount 非依存ウォッチドッグ）
+//       → 本日表示は育つのにグラフが全0で張り付く現象を解消
+//    ② 日跨ぎリセットがクラウド復元値を潰すのを防止
+//       → initStudyTimerAndDataRotation 実行“後”に復元を再実行
+//    ③ ログイン直後の描画ズレを遅延キックで確実に上書き
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※第15回パッチ（__sgRestoreFromCloud / 上書き済み renderActivityChart）が
+//      前提。無ければ各所で typeof ガードが効き、安全に何もしません
+// ==========================================================================
+(function applyStudyGraphTriggerPatch() {
+    if (window.__studyGraphTriggerPatchApplied) return;
+    window.__studyGraphTriggerPatchApplied = true;
+    
+    // ------------------------------------------------------------------
+    // ヘルパー：今日の曜日インデックス（0=月 … 6=日／既存規則と同一）
+    // ------------------------------------------------------------------
+    function sgtTodayIdx() {
+        var i = new Date().getDay() - 1;
+        return i < 0 ? 6 : i;
+    }
+    
+    // ヘルパー：メモリ上の“今日分”を週間ログへ反映してから描画
+    //   （renderActivityChart 自身も今日分を代入するが、復元直後など
+    //     値が揃う前に呼ばれても確実に反映させるための二重保険）
+    function sgtReflectAndDraw() {
+        try {
+            var todayMin = (parseInt(todayStudySeconds) || 0) / 60;
+            if (typeof weeklyStudyMinutesLog !== 'undefined' && Array.isArray(weeklyStudyMinutesLog)) {
+                var idx = sgtTodayIdx();
+                var cur = parseFloat(weeklyStudyMinutesLog[idx]) || 0;
+                if (todayMin > cur) weeklyStudyMinutesLog[idx] = todayMin;
+            }
+        } catch (e) {}
+        try {
+            if (document.getElementById('activityBarChart') &&
+                typeof window.renderActivityChart === 'function') {
+                window.renderActivityChart();
+            }
+        } catch (e) {}
+    }
+    
+    // ヘルパー：クラウド復元（第15回）が居れば叩く
+    function sgtRestore() {
+        try {
+            if (typeof window.__sgRestoreFromCloud === 'function') {
+                window.__sgRestoreFromCloud();
+            }
+        } catch (e) {}
+    }
+    
+    // ------------------------------------------------------------------
+    // 【1】initStudyTimerAndDataRotation をラップ
+    //     既存処理（日跨ぎリセット含む）が走り終わった“後”に
+    //     復元を再実行 → リセットに潰された todayStudySeconds を復活
+    // ------------------------------------------------------------------
+    var __prevInitStudyTimerForTrigger = window.initStudyTimerAndDataRotation;
+    if (typeof __prevInitStudyTimerForTrigger === 'function') {
+        window.initStudyTimerAndDataRotation = function() {
+            var r = __prevInitStudyTimerForTrigger.apply(this, arguments);
+            // 日跨ぎリセットが復元値を0に潰した可能性があるので再復元
+            sgtRestore();
+            sgtReflectAndDraw();
+            return r;
+        };
+    }
+    
+    // ------------------------------------------------------------------
+    // 【2】shouldCount 非依存ウォッチドッグ（1秒間隔）
+    //     ホーム画面に居ても、毎秒“今日分を反映＋描画”を行う
+    //     → 本日表示とグラフが常に同期し、棒がリアルタイムに立つ
+    //     描画は7要素の軽い全置換＝既存の勉強中描画と競合しても
+    //     同じ値を描くだけなのでチラつかない
+    // ------------------------------------------------------------------
+    if (!window.__sgtWatchdogStarted) {
+        window.__sgtWatchdogStarted = true;
+        setInterval(function() {
+            // ログイン済み・ゲスト問わず描画してズレを防ぐ
+            sgtReflectAndDraw();
+        }, 1000);
+    }
+    
+    // ------------------------------------------------------------------
+    // 【3】loadLocalState をラップ：完了後に遅延キック
+    //     ブートストラップ末尾の renderActivityChart は復元“前”に走るため
+    //     全0を描いてしまう。復元“後”に遅延で上書きし直す
+    // ------------------------------------------------------------------
+    var __prevLoadLocalStateForTrigger = window.loadLocalState;
+    if (typeof __prevLoadLocalStateForTrigger === 'function') {
+        window.loadLocalState = async function() {
+            var r = await __prevLoadLocalStateForTrigger.apply(this, arguments);
+            var kick = function() { sgtRestore();
+                sgtReflectAndDraw(); };
+            setTimeout(kick, 300);
+            setTimeout(kick, 900);
+            setTimeout(kick, 1800);
+            return r;
+        };
+    }
+    
+    // ------------------------------------------------------------------
+    // 【4】起動時：DOM揃い次第すぐに1回描画（保険）
+    // ------------------------------------------------------------------
+    (function initStudyGraphTriggerPatch() {
+        function boot() {
+            sgtRestore();
+            sgtReflectAndDraw();
+        }
+        if (document.readyState !== 'loading') {
+            setTimeout(boot, 500);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 500); });
+        }
+    })();
+    
+    console.log('📊 第16回パッチ（勉強時間グラフ描画トリガー根治：ホーム毎秒描画＋復元再実行＋遅延キック）適用完了');
+})();
