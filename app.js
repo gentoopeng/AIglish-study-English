@@ -11679,3 +11679,269 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
 
     console.log('🎨 第14回パッチ（フレンド欄ランキング仕上げ：枠分離＋左右対称＋重複削除＋選択中央寄せ）適用完了');
 })();
+// ==========================================================================
+// 📊 第15回パッチ：勉強時間グラフのログイン後“0分”現象を根治
+//    ① 週間ログ(weeklyStudyMinutesLog)＋本日秒数(todayStudySeconds)を
+//       クラウド(userStats)へ自動ミラー → ログインし直してもグラフが消えない
+//    ② ログイン時にクラウドからグラフを復元（ローカルとクラウドを“大きい方”で
+//       マージ＝巻き戻りしない／既存の曜日固定挙動は壊さない）
+//    ③ 1分未満の勉強を「○秒」で表示（45秒が「0分」にならず「45秒」と出る）
+//    ④ 棒の高さを“その週の最大値”基準に（ちょっと勉強した日でも棒がニョキッと立つ）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※既存の勉強タイマーには一切触れません（別ミラーで値を写すだけ）
+// ==========================================================================
+(function applyStudyGraphSyncPatch() {
+    if (window.__studyGraphSyncPatchApplied) return;
+    window.__studyGraphSyncPatchApplied = true;
+    
+    // ------------------------------------------------------------------
+    // ヘルパー①：今日の日付文字列（既存の生成規則 "Y-M-D" に完全一致）
+    // ------------------------------------------------------------------
+    function sgTodayStr() {
+        var d = new Date();
+        return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+    
+    // ヘルパー②：日付文字列 "Y-M-D" → 曜日インデックス（0=月 … 6=日）
+    //          既存 renderActivityChart の (getDay()-1, <0なら6) と同一
+    // ------------------------------------------------------------------
+    function sgDateToIdx(dateStr) {
+        if (!dateStr) return -1;
+        var p = String(dateStr).split('-');
+        if (p.length < 3) return -1;
+        var dt = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+        if (isNaN(dt.getTime())) return -1;
+        var idx = dt.getDay() - 1;
+        if (idx < 0) idx = 6;
+        return idx;
+    }
+    
+    // ヘルパー③：2つの日付文字列の日数差（b - a）。不正なら -1
+    // ------------------------------------------------------------------
+    function sgDaysBetween(aStr, bStr) {
+        if (!aStr || !bStr) return -1;
+        var pa = String(aStr).split('-'),
+            pb = String(bStr).split('-');
+        if (pa.length < 3 || pb.length < 3) return -1;
+        var da = new Date(parseInt(pa[0], 10), parseInt(pa[1], 10) - 1, parseInt(pa[2], 10));
+        var db = new Date(parseInt(pb[0], 10), parseInt(pb[1], 10) - 1, parseInt(pb[2], 10));
+        if (isNaN(da.getTime()) || isNaN(db.getTime())) return -1;
+        var ms = db.getTime() - da.getTime();
+        return Math.round(ms / (1000 * 60 * 60 * 24));
+    }
+    
+    function sgIsLoggedIn() {
+        return (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000');
+    }
+    
+    // ------------------------------------------------------------------
+    // 【1】ミラー：メモリ上のグラフデータを userStats へ写す
+    //     （saveUserStats が userStats ごとクラウドへ運ぶ＝既存経路に乗せる）
+    //     既存タイマーには触れない＝代入だけの軽量処理
+    // ------------------------------------------------------------------
+    window.__sgDirty = false;
+    window.__sgMirrorToUserStats = function() {
+        if (typeof userStats === 'undefined' || !userStats) return;
+        try {
+            var log = (typeof weeklyStudyMinutesLog !== 'undefined' && Array.isArray(weeklyStudyMinutesLog)) ?
+                weeklyStudyMinutesLog.slice(0, 7) : [0, 0, 0, 0, 0, 0, 0];
+            while (log.length < 7) log.push(0);
+            userStats.study_weekly_log = log;
+            userStats.study_today_secs = (typeof todayStudySeconds !== 'undefined') ? (parseInt(todayStudySeconds) || 0) : 0;
+            userStats.study_last_date = (typeof lastAccessDateStr !== 'undefined') ? (lastAccessDateStr || '') : '';
+            userStats.study_weekly_log_today_date = userStats.study_last_date;
+            window.__sgDirty = true;
+        } catch (e) {}
+    };
+    
+    // ------------------------------------------------------------------
+    // 【2】復元：クラウド(userStats)からグラフをメモリへ戻す
+    //     ・ローカルとクラウドを“枠ごとに大きい方”でマージ（巻き戻り防止）
+    //     ・7日以上前のクラウドログは“古い週の残骸”とみなし採用しない
+    //     ・既存の曜日固定挙動は壊さない（週リセットは導入しない）
+    // ------------------------------------------------------------------
+    window.__sgRestoreFromCloud = function() {
+        if (typeof userStats === 'undefined' || !userStats) return;
+        var s = userStats;
+        var todayStr = sgTodayStr();
+        
+        // 本日秒数：クラウドの最終日が“今日”なら大きい方を採用
+        var cloudLastDate = s.study_last_date || s.study_weekly_log_today_date || '';
+        var cloudTodaySecs = parseInt(s.study_today_secs) || 0;
+        if (cloudLastDate === todayStr) {
+            if (cloudTodaySecs > (parseInt(todayStudySeconds) || 0)) {
+                todayStudySeconds = cloudTodaySecs;
+            }
+        }
+        
+        var cloudLog = Array.isArray(s.study_weekly_log) ? s.study_weekly_log : null;
+        var cloudValid = cloudLog && cloudLog.length === 7 &&
+            (cloudLastDate === '' || sgDaysBetween(cloudLastDate, todayStr) < 7);
+        
+        var localLog = (typeof weeklyStudyMinutesLog !== 'undefined' && Array.isArray(weeklyStudyMinutesLog)) ?
+            weeklyStudyMinutesLog : [0, 0, 0, 0, 0, 0, 0];
+        while (localLog.length < 7) localLog.push(0);
+        
+        var merged = localLog.slice(0, 7);
+        if (cloudValid) {
+            for (var i = 0; i < 7; i++) {
+                var cv = parseFloat(cloudLog[i]) || 0;
+                var lv = parseFloat(merged[i]) || 0;
+                merged[i] = Math.max(lv, cv);
+            }
+            // クラウドの“最終日”が今日でない過去日で、その日の秒が残っている場合もその枠へ反映
+            if (cloudLastDate && cloudLastDate !== todayStr && cloudTodaySecs > 0) {
+                var cIdx = sgDateToIdx(cloudLastDate);
+                if (cIdx >= 0 && sgDaysBetween(cloudLastDate, todayStr) < 7) {
+                    merged[cIdx] = Math.max(merged[cIdx] || 0, cloudTodaySecs / 60);
+                }
+            }
+        }
+        
+        // 今日の枠には“いまの本日秒数”を必ず反映（描画と整合）
+        var todayIdx = sgDateToIdx(todayStr);
+        if (todayIdx >= 0) {
+            merged[todayIdx] = Math.max(merged[todayIdx] || 0, (parseInt(todayStudySeconds) || 0) / 60);
+        }
+        
+        weeklyStudyMinutesLog = merged;
+        
+        // ローカルキャッシュも復元値で揃える
+        try { localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog)); } catch (e) {}
+        try { localStorage.setItem('core_v4_study_today_secs', String(parseInt(todayStudySeconds) || 0)); } catch (e) {}
+        try { localStorage.setItem('core_v4_study_last_date', todayStr); } catch (e) {}
+        
+        // 復元直後に描画を更新（DOMが無ければ関数側でガードされる）
+        try { if (typeof window.renderActivityChart === 'function') window.renderActivityChart(); } catch (e) {}
+    };
+    
+    // ------------------------------------------------------------------
+    // 【3】loadUserStats をラップ：クラウド読み込み“後”に復元
+    //     （既存の全 loadUserStats 上書きが走り終わった後に実行される）
+    // ------------------------------------------------------------------
+    var __prevLoadUserStatsForStudyGraph = window.loadUserStats;
+    window.loadUserStats = async function() {
+        var r = __prevLoadUserStatsForStudyGraph ? await __prevLoadUserStatsForStudyGraph.apply(this, arguments) : undefined;
+        try { window.__sgRestoreFromCloud(); } catch (e) { console.error('study graph restore error:', e); }
+        return r;
+    };
+    
+    // ------------------------------------------------------------------
+    // 【4】renderActivityChart を上書き
+    //     ・1分未満は「○秒」表示（0は「0分」）
+    //     ・棒の高さは“その週の最大値”基準（少しの勉強でも棒が立つ）
+    //     ・DOM構造は既存と完全同一（class/id 不変＝CSSそのまま）
+    // ------------------------------------------------------------------
+    window.renderActivityChart = function() {
+        var chart = document.getElementById('activityBarChart');
+        if (!chart) return;
+        chart.innerHTML = "";
+        
+        var now = new Date();
+        var currentDayIdx = now.getDay() - 1;
+        if (currentDayIdx < 0) currentDayIdx = 6;
+        
+        var currentTodayMinutes = (parseInt(todayStudySeconds) || 0) / 60;
+        if (Array.isArray(weeklyStudyMinutesLog)) {
+            weeklyStudyMinutesLog[currentDayIdx] = currentTodayMinutes;
+        }
+        
+        // その週の最大値を算出（0除算防止＆“少しでも立つ”ための下限 0.1）
+        var maxMin = 0.1;
+        for (var m = 0; m < 7; m++) {
+            var v = parseFloat(weeklyStudyMinutesLog[m]) || 0;
+            if (v > maxMin) maxMin = v;
+        }
+        
+        var daysLabels = ["月", "火", "水", "木", "金", "土", "日"];
+        daysLabels.forEach(function(d, idx) {
+            var wrap = document.createElement('div');
+            wrap.className = "bar-wrapper";
+            wrap.style.cssText = "display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; flex: 1; min-width: 0;";
+            
+            var rawMin = parseFloat(weeklyStudyMinutesLog[idx]) || 0;
+            
+            // 棒の高さ：週最大値基準。勉強ゼロの日は既存踏襲の薄い4%、それ以外は相対
+            var fillHeightPercent;
+            if (rawMin <= 0) {
+                fillHeightPercent = 4;
+            } else {
+                fillHeightPercent = Math.min(100, Math.max(4, Math.round((rawMin / maxMin) * 100)));
+            }
+            
+            var fill = document.createElement('div');
+            fill.className = "bar-fill active";
+            fill.style.height = fillHeightPercent + "%";
+            
+            // ラベル：1分未満は秒、1分以上は分、0は0分
+            var valLbl = document.createElement('div');
+            valLbl.style.cssText = "font-size: 8px; font-weight: 700; color: #FFFFFF; margin-bottom: 2px; white-space: nowrap;";
+            if (rawMin <= 0) {
+                valLbl.innerText = "0分";
+            } else if (rawMin < 1) {
+                valLbl.innerText = Math.max(1, Math.round(rawMin * 60)) + "秒";
+            } else {
+                valLbl.innerText = Math.floor(rawMin) + "分";
+            }
+            
+            var lbl = document.createElement('div');
+            lbl.style.cssText = "font-size: 10px; color: var(--text-sub); margin-top: 4px; font-weight: bold;";
+            lbl.innerText = d;
+            
+            wrap.appendChild(valLbl);
+            wrap.appendChild(fill);
+            wrap.appendChild(lbl);
+            chart.appendChild(wrap);
+        });
+    };
+    
+    // ------------------------------------------------------------------
+    // 【5】ミラーの定期実行＋ページ離脱時のフラッシュ保存
+    //     ・5秒ごとにメモリ→userStats へ写す（軽い代入のみ）
+    //     ・クラウド書き込みは既存の saveUserStats 経路に任せる＋
+    //       ページ離脱時に dirty なら明示保存（勉強中に閉じても残る）
+    // ------------------------------------------------------------------
+    function sgStartMirrorLoop() {
+        if (window.__sgMirrorLoopStarted) return;
+        window.__sgMirrorLoopStarted = true;
+        
+        setInterval(function() {
+            try { window.__sgMirrorToUserStats(); } catch (e) {}
+        }, 5000);
+        
+        var flush = function() {
+            if (!sgIsLoggedIn()) return;
+            if (!window.__sgDirty) return;
+            try { window.__sgMirrorToUserStats(); } catch (e) {}
+            if (typeof window.saveUserStats === 'function') {
+                try { window.saveUserStats(); } catch (e) {}
+            }
+            window.__sgDirty = false;
+        };
+        window.addEventListener('pagehide', flush);
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden') flush();
+        });
+    }
+    
+    // ------------------------------------------------------------------
+    // 【6】起動時接続
+    // ------------------------------------------------------------------
+    (function initStudyGraphSyncPatch() {
+        function boot() {
+            try { window.__sgMirrorToUserStats(); } catch (e) {}
+            sgStartMirrorLoop();
+            // ログイン済みなら念のため一度復元＋描画
+            if (sgIsLoggedIn()) {
+                try { window.__sgRestoreFromCloud(); } catch (e) {}
+            }
+        }
+        if (document.readyState !== 'loading') {
+            setTimeout(boot, 400);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); });
+        }
+    })();
+    
+    console.log('📊 第15回パッチ（勉強時間グラフ同期＋復元＋秒表示＋週最大値基準）適用完了');
+})();
