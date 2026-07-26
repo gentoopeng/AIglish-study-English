@@ -10011,30 +10011,3 @@ window.loadLocalState = async function() {
 })();
 
 console.log("🔄 同期修正パッチ③（設定まるごと同期＋全員共有＋分単位ログイン履歴＋総勉強時間表示）適用完了");
-// ==========================================================================
-// 🔧 修正パッチ：管理者メニューが押せない問題（サイドバー圧迫＆下部隠れ）
-//    原因: サイドバーに「🎴 ロード画面クイズ設定」パネルが追加されたことで
-//          中身が100vhを超え、flexがボタンを圧縮。最下部の「🛠️ 管理者メニュー」が
-//          画面外（下部ナビの裏）に押し出されてタップできなくなっていた
-//    修正: ① サイドバーを指でスクロール可能にする
-//          ② 中身ボタン類の圧縮（flex-shrink）を禁止して元の高さを確保
-//          ③ 下部ナビバー(60px)に隠れないよう底に余白を確保
-//    使い方: このブロックを app.js の末尾にそのまま貼り付けてください
-// ==========================================================================
-(function fixSidebarAdminMenuPatch() {
-    if (document.getElementById('sidebarAdminFixCss')) return;
-    var st = document.createElement('style');
-    st.id = 'sidebarAdminFixCss';
-    st.textContent = [
-        /* サイドバー本体：縦スクロールを許可＋下部ナビぶんの余白 */
-        '#sidebarMenu{overflow-y:auto !important;-webkit-overflow-scrolling:touch;box-sizing:border-box;padding-bottom:96px !important;}',
-        /* 中身（ボタン・パネル類）が縦に潰れるのを防ぐ */
-        '#sidebarMenu > *{flex-shrink:0 !important;}',
-        /* スクロールバーを細く目立たなく（コズミックシアン） */
-        '#sidebarMenu::-webkit-scrollbar{width:4px;}',
-        '#sidebarMenu::-webkit-scrollbar-track{background:transparent;}',
-        '#sidebarMenu::-webkit-scrollbar-thumb{background:rgba(0,240,255,0.35);border-radius:2px;}'
-    ].join('\n');
-    (document.head || document.documentElement).appendChild(st);
-})();
-console.log('🔧 サイドバー管理者メニュー修正パッチ（スクロール化＋圧縮防止＋下部余白）適用完了');
