@@ -10279,3 +10279,413 @@ window.__autoFitFlashcardCard = function(card) {
 })();
 
 console.log('🔤 第12回パッチ（フラッシュ単語テキスト横拡張：170px＋縦帯106＋オートフィット再適用）適用完了');
+// ==========================================================================
+// 📖 使い方ガイドパッチ：ハンバーガーメニューの「ログアウト」直上に入口を追加
+//    ・フルスクリーンの読むだけガイド（アコーディオン式）
+//    ・クイックスタート／機能別ガイド／Tips／近日公開 の4ブロック
+//    ・明朝見出し＋ゴシック本文、コズミック発光、微粒子アンビエント、開閉モーション
+//    ・✕ボタン／背景タップ／Escキー で閉じる（元の画面へ戻る安心設計）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※index.html / style.css の編集は不要です（DOM・CSSを自動注入します）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【0】パッチ専用スタイルの注入（1回だけ）
+// ------------------------------------------------------------------
+(function injectUsageGuideCss() {
+    if (document.getElementById('usageGuideCss')) return;
+    var st = document.createElement('style');
+    st.id = 'usageGuideCss';
+    st.textContent = [
+        /* ---- オーバーレイ本体 ---- */
+        '#usageGuideOverlay{position:fixed;inset:0;z-index:100000;display:none;flex-direction:column;',
+        'background:radial-gradient(circle at 50% 0%, rgba(30,27,75,0.98) 0%, rgba(15,23,42,0.99) 60%, rgba(7,11,25,0.995) 100%);',
+        'backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);',
+        'opacity:0;transition:opacity .32s cubic-bezier(0.25,1,0.5,1);overflow:hidden;}',
+        '#usageGuideOverlay.ug-visible{opacity:1;}',
+        /* ---- 微粒子アンビエント ---- */
+        '.ug-ambient{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;}',
+        '.ug-ambient::before{content:"";position:absolute;inset:0;',
+        'background:radial-gradient(circle at 20% 15%, rgba(0,240,255,0.10) 0%, transparent 42%),',
+        'radial-gradient(circle at 82% 78%, rgba(192,132,252,0.10) 0%, transparent 45%);}',
+        '.ug-spark{position:absolute;bottom:-12px;border-radius:50%;pointer-events:none;opacity:0;',
+        'animation:ugFloat linear infinite;}',
+        '@keyframes ugFloat{0%{transform:translateY(0) scale(.5);opacity:0;}15%{opacity:.85;}85%{opacity:.5;}100%{transform:translateY(-102vh) scale(1);opacity:0;}}',
+        /* ---- ヘッダー帯 ---- */
+        '.ug-header{position:relative;z-index:2;flex-shrink:0;display:flex;align-items:center;gap:12px;',
+        'padding:18px 18px 16px 18px;border-bottom:1px solid rgba(0,240,255,0.22);',
+        'background:linear-gradient(180deg, rgba(7,11,25,0.55) 0%, rgba(7,11,25,0) 100%);}',
+        '.ug-header-icon{width:40px;height:40px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;',
+        'background:linear-gradient(135deg, rgba(0,240,255,0.22), rgba(192,132,252,0.22));',
+        'border:1px solid rgba(0,240,255,0.4);box-shadow:0 0 14px rgba(0,240,255,0.3);color:var(--cosmic-cyan);}',
+        '.ug-header-titles{flex:1;min-width:0;}',
+        '.ug-header-title{font-family:"Noto Serif JP",serif;font-size:19px;font-weight:900;color:#fff;letter-spacing:1px;',
+        'text-shadow:0 0 12px rgba(0,240,255,0.45);line-height:1.2;}',
+        '.ug-header-sub{font-size:10.5px;font-weight:700;color:var(--cosmic-purple-light);letter-spacing:1.5px;margin-top:3px;',
+        'text-shadow:0 0 8px rgba(192,132,252,0.4);}',
+        '.ug-close{width:38px;height:38px;flex-shrink:0;border-radius:10px;border:1px solid rgba(255,255,255,0.22);',
+        'background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;',
+        'transition:all .2s ease;-webkit-tap-highlight-color:transparent;}',
+        '.ug-close:active{transform:scale(0.9);background:rgba(239,68,68,0.18);border-color:#EF4444;color:#FCA5A5;}',
+        /* ---- 本文スクロール領域 ---- */
+        '.ug-body{position:relative;z-index:2;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;',
+        'padding:20px 18px calc(28px + env(safe-area-inset-bottom)) 18px;}',
+        '.ug-body::-webkit-scrollbar{width:4px;}',
+        '.ug-body::-webkit-scrollbar-thumb{background:rgba(0,240,255,0.3);border-radius:2px;}',
+        /* ---- セクション見出し ---- */
+        '.ug-section-title{font-family:"Noto Serif JP",serif;font-size:15px;font-weight:900;color:#fff;',
+        'letter-spacing:1px;margin:26px 0 12px 0;display:flex;align-items:center;gap:8px;',
+        'text-shadow:0 0 10px rgba(0,240,255,0.35);}',
+        '.ug-section-title:first-child{margin-top:4px;}',
+        '.ug-section-title::after{content:"";flex:1;height:1px;',
+        'background:linear-gradient(90deg, rgba(0,240,255,0.5), transparent);}',
+        /* ---- クイックスタート ---- */
+        '.ug-steps{display:flex;flex-direction:column;gap:10px;}',
+        '.ug-step{display:flex;gap:12px;align-items:flex-start;padding:13px 14px;border-radius:14px;',
+        'background:linear-gradient(135deg, rgba(0,240,255,0.06), rgba(192,132,252,0.05));',
+        'border:1px solid rgba(255,255,255,0.12);box-shadow:0 4px 14px rgba(0,0,0,0.25);}',
+        '.ug-step-num{width:30px;height:30px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;',
+        'font-family:"Noto Serif JP",serif;font-size:15px;font-weight:900;color:#06121f;',
+        'background:linear-gradient(135deg, var(--cosmic-cyan), var(--cosmic-purple-light));',
+        'box-shadow:0 0 12px rgba(0,240,255,0.5);}',
+        '.ug-step-body{flex:1;min-width:0;}',
+        '.ug-step-head{font-size:13.5px;font-weight:800;color:#fff;margin-bottom:3px;display:flex;align-items:center;gap:6px;}',
+        '.ug-step-head i{color:var(--cosmic-cyan);flex-shrink:0;}',
+        '.ug-step-desc{font-size:11.5px;color:rgba(226,232,240,0.82);line-height:1.6;font-weight:500;}',
+        /* ---- アコーディオン ---- */
+        '.ug-acc{border-radius:13px;margin-bottom:9px;overflow:hidden;',
+        'border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.035);',
+        'transition:border-color .25s ease, box-shadow .25s ease;}',
+        '.ug-acc.open{border-color:rgba(0,240,255,0.4);box-shadow:0 0 14px rgba(0,240,255,0.16);}',
+        '.ug-acc-head{width:100%;display:flex;align-items:center;gap:10px;padding:13px 14px;',
+        'background:none;border:none;cursor:pointer;text-align:left;color:#fff;',
+        '-webkit-tap-highlight-color:transparent;transition:background .2s ease;}',
+        '.ug-acc-head:active{background:rgba(0,240,255,0.07);}',
+        '.ug-acc-ico{width:30px;height:30px;flex-shrink:0;border-radius:9px;display:flex;align-items:center;justify-content:center;',
+        'background:rgba(0,240,255,0.12);border:1px solid rgba(0,240,255,0.3);color:var(--cosmic-cyan);}',
+        '.ug-acc-title{flex:1;min-width:0;font-size:13px;font-weight:800;color:#fff;letter-spacing:0.3px;}',
+        '.ug-chev{flex-shrink:0;color:var(--text-sub);transition:transform .3s cubic-bezier(0.25,1,0.5,1);}',
+        '.ug-acc.open .ug-chev{transform:rotate(180deg);color:var(--cosmic-cyan);}',
+        '.ug-acc-body{max-height:0;overflow:hidden;box-sizing:border-box;padding:0 16px;',
+        'transition:max-height .38s cubic-bezier(0.25,1,0.5,1);}',
+        '.ug-acc.open .ug-acc-body{padding:2px 16px 15px 16px;}',
+        '.ug-acc-body p{font-size:12px;color:rgba(226,232,240,0.86);line-height:1.75;margin:0 0 9px 0;font-weight:500;}',
+        '.ug-acc-body p:last-child{margin-bottom:0;}',
+        '.ug-acc-body strong{color:var(--cosmic-cyan);font-weight:800;}',
+        '.ug-acc-body em{color:var(--cosmic-purple-light);font-style:normal;font-weight:800;}',
+        '.ug-acc-body ul{margin:0 0 9px 0;padding:0;list-style:none;}',
+        '.ug-acc-body li{position:relative;padding:5px 0 5px 18px;font-size:11.5px;color:rgba(226,232,240,0.84);line-height:1.6;}',
+        '.ug-acc-body li::before{content:"";position:absolute;left:2px;top:11px;width:6px;height:6px;border-radius:50%;',
+        'background:var(--cosmic-cyan);box-shadow:0 0 7px rgba(0,240,255,0.7);}',
+        /* ---- 理解度マークのミニ凡例 ---- */
+        '.ug-marks{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px 0;}',
+        '.ug-mark{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;',
+        'padding:3px 9px;border-radius:20px;border:1px solid rgba(255,255,255,0.18);background:rgba(0,0,0,0.25);}',
+        '.ug-mark b{width:13px;height:13px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:900;}',
+        /* ---- Tips ---- */
+        '.ug-tips{display:flex;flex-direction:column;gap:8px;}',
+        '.ug-tip{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:12px;',
+        'background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.22);}',
+        '.ug-tip-ico{flex-shrink:0;color:#FBBF24;margin-top:1px;filter:drop-shadow(0 0 5px rgba(245,158,11,0.5));}',
+        '.ug-tip-text{font-size:11.5px;color:rgba(254,243,199,0.92);line-height:1.65;font-weight:600;}',
+        /* ---- 近日公開 ---- */
+        '.ug-soon{margin-top:6px;padding:13px 15px;border-radius:13px;text-align:center;',
+        'background:rgba(236,72,153,0.06);border:1px dashed rgba(236,72,153,0.35);}',
+        '.ug-soon-title{font-size:12px;font-weight:900;color:var(--admin-accent);letter-spacing:1px;margin-bottom:5px;',
+        'text-shadow:0 0 8px rgba(236,72,153,0.4);}',
+        '.ug-soon-desc{font-size:11px;color:rgba(255,255,255,0.55);line-height:1.6;font-weight:500;}',
+        /* ---- 入口ボタン（サイドバー内） ---- */
+        '#usageGuideEntryBtn{color:var(--cosmic-cyan) !important;}',
+        '#usageGuideEntryBtn i{color:var(--cosmic-cyan);filter:drop-shadow(0 0 5px rgba(0,240,255,0.5));}',
+        '#usageGuideEntryBtn:active{background:rgba(0,240,255,0.12) !important;}'
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(st);
+})();
+
+// ------------------------------------------------------------------
+// 【1】ガイドの中身データ（クイックスタート／機能別／Tips）
+// ------------------------------------------------------------------
+window.__USAGE_GUIDE_STEPS = [
+    { icon: 'user-check', head: 'アカウントを作る／ログインする', desc: '初めての方は「新規作成」でプレイヤー名・本名・年齢・4桁の暗証番号を登録。発行されたIDはログインに必要なので必ずメモして。2回目以降はID＋暗証番号でログイン。' },
+    { icon: 'book-marked', head: '単語帳で単語を覚える', desc: '単語をタップして意味を確認し、右の4つのボタンで理解度をマーク。⚪︎＝定着／△＝曖昧／✕＝不可／ー＝リセット。覚えるほど経験値(XP)が溜まってレベルが上がります。' },
+    { icon: 'zap', head: 'フラッシュ＆ゲームで定着させる', desc: 'ゲームタブの「フラッシュ単語」でめくり学習、「単語の試練」でタイピングテスト。苦手な単語ほど繰り返し出るので、自然と記憶に定着します。' }
+];
+
+window.__USAGE_GUIDE_SECTIONS = [
+    {
+        icon: 'home', title: '🏠 ホーム',
+        html: '<p>あなたの<strong>司令部</strong>。プロフィールカードにレベル・装備中の称号・学習目標が表示されます。</p>' +
+              '<ul><li><strong>本日の総勉強時間</strong>はリアルタイムでカウント（単語帳・リーダー・プレイ中に増えます）。</li>' +
+              '<li><strong>最近7日間のアクティビティ</strong>グラフで、勉強の習慣をひと目で確認。</li>' +
+              '<li>右上の <strong>💾 ボタン</strong>で、いつでもデータを明示保存できます。</li></ul>'
+    },
+    {
+        icon: 'book-open', title: '📔 単語帳',
+        html: '<p>登録単語を一覧し、<em>理解度</em>を4段階で管理する中心画面です。</p>' +
+              '<div class="ug-marks">' +
+              '<span class="ug-mark"><b style="background:#10B981;color:#000;">⚪︎</b>定着</span>' +
+              '<span class="ug-mark"><b style="background:#F59E0B;color:#000;">△</b>曖昧</span>' +
+              '<span class="ug-mark"><b style="background:#EF4444;color:#fff;">✕</b>不可</span>' +
+              '<span class="ug-mark"><b style="background:rgba(255,255,255,0.3);color:#fff;">ー</b>リセット</span>' +
+              '</div>' +
+              '<ul><li>単語をタップすると意味ポップアップが開き、その場でマークを変更できます。</li>' +
+              '<li>上部の<strong>表紙をタップ</strong>して教材を切り替え。範囲指定・検索・フィルタも利用可能。</li>' +
+              '<li>タイトル横の <strong>📊 詳細</strong>で、定着率のドーナツグラフを確認。</li></ul>'
+    },
+    {
+        icon: 'scan-text', title: '📖 スマート長文リーダー',
+        html: '<p>英文を貼り付けて「解析」すると、AIが<strong>全文要約・文ごとの和訳・文法ハイライト</strong>を自動生成します。</p>' +
+              '<ul><li>文中の単語をタップすると、登録語や内蔵辞書の意味をその場で確認。</li>' +
+              '<li>和訳は<strong>インライン表示</strong>と<strong>下部にまとめて表示</strong>を切り替え可能。</li>' +
+              '<li>読み終えた長文は<strong>本棚に保存</strong>して、あとから何度でも再開できます。</li></ul>'
+    },
+    {
+        icon: 'users', title: '👥 フレンド',
+        html: '<p>相手の<strong>IDコード</strong>で検索・追加して、修行仲間とつながります。</p>' +
+              '<ul><li>並び替えは「最終ログイン順／レベル順／勉強時間順」。</li>' +
+              '<li>画面を<strong>左右スワイプ</strong>すると、フレンド一覧とランキングが切り替わります。</li>' +
+              '<li><strong>🔄 最新情報に更新</strong>で、相手のレベルやログイン時刻をクラウドから再取得。</li></ul>'
+    },
+    {
+        icon: 'swords', title: '🎮 単語テスト（単語の試練）',
+        html: '<p>制限時間内に英訳・和訳・まぜまぜで答えるタイピングバトル。</p>' +
+              '<ul><li>難易度は <strong>ノーマル(3分)／ハード(7分)／エキスパート(15分)</strong>。</li>' +
+              '<li><strong>エンドレス</strong>は時間無制限・ハート5個。5回ミスで終了。</li>' +
+              '<li>正解はAIが採点（◎正解／○おまけ正解）。連続正解で<strong>コンボボーナス</strong>が乗ります。</li></ul>'
+    },
+    {
+        icon: 'layers', title: '🃏 フラッシュ単語',
+        html: '<p>泡カードをめくって、直感で仕分ける学習モード。</p>' +
+              '<ul><li>カードを<strong>タップ</strong>で裏返して答えを確認。</li>' +
+              '<li><strong>右スワイプ＝⚪︎覚えた</strong>／<strong>左スワイプ＝✕覚えてない</strong>／<strong>上スワイプ＝△スキップ</strong>。</li>' +
+              '<li>設定で<strong>出題する教材</strong>と<strong>方向（英→和／和→英）</strong>を選べます。</li></ul>'
+    },
+    {
+        icon: 'award', title: '🏅 称号コレクション',
+        html: '<p>さまざまな課題を達成して称号を解放し、プロフィールに<strong>装備</strong>できます。</p>' +
+              '<ul><li>進化称号は<strong>5段階</strong>。達成するほどレアリティが上がります。</li>' +
+              '<li>条件を満たすと<strong>特別称号</strong>や<strong>シーズン称号</strong>も解放。</li>' +
+              '<li>段階が進むごとに<strong>ボーナスXP</strong>が貰えて、レベル上げにも貢献。</li></ul>'
+    },
+    {
+        icon: 'cloud', title: '💾 保存と同期',
+        html: '<p>あなたのデータは<strong>端末</strong>と<strong>クラウド</strong>の両方に保存されます。</p>' +
+              '<ul><li>同じIDでログインすれば、<strong>別の端末でも続きから</strong>再開できます。</li>' +
+              '<li>右上の <strong>💾 ボタン</strong>で手動保存。大事な進捗はこまめに保存を。</li>' +
+              '<li>理解度・レベル・称号・設定類は、できるだけ<strong>新しい方が優先</strong>されるよう同期されます。</li></ul>'
+    }
+];
+
+window.__USAGE_GUIDE_TIPS = [
+    '読み込みを待つ間、<strong>ミニ単語クイズ</strong>が自動で表示されます。右⚪︎・左✕・上△で答えれば、選んだ教材の理解度にちゃんと保存されます。',
+    '理解度は<strong>4段階</strong>。間違えて付けたマークは <strong>ー（リセット）</strong>で元に戻せます。',
+    'リーダーで読んだ長文は<strong>本棚に保存</strong>しておくと、解析結果ごとあとから再開できて便利です。',
+    '単語帳の <strong>📊 詳細</strong>をこまめにチェック。定着率の推移がモチベーションになります。',
+    'アプリを閉じる前・端末を変える前は、右上の <strong>💾</strong>をひと押ししておくと安心です。'
+];
+
+// ------------------------------------------------------------------
+// 【2】オーバーレイのDOMを構築（1回だけ生成して再利用）
+// ------------------------------------------------------------------
+window.__buildUsageGuideOverlay = function() {
+    if (document.getElementById('usageGuideOverlay')) return;
+
+    // クイックスタート
+    var stepsHtml = '';
+    window.__USAGE_GUIDE_STEPS.forEach(function(s, i) {
+        stepsHtml +=
+            '<div class="ug-step">' +
+            '<div class="ug-step-num">' + (i + 1) + '</div>' +
+            '<div class="ug-step-body">' +
+            '<div class="ug-step-head"><i data-lucide="' + s.icon + '" size="15"></i>' + s.head + '</div>' +
+            '<div class="ug-step-desc">' + s.desc + '</div>' +
+            '</div></div>';
+    });
+
+    // 機能別アコーディオン
+    var accHtml = '';
+    window.__USAGE_GUIDE_SECTIONS.forEach(function(sec) {
+        accHtml +=
+            '<div class="ug-acc">' +
+            '<button type="button" class="ug-acc-head">' +
+            '<span class="ug-acc-ico"><i data-lucide="' + sec.icon + '" size="16"></i></span>' +
+            '<span class="ug-acc-title">' + sec.title + '</span>' +
+            '<i data-lucide="chevron-down" size="16" class="ug-chev"></i>' +
+            '</button>' +
+            '<div class="ug-acc-body">' + sec.html + '</div>' +
+            '</div>';
+    });
+
+    // Tips
+    var tipsHtml = '';
+    window.__USAGE_GUIDE_TIPS.forEach(function(t) {
+        tipsHtml +=
+            '<div class="ug-tip">' +
+            '<i data-lucide="lightbulb" size="15" class="ug-tip-ico"></i>' +
+            '<div class="ug-tip-text">' + t + '</div>' +
+            '</div>';
+    });
+
+    var ov = document.createElement('div');
+    ov.id = 'usageGuideOverlay';
+    ov.innerHTML =
+        '<div class="ug-ambient" id="ugAmbient"></div>' +
+        '<div class="ug-header">' +
+        '<div class="ug-header-icon"><i data-lucide="book-open-check" size="20"></i></div>' +
+        '<div class="ug-header-titles">' +
+        '<div class="ug-header-title">使い方ガイド</div>' +
+        '<div class="ug-header-sub">HOW TO USE · 修行の手引き</div>' +
+        '</div>' +
+        '<button type="button" class="ug-close" id="ugCloseBtn" aria-label="閉じる"><i data-lucide="x" size="20"></i></button>' +
+        '</div>' +
+        '<div class="ug-body" id="ugBody">' +
+        '<div class="ug-section-title"><i data-lucide="rocket" size="16" style="color:var(--cosmic-cyan);"></i>まずはこの3ステップ</div>' +
+        '<div class="ug-steps">' + stepsHtml + '</div>' +
+        '<div class="ug-section-title"><i data-lucide="layout-grid" size="16" style="color:var(--cosmic-purple-light);"></i>機能別ガイド</div>' +
+        '<div class="ug-acc-list">' + accHtml + '</div>' +
+        '<div class="ug-section-title"><i data-lucide="sparkles" size="16" style="color:#FBBF24;"></i>知っておくと得する Tips</div>' +
+        '<div class="ug-tips">' + tipsHtml + '</div>' +
+        '<div class="ug-section-title"><i data-lucide="telescope" size="16" style="color:var(--admin-accent);"></i>近日公開</div>' +
+        '<div class="ug-soon">' +
+        '<div class="ug-soon-title">⚔️ マルチバトル ／ 🛡️ パーティ編成</div>' +
+        '<div class="ug-soon-desc">仲間と協力してボスを討伐するマルチプレイと、キャラクター・武器・防具の編成機能はただいま準備中。公開までもうしばらくお待ちください。</div>' +
+        '</div>' +
+        '</div>';
+
+    document.body.appendChild(ov);
+
+    // 微粒子を生成
+    var ambient = ov.querySelector('#ugAmbient');
+    if (ambient) {
+        var sparks = '';
+        for (var i = 0; i < 16; i++) {
+            var left = Math.round(Math.random() * 100);
+            var delay = (Math.random() * 8).toFixed(2);
+            var dur = (7 + Math.random() * 8).toFixed(2);
+            var size = (2 + Math.round(Math.random() * 3));
+            var c = Math.random() < 0.5 ? 'rgba(0,240,255,0.8)' : 'rgba(192,132,252,0.8)';
+            sparks += '<span class="ug-spark" style="left:' + left + '%;width:' + size + 'px;height:' + size + 'px;background:' + c + ';animation-delay:' + delay + 's;animation-duration:' + dur + 's;"></span>';
+        }
+        ambient.innerHTML = sparks;
+    }
+
+    // 閉じるボタン
+    var closeBtn = ov.querySelector('#ugCloseBtn');
+    if (closeBtn) closeBtn.onclick = function() { window.closeUsageGuide(); };
+
+    // 背景タップで閉じる（ヘッダ・本文以外＝オーバーレイ直下のみ）
+    ov.addEventListener('click', function(e) {
+        if (e.target === ov) window.closeUsageGuide();
+    });
+
+    // アコーディオン（イベント委譲）
+    var body = ov.querySelector('#ugBody');
+    if (body) {
+        body.addEventListener('click', function(e) {
+            var head = e.target.closest('.ug-acc-head');
+            if (!head) return;
+            var acc = head.parentElement;
+            var accBody = acc.querySelector('.ug-acc-body');
+            if (!accBody) return;
+            var willOpen = !acc.classList.contains('open');
+            acc.classList.toggle('open', willOpen);
+            if (willOpen) {
+                accBody.style.maxHeight = accBody.scrollHeight + 24 + 'px';
+            } else {
+                accBody.style.maxHeight = '0px';
+            }
+        });
+    }
+
+    if (typeof window.initLucide === 'function') window.initLucide();
+};
+
+// ------------------------------------------------------------------
+// 【3】開く／閉じる
+// ------------------------------------------------------------------
+window.openUsageGuide = function() {
+    window.__buildUsageGuideOverlay();
+    var ov = document.getElementById('usageGuideOverlay');
+    if (!ov) return;
+    // サイドバーは閉じておく
+    if (typeof window.toggleSidebar === 'function') window.toggleSidebar(false);
+    ov.style.display = 'flex';
+    ov.scrollTop = 0;
+    var body = ov.querySelector('#ugBody');
+    if (body) body.scrollTop = 0;
+    // 開いているアコーディオンの高さを再計測（表示後に正しく出す）
+    var openAccs = ov.querySelectorAll('.ug-acc.open .ug-acc-body');
+    for (var i = 0; i < openAccs.length; i++) {
+        openAccs[i].style.maxHeight = openAccs[i].scrollHeight + 24 + 'px';
+    }
+    requestAnimationFrame(function() {
+        requestAnimationFrame(function() { ov.classList.add('ug-visible'); });
+    });
+};
+
+window.closeUsageGuide = function() {
+    var ov = document.getElementById('usageGuideOverlay');
+    if (!ov) return;
+    ov.classList.remove('ug-visible');
+    setTimeout(function() {
+        if (!ov.classList.contains('ug-visible')) ov.style.display = 'none';
+    }, 320);
+};
+
+// Escキーで閉じる（1回だけ登録）
+if (!window.__ugEscBound) {
+    window.__ugEscBound = true;
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' || e.keyCode === 27) {
+            var ov = document.getElementById('usageGuideOverlay');
+            if (ov && ov.classList.contains('ug-visible')) window.closeUsageGuide();
+        }
+    });
+}
+
+// ------------------------------------------------------------------
+// 【4】サイドバーへ入口ボタンを注入（ログアウトの直上）
+// ------------------------------------------------------------------
+window.injectUsageGuideButton = function() {
+    var sidebar = document.getElementById('sidebarMenu');
+    if (!sidebar) return;
+    if (document.getElementById('usageGuideEntryBtn')) {
+        if (typeof window.initLucide === 'function') window.initLucide();
+        return;
+    }
+    var btn = document.createElement('button');
+    btn.id = 'usageGuideEntryBtn';
+    btn.type = 'button';
+    btn.className = 'sidebar-item';
+    btn.innerHTML = '<i data-lucide="book-open-check" size="18"></i><span>使い方ガイド</span>';
+    btn.onclick = function() { window.openUsageGuide(); };
+
+    // 「ログアウト」を含む要素の直前に挿入
+    var anchor = null;
+    var children = sidebar.children;
+    for (var i = 0; i < children.length; i++) {
+        if ((children[i].textContent || '').indexOf('ログアウト') !== -1) { anchor = children[i]; break; }
+    }
+    if (anchor) sidebar.insertBefore(btn, anchor);
+    else sidebar.appendChild(btn);
+
+    if (typeof window.initLucide === 'function') window.initLucide();
+};
+
+// ------------------------------------------------------------------
+// 【5】loadLocalState に接続 ＋ 起動時注入
+// ------------------------------------------------------------------
+var __prevLoadLocalStateForUsageGuide = window.loadLocalState;
+window.loadLocalState = async function() {
+    var r = __prevLoadLocalStateForUsageGuide ? await __prevLoadLocalStateForUsageGuide.apply(this, arguments) : undefined;
+    window.injectUsageGuideButton();
+    return r;
+};
+
+(function initUsageGuidePatch() {
+    function boot() { window.injectUsageGuideButton(); }
+    if (document.readyState !== 'loading') { setTimeout(boot, 400); }
+    else { document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); }); }
+})();
+
+console.log('📖 使い方ガイドパッチ（サイドバー入口＋フルスクリーンアコーディオンガイド）適用完了');
