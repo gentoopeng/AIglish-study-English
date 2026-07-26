@@ -10038,3 +10038,244 @@ console.log("🔄 同期修正パッチ③（設定まるごと同期＋全員�
     (document.head || document.documentElement).appendChild(st);
 })();
 console.log('🔧 サイドバー管理者メニュー修正パッチ（スクロール化＋圧縮防止＋下部余白）適用完了');
+// ==========================================================================
+// 🔤 第11回パッチ：フラッシュ単語の文字読みやすさ改善（オートフィット）
+//    ・泡（円）の形は一切変えない
+//    ・中身の文字だけを整える：
+//      ① オートフィット：長い文ほど自動で文字を縮小（短い文は大きめのまま）
+//      ② 円に内接する安全領域へテキストを自動制限（円弧はみ出し＆縦長折り返しを解消）
+//      ③ 内側余白を少し圧縮＋行間・字間を整備
+//    ・英語面(.flashcard-face-front)・日本語面(.flashcard-face-back)の両方に同一ルール
+//    ・既存 renderFlashcardDeck を「描画後に整える」方式で安全に拡張（ロジックは不変）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【0】スタイル注入（1回だけ。円の外観＝border/shadow/background は不変）
+// ------------------------------------------------------------------
+(function injectFlashcardReadabilityCss() {
+    if (document.getElementById('fcReadabilityCss')) return;
+    var st = document.createElement('style');
+    st.id = 'fcReadabilityCss';
+    st.textContent = [
+        /* 内側の余白を少しだけ圧縮（円の外観は変えない＝paddingのみ） */
+        '.flashcard-face-front,.flashcard-face-back{padding:18px !important;}',
+        /* テキストdivを「円に内接する安全な領域」に制限（番号spanはdivでないので対象外） */
+        '.flashcard-face-front div,.flashcard-face-back div{',
+        '  max-width:132px !important;',
+        '  margin:0 auto !important;',
+        '  padding-left:0 !important;',
+        '  padding-right:0 !important;',
+        '  box-sizing:border-box !important;',
+        '  display:block !important;',
+        '  overflow:hidden !important;',
+        '  /* 縮小時のなめらかさ */',
+        '  transition:font-size .12s ease;',
+        '}',
+        /* 英語面：字間をわずかに広げ、行間を整える */
+        '.flashcard-face-front div{',
+        '  line-height:1.2 !important;',
+        '  letter-spacing:0.3px !important;',
+        '  word-break:break-word !important;',
+        '  overflow-wrap:anywhere !important;',
+        '}',
+        /* 日本語面：折り返しの詰まりを解消し、確実に折る */
+        '.flashcard-face-back div{',
+        '  line-height:1.42 !important;',
+        '  letter-spacing:0.02em !important;',
+        '  overflow-wrap:anywhere !important;',
+        '  word-break:break-word !important;',
+        '}'
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(st);
+})();
+
+// ------------------------------------------------------------------
+// 【1】円に内接する安全領域の高さ（px）
+//     円240 / padding18×2 → 内側204 → 内接正方形≒144 → 安全マージン込み130
+// ------------------------------------------------------------------
+window.__FC_FIT_AVAIL = 130;
+
+// ------------------------------------------------------------------
+// 【2】オートフィット：要素が安全領域に収まるまで文字を縮小
+//     短い文は初期サイズのまま＝大きめのまま表示される
+// ------------------------------------------------------------------
+window.__autoFitFlashText = function(el, maxFs, minFs, availH) {
+    if (!el) return;
+    var fs = maxFs;
+    el.style.fontSize = fs + 'px';
+    var guard = 0;
+    while (fs > minFs && guard < 80) {
+        guard++;
+        if (el.scrollHeight <= availH + 1) break;
+        fs -= 0.5;
+        el.style.fontSize = fs + 'px';
+    }
+    // 最終確認：まだ溢れていれば下限まで一気に落とす
+    if (el.scrollHeight > availH + 1) {
+        el.style.fontSize = minFs + 'px';
+    }
+};
+
+// 1枚のカード（front/back両面）にオートフィットを適用
+window.__autoFitFlashcardCard = function(card) {
+    if (!card) return;
+    var availH = window.__FC_FIT_AVAIL;
+    // 英語面：番号spanはspanなので querySelector('div') はテキストdivを返す
+    var front = card.querySelector('.flashcard-face-front');
+    if (front) window.__autoFitFlashText(front.querySelector('div'), 22, 12, availH);
+    // 日本語面：同様にテキストdivを取得
+    var back = card.querySelector('.flashcard-face-back');
+    if (back) window.__autoFitFlashText(back.querySelector('div'), 16, 10, availH);
+};
+
+// ------------------------------------------------------------------
+// 【3】renderFlashcardDeck を安全に拡張
+//     既存ロジック（タッチ／パーティクル／エッジリップル等）は一切触らず、
+//     描画が終わった“後”にだけオートフィットを差し込む
+// ------------------------------------------------------------------
+(function wrapRenderFlashcardDeckForFit() {
+    if (window.renderFlashcardDeck && window.renderFlashcardDeck.__fcFitWrapped) return;
+    var prev = window.renderFlashcardDeck;
+    if (typeof prev !== 'function') return;
+    var wrapped = function() {
+        var r = prev.apply(this, arguments);
+        // レイアウト確定を待ってから計測（英語面・日本語面の両方）
+        var runFit = function() {
+            var card = document.getElementById('activeFlashcard');
+            window.__autoFitFlashcardCard(card);
+        };
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(function() { requestAnimationFrame(runFit); });
+        } else {
+            setTimeout(runFit, 30);
+        }
+        return r;
+    };
+    wrapped.__fcFitWrapped = true;
+    window.renderFlashcardDeck = wrapped;
+})();
+
+console.log('🔤 第11回パッチ（フラッシュ単語文字読みやすさ：オートフィット＋安全領域＋余白圧縮＋行間整備）適用完了');
+// ==========================================================================
+// 🔤 第12回パッチ：フラッシュ単語のテキストを「横に伸ばす」
+//    ・泡（正円）の形は一切変えない
+//    ・テキスト枠を 132px → 170px に拡張（1行の文字数を増やす）
+//    ・縦を 106px の帯に制限（その高さでの円の横幅≈174px 内に必ず収まる）
+//    ・長い文ほど自動で縮むオートフィットを再適用（下限もさらに低く）
+//    ・内側余白 padding を 18px に統一（円の幾何学を安定させる）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※自己完結：第11回パッチの有無に関わらず正しく動作します
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// 【0】スタイル上書き（詳細度を上げて !important 同士でも確実に勝つ）
+//     正円の border / shadow / background には触れない＝padding とテキスト枠のみ
+// ------------------------------------------------------------------
+(function injectFlashcardWidenCss() {
+    if (document.getElementById('fcWidenCss')) return;
+    var st = document.createElement('style');
+    st.id = 'fcWidenCss';
+    st.textContent = [
+        /* 内側余白を 18px に統一（円の幾何学を安定＝横170が収まる前提を作る） */
+        '.flashcard-inner-rotator .flashcard-face-front,',
+        '.flashcard-inner-rotator .flashcard-face-back{padding:18px !important;}',
+        /* テキストdiv（番号spanは span なので対象外）を横広＋縦帯に制限 */
+        '.flashcard-inner-rotator .flashcard-face-front > div,',
+        '.flashcard-inner-rotator .flashcard-face-back > div{',
+        '  max-width:170px !important;',
+        '  max-height:106px !important;',
+        '  width:auto !important;',
+        '  margin:0 auto !important;',
+        '  padding-left:0 !important;',
+        '  padding-right:0 !important;',
+        '  box-sizing:border-box !important;',
+        '  display:block !important;',
+        '  overflow:hidden !important;',
+        '  transition:font-size .12s ease;',
+        '}',
+        /* 英語面：字間をわずかに広げ、行間を整える */
+        '.flashcard-inner-rotator .flashcard-face-front > div{',
+        '  line-height:1.2 !important;',
+        '  letter-spacing:0.3px !important;',
+        '  word-break:break-word !important;',
+        '  overflow-wrap:anywhere !important;',
+        '}',
+        /* 日本語面：折り返しの詰まりを解消し、確実に折る */
+        '.flashcard-inner-rotator .flashcard-face-back > div{',
+        '  line-height:1.42 !important;',
+        '  letter-spacing:0.02em !important;',
+        '  overflow-wrap:anywhere !important;',
+        '  word-break:break-word !important;',
+        '}'
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(st);
+})();
+
+// ------------------------------------------------------------------
+// 【1】円に内接する安全領域の高さ（px）を 106 に確定
+//     縦をこの帯に収める＝その帯での円の横幅(≈174)内に必ず収まる
+// ------------------------------------------------------------------
+window.__FC_FIT_AVAIL = 106;
+
+// ------------------------------------------------------------------
+// 【2】オートフィット本体（要素が安全領域に収まるまで 0.5px 刻みで縮小）
+//     短い文は初期サイズのまま＝大きめのまま表示される
+// ------------------------------------------------------------------
+window.__autoFitFlashText = function(el, maxFs, minFs, availH) {
+    if (!el) return;
+    var fs = maxFs;
+    el.style.fontSize = fs + 'px';
+    var guard = 0;
+    while (fs > minFs && guard < 100) {
+        guard++;
+        if (el.scrollHeight <= availH + 1) break;
+        fs -= 0.5;
+        el.style.fontSize = fs + 'px';
+    }
+    // 最終確認：まだ溢れていれば下限まで一気に落とす
+    if (el.scrollHeight > availH + 1) {
+        el.style.fontSize = minFs + 'px';
+    }
+};
+
+// 1枚のカード（front/back 両面）にオートフィットを適用
+window.__autoFitFlashcardCard = function(card) {
+    if (!card) return;
+    var availH = window.__FC_FIT_AVAIL; // 106
+    // 英語面：番号spanは span なので querySelector('div') はテキストdivを返す
+    var front = card.querySelector('.flashcard-face-front');
+    if (front) window.__autoFitFlashText(front.querySelector('div'), 22, 11, availH);
+    // 日本語面：同様にテキストdivを取得（下限を 9 まで低く＝長い文はしっかり小さく）
+    var back = card.querySelector('.flashcard-face-back');
+    if (back) window.__autoFitFlashText(back.querySelector('div'), 16, 9, availH);
+};
+
+// ------------------------------------------------------------------
+// 【3】renderFlashcardDeck を安全に拡張（自己完結・増殖防止）
+//     既存ロジック（スワイプ／パーティクル／エッジリップル等）は一切触らず、
+//     描画が終わった“後”にだけオートフィットを差し込む
+//     ※第11回パッチのラップが既に巻かれていても二重ガードで無害
+// ------------------------------------------------------------------
+(function wrapRenderFlashcardDeckForWiden() {
+    if (window.renderFlashcardDeck && window.renderFlashcardDeck.__fcFitWrapped12) return;
+    var prev = window.renderFlashcardDeck;
+    if (typeof prev !== 'function') return;
+    var wrapped = function() {
+        var r = prev.apply(this, arguments);
+        var runFit = function() {
+            var card = document.getElementById('activeFlashcard');
+            window.__autoFitFlashcardCard(card);
+        };
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(function() { requestAnimationFrame(runFit); });
+        } else {
+            setTimeout(runFit, 30);
+        }
+        return r;
+    };
+    wrapped.__fcFitWrapped12 = true;
+    window.renderFlashcardDeck = wrapped;
+})();
+
+console.log('🔤 第12回パッチ（フラッシュ単語テキスト横拡張：170px＋縦帯106＋オートフィット再適用）適用完了');
