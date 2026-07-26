@@ -10947,3 +10947,735 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
 
     console.log('🎴 第13回パッチ（フラッシュ単語の意味別出題）適用完了');
 })();
+// ==========================================================================
+// 🏆 第13回パッチ：フレンド欄ランキング強化（コミュニティランキングシステム）
+//    ① ランキング画面の上部にスワイプ式ランキングセレクターを新設
+//       （レベル / シングルスコア / プレイ時間 / フラッシュ）
+//    ② レベルランキング：Lvを大きく＋EXPを小さく表示（Lv優先でソート）
+//    ③ シングルスコア：英訳/和訳/まぜ × エンドレス/ノーマル/ハード/エキスパート
+//       （エンドレスは既存データ、他難易度は新たにクラウドへ送信）
+//    ④ プレイ時間：総計/週間/1日を切替（週間・1日は新たにクラウド同期）
+//    ⑤ フラッシュ：flash_count（スワイプ総回数）でランキング
+//    ⑥ ゲーム終了時に難易度別スコアを自動送信＋起動時に既存ローカルベストを
+//       一度だけクラウドへ反映（自分の過去分もランキングに載る）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+(function applyCommunityRankingPatch() {
+    if (window.__communityRankingPatchApplied) return;
+    window.__communityRankingPatchApplied = true;
+
+    // ------------------------------------------------------------------
+    // 【0】パッチ専用スタイル（スワイプ式ピル・発光・ランキング数値）
+    // ------------------------------------------------------------------
+    (function injectCommunityRankCss() {
+        if (document.getElementById('communityRankCss')) return;
+        var st = document.createElement('style');
+        st.id = 'communityRankCss';
+        st.textContent = [
+            '.community-rank-scroller{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px 2px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none;}',
+            '.community-rank-scroller::-webkit-scrollbar{display:none;}',
+            '.community-rank-pill{flex-shrink:0;scroll-snap-align:start;padding:9px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.18);background:rgba(7,11,25,0.7);color:var(--text-sub);font-size:12px;font-weight:900;letter-spacing:0.5px;cursor:pointer;white-space:nowrap;transition:all 0.25s cubic-bezier(0.25,1,0.5,1);-webkit-tap-highlight-color:transparent;}',
+            '.community-rank-pill:active{transform:scale(0.95);}',
+            '.community-rank-pill-active{border-color:var(--cosmic-cyan);background:linear-gradient(135deg, rgba(0,240,255,0.28) 0%, rgba(192,132,252,0.28) 100%);color:#FFFFFF;box-shadow:0 0 16px rgba(0,240,255,0.45);text-shadow:0 0 8px rgba(0,240,255,0.6);}',
+            '.community-rank-subrow{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 6px 2px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}',
+            '.community-rank-subrow::-webkit-scrollbar{display:none;}',
+            '.community-rank-subpill{flex-shrink:0;padding:6px 13px;border-radius:16px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.4);color:var(--text-sub);font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;transition:all 0.2s ease;-webkit-tap-highlight-color:transparent;}',
+            '.community-rank-subpill:active{transform:scale(0.94);}',
+            '.community-rank-subpill-active{border-color:var(--cosmic-purple-light);background:rgba(192,132,252,0.24);color:#FFFFFF;box-shadow:0 0 10px rgba(192,132,252,0.4);}',
+            '.community-rank-value-big{font-size:17px;font-weight:900;font-family:monospace;color:var(--cosmic-cyan);text-shadow:0 0 8px rgba(0,240,255,0.5);line-height:1.1;}',
+            '.community-rank-value-sub{font-size:8px;font-weight:normal;color:var(--text-sub);margin-top:2px;display:block;}'
+        ].join('\n');
+        (document.head || document.documentElement).appendChild(st);
+    })();
+
+    // ------------------------------------------------------------------
+    // 【1】状態変数と日付・時間ヘルパー
+    // ------------------------------------------------------------------
+    window.__communityRankType = window.__communityRankType || 'level';   // level|score|time|flash
+    window.__communityScoreMode = window.__communityScoreMode || 'ja2en'; // ja2en|en2ja|mixed
+    window.__communityScoreDiff = window.__communityScoreDiff || 'endless'; // endless|normal|hard|expert
+    window.__communityTimeRange = window.__communityTimeRange || 'total'; // total|weekly|daily
+
+    window.__getTodayKey = function() {
+        var d = new Date();
+        return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    };
+    window.__getWeekKey = function() {
+        var d = new Date();
+        var day = d.getDay();
+        var diffToMonday = (day === 0 ? -6 : 1 - day);
+        var monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffToMonday);
+        return monday.getFullYear() + '-' + (monday.getMonth() + 1) + '-' + monday.getDate();
+    };
+    window.__formatStudyTime = function(secs) {
+        var totalMin = Math.floor((secs || 0) / 60);
+        if (totalMin >= 60) {
+            var h = Math.floor(totalMin / 60);
+            var m = totalMin % 60;
+            return h + '時間' + (m > 0 ? m + '分' : '');
+        }
+        return totalMin + '分';
+    };
+
+    // ------------------------------------------------------------------
+    // 【2】週間・1日プレイ時間のクラウド同期
+    //     （勉強タイマーと同一の判定ロジックをミラーして毎秒加算）
+    // ------------------------------------------------------------------
+    window.__startCommunityStudyTimeSync = function() {
+        if (window.__communityStudyTimeSyncStarted) return;
+        window.__communityStudyTimeSyncStarted = true;
+        setInterval(function() {
+            var shouldCount = false;
+            if (currentActiveTabId === 'vocab' || currentActiveTabId === 'reader') {
+                shouldCount = true;
+            } else if (currentActiveTabId === 'game') {
+                var isFcardPlay = (document.getElementById('flashcard-play-screen') && document.getElementById('flashcard-play-screen').style.display === 'flex');
+                var isSoloPlay = (document.getElementById('game-play-screen') && document.getElementById('game-play-screen').style.display === 'block');
+                var isMultiPlay = (document.getElementById('multi-battle-play-screen') && document.getElementById('multi-battle-play-screen').style.display === 'flex');
+                if (isFcardPlay || isSoloPlay || isMultiPlay) shouldCount = true;
+            }
+            if (window.__loadQuiz && window.__loadQuiz.active) shouldCount = true;
+
+            var todayKey = window.__getTodayKey();
+            if (userStats.study_today_date !== todayKey) {
+                userStats.study_today_date = todayKey;
+                userStats.study_today_secs = 0;
+            }
+            var weekKey = window.__getWeekKey();
+            if (userStats.study_week_key !== weekKey) {
+                userStats.study_week_key = weekKey;
+                userStats.study_week_secs = 0;
+            }
+            if (shouldCount) {
+                userStats.study_today_secs = (userStats.study_today_secs || 0) + 1;
+                userStats.study_week_secs = (userStats.study_week_secs || 0) + 1;
+            }
+        }, 1000);
+    };
+
+    // ------------------------------------------------------------------
+    // 【3】難易度別スコアのクラウド送信（エンドレスは既存の殿堂を使用）
+    // ------------------------------------------------------------------
+    window.submitDifficultyScore = async function(mode, difficulty, score) {
+        if (!mode || !difficulty || difficulty === 'endless' || score <= 0) return;
+        if (!myId || myId === 'GUEST-000') return;
+        if (!window.db || !window.fbSetDoc || !window.fbDoc || !window.fbGetDoc) return;
+        try {
+            var ref = window.fbDoc(window.db, 'shared', 'game_hall_' + mode + '_' + difficulty);
+            var snap = await window.fbGetDoc(ref);
+            var scores = (snap.exists() && snap.data().scores) ? snap.data().scores : [];
+            var existing = scores.find(function(s) { return s.id === myId; });
+            var currentBest = existing ? existing.score : 0;
+            if (score <= currentBest) return;
+            var now = new Date();
+            scores = scores.filter(function(s) { return s.id !== myId; });
+            scores.push({ id: myId, name: myName, score: score, timestamp: now.getTime(), date: window.makeRankingDateStr(now) });
+            scores = window.sortRankingScores(scores).slice(0, 20);
+            await window.fbSetDoc(ref, { scores: scores, updatedAt: now.toISOString() }, { merge: true });
+        } catch (e) {
+            console.error('submitDifficultyScore error:', e);
+        }
+    };
+
+    // ゲーム終了時にノーマル〜エキスパートのスコアも自動送信
+    var __prevEndGameSessionForCommunityRank = window.endGameSession;
+    window.endGameSession = async function() {
+        var mode = selectedQuestionMode;
+        var diff = currentGameDifficulty;
+        var score = gameScoreCount;
+        var r = __prevEndGameSessionForCommunityRank ? await __prevEndGameSessionForCommunityRank.apply(this, arguments) : undefined;
+        if (diff !== 'endless' && score > 0) {
+            try { await window.submitDifficultyScore(mode, diff, score); } catch (e) {}
+        }
+        return r;
+    };
+
+    // 起動時に既存のローカルベストを一度だけクラウドへ反映（自分の過去分も載る）
+    window.__uploadMyLocalBestsOnce = async function() {
+        if (!myId || myId === 'GUEST-000') return;
+        try { if (localStorage.getItem('core_v4_local_bests_uploaded_' + myId)) return; } catch (e) {}
+        var modes = ['ja2en', 'en2ja', 'mixed'];
+        var diffs = ['normal', 'hard', 'expert'];
+        for (var mi = 0; mi < modes.length; mi++) {
+            for (var di = 0; di < diffs.length; di++) {
+                var best = parseInt(localStorage.getItem('cosmic_best_' + modes[mi] + '_' + diffs[di]) || '0');
+                if (best > 0) {
+                    try { await window.submitDifficultyScore(modes[mi], diffs[di], best); } catch (e) {}
+                }
+            }
+        }
+        try { localStorage.setItem('core_v4_local_bests_uploaded_' + myId, '1'); } catch (e) {}
+    };
+
+    // ------------------------------------------------------------------
+    // 【4】全ユーザー取得（レベルEXP・プレイ時間・フラッシュ回数つき）
+    // ------------------------------------------------------------------
+    window.__communityUsersCache = null;
+    window.__communityUsersCacheAt = 0;
+    window.__communityUsersLoadingPromise = null;
+    window.fetchAllCommunityRankingUsers = async function() {
+        var users = [];
+        if (!window.db || !window.fbGetDoc || !window.fbDoc) return users;
+        var allUsers = [];
+        try { allUsers = await window.getAllUsers(); } catch (e) {}
+        var ids = [];
+        (allUsers || []).forEach(function(u) {
+            if (u && u.id && u.id !== 'GUEST-000' && ids.indexOf(u.id) === -1) ids.push(u.id);
+        });
+        if (myId && myId !== 'GUEST-000' && ids.indexOf(myId) === -1) ids.push(myId);
+        for (var i = 0; i < ids.length; i++) {
+            var id = ids[i];
+            try {
+                var ref = window.fbDoc(window.db, 'users', id);
+                var snap = await window.fbGetDoc(ref);
+                if (!snap.exists()) continue;
+                var d = snap.data();
+                if (d.deleted) continue;
+                var stats = d.userStats || {};
+                var exp = parseInt(d.totalExp) || 0;
+                var name = d.playerName || '';
+                if (!name) {
+                    var basic = (allUsers || []).find(function(u) { return u.id === id; });
+                    name = basic ? (basic.playerName || basic.realName || '修行者') : '修行者';
+                }
+                users.push({
+                    id: id, name: name, title: d.selectedTitle || '称号なし',
+                    exp: exp, lvl: window.computeLevelSafe(exp),
+                    customAvatar: (typeof d.avatar === 'string') ? d.avatar : '',
+                    isMe: id === myId,
+                    flash_count: parseInt(stats.flash_count) || 0,
+                    study_total_secs: parseInt(stats.study_total_secs) || 0,
+                    study_today_secs: parseInt(stats.study_today_secs) || 0,
+                    study_today_date: stats.study_today_date || '',
+                    study_week_secs: parseInt(stats.study_week_secs) || 0,
+                    study_week_key: stats.study_week_key || ''
+                });
+            } catch (e) {}
+        }
+        return users;
+    };
+
+    // ------------------------------------------------------------------
+    // 【5】ランキング行の共通ビルダー（順位色・アバター・名前・称号・右側数値）
+    // ------------------------------------------------------------------
+    window.__buildCommunityRankRow = function(u, idx, valueHtml) {
+        var rankColor = idx === 0 ? '#FBBF24' : idx === 1 ? '#94A3B8' : idx === 2 ? '#D97706' : '#FFFFFF';
+        var bgStyle = u.isMe ? 'background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);' : 'background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);';
+        var avatarStr = '<span style="font-size:16px;">👤</span>';
+        if (u.customAvatar) avatarStr = '<img src="' + u.customAvatar + '" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan);">';
+        return '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin-bottom:4px; ' + bgStyle + ' font-size:12px;">' +
+            '<div style="display:flex; align-items:center; gap:10px;">' +
+            '<span style="color:' + rankColor + '; font-weight:900; font-size:14px; width:18px; text-align:center;">' + (idx + 1) + '</span>' +
+            '<div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">' + avatarStr + '</div>' +
+            '<div><div style="font-weight:bold; color:white;">' + u.name + '</div>' +
+            '<div style="font-size:9px; color:var(--text-sub); margin-top:1px;">' + u.title + '</div></div>' +
+            '</div>' +
+            '<div style="text-align:right;">' + valueHtml + '</div></div>';
+    };
+
+    // ------------------------------------------------------------------
+    // 【6】各ランキングの描画
+    // ------------------------------------------------------------------
+    window.drawCommunityLevelRanking = function(container, users) {
+        users.sort(function(a, b) {
+            if (b.lvl !== a.lvl) return b.lvl - a.lvl;
+            return b.exp - a.exp;
+        });
+        var html = '';
+        users.slice(0, 50).forEach(function(u, idx) {
+            html += window.__buildCommunityRankRow(u, idx,
+                '<div class="community-rank-value-big">Lv.' + u.lvl + '</div>' +
+                '<span class="community-rank-value-sub">' + u.exp + ' EXP</span>');
+        });
+        container.innerHTML = html;
+    };
+
+    window.drawCommunityTimeRanking = function(container, users) {
+        var range = window.__communityTimeRange;
+        var todayKey = window.__getTodayKey();
+        var weekKey = window.__getWeekKey();
+        var getValue = function(u) {
+            if (range === 'total') return u.study_total_secs || 0;
+            if (range === 'daily') return (u.study_today_date === todayKey) ? (u.study_today_secs || 0) : 0;
+            if (range === 'weekly') return (u.study_week_key === weekKey) ? (u.study_week_secs || 0) : 0;
+            return 0;
+        };
+        var rows = users.map(function(u) { return { u: u, val: getValue(u) }; });
+        rows.sort(function(a, b) { return b.val - a.val; });
+        var html = '';
+        rows.slice(0, 50).forEach(function(row, idx) {
+            html += window.__buildCommunityRankRow(row.u, idx,
+                '<div class="community-rank-value-big">' + window.__formatStudyTime(row.val) + '</div>');
+        });
+        container.innerHTML = html;
+    };
+
+    window.drawCommunityFlashRanking = function(container, users) {
+        users.sort(function(a, b) { return (b.flash_count || 0) - (a.flash_count || 0); });
+        var html = '';
+        users.slice(0, 50).forEach(function(u, idx) {
+            html += window.__buildCommunityRankRow(u, idx,
+                '<div class="community-rank-value-big">' + (u.flash_count || 0) + '<span style="font-size:9px; color:var(--text-sub); font-weight:normal;"> 回</span></div>');
+        });
+        container.innerHTML = html;
+    };
+
+    window.__communityScoreCache = {};
+    window.__communityScoreCacheAt = {};
+    window.drawCommunityScoreRanking = async function(container) {
+        var mode = window.__communityScoreMode;
+        var diff = window.__communityScoreDiff;
+        var docName = (diff === 'endless') ? ('game_hall_' + mode) : ('game_hall_' + mode + '_' + diff);
+        var cacheKey = mode + '_' + diff;
+        var now = Date.now();
+
+        var scores = null;
+        if (window.__communityScoreCache[cacheKey] && (now - window.__communityScoreCacheAt[cacheKey] < 30000)) {
+            scores = window.__communityScoreCache[cacheKey];
+        } else {
+            container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ランキングを取得中...</div>';
+            scores = [];
+            if (window.db && window.fbGetDoc && window.fbDoc) {
+                try {
+                    var ref = window.fbDoc(window.db, 'shared', docName);
+                    var snap = await window.fbGetDoc(ref);
+                    if (snap.exists() && snap.data().scores) scores = window.sortRankingScores(snap.data().scores);
+                } catch (e) {}
+            }
+            if (scores.length === 0) {
+                var localBest = parseInt(localStorage.getItem('cosmic_best_' + mode + '_' + diff) || '0');
+                if (localBest > 0 && myId && myId !== 'GUEST-000') {
+                    scores = [{ id: myId, name: myName, score: localBest, date: 'ローカル記録', timestamp: 0 }];
+                }
+            }
+            window.__communityScoreCache[cacheKey] = scores;
+            window.__communityScoreCacheAt[cacheKey] = now;
+        }
+
+        if (scores.length === 0) {
+            var modeLabel = (mode === 'ja2en') ? '和訳' : (mode === 'en2ja') ? '英訳' : 'まぜ';
+            var diffLabel = (diff === 'endless') ? 'エンドレス' : (diff === 'normal') ? 'ノーマル' : (diff === 'hard') ? 'ハード' : 'エキスパート';
+            container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">' + modeLabel + '・' + diffLabel + ' のランキングはまだありません。</div>';
+            return;
+        }
+        var html = '';
+        scores.forEach(function(record, index) {
+            html += window.buildRankingRowHtml(record, index);
+        });
+        container.innerHTML = html;
+    };
+
+    // ------------------------------------------------------------------
+    // 【7】セレクターUI（スワイプ式ピル）
+    // ------------------------------------------------------------------
+    window.__findCommunityRankHeading = function() {
+        var section = document.getElementById('leaderboardSection');
+        if (!section) return null;
+        var candidates = section.querySelectorAll('h1, h2, h3, h4, div, span, p');
+        for (var i = 0; i < candidates.length; i++) {
+            var el = candidates[i];
+            var txt = el.textContent || '';
+            if (txt.indexOf('EXPランキング') !== -1) {
+                var children = el.querySelectorAll('h1,h2,h3,h4,div,span,p');
+                var hasChildWithText = false;
+                for (var j = 0; j < children.length; j++) {
+                    if ((children[j].textContent || '').indexOf('EXPランキング') !== -1) { hasChildWithText = true; break; }
+                }
+                if (!hasChildWithText) return el;
+            }
+        }
+        return null;
+    };
+
+    window.injectCommunityRankingUI = function() {
+        var container = document.getElementById('leaderboardContainer');
+        if (!container || !container.parentNode) return;
+        if (document.getElementById('communityRankingControls')) {
+            if (!window.__communityRankHeadingEl) window.__communityRankHeadingEl = window.__findCommunityRankHeading();
+            return;
+        }
+        var ctrl = document.createElement('div');
+        ctrl.id = 'communityRankingControls';
+        ctrl.style.cssText = 'margin-bottom:10px;';
+        var mainScroller = document.createElement('div');
+        mainScroller.id = 'communityRankMainScroller';
+        mainScroller.className = 'community-rank-scroller';
+        ctrl.appendChild(mainScroller);
+        var subContainer = document.createElement('div');
+        subContainer.id = 'communityRankSubContainer';
+        ctrl.appendChild(subContainer);
+        container.parentNode.insertBefore(ctrl, container);
+
+        // タッチ分離：ピル上のスワイプをコミュニティ画面の左右タブ切替に伝えない
+        ['touchstart', 'touchmove'].forEach(function(evt) {
+            ctrl.addEventListener(evt, function(e) { e.stopPropagation(); }, { passive: true });
+        });
+
+        window.__communityRankHeadingEl = window.__findCommunityRankHeading();
+        window.renderCommunityRankPills();
+    };
+
+    window.renderCommunityRankPills = function() {
+        var scroller = document.getElementById('communityRankMainScroller');
+        if (!scroller) return;
+        var types = [
+            { key: 'level', label: '🏆 レベル' },
+            { key: 'score', label: '🎯 シングルスコア' },
+            { key: 'time', label: '⏱️ プレイ時間' },
+            { key: 'flash', label: '🃏 フラッシュ' }
+        ];
+        var html = '';
+        types.forEach(function(t) {
+            var active = (window.__communityRankType === t.key);
+            html += '<button type="button" class="community-rank-pill' + (active ? ' community-rank-pill-active' : '') + '" data-rank-type="' + t.key + '">' + t.label + '</button>';
+        });
+        scroller.innerHTML = html;
+        var pills = scroller.querySelectorAll('.community-rank-pill');
+        for (var i = 0; i < pills.length; i++) {
+            pills[i].onclick = function() {
+                window.__communityRankType = this.getAttribute('data-rank-type');
+                window.renderCommunityRankPills();
+                window.renderCommunityRankSubPills();
+                window.renderLeaderboard(false);
+            };
+        }
+        var headingTexts = {
+            level: '🏆 レベルランキング（自分と全ユーザー）',
+            score: '🎯 シングルプレイスコアランキング',
+            time: '⏱️ プレイ時間ランキング',
+            flash: '🃏 フラッシュスワイプ回数ランキング'
+        };
+        if (window.__communityRankHeadingEl) {
+            window.__communityRankHeadingEl.textContent = headingTexts[window.__communityRankType] || '修行者ランキング';
+        }
+        window.renderCommunityRankSubPills();
+    };
+
+    window.renderCommunityRankSubPills = function() {
+        var subContainer = document.getElementById('communityRankSubContainer');
+        if (!subContainer) return;
+        var type = window.__communityRankType;
+        var html = '';
+        if (type === 'score') {
+            var modes = [
+                { key: 'ja2en', label: '和訳' },
+                { key: 'en2ja', label: '英訳' },
+                { key: 'mixed', label: 'まぜ' }
+            ];
+            html += '<div class="community-rank-subrow">';
+            modes.forEach(function(m) {
+                var active = (window.__communityScoreMode === m.key);
+                html += '<button type="button" class="community-rank-subpill' + (active ? ' community-rank-subpill-active' : '') + '" data-score-mode="' + m.key + '">' + m.label + '</button>';
+            });
+            html += '</div>';
+            var diffs = [
+                { key: 'endless', label: 'エンドレス' },
+                { key: 'normal', label: 'ノーマル' },
+                { key: 'hard', label: 'ハード' },
+                { key: 'expert', label: 'エキスパート' }
+            ];
+            html += '<div class="community-rank-subrow">';
+            diffs.forEach(function(d) {
+                var active = (window.__communityScoreDiff === d.key);
+                html += '<button type="button" class="community-rank-subpill' + (active ? ' community-rank-subpill-active' : '') + '" data-score-diff="' + d.key + '">' + d.label + '</button>';
+            });
+            html += '</div>';
+        } else if (type === 'time') {
+            var ranges = [
+                { key: 'total', label: '総計' },
+                { key: 'weekly', label: '週間' },
+                { key: 'daily', label: '1日' }
+            ];
+            html += '<div class="community-rank-subrow">';
+            ranges.forEach(function(r) {
+                var active = (window.__communityTimeRange === r.key);
+                html += '<button type="button" class="community-rank-subpill' + (active ? ' community-rank-subpill-active' : '') + '" data-time-range="' + r.key + '">' + r.label + '</button>';
+            });
+            html += '</div>';
+        }
+        subContainer.innerHTML = html;
+
+        var bind = function(selector, attr, stateKey) {
+            var els = subContainer.querySelectorAll(selector);
+            for (var i = 0; i < els.length; i++) {
+                els[i].onclick = function() {
+                    window[stateKey] = this.getAttribute(attr);
+                    window.renderCommunityRankSubPills();
+                    window.renderLeaderboard(false);
+                };
+            }
+        };
+        bind('[data-score-mode]', 'data-score-mode', '__communityScoreMode');
+        bind('[data-score-diff]', 'data-score-diff', '__communityScoreDiff');
+        bind('[data-time-range]', 'data-time-range', '__communityTimeRange');
+    };
+
+    // ------------------------------------------------------------------
+    // 【8】renderLeaderboard 上書き（新ランキングUI）
+    // ------------------------------------------------------------------
+    window.renderLeaderboard = async function(force) {
+        var container = document.getElementById('leaderboardContainer');
+        if (!container) return;
+        if (typeof myId === 'undefined' || myId === 'GUEST-000') {
+            container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ゲストはランキング対象外です。</div>';
+            return;
+        }
+        var lvlData = window.calculateLevelFromExp(totalExp);
+        userStats.user_level = lvlData.level;
+        window.injectCommunityRankingUI();
+
+        var type = window.__communityRankType;
+        if (type === 'score') {
+            await window.drawCommunityScoreRanking(container);
+            return;
+        }
+
+        var selfAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || '';
+        var selfUser = {
+            id: myId, name: myName + ' (あなた)', title: selectedTitle,
+            exp: totalExp, lvl: lvlData.level, customAvatar: selfAvatar, isMe: true,
+            flash_count: userStats.flash_count || 0,
+            study_total_secs: userStats.study_total_secs || 0,
+            study_today_secs: userStats.study_today_secs || 0,
+            study_today_date: window.__getTodayKey(),
+            study_week_secs: userStats.study_week_secs || 0,
+            study_week_key: window.__getWeekKey()
+        };
+
+        var now = Date.now();
+        var cacheValid = window.__communityUsersCache && (now - window.__communityUsersCacheAt < 60000);
+        var remoteUsers;
+        if (cacheValid && !force) {
+            remoteUsers = window.__communityUsersCache;
+        } else {
+            container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ランキングを取得中...</div>';
+            try {
+                if (!window.__communityUsersLoadingPromise) {
+                    window.__communityUsersLoadingPromise = window.fetchAllCommunityRankingUsers()
+                        .then(function(users) { window.__communityUsersCache = users; window.__communityUsersCacheAt = Date.now(); return users; })
+                        .finally(function() { window.__communityUsersLoadingPromise = null; });
+                }
+                remoteUsers = await window.__communityUsersLoadingPromise;
+            } catch (e) {
+                remoteUsers = [];
+            }
+        }
+
+        var users = (remoteUsers || []).filter(function(u) { return u.id !== myId; }).map(function(u) { return Object.assign({}, u); });
+        users.push(selfUser);
+
+        if (type === 'level') window.drawCommunityLevelRanking(container, users);
+        else if (type === 'time') window.drawCommunityTimeRanking(container, users);
+        else if (type === 'flash') window.drawCommunityFlashRanking(container, users);
+    };
+
+    // ------------------------------------------------------------------
+    // 【9】loadLocalState 接続
+    // ------------------------------------------------------------------
+    var __prevLoadLocalStateForCommunityRank = window.loadLocalState;
+    window.loadLocalState = async function() {
+        var r = __prevLoadLocalStateForCommunityRank ? await __prevLoadLocalStateForCommunityRank.apply(this, arguments) : undefined;
+        try {
+            window.__startCommunityStudyTimeSync();
+            window.__uploadMyLocalBestsOnce();
+            window.injectCommunityRankingUI();
+        } catch (e) {
+            console.error('コミュニティランキングパッチ初期化エラー:', e);
+        }
+        return r;
+    };
+
+    // ------------------------------------------------------------------
+    // 【10】起動時注入
+    // ------------------------------------------------------------------
+    (function initCommunityRankingPatch() {
+        function boot() {
+            window.__startCommunityStudyTimeSync();
+            window.injectCommunityRankingUI();
+        }
+        if (document.readyState !== 'loading') {
+            setTimeout(boot, 400);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); });
+        }
+    })();
+
+    console.log('🏆 第13回パッチ（フレンド欄ランキング強化：スワイプ式セレクター＋4種ランキング＋クラウド送信）適用完了');
+})();
+// ==========================================================================
+// 🎨 第14回パッチ：フレンド欄ランキング 仕上げ
+//    ① 下の重複カード（単語テスト ハイスコアランキング）をコミュニティ画面から削除
+//       ※ゲームタブ側には一切触れない（#view-community 内に限定）
+//    ② 「選択エリア」と「ランキングエリア」を別々の枠に分離
+//    ③ ランキング枠を縦に拡張（スクロール付きで件数を多く表示）
+//    ④ サブピル（意味/単語/まぜ ・ エンドレス/…/エキスパート）を中央揃え＝左右対称
+//    ⑤ メインピルはスワイプ式を維持しつつ、選択中を中央へスッと寄せる
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※🏆 第13回パッチ適用済みが前提（未適用時は何もしません）
+// ==========================================================================
+(function applyCommunityRankFinishPatch() {
+    if (window.__communityRankFinishApplied) return;
+    window.__communityRankFinishApplied = true;
+
+    // ------------------------------------------------------------------
+    // 【0】パッチ専用スタイル（枠分離・左右対称・ランキング枠拡張・重複削除）
+    // ------------------------------------------------------------------
+    (function injectCommunityRankFinishCss() {
+        if (document.getElementById('communityRankFinishCss')) return;
+        var st = document.createElement('style');
+        st.id = 'communityRankFinishCss';
+        st.textContent = [
+            // 外側の元カードを“器”だけにして透明化（内側の2枠を目立たせる）
+            '#view-community .cr-outer-shell{background:transparent !important;border:none !important;box-shadow:none !important;padding:0 !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}',
+            // 選択エリアの枠（シアン発光）
+            '#crSelectShell{border:1px solid rgba(0,240,255,0.32);background:rgba(7,11,25,0.5);border-radius:14px;padding:12px 12px 10px;margin-bottom:12px;box-shadow:0 0 16px rgba(0,240,255,0.12), inset 0 0 18px rgba(0,240,255,0.06);}',
+            '#crSelectShell > *{margin-top:0;}',
+            '#crSelectShell .community-rank-scroller{margin-top:8px;}',
+            // ランキングエリアの枠（パープル発光）
+            '#crRankShell{border:1px solid rgba(192,132,252,0.32);background:rgba(15,10,30,0.45);border-radius:14px;padding:8px;box-shadow:0 0 16px rgba(192,132,252,0.10), inset 0 0 18px rgba(192,132,252,0.05);}',
+            // ランキングリストを縦に拡張＋スクロール
+            '#crRankShell #leaderboardContainer{min-height:340px;max-height:62vh;overflow-y:auto;padding:2px 4px;-webkit-overflow-scrolling:touch;}',
+            '#crRankShell #leaderboardContainer::-webkit-scrollbar{width:4px;}',
+            '#crRankShell #leaderboardContainer::-webkit-scrollbar-track{background:transparent;}',
+            '#crRankShell #leaderboardContainer::-webkit-scrollbar-thumb{background:rgba(192,132,252,0.4);border-radius:2px;}',
+            // サブピルを中央揃え＝左右対称（詳細度を上げて確実に上書き）
+            '#communityRankSubContainer .community-rank-subrow{justify-content:center;flex-wrap:wrap;}',
+            // 下の重複カードをコミュニティ画面からのみ削除（:has 対応ブラウザ用）
+            '#view-community .card:has(#leaderboardListContainer){display:none !important;}'
+        ].join('\n');
+        (document.head || document.documentElement).appendChild(st);
+    })();
+
+    // ------------------------------------------------------------------
+    // 【1】見出し要素の取得（前回パッチの保持値 → 無ければ再探索）
+    // ------------------------------------------------------------------
+    function getHeadingEl() {
+        if (window.__communityRankHeadingEl && document.body.contains(window.__communityRankHeadingEl)) {
+            return window.__communityRankHeadingEl;
+        }
+        if (typeof window.__findCommunityRankHeading === 'function') {
+            var h = window.__findCommunityRankHeading();
+            if (h) { window.__communityRankHeadingEl = h; return h; }
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------
+    // 【2】選択エリア／ランキングエリアを別枠に分離（冪等）
+    // ------------------------------------------------------------------
+    window.__restructureCommunityRankLayout = function() {
+        var ctrl = document.getElementById('communityRankingControls');
+        var list = document.getElementById('leaderboardContainer');
+        if (!ctrl || !list) return; // 第13回パッチ未適用なら何もしない
+        if (document.getElementById('crSelectShell')) return; // 組替済み
+
+        var heading = getHeadingEl();
+
+        // 外側の元カードを透明な“器”にする
+        var outerCard = (heading && heading.closest ? heading.closest('.card') : null) || (list.closest ? list.closest('.card') : null);
+        if (outerCard) outerCard.classList.add('cr-outer-shell');
+
+        // 選択枠・ランキング枠を作成
+        var selectShell = document.createElement('div');
+        selectShell.id = 'crSelectShell';
+        var rankShell = document.createElement('div');
+        rankShell.id = 'crRankShell';
+
+        // 見出しがある場合：見出しの前に選択枠を挿入し、見出しとコントロールを収める
+        if (heading && heading.parentNode) {
+            heading.parentNode.insertBefore(selectShell, heading);
+            selectShell.appendChild(heading);
+        } else {
+            // 見出しが取れなければコントロールの前に選択枠を挿入
+            ctrl.parentNode.insertBefore(selectShell, ctrl);
+        }
+        if (ctrl.parentNode) selectShell.appendChild(ctrl);
+
+        // リストをランキング枠で包む
+        if (list.parentNode) {
+            list.parentNode.insertBefore(rankShell, list);
+            rankShell.appendChild(list);
+        }
+    };
+
+    // ------------------------------------------------------------------
+    // 【3】下の重複カードを非表示（:has 非対応ブラウザ用のJS保険）
+    //     ※#view-community 内にあるものだけ＝ゲームタブには触れない
+    // ------------------------------------------------------------------
+    window.__hideDuplicateGameRankCard = function() {
+        var lc = document.getElementById('leaderboardListContainer');
+        if (!lc) return;
+        var community = document.getElementById('view-community');
+        if (!community) return;
+        var card = lc.closest ? lc.closest('.card') : null;
+        if (card && community.contains(card)) card.style.display = 'none';
+    };
+
+    // 両方をまとめて実行するヘルパー
+    function applyFinishLayout() {
+        try { window.__restructureCommunityRankLayout(); } catch (e) {}
+        try { window.__hideDuplicateGameRankCard(); } catch (e) {}
+    }
+
+    // ------------------------------------------------------------------
+    // 【4】renderLeaderboard 上書き：描画後に枠分離＋重複削除＋見出し再取得
+    // ------------------------------------------------------------------
+    var __prevRenderLeaderboardForFinish = window.renderLeaderboard;
+    window.renderLeaderboard = async function() {
+        var r = __prevRenderLeaderboardForFinish ? await __prevRenderLeaderboardForFinish.apply(this, arguments) : undefined;
+        applyFinishLayout();
+        return r;
+    };
+
+    // ------------------------------------------------------------------
+    // 【5】renderCommunityRankPills 上書き：選択中のメインピルを中央へ寄せる
+    //     （スワイプ式はそのまま。タップで選んだピルがスッと中央に）
+    // ------------------------------------------------------------------
+    var __prevRenderCommunityRankPillsForFinish = window.renderCommunityRankPills;
+    if (typeof __prevRenderCommunityRankPillsForFinish === 'function') {
+        window.renderCommunityRankPills = function() {
+            var r = __prevRenderCommunityRankPillsForFinish.apply(this, arguments);
+            setTimeout(function() {
+                var sc = document.getElementById('communityRankMainScroller');
+                if (!sc) return;
+                var act = sc.querySelector('.community-rank-pill-active');
+                if (act && typeof act.scrollIntoView === 'function') {
+                    act.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+                }
+            }, 60);
+            return r;
+        };
+    }
+
+    // ------------------------------------------------------------------
+    // 【6】switchTab 上書き：コミュニティ切替時に確実にレイアウトを適用
+    // ------------------------------------------------------------------
+    var __prevSwitchTabForFinish = window.switchTab;
+    window.switchTab = function(tabId) {
+        var r = __prevSwitchTabForFinish ? __prevSwitchTabForFinish.apply(this, arguments) : undefined;
+        if (tabId === 'community') {
+            setTimeout(applyFinishLayout, 80);
+            setTimeout(applyFinishLayout, 350);
+        }
+        return r;
+    };
+
+    // ------------------------------------------------------------------
+    // 【7】起動時注入（第13回パッチのDOM生成を待つため遅延＋再試行）
+    // ------------------------------------------------------------------
+    (function initCommunityRankFinishPatch() {
+        function boot() {
+            applyFinishLayout();
+            // 第13回パッチの描画より後にDOMが揃う場合の保険
+            setTimeout(applyFinishLayout, 300);
+            setTimeout(applyFinishLayout, 900);
+        }
+        if (document.readyState !== 'loading') {
+            setTimeout(boot, 450);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 450); });
+        }
+    })();
+
+    console.log('🎨 第14回パッチ（フレンド欄ランキング仕上げ：枠分離＋左右対称＋重複削除＋選択中央寄せ）適用完了');
+})();
