@@ -10689,3 +10689,261 @@ window.loadLocalState = async function() {
 })();
 
 console.log('📖 使い方ガイドパッチ（サイドバー入口＋フルスクリーンアコーディオンガイド）適用完了');
+// ==========================================================================
+// 🎴 第13回パッチ：フラッシュ単語の意味別出題
+//    ① 複数の意味を持つ単語を「意味ごとの別カード」として出題（同じ単語が意味の数だけ出る）
+//    ② 「覚えた/覚えていない」を意味ごとに個別記録（常に meanings[0] が更新されるバグを修正）
+//    ③ カード背景色・履歴バブルを、その意味自身の状態に合わせて表示
+//    ④ 意味が2つ以上ある単語は「意味 ①/②」バッジを表示
+//    ⑤ 単語全体の状態は全意味から自動集計（updateMeaningStatus と同じ方式）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※教材切替・ペンギンローディング・ゴーストエフェクト・テンポ等はすべてそのまま継承
+// ==========================================================================
+(function applyFlashcardMeaningPatch() {
+    if (window.__flashcardMeaningPatchApplied) return;
+    window.__flashcardMeaningPatchApplied = true;
+
+    var MEANING_CLEAN_REGEX = /[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g;
+    var CIRCLED_NUMS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
+
+    // ------------------------------------------------------------------
+    // ヘルパー①：カードから vocabList 内の単語を探す（num優先・wordフォールバック）
+    // ------------------------------------------------------------------
+    function findVocabForCard(wordData) {
+        if (!wordData) return null;
+        var match = null;
+        if (wordData.num !== undefined && wordData.num !== null) {
+            match = vocabList.find(function(v) { return String(v.num) === String(wordData.num); });
+        }
+        if (!match && wordData.en) {
+            var cleanKey = String(wordData.en).toLowerCase().replace(MEANING_CLEAN_REGEX, "");
+            match = vocabList.find(function(v) { return v.word.toLowerCase() === cleanKey; });
+        }
+        return match;
+    }
+
+    // ヘルパー②：カードが指す「狙った意味」を探す
+    function findTargetMeaning(vocabMatch, wordData) {
+        if (!vocabMatch || !vocabMatch.meanings) return null;
+        if (wordData.meaningId === undefined || wordData.meaningId === null) return null;
+        return vocabMatch.meanings.find(function(m) { return String(m.id) === String(wordData.meaningId); }) || null;
+    }
+
+    // ------------------------------------------------------------------
+    // ① startFlashcardSession 上書き：既存処理の実行後にキューを意味ごとに展開
+    //    （教材切替・ペンギンローディング等はそのまま実行される）
+    // ------------------------------------------------------------------
+    var __prevStartFlashcardSessionForMeaningPatch = window.startFlashcardSession;
+    window.startFlashcardSession = async function() {
+        await __prevStartFlashcardSessionForMeaningPatch.apply(this, arguments);
+
+        // セッションが始まっていない場合（プールが空で早期リターンした等）は何もしない
+        var playScreen = document.getElementById('flashcard-play-screen');
+        if (!playScreen || playScreen.style.display !== 'flex') return;
+        if (!flashcardOriginQueue || flashcardOriginQueue.length === 0) return;
+
+        // 各単語カードを「意味ごとのカード」へ展開
+        var expanded = [];
+        flashcardOriginQueue.forEach(function(card) {
+            var vocabMatch = findVocabForCard(card);
+            if (vocabMatch && vocabMatch.meanings && vocabMatch.meanings.length > 0) {
+                var valid = vocabMatch.meanings.filter(function(m) { return m.text && String(m.text).trim() !== ''; });
+                if (valid.length === 0) valid = [vocabMatch.meanings[0]];
+                valid.forEach(function(m, badgeIdx) {
+                    expanded.push({
+                        num: card.num,
+                        en: card.en,
+                        ja: m.text,
+                        meaningId: m.id,
+                        meaningBadgeIndex: badgeIdx,
+                        totalMeanings: valid.length
+                    });
+                });
+            } else {
+                // 意味が取得できない場合の保険：そのまま維持（既存挙動）
+                expanded.push({ num: card.num, en: card.en, ja: card.ja });
+            }
+        });
+
+        flashcardOriginQueue = expanded.sort(function() { return Math.random() - 0.5; });
+        flashcardCurrentIndex = 0;
+        flashcardLearnedCount = 0;
+        flashcardSessionHistory = [];
+        window.renderFlashcardDeck();
+    };
+
+    // ------------------------------------------------------------------
+    // ② getFlashcardStyleByHistory 上書き：その意味自身の履歴で背景色を決定
+    //    （意味IDが無いカードは従来の単語全体挙動をそのまま再現）
+    // ------------------------------------------------------------------
+    window.getFlashcardStyleByHistory = function(wordData) {
+        var vocabMatch = findVocabForCard(wordData);
+        var allHistory = [];
+
+        var targetMeaning = findTargetMeaning(vocabMatch, wordData);
+        if (targetMeaning) {
+            // ✅ 意味別：この意味の履歴だけを読む
+            if (targetMeaning.history && targetMeaning.history.length > 0) {
+                allHistory = allHistory.concat(targetMeaning.history);
+            }
+        } else if (vocabMatch) {
+            // フォールバック：従来の単語全体挙動
+            if (vocabMatch.history && vocabMatch.history.length > 0) {
+                allHistory = allHistory.concat(vocabMatch.history);
+            }
+            if (vocabMatch.meanings) {
+                vocabMatch.meanings.forEach(function(m) {
+                    if (m.history && m.history.length > 0) allHistory = allHistory.concat(m.history);
+                });
+            }
+        } else {
+            var cleanKey = String(wordData.en || '').toLowerCase().replace(MEANING_CLEAN_REGEX, "");
+            var memStatus = wordMemory[cleanKey];
+            if (memStatus && memStatus !== 'none') allHistory.push(memStatus);
+        }
+
+        if (allHistory.length === 0) {
+            return "background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0%, #130a24 75%, #090514 100%) !important; border: none !important; box-shadow: none !important;";
+        }
+
+        var totalScore = 0;
+        allHistory.forEach(function(h) {
+            if (h === 'ok') totalScore += 1;
+            else if (h === 'so') totalScore += 4;
+            else if (h === 'bad') totalScore += 9;
+        });
+        var avg = totalScore / allHistory.length;
+        var green = [16, 185, 129], yellow = [245, 158, 11], red = [239, 68, 68];
+        var r, g, b;
+        if (avg <= 5) {
+            var ratio = (avg - 1) / (5 - 1);
+            r = Math.round(green[0] + (yellow[0] - green[0]) * ratio);
+            g = Math.round(green[1] + (yellow[1] - green[1]) * ratio);
+            b = Math.round(green[2] + (yellow[2] - green[2]) * ratio);
+        } else {
+            var ratio2 = (avg - 5) / (9 - 5);
+            r = Math.round(yellow[0] + (red[0] - yellow[0]) * ratio2);
+            g = Math.round(yellow[1] + (red[1] - yellow[1]) * ratio2);
+            b = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio2);
+        }
+        return "background: radial-gradient(circle at center, rgba(" + r + ", " + g + ", " + b + ", 0.22) 0%, rgba(" + r + ", " + g + ", " + b + ", 0.12) 50%, rgba(" + r + ", " + g + ", " + b + ", 0) 100%);";
+    };
+
+    // ------------------------------------------------------------------
+    // ③ renderFlashcardHistoryBubbles 上書き：その意味自身の直近5回を表示
+    // ------------------------------------------------------------------
+    window.renderFlashcardHistoryBubbles = function(wordData) {
+        var container = document.getElementById('fcHistoryContainer');
+        if (!container) return;
+        container.innerHTML = "";
+
+        var vocabMatch = findVocabForCard(wordData);
+        var targetHistory = [];
+
+        var targetMeaning = findTargetMeaning(vocabMatch, wordData);
+        if (targetMeaning) {
+            // ✅ 意味別
+            if (targetMeaning.history && targetMeaning.history.length > 0) {
+                targetHistory = targetHistory.concat(targetMeaning.history);
+            } else if (targetMeaning.status && targetMeaning.status !== 'none') {
+                targetHistory.push(targetMeaning.status);
+            }
+        } else if (vocabMatch) {
+            // フォールバック：従来の単語全体挙動
+            if (vocabMatch.history && vocabMatch.history.length > 0) {
+                targetHistory = targetHistory.concat(vocabMatch.history);
+            } else if (vocabMatch.status && vocabMatch.status !== 'none') {
+                targetHistory.push(vocabMatch.status);
+            }
+        } else {
+            var cleanKey = String(wordData.en || '').toLowerCase().replace(MEANING_CLEAN_REGEX, "");
+            var memStatus = wordMemory[cleanKey];
+            if (memStatus && memStatus !== 'none') targetHistory.push(memStatus);
+        }
+
+        var displayList = targetHistory.slice(-5);
+        while (displayList.length < 5) displayList.unshift('none');
+        displayList.forEach(function(status) {
+            var bubble = document.createElement('div');
+            bubble.className = "fc-history-bubble";
+            if (status !== 'none') bubble.classList.add(status);
+            container.appendChild(bubble);
+        });
+    };
+
+    // ------------------------------------------------------------------
+    // ④ swipeFlashcard 上書き：スワイプした「その意味」だけを更新
+    //    仕組み：既存処理の実行直前だけ狙った意味を先頭へ移動し、
+    //           try/finally で必ず元の順番へ戻す（エフェクト・テンポは完全維持）
+    // ------------------------------------------------------------------
+    var __prevSwipeFlashcardForMeaningPatch = window.swipeFlashcard;
+    window.swipeFlashcard = function(direction, finalDx, finalDy) {
+        var currentWord = flashcardOriginQueue[flashcardCurrentIndex];
+        var vocabMatch = findVocabForCard(currentWord);
+        var originalIndex = -1;
+
+        if (vocabMatch && vocabMatch.meanings && currentWord &&
+            currentWord.meaningId !== undefined && currentWord.meaningId !== null) {
+            originalIndex = vocabMatch.meanings.findIndex(function(m) { return String(m.id) === String(currentWord.meaningId); });
+        }
+
+        var needRestore = false;
+        if (vocabMatch && vocabMatch.meanings && originalIndex > 0) {
+            var target = vocabMatch.meanings.splice(originalIndex, 1)[0];
+            vocabMatch.meanings.unshift(target);
+            needRestore = true;
+        }
+
+        try {
+            return __prevSwipeFlashcardForMeaningPatch.apply(this, arguments);
+        } finally {
+            // 意味の順番を必ず元に戻す
+            if (needRestore && vocabMatch && vocabMatch.meanings) {
+                var moved = vocabMatch.meanings.shift();
+                vocabMatch.meanings.splice(originalIndex, 0, moved);
+            }
+            // 単語全体の状態を全意味から集計（updateMeaningStatus と同じ方式）
+            if (vocabMatch && vocabMatch.meanings && vocabMatch.meanings.length > 0 &&
+                typeof window.wordOverallStatus === 'function') {
+                var agg = [];
+                vocabMatch.meanings.forEach(function(m) {
+                    if (m.history && m.history.length > 0) agg = agg.concat(m.history);
+                });
+                vocabMatch.history = agg.slice(-20);
+                vocabMatch.status = window.wordOverallStatus(vocabMatch);
+            }
+        }
+    };
+
+    // ------------------------------------------------------------------
+    // ⑤ renderFlashcardDeck 上書き：意味が2つ以上ある単語に「意味 ①/②」バッジを注入
+    //    （既存の描画・オートフィット処理は一切触らず、描画後に追加だけ行う）
+    // ------------------------------------------------------------------
+    var __prevRenderFlashcardDeckForMeaningPatch = window.renderFlashcardDeck;
+    window.renderFlashcardDeck = function() {
+        var r = __prevRenderFlashcardDeckForMeaningPatch.apply(this, arguments);
+        try {
+            var wordData = flashcardOriginQueue[flashcardCurrentIndex];
+            if (wordData && wordData.totalMeanings && wordData.totalMeanings > 1) {
+                var card = document.getElementById('activeFlashcard');
+                if (card) {
+                    var idxChar = CIRCLED_NUMS[wordData.meaningBadgeIndex] || String(wordData.meaningBadgeIndex + 1);
+                    var totalChar = CIRCLED_NUMS[wordData.totalMeanings - 1] || String(wordData.totalMeanings);
+                    var faces = card.querySelectorAll('.flashcard-face-front, .flashcard-face-back');
+                    for (var i = 0; i < faces.length; i++) {
+                        var face = faces[i];
+                        if (face.querySelector('.fc-meaning-badge')) continue;
+                        var badge = document.createElement('span');
+                        badge.className = 'fc-meaning-badge';
+                        badge.style.cssText = "position:absolute; bottom:26px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:800; color:var(--cosmic-purple-light); background:rgba(0,0,0,0.45); border:1px solid rgba(192,132,252,0.5); padding:2px 8px; border-radius:10px; letter-spacing:0.5px; pointer-events:none; text-shadow:0 0 6px rgba(192,132,252,0.6); white-space:nowrap; z-index:10;";
+                        badge.innerText = '意味 ' + idxChar + ' / ' + totalChar;
+                        face.appendChild(badge);
+                    }
+                }
+            }
+        } catch (e) {}
+        return r;
+    };
+
+    console.log('🎴 第13回パッチ（フラッシュ単語の意味別出題）適用完了');
+})();
