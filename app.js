@@ -12478,3 +12478,122 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
 
     console.log('📋 第16回パッチ（長文リーダー登録単語トレー：自動抽出＋意味別チェック＋英文色追従）適用完了');
 })();
+// ==========================================================================
+// 🔧 修正パッチ：長文リーダーの「開く」「本棚に保存する」ボタンが
+//    英文中のダブルクォート " で壊れて押せなくなる問題を根治
+//    原因: onclick="..." 属性内に英文を埋めているが " をエスケープしていない
+//          → 英文に " が混ざると属性が途中で切れ、ボタンが無効化される
+//    修正: 既存関数の中身には一切触れず、実行“後”にボタンを走査して
+//          壊れた onclick 属性を除去＋安全な addEventListener に付け替える
+//          （テキストはグローバル変数から直接渡す＝エスケープ地獄を回避）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※analyzeText / renderHistoryList をラップするだけ＝解析・和訳・本棚保存ロジックは不変
+// ==========================================================================
+(function applyReaderOpenButtonFixPatch() {
+    if (window.__readerOpenButtonFixApplied) return;
+    window.__readerOpenButtonFixApplied = true;
+
+    // ------------------------------------------------------------------
+    // 【1】履歴ログの「開く」ボタンを安全なリスナに付け替え
+    //     ・.list-item-row の出現順＝textHistory の順（forEach で append されるため）
+    //     ・壊れた onclick 属性を removeAttribute してからリスナを貼る
+    //     ・削除ボタン(.word-delete-btn)には触れない
+    // ------------------------------------------------------------------
+    window.__rebindHistoryOpenButtons = function() {
+        var container = document.getElementById('historyListContainer');
+        if (!container) return;
+        var rows = container.querySelectorAll('.list-item-row');
+        for (var i = 0; i < rows.length; i++) {
+            (function(idx) {
+                var row = rows[idx];
+                if (!row) return;
+                var openBtn = row.querySelector('.list-action-link');
+                if (!openBtn) return;
+                // 毎回 innerHTML で作り直されるので要素は新しい＝ガードは念のため
+                if (openBtn.dataset.openRebound === '1') return;
+                openBtn.removeAttribute('onclick');
+                openBtn.dataset.openRebound = '1';
+                openBtn.addEventListener('click', function(ev) {
+                    if (ev) ev.stopPropagation();
+                    var entry = (typeof textHistory !== 'undefined' && textHistory) ? textHistory[idx] : null;
+                    if (!entry) return;
+                    window.analyzeText(entry.text, entry.title || '無題');
+                });
+            })(i);
+        }
+    };
+
+    // ------------------------------------------------------------------
+    // 【2】解析画面の「本棚に保存する」ボタンを安全なリスナに付け替え
+    //     ・readerCurrentTitle 内の button が対象
+    //     ・テキストはグローバル変数 currentActiveReaderText / currentActiveTitle
+    //       を直接渡す（属性埋め込みをしないので " があっても壊れない）
+    // ------------------------------------------------------------------
+    window.__rebindSaveBookshelfButton = function() {
+        var titleBox = document.getElementById('readerCurrentTitle');
+        if (!titleBox) return;
+        var btn = titleBox.querySelector('button');
+        if (!btn) return;
+        if (btn.dataset.saveRebound === '1') return;
+        btn.removeAttribute('onclick');
+        btn.dataset.saveRebound = '1';
+        btn.addEventListener('click', function(ev) {
+            if (ev) ev.stopPropagation();
+            var txt = (typeof currentActiveReaderText !== 'undefined') ? currentActiveReaderText : '';
+            var ttl = (typeof currentActiveTitle !== 'undefined' && currentActiveTitle) ? currentActiveTitle : '無題';
+            if (typeof window.showCustomSaveBookshelfPrompt === 'function') {
+                window.showCustomSaveBookshelfPrompt(txt, ttl);
+            }
+        });
+    };
+
+    // 両方をまとめて実行するヘルパー
+    function rebindAll() {
+        try { window.__rebindHistoryOpenButtons(); } catch (e) {}
+        try { window.__rebindSaveBookshelfButton(); } catch (e) {}
+    }
+
+    // ------------------------------------------------------------------
+    // 【3】renderHistoryList をラップ：描画後に「開く」を付け替え
+    // ------------------------------------------------------------------
+    var __prevRenderHistoryListForOpenFix = window.renderHistoryList;
+    if (typeof __prevRenderHistoryListForOpenFix === 'function') {
+        window.renderHistoryList = function() {
+            var r = __prevRenderHistoryListForOpenFix.apply(this, arguments);
+            window.__rebindHistoryOpenButtons();
+            return r;
+        };
+    }
+
+    // ------------------------------------------------------------------
+    // 【4】analyzeText をラップ：描画後に「保存する」＋「開く」を付け替え
+    //     ・async 関数なので Promise 解決を待つ（readerCurrentTitle は await 後に設定される）
+    //     ・解析失敗で closeReader された場合もガード済み（要素が無ければ何もしない）
+    // ------------------------------------------------------------------
+    var __prevAnalyzeTextForOpenFix = window.analyzeText;
+    if (typeof __prevAnalyzeTextForOpenFix === 'function') {
+        window.analyzeText = function() {
+            var r = __prevAnalyzeTextForOpenFix.apply(this, arguments);
+            if (r && typeof r.then === 'function') {
+                r.then(function() { rebindAll(); }, function() { rebindAll(); });
+            } else {
+                rebindAll();
+            }
+            return r;
+        };
+    }
+
+    // ------------------------------------------------------------------
+    // 【5】起動時注入（履歴が初期描画された後の保険）
+    // ------------------------------------------------------------------
+    (function initReaderOpenButtonFixPatch() {
+        function boot() { rebindAll(); }
+        if (document.readyState !== 'loading') {
+            setTimeout(boot, 500);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 500); });
+        }
+    })();
+
+    console.log('🔧 長文リーダー開く/保存ボタン修正パッチ（" エスケープ欠落の根治：リスナ付け替え方式）適用完了');
+})();
