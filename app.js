@@ -12064,3 +12064,417 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     
     console.log('📊 第16回パッチ（勉強時間グラフ描画トリガー根治：ホーム毎秒描画＋復元再実行＋遅延キック）適用完了');
 })();
+// ==========================================================================
+// ⏱️ 第17回パッチ：プレイ時間ランキングの整合性根治（週間 < 今日 の矛盾を撲滅）
+//    症状：ランキングの「1日」が「週間」より大きい（論理上ありえない逆転）
+//    原因：study_today_secs と study_week_secs が別経路で刻まれ、ズレたまま
+//          クラウドへ保存／復元されるため、週間カウンタが今日の分を含まない
+//    根治：① 描画時に全ユーザー分を「週間＝max(週間, 今日)」「総計＝max(総計, 週間)」
+//             で強制補正 → 逆転を物理的に不可能化
+//          ② 毎秒ウォッチドッグで“自分”の userStats を同じルールで整合＋
+//             古い週キーの残骸を今週へ正規化 → 次回保存でクラウドも整合
+//          ③ ログイン復元直後にも整合を1回実行
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※🏆 第13回(コミュニティランキング)・📊 第15回(グラフ同期) 適用済みが前提。
+//      未適用の関数は typeof ガードで安全にスキップします
+// ==========================================================================
+(function applyPlayTimeConsistencyPatch() {
+    if (window.__playTimeConsistencyApplied) return;
+    window.__playTimeConsistencyApplied = true;
+
+    // ------------------------------------------------------------------
+    // ヘルパー：日付キー／週キー／時間フォーマット（第13回があればそれを使い、
+    //          無ければ同一ロジックのフォールバックを使う＝自己完結）
+    // ------------------------------------------------------------------
+    function ptcTodayKey() {
+        if (typeof window.__getTodayKey === 'function') return window.__getTodayKey();
+        var d = new Date();
+        return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+    function ptcWeekKey() {
+        if (typeof window.__getWeekKey === 'function') return window.__getWeekKey();
+        var d = new Date();
+        var day = d.getDay();
+        var diff = (day === 0 ? -6 : 1 - day);
+        var m = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+        return m.getFullYear() + '-' + (m.getMonth() + 1) + '-' + m.getDate();
+    }
+    function ptcFmt(secs) {
+        if (typeof window.__formatStudyTime === 'function') return window.__formatStudyTime(secs);
+        var t = Math.floor((secs || 0) / 60);
+        if (t >= 60) { var h = Math.floor(t / 60); var mm = t % 60; return h + '時間' + (mm > 0 ? mm + '分' : ''); }
+        return t + '分';
+    }
+    function ptcIsSelf(u) { return !!(u && u.isMe === true); }
+
+    // ------------------------------------------------------------------
+    // 核心：1ユーザーの range 別値を“矛盾なく”算出
+    //   ・daily  = 今日キー一致なら today_secs（自分はグローバル実測も取り込む）
+    //   ・weekly = 今週キー一致なら week_secs をベースにし、必ず daily 以上にする
+    //              今週キー不一致（前週の残骸）ならベース0 → daily だけ採用
+    //   ・total  = 必ず weekly 以上にする
+    //   → これで weekly < daily は構造的に発生しない
+    // ------------------------------------------------------------------
+    function ptcValue(u, range) {
+        var todayKey = ptcTodayKey();
+        var weekKey = ptcWeekKey();
+        var todaySecs = parseInt(u.study_today_secs) || 0;
+        // 自分はメモリ上の実測 todayStudySeconds も加味（復元ズレを吸収）
+        if (ptcIsSelf(u) && typeof todayStudySeconds !== 'undefined') {
+            var live = parseInt(todayStudySeconds) || 0;
+            if ((u.study_today_date || '') === todayKey || !u.study_today_date) {
+                if (live > todaySecs) todaySecs = live;
+            }
+        }
+        var daily = ((u.study_today_date || '') === todayKey) ? todaySecs : 0;
+        var weeklyBase = ((u.study_week_key || '') === weekKey) ? (parseInt(u.study_week_secs) || 0) : 0;
+        var weekly = Math.max(weeklyBase, daily);   // ★ 週間は今日を必ず内包
+        var total = Math.max(parseInt(u.study_total_secs) || 0, weekly); // ★ 総計は週間を必ず内包
+        if (range === 'daily') return daily;
+        if (range === 'weekly') return weekly;
+        return total;
+    }
+
+    // ------------------------------------------------------------------
+    // 自分自身の userStats を同じルールで整合（毎秒）
+    //   ・古い週キーの残骸を今週へ正規化（study_week_key を今週に上書き）
+    //   ・グローバル todayStudySeconds も整合値に揃えて表示の一貫性を確保
+    // ------------------------------------------------------------------
+    function ptcEnforceSelf() {
+        if (typeof userStats === 'undefined' || !userStats) return;
+        var todayKey = ptcTodayKey();
+        var weekKey = ptcWeekKey();
+        var live = (typeof todayStudySeconds !== 'undefined') ? (parseInt(todayStudySeconds) || 0) : 0;
+
+        var ts = parseInt(userStats.study_today_secs) || 0;
+        if ((userStats.study_today_date || '') === todayKey || !userStats.study_today_date) {
+            if (live > ts) ts = live;
+        }
+        var daily = ((userStats.study_today_date || '') === todayKey) ? ts : 0;
+
+        var weeklyBase = ((userStats.study_week_key || '') === weekKey) ? (parseInt(userStats.study_week_secs) || 0) : 0;
+        var weekly = Math.max(weeklyBase, daily);   // 前週残骸は base0 → 今週は daily から再出発
+
+        var total = Math.max(parseInt(userStats.study_total_secs) || 0, weekly);
+
+        userStats.study_today_secs = ts;
+        userStats.study_week_secs = weekly;
+        userStats.study_total_secs = total;
+        if (!userStats.study_today_date) userStats.study_today_date = todayKey;
+        userStats.study_week_key = weekKey; // ★ 今週へ正規化（残骸を消す）
+
+        if (typeof todayStudySeconds !== 'undefined' && ts > todayStudySeconds) {
+            todayStudySeconds = ts;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // drawCommunityTimeRanking 上書き：補正済み値で描画（自分も他者も）
+    // ------------------------------------------------------------------
+    window.drawCommunityTimeRanking = function(container, users) {
+        if (!container) return;
+        // 第13回の行ビルダーが無い環境では安全に終了（描画は第13回に依存）
+        if (typeof window.__buildCommunityRankRow !== 'function') return;
+        var range = window.__communityTimeRange || 'total';
+        var rows = (users || []).map(function(u) { return { u: u, val: ptcValue(u, range) }; });
+        rows.sort(function(a, b) { return b.val - a.val; });
+        var html = '';
+        rows.slice(0, 50).forEach(function(row, idx) {
+            html += window.__buildCommunityRankRow(row.u, idx,
+                '<div class="community-rank-value-big">' + ptcFmt(row.val) + '</div>');
+        });
+        container.innerHTML = html;
+    };
+
+    // ------------------------------------------------------------------
+    // 毎秒ウォッチドッグ（自分の整合。増やす方向の単調補正なので
+    //   第13回の sync ループ／第15回のミラーと競合しない）
+    // ------------------------------------------------------------------
+    if (!window.__ptcWatchdogStarted) {
+        window.__ptcWatchdogStarted = true;
+        setInterval(function() {
+            try { ptcEnforceSelf(); } catch (e) {}
+        }, 1000);
+    }
+
+    // ------------------------------------------------------------------
+    // loadUserStats ラップ：クラウド復元“後”に整合を1回実行
+    // ------------------------------------------------------------------
+    var __prevLoadUserStatsForPtc = window.loadUserStats;
+    window.loadUserStats = async function() {
+        var r = __prevLoadUserStatsForPtc ? await __prevLoadUserStatsForPtc.apply(this, arguments) : undefined;
+        try { ptcEnforceSelf(); } catch (e) {}
+        return r;
+    };
+
+    // ------------------------------------------------------------------
+    // 起動時：DOM／変数揃い次第1回整合
+    // ------------------------------------------------------------------
+    (function initPlayTimeConsistencyPatch() {
+        function boot() { try { ptcEnforceSelf(); } catch (e) {} }
+        if (document.readyState !== 'loading') {
+            setTimeout(boot, 500);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 500); });
+        }
+    })();
+
+    console.log('⏱️ 第17回パッチ（プレイ時間整合：週間≧今日・総計≧週間 を構造で保証）適用完了');
+})();
+    // ==========================================================================
+// 📋 第16回パッチ：長文リーダー「登録単語トレー」
+//    英文を解析した瞬間、その長文に含まれる“単語帳登録済みの語”を自動で拾い、
+//    英文の直下に「📋 この長文の登録単語」トレーを生成する。
+//    ・登場順・同一語は1行に集約
+//    ・各語の意味ごとに ⚪︎/△/✕/ー をその場でチェック（単語帳と完全同期）
+//    ・チェックすれば英文内の語の色もリアルタイムで追従
+//    ・登録語が0語ならトレー自体を出さない／1語以上なら最初から展開
+//    ・見出しタップで開閉（なめらかに伸縮）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※analyzeText をラップするだけ＝既存の解析・和訳・本棚保存は一切不変
+// ==========================================================================
+(function applyReaderVocabTrainerPatch() {
+    if (window.__readerVocabTrainerApplied) return;
+    window.__readerVocabTrainerApplied = true;
+
+    // ------------------------------------------------------------------
+    // 【0】パッチ専用スタイル（コズミック発光・出現モーション・生きたフィードバック）
+    // ------------------------------------------------------------------
+    (function injectReaderTrainerCss() {
+        if (document.getElementById('readerTrainerCss')) return;
+        var st = document.createElement('style');
+        st.id = 'readerTrainerCss';
+        st.textContent = [
+            /* トレー外枠 */
+            '#readerVocabTrainerCard{margin:18px 0 4px 0;border:1px solid rgba(0,240,255,0.30);border-radius:14px;background:linear-gradient(160deg, rgba(7,11,25,0.55) 0%, rgba(20,15,45,0.45) 100%);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 22px rgba(0,0,0,0.35), inset 0 0 22px rgba(0,240,255,0.05);overflow:hidden;}',
+            /* 見出し（タップで開閉） */
+            '.rvt-head{display:flex;align-items:center;gap:10px;padding:13px 15px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;background:linear-gradient(90deg, rgba(0,240,255,0.10), rgba(192,132,252,0.06));transition:background .2s ease;}',
+            '.rvt-head:active{background:linear-gradient(90deg, rgba(0,240,255,0.20), rgba(192,132,252,0.12));}',
+            '.rvt-head-ico{width:30px;height:30px;flex-shrink:0;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(0,240,255,0.12);border:1px solid rgba(0,240,255,0.35);box-shadow:0 0 10px rgba(0,240,255,0.25);}',
+            '.rvt-head-title{flex:1;min-width:0;font-size:13px;font-weight:900;color:#fff;letter-spacing:.4px;text-shadow:0 0 8px rgba(0,240,255,0.35);}',
+            '.rvt-head-sub{display:block;font-size:9.5px;font-weight:700;color:var(--text-sub);letter-spacing:.3px;margin-top:2px;text-shadow:none;}',
+            '.rvt-count{flex-shrink:0;font-size:11px;font-weight:900;color:#06121f;background:linear-gradient(135deg, var(--cosmic-cyan), var(--cosmic-purple-light));padding:3px 10px;border-radius:20px;box-shadow:0 0 10px rgba(0,240,255,0.45);}',
+            '.rvt-chev{flex-shrink:0;color:var(--cosmic-cyan);font-size:12px;font-weight:900;transition:transform .3s cubic-bezier(0.25,1,0.5,1);}',
+            '#readerVocabTrainerCard.rvt-open .rvt-chev{transform:rotate(180deg);}',
+            /* 本文（伸縮） */
+            '.rvt-body{max-height:0;overflow:hidden;transition:max-height .4s cubic-bezier(0.25,1,0.5,1);}',
+            '#readerVocabTrainerCard.rvt-open .rvt-body{max-height:4000px;}',
+            '.rvt-body-inner{padding:6px 12px 14px 12px;display:flex;flex-direction:column;gap:9px;}',
+            /* 1語カード */
+            '.rvt-word{border:1px solid rgba(255,255,255,0.12);border-radius:11px;background:rgba(255,255,255,0.04);padding:10px 12px;transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease;animation:rvtRowIn .4s cubic-bezier(0.25,1,0.5,1) both;}',
+            '.rvt-word:hover{border-color:rgba(0,240,255,0.4);box-shadow:0 0 12px rgba(0,240,255,0.18);}',
+            '@keyframes rvtRowIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}',
+            '.rvt-word-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;}',
+            '.rvt-word-num{font-size:10px;font-weight:800;color:var(--text-sub);background:rgba(255,255,255,0.08);padding:2px 7px;border-radius:5px;flex-shrink:0;}',
+            '.rvt-word-en{font-family:"Times New Roman",serif;font-size:17px;font-weight:800;color:#fff;text-shadow:0 0 8px rgba(0,240,255,0.3);word-break:break-word;}',
+            /* 意味行 */
+            '.rvt-meaning-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed rgba(255,255,255,0.10);}',
+            '.rvt-meaning-row:first-of-type{border-top:none;}',
+            '.rvt-meaning-text{flex:1;min-width:0;font-size:12.5px;color:rgba(226,232,240,0.92);line-height:1.45;word-break:break-word;}',
+            '.rvt-btns{display:flex;gap:4px;flex-shrink:0;}',
+            '.rvt-btn{width:25px;height:25px;border-radius:50%;border:1px solid rgba(255,255,255,0.3);background:rgba(0,0,0,0.5);color:#fff;font-size:10px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .12s ease, box-shadow .15s ease, background .15s ease;-webkit-tap-highlight-color:transparent;}',
+            '.rvt-btn:active{transform:scale(0.82);}',
+            '.rvt-btn.rvt-on{animation:rvtPop .3s cubic-bezier(0.25,1.4,0.5,1);}',
+            '@keyframes rvtPop{0%{transform:scale(0.7);}60%{transform:scale(1.18);}100%{transform:scale(1);}}',
+            '.rvt-btn[data-st="ok"].rvt-active{background:var(--word-ok);color:#000;box-shadow:0 0 9px rgba(16,185,129,0.6);border-color:var(--word-ok);}',
+            '.rvt-btn[data-st="so"].rvt-active{background:var(--word-so);color:#000;box-shadow:0 0 9px rgba(245,158,11,0.6);border-color:var(--word-so);}',
+            '.rvt-btn[data-st="bad"].rvt-active{background:var(--word-bad);color:#fff;box-shadow:0 0 9px rgba(239,68,68,0.6);border-color:var(--word-bad);}',
+            '.rvt-btn[data-st="none"].rvt-active{background:rgba(255,255,255,0.32);color:#fff;box-shadow:0 0 7px rgba(255,255,255,0.3);}'
+        ].join('\n');
+        (document.head || document.documentElement).appendChild(st);
+    })();
+
+    // 登録語抽出に使うクリーン正規表現（既存 analyzeText と同一ルール）
+    var RVT_CLEAN = /[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g;
+
+    // ------------------------------------------------------------------
+    // 【1】生テキストから“登録語”を登場順・重複排除で収集
+    //     （辞書語は除外＝findVocabByToken にヒットする語のみ）
+    // ------------------------------------------------------------------
+    window.__collectRegisteredWordsInText = function(text) {
+        var collected = [];
+        var seen = {};
+        if (!text || typeof window.findVocabByToken !== 'function') return collected;
+        var tokens = String(text).split(/\s+/);
+        for (var i = 0; i < tokens.length; i++) {
+            var raw = tokens[i];
+            if (!raw) continue;
+            var clean = raw.toLowerCase().replace(RVT_CLEAN, '');
+            if (!clean) continue;
+            var v = window.findVocabByToken(clean);
+            if (v && !seen[String(v.num)]) {
+                seen[String(v.num)] = true;
+                collected.push(v);
+            }
+        }
+        return collected;
+    };
+
+    // ------------------------------------------------------------------
+    // 【2】意味行の4ボタンを、現在の status に合わせて塗り直す
+    // ------------------------------------------------------------------
+    window.__paintTrainerMeaningRow = function(rowEl, vocabItem) {
+        if (!rowEl || !vocabItem) return;
+        var mid = rowEl.getAttribute('data-mid');
+        var m = null;
+        for (var i = 0; i < (vocabItem.meanings || []).length; i++) {
+            if (String(vocabItem.meanings[i].id) === String(mid)) { m = vocabItem.meanings[i]; break; }
+        }
+        var st = m ? (m.status || 'none') : 'none';
+        var btns = rowEl.querySelectorAll('.rvt-btn');
+        for (var b = 0; b < btns.length; b++) {
+            var bst = btns[b].getAttribute('data-st');
+            if (bst === st) btns[b].classList.add('rvt-active');
+            else btns[b].classList.remove('rvt-active');
+        }
+    };
+
+    // ------------------------------------------------------------------
+    // 【3】マーク変更ハンドラ（単語帳と完全同期＋英文の色も追従）
+    // ------------------------------------------------------------------
+    window.__trainerMark = function(num, meaningId, status, btnEl) {
+        // 既存の更新処理を流用（vocabList・EXP・保存・単語帳再描画を全部こなす）
+        if (typeof window.updateMeaningStatus === 'function') {
+            window.updateMeaningStatus(num, meaningId, status, null);
+        }
+        // 押したボタンをぽんとはねさせる
+        if (btnEl) {
+            btnEl.classList.remove('rvt-on');
+            void btnEl.offsetWidth;
+            btnEl.classList.add('rvt-on');
+        }
+        // 該当語を vocabList から引き直して行を再塗装
+        var v = null;
+        for (var i = 0; i < vocabList.length; i++) {
+            if (String(vocabList[i].num) === String(num)) { v = vocabList[i]; break; }
+        }
+        if (v && btnEl) {
+            var row = btnEl.closest('.rvt-meaning-row');
+            window.__paintTrainerMeaningRow(row, v);
+        }
+        // 英文内の語の色も即時追従
+        if (typeof window.updateReaderWordColors === 'function') {
+            try { window.updateReaderWordColors(); } catch (e) {}
+        }
+    };
+
+    // ------------------------------------------------------------------
+    // 【4】トレーDOMを構築して英文の直下へ挿入（0語なら非表示）
+    // ------------------------------------------------------------------
+    window.__buildReaderVocabTrainer = function() {
+        var eng = document.getElementById('englishContainer');
+        if (!eng || !eng.parentNode) return;
+
+        // 古いトレーがあれば除去
+        var old = document.getElementById('readerVocabTrainerCard');
+        if (old && old.parentNode) old.parentNode.removeChild(old);
+
+        var words = window.__collectRegisteredWordsInText(currentActiveReaderText || '');
+        if (!words || words.length === 0) return; // 登録語なし＝トレー不出
+
+        var card = document.createElement('div');
+        card.id = 'readerVocabTrainerCard';
+        card.className = 'rvt-open'; // 1語以上＝最初から展開
+
+        // ---- 見出し ----
+        var head = document.createElement('div');
+        head.className = 'rvt-head';
+        head.innerHTML =
+            '<span class="rvt-head-ico">📋</span>' +
+            '<span class="rvt-head-title">この長文の登録単語' +
+            '<span class="rvt-head-sub">タップで開閉 ／ 意味ごとに理解度をチェック</span></span>' +
+            '<span class="rvt-count">' + words.length + '語</span>' +
+            '<span class="rvt-chev">▾</span>';
+        head.onclick = function() { card.classList.toggle('rvt-open'); };
+        card.appendChild(head);
+
+        // ---- 本文 ----
+        var body = document.createElement('div');
+        body.className = 'rvt-body';
+        var inner = document.createElement('div');
+        inner.className = 'rvt-body-inner';
+
+        words.forEach(function(v, wIdx) {
+            var wCard = document.createElement('div');
+            wCard.className = 'rvt-word';
+            wCard.style.animationDelay = Math.min(wIdx * 0.04, 0.6) + 's';
+
+            var wHead = document.createElement('div');
+            wHead.className = 'rvt-word-head';
+            wHead.innerHTML =
+                '<span class="rvt-word-num">#' + v.num + '</span>' +
+                '<span class="rvt-word-en">' + (v.word || '') + '</span>';
+            wCard.appendChild(wHead);
+
+            (v.meanings || []).forEach(function(m) {
+                var row = document.createElement('div');
+                row.className = 'rvt-meaning-row';
+                row.setAttribute('data-mid', String(m.id));
+
+                var txt = document.createElement('span');
+                txt.className = 'rvt-meaning-text';
+                txt.textContent = m.text || '';
+                row.appendChild(txt);
+
+                var btns = document.createElement('div');
+                btns.className = 'rvt-btns';
+                var defs = [
+                    { st: 'ok',   label: '⚪︎' },
+                    { st: 'so',   label: '△' },
+                    { st: 'bad',  label: '✕' },
+                    { st: 'none', label: 'ー' }
+                ];
+                defs.forEach(function(d) {
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'rvt-btn';
+                    b.setAttribute('data-st', d.st);
+                    b.textContent = d.label;
+                    b.onclick = function(ev) {
+                        if (ev) ev.stopPropagation();
+                        window.__trainerMark(v.num, m.id, d.st, b);
+                    };
+                    btns.appendChild(b);
+                });
+                row.appendChild(btns);
+
+                // 初期塗装
+                window.__paintTrainerMeaningRow(row, v);
+                wCard.appendChild(row);
+            });
+
+            inner.appendChild(wCard);
+        });
+
+        body.appendChild(inner);
+        card.appendChild(body);
+
+        // 英文コンテナの“直後”に挿入
+        if (eng.nextSibling) eng.parentNode.insertBefore(card, eng.nextSibling);
+        else eng.parentNode.appendChild(card);
+    };
+
+    // ------------------------------------------------------------------
+    // 【5】analyzeText をラップ：解析完了“後”にトレーを組み立てる
+    //     （既存の解析・和訳・要約・本棚保存ロジックは一切不変）
+    // ------------------------------------------------------------------
+    var __prevAnalyzeTextForTrainer = window.analyzeText;
+    window.analyzeText = async function() {
+        var r = __prevAnalyzeTextForTrainer ? await __prevAnalyzeTextForTrainer.apply(this, arguments) : undefined;
+        try { window.__buildReaderVocabTrainer(); } catch (e) { console.error('reader trainer build error:', e); }
+        return r;
+    };
+
+    // ------------------------------------------------------------------
+    // 【6】リーダーを閉じた時はトレーも消す（既存 closeReader を拡張）
+    // ------------------------------------------------------------------
+    var __prevCloseReaderForTrainer = window.closeReader;
+    window.closeReader = function() {
+        var r = __prevCloseReaderForTrainer ? __prevCloseReaderForTrainer.apply(this, arguments) : undefined;
+        var t = document.getElementById('readerVocabTrainerCard');
+        if (t && t.parentNode) t.parentNode.removeChild(t);
+        return r;
+    };
+
+    console.log('📋 第16回パッチ（長文リーダー登録単語トレー：自動抽出＋意味別チェック＋英文色追従）適用完了');
+})();
