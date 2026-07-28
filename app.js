@@ -13507,3 +13507,656 @@ window.__steFixContrast();
 if (window.renderActivityChart) window.renderActivityChart();
 
 console.log('✍️ 第9回パッチ（コントラスト改善＋1分単位直接入力）適用完了');
+// ==========================================================================
+// 🧹 第10回パッチ：壊れた勉強時間データの浄化 ＋ 不整合修正 ＋ 管理者リセット
+//    ・読み込み/保存/日付跨ぎ時に today秒数・週間ログ を正規化
+//      （NaN/負/非数値/24h超/配列崩れ → 自動修復。正当な値は温存）
+//    ・保存時に「today秒数」と「週間ログの今日slot」を必ず同時書き
+//      → 片方だけ直って145が居座る不整合を根絶
+//    ・管理者用：①壊れた値だけ修復 ②今日を0に ③全ログを0に
+//               ④ローカルデータを完全消去して再読込（最終手段）
+//    ※必ず 第5→6→7→8→9回 の後に貼り付けてください
+// ==========================================================================
+
+var STE_DAY_SECS_MAX = 24 * 3600;   // 今日の秒数の上限（24h）
+var STE_DAY_MIN_MAX  = 1440;        // 1日の分数上限
+
+// ---------- 1. クランプ補助 ----------
+function __steClampSecs(x) {
+    var n = Number(x);
+    if (!isFinite(n) || isNaN(n)) return 0;
+    n = Math.floor(n);
+    if (n < 0) return 0;
+    if (n > STE_DAY_SECS_MAX) return STE_DAY_SECS_MAX;
+    return n;
+}
+function __steClampMin(x) {
+    var n = Number(x);
+    if (!isFinite(n) || isNaN(n)) return 0;
+    n = Math.floor(n);
+    if (n < 0) return 0;
+    if (n > STE_DAY_MIN_MAX) return STE_DAY_MIN_MAX;
+    return n;
+}
+
+// ---------- 2. データ浄化（変化があれば保存＋報告） ----------
+window.__steSanitizeStudyData = function(verbose) {
+    var changed = false;
+
+    // today 秒数
+    var oldSecs = todayStudySeconds;
+    var newSecs = __steClampSecs(todayStudySeconds);
+    if (newSecs !== oldSecs) { todayStudySeconds = newSecs; changed = true; }
+
+    // 週間ログ：配列保証＋長さ7＋各要素正規化
+    if (!Array.isArray(weeklyStudyMinutesLog)) {
+        weeklyStudyMinutesLog = [0,0,0,0,0,0,0]; changed = true;
+    }
+    if (weeklyStudyMinutesLog.length !== 7) {
+        var fixed = [];
+        for (var i = 0; i < 7; i++) fixed[i] = __steClampMin(weeklyStudyMinutesLog[i]);
+        weeklyStudyMinutesLog = fixed; changed = true;
+    } else {
+        for (var j = 0; j < 7; j++) {
+            var om = weeklyStudyMinutesLog[j];
+            var nm = __steClampMin(om);
+            if (nm !== om) { weeklyStudyMinutesLog[j] = nm; changed = true; }
+        }
+    }
+
+    if (changed) {
+        try {
+            localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
+            localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+        } catch (e) {}
+        if (verbose) {
+            console.warn('🧹 勉強時間データを修復しました',
+                { todaySecs: [oldSecs, '→', todayStudySeconds],
+                  weekly: weeklyStudyMinutesLog.slice() });
+        }
+    }
+    return changed;
+};
+
+// 起動時に即浄化
+window.__steSanitizeStudyData(true);
+
+// ---------- 3. renderActivityChart ラップ：今日のslot不整合を毎描画で是正 ----------
+if (window.renderActivityChart) {
+    var __prevRenderV10 = window.renderActivityChart;
+    window.renderActivityChart = function() {
+        // 描画前に軽量ガード（NaN/負を0に。正当値は触らない）
+        if (!isFinite(Number(todayStudySeconds)) || todayStudySeconds < 0) todayStudySeconds = 0;
+
+        var r = __prevRenderV10.apply(this, arguments);
+
+        // ✅ 核心：今日のslotを「today秒数由来」で必ず再確定
+        //    → 他経路(Firebase同期/元コード描画)が古い145を戻しても、ここで是正
+        var chart = document.getElementById('activityBarChart');
+        if (chart) {
+            var now = new Date();
+            var cur = now.getDay() - 1; if (cur < 0) cur = 6;
+            var correctMin = Math.floor(__steClampSecs(todayStudySeconds) / 60);
+            // グローバルの log も直す
+            if (weeklyStudyMinutesLog[cur] !== correctMin) {
+                weeklyStudyMinutesLog[cur] = correctMin;
+            }
+            // 表示DOMも、今日のバーだけ値/高さを是正（ローリング位置を特定）
+            var wraps = chart.querySelectorAll('.bar-wrapper');
+            for (var i = 0; i < wraps.length; i++) {
+                if (wraps[i].classList.contains('ste-today')) {
+                    var fill = wraps[i].querySelector('.bar-fill');
+                    var maxV = 0;
+                    for (var k = 0; k < 7; k++) maxV = Math.max(maxV, weeklyStudyMinutesLog[k] || 0);
+                    var scale = maxV > 0 ? maxV : 1;
+                    var pct = correctMin <= 0 ? 0 : Math.max(8, Math.round((correctMin / scale) * 100));
+                    if (fill) { fill.style.height = pct + '%'; fill.dataset.zero = correctMin <= 0 ? '1' : '0'; }
+                    if (wraps[i].children[0]) wraps[i].children[0].innerText = correctMin + '分';
+                    break;
+                }
+            }
+        }
+        return r;
+    };
+}
+
+// ---------- 4. __steSave ラップ：保存時に today と log今日slot を同時書き ----------
+if (window.__steSave) {
+    var __prevSaveV10 = window.__steSave;
+    window.__steSave = function() {
+        // 書き込み値を必ずクランプ
+        window.__steState.minutes = __steClampMin(window.__steState.minutes);
+
+        var wasToday = window.__steState.isToday;
+        var setMin   = window.__steState.minutes;
+
+        var r = __prevSaveV10.apply(this, arguments);
+
+        if (wasToday) {
+            // ✅ 不整合根絶：today秒数 と log今日slot を同時に確定
+            todayStudySeconds = __steClampSecs(setMin * 60);
+            var now = new Date();
+            var cur = now.getDay() - 1; if (cur < 0) cur = 6;
+            weeklyStudyMinutesLog[cur] = setMin;
+            try {
+                localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
+                localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+            } catch (e) {}
+            if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay();
+        } else {
+            // 過去も念のため正規化して保存
+            weeklyStudyMinutesLog[window.__steState.dayIdx] = setMin;
+            try { localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog)); } catch (e) {}
+        }
+        if (window.renderActivityChart) window.renderActivityChart();
+        return r;
+    };
+}
+
+// ---------- 5. 日付跨ぎ時の浄化（initStudyTimer 内 setInterval を補強） ----------
+// 既存の日付跨ぎ処理の“後”に浄化を挟むため、renderActivityChart 経由で既に是正される。
+// さらに安全網として、定期的にも浄化（重い処理は変化時のみ保存）。
+setInterval(function() { window.__steSanitizeStudyData(false); }, 5000);
+
+// ---------- 6. 管理者用リセットUIをモーダルに注入 ----------
+window.__steInjectAdminReset = function() {
+    if (document.getElementById('steAdminResetPanel')) return;
+    var card = document.querySelector('#studyTimeEditorOverlay .ste-card');
+    if (!card) return;
+    var footer = card.querySelector('.ste-footer');
+    if (!footer) return;
+
+    var panel = document.createElement('div');
+    panel.id = 'steAdminResetPanel';
+    panel.style.cssText = 'margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.14);display:none;';
+    panel.innerHTML =
+        '<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#fca5a5;margin-bottom:8px;">🛠 管理者：データ修復・リセット</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;">' +
+            '<button type="button" class="ste-btn-txt" data-act="repair">壊れた値だけ修復</button>' +
+            '<button type="button" class="ste-btn-txt" data-act="today0">今日を0に</button>' +
+            '<button type="button" class="ste-btn-txt" data-act="week0">全ログを0に</button>' +
+            '<button type="button" class="ste-btn-txt ste-danger" data-act="nuke">ローカル完全消去＆再読込</button>' +
+        '</div>';
+    footer.insertAdjacentElement('afterend', panel);
+
+    // ボタン用ミニスタイル
+    if (!document.getElementById('steV10BtnStyle')) {
+        var s = document.createElement('style');
+        s.id = 'steV10BtnStyle';
+        s.textContent =
+            '.ste-btn-txt{font-size:11px;font-weight:700;color:#e2e8f0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:7px 10px;cursor:pointer;font-family:inherit;transition:background .15s,transform .1s;}' +
+            '.ste-btn-txt:hover{background:rgba(255,255,255,.14);}' +
+            '.ste-btn-txt:active{transform:scale(.95);}' +
+            '.ste-btn-txt.ste-danger{color:#fecaca;border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.1);}' +
+            '.ste-btn-txt.ste-danger:hover{background:rgba(248,113,113,.2);}';
+        document.head.appendChild(s);
+    }
+
+    panel.addEventListener('click', function(e) {
+        var b = e.target.closest('[data-act]'); if (!b) return;
+        var act = b.getAttribute('data-act');
+        if (act === 'repair') window.__steRepairData();
+        else if (act === 'today0') window.__steResetToday();
+        else if (act === 'week0') window.__steResetWeek();
+        else if (act === 'nuke') window.__steNukeStudyStorage();
+    });
+};
+
+// 管理者判定に応じてパネル表示/非表示を同期
+window.__steSyncAdminResetPanel = function() {
+    var panel = document.getElementById('steAdminResetPanel');
+    if (!panel) return;
+    panel.style.display = (window.__steIsAdmin && window.__steIsAdmin()) ? 'block' : 'none';
+};
+
+// inject / open をラップして注入＋同期
+if (window.__injectStudyTimeEditor) {
+    var __origInjV10 = window.__injectStudyTimeEditor;
+    window.__injectStudyTimeEditor = function() {
+        var r = __origInjV10.apply(this, arguments);
+        window.__steInjectAdminReset();
+        window.__steSyncAdminResetPanel();
+        return r;
+    };
+}
+if (window.__openStudyTimeEditor) {
+    var __origOpenV10 = window.__openStudyTimeEditor;
+    window.__openStudyTimeEditor = function(dayIdx) {
+        var r = __origOpenV10.apply(this, arguments);
+        window.__steInjectAdminReset();
+        window.__steSyncAdminResetPanel();
+        return r;
+    };
+}
+
+// ---------- 7. リセット系コマンド ----------
+window.__steRepairData = function() {
+    var before = JSON.stringify({ s: todayStudySeconds, w: weeklyStudyMinutesLog });
+    window.__steSanitizeStudyData(true);
+    var after = JSON.stringify({ s: todayStudySeconds, w: weeklyStudyMinutesLog });
+    if (window.renderActivityChart) window.renderActivityChart();
+    if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay();
+    if (window.__steToast) window.__steToast(before === after ? '壊れた値はありませんでした ✓' : '壊れた値を修復しました 🧹');
+};
+
+window.__steResetToday = function() {
+    if (!confirm('今日の勉強時間を 0分 にリセットしますか？\n（過去のログは維持されます）')) return;
+    todayStudySeconds = 0;
+    var now = new Date(); var cur = now.getDay() - 1; if (cur < 0) cur = 6;
+    weeklyStudyMinutesLog[cur] = 0;
+    try {
+        localStorage.setItem('core_v4_study_today_secs', '0');
+        localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+    } catch (e) {}
+    if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay();
+    if (window.renderActivityChart) window.renderActivityChart();
+    if (window.__steToast) window.__steToast('今日を 0分 にリセットしました ✓');
+};
+
+window.__steResetWeek = function() {
+    if (!confirm('最近7日間のログをすべて 0分 にリセットしますか？\n（今日も含みます。元に戻せません）')) return;
+    todayStudySeconds = 0;
+    weeklyStudyMinutesLog = [0,0,0,0,0,0,0];
+    try {
+        localStorage.setItem('core_v4_study_today_secs', '0');
+        localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+    } catch (e) {}
+    if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay();
+    if (window.renderActivityChart) window.renderActivityChart();
+    if (window.__steToast) window.__steToast('7日間のログをリセットしました ✓');
+};
+
+// 最終手段：ローカルの勉強時間データを根こそぎ消して再読込
+window.__steNukeStudyStorage = function() {
+    if (!confirm('⚠️ 最終手段：ローカルに保存された勉強時間データを完全に消去して再読み込みします。\n\n壊れた値が居座る場合に使います。よろしいですか？')) return;
+    if (!confirm('本当に消去して再読み込みしますか？（この操作は取り消せません）')) return;
+    try {
+        localStorage.removeItem('core_v4_study_today_secs');
+        localStorage.removeItem('core_v4_study_weekly_log');
+        localStorage.removeItem('core_v4_study_last_date');
+    } catch (e) {}
+    location.reload();
+};
+
+// ---------- 8. 初期反映 ----------
+window.__steSanitizeStudyData(true);
+if (window.renderActivityChart) window.renderActivityChart();
+
+console.log('🧹 第10回パッチ（データ浄化＋不整合修正＋管理者リセット）適用完了');
+// ==========================================================================
+// 🧬 第11回パッチ：ローカル汚染の根絶 ＋ Firebase 単一ソース化
+//    ・localStorage を乗っ取り、アプリ独自キーを「アカウント(UID)単位」に隔離
+//      → ログインを変えても別アカウントの残骸は見えない（汚染の根絶）
+//    ・ログイン切り替えを検知 → メモリ残骸をリセット → Firebase 値で再ロード
+//    ・読み込みは Firebase 優先（ローカルはオフライン用キャッシュに格下げ）
+//    ・モードN で勉強時間キーのローカル書き込みを完全無効化（Firebase 一本）
+//    ・起動時に旧設計の残骸を自己診断して可視化
+//    ※必ず 第5→6→7→8→9→10回 の後に貼り付けてください
+// ==========================================================================
+
+// ===================== 0. 設定 =====================
+// モードS=UID隔離(既定) / モードN=ローカル完全無効
+window.__STE_LOCAL_MODE = (window.__STE_LOCAL_MODE === 'N') ? 'N' : 'S';
+// 攻撃的モード：true にすると除外リスト以外「全部」のキーをUID隔離
+// （自分のアプリのキー構成が core_v4_ 以外も混ざる場合にON）
+window.__STE_NAMESPACE_ALL = !!window.__STE_NAMESPACE_ALL;
+
+// 乗っ取り対象にする「アプリ独自キー」のプレフィックス（攻撃的モードOFF時）
+var STE_APP_PREFIXES = ['core_v4_', 'aiglish_', 'study_', 'user_stats', 'userStats'];
+// 絶対に乗っ取らないキー（Firebase/認証/サードパーティ/一時キー）
+var STE_PASSTHROUGH = [
+    'firebase:', 'firebase_', 'IndexedDB', 'amplitude', 'sentry', 'gtag', 'ga_',
+    '_ga', 'fbq', 'csrf', 'token', 'auth', 'session', 'refresh', 'idb-',
+    'workbox', 'precache', '__ste_'
+];
+// 勉強時間まわりのキー（モードN で書き込み無効にする対象）
+var STE_STUDY_KEYS = ['core_v4_study_today_secs', 'core_v4_study_weekly_log', 'core_v4_study_last_date'];
+
+// ===================== 1. 状態 =====================
+var __steUid = null;                 // 現在ログイン中のUID（null=未確定/未ログイン）
+var __steLastSeenUid = null;         // 切り替え検知用
+var __steAnonBucket = '__anon__';
+var __steNsPrefix = '__ste_ns::';
+
+function __steIsPassthrough(key) {
+    if (typeof key !== 'string') return true;
+    var k = key.toLowerCase();
+    for (var i = 0; i < STE_PASSTHROUGH.length; i++) {
+        if (k.indexOf(STE_PASSTHROUGH[i].toLowerCase()) >= 0) return true;
+    }
+    return false;
+}
+function __steIsAppKey(key) {
+    if (typeof key !== 'string') return false;
+    if (window.__STE_NAMESPACE_ALL) return true;
+    for (var i = 0; i < STE_APP_PREFIXES.length; i++) {
+        if (key.indexOf(STE_APP_PREFIXES[i]) === 0) return true;
+    }
+    return false;
+}
+function __steIsStudyKey(key) {
+    return STE_STUDY_KEYS.indexOf(key) >= 0;
+}
+function __steBucket() { return __steUid || __steAnonBucket; }
+function __steNsKey(key) { return __steNsPrefix + __steBucket() + '::' + key; }
+function __steShouldNamespace(key) {
+    if (__steIsPassthrough(key)) return false;
+    return __steIsAppKey(key);
+}
+// モードN：勉強時間キーの「書き込み」だけ無効化（読みは隔離バケットを返す）
+function __steBlockWrite(key) {
+    return (window.__STE_LOCAL_MODE === 'N') && __steIsStudyKey(key);
+}
+
+// ===================== 2. localStorage 乗っ取り =====================
+(function __steHijackStorage() {
+    if (window.__steStorageHijacked) return;
+    var ls = window.localStorage;
+    if (!ls) return;
+    var _set = ls.setItem.bind(ls);
+    var _get = ls.getItem.bind(ls);
+    var _rem = ls.removeItem.bind(ls);
+
+    try {
+        ls.setItem = function(key, val) {
+            try {
+                if (__steShouldNamespace(key)) {
+                    if (__steBlockWrite(key)) return;            // モードN：勉強時間はローカルへ書かない
+                    return _set(__steNsKey(key), val);
+                }
+            } catch (e) {}
+            return _set(key, val);
+        };
+        ls.getItem = function(key) {
+            try {
+                if (__steShouldNamespace(key)) {
+                    if (__steBlockWrite(key)) return null;       // モードN：勉強時間はローカルから読まない
+                    return _get(__steNsKey(key));
+                }
+            } catch (e) {}
+            return _get(key);
+        };
+        ls.removeItem = function(key) {
+            try {
+                if (__steShouldNamespace(key)) return _rem(__steNsKey(key));
+            } catch (e) {}
+            return _rem(key);
+        };
+        window.__steStorageHijacked = true;
+        window.__steRawGet = _get;   // 自己診断用に素のgetItemを退避
+    } catch (e) {
+        console.warn('🧬 localStorage 乗っ取りに失敗しました', e);
+    }
+})();
+
+// ===================== 3. UID 監視（Firebase v8/v9 両対応） =====================
+function __steGetAuth() {
+    try {
+        // v9 modular がグローバルに展開されている場合
+        if (window.firebase && firebase.auth) return firebase.auth();
+        if (window.getAuth) return window.getAuth();
+        if (window.firebase && firebase.auth && firebase.auth()) return firebase.auth();
+    } catch (e) {}
+    return null;
+}
+function __steAttachAuth() {
+    var auth = __steGetAuth();
+    if (!auth || !auth.onAuthStateChanged) {
+        // 認証準備を待つ（既存コードの初期化待ち）
+        setTimeout(__steAttachAuth, 600);
+        return;
+    }
+    auth.onAuthStateChanged(function(user) {
+        var newUid = user ? (user.uid || null) : null;
+        __steOnUidChange(newUid);
+    });
+    // 既にログイン済みの場合も即時反映
+    try {
+        var cu = auth.currentUser;
+        if (cu && cu.uid) __steOnUidChange(cu.uid);
+    } catch (e) {}
+}
+
+// ===================== 4. UID 切り替え時の処理 =====================
+function __steOnUidChange(newUid) {
+    if (newUid === __steLastSeenUid) return;   // 変化なし
+    var prev = __steLastSeenUid;
+    __steUid = newUid;
+    __steLastSeenUid = newUid;
+
+    // (a) メモリ残骸を一旦リセット（旧ユーザーの値が画面に残るのを防ぐ）
+    try { todayStudySeconds = 0; } catch (e) {}
+    try { weeklyStudyMinutesLog = [0,0,0,0,0,0,0]; } catch (e) {}
+
+    // (b) Firebase を正として再ロード（既存 load 関数を総当たり）
+    var loaders = ['loadLocalState','loadFromFirebase','loadUserData','syncFromFirebase',
+                   'fetchUserData','__loadState','loadState','refreshUserData'];
+    var called = false;
+    for (var i = 0; i < loaders.length; i++) {
+        if (typeof window[loaders[i]] === 'function') {
+            try { window[loaders[i]](); called = true; break; } catch (e) {}
+        }
+    }
+    // (c) 表示を即時更新
+    try { if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay(); } catch (e) {}
+    try { if (window.renderActivityChart) window.renderActivityChart(); } catch (e) {}
+
+    console.log('🧬 ログインUID切り替え', { from: prev, to: newUid, firebaseReload: called });
+    if (!called) {
+        console.warn('🧬 Firebase再ロード関数が見つかりませんでした。' +
+            '★ カスタマイズ：window.__STE_RELOAD_FN = "あなたのload関数名" を設定すると確実です。');
+    }
+    // (d) 状態UI・診断を同期
+    __steSyncModeUI();
+    __steSelfDiagnose();
+}
+// 明示指定があればそれを最優先
+if (window.__STE_RELOAD_FN && typeof window[window.__STE_RELOAD_FN] === 'function') {
+    var __origOnUid = __steOnUidChange;
+    __steOnUidChange = function(uid) {
+        __origOnUid(uid);
+        try { window[window.__STE_RELOAD_FN](); } catch (e) {}
+    };
+}
+
+// ===================== 5. 自己診断（旧設計の残骸を可視化） =====================
+window.__steSelfDiagnose = function() {
+    if (!window.__steRawGet) return;
+    var residue = [];
+    for (var i = 0; i < STE_STUDY_KEYS.length; i++) {
+        var raw = window.__steRawGet(STE_STUDY_KEYS[i]);   // 素のキー（旧設計の書き込み先）
+        if (raw !== null && raw !== undefined && raw !== '') residue.push(STE_STUDY_KEYS[i]);
+    }
+    if (residue.length > 0) {
+        console.warn('🧬 旧設計のローカル残骸を検出（アカウント非紐づけのゴミ）:', residue,
+            '→ 現在はUIDバケット[' + __steBucket() + ']のみ参照するため混入しません。' +
+            '完全に消したい場合は管理者リセット「ローカル完全消去」を実行。');
+        __steShowResidueBanner(residue.length);
+    }
+};
+
+var __steBannerShown = false;
+function __steShowResidueBanner(n) {
+    if (__steBannerShown) return;
+    __steBannerShown = true;
+    var b = document.createElement('div');
+    b.id = 'steResidueBanner';
+    b.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%) translateY(-12px);' +
+        'z-index:10001;max-width:calc(100vw - 24px);background:linear-gradient(135deg,#3b2f08,#5a3d0a);' +
+        'color:#fde68a;font-size:12px;font-weight:700;padding:10px 16px;border-radius:12px;' +
+        'border:1px solid rgba(251,191,36,.45);box-shadow:0 12px 32px rgba(0,0,0,.45);' +
+        'opacity:0;transition:opacity .3s,transform .3s;line-height:1.4;pointer-events:auto;';
+    b.innerHTML = '⚠️ ブラウザに旧形式の残骸(' + n + '件)を検出。今は隔離済みで混入しません。' +
+        '<span id="steResidueClose" style="margin-left:10px;cursor:pointer;opacity:.8;text-decoration:underline;">閉じる</span>';
+    document.body.appendChild(b);
+    requestAnimationFrame(function() { b.style.opacity = '1'; b.style.transform = 'translateX(-50%) translateY(0)'; });
+    var hide = function() { b.style.opacity = '0'; b.style.transform = 'translateX(-50%) translateY(-12px)'; setTimeout(function(){ b.remove(); }, 320); };
+    b.querySelector('#steResidueClose').addEventListener('click', hide);
+    setTimeout(hide, 9000);
+}
+
+// ===================== 6. モード切替UI（管理者パネル内） =====================
+(function __steModeStyle() {
+    if (document.getElementById('steV11Style')) return;
+    var s = document.createElement('style');
+    s.id = 'steV11Style';
+    s.textContent = [
+        '.ste-mode-panel{margin-top:12px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.14);display:none;}',
+        '.ste-mode-title{font-size:10px;font-weight:800;letter-spacing:.06em;color:#67e8f9;margin-bottom:9px;display:flex;align-items:center;gap:6px;}',
+        '.ste-mode-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;}',
+        '.ste-mode-label{font-size:11px;font-weight:700;color:#dbe4f0;line-height:1.3;}',
+        '.ste-mode-label small{display:block;color:#8b93a7;font-weight:600;font-size:9.5px;margin-top:2px;}',
+        // トグル
+        '.ste-toggle{position:relative;flex:0 0 auto;width:46px;height:26px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);cursor:pointer;transition:background .25s,border-color .25s;}',
+        '.ste-toggle::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#e2e8f0;box-shadow:0 2px 6px rgba(0,0,0,.4);transition:transform .28s cubic-bezier(.2,.9,.3,1.3),background .25s;}',
+        '.ste-toggle.on{background:linear-gradient(135deg,#22d3ee,#0e7490);border-color:rgba(34,211,238,.5);}',
+        '.ste-toggle.on::after{transform:translateX(20px);background:#ecfeff;}',
+        '.ste-toggle.warn.on{background:linear-gradient(135deg,#f59e0b,#b45309);border-color:rgba(245,158,11,.5);}',
+        // 保存先インジケータ
+        '.ste-sink{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:800;color:#bbf7d0;background:rgba(34,197,94,.12);border:1px solid rgba(74,222,128,.3);padding:5px 10px;border-radius:999px;margin-top:2px;}',
+        '.ste-sink .dot{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:steSinkPulse 1.8s ease-out infinite;}',
+        '@keyframes steSinkPulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.55)}100%{box-shadow:0 0 0 8px rgba(74,222,128,0)}}',
+        '.ste-sink.n{color:#fde68a;background:rgba(245,158,11,.12);border-color:rgba(251,191,36,.32);}',
+        '.ste-sink.n .dot{background:#fbbf24;animation-name:steSinkPulseN;}',
+        '@keyframes steSinkPulseN{0%{box-shadow:0 0 0 0 rgba(251,191,36,.55)}100%{box-shadow:0 0 0 8px rgba(251,191,36,0)}}'
+    ].join('\n');
+    document.head.appendChild(s);
+})();
+
+window.__steInjectModePanel = function() {
+    if (document.getElementById('steModePanel')) return;
+    var card = document.querySelector('#studyTimeEditorOverlay .ste-card');
+    if (!card) return;
+    var footer = card.querySelector('.ste-footer');
+    if (!footer) return;
+
+    var panel = document.createElement('div');
+    panel.id = 'steModePanel';
+    panel.className = 'ste-mode-panel';
+    panel.innerHTML =
+        '<div class="ste-mode-title">🧬 保存先の制御（アカウント汚染対策）</div>' +
+        '<div class="ste-mode-row">' +
+            '<div class="ste-mode-label">ローカル完全無効（Firebase 一本）' +
+                '<small>ON=勉強時間をローカルへ書かない／ズレ根絶・オフライン非対応</small></div>' +
+            '<div class="ste-toggle warn" id="steToggleN" role="switch"></div>' +
+        '</div>' +
+        '<div class="ste-mode-row">' +
+            '<div class="ste-mode-label">全キーをアカウント隔離' +
+                '<small>ON=勉強時間以外もUID隔離（混ざる範囲が広い時に）</small></div>' +
+            '<div class="ste-toggle" id="steToggleAll" role="switch"></div>' +
+        '</div>' +
+        '<div class="ste-sink" id="steSinkBadge"><span class="dot"></span><span id="steSinkText"></span></div>';
+    footer.insertAdjacentElement('afterend', panel);
+
+    document.getElementById('steToggleN').addEventListener('click', function() {
+        window.__STE_LOCAL_MODE = (window.__STE_LOCAL_MODE === 'N') ? 'S' : 'N';
+        try { localStorage.setItem('__ste_pref_mode', window.__STE_LOCAL_MODE); } catch (e) {}
+        __steSyncModeUI();
+        if (window.__steToast) window.__steToast(window.__STE_LOCAL_MODE === 'N' ? '🧬 ローカル無効化（Firebase 一本）' : '🧬 UID隔離モードに戻しました');
+    });
+    document.getElementById('steToggleAll').addEventListener('click', function() {
+        window.__STE_NAMESPACE_ALL = !window.__STE_NAMESPACE_ALL;
+        try { localStorage.setItem('__ste_pref_all', window.__STE_NAMESPACE_ALL ? '1' : '0'); } catch (e) {}
+        __steSyncModeUI();
+        if (window.__steToast) window.__steToast(window.__STE_NAMESPACE_ALL ? '🧬 全キー隔離 ON' : '🧬 全キー隔離 OFF');
+    });
+};
+
+window.__steSyncModeUI = function() {
+    var panel = document.getElementById('steModePanel');
+    if (!panel) return;
+    var admin = (window.__steIsAdmin && window.__steIsAdmin());
+    panel.style.display = admin ? 'block' : 'none';
+
+    var tN = document.getElementById('steToggleN');
+    var tAll = document.getElementById('steToggleAll');
+    if (tN) tN.classList.toggle('on', window.__STE_LOCAL_MODE === 'N');
+    if (tAll) tAll.classList.toggle('on', !!window.__STE_NAMESPACE_ALL);
+
+    var badge = document.getElementById('steSinkBadge');
+    var txt = document.getElementById('steSinkText');
+    if (badge && txt) {
+        if (window.__STE_LOCAL_MODE === 'N') {
+            badge.className = 'ste-sink n';
+            txt.textContent = '保存先：Firebase のみ（ローカル無効）／UID=' + (__steUid ? __steUid.slice(0,6)+'…' : '未ログイン');
+        } else {
+            badge.className = 'ste-sink';
+            txt.textContent = '保存先：Firebase ＋ ローカル(UID隔離) ／UID=' + (__steUid ? __steUid.slice(0,6)+'…' : '未ログイン');
+        }
+    }
+};
+
+// 設定の永続化（この2つだけはUID非依存で素のキーに覚えておく＝乗っ取り対象外プレフィックス）
+try {
+    var pm = window.__steRawGet ? window.__steRawGet('__ste_pref_mode') : null;
+    if (pm === 'N' || pm === 'S') window.__STE_LOCAL_MODE = pm;
+    var pa = window.__steRawGet ? window.__steRawGet('__ste_pref_all') : null;
+    if (pa === '1') window.__STE_NAMESPACE_ALL = true;
+    if (pa === '0') window.__STE_NAMESPACE_ALL = false;
+} catch (e) {}
+
+// inject / open をラップ
+if (window.__injectStudyTimeEditor) {
+    var __oiV11 = window.__injectStudyTimeEditor;
+    window.__injectStudyTimeEditor = function() {
+        var r = __oiV11.apply(this, arguments);
+        window.__steInjectModePanel(); window.__steSyncModeUI(); return r;
+    };
+}
+if (window.__openStudyTimeEditor) {
+    var __ooV11 = window.__openStudyTimeEditor;
+    window.__openStudyTimeEditor = function(dayIdx) {
+        var r = __ooV11.apply(this, arguments);
+        window.__steInjectModePanel(); window.__steSyncModeUI(); return r;
+    };
+}
+
+// ===================== 7. 起動 =====================
+__steAttachAuth();
+setTimeout(__steSelfDiagnose, 1200);   // 既存初期化が落ち着いた頃に診断
+setInterval(__steSyncModeUI, 1000);     // 管理者状態・UID表示を同期
+
+console.log('🧬 第11回パッチ適用完了',
+    { mode: window.__STE_LOCAL_MODE, namespaceAll: window.__STE_NAMESPACE_ALL,
+      hijacked: window.__steStorageHijacked });
+// ===== 窓（fix.js 用ブリッジ・差し替え版）：app.js の一番下に1回だけ =====
+(function() {
+    function snap() {
+        return {
+            myId: (typeof myId !== "undefined") ? myId : null,
+            totalExp: (typeof totalExp !== "undefined") ? totalExp : null,
+            myName: (typeof myName !== "undefined") ? myName : null,
+            selectedTitle: (typeof selectedTitle !== "undefined") ? selectedTitle : null,
+            myTarget: (typeof myTarget !== "undefined") ? myTarget : null,
+            myFriendList: (typeof myFriendList !== "undefined") ? myFriendList : null,
+            userStats: (typeof userStats !== "undefined") ? userStats : null,
+            todayStudySeconds: (typeof todayStudySeconds !== "undefined") ? todayStudySeconds : null,
+            weeklyStudyMinutesLog: (typeof weeklyStudyMinutesLog !== "undefined") ? weeklyStudyMinutesLog : null,
+            lastAccessDateStr: (typeof lastAccessDateStr !== "undefined") ? lastAccessDateStr : null,
+            wordMemory: (typeof wordMemory !== "undefined") ? wordMemory : null,
+            textHistory: (typeof textHistory !== "undefined") ? textHistory : null,
+            myBookshelf: (typeof myBookshelf !== "undefined") ? myBookshelf : null,
+            myFolders: (typeof myFolders !== "undefined") ? myFolders : null
+        };
+    }
+    // レベル計算関数を検出（exp→level。引数を見て単調に変わるものだけ採用＝でっち上げ防止）
+    var _lv = null;
+    var _names = ['getLevelFromExp', 'calcLevelFromExp', 'levelFromExp', 'calculateLevel', 'getLevelByExp', 'expToLevel', 'getLevel', 'levelOf', 'calcLevel', 'getLvFromExp', 'getLv', 'levelFromTotalExp', 'getLevelByTotalExp'];
+    for (var i = 0; i < _names.length; i++) {
+        try {
+            var fn = eval(_names[i]);
+            if (typeof fn === 'function') {
+                var t0 = fn(0),
+                    t1 = fn(1000000);
+                if (typeof t0 === 'number' && typeof t1 === 'number' && isFinite(t0) && isFinite(t1) && t1 > t0) { _lv = fn; break; }
+            }
+        } catch (e) {}
+    }
+    setInterval(function() {
+        var s = snap();
+        s.levelFromExp = _lv; // 本体のレベル計算式を fix.js へ橋渡し
+        window.__bridge = s;
+        var w = window.__bridgeWrite; // fix.js → 本体 へ
+        if (w) { window.__bridgeWrite = null; for (var k in w) { try { if (typeof eval(k) !== "undefined") eval(k + " = w[k]"); } catch (e) {} } }
+    }, 120);
+})();

@@ -1,0 +1,602 @@
+// =====================================================================
+// fix.js —— 称号エディタ（個別カード化）＋データ管理パネル＋管理者画面ボタン
+// app.js は触らない。index.html の </body> 直前に <script src="fix.js" defer></script>
+// ※勉強時間グラフ／ランキング同期は既存パッチ（第5〜17回）が担当するため、
+//   このファイルではそれらの関数を再定義しません（衝突回避）。
+// =====================================================================
+(function () {
+"use strict";
+var F_BODY = "'Noto Sans JP',system-ui,-apple-system,'Hiragino Sans','Segoe UI',sans-serif";
+var F_MONO = "ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',monospace";
+var F_DISPLAY = "'Noto Sans JP',system-ui,sans-serif";
+
+window.__admTarget = window.__admTarget || { mode: 'self', uid: null, snap: null };
+function T() { return window.__admTarget; }
+function isOther() { var t = T(); return !!(t && t.mode === 'other'); }
+function __snap() { var t = T(); if (!t.snap) t.snap = {}; return t.snap; }
+function B() { return window.__bridge || null; }
+function gv(key, fb) { if (isOther()) { var s = __snap(); var v = s[key]; return v == null ? fb : v; } var b = B(); var w = b ? b[key] : window[key]; return w == null ? fb : w; }
+function sv(key, val) { if (isOther()) { __snap()[key] = val; return; } var o = {}; o[key] = val; window.__bridgeWrite = Object.assign(window.__bridgeWrite || {}, o); window[key] = val; }
+function gExp() { return gv('totalExp', 0) || 0; }
+function gName() { return gv('myName', ''); }
+function gTitle() { return gv('selectedTitle', ''); }
+function gTarget() { return gv('myTarget', ''); }
+function gFriends() { return gv('myFriendList', []); }
+function gStats() { var s = gv('userStats', {}); return (s && typeof s === 'object') ? s : {}; }
+function gSecs() { return clampSec(gv('todayStudySeconds', 0)); }
+function gWeek() { return cleanWeek(gv('weeklyStudyMinutesLog', [0,0,0,0,0,0,0])); }
+function gDate() { return gv('lastAccessDateStr', ''); }
+function gWord() { return gv('wordMemory', {}); }
+function gText() { return gv('textHistory', []); }
+function gBook() { return gv('myBookshelf', []); }
+function gFold() { var f = gv('myFolders', null); return (Array.isArray(f) && f.length) ? f : ['未分類']; }
+function sExp(v){sv('totalExp',v);} function sName(v){sv('myName',v);} function sTitle(v){sv('selectedTitle',v);} function sTarget(v){sv('myTarget',v);} function sFriends(v){sv('myFriendList',v);}
+function sStats(v){ sv('userStats', (v && typeof v === 'object') ? v : {}); }
+function sSecs(v){sv('todayStudySeconds',clampSec(v));} function sWeek(v){sv('weeklyStudyMinutesLog',cleanWeek(v));} function sDate(v){sv('lastAccessDateStr',v);} function sWord(v){sv('wordMemory',v);} function sText(v){sv('textHistory',v);} function sBook(v){sv('myBookshelf',v);} function sFold(v){sv('myFolders',v);}
+function selfMyId() { var b = B(); return b ? b.myId : window.myId; }
+function selfG(k) { var b = B(); return b ? b[k] : window[k]; }
+function selfS(k, v) { var o = {}; o[k] = v; window.__bridgeWrite = Object.assign(window.__bridgeWrite || {}, o); window[k] = v; }
+function myId() { var id = isOther() ? (T().uid || null) : gMyIdSelf(); return (id && id !== 'GUEST-000') ? id : null; }
+function gMyIdSelf() { var b = B(); return b ? b.myId : window.myId; }
+function box(name) { var id = myId(); return id ? (name + 'for' + id) : null; }
+function get(name) { var b = box(name); if (!b) return null; try { return localStorage.getItem(b); } catch (e) { return null; } }
+function set(name, v) { var b = box(name); if (!b) return; try { localStorage.setItem(b, v); } catch (e) {} }
+function clampSec(x){var n=Math.floor(Number(x));if(!isFinite(n)||n<0)return 0;return n>86400?86400:n;}
+function clampMin(x){var n=Math.floor(Number(x));if(!isFinite(n)||n<0)return 0;return n>1440?1440:n;}
+function clampInt(x){var n=Math.floor(Number(x));if(!isFinite(n)||n<0)return 0;return n;}
+function cleanWeek(w){var a=Array.isArray(w)?w:[],o=[];for(var i=0;i<7;i++)o[i]=clampMin(a[i]);return o;}
+function todayStr(){var d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+function dayIdxOf(s){var d=new Date(s),i=d.getDay()-1;return i<0?6:i;}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+function netReadOf(uid) {
+if (!uid || !window.db || !window.fbGetDoc || !window.fbDoc) return Promise.resolve(null);
+return window.fbGetDoc(window.fbDoc(window.db, 'users/' + uid)).then(function (s) { return s && s.exists() ? s.data() : null; }).catch(function () { return null; });
+}
+function fbWriteOf(uid, payload) {
+if (!uid || !window.db || !window.fbSetDoc || !window.fbDoc) return Promise.resolve();
+return window.fbSetDoc(window.fbDoc(window.db, 'users/' + uid), payload, { merge: true });
+}
+function pickNet(net, keys) { if (!net) return undefined; for (var i = 0; i < keys.length; i++) { var k = keys[i]; if (net[k] !== undefined && net[k] !== null) return net[k]; } return undefined; }
+function parseMaybeJSON(x) { if (x == null) return undefined; if (typeof x !== 'string') return x; try { return JSON.parse(x); } catch (e) { return x; } }
+var K = {
+name: ['name','userName','user_name','displayName','nickName','nickname'],
+exp: ['totalExp','exp','total_exp','experience','xp','totalXp','totalXP','userExp'],
+title: ['title','userTitle','selectedTitle','badge','userBadge','user_title'],
+target: ['target','userTarget','goal','userGoal','user_target'],
+friends: ['friends','friendList','myFriendList','friend_list','userFriends'],
+stats: ['stats','userStats','user_stats','statistics'],
+secs: ['todayStudySeconds','study_today_secs','studySecs','todaySecs','study_secs'],
+week: ['weeklyStudyMinutesLog','study_weekly_log','weeklyLog','weekLog','study_week'],
+date: ['lastAccessDateStr','study_last_date','lastDate','study_date'],
+word: ['wordMemory','word_memory'], text: ['textHistory','text_history'],
+book: ['myBookshelf','bookshelf','my_bookshelf'], fold: ['myFolders','folders','my_folders']
+};
+function mapNetToSnap(net, uid) {
+var fr = parseMaybeJSON(pickNet(net, K.friends)); var st = pickNet(net, K.stats);
+var wk = parseMaybeJSON(pickNet(net, K.week)); var wo = parseMaybeJSON(pickNet(net, K.word));
+var tx = parseMaybeJSON(pickNet(net, K.text)); var bk = parseMaybeJSON(pickNet(net, K.book)); var fd = parseMaybeJSON(pickNet(net, K.fold));
+return { myId: uid, myName: pickNet(net, K.name),
+totalExp: (function(){ var e = pickNet(net, K.exp); var n = parseInt(e, 10); return isFinite(n) ? n : e; })(),
+selectedTitle: pickNet(net, K.title), myTarget: pickNet(net, K.target),
+myFriendList: Array.isArray(fr) ? fr : (fr || []), userStats: (st && typeof st === 'object') ? st : {},
+todayStudySeconds: pickNet(net, K.secs), weeklyStudyMinutesLog: Array.isArray(wk) ? wk : null,
+lastAccessDateStr: pickNet(net, K.date),
+wordMemory: (wo && typeof wo === 'object') ? wo : {}, textHistory: Array.isArray(tx) ? tx : [],
+myBookshelf: Array.isArray(bk) ? bk : [], myFolders: Array.isArray(fd) ? fd : null };
+}
+function snapToPayload(snap, extra) {
+return Object.assign({
+name: snap.myName, userName: snap.myName, totalExp: snap.totalExp, exp: snap.totalExp,
+title: snap.selectedTitle, userTitle: snap.selectedTitle, selectedTitle: snap.selectedTitle,
+target: snap.myTarget, userTarget: snap.myTarget,
+friends: snap.myFriendList, friendList: snap.myFriendList, myFriendList: snap.myFriendList,
+stats: snap.userStats, userStats: snap.userStats,
+todayStudySeconds: snap.todayStudySeconds, weeklyStudyMinutesLog: snap.weeklyStudyMinutesLog,
+lastAccessDateStr: snap.lastAccessDateStr, wordMemory: snap.wordMemory, textHistory: snap.textHistory,
+myBookshelf: snap.myBookshelf, myFolders: snap.myFolders, updatedAt: Date.now()
+}, extra || {});
+}
+function loadMyData() {
+var id = selfMyId(); if (!id || id === 'GUEST-000') return Promise.resolve();
+var bName=get('name'),bExp=get('exp'),bTitle=get('title'),bTarget=get('target'),bFriends=get('friends');
+var bSecs=get('study_secs'),bDate=get('study_date'),bWeek=get('study_week');
+var bWord=get('wordMemory'),bText=get('textHistory'),bBook=get('myBookshelf'),bFold=get('myFolders');
+return netReadOf(id).then(function (net) {
+function P(nkeys, bval, parser) { var nv = pickNet(net, nkeys); if (nv !== undefined && nv !== null) return parser ? parser(nv) : nv; if (bval !== null && bval !== undefined) return parser ? parser(bval) : bval; return undefined; }
+var nm = P(K.name, bName); if (nm !== undefined) selfS('myName', nm || 'プレイヤー1');
+var ex = P(K.exp, bExp, function (x){ return parseInt(x, 10) || 0; }); if (ex !== undefined) selfS('totalExp', ex);
+var ti = P(K.title, bTitle); if (ti !== undefined) selfS('selectedTitle', ti || '称号なし');
+var tg = P(K.target, bTarget); if (tg !== undefined) selfS('myTarget', tg || '未設定');
+var fr = P(K.friends, bFriends, function (x){ var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (fr !== undefined) selfS('myFriendList', fr || []);
+var st = P(K.stats, null); if (st !== undefined && typeof st === 'object') selfS('userStats', st || {});
+var sc = P(K.secs, bSecs, function (x){ return clampSec(parseInt(x, 10) || 0); }); if (sc !== undefined) selfS('todayStudySeconds', sc);
+var dt = P(K.date, bDate); if (dt !== undefined) selfS('lastAccessDateStr', dt || '');
+var wk = P(K.week, bWeek, function (x){ return cleanWeek(parseMaybeJSON(x)); }); if (wk !== undefined) selfS('weeklyStudyMinutesLog', wk);
+var wo = P(K.word, bWord, function (x){ var p = parseMaybeJSON(x); return (p && typeof p === 'object') ? p : {}; }); if (wo !== undefined) selfS('wordMemory', wo || {});
+var tx = P(K.text, bText, function (x){ var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (tx !== undefined) selfS('textHistory', tx || []);
+var bk = P(K.book, bBook, function (x){ var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (bk !== undefined) selfS('myBookshelf', bk || []);
+var fd = P(K.fold, bFold, function (x){ var p = parseMaybeJSON(x); return (Array.isArray(p) && p.length) ? p : ['未分類']; }); if (fd !== undefined) selfS('myFolders', fd);
+if (bName === null) { set('name', selfG('myName') || ''); set('exp', String(selfG('totalExp') || 0)); set('title', selfG('selectedTitle') || ''); set('target', selfG('myTarget') || ''); set('friends', JSON.stringify(selfG('myFriendList') || [])); }
+if (bSecs === null) { set('study_secs', String(selfG('todayStudySeconds') || 0)); set('study_date', selfG('lastAccessDateStr') || todayStr()); set('study_week', JSON.stringify(selfG('weeklyStudyMinutesLog') || [0,0,0,0,0,0,0])); }
+if (bWord === null) set('wordMemory', JSON.stringify(selfG('wordMemory') || {}));
+if (bText === null) set('textHistory', JSON.stringify(selfG('textHistory') || []));
+if (bBook === null) set('myBookshelf', JSON.stringify(selfG('myBookshelf') || []));
+if (bFold === null) set('myFolders', JSON.stringify(selfG('myFolders') || ['未分類']));
+refreshDisplay();
+});
+}
+function saveMyData() {
+var id = selfMyId(); if (!id || id === 'GUEST-000') return Promise.resolve();
+set('name', selfG('myName') || ''); set('exp', String(selfG('totalExp') || 0)); set('title', selfG('selectedTitle') || ''); set('target', selfG('myTarget') || ''); set('friends', JSON.stringify(selfG('myFriendList') || []));
+set('study_secs', String(selfG('todayStudySeconds') || 0)); set('study_date', selfG('lastAccessDateStr') || todayStr()); set('study_week', JSON.stringify(selfG('weeklyStudyMinutesLog') || [0,0,0,0,0,0,0]));
+set('wordMemory', JSON.stringify(selfG('wordMemory') || {})); set('textHistory', JSON.stringify(selfG('textHistory') || [])); set('myBookshelf', JSON.stringify(selfG('myBookshelf') || [])); set('myFolders', JSON.stringify(selfG('myFolders') || ['未分類']));
+return fbWriteOf(id, snapToPayload({ myName: selfG('myName'), totalExp: selfG('totalExp'), selectedTitle: selfG('selectedTitle'), myTarget: selfG('myTarget'), myFriendList: selfG('myFriendList'), userStats: selfG('userStats'), todayStudySeconds: selfG('todayStudySeconds'), weeklyStudyMinutesLog: selfG('weeklyStudyMinutesLog'), lastAccessDateStr: selfG('lastAccessDateStr'), wordMemory: selfG('wordMemory'), textHistory: selfG('textHistory'), myBookshelf: selfG('myBookshelf'), myFolders: selfG('myFolders') })).catch(function () { toast('⚠️ 端末内にだけ保存しました。ネット復帰後に再同期'); });
+}
+function saveOther() { var t = T(); if (!t || t.mode !== 'other' || !t.uid) return Promise.resolve(); return fbWriteOf(t.uid, snapToPayload(t.snap || {}, { _editedByAdmin: true })).catch(function () { toast('⚠️ 保存に失敗しました'); }); }
+function refreshDisplay() { try { if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay(); } catch (e) {} try { if (window.renderActivityChart) window.renderActivityChart(); } catch (e) {} }
+function levelFromExpFn() { var b = B(); return (b && typeof b.levelFromExp === 'function') ? b.levelFromExp : null; }
+function thresholds() { var b = B(); var t = b && b.thresholds; if (Array.isArray(t) && t.length >= 2 && typeof t[0] === 'number') return t; return null; }
+function domLevel() { var b = B(); var d = b && b.domLevel; return (typeof d === 'number' && d >= 0) ? d : -1; }
+function safeLevel(f, exp) { try { var v = f(exp); return (typeof v === 'number' && isFinite(v)) ? Math.floor(v) : -1; } catch (e) { return -1; } }
+function levelFromThresholds(exp, th) { var lv = 0; for (var i = 0; i < th.length; i++) { if (exp >= th[i]) lv = i + 1; else break; } return lv; }
+function canReverse() { return !!(levelFromExpFn() || thresholds()); }
+function levelOfCurrent(exp) { var f = levelFromExpFn(); if (f) { var v = safeLevel(f, exp); if (v >= 0) return v; } var th = thresholds(); if (th) return levelFromThresholds(exp, th); return domLevel(); }
+function expForLevel(L) { L = Math.floor(L); if (L < 1) return null; var th = thresholds(); if (th) { if (L - 1 < th.length) return th[L - 1]; return null; } var f = levelFromExpFn(); if (!f) return null; var l0 = safeLevel(f, 0); if (l0 < 0) return null; if (l0 >= L) return 0; var hi = 1, guard = 0; while (safeLevel(f, hi) < L && hi < 2e9 && guard < 64) { hi *= 4; guard++; } if (safeLevel(f, hi) < L) return null; var lo = 0; while (lo < hi) { var mid = Math.floor((lo + hi) / 2); if (safeLevel(f, mid) >= L) hi = mid; else lo = mid + 1; } return lo; }
+
+function toast(msg) { var t = document.getElementById('steToast'); if (!t) { t = document.createElement('div'); t.id = 'steToast'; t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:10001;background:#166534;color:#dcfce7;font-size:13px;font-weight:700;padding:10px 18px;border-radius:999px;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.4);font-family:' + F_BODY + ';'; document.body.appendChild(t); } t.innerText = msg; t.style.opacity = '1'; clearTimeout(t.__t); t.__t = setTimeout(function(){ t.style.opacity = '0'; }, 2200); }
+window.__steToast = toast;
+function isAdmin() { try { if (window.isAdmin === true || window.adminMode === true || window.adminUnlocked === true || window.__adminUnlocked === true || window.adminVerified === true) return true; var us = gStats(); if (us && (us.is_admin || us.isAdmin || us.admin)) return true; var cls = ((document.body ? document.body.className : '') + ' ' + (document.documentElement ? document.documentElement.className : '')); if (/(^|\s)(admin|admin-mode|admin-unlocked|is-admin|admin-verified)(\s|$|[-_])/i.test(cls)) return true; if (document.body && document.body.innerText && document.body.innerText.indexOf('@管理者') >= 0) return true; } catch (e) {} return false; }
+
+// ---------- 称号エディタ用ヘルパー ----------
+function titleDB() { try { return (typeof TITLE_DATABASE !== 'undefined' && Array.isArray(TITLE_DATABASE)) ? TITLE_DATABASE : []; } catch (e) { return []; } }
+function specialDB() { try { return (typeof SPECIAL_TITLES !== 'undefined' && Array.isArray(SPECIAL_TITLES)) ? SPECIAL_TITLES : []; } catch (e) { return []; } }
+function reachedStepOf(t, val) { var step = 0; (t.steps || []).forEach(function (tg, idx) { if (val >= tg) step = idx + 1; }); return step; }
+function rarityNameOf(step) { var map = ['コモン','アンコモン','レア','スーパーレア','レジェンダリー']; return step > 0 ? map[step - 1] : '未解放'; }
+function clearRewardedCache(id) {
+if (isOther()) return; // 他ユーザーの端末固有キャッシュは操作不可
+try {
+if (typeof rewardedTitlesStepsCache !== 'undefined') {
+rewardedTitlesStepsCache[id] = 0;
+localStorage.setItem('core_v4_rewarded_titles_cache', JSON.stringify(rewardedTitlesStepsCache));
+}
+} catch (e) {}
+}
+function isSpecialEarned(sp, stats) {
+if (sp.id === 'goal_setting') return String(stats.goal_text || '').indexOf('大学合格') >= 0;
+if (sp.id === 'weekly_rank') return stats.weekly_rank_first === true;
+return false;
+}
+function maybeResetEquipped(name) {
+if (!name) return;
+var cur = gTitle() || '';
+if (cur && cur.indexOf(name) >= 0) sTitle('称号なし');
+}
+function expNow() { var exp = gExp(); var s = (exp || 0).toLocaleString() + ' XP'; var lv = levelOfCurrent(exp); if (lv >= 0) s += '（Lv ' + lv + '）'; return s; }
+function titleNow() {
+var t = gTitle() || '称号なし';
+var DB = titleDB(); var stats = gStats() || {}; var earned = 0;
+DB.forEach(function (tt) { if (reachedStepOf(tt, stats[tt.id] || 0) > 0) earned++; });
+return t + '　[' + earned + '/' + DB.length + ']';
+}
+function items() { var us = gStats() || {}; return [
+{ icon: '⚡', name: '経験値・レベル', desc: 'レベルは経験値から自動で決まります', now: expNow, edit: { type: 'exp', get: function(){ return gExp() || 0; }, set: function(v){ sExp(clampInt(v)); } }, reset: function(){ sExp(0); } },
+{ icon: '🏅', name: '称号', desc: '称号ごとの進捗設定・未取得化・特別/シーズン称号の管理', now: titleNow, edit: { type: 'title', get: function(){ return gTitle() || ''; }, set: function(v){ sTitle(v || '称号なし'); } }, reset: function(){ sTitle('称号なし'); } },
+{ icon: '🎯', name: '目標', desc: 'プロフィールの目標を書き換えます', now: function(){ return gTarget() || '未設定'; }, edit: { type: 'text', get: function(){ return gTarget() || ''; }, set: function(v){ sTarget(v || '未設定'); } }, reset: function(){ sTarget('未設定'); } },
+{ icon: '🔥', name: '連続学習の最高記録', desc: 'いちばん長く続けた分数の記録', now: function(){ return (us.study_burst || 0) + ' 分'; }, edit: { type: 'number', unit: '分', get: function(){ return (gStats() && gStats().study_burst) || 0; }, set: function(v){ var s = gStats() || {}; s.study_burst = clampInt(v); sStats(s); } }, reset: function(){ var s = gStats() || {}; s.study_burst = 0; sStats(s); } },
+{ icon: '⏱️', name: '今日の勉強時間', desc: '今日のカウンター（分単位で指定）', now: function(){ var s = gSecs() || 0; return Math.floor(s / 60) + '分' + (s % 60) + '秒'; }, edit: { type: 'number', unit: '分', get: function(){ return Math.floor((gSecs() || 0) / 60); }, set: function(v){ sSecs(clampInt(v) * 60); } }, reset: function(){ sSecs(0); } },
+{ icon: '📊', name: '週間グラフ', desc: '7日ぶんをまとめて編集（月〜日の順・分）', now: function(){ var t = 0; (gWeek() || []).forEach(function(x){ t += (x || 0); }); return '合計 ' + Math.floor(t) + ' 分'; }, edit: { type: 'week', get: function(){ return (gWeek() || [0,0,0,0,0,0,0]).slice(); }, set: function(a){ sWeek(cleanWeek(a)); } }, reset: function(){ sWeek([0,0,0,0,0,0,0]); } },
+{ icon: '🧠', name: '単語の記憶', desc: '覚えた判定の記録（編集不可・リセットのみ）', now: function(){ return Object.keys(gWord() || {}).length + ' 語'; }, edit: null, reset: function(){ sWord({}); } },
+{ icon: '📚', name: '本棚・フォルダ', desc: '保存した長文とフォルダ（編集不可・リセットのみ）', now: function(){ return (gBook() || []).length + ' 件 / ' + (gFold() || []).length + ' フォルダ'; }, edit: null, reset: function(){ sBook([]); sFold(['未分類']); } },
+{ icon: '👥', name: 'フレンドリスト', desc: '登録したフレンド（編集不可・リセットのみ）', now: function(){ return (gFriends() || []).length + ' 人'; }, edit: null, reset: function(){ sFriends([]); } }
+]; }
+function injectStyle() { if (document.getElementById('admStyle')) return; var s = document.createElement('style'); s.id = 'admStyle'; s.textContent = [
+'@keyframes admMesh{0%{transform:translate(0,0) scale(1)}50%{transform:translate(6%,-4%) scale(1.15)}100%{transform:translate(0,0) scale(1)}}',
+'@keyframes admMesh2{0%{transform:translate(0,0) scale(1.1)}50%{transform:translate(-5%,5%) scale(1)}100%{transform:translate(0,0) scale(1.1)}}',
+'@keyframes admIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}',
+'@keyframes admFlash{0%{box-shadow:inset 0 0 0 999px rgba(34,197,94,.28)}100%{box-shadow:inset 0 0 0 999px rgba(34,197,94,0)}}',
+'@keyframes admTick{0%{transform:scale(0) rotate(-40deg);opacity:0}60%{transform:scale(1.25) rotate(0);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}}',
+'@keyframes admBlink{50%{opacity:.25}}',
+'@keyframes stePop{0%{transform:scale(1)}40%{transform:scale(1.06);box-shadow:0 0 0 3px rgba(45,212,191,.35)}100%{transform:scale(1)}}',
+'#admScrim{position:fixed;inset:0;z-index:9991;background:rgba(4,8,16,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .25s;}',
+'#admScrim.open{opacity:1;pointer-events:auto;}',
+'#admPanel{position:fixed;right:0;top:0;bottom:0;z-index:9992;width:min(430px,100vw);background:#0a1018;border-left:1px solid rgba(34,211,238,.16);box-shadow:-24px 0 70px rgba(0,0,0,.55);transform:translateX(100%);transition:transform .36s cubic-bezier(.2,.85,.25,1);display:flex;flex-direction:column;overflow:hidden;font-family:' + F_BODY + ';will-change:transform;}',
+'#admPanel.open{transform:none;}',
+'#admPanel .mesh{position:absolute;inset:-30%;z-index:0;pointer-events:none;}',
+'#admPanel .mesh i{position:absolute;border-radius:50%;filter:blur(64px);opacity:.4;will-change:transform;}',
+'#admPanel .mesh i.a{width:48%;height:40%;top:4%;left:6%;background:radial-gradient(circle,#0e7490,transparent 70%);animation:admMesh 15s ease-in-out infinite;}',
+'#admPanel .mesh i.b{width:44%;height:36%;bottom:8%;right:2%;background:radial-gradient(circle,#b45309,transparent 70%);animation:admMesh2 19s ease-in-out infinite;}',
+'#admPanel .grid{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.4;background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.02) 0 1px,transparent 1px 46px),repeating-linear-gradient(90deg,rgba(255,255,255,.02) 0 1px,transparent 1px 46px);mask-image:linear-gradient(180deg,transparent,#000 18%,#000 70%,transparent);-webkit-mask-image:linear-gradient(180deg,transparent,#000 18%,#000 70%,transparent);}',
+'#admHead{position:relative;z-index:1;padding:22px 20px 14px;border-bottom:1px solid rgba(255,255,255,.07);}',
+'#admHead .kicker{font-family:' + F_MONO + ';font-size:11px;letter-spacing:.24em;color:#22d3ee;font-weight:700;}',
+'#admHead h2{margin:7px 0 0;font-family:' + F_DISPLAY + ';font-size:30px;font-weight:900;letter-spacing:-.02em;color:#f8fafc;line-height:1;}',
+'#admHead h2 em{font-style:normal;color:#fbbf24;}',
+'#admHead p{margin:9px 0 0;font-size:12px;color:#94a3b8;line-height:1.55;}',
+'#admMeta{margin-top:11px;display:flex;align-items:center;gap:8px;font-family:' + F_MONO + ';font-size:10.5px;color:#64748b;}',
+'#admMeta .live{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 8px #4ade80;animation:admBlink 1.4s steps(1) infinite;}',
+'#admMeta b{color:#94a3b8;font-weight:700;}',
+'#admClose{position:absolute;top:18px;right:16px;width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#cbd5e1;font-size:18px;cursor:pointer;transition:background .15s,transform .12s;}',
+'#admClose:hover{background:rgba(255,255,255,.12);}#admClose:active{transform:scale(.9);}',
+'#admTarget{margin-top:13px;padding:11px 12px;border-radius:12px;background:linear-gradient(180deg,rgba(34,211,238,.06),rgba(34,211,238,.02));border:1px solid rgba(34,211,238,.16);}',
+'#admTarget.other{background:linear-gradient(180deg,rgba(245,158,11,.08),rgba(245,158,11,.02));border-color:rgba(245,158,11,.3);}',
+'.at-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}',
+'.at-label{font-family:' + F_MONO + ';font-size:9.5px;letter-spacing:.18em;color:#64748b;font-weight:700;}',
+'.at-cur{font-family:' + F_MONO + ';font-size:11.5px;font-weight:800;color:#7dd3fc;max-width:62%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+'.at-cur.other{color:#fbbf24;}',
+'.at-ctrl{display:flex;gap:6px;margin-top:9px;}',
+'#atUid{flex:1;min-width:0;padding:8px 10px;border-radius:9px;border:1.5px solid rgba(94,234,212,.28);background:rgba(4,10,16,.6);color:#f0fdfa;font-size:12px;font-weight:700;font-family:' + F_MONO + ';letter-spacing:.03em;outline:none;transition:border-color .18s,box-shadow .2s;}',
+'#atUid:focus{border-color:#2dd4bf;box-shadow:0 0 0 3px rgba(45,212,191,.18);}',
+'#atLoad{font-family:' + F_BODY + ';font-size:11.5px;font-weight:800;color:#04150b;background:linear-gradient(135deg,#22d3ee,#0e7490);border:none;border-radius:9px;padding:8px 12px;cursor:pointer;transition:transform .12s,filter .15s;white-space:nowrap;}',
+'#atLoad:hover{filter:brightness(1.1);}#atLoad:active{transform:scale(.95);}',
+'#atSelf{font-family:' + F_BODY + ';font-size:11.5px;font-weight:700;color:#cbd5e1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:8px 11px;cursor:pointer;transition:background .15s,transform .12s;white-space:nowrap;}',
+'#atSelf:hover{background:rgba(255,255,255,.12);}#atSelf:active{transform:scale(.95);}',
+'.at-note{margin-top:7px;font-size:10px;color:#94a3b8;line-height:1.4;}',
+'#admTarget.other .at-note{color:#fcd34d;}',
+'#admList{position:relative;z-index:1;flex:1;overflow-y:auto;padding:14px 16px 28px;-webkit-overflow-scrolling:touch;}',
+'.admRow{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012));border:1px solid rgba(255,255,255,.07);border-radius:15px;padding:14px 14px 14px 17px;margin-bottom:11px;overflow:hidden;transition:border-color .2s,transform .12s;opacity:0;}',
+'.admRow.in{animation:admIn .45s both;}',
+'.admRow::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#22d3ee,#0e7490);transform:scaleY(0);transform-origin:top;transition:transform .25s;}',
+'.admRow:hover{border-color:rgba(34,211,238,.35);transform:translateX(2px);}',
+'.admRow:hover::before{transform:scaleY(1);}',
+'.admRow.flash{animation:admFlash .85s ease-out;}',
+'.admTop{display:flex;align-items:flex-start;gap:12px;}',
+'.admIco{font-size:22px;line-height:1;flex:0 0 auto;margin-top:1px;}',
+'.admBody{flex:1;min-width:0;}',
+'.admName{font-size:14px;font-weight:800;color:#f1f5f9;letter-spacing:.01em;}',
+'.admNow{font-family:' + F_MONO + ';font-size:11.5px;color:#5eead4;margin-top:4px;font-weight:700;word-break:break-all;display:flex;align-items:center;gap:6px;}',
+'.admNow .tick{display:inline-block;width:13px;height:13px;color:#4ade80;font-size:12px;}',
+'.admNow .tick.show{animation:admTick .4s ease-out;}',
+'.admDesc{font-size:11px;color:#7c8aa0;margin-top:4px;line-height:1.45;}',
+'.admActs{flex:0 0 auto;align-self:center;display:flex;flex-direction:column;gap:6px;}',
+'.admBtn{font-family:' + F_BODY + ';font-size:11.5px;font-weight:800;border-radius:9px;padding:7px 12px;cursor:pointer;transition:background .15s,transform .1s,border-color .15s;white-space:nowrap;}',
+'.admBtn:active{transform:scale(.93);}',
+'.admBtn.edit{color:#7dd3fc;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.32);}',
+'.admBtn.edit:hover{background:rgba(56,189,248,.2);}',
+'.admBtn.reset{color:#fda4af;background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.32);}',
+'.admBtn.reset:hover{background:rgba(251,113,133,.2);}',
+'.admConfirm,.admEdit{display:none;margin-top:12px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.12);}',
+'.admRow.asking .admConfirm{display:flex;align-items:center;gap:8px;}',
+'.admRow.asking .admActs{display:none;}',
+'.admRow.editing .admEdit{display:block;animation:admIn .25s both;}',
+'.admRow.editing .admActs{display:none;}',
+'.admConfirm span{flex:1;font-size:12px;font-weight:700;color:#fecaca;}',
+'.admYes{font-family:' + F_BODY + ';font-size:12px;font-weight:800;color:#fff;background:linear-gradient(135deg,#ef4444,#b91c1c);border:none;border-radius:9px;padding:8px 14px;cursor:pointer;}',
+'.admNo{font-family:' + F_BODY + ';font-size:12px;font-weight:700;color:#cbd5e1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:8px 12px;cursor:pointer;}',
+'.admEdit .lab{font-size:10.5px;font-weight:700;color:#94a3b8;margin-bottom:7px;letter-spacing:.03em;display:flex;align-items:center;gap:7px;}',
+'.admEdit .line{display:flex;align-items:center;gap:8px;}',
+'.admEdit input[type=number],.admEdit input[type=text]{flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1.5px solid rgba(94,234,212,.3);background:rgba(4,10,16,.6);color:#f0fdfa;font-size:16px;font-weight:700;font-family:' + F_MONO + ';outline:none;transition:border-color .18s,box-shadow .2s;}',
+'.admEdit input:focus{border-color:#2dd4bf;box-shadow:0 0 0 3px rgba(45,212,191,.2);}',
+'.admEdit input.ste-pop{animation:stePop .4s ease-out;}',
+'.admEdit .unit{font-size:12px;color:#94a3b8;font-weight:700;flex:0 0 auto;}',
+'.admEdit .saveRow{display:flex;gap:8px;margin-top:10px;}',
+'.admEdit .go{flex:1.3;font-family:' + F_BODY + ';font-size:12.5px;font-weight:800;color:#04150b;background:linear-gradient(135deg,#4ade80,#16a34a);border:none;border-radius:9px;padding:9px;cursor:pointer;}',
+'.admEdit .back{flex:1;font-family:' + F_BODY + ';font-size:12.5px;font-weight:700;color:#cbd5e1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:9px;cursor:pointer;}',
+'.ste-lvbox{margin-top:11px;padding:10px 11px;border-radius:10px;background:rgba(148,163,184,.05);border:1px dashed rgba(148,163,184,.22);}',
+'.ste-lvbox.ready{background:rgba(245,158,11,.05);border-color:rgba(245,158,11,.28);}',
+'.ste-lvtag{font-family:' + F_MONO + ';font-size:9px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:999px;color:#cbd5e1;background:rgba(148,163,184,.14);border:1px solid rgba(148,163,184,.22);}',
+'.ste-lvtag.ok{color:#04150b;background:#4ade80;border-color:transparent;}',
+'.ste-lvtag.soft{color:#fcd34d;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);}',
+'.ste-lvcalc{flex:0 0 auto !important;width:auto !important;font-size:11.5px !important;padding:9px 11px !important;background:linear-gradient(135deg,#f59e0b,#b45309) !important;white-space:nowrap;}',
+'.ste-lvcalc:disabled{filter:grayscale(.7) brightness(.7);cursor:not-allowed;}',
+'.ste-lvhint{margin-top:7px;font-size:10.5px;line-height:1.4;min-height:14px;color:#94a3b8;}',
+'.ste-lvhint.ok{color:#86efac;}.ste-lvhint.soft{color:#fcd34d;}',
+// 称号エディタ（個別カード）
+'.ste-tt-sec{margin-top:13px;padding-top:11px;border-top:1px dashed rgba(255,255,255,.1);}',
+'.ste-tt-sec>.lab{margin-bottom:8px;}',
+'.ste-tt-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:10px 11px;margin-bottom:8px;transition:border-color .18s,background .18s;}',
+'.ste-tt-card:hover{border-color:rgba(34,211,238,.3);background:rgba(34,211,238,.04);}',
+'.ste-tt-card.special{border-color:rgba(245,158,11,.22);background:rgba(245,158,11,.04);}',
+'.ste-tt-card.special:hover{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.07);}',
+'.ste-tt-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}',
+'.ste-tt-name{font-size:12.5px;font-weight:800;color:#f1f5f9;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+'.ste-tt-rarity{flex:0 0 auto;font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:999px;border:1px solid;letter-spacing:.03em;}',
+'.ste-tt-rarity.r0{color:#64748b;border-color:rgba(100,116,139,.3);background:rgba(100,116,139,.08);}',
+'.ste-tt-rarity.r1{color:#cbd5e1;border-color:rgba(203,213,225,.35);background:rgba(203,213,225,.08);}',
+'.ste-tt-rarity.r2{color:#4ade80;border-color:rgba(74,222,128,.35);background:rgba(74,222,128,.08);}',
+'.ste-tt-rarity.r3{color:#38bdf8;border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.08);}',
+'.ste-tt-rarity.r4{color:#c084fc;border-color:rgba(192,132,252,.4);background:rgba(192,132,252,.1);}',
+'.ste-tt-rarity.r5{color:#fbbf24;border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.1);}',
+'.ste-tt-rarity.sp-on{color:#fbbf24;border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.1);}',
+'.ste-tt-rarity.sp-off{color:#64748b;border-color:rgba(100,116,139,.3);background:rgba(100,116,139,.08);}',
+'.ste-tt-prog{font-size:10.5px;color:#94a3b8;line-height:1.45;margin-bottom:8px;}',
+'.ste-tt-prog b{color:#5eead4;font-family:' + F_MONO + ';font-weight:800;}',
+'.ste-tt-acts{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}',
+'.ste-tt-inp{width:74px;padding:6px 8px;border-radius:8px;border:1.5px solid rgba(94,234,212,.28);background:rgba(4,10,16,.6);color:#f0fdfa;font-size:12px;font-weight:700;font-family:' + F_MONO + ';outline:none;transition:border-color .18s;}',
+'.ste-tt-inp:focus{border-color:#2dd4bf;}',
+'.ste-tt-mini{flex:0 0 auto;font-family:' + F_BODY + ';font-size:10.5px;font-weight:700;color:#fda4af;background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.3);border-radius:7px;padding:4px 8px;cursor:pointer;transition:background .15s,transform .1s;}',
+'.ste-tt-mini:hover{background:rgba(251,113,133,.2);}.ste-tt-mini:active{transform:scale(.93);}',
+'.ste-tt-mini.cyan{color:#7dd3fc;background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.32);}',
+'.ste-tt-mini.cyan:hover{background:rgba(56,189,248,.2);}',
+'.ste-tt-row2{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:7px 8px;border-radius:9px;background:rgba(255,255,255,.03);margin-bottom:6px;}',
+'.ste-tt-row2 .k{font-family:' + F_MONO + ';font-size:11px;color:#cbd5e1;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+'.ste-tt-row2 button{font-family:' + F_BODY + ';font-size:10.5px;font-weight:700;border-radius:7px;padding:5px 9px;cursor:pointer;border:1px solid rgba(251,113,133,.3);background:rgba(251,113,133,.1);color:#fda4af;transition:background .15s,transform .1s;flex:0 0 auto;}',
+'.ste-tt-row2 button:hover{background:rgba(251,113,133,.2);}.ste-tt-row2 button:active{transform:scale(.94);}',
+'.ste-tt-json{width:100%;min-height:120px;max-height:260px;padding:9px;border-radius:9px;border:1.5px solid rgba(94,234,212,.25);background:rgba(4,10,16,.6);color:#e2e8f0;font-family:' + F_MONO + ';font-size:11px;line-height:1.5;resize:vertical;outline:none;box-sizing:border-box;}',
+'.ste-tt-json:focus{border-color:#2dd4bf;}',
+'.ste-tt-note{margin-top:10px;font-size:10px;color:#94a3b8;line-height:1.45;}',
+'.ste-tt-emptymsg{font-size:10.5px;color:#64748b;padding:4px 2px;}',
+'.ste-tt-clearbtn{flex:0 0 auto !important;width:auto !important;font-size:11.5px !important;padding:9px 11px !important;white-space:nowrap;}',
+'.admWeek{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}',
+'.admWeek .cell{display:flex;flex-direction:column;align-items:center;gap:4px;}',
+'.admWeek .cell label{font-size:9.5px;color:#7c8aa0;font-weight:700;}',
+'.admWeek .cell input{width:100%;padding:8px 2px;border-radius:8px;border:1.5px solid rgba(94,234,212,.28);background:rgba(4,10,16,.6);color:#f0fdfa;font-size:13px;font-weight:700;text-align:center;font-family:' + F_MONO + ';outline:none;}',
+'.admWeek .cell input:focus{border-color:#2dd4bf;}',
+'.admWeek .cell.today label{color:#4ade80;}',
+'.admAll{background:linear-gradient(180deg,rgba(239,68,68,.12),rgba(239,68,68,.04));border-color:rgba(239,68,68,.28);}',
+'.admAll::before{background:linear-gradient(180deg,#f87171,#b91c1c);}',
+'#admList::-webkit-scrollbar{width:8px;}#admList::-webkit-scrollbar-thumb{background:rgba(34,211,238,.22);border-radius:8px;}'
+].join('\n'); document.head.appendChild(s); }
+var liveTimer = null;
+function buildPanel() {
+if (document.getElementById('admPanel')) return; injectStyle();
+var scrim = document.createElement('div'); scrim.id = 'admScrim'; scrim.onclick = closePanel; document.body.appendChild(scrim);
+var panel = document.createElement('div'); panel.id = 'admPanel';
+panel.innerHTML = '<div class="mesh"><i class="a"></i><i class="b"></i></div><div class="grid"></div><div id="admHead"><button id="admClose" type="button">✕</button><div class="kicker">ADMIN · DATA CONTROL</div><h2>データ<em>管理</em></h2><p>項目ごとに「いまの値」を確認してから、編集もリセットもできます。</p><div id="admTarget"><div class="at-row"><span class="at-label">EDIT TARGET</span><span class="at-cur" id="atCur">自分（ログイン中）</span></div><div class="at-ctrl"><input id="atUid" type="text" placeholder="ユーザーID（例 KYPLDVN860）" autocomplete="off" spellcheck="false"><button id="atLoad" type="button">読み込む</button><button id="atSelf" type="button" style="display:none">自分に戻る</button></div><div class="at-note" id="atNote"></div></div><div id="admMeta"><span class="live"></span><span>LIVE</span><span>·</span><b id="admUid">-</b><span>·</span><b id="admClock">--:--:--</b></div></div><div id="admList"></div>';
+document.body.appendChild(panel);
+document.getElementById('admClose').onclick = closePanel;
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closePanel(); });
+document.getElementById('atLoad').onclick = doLoadOther;
+document.getElementById('atSelf').onclick = setSelf;
+document.getElementById('atUid').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doLoadOther(); } });
+}
+function doLoadOther() {
+var uidIn = document.getElementById('atUid'); var uid = (uidIn.value || '').trim();
+if (!uid) { toast('ユーザーIDを入力してください'); return; }
+if (uid === (selfMyId() || '')) { toast('自分自身です。対象を戻します'); setSelf(); return; }
+var btn = document.getElementById('atLoad'); btn.disabled = true; btn.textContent = '読込中…';
+netReadOf(uid).then(function (net) { btn.disabled = false; btn.textContent = '読み込む'; if (!net) { toast('そのIDのデータが見つかりません（Firestore）'); return; } window.__admTarget = { mode: 'other', uid: uid, snap: mapNetToSnap(net, uid) }; refreshTargetUI(); renderRows(); toast(uid + ' のデータを読み込みました'); });
+}
+function setSelf() { window.__admTarget = { mode: 'self', uid: null, snap: null }; var uidIn = document.getElementById('atUid'); if (uidIn) uidIn.value = ''; refreshTargetUI(); renderRows(); loadMyData(); }
+function refreshTargetUI() {
+var box = document.getElementById('admTarget'); if (!box) return;
+var cur = document.getElementById('atCur'), self = document.getElementById('atSelf'), note = document.getElementById('atNote');
+if (isOther()) { box.classList.add('other'); cur.classList.add('other'); cur.textContent = '編集中：' + T().uid; self.style.display = ''; note.textContent = 'クラウド (users/' + T().uid + ') を直接編集。保存は即反映。ログインし直さなくてOK。'; }
+else { box.classList.remove('other'); cur.classList.remove('other'); cur.textContent = '自分（ログイン中）'; self.style.display = 'none'; note.textContent = '他のユーザーを編集するにはIDを入力して「読み込む」。'; }
+}
+function buildEditForm(it) {
+if (!it.edit) return '';
+var e = it.edit;
+if (e.type === 'exp') {
+return '<div class="admEdit"><div class="lab">経験値を直接入力</div><div class="line"><input type="number" inputmode="numeric" min="0" data-val="1"><span class="unit">XP</span></div><div class="ste-lvbox" data-lvbox="1"><div class="lab">レベルから算出 <span class="ste-lvtag" data-lvtag="1"></span></div><div class="line"><input type="number" inputmode="numeric" min="1" max="9999" data-lv="1" placeholder="Lv"><span class="unit">Lv</span><button type="button" class="go ste-lvcalc" data-lvcalc="1">このLvのEXPにする</button></div><div class="ste-lvhint" data-lvhint="1"></div></div><div class="saveRow"><button class="back" type="button">やめる</button><button class="go" type="button">保存</button></div></div>';
+}
+if (e.type === 'title') {
+return '<div class="admEdit">' +
+'<div class="lab">表示中の称号</div>' +
+'<div class="line"><input type="text" data-val="1" maxlength="40"><button type="button" class="back ste-tt-clearbtn" data-tt-clear="1">称号なし</button></div>' +
+'<div class="ste-tt-sec"><div class="lab">進化称号 — 進捗設定 / 未取得化</div><div data-tt-progress="1"></div></div>' +
+'<div class="ste-tt-sec"><div class="lab">特別称号</div><div data-tt-special="1"></div></div>' +
+'<div class="ste-tt-sec"><div class="lab">シーズン称号</div><div data-tt-season="1"></div></div>' +
+'<div class="ste-tt-sec"><div class="lab">上級者：userStats を直接編集</div><textarea class="ste-tt-json" data-tt-json="1" spellcheck="false"></textarea>' +
+'<div class="saveRow" style="margin-top:8px"><button type="button" class="go" data-tt-applyjson="1">JSONを適用して保存</button></div></div>' +
+'<div class="ste-tt-note">※「未取得にする」は進捗を0にし、獲得フラグも消すので再取得できます。他ユーザー編集中は進捗のみリセットできます（獲得フラグは端末ごとのため）。</div>' +
+'<div class="saveRow"><button class="back" type="button">やめる</button><button class="go" type="button">表示称号を保存</button></div></div>';
+}
+if (e.type === 'week') {
+var labels = ['月','火','水','木','金','土','日']; var now = new Date(), cur = now.getDay() - 1; if (cur < 0) cur = 6; var cells = '';
+for (var i = 0; i < 7; i++) cells += '<div class="cell' + (i === cur ? ' today' : '') + '"><label>' + labels[i] + '</label><input type="number" inputmode="numeric" min="0" max="1440" data-wi="' + i + '"></div>';
+return '<div class="admEdit"><div class="lab">各曜日の勉強時間（分）</div><div class="admWeek">' + cells + '</div><div class="saveRow"><button class="back" type="button">やめる</button><button class="go" type="button">保存</button></div></div>';
+}
+var inp = e.type === 'number' ? '<input type="number" inputmode="numeric" min="0" data-val="1">' : '<input type="text" data-val="1" maxlength="40">';
+return '<div class="admEdit"><div class="lab">新しい値</div><div class="line">' + inp + (e.unit ? '<span class="unit">' + esc(e.unit) + '</span>' : '') + '</div><div class="saveRow"><button class="back" type="button">やめる</button><button class="go" type="button">保存</button></div></div>';
+}
+function persistRow(row, it, msg) { if (isOther()) saveOther(); else if (window.saveUserStats) window.saveUserStats(); else saveMyData(); flashRow(row); toast(msg); }
+function buildTitleEditor(row, it) {
+var stats = gStats() || {};
+var DB = titleDB();
+var SP = specialDB();
+// ---- 進化称号（個別カード） ----
+var pbox = row.querySelector('[data-tt-progress]');
+if (pbox) {
+pbox.innerHTML = '';
+if (DB.length === 0) {
+pbox.innerHTML = '<div class="ste-tt-emptymsg">称号データ（TITLE_DATABASE）が見つかりませんでした。</div>';
+} else {
+DB.forEach(function (t) {
+var val = stats[t.id] || 0;
+var step = reachedStepOf(t, val);
+var rar = rarityNameOf(step);
+var nextTarget = step >= 5 ? 'MAX' : t.steps[step];
+var card = document.createElement('div');
+card.className = 'ste-tt-card';
+card.innerHTML =
+'<div class="ste-tt-card-top">' +
+'<span class="ste-tt-name">' + esc(t.name) + '</span>' +
+'<span class="ste-tt-rarity r' + step + '">' + esc(rar) + '</span>' +
+'</div>' +
+'<div class="ste-tt-prog">進捗 <b>' + esc(String(val)) + '</b> / 次の目標 ' + esc(String(nextTarget)) + esc(t.unit || '') + '</div>' +
+'<div class="ste-tt-acts">' +
+'<input type="number" class="ste-tt-inp" data-tt-setinp="' + esc(t.id) + '" min="0" value="' + esc(String(val)) + '">' +
+'<button type="button" class="ste-tt-mini cyan" data-tt-set="' + esc(t.id) + '">進捗を設定</button>' +
+'<button type="button" class="ste-tt-mini" data-tt-unearn="' + esc(t.id) + '">未取得にする</button>' +
+'</div>';
+card.querySelector('[data-tt-set]').onclick = function () {
+var inp = card.querySelector('[data-tt-setinp]');
+var v = clampInt(parseInt(inp.value, 10));
+var s = gStats() || {}; s[t.id] = v; sStats(s);
+if (!isOther() && window.checkAndRewardTitleBonusXP) { try { window.checkAndRewardTitleBonusXP(); } catch (e) {} }
+persistRow(row, it, t.name + ' の進捗を ' + v + ' に設定 ✓');
+buildTitleEditor(row, it);
+};
+card.querySelector('[data-tt-unearn]').onclick = function () {
+var s = gStats() || {}; s[t.id] = 0; sStats(s);
+clearRewardedCache(t.id);
+maybeResetEquipped(t.name);
+persistRow(row, it, t.name + ' を未取得にしました ✓');
+buildTitleEditor(row, it);
+};
+pbox.appendChild(card);
+});
+}
+}
+// ---- 特別称号 ----
+var ubox = row.querySelector('[data-tt-special]');
+if (ubox) {
+ubox.innerHTML = '';
+if (SP.length === 0) {
+ubox.innerHTML = '<div class="ste-tt-emptymsg">特別称号が見つかりませんでした。</div>';
+} else {
+SP.forEach(function (sp) {
+var earned = isSpecialEarned(sp, stats);
+var card = document.createElement('div');
+card.className = 'ste-tt-card special';
+card.innerHTML =
+'<div class="ste-tt-card-top">' +
+'<span class="ste-tt-name">【特別】' + esc(sp.name) + '</span>' +
+'<span class="ste-tt-rarity ' + (earned ? 'sp-on' : 'sp-off') + '">' + (earned ? '獲得済み' : '未獲得') + '</span>' +
+'</div>' +
+'<div class="ste-tt-prog">' + esc(sp.desc || '') + '</div>' +
+'<div class="ste-tt-acts">' +
+'<button type="button" class="ste-tt-mini" data-tt-spunearn="' + esc(sp.id) + '">未取得にする</button>' +
+'</div>';
+card.querySelector('[data-tt-spunearn]').onclick = function () {
+clearRewardedCache(sp.id);
+if (sp.id === 'weekly_rank') { var s = gStats() || {}; s.weekly_rank_first = false; sStats(s); }
+maybeResetEquipped(sp.name);
+persistRow(row, it, '【特別】' + sp.name + ' を未取得にしました ✓');
+buildTitleEditor(row, it);
+};
+ubox.appendChild(card);
+});
+}
+}
+// ---- シーズン称号 ----
+var sbox = row.querySelector('[data-tt-season]');
+if (sbox) {
+sbox.innerHTML = '';
+var seasonArr = stats.seasonTitles || [];
+if (!Array.isArray(seasonArr) || seasonArr.length === 0) {
+sbox.innerHTML = '<div class="ste-tt-emptymsg">獲得済みのシーズン称号はありません。</div>';
+} else {
+seasonArr.forEach(function (stName, idx) {
+var r2 = document.createElement('div');
+r2.className = 'ste-tt-row2';
+r2.innerHTML = '<span class="k">' + esc(String(stName)) + '</span>' +
+'<button type="button" data-tt-seasonrm="' + idx + '">外す</button>';
+r2.querySelector('[data-tt-seasonrm]').onclick = function () {
+var s = gStats() || {};
+var arr = (s.seasonTitles || []).slice();
+var removed = arr.splice(idx, 1)[0];
+s.seasonTitles = arr; sStats(s);
+maybeResetEquipped(removed);
+persistRow(row, it, 'シーズン称号を外しました ✓');
+buildTitleEditor(row, it);
+};
+sbox.appendChild(r2);
+});
+}
+}
+// ---- JSON（上級者） ----
+var ja = row.querySelector('[data-tt-json]');
+if (ja) { try { ja.value = JSON.stringify(stats, null, 2); } catch (e) { ja.value = '{}'; } }
+var ap = row.querySelector('[data-tt-applyjson]');
+if (ap) ap.onclick = function () {
+var parsed; try { parsed = JSON.parse(ja.value); } catch (e) { toast('JSONの形式が正しくありません：' + e.message); return; }
+if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) { toast('JSONはオブジェクト { } にしてください'); return; }
+sStats(parsed);
+persistRow(row, it, 'userStats を適用しました ✓');
+buildTitleEditor(row, it);
+};
+}
+function fillEditInputs(row, it) {
+if (!it.edit) return;
+if (it.edit.type === 'exp') {
+var v = it.edit.get(); var el = row.querySelector('[data-val]'); if (el) el.value = (v == null ? '' : v);
+var lvIn = row.querySelector('[data-lv]'); if (lvIn) lvIn.value = '';
+var tag = row.querySelector('[data-lvtag]'), hint = row.querySelector('[data-lvhint]'), box = row.querySelector('[data-lvbox]'), calc = row.querySelector('[data-lvcalc]');
+var rev = canReverse(); var dl = domLevel();
+if (rev) { if (box) box.classList.add('ready'); if (tag) { tag.className = 'ste-lvtag ok'; tag.textContent = levelFromExpFn() ? '本体の式' : '閾値テーブル'; } if (calc) calc.disabled = false; if (hint) { hint.className = 'ste-lvhint'; hint.textContent = 'レベルを入れると、アプリ本体の計算でEXPを逆算します。'; } }
+else if (dl >= 0) { if (box) box.classList.remove('ready'); if (tag) { tag.className = 'ste-lvtag soft'; tag.textContent = '現在Lv ' + dl + ' 表示中'; } if (calc) calc.disabled = true; if (hint) { hint.className = 'ste-lvhint soft'; hint.textContent = 'いまは画面のLvを表示しています。逆算は、本体の計算式が見つかると使えるようになります。経験値は直接入力できます。'; } }
+else { if (box) box.classList.remove('ready'); if (tag) { tag.className = 'ste-lvtag'; tag.textContent = '式を探索中'; } if (calc) calc.disabled = true; if (hint) { hint.className = 'ste-lvhint'; hint.textContent = '本体の計算式を探しています。経験値は直接入力できます。'; } }
+setTimeout(function(){ try { el && el.focus(); } catch (e) {} }, 30); return;
+}
+if (it.edit.type === 'title') {
+var el2 = row.querySelector('[data-val]'); if (el2) el2.value = (it.edit.get() || '');
+var clr = row.querySelector('[data-tt-clear]'); if (clr) clr.onclick = function () { if (el2) el2.value = ''; };
+buildTitleEditor(row, it);
+setTimeout(function(){ try { el2 && el2.focus(); } catch (e) {} }, 30); return;
+}
+if (it.edit.type === 'week') { var arr = it.edit.get(); var ins = row.querySelectorAll('.admWeek input'); for (var i = 0; i < ins.length; i++) ins[i].value = arr[i] || 0; return; }
+var vv = it.edit.get(); var el3 = row.querySelector('[data-val]'); if (el3) { el3.value = (vv == null ? '' : vv); setTimeout(function(){ try { el3.focus(); el3.select && el3.select(); } catch (e) {} }, 30); }
+}
+function readEditInputs(row, it) {
+if (it.edit.type === 'exp' || it.edit.type === 'number') { var el = row.querySelector('[data-val]'); return el ? clampInt(parseInt(el.value, 10)) : 0; }
+if (it.edit.type === 'week') { var ins = row.querySelectorAll('.admWeek input'), arr = []; for (var i = 0; i < 7; i++) arr[i] = clampMin(parseInt(ins[i].value, 10)); return arr; }
+var el3 = row.querySelector('[data-val]'); return el3 ? el3.value : '';
+}
+var io = null;
+function renderRows() {
+var list = document.getElementById('admList'); if (!list) return; list.innerHTML = '';
+var its = items();
+its.forEach(function (it, idx) {
+var row = document.createElement('div'); row.className = 'admRow'; row.setAttribute('data-idx', idx);
+var nowTxt = ''; try { nowTxt = it.now(); } catch (e) { nowTxt = '-'; }
+var acts = '<div class="admActs">'; if (it.edit) acts += '<button class="admBtn edit" type="button">編集</button>'; acts += '<button class="admBtn reset" type="button">リセット</button></div>';
+row.innerHTML = '<div class="admTop"><div class="admIco">' + it.icon + '</div><div class="admBody"><div class="admName">' + esc(it.name) + '</div><div class="admNow" data-now="1"><span class="tick"></span><span class="val">' + esc(nowTxt) + '</span></div><div class="admDesc">' + esc(it.desc) + '</div></div>' + acts + '</div>' + buildEditForm(it) + '<div class="admConfirm"><span>本当にリセットしますか？</span><button class="admNo" type="button">やめる</button><button class="admYes" type="button">リセット</button></div>';
+var editBtn = row.querySelector('.admBtn.edit'); if (editBtn) editBtn.onclick = function(){ row.classList.remove('asking'); row.classList.add('editing'); fillEditInputs(row, it); };
+row.querySelector('.admBtn.reset').onclick = function(){ row.classList.remove('editing'); row.classList.add('asking'); };
+row.querySelector('.admNo').onclick = function(){ row.classList.remove('asking'); };
+row.querySelector('.admYes').onclick = function(){ try { it.reset(); } catch (e) {} afterChange(row, it, it.name + ' をリセットしました ✓'); };
+var back = row.querySelector('.admEdit .saveRow .back'); if (back) back.onclick = function(){ row.classList.remove('editing'); };
+var go = row.querySelector('.admEdit .saveRow .go'); if (go) go.onclick = function(){ var val = readEditInputs(row, it); try { it.edit.set(val); } catch (e) {} afterChange(row, it, it.name + ' を更新しました ✓'); };
+var numInp = row.querySelector('.admEdit input[type=number][data-val]'); if (numInp) numInp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go && go.click(); } });
+var lvCalc = row.querySelector('[data-lvcalc]');
+if (lvCalc) lvCalc.onclick = function () { if (lvCalc.disabled) return; var lvIn = row.querySelector('[data-lv]'); var hint = row.querySelector('[data-lvhint]'); var valIn = row.querySelector('[data-val]'); var L = parseInt(lvIn.value, 10); if (!isFinite(L) || L < 1) { hint.className = 'ste-lvhint soft'; hint.textContent = 'レベルを1以上で入力してください。'; return; } var exp = expForLevel(L); if (exp == null) { hint.className = 'ste-lvhint soft'; hint.textContent = 'そのレベルのEXPを求められませんでした（範囲外の可能性）。'; return; } valIn.value = exp; valIn.classList.remove('ste-pop'); void valIn.offsetWidth; valIn.classList.add('ste-pop'); hint.className = 'ste-lvhint ok'; hint.textContent = '✓ Lv ' + L + ' = ' + exp.toLocaleString() + ' XP を入力欄に反映（保存で確定）'; };
+var lvIn2 = row.querySelector('[data-lv]'); if (lvIn2) lvIn2.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); lvCalc && lvCalc.click(); } });
+list.appendChild(row);
+});
+var all = document.createElement('div'); all.className = 'admRow admAll'; all.setAttribute('data-idx', 'all');
+all.innerHTML = '<div class="admTop"><div class="admIco">⚠️</div><div class="admBody"><div class="admName">全部まとめてリセット</div><div class="admNow" data-now="1"><span class="tick"></span><span class="val">全 ' + its.length + ' 項目</span></div><div class="admDesc">上の項目をすべて一度に初期化します。元に戻せません。</div></div><div class="admActs"><button class="admBtn reset" type="button">全リセット</button></div></div><div class="admConfirm"><span>本当に全部リセットしますか？</span><button class="admNo" type="button">やめる</button><button class="admYes" type="button">全部リセット</button></div>';
+all.querySelector('.admBtn.reset').onclick = function(){ all.classList.add('asking'); };
+all.querySelector('.admNo').onclick = function(){ all.classList.remove('asking'); delete all.dataset.step2; all.querySelector('.admConfirm span').innerText = '本当に全部リセットしますか？'; };
+all.querySelector('.admYes').onclick = function(){ if (!all.dataset.step2) { all.dataset.step2 = '1'; all.querySelector('.admConfirm span').innerText = '最終確認：本当に全部消していい？'; return; } its.forEach(function (it){ try { it.reset(); } catch (e) {} }); delete all.dataset.step2; afterChange(all, null, 'すべてのデータをリセットしました ✓'); renderRows(); revealRows(); };
+list.appendChild(all); revealRows();
+}
+function afterChange(row, it, msg) { row.classList.remove('asking', 'editing'); if (isOther()) saveOther(); else if (window.saveUserStats) window.saveUserStats(); else saveMyData(); refreshDisplay(); if (it) { var nv = ''; try { nv = it.now(); } catch (e) {} var vEl = row.querySelector('.admNow .val'); if (vEl) vEl.innerText = nv; } flashRow(row); toast(msg); }
+function flashRow(row) { row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash'); var tk = row.querySelector('.admNow .tick'); if (tk) { tk.innerText = '✓'; tk.classList.remove('show'); void tk.offsetWidth; tk.classList.add('show'); setTimeout(function(){ tk.innerText = ''; }, 1400); } }
+function revealRows() { var list = document.getElementById('admList'); if (!list) return; var rows = list.querySelectorAll('.admRow:not(.in)'); if (!('IntersectionObserver' in window)) { rows.forEach(function (r){ r.classList.add('in'); }); return; } if (!io) io = new IntersectionObserver(function (entries){ entries.forEach(function (en){ if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }); }, { root: list, threshold: 0.12 }); rows.forEach(function (r, i){ r.style.animationDelay = (i * 0.04) + 's'; io.observe(r); }); }
+function refreshNowValues() {
+var list = document.getElementById('admList'); if (!list) return; var its = items();
+list.querySelectorAll('.admRow[data-idx]').forEach(function (row) { if (row.classList.contains('asking') || row.classList.contains('editing')) return; var idx = row.getAttribute('data-idx'); if (idx === 'all') return; var it = its[parseInt(idx, 10)]; if (!it) return; var vEl = row.querySelector('.admNow .val'); if (!vEl) return; var nv = ''; try { nv = it.now(); } catch (e) { return; } if (vEl.innerText !== nv) vEl.innerText = nv; });
+var c = document.getElementById('admClock'); if (c) { var d = new Date(); c.innerText = [d.getHours(), d.getMinutes(), d.getSeconds()].map(function (n){ return String(n).padStart(2, '0'); }).join(':'); }
+var u = document.getElementById('admUid'); if (u) { var id = myId(); u.innerText = id ? ('UID ' + id.slice(0, 6) + '…') : (isOther() ? '他ユーザー編集中' : '未ログイン'); }
+}
+function openPanel() { buildPanel(); var tg = document.getElementById('admTarget'); if (tg) tg.style.display = isAdmin() ? '' : 'none'; refreshTargetUI(); renderRows(); document.getElementById('admScrim').classList.add('open'); document.getElementById('admPanel').classList.add('open'); refreshNowValues(); if (liveTimer) clearInterval(liveTimer); liveTimer = setInterval(refreshNowValues, 1000); }
+function closePanel() { var s = document.getElementById('admScrim'), p = document.getElementById('admPanel'); if (s) s.classList.remove('open'); if (p) p.classList.remove('open'); if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
+
+// ---------- データ管理ボタンを管理者画面の「ユーザー管理」カードの下に注入 ----------
+function injectAdminDataButton() {
+if (document.getElementById('admDataBtnCard')) return;
+var anchor = document.getElementById('adminUserListContainer');
+var insertAfter = null, parent = null;
+if (anchor) {
+var card = anchor.closest('.card');
+if (card && card.parentNode) { insertAfter = card; parent = card.parentNode; }
+}
+if (!parent) {
+var view = document.getElementById('view-admin');
+if (view) { parent = view; insertAfter = null; }
+}
+if (!parent) return;
+var btnCard = document.createElement('div');
+btnCard.className = 'card';
+btnCard.id = 'admDataBtnCard';
+btnCard.style.cssText = 'cursor:pointer;border:1px solid rgba(0,240,255,0.35);background:linear-gradient(135deg, rgba(0,240,255,0.08), rgba(192,132,252,0.06));box-shadow:0 0 15px rgba(0,240,255,0.15);transition:all .2s;display:flex;align-items:center;gap:12px;';
+btnCard.innerHTML =
+'<div style="width:42px;height:42px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(0,240,255,0.12);border:1px solid rgba(0,240,255,0.35);box-shadow:0 0 12px rgba(0,240,255,0.25);">🗄️</div>' +
+'<div style="flex:1;min-width:0;">' +
+'<div style="font-size:14px;font-weight:900;color:#fff;letter-spacing:.5px;">データ管理</div>' +
+'<div style="font-size:10.5px;color:var(--text-sub);margin-top:2px;">称号・経験値・勉強時間などをユーザーごとに編集／リセット</div>' +
+'</div>' +
+'<div style="color:var(--cosmic-cyan);font-weight:900;font-size:18px;">›</div>';
+btnCard.onmouseenter = function(){ this.style.boxShadow = '0 0 22px rgba(0,240,255,0.35)'; this.style.transform = 'translateY(-1px)'; };
+btnCard.onmouseleave = function(){ this.style.boxShadow = '0 0 15px rgba(0,240,255,0.15)'; this.style.transform = ''; };
+btnCard.onclick = function(){ openPanel(); };
+parent.insertBefore(btnCard, insertAfter ? insertAfter.nextSibling : parent.firstChild);
+}
+
+function patchCore() { var origLoad = window.loadLocalState; window.loadLocalState = function(){ var p = origLoad ? origLoad.apply(this, arguments) : Promise.resolve(); return Promise.resolve(p).then(function(){ return loadMyData(); }); }; var origSave = window.saveUserStats; window.saveUserStats = function(){ var r = origSave ? origSave.apply(this, arguments) : Promise.resolve(); saveMyData(); return r; }; }
+var lastSeenId = myId();
+setInterval(function(){ var id = myId(); if (id !== lastSeenId) { lastSeenId = id; if (!isOther()) loadMyData(); } injectAdminDataButton(); }, 900);
+function boot() { if (typeof window.saveUserStats === 'function' && typeof window.loadLocalState === 'function') { patchCore(); loadMyData(); injectAdminDataButton(); console.log('✅ fix.js 適用完了 bridge=' + (B() ? 'ON' : 'OFF') + ' levelFn=' + (levelFromExpFn() ? 'ON' : 'OFF') + ' thresholds=' + (thresholds() ? thresholds().length : 0) + ' domLv=' + domLevel()); } else { setTimeout(boot, 150); } }
+if (document.readyState === 'complete') boot(); else window.addEventListener('load', boot);
+})();
