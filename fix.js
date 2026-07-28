@@ -1,8 +1,17 @@
 // =====================================================================
-// fix.js —— 称号エディタ（個別カード化）＋データ管理パネル＋管理者画面ボタン
-// app.js は触らない。index.html の </body> 直前に <script src="fix.js" defer></script>
-// ※勉強時間グラフ／ランキング同期は既存パッチ（第5〜17回）が担当するため、
-//   このファイルではそれらの関数を再定義しません（衝突回避）。
+// fix.js —— 管理者データ管理パネル ＋ 称号エディタ
+//   ・報酬XP ＝ レア度ごとの全称号共通テーブル（shared/title_config.bonusesCommon）
+//   ・獲得条件(steps) ＝ 称号ごと（shared/title_config.steps）
+//   ・レジェンダリー超え ＝ 必要量は×2ずつ(2の累乗)／報酬XPはレジェンダリー同額
+//   ・称号ごとのカードUI（進捗設定／未取得化／獲得条件編集）※JSON欄なし
+//   ・データ管理ボタン ＝ 管理者画面の「ユーザー管理」カードの直下
+//   ・勉強時間 ＝ アカウント複製防止 ＋ ランキング(study_total/week/today)確実同期
+//   ・進捗消失防止 ＝ ローカルとクラウドをカウンタごとに大きい方でマージ
+//   ・黄色バナー(旧形式残骸の注意) ＝ 一切出さない
+// ※ app.js は触らない。app.js 末尾パッチ(グラフ描画/編集/浄化/UID隔離/窓ブリッジ)
+//    と競合しないよう、renderActivityChart / __openStudyTimeEditor /
+//    __updateStudyTimeDisplay は上書きしない（それらは app.js 側の責務）。
+// index.html の </body> 直前に <script src="fix.js" defer></script>
 // =====================================================================
 (function () {
 "use strict";
@@ -10,6 +19,23 @@ var F_BODY = "'Noto Sans JP',system-ui,-apple-system,'Hiragino Sans','Segoe UI',
 var F_MONO = "ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',monospace";
 var F_DISPLAY = "'Noto Sans JP',system-ui,sans-serif";
 
+// ---- 規定値（app.js 初期ロジックと同一） ----
+var DEFAULT_BONUSES = [10, 100, 500, 2500, 7777];
+var DEFAULT_STEPS = {
+test_count: [10, 100, 500, 2500, 9999],
+combo_max: [2, 5, 10, 30, 50],
+mistake_count: [5, 25, 100, 500, 999],
+vocab_fixed: [5, 25, 100, 500, 999],
+study_burst: [5, 15, 30, 60, 120],
+reader_open: [3, 10, 25, 50, 99],
+flash_count: [10, 100, 500, 2500, 9999],
+friends_count: [1, 5, 10, 25, 50],
+user_level: [5, 10, 25, 50, 99]
+};
+var RARITY_NAMES = ['コモン', 'アンコモン', 'レア', 'スーパーレア', 'レジェンダリー'];
+var RARITY_SHORT = ['コモン', 'アンコモン', 'レア', 'SR', 'レジェ'];
+
+// ---- 編集対象（自分 / 他ユーザー） ----
 window.__admTarget = window.__admTarget || { mode: 'self', uid: null, snap: null };
 function T() { return window.__admTarget; }
 function isOther() { var t = T(); return !!(t && t.mode === 'other'); }
@@ -18,21 +44,15 @@ function B() { return window.__bridge || null; }
 function gv(key, fb) { if (isOther()) { var s = __snap(); var v = s[key]; return v == null ? fb : v; } var b = B(); var w = b ? b[key] : window[key]; return w == null ? fb : w; }
 function sv(key, val) { if (isOther()) { __snap()[key] = val; return; } var o = {}; o[key] = val; window.__bridgeWrite = Object.assign(window.__bridgeWrite || {}, o); window[key] = val; }
 function gExp() { return gv('totalExp', 0) || 0; }
-function gName() { return gv('myName', ''); }
 function gTitle() { return gv('selectedTitle', ''); }
 function gTarget() { return gv('myTarget', ''); }
 function gFriends() { return gv('myFriendList', []); }
 function gStats() { var s = gv('userStats', {}); return (s && typeof s === 'object') ? s : {}; }
 function gSecs() { return clampSec(gv('todayStudySeconds', 0)); }
-function gWeek() { return cleanWeek(gv('weeklyStudyMinutesLog', [0,0,0,0,0,0,0])); }
-function gDate() { return gv('lastAccessDateStr', ''); }
-function gWord() { return gv('wordMemory', {}); }
-function gText() { return gv('textHistory', []); }
-function gBook() { return gv('myBookshelf', []); }
-function gFold() { var f = gv('myFolders', null); return (Array.isArray(f) && f.length) ? f : ['未分類']; }
-function sExp(v){sv('totalExp',v);} function sName(v){sv('myName',v);} function sTitle(v){sv('selectedTitle',v);} function sTarget(v){sv('myTarget',v);} function sFriends(v){sv('myFriendList',v);}
-function sStats(v){ sv('userStats', (v && typeof v === 'object') ? v : {}); }
-function sSecs(v){sv('todayStudySeconds',clampSec(v));} function sWeek(v){sv('weeklyStudyMinutesLog',cleanWeek(v));} function sDate(v){sv('lastAccessDateStr',v);} function sWord(v){sv('wordMemory',v);} function sText(v){sv('textHistory',v);} function sBook(v){sv('myBookshelf',v);} function sFold(v){sv('myFolders',v);}
+function gWeek() { return cleanWeek(gv('weeklyStudyMinutesLog', [0, 0, 0, 0, 0, 0, 0])); }
+function sExp(v) { sv('totalExp', v); } function sTitle(v) { sv('selectedTitle', v); } function sTarget(v) { sv('myTarget', v); } function sFriends(v) { sv('myFriendList', v); }
+function sStats(v) { sv('userStats', (v && typeof v === 'object') ? v : {}); }
+function sSecs(v) { sv('todayStudySeconds', clampSec(v)); } function sWeek(v) { sv('weeklyStudyMinutesLog', cleanWeek(v)); }
 function selfMyId() { var b = B(); return b ? b.myId : window.myId; }
 function selfG(k) { var b = B(); return b ? b[k] : window[k]; }
 function selfS(k, v) { var o = {}; o[k] = v; window.__bridgeWrite = Object.assign(window.__bridgeWrite || {}, o); window[k] = v; }
@@ -41,14 +61,141 @@ function gMyIdSelf() { var b = B(); return b ? b.myId : window.myId; }
 function box(name) { var id = myId(); return id ? (name + 'for' + id) : null; }
 function get(name) { var b = box(name); if (!b) return null; try { return localStorage.getItem(b); } catch (e) { return null; } }
 function set(name, v) { var b = box(name); if (!b) return; try { localStorage.setItem(b, v); } catch (e) {} }
-function clampSec(x){var n=Math.floor(Number(x));if(!isFinite(n)||n<0)return 0;return n>86400?86400:n;}
-function clampMin(x){var n=Math.floor(Number(x));if(!isFinite(n)||n<0)return 0;return n>1440?1440:n;}
-function clampInt(x){var n=Math.floor(Number(x));if(!isFinite(n)||n<0)return 0;return n;}
-function cleanWeek(w){var a=Array.isArray(w)?w:[],o=[];for(var i=0;i<7;i++)o[i]=clampMin(a[i]);return o;}
-function todayStr(){var d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
-function dayIdxOf(s){var d=new Date(s),i=d.getDay()-1;return i<0?6:i;}
-function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function clampSec(x) { var n = Math.floor(Number(x)); if (!isFinite(n) || n < 0) return 0; return n > 86400 ? 86400 : n; }
+function clampMin(x) { var n = Math.floor(Number(x)); if (!isFinite(n) || n < 0) return 0; return n > 1440 ? 1440 : n; }
+function clampInt(x) { var n = Math.floor(Number(x)); if (!isFinite(n) || n < 0) return 0; return n; }
+function cleanWeek(w) { var a = Array.isArray(w) ? w : [], o = []; for (var i = 0; i < 7; i++) o[i] = clampMin(a[i]); return o; }
+function todayStr() { var d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+function dayIdxOf(s) { var d = new Date(s), i = d.getDay() - 1; return i < 0 ? 6 : i; }
+function weekKeyOf() { var d = new Date(); var day = d.getDay(); var diff = (day === 0 ? -6 : 1 - day); var m = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff); return m.getFullYear() + '-' + (m.getMonth() + 1) + '-' + m.getDate(); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
+// ---- レベル計算：本体 calculateLevelFromExp を直接使用 ----
+function lvOf(exp) {
+try { if (typeof window.calculateLevelFromExp === 'function') { var r = window.calculateLevelFromExp(exp || 0); if (r && typeof r.level === 'number' && isFinite(r.level)) return Math.floor(r.level); } } catch (e) {}
+var b = B(); if (b && typeof b.levelFromExp === 'function') { try { var v = b.levelFromExp(exp || 0); if (typeof v === 'number' && isFinite(v)) return Math.floor(v); } catch (e) {} }
+return -1;
+}
+function canReverse() { return lvOf(0) >= 0; }
+function expForLevel(L) {
+L = Math.floor(L); if (L < 1) return null;
+if (lvOf(0) < 0) return null;
+if (lvOf(0) >= L) return 0;
+var hi = 1, g = 0; while (lvOf(hi) < L && hi < 2e9 && g < 64) { hi *= 4; g++; }
+if (lvOf(hi) < L) return null;
+var lo = 0; while (lo < hi) { var mid = Math.floor((lo + hi) / 2); if (lvOf(mid) >= L) hi = mid; else lo = mid + 1; }
+return lo;
+}
+
+// ---- 称号DB参照 ----
+function titleDB() { try { if (typeof TITLE_DATABASE !== 'undefined' && Array.isArray(TITLE_DATABASE)) return TITLE_DATABASE; } catch (e) {} return []; }
+function specialDB() { try { if (typeof SPECIAL_TITLES !== 'undefined' && Array.isArray(SPECIAL_TITLES)) return SPECIAL_TITLES; } catch (e) {} return []; }
+function rarityMap() { try { if (typeof RARITY_MAP !== 'undefined' && Array.isArray(RARITY_MAP)) return RARITY_MAP; } catch (e) {} return null; }
+
+// ---- 延伸ロジック（レジェンダリー超え：必要量は2の累乗、XPはレジェンダリー同額＝共通テーブル） ----
+function bonusesCommon() {
+var cfg = window.__titleConfig || { steps: {}, bonusesCommon: null };
+if (Array.isArray(cfg.bonusesCommon) && cfg.bonusesCommon.length === 5) return cfg.bonusesCommon;
+return DEFAULT_BONUSES;
+}
+function bonusesOf(t) { return bonusesCommon(); }
+function stepsOf(t) { return (Array.isArray(t.steps) && t.steps.length === 5) ? t.steps : (DEFAULT_STEPS[t.id] || [10, 100, 500, 2500, 9999]); }
+function thresholdOfStep(t, step) {
+var st = stepsOf(t);
+if (step <= 0) return 0;
+if (step <= st.length) return st[step - 1];
+var base = st[st.length - 1];
+return Math.floor(base * Math.pow(2, step - st.length));
+}
+function reachedStepOf(t, val) {
+var st = stepsOf(t); var step = 0;
+for (var i = 0; i < st.length; i++) { if (val >= st[i]) step = i + 1; }
+if (step >= st.length && st.length > 0) {
+var base = st[st.length - 1];
+if (base > 0 && val >= base) {
+var k = 1;
+while (val >= base * Math.pow(2, k)) { step = st.length + k; k++; if (k > 1024) break; }
+}
+}
+return step;
+}
+function bonusForStep(t, step) {
+var bn = bonusesCommon();
+if (step <= 0) return 0;
+if (step <= bn.length) return bn[step - 1];
+return bn[bn.length - 1];
+}
+function rarityLabelOf(step) {
+if (step <= 0) return '未解放';
+var rm = rarityMap();
+if (step <= 5) { if (rm && rm[step - 1]) return rm[step - 1].name; return RARITY_NAMES[step - 1] || ('段階' + step); }
+return 'レジェンダリー' + plusStr(step - 5);
+}
+function rarityClassOf(step) { if (step <= 0) return 'r0'; if (step <= 5) return 'r' + step; return 'r6'; }
+function plusStr(n) { var s = ''; for (var i = 0; i < n; i++) s += '＋'; return s; }
+function activeFullTitleOf(t, step) {
+if (step <= 0) return '';
+return '【' + rarityLabelOf(step) + '】' + t.name;
+}
+
+// ---- 称号設定（shared/title_config）の読み書き ----
+window.__titleConfig = window.__titleConfig || { steps: {}, bonusesCommon: null };
+function netReadShared(docId) {
+if (!window.db || !window.fbGetDoc || !window.fbDoc) return Promise.resolve(null);
+return window.fbGetDoc(window.fbDoc(window.db, 'shared', docId)).then(function (s) { return s && s.exists() ? s.data() : null; }).catch(function () { return null; });
+}
+function netWriteShared(docId, payload) {
+if (!window.db || !window.fbSetDoc || !window.fbDoc) return Promise.resolve();
+return window.fbSetDoc(window.fbDoc(window.db, 'shared', docId), payload, { merge: true }).catch(function () {});
+}
+function applyTitleConfigToDB() {
+var cfg = window.__titleConfig || { steps: {}, bonusesCommon: null };
+if (!cfg.steps) cfg.steps = {};
+var bc = (Array.isArray(cfg.bonusesCommon) && cfg.bonusesCommon.length === 5) ? cfg.bonusesCommon : null;
+titleDB().forEach(function (t) {
+if (Array.isArray(cfg.steps[t.id]) && cfg.steps[t.id].length === 5) t.steps = cfg.steps[t.id].map(function (x) { return clampInt(x); });
+else if (!Array.isArray(t.steps) || t.steps.length !== 5) t.steps = (DEFAULT_STEPS[t.id] || [10, 100, 500, 2500, 9999]).slice();
+t.bonuses = bc ? bc.slice() : DEFAULT_BONUSES.slice();
+});
+}
+function loadTitleConfig() {
+return netReadShared('title_config').then(function (cfg) {
+window.__titleConfig = (cfg && typeof cfg === 'object') ? cfg : { steps: {}, bonusesCommon: null };
+applyTitleConfigToDB();
+});
+}
+function saveTitleConfig() {
+var cfg = window.__titleConfig || { steps: {}, bonusesCommon: null };
+if (!cfg.steps) cfg.steps = {};
+return netWriteShared('title_config', cfg);
+}
+function commitTitleSteps(titleId, stepsArr) {
+var cfg = window.__titleConfig || { steps: {}, bonusesCommon: null };
+if (!cfg.steps) cfg.steps = {};
+cfg.steps[titleId] = stepsArr;
+window.__titleConfig = cfg; applyTitleConfigToDB();
+return saveTitleConfig().then(function () { try { window.renderTitles(); } catch (e) {} });
+}
+function resetTitleSteps(titleId) {
+var cfg = window.__titleConfig || { steps: {}, bonusesCommon: null };
+if (cfg.steps) delete cfg.steps[titleId];
+window.__titleConfig = cfg; applyTitleConfigToDB();
+return saveTitleConfig().then(function () { try { window.renderTitles(); } catch (e) {} });
+}
+function commitBonusesCommon(arr) {
+var cfg = window.__titleConfig || { steps: {}, bonusesCommon: null };
+cfg.bonusesCommon = arr;
+window.__titleConfig = cfg; applyTitleConfigToDB();
+return saveTitleConfig().then(function () { try { window.renderTitles(); } catch (e) {} });
+}
+function resetBonusesCommon() {
+var cfg = window.__titleConfig || { steps: {}, bonusesCommon: null };
+delete cfg.bonusesCommon;
+window.__titleConfig = cfg; applyTitleConfigToDB();
+return saveTitleConfig().then(function () { try { window.renderTitles(); } catch (e) {} });
+}
+
+// ---- Firebase 読み書き（users/{uid}） ----
 function netReadOf(uid) {
 if (!uid || !window.db || !window.fbGetDoc || !window.fbDoc) return Promise.resolve(null);
 return window.fbGetDoc(window.fbDoc(window.db, 'users/' + uid)).then(function (s) { return s && s.exists() ? s.data() : null; }).catch(function () { return null; });
@@ -60,24 +207,24 @@ return window.fbSetDoc(window.fbDoc(window.db, 'users/' + uid), payload, { merge
 function pickNet(net, keys) { if (!net) return undefined; for (var i = 0; i < keys.length; i++) { var k = keys[i]; if (net[k] !== undefined && net[k] !== null) return net[k]; } return undefined; }
 function parseMaybeJSON(x) { if (x == null) return undefined; if (typeof x !== 'string') return x; try { return JSON.parse(x); } catch (e) { return x; } }
 var K = {
-name: ['name','userName','user_name','displayName','nickName','nickname'],
-exp: ['totalExp','exp','total_exp','experience','xp','totalXp','totalXP','userExp'],
-title: ['title','userTitle','selectedTitle','badge','userBadge','user_title'],
-target: ['target','userTarget','goal','userGoal','user_target'],
-friends: ['friends','friendList','myFriendList','friend_list','userFriends'],
-stats: ['stats','userStats','user_stats','statistics'],
-secs: ['todayStudySeconds','study_today_secs','studySecs','todaySecs','study_secs'],
-week: ['weeklyStudyMinutesLog','study_weekly_log','weeklyLog','weekLog','study_week'],
-date: ['lastAccessDateStr','study_last_date','lastDate','study_date'],
-word: ['wordMemory','word_memory'], text: ['textHistory','text_history'],
-book: ['myBookshelf','bookshelf','my_bookshelf'], fold: ['myFolders','folders','my_folders']
+name: ['name', 'userName', 'user_name', 'displayName', 'nickName', 'nickname'],
+exp: ['totalExp', 'exp', 'total_exp', 'experience', 'xp', 'totalXp', 'totalXP', 'userExp'],
+title: ['title', 'userTitle', 'selectedTitle', 'badge', 'userBadge', 'user_title'],
+target: ['target', 'userTarget', 'goal', 'userGoal', 'user_target'],
+friends: ['friends', 'friendList', 'myFriendList', 'friend_list', 'userFriends'],
+stats: ['stats', 'userStats', 'user_stats', 'statistics'],
+secs: ['todayStudySeconds', 'study_today_secs', 'studySecs', 'todaySecs', 'study_secs'],
+week: ['weeklyStudyMinutesLog', 'study_weekly_log', 'weeklyLog', 'weekLog', 'study_week'],
+date: ['lastAccessDateStr', 'study_last_date', 'lastDate', 'study_date'],
+word: ['wordMemory', 'word_memory'], text: ['textHistory', 'text_history'],
+book: ['myBookshelf', 'bookshelf', 'my_bookshelf'], fold: ['myFolders', 'folders', 'my_folders']
 };
 function mapNetToSnap(net, uid) {
 var fr = parseMaybeJSON(pickNet(net, K.friends)); var st = pickNet(net, K.stats);
 var wk = parseMaybeJSON(pickNet(net, K.week)); var wo = parseMaybeJSON(pickNet(net, K.word));
 var tx = parseMaybeJSON(pickNet(net, K.text)); var bk = parseMaybeJSON(pickNet(net, K.book)); var fd = parseMaybeJSON(pickNet(net, K.fold));
 return { myId: uid, myName: pickNet(net, K.name),
-totalExp: (function(){ var e = pickNet(net, K.exp); var n = parseInt(e, 10); return isFinite(n) ? n : e; })(),
+totalExp: (function () { var e = pickNet(net, K.exp); var n = parseInt(e, 10); return isFinite(n) ? n : e; })(),
 selectedTitle: pickNet(net, K.title), myTarget: pickNet(net, K.target),
 myFriendList: Array.isArray(fr) ? fr : (fr || []), userStats: (st && typeof st === 'object') ? st : {},
 todayStudySeconds: pickNet(net, K.secs), weeklyStudyMinutesLog: Array.isArray(wk) ? wk : null,
@@ -97,98 +244,303 @@ lastAccessDateStr: snap.lastAccessDateStr, wordMemory: snap.wordMemory, textHist
 myBookshelf: snap.myBookshelf, myFolders: snap.myFolders, updatedAt: Date.now()
 }, extra || {});
 }
+// 進捗消失防止：ローカルとクラウドをカウンタごとに大きい方でマージ
+function mergeStats(local, cloud) {
+var m = {}; var keys = {};
+Object.keys(local || {}).forEach(function (k) { keys[k] = 1; });
+Object.keys(cloud || {}).forEach(function (k) { keys[k] = 1; });
+Object.keys(keys).forEach(function (k) {
+var lv = local ? local[k] : undefined, cv = cloud ? cloud[k] : undefined;
+if (typeof lv === 'number' && typeof cv === 'number' && isFinite(lv) && isFinite(cv)) m[k] = Math.max(lv, cv);
+else if (Array.isArray(lv) && Array.isArray(cv)) { var u = cv.slice(); lv.forEach(function (x) { if (u.indexOf(x) < 0) u.push(x); }); m[k] = u; }
+else m[k] = (cv !== undefined ? cv : lv);
+});
+return m;
+}
+
+var __studyLoadedForId = null;
 function loadMyData() {
 var id = selfMyId(); if (!id || id === 'GUEST-000') return Promise.resolve();
-var bName=get('name'),bExp=get('exp'),bTitle=get('title'),bTarget=get('target'),bFriends=get('friends');
-var bSecs=get('study_secs'),bDate=get('study_date'),bWeek=get('study_week');
-var bWord=get('wordMemory'),bText=get('textHistory'),bBook=get('myBookshelf'),bFold=get('myFolders');
+var accountChanged = (__studyLoadedForId !== id);
+var bName = get('name'), bExp = get('exp'), bTitle = get('title'), bTarget = get('target'), bFriends = get('friends');
+var bSecs = get('study_secs'), bDate = get('study_date'), bWeek = get('study_week');
+var bWord = get('wordMemory'), bText = get('textHistory'), bBook = get('myBookshelf'), bFold = get('myFolders');
 return netReadOf(id).then(function (net) {
 function P(nkeys, bval, parser) { var nv = pickNet(net, nkeys); if (nv !== undefined && nv !== null) return parser ? parser(nv) : nv; if (bval !== null && bval !== undefined) return parser ? parser(bval) : bval; return undefined; }
 var nm = P(K.name, bName); if (nm !== undefined) selfS('myName', nm || 'プレイヤー1');
-var ex = P(K.exp, bExp, function (x){ return parseInt(x, 10) || 0; }); if (ex !== undefined) selfS('totalExp', ex);
+var ex = P(K.exp, bExp, function (x) { return parseInt(x, 10) || 0; }); if (ex !== undefined) selfS('totalExp', ex);
 var ti = P(K.title, bTitle); if (ti !== undefined) selfS('selectedTitle', ti || '称号なし');
 var tg = P(K.target, bTarget); if (tg !== undefined) selfS('myTarget', tg || '未設定');
-var fr = P(K.friends, bFriends, function (x){ var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (fr !== undefined) selfS('myFriendList', fr || []);
-var st = P(K.stats, null); if (st !== undefined && typeof st === 'object') selfS('userStats', st || {});
-var sc = P(K.secs, bSecs, function (x){ return clampSec(parseInt(x, 10) || 0); }); if (sc !== undefined) selfS('todayStudySeconds', sc);
-var dt = P(K.date, bDate); if (dt !== undefined) selfS('lastAccessDateStr', dt || '');
-var wk = P(K.week, bWeek, function (x){ return cleanWeek(parseMaybeJSON(x)); }); if (wk !== undefined) selfS('weeklyStudyMinutesLog', wk);
-var wo = P(K.word, bWord, function (x){ var p = parseMaybeJSON(x); return (p && typeof p === 'object') ? p : {}; }); if (wo !== undefined) selfS('wordMemory', wo || {});
-var tx = P(K.text, bText, function (x){ var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (tx !== undefined) selfS('textHistory', tx || []);
-var bk = P(K.book, bBook, function (x){ var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (bk !== undefined) selfS('myBookshelf', bk || []);
-var fd = P(K.fold, bFold, function (x){ var p = parseMaybeJSON(x); return (Array.isArray(p) && p.length) ? p : ['未分類']; }); if (fd !== undefined) selfS('myFolders', fd);
+var fr = P(K.friends, bFriends, function (x) { var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (fr !== undefined) selfS('myFriendList', fr || []);
+var st = P(K.stats, null);
+if (!isOther()) { var cur = selfG('userStats') || {}; st = mergeStats(cur, (st && typeof st === 'object') ? st : {}); }
+if (st !== undefined && typeof st === 'object') selfS('userStats', st || {});
+var sc = P(K.secs, bSecs, function (x) { return clampSec(parseInt(x, 10) || 0); });
+var dt = P(K.date, bDate);
+var wk = P(K.week, bWeek, function (x) { return cleanWeek(parseMaybeJSON(x)); });
+if (accountChanged) {
+selfS('todayStudySeconds', (sc !== undefined && sc !== null) ? sc : 0);
+selfS('lastAccessDateStr', (dt !== undefined && dt !== null && dt !== '') ? dt : todayStr());
+selfS('weeklyStudyMinutesLog', (wk !== undefined && wk !== null) ? wk : [0, 0, 0, 0, 0, 0, 0]);
+} else {
+if (sc !== undefined) selfS('todayStudySeconds', sc);
+if (dt !== undefined) selfS('lastAccessDateStr', dt || '');
+if (wk !== undefined) selfS('weeklyStudyMinutesLog', wk);
+}
+var wo = P(K.word, bWord, function (x) { var p = parseMaybeJSON(x); return (p && typeof p === 'object') ? p : {}; }); if (wo !== undefined) selfS('wordMemory', wo || {});
+var tx = P(K.text, bText, function (x) { var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (tx !== undefined) selfS('textHistory', tx || []);
+var bk = P(K.book, bBook, function (x) { var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (bk !== undefined) selfS('myBookshelf', bk || []);
+var fd = P(K.fold, bFold, function (x) { var p = parseMaybeJSON(x); return (Array.isArray(p) && p.length) ? p : ['未分類']; }); if (fd !== undefined) selfS('myFolders', fd);
 if (bName === null) { set('name', selfG('myName') || ''); set('exp', String(selfG('totalExp') || 0)); set('title', selfG('selectedTitle') || ''); set('target', selfG('myTarget') || ''); set('friends', JSON.stringify(selfG('myFriendList') || [])); }
-if (bSecs === null) { set('study_secs', String(selfG('todayStudySeconds') || 0)); set('study_date', selfG('lastAccessDateStr') || todayStr()); set('study_week', JSON.stringify(selfG('weeklyStudyMinutesLog') || [0,0,0,0,0,0,0])); }
+if (bSecs === null) { set('study_secs', String(selfG('todayStudySeconds') || 0)); set('study_date', selfG('lastAccessDateStr') || todayStr()); set('study_week', JSON.stringify(selfG('weeklyStudyMinutesLog') || [0, 0, 0, 0, 0, 0, 0])); }
 if (bWord === null) set('wordMemory', JSON.stringify(selfG('wordMemory') || {}));
 if (bText === null) set('textHistory', JSON.stringify(selfG('textHistory') || []));
 if (bBook === null) set('myBookshelf', JSON.stringify(selfG('myBookshelf') || []));
 if (bFold === null) set('myFolders', JSON.stringify(selfG('myFolders') || ['未分類']));
+__studyLoadedForId = id;
 refreshDisplay();
 });
 }
 function saveMyData() {
 var id = selfMyId(); if (!id || id === 'GUEST-000') return Promise.resolve();
 set('name', selfG('myName') || ''); set('exp', String(selfG('totalExp') || 0)); set('title', selfG('selectedTitle') || ''); set('target', selfG('myTarget') || ''); set('friends', JSON.stringify(selfG('myFriendList') || []));
-set('study_secs', String(selfG('todayStudySeconds') || 0)); set('study_date', selfG('lastAccessDateStr') || todayStr()); set('study_week', JSON.stringify(selfG('weeklyStudyMinutesLog') || [0,0,0,0,0,0,0]));
+set('study_secs', String(selfG('todayStudySeconds') || 0)); set('study_date', selfG('lastAccessDateStr') || todayStr()); set('study_week', JSON.stringify(selfG('weeklyStudyMinutesLog') || [0, 0, 0, 0, 0, 0, 0]));
 set('wordMemory', JSON.stringify(selfG('wordMemory') || {})); set('textHistory', JSON.stringify(selfG('textHistory') || [])); set('myBookshelf', JSON.stringify(selfG('myBookshelf') || [])); set('myFolders', JSON.stringify(selfG('myFolders') || ['未分類']));
 return fbWriteOf(id, snapToPayload({ myName: selfG('myName'), totalExp: selfG('totalExp'), selectedTitle: selfG('selectedTitle'), myTarget: selfG('myTarget'), myFriendList: selfG('myFriendList'), userStats: selfG('userStats'), todayStudySeconds: selfG('todayStudySeconds'), weeklyStudyMinutesLog: selfG('weeklyStudyMinutesLog'), lastAccessDateStr: selfG('lastAccessDateStr'), wordMemory: selfG('wordMemory'), textHistory: selfG('textHistory'), myBookshelf: selfG('myBookshelf'), myFolders: selfG('myFolders') })).catch(function () { toast('⚠️ 端末内にだけ保存しました。ネット復帰後に再同期'); });
 }
 function saveOther() { var t = T(); if (!t || t.mode !== 'other' || !t.uid) return Promise.resolve(); return fbWriteOf(t.uid, snapToPayload(t.snap || {}, { _editedByAdmin: true })).catch(function () { toast('⚠️ 保存に失敗しました'); }); }
 function refreshDisplay() { try { if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay(); } catch (e) {} try { if (window.renderActivityChart) window.renderActivityChart(); } catch (e) {} }
-function levelFromExpFn() { var b = B(); return (b && typeof b.levelFromExp === 'function') ? b.levelFromExp : null; }
-function thresholds() { var b = B(); var t = b && b.thresholds; if (Array.isArray(t) && t.length >= 2 && typeof t[0] === 'number') return t; return null; }
-function domLevel() { var b = B(); var d = b && b.domLevel; return (typeof d === 'number' && d >= 0) ? d : -1; }
-function safeLevel(f, exp) { try { var v = f(exp); return (typeof v === 'number' && isFinite(v)) ? Math.floor(v) : -1; } catch (e) { return -1; } }
-function levelFromThresholds(exp, th) { var lv = 0; for (var i = 0; i < th.length; i++) { if (exp >= th[i]) lv = i + 1; else break; } return lv; }
-function canReverse() { return !!(levelFromExpFn() || thresholds()); }
-function levelOfCurrent(exp) { var f = levelFromExpFn(); if (f) { var v = safeLevel(f, exp); if (v >= 0) return v; } var th = thresholds(); if (th) return levelFromThresholds(exp, th); return domLevel(); }
-function expForLevel(L) { L = Math.floor(L); if (L < 1) return null; var th = thresholds(); if (th) { if (L - 1 < th.length) return th[L - 1]; return null; } var f = levelFromExpFn(); if (!f) return null; var l0 = safeLevel(f, 0); if (l0 < 0) return null; if (l0 >= L) return 0; var hi = 1, guard = 0; while (safeLevel(f, hi) < L && hi < 2e9 && guard < 64) { hi *= 4; guard++; } if (safeLevel(f, hi) < L) return null; var lo = 0; while (lo < hi) { var mid = Math.floor((lo + hi) / 2); if (safeLevel(f, mid) >= L) hi = mid; else lo = mid + 1; } return lo; }
 
-function toast(msg) { var t = document.getElementById('steToast'); if (!t) { t = document.createElement('div'); t.id = 'steToast'; t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:10001;background:#166534;color:#dcfce7;font-size:13px;font-weight:700;padding:10px 18px;border-radius:999px;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.4);font-family:' + F_BODY + ';'; document.body.appendChild(t); } t.innerText = msg; t.style.opacity = '1'; clearTimeout(t.__t); t.__t = setTimeout(function(){ t.style.opacity = '0'; }, 2200); }
+// ---- 今週の勉強秒数（ランキング用・絶対値計算＝二重加算にならない） ----
+function computeWeekSecs() {
+var now = new Date(); var cur = now.getDay() - 1; if (cur < 0) cur = 6;
+var log = (typeof weeklyStudyMinutesLog !== 'undefined' && Array.isArray(weeklyStudyMinutesLog)) ? weeklyStudyMinutesLog : [0, 0, 0, 0, 0, 0, 0];
+var s = 0;
+for (var i = 0; i < 7; i++) { if (i === cur) s += (parseInt(todayStudySeconds) || 0); else s += (Math.floor(parseFloat(log[i]) || 0)) * 60; }
+return s;
+}
+
+// ---- 勉強タイマー：ランキング用変数を毎秒確実に同期（app.js 末尾の interval を止めて一本化） ----
+window.initStudyTimerAndDataRotation = function () {
+if (window.__timerId) clearInterval(window.__timerId);
+if (window.__studyTimerIntervalId) { clearInterval(window.__studyTimerIntervalId); window.__studyTimerIntervalId = null; }
+try { if (!lastAccessDateStr) { lastAccessDateStr = todayStr(); localStorage.setItem('core_v4_study_last_date', lastAccessDateStr); } } catch (e) {}
+refreshDisplay();
+window.__timerId = setInterval(function () {
+try {
+var t = todayStr();
+var wk = weekKeyOf();
+var curSecs = todayStudySeconds || 0;
+if (lastAccessDateStr && lastAccessDateStr !== t) {
+var oi = dayIdxOf(lastAccessDateStr);
+var log = (Array.isArray(weeklyStudyMinutesLog) && weeklyStudyMinutesLog.length === 7) ? weeklyStudyMinutesLog : [0, 0, 0, 0, 0, 0, 0];
+log[oi] = Math.floor(curSecs / 60);
+weeklyStudyMinutesLog = log; todayStudySeconds = 0; lastAccessDateStr = t; curSecs = 0;
+try { localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog)); localStorage.setItem('core_v4_study_today_secs', '0'); localStorage.setItem('core_v4_study_last_date', t); } catch (e) {}
+saveMyData(); refreshDisplay();
+}
+var count = false;
+if (window.currentActiveTabId === 'vocab' || window.currentActiveTabId === 'reader') count = true;
+else if (window.currentActiveTabId === 'game') {
+var a = document.getElementById('flashcard-play-screen'), b = document.getElementById('game-play-screen'), c = document.getElementById('multi-battle-play-screen');
+if ((a && a.style.display === 'flex') || (b && b.style.display === 'block') || (c && c.style.display === 'flex')) count = true;
+}
+if (count) {
+var secs = clampSec(curSecs + 1);
+todayStudySeconds = secs;
+try { localStorage.setItem('core_v4_study_today_secs', String(secs)); } catch (e) {}
+try {
+if (userStats.study_today_date !== t) userStats.study_today_date = t;
+if (userStats.study_week_key !== wk) userStats.study_week_key = wk;
+userStats.study_today_secs = secs;
+userStats.study_week_secs = computeWeekSecs();
+userStats.study_total_secs = (parseInt(userStats.study_total_secs) || 0) + 1;
+try { localStorage.setItem('core_v4_study_total_secs', String(userStats.study_total_secs)); } catch (e) {}
+var m = Math.floor(secs / 60);
+if (m > (userStats.study_burst || 0)) { userStats.study_burst = m; if (window.saveUserStats) window.saveUserStats(); if (window.checkAndRewardTitleBonusXP) window.checkAndRewardTitleBonusXP(); }
+} catch (e) {}
+try { if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay(); } catch (e) {}
+if (secs % 10 === 0) { try { if (window.renderActivityChart) window.renderActivityChart(); } catch (e) {} }
+if (secs % 30 === 0) saveMyData();
+}
+} catch (e) { console.error('study timer error:', e); }
+}, 1000);
+};
+
+// ---- 称号ボーナス付与の上書き（延伸段まで・報酬は共通テーブル） ----
+window.checkAndRewardTitleBonusXP = function () {
+if (isOther()) return;
+var added = false;
+titleDB().forEach(function (t) {
+var val = userStats[t.id] || 0;
+var cur = reachedStepOf(t, val);
+if (!rewardedTitlesStepsCache[t.id]) rewardedTitlesStepsCache[t.id] = 0;
+if (cur > rewardedTitlesStepsCache[t.id]) {
+for (var s = rewardedTitlesStepsCache[t.id] + 1; s <= cur; s++) { totalExp += bonusForStep(t, s); added = true; }
+rewardedTitlesStepsCache[t.id] = cur;
+}
+});
+specialDB().forEach(function (t) {
+var unlocked = false; try { unlocked = t.check(); } catch (e) {}
+if (unlocked && !rewardedTitlesStepsCache[t.id]) { totalExp += 7777; rewardedTitlesStepsCache[t.id] = 1; added = true; }
+});
+if (added) {
+try { localStorage.setItem('core_v4_totalExp', totalExp); } catch (e) {}
+try { localStorage.setItem('core_v4_rewarded_titles_cache', JSON.stringify(rewardedTitlesStepsCache)); } catch (e) {}
+var nd = lvOf(totalExp); if (nd >= 0) userStats.user_level = nd;
+window.saveUserStats(); window.applyProfileToUi(); window.renderTitles(); window.renderLeaderboard();
+}
+};
+
+// ---- 称号コレクション画面の上書き（延伸段の表示・ドロップダウン反映・シーズン称号維持） ----
+window.renderTitles = function () {
+var listContainer = document.getElementById('titles-list');
+var selectEl = document.getElementById('sideSelectTitle');
+if (!listContainer) return;
+listContainer.innerHTML = "";
+if (selectEl) selectEl.innerHTML = '<option value="称号なし">称号なし</option>';
+var unlockedCount = 0, totalPossible = 0;
+titleDB().forEach(function (title) {
+var val = userStats[title.id] || 0;
+var reachedStep = reachedStepOf(title, val);
+unlockedCount += Math.min(reachedStep, 5);
+totalPossible += 5;
+var card = document.createElement('div');
+card.className = "word-row-container";
+card.style.cssText = "border-radius: 12px; padding: 14px; margin-bottom: 10px; border: 1.5px solid rgba(255,255,255,0.15); background: rgba(30, 41, 59, 0.85); box-sizing: border-box;";
+var badgeHTML = '<span class="badge-common" style="padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #4b5563;">未解放</span>';
+var activeFullTitle = "";
+if (reachedStep > 0) {
+badgeHTML = '<span class="badge-legendary" style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-shadow: 0 0 5px rgba(0,0,0,0.5);">' + esc(rarityLabelOf(reachedStep)) + ' (段階 ' + reachedStep + ')</span>';
+activeFullTitle = activeFullTitleOf(title, reachedStep);
+if (selectEl) { var opt = document.createElement('option'); opt.value = activeFullTitle; opt.innerText = activeFullTitle; selectEl.appendChild(opt); }
+}
+var isEquipped = selectedTitle === activeFullTitle && reachedStep > 0;
+var st = stepsOf(title);
+var targetVal = reachedStep > 0 ? thresholdOfStep(title, reachedStep + 1) : st[0];
+card.innerHTML =
+'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">' +
+'<div style="font-weight:900; font-size:16px; color:#ffffff;">' + esc(title.name) + '</div>' +
+'<div>' + badgeHTML + '</div>' +
+'</div>' +
+'<div style="font-size:12.5px; color:#FFFFFF; margin-bottom:8px; font-weight:700;">現在の進捗状況: <span style="color:var(--cosmic-cyan); font-weight:900;">' + val + '</span> / 次の段階目標値: ' + esc(String(targetVal)) + esc(title.unit || '') + '</div>' +
+'<div style="font-size:11px; color:rgba(255,255,255,0.85); font-weight:600; margin-bottom:12px; line-height:1.4; background:rgba(0,0,0,0.25); padding:6px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.05);">📊 課題内容: ' + esc(title.desc) + '<br>📈 進化段階ライン: ' + st.join(' ➔ ') + ' ➔ ＋(×2) ➔ (×4)… (' + esc(title.unit || '') + ')</div>' +
+(reachedStep > 0 ?
+'<button class="modern-btn" style="height: 34px; font-size:11px; background:' + (isEquipped ? 'var(--word-ok-bg) !important' : 'rgba(0,0,0,0.3) !important') + '; border-color:' + (isEquipped ? 'var(--word-ok)' : 'var(--border)') + ' !important; color:' + (isEquipped ? 'var(--word-ok)' : 'white') + ' !important; box-shadow: none !important;" onclick="equipTitle(\'' + activeFullTitle.replace(/'/g, "\\'") + '\')">' + (isEquipped ? 'セット中' : '称号をセットする') + '</button>' :
+'<button class="modern-btn" style="height: 34px; font-size:11px; background: rgba(0,0,0,0.5) !important; color:var(--text-sub) !important; border-color:var(--border) !important; box-shadow: none !important; cursor: not-allowed;" disabled>条件未達成</button>');
+listContainer.appendChild(card);
+});
+specialDB().forEach(function (title) {
+var isUnlocked = false; try { isUnlocked = title.check(); } catch (e) {}
+totalPossible += 1; if (isUnlocked) unlockedCount += 1;
+var card = document.createElement('div');
+card.className = "word-row-container";
+card.style.cssText = "border-radius: 12px; padding: 14px; margin-bottom: 10px; border: 1.5px solid #F59E0B; background: linear-gradient(135deg, rgba(245,158,11,0.05) 0%, rgba(30,41,59,0.9) 100%); box-sizing: border-box;";
+var activeFullTitle = '【特別】' + title.name;
+if (isUnlocked) {
+var badgeHTML = '<span class="badge-legendary" style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">レジェンダリー</span>';
+if (selectEl) { var opt = document.createElement('option'); opt.value = activeFullTitle; opt.innerText = activeFullTitle; selectEl.appendChild(opt); }
+var isEquipped = selectedTitle === activeFullTitle;
+card.innerHTML =
+'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">' +
+'<div style="font-weight:900; font-size:16px; color:#f59e0b; text-shadow:0 0 10px rgba(245,158,11,0.4);">' + esc(title.name) + '</div>' +
+'<div>' + badgeHTML + '</div></div>' +
+'<div style="font-size:12.5px; color:#FFFFFF; font-weight:700; margin-bottom:12px; background:rgba(0,0,0,0.25); padding:6px 10px; border-radius:6px; border:1px solid rgba(245,158,11,0.2);">👑 解放達成条件: ' + esc(title.desc) + '</div>' +
+'<button class="modern-btn" style="height: 34px; font-size:11px; background:' + (isEquipped ? 'var(--word-ok-bg) !important' : 'rgba(0,0,0,0.3) !important') + '; border-color:' + (isEquipped ? 'var(--word-ok)' : '#F59E0B') + ' !important; color:' + (isEquipped ? 'var(--word-ok)' : 'white') + ' !important; box-shadow: none !important;" onclick="equipTitle(\'' + activeFullTitle.replace(/'/g, "\\'") + '\')">' + (isEquipped ? 'セット中' : '称号をセットする') + '</button>';
+} else {
+card.innerHTML =
+'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">' +
+'<div style="font-weight:900; font-size:16px; color:rgba(255,255,255,0.25); font-style:italic;">🔒 未知のシークレット称号</div>' +
+'<div><span class="badge-common" style="padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #4b5563; background:rgba(0,0,0,0.4);">???</span></div></div>' +
+'<div style="font-size:11.5px; color:rgba(255,255,255,0.4); font-weight:500; line-height:1.4; text-align:center; padding:10px 0;">🕵️‍♂️ 隠された特定のミッションをクリアするとロックが解除されます。</div>' +
+'<button class="modern-btn" style="height: 34px; font-size:11px; background: rgba(0,0,0,0.5) !important; color:var(--text-sub) !important; border-color:var(--border) !important; box-shadow: none !important; cursor: not-allowed;" disabled>🔒 封印中</button>';
+}
+listContainer.appendChild(card);
+});
+if (selectEl) selectEl.value = selectedTitle;
+var percent = totalPossible > 0 ? Math.round((unlockedCount / totalPossible) * 100) : 0;
+var progressTextEl = document.getElementById('title-progress-text');
+var progressBarEl = document.getElementById('title-progress-bar');
+if (progressTextEl) progressTextEl.innerText = unlockedCount + ' / ' + totalPossible + '個 (' + percent + '%)';
+if (progressBarEl) progressBarEl.style.width = percent + '%';
+var equippedDisplayEl = document.getElementById('equipped-title-display');
+if (equippedDisplayEl) equippedDisplayEl.innerText = selectedTitle ? selectedTitle : "（未装備）";
+if (window.initLucide) window.initLucide();
+// app.js 末尾パッチのシーズン称号表示を維持
+if (typeof window.renderSeasonTitles === 'function') { try { window.renderSeasonTitles(); } catch (e) {} }
+};
+
+// ---- 黄色バナー（旧形式残骸の注意）を一切出さない ----
+function killResidueBanner() {
+try { window.__steShowResidueBanner = function () {}; } catch (e) {}
+try { var b = document.getElementById('steResidueBanner'); if (b && b.parentNode) b.parentNode.removeChild(b); } catch (e) {}
+}
+function installBannerKiller() {
+killResidueBanner();
+try {
+if (!window.__bannerKillerObs) {
+window.__bannerKillerObs = new MutationObserver(function (muts) {
+for (var i = 0; i < muts.length; i++) {
+var added = muts[i].addedNodes;
+if (!added) continue;
+for (var j = 0; j < added.length; j++) {
+var n = added[j];
+if (n.nodeType === 1 && n.id === 'steResidueBanner') { try { n.parentNode.removeChild(n); } catch (e) {} }
+}
+}
+});
+window.__bannerKillerObs.observe(document.body, { childList: true });
+}
+} catch (e) {}
+}
+
+function toast(msg) { var t = document.getElementById('steToast'); if (!t) { t = document.createElement('div'); t.id = 'steToast'; t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:10001;background:#166534;color:#dcfce7;font-size:13px;font-weight:700;padding:10px 18px;border-radius:999px;opacity:0;transition:opacity .25s;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.4);font-family:' + F_BODY + ';'; document.body.appendChild(t); } t.innerText = msg; t.style.opacity = '1'; clearTimeout(t.__t); t.__t = setTimeout(function () { t.style.opacity = '0'; }, 2200); }
 window.__steToast = toast;
 function isAdmin() { try { if (window.isAdmin === true || window.adminMode === true || window.adminUnlocked === true || window.__adminUnlocked === true || window.adminVerified === true) return true; var us = gStats(); if (us && (us.is_admin || us.isAdmin || us.admin)) return true; var cls = ((document.body ? document.body.className : '') + ' ' + (document.documentElement ? document.documentElement.className : '')); if (/(^|\s)(admin|admin-mode|admin-unlocked|is-admin|admin-verified)(\s|$|[-_])/i.test(cls)) return true; if (document.body && document.body.innerText && document.body.innerText.indexOf('@管理者') >= 0) return true; } catch (e) {} return false; }
 
-// ---------- 称号エディタ用ヘルパー ----------
-function titleDB() { try { return (typeof TITLE_DATABASE !== 'undefined' && Array.isArray(TITLE_DATABASE)) ? TITLE_DATABASE : []; } catch (e) { return []; } }
-function specialDB() { try { return (typeof SPECIAL_TITLES !== 'undefined' && Array.isArray(SPECIAL_TITLES)) ? SPECIAL_TITLES : []; } catch (e) { return []; } }
-function reachedStepOf(t, val) { var step = 0; (t.steps || []).forEach(function (tg, idx) { if (val >= tg) step = idx + 1; }); return step; }
-function rarityNameOf(step) { var map = ['コモン','アンコモン','レア','スーパーレア','レジェンダリー']; return step > 0 ? map[step - 1] : '未解放'; }
-function clearRewardedCache(id) {
-if (isOther()) return; // 他ユーザーの端末固有キャッシュは操作不可
-try {
-if (typeof rewardedTitlesStepsCache !== 'undefined') {
-rewardedTitlesStepsCache[id] = 0;
-localStorage.setItem('core_v4_rewarded_titles_cache', JSON.stringify(rewardedTitlesStepsCache));
+// ---- 称号エディタ用ヘルパー ----
+function readStats() {
+if (isOther()) { var s = __snap(); return (s.userStats && typeof s.userStats === 'object') ? s.userStats : {}; }
+try { if (typeof userStats !== 'undefined' && userStats && typeof userStats === 'object') return userStats; } catch (e) {}
+return gStats();
 }
-} catch (e) {}
+function editStats(fn) {
+if (isOther()) { var s = __snap(); if (!s.userStats || typeof s.userStats !== 'object') s.userStats = {}; fn(s.userStats); }
+else { try { fn(userStats); localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats)); sStats(userStats); } catch (e) {} }
+}
+function clearRewarded(id) {
+if (isOther()) return;
+try { rewardedTitlesStepsCache[id] = 0; localStorage.setItem('core_v4_rewarded_titles_cache', JSON.stringify(rewardedTitlesStepsCache)); } catch (e) {}
+}
+function maybeResetEquipped(name) {
+if (!name) return;
+var cur = isOther() ? (__snap().selectedTitle || '') : (function () { try { return selectedTitle; } catch (e) { return ''; } })();
+if (cur && String(cur).indexOf(String(name)) >= 0) {
+if (isOther()) { __snap().selectedTitle = '称号なし'; }
+else { try { selectedTitle = '称号なし'; localStorage.setItem('core_v4_userTitle', '称号なし'); } catch (e) {} sTitle('称号なし'); }
+}
 }
 function isSpecialEarned(sp, stats) {
 if (sp.id === 'goal_setting') return String(stats.goal_text || '').indexOf('大学合格') >= 0;
 if (sp.id === 'weekly_rank') return stats.weekly_rank_first === true;
 return false;
 }
-function maybeResetEquipped(name) {
-if (!name) return;
-var cur = gTitle() || '';
-if (cur && cur.indexOf(name) >= 0) sTitle('称号なし');
-}
-function expNow() { var exp = gExp(); var s = (exp || 0).toLocaleString() + ' XP'; var lv = levelOfCurrent(exp); if (lv >= 0) s += '（Lv ' + lv + '）'; return s; }
+function expNow() { var exp = gExp(); var s = (exp || 0).toLocaleString() + ' XP'; var lv = lvOf(exp); if (lv >= 0) s += '（Lv ' + lv + '）'; return s; }
 function titleNow() {
-var t = gTitle() || '称号なし';
-var DB = titleDB(); var stats = gStats() || {}; var earned = 0;
+var t = gTitle() || '称号なし'; var DB = titleDB(); var stats = readStats(); var earned = 0;
 DB.forEach(function (tt) { if (reachedStepOf(tt, stats[tt.id] || 0) > 0) earned++; });
-return t + '　[' + earned + '/' + DB.length + ']';
+return t + (DB.length ? '　[' + earned + '/' + DB.length + ' 獲得]' : '');
 }
 function items() { var us = gStats() || {}; return [
-{ icon: '⚡', name: '経験値・レベル', desc: 'レベルは経験値から自動で決まります', now: expNow, edit: { type: 'exp', get: function(){ return gExp() || 0; }, set: function(v){ sExp(clampInt(v)); } }, reset: function(){ sExp(0); } },
-{ icon: '🏅', name: '称号', desc: '称号ごとの進捗設定・未取得化・特別/シーズン称号の管理', now: titleNow, edit: { type: 'title', get: function(){ return gTitle() || ''; }, set: function(v){ sTitle(v || '称号なし'); } }, reset: function(){ sTitle('称号なし'); } },
-{ icon: '🎯', name: '目標', desc: 'プロフィールの目標を書き換えます', now: function(){ return gTarget() || '未設定'; }, edit: { type: 'text', get: function(){ return gTarget() || ''; }, set: function(v){ sTarget(v || '未設定'); } }, reset: function(){ sTarget('未設定'); } },
-{ icon: '🔥', name: '連続学習の最高記録', desc: 'いちばん長く続けた分数の記録', now: function(){ return (us.study_burst || 0) + ' 分'; }, edit: { type: 'number', unit: '分', get: function(){ return (gStats() && gStats().study_burst) || 0; }, set: function(v){ var s = gStats() || {}; s.study_burst = clampInt(v); sStats(s); } }, reset: function(){ var s = gStats() || {}; s.study_burst = 0; sStats(s); } },
-{ icon: '⏱️', name: '今日の勉強時間', desc: '今日のカウンター（分単位で指定）', now: function(){ var s = gSecs() || 0; return Math.floor(s / 60) + '分' + (s % 60) + '秒'; }, edit: { type: 'number', unit: '分', get: function(){ return Math.floor((gSecs() || 0) / 60); }, set: function(v){ sSecs(clampInt(v) * 60); } }, reset: function(){ sSecs(0); } },
-{ icon: '📊', name: '週間グラフ', desc: '7日ぶんをまとめて編集（月〜日の順・分）', now: function(){ var t = 0; (gWeek() || []).forEach(function(x){ t += (x || 0); }); return '合計 ' + Math.floor(t) + ' 分'; }, edit: { type: 'week', get: function(){ return (gWeek() || [0,0,0,0,0,0,0]).slice(); }, set: function(a){ sWeek(cleanWeek(a)); } }, reset: function(){ sWeek([0,0,0,0,0,0,0]); } },
-{ icon: '🧠', name: '単語の記憶', desc: '覚えた判定の記録（編集不可・リセットのみ）', now: function(){ return Object.keys(gWord() || {}).length + ' 語'; }, edit: null, reset: function(){ sWord({}); } },
-{ icon: '📚', name: '本棚・フォルダ', desc: '保存した長文とフォルダ（編集不可・リセットのみ）', now: function(){ return (gBook() || []).length + ' 件 / ' + (gFold() || []).length + ' フォルダ'; }, edit: null, reset: function(){ sBook([]); sFold(['未分類']); } },
-{ icon: '👥', name: 'フレンドリスト', desc: '登録したフレンド（編集不可・リセットのみ）', now: function(){ return (gFriends() || []).length + ' 人'; }, edit: null, reset: function(){ sFriends([]); } }
+{ icon: '⚡', name: '経験値・レベル', desc: 'レベルは経験値から自動で決まります', now: expNow, edit: { type: 'exp', get: function () { return gExp() || 0; }, set: function (v) { sExp(clampInt(v)); } }, reset: function () { sExp(0); } },
+{ icon: '🏅', name: '称号', desc: '報酬XP(レア度共通)・獲得条件(称号ごと)・進捗・未取得化', now: titleNow, edit: { type: 'title', get: function () { return gTitle() || ''; }, set: function (v) { sTitle(v || '称号なし'); } }, reset: function () { sTitle('称号なし'); } },
+{ icon: '🎯', name: '目標', desc: 'プロフィールの目標を書き換えます', now: function () { return gTarget() || '未設定'; }, edit: { type: 'text', get: function () { return gTarget() || ''; }, set: function (v) { sTarget(v || '未設定'); } }, reset: function () { sTarget('未設定'); } },
+{ icon: '🔥', name: '連続学習の最高記録', desc: 'いちばん長く続けた分数の記録', now: function () { return (us.study_burst || 0) + ' 分'; }, edit: { type: 'number', unit: '分', get: function () { return (gStats() && gStats().study_burst) || 0; }, set: function (v) { var s = gStats() || {}; s.study_burst = clampInt(v); sStats(s); } }, reset: function () { var s = gStats() || {}; s.study_burst = 0; sStats(s); } },
+{ icon: '⏱️', name: '今日の勉強時間', desc: '今日のカウンター（分単位で指定）', now: function () { var s = gSecs() || 0; return Math.floor(s / 60) + '分' + (s % 60) + '秒'; }, edit: { type: 'number', unit: '分', get: function () { return Math.floor((gSecs() || 0) / 60); }, set: function (v) { sSecs(clampInt(v) * 60); } }, reset: function () { sSecs(0); } },
+{ icon: '📊', name: '週間グラフ', desc: '7日ぶんをまとめて編集（月〜日の順・分）', now: function () { var t = 0; (gWeek() || []).forEach(function (x) { t += (x || 0); }); return '合計 ' + Math.floor(t) + ' 分'; }, edit: { type: 'week', get: function () { return (gWeek() || [0, 0, 0, 0, 0, 0, 0]).slice(); }, set: function (a) { sWeek(cleanWeek(a)); } }, reset: function () { sWeek([0, 0, 0, 0, 0, 0, 0]); } },
+{ icon: '🧠', name: '単語の記憶', desc: '覚えた判定の記録（編集不可・リセットのみ）', now: function () { return Object.keys(gWord() || {}).length + ' 語'; }, edit: null, reset: function () { sWord({}); } },
+{ icon: '📚', name: '本棚・フォルダ', desc: '保存した長文とフォルダ（編集不可・リセットのみ）', now: function () { return (gBook() || []).length + ' 件 / ' + (gFold() || []).length + ' フォルダ'; }, edit: null, reset: function () { sBook([]); sFold(['未分類']); } },
+{ icon: '👥', name: 'フレンドリスト', desc: '登録したフレンド（編集不可・リセットのみ）', now: function () { return (gFriends() || []).length + ' 人'; }, edit: null, reset: function () { sFriends([]); } }
 ]; }
 function injectStyle() { if (document.getElementById('admStyle')) return; var s = document.createElement('style'); s.id = 'admStyle'; s.textContent = [
 '@keyframes admMesh{0%{transform:translate(0,0) scale(1)}50%{transform:translate(6%,-4%) scale(1.15)}100%{transform:translate(0,0) scale(1)}}',
@@ -280,13 +632,14 @@ function injectStyle() { if (document.getElementById('admStyle')) return; var s 
 '.ste-lvcalc:disabled{filter:grayscale(.7) brightness(.7);cursor:not-allowed;}',
 '.ste-lvhint{margin-top:7px;font-size:10.5px;line-height:1.4;min-height:14px;color:#94a3b8;}',
 '.ste-lvhint.ok{color:#86efac;}.ste-lvhint.soft{color:#fcd34d;}',
-// 称号エディタ（個別カード）
 '.ste-tt-sec{margin-top:13px;padding-top:11px;border-top:1px dashed rgba(255,255,255,.1);}',
 '.ste-tt-sec>.lab{margin-bottom:8px;}',
 '.ste-tt-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:11px;padding:10px 11px;margin-bottom:8px;transition:border-color .18s,background .18s;}',
 '.ste-tt-card:hover{border-color:rgba(34,211,238,.3);background:rgba(34,211,238,.04);}',
 '.ste-tt-card.special{border-color:rgba(245,158,11,.22);background:rgba(245,158,11,.04);}',
 '.ste-tt-card.special:hover{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.07);}',
+'.ste-tt-card.bonus{border-color:rgba(45,212,191,.22);background:rgba(45,212,191,.04);}',
+'.ste-tt-card.bonus:hover{border-color:rgba(45,212,191,.4);background:rgba(45,212,191,.07);}',
 '.ste-tt-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}',
 '.ste-tt-name{font-size:12.5px;font-weight:800;color:#f1f5f9;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
 '.ste-tt-rarity{flex:0 0 auto;font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:999px;border:1px solid;letter-spacing:.03em;}',
@@ -296,6 +649,7 @@ function injectStyle() { if (document.getElementById('admStyle')) return; var s 
 '.ste-tt-rarity.r3{color:#38bdf8;border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.08);}',
 '.ste-tt-rarity.r4{color:#c084fc;border-color:rgba(192,132,252,.4);background:rgba(192,132,252,.1);}',
 '.ste-tt-rarity.r5{color:#fbbf24;border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.1);}',
+'.ste-tt-rarity.r6{color:#fff;border-color:rgba(251,191,36,.6);background:linear-gradient(135deg,rgba(251,191,36,.25),rgba(192,132,252,.25));box-shadow:0 0 8px rgba(251,191,36,.4);}',
 '.ste-tt-rarity.sp-on{color:#fbbf24;border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.1);}',
 '.ste-tt-rarity.sp-off{color:#64748b;border-color:rgba(100,116,139,.3);background:rgba(100,116,139,.08);}',
 '.ste-tt-prog{font-size:10.5px;color:#94a3b8;line-height:1.45;margin-bottom:8px;}',
@@ -307,12 +661,26 @@ function injectStyle() { if (document.getElementById('admStyle')) return; var s 
 '.ste-tt-mini:hover{background:rgba(251,113,133,.2);}.ste-tt-mini:active{transform:scale(.93);}',
 '.ste-tt-mini.cyan{color:#7dd3fc;background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.32);}',
 '.ste-tt-mini.cyan:hover{background:rgba(56,189,248,.2);}',
+'.ste-tt-mini.gold{color:#fbbf24;background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.35);}',
+'.ste-tt-mini.gold:hover{background:rgba(251,191,36,.2);}',
+'.ste-tt-cfg{display:none;margin-top:9px;padding:9px;border-radius:9px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.08);}',
+'.ste-tt-cfg.open{display:block;}',
+'.ste-tt-cfg .lab2{font-size:9.5px;font-weight:800;color:#94a3b8;letter-spacing:.04em;margin:8px 0 5px;}',
+'.ste-tt-cfg .lab2:first-child{margin-top:0;}',
+'.ste-tt-cfg-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:7px 8px;border-radius:8px;background:rgba(255,255,255,.03);flex-wrap:nowrap;}',
+'.ste-tt-cfg-row .rk{flex:0 0 auto;min-width:50px;font-size:10px;font-weight:800;color:#e2e8f0;font-family:' + F_MONO + ';}',
+'.ste-tt-cfg-inp{flex:0 0 auto;width:62px;padding:6px 6px;border-radius:7px;border:1.5px solid rgba(94,234,212,.25);background:rgba(4,10,16,.6);color:#f0fdfa;font-size:12px;font-weight:700;font-family:' + F_MONO + ';outline:none;text-align:center;}',
+'.ste-tt-cfg-inp:focus{border-color:#2dd4bf;}',
+'.ste-tt-cfg-unit{flex:0 0 auto;font-size:9px;color:#64748b;}',
+'.ste-tt-ext{display:none;margin-top:8px;padding:8px 9px;border-radius:8px;background:rgba(192,132,252,.05);border:1px solid rgba(192,132,252,.18);font-size:9.5px;color:#c4b5fd;line-height:1.55;}',
+'.ste-tt-ext.open{display:block;}',
+'.ste-tt-ext b{color:#fbbf24;font-family:' + F_MONO + ';}',
+'.ste-tt-ext-toggle{margin-top:8px;width:100%;text-align:center;}',
+'.ste-tt-ext-note{margin-top:8px;padding:7px 9px;border-radius:8px;background:rgba(45,212,191,.05);border:1px solid rgba(45,212,191,.18);font-size:9.5px;color:#7dd3fc;line-height:1.5;}',
 '.ste-tt-row2{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:7px 8px;border-radius:9px;background:rgba(255,255,255,.03);margin-bottom:6px;}',
 '.ste-tt-row2 .k{font-family:' + F_MONO + ';font-size:11px;color:#cbd5e1;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
 '.ste-tt-row2 button{font-family:' + F_BODY + ';font-size:10.5px;font-weight:700;border-radius:7px;padding:5px 9px;cursor:pointer;border:1px solid rgba(251,113,133,.3);background:rgba(251,113,133,.1);color:#fda4af;transition:background .15s,transform .1s;flex:0 0 auto;}',
 '.ste-tt-row2 button:hover{background:rgba(251,113,133,.2);}.ste-tt-row2 button:active{transform:scale(.94);}',
-'.ste-tt-json{width:100%;min-height:120px;max-height:260px;padding:9px;border-radius:9px;border:1.5px solid rgba(94,234,212,.25);background:rgba(4,10,16,.6);color:#e2e8f0;font-family:' + F_MONO + ';font-size:11px;line-height:1.5;resize:vertical;outline:none;box-sizing:border-box;}',
-'.ste-tt-json:focus{border-color:#2dd4bf;}',
 '.ste-tt-note{margin-top:10px;font-size:10px;color:#94a3b8;line-height:1.45;}',
 '.ste-tt-emptymsg{font-size:10.5px;color:#64748b;padding:4px 2px;}',
 '.ste-tt-clearbtn{flex:0 0 auto !important;width:auto !important;font-size:11.5px !important;padding:9px 11px !important;white-space:nowrap;}',
@@ -363,16 +731,15 @@ if (e.type === 'title') {
 return '<div class="admEdit">' +
 '<div class="lab">表示中の称号</div>' +
 '<div class="line"><input type="text" data-val="1" maxlength="40"><button type="button" class="back ste-tt-clearbtn" data-tt-clear="1">称号なし</button></div>' +
-'<div class="ste-tt-sec"><div class="lab">進化称号 — 進捗設定 / 未取得化</div><div data-tt-progress="1"></div></div>' +
+'<div class="ste-tt-sec"><div class="lab">🎁 報酬XP — 全称号共通・レア度ごと</div><div data-tt-bonuscommon="1"></div></div>' +
+'<div class="ste-tt-sec"><div class="lab">進化称号 — 進捗 / 未取得化 / 獲得条件の編集</div><div data-tt-progress="1"></div></div>' +
 '<div class="ste-tt-sec"><div class="lab">特別称号</div><div data-tt-special="1"></div></div>' +
 '<div class="ste-tt-sec"><div class="lab">シーズン称号</div><div data-tt-season="1"></div></div>' +
-'<div class="ste-tt-sec"><div class="lab">上級者：userStats を直接編集</div><textarea class="ste-tt-json" data-tt-json="1" spellcheck="false"></textarea>' +
-'<div class="saveRow" style="margin-top:8px"><button type="button" class="go" data-tt-applyjson="1">JSONを適用して保存</button></div></div>' +
-'<div class="ste-tt-note">※「未取得にする」は進捗を0にし、獲得フラグも消すので再取得できます。他ユーザー編集中は進捗のみリセットできます（獲得フラグは端末ごとのため）。</div>' +
+'<div class="ste-tt-note">※「🎁 報酬XP」はレア度ごとに全局所・全ユーザー共通で決まります。各称号の「⚙️ 獲得条件」は必要量のみ（称号ごと）。<br>※「未取得にする」は進捗を0にし獲得フラグも消すので再取得できます。他ユーザー編集中は進捗のみリセット可（獲得フラグは端末ごと）。</div>' +
 '<div class="saveRow"><button class="back" type="button">やめる</button><button class="go" type="button">表示称号を保存</button></div></div>';
 }
 if (e.type === 'week') {
-var labels = ['月','火','水','木','金','土','日']; var now = new Date(), cur = now.getDay() - 1; if (cur < 0) cur = 6; var cells = '';
+var labels = ['月', '火', '水', '木', '金', '土', '日']; var now = new Date(), cur = now.getDay() - 1; if (cur < 0) cur = 6; var cells = '';
 for (var i = 0; i < 7; i++) cells += '<div class="cell' + (i === cur ? ' today' : '') + '"><label>' + labels[i] + '</label><input type="number" inputmode="numeric" min="0" max="1440" data-wi="' + i + '"></div>';
 return '<div class="admEdit"><div class="lab">各曜日の勉強時間（分）</div><div class="admWeek">' + cells + '</div><div class="saveRow"><button class="back" type="button">やめる</button><button class="go" type="button">保存</button></div></div>';
 }
@@ -380,61 +747,165 @@ var inp = e.type === 'number' ? '<input type="number" inputmode="numeric" min="0
 return '<div class="admEdit"><div class="lab">新しい値</div><div class="line">' + inp + (e.unit ? '<span class="unit">' + esc(e.unit) + '</span>' : '') + '</div><div class="saveRow"><button class="back" type="button">やめる</button><button class="go" type="button">保存</button></div></div>';
 }
 function persistRow(row, it, msg) { if (isOther()) saveOther(); else if (window.saveUserStats) window.saveUserStats(); else saveMyData(); flashRow(row); toast(msg); }
+// 報酬XP（レア度共通・全称号）の編集ブロック
+function buildBonusCommonEditor(row, it) {
+var box = row.querySelector('[data-tt-bonuscommon]');
+if (!box) return;
+box.innerHTML = '';
+var bc = bonusesCommon().slice();
+var card = document.createElement('div');
+card.className = 'ste-tt-card bonus';
+var rows = '';
+for (var i = 0; i < 5; i++) {
+rows += '<div class="ste-tt-cfg-row">' +
+'<span class="rk">' + esc(RARITY_SHORT[i]) + '</span>' +
+'<span style="flex:0 0 auto;font-size:8.5px;font-weight:700;color:#7c8aa0;">報酬</span>' +
+'<input type="number" class="ste-tt-cfg-inp" data-bc="' + i + '" min="0" value="' + esc(String(bc[i])) + '">' +
+'<span class="ste-tt-cfg-unit">XP</span>' +
+'</div>';
+}
+card.innerHTML =
+'<div class="lab2">レア度ごとの報酬XP（すべての称号に適用）</div>' +
+rows +
+'<div class="ste-tt-ext-note">※レジェンダリー超え（＋/＋＋/＋＋＋…）の報酬は、ここで設定したレジェンダリーの値と同じになります。必要な量は×2ずつ自動延伸。</div>' +
+'<div class="ste-tt-acts" style="margin-top:8px;">' +
+'<button type="button" class="ste-tt-mini cyan" data-bc-save="1">配信して保存</button>' +
+'<button type="button" class="ste-tt-mini" data-bc-reset="1">規定値に戻す</button>' +
+'</div>';
+function readBc() {
+var a = [];
+for (var j = 0; j < 5; j++) a[j] = clampInt(parseInt(card.querySelector('[data-bc="' + j + '"]').value, 10));
+return a;
+}
+card.querySelector('[data-bc-save]').onclick = function () {
+var a = readBc();
+commitBonusesCommon(a).then(function () {
+toast('報酬XP（全称号共通）を配信しました ✓');
+buildBonusCommonEditor(row, it);
+});
+};
+card.querySelector('[data-bc-reset]').onclick = function () {
+resetBonusesCommon().then(function () {
+toast('報酬XPを規定値に戻しました ✓');
+buildBonusCommonEditor(row, it);
+});
+};
+box.appendChild(card);
+}
 function buildTitleEditor(row, it) {
-var stats = gStats() || {};
+var stats = readStats();
 var DB = titleDB();
 var SP = specialDB();
-// ---- 進化称号（個別カード） ----
+buildBonusCommonEditor(row, it);
 var pbox = row.querySelector('[data-tt-progress]');
 if (pbox) {
 pbox.innerHTML = '';
-if (DB.length === 0) {
-pbox.innerHTML = '<div class="ste-tt-emptymsg">称号データ（TITLE_DATABASE）が見つかりませんでした。</div>';
-} else {
+if (DB.length === 0) { pbox.innerHTML = '<div class="ste-tt-emptymsg">称号データ（TITLE_DATABASE）が見つかりませんでした。</div>'; }
+else {
 DB.forEach(function (t) {
 var val = stats[t.id] || 0;
 var step = reachedStepOf(t, val);
-var rar = rarityNameOf(step);
-var nextTarget = step >= 5 ? 'MAX' : t.steps[step];
+var rar = rarityLabelOf(step);
+var st = stepsOf(t);
+var nextTarget = step > 0 ? thresholdOfStep(t, step + 1) : st[0];
 var card = document.createElement('div');
 card.className = 'ste-tt-card';
+var cfgRows = '';
+for (var i = 0; i < 5; i++) {
+cfgRows += '<div class="ste-tt-cfg-row">' +
+'<span class="rk">' + esc(RARITY_SHORT[i]) + '</span>' +
+'<span style="flex:0 0 auto;font-size:8.5px;font-weight:700;color:#7c8aa0;">必要</span>' +
+'<input type="number" class="ste-tt-cfg-inp" data-cfg-step="' + i + '" min="0" value="' + esc(String(st[i])) + '">' +
+(t.unit ? '<span class="ste-tt-cfg-unit">' + esc(t.unit) + '</span>' : '') +
+'</div>';
+}
 card.innerHTML =
 '<div class="ste-tt-card-top">' +
 '<span class="ste-tt-name">' + esc(t.name) + '</span>' +
-'<span class="ste-tt-rarity r' + step + '">' + esc(rar) + '</span>' +
+'<span class="ste-tt-rarity ' + rarityClassOf(step) + '">' + esc(rar) + '</span>' +
 '</div>' +
 '<div class="ste-tt-prog">進捗 <b>' + esc(String(val)) + '</b> / 次の目標 ' + esc(String(nextTarget)) + esc(t.unit || '') + '</div>' +
 '<div class="ste-tt-acts">' +
-'<input type="number" class="ste-tt-inp" data-tt-setinp="' + esc(t.id) + '" min="0" value="' + esc(String(val)) + '">' +
-'<button type="button" class="ste-tt-mini cyan" data-tt-set="' + esc(t.id) + '">進捗を設定</button>' +
-'<button type="button" class="ste-tt-mini" data-tt-unearn="' + esc(t.id) + '">未取得にする</button>' +
+'<input type="number" class="ste-tt-inp" min="0" value="' + esc(String(val)) + '">' +
+'<button type="button" class="ste-tt-mini cyan">進捗を設定</button>' +
+'<button type="button" class="ste-tt-mini">未取得にする</button>' +
+'<button type="button" class="ste-tt-mini gold" data-cfg-toggle="1">⚙️ 獲得条件</button>' +
+'</div>' +
+'<div class="ste-tt-cfg" data-cfg-box="1">' +
+'<div class="lab2">獲得に必要な量（1行 = 1レアリティ・この称号のみ）</div>' +
+cfgRows +
+'<button type="button" class="ste-tt-mini cyan ste-tt-ext-toggle" data-cfg-exttoggle="1">▶ レジェンダリー超えの必要量を見る</button>' +
+'<div class="ste-tt-ext" data-cfg-ext="1"></div>' +
+'<div class="ste-tt-acts" style="margin-top:8px;">' +
+'<button type="button" class="ste-tt-mini cyan" data-cfg-save="1">配信して保存</button>' +
+'<button type="button" class="ste-tt-mini" data-cfg-reset="1">規定値に戻す</button>' +
+'</div>' +
 '</div>';
-card.querySelector('[data-tt-set]').onclick = function () {
-var inp = card.querySelector('[data-tt-setinp]');
+var inp = card.querySelector('.ste-tt-inp');
+var btns = card.querySelectorAll('.ste-tt-acts > .ste-tt-mini');
+btns[0].onclick = function () {
 var v = clampInt(parseInt(inp.value, 10));
-var s = gStats() || {}; s[t.id] = v; sStats(s);
+editStats(function (s) { s[t.id] = v; });
 if (!isOther() && window.checkAndRewardTitleBonusXP) { try { window.checkAndRewardTitleBonusXP(); } catch (e) {} }
 persistRow(row, it, t.name + ' の進捗を ' + v + ' に設定 ✓');
 buildTitleEditor(row, it);
 };
-card.querySelector('[data-tt-unearn]').onclick = function () {
-var s = gStats() || {}; s[t.id] = 0; sStats(s);
-clearRewardedCache(t.id);
+btns[1].onclick = function () {
+editStats(function (s) { s[t.id] = 0; });
+clearRewarded(t.id);
 maybeResetEquipped(t.name);
 persistRow(row, it, t.name + ' を未取得にしました ✓');
 buildTitleEditor(row, it);
+};
+var cfgBox = card.querySelector('[data-cfg-box]');
+btns[2].onclick = function () { cfgBox.classList.toggle('open'); };
+function readCfgSteps() {
+var sa = [];
+for (var j = 0; j < 5; j++) sa[j] = clampInt(parseInt(card.querySelector('[data-cfg-step="' + j + '"]').value, 10));
+return sa;
+}
+function paintExt() {
+var sa = readCfgSteps();
+var base = sa[4];
+var bxp = bonusesCommon()[4];
+var ext = card.querySelector('[data-cfg-ext]');
+var lines = '';
+for (var k = 1; k <= 3; k++) {
+var thr = Math.floor(base * Math.pow(2, k));
+lines += '【レジェンダリー' + plusStr(k) + '】 必要量 <b>' + thr + '</b>' + (t.unit || '') + ' / ボナス <b>' + bxp + '</b>XP<br>';
+}
+ext.innerHTML = '📈 レジェンダリー超え（必要量は×2ずつ／XPは上の「🎁 報酬XP」のレジェンダリー値と同額）：<br>' + lines + '<span style="opacity:.7;">＋はさらに×2ずつ無限に延伸します。</span>';
+}
+card.querySelectorAll('[data-cfg-step]').forEach(function (el) { el.addEventListener('input', function () { var ext = card.querySelector('[data-cfg-ext]'); if (ext && ext.classList.contains('open')) paintExt(); }); });
+var extToggle = card.querySelector('[data-cfg-exttoggle]');
+var extBox = card.querySelector('[data-cfg-ext]');
+extToggle.onclick = function () {
+var open = extBox.classList.toggle('open');
+extToggle.innerText = open ? '▼ レジェンダリー超えの必要量を隠す' : '▶ レジェンダリー超えの必要量を見る';
+if (open) paintExt();
+};
+card.querySelector('[data-cfg-save]').onclick = function () {
+var sa = readCfgSteps();
+commitTitleSteps(t.id, sa).then(function () {
+toast('「' + t.name + '」の獲得条件を全ユーザーに配信しました ✓');
+buildTitleEditor(row, it);
+});
+};
+card.querySelector('[data-cfg-reset]').onclick = function () {
+resetTitleSteps(t.id).then(function () {
+toast('「' + t.name + '」の獲得条件を規定値に戻しました ✓');
+buildTitleEditor(row, it);
+});
 };
 pbox.appendChild(card);
 });
 }
 }
-// ---- 特別称号 ----
 var ubox = row.querySelector('[data-tt-special]');
 if (ubox) {
 ubox.innerHTML = '';
-if (SP.length === 0) {
-ubox.innerHTML = '<div class="ste-tt-emptymsg">特別称号が見つかりませんでした。</div>';
-} else {
+if (SP.length === 0) { ubox.innerHTML = '<div class="ste-tt-emptymsg">特別称号が見つかりませんでした。</div>'; }
+else {
 SP.forEach(function (sp) {
 var earned = isSpecialEarned(sp, stats);
 var card = document.createElement('div');
@@ -445,12 +916,10 @@ card.innerHTML =
 '<span class="ste-tt-rarity ' + (earned ? 'sp-on' : 'sp-off') + '">' + (earned ? '獲得済み' : '未獲得') + '</span>' +
 '</div>' +
 '<div class="ste-tt-prog">' + esc(sp.desc || '') + '</div>' +
-'<div class="ste-tt-acts">' +
-'<button type="button" class="ste-tt-mini" data-tt-spunearn="' + esc(sp.id) + '">未取得にする</button>' +
-'</div>';
-card.querySelector('[data-tt-spunearn]').onclick = function () {
-clearRewardedCache(sp.id);
-if (sp.id === 'weekly_rank') { var s = gStats() || {}; s.weekly_rank_first = false; sStats(s); }
+'<div class="ste-tt-acts"><button type="button" class="ste-tt-mini">未取得にする</button></div>';
+card.querySelector('.ste-tt-mini').onclick = function () {
+clearRewarded(sp.id);
+if (sp.id === 'weekly_rank') editStats(function (s) { s.weekly_rank_first = false; });
 maybeResetEquipped(sp.name);
 persistRow(row, it, '【特別】' + sp.name + ' を未取得にしました ✓');
 buildTitleEditor(row, it);
@@ -459,25 +928,19 @@ ubox.appendChild(card);
 });
 }
 }
-// ---- シーズン称号 ----
 var sbox = row.querySelector('[data-tt-season]');
 if (sbox) {
 sbox.innerHTML = '';
 var seasonArr = stats.seasonTitles || [];
-if (!Array.isArray(seasonArr) || seasonArr.length === 0) {
-sbox.innerHTML = '<div class="ste-tt-emptymsg">獲得済みのシーズン称号はありません。</div>';
-} else {
+if (!Array.isArray(seasonArr) || seasonArr.length === 0) { sbox.innerHTML = '<div class="ste-tt-emptymsg">獲得済みのシーズン称号はありません。</div>'; }
+else {
 seasonArr.forEach(function (stName, idx) {
 var r2 = document.createElement('div');
 r2.className = 'ste-tt-row2';
-r2.innerHTML = '<span class="k">' + esc(String(stName)) + '</span>' +
-'<button type="button" data-tt-seasonrm="' + idx + '">外す</button>';
-r2.querySelector('[data-tt-seasonrm]').onclick = function () {
-var s = gStats() || {};
-var arr = (s.seasonTitles || []).slice();
-var removed = arr.splice(idx, 1)[0];
-s.seasonTitles = arr; sStats(s);
-maybeResetEquipped(removed);
+r2.innerHTML = '<span class="k">' + esc(String(stName)) + '</span><button type="button">外す</button>';
+r2.querySelector('button').onclick = function () {
+editStats(function (s) { var arr = Array.isArray(s.seasonTitles) ? s.seasonTitles.slice() : []; arr.splice(idx, 1); s.seasonTitles = arr; });
+maybeResetEquipped(String(stName));
 persistRow(row, it, 'シーズン称号を外しました ✓');
 buildTitleEditor(row, it);
 };
@@ -485,17 +948,6 @@ sbox.appendChild(r2);
 });
 }
 }
-// ---- JSON（上級者） ----
-var ja = row.querySelector('[data-tt-json]');
-if (ja) { try { ja.value = JSON.stringify(stats, null, 2); } catch (e) { ja.value = '{}'; } }
-var ap = row.querySelector('[data-tt-applyjson]');
-if (ap) ap.onclick = function () {
-var parsed; try { parsed = JSON.parse(ja.value); } catch (e) { toast('JSONの形式が正しくありません：' + e.message); return; }
-if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) { toast('JSONはオブジェクト { } にしてください'); return; }
-sStats(parsed);
-persistRow(row, it, 'userStats を適用しました ✓');
-buildTitleEditor(row, it);
-};
 }
 function fillEditInputs(row, it) {
 if (!it.edit) return;
@@ -503,20 +955,19 @@ if (it.edit.type === 'exp') {
 var v = it.edit.get(); var el = row.querySelector('[data-val]'); if (el) el.value = (v == null ? '' : v);
 var lvIn = row.querySelector('[data-lv]'); if (lvIn) lvIn.value = '';
 var tag = row.querySelector('[data-lvtag]'), hint = row.querySelector('[data-lvhint]'), box = row.querySelector('[data-lvbox]'), calc = row.querySelector('[data-lvcalc]');
-var rev = canReverse(); var dl = domLevel();
-if (rev) { if (box) box.classList.add('ready'); if (tag) { tag.className = 'ste-lvtag ok'; tag.textContent = levelFromExpFn() ? '本体の式' : '閾値テーブル'; } if (calc) calc.disabled = false; if (hint) { hint.className = 'ste-lvhint'; hint.textContent = 'レベルを入れると、アプリ本体の計算でEXPを逆算します。'; } }
-else if (dl >= 0) { if (box) box.classList.remove('ready'); if (tag) { tag.className = 'ste-lvtag soft'; tag.textContent = '現在Lv ' + dl + ' 表示中'; } if (calc) calc.disabled = true; if (hint) { hint.className = 'ste-lvhint soft'; hint.textContent = 'いまは画面のLvを表示しています。逆算は、本体の計算式が見つかると使えるようになります。経験値は直接入力できます。'; } }
-else { if (box) box.classList.remove('ready'); if (tag) { tag.className = 'ste-lvtag'; tag.textContent = '式を探索中'; } if (calc) calc.disabled = true; if (hint) { hint.className = 'ste-lvhint'; hint.textContent = '本体の計算式を探しています。経験値は直接入力できます。'; } }
-setTimeout(function(){ try { el && el.focus(); } catch (e) {} }, 30); return;
+var rev = canReverse();
+if (rev) { if (box) box.classList.add('ready'); if (tag) { tag.className = 'ste-lvtag ok'; tag.textContent = '本体の式'; } if (calc) calc.disabled = false; if (hint) { hint.className = 'ste-lvhint'; hint.textContent = 'レベルを入れると、アプリ本体の計算でEXPを逆算します。'; } }
+else { if (box) box.classList.remove('ready'); if (tag) { tag.className = 'ste-lvtag soft'; tag.textContent = '式未取得'; } if (calc) calc.disabled = true; if (hint) { hint.className = 'ste-lvhint soft'; hint.textContent = '本体の計算式が見つかりません。経験値は直接入力できます。'; } }
+setTimeout(function () { try { el && el.focus(); } catch (e) {} }, 30); return;
 }
 if (it.edit.type === 'title') {
 var el2 = row.querySelector('[data-val]'); if (el2) el2.value = (it.edit.get() || '');
 var clr = row.querySelector('[data-tt-clear]'); if (clr) clr.onclick = function () { if (el2) el2.value = ''; };
 buildTitleEditor(row, it);
-setTimeout(function(){ try { el2 && el2.focus(); } catch (e) {} }, 30); return;
+setTimeout(function () { try { el2 && el2.focus(); } catch (e) {} }, 30); return;
 }
 if (it.edit.type === 'week') { var arr = it.edit.get(); var ins = row.querySelectorAll('.admWeek input'); for (var i = 0; i < ins.length; i++) ins[i].value = arr[i] || 0; return; }
-var vv = it.edit.get(); var el3 = row.querySelector('[data-val]'); if (el3) { el3.value = (vv == null ? '' : vv); setTimeout(function(){ try { el3.focus(); el3.select && el3.select(); } catch (e) {} }, 30); }
+var vv = it.edit.get(); var el3 = row.querySelector('[data-val]'); if (el3) { el3.value = (vv == null ? '' : vv); setTimeout(function () { try { el3.focus(); el3.select && el3.select(); } catch (e) {} }, 30); }
 }
 function readEditInputs(row, it) {
 if (it.edit.type === 'exp' || it.edit.type === 'number') { var el = row.querySelector('[data-val]'); return el ? clampInt(parseInt(el.value, 10)) : 0; }
@@ -532,12 +983,12 @@ var row = document.createElement('div'); row.className = 'admRow'; row.setAttrib
 var nowTxt = ''; try { nowTxt = it.now(); } catch (e) { nowTxt = '-'; }
 var acts = '<div class="admActs">'; if (it.edit) acts += '<button class="admBtn edit" type="button">編集</button>'; acts += '<button class="admBtn reset" type="button">リセット</button></div>';
 row.innerHTML = '<div class="admTop"><div class="admIco">' + it.icon + '</div><div class="admBody"><div class="admName">' + esc(it.name) + '</div><div class="admNow" data-now="1"><span class="tick"></span><span class="val">' + esc(nowTxt) + '</span></div><div class="admDesc">' + esc(it.desc) + '</div></div>' + acts + '</div>' + buildEditForm(it) + '<div class="admConfirm"><span>本当にリセットしますか？</span><button class="admNo" type="button">やめる</button><button class="admYes" type="button">リセット</button></div>';
-var editBtn = row.querySelector('.admBtn.edit'); if (editBtn) editBtn.onclick = function(){ row.classList.remove('asking'); row.classList.add('editing'); fillEditInputs(row, it); };
-row.querySelector('.admBtn.reset').onclick = function(){ row.classList.remove('editing'); row.classList.add('asking'); };
-row.querySelector('.admNo').onclick = function(){ row.classList.remove('asking'); };
-row.querySelector('.admYes').onclick = function(){ try { it.reset(); } catch (e) {} afterChange(row, it, it.name + ' をリセットしました ✓'); };
-var back = row.querySelector('.admEdit .saveRow .back'); if (back) back.onclick = function(){ row.classList.remove('editing'); };
-var go = row.querySelector('.admEdit .saveRow .go'); if (go) go.onclick = function(){ var val = readEditInputs(row, it); try { it.edit.set(val); } catch (e) {} afterChange(row, it, it.name + ' を更新しました ✓'); };
+var editBtn = row.querySelector('.admBtn.edit'); if (editBtn) editBtn.onclick = function () { row.classList.remove('asking'); row.classList.add('editing'); fillEditInputs(row, it); };
+row.querySelector('.admBtn.reset').onclick = function () { row.classList.remove('editing'); row.classList.add('asking'); };
+row.querySelector('.admNo').onclick = function () { row.classList.remove('asking'); };
+row.querySelector('.admYes').onclick = function () { try { it.reset(); } catch (e) {} afterChange(row, it, it.name + ' をリセットしました ✓'); };
+var back = row.querySelector('.admEdit .saveRow .back'); if (back) back.onclick = function () { row.classList.remove('editing'); };
+var go = row.querySelector('.admEdit .saveRow .go'); if (go) go.onclick = function () { var val = readEditInputs(row, it); try { it.edit.set(val); } catch (e) {} afterChange(row, it, it.name + ' を更新しました ✓'); };
 var numInp = row.querySelector('.admEdit input[type=number][data-val]'); if (numInp) numInp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go && go.click(); } });
 var lvCalc = row.querySelector('[data-lvcalc]');
 if (lvCalc) lvCalc.onclick = function () { if (lvCalc.disabled) return; var lvIn = row.querySelector('[data-lv]'); var hint = row.querySelector('[data-lvhint]'); var valIn = row.querySelector('[data-val]'); var L = parseInt(lvIn.value, 10); if (!isFinite(L) || L < 1) { hint.className = 'ste-lvhint soft'; hint.textContent = 'レベルを1以上で入力してください。'; return; } var exp = expForLevel(L); if (exp == null) { hint.className = 'ste-lvhint soft'; hint.textContent = 'そのレベルのEXPを求められませんでした（範囲外の可能性）。'; return; } valIn.value = exp; valIn.classList.remove('ste-pop'); void valIn.offsetWidth; valIn.classList.add('ste-pop'); hint.className = 'ste-lvhint ok'; hint.textContent = '✓ Lv ' + L + ' = ' + exp.toLocaleString() + ' XP を入力欄に反映（保存で確定）'; };
@@ -546,40 +997,33 @@ list.appendChild(row);
 });
 var all = document.createElement('div'); all.className = 'admRow admAll'; all.setAttribute('data-idx', 'all');
 all.innerHTML = '<div class="admTop"><div class="admIco">⚠️</div><div class="admBody"><div class="admName">全部まとめてリセット</div><div class="admNow" data-now="1"><span class="tick"></span><span class="val">全 ' + its.length + ' 項目</span></div><div class="admDesc">上の項目をすべて一度に初期化します。元に戻せません。</div></div><div class="admActs"><button class="admBtn reset" type="button">全リセット</button></div></div><div class="admConfirm"><span>本当に全部リセットしますか？</span><button class="admNo" type="button">やめる</button><button class="admYes" type="button">全部リセット</button></div>';
-all.querySelector('.admBtn.reset').onclick = function(){ all.classList.add('asking'); };
-all.querySelector('.admNo').onclick = function(){ all.classList.remove('asking'); delete all.dataset.step2; all.querySelector('.admConfirm span').innerText = '本当に全部リセットしますか？'; };
-all.querySelector('.admYes').onclick = function(){ if (!all.dataset.step2) { all.dataset.step2 = '1'; all.querySelector('.admConfirm span').innerText = '最終確認：本当に全部消していい？'; return; } its.forEach(function (it){ try { it.reset(); } catch (e) {} }); delete all.dataset.step2; afterChange(all, null, 'すべてのデータをリセットしました ✓'); renderRows(); revealRows(); };
+all.querySelector('.admBtn.reset').onclick = function () { all.classList.add('asking'); };
+all.querySelector('.admNo').onclick = function () { all.classList.remove('asking'); delete all.dataset.step2; all.querySelector('.admConfirm span').innerText = '本当に全部リセットしますか？'; };
+all.querySelector('.admYes').onclick = function () { if (!all.dataset.step2) { all.dataset.step2 = '1'; all.querySelector('.admConfirm span').innerText = '最終確認：本当に全部消していい？'; return; } its.forEach(function (it) { try { it.reset(); } catch (e) {} }); delete all.dataset.step2; afterChange(all, null, 'すべてのデータをリセットしました ✓'); renderRows(); revealRows(); };
 list.appendChild(all); revealRows();
 }
 function afterChange(row, it, msg) { row.classList.remove('asking', 'editing'); if (isOther()) saveOther(); else if (window.saveUserStats) window.saveUserStats(); else saveMyData(); refreshDisplay(); if (it) { var nv = ''; try { nv = it.now(); } catch (e) {} var vEl = row.querySelector('.admNow .val'); if (vEl) vEl.innerText = nv; } flashRow(row); toast(msg); }
-function flashRow(row) { row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash'); var tk = row.querySelector('.admNow .tick'); if (tk) { tk.innerText = '✓'; tk.classList.remove('show'); void tk.offsetWidth; tk.classList.add('show'); setTimeout(function(){ tk.innerText = ''; }, 1400); } }
-function revealRows() { var list = document.getElementById('admList'); if (!list) return; var rows = list.querySelectorAll('.admRow:not(.in)'); if (!('IntersectionObserver' in window)) { rows.forEach(function (r){ r.classList.add('in'); }); return; } if (!io) io = new IntersectionObserver(function (entries){ entries.forEach(function (en){ if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }); }, { root: list, threshold: 0.12 }); rows.forEach(function (r, i){ r.style.animationDelay = (i * 0.04) + 's'; io.observe(r); }); }
+function flashRow(row) { row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash'); var tk = row.querySelector('.admNow .tick'); if (tk) { tk.innerText = '✓'; tk.classList.remove('show'); void tk.offsetWidth; tk.classList.add('show'); setTimeout(function () { tk.innerText = ''; }, 1400); } }
+function revealRows() { var list = document.getElementById('admList'); if (!list) return; var rows = list.querySelectorAll('.admRow:not(.in)'); if (!('IntersectionObserver' in window)) { rows.forEach(function (r) { r.classList.add('in'); }); return; } if (!io) io = new IntersectionObserver(function (entries) { entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }); }, { root: list, threshold: 0.12 }); rows.forEach(function (r, i) { r.style.animationDelay = (i * 0.04) + 's'; io.observe(r); }); }
 function refreshNowValues() {
 var list = document.getElementById('admList'); if (!list) return; var its = items();
 list.querySelectorAll('.admRow[data-idx]').forEach(function (row) { if (row.classList.contains('asking') || row.classList.contains('editing')) return; var idx = row.getAttribute('data-idx'); if (idx === 'all') return; var it = its[parseInt(idx, 10)]; if (!it) return; var vEl = row.querySelector('.admNow .val'); if (!vEl) return; var nv = ''; try { nv = it.now(); } catch (e) { return; } if (vEl.innerText !== nv) vEl.innerText = nv; });
-var c = document.getElementById('admClock'); if (c) { var d = new Date(); c.innerText = [d.getHours(), d.getMinutes(), d.getSeconds()].map(function (n){ return String(n).padStart(2, '0'); }).join(':'); }
+var c = document.getElementById('admClock'); if (c) { var d = new Date(); c.innerText = [d.getHours(), d.getMinutes(), d.getSeconds()].map(function (n) { return String(n).padStart(2, '0'); }).join(':'); }
 var u = document.getElementById('admUid'); if (u) { var id = myId(); u.innerText = id ? ('UID ' + id.slice(0, 6) + '…') : (isOther() ? '他ユーザー編集中' : '未ログイン'); }
 }
 function openPanel() { buildPanel(); var tg = document.getElementById('admTarget'); if (tg) tg.style.display = isAdmin() ? '' : 'none'; refreshTargetUI(); renderRows(); document.getElementById('admScrim').classList.add('open'); document.getElementById('admPanel').classList.add('open'); refreshNowValues(); if (liveTimer) clearInterval(liveTimer); liveTimer = setInterval(refreshNowValues, 1000); }
 function closePanel() { var s = document.getElementById('admScrim'), p = document.getElementById('admPanel'); if (s) s.classList.remove('open'); if (p) p.classList.remove('open'); if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
 
-// ---------- データ管理ボタンを管理者画面の「ユーザー管理」カードの下に注入 ----------
+// ---- データ管理ボタンを管理者画面の「ユーザー管理」カードの下に注入 ----
 function injectAdminDataButton() {
 if (document.getElementById('admDataBtnCard')) return;
 var anchor = document.getElementById('adminUserListContainer');
 var insertAfter = null, parent = null;
-if (anchor) {
-var card = anchor.closest('.card');
-if (card && card.parentNode) { insertAfter = card; parent = card.parentNode; }
-}
-if (!parent) {
-var view = document.getElementById('view-admin');
-if (view) { parent = view; insertAfter = null; }
-}
+if (anchor) { var card = anchor.closest('.card'); if (card && card.parentNode) { insertAfter = card; parent = card.parentNode; } }
+if (!parent) { var view = document.getElementById('view-admin'); if (view) { parent = view; insertAfter = null; } }
 if (!parent) return;
 var btnCard = document.createElement('div');
-btnCard.className = 'card';
-btnCard.id = 'admDataBtnCard';
+btnCard.className = 'card'; btnCard.id = 'admDataBtnCard';
 btnCard.style.cssText = 'cursor:pointer;border:1px solid rgba(0,240,255,0.35);background:linear-gradient(135deg, rgba(0,240,255,0.08), rgba(192,132,252,0.06));box-shadow:0 0 15px rgba(0,240,255,0.15);transition:all .2s;display:flex;align-items:center;gap:12px;';
 btnCard.innerHTML =
 '<div style="width:42px;height:42px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(0,240,255,0.12);border:1px solid rgba(0,240,255,0.35);box-shadow:0 0 12px rgba(0,240,255,0.25);">🗄️</div>' +
@@ -588,15 +1032,28 @@ btnCard.innerHTML =
 '<div style="font-size:10.5px;color:var(--text-sub);margin-top:2px;">称号・経験値・勉強時間などをユーザーごとに編集／リセット</div>' +
 '</div>' +
 '<div style="color:var(--cosmic-cyan);font-weight:900;font-size:18px;">›</div>';
-btnCard.onmouseenter = function(){ this.style.boxShadow = '0 0 22px rgba(0,240,255,0.35)'; this.style.transform = 'translateY(-1px)'; };
-btnCard.onmouseleave = function(){ this.style.boxShadow = '0 0 15px rgba(0,240,255,0.15)'; this.style.transform = ''; };
-btnCard.onclick = function(){ openPanel(); };
+btnCard.onmouseenter = function () { this.style.boxShadow = '0 0 22px rgba(0,240,255,0.35)'; this.style.transform = 'translateY(-1px)'; };
+btnCard.onmouseleave = function () { this.style.boxShadow = '0 0 15px rgba(0,240,255,0.15)'; this.style.transform = ''; };
+btnCard.onclick = function () { openPanel(); };
 parent.insertBefore(btnCard, insertAfter ? insertAfter.nextSibling : parent.firstChild);
 }
 
-function patchCore() { var origLoad = window.loadLocalState; window.loadLocalState = function(){ var p = origLoad ? origLoad.apply(this, arguments) : Promise.resolve(); return Promise.resolve(p).then(function(){ return loadMyData(); }); }; var origSave = window.saveUserStats; window.saveUserStats = function(){ var r = origSave ? origSave.apply(this, arguments) : Promise.resolve(); saveMyData(); return r; }; }
+function patchCore() { var origLoad = window.loadLocalState; window.loadLocalState = function () { var p = origLoad ? origLoad.apply(this, arguments) : Promise.resolve(); return Promise.resolve(p).then(function () { return loadMyData(); }); }; var origSave = window.saveUserStats; window.saveUserStats = function () { var r = origSave ? origSave.apply(this, arguments) : Promise.resolve(); saveMyData(); return r; }; }
 var lastSeenId = myId();
-setInterval(function(){ var id = myId(); if (id !== lastSeenId) { lastSeenId = id; if (!isOther()) loadMyData(); } injectAdminDataButton(); }, 900);
-function boot() { if (typeof window.saveUserStats === 'function' && typeof window.loadLocalState === 'function') { patchCore(); loadMyData(); injectAdminDataButton(); console.log('✅ fix.js 適用完了 bridge=' + (B() ? 'ON' : 'OFF') + ' levelFn=' + (levelFromExpFn() ? 'ON' : 'OFF') + ' thresholds=' + (thresholds() ? thresholds().length : 0) + ' domLv=' + domLevel()); } else { setTimeout(boot, 150); } }
+setInterval(function () { var id = myId(); if (id !== lastSeenId) { lastSeenId = id; if (!isOther()) loadMyData(); } injectAdminDataButton(); killResidueBanner(); }, 900);
+function boot() {
+if (typeof window.saveUserStats === 'function' && typeof window.loadLocalState === 'function') {
+patchCore();
+installBannerKiller();
+loadTitleConfig().then(function () {
+loadMyData();
+injectAdminDataButton();
+killResidueBanner();
+// app.js 末尾パッチのグラフ復元を起動時に1回実行（fix.js がタイマーを上書きした分の保険）
+try { if (typeof window.__sgRestoreFromCloud === 'function') window.__sgRestoreFromCloud(); } catch (e) {}
+console.log('✅ fix.js 適用完了 bridge=' + (B() ? 'ON' : 'OFF') + ' lvOf=' + (lvOf(0) >= 0 ? 'ON' : 'OFF') + ' titleCfgSteps=' + Object.keys((window.__titleConfig && window.__titleConfig.steps) || {}).length + ' bonusCommon=' + (Array.isArray(window.__titleConfig && window.__titleConfig.bonusesCommon) ? 'SET' : 'DEFAULT'));
+});
+} else { setTimeout(boot, 150); }
+}
 if (document.readyState === 'complete') boot(); else window.addEventListener('load', boot);
 })();
