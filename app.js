@@ -12597,3 +12597,1482 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
 
     console.log('🔧 長文リーダー開く/保存ボタン修正パッチ（" エスケープ欠落の根治：リスナ付け替え方式）適用完了');
 })();
+        // ==========================================================================
+// 📊 第18回パッチ：勉強時間「日跨ぎ引き継ぎ」根治
+//    症状: 日を跨ぐと昨日の勉強時間がそのまま残り、グラフもランキングも
+//          治らない／「週間 < 今日」という論理矛盾が出る
+//    原因: 勉強時間を「月〜日の7つの箱」に詰める設計で、箱の中身を捨てる
+//          処理が起動時の1回しか無い → 起動しっぱなし0時跨ぎで残骸が居座る
+//    根治: ① 箱を捨て「日付ごとの記録帳 study_daily_log」を唯一の真実にする
+//          ② 毎秒走る日跨ぎ見張りを新設（起動しっぱなしでも0時で本日0リセット）
+//          ③ グラフは記録帳から今週の月〜日を毎回再計算（残骸が映らない）
+//          ④ ランキングの 本日/週間/総計 も記録帳から再計算（矛盾を構造的に撲滅）
+//          ⑤ 記録帳をクラウドへミラー＆ログイン時に復元（端末を変えても消えない）
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※既存のあらゆる上書きの“さらに後ろ”で描画を接管するので競合しません
+// ==========================================================================
+(function applyStudyDailyLogPatch() {
+    if (window.__studyDailyLogPatchApplied) return;
+    window.__studyDailyLogPatchApplied = true;
+
+    // ------------------------------------------------------------------
+    // ヘルパー群：日付キー "Y-M-D" の生成・週月曜・週7日・日付変換・間引き
+    // ------------------------------------------------------------------
+    function sg2KeyToDate(key) {
+        var p = String(key).split('-');
+        if (p.length < 3) return new Date(NaN);
+        return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+    }
+    function sg2DateToKey(d) {
+        return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+    function sg2TodayKey() { return sg2DateToKey(new Date()); }
+    function sg2WeekMondayKey() {
+        var d = new Date();
+        var day = d.getDay();
+        var diff = (day === 0 ? -6 : 1 - day);
+        return sg2DateToKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff));
+    }
+    function sg2WeekKeys() {
+        var md = sg2KeyToDate(sg2WeekMondayKey());
+        var arr = [];
+        for (var i = 0; i < 7; i++) {
+            arr.push(sg2DateToKey(new Date(md.getFullYear(), md.getMonth(), md.getDate() + i)));
+        }
+        return arr;
+    }
+    function sg2PruneLog(log) {
+        var tk = sg2TodayKey();
+        var tMs = sg2KeyToDate(tk).getTime();
+        Object.keys(log).forEach(function(k) {
+            var dMs = sg2KeyToDate(k).getTime();
+            if (isNaN(dMs) || (tMs - dMs > 180 * 24 * 3600 * 1000)) delete log[k];
+        });
+    }
+    function sg2EnsureLog() {
+        if (typeof userStats === 'undefined' || !userStats) return;
+        if (!userStats.study_daily_log || typeof userStats.study_daily_log !== 'object' || Array.isArray(userStats.study_daily_log)) {
+            userStats.study_daily_log = {};
+        }
+    }
+    function sg2LevelOf(exp) {
+        if (typeof window.computeLevelSafe === 'function') return window.computeLevelSafe(exp);
+        try { return window.calculateLevelFromExp(exp).level; } catch (e) { return 1; }
+    }
+
+    // ------------------------------------------------------------------
+    // 核心：毎秒の整合（日跨ぎリセット＋記録帳更新＋本日/週間/総計の再計算）
+    //   ・shouldCount に依存しない＝勉強していなくても日跨ぎを補足する
+    //   ・総計は「既存値と記録帳合計の大きい方」＝間引いても巻き戻らない
+    // ------------------------------------------------------------------
+    function sg2Reconcile() {
+        if (typeof userStats === 'undefined' || !userStats) return;
+        sg2EnsureLog();
+        var tk = sg2TodayKey();
+        // 日跨ぎリセット（メモリ＋端末）
+        try {
+            if (typeof lastAccessDateStr !== 'undefined' && lastAccessDateStr && lastAccessDateStr !== tk) {
+                todayStudySeconds = 0;
+                try { localStorage.setItem('core_v4_study_today_secs', '0'); } catch (e) {}
+            }
+            lastAccessDateStr = tk;
+            try { localStorage.setItem('core_v4_study_last_date', tk); } catch (e) {}
+        } catch (e) {}
+        // 今日の記録帳
+        var todaySecs = 0;
+        try { todaySecs = parseInt(todayStudySeconds) || 0; } catch (e) {}
+        userStats.study_daily_log[tk] = todaySecs;
+        try { localStorage.setItem('core_v4_study_today_secs', String(todaySecs)); } catch (e) {}
+        sg2PruneLog(userStats.study_daily_log);
+        // 本日
+        userStats.study_today_secs = todaySecs;
+        userStats.study_today_date = tk;
+        // 週間＝今週の記録帳合計（箱の残骸が入り込む余地が無い）
+        var wk = sg2WeekKeys();
+        var wsum = 0;
+        wk.forEach(function(k) { wsum += parseInt(userStats.study_daily_log[k]) || 0; });
+        userStats.study_week_secs = wsum;
+        userStats.study_week_key = wk[0];
+        // 総計＝既存と記録帳全合計の大きい方
+        var tsum = 0;
+        Object.keys(userStats.study_daily_log).forEach(function(k) { tsum += parseInt(userStats.study_daily_log[k]) || 0; });
+        var existing = parseInt(userStats.study_total_secs) || 0;
+        userStats.study_total_secs = Math.max(existing, tsum);
+        try { localStorage.setItem('core_v4_study_total_secs', String(userStats.study_total_secs)); } catch (e) {}
+        // 他パッチ保険：今週ぶんだけ曜日箱にも同期しておく
+        try {
+            localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(wk.map(function(k) {
+                return (parseInt(userStats.study_daily_log[k]) || 0) / 60;
+            })));
+        } catch (e) {}
+    }
+
+    // ------------------------------------------------------------------
+    // ③ グラフ描画を接管：記録帳から今週の月〜日を毎回再計算
+    //    ・署名ガード＝データ不変時はDOMを触らない（他ウォッチドッグと重複しても
+    //      チラつかず軽い／勉強中は毎秒1回だけ実更新）
+    //    ・1分未満は秒表示／高さは週最大基準（既存の見え方を継承）
+    // ------------------------------------------------------------------
+    window.renderActivityChart = function() {
+        var chart = document.getElementById('activityBarChart');
+        if (!chart) return;
+        sg2EnsureLog();
+        var wk = sg2WeekKeys();
+        var tk = sg2TodayKey();
+        var todaySecs = 0;
+        try { todaySecs = parseInt(todayStudySeconds) || 0; } catch (e) {}
+        var vals = wk.map(function(k) {
+            if (k === tk) return todaySecs / 60;
+            return (parseInt((userStats.study_daily_log || {})[k]) || 0) / 60;
+        });
+        var sig = vals.map(function(v) { return Math.round(v * 10); }).join(',') + '|' + todaySecs;
+        if (window.__sg2LastSig === sig && chart.children.length === 7) return;
+        window.__sg2LastSig = sig;
+        chart.innerHTML = "";
+        var maxMin = 0.1;
+        vals.forEach(function(v) { if (v > maxMin) maxMin = v; });
+        var labels = ["月", "火", "水", "木", "金", "土", "日"];
+        labels.forEach(function(d, idx) {
+            var rawMin = vals[idx] || 0;
+            var fillH = rawMin <= 0 ? 4 : Math.min(100, Math.max(4, Math.round((rawMin / maxMin) * 100)));
+            var wrap = document.createElement('div');
+            wrap.className = "bar-wrapper";
+            wrap.style.cssText = "display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; flex: 1; min-width: 0;";
+            var fill = document.createElement('div');
+            fill.className = "bar-fill active";
+            fill.style.height = fillH + "%";
+            var valLbl = document.createElement('div');
+            valLbl.style.cssText = "font-size: 8px; font-weight: 700; color: #FFFFFF; margin-bottom: 2px; white-space: nowrap;";
+            if (rawMin <= 0) valLbl.innerText = "0分";
+            else if (rawMin < 1) valLbl.innerText = Math.max(1, Math.round(rawMin * 60)) + "秒";
+            else valLbl.innerText = Math.floor(rawMin) + "分";
+            var lbl = document.createElement('div');
+            lbl.style.cssText = "font-size: 10px; color: var(--text-sub); margin-top: 4px; font-weight: bold;";
+            lbl.innerText = d;
+            wrap.appendChild(valLbl);
+            wrap.appendChild(fill);
+            wrap.appendChild(lbl);
+            chart.appendChild(wrap);
+        });
+    };
+
+    // ------------------------------------------------------------------
+    // ④ ランキング描画を接管：記録帳から 本日/週間/総計 を再計算
+    //    ・自分は常に最新の userStats.study_daily_log を参照
+    //    ・他ユーザーは記録帳があればそれ、無ければ旧フィールドへ安全にフォールバック
+    // ------------------------------------------------------------------
+    window.fetchAllCommunityRankingUsers = async function() {
+        var users = [];
+        if (!window.db || !window.fbGetDoc || !window.fbDoc) return users;
+        var allUsers = [];
+        try { allUsers = await window.getAllUsers(); } catch (e) {}
+        var ids = [];
+        (allUsers || []).forEach(function(u) {
+            if (u && u.id && u.id !== 'GUEST-000' && ids.indexOf(u.id) === -1) ids.push(u.id);
+        });
+        if (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000' && ids.indexOf(myId) === -1) ids.push(myId);
+        for (var i = 0; i < ids.length; i++) {
+            var id = ids[i];
+            try {
+                var ref = window.fbDoc(window.db, 'users', id);
+                var snap = await window.fbGetDoc(ref);
+                if (!snap.exists()) continue;
+                var d = snap.data();
+                if (d.deleted) continue;
+                var stats = d.userStats || {};
+                var exp = parseInt(d.totalExp) || 0;
+                var name = d.playerName || '';
+                if (!name) {
+                    var basic = (allUsers || []).find(function(u) { return u.id === id; });
+                    name = basic ? (basic.playerName || basic.realName || '修行者') : '修行者';
+                }
+                users.push({
+                    id: id, name: name, title: d.selectedTitle || '称号なし',
+                    exp: exp, lvl: sg2LevelOf(exp),
+                    customAvatar: (typeof d.avatar === 'string') ? d.avatar : '',
+                    isMe: id === myId,
+                    flash_count: parseInt(stats.flash_count) || 0,
+                    study_total_secs: parseInt(stats.study_total_secs) || 0,
+                    study_today_secs: parseInt(stats.study_today_secs) || 0,
+                    study_today_date: stats.study_today_date || '',
+                    study_week_secs: parseInt(stats.study_week_secs) || 0,
+                    study_week_key: stats.study_week_key || '',
+                    study_daily_log: (stats.study_daily_log && typeof stats.study_daily_log === 'object' && !Array.isArray(stats.study_daily_log)) ? stats.study_daily_log : null
+                });
+            } catch (e) {}
+        }
+        return users;
+    };
+
+    window.drawCommunityTimeRanking = function(container, users) {
+        if (!container) return;
+        if (typeof window.__buildCommunityRankRow !== 'function') return;
+        var range = window.__communityTimeRange || 'total';
+        var tk = sg2TodayKey();
+        var wk = sg2WeekKeys();
+        var fmt = (typeof window.__formatStudyTime === 'function') ? window.__formatStudyTime : function(s) {
+            var m = Math.floor((s || 0) / 60);
+            return m >= 60 ? (Math.floor(m / 60) + '時間' + (m % 60 > 0 ? m % 60 + '分' : '')) : (m + '分');
+        };
+        var getValue = function(u) {
+            var log = (u.isMe && typeof userStats !== 'undefined' && userStats && userStats.study_daily_log)
+                ? userStats.study_daily_log : u.study_daily_log;
+            if (range === 'total') {
+                var t = parseInt(u.study_total_secs) || 0;
+                if (log && typeof log === 'object') {
+                    var s = 0; Object.keys(log).forEach(function(k) { s += parseInt(log[k]) || 0; });
+                    t = Math.max(t, s);
+                }
+                return t;
+            }
+            if (log && typeof log === 'object') {
+                if (range === 'daily') return parseInt(log[tk]) || 0;
+                if (range === 'weekly') { var w = 0; wk.forEach(function(k) { w += parseInt(log[k]) || 0; }); return w; }
+            }
+            // フォールバック（記録帳をまだ持たない旧環境ユーザー）
+            if (range === 'daily') return (u.study_today_date === tk) ? (parseInt(u.study_today_secs) || 0) : 0;
+            if (range === 'weekly') return (u.study_week_key === wk[0]) ? (parseInt(u.study_week_secs) || 0) : 0;
+            return 0;
+        };
+        var rows = (users || []).map(function(u) { return { u: u, val: getValue(u) }; });
+        rows.sort(function(a, b) { return b.val - a.val; });
+        var html = '';
+        rows.slice(0, 50).forEach(function(row, idx) {
+            html += window.__buildCommunityRankRow(row.u, idx,
+                '<div class="community-rank-value-big">' + fmt(row.val) + '</div>');
+        });
+        container.innerHTML = html;
+    };
+
+    // ------------------------------------------------------------------
+    // 既存ライフサイクルへ接続（ラップ＝外側から包むだけ）
+    // ------------------------------------------------------------------
+    var __prevInitStudyTimerForSg2 = window.initStudyTimerAndDataRotation;
+    window.initStudyTimerAndDataRotation = function() {
+        var r = __prevInitStudyTimerForSg2 ? __prevInitStudyTimerForSg2.apply(this, arguments) : undefined;
+        try { sg2EnsureLog(); sg2Reconcile(); } catch (e) {}
+        return r;
+    };
+
+    var __prevLoadUserStatsForSg2 = window.loadUserStats;
+    window.loadUserStats = async function() {
+        var r = __prevLoadUserStatsForSg2 ? await __prevLoadUserStatsForSg2.apply(this, arguments) : undefined;
+        try {
+            sg2EnsureLog();
+            sg2Reconcile(); // クラウドから来た記録帳を整合
+            if (typeof window.renderActivityChart === 'function') window.renderActivityChart();
+        } catch (e) {}
+        return r;
+    };
+
+    // ------------------------------------------------------------------
+    // 毎秒ウォッチドッグ（shouldCount 非依存＝日跨ぎを必ず補足）
+    // ------------------------------------------------------------------
+    if (!window.__sg2WatchdogStarted) {
+        window.__sg2WatchdogStarted = true;
+        setInterval(function() {
+            try { sg2Reconcile(); } catch (e) {}
+        }, 1000);
+    }
+
+    // ------------------------------------------------------------------
+    // 起動時注入
+    // ------------------------------------------------------------------
+    (function initStudyDailyLogPatch() {
+        function boot() {
+            try { sg2EnsureLog(); sg2Reconcile(); } catch (e) {}
+            try { if (typeof window.renderActivityChart === 'function') window.renderActivityChart(); } catch (e) {}
+        }
+        if (document.readyState !== 'loading') setTimeout(boot, 400);
+        else document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); });
+    })();
+
+    console.log('📊 第18回パッチ（勉強時間 日跨ぎ引き継ぎ根治：日付キー記録帳＋毎秒見張り＋ランキング整合）適用完了');
+})();
+// ==========================================================================
+// 📅 第16回パッチ：勉強時間グラフ「日跨ぎズレ」根治（日付キー記録帳方式）
+//    症状: 昨日勉強した143分が、日付を跨いだ後も今日の欄に居座る／ズレる。
+//          今日（まだ未勉強）が0分にならない。
+//    原因: 第15回までのグラフが「月〜日の曜日固定7配列」でデータを持ち、
+//          日付を跨いだ瞬間に“昨日の値”を正しい曜日へ確定できていない＋
+//          起動しっぱなし日跨ぎではリセット処理自体が走らない。
+//    根治: ① データを「日付キーの記録帳 study_daily_log」を唯一の真実にする
+//          ② 毎秒ウォッチドッグが日跨ぎを検知→ todayStudySeconds を0にリセット
+//             ＋ 記録帳へ今日分を写す（既存タイマーには触れない）
+//          ③ renderActivityChart を「各曜日の直近7日以内の該当日」を記録帳から
+//             毎回組み直す版で上書き → 昨日=143／今日=0 が構造的に必ず成立
+//          ④ 記録帳をクラウド(userStats)へミラー＆ログイン時にマージ復元
+//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+//    ※既存の勉強タイマー（1秒カウント・総計加算）には一切触れません
+// ==========================================================================
+(function applyStudyDailyLogPatch() {
+    if (window.__studyDailyLogPatchApplied) return;
+    window.__studyDailyLogPatchApplied = true;
+
+    // ------------------------------------------------------------------
+    // ヘルパー：日付 ⇄ キー "Y-M-D"
+    // ------------------------------------------------------------------
+    function sdlKeyFromDate(d) {
+        return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+    function sdlTodayKey() { return sdlKeyFromDate(new Date()); }
+    function sdlKeyToDate(k) {
+        var p = String(k).split('-');
+        if (p.length < 3) return new Date(NaN);
+        return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+    }
+    function sdlIdxFromDate(d) { var i = d.getDay() - 1; return i < 0 ? 6 : i; }
+
+    // ------------------------------------------------------------------
+    // 記録帳（メモリ）を localStorage / クラウドから初期化
+    // ------------------------------------------------------------------
+    window.__sdlLog = {};
+    window.__sdlLastDate = '';
+    try {
+        var raw = localStorage.getItem('core_v4_study_daily_log');
+        if (raw) { var o = JSON.parse(raw); if (o && typeof o === 'object') window.__sdlLog = o; }
+    } catch (e) {}
+    // 既存の最終アクセス日を初期値に（初回の日跨ぎ誤検知を防ぐ）
+    try { window.__sdlLastDate = localStorage.getItem('core_v4_study_last_date') || sdlTodayKey(); } catch (e) { window.__sdlLastDate = sdlTodayKey(); }
+
+    // ------------------------------------------------------------------
+    // 【1】毎秒ウォッチドッグ：日跨ぎリセット＋記録帳へ今日分を写す
+    //     ・既存タイマーが todayStudySeconds を++するので、ここでは“写す”だけ
+    //     ・日付が変わっていたら todayStudySeconds を0に（起動しっぱなし対応）
+    //     ・今日キーは max(メモリ, 既存) で別端末分を保持
+    // ------------------------------------------------------------------
+    function sdlMirrorAndReset() {
+        var today = sdlTodayKey();
+        // 日跨ぎ検知
+        if (window.__sdlLastDate && window.__sdlLastDate !== today) {
+            try { todayStudySeconds = 0; } catch (e) {}
+            try { localStorage.setItem('core_v4_study_today_secs', '0'); } catch (e) {}
+        }
+        window.__sdlLastDate = today;
+
+        // 今日分を記録帳へ（別端末分を消さないよう max）
+        var live = 0;
+        try { live = parseInt(todayStudySeconds) || 0; } catch (e) {}
+        var prevToday = parseFloat(window.__sdlLog[today]) || 0;
+        window.__sdlLog[today] = Math.max(live, prevToday);
+
+        // 180日より古いキーは間引き
+        var tMs = sdlKeyToDate(today).getTime();
+        Object.keys(window.__sdlLog).forEach(function(k) {
+            var dMs = sdlKeyToDate(k).getTime();
+            if (isNaN(dMs) || (tMs - dMs > 180 * 24 * 3600 * 1000)) delete window.__sdlLog[k];
+        });
+
+        // ローカル保存
+        try { localStorage.setItem('core_v4_study_daily_log', JSON.stringify(window.__sdlLog)); } catch (e) {}
+        try { localStorage.setItem('core_v4_study_last_date', today); } catch (e) {}
+
+        // クラウド用 userStats へ写す（既存 saveUserStats が運ぶ）
+        if (typeof userStats !== 'undefined' && userStats) {
+            userStats.study_daily_log = window.__sdlLog;
+            userStats.study_today_secs = live;
+            userStats.study_today_date = today;
+            userStats.study_last_date = today;
+        }
+    }
+
+    if (!window.__sdlWatchdogStarted) {
+        window.__sdlWatchdogStarted = true;
+        setInterval(function() {
+            try { sdlMirrorAndReset(); } catch (e) {}
+            try { if (document.getElementById('activityBarChart')) window.renderActivityChart(); } catch (e) {}
+        }, 1000);
+        // ページ離脱時に明示保存
+        var sdlFlush = function() {
+            try { sdlMirrorAndReset(); } catch (e) {}
+            if (typeof window.saveUserStats === 'function') { try { window.saveUserStats(); } catch (e) {} }
+        };
+        window.addEventListener('pagehide', sdlFlush);
+        document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'hidden') sdlFlush(); });
+    }
+
+    // ------------------------------------------------------------------
+    // 【2】renderActivityChart 上書き：記録帳から“各曜日の直近該当日”を組み直す
+    //     ・今日を back=0 として過去7日を新しい順に見て、各曜日に初ヒットを採用
+    //       → 今日が火曜なら 月=昨日(143)／火=今日(0) が必ず成立
+    //     ・1分未満は秒表示／棒はその週の最大値基準（第15回の見え方を継承）
+    // ------------------------------------------------------------------
+    window.renderActivityChart = function() {
+        var chart = document.getElementById('activityBarChart');
+        if (!chart) return;
+
+        // 描画直前にも記録帳を最新化
+        try { sdlMirrorAndReset(); } catch (e) {}
+
+        var today = new Date();
+        var vals = [0, 0, 0, 0, 0, 0, 0]; // 0=月 … 6=日（分単位）
+        var filled = [false, false, false, false, false, false, false];
+        for (var back = 0; back < 7; back++) {
+            var d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - back);
+            var idx = sdlIdxFromDate(d);
+            if (filled[idx]) continue;            // 既に“直近”を採用済み
+            filled[idx] = true;
+            var k = sdlKeyFromDate(d);
+            vals[idx] = (parseFloat(window.__sdlLog[k]) || 0) / 60;
+        }
+
+        // 週最大値（0除算防止＆少しでも立つ下限）
+        var maxMin = 0.1;
+        for (var m = 0; m < 7; m++) { if (vals[m] > maxMin) maxMin = vals[m]; }
+
+        chart.innerHTML = "";
+        var labels = ["月", "火", "水", "木", "金", "土", "日"];
+        labels.forEach(function(lblText, idx) {
+            var rawMin = vals[idx] || 0;
+            var fillH = rawMin <= 0 ? 4 : Math.min(100, Math.max(4, Math.round((rawMin / maxMin) * 100)));
+
+            var wrap = document.createElement('div');
+            wrap.className = "bar-wrapper";
+            wrap.style.cssText = "display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; flex: 1; min-width: 0;";
+
+            var valLbl = document.createElement('div');
+            valLbl.style.cssText = "font-size: 8px; font-weight: 700; color: #FFFFFF; margin-bottom: 2px; white-space: nowrap;";
+            if (rawMin <= 0) valLbl.innerText = "0分";
+            else if (rawMin < 1) valLbl.innerText = Math.max(1, Math.round(rawMin * 60)) + "秒";
+            else valLbl.innerText = Math.floor(rawMin) + "分";
+
+            var fill = document.createElement('div');
+            fill.className = "bar-fill active";
+            fill.style.height = fillH + "%";
+
+            var lbl = document.createElement('div');
+            lbl.style.cssText = "font-size: 10px; color: var(--text-sub); margin-top: 4px; font-weight: bold;";
+            lbl.innerText = lblText;
+
+            wrap.appendChild(valLbl);
+            wrap.appendChild(fill);
+            wrap.appendChild(lbl);
+            chart.appendChild(wrap);
+        });
+    };
+
+    // ------------------------------------------------------------------
+    // 【3】saveUserStats ラップ：保存直前に記録帳を userStats へ確実に写す
+    // ------------------------------------------------------------------
+    var __prevSaveUserStatsForSdl = window.saveUserStats;
+    window.saveUserStats = async function() {
+        try { sdlMirrorAndReset(); } catch (e) {}
+        return __prevSaveUserStatsForSdl ? __prevSaveUserStatsForSdl.apply(this, arguments) : undefined;
+    };
+
+    // ------------------------------------------------------------------
+    // 【4】loadUserStats ラップ：クラウドの記録帳をローカルへマージ復元
+    //     ・各日付キーを max で統合（巻き戻り防止）
+    //     ・復元後に描画を更新
+    // ------------------------------------------------------------------
+    var __prevLoadUserStatsForSdl = window.loadUserStats;
+    window.loadUserStats = async function() {
+        var r = __prevLoadUserStatsForSdl ? await __prevLoadUserStatsForSdl.apply(this, arguments) : undefined;
+        try {
+            if (typeof userStats !== 'undefined' && userStats && userStats.study_daily_log && typeof userStats.study_daily_log === 'object') {
+                var cloud = userStats.study_daily_log;
+                Object.keys(cloud).forEach(function(k) {
+                    var cv = parseFloat(cloud[k]) || 0;
+                    var lv = parseFloat(window.__sdlLog[k]) || 0;
+                    window.__sdlLog[k] = Math.max(cv, lv);
+                });
+                try { localStorage.setItem('core_v4_study_daily_log', JSON.stringify(window.__sdlLog)); } catch (e) {}
+            }
+            // クラウドの“今日”がメモリより大きければ todayStudySeconds も引き上げる
+            var tk = sdlTodayKey();
+            var cloudToday = parseFloat(window.__sdlLog[tk]) || 0;
+            var liveNow = 0; try { liveNow = parseInt(todayStudySeconds) || 0; } catch (e) {}
+            if (cloudToday > liveNow) {
+                try { todayStudySeconds = Math.round(cloudToday); } catch (e) {}
+                try { localStorage.setItem('core_v4_study_today_secs', String(Math.round(cloudToday))); } catch (e) {}
+            }
+            window.__sdlLastDate = tk;
+            if (document.getElementById('activityBarChart')) window.renderActivityChart();
+        } catch (e) { console.error('study daily log restore error:', e); }
+        return r;
+    };
+
+    // ------------------------------------------------------------------
+    // 【5】起動時：記録帳を反映して1回描画
+    // ------------------------------------------------------------------
+    (function initStudyDailyLogPatch() {
+        function boot() {
+            try { sdlMirrorAndReset(); } catch (e) {}
+            try { if (document.getElementById('activityBarChart')) window.renderActivityChart(); } catch (e) {}
+        }
+        if (document.readyState !== 'loading') setTimeout(boot, 400);
+        else document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); });
+    })();
+
+    console.log('📅 第16回パッチ（勉強時間グラフ日跨ぎズレ根治：日付キー記録帳＋毎秒リセット＋直近該当日組み直し）適用完了');
+})();
+        // ==========================================================================
+//  統合パッチ：勉強時間グラフ「日跨ぎ引き継ぎ」根治 ＋ 勉強時間ロジックの収束
+//    症状: 日を跨ぐと昨日の勉強時間がリセットされず、昨日の欄にも今日の欄にも
+//          残る（月=143／火=143 のような引き継ぎ）。
+//    根因: ① 日付リセットが「起動時1回」しか走らない（起動しっぱなし0時跨ぎで不動）
+//          ② 描画が「今日の欄」に生の累計を無条件に書き込む
+//          ③ 過去パッチが曜日配列・記録帳・整合を多重に走らせ相互干渉
+//    根治: 日付→秒の記録帳(__sgLog)を唯一の真実とし、
+//          カウント(initStudyTimerAndDataRotation)と描画(renderActivityChart)を
+//          この1ブロックで“完全に上書き”＝過去の散らばったロジックを収束。
+//          同期(loadUserStats/saveUserStats)は生かしたまま記録帳だけ付け足す。
+//    安全: 他機能(単語帳/ゲーム/リーダー/同期マージ)は一切不変更。
+//          末尾追記のみ。このブロックを消せば元通り。
+// ==========================================================================
+(function applyStudyTimeUnifiedPatch() {
+    if (window.__studyTimeUnifiedApplied) return;
+    window.__studyTimeUnifiedApplied = true;
+
+    // ------------------------------------------------------------------
+    // ヘルパー群：日付キー / 週キー / 記録帳 / 間引き
+    // ------------------------------------------------------------------
+    function sgKey(d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+    function sgTodayKey() { return sgKey(new Date()); }
+    function sgKeyToDate(k) {
+        var p = String(k).split('-');
+        if (p.length < 3) return new Date(NaN);
+        return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+    }
+    function sgWeekdayIdx(d) { var i = d.getDay() - 1; return i < 0 ? 6 : i; } // 0=月..6=日
+    function sgEnsureLog() {
+        if (!window.__sgLog || typeof window.__sgLog !== 'object') {
+            window.__sgLog = {};
+            try {
+                var raw = localStorage.getItem('core_v4_study_daily_log');
+                if (raw) { var o = JSON.parse(raw); if (o && typeof o === 'object') window.__sgLog = o; }
+            } catch (e) {}
+        }
+        return window.__sgLog;
+    }
+    function sgPrune(log) {
+        var tMs = sgKeyToDate(sgTodayKey()).getTime();
+        Object.keys(log).forEach(function(k) {
+            var dMs = sgKeyToDate(k).getTime();
+            if (isNaN(dMs) || (tMs - dMs > 180 * 24 * 3600 * 1000)) delete log[k];
+        });
+    }
+    function sgPersistLog() {
+        try { localStorage.setItem('core_v4_study_daily_log', JSON.stringify(window.__sgLog || {})); } catch (e) {}
+    }
+
+    // 記録帳をメモリへ初期化＋起動時の日跨ぎを確定
+    var log = sgEnsureLog();
+    window.__sgLastDate = (typeof lastAccessDateStr !== 'undefined' && lastAccessDateStr) ? lastAccessDateStr : sgTodayKey();
+    var __today = sgTodayKey();
+    if (window.__sgLastDate && window.__sgLastDate !== __today) {
+        // 起動時に日を跨いでいた：未確定の累計を“前日”へ確定し、本日を0に
+        try {
+            var carry = parseInt(todayStudySeconds) || 0;
+            if (carry > 0) log[window.__sgLastDate] = Math.max(parseFloat(log[window.__sgLastDate]) || 0, carry);
+        } catch (e) {}
+        try { todayStudySeconds = 0; } catch (e) {}
+        try { localStorage.setItem('core_v4_study_today_secs', '0'); } catch (e) {}
+        try { lastAccessDateStr = __today; } catch (e) {}
+        window.__sgLastDate = __today;
+        sgPersistLog();
+    }
+
+    // ------------------------------------------------------------------
+    // カウント：完全に上書き（prev を呼ばない＝過去ロジックを収束）
+    //   ・shouldCount 判定は base と同一
+    //   ・毎秒：本日++ / 記録帳[今日]=本日 / 総計++ / burst / 表示 / 描画
+    //   ・日跨ぎ見張り：0時を跨げば本日=0（起動しっぱなし対応）
+    // ------------------------------------------------------------------
+    if (window.__sgUnifiedTimer) { try { clearInterval(window.__sgUnifiedTimer); } catch (e) {} }
+
+    function sgUpdateDisplay() {
+        var el = document.getElementById('todayStudyTimeDisplay');
+        if (!el) return;
+        var s = parseInt(todayStudySeconds) || 0;
+        var mm = String(Math.floor(s / 60)).padStart(2, '0');
+        var ss = String(s % 60).padStart(2, '0');
+        el.innerText = mm + '分' + ss + '秒';
+    }
+
+    function sgShouldCount() {
+        var tab = (typeof currentActiveTabId !== 'undefined') ? currentActiveTabId : '';
+        if (tab === 'vocab' || tab === 'reader') return true;
+        if (tab === 'game') {
+            var fc = document.getElementById('flashcard-play-screen');
+            var so = document.getElementById('game-play-screen');
+            var mu = document.getElementById('multi-battle-play-screen');
+            if ((fc && fc.style.display === 'flex') ||
+                (so && so.style.display === 'block') ||
+                (mu && mu.style.display === 'flex')) return true;
+        }
+        if (window.__loadQuiz && window.__loadQuiz.active) return true;
+        return false;
+    }
+
+    window.initStudyTimerAndDataRotation = function() {
+        var lg = sgEnsureLog();
+        var today = sgTodayKey();
+        // 起動時日跨ぎの最終確定（上の初期化で概ね済、ここで保険）
+        if (window.__sgLastDate && window.__sgLastDate !== today) {
+            var carry = parseInt(todayStudySeconds) || 0;
+            if (carry > 0) lg[window.__sgLastDate] = Math.max(parseFloat(lg[window.__sgLastDate]) || 0, carry);
+            try { todayStudySeconds = 0; } catch (e) {}
+            try { localStorage.setItem('core_v4_study_today_secs', '0'); } catch (e) {}
+            window.__sgLastDate = today;
+            sgPersistLog();
+        }
+        try { lastAccessDateStr = today; } catch (e) {}
+        try { localStorage.setItem('core_v4_study_last_date', today); } catch (e) {}
+
+        // 総計の初期値保険
+        if (typeof userStats !== 'undefined' && userStats) {
+            var localTotal = parseInt(localStorage.getItem('core_v4_study_total_secs') || '0');
+            if (localTotal > (userStats.study_total_secs || 0)) userStats.study_total_secs = localTotal;
+        }
+
+        sgUpdateDisplay();
+        window.renderActivityChart();
+
+        if (window.__sgUnifiedTimer) { try { clearInterval(window.__sgUnifiedTimer); } catch (e) {} }
+        window.__sgUnifiedTimer = setInterval(function() {
+            var tk = sgTodayKey();
+            // 日跨ぎ見張り（起動しっぱなし0時跨ぎ）
+            if (window.__sgLastDate && window.__sgLastDate !== tk) {
+                var c = parseInt(todayStudySeconds) || 0;
+                if (c > 0) lg[window.__sgLastDate] = Math.max(parseFloat(lg[window.__sgLastDate]) || 0, c);
+                try { todayStudySeconds = 0; } catch (e) {}
+                try { localStorage.setItem('core_v4_study_today_secs', '0'); } catch (e) {}
+                window.__sgLastDate = tk;
+                sgPersistLog();
+            }
+            if (sgShouldCount()) {
+                try { todayStudySeconds = (parseInt(todayStudySeconds) || 0) + 1; } catch (e) {}
+                try { localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds)); } catch (e) {}
+                if (typeof userStats !== 'undefined' && userStats) {
+                    userStats.study_total_secs = (userStats.study_total_secs || 0) + 1;
+                    try { localStorage.setItem('core_v4_study_total_secs', String(userStats.study_total_secs)); } catch (e) {}
+                    var curMin = Math.floor((parseInt(todayStudySeconds) || 0) / 60);
+                    if (curMin > (userStats.study_burst || 0)) {
+                        userStats.study_burst = curMin;
+                        try { window.saveUserStats(); } catch (e) {}
+                        try { window.checkAndRewardTitleBonusXP(); } catch (e) {}
+                    }
+                }
+            }
+            // 記録帳[今日] を毎秒確定（描画の唯一の真実）
+            lg[tk] = (parseInt(todayStudySeconds) || 0);
+            sgUpdateDisplay();
+            window.renderActivityChart();
+        }, 1000);
+    };
+
+    // ------------------------------------------------------------------
+    // 描画：完全に上書き（prev を呼ばない＝過去ロジックを収束）
+    //   記録帳から過去7日を“日付で”辿り各曜日に配置 → 引き継ぎ構造的に不可能
+    //   1分未満は秒表示 / 棒はその週の最大値基準 / 署名ガードで軽量
+    // ------------------------------------------------------------------
+    window.renderActivityChart = function() {
+        var chart = document.getElementById('activityBarChart');
+        if (!chart) return;
+        var lg = sgEnsureLog();
+        var tk = sgTodayKey();
+        // 描画時にも今日の欄を確定（タイマー未起動時の保険）
+        lg[tk] = Math.max(parseFloat(lg[tk]) || 0, (parseInt(todayStudySeconds) || 0));
+
+        var vals = [0, 0, 0, 0, 0, 0, 0]; // 0=月..6=日（分）
+        for (var back = 0; back < 7; back++) {
+            var d = new Date(); d.setDate(d.getDate() - back);
+            var k = sgKey(d);
+            vals[sgWeekdayIdx(d)] = (parseFloat(lg[k]) || 0) / 60;
+        }
+
+        // 署名ガード：変化が無ければDOM再構築をスキップ
+        var sig = vals.map(function(v) { return Math.round(v * 10); }).join(',') + '|' + (parseInt(todayStudySeconds) || 0);
+        if (window.__sgLastSig === sig && chart.children.length === 7) return;
+        window.__sgLastSig = sig;
+
+        var maxMin = 0.1;
+        for (var m = 0; m < 7; m++) if (vals[m] > maxMin) maxMin = vals[m];
+
+        chart.innerHTML = '';
+        var labels = ['月', '火', '水', '木', '金', '土', '日'];
+        for (var i = 0; i < 7; i++) {
+            var rawMin = vals[i] || 0;
+            var fillH = rawMin <= 0 ? 4 : Math.min(100, Math.max(4, Math.round((rawMin / maxMin) * 100)));
+            var wrap = document.createElement('div');
+            wrap.className = 'bar-wrapper';
+            wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;flex:1;min-width:0;';
+            var valLbl = document.createElement('div');
+            valLbl.style.cssText = 'font-size:8px;font-weight:700;color:#FFFFFF;margin-bottom:2px;white-space:nowrap;';
+            if (rawMin <= 0) valLbl.innerText = '0分';
+            else if (rawMin < 1) valLbl.innerText = Math.max(1, Math.round(rawMin * 60)) + '秒';
+            else valLbl.innerText = Math.floor(rawMin) + '分';
+            var fill = document.createElement('div');
+            fill.className = 'bar-fill active';
+            fill.style.height = fillH + '%';
+            var lbl = document.createElement('div');
+            lbl.style.cssText = 'font-size:10px;color:var(--text-sub);margin-top:4px;font-weight:bold;';
+            lbl.innerText = labels[i];
+            wrap.appendChild(valLbl);
+            wrap.appendChild(fill);
+            wrap.appendChild(lbl);
+            chart.appendChild(wrap);
+        }
+    };
+
+    // ------------------------------------------------------------------
+    // 同期：生かしたまま記録帳だけ付け足す（prev を呼ぶ＝他パッチのマージを保持）
+    // ------------------------------------------------------------------
+    var __prevLoadUserStatsForUnified = window.loadUserStats;
+    window.loadUserStats = async function() {
+        var r = __prevLoadUserStatsForUnified ? await __prevLoadUserStatsForUnified.apply(this, arguments) : undefined;
+        try {
+            var lg2 = sgEnsureLog();
+            if (typeof userStats !== 'undefined' && userStats && userStats.study_daily_log &&
+                typeof userStats.study_daily_log === 'object' && !Array.isArray(userStats.study_daily_log)) {
+                var cloud = userStats.study_daily_log;
+                Object.keys(cloud).forEach(function(k) {
+                    var cv = parseFloat(cloud[k]) || 0;
+                    var lv = parseFloat(lg2[k]) || 0;
+                    lg2[k] = Math.max(cv, lv); // 巻き戻り防止
+                });
+                sgPrune(lg2);
+                sgPersistLog();
+            }
+            // クラウドの“今日”が大きければ本日も引き上げ
+            var tk2 = sgTodayKey();
+            var cloudToday = (parseFloat(lg2[tk2]) || 0);
+            var liveNow = parseInt(todayStudySeconds) || 0;
+            if (cloudToday > liveNow) {
+                try { todayStudySeconds = Math.round(cloudToday); } catch (e) {}
+                try { localStorage.setItem('core_v4_study_today_secs', String(Math.round(cloudToday))); } catch (e) {}
+            }
+            window.renderActivityChart();
+        } catch (e) {}
+        return r;
+    };
+
+    var __prevSaveUserStatsForUnified = window.saveUserStats;
+    window.saveUserStats = async function() {
+        try {
+            var lg3 = sgEnsureLog();
+            lg3[sgTodayKey()] = Math.max(parseFloat(lg3[sgTodayKey()]) || 0, (parseInt(todayStudySeconds) || 0));
+            if (typeof userStats !== 'undefined' && userStats) userStats.study_daily_log = lg3;
+        } catch (e) {}
+        return __prevSaveUserStatsForUnified ? __prevSaveUserStatsForUnified.apply(this, arguments) : undefined;
+    };
+
+    // ページ離脱時に記録帳を確定保存
+    function sgFlush() {
+        try {
+            var lg4 = sgEnsureLog();
+            lg4[sgTodayKey()] = Math.max(parseFloat(lg4[sgTodayKey()]) || 0, (parseInt(todayStudySeconds) || 0));
+            sgPersistLog();
+            if (typeof userStats !== 'undefined' && userStats) userStats.study_daily_log = lg4;
+        } catch (e) {}
+    }
+    window.addEventListener('pagehide', sgFlush);
+    document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'hidden') sgFlush(); });
+
+    // 起動時：記録帳を反映して1回描画
+    (function bootUnified() {
+        function run() {
+            try { sgEnsureLog(); } catch (e) {}
+            try { window.renderActivityChart(); } catch (e) {}
+        }
+        if (document.readyState !== 'loading') setTimeout(run, 400);
+        else document.addEventListener('DOMContentLoaded', function() { setTimeout(run, 400); });
+    })();
+
+    console.log('📅 統合パッチ（勉強時間グラフ日跨ぎ根治＋ロジック収束：記録帳を唯一の真実に）適用完了');
+})();
+// ==========================================================================
+// 📊 第18回パッチ：勉強時間グラフ同期ズレ「完全根治」
+//    ① 週リセット導入（月曜0時起点で weeklyStudyMinutesLog を自動クリア）
+//    ② setInterval 内でのリアルタイム日跨ぎ検知
+//    ③ Math.max マージ廃止 → 週キー付き有効期限管理
+//    ④ new Date() パースを安全な手動パースに置換
+//    ⑤ 競合ウォッチドッグを1本に統合
+//    ⑥ ブートストラップ描画を復元完了後に遅延
+//    ※このファイルの末尾にそのまま貼り付けてください
+// ==========================================================================
+(function applyStudyGraphFinalFix() {
+    if (window.__studyGraphFinalFixApplied) return;
+    window.__studyGraphFinalFixApplied = true;
+
+    // ------------------------------------------------------------------
+    // ヘルパー：安全な日付パース（"2026-7-28" → Date）
+    // ------------------------------------------------------------------
+    function safeParseDate(str) {
+        if (!str) return null;
+        var p = String(str).split('-');
+        if (p.length < 3) return null;
+        var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    // ヘルパー：今日の日付文字列（既存 "Y-M-D" 規則）
+    function todayStr() {
+        var d = new Date();
+        return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+
+    // ヘルパー：曜日インデックス（0=月 … 6=日）
+    function dayIdx(date) {
+        var i = (date || new Date()).getDay() - 1;
+        return i < 0 ? 6 : i;
+    }
+
+    // ヘルパー：今週の月曜の日付文字列（週キー）
+    function weekMondayKey() {
+        var d = new Date();
+        var day = d.getDay();
+        var diff = (day === 0 ? -6 : 1 - day);
+        var mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+        return mon.getFullYear() + '-' + (mon.getMonth() + 1) + '-' + mon.getDate();
+    }
+
+    // ------------------------------------------------------------------
+    // 【1】週リセット + 日跨ぎリセットを1つの関数に統合
+    // ------------------------------------------------------------------
+    var __lastCheckedDateStr = todayStr();
+    var __lastCheckedWeekKey = weekMondayKey();
+
+    function checkDateAndWeekRotation() {
+        var nowStr = todayStr();
+        var nowWeekKey = weekMondayKey();
+
+        // ★ 週リセット：月曜が変わったら全要素を0に
+        if (nowWeekKey !== __lastCheckedWeekKey) {
+            weeklyStudyMinutesLog = [0, 0, 0, 0, 0, 0, 0];
+            localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+            localStorage.setItem('core_v4_study_week_monday', nowWeekKey);
+            __lastCheckedWeekKey = nowWeekKey;
+            console.log('📊 週リセット実行:', nowWeekKey);
+        }
+
+        // ★ 日跨ぎリセット：日付が変わったら todayStudySeconds を0に
+        if (nowStr !== __lastCheckedDateStr) {
+            // 昨日のデータを昨日の曜日枠に確定保存
+            var oldDate = safeParseDate(__lastCheckedDateStr);
+            if (oldDate) {
+                var oldIdx = dayIdx(oldDate);
+                weeklyStudyMinutesLog[oldIdx] = (parseInt(todayStudySeconds) || 0) / 60;
+                localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+            }
+            todayStudySeconds = 0;
+            localStorage.setItem('core_v4_study_today_secs', '0');
+            lastAccessDateStr = nowStr;
+            localStorage.setItem('core_v4_study_last_date', nowStr);
+            __lastCheckedDateStr = nowStr;
+            console.log('📊 日跨ぎリセット実行:', nowStr);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 【2】initStudyTimerAndDataRotation を上書き
+    //     ・起動時の日跨ぎチェックに safeParseDate を使用
+    //     ・週リセットを起動時にも実行
+    //     ・setInterval 内で毎秒日跨ぎ＋週跨ぎを検知
+    // ------------------------------------------------------------------
+    window.__studyTimerIntervalId_v18 = null;
+
+    window.initStudyTimerAndDataRotation = function() {
+        // 旧タイマーを全停止（第4回・第16回の残留を掃除）
+        if (window.__studyTimerIntervalId) {
+            clearInterval(window.__studyTimerIntervalId);
+            window.__studyTimerIntervalId = null;
+        }
+        if (window.__studyTimerIntervalId_v18) {
+            clearInterval(window.__studyTimerIntervalId_v18);
+            window.__studyTimerIntervalId_v18 = null;
+        }
+
+        var now = new Date();
+        var tStr = todayStr();
+        var wKey = weekMondayKey();
+
+        // 起動時の週リセットチェック
+        var savedWeekMonday = localStorage.getItem('core_v4_study_week_monday') || '';
+        if (savedWeekMonday && savedWeekMonday !== wKey) {
+            weeklyStudyMinutesLog = [0, 0, 0, 0, 0, 0, 0];
+            localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+        }
+        localStorage.setItem('core_v4_study_week_monday', wKey);
+        __lastCheckedWeekKey = wKey;
+
+        // 起動時の日跨ぎチェック（safeParseDate で安全に）
+        if (lastAccessDateStr && lastAccessDateStr !== tStr) {
+            var oldDate = safeParseDate(lastAccessDateStr);
+            if (oldDate) {
+                var oldIdx = dayIdx(oldDate);
+                weeklyStudyMinutesLog[oldIdx] = (parseInt(todayStudySeconds) || 0) / 60;
+                localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+            }
+            todayStudySeconds = 0;
+            localStorage.setItem('core_v4_study_today_secs', '0');
+        }
+        lastAccessDateStr = tStr;
+        localStorage.setItem('core_v4_study_last_date', tStr);
+        __lastCheckedDateStr = tStr;
+
+        var updateDisplay = function() {
+            var minStr = String(Math.floor((parseInt(todayStudySeconds) || 0) / 60)).padStart(2, '0');
+            var secStr = String((parseInt(todayStudySeconds) || 0) % 60).padStart(2, '0');
+            var el = document.getElementById('todayStudyTimeDisplay');
+            if (el) el.innerText = minStr + '分' + secStr + '秒';
+        };
+
+        // ★ 統合タイマー（1本だけ）
+        window.__studyTimerIntervalId_v18 = setInterval(function() {
+            // 毎秒：日跨ぎ＋週跨ぎをチェック
+            checkDateAndWeekRotation();
+
+            var shouldCount = false;
+            if (currentActiveTabId === 'vocab' || currentActiveTabId === 'reader') {
+                shouldCount = true;
+            } else if (currentActiveTabId === 'game') {
+                var isFcardPlay = (document.getElementById('flashcard-play-screen') &&
+                    document.getElementById('flashcard-play-screen').style.display === 'flex');
+                var isSoloPlay = (document.getElementById('game-play-screen') &&
+                    document.getElementById('game-play-screen').style.display === 'block');
+                var isMultiPlay = (document.getElementById('multi-battle-play-screen') &&
+                    document.getElementById('multi-battle-play-screen').style.display === 'flex');
+                if (isFcardPlay || isSoloPlay || isMultiPlay) shouldCount = true;
+            }
+            if (window.__loadQuiz && window.__loadQuiz.active) shouldCount = true;
+
+            if (shouldCount) {
+                todayStudySeconds++;
+                userStats.study_total_secs = (userStats.study_total_secs || 0) + 1;
+                localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
+                localStorage.setItem('core_v4_study_total_secs', String(userStats.study_total_secs));
+
+                var currentMin = Math.floor(todayStudySeconds / 60);
+                if (currentMin > userStats.study_burst) {
+                    userStats.study_burst = currentMin;
+                    window.saveUserStats();
+                    window.checkAndRewardTitleBonusXP();
+                }
+
+                // 10秒ごとに週間ログへ反映
+                if (todayStudySeconds % 10 === 0) {
+                    var idx = dayIdx();
+                    weeklyStudyMinutesLog[idx] = todayStudySeconds / 60;
+                    localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+                }
+                if (todayStudySeconds % 60 === 0) {
+                    try { window.saveUserStats(); } catch (e) {}
+                }
+            }
+
+            // 毎秒：今日分をグラフに反映＋描画（shouldCount 非依存）
+            var todayMin = (parseInt(todayStudySeconds) || 0) / 60;
+            var tIdx = dayIdx();
+            if (Array.isArray(weeklyStudyMinutesLog)) {
+                weeklyStudyMinutesLog[tIdx] = todayMin;  // 代入（加算ではない）
+            }
+
+            updateDisplay();
+            if (typeof window.renderActivityChart === 'function') {
+                window.renderActivityChart();
+            }
+        }, 1000);
+
+        updateDisplay();
+        if (typeof window.renderActivityChart === 'function') window.renderActivityChart();
+    };
+
+    // ------------------------------------------------------------------
+    // 【3】__sgRestoreFromCloud を上書き：Math.max マージを廃止
+    //     週キーが一致する場合のみクラウド値を採用（古い週は無視）
+    // ------------------------------------------------------------------
+    if (typeof window.__sgRestoreFromCloud === 'function') {
+        window.__sgRestoreFromCloud = function() {
+            if (typeof userStats === 'undefined' || !userStats) return;
+            var s = userStats;
+            var tStr = todayStr();
+            var wKey = weekMondayKey();
+
+            // 本日秒数：クラウドの最終日が"今日"なら大きい方を採用
+            var cloudLastDate = s.study_last_date || s.study_weekly_log_today_date || '';
+            var cloudTodaySecs = parseInt(s.study_today_secs) || 0;
+            if (cloudLastDate === tStr) {
+                if (cloudTodaySecs > (parseInt(todayStudySeconds) || 0)) {
+                    todayStudySeconds = cloudTodaySecs;
+                }
+            }
+
+            // ★ 週キーが一致する場合のみクラウドの週間ログを採用
+            var cloudLog = Array.isArray(s.study_weekly_log) ? s.study_weekly_log : null;
+            var cloudWeekKey = s.study_week_monday || '';
+            var cloudValid = cloudLog && cloudLog.length === 7 && cloudWeekKey === wKey;
+
+            if (cloudValid) {
+                // 同じ週のデータなので、各曜日の「クラウド値」で上書き
+                // （Math.max ではなく、クラウドの確定値を優先）
+                for (var i = 0; i < 7; i++) {
+                    var cv = parseFloat(cloudLog[i]) || 0;
+                    weeklyStudyMinutesLog[i] = cv;
+                }
+            }
+            // 週キー不一致 → クラウドのログは「先週の残骸」→ 無視（ローカルの0のまま）
+
+            // 今日の枠には現在の実測値を反映
+            var tIdx = dayIdx();
+            weeklyStudyMinutesLog[tIdx] = (parseInt(todayStudySeconds) || 0) / 60;
+
+            // ローカルキャッシュを揃える
+            try { localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog)); } catch (e) {}
+            try { localStorage.setItem('core_v4_study_today_secs', String(parseInt(todayStudySeconds) || 0)); } catch (e) {}
+            try { localStorage.setItem('core_v4_study_last_date', tStr); } catch (e) {}
+            try { localStorage.setItem('core_v4_study_week_monday', wKey); } catch (e) {}
+
+            try { if (typeof window.renderActivityChart === 'function') window.renderActivityChart(); } catch (e) {}
+        };
+    }
+
+    // ------------------------------------------------------------------
+    // 【4】__sgMirrorToUserStats を上書き：週キーも一緒にミラー
+    // ------------------------------------------------------------------
+    if (typeof window.__sgMirrorToUserStats === 'function') {
+        window.__sgMirrorToUserStats = function() {
+            if (typeof userStats === 'undefined' || !userStats) return;
+            try {
+                var log = (typeof weeklyStudyMinutesLog !== 'undefined' && Array.isArray(weeklyStudyMinutesLog)) ?
+                    weeklyStudyMinutesLog.slice(0, 7) : [0, 0, 0, 0, 0, 0, 0];
+                while (log.length < 7) log.push(0);
+                userStats.study_weekly_log = log;
+                userStats.study_today_secs = (typeof todayStudySeconds !== 'undefined') ? (parseInt(todayStudySeconds) || 0) : 0;
+                userStats.study_last_date = (typeof lastAccessDateStr !== 'undefined') ? (lastAccessDateStr || '') : '';
+                userStats.study_weekly_log_today_date = userStats.study_last_date;
+                userStats.study_week_monday = weekMondayKey();  // ★ 週キーを付与
+                window.__sgDirty = true;
+            } catch (e) {}
+        };
+    }
+
+    // ------------------------------------------------------------------
+    // 【5】第16回ウォッチドッグを無効化（統合タイマーに置換済み）
+    // ------------------------------------------------------------------
+    // 第16回の sgtReflectAndDraw は毎秒走るが、統合タイマーが同じ処理を
+    // 行うため二重描画になる。フラグで停止させる。
+    window.__sgtWatchdogStarted = true;  // 起動済みにして再登録を防止
+
+    // ------------------------------------------------------------------
+    // 【6】loadLocalState をラップ：復元完了後に描画（競合解消）
+    // ------------------------------------------------------------------
+    var __prevLoadLocalState_v18 = window.loadLocalState;
+    if (typeof __prevLoadLocalState_v18 === 'function') {
+        window.loadLocalState = async function() {
+            var r = await __prevLoadLocalState_v18.apply(this, arguments);
+            // 復元完了後に確実に描画
+            setTimeout(function() {
+                try {
+                    if (typeof window.__sgRestoreFromCloud === 'function') window.__sgRestoreFromCloud();
+                } catch (e) {}
+                try {
+                    if (typeof window.renderActivityChart === 'function') window.renderActivityChart();
+                } catch (e) {}
+            }, 500);
+            return r;
+        };
+    }
+
+    // ------------------------------------------------------------------
+    // 【7】起動時：DOM 揃い次第、週キー初期化＋描画
+    // ------------------------------------------------------------------
+    (function initFinalFix() {
+        function boot() {
+            var wKey = weekMondayKey();
+            var saved = localStorage.getItem('core_v4_study_week_monday') || '';
+            if (saved && saved !== wKey) {
+                weeklyStudyMinutesLog = [0, 0, 0, 0, 0, 0, 0];
+                localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+            }
+            localStorage.setItem('core_v4_study_week_monday', wKey);
+            __lastCheckedWeekKey = wKey;
+            __lastCheckedDateStr = todayStr();
+            try {
+                if (typeof window.renderActivityChart === 'function') window.renderActivityChart();
+            } catch (e) {}
+        }
+        if (document.readyState !== 'loading') {
+            setTimeout(boot, 600);
+        } else {
+            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 600); });
+        }
+    })();
+
+    console.log('📊 第18回パッチ（勉強時間グラフ同期ズレ完全根治：週リセット＋日跨ぎ検知＋Math.max廃止＋タイマー統合）適用完了');
+})();
+// ==========================================================================
+// 📊 第18.1回パッチ：蓄積した過去データの「強制リセット」
+//    今週の間違ったグラフを0に戻し、クラウドも正しい値で上書きする
+//    ※1回だけ実行すればOK（実行後は削除してよい）
+// ==========================================================================
+(function applyStudyGraphPastDataReset() {
+    if (window.__studyGraphPastResetApplied) return;
+    window.__studyGraphPastResetApplied = true;
+
+    // 週キーを計算（第18回パッチと同じロジック）
+    var d = new Date();
+    var day = d.getDay();
+    var diff = (day === 0 ? -6 : 1 - day);
+    var mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+    var wKey = mon.getFullYear() + '-' + (mon.getMonth() + 1) + '-' + mon.getDate();
+
+    // 今日の日付
+    var tStr = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+
+    // 曜日インデックス（0=月 … 6=日）
+    var tIdx = d.getDay() - 1;
+    if (tIdx < 0) tIdx = 6;
+
+    // ★ 強制リセット：全曜日を0に
+    weeklyStudyMinutesLog = [0, 0, 0, 0, 0, 0, 0];
+
+    // 今日の枠だけ、現在の実測秒数から再計算
+    var todayMin = (parseInt(todayStudySeconds) || 0) / 60;
+    weeklyStudyMinutesLog[tIdx] = todayMin;
+
+    // ローカルストレージを上書き
+    localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+    localStorage.setItem('core_v4_study_week_monday', wKey);
+    localStorage.setItem('core_v4_study_last_date', tStr);
+    localStorage.setItem('core_v4_study_today_secs', String(parseInt(todayStudySeconds) || 0));
+
+    // userStats も正しい値で上書き
+    if (typeof userStats !== 'undefined' && userStats) {
+        userStats.study_weekly_log = weeklyStudyMinutesLog.slice();
+        userStats.study_today_secs = parseInt(todayStudySeconds) || 0;
+        userStats.study_last_date = tStr;
+        userStats.study_weekly_log_today_date = tStr;
+        userStats.study_week_monday = wKey;
+
+        // ★ クラウドに正しい値を即座に保存（Math.maxの残骸を上書き）
+        if (typeof window.saveUserStats === 'function') {
+            window.saveUserStats();
+        }
+    }
+
+    // グラフを再描画
+    if (typeof window.renderActivityChart === 'function') {
+        window.renderActivityChart();
+    }
+
+    console.log('📊 第18.1回パッチ：過去データ強制リセット完了（週キー:', wKey, '）');
+})();
+// ==========================================================================
+// 🛠️ 第19回パッチ：管理者ツール「勉強時間データ管理」
+//    既存の管理者パネルを自動検出し、以下の機能を追加：
+//    ① 今週の各曜日の分数を直接編集
+//    ② 日付指定で過去のデータを1日分セット
+//    ③ 週間データの一括リセット
+//    ※このファイルの末尾にそのまま貼り付けてください
+// ==========================================================================
+(function applyAdminStudyDataPatch() {
+    if (window.__adminStudyDataPatchApplied) return;
+    window.__adminStudyDataPatchApplied = true;
+
+    var DAY_LABELS = ['月', '火', '水', '木', '金', '土', '日'];
+
+    // ------------------------------------------------------------------
+    // ヘルパー
+    // ------------------------------------------------------------------
+    function todayStr() {
+        var d = new Date();
+        return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+    function dayIdx(date) {
+        var i = (date || new Date()).getDay() - 1;
+        return i < 0 ? 6 : i;
+    }
+    function weekMondayKey() {
+        var d = new Date();
+        var diff = (d.getDay() === 0 ? -6 : 1 - d.getDay());
+        var mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+        return mon.getFullYear() + '-' + (mon.getMonth() + 1) + '-' + mon.getDate();
+    }
+    function getLog() {
+        return (typeof weeklyStudyMinutesLog !== 'undefined' && Array.isArray(weeklyStudyMinutesLog))
+            ? weeklyStudyMinutesLog : [0, 0, 0, 0, 0, 0, 0];
+    }
+    function persistAndRedraw() {
+        try { localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(getLog())); } catch (e) {}
+        try { localStorage.setItem('core_v4_study_week_monday', weekMondayKey()); } catch (e) {}
+        if (typeof userStats !== 'undefined' && userStats) {
+            userStats.study_weekly_log = getLog().slice();
+            userStats.study_week_monday = weekMondayKey();
+            if (typeof window.saveUserStats === 'function') { try { window.saveUserStats(); } catch (e) {} }
+        }
+        if (typeof window.renderActivityChart === 'function') { try { window.renderActivityChart(); } catch (e) {} }
+    }
+
+    // ------------------------------------------------------------------
+    // セクションHTML
+    // ------------------------------------------------------------------
+    function buildSectionHTML() {
+        var log = getLog();
+        var rows = '';
+        for (var i = 0; i < 7; i++) {
+            var val = Math.round((parseFloat(log[i]) || 0) * 10) / 10;
+            var isToday = (i === dayIdx());
+            rows += '<div class="asd-day-row' + (isToday ? ' asd-today' : '') + '">'
+                + '<span class="asd-day-label">' + DAY_LABELS[i] + (isToday ? '<span class="asd-today-dot">●</span>' : '') + '</span>'
+                + '<input type="number" class="form-input asd-day-input" data-day-idx="' + i + '" '
+                + 'value="' + val + '" min="0" max="1440" step="0.5">'
+                + '<span class="asd-day-unit">分</span>'
+                + '</div>';
+        }
+
+        return '<div class="glass-card asd-card" id="adminStudyDataSection">'
+            + '<div class="asd-header">'
+            + '<span class="asd-title">📊 勉強時間データ管理</span>'
+            + '<span class="asd-week-key">週:' + weekMondayKey() + '</span>'
+            + '</div>'
+
+            // ① 今週の曜日別編集
+            + '<div class="asd-subtitle">今週の曜日別データ</div>'
+            + '<div class="asd-days-grid">' + rows + '</div>'
+            + '<div class="asd-btn-row">'
+            + '<button class="btn btn-primary asd-btn" id="asdSaveWeek">💾 保存して反映</button>'
+            + '<button class="btn btn-outline asd-btn" id="asdClearWeek">🗑 今週をリセット</button>'
+            + '</div>'
+
+            // ② 日付指定で過去データセット
+            + '<div class="asd-subtitle" style="margin-top:14px;">日付指定でセット</div>'
+            + '<div class="asd-date-row">'
+            + '<input type="date" class="form-input asd-date-input" id="asdTargetDate">'
+            + '<input type="number" class="form-input asd-min-input" id="asdTargetMin" min="0" max="1440" step="0.5" placeholder="分数">'
+            + '<button class="btn btn-primary asd-btn" id="asdSetDate">セット</button>'
+            + '</div>'
+
+            + '<div class="asd-msg" id="asdMsg"></div>'
+            + '</div>';
+    }
+
+    // ------------------------------------------------------------------
+    // 専用CSS
+    // ------------------------------------------------------------------
+    function injectCSS() {
+        if (document.getElementById('asd-css')) return;
+        var css = document.createElement('style');
+        css.id = 'asd-css';
+        css.textContent = ''
+            + '.asd-card{padding:16px;border:1px solid rgba(59,130,246,.25);}'
+            + '.asd-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px;}'
+            + '.asd-title{font-weight:800;font-size:15px;}'
+            + '.asd-week-key{font-size:11px;opacity:.55;font-family:monospace;}'
+            + '.asd-subtitle{font-size:12px;font-weight:700;opacity:.75;margin-bottom:8px;letter-spacing:.03em;}'
+            + '.asd-days-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;}'
+            + '.asd-day-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:10px;'
+            + 'background:rgba(255,255,255,.04);border:1px solid transparent;transition:all .18s ease;}'
+            + '.asd-day-row:hover{border-color:rgba(59,130,246,.4);transform:translateY(-1px);}'
+            + '.asd-day-row.asd-today{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.08);}'
+            + '.asd-day-label{font-weight:800;font-size:13px;width:18px;flex:0 0 auto;}'
+            + '.asd-today-dot{color:#22c55e;font-size:8px;margin-left:2px;vertical-align:middle;}'
+            + '.asd-day-input{width:100%;min-width:0;padding:6px 8px;font-size:13px;text-align:right;}'
+            + '.asd-day-unit{font-size:11px;opacity:.6;flex:0 0 auto;}'
+            + '.asd-btn-row{display:flex;gap:8px;margin-top:10px;}'
+            + '.asd-btn{font-size:13px;padding:8px 12px;transition:all .15s ease;}'
+            + '.asd-btn:active{transform:scale(.97);}'
+            + '#asdSaveWeek{flex:1;}'
+            + '.asd-date-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}'
+            + '.asd-date-input{flex:1;min-width:130px;padding:7px 8px;font-size:13px;}'
+            + '.asd-min-input{width:80px;padding:7px 8px;font-size:13px;text-align:right;}'
+            + '.asd-msg{margin-top:10px;font-size:12px;font-weight:700;min-height:16px;'
+            + 'opacity:0;transform:translateY(4px);transition:all .25s ease;}'
+            + '.asd-msg.show{opacity:1;transform:translateY(0);}'
+            + '.asd-msg.ok{color:#22c55e;}'
+            + '.asd-msg.err{color:#ef4444;}';
+        document.head.appendChild(css);
+    }
+
+    // ------------------------------------------------------------------
+    // メッセージ表示
+    // ------------------------------------------------------------------
+    function showMsg(text, ok) {
+        var el = document.getElementById('asdMsg');
+        if (!el) return;
+        el.textContent = text;
+        el.className = 'asd-msg show ' + (ok ? 'ok' : 'err');
+        clearTimeout(window.__asdMsgTimer);
+        window.__asdMsgTimer = setTimeout(function() {
+            el.className = 'asd-msg';
+        }, 2600);
+    }
+
+    // ------------------------------------------------------------------
+    // 入力欄の値を現在のデータで更新
+    // ------------------------------------------------------------------
+    function refreshInputs() {
+        var log = getLog();
+        var inputs = document.querySelectorAll('.asd-day-input');
+        for (var i = 0; i < inputs.length; i++) {
+            var idx = parseInt(inputs[i].getAttribute('data-day-idx'), 10);
+            if (!isNaN(idx) && log[idx] !== undefined) {
+                inputs[i].value = Math.round((parseFloat(log[idx]) || 0) * 10) / 10;
+            }
+        }
+        var wk = document.querySelector('.asd-week-key');
+        if (wk) wk.textContent = '週:' + weekMondayKey();
+    }
+
+    // ------------------------------------------------------------------
+    // イベントバインド
+    // ------------------------------------------------------------------
+    function bindEvents() {
+        // 今週保存
+        var btnSave = document.getElementById('asdSaveWeek');
+        if (btnSave && !btnSave.__asdBound) {
+            btnSave.__asdBound = true;
+            btnSave.addEventListener('click', function() {
+                var inputs = document.querySelectorAll('.asd-day-input');
+                var log = getLog();
+                for (var i = 0; i < inputs.length; i++) {
+                    var idx = parseInt(inputs[i].getAttribute('data-day-idx'), 10);
+                    var v = parseFloat(inputs[i].value);
+                    if (!isNaN(idx) && !isNaN(v) && v >= 0) {
+                        log[idx] = Math.min(v, 1440);
+                    }
+                }
+                // 今日の枠は実測値と手動値の大きい方を採用（今日の進行分を消さない）
+                var tIdx = dayIdx();
+                var liveMin = (parseInt(todayStudySeconds) || 0) / 60;
+                if (liveMin > log[tIdx]) log[tIdx] = liveMin;
+
+                persistAndRedraw();
+                refreshInputs();
+                showMsg('✅ 保存しました（グラフ反映済み）', true);
+            });
+        }
+
+        // 今週リセット
+        var btnClear = document.getElementById('asdClearWeek');
+        if (btnClear && !btnClear.__asdBound) {
+            btnClear.__asdBound = true;
+            btnClear.addEventListener('click', function() {
+                if (!confirm('今週の勉強時間データをすべて0にしますか？')) return;
+                for (var i = 0; i < weeklyStudyMinutesLog.length; i++) weeklyStudyMinutesLog[i] = 0;
+                // 今日の枠だけ実測値で復元
+                weeklyStudyMinutesLog[dayIdx()] = (parseInt(todayStudySeconds) || 0) / 60;
+                persistAndRedraw();
+                refreshInputs();
+                showMsg('🗑 今週のデータをリセットしました', true);
+            });
+        }
+
+        // 日付指定セット
+        var btnSetDate = document.getElementById('asdSetDate');
+        if (btnSetDate && !btnSetDate.__asdBound) {
+            btnSetDate.__asdBound = true;
+            btnSetDate.addEventListener('click', function() {
+                var dateEl = document.getElementById('asdTargetDate');
+                var minEl = document.getElementById('asdTargetMin');
+                if (!dateEl.value) { showMsg('⚠️ 日付を選択してください', false); return; }
+                var v = parseFloat(minEl.value);
+                if (isNaN(v) || v < 0) { showMsg('⚠️ 分数を正しく入力してください', false); return; }
+
+                // 指定日が今週かどうか判定
+                var parts = dateEl.value.split('-');
+                var target = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                var targetMonday = (function() {
+                    var diff = (target.getDay() === 0 ? -6 : 1 - target.getDay());
+                    var m = new Date(target.getFullYear(), target.getMonth(), target.getDate() + diff);
+                    return m.getFullYear() + '-' + (m.getMonth() + 1) + '-' + m.getDate();
+                })();
+
+                if (targetMonday === weekMondayKey()) {
+                    // 今週 → その曜日の枠にセット
+                    weeklyStudyMinutesLog[dayIdx(target)] = Math.min(v, 1440);
+                    persistAndRedraw();
+                    refreshInputs();
+                    showMsg('✅ ' + dateEl.value + ' に ' + v + '分セットしました', true);
+                } else {
+                    // 今週以外 → 注意喚起（週間ログは「今週」のみ保持するため）
+                    showMsg('⚠️ 指定日は今週ではありません。今週のみ保存可能です', false);
+                }
+            });
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 管理者パネルを検出して挿入
+    // ------------------------------------------------------------------
+    function tryInsert() {
+        if (document.getElementById('adminStudyDataSection')) {
+            refreshInputs();
+            return true;
+        }
+
+        // 候補セレクタ（既存の管理者パネルを探す）
+        var candidates = [
+            '#adminPanel', '#admin-panel', '#adminScreen', '#admin-screen',
+            '#adminModal', '#admin-modal', '#debugPanel', '#debug-panel',
+            '#devPanel', '#devTools', '#settingsAdmin', '#adminTools',
+            '#adminArea', '#admin-area'
+        ];
+        var container = null;
+        for (var i = 0; i < candidates.length; i++) {
+            container = document.querySelector(candidates[i]);
+            if (container) break;
+        }
+
+        // フォールバック：「管理者」「admin」を含むID/クラスを持つ要素を探す
+        if (!container) {
+            var all = document.querySelectorAll('[id*="admin" i],[id*="Admin"],[class*="admin" i]');
+            for (var j = 0; j < all.length; j++) {
+                // 入力欄やボタンではなく、ある程度大きいコンテナを選ぶ
+                var tag = all[j].tagName.toLowerCase();
+                if (tag === 'div' || tag === 'section' || tag === 'aside' || tag === 'main') {
+                    container = all[j];
+                    break;
+                }
+            }
+        }
+
+        if (!container) return false;
+
+        injectCSS();
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = buildSectionHTML();
+        container.appendChild(wrapper.firstChild);
+        bindEvents();
+        refreshInputs();
+        return true;
+    }
+
+    // ------------------------------------------------------------------
+    // 管理者パネルが開かれるタイミングを検知して挿入
+    // ------------------------------------------------------------------
+    // MutationObserver：管理者パネルがDOMに現れたら即挿入
+    var observer = new MutationObserver(function() {
+        tryInsert();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // 既存の「管理者パネルを開く」関数をラップして挿入を保証
+    var openFnNames = ['openAdminPanel', 'showAdminPanel', 'toggleAdminPanel', 'openAdmin', 'showAdmin'];
+    for (var k = 0; k < openFnNames.length; k++) {
+        (function(name) {
+            if (typeof window[name] === 'function' && !window[name].__asdWrapped) {
+                var orig = window[name];
+                var wrapped = function() {
+                    var r = orig.apply(this, arguments);
+                    setTimeout(tryInsert, 120);
+                    return r;
+                };
+                wrapped.__asdWrapped = true;
+                window[name] = wrapped;
+            }
+        })(openFnNames[k]);
+    }
+
+    // 初回試行＋定期リトライ（パネルが遅延生成される場合に対応）
+    tryInsert();
+    var retryCount = 0;
+    var retryTimer = setInterval(function() {
+        if (tryInsert() || retryCount > 20) clearInterval(retryTimer);
+        retryCount++;
+    }, 500);
+
+    console.log('🛠️ 第19回パッチ（管理者ツール：勉強時間データ管理）適用完了');
+})();
+    
