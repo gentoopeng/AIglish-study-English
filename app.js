@@ -12597,3 +12597,913 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
 
     console.log('🔧 長文リーダー開く/保存ボタン修正パッチ（" エスケープ欠落の根治：リスナ付け替え方式）適用完了');
 })();
+// ==========================================================================
+// 📊 第5回パッチ：勉強時間グラフ安定化 ＋ 日付跨ぎ修正
+// ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+
+// ------------------------------------------------------------------
+// A. 時間表示の更新を分離（毎秒呼んでも軽量なテキスト更新のみ）
+// ------------------------------------------------------------------
+window.__updateStudyTimeDisplay = function() {
+    var minStr = String(Math.floor(todayStudySeconds / 60)).padStart(2, '0');
+    var secStr = String(todayStudySeconds % 60).padStart(2, '0');
+    var el = document.getElementById('todayStudyTimeDisplay');
+    if (el) el.innerText = minStr + '分' + secStr + '秒';
+};
+
+// ------------------------------------------------------------------
+// B. グラフ描画の完全上書き
+//    ・整数分に切り捨て（小数チラつき防止）
+//    ・既存DOMがある場合は値だけ更新（全消去→再構築しない）
+// ------------------------------------------------------------------
+window.renderActivityChart = function() {
+    var chart = document.getElementById('activityBarChart');
+    if (!chart) return;
+
+    var now = new Date();
+    var currentDayIdx = now.getDay() - 1;
+    if (currentDayIdx < 0) currentDayIdx = 6;
+
+    // ✅ 整数分に切り捨て
+    var currentTodayMinutes = Math.floor(todayStudySeconds / 60);
+    weeklyStudyMinutesLog[currentDayIdx] = currentTodayMinutes;
+
+    var daysLabels = ['月', '火', '水', '木', '金', '土', '日'];
+
+    // ✅ 既存バーがある場合は値だけ更新して return（DOM全消去しない）
+    if (chart.children.length === daysLabels.length) {
+        for (var i = 0; i < daysLabels.length; i++) {
+            var wrap = chart.children[i];
+            if (!wrap) continue;
+            var rawMin = weeklyStudyMinutesLog[i] || 0;
+            var pct = Math.min(100, Math.max(4, Math.round((rawMin / 60) * 100)));
+            var fill = wrap.querySelector('.bar-fill');
+            if (fill) fill.style.height = pct + '%';
+            var valLbl = wrap.children[0];
+            if (valLbl) valLbl.innerText = Math.floor(rawMin) + '分';
+        }
+        return;
+    }
+
+    // 初回のみDOM構築
+    chart.innerHTML = '';
+    for (var j = 0; j < daysLabels.length; j++) {
+        var w = document.createElement('div');
+        w.className = 'bar-wrapper';
+        w.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;flex:1;min-width:0;';
+
+        var raw = weeklyStudyMinutesLog[j] || 0;
+        var h = Math.min(100, Math.max(4, Math.round((raw / 60) * 100)));
+
+        var vl = document.createElement('div');
+        vl.style.cssText = 'font-size:8px;font-weight:700;color:#FFFFFF;margin-bottom:2px;white-space:nowrap;';
+        vl.innerText = Math.floor(raw) + '分';
+
+        var f = document.createElement('div');
+        f.className = 'bar-fill active';
+        f.style.height = h + '%';
+
+        var lb = document.createElement('div');
+        lb.style.cssText = 'font-size:10px;color:var(--text-sub);margin-top:4px;font-weight:bold;';
+        lb.innerText = daysLabels[j];
+
+        w.appendChild(vl);
+        w.appendChild(f);
+        w.appendChild(lb);
+        chart.appendChild(w);
+    }
+};
+
+// ------------------------------------------------------------------
+// C. タイマー＆日付ローテーションの完全上書き
+//    ・setInterval 内に毎秒の日付チェックを追加（0時跨ぎ対応）
+//    ・グラフ更新は10秒に1回に間引き
+//    ・二重起動防止ガード付き
+// ------------------------------------------------------------------
+window.initStudyTimerAndDataRotation = function() {
+    // 二重起動防止（旧intervalが残っていれば停止）
+    if (window.__studyTimerIntervalId) {
+        clearInterval(window.__studyTimerIntervalId);
+        window.__studyTimerIntervalId = null;
+    }
+
+    var now = new Date();
+    var todayStr = now.getFullYear() + '-' + (now.getMonth() + 1) + '-' + now.getDate();
+
+    // 起動時の日付チェック（前日データ確定）
+    if (lastAccessDateStr && lastAccessDateStr !== todayStr) {
+        var oldDate = new Date(lastAccessDateStr);
+        var oldDayIdx = oldDate.getDay() - 1;
+        if (oldDayIdx < 0) oldDayIdx = 6;
+        weeklyStudyMinutesLog[oldDayIdx] = todayStudySeconds / 60;
+        localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+        todayStudySeconds = 0;
+        localStorage.setItem('core_v4_study_today_secs', '0');
+    }
+
+    lastAccessDateStr = todayStr;
+    localStorage.setItem('core_v4_study_last_date', todayStr);
+
+    window.__updateStudyTimeDisplay();
+    window.renderActivityChart();
+
+    window.__studyTimerIntervalId = setInterval(function() {
+        // ✅ 毎秒日付チェック（日付跨ぎ対応）
+        var checkNow = new Date();
+        var checkTodayStr = checkNow.getFullYear() + '-' + (checkNow.getMonth() + 1) + '-' + checkNow.getDate();
+
+        if (checkTodayStr !== lastAccessDateStr) {
+            var od = new Date(lastAccessDateStr);
+            var odIdx = od.getDay() - 1;
+            if (odIdx < 0) odIdx = 6;
+            weeklyStudyMinutesLog[odIdx] = todayStudySeconds / 60;
+            localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+
+            todayStudySeconds = 0;
+            localStorage.setItem('core_v4_study_today_secs', '0');
+            lastAccessDateStr = checkTodayStr;
+            localStorage.setItem('core_v4_study_last_date', checkTodayStr);
+
+            window.renderActivityChart();
+            console.log('📅 日付が変わりました。勉強時間をリセットしました。');
+        }
+
+        // 勉強時間の計測判定
+        var shouldCount = false;
+        if (currentActiveTabId === 'vocab' || currentActiveTabId === 'reader') {
+            shouldCount = true;
+        } else if (currentActiveTabId === 'game') {
+            var isFcardPlay = (document.getElementById('flashcard-play-screen') && document.getElementById('flashcard-play-screen').style.display === 'flex');
+            var isSoloPlay = (document.getElementById('game-play-screen') && document.getElementById('game-play-screen').style.display === 'block');
+            var isMultiPlay = (document.getElementById('multi-battle-play-screen') && document.getElementById('multi-battle-play-screen').style.display === 'flex');
+            if (isFcardPlay || isSoloPlay || isMultiPlay) shouldCount = true;
+        }
+
+        if (shouldCount) {
+            todayStudySeconds++;
+            localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
+
+            var currentMin = Math.floor(todayStudySeconds / 60);
+            if (currentMin > userStats.study_burst) {
+                userStats.study_burst = currentMin;
+                window.saveUserStats();
+                window.checkAndRewardTitleBonusXP();
+            }
+
+            window.__updateStudyTimeDisplay();
+
+            // ✅ グラフは10秒に1回だけ更新（チラつき防止）
+            if (todayStudySeconds % 10 === 0) {
+                window.renderActivityChart();
+            }
+        }
+    }, 1000);
+};
+
+console.log('📊 第5回パッチ（勉強時間グラフ安定化＋日付跨ぎ修正）適用完了');
+// ==========================================================================
+// ✏️ 第6回パッチ：勉強時間の手動編集（今日 ＋ 過去7日分）
+//    ・グラフのバーをクリック → その日の時間を編集するモーダルが開く
+//    ・今日 → todayStudySeconds を書き換え（以降もタイマーが加算を継続）
+//    ・過去 → weeklyStudyMinutesLog を書き換え
+//    ※必ず第5回パッチより後に貼り付けてください
+// ==========================================================================
+
+// ---------- 1. エディタのDOM／CSSを1回だけ注入 ----------
+window.__injectStudyTimeEditor = function() {
+    if (document.getElementById('studyTimeEditorOverlay')) return;
+
+    var style = document.createElement('style');
+    style.textContent = [
+        '#studyTimeEditorOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(7,10,18,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .22s ease;}',
+        '#studyTimeEditorOverlay.open{opacity:1;pointer-events:auto;}',
+        '.ste-card{width:min(340px,calc(100vw - 40px));background:linear-gradient(168deg,#242c42 0%,#161c2d 70%);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:22px 22px 18px;box-shadow:0 24px 64px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06);color:#fff;transform:translateY(16px) scale(.95);transition:transform .28s cubic-bezier(.2,.9,.3,1.25);font-family:inherit;}',
+        '#studyTimeEditorOverlay.open .ste-card{transform:none;}',
+        '.ste-eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b93a7;margin-bottom:6px;}',
+        '.ste-date-row{display:flex;align-items:center;gap:8px;margin-bottom:18px;}',
+        '#steDateLabel{font-size:22px;font-weight:800;letter-spacing:.01em;}',
+        '#steTodayBadge{font-size:10px;font-weight:800;color:#052e16;background:linear-gradient(135deg,#4ade80,#22c55e);padding:3px 8px;border-radius:999px;}',
+        '.ste-steppers{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;}',
+        '.ste-group{display:flex;align-items:center;gap:8px;}',
+        '.ste-btn{width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font-size:20px;font-weight:700;cursor:pointer;transition:background .15s,transform .1s,border-color .15s;line-height:1;}',
+        '.ste-btn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.28);}',
+        '.ste-btn:active{transform:scale(.9);}',
+        '.ste-val{min-width:56px;text-align:center;}',
+        '.ste-val span{display:block;font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05;}',
+        '.ste-val em{display:block;font-style:normal;font-size:10px;color:#8b93a7;font-weight:700;margin-top:2px;}',
+        '.ste-colon{font-size:24px;font-weight:800;color:#5b6478;padding-bottom:12px;}',
+        '.ste-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:18px;}',
+        '.ste-chips button{font-size:11px;font-weight:700;color:#cdd3e1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:6px 11px;cursor:pointer;transition:transform .12s,background .15s;font-family:inherit;}',
+        '.ste-chips button:hover{background:rgba(255,255,255,.14);transform:translateY(-1px);}',
+        '.ste-chips .ste-reset{color:#fda4af;border-color:rgba(251,113,133,.35);background:rgba(251,113,133,.08);}',
+        '.ste-chips .ste-reset:hover{background:rgba(251,113,133,.18);}',
+        '.ste-footer{display:flex;gap:10px;}',
+        '.ste-cancel{flex:1;padding:11px 0;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:transparent;color:#cdd3e1;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s;font-family:inherit;}',
+        '.ste-cancel:hover{background:rgba(255,255,255,.07);}',
+        '.ste-save{flex:1.4;padding:11px 0;border-radius:12px;border:none;background:linear-gradient(135deg,#4ade80,#16a34a);color:#04150b;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,.35);transition:transform .12s,box-shadow .15s,filter .15s;font-family:inherit;}',
+        '.ste-save:hover{transform:translateY(-1px);filter:brightness(1.08);box-shadow:0 9px 24px rgba(34,197,94,.45);}',
+        '.ste-save:active{transform:scale(.97);}',
+        '#activityBarChart.editable .bar-wrapper{cursor:pointer;}',
+        '#activityBarChart.editable .bar-wrapper .bar-fill{transition:filter .15s, height .3s ease;}',
+        '#activityBarChart.editable .bar-wrapper:hover .bar-fill{filter:brightness(1.3) saturate(1.1);}',
+        '#steHint{text-align:center;font-size:10px;color:var(--text-sub,#8b93a7);margin-top:8px;opacity:.85;}',
+        '#steToast{position:fixed;bottom:28px;left:50%;transform:translate(-50%,14px);z-index:10000;background:linear-gradient(135deg,#14532d,#166534);color:#dcfce7;font-size:13px;font-weight:700;padding:10px 20px;border-radius:999px;border:1px solid rgba(74,222,128,.4);box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;}',
+        '#steToast.show{opacity:1;transform:translate(-50%,0);}',
+        '@keyframes stePulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.6)}100%{box-shadow:0 0 0 16px rgba(74,222,128,0)}}',
+        '.bar-fill.ste-saved{animation:stePulse .65s ease-out;}'
+    ].join('\n');
+    document.head.appendChild(style);
+
+    var overlay = document.createElement('div');
+    overlay.id = 'studyTimeEditorOverlay';
+    overlay.innerHTML =
+        '<div class="ste-card">' +
+            '<div class="ste-eyebrow">✏️ 勉強時間を編集</div>' +
+            '<div class="ste-date-row">' +
+                '<span id="steDateLabel"></span>' +
+                '<span id="steTodayBadge">今日</span>' +
+            '</div>' +
+            '<div class="ste-steppers">' +
+                '<div class="ste-group">' +
+                    '<button type="button" class="ste-btn" onclick="__steAdjust(-60)">−</button>' +
+                    '<div class="ste-val"><span id="steHours">00</span><em>時間</em></div>' +
+                    '<button type="button" class="ste-btn" onclick="__steAdjust(60)">＋</button>' +
+                '</div>' +
+                '<div class="ste-colon">:</div>' +
+                '<div class="ste-group">' +
+                    '<button type="button" class="ste-btn" onclick="__steAdjust(-5)">−</button>' +
+                    '<div class="ste-val"><span id="steMins">00</span><em>分</em></div>' +
+                    '<button type="button" class="ste-btn" onclick="__steAdjust(5)">＋</button>' +
+                '</div>' +
+            '</div>' +
+            '<div class="ste-chips">' +
+                '<button type="button" onclick="__steAdjust(15)">+15分</button>' +
+                '<button type="button" onclick="__steAdjust(30)">+30分</button>' +
+                '<button type="button" onclick="__steAdjust(60)">+1時間</button>' +
+                '<button type="button" class="ste-reset" onclick="__steReset()">0に戻す</button>' +
+            '</div>' +
+            '<div class="ste-footer">' +
+                '<button type="button" class="ste-cancel" onclick="__steClose()">キャンセル</button>' +
+                '<button type="button" class="ste-save" onclick="__steSave()">保存する</button>' +
+            '</div>' +
+        '</div>';
+    document.body.appendChild(overlay);
+
+    // 背景クリック／Escで閉じる
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) window.__steClose();
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') window.__steClose();
+    });
+};
+
+// ---------- 2. エディタの状態と操作 ----------
+window.__steState = { dayIdx: 0, minutes: 0, isToday: false };
+
+window.__steRenderValues = function() {
+    document.getElementById('steHours').textContent = String(Math.floor(window.__steState.minutes / 60)).padStart(2, '0');
+    document.getElementById('steMins').textContent = String(window.__steState.minutes % 60).padStart(2, '0');
+};
+
+window.__steAdjust = function(delta) {
+    window.__steState.minutes = Math.max(0, Math.min(24 * 60 - 5, window.__steState.minutes + delta));
+    window.__steState.minutes = Math.round(window.__steState.minutes / 5) * 5; // 5分単位にスナップ
+    window.__steRenderValues();
+};
+
+window.__steReset = function() {
+    window.__steState.minutes = 0;
+    window.__steRenderValues();
+};
+
+// ---------- 3. モーダルを開く（dayIdx: 0=月 〜 6=日） ----------
+window.__openStudyTimeEditor = function(dayIdx) {
+    window.__injectStudyTimeEditor();
+
+    var now = new Date();
+    var cur = now.getDay() - 1;
+    if (cur < 0) cur = 6;
+
+    // その曜日の直近の日付を計算
+    var diff = cur - dayIdx;
+    if (diff < 0) diff += 7;
+    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+
+    var isToday = (dayIdx === cur);
+    var totalMin = isToday
+        ? Math.floor(todayStudySeconds / 60)
+        : Math.floor(weeklyStudyMinutesLog[dayIdx] || 0);
+
+    window.__steState = { dayIdx: dayIdx, minutes: totalMin, isToday: isToday };
+
+    var dow = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+    document.getElementById('steDateLabel').textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日（' + dow + '）';
+    document.getElementById('steTodayBadge').style.display = isToday ? 'inline-block' : 'none';
+    window.__steRenderValues();
+
+    document.getElementById('studyTimeEditorOverlay').classList.add('open');
+};
+
+window.__steClose = function() {
+    var ov = document.getElementById('studyTimeEditorOverlay');
+    if (ov) ov.classList.remove('open');
+};
+
+// ---------- 4. 保存 ----------
+window.__steSave = function() {
+    var st = window.__steState;
+
+    if (st.isToday) {
+        // 今日：秒数に換算して書き換え（以降もタイマーがここから加算）
+        todayStudySeconds = st.minutes * 60;
+        localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
+        if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay();
+
+        // 連続学習記録もついでに更新
+        if (st.minutes > userStats.study_burst && window.saveUserStats) {
+            userStats.study_burst = st.minutes;
+            window.saveUserStats();
+        }
+    } else {
+        // 過去：週間ログを直接書き換え
+        weeklyStudyMinutesLog[st.dayIdx] = st.minutes;
+        localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
+    }
+
+    window.__steClose();
+    window.renderActivityChart();
+
+    // 編集したバーをパルス表示
+    var chart = document.getElementById('activityBarChart');
+    if (chart && chart.children[st.dayIdx]) {
+        var fill = chart.children[st.dayIdx].querySelector('.bar-fill');
+        if (fill) {
+            fill.classList.remove('ste-saved');
+            void fill.offsetWidth; // アニメーション再トリガー
+            fill.classList.add('ste-saved');
+        }
+    }
+
+    window.__steToast(st.isToday ? '今日の勉強時間を保存しました ✓' : '勉強時間を保存しました ✓');
+};
+
+// ---------- 5. トースト ----------
+window.__steToast = function(msg) {
+    var t = document.getElementById('steToast');
+    if (!t) {
+        t = document.createElement('div');
+        t.id = 'steToast';
+        document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t.__hideTimer);
+    t.__hideTimer = setTimeout(function() { t.classList.remove('show'); }, 2200);
+};
+
+// ---------- 6. renderActivityChart をラップしてクリック binding ----------
+var __prevRenderForEditor = window.renderActivityChart;
+window.renderActivityChart = function() {
+    var r = __prevRenderForEditor ? __prevRenderForEditor.apply(this, arguments) : undefined;
+
+    var chart = document.getElementById('activityBarChart');
+    if (chart && !chart.__steBound) {
+        chart.__steBound = true;
+        chart.classList.add('editable');
+
+        // イベント移譲：DOM再構築されても1回のbindingで永久に動作
+        chart.addEventListener('click', function(e) {
+            var wrap = e.target.closest('.bar-wrapper');
+            if (!wrap) return;
+            var idx = Array.prototype.indexOf.call(chart.children, wrap);
+            if (idx >= 0) window.__openStudyTimeEditor(idx);
+        });
+
+        // ヒント表示
+        if (!document.getElementById('steHint')) {
+            var hint = document.createElement('div');
+            hint.id = 'steHint';
+            hint.textContent = '💡 バーをタップすると、その日の勉強時間を編集できます';
+            chart.insertAdjacentElement('afterend', hint);
+        }
+    }
+    return r;
+};
+
+console.log('✏️ 第6回パッチ（勉強時間の手動編集）適用完了');
+// ==========================================================================
+// 📅 第7回パッチ：グラフの右端を常に最新（今日）にするローリング表示
+//    ・左端 = 6日前 … 右端 = 今日（日付が変わると自動で並び替え）
+//    ・各バー下に「曜日 + 日付」ラベルを表示、今日は「今日」と強調
+//    ※第6回パッチ（編集機能）より後に貼り付けてください
+// ==========================================================================
+
+// ---------- 0. ローリング表示用の追加スタイル ----------
+(function() {
+    if (document.getElementById('steRollingStyle')) return;
+    var s = document.createElement('style');
+    s.id = 'steRollingStyle';
+    s.textContent = [
+        '.ste-day-lbl{font-size:10px;font-weight:bold;color:var(--text-sub,#8b93a7);margin-top:4px;line-height:1;}',
+        '.ste-date-lbl{font-size:8px;color:var(--text-sub,#8b93a7);opacity:.75;margin-top:2px;line-height:1;font-variant-numeric:tabular-nums;}',
+        '.bar-wrapper.ste-today .ste-day-lbl{color:#4ade80;}',
+        '.bar-wrapper.ste-today .ste-date-lbl{color:#4ade80;opacity:1;font-weight:800;}',
+        '.bar-wrapper.ste-today .bar-fill{box-shadow:0 0 12px rgba(74,222,128,.35);}'
+    ].join('\n');
+    document.head.appendChild(s);
+})();
+
+// ---------- 1. renderActivityChart 差し替え（ローリング順序） ----------
+window.renderActivityChart = function() {
+    var chart = document.getElementById('activityBarChart');
+    if (!chart) return;
+
+    var now = new Date();
+    var currentDayIdx = now.getDay() - 1;
+    if (currentDayIdx < 0) currentDayIdx = 6;
+
+    // 今日の分数（整数）をログに反映
+    weeklyStudyMinutesLog[currentDayIdx] = Math.floor(todayStudySeconds / 60);
+
+    var daysLabels = ['月', '火', '水', '木', '金', '土', '日'];
+
+    // 位置 p（0=左端 〜 6=右端）→ 曜日インデックス・日付
+    // 右端が常に今日、左へ1つずつ過去に遡る
+    function dayIdxAtPos(p) { return (currentDayIdx + p + 1) % 7; }
+    function dateAtPos(p) { return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - p)); }
+    function subLabelFor(p) {
+        var di = dayIdxAtPos(p);
+        if (di === currentDayIdx) return '今日';
+        var d = dateAtPos(p);
+        return (d.getMonth() + 1) + '/' + d.getDate();
+    }
+
+    if (chart.children.length === 7 && chart.__steRolling) {
+        // ---- 既存DOMあり：値だけ更新（全消去しない → チラつかない） ----
+        for (var p = 0; p < 7; p++) {
+            var wrapU = chart.children[p];
+            var diU = dayIdxAtPos(p);
+            wrapU.dataset.dayIdx = diU;
+            wrapU.classList.toggle('ste-today', diU === currentDayIdx);
+            var rawU = weeklyStudyMinutesLog[diU] || 0;
+            var fillU = wrapU.querySelector('.bar-fill');
+            if (fillU) fillU.style.height = Math.min(100, Math.max(4, Math.round((rawU / 60) * 100))) + '%';
+            if (wrapU.children[0]) wrapU.children[0].innerText = Math.floor(rawU) + '分';
+            if (wrapU.children[2]) wrapU.children[2].innerText = daysLabels[diU];
+            if (wrapU.children[3]) wrapU.children[3].innerText = subLabelFor(p);
+        }
+    } else {
+        // ---- 初回：DOM構築 ----
+        chart.innerHTML = '';
+        chart.__steRolling = true;
+        for (var p2 = 0; p2 < 7; p2++) {
+            var di2 = dayIdxAtPos(p2);
+            var isToday2 = (di2 === currentDayIdx);
+            var raw2 = weeklyStudyMinutesLog[di2] || 0;
+
+            var wrap2 = document.createElement('div');
+            wrap2.className = 'bar-wrapper' + (isToday2 ? ' ste-today' : '');
+            wrap2.dataset.dayIdx = di2;
+            wrap2.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;flex:1;min-width:0;';
+
+            var vl2 = document.createElement('div');
+            vl2.style.cssText = 'font-size:8px;font-weight:700;color:#FFFFFF;margin-bottom:2px;white-space:nowrap;';
+            vl2.innerText = Math.floor(raw2) + '分';
+
+            var f2 = document.createElement('div');
+            f2.className = 'bar-fill active';
+            f2.style.height = Math.min(100, Math.max(4, Math.round((raw2 / 60) * 100))) + '%';
+
+            var dl2 = document.createElement('div');
+            dl2.className = 'ste-day-lbl';
+            dl2.innerText = daysLabels[di2];
+
+            var dt2 = document.createElement('div');
+            dt2.className = 'ste-date-lbl';
+            dt2.innerText = subLabelFor(p2);
+
+            wrap2.appendChild(vl2);
+            wrap2.appendChild(f2);
+            wrap2.appendChild(dl2);
+            wrap2.appendChild(dt2);
+            chart.appendChild(wrap2);
+        }
+    }
+
+    // ---------- エディタのバインド（第6回パッチ連携） ----------
+    if (!chart.__steBoundV2 && window.__openStudyTimeEditor) {
+        chart.__steBoundV2 = true;
+        chart.classList.add('editable');
+        // 位置ではなく data-day-idx から曜日を取得 → ローリング後も正確
+        chart.addEventListener('click', function(e) {
+            var wrap = e.target.closest('.bar-wrapper');
+            if (!wrap || wrap.dataset.dayIdx === undefined) return;
+            window.__openStudyTimeEditor(parseInt(wrap.dataset.dayIdx, 10));
+        });
+    }
+    var hint = document.getElementById('steHint');
+    if (!hint) {
+        hint = document.createElement('div');
+        hint.id = 'steHint';
+        chart.insertAdjacentElement('afterend', hint);
+    }
+    hint.textContent = '💡 右端が今日です。バーをタップすると勉強時間を編集できます';
+};
+
+// ---------- 2. 保存後のパルスを正しいバーに出す（第6回パッチ補正） ----------
+if (window.__steSave) {
+    var __prevSteSaveForRolling = window.__steSave;
+    window.__steSave = function() {
+        var dayIdx = window.__steState.dayIdx;
+        __prevSteSaveForRolling.apply(this, arguments);
+        var chart = document.getElementById('activityBarChart');
+        if (!chart) return;
+        var fills = chart.querySelectorAll('.bar-fill');
+        for (var i = 0; i < fills.length; i++) fills[i].classList.remove('ste-saved');
+        var target = chart.querySelector('[data-day-idx="' + dayIdx + '"] .bar-fill');
+        if (target) {
+            void target.offsetWidth;
+            target.classList.add('ste-saved');
+        }
+    };
+}
+
+console.log('📅 第7回パッチ（右端が最新・ローリング表示）適用完了');
+// ==========================================================================
+// 🔒 第8回パッチ：高さの正規化 ＋ 注釈削除 ＋ 編集を管理者限定に
+//    ・バー高さを「7日中の最大値=100%」の比率スケールに変更（値と一致）
+//    ・グラフ下のヒント注釈を撤去
+//    ・バーのタップ編集を管理者ツール開放時のみ許可（単語帳編集と同じ方式）
+//    ※必ず 第5→6→7回 の後に貼り付けてください
+// ==========================================================================
+
+// ---------- 0. バーの見た目（不透明グラデ＋発光＋遷移） ----------
+(function() {
+    if (document.getElementById('steV8Style')) return;
+    var s = document.createElement('style');
+    s.id = 'steV8Style';
+    s.textContent = [
+        // 値に比例して初めて意味を持つよう、バーを不透明な実体にする
+        '#activityBarChart .bar-fill{',
+        '  background:linear-gradient(180deg,#a5f3fc 0%,#22d3ee 42%,#0e7490 100%) !important;',
+        '  opacity:1 !important;border-radius:7px 7px 3px 3px;',
+        '  box-shadow:0 3px 12px rgba(34,211,238,.28),inset 0 1px 0 rgba(255,255,255,.35);',
+        '  transition:height .5s cubic-bezier(.2,.85,.25,1), filter .18s, box-shadow .25s;',
+        '}',
+        // 今日のバーは緑＋常時やわらかく脈動
+        '#activityBarChart .bar-wrapper.ste-today .bar-fill{',
+        '  background:linear-gradient(180deg,#bbf7d0 0%,#22c55e 48%,#15803d 100%) !important;',
+        '  box-shadow:0 0 16px rgba(34,197,94,.5),inset 0 1px 0 rgba(255,255,255,.4);',
+        '  animation:steTodayGlow 2.6s ease-in-out infinite;',
+        '}',
+        '@keyframes steTodayGlow{0%,100%{box-shadow:0 0 12px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.4)}50%{box-shadow:0 0 22px rgba(34,197,94,.65),inset 0 1px 0 rgba(255,255,255,.5)}}',
+        // 編集権限がある時だけ「押せる」見た目
+        '#activityBarChart.editable .bar-wrapper{cursor:pointer;}',
+        '#activityBarChart.editable .bar-wrapper:hover .bar-fill{filter:brightness(1.2) saturate(1.15);transform:translateY(-1px);}',
+        '#activityBarChart.editable .bar-wrapper:active .bar-fill{filter:brightness(.92);}',
+        '#activityBarChart:not(.editable) .bar-wrapper{cursor:default;}',
+        // 0分のバーは完全に消す（値=0 を正しく表現）
+        '#activityBarChart .bar-fill[data-zero="1"]{box-shadow:none;background:transparent !important;}'
+    ].join('\n');
+    document.head.appendChild(s);
+})();
+
+// ---------- 1. 管理者判定（単語帳編集と同じ権限を参照） ----------
+window.__steAdminGranted = window.__steAdminGranted || false;
+
+window.__steIsAdmin = function() {
+    // ─────────────────────────────────────────────────────────────
+    // ★ カスタマイズ箇所：お使いのアプリの管理者フラグ変数名が
+    //   下記のいずれにも無い場合、この1行だけを
+    //       return window.あなたのフラグ名 === true;
+    //   に書き換えてください（単語帳編集を制御している変数と同じもの）。
+    // ─────────────────────────────────────────────────────────────
+    try {
+        if (window.__steAdminGranted) return true;
+        if (window.isAdmin        === true) return true;
+        if (window.adminMode      === true) return true;
+        if (window.adminUnlocked  === true) return true;
+        if (window.__adminUnlocked=== true) return true;
+        if (window.adminVerified  === true) return true;
+        if (window.adminAuth      === true) return true;
+        if (window.userStats && (userStats.is_admin || userStats.isAdmin || userStats.admin)) return true;
+
+        var cls = ((document.body ? document.body.className : '') + ' ' +
+                   (document.documentElement ? document.documentElement.className : ''));
+        if (/(^|\s)(admin|admin-mode|admin-unlocked|is-admin|admin-verified|admin-auth)(\s|$|[-_])/i.test(cls)) return true;
+
+        // 管理者ツール／パネルが「開いている」間も編集可
+        var openSels = [
+            '#adminPanel.open', '#adminModal.open', '#adminTools.open',
+            '#admin-panel.open', '#admin-modal.open', '#adminToolsModal.open',
+            '.admin-panel.open', '.admin-modal.open', '.admin-tools.open',
+            '#adminPanel[style*="flex"]', '#adminPanel[style*="block"]',
+            '#adminModal[style*="flex"]', '#adminTools[style*="flex"]'
+        ];
+        for (var i = 0; i < openSels.length; i++) {
+            try { if (document.querySelector(openSels[i])) return true; } catch (e) {}
+        }
+    } catch (e) {}
+    return false;
+};
+
+// 権限状態が変わったらグラフの見た目（カーソル等）を即時同期
+var __steLastAdmin = null;
+function __steSyncAdminUI() {
+    var a = window.__steIsAdmin();
+    if (a !== __steLastAdmin) {
+        __steLastAdmin = a;
+        if (window.renderActivityChart) window.renderActivityChart();
+    }
+}
+try {
+    var __steMO = new MutationObserver(__steSyncAdminUI);
+    __steMO.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-admin', 'data-mode'] });
+    __steMO.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-admin'] });
+} catch (e) {}
+setInterval(__steSyncAdminUI, 800); // グローバル変数の変化はポーリングで拾う
+
+// ---------- 2. renderActivityChart 差し替え（比率スケール＋注釈なし） ----------
+window.renderActivityChart = function() {
+    var chart = document.getElementById('activityBarChart');
+    if (!chart) return;
+
+    var now = new Date();
+    var currentDayIdx = now.getDay() - 1;
+    if (currentDayIdx < 0) currentDayIdx = 6;
+
+    weeklyStudyMinutesLog[currentDayIdx] = Math.floor(todayStudySeconds / 60);
+
+    var daysLabels = ['月', '火', '水', '木', '金', '土', '日'];
+
+    // ✅ 7日中の最大値を100%とする比率スケール（値と高さを一致させる）
+    var maxVal = 0;
+    for (var m = 0; m < 7; m++) maxVal = Math.max(maxVal, weeklyStudyMinutesLog[m] || 0);
+    var scaleMax = maxVal > 0 ? maxVal : 1;
+    function pctFor(raw) {
+        if (raw <= 0) return 0;                                   // 0分は本当に0
+        return Math.max(8, Math.round((raw / scaleMax) * 100));   // 最小8%〜最大100%
+    }
+
+    function dayIdxAtPos(p) { return (currentDayIdx + p + 1) % 7; }
+    function dateAtPos(p) { return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - p)); }
+    function subLabelFor(p) {
+        if (dayIdxAtPos(p) === currentDayIdx) return '今日';
+        var d = dateAtPos(p);
+        return (d.getMonth() + 1) + '/' + d.getDate();
+    }
+
+    function paintBar(wrap, p) {
+        var di = dayIdxAtPos(p);
+        var raw = weeklyStudyMinutesLog[di] || 0;
+        var pct = pctFor(raw);
+        wrap.dataset.dayIdx = di;
+        wrap.classList.toggle('ste-today', di === currentDayIdx);
+        var fill = wrap.querySelector('.bar-fill');
+        if (fill) { fill.style.height = pct + '%'; fill.dataset.zero = raw <= 0 ? '1' : '0'; }
+        if (wrap.children[0]) wrap.children[0].innerText = Math.floor(raw) + '分';
+        if (wrap.children[2]) wrap.children[2].innerText = daysLabels[di];
+        if (wrap.children[3]) wrap.children[3].innerText = subLabelFor(p);
+    }
+
+    if (chart.children.length === 7 && chart.__steRolling) {
+        for (var p = 0; p < 7; p++) paintBar(chart.children[p], p);
+    } else {
+        chart.innerHTML = '';
+        chart.__steRolling = true;
+        for (var p2 = 0; p2 < 7; p2++) {
+            var di2 = dayIdxAtPos(p2);
+            var raw2 = weeklyStudyMinutesLog[di2] || 0;
+            var wrap2 = document.createElement('div');
+            wrap2.className = 'bar-wrapper' + (di2 === currentDayIdx ? ' ste-today' : '');
+            wrap2.dataset.dayIdx = di2;
+            wrap2.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;flex:1;min-width:0;';
+
+            var vl = document.createElement('div');
+            vl.style.cssText = 'font-size:8px;font-weight:700;color:#FFFFFF;margin-bottom:2px;white-space:nowrap;';
+            vl.innerText = Math.floor(raw2) + '分';
+
+            var f = document.createElement('div');
+            f.className = 'bar-fill active';
+            f.style.height = pctFor(raw2) + '%';
+            f.dataset.zero = raw2 <= 0 ? '1' : '0';
+
+            var dl = document.createElement('div');
+            dl.className = 'ste-day-lbl';
+            dl.innerText = daysLabels[di2];
+
+            var dt = document.createElement('div');
+            dt.className = 'ste-date-lbl';
+            dt.innerText = subLabelFor(p2);
+
+            wrap2.appendChild(vl); wrap2.appendChild(f);
+            wrap2.appendChild(dl); wrap2.appendChild(dt);
+            chart.appendChild(wrap2);
+        }
+    }
+
+    // 編集権限がある時だけ「押せる」クラスを付与
+    if (window.__steIsAdmin()) chart.classList.add('editable');
+    else chart.classList.remove('editable');
+
+    // クリックバインド（1回だけ。dataset.dayIdx から曜日判定→ローリング後も正確）
+    if (!chart.__steBoundV8) {
+        chart.__steBoundV8 = true;
+        chart.addEventListener('click', function(e) {
+            var wrap = e.target.closest('.bar-wrapper');
+            if (!wrap || wrap.dataset.dayIdx === undefined) return;
+            window.__openStudyTimeEditor(parseInt(wrap.dataset.dayIdx, 10));
+        });
+    }
+
+    // ✅ 注釈は出さない（既存があれば撤去）
+    var oldHint = document.getElementById('steHint');
+    if (oldHint) oldHint.remove();
+};
+
+// ---------- 3. 編集モーダルを管理者ガードでラップ ----------
+var __origOpenEditor = window.__openStudyTimeEditor;
+window.__openStudyTimeEditor = function(dayIdx) {
+    if (!window.__steIsAdmin()) {
+        if (window.__steToast) window.__steToast('🔒 編集は管理者ツール開放後に可能です');
+        return;
+    }
+    return __origOpenEditor ? __origOpenEditor.call(this, dayIdx) : undefined;
+};
+
+// ---------- 4. 初期反映 ----------
+__steSyncAdminUI();
+if (window.renderActivityChart) window.renderActivityChart();
+
+console.log('🔒 第8回パッチ（高さ正規化＋注釈削除＋編集を管理者限定）適用完了');
+// ==========================================================================
+// ✍️ 第9回パッチ：コントラスト改善 ＋ 1分単位の直接入力
+//    ・「総勉強時間」ラベルとグラフ下の日付／曜日を背景透過に負けない濃さへ
+//    ・編集モーダルに number 入力欄を追加（1分単位・0〜23:59 クランプ）
+//    ・入力中はリアルタイムで「○時間○分」プレビューが追従
+//    ※必ず 第5→6→7→8回 の後に貼り付けてください
+// ==========================================================================
+
+// ---------- 0. スタイル：コントラスト ＋ 直接入力欄のデザイン ----------
+(function() {
+    if (document.getElementById('steV9Style')) return;
+    var s = document.createElement('style');
+    s.id = 'steV9Style';
+    s.textContent = [
+        // ── グラフ下の曜日／日付ラベルを濃く（今日の緑強調は維持） ──
+        '#activityBarChart .ste-day-lbl{color:#eef3fb !important;text-shadow:0 1px 2px rgba(0,0,0,.62);letter-spacing:.02em;}',
+        '#activityBarChart .ste-date-lbl{color:#dbe4f0 !important;opacity:1 !important;font-weight:700 !important;text-shadow:0 1px 2px rgba(0,0,0,.62);}',
+        '#activityBarChart .bar-wrapper.ste-today .ste-day-lbl{color:#4ade80 !important;text-shadow:0 0 8px rgba(34,197,94,.55),0 1px 2px rgba(0,0,0,.5);}',
+        '#activityBarChart .bar-wrapper.ste-today .ste-date-lbl{color:#86efac !important;text-shadow:0 0 8px rgba(34,197,94,.5),0 1px 2px rgba(0,0,0,.5);}',
+
+        // ── 総勉強時間ラベルの強制コントラスト（JSで data-ste-fixed を付与） ──
+        '[data-ste-fixed="1"]{color:#eaf0fa !important;text-shadow:0 1px 3px rgba(0,0,0,.6),0 0 1px rgba(0,0,0,.4);font-weight:800 !important;}',
+
+        // ── 直接入力ブロック ──
+        '.ste-direct{margin:2px 0 16px;padding:13px 14px;border-radius:14px;background:rgba(8,12,22,.42);border:1px solid rgba(255,255,255,.09);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);}',
+        '.ste-direct-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}',
+        '.ste-direct-title{font-size:11px;font-weight:800;letter-spacing:.04em;color:#aeb6c8;}',
+        '.ste-direct-title b{color:#5eead4;font-weight:800;}',
+        '#stePreview{font-size:12px;font-weight:800;color:#bbf7d0;font-variant-numeric:tabular-nums;background:rgba(34,197,94,.12);border:1px solid rgba(74,222,128,.3);padding:3px 9px;border-radius:999px;transition:transform .18s cubic-bezier(.2,.9,.3,1.3),background .2s,color .2s;}',
+        '#stePreview.bump{transform:scale(1.08);background:rgba(34,197,94,.22);}',
+        '.ste-direct-row{display:flex;align-items:center;gap:9px;}',
+        '#steDirectInput{-webkit-appearance:none;-moz-appearance:textfield;appearance:textfield;flex:0 0 auto;width:92px;padding:10px 12px;border-radius:11px;border:1.5px solid rgba(94,234,212,.32);background:rgba(4,10,16,.6);color:#f0fdfa;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right;outline:none;transition:border-color .18s,box-shadow .2s,background .2s;font-family:inherit;}',
+        '#steDirectInput::-webkit-outer-spin-button,#steDirectInput::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}',
+        '#steDirectInput:focus{border-color:#2dd4bf;box-shadow:0 0 0 3px rgba(45,212,191,.22),0 0 18px rgba(45,212,191,.25);background:rgba(4,14,18,.85);}',
+        '#steDirectInput:hover{border-color:rgba(94,234,212,.55);}',
+        '.ste-direct-unit{font-size:13px;font-weight:700;color:#9aa3b6;}',
+        '.ste-direct-hint{margin-top:8px;font-size:10px;color:#7e879b;line-height:1.4;}',
+        '.ste-divider{display:flex;align-items:center;gap:8px;margin:0 0 12px;color:#6b7488;font-size:10px;font-weight:700;letter-spacing:.08em;}',
+        '.ste-divider::before,.ste-divider::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);}'
+    ].join('\n');
+    document.head.appendChild(s);
+})();
+
+// ---------- 1. 総勉強時間ラベルのコントラスト修正 ----------
+window.__steFixContrast = function() {
+    if (!document.body) return;
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode: function(n) {
+            if (!n.nodeValue || n.nodeValue.indexOf('総勉強時間') < 0) return NodeFilter.FILTER_REJECT;
+            var p = n.parentNode;
+            if (!p || p.nodeType !== 1) return NodeFilter.FILTER_REJECT;
+            if (p.getAttribute('data-ste-fixed') === '1') return NodeFilter.FILTER_REJECT;
+            // 入力欄など編集UIの中は対象外
+            if (p.closest && p.closest('#studyTimeEditorOverlay')) return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+        }
+    });
+    var node;
+    while ((node = walker.nextNode())) {
+        var el = node.parentNode;
+        el.setAttribute('data-ste-fixed', '1');
+    }
+};
+// 初回＋軽い間隔で再適用（タブ切替後のDOM差し替えにも追従）
+window.__steFixContrast();
+setInterval(window.__steFixContrast, 1500);
+
+// ---------- 2. 編集モーダルへ直接入力欄を注入 ----------
+window.__steInjectDirectInput = function() {
+    if (document.getElementById('steDirectInputRow')) return;
+    var steppers = document.querySelector('#studyTimeEditorOverlay .ste-steppers');
+    if (!steppers) return;
+
+    var block = document.createElement('div');
+    block.className = 'ste-direct';
+    block.id = 'steDirectInputRow';
+    block.innerHTML =
+        '<div class="ste-direct-head">' +
+            '<span class="ste-direct-title">✍️ <b>分</b>を直接入力</span>' +
+            '<span id="stePreview">0分</span>' +
+        '</div>' +
+        '<div class="ste-direct-row">' +
+            '<input id="steDirectInput" type="number" inputmode="numeric" min="0" max="1439" step="1" placeholder="0" autocomplete="off">' +
+            '<span class="ste-direct-unit">分</span>' +
+        '</div>' +
+        '<div class="ste-direct-hint">1分単位で入力できます（例：135 → 2時間15分）。±ボタンはクイック調整用。</div>';
+
+    // ステッパーの下に「または」区切り＋入力欄を挿入
+    var divider = document.createElement('div');
+    divider.className = 'ste-divider';
+    divider.textContent = 'または';
+    steppers.insertAdjacentElement('afterend', divider);
+    divider.insertAdjacentElement('afterend', block);
+
+    var input = document.getElementById('steDirectInput');
+    input.addEventListener('input', function() {
+        var v = parseInt(input.value, 10);
+        if (isNaN(v)) v = 0;
+        v = Math.max(0, Math.min(1439, v));
+        window.__steState.minutes = v;
+        window.__steUpdatePreview(true);
+    });
+    // blur時にクランプ値へ整形
+    input.addEventListener('blur', function() {
+        if (window.__steRenderValues) window.__steRenderValues();
+    });
+    // Enterで保存
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); if (window.__steSave) window.__steSave(); }
+    });
+};
+
+// __injectStudyTimeEditor をラップして、DOM生成後に必ず入力欄を差し込む
+if (window.__injectStudyTimeEditor) {
+    var __origInjectV9 = window.__injectStudyTimeEditor;
+    window.__injectStudyTimeEditor = function() {
+        var r = __origInjectV9.apply(this, arguments);
+        window.__steInjectDirectInput();
+        return r;
+    };
+}
+
+// ---------- 3. プレビュー更新 ----------
+window.__steUpdatePreview = function(bump) {
+    var pv = document.getElementById('stePreview');
+    if (!pv) return;
+    var t = window.__steState.minutes || 0;
+    var h = Math.floor(t / 60), m = t % 60;
+    pv.textContent = h > 0 ? (h + '時間' + (m > 0 ? m + '分' : '')) : (m + '分');
+    if (bump) {
+        pv.classList.remove('bump'); void pv.offsetWidth; pv.classList.add('bump');
+        setTimeout(function() { pv.classList.remove('bump'); }, 200);
+    }
+};
+
+// ---------- 4. __steRenderValues をラップ（input／preview 同期） ----------
+if (window.__steRenderValues) {
+    var __origRenderValsV9 = window.__steRenderValues;
+    window.__steRenderValues = function() {
+        var r = __origRenderValsV9.apply(this, arguments);
+        // inputにフォーカス中はカーソル飛び防止のため値を書き戻さない
+        var input = document.getElementById('steDirectInput');
+        if (input && document.activeElement !== input) {
+            input.value = String(window.__steState.minutes || 0);
+        }
+        window.__steUpdatePreview(false);
+        return r;
+    };
+}
+
+// ---------- 5. モーダルを開いた直後にも入力欄の存在を保証 ----------
+if (window.__openStudyTimeEditor) {
+    var __origOpenV9 = window.__openStudyTimeEditor;
+    window.__openStudyTimeEditor = function(dayIdx) {
+        var r = __origOpenV9.apply(this, arguments);
+        window.__steInjectDirectInput();
+        // 開いた時の値を入力欄へ反映
+        var input = document.getElementById('steDirectInput');
+        if (input && document.activeElement !== input) input.value = String(window.__steState.minutes || 0);
+        window.__steUpdatePreview(false);
+        return r;
+    };
+}
+
+// ---------- 6. 初期反映 ----------
+window.__steFixContrast();
+if (window.renderActivityChart) window.renderActivityChart();
+
+console.log('✍️ 第9回パッチ（コントラスト改善＋1分単位直接入力）適用完了');
