@@ -14160,3 +14160,89 @@ console.log('🧬 第11回パッチ適用完了',
         if (w) { window.__bridgeWrite = null; for (var k in w) { try { if (typeof eval(k) !== "undefined") eval(k + " = w[k]"); } catch (e) {} } }
     }, 120);
 })();
+// ==========================================================================
+//  app.js 末尾パッチ：データリセット後の“復活”を根治（理解度は残す）
+//    症状：管理者リセット後も各端末のローカル旧値が残り、ログイン時の
+//          「大きい方を採用＋クラウドへ書き戻し」で0が旧値に巻き戻っていた。
+//    根治：読み込みの“先頭”でリセット世代を比較し、世代より古いローカル派生を
+//          先に0へ落としてから本来の読み込みへ進む＝0 vs 0 で復活不能。
+//    保持：理解度(core_v4_user_vocab_progress_*)・wordMemory・単語/長文/本棚/
+//          フレンド/目標 は一切触らない（＝理解度は残る）。
+//    ※ fix.js / multi.js / style.css / index.html は不変更
+// ==========================================================================
+(function applyResetResurrectionFix() {
+"use strict";
+if (window.__resetResurrectionFixApplied) return;
+window.__resetResurrectionFixApplied = true;
+
+function rrToday() { var d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+function rrLocalGen(id) { try { return parseInt(localStorage.getItem('__ste_reset_gen_' + id)) || 0; } catch (e) { return 0; } }
+function rrSetLocalGen(id, g) { try { localStorage.setItem('__ste_reset_gen_' + id, String(g)); } catch (e) {} }
+function rrFetchCloudGen() {
+if (!window.db || !window.fbGetDoc || !window.fbDoc) return Promise.resolve(0);
+try {
+return Promise.resolve(window.fbGetDoc(window.fbDoc(window.db, 'shared', 'app_settings')))
+.then(function (s) { return (s && s.exists() && s.data() && s.data().resetGeneration) ? (parseInt(s.data().resetGeneration) || 0) : 0; })
+.catch(function () { return 0; });
+} catch (e) { return Promise.resolve(0); }
+}
+function rrResetDerived(stats) {
+stats = stats || {};
+return {
+test_count: 0, combo_max: 0, multi_win: 0, high_score: 0, mistake_count: 0,
+vocab_reg: 0, vocab_fixed: 0, delete_count: 0, study_burst: 0, reader_open: 0,
+flash_count: 0, user_level: 1, gold_spent: 0,
+goal_text: stats.goal_text || '',
+friends_count: (typeof stats.friends_count === 'number') ? stats.friends_count : 0,
+weekly_rank_first: false,
+seasonTitles: Array.isArray(stats.seasonTitles) ? stats.seasonTitles : [],
+settledSeasons: Array.isArray(stats.settledSeasons) ? stats.settledSeasons : [],
+study_total_secs: 0, study_today_secs: 0, study_week_secs: 0,
+study_today_date: rrToday(), study_week_key: ''
+};
+}
+function rrWipeKeepProgress() {
+try { totalExp = 0; } catch (e) {}
+try { selectedTitle = '称号なし'; } catch (e) {}
+try { userStats = rrResetDerived(userStats); } catch (e) {}
+try { todayStudySeconds = 0; } catch (e) {}
+try { weeklyStudyMinutesLog = [0, 0, 0, 0, 0, 0, 0]; } catch (e) {}
+try { rewardedTitlesStepsCache = {}; } catch (e) {}
+var id = (typeof myId !== 'undefined' && myId) ? myId : '';
+try {
+localStorage.setItem('core_v4_totalExp', '0');
+localStorage.setItem('core_v4_userTitle', '称号なし');
+localStorage.setItem('core_v4_rewarded_titles_cache', '{}');
+localStorage.setItem('core_v4_study_today_secs', '0');
+localStorage.setItem('core_v4_study_weekly_log', '[0,0,0,0,0,0,0]');
+localStorage.setItem('core_v4_study_last_date', rrToday());
+localStorage.setItem('core_v4_study_total_secs', '0');
+if (id) localStorage.setItem('core_v4_user_stats_' + id, JSON.stringify(userStats));
+var rm = [];
+for (var i = 0; i < localStorage.length; i++) {
+var k = localStorage.key(i); if (!k) continue;
+if (k.indexOf('cosmic_score_') === 0 || k.indexOf('cosmic_best_') === 0 || k.indexOf('season_best_') === 0) rm.push(k);
+}
+rm.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+// 理解度 / wordMemory / 単語 / 長文 / 本棚 / フレンド / 目標 は意図的に触らない
+} catch (e) {}
+}
+
+var __prevLoadLocalStateForRR = window.loadLocalState;
+window.loadLocalState = async function () {
+try {
+var id = (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000') ? myId : null;
+if (id) {
+var cloudGen = await rrFetchCloudGen();
+var lgen = rrLocalGen(id);
+if (cloudGen > 0 && cloudGen > lgen) {
+rrWipeKeepProgress();
+rrSetLocalGen(id, cloudGen);
+try { window.__fixLastGen = cloudGen; } catch (e) {}
+}
+}
+} catch (e) {}
+return __prevLoadLocalStateForRR ? __prevLoadLocalStateForRR.apply(this, arguments) : undefined;
+};
+console.log('🧹 app.js 末尾パッチ（リセット復活根治：理解度保持のまま派生データのみ無効化）適用完了');
+})();

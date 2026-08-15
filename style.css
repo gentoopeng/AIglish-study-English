@@ -1962,3 +1962,43 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
   transform: translateY(-50%) scale(0.9);
   box-shadow: 0 0 15px rgba(0, 240, 255, 0.5) !important;
 }
+/* ==========================================================================
+   マルチプレイUI修正（空白解消・HPバー延長・名前表示修正）
+   ========================================================================== */
+/* 味方パーティエリアの幅を広げて中央空白を解消 */
+div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
+    max-width: 100% !important;
+    width: 100% !important;
+}
+/* 各味方ユニットを横並びレイアウトに変更してスペースを有効活用 */
+.multi-party-member, [class*="party-member"] {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+/* 名前とHPバーを含む情報エリア */
+.m2-ally-info, [class*="ally-info"], [class*="info"] {
+    flex: 1 !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+}
+/* HPバーを長くする */
+.multi-party-hp-bar, [class*="hp-bar"] {
+    width: 100% !important;
+    height: 10px !important;
+    flex-shrink: 0 !important;
+}
+/* 名前表示を修正 */
+.m2-ally-name, [class*="ally-name"], [class*="name"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    font-size: 14px !important;
+}
