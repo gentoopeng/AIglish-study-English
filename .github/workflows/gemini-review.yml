@@ -20,6 +20,7 @@ jobs:
         uses: google-github-actions/run-gemini-cli@main
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          arg: '--skip-trust'
           prompt: |
             リポジトリのコードを分析し、改善点があれば直接ファイルを書き換えてください。
             **ただし、絶対にコミットやプッシュをしないでください。**
