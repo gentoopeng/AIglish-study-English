@@ -19,12 +19,12 @@ jobs:
       - name: AIに編集させてみる
         uses: google-github-actions/run-gemini-cli@main
         with:
-          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          args: '--skip-trust'
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }
           prompt: |
             リポジトリのコードを分析し、改善点があれば直接ファイルを書き換えてください。
             ただし、絶対にコミットやプッシュをしないでください。
-
+            env:
+            GEMINI_CLI_TRUST_WORKSPACE: 'true'
       - name: 変更があったか確認
         id: check
         run: |
