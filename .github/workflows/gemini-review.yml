@@ -1,4 +1,4 @@
-name: AI Edit Suggestion (PR作成)
+name: AI Edit with Custom Prompt
 
 on:
   issue_comment:
@@ -16,14 +16,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: AIに編集させてみる
+      - name: コメントから指示を抽出
+        id: extract
+        run: |
+          BODY="${{ github.event.comment.body }}"
+          # "/edit " 以降の文章を指示として切り出す
+          INSTRUCTION=$(echo "$BODY" | sed 's/^\/edit //')
+          echo "instruction=$INSTRUCTION" >> $GITHUB_OUTPUT
+
+      - name: AIに編集させる
         uses: google-github-actions/run-gemini-cli@main
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          arg: '--skip-trust'
+          args: '--skip-trust'
           prompt: |
-            リポジトリのコードを分析し、改善点があれば直接ファイルを書き換えてください。
-            **ただし、絶対にコミットやプッシュをしないでください。**
+            リポジトリのコードを分析し、以下の指示に従ってファイルを書き換えてください。
+            ただし、絶対にコミットやプッシュをしないでください。
+
+            【ユーザーからの指示】
+            ${{ steps.extract.outputs.instruction }}
 
       - name: 変更があったか確認
         id: check
@@ -51,7 +62,7 @@ jobs:
         run: |
           gh pr create \
             --title "AIが編集を提案しています" \
-            --body "AIが /edit コマンドで編集しました。\n\nこのPRを確認して、問題なければ **「Merge pull request」** をクリックしてください。" \
+            --body "AIが指示に従って編集しました。\n\n指示内容：${{ steps.extract.outputs.instruction }}" \
             --head ${{ env.BRANCH_NAME }} \
             --base main
         env:
@@ -61,7 +72,7 @@ jobs:
         if: steps.check.outputs.changed == 'true'
         run: |
           gh issue comment ${{ github.event.issue.number }} \
-            --body "✅ AIが編集を完了しました！\nPRを確認してください：https://github.com/${{ github.repository }}/pull/new/${{ env.BRANCH_NAME }}"
+            --body "✅ AIが編集を完了しました！\nPRを確認してください。"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -69,6 +80,6 @@ jobs:
         if: steps.check.outputs.changed == 'false'
         run: |
           gh issue comment ${{ github.event.issue.number }} \
-            --body "特に編集すべき点は見つかりませんでした。"
+            --body "指示内容に沿った編集箇所は見つかりませんでした。"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB
