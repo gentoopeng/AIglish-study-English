@@ -7852,38 +7852,6 @@ return r;
 };
 var __prevNext=window.showNextMultiWord;
 window.showNextMultiWord=function(){unlockAnswer();return __prevNext?__prevNext.apply(this,arguments):undefined;};
-
-function bindDrag(){
-var word=document.getElementById('flickTargetWord');
-if(!word||word.__boptDrag)return; word.__boptDrag=true;
-word.addEventListener('pointerdown',function(e){
-drag={sx:e.clientX,sy:e.clientY,dx:0,dy:0};
-word.classList.add('bopt-drag');
-try{word.setPointerCapture(e.pointerId);}catch(err){}
-e.preventDefault();
-});
-word.addEventListener('pointermove',function(e){
-if(!drag)return;
-drag.dx=e.clientX-drag.sx; drag.dy=e.clientY-drag.sy;
-word.style.transform='translate('+drag.dx+'px,'+drag.dy+'px)';
-});
-word.addEventListener('pointerup',function(e){
-if(!drag)return;
-word.classList.remove('bopt-drag');
-var x=e.clientX,y=e.clientY;
-drag=null;
-word.style.transform='';
-var el=document.elementFromPoint(x,y);
-var cell=el?el.closest('.flick-choice'):null;
-if(cell&&!cell.classList.contains('flick-center-spark')){
-var grid=cell.closest('.multi-grid-3x3');
-if(grid){var idx=Array.prototype.indexOf.call(grid.children,cell);
-if(idx>=0){unlockAnswer();window.processMultiFlickAnswer(idx);} }
-}
-});
-word.addEventListener('pointercancel',function(){drag=null;word.classList.remove('bopt-drag');word.style.transform='';});
-}
-
 /* ===== ④ 行動ゲージ ===== */
 function ensureGauge(){
 var t=document.getElementById('multiEnemyTimerDisplay');
@@ -7923,242 +7891,11 @@ p.style.pointerEvents='';p.style.opacity='';
 var tick=0;
 setInterval(function(){
 tick++;
-bindDrag();
 updateGauge();
 if(tick%5===0)unlockSoon();
 },300);
 
 console.log('⚡ 戦闘最適化＋操作改版パッチ適用完了');
-})();
-// =====================================================================
-// 🎮 操作修正パッチ（multi.js末尾追記・既存不変更）
-// ① 選択肢は id(multiChoice-N) から直接読む＝中央マスによるズレ根絶
-// ② ドロップ検知の瞬間だけ単語カードをヒットテスト除外＝確実に枠を認識
-// ③ 「意図した選択」のみ受付。旧8方向フリック/二重発火は全て無視
-//    → 正しい答えが不正解になるのを防ぐ
-// =====================================================================
-(function applyControlFixPatch(){
-"use strict";
-if(window.__controlFixApplied) return; window.__controlFixApplied=true;
-
-/* ③ 意図した選択だけ通す（それ以外は捨てる） */
-var __inner=window.processMultiFlickAnswer;
-window.processMultiFlickAnswer=function(ci){
-if(window.__intendedChoice!=null){
-var idx=window.__intendedChoice; window.__intendedChoice=null;
-return __inner?__inner.call(this,idx):undefined;
-}
-return undefined; // 旧フリック/二重発火は無視
-};
-var __prevNext=window.showNextMultiWord;
-window.showNextMultiWord=function(){window.__intendedChoice=null;return __prevNext?__prevNext.apply(this,arguments):undefined;};
-
-/* ① idから正確なインデックス */
-function idxOf(c){ if(!c||!c.id)return -1; var n=parseInt(c.id.replace('multiChoice-',''),10); return isFinite(n)?n:-1; }
-function selectAt(x,y){
-var el=document.elementFromPoint(x,y); if(!el)return false;
-var c=el.closest('[id^=multiChoice-]'); var idx=idxOf(c);
-if(idx>=0){ window.__intendedChoice=idx; window.processMultiFlickAnswer(idx); return true; }
-return false;
-}
-
-/* ② 単語カードを自由ドラッグ＋確実なドロップ検知 */
-function bindWord(){
-var word=document.getElementById('flickTargetWord');
-if(!word||word.__cfDrag)return; word.__cfDrag=true;
-var drag=null;
-word.addEventListener('pointerdown',function(e){
-drag={sx:e.clientX,sy:e.clientY};
-try{word.setPointerCapture(e.pointerId);}catch(_){}
-word.style.transition='none';
-e.preventDefault();
-});
-word.addEventListener('pointermove',function(e){
-if(!drag)return;
-word.style.transform='translate('+(e.clientX-drag.sx)+'px,'+(e.clientY-drag.sy)+'px)';
-});
-word.addEventListener('pointerup',function(e){
-if(!drag)return; drag=null;
-word.style.pointerEvents='none';      // ★検知瞬間だけカードを除外
-selectAt(e.clientX,e.clientY);
-word.style.pointerEvents='';
-word.style.transform='';
-});
-word.addEventListener('pointercancel',function(){drag=null;word.style.transform='';});
-}
-
-/* 選択肢を直接タップしても選べる */
-document.addEventListener('pointerup',function(e){
-var t=e.target; if(!t||!t.closest)return;
-var grid=t.closest('.multi-grid-3x3'); if(!grid)return;
-selectAt(e.clientX,e.clientY);
-},true);
-
-setInterval(bindWord,700);
-console.log('🎮 操作修正パッチ適用完了');
-})();
-// =====================================================================
-// 🎮 操作修正パッチ（multi.js末尾追記・既存不変更）
-// ① 選択肢は id(multiChoice-N) から直接読む＝中央マスによるズレ根絶
-// ② ドロップ検知の瞬間だけ単語カードをヒットテスト除外＝確実に枠を認識
-// ③ 「意図した選択」のみ受付。旧8方向フリック/二重発火は全て無視
-//    → 正しい答えが不正解になるのを防ぐ
-// =====================================================================
-(function applyControlFixPatch(){
-"use strict";
-if(window.__controlFixApplied) return; window.__controlFixApplied=true;
-
-/* ③ 意図した選択だけ通す（それ以外は捨てる） */
-var __inner=window.processMultiFlickAnswer;
-window.processMultiFlickAnswer=function(ci){
-if(window.__intendedChoice!=null){
-var idx=window.__intendedChoice; window.__intendedChoice=null;
-return __inner?__inner.call(this,idx):undefined;
-}
-return undefined; // 旧フリック/二重発火は無視
-};
-var __prevNext=window.showNextMultiWord;
-window.showNextMultiWord=function(){window.__intendedChoice=null;return __prevNext?__prevNext.apply(this,arguments):undefined;};
-
-/* ① idから正確なインデックス */
-function idxOf(c){ if(!c||!c.id)return -1; var n=parseInt(c.id.replace('multiChoice-',''),10); return isFinite(n)?n:-1; }
-function selectAt(x,y){
-var el=document.elementFromPoint(x,y); if(!el)return false;
-var c=el.closest('[id^=multiChoice-]'); var idx=idxOf(c);
-if(idx>=0){ window.__intendedChoice=idx; window.processMultiFlickAnswer(idx); return true; }
-return false;
-}
-
-/* ② 単語カードを自由ドラッグ＋確実なドロップ検知 */
-function bindWord(){
-var word=document.getElementById('flickTargetWord');
-if(!word||word.__cfDrag)return; word.__cfDrag=true;
-var drag=null;
-word.addEventListener('pointerdown',function(e){
-drag={sx:e.clientX,sy:e.clientY};
-try{word.setPointerCapture(e.pointerId);}catch(_){}
-word.style.transition='none';
-e.preventDefault();
-});
-word.addEventListener('pointermove',function(e){
-if(!drag)return;
-word.style.transform='translate('+(e.clientX-drag.sx)+'px,'+(e.clientY-drag.sy)+'px)';
-});
-word.addEventListener('pointerup',function(e){
-if(!drag)return; drag=null;
-word.style.pointerEvents='none';      // ★検知瞬間だけカードを除外
-selectAt(e.clientX,e.clientY);
-word.style.pointerEvents='';
-word.style.transform='';
-});
-word.addEventListener('pointercancel',function(){drag=null;word.style.transform='';});
-}
-
-/* 選択肢を直接タップしても選べる */
-document.addEventListener('pointerup',function(e){
-var t=e.target; if(!t||!t.closest)return;
-var grid=t.closest('.multi-grid-3x3'); if(!grid)return;
-selectAt(e.clientX,e.clientY);
-},true);
-
-setInterval(bindWord,700);
-console.log('🎮 操作修正パッチ適用完了');
-})();
-// =====================================================================
-// 🎯 フリック平滑化パッチ（8方向スナップ廃止＝自由追従＋誤爆防止）
-// ① 🔥武器アイコンが自由角度で指に滑らかに追従（カクつき解消）
-// ② 移動中に選択予定マスをライブハイライト
-// ③ 離す距離が短いと無効（デッドゾーン＝誤爆防止）
-// ④ 選択は実マス位置に最も近い角度を採用（マッピングズレ根絶）
-// ※ multi.js末尾に追記・既存コード不変更（window関数を上書くだけ）
-// =====================================================================
-(function applyFlickSmoothPatch(){
-"use strict";
-if(window.__flickSmoothApplied) return; window.__flickSmoothApplied=true;
-
-var my=null; // {sx,sy,active,dist,choice}
-
-function pad(){ return document.getElementById('flickPadArea'); }
-function icon(){ return document.getElementById('flickWeaponIcon'); }
-
-/* 実マスの中心角度と比較して最も近い選択肢を返す */
-function cellByAngle(dx,dy,dist){
-if(dist<8) return -1;
-var ang=Math.atan2(dy,dx)*180/Math.PI;
-var grid=document.querySelector('.multi-grid-3x3'); if(!grid) return -1;
-var gr=grid.getBoundingClientRect();
-var cx=gr.left+gr.width/2, cy=gr.top+gr.height/2;
-var best=-1,bd=999;
-for(var i=0;i<8;i++){
-var el=document.getElementById('multiChoice-'+i); if(!el)continue;
-var r=el.getBoundingClientRect();
-var ex=r.left+r.width/2-cx, ey=r.top+r.height/2-cy;
-if(ex===0&&ey===0)continue;
-var ea=Math.atan2(ey,ex)*180/Math.PI;
-var diff=Math.abs(((ang-ea+540)%360)-180);
-if(diff<bd){bd=diff;best=i;}
-}
-return best;
-}
-function highlight(idx){
-for(var i=0;i<8;i++){
-var el=document.getElementById('multiChoice-'+i); if(!el)continue;
-if(i===idx) el.classList.add('highlight'); else el.classList.remove('highlight');
-}
-}
-function resetIcon(){
-var ic=icon(); if(!ic)return;
-ic.style.left='50%'; ic.style.top='50%';
-}
-
-/* capture で既存リスナーより先に奪う */
-document.addEventListener('touchstart',function(e){
-var t=e.target; if(!t||!t.closest)return;
-if(!t.closest('#flickPadArea'))return;
-e.stopPropagation();
-var touch=e.touches[0];
-my={sx:touch.clientX,sy:touch.clientY,active:true,dist:0,choice:-1};
-},true);
-
-document.addEventListener('touchmove',function(e){
-if(!my||!my.active)return;
-var t=e.target; if(!t||!t.closest||!t.closest('#flickPadArea'))return;
-e.preventDefault(); e.stopPropagation();
-var touch=e.touches[0];
-var p=pad(); if(!p)return;
-var rect=p.getBoundingClientRect();
-var dx=touch.clientX-my.sx, dy=touch.clientY-my.sy;
-var dist=Math.sqrt(dx*dx+dy*dy);
-my.dist=dist;
-/* ① 自由追従（半径クランプ） */
-var ic=icon();
-if(ic){
-var maxR=Math.min(rect.width,rect.height)*0.42;
-var cl=Math.min(dist,maxR);
-var ang=Math.atan2(dy,dx);
-ic.style.left=(rect.width/2+Math.cos(ang)*cl)+'px';
-ic.style.top=(rect.height/2+Math.sin(ang)*cl)+'px';
-ic.style.transform='translate(-50%,-50%)';
-}
-/* ② ライブハイライト */
-my.choice=cellByAngle(dx,dy,dist);
-highlight(my.choice);
-},{capture:true,passive:false});
-
-document.addEventListener('touchend',function(e){
-if(!my||!my.active)return;
-e.stopPropagation();
-var dist=my.dist, choice=my.choice;
-resetIcon(); highlight(-1);
-my.active=false;
-/* ③ デッドゾーン＋④ 実マス採用 */
-if(dist>18 && choice>=0){
-window.__intendedChoice=choice;   // 既存ガード経由で確実に1回だけ回答
-window.processMultiFlickAnswer(choice);
-}
-},true);
-
-console.log('🎯 フリック平滑化パッチ適用完了');
 })();
 // =====================================================================
 // ⚔️ 2回目以降の攻撃が出ない問題 修正パッチ（multi.js末尾追記）
@@ -8177,12 +7914,74 @@ console.log('🎯 フリック平滑化パッチ適用完了');
     
     /* 単語が進んだ時も確実に解除＋意図選択クリア */
     var __p = window.showNextMultiWord;
-    window.showNextMultiWord = function() {
-        window.__ansLock = false;
-        window.__intendedChoice = null;
-        return __p ? __p.apply(this, arguments) : undefined;
-    };
+ window.showNextMultiWord = function() {
+    if (gameCurrentWordsQueue.length === 0) return;
+    if (gameCurrentIndex >= gameCurrentWordsQueue.length) {
+        gameCurrentWordsQueue.sort(() => Math.random() - 0.5);
+        gameCurrentIndex = 0;
+    }
+    const target = gameCurrentWordsQueue[gameCurrentIndex];
+    document.getElementById('flickTargetWord').innerText = target.word;
+
+    // ★ 9択（中央マス含む）で選択肢を生成
+    let choices = [target.meaning];
+    let dummies = [...gameCurrentWordsQueue]
+        .filter(w => w.word !== target.word)
+        .map(w => w.meaning);
+    dummies.sort(() => Math.random() - 0.5);
+    // 8個のダミーを追加して9択にする
+    choices = choices.concat(dummies.slice(0, 8)).sort(() => Math.random() - 0.5);
+
+    // ★ 中央（index 4）が正解になる確率を 1/9 に調整
+    // 9マス中1マスが正解になるよう、正解の位置をランダムに決定
+    const correctPos = Math.floor(Math.random() * 9);
+    const correctMeaning = choices[0]; // 正解の意味
+    const shuffled = choices.slice(1); // 正解以外
+    shuffled.sort(() => Math.random() - 0.5);
     
+    // 9マスに配置
+    const finalChoices = [];
+    let dummyIdx = 0;
+    for (let i = 0; i < 9; i++) {
+        if (i === correctPos) {
+            finalChoices.push(correctMeaning);
+        } else {
+            finalChoices.push(shuffled[dummyIdx++]);
+        }
+    }
+
+    currentMultiCorrectIndex = correctPos;
+
+    // 9マスすべてに表示
+    for (let i = 0; i < 9; i++) {
+        let el = document.getElementById('multiChoice-' + i);
+        if (el) {
+            // ★ 中央マス（index 4）が正解の時は空白表示
+            if (i === 4 && i === correctPos) {
+                el.innerHTML = '<span class="flick-center-spark-hidden"></span>';
+                el.classList.add('flick-center-spark');
+                el.classList.remove('highlight');
+            } else {
+                el.innerText = finalChoices[i] || "---";
+                el.classList.remove('highlight', 'flick-center-spark');
+            }
+        }
+    }
+
+    // 中央マスの初期化（火花アイコンを戻す）
+    const centerEl = document.getElementById('multiChoice-4');
+    if (centerEl && !centerEl.classList.contains('flick-center-spark')) {
+        // 中央が不正解の時は通常の火花アイコン
+        centerEl.innerHTML = '🔥';
+    }
+
+    const icon = document.getElementById('flickWeaponIcon');
+    if (icon) {
+        icon.style.left = '50%';
+        icon.style.top = '50%';
+    }
+};
+
     /* 保険：長時間ロックが残らないよう定期解除 */
     setInterval(function() { window.__ansLock = false; }, 800);
     
@@ -9280,4 +9079,1245 @@ vis.style.opacity='0'; vis.style.pointerEvents='none';
 }
 setInterval(tick,300);
 console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
+})();
+// =====================================================================
+// 🔧 操作修正パッチ の修正（フォールバック追加）
+// =====================================================================
+(function() {
+ if (window.__controlFixFixed) return;
+ window.__controlFixFixed = true;
+ 
+ // 既存の processMultiFlickAnswer を取得（ラップされていても大丈夫なように）
+ var __inner = window.processMultiFlickAnswer;
+ if (typeof __inner !== 'function') {
+  console.warn('processMultiFlickAnswer not found');
+  return;
+ }
+ 
+ // 安全に置き換え（__intendedChoice が無ければ引数を使う）
+ window.processMultiFlickAnswer = function(ci) {
+  var idx = (window.__intendedChoice != null) ? window.__intendedChoice : ci;
+  window.__intendedChoice = null;
+  return __inner.call(this, idx);
+ };
+ 
+ console.log('✅ __controlFixApplied を修正（フォールバック追加）');
+})();
+// =====================================================================
+// 🔧 フリック平滑化パッチ 修正（#flickPadArea → .multi-flick-area）
+// =====================================================================
+(function() {
+  if (window.__flickSmoothFixed) return;
+  window.__flickSmoothFixed = true;
+
+  // 既存の touchstart リスナーを置き換えるため、一旦全て削除
+  var listeners = [];
+  var origAdd = document.addEventListener;
+  document.addEventListener = function(type, handler, options) {
+    if (type === 'touchstart' || type === 'touchmove' || type === 'touchend') {
+      listeners.push({ type: type, handler: handler, options: options });
+    }
+    origAdd.call(this, type, handler, options);
+  };
+
+  // 新しいリスナーを登録（#flickPadArea の代わりに .multi-flick-area を使用）
+  var my = null;
+
+  document.addEventListener('touchstart', function(e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    // ★ ここが修正ポイント： #flickPadArea → .multi-flick-area
+    if (!t.closest('.multi-flick-area')) return;
+    e.stopPropagation();
+    var touch = e.touches[0];
+    my = { sx: touch.clientX, sy: touch.clientY, active: true, dist: 0, choice: -1 };
+  }, true);
+
+  document.addEventListener('touchmove', function(e) {
+    if (!my || !my.active) return;
+    var t = e.target;
+    if (!t || !t.closest || !t.closest('.multi-flick-area')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var touch = e.touches[0];
+    var dx = touch.clientX - my.sx, dy = touch.clientY - my.sy;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    my.dist = dist;
+    // 角度計算（最も近い選択肢をライブハイライト）
+    var ang = Math.atan2(dy, dx) * 180 / Math.PI;
+    var grid = document.querySelector('.multi-grid-3x3');
+    if (grid) {
+      var gr = grid.getBoundingClientRect();
+      var cx = gr.left + gr.width / 2, cy = gr.top + gr.height / 2;
+      var best = -1, bd = 999;
+      for (var i = 0; i < 8; i++) {
+        var el = document.getElementById('multiChoice-' + i);
+        if (!el) continue;
+        var r = el.getBoundingClientRect();
+        var ex = r.left + r.width / 2 - cx, ey = r.top + r.height / 2 - cy;
+        if (ex === 0 && ey === 0) continue;
+        var ea = Math.atan2(ey, ex) * 180 / Math.PI;
+        var diff = Math.abs(((ang - ea + 540) % 360) - 180);
+        if (diff < bd) { bd = diff; best = i; }
+      }
+      my.choice = best;
+      // ハイライト更新
+      for (var j = 0; j < 8; j++) {
+        var el2 = document.getElementById('multiChoice-' + j);
+        if (el2) el2.classList.toggle('highlight', j === best);
+      }
+    }
+  }, { capture: true, passive: false });
+
+  document.addEventListener('touchend', function(e) {
+    if (!my || !my.active) return;
+    e.stopPropagation();
+    var dist = my.dist, choice = my.choice;
+    my.active = false;
+    // デッドゾーン（18px未満は無効）
+    if (dist > 18 && choice >= 0) {
+      window.__intendedChoice = choice;
+      window.processMultiFlickAnswer(choice);
+    }
+    // ハイライト解除
+    for (var j = 0; j < 8; j++) {
+      var el = document.getElementById('multiChoice-' + j);
+      if (el) el.classList.remove('highlight');
+    }
+    my = null;
+  }, true);
+
+  console.log('✅ __flickSmoothApplied 修正完了（#flickPadArea → .multi-flick-area）');
+})();
+// =====================================================================
+// 🔄 スワイプ完全復活パッチ（既存パッチを上書きし、確実に動作させる）
+// =====================================================================
+(function() {
+  if (window.__swipeRevived) return;
+  window.__swipeRevived = true;
+
+  console.log('🔄 スワイプ完全復活パッチを適用します...');
+
+  // ---- 1. 既存の processMultiFlickAnswer を退避 ----
+  var __origProcess = window.processMultiFlickAnswer;
+  if (typeof __origProcess !== 'function') {
+    console.warn('processMultiFlickAnswer が見つかりません');
+    return;
+  }
+
+  // ---- 2. processMultiFlickAnswer を再定義（__controlFixApplied を迂回） ----
+  window.processMultiFlickAnswer = function(choiceIndex) {
+    let me = multiPartyMembers.find(m => m.isMe);
+    let q = gameCurrentWordsQueue[gameCurrentIndex];
+    let updatedStatus = "bad";
+    let ch = charOf(me ? (me.char || activeCharacter) : activeCharacter);
+    let comboRate = ch.comboRate || 1.0;
+    let s = M2().session; if (!s) s = M2().session = freshSession();
+
+    // ★ 中央マス（index 4）の特別処理
+    const isCenter = (choiceIndex === 4);
+    const centerEl = document.getElementById('multiChoice-4');
+
+    if (choiceIndex === currentMultiCorrectIndex) {
+        updatedStatus = "ok";
+        gameComboCount++;
+        if (gameComboCount > s.maxCombo) s.maxCombo = gameComboCount;
+        try { if (typeof window.createFireballEffect === 'function') window.createFireballEffect(); } catch (e) {}
+        let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5;
+        let damage = Math.round(400 * comboMulti * (ch.atk || 1.0));
+        try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
+        M2().comboGauge = Math.min(M2().comboMax, M2().comboGauge + 12 * comboRate);
+        renderComboGauge();
+        let cur = M2().current;
+        if (cur && cur.barrier > 0) {
+            let tb = Math.min(cur.barrier, damage); cur.barrier -= tb; damage -= tb;
+        }
+        multiBossHp = Math.max(0, (multiBossHp || 0) - damage);
+        if (cur) cur.hp = multiBossHp;
+        if (me) try { window.showCharacterPopup(me.id, '💥 ' + damage, 'attack'); } catch (e) {}
+        let bimg = document.getElementById('multiBossImage');
+        if (bimg && bimg.style.display !== 'none') { bimg.classList.remove('m2-hit'); void bimg.offsetWidth; bimg.classList.add('m2-hit'); }
+
+        // ★ 中央が正解の時は裏返って正解の意味を表示
+        if (isCenter && centerEl) {
+            centerEl.innerHTML = '<div class="center-revealed">' + q.meaning + '</div>';
+            centerEl.classList.add('center-correct');
+        }
+
+        if (M2().comboGauge >= M2().comboMax) {
+            setTimeout(function () {
+                let burst = 5000;
+                let c2 = M2().current;
+                if (c2 && c2.barrier > 0) { let tb2 = Math.min(c2.barrier, burst); c2.barrier -= tb2; burst -= tb2; }
+                multiBossHp = Math.max(0, multiBossHp - burst); if (c2) c2.hp = multiBossHp;
+                M2().comboGauge = 0; renderComboGauge();
+                try { window.updateMultiHpBars(); } catch (e) {}
+                checkEnemyDefeated();
+            }, 200);
+        } else {
+            try { window.updateMultiHpBars(); } catch (e) {}
+        }
+        let curE = M2().current;
+        if (curE && curE.skills && curE.skills.indexOf('combo') >= 0 && gameComboCount >= (curE.comboTh || 999)) {
+            triggerEnemyAoE(curE, true);
+        }
+    } else {
+        gameComboCount = 0;
+        M2().comboGauge = Math.max(0, M2().comboGauge - 20);
+        renderComboGauge();
+        try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
+
+        // ★ 中央が不正解の時はしっかり不正解判定＋ポップアップ
+        if (isCenter && centerEl) {
+            centerEl.classList.add('center-wrong');
+            showCenterWrongPopup(q);
+        }
+
+        if (me && me.hp > 0) {
+            me.hp = Math.max(0, me.hp - 300);
+            s.dmgTaken += 300;
+            try { window.showCharacterPopup(me.id, 300, 'damage'); } catch (e) {}
+        }
+    }
+
+    if (q) {
+        let targetVocab = vocabList.find(function (w) { return w.num === q.wordNum; });
+        if (targetVocab) {
+            if (targetVocab.meanings.length > 0) {
+                targetVocab.meanings[0].status = updatedStatus;
+                if (!targetVocab.meanings[0].history) targetVocab.meanings[0].history = [];
+                targetVocab.meanings[0].history.push(updatedStatus);
+            }
+            targetVocab.status = updatedStatus;
+            if (!targetVocab.history) targetVocab.history = [];
+            targetVocab.history.push(updatedStatus);
+            try { if (typeof window.saveVocabToStorage === 'function') window.saveVocabToStorage(); } catch (e) {}
+        }
+    }
+    if (checkEnemyDefeated()) return;
+    if (multiPartyMembers.every(function (m) { return m.hp <= 0; })) {
+        showMultiResult();
+        return;
+    }
+    try { window.updateMultiHpBars(); } catch (e) {}
+    gameCurrentIndex++;
+    try { if (typeof window.showNextMultiWord === 'function') window.showNextMultiWord(); } catch (e) {}
+};
+
+  // ---- 3. スワイプ検出（.multi-flick-area 内） ----
+  var swipeData = null;
+
+  function getSwipeTarget(x, y) {
+    var grid = document.querySelector('.multi-grid-3x3');
+    if (!grid) return -1;
+    var cells = grid.children;
+    var best = -1, bestDist = Infinity;
+    for (var i = 0; i < cells.length; i++) {
+      var rect = cells[i].getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      var dx = x - cx, dy = y - cy;
+      var dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  function handleSwipeEnd(clientX, clientY) {
+    var idx = getSwipeTarget(clientX, clientY);
+    if (idx >= 0 && idx < 8) {
+      // __intendedChoice を設定してから呼ぶ（新しい processMultiFlickAnswer が使う）
+      window.__intendedChoice = idx;
+      window.processMultiFlickAnswer(idx);
+      // クリア（保険）
+      setTimeout(function() { window.__intendedChoice = null; }, 100);
+    }
+  }
+
+  // touchstart（キャプチャフェーズで取得）
+  document.addEventListener('touchstart', function(e) {
+    var target = e.target;
+    if (!target || !target.closest) return;
+    var area = target.closest('.multi-flick-area');
+    if (!area) return;
+    var touch = e.touches[0];
+    if (!touch) return;
+    swipeData = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      active: true
+    };
+    // 他のリスナーに伝播させるが、デフォルト動作は防止しない（スクロールは許可）
+  }, { passive: true, capture: true });
+
+  // touchmove（キャプチャ）
+  document.addEventListener('touchmove', function(e) {
+    if (!swipeData || !swipeData.active) return;
+    var target = e.target;
+    if (!target || !target.closest) return;
+    var area = target.closest('.multi-flick-area');
+    if (!area) {
+      swipeData.active = false;
+      return;
+    }
+    // スクロールを防止（スワイプ中はページが動かないように）
+    e.preventDefault();
+  }, { passive: false, capture: true });
+
+  // touchend（キャプチャ）
+  document.addEventListener('touchend', function(e) {
+    if (!swipeData || !swipeData.active) return;
+    var touch = e.changedTouches[0];
+    if (touch) {
+      handleSwipeEnd(touch.clientX, touch.clientY);
+    }
+    swipeData = null;
+  }, { passive: true, capture: true });
+
+  // ---- 4. 既存の __flickSmoothApplied のリスナーを無効化（上書き） ----
+  // キャプチャフェーズで取得しているので、既存のバブリングリスナーより先に動く。
+  // ただし、既存の touchstart が stopImmediatePropagation を使っている場合に備え、
+  // window レベルで touchstart を補足する。
+
+  console.log('✅ スワイプ完全復活パッチ適用完了');
+})();
+// =====================================================================
+// 🔍 スワイプ完全デバッグ（何が起きているか全部見える）
+// =====================================================================
+(function() {
+ if (window.__swipeDebugApplied) return;
+ window.__swipeDebugApplied = true;
+ 
+ console.log('🔍 スワイプデバッグ開始');
+ 
+ // 1. .multi-flick-area が存在するか
+ var area = document.querySelector('.multi-flick-area');
+ console.log('📌 .multi-flick-area の有無:', area);
+ 
+ // 2. .multi-grid-3x3 が存在するか
+ var grid = document.querySelector('.multi-grid-3x3');
+ console.log('📌 .multi-grid-3x3 の有無:', grid);
+ 
+ // 3. processMultiFlickAnswer が存在するか
+ console.log('📌 processMultiFlickAnswer の型:', typeof window.processMultiFlickAnswer);
+ 
+ // 4. 全ての touchstart をキャプチャ
+ document.addEventListener('touchstart', function(e) {
+  var target = e.target;
+  var cls = target.className || '';
+  var id = target.id || '';
+  console.log('🟢 touchstart:', { target: target.tagName, class: cls, id: id });
+  // フリックエリア内か？
+  var inArea = target.closest ? !!target.closest('.multi-flick-area') : false;
+  console.log('   .multi-flick-area 内?', inArea);
+ }, { capture: true, passive: true });
+ 
+ // 5. 全ての touchend をキャプチャ
+ document.addEventListener('touchend', function(e) {
+  var touch = e.changedTouches[0];
+  console.log('🔴 touchend:', { clientX: touch.clientX, clientY: touch.clientY });
+ }, { capture: true, passive: true });
+ 
+ // 6. processMultiFlickAnswer の呼び出しをトレース
+ var __orig = window.processMultiFlickAnswer;
+ if (typeof __orig === 'function') {
+  window.processMultiFlickAnswer = function(idx) {
+   console.log('🔥 processMultiFlickAnswer 呼び出し!', idx);
+   return __orig.call(this, idx);
+  };
+ }
+ 
+ console.log('✅ デバッグ準備完了。マルチバトルを開始してスワイプしてみてください。');
+})();
+// =====================================================================
+// 🐛 processMultiFlickAnswer エラー詳細表示パッチ
+// =====================================================================
+(function() {
+ if (window.__errorDetailApplied) return;
+ window.__errorDetailApplied = true;
+ 
+ var __orig = window.processMultiFlickAnswer;
+ if (typeof __orig !== 'function') {
+  console.warn('processMultiFlickAnswer が見つかりません');
+  return;
+ }
+ 
+ window.processMultiFlickAnswer = function(choiceIndex) {
+  try {
+   // 元の処理を実行
+   return __orig.call(this, choiceIndex);
+  } catch (e) {
+   console.error('🔥 processMultiFlickAnswer でエラーが発生しました');
+   console.error('エラー名:', e.name);
+   console.error('エラーメッセージ:', e.message);
+   console.error('スタックトレース:', e.stack);
+   // エラーが起きてもゲームが止まらないようにする
+   return undefined;
+  }
+ };
+ 
+ console.log('✅ エラー詳細表示パッチ適用完了');
+})();
+// =====================================================================
+// 🛠️ localStorage エラーを握りつぶしてエフェクトを復活させる
+// =====================================================================
+(function() {
+ if (window.__saveErrorFixed) return;
+ window.__saveErrorFixed = true;
+ 
+ console.log('🛠️ localStorage エラー対策パッチを適用します...');
+ 
+ // 1. saveUserStats をラップ（エラーを無視）
+ var __origSave = window.saveUserStats;
+ if (typeof __origSave === 'function') {
+  window.saveUserStats = function() {
+   try {
+    return __origSave.apply(this, arguments);
+   } catch (e) {
+    console.warn('⚠️ saveUserStats エラー（無視）:', e.message);
+    return undefined;
+   }
+  };
+  console.log('✅ saveUserStats をラップしました');
+ }
+ 
+ // 2. saveVocabToStorage をラップ（エラーを無視）
+ var __origVocabSave = window.saveVocabToStorage;
+ if (typeof __origVocabSave === 'function') {
+  window.saveVocabToStorage = function() {
+   try {
+    return __origVocabSave.apply(this, arguments);
+   } catch (e) {
+    console.warn('⚠️ saveVocabToStorage エラー（無視）:', e.message);
+    return undefined;
+   }
+  };
+  console.log('✅ saveVocabToStorage をラップしました');
+ }
+ 
+ // 3. localStorage.setItem を直接ラップ（保険）
+ var __origSetItem = localStorage.setItem;
+ localStorage.setItem = function(key, value) {
+  try {
+   return __origSetItem.call(this, key, value);
+  } catch (e) {
+   console.warn('⚠️ localStorage.setItem エラー（無視）:', key, e.message);
+   return undefined;
+  }
+ };
+ console.log('✅ localStorage.setItem をラップしました');
+ 
+ console.log('🛠️ すべての保存エラーを握りつぶしました。エフェクトが復活するはずです。');
+})();
+// =====================================================================
+// 🔄 processMultiFlickAnswer 完全再実装（既存パッチを全て無視）
+// =====================================================================
+(function() {
+ if (window.__coreFlickFixed) return;
+ window.__coreFlickFixed = true;
+ 
+ console.log('🔄 processMultiFlickAnswer を完全再実装します...');
+ 
+ // ---- 元の関数を退避（使わない） ----
+ var __origProcess = window.processMultiFlickAnswer;
+ 
+ // ---- 新実装 ----
+ window.processMultiFlickAnswer = function(choiceIndex) {
+  console.log('🔥 新実装 processMultiFlickAnswer 呼び出し!', choiceIndex);
+  
+  try {
+   // 1. 正解判定
+   var isCorrect = (choiceIndex === currentMultiCorrectIndex);
+   console.log('   正解?', isCorrect);
+   
+   // 2. 自分を取得
+   var me = null;
+   if (typeof multiPartyMembers !== 'undefined' && multiPartyMembers.length > 0) {
+    me = multiPartyMembers.find(function(m) { return m.isMe; }) || multiPartyMembers[0];
+   }
+   console.log('   me:', me ? me.name : 'なし');
+   
+   // 3. コンボ処理
+   if (isCorrect) {
+    gameComboCount = (gameComboCount || 0) + 1;
+    console.log('   gameComboCount:', gameComboCount);
+    // コンボ表示更新
+    try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
+   } else {
+    gameComboCount = 0;
+    try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
+   }
+   
+   // 4. ダメージ計算と適用（正解時のみ）
+   if (isCorrect) {
+    var comboMulti = 1 + Math.floor((gameComboCount || 0) / 5) * 0.5;
+    var damage = Math.round(400 * comboMulti);
+    console.log('   ダメージ:', damage);
+    
+    // ボスHPを減らす
+    if (typeof multiBossHp !== 'undefined') {
+     multiBossHp = Math.max(0, multiBossHp - damage);
+     console.log('   multiBossHp:', multiBossHp);
+     // バリア処理（あれば）
+     var cur = (typeof M2 === 'function') ? M2().current : null;
+     if (cur && cur.barrier > 0) {
+      var tb = Math.min(cur.barrier, damage);
+      cur.barrier -= tb;
+      multiBossHp = Math.max(0, multiBossHp + tb - damage);
+     }
+     if (cur) cur.hp = multiBossHp;
+    }
+    
+    // ★★★ 攻撃エフェクトを強制発火 ★★★
+    if (me && typeof window.showCharacterPopup === 'function') {
+     console.log('💥 showCharacterPopup を呼び出し (attack)');
+     window.showCharacterPopup(me.id, '💥 ' + damage, 'attack');
+    } else {
+     console.warn('showCharacterPopup がないか、me がありません');
+    }
+    
+    // コンボゲージ更新
+    if (typeof M2 === 'function') {
+     var m2 = M2();
+     if (m2) {
+      m2.comboGauge = Math.min(m2.comboMax || 100, (m2.comboGauge || 0) + 12);
+      // ゲージ表示更新
+      var fill = document.getElementById('m2ComboGaugeFill');
+      if (fill) {
+       var pct = Math.round((m2.comboGauge / (m2.comboMax || 100)) * 100);
+       fill.style.width = pct + '%';
+      }
+     }
+    }
+    
+    // ボスヒットアニメーション
+    var bimg = document.getElementById('multiBossImage');
+    if (bimg && bimg.style.display !== 'none') {
+     bimg.classList.remove('m2-hit');
+     void bimg.offsetWidth;
+     bimg.classList.add('m2-hit');
+    }
+    
+    // HPバー更新
+    try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch (e) {}
+    
+    // ボス撃破チェック
+    if (typeof multiBossHp !== 'undefined' && multiBossHp <= 0) {
+     console.log('💀 ボス撃破！');
+     if (typeof checkEnemyDefeated === 'function') {
+      checkEnemyDefeated();
+     }
+    }
+   } else {
+    // 不正解時のペナルティ
+    if (me && me.hp > 0) {
+     me.hp = Math.max(0, me.hp - 300);
+     console.log('   me.hp (不正解ペナルティ):', me.hp);
+     if (typeof window.showCharacterPopup === 'function') {
+      window.showCharacterPopup(me.id, 300, 'damage');
+     }
+     try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch (e) {}
+    }
+   }
+   
+   // 5. 次の単語へ進む
+   if (typeof gameCurrentIndex !== 'undefined') {
+    gameCurrentIndex = (gameCurrentIndex || 0) + 1;
+    console.log('   次のインデックス:', gameCurrentIndex);
+    if (typeof window.showNextMultiWord === 'function') {
+     window.showNextMultiWord();
+    }
+   }
+   
+   console.log('✅ 新実装 processMultiFlickAnswer 完了');
+   
+  } catch (e) {
+   console.error('🔥 新実装でエラー発生:', e);
+   console.error('スタック:', e.stack);
+  }
+ };
+ 
+ console.log('✅ processMultiFlickAnswer 完全再実装完了');
+})();
+// =====================================================================
+// 🔧 正誤判定修正パッチ（グリッドインデックス → 選択肢インデックス）
+// =====================================================================
+(function() {
+ if (window.__choiceIndexFixApplied) return;
+ window.__choiceIndexFixApplied = true;
+ 
+ console.log('🔧 正誤判定修正パッチを適用します...');
+ 
+ // processMultiFlickAnswer をさらにラップ
+ var __orig = window.processMultiFlickAnswer;
+ if (typeof __orig !== 'function') {
+  console.warn('processMultiFlickAnswer が見つかりません');
+  return;
+ }
+ 
+ window.processMultiFlickAnswer = function(choiceIndex) {
+  // グリッドのセルインデックス（0〜8）を選択肢インデックス（0〜7）に変換
+  // 0 1 2
+  // 3 4 5  ← 4は中央（選択肢なし）
+  // 6 7 8
+  // 選択肢のマッピング: [0,1,2,3,5,6,7,8] → [0,1,2,3,4,5,6,7]
+  var gridIdx = choiceIndex;
+  var choiceIdx = -1;
+  
+  if (gridIdx >= 0 && gridIdx <= 8) {
+   if (gridIdx < 4) {
+    choiceIdx = gridIdx; // 0→0, 1→1, 2→2, 3→3
+   } else if (gridIdx > 4) {
+    choiceIdx = gridIdx - 1; // 5→4, 6→5, 7→6, 8→7
+   } else {
+    // 中央（index 4）は無効
+    console.warn('⚠️ 中央の選択肢は無効です');
+    return undefined;
+   }
+  }
+  
+  console.log('🔄 インデックス変換:', gridIdx, '→', choiceIdx);
+  
+  // 変換した選択肢インデックスで元の関数を呼ぶ
+  return __orig.call(this, choiceIdx);
+ };
+ 
+ console.log('✅ 正誤判定修正パッチ適用完了');
+})();
+// =====================================================================
+// 🔄 角度ベーススワイプ（全パッチリセット版）
+// =====================================================================
+(function() {
+  if (window.__finalSwipeApplied) return;
+  window.__finalSwipeApplied = true;
+
+  console.log('🔄 角度ベーススワイプ（最終版）を適用します');
+
+  // ---- processMultiFlickAnswer を完全に再定義 ----
+  var __orig = window.processMultiFlickAnswer;
+  window.processMultiFlickAnswer = function(choiceIndex) {
+    console.log('🔥 processMultiFlickAnswer 呼び出し:', choiceIndex);
+
+    try {
+      var isCorrect = (choiceIndex === currentMultiCorrectIndex);
+      console.log('   正解?', isCorrect);
+
+      var me = null;
+      if (typeof multiPartyMembers !== 'undefined' && multiPartyMembers.length > 0) {
+        me = multiPartyMembers.find(function(m) { return m.isMe; }) || multiPartyMembers[0];
+      }
+
+      // コンボ処理
+      if (isCorrect) {
+        gameComboCount = (gameComboCount || 0) + 1;
+        try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch(e) {}
+      } else {
+        gameComboCount = 0;
+        try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch(e) {}
+      }
+
+      // ダメージ適用（正解時のみ）
+      if (isCorrect) {
+        var comboMulti = 1 + Math.floor((gameComboCount || 0) / 5) * 0.5;
+        var damage = Math.round(400 * comboMulti);
+
+        if (typeof multiBossHp !== 'undefined') {
+          multiBossHp = Math.max(0, multiBossHp - damage);
+          var cur = (typeof M2 === 'function') ? M2().current : null;
+          if (cur) cur.hp = multiBossHp;
+        }
+
+        // 攻撃エフェクト
+        if (me && typeof window.showCharacterPopup === 'function') {
+          window.showCharacterPopup(me.id, '💥 ' + damage, 'attack');
+        }
+
+        // ボスヒットアニメ
+        var bimg = document.getElementById('multiBossImage');
+        if (bimg) { bimg.classList.remove('m2-hit'); void bimg.offsetWidth; bimg.classList.add('m2-hit'); }
+
+        try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch(e) {}
+
+        if (multiBossHp <= 0 && typeof checkEnemyDefeated === 'function') {
+          checkEnemyDefeated();
+        }
+      } else {
+        // 不正解ペナルティ
+        if (me && me.hp > 0) {
+          me.hp = Math.max(0, me.hp - 300);
+          if (typeof window.showCharacterPopup === 'function') {
+            window.showCharacterPopup(me.id, 300, 'damage');
+          }
+          try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch(e) {}
+        }
+      }
+
+      // 次の単語へ
+      gameCurrentIndex = (gameCurrentIndex || 0) + 1;
+      if (typeof window.showNextMultiWord === 'function') {
+        window.showNextMultiWord();
+      }
+
+    } catch (e) {
+      console.error('🔥 エラー:', e);
+    }
+  };
+
+  // ---- 角度ベーススワイプ検出 ----
+  var startX = 0, startY = 0, active = false;
+
+  document.addEventListener('touchstart', function(e) {
+    var el = e.target.closest('.multi-flick-area');
+    if (!el) return;
+    var t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    active = true;
+  }, { capture: true, passive: true });
+
+  document.addEventListener('touchmove', function(e) {
+    if (!active) return;
+    var el = e.target.closest('.multi-flick-area');
+    if (!el) { active = false; return; }
+    e.preventDefault();
+  }, { capture: true, passive: false });
+
+  document.addEventListener('touchend', function(e) {
+    if (!active) return;
+    active = false;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - startX;
+    var dy = t.clientY - startY;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 20) return;
+
+    var angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    var idx = Math.round(((angle + 360) % 360) / 45) % 8;
+
+    console.log('🔄 スワイプ方向 → 選択肢:', idx);
+    window.processMultiFlickAnswer(idx);
+  }, { capture: true, passive: true });
+
+  console.log('✅ 角度ベーススワイプ（最終版）適用完了');
+})();
+// =====================================================================
+// 🎯 スワイプ角度固定版（3x3グリッド専用・安定）
+// =====================================================================
+(function() {
+  if (window.__swipeAngleFinalApplied) return;
+  window.__swipeAngleFinalApplied = true;
+
+  console.log('🎯 スワイプ角度固定版を適用');
+
+  // ---- 元の processMultiFlickAnswer を退避 ----
+  var __orig = window.processMultiFlickAnswer;
+
+  // ---- 新しい processMultiFlickAnswer（ガード強制解除） ----
+  window.processMultiFlickAnswer = function(choiceIndex) {
+    window.__m2Processing = false;
+    window.__ansLock = false;
+    window.__intendedChoice = null;
+    return __orig.call(this, choiceIndex);
+  };
+
+  // ---- スワイプ検出（角度ベース・固定） ----
+  var startX = 0, startY = 0, active = false;
+
+  document.addEventListener('touchstart', function(e) {
+    var el = e.target.closest('.multi-flick-area');
+    if (!el) return;
+    var t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    active = true;
+  }, { capture: true, passive: true });
+
+  document.addEventListener('touchmove', function(e) {
+    if (!active) return;
+    var el = e.target.closest('.multi-flick-area');
+    if (!el) { active = false; return; }
+    e.preventDefault();
+  }, { capture: true, passive: false });
+
+  document.addEventListener('touchend', function(e) {
+    if (!active) return;
+    active = false;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - startX;
+    var dy = t.clientY - startY;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 20) return; // デッドゾーン
+
+    // 角度を計算（0〜360度）
+    var angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    var normalized = ((angle + 360) % 360 + 360) % 360;
+
+    // ★★★ 3x3グリッドの選択肢配置（右上から時計回り）★★★
+    // 選択肢の配置角度（中心からの相対角度）
+    // 右上: 45°, 上: 90°, 左上: 135°, 左: 180°, 左下: 225°, 下: 270°, 右下: 315°, 右: 0°/360°
+    // 選択肢インデックス（multiChoice-0〜7）と角度のマッピング
+    var angleMap = [
+      { idx: 0, angle: 45 },   // 右上
+      { idx: 1, angle: 90 },   // 上
+      { idx: 2, angle: 135 },  // 左上
+      { idx: 3, angle: 180 },  // 左
+      { idx: 4, angle: 225 },  // 左下
+      { idx: 5, angle: 270 },  // 下
+      { idx: 6, angle: 315 },  // 右下
+      { idx: 7, angle: 0 }     // 右（0度）
+    ];
+
+    // 最も近い角度の選択肢を探す
+    var bestIdx = 0;
+    var bestDiff = 999;
+    for (var i = 0; i < angleMap.length; i++) {
+      var target = angleMap[i].angle;
+      var diff = Math.abs(((normalized - target + 360) % 360 + 360) % 360);
+      if (diff > 180) diff = 360 - diff;
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestIdx = angleMap[i].idx;
+      }
+    }
+
+    // デバッグログ（必要に応じてコメントアウト可）
+    console.log('🔄 スワイプ角度:', normalized.toFixed(1), '→ 選択肢:', bestIdx);
+
+    window.processMultiFlickAnswer(bestIdx);
+  }, { capture: true, passive: true });
+
+  console.log('✅ スワイプ角度固定版適用完了');
+})();
+// =====================================================================
+// 🎯 中央マス（火花マス）CSS追加パッチ
+// =====================================================================
+(function applyCenterSparkCssPatch() {
+"use strict";
+if (window.__centerSparkCssApplied) return;
+window.__centerSparkCssApplied = true;
+
+(function injectCenterSparkCss() {
+if (document.getElementById('centerSparkCss')) return;
+var s = document.createElement('style');
+s.id = 'centerSparkCss';
+s.textContent = [
+/* 中央マス（火花）の基本スタイル */
+'.flick-center-spark{',
+'  background:radial-gradient(circle, rgba(251,191,36,0.3), rgba(0,0,0,0.5)) !important;',
+'  border:2px solid rgba(251,191,36,0.6) !important;',
+'  display:flex !important;',
+'  align-items:center !important;',
+'  justify-content:center !important;',
+'  font-size:32px !important;',
+'}',
+'.flick-center-spark-hidden{display:none;}',
+
+/* 中央が正解の時の裏返し表示 */
+'.flick-center-spark.center-correct{',
+'  background:linear-gradient(135deg, rgba(16,185,129,0.3), rgba(0,0,0,0.5)) !important;',
+'  border-color:rgba(16,185,129,0.8) !important;',
+'  font-size:13px !important;',
+'  padding:8px !important;',
+'  text-align:center !important;',
+'  word-break:break-word !important;',
+'}',
+'.center-revealed{',
+'  color:#10B981;',
+'  font-weight:700;',
+'  text-shadow:0 0 8px rgba(16,185,129,0.5);',
+'}',
+
+/* 中央が不正解の時の赤表示 */
+'.flick-center-spark.center-wrong{',
+'  background:linear-gradient(135deg, rgba(239,68,68,0.3), rgba(0,0,0,0.5)) !important;',
+'  border-color:rgba(239,68,68,0.8) !important;',
+'  animation:centerWrongShake 0.4s ease;',
+'}',
+'@keyframes centerWrongShake{',
+'  0%, 100%{transform:translateX(0);}',
+'  25%{transform:translateX(-6px);}',
+'  75%{transform:translateX(6px);}',
+'}',
+
+/* 中央不正解ポップアップ */
+'.center-wrong-popup{',
+'  position:fixed;',
+'  top:50%;',
+'  left:50%;',
+'  transform:translate(-50%, -50%);',
+'  z-index:99999;',
+'  background:linear-gradient(168deg, rgba(46,38,28,0.96), rgba(28,22,15,0.98));',
+'  border:2px solid rgba(239,68,68,0.6);',
+'  border-radius:16px;',
+'  padding:20px;',
+'  min-width:280px;',
+'  max-width:340px;',
+'  box-shadow:0 20px 60px rgba(0,0,0,0.7), 0 0 30px rgba(239,68,68,0.3);',
+'  animation:cwpPopIn 0.3s cubic-bezier(0.2,0.9,0.3,1.2);',
+'}',
+'@keyframes cwpPopIn{',
+'  from{opacity:0; transform:translate(-50%, -50%) scale(0.8);}',
+'  to{opacity:1; transform:translate(-50%, -50%) scale(1);}',
+'}',
+'.cwp-header{',
+'  display:flex;',
+'  align-items:center;',
+'  gap:10px;',
+'  margin-bottom:16px;',
+'  padding-bottom:12px;',
+'  border-bottom:1px solid rgba(239,68,68,0.3);',
+'}',
+'.cwp-icon{',
+'  width:32px;',
+'  height:32px;',
+'  border-radius:50%;',
+'  background:rgba(239,68,68,0.2);',
+'  border:2px solid rgba(239,68,68,0.6);',
+'  display:flex;',
+'  align-items:center;',
+'  justify-content:center;',
+'  color:#ef4444;',
+'  font-size:18px;',
+'  font-weight:900;',
+'}',
+'.cwp-title{',
+'  font-family:"Noto Serif JP", serif;',
+'  font-size:18px;',
+'  font-weight:900;',
+'  color:#ef4444;',
+'  text-shadow:0 0 10px rgba(239,68,68,0.4);',
+'}',
+'.cwp-body{',
+'  display:flex;',
+'  flex-direction:column;',
+'  gap:10px;',
+'}',
+'.cwp-row{',
+'  display:flex;',
+'  flex-direction:column;',
+'  gap:4px;',
+'}',
+'.cwp-label{',
+'  font-size:10px;',
+'  font-weight:700;',
+'  color:#a89880;',
+'  letter-spacing:0.1em;',
+'}',
+'.cwp-value{',
+'  font-size:14px;',
+'  font-weight:700;',
+'  color:#f3e5c0;',
+'  padding:6px 10px;',
+'  background:rgba(0,0,0,0.3);',
+'  border-radius:8px;',
+'  word-break:break-word;',
+'}',
+'.cwp-correct{',
+'  color:#10B981;',
+'  border-left:3px solid #10B981;',
+'}',
+'.cwp-wrong{',
+'  color:#ef4444;',
+'  border-left:3px solid #ef4444;',
+'}',
+'.cwp-close{',
+'  margin-top:16px;',
+'  width:100%;',
+'  padding:10px;',
+'  border-radius:10px;',
+'  border:1px solid rgba(255,255,255,0.2);',
+'  background:rgba(255,255,255,0.05);',
+'  color:#f3e5c0;',
+'  font-size:13px;',
+'  font-weight:700;',
+'  cursor:pointer;',
+'  transition:all 0.2s;',
+'}',
+'.cwp-close:hover{',
+'  background:rgba(255,255,255,0.1);',
+'}'
+].join('\n');
+(document.head || document.documentElement).appendChild(s);
+})();
+
+console.log('🎯 中央マスCSS追加パッチ適用完了');
+})();
+// ★ 中央マス不正解時のポップアップ
+function showCenterWrongPopup(q) {
+    // 既存のポップアップを削除
+    const old = document.getElementById('centerWrongPopup');
+    if (old) old.remove();
+
+    const popup = document.createElement('div');
+    popup.id = 'centerWrongPopup';
+    popup.className = 'center-wrong-popup';
+    popup.innerHTML = `
+        <div class="cwp-header">
+            <span class="cwp-icon">✕</span>
+            <span class="cwp-title">不正解</span>
+        </div>
+        <div class="cwp-body">
+            <div class="cwp-row">
+                <span class="cwp-label">問題</span>
+                <span class="cwp-value">${q.word}</span>
+            </div>
+            <div class="cwp-row">
+                <span class="cwp-label">正解</span>
+                <span class="cwp-value cwp-correct">${q.meaning}</span>
+            </div>
+            <div class="cwp-row">
+                <span class="cwp-label">あなたの選択</span>
+                <span class="cwp-value cwp-wrong">中央（火花マス）</span>
+            </div>
+        </div>
+        <button class="cwp-close" onclick="this.parentElement.remove()">閉じる</button>
+    `;
+    document.body.appendChild(popup);
+
+    // 3秒後に自動で閉じる
+    setTimeout(() => { if (popup.parentNode) popup.remove(); }, 3000);
+}
+// ==========================================================================
+// 🎯 第10回パッチ：タップ選択＋中央マス9択＋スワイプ完全廃止
+//    ① スワイプ操作を完全廃止（handleFlickStart/Move/End を無効化）
+//    ② 中央の火花マス（index 4）を9番目の選択肢として追加（8択→9択）
+//    ③ 中央が正解になる確率は 1/9（約11%）
+//    ④ 中央が正解のときは空白 → タップで裏返して正解の意味を表示
+//    ⑤ 中央が不正解のときはしっかり不正解判定＋ポップアップ
+//    ⑥ 不正解時は「問題・正解・選んだ答え」がわかるポップアップ
+//    ⑦ タップ選択が確実に動作（イベント委譲）
+//    ※このファイルの一番下に貼り付けてください（既存コードは変更不要）
+// ==========================================================================
+(function applyTapCenterPatch() {
+"use strict";
+if (window.__tapCenterPatchApplied) return;
+window.__tapCenterPatchApplied = true;
+
+// ------------------------------------------------------------------
+// 【0】CSS注入（中央マス＋ポップアップ）
+// ------------------------------------------------------------------
+(function injectTapCenterCss() {
+if (document.getElementById('tapCenterCss')) return;
+var s = document.createElement('style');
+s.id = 'tapCenterCss';
+s.textContent = [
+'.flick-choice.flick-center-spark{',
+'  background:radial-gradient(circle, rgba(251,191,36,0.25), rgba(0,0,0,0.5)) !important;',
+'  border:2px solid rgba(251,191,36,0.55) !important;',
+'  display:flex !important;align-items:center !important;justify-content:center !important;',
+'  font-size:30px !important;',
+'}',
+'.flick-choice.flick-center-spark.center-blank{',
+'  background:radial-gradient(circle, rgba(255,255,255,0.03), rgba(0,0,0,0.5)) !important;',
+'  border:2px solid rgba(255,255,255,0.18) !important;',
+'  color:transparent !important;',
+'}',
+'.flick-choice.flick-center-spark.center-correct{',
+'  background:linear-gradient(135deg, rgba(16,185,129,0.35), rgba(0,0,0,0.5)) !important;',
+'  border-color:rgba(16,185,129,0.8) !important;',
+'  font-size:12px !important;padding:6px !important;',
+'  text-align:center !important;word-break:break-word !important;',
+'  color:#a7f3d0 !important;font-weight:800 !important;',
+'}',
+'.flick-choice.flick-center-spark.center-wrong{',
+'  background:linear-gradient(135deg, rgba(239,68,68,0.35), rgba(0,0,0,0.5)) !important;',
+'  border-color:rgba(239,68,68,0.8) !important;',
+'  animation:tcShake .4s ease;',
+'}',
+'@keyframes tcShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}',
+'.tc-wrong-popup{',
+'  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:99999;',
+'  background:linear-gradient(168deg, rgba(46,38,28,0.97), rgba(28,22,15,0.98));',
+'  border:2px solid rgba(239,68,68,0.6);border-radius:16px;padding:20px;',
+'  min-width:280px;max-width:340px;',
+'  box-shadow:0 20px 60px rgba(0,0,0,0.7), 0 0 30px rgba(239,68,68,0.3);',
+'  animation:tcPopIn .3s cubic-bezier(0.2,0.9,0.3,1.2);',
+'}',
+'@keyframes tcPopIn{from{opacity:0;transform:translate(-50%,-50%) scale(0.8)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}',
+'.tc-popup-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid rgba(239,68,68,0.3);}',
+'.tc-popup-icon{width:32px;height:32px;border-radius:50%;background:rgba(239,68,68,0.2);border:2px solid rgba(239,68,68,0.6);display:flex;align-items:center;justify-content:center;color:#ef4444;font-size:18px;font-weight:900;}',
+'.tc-popup-title{font-size:18px;font-weight:900;color:#ef4444;}',
+'.tc-popup-body{display:flex;flex-direction:column;gap:10px;}',
+'.tc-popup-row{display:flex;flex-direction:column;gap:4px;}',
+'.tc-popup-label{font-size:10px;font-weight:700;color:#a89880;letter-spacing:0.1em;}',
+'.tc-popup-value{font-size:14px;font-weight:700;color:#f3e5c0;padding:6px 10px;background:rgba(0,0,0,0.3);border-radius:8px;word-break:break-word;}',
+'.tc-popup-correct{color:#10B981;border-left:3px solid #10B981;}',
+'.tc-popup-wrong{color:#ef4444;border-left:3px solid #ef4444;}',
+'.tc-popup-close{margin-top:16px;width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:#f3e5c0;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;}',
+'.tc-popup-close:hover{background:rgba(255,255,255,0.1);}'
+].join('\n');
+(document.head || document.documentElement).appendChild(s);
+})();
+
+// ------------------------------------------------------------------
+// 【1】showNextMultiWord 上書き（9択・中央正解確率1/9・中央正解時は空白）
+// ------------------------------------------------------------------
+window.showNextMultiWord = function() {
+if (gameCurrentWordsQueue.length === 0) return;
+if (gameCurrentIndex >= gameCurrentWordsQueue.length) {
+    gameCurrentWordsQueue.sort(function() { return Math.random() - 0.5; });
+    gameCurrentIndex = 0;
+}
+var target = gameCurrentWordsQueue[gameCurrentIndex];
+document.getElementById('flickTargetWord').innerText = target.word;
+
+var allMeanings = [target.meaning];
+var pool = [];
+for (var i = 0; i < gameCurrentWordsQueue.length; i++) {
+    if (gameCurrentWordsQueue[i].word !== target.word) {
+        pool.push(gameCurrentWordsQueue[i].meaning);
+    }
+}
+pool.sort(function() { return Math.random() - 0.5; });
+for (var j = 0; j < 8 && j < pool.length; j++) {
+    allMeanings.push(pool[j]);
+}
+while (allMeanings.length < 9) {
+    allMeanings.push('---');
+}
+
+var correctPos = Math.floor(Math.random() * 9);
+currentMultiCorrectIndex = correctPos;
+
+for (var k = 0; k < 9; k++) {
+    var el = document.getElementById('multiChoice-' + k);
+    if (el) {
+        if (k === 4) {
+            el.classList.add('flick-center-spark');
+            if (correctPos === 4) {
+                el.innerHTML = '';
+                el.classList.add('center-blank');
+                el.classList.remove('center-correct', 'center-wrong', 'highlight');
+            } else {
+                el.innerHTML = '🔥';
+                el.classList.remove('center-blank', 'center-correct', 'center-wrong', 'highlight');
+            }
+        } else {
+            el.classList.remove('flick-center-spark', 'center-blank', 'center-correct', 'center-wrong', 'highlight');
+            var meaningIdx;
+            if (correctPos === 4) {
+                meaningIdx = k < 4 ? k : k - 1;
+            } else {
+                if (k === correctPos) {
+                    meaningIdx = 0;
+                } else {
+                    meaningIdx = k < correctPos ? k + 1 : k;
+                }
+            }
+            el.innerText = allMeanings[meaningIdx] || '---';
+        }
+    }
+}
+
+var icon = document.getElementById('flickWeaponIcon');
+if (icon) {
+    icon.style.left = '50%';
+    icon.style.top = '50%';
+}
+};
+
+// ------------------------------------------------------------------
+// 【2】processMultiFlickAnswer 上書き（中央マス対応＋ポップアップ）
+// ------------------------------------------------------------------
+var __prevTapCenterProcess = window.processMultiFlickAnswer;
+window.processMultiFlickAnswer = function(choiceIndex) {
+var q = gameCurrentWordsQueue[gameCurrentIndex];
+var isCenter = (choiceIndex === 4);
+var centerEl = document.getElementById('multiChoice-4');
+var isCorrect = (choiceIndex === currentMultiCorrectIndex);
+
+if (isCenter && isCorrect && centerEl) {
+    centerEl.classList.remove('center-blank', 'center-wrong');
+    centerEl.classList.add('center-correct');
+    centerEl.innerHTML = q.meaning;
+}
+
+if (isCenter && !isCorrect) {
+    if (centerEl) {
+        centerEl.classList.remove('center-blank', 'center-correct');
+        centerEl.classList.add('center-wrong');
+        centerEl.innerHTML = '🔥';
+    }
+    showTapCenterWrongPopup(q);
+}
+
+if (typeof __prevTapCenterProcess === 'function') {
+    __prevTapCenterProcess.call(this, choiceIndex);
+}
+};
+
+// ------------------------------------------------------------------
+// 【3】不正解ポップアップ（問題・正解・選んだ答え）
+// ------------------------------------------------------------------
+function showTapCenterWrongPopup(q) {
+var old = document.getElementById('tcWrongPopup');
+if (old) old.remove();
+var popup = document.createElement('div');
+popup.id = 'tcWrongPopup';
+popup.className = 'tc-wrong-popup';
+popup.innerHTML =
+    '<div class="tc-popup-header">' +
+    '<span class="tc-popup-icon">✕</span>' +
+    '<span class="tc-popup-title">不正解</span>' +
+    '</div>' +
+    '<div class="tc-popup-body">' +
+    '<div class="tc-popup-row"><span class="tc-popup-label">問題</span><span class="tc-popup-value">' + escHtml(q.word) + '</span></div>' +
+    '<div class="tc-popup-row"><span class="tc-popup-label">正解</span><span class="tc-popup-value tc-popup-correct">' + escHtml(q.meaning) + '</span></div>' +
+    '<div class="tc-popup-row"><span class="tc-popup-label">あなたの選択</span><span class="tc-popup-value tc-popup-wrong">中央（火花マス）</span></div>' +
+    '</div>' +
+    '<button class="tc-popup-close" onclick="this.parentElement.remove()">閉じる</button>';
+document.body.appendChild(popup);
+setTimeout(function() { if (popup.parentNode) popup.remove(); }, 3500);
+}
+function escHtml(s) {
+return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+});
+}
+
+// ------------------------------------------------------------------
+// 【4】スワイプ関数を完全無効化
+// ------------------------------------------------------------------
+window.handleFlickStart = function(e) { if (e) e.preventDefault(); };
+window.handleFlickMove = function(e) { if (e) e.preventDefault(); };
+window.handleFlickEnd = function(e) { if (e) e.preventDefault(); };
+
+// ------------------------------------------------------------------
+// 【5】initMultiPartyEvents 上書き（フリックバインド除去・タップのみ）
+// ------------------------------------------------------------------
+window.initMultiPartyEvents = function() {
+if (window.__tapCenterBound) return;
+window.__tapCenterBound = true;
+function choiceIdxOf(node) {
+    var c = (node && node.closest) ? node.closest('.flick-choice') : null;
+    if (!c || !c.id) return -1;
+    var m = /multiChoice-(\d+)/.exec(c.id);
+    return m ? parseInt(m[1], 10) : -1;
+}
+document.addEventListener('touchend', function(e) {
+    var idx = choiceIdxOf(e.target);
+    if (idx < 0) return;
+    e.preventDefault();
+    window.processMultiFlickAnswer(idx);
+}, { passive: false, capture: true });
+document.addEventListener('click', function(e) {
+    var idx = choiceIdxOf(e.target);
+    if (idx < 0) return;
+    window.processMultiFlickAnswer(idx);
+}, true);
+};
+
+// ------------------------------------------------------------------
+// 【6】起動時にタップイベントを確実にバインド
+// ------------------------------------------------------------------
+(function bootTapCenter() {
+function run() { window.initMultiPartyEvents(); }
+if (document.readyState !== 'loading') { setTimeout(run, 300); }
+else { document.addEventListener('DOMContentLoaded', function() { setTimeout(run, 300); }); }
+})();
+
+console.log('🎯 第10回パッチ（タップ選択＋中央マス9択＋スワイプ完全廃止）適用完了');
 })();

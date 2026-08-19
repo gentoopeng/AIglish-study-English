@@ -1900,16 +1900,59 @@ if(multiEnemyTimeLeft <= 0) {
 const timerDisplay = document.getElementById('multiEnemyTimerDisplay'); if(timerDisplay) timerDisplay.innerText = `行動: ${Math.max(0, multiEnemyTimeLeft).toFixed(1)}秒`;
 window.updateMultiHpBars();
 };
-window.showNextMultiWord = function() {
-if(gameCurrentWordsQueue.length === 0) return;
-if(gameCurrentIndex >= gameCurrentWordsQueue.length) { gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0; }
-const target = gameCurrentWordsQueue[gameCurrentIndex]; document.getElementById('flickTargetWord').innerText = target.word;
-let choices = [target.meaning]; let dummies = [...gameCurrentWordsQueue].filter(w => w.word !== target.word).map(w => w.meaning);
-dummies.sort(() => Math.random() - 0.5); choices = choices.concat(dummies.slice(0, 7)).sort(() => Math.random() - 0.5);
-currentMultiCorrectIndex = choices.indexOf(target.meaning);
-for(let i=0; i<8; i++) { let el = document.getElementById('multiChoice-' + i); if(el) { el.innerText = choices[i] || "---"; el.classList.remove('highlight'); } }
-const icon = document.getElementById('flickWeaponIcon'); if(icon) { icon.style.left = '50%'; icon.style.top = '50%'; }
+// 中央マスを9個目の選択肢に変換（1回だけ）
+window.__getCenterChoiceCell = function() {
+    let el = document.getElementById('multiChoice-8');
+    if (el) return el;
+    const grid = document.querySelector('.multi-grid-3x3');
+    if (!grid) return null;
+    let center = null;
+    for (let i = 0; i < grid.children.length; i++) {
+        const k = grid.children[i];
+        if (!k.classList.contains('flick-choice')) { center = k; break; }
+    }
+    if (!center) return null;
+    center.classList.add('flick-choice', 'flick-center-spark');
+    center.id = 'multiChoice-8';
+    return center;
 };
+
+window.showNextMultiWord = function() {
+    if(gameCurrentWordsQueue.length === 0) return;
+    if(gameCurrentIndex >= gameCurrentWordsQueue.length) { gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0; }
+    const target = gameCurrentWordsQueue[gameCurrentIndex];
+    const tEl = document.getElementById('flickTargetWord');
+    if(tEl) tEl.innerText = target.word;
+
+    const center = window.__getCenterChoiceCell();
+
+    // ダミー8個（足りなければ --- で埋める＝空欄を出さない）
+    let dummies = [...gameCurrentWordsQueue].filter(w => w.word !== target.word).map(w => w.meaning);
+    dummies.sort(() => Math.random() - 0.5);
+    while(dummies.length < 8) dummies.push('---');
+
+    // 正解は 0〜8 のどこか（中央=8）＝確率1/9
+    const correctPos = Math.floor(Math.random() * 9);
+    currentMultiCorrectIndex = correctPos;
+
+    let d = 0;
+    for(let i = 0; i < 9; i++){
+        const isHere = (i === correctPos);
+        const text = isHere ? target.meaning : dummies[d++];
+        const el = (i === 8) ? center : document.getElementById('multiChoice-' + i);
+        if(!el) continue;
+        el.classList.remove('highlight');
+        if(i === 8){
+            if(isHere){ el.innerHTML = ''; el.classList.add('center-blank'); }
+            else { el.innerHTML = '<span class="center-choice-text">' + String(text) + '</span>'; el.classList.remove('center-blank'); }
+        } else {
+            el.innerText = text;
+        }
+    }
+    const icon = document.getElementById('flickWeaponIcon');
+    if(icon) icon.style.display = 'none';
+};
+
 window.cancelMultiBattlePlay = function(force = false) {
 if(force || confirm("バトルから逃走しますか？")) {
 document.body.classList.remove('in-game-active'); const sparkleBorder = document.getElementById('combo-sparkle-border'); if(sparkleBorder) sparkleBorder.classList.remove('active');
@@ -1918,112 +1961,7 @@ const startScreen = document.getElementById('game-start-screen'); if (startScree
 const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'flex';
 }
 };
-window.initMultiPartyEvents = function() {
-const pad = document.getElementById('flickPadArea');
-if(pad && !pad.dataset.eventsBound) {
-pad.dataset.eventsBound = "true"; pad.addEventListener('touchstart', window.handleFlickStart, {passive: false});
-pad.addEventListener('touchmove', window.handleFlickMove, {passive: false}); pad.addEventListener('touchend', window.handleFlickEnd);
-}
-};
-window.handleFlickStart = function(e) { e.preventDefault(); const touch = e.touches[0]; const rect = document.getElementById('flickPadArea').getBoundingClientRect(); flickStartX = touch.clientX - rect.left; flickStartY = touch.clientY - rect.top; isFlicking = true; currentFlickChoice = -1; };
-window.handleFlickMove = function(e) {
-if(!isFlicking) return; e.preventDefault(); const touch = e.touches[0]; const rect = document.getElementById('flickPadArea').getBoundingClientRect();
-let dx = (touch.clientX - rect.left) - flickStartX, dy = (touch.clientY - rect.top) - flickStartY, distance = Math.sqrt(dx * dx + dy * dy);
-const icon = document.getElementById('flickWeaponIcon'); 
- if(icon) { 
-     if (distance > 5) {
-         let angle = Math.atan2(dy, dx);
-         let degree = angle * 180 / Math.PI; if(degree < 0) degree += 360;
-         let sector = Math.round(degree / 45) % 8;
-         let snapAngle = (sector * 45) * Math.PI / 180;
-         let constrainedDx = distance * Math.cos(snapAngle);
-         let constrainedDy = distance * Math.sin(snapAngle);
-         icon.style.left = `calc(50% + ${constrainedDx}px)`; 
-         icon.style.top = `calc(50% + ${constrainedDy}px)`; 
-     } else {
-         icon.style.left = '50%'; icon.style.top = '50%';
-     }
- }
- for(let i=0; i<8; i++) { let el = document.getElementById('multiChoice-' + i); if(el) el.classList.remove('highlight'); }
- if(distance > 24) {
-     let angle = Math.atan2(dy, dx) * 180 / Math.PI; if(angle < 0) angle += 360;
-     let sector = Math.round(angle / 45) % 8; let choiceMap = { 0: 4, 1: 7, 2: 6, 3: 5, 4: 3, 5: 0, 6: 1, 7: 2 };
-     currentFlickChoice = choiceMap[sector]; let el = document.getElementById('multiChoice-' + currentFlickChoice); if(el) el.classList.add('highlight');
- } else { currentFlickChoice = -1; }
-};
-window.handleFlickEnd = function(e) {
-if(!isFlicking) return; isFlicking = false;
-for(let i=0; i<8; i++) { let el = document.getElementById('multiChoice-' + i); if(el) el.classList.remove('highlight'); }
-if(currentFlickChoice !== -1) { window.processMultiFlickAnswer(currentFlickChoice); }
-else { const icon = document.getElementById('flickWeaponIcon'); if(icon) { icon.style.left = '50%'; icon.style.top = '50%'; } }
-};
-window.processMultiFlickAnswer = function(choiceIndex) {
-let me = multiPartyMembers.find(m => m.isMe);
-let q = gameCurrentWordsQueue[gameCurrentIndex];
-let updatedStatus = "bad";
-if(choiceIndex === currentMultiCorrectIndex) {
-     updatedStatus = "ok";
-     gameComboCount++; window.createFireballEffect();
-     const myThumb = document.querySelector('.multi-party-member:first-child .multi-party-icon');
-     if(myThumb) { myThumb.classList.remove('companion-attack-active'); void myThumb.offsetWidth; myThumb.classList.add('companion-attack-active'); setTimeout(() => myThumb.classList.remove('companion-attack-active'), 500); }
-     let comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5; let damage = 400 * comboMulti;
-     document.getElementById('multiComboCountText').innerText = gameComboCount; multiBossHp -= damage; 
-     if(me) window.showCharacterPopup(me.id, `💥 ${damage}`, 'attack');
-     multiLimitAmount = Math.min(multiLimitMax, multiLimitAmount + 15); window.updateMultiHpBars();
-     if(multiLimitAmount >= multiLimitMax) {
-         setTimeout(() => {
-             multiBossHp -= 5000; multiLimitAmount = 0; window.updateMultiHpBars();
-             if (multiBossHp <= 0) { 
-                 clearInterval(gameTimerInterval); 
-                 const winMsg = currentMultiMode === 'coop' ? "🎉 BOSS討伐完了！クエストクリア！" : "🎉 ライバルチームに勝利！バトルクリア！";
-                 userStats.multi_win++;
-                 window.saveUserStats();
-                 window.checkAndRewardTitleBonusXP();
-                 setTimeout(() => { alert(winMsg); window.cancelMultiBattlePlay(true); }, 500); 
-             }
-         }, 500);
-     }
- } else { 
-     gameComboCount = 0; document.getElementById('multiComboCountText').innerText = gameComboCount;
-     if (me && me.hp > 0) {
-         me.hp -= 300; if (me.hp < 0) me.hp = 0;
-         let myEl = document.getElementById('partyMember-' + me.id);
-         if(myEl) { let iconEl = myEl.querySelector('.multi-party-icon'); if(iconEl) { iconEl.classList.remove('player-damage-flash'); void iconEl.offsetWidth; iconEl.classList.add('player-damage-flash'); } }
-         window.showCharacterPopup(me.id, 300, 'damage');
-     }
- }
- if(q) {
-     const targetVocab = vocabList.find(w => w.num === q.wordNum);
-     if(targetVocab) {
-         if(targetVocab.meanings.length > 0) {
-             targetVocab.meanings[0].status = updatedStatus;
-             if(!targetVocab.meanings[0].history) targetVocab.meanings[0].history = [];
-             targetVocab.meanings[0].history.push(updatedStatus);
-         }
-         targetVocab.status = updatedStatus;
-         if(!targetVocab.history) targetVocab.history = [];
-         targetVocab.history.push(updatedStatus);
-         window.saveVocabToStorage();
-     }
- }
- if (multiBossHp <= 0) { 
-     clearInterval(gameTimerInterval); 
-     const winMsg = currentMultiMode === 'coop' ? "🎉 BOSS討伐完了！クエストクリア！" : "🎉 ライバルチームに勝利！バトルクリア！";
-     userStats.multi_win++;
-     window.saveUserStats();
-     window.checkAndRewardTitleBonusXP();
-     setTimeout(() => { alert(winMsg); window.cancelMultiBattlePlay(true); }, 500); 
-     return; 
- }
- if(multiPartyMembers.every(m => m.hp <= 0)) { clearInterval(gameTimerInterval); setTimeout(() => { alert("全滅しました..."); window.cancelMultiBattlePlay(true); }, 500); return; }
- window.updateMultiHpBars(); gameCurrentIndex++; window.showNextMultiWord();
-};
-window.createFireballEffect = function() {
-const layer = document.getElementById('battle-effects-layer'); if(!layer) return; const p = document.createElement('div'); p.className = 'fireball-particle';
-const pad = document.getElementById('flickPadArea'); const rect = pad.getBoundingClientRect();
-p.style.left = (rect.left + rect.width/2) + 'px'; p.style.top = (rect.top + rect.height/2) + 'px';
-p.style.setProperty('--tx', (Math.random() * 80 - 40) + 'px'); p.style.setProperty('--ty', '-160px'); layer.appendChild(p); setTimeout(() => { p.remove(); }, 400);
-};
+
 window.saveAdminSystemSettings = function() {
 const noticeInput = document.getElementById('adminNoticeInput');
 if (noticeInput) {
