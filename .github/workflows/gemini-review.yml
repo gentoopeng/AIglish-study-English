@@ -25,6 +25,7 @@ jobs:
             ただし、絶対にコミットやプッシュをしないでください。
         env:
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
+          GEMINI_CLI_YOLO: 'true'
 
       - name: 変更があったか確認
         id: check
