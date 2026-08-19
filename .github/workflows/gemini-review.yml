@@ -33,7 +33,8 @@ jobs:
       - name: DeepSeekに編集させる（ここで実際に動く！）
         run: |
           aider --model deepseek/deepseek-coder \
-                --api-key ${{ secrets.DEEPSEEK_API_KEY }} \
+                --api-key deepseek=$
+                {{ secrets.DEEPSEEK_API_KEY }} \
                 --yes \
                 --message "リポジトリのコードを分析し、改善点があれば直接ファイルを書き換えてください。"
         env:
