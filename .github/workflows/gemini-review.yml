@@ -1,24 +1,73 @@
-name: Gemini PR Review
+name: AI Edit Suggestion (PR作成)
 
 on:
-  pull_request:
-    types: [opened, synchronize, labeled]
+  issue_comment:
+    types: [created]
 
 permissions:
-  contents: read
+  contents: write
+  issues: write
   pull-requests: write
 
 jobs:
-  review:
+  suggest-edit:
+    if: contains(github.event.comment.body, '/edit')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Run Gemini CLI Review
+
+      - name: AIに編集させてみる
         uses: google-github-actions/run-gemini-cli@main
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           prompt: |
-            このPRのコードをレビューしてください。
-            改善点があれば具体的に指摘し、修正案も提案してください。
+            リポジトリのコードを分析し、改善点があれば直接ファイルを書き換えてください。
+            **ただし、絶対にコミットやプッシュをしないでください。**
+
+      - name: 変更があったか確認
+        id: check
+        run: |
+          git add -A
+          if git diff --staged --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: ブランチを作成してプッシュ
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          BRANCH="ai-edit-$(date +%s)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b $BRANCH
+          git commit -m "AIによる編集提案"
+          git push origin $BRANCH
+          echo "BRANCH_NAME=$BRANCH" >> $GITHUB_ENV
+
+      - name: Pull Requestを作成
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          gh pr create \
+            --title "AIが編集を提案しています" \
+            --body "AIが /edit コマンドで編集しました。\n\nこのPRを確認して、問題なければ **「Merge pull request」** をクリックしてください。" \
+            --head ${{ env.BRANCH_NAME }} \
+            --base main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Issueに報告
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "✅ AIが編集を完了しました！\nPRを確認してください：https://github.com/${{ github.repository }}/pull/new/${{ env.BRANCH_NAME }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 変更なしの報告
+        if: steps.check.outputs.changed == 'false'
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "特に編集すべき点は見つかりませんでした。"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
