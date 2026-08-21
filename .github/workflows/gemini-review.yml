@@ -1,4 +1,4 @@
-name: DeepSeek Editor (解釈コメント付き)
+name: Qwen Editor (解釈コメント付き・無料)
 
 on:
   issue_comment:
@@ -20,18 +20,57 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: aiderインストール
-        run: pip install aider-chat
+      - name: OpenAIライブラリをインストール
+        run: pip install openai
 
-      - name: DeepSeekに編集させる（解釈も出力させる）
+      - name: Qwenに編集させる（解釈も出力）
         run: |
-          aider --model deepseek/deepseek-coder \
-                --api-key deepseek=$DEEPSEEK_API_KEY \
-                --yes \
-                --message "リポジトリのコードを分析し、改善点があれば直接ファイルを書き換えてください。\n\n【重要】ファイルを書き換えたら、最後に以下の形式で出力してください：\n- 変更した理由（なぜその変更をしたのか）\n- 変更の具体的な内容（どのファイルの何をどう変えたか）" \
-                --no-auto-commits 2>&1 | tee aider_output.txt
+          python -c "
+          import openai
+          import os
+
+          client = openai.OpenAI(
+              base_url='https://api.tokenrouter.com/v1',
+              api_key=os.environ['QWEN_API_KEY'],
+          )
+
+          # README.md を読み込む（なければ作成）
+          try:
+              with open('README.md', 'r') as f:
+                  code = f.read()
+          except FileNotFoundError:
+              code = '# README.md がありません'
+
+          response = client.chat.completions.create(
+              model='qwen/qwen3.8-max-free',
+              messages=[
+                  {'role': 'system', 'content': 'あなたはコードレビュアーです。'},
+                  {'role': 'user', 'content': f'''
+                  以下のコードを分析し、改善点があれば直接修正してください。
+                  修正したコードを出力してください。
+
+                  また、最後に以下の形式で出力してください：
+                  - 変更した理由
+                  - 変更の具体的な内容
+
+                  コード:
+                  {code}
+                  '''}
+              ]
+          )
+
+          # AIの出力を保存
+          with open('aider_output.txt', 'w') as f:
+              f.write(response.choices[0].message.content)
+
+          # README.md を AI の出力で置き換え
+          with open('README.md', 'w') as f:
+              f.write(response.choices[0].message.content)
+
+          print(response.choices[0].message.content)
+          "
         env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
 
       - name: 変更をコミット＆プッシュ
         run: |
@@ -46,16 +85,13 @@ jobs:
             echo "CHANGED=false" >> $GITHUB_ENV
           fi
 
-      - name: AIの解釈と変更内容をIssueにコメント
+      - name: AIの解釈をIssueにコメント
         if: env.CHANGED == 'true'
         run: |
-          # AIの出力（解釈）を取得（最初の50行に制限）
           AI_OUTPUT=$(head -n 50 aider_output.txt)
-          # 変更の統計情報
           DIFF_STAT=$(git show HEAD --stat)
-          # コメントを投稿
           gh issue comment ${{ github.event.issue.number }} \
-            --body "✅ **AIが編集を完了しました（mainに反映済み）**\n\n**🤖 AIの解釈・変更理由**\n\`\`\`\n$AI_OUTPUT\n\`\`\`\n\n**📊 変更の統計**\n\`\`\`\n$DIFF_STAT\n\`\`\`\n\n💡 編集内容はmainブランチに直接コミットされました。詳細は [Commits](https://github.com/${{ github.repository }}/commits/main/) で確認できます。"
+            --body "✅ **AIが編集を完了しました（mainに反映済み）**\n\n**🤖 AIの解釈・変更理由**\n\`\`\`\n$AI_OUTPUT\n\`\`\`\n\n**📊 変更の統計**\n\`\`\`\n$DIFF_STAT\n\`\`\`\n\n💡 編集内容はmainブランチに直接コミットされました。"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -63,6 +99,6 @@ jobs:
         if: env.CHANGED == 'false'
         run: |
           gh issue comment ${{ github.event.issue.number }} \
-            --body "📝 **AIがコードを確認しましたが、特に編集すべき点は見つかりませんでした。**\n\n（AIの出力ログ）\n\`\`\`\n$(head -n 20 aider_output.txt)\n\`\`\`"
+            --body "📝 **AIがコードを確認しましたが、特に編集すべき点は見つかりませんでした。**"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
