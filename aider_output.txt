@@ -2,17 +2,48 @@ Warning: Input is not a terminal (fd=0).
 ────────────────────────────────────────────────────────────────────────────────
 Update git name with: git config user.name "Your Name"
 Update git email with: git config user.email "you@example.com"
-You can skip this check with --no-gitignore
-Added .aider* to .gitignore
 Aider v0.86.2
 Model: deepseek/deepseek-coder with diff edit format, prompt cache, infinite 
 output
-Git repo: .git with 41 files
+Git repo: .git with 42 files
 Repo-map: using 4096 tokens, auto refresh
 
 
 https://aider.chat/HISTORY.html#release-notes
 
-litellm.BadRequestError: DeepseekException - {"error":{"message":"Insufficient 
-Balance","type":"unknown_error","param":null,"code":"invalid_request_error"}}
+litellm.InternalServerError: InternalServerError: DeepseekException - Illegal 
+header value b'Bearer '
+The API provider's servers are down or overloaded.
+Retrying in 0.2 seconds...
+litellm.InternalServerError: InternalServerError: DeepseekException - Illegal 
+header value b'Bearer '
+The API provider's servers are down or overloaded.
+Retrying in 0.5 seconds...
+litellm.InternalServerError: InternalServerError: DeepseekException - Illegal 
+header value b'Bearer '
+The API provider's servers are down or overloaded.
+Retrying in 1.0 seconds...
+litellm.InternalServerError: InternalServerError: DeepseekException - Illegal 
+header value b'Bearer '
+The API provider's servers are down or overloaded.
+Retrying in 2.0 seconds...
+litellm.InternalServerError: InternalServerError: DeepseekException - Illegal 
+header value b'Bearer '
+The API provider's servers are down or overloaded.
+Retrying in 4.0 seconds...
+litellm.InternalServerError: InternalServerError: DeepseekException - Illegal 
+header value b'Bearer '
+The API provider's servers are down or overloaded.
+Retrying in 8.0 seconds...
+litellm.InternalServerError: InternalServerError: DeepseekException - Illegal 
+header value b'Bearer '
+The API provider's servers are down or overloaded.
+Retrying in 16.0 seconds...
+litellm.InternalServerError: InternalServerError: DeepseekException - Illegal 
+header value b'Bearer '
+The API provider's servers are down or overloaded.
+Retrying in 32.0 seconds...
+litellm.InternalServerError: InternalServerError: DeepseekException - Illegal 
+header value b'Bearer '
+The API provider's servers are down or overloaded.
 
