@@ -1,4 +1,4 @@
-name: Qwen Editor (解釈コメント付き・無料)
+name: Qwen Editor (全ファイルアクセス・解釈コメント付き)
 
 on:
   issue_comment:
@@ -23,38 +23,58 @@ jobs:
       - name: OpenAIライブラリをインストール
         run: pip install openai
 
-      - name: Qwenに編集させる（解釈も出力）
+      - name: Qwenに全ファイルを分析＆編集させる
+        env:
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
         run: |
-          python -c "
+          python << 'EOF'
           import openai
           import os
+          import glob
 
           client = openai.OpenAI(
               base_url='https://api.tokenrouter.com/v1',
               api_key=os.environ['QWEN_API_KEY'],
           )
 
-          # README.md を読み込む（なければ作成）
-          try:
-              with open('README.md', 'r') as f:
-                  code = f.read()
-          except FileNotFoundError:
-              code = '# README.md がありません'
+          # すべてのコードファイルを読み込む（拡張子を追加可能）
+          extensions = ['*.py', '*.js', '*.html', '*.css', '*.json', '*.md', '*.txt']
+          all_files = []
+          for ext in extensions:
+              all_files.extend(glob.glob(f'**/{ext}', recursive=True))
 
+          # ファイルごとに内容をまとめる
+          repo_content = ""
+          for file in all_files:
+              try:
+                  with open(file, 'r', encoding='utf-8') as f:
+                      content = f.read()
+                      repo_content += f"\n\n=== {file} ===\n{content}"
+              except Exception as e:
+                  repo_content += f"\n\n=== {file} ===\n（読み込みエラー: {e}）"
+
+          # AIに編集を依頼
           response = client.chat.completions.create(
               model='qwen/qwen3.8-max-free',
               messages=[
-                  {'role': 'system', 'content': 'あなたはコードレビュアーです。'},
+                  {'role': 'system', 'content': 'あなたはコードレビュアーです。改善点があれば具体的に修正コードを提示してください。'},
                   {'role': 'user', 'content': f'''
-                  以下のコードを分析し、改善点があれば直接修正してください。
-                  修正したコードを出力してください。
+                  以下のリポジトリの全ファイルを分析し、改善点があれば直接修正コードを提示してください。
 
-                  また、最後に以下の形式で出力してください：
-                  - 変更した理由
-                  - 変更の具体的な内容
+                  【重要】修正が必要なファイルがあれば、以下の形式で出力してください：
+                  ---
+                  ファイル: （ファイル名）
+                  変更前:
+                  （元のコード）
+                  変更後:
+                  （修正後のコード）
+                  変更理由: （なぜその修正が必要か）
 
-                  コード:
-                  {code}
+                  ---
+                  もし修正が不要な場合は、「特に修正すべき点は見つかりませんでした」と出力してください。
+
+                  リポジトリの全ファイル内容:
+                  {repo_content[:50000]}  # 長すぎる場合は最初の5万文字に制限
                   '''}
               ]
           )
@@ -63,16 +83,16 @@ jobs:
           with open('aider_output.txt', 'w') as f:
               f.write(response.choices[0].message.content)
 
-          # README.md を AI の出力で置き換え
-          with open('README.md', 'w') as f:
-              f.write(response.choices[0].message.content)
+          # 簡易的に出力を表示（デバッグ用）
+          print(response.choices[0].message.content[:500])
+          EOF
 
-          print(response.choices[0].message.content)
-          "
-        env:
-          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
+      - name: AIの出力をファイルに保存（変更反映用の前処理）
+        run: |
+          # もしAIが変更コードを出力していた場合に備えて、ファイルを一時保存
+          cp aider_output.txt ai_output_backup.txt || true
 
-      - name: 変更をコミット＆プッシュ
+      - name: 変更をコミット＆プッシュ（AIが直接編集した場合）
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -88,17 +108,18 @@ jobs:
       - name: AIの解釈をIssueにコメント
         if: env.CHANGED == 'true'
         run: |
-          AI_OUTPUT=$(head -n 50 aider_output.txt)
+          AI_OUTPUT=$(head -n 50 ai_output_backup.txt)
           DIFF_STAT=$(git show HEAD --stat)
           gh issue comment ${{ github.event.issue.number }} \
-            --body "✅ **AIが編集を完了しました（mainに反映済み）**\n\n**🤖 AIの解釈・変更理由**\n\`\`\`\n$AI_OUTPUT\n\`\`\`\n\n**📊 変更の統計**\n\`\`\`\n$DIFF_STAT\n\`\`\`\n\n💡 編集内容はmainブランチに直接コミットされました。"
+            --body "✅ **AIが編集を完了しました（mainに反映済み）**\n\n**🤖 AIの解釈・変更理由**\n\`\`\`\n$AI_OUTPUT\n\`\`\`\n\n**📊 変更の統計**\n\`\`\`\n$DIFF_STAT\n\`\`\`\n\n💡 編集内容はmainブランチに直接コミットされました。\n\n⚠️ AIが出力したコードが実際に適用されていない場合は、手動で適用してください。"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 変更なしの報告
         if: env.CHANGED == 'false'
         run: |
+          AI_OUTPUT=$(head -n 20 ai_output_backup.txt)
           gh issue comment ${{ github.event.issue.number }} \
-            --body "📝 **AIがコードを確認しましたが、特に編集すべき点は見つかりませんでした。**"
+            --body "📝 **AIがコードを確認しましたが、特に編集すべき点は見つかりませんでした。**\n\n**AIの出力ログ**\n\`\`\`\n$AI_OUTPUT\n\`\`\`"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
