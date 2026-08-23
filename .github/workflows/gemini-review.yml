@@ -1,4 +1,4 @@
-name: Kimi K3 Editor (キーワード検索・絞り込み版)
+name: AI Editor (複数モデル・フォールバック対応)
 
 on:
   issue_comment:
@@ -23,112 +23,78 @@ jobs:
       - name: OpenAIライブラリをインストール
         run: pip install openai
 
-      - name: キーワード検索＋対象ファイル抽出＋編集
+      - name: AI編集（複数モデルを自動フォールバック）
         env:
           QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           python << 'EOF'
-          import openai
-          import os
-          import glob
-          import re
-          import time
-          import subprocess
+          import openai, os, glob, re, time, subprocess
+
+          # モデルリスト（優先順位順）
+          MODELS = [
+              'qwen/qwen3.8-max-free',
+              'moonshotai/kimi-k3-free',
+              'openai/gpt-4o-mini',
+          ]
 
           comment = os.environ.get('COMMENT_BODY', '')
-          # 「/edit」以降の文章を指示として抽出
-          instruction = re.sub(r'^/edit\s*', '', comment).strip()
-          if not instruction:
-              instruction = "コードをレビューして改善点を教えてください"
+          instruction = re.sub(r'^/edit\s*', '', comment).strip() or "コードをレビューして"
 
-          # キーワード抽出（日本語・英語の重要単語）
-          keywords = re.findall(r'[\w\-]+', instruction)
-          keywords = [k.lower() for k in keywords if len(k) > 2]
-
-          # 検索対象の拡張子
-          extensions = ['*.py', '*.js', '*.html', '*.css', '*.json', '*.md', '*.txt', '*.ts', '*.jsx', '*.tsx']
+          # キーワード抽出＆ファイル検索（簡易版）
+          keywords = [w.lower() for w in re.findall(r'[\w\-]+', instruction) if len(w) > 2][:3]
           all_files = []
-          for ext in extensions:
+          for ext in ['*.py', '*.js', '*.html', '*.css', '*.json', '*.md', '*.ts']:
               all_files.extend(glob.glob(f'**/{ext}', recursive=True))
 
-          # キーワードでファイルを絞り込み（grep検索）
-          matched_files = set()
-          for kw in keywords[:5]:  # 最初の5キーワードで検索
+          matched = set()
+          for kw in keywords:
               for f in all_files:
+                  if kw in f.lower():
+                      matched.add(f)
+                      continue
                   try:
-                      # ファイル名にキーワードが含まれているか
-                      if kw in f.lower():
-                          matched_files.add(f)
-                          continue
-                      # ファイル内容にキーワードが含まれているか（最初の50行だけチェック）
                       with open(f, 'r', encoding='utf-8', errors='ignore') as rf:
-                          content = rf.read(5000)  # 先頭5000文字だけチェック
-                          if kw in content.lower():
-                              matched_files.add(f)
+                          if kw in rf.read(3000).lower():
+                              matched.add(f)
                   except:
                       pass
 
-          # 検索結果が0なら、キーワードの代わりにファイル名のパターンで検索
-          if not matched_files:
-              for f in all_files:
-                  for kw in keywords[:3]:
-                      if kw in f.lower():
-                          matched_files.add(f)
+          matched = list(matched)[:8] or ['README.md'] if os.path.exists('README.md') else []
 
-          # それでもなければ、主要なファイル（README.mdなど）をフォールバック
-          if not matched_files:
-              for f in ['README.md', 'index.html', 'app.py', 'main.py', 'script.js', 'style.css']:
-                  if os.path.exists(f):
-                      matched_files.add(f)
-
-          # 最大10ファイルに制限
-          matched_files = list(matched_files)[:10]
-
-          # ファイル内容を読み込む
-          repo_content = ""
-          for f in matched_files:
+          content = ""
+          for f in matched:
               try:
                   with open(f, 'r', encoding='utf-8', errors='ignore') as rf:
-                      content = rf.read()
-                      repo_content += f"\n\n=== {f} ===\n{content}"
+                      content += f"\n\n=== {f} ===\n{rf.read()}"
               except:
-                  repo_content += f"\n\n=== {f} ===\n（読み込みエラー）"
+                  pass
 
-          # AIに編集を依頼
-          client = openai.OpenAI(
-              base_url='https://api.tokenrouter.com/v1',
-              api_key=os.environ['QWEN_API_KEY'],
-              timeout=120.0,
-          )
+          client = openai.OpenAI(base_url='https://api.tokenrouter.com/v1', api_key=os.environ['QWEN_API_KEY'], timeout=120)
 
-          for i in range(3):
+          # フォールバック処理
+          last_error = None
+          for model in MODELS:
               try:
                   response = client.chat.completions.create(
-                      model='moonshotai/kimi-k3-free',
+                      model=model,
                       messages=[
                           {'role': 'system', 'content': 'あなたはコードレビュアーです。'},
-                          {'role': 'user', 'content': f'''
-                          ユーザーからの指示: {instruction}
-
-                          以下のファイルを分析し、指示に従って修正してください。
-                          修正が必要な場合は、修正後のコードを出力してください。
-                          修正が不要な場合は「特に修正すべき点はありません」と出力してください。
-
-                          {repo_content[:40000]}
-                          '''}
+                          {'role': 'user', 'content': f'指示: {instruction}\n\nファイル:\n{content[:40000]}'}
                       ],
                       timeout=90,
                   )
+                  with open('aider_output.txt', 'w') as f:
+                      f.write(response.choices[0].message.content)
+                  print(f"✅ 使用モデル: {model}")
                   break
               except Exception as e:
-                  if i < 2:
-                      time.sleep(5)
-                  else:
-                      raise e
-
-          with open('aider_output.txt', 'w') as f:
-              f.write(response.choices[0].message.content)
+                  last_error = e
+                  print(f"⚠️ {model} が使えません: {e}")
+                  time.sleep(2)
+                  continue
+          else:
+              raise Exception(f"すべてのモデルが使えません: {last_error}")
           EOF
 
       - name: 変更をコミット＆プッシュ
@@ -150,7 +116,7 @@ jobs:
           AI_OUTPUT=$(head -n 50 aider_output.txt)
           DIFF_STAT=$(git show HEAD --stat)
           gh issue comment ${{ github.event.issue.number }} \
-            --body "✅ **AIが編集を完了しました（mainに反映済み）**\n\n**🤖 AIの解釈・変更理由**\n\`\`\`\n$AI_OUTPUT\n\`\`\`\n\n**📊 変更の統計**\n\`\`\`\n$DIFF_STAT\n\`\`\`\n\n📁 **編集対象ファイル**\n${{ steps.files.outputs.files }}"
+            --body "✅ **AIが編集を完了しました**\n\n**🤖 AIの解釈**\n\`\`\`\n$AI_OUTPUT\n\`\`\`\n\n**📊 変更の統計**\n\`\`\`\n$DIFF_STAT\n\`\`\`"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
