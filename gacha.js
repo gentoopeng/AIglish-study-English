@@ -796,15 +796,7 @@ function injectAdmin() {
 ===================================================================== */
 function gachaTick() { injectHeaderGold(); buildGashaPage(); injectAdmin(); }
 function gachaAfterLogin() { injectHeaderGold(); buildGashaPage(); refreshGashaPage(); checkLoginBonus(); injectAdmin(); }
-(function hookLoad() {
-  var prev = window.loadLocalState;
-  var wrapped = function () {
-    var p = prev ? prev.apply(this, arguments) : Promise.resolve();
-    return Promise.resolve(p).then(function (r) { try { gachaAfterLogin(); } catch (e) {} return r; });
-  };
-  wrapped.__gcWrapped = true;
-  window.loadLocalState = wrapped;
-})();
+window.onAppLoaded(function () { gachaAfterLogin(); });
 (function attachWatchers() {
   var obs = null;
   function observe() {
@@ -990,12 +982,9 @@ var pu = window.__partyUi;
 if (pu && pu.cat === 'char') renderCharDex();
 }
 setInterval(tick, 500);
-var __prevSwitchTabF = window.switchTab;
-window.switchTab = function (tabId) {
-var r = __prevSwitchTabF ? __prevSwitchTabF.apply(this, arguments) : undefined;
+window.onTabChange(function (tabId) {
 if (tabId === 'party') setTimeout(function () { renderCharDex(); renderHeaderBadges(); }, 60);
-return r;
-};
+});
 (function bootF() {
 function run() { renderHeaderBadges(); fixDupeText(); }
 if (document.readyState !== 'loading') setTimeout(run, 400);
@@ -2158,18 +2147,6 @@ if(t&&!t.querySelector('.us-timg')){var m=(t.textContent||'').replace(/[^0-9,]/g
 }
 setInterval(fixBadges,500);
 
-/* ---------- ⑥ セーブ連打防止 ---------- */
-if(typeof window.saveUserStats==='function'&&!window.saveUserStats.__usWrapped){
-var orig=window.saveUserStats,last=0,pend=null,run=false;
-window.saveUserStats=function(){
-var now=Date.now(),self=this,args=arguments,el=now-last;
-if(el<2000){if(!pend)pend=setTimeout(function(){pend=null;last=Date.now();try{orig.apply(self,args);}catch(e){}},2000-el+100);return Promise.resolve();}
-last=now;if(run)return Promise.resolve();run=true;
-try{var r=orig.apply(self,args);if(r&&r.then)return r.then(function(v){run=false;return v;},function(e){run=false;throw e;});run=false;return r;}catch(e){run=false;throw e;}
-};
-window.saveUserStats.__usWrapped=true;
-}
-
 console.log('🎯 統合安定化パッチ適用完了');
 })();
 // ==========================================================================
@@ -2524,7 +2501,7 @@ if(t.closest('[data-v19-search]')){wrk.__q=t.value;renderWork(curW(wrk.__id));}}
 if(typeof window.updateMeaningStatus==='function'&&!window.__vv19ums){window.__vv19ums=true;var __p=window.updateMeaningStatus;window.updateMeaningStatus=function(num,meaningId,status,btnEl){var r=__p.apply(this,arguments);try{var w=vocabList.find(function(v){return String(v.num)===String(num);});if(w){w.lastReviewDate=(new Date()).getFullYear()+'-'+((new Date()).getMonth()+1)+'-'+((new Date()).getDate());if(window.saveVocabToStorage)window.saveVocabToStorage();}}catch(e){}return r;};}
 function addVocabDates(){try{var c=document.getElementById('vocabListContainer');if(!c)return;c.querySelectorAll('.word-row-container').forEach(function(row){if(row.querySelector('.vv19-vdate'))return;var numEl=null;row.querySelectorAll('span,div').forEach(function(el){var tx=(el.textContent||'').trim();if(/^#\d+$/.test(tx)&&!numEl)numEl=el;});if(!numEl)return;var num=parseInt(numEl.textContent.replace('#',''),10);var w=vocabList.find(function(v){return String(v.num)===String(num);});if(!w||!w.lastReviewDate)return;var p=String(w.lastReviewDate).split('-');var dt=(p.length>=3)?(+p[1])+'/'+(+p[2]):'';var sp=document.createElement('span');sp.className='vv19-vdate';sp.textContent='📅'+dt;sp.style.cssText='font-size:8px;color:var(--text-sub);margin-left:6px;';numEl.parentNode.appendChild(sp);});}catch(e){}}
 if(typeof window.renderVocabList==='function'&&!window.__vv19rvl){window.__vv19rvl=true;var __r=window.renderVocabList;window.renderVocabList=function(){var r=__r.apply(this,arguments);setTimeout(addVocabDates,0);return r;};}
-var prev=window.switchTab;window.switchTab=function(t){var r=prev?prev.apply(this,arguments):undefined;if(t==='vocab'){setTimeout(function(){show('sel');},60);}return r;};
+window.onTabChange(function(t){if(t==='vocab'){setTimeout(function(){show('sel');},60);}});
 (function(){function b(){setup();show('sel');}if(document.readyState!=='loading')setTimeout(b,500);else document.addEventListener('DOMContentLoaded',function(){setTimeout(b,500);});})();
 console.log('📚 単語帳タブ最終版v19（インポート+Gemini解説）適用完了');
 })();
@@ -3091,68 +3068,6 @@ doEnhance(b.getAttribute('data-dxenh2'));
 
 setInterval(function(){injectDex();injectModal();},600);
 console.log('💎 図鑑カケラ強化(確定版)適用完了');
-})();
-// =====================================================================
-// 💎 図鑑モーダル修正（ボタン小型化＋攻撃を実数値化）
-// ・強化ボタンを「編成する」と横並び・半分サイズに（馴染む見た目）
-// ・「攻撃倍率 ×1.0」→「攻撃 300」など実数値に変換（強化Lv連動 +1%/Lv）
-// ※gacha.js末尾に追記（既存パッチは消さない）
-// =====================================================================
-(function(){
-"use strict";
-if(window.__dexModalFix) return; window.__dexModalFix=true;
-var NAME2ID={'タンゴン':'tangon'};
-var BASE_ATK={tangon:300};
-var RAR_ATK={SR:300,R:255,UC:210,C:150};
-function enhLv(id){
-try{ var s=(typeof userStats!=='undefined'&&userStats)?userStats:{}; var g=s.gacha_enhance||{}; return g[id]||0; }catch(e){return 0;}
-}
-function processModal(modal){
-/* ① 強化ボタンを小型・横並びに */
-var b=modal.querySelector('[data-dxenh2]');
-if(b){
-var parent=b.parentNode;
-parent.style.display='flex';
-parent.style.gap='10px';
-parent.style.alignItems='stretch';
-b.style.cssText='flex:1;width:auto;margin:0;padding:12px;border-radius:12px;border:1px solid rgba(245,196,81,.55);background:rgba(245,196,81,.12);color:#f5c451;font-size:12px;font-weight:800;cursor:pointer;';
-for(var c=0;c<parent.children.length;c++){
-var ch=parent.children[c];
-if(ch.tagName==='BUTTON'){ ch.style.flex='1'; ch.style.width='auto'; }
-}
-}
-/* ② 攻撃倍率→実数値 */
-var name='', rar='SR';
-var nodes=modal.querySelectorAll('div,span');
-for(var i=0;i<nodes.length;i++){ var tx=(nodes[i].textContent||'').trim(); if(tx&&NAME2ID[tx]) name=tx; }
-for(var j=0;j<nodes.length;j++){
-if((nodes[j].textContent||'').trim()==='レアリティ'){ var rv=nodes[j].nextElementSibling; if(rv) rar=(rv.textContent||'SR').trim(); }
-}
-var id=NAME2ID[name]||null;
-for(var k=0;k<nodes.length;k++){
-if((nodes[k].textContent||'').trim()==='攻撃倍率'){
-nodes[k].textContent='攻撃';
-var val=nodes[k].nextElementSibling;
-if(val&&id){
-var lv=enhLv(id);
-var base=BASE_ATK[id]||RAR_ATK[rar]||300;
-val.textContent=String(Math.round(base*(1+lv/100)));
-}
-}
-}
-}
-function scan(){
-document.querySelectorAll('[data-dxenh2]').forEach(function(b){
-var m=b;
-for(var up=0; up<8 && m; up++){
-m=m.parentElement;
-if(m && (m.textContent.indexOf('攻撃倍率')>=0 || m.textContent.indexOf('レアリティ')>=0)) break;
-}
-if(m) processModal(m);
-});
-}
-setInterval(scan,600);
-console.log('💎 図鑑モーダル修正(ボタン小型+攻撃実数値)適用完了');
 })();
 // =====================================================================
 // 💎 図鑑モーダル 瞬き根治（旧データの一時表示を解消）

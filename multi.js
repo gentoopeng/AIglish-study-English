@@ -3691,12 +3691,9 @@ ptyToast(armorId ? '🛡️ 防具を装備しました' : '🛡️ 防具を外
 };
 
 /* ---------- 14. switchTab ラップ：編成タブ表示時に再描画 ---------- */
-var __prevSwitchTabPty = window.switchTab;
-window.switchTab = function (tabId) {
-var r = __prevSwitchTabPty ? __prevSwitchTabPty.apply(this, arguments) : undefined;
+window.onTabChange(function (tabId) {
 if (tabId === 'party') { setTimeout(renderPartyTab, 30); }
-return r;
-};
+});
 
 /* ---------- 15. 起動時注入 ---------- */
 (function initPartyPatch() {
@@ -4066,16 +4063,13 @@ new MutationObserver(function () {
 if (view.querySelector('.pty-scroll') && !view.querySelector('#pgfBar')) requestAnimationFrame(rebuild);
 }).observe(view, { childList: true });
 }
-var __prevSwitchTabPgf = window.switchTab;
-window.switchTab = function (tabId) {
-var r = __prevSwitchTabPgf ? __prevSwitchTabPgf.apply(this, arguments) : undefined;
+window.onTabChange(function (tabId) {
 if (tabId === 'party') {
 window.__pgfPage = 'party';
 setTimeout(function () { var v = document.getElementById('view-party'); attachObserver(); bindSwipe(v); rebuild(); }, 40);
 setTimeout(rebuild, 140);
 }
-return r;
-};
+});
 (function bootPgf() {
 function run() {
 var view = document.getElementById('view-party');
@@ -4208,12 +4202,9 @@ var boot=function(){ var l=document.getElementById('ptyList'); if(l) mo.observe(
 if(document.readyState!=='loading') setTimeout(boot,400);
 else document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,400);});
 }
-var __prevTab=window.switchTab;
-window.switchTab=function(tabId){
-var r=__prevTab?__prevTab.apply(this,arguments):undefined;
+window.onTabChange(function(tabId){
 if(tabId==='party') setTimeout(refresh,60);
-return r;
-};
+});
 setInterval(refresh, 800);
 console.log('🐧 編成統一パッチ（並び替え統一＋Lv連動＋攻撃実数値）適用完了');
 })();
@@ -4392,8 +4383,7 @@ var list=document.getElementById('ptyList');
 if(list&&!list.querySelector('.pcv-lock')){ /* 旧パッチが残っていても上書きで正す */ }
 }
 setInterval(tick,400);
-var __prevTab=window.switchTab;
-window.switchTab=function(t){var r=__prevTab?__prevTab.apply(this,arguments):undefined; if(t==='party')setTimeout(function(){bindSearch();renderDex();},40); return r;};
+window.onTabChange(function(t){ if(t==='party')setTimeout(function(){bindSearch();renderDex();},40); });
 (function(){function run(){bindSearch(); if(PU().cat)renderDex();}
 if(document.readyState!=='loading')setTimeout(run,450); else document.addEventListener('DOMContentLoaded',function(){setTimeout(run,450);});})();
 console.log('📚 統合図鑑パッチ適用完了');
@@ -4519,12 +4509,9 @@ if (typeof __origLoadBook==='function'){
     return r;
   };
 }
-var __prevTab = window.switchTab;
-window.switchTab = function(tabId){
-  var r = __prevTab ? __prevTab.apply(this, arguments) : undefined;
+window.onTabChange(function(tabId){
   if(tabId==='vocab'){ setTimeout(doRestore, 150); }
-  return r;
-};
+});
 (function boot(){
   function run(){ doRestore(); }
   if(document.readyState!=='loading') setTimeout(run, 1200);
@@ -5029,15 +5016,12 @@ if (!c.getAttribute('role')) c.setAttribute('role', 'button');
 }, 400);
 
 /* ---------- 5. switchTab ラップ：タブ切替時にチップ状態を再同期 ---------- */
-var __prevTabSortFix = window.switchTab;
-window.switchTab = function(tabId) {
-var r = __prevTabSortFix ? __prevTabSortFix.apply(this, arguments) : undefined;
+window.onTabChange(function(tabId) {
 if (tabId === 'party') {
 setTimeout(updateChipVisuals, 80);
 setTimeout(updateChipVisuals, 300);
 }
-return r;
-};
+});
 
 /* ---------- 6. 起動時 ---------- */
 (function bootSortFix() {
@@ -5407,22 +5391,13 @@ if (typeof __origSaveUserStats === 'function' && !__origSaveUserStats.__svWrappe
   window.saveUserStats = wrappedSave;
 }
 
-/* ---------- loadLocalState ラップ → ボタン紐付け＋初期オートセーブ ---------- */
-var __origLoadLocalState = window.loadLocalState;
-if (typeof __origLoadLocalState === 'function' && !__origLoadLocalState.__svWrapped) {
-  var wrappedLoad = function () {
-    var p = __origLoadLocalState.apply(this, arguments);
-    return Promise.resolve(p).then(function (r) {
-      setTimeout(function () {
-        bindSaveButton();
-        if (uid()) { doSave('auto'); }
-      }, 1500);
-      return r;
-    });
-  };
-  wrappedLoad.__svWrapped = true;
-  window.loadLocalState = wrappedLoad;
-}
+/* ---------- 読み込み完了後 → ボタン紐付け＋初期オートセーブ ---------- */
+window.onAppLoaded(function () {
+  setTimeout(function () {
+    bindSaveButton();
+    if (uid()) { doSave('auto'); }
+  }, 1500);
+});
 
 /* ---------- CSS ---------- */
 function injectSvCss() {
@@ -5766,19 +5741,12 @@ if(!list.querySelector('.gm-grid')&&!list.querySelector('.gm-empty'))gmRender();
 else if(!list.classList.contains('gm-active'))gmRender();
 }
 setInterval(gmWatch,250);
-var __prevTabGM=window.switchTab;
-window.switchTab=function(tabId){
-var r=__prevTabGM?__prevTabGM.apply(this,arguments):undefined;
+window.onTabChange(function(tabId){
 if(tabId==='party'){setTimeout(gmReplace,50);setTimeout(gmReplace,200);}
-return r;
-};
-var __prevLoadGM=window.loadLocalState;
-window.loadLocalState=function(){
-var r=__prevLoadGM?__prevLoadGM.apply(this,arguments):undefined;
-if(r&&r.then)r.then(function(){setTimeout(gmReplace,100);});
-else setTimeout(gmReplace,100);
-return r;
-};
+});
+window.onAppLoaded(function(){
+setTimeout(gmReplace,100);
+});
 (function bootGM(){
 function run(){gmReplace();}
 if(document.readyState!=='loading')setTimeout(run,500);
@@ -6560,28 +6528,11 @@ ringTarget = null;
 
 /* ==================================================================
 【3】チュートリアル初回限定（ログアウトしても再表示しない）
-    logoutToGate が localStorage.clear() を呼ぶため、
-    チュートリアル完了フラグを退避・復元する
+    完了フラグは IndexedDB にも保存し、端末内で維持する
 ================================================================== */
 (function fixTutorialOnce() {
 
 var TUTORIAL_KEY = 'b3_tutorial_done';
-
-/* logoutToGate をラップ：チュートリアルフラグを退避・復元 */
-if (typeof window.logoutToGate === 'function' && !window.logoutToGate.__fixPatched) {
-var origLogout = window.logoutToGate;
-window.logoutToGate = function() {
-/* フラグ退避 */
-var tutorialDone = null;
-try { tutorialDone = localStorage.getItem(TUTORIAL_KEY); } catch (e) {}
-/* 元の処理を実行（localStorage.clear() が呼ばれる） */
-origLogout.apply(this, arguments);
-/* clear() 後に復元（ただし location.reload() が呼ばれるので復元は次セッション用） */
-/* 実際には reload されるので、localStorage 復元は意味がない。 */
-/* 代わりに、別キーに永続フラグを保存する方式を使う */
-};
-window.logoutToGate.__fixPatched = true;
-}
 
 /* 別の永続化方式：IndexedDB にチュートリアル完了フラグを保存 */
 function saveTutorialFlagDB(callback) {
@@ -6645,7 +6596,7 @@ clearInterval(checkInterval);
 }, 1000);
 
 /* ページ読み込み時に IndexedDB のフラグを localStorage に復元 */
-/* （logoutToGate の localStorage.clear() 後に再ログインしたとき用） */
+/* 再ログインしたときにも完了フラグを復元する */
 (function restoreTutorialFlag() {
 loadTutorialFlagDB(function(done) {
 if (done) {
@@ -6662,32 +6613,14 @@ try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
 }, 2000);
 })();
 
-/* loadLocalState をラップ：完了後に IndexedDB から復元 */
-if (typeof window.loadLocalState === 'function' && !window.loadLocalState.__fixTutPatched) {
-var origLoad = window.loadLocalState;
-window.loadLocalState = function() {
-var result = origLoad.apply(this, arguments);
-if (result && typeof result.then === 'function') {
-return result.then(function(r) {
-/* IndexedDB からチュートリアルフラグを復元 */
+/* 読み込み完了後に IndexedDB からチュートリアルフラグを復元 */
+window.onAppLoaded(function() {
 loadTutorialFlagDB(function(done) {
 if (done) {
 try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
 }
 });
-return r;
 });
-}
-/* IndexedDB からチュートリアルフラグを復元 */
-loadTutorialFlagDB(function(done) {
-if (done) {
-try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
-}
-});
-return result;
-};
-window.loadLocalState.__fixTutPatched = true;
-}
 })();
 
 console.log('🔧 修正パッチ③（セーブ根治＋長押しリング＋チュートリアル初回限定）適用完了');
@@ -6971,21 +6904,13 @@ document.addEventListener('visibilitychange', function () { if (document.visibil
 
 /* ---------- ログイン後：ボタン確保＋初回バックアップ ---------- */
 var bootedOnce = false;
-if (typeof window.loadLocalState === 'function' && !window.loadLocalState.__fbsWrapped) {
-var origLoad = window.loadLocalState;
-window.loadLocalState = function () {
-var r = origLoad.apply(this, arguments);
-return Promise.resolve(r).then(function (v) {
+window.onAppLoaded(function () {
 ensureBtn();
 if (!bootedOnce) {
 bootedOnce = true;
 setTimeout(function () { if (uid()) cloudSave('auto', false); }, 4000);
 }
-return v;
 });
-};
-window.loadLocalState.__fbsWrapped = true;
-}
 (function bootFbsv() {
 function run() { ensureBtn(); }
 if (document.readyState !== 'loading') setTimeout(run, 400);
@@ -7312,12 +7237,9 @@ function _syncPity() {
 }
 
 /* ===== タブ切替・定期監視 ===== */
-var _prevTabFF = window.switchTab;
-window.switchTab = function (tabId) {
-    var r = _prevTabFF ? _prevTabFF.apply(this, arguments) : undefined;
+window.onTabChange(function (tabId) {
     if (tabId === 'party') setTimeout(_fixPartyCards, 120);
-    return r;
-};
+});
 setInterval(function () {
     _fixPartyCards();
     _syncPity();
@@ -7514,12 +7436,9 @@ function syncPityGauge() {
 }
 
 /* ===== タブ切替・定期監視 ===== */
-var __prevTabFF2 = window.switchTab;
-window.switchTab = function(tabId) {
-    var r = __prevTabFF2 ? __prevTabFF2.apply(this, arguments) : undefined;
+window.onTabChange(function(tabId) {
     if (tabId === 'party') setTimeout(fixPartyCards, 150);
-    return r;
-};
+});
 setInterval(function() {
     fixPartyCards();
     syncPityGauge();
@@ -7551,20 +7470,6 @@ var REVIVE_NEED=3;
 '.m2-big-box .sub{font-size:13px;color:#e2e8f0;margin-top:10px;}',
 '#m2ReviveHud{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:99989;background:rgba(0,0,0,.7);border:1px solid rgba(252,165,165,.5);color:#fca5a5;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:800;display:none;}'
 ].join('\n');(document.head||document.documentElement).appendChild(s);})();
-
-/* ---- 近日公開解除 ---- */
-function unlockSoon(){
-var scope=document.getElementById('view-party')||document.body;
-var all=scope.querySelectorAll('*');
-for(var i=0;i<all.length;i++){
-var el=all[i];
-if(el.children.length===0 && (el.textContent||'').trim().indexOf('近日公開')>=0){
-el.style.display='none';
-var host=el.closest('[class*=door],[data-mode],button,.mdu-card,.mdu-mode')||el.parentElement;
-if(host){ host.classList.remove('locked','soon','disabled'); host.removeAttribute('disabled'); host.style.opacity=''; host.style.pointerEvents=''; }
-}
-}
-}
 
 /* ---- 死亡/魂 ---- */
 function setSoul(m,on){
@@ -7644,8 +7549,7 @@ var r=__prevStart?__prevStart.apply(this,arguments):undefined;
 return r;
 };
 
-setInterval(unlockSoon,700);
-console.log('💀 死亡/魂/蘇生/敗北パッチ＋近日公開解除 適用完了');
+console.log('💀 死亡/魂/蘇生/敗北パッチ 適用完了');
 })();
 // =====================================================================
 // ⚔️ マルチ 戦闘ループ強化パッチ（multi.js末尾追記・既存不変更）
@@ -7688,18 +7592,6 @@ var winStreak=0;
 ].join('\n');(document.head||document.documentElement).appendChild(s);})();
 
 /* ===== ① 真ん中の円はCSSで消去済み ===== */
-
-/* ===== ② カードの上で離したら発動（角度自由） ===== */
-document.addEventListener('pointerup',function(e){
-var grid=e.target.closest?e.target.closest('.multi-grid-3x3'):null;
-if(!grid) return;
-var cell=e.target.closest('.multi-grid-3x3 > *');
-if(!cell) return;
-var idx=Array.prototype.indexOf.call(grid.children,cell);
-if(idx>=0&&typeof window.processMultiFlickAnswer==='function'){
-window.processMultiFlickAnswer(idx);
-}
-},true);
 
 /* ===== ③ 近日公開解除（強化版） ===== */
 function unlockSoon(){
@@ -9081,131 +8973,15 @@ setInterval(tick,300);
 console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
 })();
 // =====================================================================
-// 🔧 操作修正パッチ の修正（フォールバック追加）
-// =====================================================================
-(function() {
- if (window.__controlFixFixed) return;
- window.__controlFixFixed = true;
- 
- // 既存の processMultiFlickAnswer を取得（ラップされていても大丈夫なように）
- var __inner = window.processMultiFlickAnswer;
- if (typeof __inner !== 'function') {
-  console.warn('processMultiFlickAnswer not found');
-  return;
- }
- 
- // 安全に置き換え（__intendedChoice が無ければ引数を使う）
- window.processMultiFlickAnswer = function(ci) {
-  var idx = (window.__intendedChoice != null) ? window.__intendedChoice : ci;
-  window.__intendedChoice = null;
-  return __inner.call(this, idx);
- };
- 
- console.log('✅ __controlFixApplied を修正（フォールバック追加）');
-})();
-// =====================================================================
-// 🔧 フリック平滑化パッチ 修正（#flickPadArea → .multi-flick-area）
-// =====================================================================
-(function() {
-  if (window.__flickSmoothFixed) return;
-  window.__flickSmoothFixed = true;
-
-  // 既存の touchstart リスナーを置き換えるため、一旦全て削除
-  var listeners = [];
-  var origAdd = document.addEventListener;
-  document.addEventListener = function(type, handler, options) {
-    if (type === 'touchstart' || type === 'touchmove' || type === 'touchend') {
-      listeners.push({ type: type, handler: handler, options: options });
-    }
-    origAdd.call(this, type, handler, options);
-  };
-
-  // 新しいリスナーを登録（#flickPadArea の代わりに .multi-flick-area を使用）
-  var my = null;
-
-  document.addEventListener('touchstart', function(e) {
-    var t = e.target;
-    if (!t || !t.closest) return;
-    // ★ ここが修正ポイント： #flickPadArea → .multi-flick-area
-    if (!t.closest('.multi-flick-area')) return;
-    e.stopPropagation();
-    var touch = e.touches[0];
-    my = { sx: touch.clientX, sy: touch.clientY, active: true, dist: 0, choice: -1 };
-  }, true);
-
-  document.addEventListener('touchmove', function(e) {
-    if (!my || !my.active) return;
-    var t = e.target;
-    if (!t || !t.closest || !t.closest('.multi-flick-area')) return;
-    e.preventDefault();
-    e.stopPropagation();
-    var touch = e.touches[0];
-    var dx = touch.clientX - my.sx, dy = touch.clientY - my.sy;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    my.dist = dist;
-    // 角度計算（最も近い選択肢をライブハイライト）
-    var ang = Math.atan2(dy, dx) * 180 / Math.PI;
-    var grid = document.querySelector('.multi-grid-3x3');
-    if (grid) {
-      var gr = grid.getBoundingClientRect();
-      var cx = gr.left + gr.width / 2, cy = gr.top + gr.height / 2;
-      var best = -1, bd = 999;
-      for (var i = 0; i < 8; i++) {
-        var el = document.getElementById('multiChoice-' + i);
-        if (!el) continue;
-        var r = el.getBoundingClientRect();
-        var ex = r.left + r.width / 2 - cx, ey = r.top + r.height / 2 - cy;
-        if (ex === 0 && ey === 0) continue;
-        var ea = Math.atan2(ey, ex) * 180 / Math.PI;
-        var diff = Math.abs(((ang - ea + 540) % 360) - 180);
-        if (diff < bd) { bd = diff; best = i; }
-      }
-      my.choice = best;
-      // ハイライト更新
-      for (var j = 0; j < 8; j++) {
-        var el2 = document.getElementById('multiChoice-' + j);
-        if (el2) el2.classList.toggle('highlight', j === best);
-      }
-    }
-  }, { capture: true, passive: false });
-
-  document.addEventListener('touchend', function(e) {
-    if (!my || !my.active) return;
-    e.stopPropagation();
-    var dist = my.dist, choice = my.choice;
-    my.active = false;
-    // デッドゾーン（18px未満は無効）
-    if (dist > 18 && choice >= 0) {
-      window.__intendedChoice = choice;
-      window.processMultiFlickAnswer(choice);
-    }
-    // ハイライト解除
-    for (var j = 0; j < 8; j++) {
-      var el = document.getElementById('multiChoice-' + j);
-      if (el) el.classList.remove('highlight');
-    }
-    my = null;
-  }, true);
-
-  console.log('✅ __flickSmoothApplied 修正完了（#flickPadArea → .multi-flick-area）');
-})();
-// =====================================================================
-// 🔄 スワイプ完全復活パッチ（既存パッチを上書きし、確実に動作させる）
+// 🎯 マルチバトル回答処理（得点・ダメージ・理解度の一括更新）
 // =====================================================================
 (function() {
   if (window.__swipeRevived) return;
   window.__swipeRevived = true;
 
-  console.log('🔄 スワイプ完全復活パッチを適用します...');
+  console.log('🎯 マルチバトル回答処理を読み込みます...');
 
-  // ---- 1. 既存の processMultiFlickAnswer を退避 ----
-  var __origProcess = window.processMultiFlickAnswer;
-  if (typeof __origProcess !== 'function') {
-    console.warn('processMultiFlickAnswer が見つかりません');
-    return;
-  }
-
-  // ---- 2. processMultiFlickAnswer を再定義（__controlFixApplied を迂回） ----
+  // ---- 回答に必要な更新をこの関数に集約 ----
   window.processMultiFlickAnswer = function(choiceIndex) {
     let me = multiPartyMembers.find(m => m.isMe);
     let q = gameCurrentWordsQueue[gameCurrentIndex];
@@ -9213,10 +8989,6 @@ console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
     let ch = charOf(me ? (me.char || activeCharacter) : activeCharacter);
     let comboRate = ch.comboRate || 1.0;
     let s = M2().session; if (!s) s = M2().session = freshSession();
-
-    // ★ 中央マス（index 4）の特別処理
-    const isCenter = (choiceIndex === 4);
-    const centerEl = document.getElementById('multiChoice-4');
 
     if (choiceIndex === currentMultiCorrectIndex) {
         updatedStatus = "ok";
@@ -9237,12 +9009,6 @@ console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
         if (me) try { window.showCharacterPopup(me.id, '💥 ' + damage, 'attack'); } catch (e) {}
         let bimg = document.getElementById('multiBossImage');
         if (bimg && bimg.style.display !== 'none') { bimg.classList.remove('m2-hit'); void bimg.offsetWidth; bimg.classList.add('m2-hit'); }
-
-        // ★ 中央が正解の時は裏返って正解の意味を表示
-        if (isCenter && centerEl) {
-            centerEl.innerHTML = '<div class="center-revealed">' + q.meaning + '</div>';
-            centerEl.classList.add('center-correct');
-        }
 
         if (M2().comboGauge >= M2().comboMax) {
             setTimeout(function () {
@@ -9266,12 +9032,6 @@ console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
         M2().comboGauge = Math.max(0, M2().comboGauge - 20);
         renderComboGauge();
         try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
-
-        // ★ 中央が不正解の時はしっかり不正解判定＋ポップアップ
-        if (isCenter && centerEl) {
-            centerEl.classList.add('center-wrong');
-            showCenterWrongPopup(q);
-        }
 
         if (me && me.hp > 0) {
             me.hp = Math.max(0, me.hp - 300);
@@ -9304,782 +9064,7 @@ console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
     try { if (typeof window.showNextMultiWord === 'function') window.showNextMultiWord(); } catch (e) {}
 };
 
-  // ---- 3. スワイプ検出（.multi-flick-area 内） ----
-  var swipeData = null;
-
-  function getSwipeTarget(x, y) {
-    var grid = document.querySelector('.multi-grid-3x3');
-    if (!grid) return -1;
-    var cells = grid.children;
-    var best = -1, bestDist = Infinity;
-    for (var i = 0; i < cells.length; i++) {
-      var rect = cells[i].getBoundingClientRect();
-      var cx = rect.left + rect.width / 2;
-      var cy = rect.top + rect.height / 2;
-      var dx = x - cx, dy = y - cy;
-      var dist = dx * dx + dy * dy;
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = i;
-      }
-    }
-    return best;
-  }
-
-  function handleSwipeEnd(clientX, clientY) {
-    var idx = getSwipeTarget(clientX, clientY);
-    if (idx >= 0 && idx < 8) {
-      // __intendedChoice を設定してから呼ぶ（新しい processMultiFlickAnswer が使う）
-      window.__intendedChoice = idx;
-      window.processMultiFlickAnswer(idx);
-      // クリア（保険）
-      setTimeout(function() { window.__intendedChoice = null; }, 100);
-    }
-  }
-
-  // touchstart（キャプチャフェーズで取得）
-  document.addEventListener('touchstart', function(e) {
-    var target = e.target;
-    if (!target || !target.closest) return;
-    var area = target.closest('.multi-flick-area');
-    if (!area) return;
-    var touch = e.touches[0];
-    if (!touch) return;
-    swipeData = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      active: true
-    };
-    // 他のリスナーに伝播させるが、デフォルト動作は防止しない（スクロールは許可）
-  }, { passive: true, capture: true });
-
-  // touchmove（キャプチャ）
-  document.addEventListener('touchmove', function(e) {
-    if (!swipeData || !swipeData.active) return;
-    var target = e.target;
-    if (!target || !target.closest) return;
-    var area = target.closest('.multi-flick-area');
-    if (!area) {
-      swipeData.active = false;
-      return;
-    }
-    // スクロールを防止（スワイプ中はページが動かないように）
-    e.preventDefault();
-  }, { passive: false, capture: true });
-
-  // touchend（キャプチャ）
-  document.addEventListener('touchend', function(e) {
-    if (!swipeData || !swipeData.active) return;
-    var touch = e.changedTouches[0];
-    if (touch) {
-      handleSwipeEnd(touch.clientX, touch.clientY);
-    }
-    swipeData = null;
-  }, { passive: true, capture: true });
-
-  // ---- 4. 既存の __flickSmoothApplied のリスナーを無効化（上書き） ----
-  // キャプチャフェーズで取得しているので、既存のバブリングリスナーより先に動く。
-  // ただし、既存の touchstart が stopImmediatePropagation を使っている場合に備え、
-  // window レベルで touchstart を補足する。
-
-  console.log('✅ スワイプ完全復活パッチ適用完了');
 })();
-// =====================================================================
-// 🔍 スワイプ完全デバッグ（何が起きているか全部見える）
-// =====================================================================
-(function() {
- if (window.__swipeDebugApplied) return;
- window.__swipeDebugApplied = true;
- 
- console.log('🔍 スワイプデバッグ開始');
- 
- // 1. .multi-flick-area が存在するか
- var area = document.querySelector('.multi-flick-area');
- console.log('📌 .multi-flick-area の有無:', area);
- 
- // 2. .multi-grid-3x3 が存在するか
- var grid = document.querySelector('.multi-grid-3x3');
- console.log('📌 .multi-grid-3x3 の有無:', grid);
- 
- // 3. processMultiFlickAnswer が存在するか
- console.log('📌 processMultiFlickAnswer の型:', typeof window.processMultiFlickAnswer);
- 
- // 4. 全ての touchstart をキャプチャ
- document.addEventListener('touchstart', function(e) {
-  var target = e.target;
-  var cls = target.className || '';
-  var id = target.id || '';
-  console.log('🟢 touchstart:', { target: target.tagName, class: cls, id: id });
-  // フリックエリア内か？
-  var inArea = target.closest ? !!target.closest('.multi-flick-area') : false;
-  console.log('   .multi-flick-area 内?', inArea);
- }, { capture: true, passive: true });
- 
- // 5. 全ての touchend をキャプチャ
- document.addEventListener('touchend', function(e) {
-  var touch = e.changedTouches[0];
-  console.log('🔴 touchend:', { clientX: touch.clientX, clientY: touch.clientY });
- }, { capture: true, passive: true });
- 
- // 6. processMultiFlickAnswer の呼び出しをトレース
- var __orig = window.processMultiFlickAnswer;
- if (typeof __orig === 'function') {
-  window.processMultiFlickAnswer = function(idx) {
-   console.log('🔥 processMultiFlickAnswer 呼び出し!', idx);
-   return __orig.call(this, idx);
-  };
- }
- 
- console.log('✅ デバッグ準備完了。マルチバトルを開始してスワイプしてみてください。');
-})();
-// =====================================================================
-// 🐛 processMultiFlickAnswer エラー詳細表示パッチ
-// =====================================================================
-(function() {
- if (window.__errorDetailApplied) return;
- window.__errorDetailApplied = true;
- 
- var __orig = window.processMultiFlickAnswer;
- if (typeof __orig !== 'function') {
-  console.warn('processMultiFlickAnswer が見つかりません');
-  return;
- }
- 
- window.processMultiFlickAnswer = function(choiceIndex) {
-  try {
-   // 元の処理を実行
-   return __orig.call(this, choiceIndex);
-  } catch (e) {
-   console.error('🔥 processMultiFlickAnswer でエラーが発生しました');
-   console.error('エラー名:', e.name);
-   console.error('エラーメッセージ:', e.message);
-   console.error('スタックトレース:', e.stack);
-   // エラーが起きてもゲームが止まらないようにする
-   return undefined;
-  }
- };
- 
- console.log('✅ エラー詳細表示パッチ適用完了');
-})();
-// =====================================================================
-// 🛠️ localStorage エラーを握りつぶしてエフェクトを復活させる
-// =====================================================================
-(function() {
- if (window.__saveErrorFixed) return;
- window.__saveErrorFixed = true;
- 
- console.log('🛠️ localStorage エラー対策パッチを適用します...');
- 
- // 1. saveUserStats をラップ（エラーを無視）
- var __origSave = window.saveUserStats;
- if (typeof __origSave === 'function') {
-  window.saveUserStats = function() {
-   try {
-    return __origSave.apply(this, arguments);
-   } catch (e) {
-    console.warn('⚠️ saveUserStats エラー（無視）:', e.message);
-    return undefined;
-   }
-  };
-  console.log('✅ saveUserStats をラップしました');
- }
- 
- // 2. saveVocabToStorage をラップ（エラーを無視）
- var __origVocabSave = window.saveVocabToStorage;
- if (typeof __origVocabSave === 'function') {
-  window.saveVocabToStorage = function() {
-   try {
-    return __origVocabSave.apply(this, arguments);
-   } catch (e) {
-    console.warn('⚠️ saveVocabToStorage エラー（無視）:', e.message);
-    return undefined;
-   }
-  };
-  console.log('✅ saveVocabToStorage をラップしました');
- }
- 
- // 3. localStorage.setItem を直接ラップ（保険）
- var __origSetItem = localStorage.setItem;
- localStorage.setItem = function(key, value) {
-  try {
-   return __origSetItem.call(this, key, value);
-  } catch (e) {
-   console.warn('⚠️ localStorage.setItem エラー（無視）:', key, e.message);
-   return undefined;
-  }
- };
- console.log('✅ localStorage.setItem をラップしました');
- 
- console.log('🛠️ すべての保存エラーを握りつぶしました。エフェクトが復活するはずです。');
-})();
-// =====================================================================
-// 🔄 processMultiFlickAnswer 完全再実装（既存パッチを全て無視）
-// =====================================================================
-(function() {
- if (window.__coreFlickFixed) return;
- window.__coreFlickFixed = true;
- 
- console.log('🔄 processMultiFlickAnswer を完全再実装します...');
- 
- // ---- 元の関数を退避（使わない） ----
- var __origProcess = window.processMultiFlickAnswer;
- 
- // ---- 新実装 ----
- window.processMultiFlickAnswer = function(choiceIndex) {
-  console.log('🔥 新実装 processMultiFlickAnswer 呼び出し!', choiceIndex);
-  
-  try {
-   // 1. 正解判定
-   var isCorrect = (choiceIndex === currentMultiCorrectIndex);
-   console.log('   正解?', isCorrect);
-   
-   // 2. 自分を取得
-   var me = null;
-   if (typeof multiPartyMembers !== 'undefined' && multiPartyMembers.length > 0) {
-    me = multiPartyMembers.find(function(m) { return m.isMe; }) || multiPartyMembers[0];
-   }
-   console.log('   me:', me ? me.name : 'なし');
-   
-   // 3. コンボ処理
-   if (isCorrect) {
-    gameComboCount = (gameComboCount || 0) + 1;
-    console.log('   gameComboCount:', gameComboCount);
-    // コンボ表示更新
-    try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
-   } else {
-    gameComboCount = 0;
-    try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
-   }
-   
-   // 4. ダメージ計算と適用（正解時のみ）
-   if (isCorrect) {
-    var comboMulti = 1 + Math.floor((gameComboCount || 0) / 5) * 0.5;
-    var damage = Math.round(400 * comboMulti);
-    console.log('   ダメージ:', damage);
-    
-    // ボスHPを減らす
-    if (typeof multiBossHp !== 'undefined') {
-     multiBossHp = Math.max(0, multiBossHp - damage);
-     console.log('   multiBossHp:', multiBossHp);
-     // バリア処理（あれば）
-     var cur = (typeof M2 === 'function') ? M2().current : null;
-     if (cur && cur.barrier > 0) {
-      var tb = Math.min(cur.barrier, damage);
-      cur.barrier -= tb;
-      multiBossHp = Math.max(0, multiBossHp + tb - damage);
-     }
-     if (cur) cur.hp = multiBossHp;
-    }
-    
-    // ★★★ 攻撃エフェクトを強制発火 ★★★
-    if (me && typeof window.showCharacterPopup === 'function') {
-     console.log('💥 showCharacterPopup を呼び出し (attack)');
-     window.showCharacterPopup(me.id, '💥 ' + damage, 'attack');
-    } else {
-     console.warn('showCharacterPopup がないか、me がありません');
-    }
-    
-    // コンボゲージ更新
-    if (typeof M2 === 'function') {
-     var m2 = M2();
-     if (m2) {
-      m2.comboGauge = Math.min(m2.comboMax || 100, (m2.comboGauge || 0) + 12);
-      // ゲージ表示更新
-      var fill = document.getElementById('m2ComboGaugeFill');
-      if (fill) {
-       var pct = Math.round((m2.comboGauge / (m2.comboMax || 100)) * 100);
-       fill.style.width = pct + '%';
-      }
-     }
-    }
-    
-    // ボスヒットアニメーション
-    var bimg = document.getElementById('multiBossImage');
-    if (bimg && bimg.style.display !== 'none') {
-     bimg.classList.remove('m2-hit');
-     void bimg.offsetWidth;
-     bimg.classList.add('m2-hit');
-    }
-    
-    // HPバー更新
-    try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch (e) {}
-    
-    // ボス撃破チェック
-    if (typeof multiBossHp !== 'undefined' && multiBossHp <= 0) {
-     console.log('💀 ボス撃破！');
-     if (typeof checkEnemyDefeated === 'function') {
-      checkEnemyDefeated();
-     }
-    }
-   } else {
-    // 不正解時のペナルティ
-    if (me && me.hp > 0) {
-     me.hp = Math.max(0, me.hp - 300);
-     console.log('   me.hp (不正解ペナルティ):', me.hp);
-     if (typeof window.showCharacterPopup === 'function') {
-      window.showCharacterPopup(me.id, 300, 'damage');
-     }
-     try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch (e) {}
-    }
-   }
-   
-   // 5. 次の単語へ進む
-   if (typeof gameCurrentIndex !== 'undefined') {
-    gameCurrentIndex = (gameCurrentIndex || 0) + 1;
-    console.log('   次のインデックス:', gameCurrentIndex);
-    if (typeof window.showNextMultiWord === 'function') {
-     window.showNextMultiWord();
-    }
-   }
-   
-   console.log('✅ 新実装 processMultiFlickAnswer 完了');
-   
-  } catch (e) {
-   console.error('🔥 新実装でエラー発生:', e);
-   console.error('スタック:', e.stack);
-  }
- };
- 
- console.log('✅ processMultiFlickAnswer 完全再実装完了');
-})();
-// =====================================================================
-// 🔧 正誤判定修正パッチ（グリッドインデックス → 選択肢インデックス）
-// =====================================================================
-(function() {
- if (window.__choiceIndexFixApplied) return;
- window.__choiceIndexFixApplied = true;
- 
- console.log('🔧 正誤判定修正パッチを適用します...');
- 
- // processMultiFlickAnswer をさらにラップ
- var __orig = window.processMultiFlickAnswer;
- if (typeof __orig !== 'function') {
-  console.warn('processMultiFlickAnswer が見つかりません');
-  return;
- }
- 
- window.processMultiFlickAnswer = function(choiceIndex) {
-  // グリッドのセルインデックス（0〜8）を選択肢インデックス（0〜7）に変換
-  // 0 1 2
-  // 3 4 5  ← 4は中央（選択肢なし）
-  // 6 7 8
-  // 選択肢のマッピング: [0,1,2,3,5,6,7,8] → [0,1,2,3,4,5,6,7]
-  var gridIdx = choiceIndex;
-  var choiceIdx = -1;
-  
-  if (gridIdx >= 0 && gridIdx <= 8) {
-   if (gridIdx < 4) {
-    choiceIdx = gridIdx; // 0→0, 1→1, 2→2, 3→3
-   } else if (gridIdx > 4) {
-    choiceIdx = gridIdx - 1; // 5→4, 6→5, 7→6, 8→7
-   } else {
-    // 中央（index 4）は無効
-    console.warn('⚠️ 中央の選択肢は無効です');
-    return undefined;
-   }
-  }
-  
-  console.log('🔄 インデックス変換:', gridIdx, '→', choiceIdx);
-  
-  // 変換した選択肢インデックスで元の関数を呼ぶ
-  return __orig.call(this, choiceIdx);
- };
- 
- console.log('✅ 正誤判定修正パッチ適用完了');
-})();
-// =====================================================================
-// 🔄 角度ベーススワイプ（全パッチリセット版）
-// =====================================================================
-(function() {
-  if (window.__finalSwipeApplied) return;
-  window.__finalSwipeApplied = true;
-
-  console.log('🔄 角度ベーススワイプ（最終版）を適用します');
-
-  // ---- processMultiFlickAnswer を完全に再定義 ----
-  var __orig = window.processMultiFlickAnswer;
-  window.processMultiFlickAnswer = function(choiceIndex) {
-    console.log('🔥 processMultiFlickAnswer 呼び出し:', choiceIndex);
-
-    try {
-      var isCorrect = (choiceIndex === currentMultiCorrectIndex);
-      console.log('   正解?', isCorrect);
-
-      var me = null;
-      if (typeof multiPartyMembers !== 'undefined' && multiPartyMembers.length > 0) {
-        me = multiPartyMembers.find(function(m) { return m.isMe; }) || multiPartyMembers[0];
-      }
-
-      // コンボ処理
-      if (isCorrect) {
-        gameComboCount = (gameComboCount || 0) + 1;
-        try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch(e) {}
-      } else {
-        gameComboCount = 0;
-        try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch(e) {}
-      }
-
-      // ダメージ適用（正解時のみ）
-      if (isCorrect) {
-        var comboMulti = 1 + Math.floor((gameComboCount || 0) / 5) * 0.5;
-        var damage = Math.round(400 * comboMulti);
-
-        if (typeof multiBossHp !== 'undefined') {
-          multiBossHp = Math.max(0, multiBossHp - damage);
-          var cur = (typeof M2 === 'function') ? M2().current : null;
-          if (cur) cur.hp = multiBossHp;
-        }
-
-        // 攻撃エフェクト
-        if (me && typeof window.showCharacterPopup === 'function') {
-          window.showCharacterPopup(me.id, '💥 ' + damage, 'attack');
-        }
-
-        // ボスヒットアニメ
-        var bimg = document.getElementById('multiBossImage');
-        if (bimg) { bimg.classList.remove('m2-hit'); void bimg.offsetWidth; bimg.classList.add('m2-hit'); }
-
-        try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch(e) {}
-
-        if (multiBossHp <= 0 && typeof checkEnemyDefeated === 'function') {
-          checkEnemyDefeated();
-        }
-      } else {
-        // 不正解ペナルティ
-        if (me && me.hp > 0) {
-          me.hp = Math.max(0, me.hp - 300);
-          if (typeof window.showCharacterPopup === 'function') {
-            window.showCharacterPopup(me.id, 300, 'damage');
-          }
-          try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch(e) {}
-        }
-      }
-
-      // 次の単語へ
-      gameCurrentIndex = (gameCurrentIndex || 0) + 1;
-      if (typeof window.showNextMultiWord === 'function') {
-        window.showNextMultiWord();
-      }
-
-    } catch (e) {
-      console.error('🔥 エラー:', e);
-    }
-  };
-
-  // ---- 角度ベーススワイプ検出 ----
-  var startX = 0, startY = 0, active = false;
-
-  document.addEventListener('touchstart', function(e) {
-    var el = e.target.closest('.multi-flick-area');
-    if (!el) return;
-    var t = e.touches[0];
-    startX = t.clientX;
-    startY = t.clientY;
-    active = true;
-  }, { capture: true, passive: true });
-
-  document.addEventListener('touchmove', function(e) {
-    if (!active) return;
-    var el = e.target.closest('.multi-flick-area');
-    if (!el) { active = false; return; }
-    e.preventDefault();
-  }, { capture: true, passive: false });
-
-  document.addEventListener('touchend', function(e) {
-    if (!active) return;
-    active = false;
-    var t = e.changedTouches[0];
-    var dx = t.clientX - startX;
-    var dy = t.clientY - startY;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 20) return;
-
-    var angle = Math.atan2(dy, dx) * 180 / Math.PI;
-    var idx = Math.round(((angle + 360) % 360) / 45) % 8;
-
-    console.log('🔄 スワイプ方向 → 選択肢:', idx);
-    window.processMultiFlickAnswer(idx);
-  }, { capture: true, passive: true });
-
-  console.log('✅ 角度ベーススワイプ（最終版）適用完了');
-})();
-// =====================================================================
-// 🎯 スワイプ角度固定版（3x3グリッド専用・安定）
-// =====================================================================
-(function() {
-  if (window.__swipeAngleFinalApplied) return;
-  window.__swipeAngleFinalApplied = true;
-
-  console.log('🎯 スワイプ角度固定版を適用');
-
-  // ---- 元の processMultiFlickAnswer を退避 ----
-  var __orig = window.processMultiFlickAnswer;
-
-  // ---- 新しい processMultiFlickAnswer（ガード強制解除） ----
-  window.processMultiFlickAnswer = function(choiceIndex) {
-    window.__m2Processing = false;
-    window.__ansLock = false;
-    window.__intendedChoice = null;
-    return __orig.call(this, choiceIndex);
-  };
-
-  // ---- スワイプ検出（角度ベース・固定） ----
-  var startX = 0, startY = 0, active = false;
-
-  document.addEventListener('touchstart', function(e) {
-    var el = e.target.closest('.multi-flick-area');
-    if (!el) return;
-    var t = e.touches[0];
-    startX = t.clientX;
-    startY = t.clientY;
-    active = true;
-  }, { capture: true, passive: true });
-
-  document.addEventListener('touchmove', function(e) {
-    if (!active) return;
-    var el = e.target.closest('.multi-flick-area');
-    if (!el) { active = false; return; }
-    e.preventDefault();
-  }, { capture: true, passive: false });
-
-  document.addEventListener('touchend', function(e) {
-    if (!active) return;
-    active = false;
-    var t = e.changedTouches[0];
-    var dx = t.clientX - startX;
-    var dy = t.clientY - startY;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 20) return; // デッドゾーン
-
-    // 角度を計算（0〜360度）
-    var angle = Math.atan2(dy, dx) * 180 / Math.PI;
-    var normalized = ((angle + 360) % 360 + 360) % 360;
-
-    // ★★★ 3x3グリッドの選択肢配置（右上から時計回り）★★★
-    // 選択肢の配置角度（中心からの相対角度）
-    // 右上: 45°, 上: 90°, 左上: 135°, 左: 180°, 左下: 225°, 下: 270°, 右下: 315°, 右: 0°/360°
-    // 選択肢インデックス（multiChoice-0〜7）と角度のマッピング
-    var angleMap = [
-      { idx: 0, angle: 45 },   // 右上
-      { idx: 1, angle: 90 },   // 上
-      { idx: 2, angle: 135 },  // 左上
-      { idx: 3, angle: 180 },  // 左
-      { idx: 4, angle: 225 },  // 左下
-      { idx: 5, angle: 270 },  // 下
-      { idx: 6, angle: 315 },  // 右下
-      { idx: 7, angle: 0 }     // 右（0度）
-    ];
-
-    // 最も近い角度の選択肢を探す
-    var bestIdx = 0;
-    var bestDiff = 999;
-    for (var i = 0; i < angleMap.length; i++) {
-      var target = angleMap[i].angle;
-      var diff = Math.abs(((normalized - target + 360) % 360 + 360) % 360);
-      if (diff > 180) diff = 360 - diff;
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestIdx = angleMap[i].idx;
-      }
-    }
-
-    // デバッグログ（必要に応じてコメントアウト可）
-    console.log('🔄 スワイプ角度:', normalized.toFixed(1), '→ 選択肢:', bestIdx);
-
-    window.processMultiFlickAnswer(bestIdx);
-  }, { capture: true, passive: true });
-
-  console.log('✅ スワイプ角度固定版適用完了');
-})();
-// =====================================================================
-// 🎯 中央マス（火花マス）CSS追加パッチ
-// =====================================================================
-(function applyCenterSparkCssPatch() {
-"use strict";
-if (window.__centerSparkCssApplied) return;
-window.__centerSparkCssApplied = true;
-
-(function injectCenterSparkCss() {
-if (document.getElementById('centerSparkCss')) return;
-var s = document.createElement('style');
-s.id = 'centerSparkCss';
-s.textContent = [
-/* 中央マス（火花）の基本スタイル */
-'.flick-center-spark{',
-'  background:radial-gradient(circle, rgba(251,191,36,0.3), rgba(0,0,0,0.5)) !important;',
-'  border:2px solid rgba(251,191,36,0.6) !important;',
-'  display:flex !important;',
-'  align-items:center !important;',
-'  justify-content:center !important;',
-'  font-size:32px !important;',
-'}',
-'.flick-center-spark-hidden{display:none;}',
-
-/* 中央が正解の時の裏返し表示 */
-'.flick-center-spark.center-correct{',
-'  background:linear-gradient(135deg, rgba(16,185,129,0.3), rgba(0,0,0,0.5)) !important;',
-'  border-color:rgba(16,185,129,0.8) !important;',
-'  font-size:13px !important;',
-'  padding:8px !important;',
-'  text-align:center !important;',
-'  word-break:break-word !important;',
-'}',
-'.center-revealed{',
-'  color:#10B981;',
-'  font-weight:700;',
-'  text-shadow:0 0 8px rgba(16,185,129,0.5);',
-'}',
-
-/* 中央が不正解の時の赤表示 */
-'.flick-center-spark.center-wrong{',
-'  background:linear-gradient(135deg, rgba(239,68,68,0.3), rgba(0,0,0,0.5)) !important;',
-'  border-color:rgba(239,68,68,0.8) !important;',
-'  animation:centerWrongShake 0.4s ease;',
-'}',
-'@keyframes centerWrongShake{',
-'  0%, 100%{transform:translateX(0);}',
-'  25%{transform:translateX(-6px);}',
-'  75%{transform:translateX(6px);}',
-'}',
-
-/* 中央不正解ポップアップ */
-'.center-wrong-popup{',
-'  position:fixed;',
-'  top:50%;',
-'  left:50%;',
-'  transform:translate(-50%, -50%);',
-'  z-index:99999;',
-'  background:linear-gradient(168deg, rgba(46,38,28,0.96), rgba(28,22,15,0.98));',
-'  border:2px solid rgba(239,68,68,0.6);',
-'  border-radius:16px;',
-'  padding:20px;',
-'  min-width:280px;',
-'  max-width:340px;',
-'  box-shadow:0 20px 60px rgba(0,0,0,0.7), 0 0 30px rgba(239,68,68,0.3);',
-'  animation:cwpPopIn 0.3s cubic-bezier(0.2,0.9,0.3,1.2);',
-'}',
-'@keyframes cwpPopIn{',
-'  from{opacity:0; transform:translate(-50%, -50%) scale(0.8);}',
-'  to{opacity:1; transform:translate(-50%, -50%) scale(1);}',
-'}',
-'.cwp-header{',
-'  display:flex;',
-'  align-items:center;',
-'  gap:10px;',
-'  margin-bottom:16px;',
-'  padding-bottom:12px;',
-'  border-bottom:1px solid rgba(239,68,68,0.3);',
-'}',
-'.cwp-icon{',
-'  width:32px;',
-'  height:32px;',
-'  border-radius:50%;',
-'  background:rgba(239,68,68,0.2);',
-'  border:2px solid rgba(239,68,68,0.6);',
-'  display:flex;',
-'  align-items:center;',
-'  justify-content:center;',
-'  color:#ef4444;',
-'  font-size:18px;',
-'  font-weight:900;',
-'}',
-'.cwp-title{',
-'  font-family:"Noto Serif JP", serif;',
-'  font-size:18px;',
-'  font-weight:900;',
-'  color:#ef4444;',
-'  text-shadow:0 0 10px rgba(239,68,68,0.4);',
-'}',
-'.cwp-body{',
-'  display:flex;',
-'  flex-direction:column;',
-'  gap:10px;',
-'}',
-'.cwp-row{',
-'  display:flex;',
-'  flex-direction:column;',
-'  gap:4px;',
-'}',
-'.cwp-label{',
-'  font-size:10px;',
-'  font-weight:700;',
-'  color:#a89880;',
-'  letter-spacing:0.1em;',
-'}',
-'.cwp-value{',
-'  font-size:14px;',
-'  font-weight:700;',
-'  color:#f3e5c0;',
-'  padding:6px 10px;',
-'  background:rgba(0,0,0,0.3);',
-'  border-radius:8px;',
-'  word-break:break-word;',
-'}',
-'.cwp-correct{',
-'  color:#10B981;',
-'  border-left:3px solid #10B981;',
-'}',
-'.cwp-wrong{',
-'  color:#ef4444;',
-'  border-left:3px solid #ef4444;',
-'}',
-'.cwp-close{',
-'  margin-top:16px;',
-'  width:100%;',
-'  padding:10px;',
-'  border-radius:10px;',
-'  border:1px solid rgba(255,255,255,0.2);',
-'  background:rgba(255,255,255,0.05);',
-'  color:#f3e5c0;',
-'  font-size:13px;',
-'  font-weight:700;',
-'  cursor:pointer;',
-'  transition:all 0.2s;',
-'}',
-'.cwp-close:hover{',
-'  background:rgba(255,255,255,0.1);',
-'}'
-].join('\n');
-(document.head || document.documentElement).appendChild(s);
-})();
-
-console.log('🎯 中央マスCSS追加パッチ適用完了');
-})();
-// ★ 中央マス不正解時のポップアップ
-function showCenterWrongPopup(q) {
-    // 既存のポップアップを削除
-    const old = document.getElementById('centerWrongPopup');
-    if (old) old.remove();
-
-    const popup = document.createElement('div');
-    popup.id = 'centerWrongPopup';
-    popup.className = 'center-wrong-popup';
-    popup.innerHTML = `
-        <div class="cwp-header">
-            <span class="cwp-icon">✕</span>
-            <span class="cwp-title">不正解</span>
-        </div>
-        <div class="cwp-body">
-            <div class="cwp-row">
-                <span class="cwp-label">問題</span>
-                <span class="cwp-value">${q.word}</span>
-            </div>
-            <div class="cwp-row">
-                <span class="cwp-label">正解</span>
-                <span class="cwp-value cwp-correct">${q.meaning}</span>
-            </div>
-            <div class="cwp-row">
-                <span class="cwp-label">あなたの選択</span>
-                <span class="cwp-value cwp-wrong">中央（火花マス）</span>
-            </div>
-        </div>
-        <button class="cwp-close" onclick="this.parentElement.remove()">閉じる</button>
-    `;
-    document.body.appendChild(popup);
-
-    // 3秒後に自動で閉じる
-    setTimeout(() => { if (popup.parentNode) popup.remove(); }, 3000);
-}
 // ==========================================================================
 // 🎯 第10回パッチ：タップ選択＋中央マス9択＋スワイプ完全廃止
 //    ① スワイプ操作を完全廃止（handleFlickStart/Move/End を無効化）
@@ -10284,40 +9269,6 @@ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
 window.handleFlickStart = function(e) { if (e) e.preventDefault(); };
 window.handleFlickMove = function(e) { if (e) e.preventDefault(); };
 window.handleFlickEnd = function(e) { if (e) e.preventDefault(); };
-
-// ------------------------------------------------------------------
-// 【5】initMultiPartyEvents 上書き（フリックバインド除去・タップのみ）
-// ------------------------------------------------------------------
-window.initMultiPartyEvents = function() {
-if (window.__tapCenterBound) return;
-window.__tapCenterBound = true;
-function choiceIdxOf(node) {
-    var c = (node && node.closest) ? node.closest('.flick-choice') : null;
-    if (!c || !c.id) return -1;
-    var m = /multiChoice-(\d+)/.exec(c.id);
-    return m ? parseInt(m[1], 10) : -1;
-}
-document.addEventListener('touchend', function(e) {
-    var idx = choiceIdxOf(e.target);
-    if (idx < 0) return;
-    e.preventDefault();
-    window.processMultiFlickAnswer(idx);
-}, { passive: false, capture: true });
-document.addEventListener('click', function(e) {
-    var idx = choiceIdxOf(e.target);
-    if (idx < 0) return;
-    window.processMultiFlickAnswer(idx);
-}, true);
-};
-
-// ------------------------------------------------------------------
-// 【6】起動時にタップイベントを確実にバインド
-// ------------------------------------------------------------------
-(function bootTapCenter() {
-function run() { window.initMultiPartyEvents(); }
-if (document.readyState !== 'loading') { setTimeout(run, 300); }
-else { document.addEventListener('DOMContentLoaded', function() { setTimeout(run, 300); }); }
-})();
 
 console.log('🎯 第10回パッチ（タップ選択＋中央マス9択＋スワイプ完全廃止）適用完了');
 })();
