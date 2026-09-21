@@ -7593,21 +7593,6 @@ var winStreak=0;
 
 /* ===== ① 真ん中の円はCSSで消去済み ===== */
 
-/* ===== ③ 近日公開解除（強化版） ===== */
-function unlockSoon(){
-var scope=document.getElementById('view-party')||document.body;
-var all=scope.querySelectorAll('*');
-for(var i=0;i<all.length;i++){
-var el=all[i];
-if(el.children.length===0&&(el.textContent||'').trim().indexOf('近日公開')>=0){
-el.style.display='none';
-var host=el.closest('[class*=door],[class*=mode],[data-mode],button,.mdu-card')||el.parentElement;
-if(host){host.classList.remove('locked','soon','disabled');host.removeAttribute('disabled');host.style.opacity='';host.style.pointerEvents='';}
-}
-}
-}
-setInterval(unlockSoon,700);
-
 /* ===== ④ ドロップ散らばり（敵IDで決定的＝全員同じ・×人数） ===== */
 function hashStr(s){var h=0;for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return Math.abs(h);}
 function scatterDrops(enemy){
