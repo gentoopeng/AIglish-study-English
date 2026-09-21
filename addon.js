@@ -34,11 +34,7 @@ return r;
 };
 /* 攻撃/スキル（元処理の後だけ・判定/進行には触らない） */
 var __prevFlick=window.processMultiFlickAnswer;
-var __lastFlickAt=0;
 window.processMultiFlickAnswer=function(ci){
-var now=Date.now();
-if(now-__lastFlickAt<600){ return; }
-__lastFlickAt=now;
 var chId=activeCharId();
 var st=CHSTATS[chId]||CHSTATS.tangon;
 var M0=window.__multi2||null;
@@ -321,49 +317,62 @@ s.textContent=[
 console.log('🔧 名前見切れ修正パッチ適用完了');
 })();
 
-// ============ ⑤ セーブ削減 ============
-(function applySaveReducePatch(){
+// ============ ⑤ セーブ調停 ============
+(function applySaveCoordinator(){
 "use strict";
-if(window.__saveReduceApplied) return; window.__saveReduceApplied=true;
+if(window.__saveCoordinatorApplied) return; window.__saveCoordinatorApplied=true;
 try{ if(window.__autoSaveTimer){ clearInterval(window.__autoSaveTimer); window.__autoSaveTimer=null; } }catch(e){}
-var bootAt=Date.now();
-var lastStats=0, lastVocab=0;
-window.__saveDirty=false;
-var origStats=window.saveUserStats;
-var origVocab=window.saveVocabToStorage;
-function doStats(){ if(origStats){ try{ origStats(); }catch(e){} } }
-function doVocab(){ if(origVocab){ try{ origVocab(); }catch(e){} } }
-window.saveUserStats=function(){
-var now=Date.now();
-if(now-bootAt<5000){ window.__saveDirty=true; return; }
-if(now-lastStats>20000){ lastStats=now; doStats(); }
-else window.__saveDirty=true;
-};
-window.saveVocabToStorage=function(){
-var now=Date.now();
-if(now-bootAt<5000){ window.__saveDirty=true; return; }
-if(now-lastVocab>20000){ lastVocab=now; doVocab(); }
-else window.__saveDirty=true;
-};
-function flush(){
-if(!window.__saveDirty) return;
-window.__saveDirty=false;
-lastStats=Date.now(); lastVocab=Date.now();
-doStats(); doVocab();
+
+function coordinate(name){
+var original=window[name];
+if(typeof original!=='function') return null;
+var running=false;
+var queued=[];
+var latestThis=null;
+var latestArgs=[];
+
+function run(){
+if(running||queued.length===0) return;
+running=true;
+var batch=queued.splice(0);
+var self=latestThis;
+var args=latestArgs;
+var result;
+try{ result=original.apply(self,args); }
+catch(error){ finish(batch,error); return; }
+Promise.resolve(result).then(function(value){ finish(batch,null,value); },function(error){ finish(batch,error); });
 }
-window.__saveFlush=flush;
-['showMultiResult','cancelMultiBattlePlay','endGame'].forEach(function(fn){
-var orig=window[fn];
-if(typeof orig==='function'){
-window[fn]=function(){ var r=orig.apply(this,arguments); setTimeout(flush,100); return r; };
+
+function finish(batch,error,value){
+running=false;
+batch.forEach(function(waiter){ if(error) waiter.reject(error); else waiter.resolve(value); });
+run();
 }
-});
-document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') flush(); });
-window.addEventListener('pagehide',flush);
-setInterval(function(){
-if(window.__saveDirty && Date.now()-Math.max(lastStats,lastVocab)>60000){ flush(); }
-},10000);
-console.log('💾 セーブ削減パッチ適用完了');
+
+function request(){
+latestThis=this;
+latestArgs=arguments;
+var promise=new Promise(function(resolve,reject){ queued.push({resolve:resolve,reject:reject}); });
+run();
+return promise;
+}
+
+window[name]=request;
+return { flush:function(){ return request.call(window); } };
+}
+
+var stats=coordinate('saveUserStats');
+var vocab=coordinate('saveVocabToStorage');
+window.__saveFlush=function(){
+var jobs=[];
+if(stats) jobs.push(stats.flush());
+if(vocab) jobs.push(vocab.flush());
+return Promise.all(jobs);
+};
+function flushSafely(){ window.__saveFlush().catch(function(error){ console.error('セーブのフラッシュに失敗しました:',error); }); }
+document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') flushSafely(); });
+window.addEventListener('pagehide',flushSafely);
+console.log('💾 セーブ調停処理適用完了');
 })();
 
 // ============ ⑦ 回復/スキル2演出＋討伐是正（間違えポップは無し） ============
@@ -538,8 +547,7 @@ console.log('🎭 状態異常エフェクトライブラリ適用完了');
 // ⚔️ 判定2回出し根治パッチ（1タップ=1判定を保証）
 //   原因①: touchendで答えた後に合成clickが別判定として飛び込む
 //   原因②: タップとフリックが同一タップで二重発火
-//   対策: (a) 選択肢へのclickは全て遮断（touchend側で既に解答済み）
-//         (b) 700msロックで1タップ1判定を保証
+//   対策: 700msロックで1タップ1判定を保証
 //   ※判定ロジック自体は一切変更しない（遮断と間隔制御のみ）
 // =====================================================================
 (function applyDoubleJudgmentFix() {
@@ -547,17 +555,7 @@ console.log('🎭 状態異常エフェクトライブラリ適用完了');
   if (window.__doubleJudgmentFixed) return;
   window.__doubleJudgmentFixed = true;
   
-  // (a) 選択肢への合成clickをwindowキャプチャで完全遮断
-  //     （windowキャプチャはdocumentキャプチャより先に走る＝multi.jsのclickハンドラより前に止められる）
-  window.addEventListener('click', function(e) {
-    var t = e.target;
-    if (t && t.closest && t.closest('.flick-choice')) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  }, true);
-  
-  // (b) 1タップ1判定ロック（700ms以内の2回目は無視）
+  // 1タップ1判定ロック（700ms以内の2回目は無視）
   var LOCK = 700;
   var last = 0;
   var orig = window.processMultiFlickAnswer;
