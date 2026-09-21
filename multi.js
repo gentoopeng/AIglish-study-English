@@ -8244,7 +8244,10 @@ if(document.getElementById('m2RingCss3')) return;
 var s=document.createElement('style'); s.id='m2RingCss3';
 s.textContent=[
 '#multiEnemyTimerDisplay,#m2ActionGauge{display:none !important;}',
-'#m2AtkRing{pointer-events:none;}',
+'#m2ArenaTop{overflow:visible !important;}',
+'#m2ArenaTop #multiBossHpBarContainer{overflow:visible !important;position:relative !important;}',
+'#m2AtkRing{pointer-events:none;z-index:80 !important;overflow:visible !important;}',
+'#multiEnemyHpText,.multi-boss-hp-text-layer{right:52px !important;}',
 '#m2AtkRing svg{display:block;width:40px;height:40px;}',
 '#m2AtkRingNum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,monospace;font-size:11px;font-weight:800;color:#fff;text-shadow:0 1px 2px #000;}',
 '#m2AtkRing.m2-ring-flash{animation:m2RingFlash3 .4s ease;}',
@@ -8281,11 +8284,31 @@ if(ring.parentNode!==c) c.appendChild(ring);
 var cs=getComputedStyle(c);
 if(cs.position==='static') c.style.position='relative';
 c.style.paddingRight='46px';
+c.style.boxSizing='border-box';
+c.style.width='100%';
+c.style.maxWidth='100%';
+c.style.overflow='visible';
+if(c.parentElement) c.parentElement.style.maxWidth='100%';
 ring.style.position='absolute';
 ring.style.right='0';
 ring.style.top='50%';
 ring.style.transform='translateY(-50%)';
-ring.style.zIndex='30';
+ring.style.zIndex='80';
+ring.style.overflow='visible';
+}
+function positionHpText(){
+var c=host(); if(!c)return;
+var all=c.querySelectorAll('*');
+for(var i=0;i<all.length;i++){
+var el=all[i];
+if((el.children&&el.children.length>0)||el.closest('#m2AtkRing'))continue;
+var t=(el.textContent||'').trim();
+if(!/^\d[\d,]*(\s*\/\s*\d[\d,]*)?$/.test(t))continue;
+var cs=getComputedStyle(el);
+if(cs.position==='absolute'||cs.position==='fixed'){el.style.right='52px';el.style.left='auto';}
+else{el.style.marginRight='52px';}
+el.style.zIndex='31';
+}
 }
 var prevLeft=10;
 function update(){
@@ -8304,131 +8327,8 @@ if(num) num.textContent=String(Math.ceil(left));
 if(left>prevLeft+0.5){ ring.classList.remove('m2-ring-flash'); void ring.offsetWidth; ring.classList.add('m2-ring-flash'); setTimeout(function(){ring.classList.remove('m2-ring-flash');},420); }
 prevLeft=left;
 }
-setInterval(function(){ ensure(); update(); },100);
+setInterval(function(){ ensure(); update(); positionHpText(); },100);
 console.log('⏱️ 敵行動 円形ゲージv3適用完了');
-})();
-// =====================================================================
-// ⏱️ 円ゲージ はみ出し修正パッチ（multi.js末尾追記・既存不変更）
-// 原因：バー枠 width:100% ＋ 右パディング46px ＝ 100%+46px で右切れ
-// 対策：box-sizing:border-box にして「パディング込み100%」へ
-//      → バーがゲージ分だけ縮み、ゲージは画面内に収まる
-// =====================================================================
-(function applyRingFitPatch(){
-"use strict";
-if(window.__ringFitApplied) return; window.__ringFitApplied=true;
-
-function host(){
-var fill=document.getElementById('multiBossHpFill')||document.querySelector('.multi-boss-hp-fill');
-if(!fill) return null;
-var c=fill.closest('#multiBossHpBarContainer');
-if(!c){ var fb=fill.closest('.multi-boss-full-bar'); c=fb?fb.parentElement:null; }
-if(!c) c=fill.parentElement?fill.parentElement.parentElement:null;
-return c;
-}
-function fix(){
-var c=host(); if(!c) return;
-/* ★ここが核心：パディング込みで100%にする */
-c.style.boxSizing='border-box';
-c.style.width='100%';
-c.style.maxWidth='100%';
-c.style.paddingRight='46px';
-c.style.position='relative';
-/* ゲージは枠の内側・右端に固定 */
-var ring=document.getElementById('m2AtkRing');
-if(ring){
-ring.style.position='absolute';
-ring.style.right='0';
-ring.style.top='50%';
-ring.style.transform='translateY(-50%)';
-ring.style.zIndex='30';
-}
-/* 親(アリーナ上部)もはみ出さないよう保険 */
-var p=c.parentElement;
-if(p){ p.style.maxWidth='100%'; }
-}
-setInterval(fix,120);
-fix();
-console.log('⏱️ 円ゲージはみ出し修正パッチ適用完了');
-})();
-// =====================================================================
-// ⏱️ 円ゲージ 最前面＋見切れ/文字重なり解消パッチ（multi.js末尾追記）
-// ① 円ゲージを z-index 最前面 に（バーや文字の手前に表示）
-// ② 上下の見切れを解消＝コンテナ/アリーナの overflow を visible（はみ出しOK）
-// ③ バーのHP文字をゲージの左側へ退避（重ならない）
-// =====================================================================
-(function applyRingFrontPatch(){
-"use strict";
-if(window.__ringFrontApplied) return; window.__ringFrontApplied=true;
-
-(function(){if(document.getElementById('m2RingCss5'))return;var s=document.createElement('style');s.id='m2RingCss5';s.textContent=[
-/* ② はみ出し許可（上下見切れ解消） */
-'#m2ArenaTop{overflow:visible !important;}',
-'#m2ArenaTop #multiBossHpBarContainer{overflow:visible !important;position:relative !important;}',
-/* ① 円ゲージ最前面 */
-'#m2AtkRing{z-index:80 !important;overflow:visible !important;}',
-/* ③ HP文字をゲージ左へ退避 */
-'.multi-boss-hp-text-layer{right:48px !important;}',
-'#multiEnemyHpText{right:48px !important;}'
-].join('\n');(document.head||document.documentElement).appendChild(s);})();
-
-function fix(){
-var ring=document.getElementById('m2AtkRing');
-if(ring){ ring.style.zIndex='80'; ring.style.overflow='visible'; }
-var c=document.getElementById('multiBossHpBarContainer');
-if(c){ c.style.overflow='visible'; }
-var at=document.getElementById('m2ArenaTop');
-if(at){ at.style.overflow='visible'; }
-/* ③ 文字退避（インラインでも念押し） */
-var tl=document.querySelector('.multi-boss-hp-text-layer');
-if(tl){ tl.style.right='60px'; }
-var ht=document.getElementById('multiEnemyHpText');
-if(ht&&!tl){ ht.style.marginRight='60px'; }
-}
-setInterval(fix,150);
-fix();
-console.log('⏱️ 円ゲージ最前面＋見切れ/文字重なり解消 適用完了');
-})();
-// =====================================================================
-// 🔧 ボスHP文字 左寄せ修正パッチ（multi.js末尾追記・既存不変更）
-// ・ボスバー内の「数値 / 数値」または「数値」テキストを自動検出
-// ・円ゲージ(#m2AtkRing)の中身は除外
-// ・絶対配置なら right:52px、そうでなければ margin-right:52px で
-//   ゲージの左側へ退避＝重なりを根治
-// =====================================================================
-(function applyBossHpTextLeftPatch(){
-"use strict";
-if(window.__bossHpTextLeft) return; window.__bossHpTextLeft=true;
-
-function host(){
-var fill=document.getElementById('multiBossHpFill')||document.querySelector('.multi-boss-hp-fill');
-if(!fill) return null;
-var c=fill.closest('#multiBossHpBarContainer');
-if(!c){ var fb=fill.closest('.multi-boss-full-bar'); c=fb?fb.parentElement:null; }
-if(!c) c=fill.parentElement?fill.parentElement.parentElement:null;
-return c;
-}
-function fix(){
-var c=host(); if(!c) return;
-var all=c.querySelectorAll('*');
-for(var i=0;i<all.length;i++){
-var el=all[i];
-if(el.children&&el.children.length>0) continue;          // 葉のみ
-if(el.closest('#m2AtkRing')) continue;                    // ゲージ内は除外
-var t=(el.textContent||'').trim();
-if(!/^\d[\d,]*(\s*\/\s*\d[\d,]*)?$/.test(t)) continue;    // HP数値のみ
-var cs=getComputedStyle(el);
-if(cs.position==='absolute'||cs.position==='fixed'){
-el.style.right='52px';
-el.style.left='auto';
-}else{
-el.style.marginRight='52px';
-}
-el.style.zIndex='31';
-}
-}
-setInterval(fix,150);
-fix();
-console.log('🔧 ボスHP文字左寄せ修正 適用完了');
 })();
 // =====================================================================
 // 👤 1人(ソロ)マルチ対応 v2（レイアウト自動修正つき・multi.js末尾追記）
