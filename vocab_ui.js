@@ -489,7 +489,6 @@
                     vocabList[wIdx].meanings[mIdx].history.push(status);
                     totalExp += 1;
                 }
-                userStats.vocab_fixed = vocabList.filter(function(w) { return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; }); }).length;
                 // 押したボタンだけを先に更新し、一覧全体の描画や通信を待たせない。
                 if (event && event.currentTarget && event.currentTarget.parentElement) {
                     var colors = { ok: 'var(--word-ok)', so: 'var(--word-so)', bad: 'var(--word-bad)', none: 'rgba(255,255,255,0.3)' };
@@ -500,21 +499,30 @@
                     event.currentTarget.style.background = colors[status] || colors.none;
                     event.currentTarget.style.color = status === 'bad' ? '#FFF' : (status === 'none' ? 'white' : '#000');
                 }
-                // 端末保存も次の処理へ回し、色の変化を先に画面へ反映する。
-                if (typeof window.saveVocabProgressLocally === 'function') {
-                    setTimeout(window.saveVocabProgressLocally, 0);
-                }
-                if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(60000);
-                window.saveUserStats();
-                window.checkAndRewardTitleBonusXP();
-                window.saveVocabToStorage();
-                if (typeof window.scheduleVocabListRender === 'function') window.scheduleVocabListRender(400);
-                else window.renderVocabList();
-                if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(800);
-                else {
-                    window.applyProfileToUi();
-                    window.renderLeaderboard();
-                }
+                // 原因だった全単語の集計・端末保存・一覧再描画は、描画後に1回へまとめる。
+                var queueWork = function() {
+                    if (window.__meaningStatusWorkTimer) clearTimeout(window.__meaningStatusWorkTimer);
+                    window.__meaningStatusWorkTimer = setTimeout(function() {
+                        window.__meaningStatusWorkTimer = null;
+                        userStats.vocab_fixed = vocabList.filter(function(w) {
+                            return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; });
+                        }).length;
+                        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+                        if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(60000);
+                        window.saveUserStats();
+                        window.checkAndRewardTitleBonusXP();
+                        window.saveVocabToStorage();
+                        if (typeof window.scheduleVocabListRender === 'function') window.scheduleVocabListRender(700);
+                        else window.renderVocabList();
+                        if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(1000);
+                        else {
+                            window.applyProfileToUi();
+                            window.renderLeaderboard();
+                        }
+                    }, 100);
+                };
+                if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(queueWork);
+                else queueWork();
             }
         }
     };
@@ -543,7 +551,7 @@
 
     window.updateMeaningStatusFromPopover = function(wordNum, meaningId, status, event) {
         if (event) event.stopPropagation();
-        window.updateMeaningStatus(wordNum, meaningId, status, null);
+        window.updateMeaningStatus(wordNum, meaningId, status, event);
         var vocabItem = vocabList.find(function(w) { return String(w.num) === String(wordNum); });
         if (vocabItem) {
             window.openWordPopoverFromVocab(null, vocabItem, document.getElementById('popWord').innerText);
