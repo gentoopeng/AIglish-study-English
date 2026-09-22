@@ -5190,54 +5190,12 @@ function bindSaveButton() {
   }, true);
 }
 
-/* ---------- オートセーブ ---------- */
-var __svDirty = false;
-var __svDebounce = null;
-
-function markDirty() {
-  __svDirty = true;
-  clearTimeout(__svDebounce);
-  __svDebounce = setTimeout(function () {
-    if (__svDirty && uid()) {
-      doSave('auto');
-      __svDirty = false;
-    }
-  }, 3000);
-}
-
-setInterval(function () {
-  if (uid() && __svDirty) {
-    doSave('auto');
-    __svDirty = false;
-  }
-}, SAVE_INTERVAL);
-
-window.addEventListener('pagehide', function () {
-  if (uid()) { try { doSave('auto'); } catch (e) {} }
-});
-document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'hidden' && uid()) {
-    try { doSave('auto'); } catch (e) {}
-  }
-});
-
-/* ---------- saveUserStats ラップ → 変更マーク ---------- */
-var __origSaveUserStats = window.saveUserStats;
-if (typeof __origSaveUserStats === 'function' && !__origSaveUserStats.__svWrapped) {
-  var wrappedSave = function () {
-    var r = __origSaveUserStats.apply(this, arguments);
-    markDirty();
-    return r;
-  };
-  wrappedSave.__svWrapped = true;
-  window.saveUserStats = wrappedSave;
-}
+/* ---------- 自動保存は addon.js の1分調停へ一本化 ---------- */
 
 /* ---------- 読み込み完了後 → ボタン紐付け＋初期オートセーブ ---------- */
 window.onAppLoaded(function () {
   setTimeout(function () {
     bindSaveButton();
-    if (uid()) { doSave('auto'); }
   }, 1500);
 });
 
@@ -6164,6 +6122,7 @@ document.body.appendChild(indicatorEl);
 return indicatorEl;
 }
 function updateSaveIndicator(state) {
+return;
 var el = ensureIndicator();
 if (!el) return;
 var icon = document.getElementById('svAutoIcon');
@@ -6535,6 +6494,7 @@ document.body.appendChild(indEl);
 return indEl;
 }
 function ind(state, text) {
+return;
 var el = ensureInd();
 el.textContent = (state === 'saving' ? '🔄 ' : state === 'ok' ? '✅ ' : '⚠️ ') + text;
 el.style.borderColor = state === 'ok' ? 'rgba(74,222,128,.6)' : state === 'err' ? 'rgba(248,113,113,.6)' : 'rgba(52,231,228,.5)';
@@ -6728,30 +6688,11 @@ var t = e.target; if (!t || !t.closest) return;
 if (t.closest('#headerSaveBtn')) { e.preventDefault(); e.stopPropagation(); openPanel(); }
 }, true);
 
-/* ---------- 自動セーブ ---------- */
-var dirty = false, dbT = null;
-function markDirty() {
-dirty = true;
-clearTimeout(dbT);
-dbT = setTimeout(function () { if (dirty && uid()) { dirty = false; cloudSave('auto', false); } }, 3000);
-}
-if (typeof window.saveUserStats === 'function' && !window.saveUserStats.__fbsWrapped) {
-var origSave = window.saveUserStats;
-window.saveUserStats = function () { var r = origSave.apply(this, arguments); markDirty(); return r; };
-window.saveUserStats.__fbsWrapped = true;
-}
-setInterval(function () { if (dirty && uid()) { dirty = false; cloudSave('auto', false); } }, 180000);
-window.addEventListener('pagehide', function () { if (dirty && uid()) { dirty = false; cloudSave('auto', false); } });
-document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && dirty && uid()) { dirty = false; cloudSave('auto', false); } });
+/* ---------- 自動保存は addon.js の1分調停へ一本化 ---------- */
 
-/* ---------- ログイン後：ボタン確保＋初回バックアップ ---------- */
-var bootedOnce = false;
+/* ---------- ログイン後：ボタン確保 ---------- */
 window.onAppLoaded(function () {
 ensureBtn();
-if (!bootedOnce) {
-bootedOnce = true;
-setTimeout(function () { if (uid()) cloudSave('auto', false); }, 4000);
-}
 });
 (function bootFbsv() {
 function run() { ensureBtn(); }
@@ -6759,159 +6700,6 @@ if (document.readyState !== 'loading') setTimeout(run, 400);
 else document.addEventListener('DOMContentLoaded', function () { setTimeout(run, 400); });
 })();
 console.log('☁️ セーブFirebase一本化パッチ適用完了（失敗時通知＋自動セーブ表示）');
-})();
-// ==========================================================================
-// 💾 保存プログレスゲージパッチ（末尾追記・既存コード不変更）
-//    ・保存（手動/オート）中に「💾 保存中 NN%」ゲージを表示
-//    ・完了で「✅ 保存完了 100%」→1.6秒で消灯
-//    ・失敗で「⚠️ 保存失敗」→3.2秒で消灯
-//    ・仕組み：window.fbSetDoc をラップし、
-//      users/{id}/saves/{slot}（メタ）と .../parts/pN（分割データ）の
-//      書き込み回数から進捗%を計算（既存パッチには一切触れない）
-//    ・25秒無反応ウォッチドッグ＝詰まりでも必ず結果表示
-//    ※ app.js / fix.js / style.css / index.html は不変更
-// ==========================================================================
-(function applySaveProgressGaugePatch() {
-"use strict";
-if (window.__saveGaugeApplied) return;
-window.__saveGaugeApplied = true;
-
-/* ---------- スタイル ---------- */
-(function injectGaugeCss() {
-if (document.getElementById('svGaugeCss')) return;
-var s = document.createElement('style');
-s.id = 'svGaugeCss';
-s.textContent = [
-'#svGauge{position:fixed;top:calc(56px + env(safe-area-inset-top));left:50%;transform:translateX(-50%) translateY(-8px);z-index:99995;',
-'  display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;',
-'  background:rgba(7,11,25,.80);border:1px solid rgba(0,240,255,.35);',
-'  box-shadow:0 0 14px rgba(0,240,255,.25),0 6px 18px rgba(0,0,0,.5);',
-'  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);',
-'  opacity:0;transition:opacity .25s ease,transform .25s ease;pointer-events:none;}',
-'#svGauge.show{opacity:1;transform:translateX(-50%) translateY(0);}',
-'#svGauge .sg-ico{font-size:13px;line-height:1;}',
-'#svGauge .sg-bar{width:110px;height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;flex:0 0 auto;}',
-'#svGauge .sg-fill{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#00F0FF,#C084FC);box-shadow:0 0 8px rgba(0,240,255,.7);transition:width .18s ease;}',
-'#svGauge .sg-txt{font-family:ui-monospace,monospace;font-size:10px;font-weight:800;color:#E2E8F0;letter-spacing:.05em;min-width:74px;text-align:right;white-space:nowrap;}',
-'#svGauge.ok{border-color:rgba(16,185,129,.6);box-shadow:0 0 14px rgba(16,185,129,.35),0 6px 18px rgba(0,0,0,.5);}',
-'#svGauge.ok .sg-fill{background:linear-gradient(90deg,#34D399,#10B981);box-shadow:0 0 8px rgba(16,185,129,.7);}',
-'#svGauge.err{border-color:rgba(239,68,68,.6);box-shadow:0 0 14px rgba(239,68,68,.4),0 6px 18px rgba(0,0,0,.5);}',
-'#svGauge.err .sg-fill{background:linear-gradient(90deg,#F87171,#EF4444);box-shadow:0 0 8px rgba(239,68,68,.7);}'
-].join('\n');
-(document.head || document.documentElement).appendChild(s);
-})();
-
-/* ---------- ゲージDOM ---------- */
-var gEl = null, gFill = null, gTxt = null, gIco = null;
-var hideT = null, dogT = null;
-var st = { active: false, partTotal: 1, done: 0 };
-
-function ensureGauge() {
-if (gEl && document.body.contains(gEl)) return;
-gEl = document.createElement('div');
-gEl.id = 'svGauge';
-gEl.innerHTML = '<span class="sg-ico">💾</span><span class="sg-bar"><span class="sg-fill"></span></span><span class="sg-txt">保存中 0%</span>';
-document.body.appendChild(gEl);
-gFill = gEl.querySelector('.sg-fill');
-gTxt = gEl.querySelector('.sg-txt');
-gIco = gEl.querySelector('.sg-ico');
-}
-function paint(pct) {
-if (!gEl) return;
-if (gFill) gFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
-if (gTxt) gTxt.textContent = '保存中 ' + Math.max(0, Math.min(100, pct)) + '%';
-}
-function kickDog() {
-clearTimeout(dogT);
-dogT = setTimeout(function () { if (st.active) fail(); }, 25000);
-}
-function show() {
-ensureGauge();
-gEl.classList.remove('ok', 'err');
-gEl.classList.add('show');
-if (gIco) gIco.textContent = '💾';
-kickDog();
-}
-function done() {
-clearTimeout(dogT);
-st.active = false;
-ensureGauge();
-gEl.classList.remove('err');
-gEl.classList.add('ok', 'show');
-if (gFill) gFill.style.width = '100%';
-if (gTxt) gTxt.textContent = '保存完了 100%';
-if (gIco) gIco.textContent = '✅';
-clearTimeout(hideT);
-hideT = setTimeout(function () { if (gEl) gEl.classList.remove('show'); }, 1600);
-}
-function fail() {
-clearTimeout(dogT);
-st.active = false;
-ensureGauge();
-gEl.classList.remove('ok');
-gEl.classList.add('err', 'show');
-if (gTxt) gTxt.textContent = '保存失敗';
-if (gIco) gIco.textContent = '⚠️';
-clearTimeout(hideT);
-hideT = setTimeout(function () { if (gEl) gEl.classList.remove('show'); }, 3200);
-}
-
-/* ---------- fbSetDoc ラップ（進捗計測） ---------- */
-function refPath(ref) {
-try { if (ref && typeof ref.path === 'string') return ref.path; } catch (e) {}
-try { if (ref && ref._key && typeof ref._key.path === 'string') return ref._key.path; } catch (e) {}
-return '';
-}
-function partCountOf(data) {
-if (!data || typeof data !== 'object') return 0;
-var n = data.partCount || data.parts || data.totalParts || 0;
-n = parseInt(n, 10);
-return (isFinite(n) && n > 0) ? n : 0;
-}
-function hook() {
-if (typeof window.fbSetDoc !== 'function' || window.fbSetDoc.__gaugeWrapped) return true;
-var prev = window.fbSetDoc;
-var wrapped = function (ref, data, opts) {
-var path = refPath(ref);
-var mMeta = /\/saves\/([^\/]+)$/.exec(path);
-var mPart = /\/saves\/([^\/]+)\/parts\/p(\d+)$/.exec(path);
-var p = prev.apply(this, arguments);
-try {
-if (mMeta) {
-st.active = true;
-st.partTotal = Math.max(1, partCountOf(data));
-st.done = 0;
-clearTimeout(hideT);
-show();
-paint(st.partTotal > 1 ? 2 : 30);
-if (st.partTotal <= 1) {
-p.then(function () { if (st.active) done(); }, function () { fail(); });
-}
-} else if (mPart) {
-if (!st.active) { st.active = true; st.partTotal = Math.max(st.partTotal, 1); st.done = 0; clearTimeout(hideT); show(); }
-var idx = parseInt(mPart[2], 10) || 0;
-st.done = Math.max(st.done, idx + 1);
-kickDog();
-paint(Math.round((st.done / st.partTotal) * 96));
-p.then(function () {
-if (st.active && st.done >= st.partTotal) done();
-}, function () { fail(); });
-}
-} catch (e) {}
-return p;
-};
-wrapped.__gaugeWrapped = true;
-window.fbSetDoc = wrapped;
-return true;
-}
-if (!hook()) {
-var tries = 0;
-var iv = setInterval(function () {
-tries++;
-if (hook() || tries > 20) clearInterval(iv);
-}, 300);
-}
-console.log('💾 保存プログレスゲージパッチ適用完了');
 })();
 // ==========================================================================
 // 🛠️ 最終修正パッチ（gacha.js末尾追記・既存コード不変更）

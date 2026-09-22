@@ -707,10 +707,6 @@
             var card = document.createElement('div');
             card.className = "word-row-container";
             card.setAttribute('style', window.getCardStyleByHistory(w));
-            card.onclick = function(e) {
-                if (e.target.closest('button') || e.target.closest('.word-expand-toggle') || e.target.closest('input') || e.target.closest('textarea')) return;
-                window.openWordPopoverFromVocab(e, w, w.word);
-            };
             var hasAnyHistory = w.meanings && w.meanings.some(function(m) { return m.history && m.history.length > 0; });
             var dotsHtml = "";
             if (hasAnyHistory) {

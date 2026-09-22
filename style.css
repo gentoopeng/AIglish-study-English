@@ -1665,3 +1665,11 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
+
+/* 保存は裏側で行い、ヘッダーの保存ボタンや上部通知は表示しない。 */
+#headerSaveBtn,
+#svAutoIndicator,
+#fbSaveInd,
+#svGauge {
+    display: none !important;
+}
