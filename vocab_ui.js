@@ -475,7 +475,7 @@
     // ================================================================
 
     window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
-        if (event) event.stopPropagation();
+        if (event) { event.preventDefault(); event.stopPropagation(); }
         var wIdx = vocabList.findIndex(function(w) { return String(w.num) === String(wordNum); });
         if (wIdx >= 0) {
             var mIdx = vocabList[wIdx].meanings.findIndex(function(m) { return String(m.id) === String(meaningId); });
@@ -489,13 +489,42 @@
                     vocabList[wIdx].meanings[mIdx].history.push(status);
                     totalExp += 1;
                 }
-                userStats.vocab_fixed = vocabList.filter(function(w) { return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; }); }).length;
-                window.saveUserStats();
-                window.checkAndRewardTitleBonusXP();
-                window.saveVocabToStorage();
-                window.renderVocabList();
-                window.applyProfileToUi();
-                window.renderLeaderboard();
+                // 押したボタンだけを先に更新し、一覧全体の描画や通信を待たせない。
+                if (event && event.currentTarget && event.currentTarget.parentElement) {
+                    var colors = { ok: 'var(--word-ok)', so: 'var(--word-so)', bad: 'var(--word-bad)', none: 'rgba(255,255,255,0.3)' };
+                    Array.prototype.forEach.call(event.currentTarget.parentElement.children, function(button) {
+                        button.style.background = 'rgba(0,0,0,0.5)';
+                        button.style.color = 'white';
+                    });
+                    event.currentTarget.style.background = colors[status] || colors.none;
+                    event.currentTarget.style.color = status === 'bad' ? '#FFF' : (status === 'none' ? 'white' : '#000');
+                    var card = event.currentTarget.closest ? event.currentTarget.closest('.word-row-container') : null;
+                    if (card) card.setAttribute('style', window.getCardStyleByHistory(vocabList[wIdx]));
+                }
+                // 原因だった全単語の集計・端末保存・一覧再描画は、描画後に1回へまとめる。
+                var queueWork = function() {
+                    if (window.__meaningStatusWorkTimer) clearTimeout(window.__meaningStatusWorkTimer);
+                    window.__meaningStatusWorkTimer = setTimeout(function() {
+                        window.__meaningStatusWorkTimer = null;
+                        userStats.vocab_fixed = vocabList.filter(function(w) {
+                            return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; });
+                        }).length;
+                        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+                        if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(60000);
+                        window.saveUserStats();
+                        window.checkAndRewardTitleBonusXP();
+                        window.saveVocabToStorage();
+                        if (typeof window.scheduleVocabListRender === 'function') window.scheduleVocabListRender(700);
+                        else window.renderVocabList();
+                        if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(1000);
+                        else {
+                            window.applyProfileToUi();
+                            window.renderLeaderboard();
+                        }
+                    }, 100);
+                };
+                if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(queueWork);
+                else queueWork();
             }
         }
     };
@@ -513,7 +542,7 @@
         document.getElementById('popWordNum').innerText = '#' + vocabItem.num;
         var meaningHtml = "";
         vocabItem.meanings.forEach(function(m) {
-            meaningHtml += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:6px;"> <span style="font-size:14px; color:white; flex:1; line-height:1.4;">' + m.text + '</span> <div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'so\', event)">△</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'none\', event)">ー</button> </div> </div>';
+            meaningHtml += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:6px;"> <span style="font-size:14px; color:white; flex:1; line-height:1.4;">' + m.text + '</span> <div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'so\', event)">△</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'none\', event)">ー</button> </div> </div>';
         });
         document.getElementById('popMeaning').innerHTML = meaningHtml;
         document.getElementById('popoverStatusBtns').style.display = "none";
@@ -524,7 +553,7 @@
 
     window.updateMeaningStatusFromPopover = function(wordNum, meaningId, status, event) {
         if (event) event.stopPropagation();
-        window.updateMeaningStatus(wordNum, meaningId, status, null);
+        window.updateMeaningStatus(wordNum, meaningId, status, event);
         var vocabItem = vocabList.find(function(w) { return String(w.num) === String(wordNum); });
         if (vocabItem) {
             window.openWordPopoverFromVocab(null, vocabItem, document.getElementById('popWord').innerText);
@@ -716,7 +745,7 @@
             }
             var meaningsHtml = '<div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px;">';
             w.meanings.forEach(function(m) {
-                meaningsHtml += '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4;">' + m.text + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
+                meaningsHtml += '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4;">' + m.text + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
             });
             meaningsHtml += '</div>';
             var adminActionButtons = "";
