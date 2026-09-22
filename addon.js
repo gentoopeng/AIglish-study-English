@@ -323,18 +323,22 @@ console.log('🔧 名前見切れ修正パッチ適用完了');
 if(window.__saveCoordinatorApplied) return; window.__saveCoordinatorApplied=true;
 try{ if(window.__autoSaveTimer){ clearInterval(window.__autoSaveTimer); window.__autoSaveTimer=null; } }catch(e){}
 
-function coordinate(name){
+function coordinate(name,delay){
 var original=window[name];
 if(typeof original!=='function') return null;
 var running=false;
-var queued=[];
+var pending=false;
+var timer=null;
+var waiters=[];
 var latestThis=null;
 var latestArgs=[];
 
 function run(){
-if(running||queued.length===0) return;
+if(running||!pending) return;
+if(timer){ clearTimeout(timer); timer=null; }
 running=true;
-var batch=queued.splice(0);
+pending=false;
+var batch=waiters.splice(0);
 var self=latestThis;
 var args=latestArgs;
 var result;
@@ -346,23 +350,41 @@ Promise.resolve(result).then(function(value){ finish(batch,null,value); },functi
 function finish(batch,error,value){
 running=false;
 batch.forEach(function(waiter){ if(error) waiter.reject(error); else waiter.resolve(value); });
-run();
+if(pending) schedule();
+}
+
+function schedule(){
+if(running||timer||!pending) return;
+timer=setTimeout(run,delay);
 }
 
 function request(){
 latestThis=this;
 latestArgs=arguments;
-var promise=new Promise(function(resolve,reject){ queued.push({resolve:resolve,reject:reject}); });
-run();
+pending=true;
+var promise=new Promise(function(resolve,reject){ waiters.push({resolve:resolve,reject:reject}); });
+schedule();
 return promise;
 }
 
 window[name]=request;
-return { flush:function(){ return request.call(window); } };
+return { flush:function(){
+if(timer){ clearTimeout(timer); timer=null; }
+if(pending) run();
+return new Promise(function(resolve){
+function check(){
+if(!running&&!pending){ resolve(); return; }
+if(!running&&pending){ if(timer){ clearTimeout(timer); timer=null; } run(); }
+setTimeout(check,20);
+}
+check();
+});
+} };
 }
 
-var stats=coordinate('saveUserStats');
-var vocab=coordinate('saveVocabToStorage');
+// 短時間に何度呼ばれても、最後の内容を1回だけ保存する。
+var stats=coordinate('saveUserStats',1200);
+var vocab=coordinate('saveVocabToStorage',1500);
 window.__saveFlush=function(){
 var jobs=[];
 if(stats) jobs.push(stats.flush());
