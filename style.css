@@ -1666,8 +1666,7 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* 保存は裏側で行い、ヘッダーの保存ボタンや上部通知は表示しない。 */
-#headerSaveBtn,
+/* 保存中の上部通知は表示しない。手動保存ボタンは表示する。 */
 #svAutoIndicator,
 #fbSaveInd,
 #svGauge {

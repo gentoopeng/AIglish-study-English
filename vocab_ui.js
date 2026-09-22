@@ -489,6 +489,14 @@
                     vocabList[wIdx].meanings[mIdx].history.push(status);
                     totalExp += 1;
                 }
+                var combinedHistory = [];
+                vocabList[wIdx].meanings.forEach(function(meaning) {
+                    if (meaning.history && meaning.history.length) combinedHistory = combinedHistory.concat(meaning.history);
+                });
+                vocabList[wIdx].history = combinedHistory.slice(-20);
+                if (typeof window.wordOverallStatus === 'function') {
+                    vocabList[wIdx].status = window.wordOverallStatus(vocabList[wIdx]);
+                }
                 // 押したボタンだけを先に更新し、一覧全体の描画や通信を待たせない。
                 if (event && event.currentTarget && event.currentTarget.parentElement) {
                     var colors = { ok: 'var(--word-ok)', so: 'var(--word-so)', bad: 'var(--word-bad)', none: 'rgba(255,255,255,0.3)' };
@@ -501,6 +509,8 @@
                     var card = event.currentTarget.closest ? event.currentTarget.closest('.word-row-container') : null;
                     if (card) card.setAttribute('style', window.getCardStyleByHistory(vocabList[wIdx]));
                 }
+                // 履歴部分も対象カードだけ即時更新し、一覧全体を作り直さない。
+                if (typeof window.updateVocabCardUi === 'function') window.updateVocabCardUi(wordNum);
                 // 原因だった全単語の集計・端末保存・一覧再描画は、描画後に1回へまとめる。
                 var queueWork = function() {
                     if (window.__meaningStatusWorkTimer) clearTimeout(window.__meaningStatusWorkTimer);
@@ -509,13 +519,9 @@
                         userStats.vocab_fixed = vocabList.filter(function(w) {
                             return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; });
                         }).length;
-                        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
-                        if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(60000);
                         window.saveUserStats();
                         window.checkAndRewardTitleBonusXP();
                         window.saveVocabToStorage();
-                        if (typeof window.scheduleVocabListRender === 'function') window.scheduleVocabListRender(700);
-                        else window.renderVocabList();
                         if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(1000);
                         else {
                             window.applyProfileToUi();

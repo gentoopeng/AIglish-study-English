@@ -3196,25 +3196,7 @@ window.onAppLoaded(async function() {
   }
 })();
 
-// ------------------------------------------------------------------
-// 19. ページ離脱時のフラッシュ保存
-// ------------------------------------------------------------------
-window.addEventListener("pagehide", function() {
-  window.saveVocabProgressLocally();
-  if (window.__vocabSaveTimer || window.__userStatsTimer || window.__flashcardSessionActive) {
-    window.flushVocabProgressSave();
-    window.flushUserStatsRefresh();
-  }
-});
-document.addEventListener("visibilitychange", function() {
-  if (document.visibilityState === "hidden") {
-    window.saveVocabProgressLocally();
-    if (window.__vocabSaveTimer || window.__userStatsTimer || window.__flashcardSessionActive) {
-      window.flushVocabProgressSave();
-      window.flushUserStatsRefresh();
-    }
-  }
-});
+// 保存は右上のセーブボタンから行う。ページ離脱時の自動保存は行わない。
 
 // ------------------------------------------------------------------
 // 20. シーズンランキング定期チェック（60秒間隔）
@@ -7643,26 +7625,7 @@ window.__loadUserSettings = async function() {
 // 【C】変更の自動検知（20秒ごと＋画面を閉じる時）→ クラウドへ保存
 // ------------------------------------------------------------------
 window.__startSettingsSyncLoop = function() {
-    if (window.__settingsSyncLoopStarted) return;
     window.__settingsSyncLoopStarted = true;
-    setInterval(function() {
-        if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
-        if (window.__lastSavedSettingsJson === null) return;
-        try {
-            var cur = JSON.stringify(window.__collectLocalSettings());
-            if (cur !== window.__lastSavedSettingsJson) window.__saveUserSettings();
-        } catch (e) {}
-    }, 20000);
-    var flush = function() {
-        if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
-        if (window.__lastSavedSettingsJson === null) return;
-        try {
-            var cur = JSON.stringify(window.__collectLocalSettings());
-            if (cur !== window.__lastSavedSettingsJson) window.__saveUserSettings();
-        } catch (e) {}
-    };
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'hidden') flush(); });
 };
 
 // ------------------------------------------------------------------

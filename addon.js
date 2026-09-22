@@ -323,18 +323,16 @@ console.log('🔧 名前見切れ修正パッチ適用完了');
 if(window.__saveCoordinatorApplied) return; window.__saveCoordinatorApplied=true;
 try{ if(window.__autoSaveTimer){ clearInterval(window.__autoSaveTimer); window.__autoSaveTimer=null; } }catch(e){}
 
-function coordinate(name,delay){
+function coordinate(name){
 var original=window[name];
 if(typeof original!=='function') return null;
 var running=false;
 var pending=false;
-var timer=null;
 var latestThis=null;
 var latestArgs=[];
 
 function run(){
 if(running||!pending) return;
-if(timer){ clearTimeout(timer); timer=null; }
 running=true;
 pending=false;
 var self=latestThis;
@@ -348,31 +346,23 @@ Promise.resolve(result).then(function(){ finish(null); },function(error){ finish
 function finish(error){
 running=false;
 if(error) console.error('自動保存に失敗しました:',error);
-if(pending) schedule();
-}
-
-function schedule(){
-if(running||timer||!pending) return;
-timer=setTimeout(run,delay);
 }
 
 function request(){
 latestThis=this;
 latestArgs=arguments;
 pending=true;
-schedule();
-// 画面操作は通信完了を待たせない。完了待ちは __saveFlush が担当する。
+// 通常操作では保存せず、手動保存・ログアウト時の flush だけで確定する。
 return Promise.resolve();
 }
 
 window[name]=request;
 return { flush:function(){
-if(timer){ clearTimeout(timer); timer=null; }
 if(pending) run();
 return new Promise(function(resolve){
 function check(){
 if(!running&&!pending){ resolve(); return; }
-if(!running&&pending){ if(timer){ clearTimeout(timer); timer=null; } run(); }
+if(!running&&pending) run();
 setTimeout(check,20);
 }
 check();
@@ -380,19 +370,16 @@ check();
 } };
 }
 
-// 短時間に何度呼ばれても、最後の内容を1回だけ保存する。
-var stats=coordinate('saveUserStats',60000);
-var vocab=coordinate('saveVocabToStorage',60000);
+// 自動保存は行わず、明示的な flush まで変更をまとめる。
+var stats=coordinate('saveUserStats');
+var vocab=coordinate('saveVocabToStorage');
 window.__saveFlush=function(){
 var jobs=[];
 if(stats) jobs.push(stats.flush());
 if(vocab) jobs.push(vocab.flush());
 return Promise.all(jobs);
 };
-function flushSafely(){ window.__saveFlush().catch(function(error){ console.error('セーブのフラッシュに失敗しました:',error); }); }
-document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') flushSafely(); });
-window.addEventListener('pagehide',flushSafely);
-console.log('💾 セーブ調停処理適用完了');
+console.log('💾 手動セーブ調停処理適用完了');
 })();
 
 // ============ ⑦ 回復/スキル2演出＋討伐是正（間違えポップは無し） ============
