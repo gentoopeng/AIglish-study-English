@@ -490,6 +490,7 @@
                     totalExp += 1;
                 }
                 userStats.vocab_fixed = vocabList.filter(function(w) { return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; }); }).length;
+                if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
                 window.saveUserStats();
                 window.checkAndRewardTitleBonusXP();
                 window.saveVocabToStorage();
