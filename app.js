@@ -163,7 +163,15 @@ if (!file.type.startsWith('image/')) {
  reader.readAsDataURL(file);
 };
 // アプリのコアライフサイクル読み込み
+window.__beforeAppLoadHandlers = window.__beforeAppLoadHandlers || [];
+window.__afterAppLoadHandlers = window.__afterAppLoadHandlers || [];
+window.onBeforeAppLoad = function(handler) { if(typeof handler === 'function') window.__beforeAppLoadHandlers.push(handler); };
+window.onAppLoaded = function(handler) { if(typeof handler === 'function') window.__afterAppLoadHandlers.push(handler); };
 window.loadLocalState = async function() {
+for (var beforeIndex = 0; beforeIndex < window.__beforeAppLoadHandlers.length; beforeIndex++) {
+    try { await window.__beforeAppLoadHandlers[beforeIndex](); }
+    catch (e) { console.error('起動前の準備に失敗しました:', e); }
+}
 const savedId = localStorage.getItem('core_v4_userId');
 geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
 const apiKeyInput = document.getElementById('sidebarApiKeyInput');
@@ -215,9 +223,13 @@ const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダ�
      window.relabelUiText();
      window.injectVocabStatsButton();
  } else {
-     const gateScreen = document.getElementById('auth-gate-screen');
-     if(gateScreen) gateScreen.style.display = 'flex';
- }
+	     const gateScreen = document.getElementById('auth-gate-screen');
+	     if(gateScreen) gateScreen.style.display = 'flex';
+	 }
+for (var afterIndex = 0; afterIndex < window.__afterAppLoadHandlers.length; afterIndex++) {
+    try { await window.__afterAppLoadHandlers[afterIndex](); }
+    catch (e) { console.error('起動後の追加読み込みに失敗しました:', e); }
+}
 };
 // ==========================================================================
 // 🌟 2. グローバル変数（システム全体で使うデータ）
@@ -980,6 +992,10 @@ const overlay = document.getElementById('sidebarOverlay');
 if(menu) menu.classList.toggle('open', open);
 if(overlay) overlay.style.display = open ? 'block' : 'none';
 };
+window.__tabChangeHandlers = window.__tabChangeHandlers || [];
+window.onTabChange = function(handler) {
+if(typeof handler === 'function') window.__tabChangeHandlers.push(handler);
+};
 window.switchTab = function(tabId) {
 document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
 const view = document.getElementById('view-' + tabId);
@@ -997,6 +1013,9 @@ if(tabId === 'admin') {
 if(tabId === 'titles') window.renderTitles(); 
 currentActiveTabId = tabId;
 if(tabId === 'community') window.sortAndRenderFriendList();
+window.__tabChangeHandlers.slice().forEach(function(handler) {
+    try { handler(tabId); } catch (e) { console.error('画面切り替え後の更新に失敗しました:', e); }
+});
 };
 // ==========================================================================
 // 📖 単語帳関連
@@ -1125,90 +1144,6 @@ if(myBookshelf.some(item => item.text === text && item.folder === folder)) { ale
 };
 window.closeWordPopover = function() { document.getElementById('wordPopover').classList.remove('show'); document.getElementById('wordPopover').style.display = 'none'; };
 window.closeReader = function() { document.getElementById('text-input-view').style.display = 'block'; document.getElementById('text-reader-view').style.display = 'none'; currentActiveAiAnalysisCache = null; };
-window.renderActivityChart = function() {
-const chart = document.getElementById('activityBarChart');
-if(!chart) return;
-chart.innerHTML = "";
-const now = new Date();
- let currentDayIdx = now.getDay() - 1; 
- if(currentDayIdx < 0) currentDayIdx = 6; 
- const currentTodayMinutes = todayStudySeconds / 60;
- weeklyStudyMinutesLog[currentDayIdx] = currentTodayMinutes;
- const daysLabels = ["月", "火", "水", "木", "金", "土", "日"];
- daysLabels.forEach((d, idx) => {
-     const wrap = document.createElement('div'); 
-     wrap.className = "bar-wrapper";
-     wrap.style.cssText = "display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; flex: 1; min-width: 0;";
-     let rawMin = weeklyStudyMinutesLog[idx] || 0;
-     let fillHeightPercent = Math.min(100, Math.max(4, Math.round((rawMin / 60) * 100)));
-     const fill = document.createElement('div'); 
-     fill.className = "bar-fill active"; 
-     fill.style.height = `${fillHeightPercent}%`;
-     const valLbl = document.createElement('div'); 
-     valLbl.style.cssText = "font-size: 8px; font-weight: 700; color: #FFFFFF; margin-bottom: 2px; white-space: nowrap;";
-     valLbl.innerText = `${Math.floor(rawMin)}分`;
-     const lbl = document.createElement('div'); 
-     lbl.style.cssText = "font-size: 10px; color: var(--text-sub); margin-top: 4px; font-weight: bold;";
-     lbl.innerText = d;
-     wrap.appendChild(valLbl);
-     wrap.appendChild(fill); 
-     wrap.appendChild(lbl); 
-     chart.appendChild(wrap);
- });
-};
-window.initStudyTimerAndDataRotation = function() {
-const now = new Date();
-const todayStr = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;
-if (lastAccessDateStr && lastAccessDateStr !== todayStr) {
-     let oldDate = new Date(lastAccessDateStr);
-     let oldDayIdx = oldDate.getDay() - 1;
-     if(oldDayIdx < 0) oldDayIdx = 6;
-     weeklyStudyMinutesLog[oldDayIdx] = todayStudySeconds / 60;
-     localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
-     todayStudySeconds = 0;
-     localStorage.setItem('core_v4_study_today_secs', "0");
- }
- lastAccessDateStr = todayStr;
- localStorage.setItem('core_v4_study_last_date', todayStr);
- setInterval(() => {
-     let shouldCount = false;
-     if (currentActiveTabId === "vocab" || currentActiveTabId === "reader") {
-         shouldCount = true;
-     }
-     else if (currentActiveTabId === "game") {
-         const isFcardPlay = (document.getElementById('flashcard-play-screen') && document.getElementById('flashcard-play-screen').style.display === 'flex');
-         const isSoloPlay = (document.getElementById('game-play-screen') && document.getElementById('game-play-screen').style.display === 'block');
-         const isMultiPlay = (document.getElementById('multi-battle-play-screen') && document.getElementById('multi-battle-play-screen').style.display === 'flex');
-         if (isFcardPlay || isSoloPlay || isMultiPlay) {
-             shouldCount = true;
-         }
-     }
-     if (shouldCount) {
-         todayStudySeconds++;
-         localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
-         const currentMin = Math.floor(todayStudySeconds / 60);
-         if (currentMin > userStats.study_burst) {
-             userStats.study_burst = currentMin; 
-             window.saveUserStats();
-             window.checkAndRewardTitleBonusXP();
-         }
-         const minStr = String(currentMin).padStart(2, '0');
-         const secStr = String(todayStudySeconds % 60).padStart(2, '0');
-         const timeDisplayEl = document.getElementById('todayStudyTimeDisplay');
-         if (timeDisplayEl) {
-             timeDisplayEl.innerText = `${minStr}分${secStr}秒`;
-         }
-         window.renderActivityChart();
-     }
- }, 1000);
- const minStr = String(Math.floor(todayStudySeconds / 60)).padStart(2, '0');
- const secStr = String(todayStudySeconds % 60).padStart(2, '0');
- const timeDisplayEl = document.getElementById('todayStudyTimeDisplay');
- if (timeDisplayEl) {
-     timeDisplayEl.innerText = `${minStr}分${secStr}秒`;
- }
- window.renderActivityChart();
-};
 // 🌟 修正：実在ユーザー厳格判定＆本物プロフィール・アイコン取得フレンド追加処理
 window.searchAndAddFriend = async function() {
 const inputEl = document.getElementById('friendSearchInput');
@@ -1551,7 +1486,6 @@ const txt = input.value.trim() || "ダッシュボード"; localStorage.setItem(
 const headerTitleEl = document.getElementById('headerTitleText'); if(headerTitleEl) headerTitleEl.innerText = txt;
 alert("ダッシュボードのタイトルを更新しました！");
 };
-window.logoutToGate = function() { localStorage.clear(); location.reload(); };
 // ==========================================================================
 // 🎮 フラッシュカード（単語フラッシュ）制御モジュール
 // ==========================================================================
@@ -2270,6 +2204,21 @@ window.saveVocabMasterToStorage = async function() {
 window.__vocabSaveTimer = null;
 window.__userStatsTimer = null;
 window.__vocabRenderTimer = null;
+
+// 理解度は通信を待たず、先に端末へ保存する。
+window.saveVocabProgressLocally = function() {
+  if (typeof myId === "undefined" || !myId || typeof window.extractUserProgressFromVocabList !== "function") return;
+  var bookKey = currentTextbook || "default";
+  var progress = window.extractUserProgressFromVocabList();
+  var now = Date.now();
+  currentUserVocabProgress = progress;
+  try {
+    localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(progress));
+    localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + "__ts", String(now));
+  } catch (e) {
+    console.error("理解度の端末保存に失敗しました:", e);
+  }
+};
 
 window.scheduleVocabProgressSave = function(delay) {
   delay = delay || 500;
@@ -3160,26 +3109,6 @@ window.recordLastLoginOnce = async function() {
   try { userStats.lastLoginAt = new Date().toISOString(); await window.saveUserStats(); } catch (e) {}
 };
 
-window.logoutToGate = function() {
-  try {
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-      if (key === "core_v4_userId" || key === "core_v4_userName" || key === "core_v4_userTarget" || key === "core_v4_userTitle" ||
-          key === "core_v4_totalExp" || key === "core_v4_friend_list" || key === "core_v4_rewarded_titles_cache" ||
-          key === "core_v4_active_char" || key === "core_v4_active_weapon" || key === "core_v4_active_armor" ||
-          key === "core_v4_current_textbook_id" || key.indexOf("core_v4_user_stats_") === 0 ||
-          key.indexOf("core_v4_user_avatar_") === 0 || key.indexOf("core_v4_user_vocab_progress_") === 0 ||
-          key.indexOf("core_v4_study_") === 0) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(function(key) { localStorage.removeItem(key); });
-  } catch (e) { localStorage.clear(); }
-  location.reload();
-};
-
 // ------------------------------------------------------------------
 // 15. 管理者: ユーザーID復旧ボックス
 // ------------------------------------------------------------------
@@ -3221,9 +3150,7 @@ window.repairUserIntoAllUsers = async function() {
 // ------------------------------------------------------------------
 // 16. switchTab上書き（全機能のUI注入）
 // ------------------------------------------------------------------
-const __prevSwitchTabForAllPatch = window.switchTab;
-window.switchTab = function(tabId) {
-  const res = __prevSwitchTabForAllPatch ? __prevSwitchTabForAllPatch.apply(this, arguments) : undefined;
+window.onTabChange(function(tabId) {
   if (tabId === "community") {
     window.injectFriendRefreshButton();
     window.refreshFriendListFromFirebase(false);
@@ -3237,15 +3164,12 @@ window.switchTab = function(tabId) {
   if (tabId === "game") {
     window.renderGameLeaderboard();
   }
-  return res;
-};
+});
 
 // ------------------------------------------------------------------
 // 17. loadLocalState上書き（全初期化）
 // ------------------------------------------------------------------
-const __prevLoadLocalStateForAllPatch = window.loadLocalState;
-window.loadLocalState = async function() {
-  const result = __prevLoadLocalStateForAllPatch ? await __prevLoadLocalStateForAllPatch.apply(this, arguments) : undefined;
+window.onAppLoaded(async function() {
   if (myId && myId !== "GUEST-000") {
     window.ensureSeasonUserStats();
     await window.checkAndSettleSeasonTitles();
@@ -3253,8 +3177,7 @@ window.loadLocalState = async function() {
     if (typeof window.renderGameLeaderboard === "function") window.renderGameLeaderboard();
     if (typeof window.renderLeaderboard === "function") window.renderLeaderboard(false);
   }
-  return result;
-};
+});
 
 // ------------------------------------------------------------------
 // 18. 起動時注入
@@ -3277,6 +3200,7 @@ window.loadLocalState = async function() {
 // 19. ページ離脱時のフラッシュ保存
 // ------------------------------------------------------------------
 window.addEventListener("pagehide", function() {
+  window.saveVocabProgressLocally();
   if (window.__vocabSaveTimer || window.__userStatsTimer || window.__flashcardSessionActive) {
     window.flushVocabProgressSave();
     window.flushUserStatsRefresh();
@@ -3284,6 +3208,7 @@ window.addEventListener("pagehide", function() {
 });
 document.addEventListener("visibilitychange", function() {
   if (document.visibilityState === "hidden") {
+    window.saveVocabProgressLocally();
     if (window.__vocabSaveTimer || window.__userStatsTimer || window.__flashcardSessionActive) {
       window.flushVocabProgressSave();
       window.flushUserStatsRefresh();
@@ -3660,16 +3585,9 @@ window.autoRecoverCurrentUser = async function() {
 // ------------------------------------------------------------------
 // 8. loadLocalState に自動復旧を組み込み
 // ------------------------------------------------------------------
-const __prevLoadLocalStateForLoginRecovery = window.loadLocalState;
-window.loadLocalState = async function() {
-  const result = __prevLoadLocalStateForLoginRecovery
-    ? await __prevLoadLocalStateForLoginRecovery.apply(this, arguments)
-    : undefined;
-
+window.onAppLoaded(async function() {
   await window.autoRecoverCurrentUser();
-
-  return result;
-};
+});
 
 // ------------------------------------------------------------------
 // 9. 管理者用: 指定ユーザーをall_usersに強制復旧
@@ -4795,9 +4713,7 @@ window.renderLeaderboard = async function(force) {
 // E. switchTab 上書き：コミュニティ切替後の transform/opacity 残留を解消
 //    ＋ 保存ボタンの表示状態を同期
 // ------------------------------------------------------------------
-var __prevSwitchTabForRankReset = window.switchTab;
-window.switchTab = function(tabId) {
-  var res = __prevSwitchTabForRankReset ? __prevSwitchTabForRankReset.apply(this, arguments) : undefined;
+window.onTabChange(function(tabId) {
   if (tabId === 'community') {
     var ra = document.getElementById('leaderboardSection') || (document.getElementById('leaderboardContainer') ? document.getElementById('leaderboardContainer').parentElement : null);
     var fa = document.getElementById('friendSection') || (document.getElementById('friendListContainer') ? document.getElementById('friendListContainer').parentElement : null);
@@ -4806,18 +4722,14 @@ window.switchTab = function(tabId) {
     });
   }
   window.injectHeaderSaveButton();
-  return res;
-};
+});
 
 // ------------------------------------------------------------------
 // F. loadLocalState 上書き：起動／ログイン後に保存ボタンを注入
 // ------------------------------------------------------------------
-var __prevLoadLocalStateForSaveBtn = window.loadLocalState;
-window.loadLocalState = async function() {
-  var r = __prevLoadLocalStateForSaveBtn ? await __prevLoadLocalStateForSaveBtn.apply(this, arguments) : undefined;
+window.onAppLoaded(function() {
   window.injectHeaderSaveButton();
-  return r;
-};
+});
 
 // ------------------------------------------------------------------
 // G. 起動時注入
@@ -5118,23 +5030,45 @@ window.saveUserVocabProgress = async function() {
 // ------------------------------------------------------------------
 window.__studyTimerIntervalId = null;
 // ログアウトしても勉強時間データは消さない
-window.logoutToGate = function() {
+window.logoutToGate = async function() {
+  if (window.__logoutInProgress) return;
+  window.__logoutInProgress = true;
   try {
+    if (typeof window.__saveFlush === 'function') {
+      await Promise.race([
+        window.__saveFlush(),
+        new Promise(function(resolve) { setTimeout(resolve, 3000); })
+      ]);
+    }
+  } catch (e) {
+    console.error('ログアウト前の保存に失敗しました:', e);
+  }
+  try {
+    var exactKeys = [
+      'core_v4_userId', 'core_v4_userName', 'core_v4_userTarget', 'core_v4_userTitle',
+      'core_v4_totalExp', 'core_v4_friend_list', 'core_v4_rewarded_titles_cache',
+      'core_v4_active_char', 'core_v4_active_weapon', 'core_v4_active_armor',
+      'core_v4_current_textbook_id'
+    ];
+    exactKeys.forEach(function(key) {
+      try { localStorage.removeItem(key); } catch (e) { console.error('ログアウト情報を削除できませんでした:', key, e); }
+    });
     var keysToRemove = [];
     for (var i = 0; i < localStorage.length; i++) {
       var key = localStorage.key(i);
       if (!key) continue;
       if (key.indexOf('core_v4_study_') === 0) continue;
-      if (key === 'core_v4_userId' || key === 'core_v4_userName' || key === 'core_v4_userTarget' || key === 'core_v4_userTitle' ||
-          key === 'core_v4_totalExp' || key === 'core_v4_friend_list' || key === 'core_v4_rewarded_titles_cache' ||
-          key === 'core_v4_active_char' || key === 'core_v4_active_weapon' || key === 'core_v4_active_armor' ||
-          key === 'core_v4_current_textbook_id' || key.indexOf('core_v4_user_stats_') === 0 ||
-          key.indexOf('core_v4_user_avatar_') === 0 || key.indexOf('core_v4_user_vocab_progress_') === 0) {
+      if (key.indexOf('core_v4_user_stats_') === 0 || key.indexOf('core_v4_user_avatar_') === 0 ||
+          key.indexOf('core_v4_user_vocab_progress_') === 0) {
         keysToRemove.push(key);
       }
     }
-    keysToRemove.forEach(function(key) { localStorage.removeItem(key); });
-  } catch (e) { localStorage.clear(); }
+    keysToRemove.forEach(function(key) {
+      try { localStorage.removeItem(key); } catch (e) { console.error('ユーザー別情報を削除できませんでした:', key, e); }
+    });
+  } catch (e) {
+    console.error('ログアウト情報の削除に失敗しました:', e);
+  }
   location.reload();
 };
 
@@ -5556,25 +5490,6 @@ window.updateLoadQuizBookSelect = function() {
   };
 };
 
-// ------------------------------------------------------------------
-// 【9】loadLocalState 上書き（設定セクションの注入）
-// ------------------------------------------------------------------
-var __prevLoadLocalStateForQuizSettings = window.loadLocalState;
-window.loadLocalState = async function() {
-  var r = __prevLoadLocalStateForQuizSettings ? await __prevLoadLocalStateForQuizSettings.apply(this, arguments) : undefined;
-  window.injectLoadQuizSettings();
-  return r;
-};
-
-// ------------------------------------------------------------------
-// 【10】起動時注入
-// ------------------------------------------------------------------
-(function initLoadQuizSettingsPatch() {
-  function boot() { window.injectLoadQuizSettings(); }
-  if (document.readyState !== 'loading') { setTimeout(boot, 400); }
-  else { document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 400); }); }
-})();
-
 console.log('🎴 第5回パッチ（ロードクイズ番号削除＋出題元単語帳選択）適用完了');
 // ==========================================================================
 // 🎴 第6回パッチ：ロード画面クイズ 完全修正版（自己完結）
@@ -5966,19 +5881,6 @@ window.updateLoadQuizBookSelect = function() {
     if (typeof window.showToast === 'function') window.showToast('🎴 ロードクイズの出題元を設定しました', 'ok');
   };
 };
-
-var __prevLoadLocalStateForQuiz6 = window.loadLocalState;
-window.loadLocalState = async function() {
-  var r = __prevLoadLocalStateForQuiz6 ? await __prevLoadLocalStateForQuiz6.apply(this, arguments) : undefined;
-  window.injectLoadQuizSettings();
-  return r;
-};
-
-(function initPatch6() {
-  function boot() { window.injectLoadQuizSettings(); }
-  if (document.readyState !== 'loading') { setTimeout(boot, 400); }
-  else { document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 400); }); }
-})();
 
 console.log('🎴 第6回パッチ（ロードクイズ完全修正：増殖根絶＋スコアバー削除＋番号削除＋出題元選択）適用完了');
 // ==========================================================================
@@ -6537,18 +6439,9 @@ window.updateLoadQuizBookSelect = function() {
   };
 };
 
-var __prevLoadLocalStateForQuiz8 = window.loadLocalState;
-window.loadLocalState = async function() {
-  var r = __prevLoadLocalStateForQuiz8 ? await __prevLoadLocalStateForQuiz8.apply(this, arguments) : undefined;
+window.onAppLoaded(function() {
   window.injectLoadQuizSettings();
-  return r;
-};
-
-(function initPatch8() {
-  function boot() { window.injectLoadQuizSettings(); }
-  if (document.readyState !== 'loading') { setTimeout(boot, 400); }
-  else { document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 400); }); }
-})();
+});
 
 console.log('🎴 第8回パッチ（ロードクイズ完全版：増殖根絶＋スコアバー削除＋番号削除＋出題元選択＋記録B）適用完了');
 // ==========================================================================
@@ -7202,9 +7095,7 @@ window.switchReaderSubTab = function(tabName, animDir) {
 // ------------------------------------------------------------------
 // 【7】loadLocalState 上書き（教材同期＋構造初期化）
 // ------------------------------------------------------------------
-var __prevLoadLocalStateForShelfTabPatch = window.loadLocalState;
-window.loadLocalState = async function() {
-  var r = __prevLoadLocalStateForShelfTabPatch ? await __prevLoadLocalStateForShelfTabPatch.apply(this, arguments) : undefined;
+window.onAppLoaded(async function() {
   try {
     window.initReaderSubTabStructure();
     window.injectShelfAdminPanel();
@@ -7214,8 +7105,7 @@ window.loadLocalState = async function() {
   } catch (e) {
     console.error("本棚タブパッチ初期化エラー:", e);
   }
-  return r;
-};
+});
 
 // ------------------------------------------------------------------
 // 【8】起動時注入
@@ -7970,9 +7860,7 @@ window.__startTotalStudyDisplayLoop = function() {
 // ------------------------------------------------------------------
 // 【H】loadLocalState につなげて全体を起動
 // ------------------------------------------------------------------
-var __prevLoadLocalStateForSync3 = window.loadLocalState;
-window.loadLocalState = async function() {
-    var r = __prevLoadLocalStateForSync3 ? await __prevLoadLocalStateForSync3.apply(this, arguments) : undefined;
+window.onAppLoaded(async function() {
     try {
         await window.__loadGlobalSettings();
         await window.__loadUserSettings();
@@ -7982,8 +7870,7 @@ window.loadLocalState = async function() {
     } catch (e) {
         console.error("sync3 loadLocalState error:", e);
     }
-    return r;
-};
+});
 
 // ------------------------------------------------------------------
 // 【I】起動時注入（loadLocalState の保険）
@@ -8662,12 +8549,9 @@ window.injectUsageGuideButton = function() {
 // ------------------------------------------------------------------
 // 【5】loadLocalState に接続 ＋ 起動時注入
 // ------------------------------------------------------------------
-var __prevLoadLocalStateForUsageGuide = window.loadLocalState;
-window.loadLocalState = async function() {
-    var r = __prevLoadLocalStateForUsageGuide ? await __prevLoadLocalStateForUsageGuide.apply(this, arguments) : undefined;
+window.onAppLoaded(function() {
     window.injectUsageGuideButton();
-    return r;
-};
+});
 
 (function initUsageGuidePatch() {
     function boot() { window.injectUsageGuideButton(); }
@@ -9459,9 +9343,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     // 【9】loadLocalState 接続
     // ------------------------------------------------------------------
-    var __prevLoadLocalStateForCommunityRank = window.loadLocalState;
-    window.loadLocalState = async function() {
-        var r = __prevLoadLocalStateForCommunityRank ? await __prevLoadLocalStateForCommunityRank.apply(this, arguments) : undefined;
+    window.onAppLoaded(function() {
         try {
             window.__startCommunityStudyTimeSync();
             window.__uploadMyLocalBestsOnce();
@@ -9469,8 +9351,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         } catch (e) {
             console.error('コミュニティランキングパッチ初期化エラー:', e);
         }
-        return r;
-    };
+    });
 
     // ------------------------------------------------------------------
     // 【10】起動時注入
@@ -9637,15 +9518,12 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     // 【6】switchTab 上書き：コミュニティ切替時に確実にレイアウトを適用
     // ------------------------------------------------------------------
-    var __prevSwitchTabForFinish = window.switchTab;
-    window.switchTab = function(tabId) {
-        var r = __prevSwitchTabForFinish ? __prevSwitchTabForFinish.apply(this, arguments) : undefined;
+    window.onTabChange(function(tabId) {
         if (tabId === 'community') {
             setTimeout(applyFinishLayout, 80);
             setTimeout(applyFinishLayout, 350);
         }
-        return r;
-    };
+    });
 
     // ------------------------------------------------------------------
     // 【7】起動時注入（第13回パッチのDOM生成を待つため遅延＋再試行）
@@ -9926,66 +9804,20 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     //     既存処理（日跨ぎリセット含む）が走り終わった“後”に
     //     復元を再実行 → リセットに潰された todayStudySeconds を復活
     // ------------------------------------------------------------------
-    var __prevInitStudyTimerForTrigger = window.initStudyTimerAndDataRotation;
-    if (typeof __prevInitStudyTimerForTrigger === 'function') {
-        window.initStudyTimerAndDataRotation = function() {
-            var r = __prevInitStudyTimerForTrigger.apply(this, arguments);
-            // 日跨ぎリセットが復元値を0に潰した可能性があるので再復元
-            sgtRestore();
-            sgtReflectAndDraw();
-            return r;
-        };
-    }
-    
-    // ------------------------------------------------------------------
-    // 【2】shouldCount 非依存ウォッチドッグ（1秒間隔）
-    //     ホーム画面に居ても、毎秒“今日分を反映＋描画”を行う
-    //     → 本日表示とグラフが常に同期し、棒がリアルタイムに立つ
-    //     描画は7要素の軽い全置換＝既存の勉強中描画と競合しても
-    //     同じ値を描くだけなのでチラつかない
-    // ------------------------------------------------------------------
-    if (!window.__sgtWatchdogStarted) {
-        window.__sgtWatchdogStarted = true;
-        setInterval(function() {
-            // ログイン済み・ゲスト問わず描画してズレを防ぐ
-            sgtReflectAndDraw();
-        }, 1000);
-    }
-    
     // ------------------------------------------------------------------
     // 【3】loadLocalState をラップ：完了後に遅延キック
     //     ブートストラップ末尾の renderActivityChart は復元“前”に走るため
     //     全0を描いてしまう。復元“後”に遅延で上書きし直す
     // ------------------------------------------------------------------
-    var __prevLoadLocalStateForTrigger = window.loadLocalState;
-    if (typeof __prevLoadLocalStateForTrigger === 'function') {
-        window.loadLocalState = async function() {
-            var r = await __prevLoadLocalStateForTrigger.apply(this, arguments);
+    window.onAppLoaded(function() {
             var kick = function() { sgtRestore();
                 sgtReflectAndDraw(); };
             setTimeout(kick, 300);
             setTimeout(kick, 900);
             setTimeout(kick, 1800);
-            return r;
-        };
-    }
+    });
     
-    // ------------------------------------------------------------------
-    // 【4】起動時：DOM揃い次第すぐに1回描画（保険）
-    // ------------------------------------------------------------------
-    (function initStudyGraphTriggerPatch() {
-        function boot() {
-            sgtRestore();
-            sgtReflectAndDraw();
-        }
-        if (document.readyState !== 'loading') {
-            setTimeout(boot, 500);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 500); });
-        }
-    })();
-    
-    console.log('📊 第16回パッチ（勉強時間グラフ描画トリガー根治：ホーム毎秒描画＋復元再実行＋遅延キック）適用完了');
+    console.log('📊 第16回パッチ（勉強時間グラフ描画トリガー：復元＋遅延キック）適用完了');
 })();
 // ==========================================================================
 // ⏱️ 第17回パッチ：プレイ時間ランキングの整合性根治（週間 < 今日 の矛盾を撲滅）
@@ -10534,64 +10366,6 @@ window.__updateStudyTimeDisplay = function() {
 //    ・整数分に切り捨て（小数チラつき防止）
 //    ・既存DOMがある場合は値だけ更新（全消去→再構築しない）
 // ------------------------------------------------------------------
-window.renderActivityChart = function() {
-    var chart = document.getElementById('activityBarChart');
-    if (!chart) return;
-
-    var now = new Date();
-    var currentDayIdx = now.getDay() - 1;
-    if (currentDayIdx < 0) currentDayIdx = 6;
-
-    // ✅ 整数分に切り捨て
-    var currentTodayMinutes = Math.floor(todayStudySeconds / 60);
-    weeklyStudyMinutesLog[currentDayIdx] = currentTodayMinutes;
-
-    var daysLabels = ['月', '火', '水', '木', '金', '土', '日'];
-
-    // ✅ 既存バーがある場合は値だけ更新して return（DOM全消去しない）
-    if (chart.children.length === daysLabels.length) {
-        for (var i = 0; i < daysLabels.length; i++) {
-            var wrap = chart.children[i];
-            if (!wrap) continue;
-            var rawMin = weeklyStudyMinutesLog[i] || 0;
-            var pct = Math.min(100, Math.max(4, Math.round((rawMin / 60) * 100)));
-            var fill = wrap.querySelector('.bar-fill');
-            if (fill) fill.style.height = pct + '%';
-            var valLbl = wrap.children[0];
-            if (valLbl) valLbl.innerText = Math.floor(rawMin) + '分';
-        }
-        return;
-    }
-
-    // 初回のみDOM構築
-    chart.innerHTML = '';
-    for (var j = 0; j < daysLabels.length; j++) {
-        var w = document.createElement('div');
-        w.className = 'bar-wrapper';
-        w.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;flex:1;min-width:0;';
-
-        var raw = weeklyStudyMinutesLog[j] || 0;
-        var h = Math.min(100, Math.max(4, Math.round((raw / 60) * 100)));
-
-        var vl = document.createElement('div');
-        vl.style.cssText = 'font-size:8px;font-weight:700;color:#FFFFFF;margin-bottom:2px;white-space:nowrap;';
-        vl.innerText = Math.floor(raw) + '分';
-
-        var f = document.createElement('div');
-        f.className = 'bar-fill active';
-        f.style.height = h + '%';
-
-        var lb = document.createElement('div');
-        lb.style.cssText = 'font-size:10px;color:var(--text-sub);margin-top:4px;font-weight:bold;';
-        lb.innerText = daysLabels[j];
-
-        w.appendChild(vl);
-        w.appendChild(f);
-        w.appendChild(lb);
-        chart.appendChild(w);
-    }
-};
-
 // ------------------------------------------------------------------
 // C. タイマー＆日付ローテーションの完全上書き
 //    ・setInterval 内に毎秒の日付チェックを追加（0時跨ぎ対応）
@@ -10880,35 +10654,6 @@ window.__steToast = function(msg) {
     t.__hideTimer = setTimeout(function() { t.classList.remove('show'); }, 2200);
 };
 
-// ---------- 6. renderActivityChart をラップしてクリック binding ----------
-var __prevRenderForEditor = window.renderActivityChart;
-window.renderActivityChart = function() {
-    var r = __prevRenderForEditor ? __prevRenderForEditor.apply(this, arguments) : undefined;
-
-    var chart = document.getElementById('activityBarChart');
-    if (chart && !chart.__steBound) {
-        chart.__steBound = true;
-        chart.classList.add('editable');
-
-        // イベント移譲：DOM再構築されても1回のbindingで永久に動作
-        chart.addEventListener('click', function(e) {
-            var wrap = e.target.closest('.bar-wrapper');
-            if (!wrap) return;
-            var idx = Array.prototype.indexOf.call(chart.children, wrap);
-            if (idx >= 0) window.__openStudyTimeEditor(idx);
-        });
-
-        // ヒント表示
-        if (!document.getElementById('steHint')) {
-            var hint = document.createElement('div');
-            hint.id = 'steHint';
-            hint.textContent = '💡 バーをタップすると、その日の勉強時間を編集できます';
-            chart.insertAdjacentElement('afterend', hint);
-        }
-    }
-    return r;
-};
-
 console.log('✏️ 第6回パッチ（勉強時間の手動編集）適用完了');
 // ==========================================================================
 // 📅 第7回パッチ：グラフの右端を常に最新（今日）にするローリング表示
@@ -10931,103 +10676,6 @@ console.log('✏️ 第6回パッチ（勉強時間の手動編集）適用完�
     ].join('\n');
     document.head.appendChild(s);
 })();
-
-// ---------- 1. renderActivityChart 差し替え（ローリング順序） ----------
-window.renderActivityChart = function() {
-    var chart = document.getElementById('activityBarChart');
-    if (!chart) return;
-
-    var now = new Date();
-    var currentDayIdx = now.getDay() - 1;
-    if (currentDayIdx < 0) currentDayIdx = 6;
-
-    // 今日の分数（整数）をログに反映
-    weeklyStudyMinutesLog[currentDayIdx] = Math.floor(todayStudySeconds / 60);
-
-    var daysLabels = ['月', '火', '水', '木', '金', '土', '日'];
-
-    // 位置 p（0=左端 〜 6=右端）→ 曜日インデックス・日付
-    // 右端が常に今日、左へ1つずつ過去に遡る
-    function dayIdxAtPos(p) { return (currentDayIdx + p + 1) % 7; }
-    function dateAtPos(p) { return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - p)); }
-    function subLabelFor(p) {
-        var di = dayIdxAtPos(p);
-        if (di === currentDayIdx) return '今日';
-        var d = dateAtPos(p);
-        return (d.getMonth() + 1) + '/' + d.getDate();
-    }
-
-    if (chart.children.length === 7 && chart.__steRolling) {
-        // ---- 既存DOMあり：値だけ更新（全消去しない → チラつかない） ----
-        for (var p = 0; p < 7; p++) {
-            var wrapU = chart.children[p];
-            var diU = dayIdxAtPos(p);
-            wrapU.dataset.dayIdx = diU;
-            wrapU.classList.toggle('ste-today', diU === currentDayIdx);
-            var rawU = weeklyStudyMinutesLog[diU] || 0;
-            var fillU = wrapU.querySelector('.bar-fill');
-            if (fillU) fillU.style.height = Math.min(100, Math.max(4, Math.round((rawU / 60) * 100))) + '%';
-            if (wrapU.children[0]) wrapU.children[0].innerText = Math.floor(rawU) + '分';
-            if (wrapU.children[2]) wrapU.children[2].innerText = daysLabels[diU];
-            if (wrapU.children[3]) wrapU.children[3].innerText = subLabelFor(p);
-        }
-    } else {
-        // ---- 初回：DOM構築 ----
-        chart.innerHTML = '';
-        chart.__steRolling = true;
-        for (var p2 = 0; p2 < 7; p2++) {
-            var di2 = dayIdxAtPos(p2);
-            var isToday2 = (di2 === currentDayIdx);
-            var raw2 = weeklyStudyMinutesLog[di2] || 0;
-
-            var wrap2 = document.createElement('div');
-            wrap2.className = 'bar-wrapper' + (isToday2 ? ' ste-today' : '');
-            wrap2.dataset.dayIdx = di2;
-            wrap2.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;flex:1;min-width:0;';
-
-            var vl2 = document.createElement('div');
-            vl2.style.cssText = 'font-size:8px;font-weight:700;color:#FFFFFF;margin-bottom:2px;white-space:nowrap;';
-            vl2.innerText = Math.floor(raw2) + '分';
-
-            var f2 = document.createElement('div');
-            f2.className = 'bar-fill active';
-            f2.style.height = Math.min(100, Math.max(4, Math.round((raw2 / 60) * 100))) + '%';
-
-            var dl2 = document.createElement('div');
-            dl2.className = 'ste-day-lbl';
-            dl2.innerText = daysLabels[di2];
-
-            var dt2 = document.createElement('div');
-            dt2.className = 'ste-date-lbl';
-            dt2.innerText = subLabelFor(p2);
-
-            wrap2.appendChild(vl2);
-            wrap2.appendChild(f2);
-            wrap2.appendChild(dl2);
-            wrap2.appendChild(dt2);
-            chart.appendChild(wrap2);
-        }
-    }
-
-    // ---------- エディタのバインド（第6回パッチ連携） ----------
-    if (!chart.__steBoundV2 && window.__openStudyTimeEditor) {
-        chart.__steBoundV2 = true;
-        chart.classList.add('editable');
-        // 位置ではなく data-day-idx から曜日を取得 → ローリング後も正確
-        chart.addEventListener('click', function(e) {
-            var wrap = e.target.closest('.bar-wrapper');
-            if (!wrap || wrap.dataset.dayIdx === undefined) return;
-            window.__openStudyTimeEditor(parseInt(wrap.dataset.dayIdx, 10));
-        });
-    }
-    var hint = document.getElementById('steHint');
-    if (!hint) {
-        hint = document.createElement('div');
-        hint.id = 'steHint';
-        chart.insertAdjacentElement('afterend', hint);
-    }
-    hint.textContent = '💡 右端が今日です。バーをタップすると勉強時間を編集できます';
-};
 
 // ---------- 2. 保存後のパルスを正しいバーに出す（第6回パッチ補正） ----------
 if (window.__steSave) {
@@ -11144,6 +10792,8 @@ setInterval(__steSyncAdminUI, 800); // グローバル変数の変化はポー�
 
 // ---------- 2. renderActivityChart 差し替え（比率スケール＋注釈なし） ----------
 window.renderActivityChart = function() {
+    if (typeof window.__steSanitizeStudyData === 'function') window.__steSanitizeStudyData(false);
+    if (!isFinite(Number(todayStudySeconds)) || todayStudySeconds < 0) todayStudySeconds = 0;
     var chart = document.getElementById('activityBarChart');
     if (!chart) return;
 
@@ -11497,45 +11147,6 @@ window.__steSanitizeStudyData = function(verbose) {
 
 // 起動時に即浄化
 window.__steSanitizeStudyData(true);
-
-// ---------- 3. renderActivityChart ラップ：今日のslot不整合を毎描画で是正 ----------
-if (window.renderActivityChart) {
-    var __prevRenderV10 = window.renderActivityChart;
-    window.renderActivityChart = function() {
-        // 描画前に軽量ガード（NaN/負を0に。正当値は触らない）
-        if (!isFinite(Number(todayStudySeconds)) || todayStudySeconds < 0) todayStudySeconds = 0;
-
-        var r = __prevRenderV10.apply(this, arguments);
-
-        // ✅ 核心：今日のslotを「today秒数由来」で必ず再確定
-        //    → 他経路(Firebase同期/元コード描画)が古い145を戻しても、ここで是正
-        var chart = document.getElementById('activityBarChart');
-        if (chart) {
-            var now = new Date();
-            var cur = now.getDay() - 1; if (cur < 0) cur = 6;
-            var correctMin = Math.floor(__steClampSecs(todayStudySeconds) / 60);
-            // グローバルの log も直す
-            if (weeklyStudyMinutesLog[cur] !== correctMin) {
-                weeklyStudyMinutesLog[cur] = correctMin;
-            }
-            // 表示DOMも、今日のバーだけ値/高さを是正（ローリング位置を特定）
-            var wraps = chart.querySelectorAll('.bar-wrapper');
-            for (var i = 0; i < wraps.length; i++) {
-                if (wraps[i].classList.contains('ste-today')) {
-                    var fill = wraps[i].querySelector('.bar-fill');
-                    var maxV = 0;
-                    for (var k = 0; k < 7; k++) maxV = Math.max(maxV, weeklyStudyMinutesLog[k] || 0);
-                    var scale = maxV > 0 ? maxV : 1;
-                    var pct = correctMin <= 0 ? 0 : Math.max(8, Math.round((correctMin / scale) * 100));
-                    if (fill) { fill.style.height = pct + '%'; fill.dataset.zero = correctMin <= 0 ? '1' : '0'; }
-                    if (wraps[i].children[0]) wraps[i].children[0].innerText = correctMin + '分';
-                    break;
-                }
-            }
-        }
-        return r;
-    };
-}
 
 // ---------- 4. __steSave ラップ：保存時に today と log今日slot を同時書き ----------
 if (window.__steSave) {
@@ -12145,10 +11756,9 @@ rm.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
 } catch (e) {}
 }
 
-var __prevLoadLocalStateForRR = window.loadLocalState;
-window.loadLocalState = async function () {
+window.onBeforeAppLoad(async function () {
 try {
-var id = (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000') ? myId : null;
+var id = (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000') ? myId : localStorage.getItem('core_v4_userId');
 if (id) {
 var cloudGen = await rrFetchCloudGen();
 var lgen = rrLocalGen(id);
@@ -12159,7 +11769,6 @@ try { window.__fixLastGen = cloudGen; } catch (e) {}
 }
 }
 } catch (e) {}
-return __prevLoadLocalStateForRR ? __prevLoadLocalStateForRR.apply(this, arguments) : undefined;
-};
+});
 console.log('🧹 app.js 末尾パッチ（リセット復活根治：理解度保持のまま派生データのみ無効化）適用完了');
 })();
