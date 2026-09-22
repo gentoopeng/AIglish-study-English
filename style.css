@@ -1658,3 +1658,10 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
     text-overflow: ellipsis !important;
     font-size: 14px !important;
 }
+
+/* 理解度ボタンはタップ終了後の click を待たず pointerdown で反応する。 */
+.word-row-container button[onpointerdown*="updateMeaningStatus"],
+#wordPopover button[onpointerdown*="updateMeaningStatus"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
