@@ -329,7 +329,6 @@ if(typeof original!=='function') return null;
 var running=false;
 var pending=false;
 var timer=null;
-var waiters=[];
 var latestThis=null;
 var latestArgs=[];
 
@@ -338,18 +337,17 @@ if(running||!pending) return;
 if(timer){ clearTimeout(timer); timer=null; }
 running=true;
 pending=false;
-var batch=waiters.splice(0);
 var self=latestThis;
 var args=latestArgs;
 var result;
 try{ result=original.apply(self,args); }
-catch(error){ finish(batch,error); return; }
-Promise.resolve(result).then(function(value){ finish(batch,null,value); },function(error){ finish(batch,error); });
+catch(error){ finish(error); return; }
+Promise.resolve(result).then(function(){ finish(null); },function(error){ finish(error); });
 }
 
-function finish(batch,error,value){
+function finish(error){
 running=false;
-batch.forEach(function(waiter){ if(error) waiter.reject(error); else waiter.resolve(value); });
+if(error) console.error('自動保存に失敗しました:',error);
 if(pending) schedule();
 }
 
@@ -362,9 +360,9 @@ function request(){
 latestThis=this;
 latestArgs=arguments;
 pending=true;
-var promise=new Promise(function(resolve,reject){ waiters.push({resolve:resolve,reject:reject}); });
 schedule();
-return promise;
+// 画面操作は通信完了を待たせない。完了待ちは __saveFlush が担当する。
+return Promise.resolve();
 }
 
 window[name]=request;
@@ -383,8 +381,8 @@ check();
 }
 
 // 短時間に何度呼ばれても、最後の内容を1回だけ保存する。
-var stats=coordinate('saveUserStats',1200);
-var vocab=coordinate('saveVocabToStorage',1500);
+var stats=coordinate('saveUserStats',60000);
+var vocab=coordinate('saveVocabToStorage',60000);
 window.__saveFlush=function(){
 var jobs=[];
 if(stats) jobs.push(stats.flush());

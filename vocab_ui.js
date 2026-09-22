@@ -490,13 +490,31 @@
                     totalExp += 1;
                 }
                 userStats.vocab_fixed = vocabList.filter(function(w) { return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; }); }).length;
-                if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+                // 押したボタンだけを先に更新し、一覧全体の描画や通信を待たせない。
+                if (event && event.currentTarget && event.currentTarget.parentElement) {
+                    var colors = { ok: 'var(--word-ok)', so: 'var(--word-so)', bad: 'var(--word-bad)', none: 'rgba(255,255,255,0.3)' };
+                    Array.prototype.forEach.call(event.currentTarget.parentElement.children, function(button) {
+                        button.style.background = 'rgba(0,0,0,0.5)';
+                        button.style.color = 'white';
+                    });
+                    event.currentTarget.style.background = colors[status] || colors.none;
+                    event.currentTarget.style.color = status === 'bad' ? '#FFF' : (status === 'none' ? 'white' : '#000');
+                }
+                // 端末保存も次の処理へ回し、色の変化を先に画面へ反映する。
+                if (typeof window.saveVocabProgressLocally === 'function') {
+                    setTimeout(window.saveVocabProgressLocally, 0);
+                }
+                if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(60000);
                 window.saveUserStats();
                 window.checkAndRewardTitleBonusXP();
                 window.saveVocabToStorage();
-                window.renderVocabList();
-                window.applyProfileToUi();
-                window.renderLeaderboard();
+                if (typeof window.scheduleVocabListRender === 'function') window.scheduleVocabListRender(400);
+                else window.renderVocabList();
+                if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(800);
+                else {
+                    window.applyProfileToUi();
+                    window.renderLeaderboard();
+                }
             }
         }
     };
