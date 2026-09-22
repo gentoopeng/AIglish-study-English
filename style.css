@@ -330,6 +330,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .sidebar { position: fixed; top: 0; left: -280px; width: 280px; height: 100vh; background: linear-gradient(160deg, rgba(10, 15, 30, 0.88) 0%, rgba(20, 15, 45, 0.96) 100%) !important; backdrop-filter: blur(25px) !important; -webkit-backdrop-filter: blur(25px) !important; z-index: 2001; transition: left 0.3s cubic-bezier(0.25, 1, 0.5, 1); display: flex; flex-direction: column; border-right: 2px solid transparent; border-image: linear-gradient(to bottom, var(--cosmic-cyan), var(--cosmic-purple-light)) 1; box-shadow: 5px 0 25px rgba(0, 240, 255, 0.3), 10px 0 50px rgba(192, 132, 252, 0.15); }
 .sidebar.open { left: 0; }
 .sidebar-header { padding: 24px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.15); display: flex; align-items: center; gap: 14px; background: linear-gradient(to right, rgba(0, 240, 255, 0.08), transparent); }
+.sidebar-version { flex-shrink: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid rgba(255,255,255,0.1); color: var(--text-sub); font-family: monospace; font-size: 10px; letter-spacing: 0.08em; text-align: center; }
 .sidebar-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--text-main); font-size: 13.5px; font-weight: 700; background: none; border: none; width: calc(100% - 16px); margin: 4px 8px; border-radius: 8px; text-align: left; cursor: pointer; transition: all 0.2s; }
 
 .nav-bar { position: fixed; bottom: 0; left: 0; width: 100vw; height: 60px; background: rgba(15, 23, 42, 0.85) !important; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; justify-content: space-around; align-items: center; z-index: 4000 !important; transition: opacity 0.3s, transform 0.3s; }
@@ -1333,11 +1334,17 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-align: center;
     transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
     transform-style: preserve-3d;
+    will-change: transform;
+    -webkit-transform-style: preserve-3d;
     z-index: 2;
 }
 
 .flashcard-wrapper-3d.flipped .flashcard-inner-rotator {
     transform: rotateY(180deg);
+}
+
+.flashcard-wrapper-3d.flipped {
+    animation-play-state: paused;
 }
 
 .flashcard-face-front,
