@@ -2205,6 +2205,21 @@ window.__vocabSaveTimer = null;
 window.__userStatsTimer = null;
 window.__vocabRenderTimer = null;
 
+// 理解度は通信を待たず、先に端末へ保存する。
+window.saveVocabProgressLocally = function() {
+  if (typeof myId === "undefined" || !myId || typeof window.extractUserProgressFromVocabList !== "function") return;
+  var bookKey = currentTextbook || "default";
+  var progress = window.extractUserProgressFromVocabList();
+  var now = Date.now();
+  currentUserVocabProgress = progress;
+  try {
+    localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(progress));
+    localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + "__ts", String(now));
+  } catch (e) {
+    console.error("理解度の端末保存に失敗しました:", e);
+  }
+};
+
 window.scheduleVocabProgressSave = function(delay) {
   delay = delay || 500;
   if (window.__vocabSaveTimer) clearTimeout(window.__vocabSaveTimer);
@@ -3185,6 +3200,7 @@ window.onAppLoaded(async function() {
 // 19. ページ離脱時のフラッシュ保存
 // ------------------------------------------------------------------
 window.addEventListener("pagehide", function() {
+  window.saveVocabProgressLocally();
   if (window.__vocabSaveTimer || window.__userStatsTimer || window.__flashcardSessionActive) {
     window.flushVocabProgressSave();
     window.flushUserStatsRefresh();
@@ -3192,6 +3208,7 @@ window.addEventListener("pagehide", function() {
 });
 document.addEventListener("visibilitychange", function() {
   if (document.visibilityState === "hidden") {
+    window.saveVocabProgressLocally();
     if (window.__vocabSaveTimer || window.__userStatsTimer || window.__flashcardSessionActive) {
       window.flushVocabProgressSave();
       window.flushUserStatsRefresh();

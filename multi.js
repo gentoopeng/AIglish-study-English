@@ -890,30 +890,6 @@ console.log('⚔️ multi.js 適用完了');
     return r;
   };
 
-  // ------------------------------------------------------------------
-  // 【5】タップ接続（イベント委譲＝DOM生成タイミングに依存しない）
-  //     ・.flick-choice（#multiChoice-0〜7）をタップで解答
-  //     ・フリックパッド(#flickPadArea)は別コンテナなので従来通り動作
-  //     ・touchend と click の二重は【3】のガードが吸収
-  // ------------------------------------------------------------------
-  function choiceIndexOf(node) {
-    var c = (node && node.closest) ? node.closest('.flick-choice') : null;
-    if (!c || !c.id) return -1;
-    var m = /multiChoice-(\d+)/.exec(c.id);
-    return m ? parseInt(m[1], 10) : -1;
-  }
-  document.addEventListener('touchend', function (e) {
-    var idx = choiceIndexOf(e.target);
-    if (idx < 0) return;            // 選択肢以外（フリックパッド等）は何もしない
-    e.preventDefault();             // 後続 click を抑制
-    window.processMultiFlickAnswer(idx);
-  }, { passive: false, capture: true });
-  document.addEventListener('click', function (e) {
-    var idx = choiceIndexOf(e.target);
-    if (idx < 0) return;
-    window.processMultiFlickAnswer(idx);
-  }, true);
-
   console.log('⚔️ multi.js 最終パッチ（余白詰め＋円消去＋タップ両対応＋AAA演出復活＋HP色相）適用完了');
 })();
 // ==========================================================================
@@ -8629,8 +8605,8 @@ if (gameCurrentIndex >= gameCurrentWordsQueue.length) {
 }
 var target = gameCurrentWordsQueue[gameCurrentIndex];
 document.getElementById('flickTargetWord').innerText = target.word;
+var center = (typeof window.__getCenterChoiceCell === 'function') ? window.__getCenterChoiceCell() : null;
 
-var allMeanings = [target.meaning];
 var pool = [];
 for (var i = 0; i < gameCurrentWordsQueue.length; i++) {
     if (gameCurrentWordsQueue[i].word !== target.word) {
@@ -8638,22 +8614,20 @@ for (var i = 0; i < gameCurrentWordsQueue.length; i++) {
     }
 }
 pool.sort(function() { return Math.random() - 0.5; });
-for (var j = 0; j < 8 && j < pool.length; j++) {
-    allMeanings.push(pool[j]);
-}
-while (allMeanings.length < 9) {
-    allMeanings.push('---');
-}
+while (pool.length < 8) pool.push('---');
 
 var correctPos = Math.floor(Math.random() * 9);
 currentMultiCorrectIndex = correctPos;
+var dummyIndex = 0;
 
 for (var k = 0; k < 9; k++) {
-    var el = document.getElementById('multiChoice-' + k);
+    var el = k === 8 ? center : document.getElementById('multiChoice-' + k);
     if (el) {
-        if (k === 4) {
+        var choiceText = k === correctPos ? target.meaning : pool[dummyIndex++];
+        el.dataset.choiceText = choiceText;
+        if (k === 8) {
             el.classList.add('flick-center-spark');
-            if (correctPos === 4) {
+            if (correctPos === 8) {
                 el.innerHTML = '';
                 el.classList.add('center-blank');
                 el.classList.remove('center-correct', 'center-wrong', 'highlight');
@@ -8663,17 +8637,7 @@ for (var k = 0; k < 9; k++) {
             }
         } else {
             el.classList.remove('flick-center-spark', 'center-blank', 'center-correct', 'center-wrong', 'highlight');
-            var meaningIdx;
-            if (correctPos === 4) {
-                meaningIdx = k < 4 ? k : k - 1;
-            } else {
-                if (k === correctPos) {
-                    meaningIdx = 0;
-                } else {
-                    meaningIdx = k < correctPos ? k + 1 : k;
-                }
-            }
-            el.innerText = allMeanings[meaningIdx] || '---';
+            el.innerText = choiceText;
         }
     }
 }
@@ -8691,8 +8655,8 @@ if (icon) {
 var __prevTapCenterProcess = window.processMultiFlickAnswer;
 window.processMultiFlickAnswer = function(choiceIndex) {
 var q = gameCurrentWordsQueue[gameCurrentIndex];
-var isCenter = (choiceIndex === 4);
-var centerEl = document.getElementById('multiChoice-4');
+var isCenter = (choiceIndex === 8);
+var centerEl = document.getElementById('multiChoice-8');
 var isCorrect = (choiceIndex === currentMultiCorrectIndex);
 
 if (isCenter && isCorrect && centerEl) {
@@ -8701,13 +8665,17 @@ if (isCenter && isCorrect && centerEl) {
     centerEl.innerHTML = q.meaning;
 }
 
-if (isCenter && !isCorrect) {
+if (!isCorrect) {
     if (centerEl) {
-        centerEl.classList.remove('center-blank', 'center-correct');
-        centerEl.classList.add('center-wrong');
-        centerEl.innerHTML = '🔥';
+        if (isCenter) {
+            centerEl.classList.remove('center-blank', 'center-correct');
+            centerEl.classList.add('center-wrong');
+            centerEl.innerHTML = '🔥';
+        }
     }
-    showTapCenterWrongPopup(q);
+    var selectedEl=document.getElementById('multiChoice-'+choiceIndex);
+    var selectedText=isCenter?'中央（火花マス）':(selectedEl?(selectedEl.dataset.choiceText||selectedEl.textContent):'不明');
+    showTapCenterWrongPopup(q,selectedText);
 }
 
 if (typeof __prevTapCenterProcess === 'function') {
@@ -8718,7 +8686,7 @@ if (typeof __prevTapCenterProcess === 'function') {
 // ------------------------------------------------------------------
 // 【3】不正解ポップアップ（問題・正解・選んだ答え）
 // ------------------------------------------------------------------
-function showTapCenterWrongPopup(q) {
+function showTapCenterWrongPopup(q,selectedText) {
 var old = document.getElementById('tcWrongPopup');
 if (old) old.remove();
 var popup = document.createElement('div');
@@ -8732,7 +8700,7 @@ popup.innerHTML =
     '<div class="tc-popup-body">' +
     '<div class="tc-popup-row"><span class="tc-popup-label">問題</span><span class="tc-popup-value">' + escHtml(q.word) + '</span></div>' +
     '<div class="tc-popup-row"><span class="tc-popup-label">正解</span><span class="tc-popup-value tc-popup-correct">' + escHtml(q.meaning) + '</span></div>' +
-    '<div class="tc-popup-row"><span class="tc-popup-label">あなたの選択</span><span class="tc-popup-value tc-popup-wrong">中央（火花マス）</span></div>' +
+    '<div class="tc-popup-row"><span class="tc-popup-label">あなたの選択</span><span class="tc-popup-value tc-popup-wrong">' + escHtml(selectedText) + '</span></div>' +
     '</div>' +
     '<button class="tc-popup-close" onclick="this.parentElement.remove()">閉じる</button>';
 document.body.appendChild(popup);
@@ -8750,6 +8718,24 @@ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
 window.handleFlickStart = function(e) { if (e) e.preventDefault(); };
 window.handleFlickMove = function(e) { if (e) e.preventDefault(); };
 window.handleFlickEnd = function(e) { if (e) e.preventDefault(); };
+
+/* 選択入力は pointerup の1経路だけに統一する */
+var tapStart=null;
+document.addEventListener('pointerdown',function(e){
+var choice=e.target&&e.target.closest?e.target.closest('.flick-choice'):null;
+if(!choice)return;
+tapStart={id:choice.id,x:e.clientX,y:e.clientY};
+},{capture:true});
+document.addEventListener('pointerup',function(e){
+var choice=e.target&&e.target.closest?e.target.closest('.flick-choice'):null;
+if(!choice||!tapStart||choice.id!==tapStart.id){tapStart=null;return;}
+var dx=e.clientX-tapStart.x,dy=e.clientY-tapStart.y;
+tapStart=null;
+if(Math.sqrt(dx*dx+dy*dy)>14)return;
+e.preventDefault();
+var match=/multiChoice-(\d+)/.exec(choice.id);
+if(match)window.processMultiFlickAnswer(parseInt(match[1],10));
+},{capture:true});
 
 console.log('🎯 第10回パッチ（タップ選択＋中央マス9択＋スワイプ完全廃止）適用完了');
 })();
