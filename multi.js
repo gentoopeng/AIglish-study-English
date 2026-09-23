@@ -6507,7 +6507,7 @@ document.addEventListener('click',function(e){var t=e.target;if(t&&t.closest&&t.
 window.onAppLoaded(function(){ensureBtn();setTimeout(autoLoadOnce,300);});
 if(document.readyState!=='loading')setTimeout(ensureBtn,400);else document.addEventListener('DOMContentLoaded',function(){setTimeout(ensureBtn,400);});
 console.log('☁️ 単一セーブ＋ログイン時自動ロード適用完了');
-})()
+})();
 // ==========================================================================
 // 🛠️ 最終修正パッチ（gacha.js末尾追記・既存コード不変更）
 //    ① セーブ：保存後にヘッダーゲージを即再描画
