@@ -4951,6 +4951,7 @@ function collectAllData() {
   try { memData.geminiApiKey = (typeof geminiApiKey !== 'undefined') ? geminiApiKey : ''; } catch (e) {}
   return { localStorage: lsData, memory: memData };
 }
+window.__collectGameSaveData = collectAllData;
 
 /* ---------- セーブ情報取得 ---------- */
 function getSaveInfo(slot) {
@@ -5064,6 +5065,7 @@ function applyLoad(save) {
   toast('読み込み中。しばらくお待ちください…');
   setTimeout(function () { location.reload(); }, 600);
 }
+window.__applyGameSaveData = applyLoad;
 
 /* ---------- UI ---------- */
 var __svCurrentTab = 'save';
@@ -5180,14 +5182,7 @@ function ensureSaveButton() {
 
 function bindSaveButton() {
   var btn = ensureSaveButton();
-  if (!btn || btn.__svBound) return;
-  btn.__svBound = true;
-  btn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    openSavePanel();
-  }, true);
+  if (btn) btn.__svBound = true;
 }
 
 /* ---------- 自動保存は addon.js の1分調停へ一本化 ---------- */
@@ -6440,267 +6435,79 @@ console.log('🔧 修正パッチ③（セーブ根治＋長押しリング＋�
 if (window.__fbSaveApplied) return;
 window.__fbSaveApplied = true;
 
-var SLOTS = ['slot1', 'slot2', 'auto'];
-var SLOT_NAMES = { slot1: 'セーブ1', slot2: 'セーブ2', auto: 'オートセーブ' };
-var CHUNK = 200000; // 分割サイズ（文字数）
-
-/* ---------- ヘルパー ---------- */
+var SLOT = 'main';
+var CHUNK = 200000;
 function uid() { return (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000') ? myId : null; }
-function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-function nowDisplay() {
-var d = new Date();
-function p(n) { return (n < 10 ? '0' : '') + n; }
-return d.getFullYear() + '/' + p(d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
-}
-function toast(msg, type) { try { if (window.showToast) window.showToast(msg, type || 'ok'); } catch (e) {} }
 function fbOk() { return !!(window.db && window.fbSetDoc && window.fbGetDoc && window.fbDoc); }
-
-/* ---------- スタイル ---------- */
-(function injectFbsvCss() {
-if (document.getElementById('fbsvCss')) return;
-var s = document.createElement('style');
-s.id = 'fbsvCss';
-s.textContent = [
-'.fbsv-modal{position:fixed;inset:0;z-index:60060;display:flex;align-items:center;justify-content:center;background:rgba(5,3,12,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:20px;}',
-'.fbsv-card{width:min(92vw,400px);max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:18px;padding:22px 18px;background:linear-gradient(168deg,rgba(46,38,28,.96),rgba(24,18,12,.98));border:1px solid rgba(200,144,42,.4);box-shadow:0 24px 64px rgba(0,0,0,.6);}',
-'.fbsv-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}',
-'.fbsv-title{font-family:"Noto Serif JP",serif;font-size:18px;font-weight:900;color:#f3e5c0;}',
-'.fbsv-close{width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#a89880;font-size:16px;cursor:pointer;}',
-'.fbsv-offline{display:none;margin:6px 0 10px;padding:8px 12px;border-radius:10px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.4);color:#fcd34d;font-size:11px;font-weight:700;}',
-'.fbsv-offline.show{display:block;}',
-'.fbsv-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 14px;}',
-'.fbsv-tab{padding:11px;border-radius:10px;border:1.5px solid rgba(255,255,255,.15);background:rgba(0,0,0,.3);color:#a89880;font-family:"Noto Serif JP",serif;font-size:13px;font-weight:900;cursor:pointer;}',
-'.fbsv-tab.on{border-color:rgba(245,196,81,.7);background:rgba(245,196,81,.12);color:#fde68a;}',
-'.fbsv-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.25);margin-bottom:10px;}',
-'.fbsv-name{font-family:"Noto Serif JP",serif;font-size:14px;font-weight:900;color:#f3e5c0;}',
-'.fbsv-date{font-family:ui-monospace,monospace;font-size:11px;color:#8a7a5f;margin-top:3px;}',
-'.fbsv-btn{padding:9px 18px;border-radius:9px;border:1.5px solid rgba(245,196,81,.5);background:linear-gradient(180deg,#4a3b24,#2e2415 55%,#1f1809);color:#fde68a;font-family:"Noto Serif JP",serif;font-size:12px;font-weight:900;cursor:pointer;}',
-'.fbsv-btn:active{transform:scale(.96);}',
-'.fbsv-btn.load{border-color:rgba(52,231,228,.5);background:linear-gradient(180deg,#1a3a3a,#0e2424 55%,#081616);color:#9af6f1;}',
-'.fbsv-btn.dis{opacity:.45;cursor:not-allowed;}',
-'.fbsv-note{margin-top:10px;padding:10px 12px;border-radius:9px;border:1px dashed rgba(200,144,42,.25);font-size:10.5px;font-weight:600;color:#a89880;line-height:1.6;}'
-].join('\n');
-(document.head || document.documentElement).appendChild(s);
-})();
-
-/* ---------- インジケータ（保存中/成功/失敗） ---------- */
-var indEl = null, indTimer = null;
-function ensureInd() {
-if (indEl && document.body.contains(indEl)) return indEl;
-indEl = document.createElement('div');
-indEl.id = 'fbSaveInd';
-indEl.style.cssText = 'position:fixed;top:64px;right:10px;z-index:1002;padding:5px 12px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.05em;pointer-events:none;opacity:0;transform:translateY(-6px);transition:all .3s ease;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.2);color:#e2e8f0;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);font-family:"Noto Sans JP",sans-serif;';
-document.body.appendChild(indEl);
-return indEl;
+function localKey() { return 'save_studio_' + uid() + '_' + SLOT; }
+function nowDisplay() { var d=new Date(),p=function(n){return n<10?'0'+n:n;}; return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function closePanel() { var m=document.getElementById('fbsvModal'); if(m&&m.parentNode)m.parentNode.removeChild(m); }
+function progress(percent, startedAt, text) {
+  var box=document.getElementById('fbsvProgress'),fill=document.getElementById('fbsvProgressFill'),label=document.getElementById('fbsvProgressText');
+  if(!box||!fill||!label)return;
+  box.style.display='block'; fill.style.width=Math.max(0,Math.min(100,percent))+'%';
+  var elapsed=Math.max(0.1,(Date.now()-startedAt)/1000), remaining=percent>0&&percent<100?Math.max(1,Math.ceil(elapsed*(100-percent)/percent)):0;
+  label.textContent=text+' '+Math.round(percent)+'%'+(remaining?'（残り約'+remaining+'秒）':'');
 }
-function ind(state, text) {
-return;
-var el = ensureInd();
-el.textContent = (state === 'saving' ? '🔄 ' : state === 'ok' ? '✅ ' : '⚠️ ') + text;
-el.style.borderColor = state === 'ok' ? 'rgba(74,222,128,.6)' : state === 'err' ? 'rgba(248,113,113,.6)' : 'rgba(52,231,228,.5)';
-el.style.opacity = '1'; el.style.transform = 'translateY(0)';
-clearTimeout(indTimer);
-if (state !== 'saving') indTimer = setTimeout(function () { el.style.opacity = '0'; el.style.transform = 'translateY(-6px)'; }, state === 'err' ? 4000 : 2500);
+function collectAll() {
+  if(typeof window.__collectGameSaveData==='function') return window.__collectGameSaveData();
+  var ls={}; for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k)ls[k]=localStorage.getItem(k);} return {localStorage:ls,memory:{}};
 }
-
-/* ---------- データ収集（ローカル全キーのスナップショット） ---------- */
-function collect() {
-var ls = {};
-try {
-for (var i = 0; i < localStorage.length; i++) {
-var k = localStorage.key(i);
-if (!k || k.indexOf('save_studio_') === 0 || k.indexOf('fbsave_meta_') === 0) continue;
-try { ls[k] = localStorage.getItem(k); } catch (e) {}
+async function saveAll() {
+  var id=uid(); if(!id)throw new Error('先にログインしてください');
+  var started=Date.now(); progress(2,started,'データを準備中');
+  if(typeof window.__saveFlush==='function') await window.__saveFlush();
+  progress(8,started,'全データを整理中');
+  var data=collectAll();
+  var save={slot:SLOT,savedAt:new Date().toISOString(),savedAtDisplay:nowDisplay(),data:data};
+  var raw=JSON.stringify(save);
+  localStorage.setItem(localKey(),raw);
+  if(!fbOk()){progress(100,started,'端末へ保存完了');return;}
+  var chunks=[]; for(var i=0;i<raw.length;i+=CHUNK)chunks.push(raw.slice(i,i+CHUNK)); if(!chunks.length)chunks=[''];
+  var meta={savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,partCount:chunks.length,v:3};
+  await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});
+  for(var n=0;n<chunks.length;n++){
+    await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts','p'+n),{d:chunks[n]},{merge:false});
+    progress(10+((n+1)/chunks.length)*90,started,'クラウドへ保存中');
+  }
+  progress(100,started,'保存完了');
 }
-} catch (e) {}
-return ls;
+async function fetchCloudSave() {
+  var id=uid(); if(!id||!fbOk())return null;
+  var snap=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
+  if(!snap||!snap.exists())return null;
+  var meta=snap.data()||{}, raw='';
+  for(var i=0;i<(meta.partCount||0);i++){
+    var part=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts','p'+i));
+    if(part&&part.exists()&&part.data())raw+=part.data().d||'';
+  }
+  return raw?JSON.parse(raw):null;
 }
-
-/* ---------- メタ（日時）キャッシュ ---------- */
-var cloudMetaCache = {};
-function metaKey(slot) { return 'fbsave_meta_' + uid() + '_' + slot; }
-function localMeta(slot) { try { return JSON.parse(localStorage.getItem(metaKey(slot)) || 'null'); } catch (e) { return null; } }
-function setLocalMeta(slot, m) { try { localStorage.setItem(metaKey(slot), JSON.stringify(m)); } catch (e) {} }
-function metaFor(slot) { return cloudMetaCache[slot] || localMeta(slot); }
-
-/* ---------- 失敗通知（自動セーブの連発は抑制） ---------- */
-var lastAutoErr = 0;
-function failNotify(msg, manual) {
-ind('err', manual ? '保存失敗' : '自動セーブ失敗');
-if (manual) { toast(msg, 'err'); return; }
-var now = Date.now();
-if (now - lastAutoErr > 60000) { lastAutoErr = now; toast(msg, 'err'); }
-}
-
-/* ---------- クラウドへ保存 ---------- */
-function cloudSave(slot, manual) {
-var id = uid();
-if (!id) { if (manual) { toast('先にログインしてください', 'err'); } return Promise.reject(new Error('no login')); }
-if (!fbOk()) { failNotify('保存に失敗しました：通信未接続', manual); return Promise.reject(new Error('no fb')); }
-ind('saving', '保存中…');
-var raw;
-try { raw = JSON.stringify(collect()); } catch (e) { failNotify('保存に失敗しました：データ処理エラー', manual); return Promise.reject(e); }
-var chunks = [];
-for (var i = 0; i < raw.length; i += CHUNK) chunks.push(raw.substr(i, CHUNK));
-if (!chunks.length) chunks = [''];
-var meta = { savedAt: new Date().toISOString(), savedAtDisplay: nowDisplay(), partCount: chunks.length, v: 2 };
-return window.fbSetDoc(window.fbDoc(window.db, 'users', id, 'saves', slot), meta, { merge: false }).then(function () {
-var chain = Promise.resolve();
-chunks.forEach(function (c, idx) {
-chain = chain.then(function () {
-return window.fbSetDoc(window.fbDoc(window.db, 'users', id, 'saves', slot, 'parts', 'p' + idx), { d: c }, { merge: false });
-});
-});
-return chain;
-}).then(function () {
-var old = localMeta(slot);
-if (old && old.partCount > chunks.length && typeof window.fbDeleteDoc === 'function') {
-for (var x = chunks.length; x < old.partCount; x++) {
-try { window.fbDeleteDoc(window.fbDoc(window.db, 'users', id, 'saves', slot, 'parts', 'p' + x)).catch(function () {}); } catch (e) {}
-}
-}
-cloudMetaCache[slot] = meta;
-setLocalMeta(slot, { savedAtDisplay: meta.savedAtDisplay, partCount: chunks.length });
-ind('ok', manual ? '保存しました' : '自動セーブしました');
-if (manual) toast('💾 クラウドに保存しました', 'ok');
-}).catch(function (e) {
-console.error('[fbSave] save error:', e);
-failNotify('保存に失敗しました。通信状態を確認してください', manual);
-});
-}
-
-/* ---------- クラウドから読み込み ---------- */
-function cloudLoad(slot) {
-var id = uid();
-if (!id) { toast('先にログインしてください', 'err'); return; }
-if (!fbOk()) { toast('通信できません。電波の良い場所でやり直してください', 'err'); return; }
-ind('saving', '読み込み中…');
-window.fbGetDoc(window.fbDoc(window.db, 'users', id, 'saves', slot)).then(function (snap) {
-if (!snap || !snap.exists()) { ind('err', 'データなし'); toast('セーブデータがありません', 'warn'); return; }
-var meta = snap.data() || {};
-var count = meta.partCount || 0;
-var chain = Promise.resolve('');
-for (var i = 0; i < count; i++) {
-chain = (function (c, idx) {
-return c.then(function (acc) {
-return window.fbGetDoc(window.fbDoc(window.db, 'users', id, 'saves', slot, 'parts', 'p' + idx)).then(function (s2) {
-return acc + ((s2 && s2.exists() && s2.data()) ? (s2.data().d || '') : '');
-});
-});
-})(chain, i);
-}
-chain.then(function (raw) {
-var ls;
-try { ls = JSON.parse(raw); } catch (e) { ind('err', '破損'); toast('セーブデータが破損しています', 'err'); return; }
-for (var k in ls) { try { localStorage.setItem(k, ls[k]); } catch (e) {} }
-setLocalMeta(slot, { savedAtDisplay: meta.savedAtDisplay, partCount: count });
-toast('✅ 読み込みました。再起動します…', 'ok');
-setTimeout(function () { location.reload(); }, 700);
-});
-}).catch(function (e) {
-console.error('[fbSave] load error:', e);
-ind('err', '読み込み失敗');
-toast('読み込みに失敗しました。通信状態を確認してください', 'err');
-});
-}
-
-/* ---------- パネル ---------- */
-var curTab = 'save';
-function closePanel() { var m = document.getElementById('fbsvModal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
-function renderRows() {
-var body = document.getElementById('fbsvBody');
-if (!body) return;
-var html = '';
-SLOTS.forEach(function (slot) {
-var meta = metaFor(slot);
-var dateStr = meta ? meta.savedAtDisplay : '未セーブ';
-var btn;
-if (curTab === 'save') btn = '<button type="button" class="fbsv-btn" data-fbsave="' + slot + '">' + (meta ? '上書き' : 'セーブ') + '</button>';
-else btn = meta ? '<button type="button" class="fbsv-btn load" data-fbload="' + slot + '">ロード</button>' : '<button type="button" class="fbsv-btn dis" disabled>データなし</button>';
-html += '<div class="fbsv-row"><div><div class="fbsv-name">' + SLOT_NAMES[slot] + '</div><div class="fbsv-date">' + esc(dateStr) + '</div></div>' + btn + '</div>';
-});
-body.innerHTML = html;
-}
-function refreshMetaFromCloud() {
-var note = document.getElementById('fbsvOffline');
-var id = uid();
-if (!id || !fbOk()) { if (note) note.classList.add('show'); renderRows(); return; }
-var pend = 0;
-SLOTS.forEach(function (slot) {
-pend++;
-window.fbGetDoc(window.fbDoc(window.db, id && window.db ? 'users' : 'users', id, 'saves', slot)).then(function (s) {
-if (s && s.exists()) { var d = s.data() || {}; cloudMetaCache[slot] = { savedAtDisplay: d.savedAtDisplay, partCount: d.partCount }; setLocalMeta(slot, cloudMetaCache[slot]); }
-}).catch(function () { if (note) note.classList.add('show'); }).then(function () { if (--pend === 0) renderRows(); });
-});
+async function autoLoadOnce() {
+  var id=uid(); if(!id)return;
+  var marker='game_save_loaded_'+id;
+  if(sessionStorage.getItem(marker)==='1')return;
+  sessionStorage.setItem(marker,'1');
+  var save=null;
+  try{save=await fetchCloudSave();}catch(e){console.warn('[save] cloud load failed',e);}
+  if(!save){try{save=JSON.parse(localStorage.getItem(localKey())||'null');}catch(e){}}
+  if(save&&save.data&&typeof window.__applyGameSaveData==='function')window.__applyGameSaveData(save);
 }
 function openPanel() {
-closePanel();
-if (!uid()) { toast('先にログインしてください', 'err'); return; }
-curTab = 'save';
-var m = document.createElement('div');
-m.id = 'fbsvModal'; m.className = 'fbsv-modal';
-m.innerHTML = '<div class="fbsv-card">' +
-'<div class="fbsv-head"><div class="fbsv-title">💾 データ保存 / 読み込み</div><button type="button" class="fbsv-close" id="fbsvClose">✕</button></div>' +
-'<div class="fbsv-offline" id="fbsvOffline">⚠️ 通信につながりません。表示は古い可能性があります。</div>' +
-'<div class="fbsv-tabs"><button type="button" class="fbsv-tab on" id="fbsvTabSave">セーブ</button><button type="button" class="fbsv-tab" id="fbsvTabLoad">ロード</button></div>' +
-'<div id="fbsvBody"></div>' +
-'<div class="fbsv-note">データはクラウドに保存されます。<br>機種変更しても、同じIDでログインすれば引き継げます。</div>' +
-'</div>';
-document.body.appendChild(m);
-m.querySelector('#fbsvClose').onclick = closePanel;
-m.addEventListener('click', function (e) { if (e.target === m) closePanel(); });
-m.querySelector('#fbsvTabSave').onclick = function () { curTab = 'save'; m.querySelector('#fbsvTabSave').classList.add('on'); m.querySelector('#fbsvTabLoad').classList.remove('on'); renderRows(); };
-m.querySelector('#fbsvTabLoad').onclick = function () { curTab = 'load'; m.querySelector('#fbsvTabLoad').classList.add('on'); m.querySelector('#fbsvTabSave').classList.remove('on'); renderRows(); };
-m.querySelector('#fbsvBody').addEventListener('click', function (e) {
-var t = e.target; if (!t || !t.closest) return;
-var sv = t.closest('[data-fbsave]');
-if (sv) {
-var slot = sv.getAttribute('data-fbsave');
-var meta = metaFor(slot);
-if (meta && !confirm(SLOT_NAMES[slot] + ' には既にデータがあります（' + meta.savedAtDisplay + '）。\n上書きしますか？')) return;
-cloudSave(slot, true).then(function () { refreshMetaFromCloud(); });
-return;
+  closePanel();
+  if(!uid())return;
+  var m=document.createElement('div');m.id='fbsvModal';m.className='fbsv-modal';
+  var last='未セーブ';try{var old=JSON.parse(localStorage.getItem(localKey())||'null');if(old)last=old.savedAtDisplay||last;}catch(e){}
+  m.innerHTML='<div class="fbsv-card"><div class="fbsv-head"><div class="fbsv-title">💾 セーブ</div><button class="fbsv-close" id="fbsvClose">✕</button></div><div class="fbsv-row"><div><div class="fbsv-name">セーブデータ</div><div class="fbsv-date">最終保存: '+last+'</div></div><button class="fbsv-btn" id="fbsvSave">セーブする</button></div><div id="fbsvProgress" style="display:none;margin-top:12px"><div id="fbsvProgressText" style="font-size:11px;color:#fde68a;margin-bottom:6px">準備中 0%</div><div style="height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden"><div id="fbsvProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .2s"></div></div></div><div class="fbsv-note">すべてのデータを端末とクラウドへ保存します。ロード操作は不要で、ログイン時に自動で読み込まれます。</div></div>';
+  document.body.appendChild(m);m.querySelector('#fbsvClose').onclick=closePanel;m.onclick=function(e){if(e.target===m)closePanel();};
+  m.querySelector('#fbsvSave').onclick=async function(){var b=this;b.disabled=true;try{await saveAll();b.textContent='保存完了';}catch(e){progress(0,Date.now(),'保存失敗');b.textContent='もう一度試す';console.error(e);}finally{b.disabled=false;}};
 }
-var ld = t.closest('[data-fbload]');
-if (ld) {
-var slot2 = ld.getAttribute('data-fbload');
-if (!confirm(SLOT_NAMES[slot2] + ' を読み込みますか？\n今の端末のデータは上書きされます。')) return;
-cloudLoad(slot2);
-}
-});
-renderRows();
-refreshMetaFromCloud();
-}
-
-/* ---------- 💾ボタン乗っ取り（旧パネルは開かない） ---------- */
-function ensureBtn() {
-var b = document.getElementById('headerSaveBtn');
-if (b) return;
-var h = document.querySelector('.app-header');
-if (!h) return;
-b = document.createElement('button');
-b.id = 'headerSaveBtn'; b.type = 'button'; b.innerHTML = '💾';
-b.style.cssText = 'position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';
-h.appendChild(b);
-}
-document.addEventListener('click', function (e) {
-var t = e.target; if (!t || !t.closest) return;
-if (t.closest('#headerSaveBtn')) { e.preventDefault(); e.stopPropagation(); openPanel(); }
-}, true);
-
-/* ---------- 自動保存は addon.js の1分調停へ一本化 ---------- */
-
-/* ---------- ログイン後：ボタン確保 ---------- */
-window.onAppLoaded(function () {
-ensureBtn();
-});
-(function bootFbsv() {
-function run() { ensureBtn(); }
-if (document.readyState !== 'loading') setTimeout(run, 400);
-else document.addEventListener('DOMContentLoaded', function () { setTimeout(run, 400); });
-})();
-console.log('☁️ セーブFirebase一本化パッチ適用完了（失敗時通知＋自動セーブ表示）');
-})();
+function ensureBtn(){var b=document.getElementById('headerSaveBtn'),h=document.querySelector('.app-header');if(!b&&h){b=document.createElement('button');b.id='headerSaveBtn';b.type='button';b.innerHTML='💾';b.style.cssText='position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';h.appendChild(b);}return b;}
+document.addEventListener('click',function(e){var t=e.target;if(t&&t.closest&&t.closest('#headerSaveBtn')){e.preventDefault();e.stopPropagation();openPanel();}},true);
+window.onAppLoaded(function(){ensureBtn();setTimeout(autoLoadOnce,300);});
+if(document.readyState!=='loading')setTimeout(ensureBtn,400);else document.addEventListener('DOMContentLoaded',function(){setTimeout(ensureBtn,400);});
+console.log('☁️ 単一セーブ＋ログイン時自動ロード適用完了');
+})()
 // ==========================================================================
 // 🛠️ 最終修正パッチ（gacha.js末尾追記・既存コード不変更）
 //    ① セーブ：保存後にヘッダーゲージを即再描画
