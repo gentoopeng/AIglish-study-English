@@ -4939,6 +4939,14 @@ function collectAllData() {
   try { memData.weeklyStudyMinutesLog = (typeof weeklyStudyMinutesLog !== 'undefined') ? weeklyStudyMinutesLog : [0,0,0,0,0,0,0]; } catch (e) {}
   try { memData.lastAccessDateStr = (typeof lastAccessDateStr !== 'undefined') ? lastAccessDateStr : ''; } catch (e) {}
   try { memData.vocabList = (typeof vocabList !== 'undefined') ? vocabList : []; } catch (e) {}
+  // 理解度は単語マスターとは別の専用スナップショットとしても保持する。
+  // 起動中に通常の教材ロードが走って vocabList が置き換わっても、これを最後に適用できる。
+  try {
+    memData.vocabBookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default';
+    memData.vocabProgress = (typeof window.extractUserProgressFromVocabList === 'function')
+      ? window.extractUserProgressFromVocabList()
+      : ((typeof currentUserVocabProgress !== 'undefined' && currentUserVocabProgress) ? currentUserVocabProgress : {});
+  } catch (e) {}
   try { memData.wordMemory = (typeof wordMemory !== 'undefined') ? wordMemory : {}; } catch (e) {}
   try { memData.textHistory = (typeof textHistory !== 'undefined') ? textHistory : []; } catch (e) {}
   try { memData.myBookshelf = (typeof myBookshelf !== 'undefined') ? myBookshelf : []; } catch (e) {}
@@ -6465,6 +6473,16 @@ async function saveAll() {
   progress(8,started,'全データを整理中');
   var data=collectAll();
   var save={slot:SLOT,savedAt:new Date().toISOString(),savedAtDisplay:nowDisplay(),data:data};
+  // 手動セーブ時点の理解度を、その場で正規のローカル領域にも確定する。
+  // 100ms の遅延処理や別の自動保存処理には依存させない。
+  try {
+    var savedProgress=data.memory&&data.memory.vocabProgress;
+    var savedBook=data.memory&&data.memory.vocabBookKey||'default';
+    if(savedProgress&&typeof window.getVocabProgressStorageKey==='function'){
+      localStorage.setItem(window.getVocabProgressStorageKey(savedBook),JSON.stringify(savedProgress));
+      localStorage.setItem(window.getVocabProgressStorageKey(savedBook)+'__ts',String(Date.parse(save.savedAt)));
+    }
+  } catch(e) { console.warn('[save] vocab snapshot write failed',e); }
   var raw=JSON.stringify(save);
   var localSaved=false, cloudSaved=false, localError=null, cloudError=null;
   try { localStorage.setItem(localKey(),raw); localSaved=true; }
@@ -6547,7 +6565,7 @@ async function autoLoadOnce() {
     for(var key in stored){try{localStorage.setItem(key,stored[key]);}catch(e){}}
   }
   if(save&&save.data&&save.data.memory){
-    window.__pendingGameSaveMemory={id:id,data:save.data.memory};
+    window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt||'',data:save.data.memory};
     applySavedMemory(save.data.memory,id);
   }
 }
@@ -6569,10 +6587,19 @@ window.onAppLoaded(function(){
   if(!pending)return;
   applySavedMemory(pending.data,pending.id);
   try{
-    if(typeof window.extractUserProgressFromVocabList==='function'){
+    var bookKey=pending.data.vocabBookKey||((typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default');
+    // 保存時に確定した理解度を使う。起動途中で読み込まれた古い vocabList から
+    // 再抽出すると巻き戻るため、vocabProgress がある場合は再抽出しない。
+    if(pending.data.vocabProgress&&typeof pending.data.vocabProgress==='object'){
+      currentUserVocabProgress=pending.data.vocabProgress;
+      if(typeof window.applyUserProgressToVocabList==='function')window.applyUserProgressToVocabList();
+    }else if(typeof window.extractUserProgressFromVocabList==='function'){
       currentUserVocabProgress=window.extractUserProgressFromVocabList();
-      var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
-      if(typeof window.getVocabProgressStorageKey==='function')localStorage.setItem(window.getVocabProgressStorageKey(bookKey),JSON.stringify(currentUserVocabProgress));
+    }
+    if(typeof window.getVocabProgressStorageKey==='function'){
+      localStorage.setItem(window.getVocabProgressStorageKey(bookKey),JSON.stringify(currentUserVocabProgress||{}));
+      var restoredMs=Date.parse(pending.savedAt||'')||0;
+      if(restoredMs)localStorage.setItem(window.getVocabProgressStorageKey(bookKey)+'__ts',String(restoredMs));
     }
   }catch(e){console.warn('[save] vocab progress restore failed',e);}
   try{if(typeof window.applyProfileToUi==='function')window.applyProfileToUi();}catch(e){}
