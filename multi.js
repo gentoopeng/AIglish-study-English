@@ -6438,8 +6438,9 @@ window.__fbSaveApplied = true;
 var SLOT = 'main';
 var CHUNK = 200000;
 function uid() { return (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000') ? myId : null; }
+function loginUid() { var id=uid(); if(id)return id; try{id=localStorage.getItem('core_v4_userId');}catch(e){} return id&&id!=='GUEST-000'?id:null; }
 function fbOk() { return !!(window.db && window.fbSetDoc && window.fbGetDoc && window.fbDoc); }
-function localKey() { return 'save_studio_' + uid() + '_' + SLOT; }
+function localKey(id) { return 'save_studio_' + (id||uid()) + '_' + SLOT; }
 function nowDisplay() { var d=new Date(),p=function(n){return n<10?'0'+n:n;}; return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
 function closePanel() { var m=document.getElementById('fbsvModal'); if(m&&m.parentNode)m.parentNode.removeChild(m); }
 function progress(percent, startedAt, text) {
@@ -6487,8 +6488,8 @@ async function saveAll() {
   if(localSaved){progress(100,started,'端末へ保存完了（クラウド未接続）');return {localSaved:true,cloudSaved:false};}
   throw cloudError||localError||new Error('保存に失敗しました');
 }
-async function fetchCloudSave() {
-  var id=uid(); if(!id||!fbOk())return null;
+async function fetchCloudSave(id) {
+  id=id||loginUid(); if(!id||!fbOk())return null;
   var snap=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
   if(!snap||!snap.exists())return null;
   var meta=snap.data()||{}, raw='';
@@ -6499,14 +6500,17 @@ async function fetchCloudSave() {
   return raw?JSON.parse(raw):null;
 }
 async function autoLoadOnce() {
-  var id=uid(); if(!id)return;
-  var marker='game_save_loaded_'+id;
+  var id=loginUid(); if(!id)return;
+  var marker='game_save_loaded_v2_'+id;
   if(sessionStorage.getItem(marker)==='1')return;
   sessionStorage.setItem(marker,'1');
   var save=null;
-  try{save=await fetchCloudSave();}catch(e){console.warn('[save] cloud load failed',e);}
-  if(!save){try{save=JSON.parse(localStorage.getItem(localKey())||'null');}catch(e){}}
-  if(save&&save.data&&typeof window.__applyGameSaveData==='function')window.__applyGameSaveData(save);
+  try{save=await fetchCloudSave(id);}catch(e){console.warn('[save] cloud load failed',e);}
+  if(!save){try{save=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}}
+  if(save&&save.data&&save.data.localStorage){
+    var stored=save.data.localStorage;
+    for(var key in stored){try{localStorage.setItem(key,stored[key]);}catch(e){}}
+  }
 }
 function openPanel() {
   closePanel();
@@ -6519,7 +6523,8 @@ function openPanel() {
 }
 function ensureBtn(){var b=document.getElementById('headerSaveBtn'),h=document.querySelector('.app-header');if(!b&&h){b=document.createElement('button');b.id='headerSaveBtn';b.type='button';b.innerHTML='💾';b.style.cssText='position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';h.appendChild(b);}return b;}
 document.addEventListener('click',function(e){var t=e.target;if(t&&t.closest&&t.closest('#headerSaveBtn')){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openPanel();}},true);
-window.onAppLoaded(function(){ensureBtn();setTimeout(autoLoadOnce,300);});
+window.onBeforeAppLoad(autoLoadOnce);
+window.onAppLoaded(function(){ensureBtn();});
 if(document.readyState!=='loading')setTimeout(ensureBtn,400);else document.addEventListener('DOMContentLoaded',function(){setTimeout(ensureBtn,400);});
 console.log('☁️ 単一セーブ＋ログイン時自動ロード適用完了');
 })();
