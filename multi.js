@@ -6495,11 +6495,23 @@ async function saveAll() {
   var chunks=[]; for(var i=0;i<raw.length;i+=CHUNK)chunks.push(raw.slice(i,i+CHUNK)); if(!chunks.length)chunks=[''];
   var meta={savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,partCount:chunks.length,v:3};
   try {
-    await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});
+    // アプリ本体が起動時に読む正規の理解度ドキュメントも同じ操作内で更新する。
+    // フルセーブだけを更新すると、その後の教材ロードが古い理解度で上書きしてしまう。
+    if(savedProgress){
+      await window.fbSetDoc(
+        window.fbDoc(window.db,'users',id,'vocabProgress',savedBook),
+        {wordsJson:JSON.stringify(savedProgress),updatedAt:save.savedAt},
+        {merge:false}
+      );
+      progress(15,started,'理解度を保存中');
+    }
+    // 本文を先に保存し、最後にメタデータを更新する。途中で通信が切れても
+    // ローダーが未完成の新規セーブを「保存完了」として選ばない。
     for(var n=0;n<chunks.length;n++){
       await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts','p'+n),{d:chunks[n]},{merge:false});
-      progress(10+((n+1)/chunks.length)*90,started,'クラウドへ保存中');
+      progress(15+((n+1)/chunks.length)*80,started,'クラウドへ保存中');
     }
+    await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});
     cloudSaved=true;
   } catch(e) {
     cloudError=e; console.warn('[save] cloud save failed',e);
