@@ -6499,17 +6499,50 @@ async function fetchCloudSave(id) {
   }
   return raw?JSON.parse(raw):null;
 }
+function applySavedMemory(memory,id) {
+  if(!memory||typeof memory!=='object')return;
+  try{if(memory.totalExp!=null)totalExp=memory.totalExp;}catch(e){}
+  try{if(memory.myName!=null)myName=memory.myName;}catch(e){}
+  try{if(memory.myTarget!=null)myTarget=memory.myTarget;}catch(e){}
+  try{if(memory.selectedTitle!=null)selectedTitle=memory.selectedTitle;}catch(e){}
+  try{if(Array.isArray(memory.myFriendList))myFriendList=memory.myFriendList;}catch(e){}
+  try{if(memory.userStats)userStats=memory.userStats;}catch(e){}
+  try{if(memory.todayStudySeconds!=null)todayStudySeconds=memory.todayStudySeconds;}catch(e){}
+  try{if(Array.isArray(memory.weeklyStudyMinutesLog))weeklyStudyMinutesLog=memory.weeklyStudyMinutesLog;}catch(e){}
+  try{if(memory.lastAccessDateStr!=null)lastAccessDateStr=memory.lastAccessDateStr;}catch(e){}
+  try{if(Array.isArray(memory.vocabList))vocabList=memory.vocabList;}catch(e){}
+  try{if(memory.wordMemory)wordMemory=memory.wordMemory;}catch(e){}
+  try{if(Array.isArray(memory.textHistory))textHistory=memory.textHistory;}catch(e){}
+  try{if(Array.isArray(memory.myBookshelf))myBookshelf=memory.myBookshelf;}catch(e){}
+  try{if(Array.isArray(memory.myFolders))myFolders=memory.myFolders;}catch(e){}
+  try{if(memory.currentTextbook!=null)currentTextbook=memory.currentTextbook;}catch(e){}
+  try{if(Array.isArray(memory.textbooksPool))textbooksPool=memory.textbooksPool;}catch(e){}
+  try{if(memory.activeCharacter!=null)activeCharacter=memory.activeCharacter;}catch(e){}
+  try{if(memory.activeWeapon!=null)activeWeapon=memory.activeWeapon;}catch(e){}
+  try{if(memory.activeArmor!=null)activeArmor=memory.activeArmor;}catch(e){}
+  try{
+    localStorage.setItem('core_v4_totalExp',String(memory.totalExp||0));
+    localStorage.setItem('core_v4_userName',memory.myName||'');
+    localStorage.setItem('core_v4_userTarget',memory.myTarget||'');
+    localStorage.setItem('core_v4_userTitle',memory.selectedTitle||'');
+    if(memory.userStats)localStorage.setItem('core_v4_user_stats_'+id,JSON.stringify(memory.userStats));
+    if(memory.myFriendList)localStorage.setItem('core_v4_friend_list',JSON.stringify(memory.myFriendList));
+  }catch(e){}
+}
 async function autoLoadOnce() {
   var id=loginUid(); if(!id)return;
-  var marker='game_save_loaded_v2_'+id;
-  if(sessionStorage.getItem(marker)==='1')return;
-  sessionStorage.setItem(marker,'1');
+  if(window.__gameSaveLoadedFor===id)return;
+  window.__gameSaveLoadedFor=id;
   var save=null;
   try{save=await fetchCloudSave(id);}catch(e){console.warn('[save] cloud load failed',e);}
   if(!save){try{save=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}}
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
     for(var key in stored){try{localStorage.setItem(key,stored[key]);}catch(e){}}
+  }
+  if(save&&save.data&&save.data.memory){
+    window.__pendingGameSaveMemory={id:id,data:save.data.memory};
+    applySavedMemory(save.data.memory,id);
   }
 }
 function openPanel() {
@@ -6524,7 +6557,17 @@ function openPanel() {
 function ensureBtn(){var b=document.getElementById('headerSaveBtn'),h=document.querySelector('.app-header');if(!b&&h){b=document.createElement('button');b.id='headerSaveBtn';b.type='button';b.innerHTML='💾';b.style.cssText='position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';h.appendChild(b);}return b;}
 document.addEventListener('click',function(e){var t=e.target;if(t&&t.closest&&t.closest('#headerSaveBtn')){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openPanel();}},true);
 window.onBeforeAppLoad(autoLoadOnce);
-window.onAppLoaded(function(){ensureBtn();});
+window.onAppLoaded(function(){
+  ensureBtn();
+  var pending=window.__pendingGameSaveMemory;
+  if(!pending)return;
+  applySavedMemory(pending.data,pending.id);
+  try{if(typeof window.applyProfileToUi==='function')window.applyProfileToUi();}catch(e){}
+  try{if(typeof window.renderVocabList==='function')window.renderVocabList();}catch(e){}
+  try{if(typeof window.renderLeaderboard==='function')window.renderLeaderboard();}catch(e){}
+  try{if(typeof window.renderBookshelf==='function')window.renderBookshelf();}catch(e){}
+  try{if(typeof window.updatePartySlotsUi==='function')window.updatePartySlotsUi();}catch(e){}
+});
 if(document.readyState!=='loading')setTimeout(ensureBtn,400);else document.addEventListener('DOMContentLoaded',function(){setTimeout(ensureBtn,400);});
 console.log('☁️ 単一セーブ＋ログイン時自動ロード適用完了');
 })();
