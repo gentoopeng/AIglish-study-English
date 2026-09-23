@@ -6441,6 +6441,7 @@ function uid() { return (typeof myId !== 'undefined' && myId && myId !== 'GUEST-
 function loginUid() { var id=uid(); if(id)return id; try{id=localStorage.getItem('core_v4_userId');}catch(e){} return id&&id!=='GUEST-000'?id:null; }
 function fbOk() { return !!(window.db && window.fbSetDoc && window.fbGetDoc && window.fbDoc); }
 function localKey(id) { return 'save_studio_' + (id||uid()) + '_' + SLOT; }
+function localMetaKey(id) { return 'game_save_meta_' + (id||uid()); }
 function nowDisplay() { var d=new Date(),p=function(n){return n<10?'0'+n:n;}; return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
 function closePanel() { var m=document.getElementById('fbsvModal'); if(m&&m.parentNode)m.parentNode.removeChild(m); }
 function progress(percent, startedAt, text) {
@@ -6468,6 +6469,7 @@ async function saveAll() {
   var localSaved=false, cloudSaved=false, localError=null, cloudError=null;
   try { localStorage.setItem(localKey(),raw); localSaved=true; }
   catch(e) { localError=e; console.warn('[save] local save failed',e); }
+  try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay})); } catch(e) {}
   if(!fbOk()) {
     if(localSaved){progress(100,started,'端末へ保存完了');return {localSaved:true,cloudSaved:false};}
     throw localError||new Error('保存先に接続できません');
@@ -6533,9 +6535,13 @@ async function autoLoadOnce() {
   var id=loginUid(); if(!id)return;
   if(window.__gameSaveLoadedFor===id)return;
   window.__gameSaveLoadedFor=id;
-  var save=null;
-  try{save=await fetchCloudSave(id);}catch(e){console.warn('[save] cloud load failed',e);}
-  if(!save){try{save=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}}
+  var cloudSave=null,localSave=null,save=null;
+  try{cloudSave=await fetchCloudSave(id);}catch(e){console.warn('[save] cloud load failed',e);}
+  try{localSave=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}
+  if(cloudSave&&localSave){
+    var cloudTime=Date.parse(cloudSave.savedAt||'')||0,localTime=Date.parse(localSave.savedAt||'')||0;
+    save=localTime>cloudTime?localSave:cloudSave;
+  }else save=cloudSave||localSave;
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
     for(var key in stored){try{localStorage.setItem(key,stored[key]);}catch(e){}}
@@ -6549,7 +6555,7 @@ function openPanel() {
   closePanel();
   if(!uid())return;
   var m=document.createElement('div');m.id='fbsvModal';m.className='fbsv-modal';
-  var last='未セーブ';try{var old=JSON.parse(localStorage.getItem(localKey())||'null');if(old)last=old.savedAtDisplay||last;}catch(e){}
+  var last='未セーブ';try{var oldMeta=JSON.parse(localStorage.getItem(localMetaKey())||'null');var old=JSON.parse(localStorage.getItem(localKey())||'null');if(oldMeta)last=oldMeta.savedAtDisplay||last;else if(old)last=old.savedAtDisplay||last;}catch(e){}
   m.innerHTML='<div class="fbsv-card"><div class="fbsv-head"><div class="fbsv-title">💾 セーブ</div><button class="fbsv-close" id="fbsvClose">✕</button></div><div class="fbsv-row"><div><div class="fbsv-name">セーブデータ</div><div class="fbsv-date">最終保存: '+last+'</div></div><button class="fbsv-btn" id="fbsvSave">セーブする</button></div><div id="fbsvProgress" style="display:none;margin-top:12px"><div id="fbsvProgressText" style="font-size:11px;color:#fde68a;margin-bottom:6px">準備中 0%</div><div style="height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden"><div id="fbsvProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .2s"></div></div></div><div class="fbsv-note">すべてのデータを端末とクラウドへ保存します。ロード操作は不要で、ログイン時に自動で読み込まれます。</div></div>';
   document.body.appendChild(m);m.querySelector('#fbsvClose').onclick=closePanel;m.onclick=function(e){if(e.target===m)closePanel();};
   m.querySelector('#fbsvSave').onclick=async function(){var b=this;b.disabled=true;try{var result=await saveAll();b.textContent=result.cloudSaved?'保存完了':'端末に保存完了';}catch(e){progress(0,Date.now(),'保存失敗');b.textContent='もう一度試す';console.error(e);}finally{b.disabled=false;}};
@@ -6562,6 +6568,13 @@ window.onAppLoaded(function(){
   var pending=window.__pendingGameSaveMemory;
   if(!pending)return;
   applySavedMemory(pending.data,pending.id);
+  try{
+    if(typeof window.extractUserProgressFromVocabList==='function'){
+      currentUserVocabProgress=window.extractUserProgressFromVocabList();
+      var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
+      if(typeof window.getVocabProgressStorageKey==='function')localStorage.setItem(window.getVocabProgressStorageKey(bookKey),JSON.stringify(currentUserVocabProgress));
+    }
+  }catch(e){console.warn('[save] vocab progress restore failed',e);}
   try{if(typeof window.applyProfileToUi==='function')window.applyProfileToUi();}catch(e){}
   try{if(typeof window.renderVocabList==='function')window.renderVocabList();}catch(e){}
   try{if(typeof window.renderLeaderboard==='function')window.renderLeaderboard();}catch(e){}
