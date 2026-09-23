@@ -6456,21 +6456,36 @@ function collectAll() {
 async function saveAll() {
   var id=uid(); if(!id)throw new Error('先にログインしてください');
   var started=Date.now(); progress(2,started,'データを準備中');
-  if(typeof window.__saveFlush==='function') await window.__saveFlush();
+  if(typeof window.__saveFlush==='function') {
+    try { await window.__saveFlush(); }
+    catch(e) { console.warn('[save] individual data flush failed; continuing full save',e); }
+  }
   progress(8,started,'全データを整理中');
   var data=collectAll();
   var save={slot:SLOT,savedAt:new Date().toISOString(),savedAtDisplay:nowDisplay(),data:data};
   var raw=JSON.stringify(save);
-  localStorage.setItem(localKey(),raw);
-  if(!fbOk()){progress(100,started,'端末へ保存完了');return;}
+  var localSaved=false, cloudSaved=false, localError=null, cloudError=null;
+  try { localStorage.setItem(localKey(),raw); localSaved=true; }
+  catch(e) { localError=e; console.warn('[save] local save failed',e); }
+  if(!fbOk()) {
+    if(localSaved){progress(100,started,'端末へ保存完了');return {localSaved:true,cloudSaved:false};}
+    throw localError||new Error('保存先に接続できません');
+  }
   var chunks=[]; for(var i=0;i<raw.length;i+=CHUNK)chunks.push(raw.slice(i,i+CHUNK)); if(!chunks.length)chunks=[''];
   var meta={savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,partCount:chunks.length,v:3};
-  await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});
-  for(var n=0;n<chunks.length;n++){
-    await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts','p'+n),{d:chunks[n]},{merge:false});
-    progress(10+((n+1)/chunks.length)*90,started,'クラウドへ保存中');
+  try {
+    await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});
+    for(var n=0;n<chunks.length;n++){
+      await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts','p'+n),{d:chunks[n]},{merge:false});
+      progress(10+((n+1)/chunks.length)*90,started,'クラウドへ保存中');
+    }
+    cloudSaved=true;
+  } catch(e) {
+    cloudError=e; console.warn('[save] cloud save failed',e);
   }
-  progress(100,started,'保存完了');
+  if(cloudSaved){progress(100,started,'保存完了');return {localSaved:localSaved,cloudSaved:true};}
+  if(localSaved){progress(100,started,'端末へ保存完了（クラウド未接続）');return {localSaved:true,cloudSaved:false};}
+  throw cloudError||localError||new Error('保存に失敗しました');
 }
 async function fetchCloudSave() {
   var id=uid(); if(!id||!fbOk())return null;
@@ -6500,7 +6515,7 @@ function openPanel() {
   var last='未セーブ';try{var old=JSON.parse(localStorage.getItem(localKey())||'null');if(old)last=old.savedAtDisplay||last;}catch(e){}
   m.innerHTML='<div class="fbsv-card"><div class="fbsv-head"><div class="fbsv-title">💾 セーブ</div><button class="fbsv-close" id="fbsvClose">✕</button></div><div class="fbsv-row"><div><div class="fbsv-name">セーブデータ</div><div class="fbsv-date">最終保存: '+last+'</div></div><button class="fbsv-btn" id="fbsvSave">セーブする</button></div><div id="fbsvProgress" style="display:none;margin-top:12px"><div id="fbsvProgressText" style="font-size:11px;color:#fde68a;margin-bottom:6px">準備中 0%</div><div style="height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden"><div id="fbsvProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .2s"></div></div></div><div class="fbsv-note">すべてのデータを端末とクラウドへ保存します。ロード操作は不要で、ログイン時に自動で読み込まれます。</div></div>';
   document.body.appendChild(m);m.querySelector('#fbsvClose').onclick=closePanel;m.onclick=function(e){if(e.target===m)closePanel();};
-  m.querySelector('#fbsvSave').onclick=async function(){var b=this;b.disabled=true;try{await saveAll();b.textContent='保存完了';}catch(e){progress(0,Date.now(),'保存失敗');b.textContent='もう一度試す';console.error(e);}finally{b.disabled=false;}};
+  m.querySelector('#fbsvSave').onclick=async function(){var b=this;b.disabled=true;try{var result=await saveAll();b.textContent=result.cloudSaved?'保存完了':'端末に保存完了';}catch(e){progress(0,Date.now(),'保存失敗');b.textContent='もう一度試す';console.error(e);}finally{b.disabled=false;}};
 }
 function ensureBtn(){var b=document.getElementById('headerSaveBtn'),h=document.querySelector('.app-header');if(!b&&h){b=document.createElement('button');b.id='headerSaveBtn';b.type='button';b.innerHTML='💾';b.style.cssText='position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';h.appendChild(b);}return b;}
 document.addEventListener('click',function(e){var t=e.target;if(t&&t.closest&&t.closest('#headerSaveBtn')){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openPanel();}},true);
