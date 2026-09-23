@@ -682,84 +682,6 @@ container.innerHTML += ahtml;
 renderComboGauge();
 };
 
-var __origProcessFlick = window.processMultiFlickAnswer;
-window.processMultiFlickAnswer = function (choiceIndex) {
-var me = multiPartyMembers.find(function (m) { return m.isMe; });
-var q = gameCurrentWordsQueue[gameCurrentIndex];
-var updatedStatus = "bad";
-var ch = charOf(me ? (me.char || activeCharacter) : activeCharacter);
-var comboRate = ch.comboRate || 1.0;
-var s = M2().session; if (!s) s = M2().session = freshSession();
-if (choiceIndex === currentMultiCorrectIndex) {
-updatedStatus = "ok";
-gameComboCount++;
-if (gameComboCount > s.maxCombo) s.maxCombo = gameComboCount;
-try { if (typeof window.createFireballEffect === 'function') window.createFireballEffect(); } catch (e) {}
-var comboMulti = 1 + Math.floor(gameComboCount / 5) * 0.5;
-var damage = Math.round(400 * comboMulti * (ch.atk || 1.0));
-try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
-M2().comboGauge = Math.min(M2().comboMax, M2().comboGauge + 12 * comboRate);
-renderComboGauge();
-var cur = M2().current;
-if (cur && cur.barrier > 0) {
-var tb = Math.min(cur.barrier, damage); cur.barrier -= tb; damage -= tb;
-}
-multiBossHp = Math.max(0, (multiBossHp || 0) - damage);
-if (cur) cur.hp = multiBossHp;
-if (me) try { window.showCharacterPopup(me.id, '💥 ' + damage, 'attack'); } catch (e) {}
-var bimg = document.getElementById('multiBossImage');
-if (bimg && bimg.style.display !== 'none') { bimg.classList.remove('m2-hit'); void bimg.offsetWidth; bimg.classList.add('m2-hit'); }
-if (M2().comboGauge >= M2().comboMax) {
-setTimeout(function () {
-var burst = 5000;
-var c2 = M2().current;
-if (c2 && c2.barrier > 0) { var tb2 = Math.min(c2.barrier, burst); c2.barrier -= tb2; burst -= tb2; }
-multiBossHp = Math.max(0, multiBossHp - burst); if (c2) c2.hp = multiBossHp;
-M2().comboGauge = 0; renderComboGauge();
-try { window.updateMultiHpBars(); } catch (e) {}
-checkEnemyDefeated();
-}, 200);
-} else {
-try { window.updateMultiHpBars(); } catch (e) {}
-}
-var curE = M2().current;
-if (curE && curE.skills && curE.skills.indexOf('combo') >= 0 && gameComboCount >= (curE.comboTh || 999)) {
-triggerEnemyAoE(curE, true);
-}
-} else {
-gameComboCount = 0;
-M2().comboGauge = Math.max(0, M2().comboGauge - 20);
-renderComboGauge();
-try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
-if (me && me.hp > 0) {
-me.hp = Math.max(0, me.hp - 300);
-s.dmgTaken += 300;
-try { window.showCharacterPopup(me.id, 300, 'damage'); } catch (e) {}
-}
-}
-if (q) {
-var targetVocab = vocabList.find(function (w) { return w.num === q.wordNum; });
-if (targetVocab) {
-if (targetVocab.meanings.length > 0) {
-targetVocab.meanings[0].status = updatedStatus;
-if (!targetVocab.meanings[0].history) targetVocab.meanings[0].history = [];
-targetVocab.meanings[0].history.push(updatedStatus);
-}
-targetVocab.status = updatedStatus;
-if (!targetVocab.history) targetVocab.history = [];
-targetVocab.history.push(updatedStatus);
-try { if (typeof window.saveVocabToStorage === 'function') window.saveVocabToStorage(); } catch (e) {}
-}
-}
-if (checkEnemyDefeated()) return;
-if (multiPartyMembers.every(function (m) { return m.hp <= 0; })) {
-showMultiResult();
-return;
-}
-try { window.updateMultiHpBars(); } catch (e) {}
-gameCurrentIndex++;
-try { if (typeof window.showNextMultiWord === 'function') window.showNextMultiWord(); } catch (e) {}
-};
 function checkEnemyDefeated() {
 if (multiBossHp > 0) return false;
 var cur = M2().current;
@@ -943,62 +865,6 @@ console.log('⚔️ multi.js 適用完了');
   })();
 
   // ------------------------------------------------------------------
-  // 【2】AAAコンボバナー制御（fix.js 内ローカル関数の代替・自前実装）
-  // ------------------------------------------------------------------
-  var __cbHideT = null;
-  function cbTier(c) { return c >= 20 ? 4 : c >= 10 ? 3 : c >= 5 ? 2 : 1; }
-  function cbWord(t) { return ['', 'COMBO', 'GREAT', 'EXCELLENT', 'UNSTOPPABLE'][t] || 'COMBO'; }
-  function showCombo(c) {
-    var b = document.getElementById('aaaComboBanner');
-    var f = document.getElementById('aaaComboFlash');
-    if (!b) return;
-    var t = cbTier(c);
-    b.className = 'show tier-' + t;
-    var w = b.querySelector('.aaa-cb-word');
-    var n = b.querySelector('.aaa-cb-num');
-    if (w) w.textContent = cbWord(t);
-    if (n) n.textContent = c + ' HITS';
-    if (f) f.className = 'tier-' + t;
-    clearTimeout(__cbHideT);
-    __cbHideT = setTimeout(hideCombo, 1400);
-  }
-  function hideCombo() {
-    var b = document.getElementById('aaaComboBanner');
-    var f = document.getElementById('aaaComboFlash');
-    if (b) b.classList.remove('show');
-    if (f) f.className = '';
-  }
-
-  // ------------------------------------------------------------------
-  // 【3】processMultiFlickAnswer ラップ
-  //     ・二重発火ガード（タップとフリックが万が一重なっても1回だけ）
-  //     ・押した選択肢に aaa-correct / aaa-wrong を一時付与
-  //     ・コンボ変化でバナー表示
-  // ------------------------------------------------------------------
-  var __origFlick = window.processMultiFlickAnswer;
-  window.processMultiFlickAnswer = function (choiceIndex) {
-    if (window.__m2Processing) return;          // ★ガード
-    window.__m2Processing = true;
-    setTimeout(function () { window.__m2Processing = false; }, 350);
-    try {
-      var el = document.getElementById('multiChoice-' + choiceIndex);
-      if (el) {
-        var ok = (typeof currentMultiCorrectIndex !== 'undefined') && (choiceIndex === currentMultiCorrectIndex);
-        el.classList.add(ok ? 'aaa-correct' : 'aaa-wrong');
-        setTimeout(function () { el.classList.remove('aaa-correct', 'aaa-wrong'); }, 460);
-      }
-    } catch (e) {}
-    var before = (typeof gameComboCount !== 'undefined') ? gameComboCount : 0;
-    var r = __origFlick ? __origFlick.apply(this, arguments) : undefined;
-    var after = (typeof gameComboCount !== 'undefined') ? gameComboCount : 0;
-    try {
-      if (after > before && after >= 2) showCombo(after);
-      else if (after === 0 && before >= 2) hideCombo();
-    } catch (e) {}
-    return r;
-  };
-
-  // ------------------------------------------------------------------
   // 【4】showCharacterPopup ラップ
   //     ・attack → 敵に aaa-hit ＋ コンボ5以上でバブルを CRIT 化
   //     ・damage → 敵攻撃時の画面揺れ(boss-damage-shake)を復活
@@ -1023,30 +889,6 @@ console.log('⚔️ multi.js 適用完了');
     } catch (e) {}
     return r;
   };
-
-  // ------------------------------------------------------------------
-  // 【5】タップ接続（イベント委譲＝DOM生成タイミングに依存しない）
-  //     ・.flick-choice（#multiChoice-0〜7）をタップで解答
-  //     ・フリックパッド(#flickPadArea)は別コンテナなので従来通り動作
-  //     ・touchend と click の二重は【3】のガードが吸収
-  // ------------------------------------------------------------------
-  function choiceIndexOf(node) {
-    var c = (node && node.closest) ? node.closest('.flick-choice') : null;
-    if (!c || !c.id) return -1;
-    var m = /multiChoice-(\d+)/.exec(c.id);
-    return m ? parseInt(m[1], 10) : -1;
-  }
-  document.addEventListener('touchend', function (e) {
-    var idx = choiceIndexOf(e.target);
-    if (idx < 0) return;            // 選択肢以外（フリックパッド等）は何もしない
-    e.preventDefault();             // 後続 click を抑制
-    window.processMultiFlickAnswer(idx);
-  }, { passive: false, capture: true });
-  document.addEventListener('click', function (e) {
-    var idx = choiceIndexOf(e.target);
-    if (idx < 0) return;
-    window.processMultiFlickAnswer(idx);
-  }, true);
 
   console.log('⚔️ multi.js 最終パッチ（余白詰め＋円消去＋タップ両対応＋AAA演出復活＋HP色相）適用完了');
 })();
@@ -3691,12 +3533,9 @@ ptyToast(armorId ? '🛡️ 防具を装備しました' : '🛡️ 防具を外
 };
 
 /* ---------- 14. switchTab ラップ：編成タブ表示時に再描画 ---------- */
-var __prevSwitchTabPty = window.switchTab;
-window.switchTab = function (tabId) {
-var r = __prevSwitchTabPty ? __prevSwitchTabPty.apply(this, arguments) : undefined;
+window.onTabChange(function (tabId) {
 if (tabId === 'party') { setTimeout(renderPartyTab, 30); }
-return r;
-};
+});
 
 /* ---------- 15. 起動時注入 ---------- */
 (function initPartyPatch() {
@@ -4066,16 +3905,13 @@ new MutationObserver(function () {
 if (view.querySelector('.pty-scroll') && !view.querySelector('#pgfBar')) requestAnimationFrame(rebuild);
 }).observe(view, { childList: true });
 }
-var __prevSwitchTabPgf = window.switchTab;
-window.switchTab = function (tabId) {
-var r = __prevSwitchTabPgf ? __prevSwitchTabPgf.apply(this, arguments) : undefined;
+window.onTabChange(function (tabId) {
 if (tabId === 'party') {
 window.__pgfPage = 'party';
 setTimeout(function () { var v = document.getElementById('view-party'); attachObserver(); bindSwipe(v); rebuild(); }, 40);
 setTimeout(rebuild, 140);
 }
-return r;
-};
+});
 (function bootPgf() {
 function run() {
 var view = document.getElementById('view-party');
@@ -4208,12 +4044,9 @@ var boot=function(){ var l=document.getElementById('ptyList'); if(l) mo.observe(
 if(document.readyState!=='loading') setTimeout(boot,400);
 else document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,400);});
 }
-var __prevTab=window.switchTab;
-window.switchTab=function(tabId){
-var r=__prevTab?__prevTab.apply(this,arguments):undefined;
+window.onTabChange(function(tabId){
 if(tabId==='party') setTimeout(refresh,60);
-return r;
-};
+});
 setInterval(refresh, 800);
 console.log('🐧 編成統一パッチ（並び替え統一＋Lv連動＋攻撃実数値）適用完了');
 })();
@@ -4392,8 +4225,7 @@ var list=document.getElementById('ptyList');
 if(list&&!list.querySelector('.pcv-lock')){ /* 旧パッチが残っていても上書きで正す */ }
 }
 setInterval(tick,400);
-var __prevTab=window.switchTab;
-window.switchTab=function(t){var r=__prevTab?__prevTab.apply(this,arguments):undefined; if(t==='party')setTimeout(function(){bindSearch();renderDex();},40); return r;};
+window.onTabChange(function(t){ if(t==='party')setTimeout(function(){bindSearch();renderDex();},40); });
 (function(){function run(){bindSearch(); if(PU().cat)renderDex();}
 if(document.readyState!=='loading')setTimeout(run,450); else document.addEventListener('DOMContentLoaded',function(){setTimeout(run,450);});})();
 console.log('📚 統合図鑑パッチ適用完了');
@@ -4519,12 +4351,9 @@ if (typeof __origLoadBook==='function'){
     return r;
   };
 }
-var __prevTab = window.switchTab;
-window.switchTab = function(tabId){
-  var r = __prevTab ? __prevTab.apply(this, arguments) : undefined;
+window.onTabChange(function(tabId){
   if(tabId==='vocab'){ setTimeout(doRestore, 150); }
-  return r;
-};
+});
 (function boot(){
   function run(){ doRestore(); }
   if(document.readyState!=='loading') setTimeout(run, 1200);
@@ -5029,15 +4858,12 @@ if (!c.getAttribute('role')) c.setAttribute('role', 'button');
 }, 400);
 
 /* ---------- 5. switchTab ラップ：タブ切替時にチップ状態を再同期 ---------- */
-var __prevTabSortFix = window.switchTab;
-window.switchTab = function(tabId) {
-var r = __prevTabSortFix ? __prevTabSortFix.apply(this, arguments) : undefined;
+window.onTabChange(function(tabId) {
 if (tabId === 'party') {
 setTimeout(updateChipVisuals, 80);
 setTimeout(updateChipVisuals, 300);
 }
-return r;
-};
+});
 
 /* ---------- 6. 起動時 ---------- */
 (function bootSortFix() {
@@ -5113,6 +4939,14 @@ function collectAllData() {
   try { memData.weeklyStudyMinutesLog = (typeof weeklyStudyMinutesLog !== 'undefined') ? weeklyStudyMinutesLog : [0,0,0,0,0,0,0]; } catch (e) {}
   try { memData.lastAccessDateStr = (typeof lastAccessDateStr !== 'undefined') ? lastAccessDateStr : ''; } catch (e) {}
   try { memData.vocabList = (typeof vocabList !== 'undefined') ? vocabList : []; } catch (e) {}
+  // 理解度は単語マスターとは別の専用スナップショットとしても保持する。
+  // 起動中に通常の教材ロードが走って vocabList が置き換わっても、これを最後に適用できる。
+  try {
+    memData.vocabBookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default';
+    memData.vocabProgress = (typeof window.extractUserProgressFromVocabList === 'function')
+      ? window.extractUserProgressFromVocabList()
+      : ((typeof currentUserVocabProgress !== 'undefined' && currentUserVocabProgress) ? currentUserVocabProgress : {});
+  } catch (e) {}
   try { memData.wordMemory = (typeof wordMemory !== 'undefined') ? wordMemory : {}; } catch (e) {}
   try { memData.textHistory = (typeof textHistory !== 'undefined') ? textHistory : []; } catch (e) {}
   try { memData.myBookshelf = (typeof myBookshelf !== 'undefined') ? myBookshelf : []; } catch (e) {}
@@ -5125,6 +4959,7 @@ function collectAllData() {
   try { memData.geminiApiKey = (typeof geminiApiKey !== 'undefined') ? geminiApiKey : ''; } catch (e) {}
   return { localStorage: lsData, memory: memData };
 }
+window.__collectGameSaveData = collectAllData;
 
 /* ---------- セーブ情報取得 ---------- */
 function getSaveInfo(slot) {
@@ -5238,6 +5073,7 @@ function applyLoad(save) {
   toast('読み込み中。しばらくお待ちください…');
   setTimeout(function () { location.reload(); }, 600);
 }
+window.__applyGameSaveData = applyLoad;
 
 /* ---------- UI ---------- */
 var __svCurrentTab = 'save';
@@ -5354,75 +5190,17 @@ function ensureSaveButton() {
 
 function bindSaveButton() {
   var btn = ensureSaveButton();
-  if (!btn || btn.__svBound) return;
-  btn.__svBound = true;
-  btn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    openSavePanel();
-  }, true);
+  if (btn) btn.__svBound = true;
 }
 
-/* ---------- オートセーブ ---------- */
-var __svDirty = false;
-var __svDebounce = null;
+/* ---------- 自動保存は addon.js の1分調停へ一本化 ---------- */
 
-function markDirty() {
-  __svDirty = true;
-  clearTimeout(__svDebounce);
-  __svDebounce = setTimeout(function () {
-    if (__svDirty && uid()) {
-      doSave('auto');
-      __svDirty = false;
-    }
-  }, 3000);
-}
-
-setInterval(function () {
-  if (uid() && __svDirty) {
-    doSave('auto');
-    __svDirty = false;
-  }
-}, SAVE_INTERVAL);
-
-window.addEventListener('pagehide', function () {
-  if (uid()) { try { doSave('auto'); } catch (e) {} }
+/* ---------- 読み込み完了後 → ボタン紐付け＋初期オートセーブ ---------- */
+window.onAppLoaded(function () {
+  setTimeout(function () {
+    bindSaveButton();
+  }, 1500);
 });
-document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'hidden' && uid()) {
-    try { doSave('auto'); } catch (e) {}
-  }
-});
-
-/* ---------- saveUserStats ラップ → 変更マーク ---------- */
-var __origSaveUserStats = window.saveUserStats;
-if (typeof __origSaveUserStats === 'function' && !__origSaveUserStats.__svWrapped) {
-  var wrappedSave = function () {
-    var r = __origSaveUserStats.apply(this, arguments);
-    markDirty();
-    return r;
-  };
-  wrappedSave.__svWrapped = true;
-  window.saveUserStats = wrappedSave;
-}
-
-/* ---------- loadLocalState ラップ → ボタン紐付け＋初期オートセーブ ---------- */
-var __origLoadLocalState = window.loadLocalState;
-if (typeof __origLoadLocalState === 'function' && !__origLoadLocalState.__svWrapped) {
-  var wrappedLoad = function () {
-    var p = __origLoadLocalState.apply(this, arguments);
-    return Promise.resolve(p).then(function (r) {
-      setTimeout(function () {
-        bindSaveButton();
-        if (uid()) { doSave('auto'); }
-      }, 1500);
-      return r;
-    });
-  };
-  wrappedLoad.__svWrapped = true;
-  window.loadLocalState = wrappedLoad;
-}
 
 /* ---------- CSS ---------- */
 function injectSvCss() {
@@ -5766,19 +5544,12 @@ if(!list.querySelector('.gm-grid')&&!list.querySelector('.gm-empty'))gmRender();
 else if(!list.classList.contains('gm-active'))gmRender();
 }
 setInterval(gmWatch,250);
-var __prevTabGM=window.switchTab;
-window.switchTab=function(tabId){
-var r=__prevTabGM?__prevTabGM.apply(this,arguments):undefined;
+window.onTabChange(function(tabId){
 if(tabId==='party'){setTimeout(gmReplace,50);setTimeout(gmReplace,200);}
-return r;
-};
-var __prevLoadGM=window.loadLocalState;
-window.loadLocalState=function(){
-var r=__prevLoadGM?__prevLoadGM.apply(this,arguments):undefined;
-if(r&&r.then)r.then(function(){setTimeout(gmReplace,100);});
-else setTimeout(gmReplace,100);
-return r;
-};
+});
+window.onAppLoaded(function(){
+setTimeout(gmReplace,100);
+});
 (function bootGM(){
 function run(){gmReplace();}
 if(document.readyState!=='loading')setTimeout(run,500);
@@ -6354,6 +6125,7 @@ document.body.appendChild(indicatorEl);
 return indicatorEl;
 }
 function updateSaveIndicator(state) {
+return;
 var el = ensureIndicator();
 if (!el) return;
 var icon = document.getElementById('svAutoIcon');
@@ -6560,28 +6332,11 @@ ringTarget = null;
 
 /* ==================================================================
 【3】チュートリアル初回限定（ログアウトしても再表示しない）
-    logoutToGate が localStorage.clear() を呼ぶため、
-    チュートリアル完了フラグを退避・復元する
+    完了フラグは IndexedDB にも保存し、端末内で維持する
 ================================================================== */
 (function fixTutorialOnce() {
 
 var TUTORIAL_KEY = 'b3_tutorial_done';
-
-/* logoutToGate をラップ：チュートリアルフラグを退避・復元 */
-if (typeof window.logoutToGate === 'function' && !window.logoutToGate.__fixPatched) {
-var origLogout = window.logoutToGate;
-window.logoutToGate = function() {
-/* フラグ退避 */
-var tutorialDone = null;
-try { tutorialDone = localStorage.getItem(TUTORIAL_KEY); } catch (e) {}
-/* 元の処理を実行（localStorage.clear() が呼ばれる） */
-origLogout.apply(this, arguments);
-/* clear() 後に復元（ただし location.reload() が呼ばれるので復元は次セッション用） */
-/* 実際には reload されるので、localStorage 復元は意味がない。 */
-/* 代わりに、別キーに永続フラグを保存する方式を使う */
-};
-window.logoutToGate.__fixPatched = true;
-}
 
 /* 別の永続化方式：IndexedDB にチュートリアル完了フラグを保存 */
 function saveTutorialFlagDB(callback) {
@@ -6645,7 +6400,7 @@ clearInterval(checkInterval);
 }, 1000);
 
 /* ページ読み込み時に IndexedDB のフラグを localStorage に復元 */
-/* （logoutToGate の localStorage.clear() 後に再ログインしたとき用） */
+/* 再ログインしたときにも完了フラグを復元する */
 (function restoreTutorialFlag() {
 loadTutorialFlagDB(function(done) {
 if (done) {
@@ -6662,32 +6417,14 @@ try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
 }, 2000);
 })();
 
-/* loadLocalState をラップ：完了後に IndexedDB から復元 */
-if (typeof window.loadLocalState === 'function' && !window.loadLocalState.__fixTutPatched) {
-var origLoad = window.loadLocalState;
-window.loadLocalState = function() {
-var result = origLoad.apply(this, arguments);
-if (result && typeof result.then === 'function') {
-return result.then(function(r) {
-/* IndexedDB からチュートリアルフラグを復元 */
+/* 読み込み完了後に IndexedDB からチュートリアルフラグを復元 */
+window.onAppLoaded(function() {
 loadTutorialFlagDB(function(done) {
 if (done) {
 try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
 }
 });
-return r;
 });
-}
-/* IndexedDB からチュートリアルフラグを復元 */
-loadTutorialFlagDB(function(done) {
-if (done) {
-try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
-}
-});
-return result;
-};
-window.loadLocalState.__fixTutPatched = true;
-}
 })();
 
 console.log('🔧 修正パッチ③（セーブ根治＋長押しリング＋チュートリアル初回限定）適用完了');
@@ -6706,445 +6443,173 @@ console.log('🔧 修正パッチ③（セーブ根治＋長押しリング＋�
 if (window.__fbSaveApplied) return;
 window.__fbSaveApplied = true;
 
-var SLOTS = ['slot1', 'slot2', 'auto'];
-var SLOT_NAMES = { slot1: 'セーブ1', slot2: 'セーブ2', auto: 'オートセーブ' };
-var CHUNK = 200000; // 分割サイズ（文字数）
-
-/* ---------- ヘルパー ---------- */
+var SLOT = 'main';
+var CHUNK = 200000;
 function uid() { return (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000') ? myId : null; }
-function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-function nowDisplay() {
-var d = new Date();
-function p(n) { return (n < 10 ? '0' : '') + n; }
-return d.getFullYear() + '/' + p(d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
-}
-function toast(msg, type) { try { if (window.showToast) window.showToast(msg, type || 'ok'); } catch (e) {} }
+function loginUid() { var id=uid(); if(id)return id; try{id=localStorage.getItem('core_v4_userId');}catch(e){} return id&&id!=='GUEST-000'?id:null; }
 function fbOk() { return !!(window.db && window.fbSetDoc && window.fbGetDoc && window.fbDoc); }
-
-/* ---------- スタイル ---------- */
-(function injectFbsvCss() {
-if (document.getElementById('fbsvCss')) return;
-var s = document.createElement('style');
-s.id = 'fbsvCss';
-s.textContent = [
-'.fbsv-modal{position:fixed;inset:0;z-index:60060;display:flex;align-items:center;justify-content:center;background:rgba(5,3,12,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:20px;}',
-'.fbsv-card{width:min(92vw,400px);max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:18px;padding:22px 18px;background:linear-gradient(168deg,rgba(46,38,28,.96),rgba(24,18,12,.98));border:1px solid rgba(200,144,42,.4);box-shadow:0 24px 64px rgba(0,0,0,.6);}',
-'.fbsv-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}',
-'.fbsv-title{font-family:"Noto Serif JP",serif;font-size:18px;font-weight:900;color:#f3e5c0;}',
-'.fbsv-close{width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#a89880;font-size:16px;cursor:pointer;}',
-'.fbsv-offline{display:none;margin:6px 0 10px;padding:8px 12px;border-radius:10px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.4);color:#fcd34d;font-size:11px;font-weight:700;}',
-'.fbsv-offline.show{display:block;}',
-'.fbsv-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 14px;}',
-'.fbsv-tab{padding:11px;border-radius:10px;border:1.5px solid rgba(255,255,255,.15);background:rgba(0,0,0,.3);color:#a89880;font-family:"Noto Serif JP",serif;font-size:13px;font-weight:900;cursor:pointer;}',
-'.fbsv-tab.on{border-color:rgba(245,196,81,.7);background:rgba(245,196,81,.12);color:#fde68a;}',
-'.fbsv-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.25);margin-bottom:10px;}',
-'.fbsv-name{font-family:"Noto Serif JP",serif;font-size:14px;font-weight:900;color:#f3e5c0;}',
-'.fbsv-date{font-family:ui-monospace,monospace;font-size:11px;color:#8a7a5f;margin-top:3px;}',
-'.fbsv-btn{padding:9px 18px;border-radius:9px;border:1.5px solid rgba(245,196,81,.5);background:linear-gradient(180deg,#4a3b24,#2e2415 55%,#1f1809);color:#fde68a;font-family:"Noto Serif JP",serif;font-size:12px;font-weight:900;cursor:pointer;}',
-'.fbsv-btn:active{transform:scale(.96);}',
-'.fbsv-btn.load{border-color:rgba(52,231,228,.5);background:linear-gradient(180deg,#1a3a3a,#0e2424 55%,#081616);color:#9af6f1;}',
-'.fbsv-btn.dis{opacity:.45;cursor:not-allowed;}',
-'.fbsv-note{margin-top:10px;padding:10px 12px;border-radius:9px;border:1px dashed rgba(200,144,42,.25);font-size:10.5px;font-weight:600;color:#a89880;line-height:1.6;}'
-].join('\n');
-(document.head || document.documentElement).appendChild(s);
-})();
-
-/* ---------- インジケータ（保存中/成功/失敗） ---------- */
-var indEl = null, indTimer = null;
-function ensureInd() {
-if (indEl && document.body.contains(indEl)) return indEl;
-indEl = document.createElement('div');
-indEl.id = 'fbSaveInd';
-indEl.style.cssText = 'position:fixed;top:64px;right:10px;z-index:1002;padding:5px 12px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.05em;pointer-events:none;opacity:0;transform:translateY(-6px);transition:all .3s ease;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.2);color:#e2e8f0;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);font-family:"Noto Sans JP",sans-serif;';
-document.body.appendChild(indEl);
-return indEl;
+function localKey(id) { return 'save_studio_' + (id||uid()) + '_' + SLOT; }
+function localMetaKey(id) { return 'game_save_meta_' + (id||uid()); }
+function nowDisplay() { var d=new Date(),p=function(n){return n<10?'0'+n:n;}; return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function closePanel() { var m=document.getElementById('fbsvModal'); if(m&&m.parentNode)m.parentNode.removeChild(m); }
+function progress(percent, startedAt, text) {
+  var box=document.getElementById('fbsvProgress'),fill=document.getElementById('fbsvProgressFill'),label=document.getElementById('fbsvProgressText');
+  if(!box||!fill||!label)return;
+  box.style.display='block'; fill.style.width=Math.max(0,Math.min(100,percent))+'%';
+  var elapsed=Math.max(0.1,(Date.now()-startedAt)/1000), remaining=percent>0&&percent<100?Math.max(1,Math.ceil(elapsed*(100-percent)/percent)):0;
+  label.textContent=text+' '+Math.round(percent)+'%'+(remaining?'（残り約'+remaining+'秒）':'');
 }
-function ind(state, text) {
-var el = ensureInd();
-el.textContent = (state === 'saving' ? '🔄 ' : state === 'ok' ? '✅ ' : '⚠️ ') + text;
-el.style.borderColor = state === 'ok' ? 'rgba(74,222,128,.6)' : state === 'err' ? 'rgba(248,113,113,.6)' : 'rgba(52,231,228,.5)';
-el.style.opacity = '1'; el.style.transform = 'translateY(0)';
-clearTimeout(indTimer);
-if (state !== 'saving') indTimer = setTimeout(function () { el.style.opacity = '0'; el.style.transform = 'translateY(-6px)'; }, state === 'err' ? 4000 : 2500);
+function collectAll() {
+  if(typeof window.__collectGameSaveData==='function') return window.__collectGameSaveData();
+  var ls={}; for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k)ls[k]=localStorage.getItem(k);} return {localStorage:ls,memory:{}};
 }
-
-/* ---------- データ収集（ローカル全キーのスナップショット） ---------- */
-function collect() {
-var ls = {};
-try {
-for (var i = 0; i < localStorage.length; i++) {
-var k = localStorage.key(i);
-if (!k || k.indexOf('save_studio_') === 0 || k.indexOf('fbsave_meta_') === 0) continue;
-try { ls[k] = localStorage.getItem(k); } catch (e) {}
+async function saveAll() {
+  var id=uid(); if(!id)throw new Error('先にログインしてください');
+  var started=Date.now(); progress(2,started,'データを準備中');
+  if(typeof window.__saveFlush==='function') {
+    try { await window.__saveFlush(); }
+    catch(e) { console.warn('[save] individual data flush failed; continuing full save',e); }
+  }
+  progress(8,started,'全データを整理中');
+  var data=collectAll();
+  var save={slot:SLOT,savedAt:new Date().toISOString(),savedAtDisplay:nowDisplay(),data:data};
+  // 手動セーブ時点の理解度を、その場で正規のローカル領域にも確定する。
+  // 100ms の遅延処理や別の自動保存処理には依存させない。
+  try {
+    var savedProgress=data.memory&&data.memory.vocabProgress;
+    var savedBook=data.memory&&data.memory.vocabBookKey||'default';
+    if(savedProgress&&typeof window.getVocabProgressStorageKey==='function'){
+      localStorage.setItem(window.getVocabProgressStorageKey(savedBook),JSON.stringify(savedProgress));
+      localStorage.setItem(window.getVocabProgressStorageKey(savedBook)+'__ts',String(Date.parse(save.savedAt)));
+    }
+  } catch(e) { console.warn('[save] vocab snapshot write failed',e); }
+  var raw=JSON.stringify(save);
+  var localSaved=false, cloudSaved=false, localError=null, cloudError=null;
+  try { localStorage.setItem(localKey(),raw); localSaved=true; }
+  catch(e) { localError=e; console.warn('[save] local save failed',e); }
+  try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay})); } catch(e) {}
+  if(!fbOk()) {
+    if(localSaved){progress(100,started,'端末へ保存完了');return {localSaved:true,cloudSaved:false};}
+    throw localError||new Error('保存先に接続できません');
+  }
+  var chunks=[]; for(var i=0;i<raw.length;i+=CHUNK)chunks.push(raw.slice(i,i+CHUNK)); if(!chunks.length)chunks=[''];
+  var meta={savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,partCount:chunks.length,v:3};
+  try {
+    await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});
+    for(var n=0;n<chunks.length;n++){
+      await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts','p'+n),{d:chunks[n]},{merge:false});
+      progress(10+((n+1)/chunks.length)*90,started,'クラウドへ保存中');
+    }
+    cloudSaved=true;
+  } catch(e) {
+    cloudError=e; console.warn('[save] cloud save failed',e);
+  }
+  if(cloudSaved){progress(100,started,'保存完了');return {localSaved:localSaved,cloudSaved:true};}
+  if(localSaved){progress(100,started,'端末へ保存完了（クラウド未接続）');return {localSaved:true,cloudSaved:false};}
+  throw cloudError||localError||new Error('保存に失敗しました');
 }
-} catch (e) {}
-return ls;
+async function fetchCloudSave(id) {
+  id=id||loginUid(); if(!id||!fbOk())return null;
+  var snap=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
+  if(!snap||!snap.exists())return null;
+  var meta=snap.data()||{}, raw='';
+  for(var i=0;i<(meta.partCount||0);i++){
+    var part=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts','p'+i));
+    if(part&&part.exists()&&part.data())raw+=part.data().d||'';
+  }
+  return raw?JSON.parse(raw):null;
 }
-
-/* ---------- メタ（日時）キャッシュ ---------- */
-var cloudMetaCache = {};
-function metaKey(slot) { return 'fbsave_meta_' + uid() + '_' + slot; }
-function localMeta(slot) { try { return JSON.parse(localStorage.getItem(metaKey(slot)) || 'null'); } catch (e) { return null; } }
-function setLocalMeta(slot, m) { try { localStorage.setItem(metaKey(slot), JSON.stringify(m)); } catch (e) {} }
-function metaFor(slot) { return cloudMetaCache[slot] || localMeta(slot); }
-
-/* ---------- 失敗通知（自動セーブの連発は抑制） ---------- */
-var lastAutoErr = 0;
-function failNotify(msg, manual) {
-ind('err', manual ? '保存失敗' : '自動セーブ失敗');
-if (manual) { toast(msg, 'err'); return; }
-var now = Date.now();
-if (now - lastAutoErr > 60000) { lastAutoErr = now; toast(msg, 'err'); }
+function applySavedMemory(memory,id) {
+  if(!memory||typeof memory!=='object')return;
+  try{if(memory.totalExp!=null)totalExp=memory.totalExp;}catch(e){}
+  try{if(memory.myName!=null)myName=memory.myName;}catch(e){}
+  try{if(memory.myTarget!=null)myTarget=memory.myTarget;}catch(e){}
+  try{if(memory.selectedTitle!=null)selectedTitle=memory.selectedTitle;}catch(e){}
+  try{if(Array.isArray(memory.myFriendList))myFriendList=memory.myFriendList;}catch(e){}
+  try{if(memory.userStats)userStats=memory.userStats;}catch(e){}
+  try{if(memory.todayStudySeconds!=null)todayStudySeconds=memory.todayStudySeconds;}catch(e){}
+  try{if(Array.isArray(memory.weeklyStudyMinutesLog))weeklyStudyMinutesLog=memory.weeklyStudyMinutesLog;}catch(e){}
+  try{if(memory.lastAccessDateStr!=null)lastAccessDateStr=memory.lastAccessDateStr;}catch(e){}
+  try{if(Array.isArray(memory.vocabList))vocabList=memory.vocabList;}catch(e){}
+  try{if(memory.wordMemory)wordMemory=memory.wordMemory;}catch(e){}
+  try{if(Array.isArray(memory.textHistory))textHistory=memory.textHistory;}catch(e){}
+  try{if(Array.isArray(memory.myBookshelf))myBookshelf=memory.myBookshelf;}catch(e){}
+  try{if(Array.isArray(memory.myFolders))myFolders=memory.myFolders;}catch(e){}
+  try{if(memory.currentTextbook!=null)currentTextbook=memory.currentTextbook;}catch(e){}
+  try{if(Array.isArray(memory.textbooksPool))textbooksPool=memory.textbooksPool;}catch(e){}
+  try{if(memory.activeCharacter!=null)activeCharacter=memory.activeCharacter;}catch(e){}
+  try{if(memory.activeWeapon!=null)activeWeapon=memory.activeWeapon;}catch(e){}
+  try{if(memory.activeArmor!=null)activeArmor=memory.activeArmor;}catch(e){}
+  try{
+    localStorage.setItem('core_v4_totalExp',String(memory.totalExp||0));
+    localStorage.setItem('core_v4_userName',memory.myName||'');
+    localStorage.setItem('core_v4_userTarget',memory.myTarget||'');
+    localStorage.setItem('core_v4_userTitle',memory.selectedTitle||'');
+    if(memory.userStats)localStorage.setItem('core_v4_user_stats_'+id,JSON.stringify(memory.userStats));
+    if(memory.myFriendList)localStorage.setItem('core_v4_friend_list',JSON.stringify(memory.myFriendList));
+  }catch(e){}
 }
-
-/* ---------- クラウドへ保存 ---------- */
-function cloudSave(slot, manual) {
-var id = uid();
-if (!id) { if (manual) { toast('先にログインしてください', 'err'); } return Promise.reject(new Error('no login')); }
-if (!fbOk()) { failNotify('保存に失敗しました：通信未接続', manual); return Promise.reject(new Error('no fb')); }
-ind('saving', '保存中…');
-var raw;
-try { raw = JSON.stringify(collect()); } catch (e) { failNotify('保存に失敗しました：データ処理エラー', manual); return Promise.reject(e); }
-var chunks = [];
-for (var i = 0; i < raw.length; i += CHUNK) chunks.push(raw.substr(i, CHUNK));
-if (!chunks.length) chunks = [''];
-var meta = { savedAt: new Date().toISOString(), savedAtDisplay: nowDisplay(), partCount: chunks.length, v: 2 };
-return window.fbSetDoc(window.fbDoc(window.db, 'users', id, 'saves', slot), meta, { merge: false }).then(function () {
-var chain = Promise.resolve();
-chunks.forEach(function (c, idx) {
-chain = chain.then(function () {
-return window.fbSetDoc(window.fbDoc(window.db, 'users', id, 'saves', slot, 'parts', 'p' + idx), { d: c }, { merge: false });
-});
-});
-return chain;
-}).then(function () {
-var old = localMeta(slot);
-if (old && old.partCount > chunks.length && typeof window.fbDeleteDoc === 'function') {
-for (var x = chunks.length; x < old.partCount; x++) {
-try { window.fbDeleteDoc(window.fbDoc(window.db, 'users', id, 'saves', slot, 'parts', 'p' + x)).catch(function () {}); } catch (e) {}
-}
-}
-cloudMetaCache[slot] = meta;
-setLocalMeta(slot, { savedAtDisplay: meta.savedAtDisplay, partCount: chunks.length });
-ind('ok', manual ? '保存しました' : '自動セーブしました');
-if (manual) toast('💾 クラウドに保存しました', 'ok');
-}).catch(function (e) {
-console.error('[fbSave] save error:', e);
-failNotify('保存に失敗しました。通信状態を確認してください', manual);
-});
-}
-
-/* ---------- クラウドから読み込み ---------- */
-function cloudLoad(slot) {
-var id = uid();
-if (!id) { toast('先にログインしてください', 'err'); return; }
-if (!fbOk()) { toast('通信できません。電波の良い場所でやり直してください', 'err'); return; }
-ind('saving', '読み込み中…');
-window.fbGetDoc(window.fbDoc(window.db, 'users', id, 'saves', slot)).then(function (snap) {
-if (!snap || !snap.exists()) { ind('err', 'データなし'); toast('セーブデータがありません', 'warn'); return; }
-var meta = snap.data() || {};
-var count = meta.partCount || 0;
-var chain = Promise.resolve('');
-for (var i = 0; i < count; i++) {
-chain = (function (c, idx) {
-return c.then(function (acc) {
-return window.fbGetDoc(window.fbDoc(window.db, 'users', id, 'saves', slot, 'parts', 'p' + idx)).then(function (s2) {
-return acc + ((s2 && s2.exists() && s2.data()) ? (s2.data().d || '') : '');
-});
-});
-})(chain, i);
-}
-chain.then(function (raw) {
-var ls;
-try { ls = JSON.parse(raw); } catch (e) { ind('err', '破損'); toast('セーブデータが破損しています', 'err'); return; }
-for (var k in ls) { try { localStorage.setItem(k, ls[k]); } catch (e) {} }
-setLocalMeta(slot, { savedAtDisplay: meta.savedAtDisplay, partCount: count });
-toast('✅ 読み込みました。再起動します…', 'ok');
-setTimeout(function () { location.reload(); }, 700);
-});
-}).catch(function (e) {
-console.error('[fbSave] load error:', e);
-ind('err', '読み込み失敗');
-toast('読み込みに失敗しました。通信状態を確認してください', 'err');
-});
-}
-
-/* ---------- パネル ---------- */
-var curTab = 'save';
-function closePanel() { var m = document.getElementById('fbsvModal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
-function renderRows() {
-var body = document.getElementById('fbsvBody');
-if (!body) return;
-var html = '';
-SLOTS.forEach(function (slot) {
-var meta = metaFor(slot);
-var dateStr = meta ? meta.savedAtDisplay : '未セーブ';
-var btn;
-if (curTab === 'save') btn = '<button type="button" class="fbsv-btn" data-fbsave="' + slot + '">' + (meta ? '上書き' : 'セーブ') + '</button>';
-else btn = meta ? '<button type="button" class="fbsv-btn load" data-fbload="' + slot + '">ロード</button>' : '<button type="button" class="fbsv-btn dis" disabled>データなし</button>';
-html += '<div class="fbsv-row"><div><div class="fbsv-name">' + SLOT_NAMES[slot] + '</div><div class="fbsv-date">' + esc(dateStr) + '</div></div>' + btn + '</div>';
-});
-body.innerHTML = html;
-}
-function refreshMetaFromCloud() {
-var note = document.getElementById('fbsvOffline');
-var id = uid();
-if (!id || !fbOk()) { if (note) note.classList.add('show'); renderRows(); return; }
-var pend = 0;
-SLOTS.forEach(function (slot) {
-pend++;
-window.fbGetDoc(window.fbDoc(window.db, id && window.db ? 'users' : 'users', id, 'saves', slot)).then(function (s) {
-if (s && s.exists()) { var d = s.data() || {}; cloudMetaCache[slot] = { savedAtDisplay: d.savedAtDisplay, partCount: d.partCount }; setLocalMeta(slot, cloudMetaCache[slot]); }
-}).catch(function () { if (note) note.classList.add('show'); }).then(function () { if (--pend === 0) renderRows(); });
-});
+async function autoLoadOnce() {
+  var id=loginUid(); if(!id)return;
+  if(window.__gameSaveLoadedFor===id)return;
+  window.__gameSaveLoadedFor=id;
+  var cloudSave=null,localSave=null,save=null;
+  try{cloudSave=await fetchCloudSave(id);}catch(e){console.warn('[save] cloud load failed',e);}
+  try{localSave=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}
+  if(cloudSave&&localSave){
+    var cloudTime=Date.parse(cloudSave.savedAt||'')||0,localTime=Date.parse(localSave.savedAt||'')||0;
+    save=localTime>cloudTime?localSave:cloudSave;
+  }else save=cloudSave||localSave;
+  if(save&&save.data&&save.data.localStorage){
+    var stored=save.data.localStorage;
+    for(var key in stored){try{localStorage.setItem(key,stored[key]);}catch(e){}}
+  }
+  if(save&&save.data&&save.data.memory){
+    window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt||'',data:save.data.memory};
+    applySavedMemory(save.data.memory,id);
+  }
 }
 function openPanel() {
-closePanel();
-if (!uid()) { toast('先にログインしてください', 'err'); return; }
-curTab = 'save';
-var m = document.createElement('div');
-m.id = 'fbsvModal'; m.className = 'fbsv-modal';
-m.innerHTML = '<div class="fbsv-card">' +
-'<div class="fbsv-head"><div class="fbsv-title">💾 データ保存 / 読み込み</div><button type="button" class="fbsv-close" id="fbsvClose">✕</button></div>' +
-'<div class="fbsv-offline" id="fbsvOffline">⚠️ 通信につながりません。表示は古い可能性があります。</div>' +
-'<div class="fbsv-tabs"><button type="button" class="fbsv-tab on" id="fbsvTabSave">セーブ</button><button type="button" class="fbsv-tab" id="fbsvTabLoad">ロード</button></div>' +
-'<div id="fbsvBody"></div>' +
-'<div class="fbsv-note">データはクラウドに保存されます。<br>機種変更しても、同じIDでログインすれば引き継げます。</div>' +
-'</div>';
-document.body.appendChild(m);
-m.querySelector('#fbsvClose').onclick = closePanel;
-m.addEventListener('click', function (e) { if (e.target === m) closePanel(); });
-m.querySelector('#fbsvTabSave').onclick = function () { curTab = 'save'; m.querySelector('#fbsvTabSave').classList.add('on'); m.querySelector('#fbsvTabLoad').classList.remove('on'); renderRows(); };
-m.querySelector('#fbsvTabLoad').onclick = function () { curTab = 'load'; m.querySelector('#fbsvTabLoad').classList.add('on'); m.querySelector('#fbsvTabSave').classList.remove('on'); renderRows(); };
-m.querySelector('#fbsvBody').addEventListener('click', function (e) {
-var t = e.target; if (!t || !t.closest) return;
-var sv = t.closest('[data-fbsave]');
-if (sv) {
-var slot = sv.getAttribute('data-fbsave');
-var meta = metaFor(slot);
-if (meta && !confirm(SLOT_NAMES[slot] + ' には既にデータがあります（' + meta.savedAtDisplay + '）。\n上書きしますか？')) return;
-cloudSave(slot, true).then(function () { refreshMetaFromCloud(); });
-return;
+  closePanel();
+  if(!uid())return;
+  var m=document.createElement('div');m.id='fbsvModal';m.className='fbsv-modal';
+  var last='未セーブ';try{var oldMeta=JSON.parse(localStorage.getItem(localMetaKey())||'null');var old=JSON.parse(localStorage.getItem(localKey())||'null');if(oldMeta)last=oldMeta.savedAtDisplay||last;else if(old)last=old.savedAtDisplay||last;}catch(e){}
+  m.innerHTML='<div class="fbsv-card"><div class="fbsv-head"><div class="fbsv-title">💾 セーブ</div><button class="fbsv-close" id="fbsvClose">✕</button></div><div class="fbsv-row"><div><div class="fbsv-name">セーブデータ</div><div class="fbsv-date">最終保存: '+last+'</div></div><button class="fbsv-btn" id="fbsvSave">セーブする</button></div><div id="fbsvProgress" style="display:none;margin-top:12px"><div id="fbsvProgressText" style="font-size:11px;color:#fde68a;margin-bottom:6px">準備中 0%</div><div style="height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden"><div id="fbsvProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .2s"></div></div></div><div class="fbsv-note">すべてのデータを端末とクラウドへ保存します。ロード操作は不要で、ログイン時に自動で読み込まれます。</div></div>';
+  document.body.appendChild(m);m.querySelector('#fbsvClose').onclick=closePanel;m.onclick=function(e){if(e.target===m)closePanel();};
+  m.querySelector('#fbsvSave').onclick=async function(){var b=this;b.disabled=true;try{var result=await saveAll();b.textContent=result.cloudSaved?'保存完了':'端末に保存完了';}catch(e){progress(0,Date.now(),'保存失敗');b.textContent='もう一度試す';console.error(e);}finally{b.disabled=false;}};
 }
-var ld = t.closest('[data-fbload]');
-if (ld) {
-var slot2 = ld.getAttribute('data-fbload');
-if (!confirm(SLOT_NAMES[slot2] + ' を読み込みますか？\n今の端末のデータは上書きされます。')) return;
-cloudLoad(slot2);
-}
+function ensureBtn(){var b=document.getElementById('headerSaveBtn'),h=document.querySelector('.app-header');if(!b&&h){b=document.createElement('button');b.id='headerSaveBtn';b.type='button';b.innerHTML='💾';b.style.cssText='position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';h.appendChild(b);}return b;}
+document.addEventListener('click',function(e){var t=e.target;if(t&&t.closest&&t.closest('#headerSaveBtn')){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openPanel();}},true);
+window.onBeforeAppLoad(autoLoadOnce);
+window.onAppLoaded(function(){
+  ensureBtn();
+  var pending=window.__pendingGameSaveMemory;
+  if(!pending)return;
+  applySavedMemory(pending.data,pending.id);
+  try{
+    var bookKey=pending.data.vocabBookKey||((typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default');
+    // 保存時に確定した理解度を使う。起動途中で読み込まれた古い vocabList から
+    // 再抽出すると巻き戻るため、vocabProgress がある場合は再抽出しない。
+    if(pending.data.vocabProgress&&typeof pending.data.vocabProgress==='object'){
+      currentUserVocabProgress=pending.data.vocabProgress;
+      if(typeof window.applyUserProgressToVocabList==='function')window.applyUserProgressToVocabList();
+    }else if(typeof window.extractUserProgressFromVocabList==='function'){
+      currentUserVocabProgress=window.extractUserProgressFromVocabList();
+    }
+    if(typeof window.getVocabProgressStorageKey==='function'){
+      localStorage.setItem(window.getVocabProgressStorageKey(bookKey),JSON.stringify(currentUserVocabProgress||{}));
+      var restoredMs=Date.parse(pending.savedAt||'')||0;
+      if(restoredMs)localStorage.setItem(window.getVocabProgressStorageKey(bookKey)+'__ts',String(restoredMs));
+    }
+  }catch(e){console.warn('[save] vocab progress restore failed',e);}
+  try{if(typeof window.applyProfileToUi==='function')window.applyProfileToUi();}catch(e){}
+  try{if(typeof window.renderVocabList==='function')window.renderVocabList();}catch(e){}
+  try{if(typeof window.renderLeaderboard==='function')window.renderLeaderboard();}catch(e){}
+  try{if(typeof window.renderBookshelf==='function')window.renderBookshelf();}catch(e){}
+  try{if(typeof window.updatePartySlotsUi==='function')window.updatePartySlotsUi();}catch(e){}
 });
-renderRows();
-refreshMetaFromCloud();
-}
-
-/* ---------- 💾ボタン乗っ取り（旧パネルは開かない） ---------- */
-function ensureBtn() {
-var b = document.getElementById('headerSaveBtn');
-if (b) return;
-var h = document.querySelector('.app-header');
-if (!h) return;
-b = document.createElement('button');
-b.id = 'headerSaveBtn'; b.type = 'button'; b.innerHTML = '💾';
-b.style.cssText = 'position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';
-h.appendChild(b);
-}
-document.addEventListener('click', function (e) {
-var t = e.target; if (!t || !t.closest) return;
-if (t.closest('#headerSaveBtn')) { e.preventDefault(); e.stopPropagation(); openPanel(); }
-}, true);
-
-/* ---------- 自動セーブ ---------- */
-var dirty = false, dbT = null;
-function markDirty() {
-dirty = true;
-clearTimeout(dbT);
-dbT = setTimeout(function () { if (dirty && uid()) { dirty = false; cloudSave('auto', false); } }, 3000);
-}
-if (typeof window.saveUserStats === 'function' && !window.saveUserStats.__fbsWrapped) {
-var origSave = window.saveUserStats;
-window.saveUserStats = function () { var r = origSave.apply(this, arguments); markDirty(); return r; };
-window.saveUserStats.__fbsWrapped = true;
-}
-setInterval(function () { if (dirty && uid()) { dirty = false; cloudSave('auto', false); } }, 180000);
-window.addEventListener('pagehide', function () { if (dirty && uid()) { dirty = false; cloudSave('auto', false); } });
-document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && dirty && uid()) { dirty = false; cloudSave('auto', false); } });
-
-/* ---------- ログイン後：ボタン確保＋初回バックアップ ---------- */
-var bootedOnce = false;
-if (typeof window.loadLocalState === 'function' && !window.loadLocalState.__fbsWrapped) {
-var origLoad = window.loadLocalState;
-window.loadLocalState = function () {
-var r = origLoad.apply(this, arguments);
-return Promise.resolve(r).then(function (v) {
-ensureBtn();
-if (!bootedOnce) {
-bootedOnce = true;
-setTimeout(function () { if (uid()) cloudSave('auto', false); }, 4000);
-}
-return v;
-});
-};
-window.loadLocalState.__fbsWrapped = true;
-}
-(function bootFbsv() {
-function run() { ensureBtn(); }
-if (document.readyState !== 'loading') setTimeout(run, 400);
-else document.addEventListener('DOMContentLoaded', function () { setTimeout(run, 400); });
-})();
-console.log('☁️ セーブFirebase一本化パッチ適用完了（失敗時通知＋自動セーブ表示）');
-})();
-// ==========================================================================
-// 💾 保存プログレスゲージパッチ（末尾追記・既存コード不変更）
-//    ・保存（手動/オート）中に「💾 保存中 NN%」ゲージを表示
-//    ・完了で「✅ 保存完了 100%」→1.6秒で消灯
-//    ・失敗で「⚠️ 保存失敗」→3.2秒で消灯
-//    ・仕組み：window.fbSetDoc をラップし、
-//      users/{id}/saves/{slot}（メタ）と .../parts/pN（分割データ）の
-//      書き込み回数から進捗%を計算（既存パッチには一切触れない）
-//    ・25秒無反応ウォッチドッグ＝詰まりでも必ず結果表示
-//    ※ app.js / fix.js / style.css / index.html は不変更
-// ==========================================================================
-(function applySaveProgressGaugePatch() {
-"use strict";
-if (window.__saveGaugeApplied) return;
-window.__saveGaugeApplied = true;
-
-/* ---------- スタイル ---------- */
-(function injectGaugeCss() {
-if (document.getElementById('svGaugeCss')) return;
-var s = document.createElement('style');
-s.id = 'svGaugeCss';
-s.textContent = [
-'#svGauge{position:fixed;top:calc(56px + env(safe-area-inset-top));left:50%;transform:translateX(-50%) translateY(-8px);z-index:99995;',
-'  display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;',
-'  background:rgba(7,11,25,.80);border:1px solid rgba(0,240,255,.35);',
-'  box-shadow:0 0 14px rgba(0,240,255,.25),0 6px 18px rgba(0,0,0,.5);',
-'  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);',
-'  opacity:0;transition:opacity .25s ease,transform .25s ease;pointer-events:none;}',
-'#svGauge.show{opacity:1;transform:translateX(-50%) translateY(0);}',
-'#svGauge .sg-ico{font-size:13px;line-height:1;}',
-'#svGauge .sg-bar{width:110px;height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;flex:0 0 auto;}',
-'#svGauge .sg-fill{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#00F0FF,#C084FC);box-shadow:0 0 8px rgba(0,240,255,.7);transition:width .18s ease;}',
-'#svGauge .sg-txt{font-family:ui-monospace,monospace;font-size:10px;font-weight:800;color:#E2E8F0;letter-spacing:.05em;min-width:74px;text-align:right;white-space:nowrap;}',
-'#svGauge.ok{border-color:rgba(16,185,129,.6);box-shadow:0 0 14px rgba(16,185,129,.35),0 6px 18px rgba(0,0,0,.5);}',
-'#svGauge.ok .sg-fill{background:linear-gradient(90deg,#34D399,#10B981);box-shadow:0 0 8px rgba(16,185,129,.7);}',
-'#svGauge.err{border-color:rgba(239,68,68,.6);box-shadow:0 0 14px rgba(239,68,68,.4),0 6px 18px rgba(0,0,0,.5);}',
-'#svGauge.err .sg-fill{background:linear-gradient(90deg,#F87171,#EF4444);box-shadow:0 0 8px rgba(239,68,68,.7);}'
-].join('\n');
-(document.head || document.documentElement).appendChild(s);
-})();
-
-/* ---------- ゲージDOM ---------- */
-var gEl = null, gFill = null, gTxt = null, gIco = null;
-var hideT = null, dogT = null;
-var st = { active: false, partTotal: 1, done: 0 };
-
-function ensureGauge() {
-if (gEl && document.body.contains(gEl)) return;
-gEl = document.createElement('div');
-gEl.id = 'svGauge';
-gEl.innerHTML = '<span class="sg-ico">💾</span><span class="sg-bar"><span class="sg-fill"></span></span><span class="sg-txt">保存中 0%</span>';
-document.body.appendChild(gEl);
-gFill = gEl.querySelector('.sg-fill');
-gTxt = gEl.querySelector('.sg-txt');
-gIco = gEl.querySelector('.sg-ico');
-}
-function paint(pct) {
-if (!gEl) return;
-if (gFill) gFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
-if (gTxt) gTxt.textContent = '保存中 ' + Math.max(0, Math.min(100, pct)) + '%';
-}
-function kickDog() {
-clearTimeout(dogT);
-dogT = setTimeout(function () { if (st.active) fail(); }, 25000);
-}
-function show() {
-ensureGauge();
-gEl.classList.remove('ok', 'err');
-gEl.classList.add('show');
-if (gIco) gIco.textContent = '💾';
-kickDog();
-}
-function done() {
-clearTimeout(dogT);
-st.active = false;
-ensureGauge();
-gEl.classList.remove('err');
-gEl.classList.add('ok', 'show');
-if (gFill) gFill.style.width = '100%';
-if (gTxt) gTxt.textContent = '保存完了 100%';
-if (gIco) gIco.textContent = '✅';
-clearTimeout(hideT);
-hideT = setTimeout(function () { if (gEl) gEl.classList.remove('show'); }, 1600);
-}
-function fail() {
-clearTimeout(dogT);
-st.active = false;
-ensureGauge();
-gEl.classList.remove('ok');
-gEl.classList.add('err', 'show');
-if (gTxt) gTxt.textContent = '保存失敗';
-if (gIco) gIco.textContent = '⚠️';
-clearTimeout(hideT);
-hideT = setTimeout(function () { if (gEl) gEl.classList.remove('show'); }, 3200);
-}
-
-/* ---------- fbSetDoc ラップ（進捗計測） ---------- */
-function refPath(ref) {
-try { if (ref && typeof ref.path === 'string') return ref.path; } catch (e) {}
-try { if (ref && ref._key && typeof ref._key.path === 'string') return ref._key.path; } catch (e) {}
-return '';
-}
-function partCountOf(data) {
-if (!data || typeof data !== 'object') return 0;
-var n = data.partCount || data.parts || data.totalParts || 0;
-n = parseInt(n, 10);
-return (isFinite(n) && n > 0) ? n : 0;
-}
-function hook() {
-if (typeof window.fbSetDoc !== 'function' || window.fbSetDoc.__gaugeWrapped) return true;
-var prev = window.fbSetDoc;
-var wrapped = function (ref, data, opts) {
-var path = refPath(ref);
-var mMeta = /\/saves\/([^\/]+)$/.exec(path);
-var mPart = /\/saves\/([^\/]+)\/parts\/p(\d+)$/.exec(path);
-var p = prev.apply(this, arguments);
-try {
-if (mMeta) {
-st.active = true;
-st.partTotal = Math.max(1, partCountOf(data));
-st.done = 0;
-clearTimeout(hideT);
-show();
-paint(st.partTotal > 1 ? 2 : 30);
-if (st.partTotal <= 1) {
-p.then(function () { if (st.active) done(); }, function () { fail(); });
-}
-} else if (mPart) {
-if (!st.active) { st.active = true; st.partTotal = Math.max(st.partTotal, 1); st.done = 0; clearTimeout(hideT); show(); }
-var idx = parseInt(mPart[2], 10) || 0;
-st.done = Math.max(st.done, idx + 1);
-kickDog();
-paint(Math.round((st.done / st.partTotal) * 96));
-p.then(function () {
-if (st.active && st.done >= st.partTotal) done();
-}, function () { fail(); });
-}
-} catch (e) {}
-return p;
-};
-wrapped.__gaugeWrapped = true;
-window.fbSetDoc = wrapped;
-return true;
-}
-if (!hook()) {
-var tries = 0;
-var iv = setInterval(function () {
-tries++;
-if (hook() || tries > 20) clearInterval(iv);
-}, 300);
-}
-console.log('💾 保存プログレスゲージパッチ適用完了');
+if(document.readyState!=='loading')setTimeout(ensureBtn,400);else document.addEventListener('DOMContentLoaded',function(){setTimeout(ensureBtn,400);});
+console.log('☁️ 単一セーブ＋ログイン時自動ロード適用完了');
 })();
 // ==========================================================================
 // 🛠️ 最終修正パッチ（gacha.js末尾追記・既存コード不変更）
@@ -7312,12 +6777,9 @@ function _syncPity() {
 }
 
 /* ===== タブ切替・定期監視 ===== */
-var _prevTabFF = window.switchTab;
-window.switchTab = function (tabId) {
-    var r = _prevTabFF ? _prevTabFF.apply(this, arguments) : undefined;
+window.onTabChange(function (tabId) {
     if (tabId === 'party') setTimeout(_fixPartyCards, 120);
-    return r;
-};
+});
 setInterval(function () {
     _fixPartyCards();
     _syncPity();
@@ -7514,12 +6976,9 @@ function syncPityGauge() {
 }
 
 /* ===== タブ切替・定期監視 ===== */
-var __prevTabFF2 = window.switchTab;
-window.switchTab = function(tabId) {
-    var r = __prevTabFF2 ? __prevTabFF2.apply(this, arguments) : undefined;
+window.onTabChange(function(tabId) {
     if (tabId === 'party') setTimeout(fixPartyCards, 150);
-    return r;
-};
+});
 setInterval(function() {
     fixPartyCards();
     syncPityGauge();
@@ -7551,20 +7010,6 @@ var REVIVE_NEED=3;
 '.m2-big-box .sub{font-size:13px;color:#e2e8f0;margin-top:10px;}',
 '#m2ReviveHud{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:99989;background:rgba(0,0,0,.7);border:1px solid rgba(252,165,165,.5);color:#fca5a5;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:800;display:none;}'
 ].join('\n');(document.head||document.documentElement).appendChild(s);})();
-
-/* ---- 近日公開解除 ---- */
-function unlockSoon(){
-var scope=document.getElementById('view-party')||document.body;
-var all=scope.querySelectorAll('*');
-for(var i=0;i<all.length;i++){
-var el=all[i];
-if(el.children.length===0 && (el.textContent||'').trim().indexOf('近日公開')>=0){
-el.style.display='none';
-var host=el.closest('[class*=door],[data-mode],button,.mdu-card,.mdu-mode')||el.parentElement;
-if(host){ host.classList.remove('locked','soon','disabled'); host.removeAttribute('disabled'); host.style.opacity=''; host.style.pointerEvents=''; }
-}
-}
-}
 
 /* ---- 死亡/魂 ---- */
 function setSoul(m,on){
@@ -7620,20 +7065,6 @@ setTimeout(goResult,1400);
 var __prevUpd=window.updateMultiHpBars;
 window.updateMultiHpBars=function(){var r=__prevUpd?__prevUpd.apply(this,arguments):undefined;checkDeaths();return r;};
 
-/* ---- 正解時の蘇生カウント ---- */
-var __prevFlick=window.processMultiFlickAnswer;
-window.processMultiFlickAnswer=function(ci){
-var wasCorrect=(ci===currentMultiCorrectIndex);
-var me=(typeof multiPartyMembers!=='undefined')?multiPartyMembers.find(function(m){return m.isMe;}):null;
-var r=__prevFlick?__prevFlick.apply(this,arguments):undefined;
-if(me&&me.dead&&wasCorrect){
-me.reviveProgress=(me.reviveProgress||0)+1;
-if(me.reviveProgress>=REVIVE_NEED){ revive(me); } else { showReviveHud(me); }
-}
-checkDeaths();
-return r;
-};
-
 /* ---- バトル開始時にリセット ---- */
 var __prevStart=window.startMultiBattlePlay;
 window.startMultiBattlePlay=function(){
@@ -7644,8 +7075,7 @@ var r=__prevStart?__prevStart.apply(this,arguments):undefined;
 return r;
 };
 
-setInterval(unlockSoon,700);
-console.log('💀 死亡/魂/蘇生/敗北パッチ＋近日公開解除 適用完了');
+console.log('💀 死亡/魂/蘇生/敗北パッチ 適用完了');
 })();
 // =====================================================================
 // ⚔️ マルチ 戦闘ループ強化パッチ（multi.js末尾追記・既存不変更）
@@ -7688,33 +7118,6 @@ var winStreak=0;
 ].join('\n');(document.head||document.documentElement).appendChild(s);})();
 
 /* ===== ① 真ん中の円はCSSで消去済み ===== */
-
-/* ===== ② カードの上で離したら発動（角度自由） ===== */
-document.addEventListener('pointerup',function(e){
-var grid=e.target.closest?e.target.closest('.multi-grid-3x3'):null;
-if(!grid) return;
-var cell=e.target.closest('.multi-grid-3x3 > *');
-if(!cell) return;
-var idx=Array.prototype.indexOf.call(grid.children,cell);
-if(idx>=0&&typeof window.processMultiFlickAnswer==='function'){
-window.processMultiFlickAnswer(idx);
-}
-},true);
-
-/* ===== ③ 近日公開解除（強化版） ===== */
-function unlockSoon(){
-var scope=document.getElementById('view-party')||document.body;
-var all=scope.querySelectorAll('*');
-for(var i=0;i<all.length;i++){
-var el=all[i];
-if(el.children.length===0&&(el.textContent||'').trim().indexOf('近日公開')>=0){
-el.style.display='none';
-var host=el.closest('[class*=door],[class*=mode],[data-mode],button,.mdu-card')||el.parentElement;
-if(host){host.classList.remove('locked','soon','disabled');host.removeAttribute('disabled');host.style.opacity='';host.style.pointerEvents='';}
-}
-}
-}
-setInterval(unlockSoon,700);
 
 /* ===== ④ ドロップ散らばり（敵IDで決定的＝全員同じ・×人数） ===== */
 function hashStr(s){var h=0;for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return Math.abs(h);}
@@ -7832,26 +7235,6 @@ wrapped.__bopt=true;
 window.saveUserStats=wrapped;
 })();
 
-/* ===== ② 自由ドラッグ＋③蘇生1/8＋回答ロック ===== */
-var drag=null;
-function lockAnswer(){window.__ansLock=true;}
-function unlockAnswer(){window.__ansLock=false;}
-var __prevFlick=window.processMultiFlickAnswer;
-window.processMultiFlickAnswer=function(ci){
-if(window.__ansLock) return undefined;
-var me=(typeof multiPartyMembers!=='undefined')?multiPartyMembers.find(function(m){return m.isMe;}):null;
-var wasDead=me?me.dead:false;
-lockAnswer();
-var r=__prevFlick?__prevFlick.apply(this,arguments):undefined;
-/* ③ 蘇生HPを1/8へ上書き */
-if(me&&wasDead&&!me.dead){
-me.hp=Math.max(1,Math.round((me.maxHp||1)/8));
-try{window.updateMultiHpBars();}catch(e){}
-}
-return r;
-};
-var __prevNext=window.showNextMultiWord;
-window.showNextMultiWord=function(){unlockAnswer();return __prevNext?__prevNext.apply(this,arguments):undefined;};
 /* ===== ④ 行動ゲージ ===== */
 function ensureGauge(){
 var t=document.getElementById('multiEnemyTimerDisplay');
@@ -7911,79 +7294,6 @@ console.log('⚡ 戦闘最適化＋操作改版パッチ適用完了');
     /* 新しい操作が始まったらロック解除 */
     document.addEventListener('touchstart', function() { window.__ansLock = false; }, true);
     document.addEventListener('pointerdown', function() { window.__ansLock = false; }, true);
-    
-    /* 単語が進んだ時も確実に解除＋意図選択クリア */
-    var __p = window.showNextMultiWord;
- window.showNextMultiWord = function() {
-    if (gameCurrentWordsQueue.length === 0) return;
-    if (gameCurrentIndex >= gameCurrentWordsQueue.length) {
-        gameCurrentWordsQueue.sort(() => Math.random() - 0.5);
-        gameCurrentIndex = 0;
-    }
-    const target = gameCurrentWordsQueue[gameCurrentIndex];
-    document.getElementById('flickTargetWord').innerText = target.word;
-
-    // ★ 9択（中央マス含む）で選択肢を生成
-    let choices = [target.meaning];
-    let dummies = [...gameCurrentWordsQueue]
-        .filter(w => w.word !== target.word)
-        .map(w => w.meaning);
-    dummies.sort(() => Math.random() - 0.5);
-    // 8個のダミーを追加して9択にする
-    choices = choices.concat(dummies.slice(0, 8)).sort(() => Math.random() - 0.5);
-
-    // ★ 中央（index 4）が正解になる確率を 1/9 に調整
-    // 9マス中1マスが正解になるよう、正解の位置をランダムに決定
-    const correctPos = Math.floor(Math.random() * 9);
-    const correctMeaning = choices[0]; // 正解の意味
-    const shuffled = choices.slice(1); // 正解以外
-    shuffled.sort(() => Math.random() - 0.5);
-    
-    // 9マスに配置
-    const finalChoices = [];
-    let dummyIdx = 0;
-    for (let i = 0; i < 9; i++) {
-        if (i === correctPos) {
-            finalChoices.push(correctMeaning);
-        } else {
-            finalChoices.push(shuffled[dummyIdx++]);
-        }
-    }
-
-    currentMultiCorrectIndex = correctPos;
-
-    // 9マスすべてに表示
-    for (let i = 0; i < 9; i++) {
-        let el = document.getElementById('multiChoice-' + i);
-        if (el) {
-            // ★ 中央マス（index 4）が正解の時は空白表示
-            if (i === 4 && i === correctPos) {
-                el.innerHTML = '<span class="flick-center-spark-hidden"></span>';
-                el.classList.add('flick-center-spark');
-                el.classList.remove('highlight');
-            } else {
-                el.innerText = finalChoices[i] || "---";
-                el.classList.remove('highlight', 'flick-center-spark');
-            }
-        }
-    }
-
-    // 中央マスの初期化（火花アイコンを戻す）
-    const centerEl = document.getElementById('multiChoice-4');
-    if (centerEl && !centerEl.classList.contains('flick-center-spark')) {
-        // 中央が不正解の時は通常の火花アイコン
-        centerEl.innerHTML = '🔥';
-    }
-
-    const icon = document.getElementById('flickWeaponIcon');
-    if (icon) {
-        icon.style.left = '50%';
-        icon.style.top = '50%';
-    }
-};
-
-    /* 保険：長時間ロックが残らないよう定期解除 */
-    setInterval(function() { window.__ansLock = false; }, 800);
     
     console.log('⚔️ 2回目以降の攻撃修正 適用完了');
 })();
@@ -8152,25 +7462,6 @@ return charAtk(id);
 }
 function comboMulti(){ return 1+Math.floor(((typeof gameComboCount!=='undefined')?gameComboCount:0)/5)*0.5; }
 
-/* 与ダメを「自分の実攻撃力」に同期（固定400との差分補正） */
-var __prev=window.processMultiFlickAnswer;
-window.processMultiFlickAnswer=function(ci){
-var correct=(typeof currentMultiCorrectIndex!=='undefined')&&(ci===currentMultiCorrectIndex);
-var r=__prev?__prev.apply(this,arguments):undefined;
-if(correct){
-var fixed=400*comboMulti();
-var real=myAtk()*comboMulti();
-var diff=real-fixed;
-if(diff!==0&&typeof multiBossHp==='number'){
-multiBossHp=Math.max(0,multiBossHp-diff);
-try{ var c=(typeof M2==='function')?M2().current:null; if(c)c.hp=multiBossHp; }catch(e){}
-try{ window.updateMultiHpBars(); }catch(e){}
-try{ if(multiBossHp<=0&&typeof checkEnemyDefeated==='function')checkEnemyDefeated(); }catch(e){}
-}
-}
-return r;
-};
-
 /* 飛ぶ💥数値も自分の実値に */
 var __sp=window.showCharacterPopup;
 window.showCharacterPopup=function(id,amount,type){
@@ -8181,7 +7472,7 @@ return __sp?__sp.call(this,id,amount,type):undefined;
 return __sp?__sp.apply(this,arguments):undefined;
 };
 
-console.log('⚔️ 攻撃力実値同期【個人キャラ版】適用完了（与ダメ=自分のキャラ実攻撃力×コンボ）');
+console.log('⚔️ 攻撃力表示【個人キャラ版】適用完了');
 })();
 // =====================================================================
 // ⭕ 中央円除去パッチv2（app.js不変更・multi.js末尾追記）
@@ -8367,7 +7658,10 @@ if(document.getElementById('m2RingCss3')) return;
 var s=document.createElement('style'); s.id='m2RingCss3';
 s.textContent=[
 '#multiEnemyTimerDisplay,#m2ActionGauge{display:none !important;}',
-'#m2AtkRing{pointer-events:none;}',
+'#m2ArenaTop{overflow:visible !important;}',
+'#m2ArenaTop #multiBossHpBarContainer{overflow:visible !important;position:relative !important;}',
+'#m2AtkRing{pointer-events:none;z-index:80 !important;overflow:visible !important;}',
+'#multiEnemyHpText,.multi-boss-hp-text-layer{right:52px !important;}',
 '#m2AtkRing svg{display:block;width:40px;height:40px;}',
 '#m2AtkRingNum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,monospace;font-size:11px;font-weight:800;color:#fff;text-shadow:0 1px 2px #000;}',
 '#m2AtkRing.m2-ring-flash{animation:m2RingFlash3 .4s ease;}',
@@ -8404,11 +7698,31 @@ if(ring.parentNode!==c) c.appendChild(ring);
 var cs=getComputedStyle(c);
 if(cs.position==='static') c.style.position='relative';
 c.style.paddingRight='46px';
+c.style.boxSizing='border-box';
+c.style.width='100%';
+c.style.maxWidth='100%';
+c.style.overflow='visible';
+if(c.parentElement) c.parentElement.style.maxWidth='100%';
 ring.style.position='absolute';
 ring.style.right='0';
 ring.style.top='50%';
 ring.style.transform='translateY(-50%)';
-ring.style.zIndex='30';
+ring.style.zIndex='80';
+ring.style.overflow='visible';
+}
+function positionHpText(){
+var c=host(); if(!c)return;
+var all=c.querySelectorAll('*');
+for(var i=0;i<all.length;i++){
+var el=all[i];
+if((el.children&&el.children.length>0)||el.closest('#m2AtkRing'))continue;
+var t=(el.textContent||'').trim();
+if(!/^\d[\d,]*(\s*\/\s*\d[\d,]*)?$/.test(t))continue;
+var cs=getComputedStyle(el);
+if(cs.position==='absolute'||cs.position==='fixed'){el.style.right='52px';el.style.left='auto';}
+else{el.style.marginRight='52px';}
+el.style.zIndex='31';
+}
 }
 var prevLeft=10;
 function update(){
@@ -8427,131 +7741,8 @@ if(num) num.textContent=String(Math.ceil(left));
 if(left>prevLeft+0.5){ ring.classList.remove('m2-ring-flash'); void ring.offsetWidth; ring.classList.add('m2-ring-flash'); setTimeout(function(){ring.classList.remove('m2-ring-flash');},420); }
 prevLeft=left;
 }
-setInterval(function(){ ensure(); update(); },100);
+setInterval(function(){ ensure(); update(); positionHpText(); },100);
 console.log('⏱️ 敵行動 円形ゲージv3適用完了');
-})();
-// =====================================================================
-// ⏱️ 円ゲージ はみ出し修正パッチ（multi.js末尾追記・既存不変更）
-// 原因：バー枠 width:100% ＋ 右パディング46px ＝ 100%+46px で右切れ
-// 対策：box-sizing:border-box にして「パディング込み100%」へ
-//      → バーがゲージ分だけ縮み、ゲージは画面内に収まる
-// =====================================================================
-(function applyRingFitPatch(){
-"use strict";
-if(window.__ringFitApplied) return; window.__ringFitApplied=true;
-
-function host(){
-var fill=document.getElementById('multiBossHpFill')||document.querySelector('.multi-boss-hp-fill');
-if(!fill) return null;
-var c=fill.closest('#multiBossHpBarContainer');
-if(!c){ var fb=fill.closest('.multi-boss-full-bar'); c=fb?fb.parentElement:null; }
-if(!c) c=fill.parentElement?fill.parentElement.parentElement:null;
-return c;
-}
-function fix(){
-var c=host(); if(!c) return;
-/* ★ここが核心：パディング込みで100%にする */
-c.style.boxSizing='border-box';
-c.style.width='100%';
-c.style.maxWidth='100%';
-c.style.paddingRight='46px';
-c.style.position='relative';
-/* ゲージは枠の内側・右端に固定 */
-var ring=document.getElementById('m2AtkRing');
-if(ring){
-ring.style.position='absolute';
-ring.style.right='0';
-ring.style.top='50%';
-ring.style.transform='translateY(-50%)';
-ring.style.zIndex='30';
-}
-/* 親(アリーナ上部)もはみ出さないよう保険 */
-var p=c.parentElement;
-if(p){ p.style.maxWidth='100%'; }
-}
-setInterval(fix,120);
-fix();
-console.log('⏱️ 円ゲージはみ出し修正パッチ適用完了');
-})();
-// =====================================================================
-// ⏱️ 円ゲージ 最前面＋見切れ/文字重なり解消パッチ（multi.js末尾追記）
-// ① 円ゲージを z-index 最前面 に（バーや文字の手前に表示）
-// ② 上下の見切れを解消＝コンテナ/アリーナの overflow を visible（はみ出しOK）
-// ③ バーのHP文字をゲージの左側へ退避（重ならない）
-// =====================================================================
-(function applyRingFrontPatch(){
-"use strict";
-if(window.__ringFrontApplied) return; window.__ringFrontApplied=true;
-
-(function(){if(document.getElementById('m2RingCss5'))return;var s=document.createElement('style');s.id='m2RingCss5';s.textContent=[
-/* ② はみ出し許可（上下見切れ解消） */
-'#m2ArenaTop{overflow:visible !important;}',
-'#m2ArenaTop #multiBossHpBarContainer{overflow:visible !important;position:relative !important;}',
-/* ① 円ゲージ最前面 */
-'#m2AtkRing{z-index:80 !important;overflow:visible !important;}',
-/* ③ HP文字をゲージ左へ退避 */
-'.multi-boss-hp-text-layer{right:48px !important;}',
-'#multiEnemyHpText{right:48px !important;}'
-].join('\n');(document.head||document.documentElement).appendChild(s);})();
-
-function fix(){
-var ring=document.getElementById('m2AtkRing');
-if(ring){ ring.style.zIndex='80'; ring.style.overflow='visible'; }
-var c=document.getElementById('multiBossHpBarContainer');
-if(c){ c.style.overflow='visible'; }
-var at=document.getElementById('m2ArenaTop');
-if(at){ at.style.overflow='visible'; }
-/* ③ 文字退避（インラインでも念押し） */
-var tl=document.querySelector('.multi-boss-hp-text-layer');
-if(tl){ tl.style.right='60px'; }
-var ht=document.getElementById('multiEnemyHpText');
-if(ht&&!tl){ ht.style.marginRight='60px'; }
-}
-setInterval(fix,150);
-fix();
-console.log('⏱️ 円ゲージ最前面＋見切れ/文字重なり解消 適用完了');
-})();
-// =====================================================================
-// 🔧 ボスHP文字 左寄せ修正パッチ（multi.js末尾追記・既存不変更）
-// ・ボスバー内の「数値 / 数値」または「数値」テキストを自動検出
-// ・円ゲージ(#m2AtkRing)の中身は除外
-// ・絶対配置なら right:52px、そうでなければ margin-right:52px で
-//   ゲージの左側へ退避＝重なりを根治
-// =====================================================================
-(function applyBossHpTextLeftPatch(){
-"use strict";
-if(window.__bossHpTextLeft) return; window.__bossHpTextLeft=true;
-
-function host(){
-var fill=document.getElementById('multiBossHpFill')||document.querySelector('.multi-boss-hp-fill');
-if(!fill) return null;
-var c=fill.closest('#multiBossHpBarContainer');
-if(!c){ var fb=fill.closest('.multi-boss-full-bar'); c=fb?fb.parentElement:null; }
-if(!c) c=fill.parentElement?fill.parentElement.parentElement:null;
-return c;
-}
-function fix(){
-var c=host(); if(!c) return;
-var all=c.querySelectorAll('*');
-for(var i=0;i<all.length;i++){
-var el=all[i];
-if(el.children&&el.children.length>0) continue;          // 葉のみ
-if(el.closest('#m2AtkRing')) continue;                    // ゲージ内は除外
-var t=(el.textContent||'').trim();
-if(!/^\d[\d,]*(\s*\/\s*\d[\d,]*)?$/.test(t)) continue;    // HP数値のみ
-var cs=getComputedStyle(el);
-if(cs.position==='absolute'||cs.position==='fixed'){
-el.style.right='52px';
-el.style.left='auto';
-}else{
-el.style.marginRight='52px';
-}
-el.style.zIndex='31';
-}
-}
-setInterval(fix,150);
-fix();
-console.log('🔧 ボスHP文字左寄せ修正 適用完了');
 })();
 // =====================================================================
 // 👤 1人(ソロ)マルチ対応 v2（レイアウト自動修正つき・multi.js末尾追記）
@@ -8687,153 +7878,6 @@ s.textContent=[
 (document.head||document.documentElement).appendChild(s);
 })();
 console.log('🐧 ソロ時自キャラ縦中央パッチ適用完了');
-})();
-// =====================================================================
-// ⚔️ 対人戦(PVP)カスタマイズ（モック版・オンラインは後で接続）
-// ・敵→相手キャラ表示（画像/名前/装備/COMBOゲージ＝自分と同じ）
-// ・2v2＝相手を縦積み ／ 上段バー＝ターゲット相手のHP/名前
-// ・正解→相手へダメージ／ミス→自分が被ダメ(相手atk依存)
-// ・相手COMBOは攻撃ごとに+、満タンで大技／ドロップ・報酬無し
-// ・後で window.__pvpOpponents に実データを入れればオンライン化
-// =====================================================================
-(function applyPvpCustomPatch(){
-"use strict";
-if(window.__pvpCustomApplied) return; window.__pvpCustomApplied=true;
-var COMBO_MAX=10;
-
-var MOCK_CHARS=[{id:'tangon',name:'タンゴン',img:'tangon.png'}];
-var MOCK_WEAPONS=[{id:'fire_sword',e:'🔥',n:'業火の大剣'},{id:'',e:'🗡️',n:'素手'}];
-var MOCK_ARMORS=[{id:'cosmic_shield',e:'🛡️',n:'星屑の盾'},{id:'',e:'🛡️',n:'布の服'}];
-
-function isPvp(){ try{ return (typeof currentMultiMode!=='undefined'&&currentMultiMode==='pvp'); }catch(e){ return false; } }
-function fmt(){ try{ return (typeof window.__pvpFormat!=='undefined')?window.__pvpFormat:'1v1'; }catch(e){ return '1v1'; } }
-
-function buildOpponents(){
-if(window.__pvpOpponents&&window.__pvpOpponents.length) return window.__pvpOpponents;
-var n=(fmt()==='2v2')?2:1; var arr=[];
-for(var i=0;i<n;i++){
-var c=MOCK_CHARS[i%MOCK_CHARS.length];
-var w=MOCK_WEAPONS[Math.floor(Math.random()*MOCK_WEAPONS.length)];
-var a=MOCK_ARMORS[Math.floor(Math.random()*MOCK_ARMORS.length)];
-arr.push({id:'opp'+i,charId:c.id,name:c.name,img:c.img,weapon:w,armor:a,hp:3500,maxHp:3500,atk:300,combo:0});
-}
-window.__pvpOpponents=arr; return arr;
-}
-function targetOpp(){
-var o=window.__pvpOpponents||[]; 
-for(var i=0;i<o.length;i++){ if(o[i].hp>0) return o[i]; }
-return o[0]||null;
-}
-
-/* ===== CSS ===== */
-(function(){if(document.getElementById('pvpCss'))return;var s=document.createElement('style');s.id='pvpCss';s.textContent=[
-'#pvpOppWrap{display:flex;flex-direction:column;gap:8px;align-items:center;width:100%;}',
-'.pvp-opp-card{width:min(46vw,190px);border-radius:14px;padding:8px;background:linear-gradient(180deg,rgba(58,47,34,.6),rgba(30,24,16,.6));border:1px solid rgba(200,144,42,.4);box-shadow:0 6px 18px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:5px;}',
-'.pvp-opp-top{display:flex;align-items:center;gap:8px;}',
-'.pvp-opp-img{width:44px;height:44px;border-radius:10px;object-fit:cover;background:rgba(0,0,0,.4);}',
-'.pvp-opp-name{font-size:12px;font-weight:900;color:#ffd2d8;text-shadow:0 0 10px rgba(255,84,104,.5);}',
-'.pvp-opp-equip{font-size:11px;color:#e2e8f0;}',
-'.pvp-opp-hp{height:8px;border-radius:4px;background:rgba(0,0,0,.5);overflow:hidden;}',
-'.pvp-opp-hp i{display:block;height:100%;background:linear-gradient(90deg,#ff5468,#ff8a3d);width:100%;}',
-'.pvp-combo{display:flex;align-items:center;gap:6px;}',
-'.pvp-combo .lab{font-size:9px;font-weight:800;color:#f5c451;}',
-'.pvp-combo .bar{flex:1;height:6px;border-radius:3px;background:rgba(0,0,0,.5);overflow:hidden;}',
-'.pvp-combo .bar i{display:block;height:100%;background:linear-gradient(90deg,#f5c451,#ff8a3d);width:0%;}',
-'.pvp-combo .num{font-size:10px;font-weight:900;color:#fff;}'
-].join('\n');(document.head||document.documentElement).appendChild(s);})();
-
-/* ===== 描画 ===== */
-function rightCol(){ return document.querySelector('#m2ArenaMid > *:last-child'); }
-function renderOpponents(){
-var right=rightCol(); if(!right) return;
-var boss=document.getElementById('multiBossImage'); if(boss) boss.style.display=isPvp()?'none':'';
-var sig=document.getElementById('m2BossSigil'); if(sig) sig.style.display=isPvp()?'none':'';
-var wrap=document.getElementById('pvpOppWrap');
-if(!isPvp()){ if(wrap)wrap.style.display='none'; return; }
-if(!wrap){ wrap=document.createElement('div'); wrap.id='pvpOppWrap'; right.appendChild(wrap); }
-wrap.style.display='';
-var opps=buildOpponents();
-if(wrap.childElementCount!==opps.length){
-wrap.innerHTML='';
-opps.forEach(function(o,i){
-var c=document.createElement('div'); c.className='pvp-opp-card'; c.id='pvpOpp-'+i;
-c.innerHTML='<div class="pvp-opp-top"><img class="pvp-opp-img" src="'+(o.img||'')+'" onerror="this.style.display=\'none\'"><div><div class="pvp-opp-name"></div><div class="pvp-opp-equip"></div></div></div>'
-+'<div class="pvp-opp-hp"><i></i></div>'
-+'<div class="pvp-combo"><span class="lab">COMBO</span><span class="bar"><i></i></span><span class="num">0</span></div>';
-wrap.appendChild(c);
-});
-}
-updateOpponents();
-}
-function updateOpponents(){
-if(!isPvp())return;
-var opps=window.__pvpOpponents||[];
-opps.forEach(function(o,i){
-var c=document.getElementById('pvpOpp-'+i); if(!c)return;
-c.querySelector('.pvp-opp-name').textContent=o.name;
-c.querySelector('.pvp-opp-equip').textContent=(o.weapon?o.weapon.e:'🗡️')+' '+(o.armor?o.armor.e:'🛡️');
-c.querySelector('.pvp-opp-hp i').style.width=Math.max(0,(o.hp/o.maxHp)*100)+'%';
-c.querySelector('.pvp-combo .bar i').style.width=Math.min(100,(o.combo/COMBO_MAX)*100)+'%';
-c.querySelector('.pvp-combo .num').textContent=String(o.combo);
-});
-/* 上段バーをターゲット相手に同期 */
-var t=targetOpp(); if(!t)return;
-var nameEl=document.querySelector('#multiBossName,#multiEnemyName,.multi-boss-name');
-if(nameEl) nameEl.textContent=t.name;
-var fill=document.getElementById('multiBossHpFill');
-if(fill){ var r=Math.max(0,t.hp/t.maxHp); fill.style.width=(r*100)+'%'; fill.style.setProperty('--hp-ratio',r.toFixed(3)); }
-var ht=document.getElementById('multiEnemyHpText'); if(ht) ht.textContent=Math.max(0,Math.round(t.hp))+' / '+t.maxHp;
-}
-
-/* ===== 正解→相手へダメージ ===== */
-var __pf=window.processMultiFlickAnswer;
-window.processMultiFlickAnswer=function(ci){
-var correct=(typeof currentMultiCorrectIndex!=='undefined')&&(ci===currentMultiCorrectIndex);
-var r=__pf?__pf.apply(this,arguments):undefined;
-if(isPvp()&&correct){
-var t=targetOpp();
-if(t){
-var comboMulti=1+Math.floor(((typeof gameComboCount!=='undefined')?gameComboCount:0)/5)*0.5;
-var dmg=Math.round(300*comboMulti);
-t.hp=Math.max(0,t.hp-dmg);
-try{ window.showCharacterPopup?null:null; }catch(e){}
-if(t.hp<=0&&window.__pvpOpponents.every(function(o){return o.hp<=0;})){
-try{ clearInterval(gameTimerInterval); }catch(e){}
-setTimeout(function(){ alert('🎉 ライバルチームに勝利！'); try{window.cancelMultiBattlePlay(true);}catch(e){} },500);
-}
-updateOpponents();
-}
-}
-return r;
-};
-
-/* ===== 相手攻撃（ミス時自分は被ダメ／相手COMBO増加） ===== */
-var __pt=window.handleMultiBattleTimer;
-window.handleMultiBattleTimer=function(){
-if(isPvp()){
-if(typeof multiEnemyTimeLeft==='number'){ multiEnemyTimeLeft-=0.1;
-if(multiEnemyTimeLeft<=0){ multiEnemyTimeLeft=10;
-var me=(typeof multiPartyMembers!=='undefined')?multiPartyMembers.find(function(m){return m.isMe;}):null;
-(window.__pvpOpponents||[]).forEach(function(o){
-if(o.hp<=0)return;
-o.combo=Math.min(COMBO_MAX,o.combo+1);
-var big=(o.combo>=COMBO_MAX); if(big)o.combo=0;
-var dmg=Math.round(o.atk*(big?2:1));
-if(me&&me.hp>0){ me.hp=Math.max(0,me.hp-dmg); try{window.showCharacterPopup(me.id,dmg,'damage');}catch(e){} }
-});
-try{window.updateMultiHpBars();}catch(e){}
-updateOpponents();
-}
-var td=document.getElementById('multiEnemyTimerDisplay');
-if(td)td.innerText='行動: '+Math.max(0,multiEnemyTimeLeft).toFixed(1)+'秒';
-}
-return;
-}
-return __pt?__pt.apply(this,arguments):undefined;
-};
-
-setInterval(function(){ renderOpponents(); },500);
-console.log('⚔️ 対人戦カスタマイズ(モック)適用完了');
 })();
 // =====================================================================
 // ️ 対人戦レイアウトパッチ（スケッチ準拠・1v1/2v2縦積み・モック相手）
@@ -9081,142 +8125,24 @@ setInterval(tick,300);
 console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
 })();
 // =====================================================================
-// 🔧 操作修正パッチ の修正（フォールバック追加）
-// =====================================================================
-(function() {
- if (window.__controlFixFixed) return;
- window.__controlFixFixed = true;
- 
- // 既存の processMultiFlickAnswer を取得（ラップされていても大丈夫なように）
- var __inner = window.processMultiFlickAnswer;
- if (typeof __inner !== 'function') {
-  console.warn('processMultiFlickAnswer not found');
-  return;
- }
- 
- // 安全に置き換え（__intendedChoice が無ければ引数を使う）
- window.processMultiFlickAnswer = function(ci) {
-  var idx = (window.__intendedChoice != null) ? window.__intendedChoice : ci;
-  window.__intendedChoice = null;
-  return __inner.call(this, idx);
- };
- 
- console.log('✅ __controlFixApplied を修正（フォールバック追加）');
-})();
-// =====================================================================
-// 🔧 フリック平滑化パッチ 修正（#flickPadArea → .multi-flick-area）
-// =====================================================================
-(function() {
-  if (window.__flickSmoothFixed) return;
-  window.__flickSmoothFixed = true;
-
-  // 既存の touchstart リスナーを置き換えるため、一旦全て削除
-  var listeners = [];
-  var origAdd = document.addEventListener;
-  document.addEventListener = function(type, handler, options) {
-    if (type === 'touchstart' || type === 'touchmove' || type === 'touchend') {
-      listeners.push({ type: type, handler: handler, options: options });
-    }
-    origAdd.call(this, type, handler, options);
-  };
-
-  // 新しいリスナーを登録（#flickPadArea の代わりに .multi-flick-area を使用）
-  var my = null;
-
-  document.addEventListener('touchstart', function(e) {
-    var t = e.target;
-    if (!t || !t.closest) return;
-    // ★ ここが修正ポイント： #flickPadArea → .multi-flick-area
-    if (!t.closest('.multi-flick-area')) return;
-    e.stopPropagation();
-    var touch = e.touches[0];
-    my = { sx: touch.clientX, sy: touch.clientY, active: true, dist: 0, choice: -1 };
-  }, true);
-
-  document.addEventListener('touchmove', function(e) {
-    if (!my || !my.active) return;
-    var t = e.target;
-    if (!t || !t.closest || !t.closest('.multi-flick-area')) return;
-    e.preventDefault();
-    e.stopPropagation();
-    var touch = e.touches[0];
-    var dx = touch.clientX - my.sx, dy = touch.clientY - my.sy;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    my.dist = dist;
-    // 角度計算（最も近い選択肢をライブハイライト）
-    var ang = Math.atan2(dy, dx) * 180 / Math.PI;
-    var grid = document.querySelector('.multi-grid-3x3');
-    if (grid) {
-      var gr = grid.getBoundingClientRect();
-      var cx = gr.left + gr.width / 2, cy = gr.top + gr.height / 2;
-      var best = -1, bd = 999;
-      for (var i = 0; i < 8; i++) {
-        var el = document.getElementById('multiChoice-' + i);
-        if (!el) continue;
-        var r = el.getBoundingClientRect();
-        var ex = r.left + r.width / 2 - cx, ey = r.top + r.height / 2 - cy;
-        if (ex === 0 && ey === 0) continue;
-        var ea = Math.atan2(ey, ex) * 180 / Math.PI;
-        var diff = Math.abs(((ang - ea + 540) % 360) - 180);
-        if (diff < bd) { bd = diff; best = i; }
-      }
-      my.choice = best;
-      // ハイライト更新
-      for (var j = 0; j < 8; j++) {
-        var el2 = document.getElementById('multiChoice-' + j);
-        if (el2) el2.classList.toggle('highlight', j === best);
-      }
-    }
-  }, { capture: true, passive: false });
-
-  document.addEventListener('touchend', function(e) {
-    if (!my || !my.active) return;
-    e.stopPropagation();
-    var dist = my.dist, choice = my.choice;
-    my.active = false;
-    // デッドゾーン（18px未満は無効）
-    if (dist > 18 && choice >= 0) {
-      window.__intendedChoice = choice;
-      window.processMultiFlickAnswer(choice);
-    }
-    // ハイライト解除
-    for (var j = 0; j < 8; j++) {
-      var el = document.getElementById('multiChoice-' + j);
-      if (el) el.classList.remove('highlight');
-    }
-    my = null;
-  }, true);
-
-  console.log('✅ __flickSmoothApplied 修正完了（#flickPadArea → .multi-flick-area）');
-})();
-// =====================================================================
-// 🔄 スワイプ完全復活パッチ（既存パッチを上書きし、確実に動作させる）
+// 🎯 マルチバトル回答処理（得点・ダメージ・理解度の一括更新）
 // =====================================================================
 (function() {
   if (window.__swipeRevived) return;
   window.__swipeRevived = true;
 
-  console.log('🔄 スワイプ完全復活パッチを適用します...');
+  console.log('🎯 マルチバトル回答処理を読み込みます...');
 
-  // ---- 1. 既存の processMultiFlickAnswer を退避 ----
-  var __origProcess = window.processMultiFlickAnswer;
-  if (typeof __origProcess !== 'function') {
-    console.warn('processMultiFlickAnswer が見つかりません');
-    return;
-  }
-
-  // ---- 2. processMultiFlickAnswer を再定義（__controlFixApplied を迂回） ----
+  // ---- 回答に必要な更新をこの関数に集約 ----
   window.processMultiFlickAnswer = function(choiceIndex) {
+    if (window.__ansLock) return;
+    window.__ansLock = true;
     let me = multiPartyMembers.find(m => m.isMe);
     let q = gameCurrentWordsQueue[gameCurrentIndex];
     let updatedStatus = "bad";
     let ch = charOf(me ? (me.char || activeCharacter) : activeCharacter);
     let comboRate = ch.comboRate || 1.0;
     let s = M2().session; if (!s) s = M2().session = freshSession();
-
-    // ★ 中央マス（index 4）の特別処理
-    const isCenter = (choiceIndex === 4);
-    const centerEl = document.getElementById('multiChoice-4');
 
     if (choiceIndex === currentMultiCorrectIndex) {
         updatedStatus = "ok";
@@ -9237,12 +8163,6 @@ console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
         if (me) try { window.showCharacterPopup(me.id, '💥 ' + damage, 'attack'); } catch (e) {}
         let bimg = document.getElementById('multiBossImage');
         if (bimg && bimg.style.display !== 'none') { bimg.classList.remove('m2-hit'); void bimg.offsetWidth; bimg.classList.add('m2-hit'); }
-
-        // ★ 中央が正解の時は裏返って正解の意味を表示
-        if (isCenter && centerEl) {
-            centerEl.innerHTML = '<div class="center-revealed">' + q.meaning + '</div>';
-            centerEl.classList.add('center-correct');
-        }
 
         if (M2().comboGauge >= M2().comboMax) {
             setTimeout(function () {
@@ -9266,12 +8186,6 @@ console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
         M2().comboGauge = Math.max(0, M2().comboGauge - 20);
         renderComboGauge();
         try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
-
-        // ★ 中央が不正解の時はしっかり不正解判定＋ポップアップ
-        if (isCenter && centerEl) {
-            centerEl.classList.add('center-wrong');
-            showCenterWrongPopup(q);
-        }
 
         if (me && me.hp > 0) {
             me.hp = Math.max(0, me.hp - 300);
@@ -9304,782 +8218,7 @@ console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
     try { if (typeof window.showNextMultiWord === 'function') window.showNextMultiWord(); } catch (e) {}
 };
 
-  // ---- 3. スワイプ検出（.multi-flick-area 内） ----
-  var swipeData = null;
-
-  function getSwipeTarget(x, y) {
-    var grid = document.querySelector('.multi-grid-3x3');
-    if (!grid) return -1;
-    var cells = grid.children;
-    var best = -1, bestDist = Infinity;
-    for (var i = 0; i < cells.length; i++) {
-      var rect = cells[i].getBoundingClientRect();
-      var cx = rect.left + rect.width / 2;
-      var cy = rect.top + rect.height / 2;
-      var dx = x - cx, dy = y - cy;
-      var dist = dx * dx + dy * dy;
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = i;
-      }
-    }
-    return best;
-  }
-
-  function handleSwipeEnd(clientX, clientY) {
-    var idx = getSwipeTarget(clientX, clientY);
-    if (idx >= 0 && idx < 8) {
-      // __intendedChoice を設定してから呼ぶ（新しい processMultiFlickAnswer が使う）
-      window.__intendedChoice = idx;
-      window.processMultiFlickAnswer(idx);
-      // クリア（保険）
-      setTimeout(function() { window.__intendedChoice = null; }, 100);
-    }
-  }
-
-  // touchstart（キャプチャフェーズで取得）
-  document.addEventListener('touchstart', function(e) {
-    var target = e.target;
-    if (!target || !target.closest) return;
-    var area = target.closest('.multi-flick-area');
-    if (!area) return;
-    var touch = e.touches[0];
-    if (!touch) return;
-    swipeData = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      active: true
-    };
-    // 他のリスナーに伝播させるが、デフォルト動作は防止しない（スクロールは許可）
-  }, { passive: true, capture: true });
-
-  // touchmove（キャプチャ）
-  document.addEventListener('touchmove', function(e) {
-    if (!swipeData || !swipeData.active) return;
-    var target = e.target;
-    if (!target || !target.closest) return;
-    var area = target.closest('.multi-flick-area');
-    if (!area) {
-      swipeData.active = false;
-      return;
-    }
-    // スクロールを防止（スワイプ中はページが動かないように）
-    e.preventDefault();
-  }, { passive: false, capture: true });
-
-  // touchend（キャプチャ）
-  document.addEventListener('touchend', function(e) {
-    if (!swipeData || !swipeData.active) return;
-    var touch = e.changedTouches[0];
-    if (touch) {
-      handleSwipeEnd(touch.clientX, touch.clientY);
-    }
-    swipeData = null;
-  }, { passive: true, capture: true });
-
-  // ---- 4. 既存の __flickSmoothApplied のリスナーを無効化（上書き） ----
-  // キャプチャフェーズで取得しているので、既存のバブリングリスナーより先に動く。
-  // ただし、既存の touchstart が stopImmediatePropagation を使っている場合に備え、
-  // window レベルで touchstart を補足する。
-
-  console.log('✅ スワイプ完全復活パッチ適用完了');
 })();
-// =====================================================================
-// 🔍 スワイプ完全デバッグ（何が起きているか全部見える）
-// =====================================================================
-(function() {
- if (window.__swipeDebugApplied) return;
- window.__swipeDebugApplied = true;
- 
- console.log('🔍 スワイプデバッグ開始');
- 
- // 1. .multi-flick-area が存在するか
- var area = document.querySelector('.multi-flick-area');
- console.log('📌 .multi-flick-area の有無:', area);
- 
- // 2. .multi-grid-3x3 が存在するか
- var grid = document.querySelector('.multi-grid-3x3');
- console.log('📌 .multi-grid-3x3 の有無:', grid);
- 
- // 3. processMultiFlickAnswer が存在するか
- console.log('📌 processMultiFlickAnswer の型:', typeof window.processMultiFlickAnswer);
- 
- // 4. 全ての touchstart をキャプチャ
- document.addEventListener('touchstart', function(e) {
-  var target = e.target;
-  var cls = target.className || '';
-  var id = target.id || '';
-  console.log('🟢 touchstart:', { target: target.tagName, class: cls, id: id });
-  // フリックエリア内か？
-  var inArea = target.closest ? !!target.closest('.multi-flick-area') : false;
-  console.log('   .multi-flick-area 内?', inArea);
- }, { capture: true, passive: true });
- 
- // 5. 全ての touchend をキャプチャ
- document.addEventListener('touchend', function(e) {
-  var touch = e.changedTouches[0];
-  console.log('🔴 touchend:', { clientX: touch.clientX, clientY: touch.clientY });
- }, { capture: true, passive: true });
- 
- // 6. processMultiFlickAnswer の呼び出しをトレース
- var __orig = window.processMultiFlickAnswer;
- if (typeof __orig === 'function') {
-  window.processMultiFlickAnswer = function(idx) {
-   console.log('🔥 processMultiFlickAnswer 呼び出し!', idx);
-   return __orig.call(this, idx);
-  };
- }
- 
- console.log('✅ デバッグ準備完了。マルチバトルを開始してスワイプしてみてください。');
-})();
-// =====================================================================
-// 🐛 processMultiFlickAnswer エラー詳細表示パッチ
-// =====================================================================
-(function() {
- if (window.__errorDetailApplied) return;
- window.__errorDetailApplied = true;
- 
- var __orig = window.processMultiFlickAnswer;
- if (typeof __orig !== 'function') {
-  console.warn('processMultiFlickAnswer が見つかりません');
-  return;
- }
- 
- window.processMultiFlickAnswer = function(choiceIndex) {
-  try {
-   // 元の処理を実行
-   return __orig.call(this, choiceIndex);
-  } catch (e) {
-   console.error('🔥 processMultiFlickAnswer でエラーが発生しました');
-   console.error('エラー名:', e.name);
-   console.error('エラーメッセージ:', e.message);
-   console.error('スタックトレース:', e.stack);
-   // エラーが起きてもゲームが止まらないようにする
-   return undefined;
-  }
- };
- 
- console.log('✅ エラー詳細表示パッチ適用完了');
-})();
-// =====================================================================
-// 🛠️ localStorage エラーを握りつぶしてエフェクトを復活させる
-// =====================================================================
-(function() {
- if (window.__saveErrorFixed) return;
- window.__saveErrorFixed = true;
- 
- console.log('🛠️ localStorage エラー対策パッチを適用します...');
- 
- // 1. saveUserStats をラップ（エラーを無視）
- var __origSave = window.saveUserStats;
- if (typeof __origSave === 'function') {
-  window.saveUserStats = function() {
-   try {
-    return __origSave.apply(this, arguments);
-   } catch (e) {
-    console.warn('⚠️ saveUserStats エラー（無視）:', e.message);
-    return undefined;
-   }
-  };
-  console.log('✅ saveUserStats をラップしました');
- }
- 
- // 2. saveVocabToStorage をラップ（エラーを無視）
- var __origVocabSave = window.saveVocabToStorage;
- if (typeof __origVocabSave === 'function') {
-  window.saveVocabToStorage = function() {
-   try {
-    return __origVocabSave.apply(this, arguments);
-   } catch (e) {
-    console.warn('⚠️ saveVocabToStorage エラー（無視）:', e.message);
-    return undefined;
-   }
-  };
-  console.log('✅ saveVocabToStorage をラップしました');
- }
- 
- // 3. localStorage.setItem を直接ラップ（保険）
- var __origSetItem = localStorage.setItem;
- localStorage.setItem = function(key, value) {
-  try {
-   return __origSetItem.call(this, key, value);
-  } catch (e) {
-   console.warn('⚠️ localStorage.setItem エラー（無視）:', key, e.message);
-   return undefined;
-  }
- };
- console.log('✅ localStorage.setItem をラップしました');
- 
- console.log('🛠️ すべての保存エラーを握りつぶしました。エフェクトが復活するはずです。');
-})();
-// =====================================================================
-// 🔄 processMultiFlickAnswer 完全再実装（既存パッチを全て無視）
-// =====================================================================
-(function() {
- if (window.__coreFlickFixed) return;
- window.__coreFlickFixed = true;
- 
- console.log('🔄 processMultiFlickAnswer を完全再実装します...');
- 
- // ---- 元の関数を退避（使わない） ----
- var __origProcess = window.processMultiFlickAnswer;
- 
- // ---- 新実装 ----
- window.processMultiFlickAnswer = function(choiceIndex) {
-  console.log('🔥 新実装 processMultiFlickAnswer 呼び出し!', choiceIndex);
-  
-  try {
-   // 1. 正解判定
-   var isCorrect = (choiceIndex === currentMultiCorrectIndex);
-   console.log('   正解?', isCorrect);
-   
-   // 2. 自分を取得
-   var me = null;
-   if (typeof multiPartyMembers !== 'undefined' && multiPartyMembers.length > 0) {
-    me = multiPartyMembers.find(function(m) { return m.isMe; }) || multiPartyMembers[0];
-   }
-   console.log('   me:', me ? me.name : 'なし');
-   
-   // 3. コンボ処理
-   if (isCorrect) {
-    gameComboCount = (gameComboCount || 0) + 1;
-    console.log('   gameComboCount:', gameComboCount);
-    // コンボ表示更新
-    try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
-   } else {
-    gameComboCount = 0;
-    try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch (e) {}
-   }
-   
-   // 4. ダメージ計算と適用（正解時のみ）
-   if (isCorrect) {
-    var comboMulti = 1 + Math.floor((gameComboCount || 0) / 5) * 0.5;
-    var damage = Math.round(400 * comboMulti);
-    console.log('   ダメージ:', damage);
-    
-    // ボスHPを減らす
-    if (typeof multiBossHp !== 'undefined') {
-     multiBossHp = Math.max(0, multiBossHp - damage);
-     console.log('   multiBossHp:', multiBossHp);
-     // バリア処理（あれば）
-     var cur = (typeof M2 === 'function') ? M2().current : null;
-     if (cur && cur.barrier > 0) {
-      var tb = Math.min(cur.barrier, damage);
-      cur.barrier -= tb;
-      multiBossHp = Math.max(0, multiBossHp + tb - damage);
-     }
-     if (cur) cur.hp = multiBossHp;
-    }
-    
-    // ★★★ 攻撃エフェクトを強制発火 ★★★
-    if (me && typeof window.showCharacterPopup === 'function') {
-     console.log('💥 showCharacterPopup を呼び出し (attack)');
-     window.showCharacterPopup(me.id, '💥 ' + damage, 'attack');
-    } else {
-     console.warn('showCharacterPopup がないか、me がありません');
-    }
-    
-    // コンボゲージ更新
-    if (typeof M2 === 'function') {
-     var m2 = M2();
-     if (m2) {
-      m2.comboGauge = Math.min(m2.comboMax || 100, (m2.comboGauge || 0) + 12);
-      // ゲージ表示更新
-      var fill = document.getElementById('m2ComboGaugeFill');
-      if (fill) {
-       var pct = Math.round((m2.comboGauge / (m2.comboMax || 100)) * 100);
-       fill.style.width = pct + '%';
-      }
-     }
-    }
-    
-    // ボスヒットアニメーション
-    var bimg = document.getElementById('multiBossImage');
-    if (bimg && bimg.style.display !== 'none') {
-     bimg.classList.remove('m2-hit');
-     void bimg.offsetWidth;
-     bimg.classList.add('m2-hit');
-    }
-    
-    // HPバー更新
-    try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch (e) {}
-    
-    // ボス撃破チェック
-    if (typeof multiBossHp !== 'undefined' && multiBossHp <= 0) {
-     console.log('💀 ボス撃破！');
-     if (typeof checkEnemyDefeated === 'function') {
-      checkEnemyDefeated();
-     }
-    }
-   } else {
-    // 不正解時のペナルティ
-    if (me && me.hp > 0) {
-     me.hp = Math.max(0, me.hp - 300);
-     console.log('   me.hp (不正解ペナルティ):', me.hp);
-     if (typeof window.showCharacterPopup === 'function') {
-      window.showCharacterPopup(me.id, 300, 'damage');
-     }
-     try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch (e) {}
-    }
-   }
-   
-   // 5. 次の単語へ進む
-   if (typeof gameCurrentIndex !== 'undefined') {
-    gameCurrentIndex = (gameCurrentIndex || 0) + 1;
-    console.log('   次のインデックス:', gameCurrentIndex);
-    if (typeof window.showNextMultiWord === 'function') {
-     window.showNextMultiWord();
-    }
-   }
-   
-   console.log('✅ 新実装 processMultiFlickAnswer 完了');
-   
-  } catch (e) {
-   console.error('🔥 新実装でエラー発生:', e);
-   console.error('スタック:', e.stack);
-  }
- };
- 
- console.log('✅ processMultiFlickAnswer 完全再実装完了');
-})();
-// =====================================================================
-// 🔧 正誤判定修正パッチ（グリッドインデックス → 選択肢インデックス）
-// =====================================================================
-(function() {
- if (window.__choiceIndexFixApplied) return;
- window.__choiceIndexFixApplied = true;
- 
- console.log('🔧 正誤判定修正パッチを適用します...');
- 
- // processMultiFlickAnswer をさらにラップ
- var __orig = window.processMultiFlickAnswer;
- if (typeof __orig !== 'function') {
-  console.warn('processMultiFlickAnswer が見つかりません');
-  return;
- }
- 
- window.processMultiFlickAnswer = function(choiceIndex) {
-  // グリッドのセルインデックス（0〜8）を選択肢インデックス（0〜7）に変換
-  // 0 1 2
-  // 3 4 5  ← 4は中央（選択肢なし）
-  // 6 7 8
-  // 選択肢のマッピング: [0,1,2,3,5,6,7,8] → [0,1,2,3,4,5,6,7]
-  var gridIdx = choiceIndex;
-  var choiceIdx = -1;
-  
-  if (gridIdx >= 0 && gridIdx <= 8) {
-   if (gridIdx < 4) {
-    choiceIdx = gridIdx; // 0→0, 1→1, 2→2, 3→3
-   } else if (gridIdx > 4) {
-    choiceIdx = gridIdx - 1; // 5→4, 6→5, 7→6, 8→7
-   } else {
-    // 中央（index 4）は無効
-    console.warn('⚠️ 中央の選択肢は無効です');
-    return undefined;
-   }
-  }
-  
-  console.log('🔄 インデックス変換:', gridIdx, '→', choiceIdx);
-  
-  // 変換した選択肢インデックスで元の関数を呼ぶ
-  return __orig.call(this, choiceIdx);
- };
- 
- console.log('✅ 正誤判定修正パッチ適用完了');
-})();
-// =====================================================================
-// 🔄 角度ベーススワイプ（全パッチリセット版）
-// =====================================================================
-(function() {
-  if (window.__finalSwipeApplied) return;
-  window.__finalSwipeApplied = true;
-
-  console.log('🔄 角度ベーススワイプ（最終版）を適用します');
-
-  // ---- processMultiFlickAnswer を完全に再定義 ----
-  var __orig = window.processMultiFlickAnswer;
-  window.processMultiFlickAnswer = function(choiceIndex) {
-    console.log('🔥 processMultiFlickAnswer 呼び出し:', choiceIndex);
-
-    try {
-      var isCorrect = (choiceIndex === currentMultiCorrectIndex);
-      console.log('   正解?', isCorrect);
-
-      var me = null;
-      if (typeof multiPartyMembers !== 'undefined' && multiPartyMembers.length > 0) {
-        me = multiPartyMembers.find(function(m) { return m.isMe; }) || multiPartyMembers[0];
-      }
-
-      // コンボ処理
-      if (isCorrect) {
-        gameComboCount = (gameComboCount || 0) + 1;
-        try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch(e) {}
-      } else {
-        gameComboCount = 0;
-        try { document.getElementById('multiComboCountText').innerText = gameComboCount; } catch(e) {}
-      }
-
-      // ダメージ適用（正解時のみ）
-      if (isCorrect) {
-        var comboMulti = 1 + Math.floor((gameComboCount || 0) / 5) * 0.5;
-        var damage = Math.round(400 * comboMulti);
-
-        if (typeof multiBossHp !== 'undefined') {
-          multiBossHp = Math.max(0, multiBossHp - damage);
-          var cur = (typeof M2 === 'function') ? M2().current : null;
-          if (cur) cur.hp = multiBossHp;
-        }
-
-        // 攻撃エフェクト
-        if (me && typeof window.showCharacterPopup === 'function') {
-          window.showCharacterPopup(me.id, '💥 ' + damage, 'attack');
-        }
-
-        // ボスヒットアニメ
-        var bimg = document.getElementById('multiBossImage');
-        if (bimg) { bimg.classList.remove('m2-hit'); void bimg.offsetWidth; bimg.classList.add('m2-hit'); }
-
-        try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch(e) {}
-
-        if (multiBossHp <= 0 && typeof checkEnemyDefeated === 'function') {
-          checkEnemyDefeated();
-        }
-      } else {
-        // 不正解ペナルティ
-        if (me && me.hp > 0) {
-          me.hp = Math.max(0, me.hp - 300);
-          if (typeof window.showCharacterPopup === 'function') {
-            window.showCharacterPopup(me.id, 300, 'damage');
-          }
-          try { if (typeof window.updateMultiHpBars === 'function') window.updateMultiHpBars(); } catch(e) {}
-        }
-      }
-
-      // 次の単語へ
-      gameCurrentIndex = (gameCurrentIndex || 0) + 1;
-      if (typeof window.showNextMultiWord === 'function') {
-        window.showNextMultiWord();
-      }
-
-    } catch (e) {
-      console.error('🔥 エラー:', e);
-    }
-  };
-
-  // ---- 角度ベーススワイプ検出 ----
-  var startX = 0, startY = 0, active = false;
-
-  document.addEventListener('touchstart', function(e) {
-    var el = e.target.closest('.multi-flick-area');
-    if (!el) return;
-    var t = e.touches[0];
-    startX = t.clientX;
-    startY = t.clientY;
-    active = true;
-  }, { capture: true, passive: true });
-
-  document.addEventListener('touchmove', function(e) {
-    if (!active) return;
-    var el = e.target.closest('.multi-flick-area');
-    if (!el) { active = false; return; }
-    e.preventDefault();
-  }, { capture: true, passive: false });
-
-  document.addEventListener('touchend', function(e) {
-    if (!active) return;
-    active = false;
-    var t = e.changedTouches[0];
-    var dx = t.clientX - startX;
-    var dy = t.clientY - startY;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 20) return;
-
-    var angle = Math.atan2(dy, dx) * 180 / Math.PI;
-    var idx = Math.round(((angle + 360) % 360) / 45) % 8;
-
-    console.log('🔄 スワイプ方向 → 選択肢:', idx);
-    window.processMultiFlickAnswer(idx);
-  }, { capture: true, passive: true });
-
-  console.log('✅ 角度ベーススワイプ（最終版）適用完了');
-})();
-// =====================================================================
-// 🎯 スワイプ角度固定版（3x3グリッド専用・安定）
-// =====================================================================
-(function() {
-  if (window.__swipeAngleFinalApplied) return;
-  window.__swipeAngleFinalApplied = true;
-
-  console.log('🎯 スワイプ角度固定版を適用');
-
-  // ---- 元の processMultiFlickAnswer を退避 ----
-  var __orig = window.processMultiFlickAnswer;
-
-  // ---- 新しい processMultiFlickAnswer（ガード強制解除） ----
-  window.processMultiFlickAnswer = function(choiceIndex) {
-    window.__m2Processing = false;
-    window.__ansLock = false;
-    window.__intendedChoice = null;
-    return __orig.call(this, choiceIndex);
-  };
-
-  // ---- スワイプ検出（角度ベース・固定） ----
-  var startX = 0, startY = 0, active = false;
-
-  document.addEventListener('touchstart', function(e) {
-    var el = e.target.closest('.multi-flick-area');
-    if (!el) return;
-    var t = e.touches[0];
-    startX = t.clientX;
-    startY = t.clientY;
-    active = true;
-  }, { capture: true, passive: true });
-
-  document.addEventListener('touchmove', function(e) {
-    if (!active) return;
-    var el = e.target.closest('.multi-flick-area');
-    if (!el) { active = false; return; }
-    e.preventDefault();
-  }, { capture: true, passive: false });
-
-  document.addEventListener('touchend', function(e) {
-    if (!active) return;
-    active = false;
-    var t = e.changedTouches[0];
-    var dx = t.clientX - startX;
-    var dy = t.clientY - startY;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 20) return; // デッドゾーン
-
-    // 角度を計算（0〜360度）
-    var angle = Math.atan2(dy, dx) * 180 / Math.PI;
-    var normalized = ((angle + 360) % 360 + 360) % 360;
-
-    // ★★★ 3x3グリッドの選択肢配置（右上から時計回り）★★★
-    // 選択肢の配置角度（中心からの相対角度）
-    // 右上: 45°, 上: 90°, 左上: 135°, 左: 180°, 左下: 225°, 下: 270°, 右下: 315°, 右: 0°/360°
-    // 選択肢インデックス（multiChoice-0〜7）と角度のマッピング
-    var angleMap = [
-      { idx: 0, angle: 45 },   // 右上
-      { idx: 1, angle: 90 },   // 上
-      { idx: 2, angle: 135 },  // 左上
-      { idx: 3, angle: 180 },  // 左
-      { idx: 4, angle: 225 },  // 左下
-      { idx: 5, angle: 270 },  // 下
-      { idx: 6, angle: 315 },  // 右下
-      { idx: 7, angle: 0 }     // 右（0度）
-    ];
-
-    // 最も近い角度の選択肢を探す
-    var bestIdx = 0;
-    var bestDiff = 999;
-    for (var i = 0; i < angleMap.length; i++) {
-      var target = angleMap[i].angle;
-      var diff = Math.abs(((normalized - target + 360) % 360 + 360) % 360);
-      if (diff > 180) diff = 360 - diff;
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestIdx = angleMap[i].idx;
-      }
-    }
-
-    // デバッグログ（必要に応じてコメントアウト可）
-    console.log('🔄 スワイプ角度:', normalized.toFixed(1), '→ 選択肢:', bestIdx);
-
-    window.processMultiFlickAnswer(bestIdx);
-  }, { capture: true, passive: true });
-
-  console.log('✅ スワイプ角度固定版適用完了');
-})();
-// =====================================================================
-// 🎯 中央マス（火花マス）CSS追加パッチ
-// =====================================================================
-(function applyCenterSparkCssPatch() {
-"use strict";
-if (window.__centerSparkCssApplied) return;
-window.__centerSparkCssApplied = true;
-
-(function injectCenterSparkCss() {
-if (document.getElementById('centerSparkCss')) return;
-var s = document.createElement('style');
-s.id = 'centerSparkCss';
-s.textContent = [
-/* 中央マス（火花）の基本スタイル */
-'.flick-center-spark{',
-'  background:radial-gradient(circle, rgba(251,191,36,0.3), rgba(0,0,0,0.5)) !important;',
-'  border:2px solid rgba(251,191,36,0.6) !important;',
-'  display:flex !important;',
-'  align-items:center !important;',
-'  justify-content:center !important;',
-'  font-size:32px !important;',
-'}',
-'.flick-center-spark-hidden{display:none;}',
-
-/* 中央が正解の時の裏返し表示 */
-'.flick-center-spark.center-correct{',
-'  background:linear-gradient(135deg, rgba(16,185,129,0.3), rgba(0,0,0,0.5)) !important;',
-'  border-color:rgba(16,185,129,0.8) !important;',
-'  font-size:13px !important;',
-'  padding:8px !important;',
-'  text-align:center !important;',
-'  word-break:break-word !important;',
-'}',
-'.center-revealed{',
-'  color:#10B981;',
-'  font-weight:700;',
-'  text-shadow:0 0 8px rgba(16,185,129,0.5);',
-'}',
-
-/* 中央が不正解の時の赤表示 */
-'.flick-center-spark.center-wrong{',
-'  background:linear-gradient(135deg, rgba(239,68,68,0.3), rgba(0,0,0,0.5)) !important;',
-'  border-color:rgba(239,68,68,0.8) !important;',
-'  animation:centerWrongShake 0.4s ease;',
-'}',
-'@keyframes centerWrongShake{',
-'  0%, 100%{transform:translateX(0);}',
-'  25%{transform:translateX(-6px);}',
-'  75%{transform:translateX(6px);}',
-'}',
-
-/* 中央不正解ポップアップ */
-'.center-wrong-popup{',
-'  position:fixed;',
-'  top:50%;',
-'  left:50%;',
-'  transform:translate(-50%, -50%);',
-'  z-index:99999;',
-'  background:linear-gradient(168deg, rgba(46,38,28,0.96), rgba(28,22,15,0.98));',
-'  border:2px solid rgba(239,68,68,0.6);',
-'  border-radius:16px;',
-'  padding:20px;',
-'  min-width:280px;',
-'  max-width:340px;',
-'  box-shadow:0 20px 60px rgba(0,0,0,0.7), 0 0 30px rgba(239,68,68,0.3);',
-'  animation:cwpPopIn 0.3s cubic-bezier(0.2,0.9,0.3,1.2);',
-'}',
-'@keyframes cwpPopIn{',
-'  from{opacity:0; transform:translate(-50%, -50%) scale(0.8);}',
-'  to{opacity:1; transform:translate(-50%, -50%) scale(1);}',
-'}',
-'.cwp-header{',
-'  display:flex;',
-'  align-items:center;',
-'  gap:10px;',
-'  margin-bottom:16px;',
-'  padding-bottom:12px;',
-'  border-bottom:1px solid rgba(239,68,68,0.3);',
-'}',
-'.cwp-icon{',
-'  width:32px;',
-'  height:32px;',
-'  border-radius:50%;',
-'  background:rgba(239,68,68,0.2);',
-'  border:2px solid rgba(239,68,68,0.6);',
-'  display:flex;',
-'  align-items:center;',
-'  justify-content:center;',
-'  color:#ef4444;',
-'  font-size:18px;',
-'  font-weight:900;',
-'}',
-'.cwp-title{',
-'  font-family:"Noto Serif JP", serif;',
-'  font-size:18px;',
-'  font-weight:900;',
-'  color:#ef4444;',
-'  text-shadow:0 0 10px rgba(239,68,68,0.4);',
-'}',
-'.cwp-body{',
-'  display:flex;',
-'  flex-direction:column;',
-'  gap:10px;',
-'}',
-'.cwp-row{',
-'  display:flex;',
-'  flex-direction:column;',
-'  gap:4px;',
-'}',
-'.cwp-label{',
-'  font-size:10px;',
-'  font-weight:700;',
-'  color:#a89880;',
-'  letter-spacing:0.1em;',
-'}',
-'.cwp-value{',
-'  font-size:14px;',
-'  font-weight:700;',
-'  color:#f3e5c0;',
-'  padding:6px 10px;',
-'  background:rgba(0,0,0,0.3);',
-'  border-radius:8px;',
-'  word-break:break-word;',
-'}',
-'.cwp-correct{',
-'  color:#10B981;',
-'  border-left:3px solid #10B981;',
-'}',
-'.cwp-wrong{',
-'  color:#ef4444;',
-'  border-left:3px solid #ef4444;',
-'}',
-'.cwp-close{',
-'  margin-top:16px;',
-'  width:100%;',
-'  padding:10px;',
-'  border-radius:10px;',
-'  border:1px solid rgba(255,255,255,0.2);',
-'  background:rgba(255,255,255,0.05);',
-'  color:#f3e5c0;',
-'  font-size:13px;',
-'  font-weight:700;',
-'  cursor:pointer;',
-'  transition:all 0.2s;',
-'}',
-'.cwp-close:hover{',
-'  background:rgba(255,255,255,0.1);',
-'}'
-].join('\n');
-(document.head || document.documentElement).appendChild(s);
-})();
-
-console.log('🎯 中央マスCSS追加パッチ適用完了');
-})();
-// ★ 中央マス不正解時のポップアップ
-function showCenterWrongPopup(q) {
-    // 既存のポップアップを削除
-    const old = document.getElementById('centerWrongPopup');
-    if (old) old.remove();
-
-    const popup = document.createElement('div');
-    popup.id = 'centerWrongPopup';
-    popup.className = 'center-wrong-popup';
-    popup.innerHTML = `
-        <div class="cwp-header">
-            <span class="cwp-icon">✕</span>
-            <span class="cwp-title">不正解</span>
-        </div>
-        <div class="cwp-body">
-            <div class="cwp-row">
-                <span class="cwp-label">問題</span>
-                <span class="cwp-value">${q.word}</span>
-            </div>
-            <div class="cwp-row">
-                <span class="cwp-label">正解</span>
-                <span class="cwp-value cwp-correct">${q.meaning}</span>
-            </div>
-            <div class="cwp-row">
-                <span class="cwp-label">あなたの選択</span>
-                <span class="cwp-value cwp-wrong">中央（火花マス）</span>
-            </div>
-        </div>
-        <button class="cwp-close" onclick="this.parentElement.remove()">閉じる</button>
-    `;
-    document.body.appendChild(popup);
-
-    // 3秒後に自動で閉じる
-    setTimeout(() => { if (popup.parentNode) popup.remove(); }, 3000);
-}
 // ==========================================================================
 // 🎯 第10回パッチ：タップ選択＋中央マス9択＋スワイプ完全廃止
 //    ① スワイプ操作を完全廃止（handleFlickStart/Move/End を無効化）
@@ -10156,6 +8295,7 @@ s.textContent = [
 // 【1】showNextMultiWord 上書き（9択・中央正解確率1/9・中央正解時は空白）
 // ------------------------------------------------------------------
 window.showNextMultiWord = function() {
+window.__ansLock = false;
 if (gameCurrentWordsQueue.length === 0) return;
 if (gameCurrentIndex >= gameCurrentWordsQueue.length) {
     gameCurrentWordsQueue.sort(function() { return Math.random() - 0.5; });
@@ -10163,8 +8303,8 @@ if (gameCurrentIndex >= gameCurrentWordsQueue.length) {
 }
 var target = gameCurrentWordsQueue[gameCurrentIndex];
 document.getElementById('flickTargetWord').innerText = target.word;
+var center = (typeof window.__getCenterChoiceCell === 'function') ? window.__getCenterChoiceCell() : null;
 
-var allMeanings = [target.meaning];
 var pool = [];
 for (var i = 0; i < gameCurrentWordsQueue.length; i++) {
     if (gameCurrentWordsQueue[i].word !== target.word) {
@@ -10172,22 +8312,20 @@ for (var i = 0; i < gameCurrentWordsQueue.length; i++) {
     }
 }
 pool.sort(function() { return Math.random() - 0.5; });
-for (var j = 0; j < 8 && j < pool.length; j++) {
-    allMeanings.push(pool[j]);
-}
-while (allMeanings.length < 9) {
-    allMeanings.push('---');
-}
+while (pool.length < 8) pool.push('---');
 
 var correctPos = Math.floor(Math.random() * 9);
 currentMultiCorrectIndex = correctPos;
+var dummyIndex = 0;
 
 for (var k = 0; k < 9; k++) {
-    var el = document.getElementById('multiChoice-' + k);
+    var el = k === 8 ? center : document.getElementById('multiChoice-' + k);
     if (el) {
-        if (k === 4) {
+        var choiceText = k === correctPos ? target.meaning : pool[dummyIndex++];
+        el.dataset.choiceText = choiceText;
+        if (k === 8) {
             el.classList.add('flick-center-spark');
-            if (correctPos === 4) {
+            if (correctPos === 8) {
                 el.innerHTML = '';
                 el.classList.add('center-blank');
                 el.classList.remove('center-correct', 'center-wrong', 'highlight');
@@ -10197,17 +8335,7 @@ for (var k = 0; k < 9; k++) {
             }
         } else {
             el.classList.remove('flick-center-spark', 'center-blank', 'center-correct', 'center-wrong', 'highlight');
-            var meaningIdx;
-            if (correctPos === 4) {
-                meaningIdx = k < 4 ? k : k - 1;
-            } else {
-                if (k === correctPos) {
-                    meaningIdx = 0;
-                } else {
-                    meaningIdx = k < correctPos ? k + 1 : k;
-                }
-            }
-            el.innerText = allMeanings[meaningIdx] || '---';
+            el.innerText = choiceText;
         }
     }
 }
@@ -10225,8 +8353,8 @@ if (icon) {
 var __prevTapCenterProcess = window.processMultiFlickAnswer;
 window.processMultiFlickAnswer = function(choiceIndex) {
 var q = gameCurrentWordsQueue[gameCurrentIndex];
-var isCenter = (choiceIndex === 4);
-var centerEl = document.getElementById('multiChoice-4');
+var isCenter = (choiceIndex === 8);
+var centerEl = document.getElementById('multiChoice-8');
 var isCorrect = (choiceIndex === currentMultiCorrectIndex);
 
 if (isCenter && isCorrect && centerEl) {
@@ -10235,13 +8363,17 @@ if (isCenter && isCorrect && centerEl) {
     centerEl.innerHTML = q.meaning;
 }
 
-if (isCenter && !isCorrect) {
+if (!isCorrect) {
     if (centerEl) {
-        centerEl.classList.remove('center-blank', 'center-correct');
-        centerEl.classList.add('center-wrong');
-        centerEl.innerHTML = '🔥';
+        if (isCenter) {
+            centerEl.classList.remove('center-blank', 'center-correct');
+            centerEl.classList.add('center-wrong');
+            centerEl.innerHTML = '🔥';
+        }
     }
-    showTapCenterWrongPopup(q);
+    var selectedEl=document.getElementById('multiChoice-'+choiceIndex);
+    var selectedText=isCenter?'中央（火花マス）':(selectedEl?(selectedEl.dataset.choiceText||selectedEl.textContent):'不明');
+    showTapCenterWrongPopup(q,selectedText);
 }
 
 if (typeof __prevTapCenterProcess === 'function') {
@@ -10252,7 +8384,7 @@ if (typeof __prevTapCenterProcess === 'function') {
 // ------------------------------------------------------------------
 // 【3】不正解ポップアップ（問題・正解・選んだ答え）
 // ------------------------------------------------------------------
-function showTapCenterWrongPopup(q) {
+function showTapCenterWrongPopup(q,selectedText) {
 var old = document.getElementById('tcWrongPopup');
 if (old) old.remove();
 var popup = document.createElement('div');
@@ -10266,7 +8398,7 @@ popup.innerHTML =
     '<div class="tc-popup-body">' +
     '<div class="tc-popup-row"><span class="tc-popup-label">問題</span><span class="tc-popup-value">' + escHtml(q.word) + '</span></div>' +
     '<div class="tc-popup-row"><span class="tc-popup-label">正解</span><span class="tc-popup-value tc-popup-correct">' + escHtml(q.meaning) + '</span></div>' +
-    '<div class="tc-popup-row"><span class="tc-popup-label">あなたの選択</span><span class="tc-popup-value tc-popup-wrong">中央（火花マス）</span></div>' +
+    '<div class="tc-popup-row"><span class="tc-popup-label">あなたの選択</span><span class="tc-popup-value tc-popup-wrong">' + escHtml(selectedText) + '</span></div>' +
     '</div>' +
     '<button class="tc-popup-close" onclick="this.parentElement.remove()">閉じる</button>';
 document.body.appendChild(popup);
@@ -10285,39 +8417,23 @@ window.handleFlickStart = function(e) { if (e) e.preventDefault(); };
 window.handleFlickMove = function(e) { if (e) e.preventDefault(); };
 window.handleFlickEnd = function(e) { if (e) e.preventDefault(); };
 
-// ------------------------------------------------------------------
-// 【5】initMultiPartyEvents 上書き（フリックバインド除去・タップのみ）
-// ------------------------------------------------------------------
-window.initMultiPartyEvents = function() {
-if (window.__tapCenterBound) return;
-window.__tapCenterBound = true;
-function choiceIdxOf(node) {
-    var c = (node && node.closest) ? node.closest('.flick-choice') : null;
-    if (!c || !c.id) return -1;
-    var m = /multiChoice-(\d+)/.exec(c.id);
-    return m ? parseInt(m[1], 10) : -1;
-}
-document.addEventListener('touchend', function(e) {
-    var idx = choiceIdxOf(e.target);
-    if (idx < 0) return;
-    e.preventDefault();
-    window.processMultiFlickAnswer(idx);
-}, { passive: false, capture: true });
-document.addEventListener('click', function(e) {
-    var idx = choiceIdxOf(e.target);
-    if (idx < 0) return;
-    window.processMultiFlickAnswer(idx);
-}, true);
-};
-
-// ------------------------------------------------------------------
-// 【6】起動時にタップイベントを確実にバインド
-// ------------------------------------------------------------------
-(function bootTapCenter() {
-function run() { window.initMultiPartyEvents(); }
-if (document.readyState !== 'loading') { setTimeout(run, 300); }
-else { document.addEventListener('DOMContentLoaded', function() { setTimeout(run, 300); }); }
-})();
+/* 選択入力は pointerup の1経路だけに統一する */
+var tapStart=null;
+document.addEventListener('pointerdown',function(e){
+var choice=e.target&&e.target.closest?e.target.closest('.flick-choice'):null;
+if(!choice)return;
+tapStart={id:choice.id,x:e.clientX,y:e.clientY};
+},{capture:true});
+document.addEventListener('pointerup',function(e){
+var choice=e.target&&e.target.closest?e.target.closest('.flick-choice'):null;
+if(!choice||!tapStart||choice.id!==tapStart.id){tapStart=null;return;}
+var dx=e.clientX-tapStart.x,dy=e.clientY-tapStart.y;
+tapStart=null;
+if(Math.sqrt(dx*dx+dy*dy)>14)return;
+e.preventDefault();
+var match=/multiChoice-(\d+)/.exec(choice.id);
+if(match)window.processMultiFlickAnswer(parseInt(match[1],10));
+},{capture:true});
 
 console.log('🎯 第10回パッチ（タップ選択＋中央マス9択＋スワイプ完全廃止）適用完了');
 })();
