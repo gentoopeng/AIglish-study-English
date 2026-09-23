@@ -1672,3 +1672,34 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 #svGauge {
     display: none !important;
 }
+
+/* 単一セーブ画面 */
+.fbsv-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 60060;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(5, 3, 12, 0.82);
+    backdrop-filter: blur(8px);
+}
+.fbsv-card {
+    width: min(92vw, 400px);
+    padding: 22px 18px;
+    border: 1px solid rgba(200, 144, 42, 0.4);
+    border-radius: 18px;
+    background: linear-gradient(168deg, rgba(46, 38, 28, 0.98), rgba(24, 18, 12, 0.99));
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+}
+.fbsv-head, .fbsv-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fbsv-head { margin-bottom: 14px; }
+.fbsv-title { color: #f3e5c0; font-size: 18px; font-weight: 900; }
+.fbsv-close { width: 32px; height: 32px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; background: rgba(255,255,255,.05); color: #fff; }
+.fbsv-row { padding: 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; background: rgba(0,0,0,.25); }
+.fbsv-name { color: #f3e5c0; font-size: 14px; font-weight: 900; }
+.fbsv-date { margin-top: 3px; color: #a89880; font-size: 11px; }
+.fbsv-btn { padding: 10px 18px; border: 1px solid rgba(245,196,81,.5); border-radius: 9px; background: linear-gradient(180deg,#4a3b24,#1f1809); color: #fde68a; font-weight: 900; }
+.fbsv-btn:disabled { opacity: .6; }
+.fbsv-note { margin-top: 14px; padding: 10px 12px; border: 1px dashed rgba(200,144,42,.25); border-radius: 9px; color: #a89880; font-size: 10.5px; line-height: 1.6; }
