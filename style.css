@@ -330,6 +330,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .sidebar { position: fixed; top: 0; left: -280px; width: 280px; height: 100vh; background: linear-gradient(160deg, rgba(10, 15, 30, 0.88) 0%, rgba(20, 15, 45, 0.96) 100%) !important; backdrop-filter: blur(25px) !important; -webkit-backdrop-filter: blur(25px) !important; z-index: 2001; transition: left 0.3s cubic-bezier(0.25, 1, 0.5, 1); display: flex; flex-direction: column; border-right: 2px solid transparent; border-image: linear-gradient(to bottom, var(--cosmic-cyan), var(--cosmic-purple-light)) 1; box-shadow: 5px 0 25px rgba(0, 240, 255, 0.3), 10px 0 50px rgba(192, 132, 252, 0.15); }
 .sidebar.open { left: 0; }
 .sidebar-header { padding: 24px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.15); display: flex; align-items: center; gap: 14px; background: linear-gradient(to right, rgba(0, 240, 255, 0.08), transparent); }
+.sidebar-version { margin: 12px 8px 4px; padding: 9px 12px; border: 1px solid rgba(0,240,255,0.2); border-radius: 8px; background: rgba(0,0,0,0.2); color: #94a3b8; font-family: monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-align: center; }
 .sidebar-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--text-main); font-size: 13.5px; font-weight: 700; background: none; border: none; width: calc(100% - 16px); margin: 4px 8px; border-radius: 8px; text-align: left; cursor: pointer; transition: all 0.2s; }
 
 .nav-bar { position: fixed; bottom: 0; left: 0; width: 100vw; height: 60px; background: rgba(15, 23, 42, 0.85) !important; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; justify-content: space-around; align-items: center; z-index: 4000 !important; transition: opacity 0.3s, transform 0.3s; }
@@ -1333,11 +1334,17 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-align: center;
     transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
     transform-style: preserve-3d;
+    will-change: transform;
+    -webkit-transform-style: preserve-3d;
     z-index: 2;
 }
 
 .flashcard-wrapper-3d.flipped .flashcard-inner-rotator {
     transform: rotateY(180deg);
+}
+
+.flashcard-wrapper-3d.flipped {
+    animation-play-state: paused;
 }
 
 .flashcard-face-front,
@@ -1650,4 +1657,18 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     font-size: 14px !important;
+}
+
+/* 理解度ボタンはタップ終了後の click を待たず pointerdown で反応する。 */
+.word-row-container button[onpointerdown*="updateMeaningStatus"],
+#wordPopover button[onpointerdown*="updateMeaningStatus"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 保存中の上部通知は表示しない。手動保存ボタンは表示する。 */
+#svAutoIndicator,
+#fbSaveInd,
+#svGauge {
+    display: none !important;
 }
