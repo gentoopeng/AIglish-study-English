@@ -182,6 +182,7 @@
 
         cardWrap.onclick = function(e) {
             if (isCardFlicking) return;
+            if (cardWrap.__ignoreClickUntil && Date.now() < cardWrap.__ignoreClickUntil) return;
             cardWrap.classList.toggle('flipped');
         };
 
@@ -244,6 +245,9 @@
             else if (dy < -65) { window.swipeFlashcard('up', dx, dy); }
             else {
                 cardWrap.style.transform = "";
+                // スマホはclickの発火を待たず、指を離した瞬間にめくる。
+                cardWrap.classList.toggle('flipped');
+                cardWrap.__ignoreClickUntil = Date.now() + 500;
                 var rightEdge2 = document.getElementById('fcEdgeRippleRight');
                 var leftEdge2 = document.getElementById('fcEdgeRippleLeft');
                 var topEdge2 = document.getElementById('fcEdgeRippleTop');
