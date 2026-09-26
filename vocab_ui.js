@@ -497,6 +497,12 @@
                 if (typeof window.wordOverallStatus === 'function') {
                     vocabList[wIdx].status = window.wordOverallStatus(vocabList[wIdx]);
                 }
+                // 教材切替より前に、変更した教材の状態を同期的に退避する。
+                // 後段の100msタイマーに任せると、その間に教材を切り替えた場合、
+                // 切替先の教材として保存されて元の教材の変更が失われる。
+                if (typeof window.__captureManualVocabDraft === 'function') {
+                    window.__captureManualVocabDraft();
+                }
                 // 押したボタンだけを先に更新し、一覧全体の描画や通信を待たせない。
                 if (event && event.currentTarget && event.currentTarget.parentElement) {
                     var colors = { ok: 'var(--word-ok)', so: 'var(--word-so)', bad: 'var(--word-bad)', none: 'rgba(255,255,255,0.3)' };

@@ -4243,6 +4243,9 @@ console.log('📚 統合図鑑パッチ適用完了');
 "use strict";
 if (window.__pcvRestoreApplied) return;
 window.__pcvRestoreApplied = true;
+// 廃止: 複数の保存元から「状態が多い方」を推測して自動復元すると、
+// 教材切替のたびに正しい手動セーブを古いデータで上書きするため実行しない。
+return;
 
 function bkNow(){ return (typeof currentTextbook!=='undefined' && currentTextbook)? currentTextbook : 'default'; }
 function uidNow(){ return (typeof myId!=='undefined' && myId && myId!=='GUEST-000')? myId : null; }
@@ -4372,6 +4375,9 @@ console.log('💾 理解度復元＆再消失防止パッチ 適用完了');
 "use strict";
 if (window.__vocabSigFallbackApplied) return;
 window.__vocabSigFallbackApplied = true;
+// 廃止: 遅延タイマーでクラウド理解度を再読込する旧処理は、
+// 手動セーブ下書きの適用後に古い値を被せる競合原因になる。
+return;
 
 // ---- applyUserProgressToVocabList を「署名ズレ許容」で上書き ----
 window.applyUserProgressToVocabList = function () {
@@ -4456,6 +4462,9 @@ console.log('📚 理解度「‑」根治パッチ（署名ズレ復元）適�
 "use strict";
 if (window.__progressRecoveryApplied) return;
 window.__progressRecoveryApplied = true;
+// 廃止: 旧キャッシュや共有教材からの自動救出は通常ロード中に実行せず、
+// 手動セーブを唯一の復元元として扱う。
+return;
 
 function loggedIn() { return (typeof myId !== 'undefined') && myId && myId !== 'GUEST-000'; }
 function bookKeyNow() { return (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default'; }
@@ -4594,6 +4603,9 @@ console.log('📚 理解度復元パッチ適用完了');
 "use strict";
 if (window.__vocabRestoreRobust) return;
 window.__vocabRestoreRobust = true;
+// 廃止: 保存場所を全走査して件数最大のデータを採用する方式は、
+// 古い履歴の方が件数が多いだけで最新データを上書きしてしまう。
+return;
 
 function bookKey() { return (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default'; }
 function uid() { return (typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000'; }
@@ -7790,20 +7802,6 @@ ring.style.top='50%';
 ring.style.transform='translateY(-50%)';
 ring.style.zIndex='80';
 ring.style.overflow='visible';
-}
-function positionHpText(){
-var c=host(); if(!c)return;
-var all=c.querySelectorAll('*');
-for(var i=0;i<all.length;i++){
-var el=all[i];
-if((el.children&&el.children.length>0)||el.closest('#m2AtkRing'))continue;
-var t=(el.textContent||'').trim();
-if(!/^\d[\d,]*(\s*\/\s*\d[\d,]*)?$/.test(t))continue;
-var cs=getComputedStyle(el);
-if(cs.position==='absolute'||cs.position==='fixed'){el.style.right='52px';el.style.left='auto';}
-else{el.style.marginRight='52px';}
-el.style.zIndex='31';
-}
 }
 function positionHpText(){
 var c=host(); if(!c)return;
