@@ -28,40 +28,108 @@
             var ss = String(now.getSeconds()).padStart(2, '0');
             assignedTitle = yyyy + '/' + mm + '/' + dd + ' ' + hh + ':' + min + ':' + ss;
         }
+        // サイドバーに入力済みのキーを解析開始時にも反映する。
+        // プロフィール保存処理の完了順に依存させない。
+        var apiKeyInput = document.getElementById('sidebarApiKeyInput');
+        var enteredApiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
+        if (enteredApiKey) {
+            geminiApiKey = enteredApiKey;
+            localStorage.setItem('core_v4_geminiKey', enteredApiKey);
+        }
+        var submitButton = document.getElementById('analysisSubmitBtn');
+        if (submitButton && submitButton.disabled) return;
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.dataset.originalHtml = submitButton.innerHTML;
+            submitButton.textContent = "解析しています…";
+        }
         totalExp += 5;
         userStats.reader_open++;
         window.saveUserStats();
         window.checkAndRewardTitleBonusXP();
         window.applyProfileToUi();
         window.renderLeaderboard();
-        window.analyzeText(rawText, assignedTitle);
+        if (typeof window.analyzeText !== 'function') {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = submitButton.dataset.originalHtml || "英文解析";
+            }
+            alert("英文解析機能の読み込みに失敗しました。ページを再読み込みしてください。");
+            return;
+        }
+        Promise.resolve(window.analyzeText(rawText, assignedTitle)).catch(function(error) {
+            console.error("English analysis failed:", error);
+            alert("英文解析に失敗しました。\n" + (error && error.message ? error.message : "通信状態とAPIキーを確認してください。"));
+        }).finally(function() {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = submitButton.dataset.originalHtml || "英文解析";
+                if (typeof window.initLucide === 'function') window.initLucide();
+            }
+        });
     };
 
+    function buildAnalysisFallback(text, message) {
+        var sentences = String(text || '').replace(/\n/g, ' ').match(/[^.?!]+[.?!]+|[^.?!]+$/g) || [String(text || '')];
+        return {
+            analysisError: true,
+            fullSummaryAbstract: message,
+            sentences: sentences.filter(function(sentence) { return sentence.trim(); }).map(function(sentence) {
+                return { text: sentence.trim(), translation: "（AI和訳を取得できませんでした）", grammarHighlights: [] };
+            })
+        };
+    }
+
     window.callGeminiAnalyzer = async function(text) {
-        if (!geminiApiKey) {
-            alert("【デバッグ情報】\nAPIキーが設定されていないため、AI通信をスキップしました。");
+        var input = document.getElementById('sidebarApiKeyInput');
+        var apiKey = (input && input.value.trim()) || localStorage.getItem('core_v4_geminiKey') || (typeof geminiApiKey !== 'undefined' ? geminiApiKey : '');
+        if (!apiKey) {
+            alert("Gemini APIキーが設定されていません。左上メニューからAPIキーを設定してください。");
             return null;
         }
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 45000) : null;
         try {
-            var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + geminiApiKey;
-            var prompt = "以下の英文をパースし、指定 of JSONスキーマ形式のみで返答してください。\n\n英文:\n " + text + "\n\n出力JSON形式:\n{\n   \"fullSummaryAbstract\": \"英文全体のシンプルな日本語要約(3文以内)\",\n   \"sentences\": [\n    {\n       \"text\": \"元の英語の1文\",\n       \"translation\": \"その文の正確な日本語訳\",\n       \"grammarHighlights\": [\n        {\n           \"phrase\": \"フレーズ\",\n           \"meaning\": \"意味\"\n        }\n      ]\n    }\n  ]\n}";
+            var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(apiKey);
+            var prompt = "以下の英文を解析し、指定したJSON形式だけを返してください。英文を省略しないでください。\n\n英文:\n" + text + "\n\nJSON形式:\n{\"fullSummaryAbstract\":\"英文全体の日本語要約（3文以内）\",\"sentences\":[{\"text\":\"元の英語の1文\",\"translation\":\"正確な日本語訳\",\"grammarHighlights\":[{\"phrase\":\"重要表現\",\"meaning\":\"日本語での文法説明\"}]}]}";
             var response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: "application/json", temperature: 0.2 }
+                }),
+                signal: controller ? controller.signal : undefined
             });
             if (!response.ok) {
                 var errorData = await response.text();
                 console.error("Gemini API Error details:", errorData);
-                return null;
+                var apiMessage = "Gemini APIエラー（" + response.status + "）";
+                try {
+                    var parsedError = JSON.parse(errorData);
+                    if (parsedError.error && parsedError.error.message) apiMessage += ": " + parsedError.error.message;
+                } catch (ignore) {}
+                alert(apiMessage);
+                return buildAnalysisFallback(text, apiMessage);
             }
             var data = await response.json();
-            var responseText = data.candidates[0].content.parts[0].text.trim();
-            var cleanJsonText = responseText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
-            return JSON.parse(cleanJsonText);
+            var parts = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+            var responseText = parts && parts.map(function(part) { return part.text || ''; }).join('').trim();
+            if (!responseText) throw new Error("Geminiから解析結果が返されませんでした");
+            var cleanJsonText = responseText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+            var firstBrace = cleanJsonText.indexOf('{');
+            var lastBrace = cleanJsonText.lastIndexOf('}');
+            if (firstBrace >= 0 && lastBrace > firstBrace) cleanJsonText = cleanJsonText.slice(firstBrace, lastBrace + 1);
+            var result = JSON.parse(cleanJsonText);
+            if (!result || !Array.isArray(result.sentences) || !result.sentences.length) throw new Error("解析結果の文章データが空です");
+            return result;
         } catch (e) {
             console.error("Gemini Analyzer Error:", e);
-            return null;
+            var message = e && e.name === 'AbortError' ? "Gemini APIが45秒以内に応答しませんでした" : (e.message || "Gemini APIとの通信に失敗しました");
+            alert(message);
+            return buildAnalysisFallback(text, message);
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId);
         }
     };
     window.openWordPopover = function(event, cleanKey, originalText) {
