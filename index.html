@@ -10,12 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
+    <meta name="application-version" content="1.21">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="gacha.css">
+    <link rel="stylesheet" href="style.css?v=1.21">
+    <link rel="stylesheet" href="gacha.css?v=1.21">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -155,6 +157,7 @@
                     <i data-lucide="shield-alert" size="16"></i> 🛠️ 管理者メニュー
                 </button>
             </div>
+            <div id="appVersionDisplay" class="sidebar-version" aria-label="アプリのバージョン">Version 1.21</div>
         </div>
     </div>
 
@@ -1075,14 +1078,13 @@
       window.fbSetDoc = setDoc;
       window.fbGetDoc = getDoc;
     </script>
-    <script src="app.js" defer></script>
-    <script src="game_core.js" defer></script>
-    <script src="vocab_ui.js" defer></script>
-    <script src="reader.js" defer></script>
+    <script src="app.js?v=1.21" defer></script>
+    <script src="game_core.js?v=1.21" defer></script>
+    <script src="vocab_ui.js?v=1.21" defer></script>
+    <script src="reader.js?v=1.21" defer></script>
+    <script src="fix.js?v=1.21" defer></script>
+    <script src="multi.js?v=1.21" defer></script>
+    <script src="gacha.js?v=1.21" defer></script>
+    <script src="addon.js?v=1.21" defer></script>
 </body>
 </html>
-<script src="fix.js" defer></script>
-<script src="multi.js" defer></script>
-<script src="gacha.js" defer></script>
-<script src="multi.js" defer></script>
-<script src="addon.js" defer></script>  <!-- ←この1行を追加 -->
