@@ -4231,473 +4231,6 @@ if(document.readyState!=='loading')setTimeout(run,450); else document.addEventLi
 console.log('📚 統合図鑑パッチ適用完了');
 })();
 // ==========================================================================
-// 💾 理解度復元＆再消失防止パッチ（multi.js 末尾追記）
-//    原因:単語テキスト/意味の更新で保存時sigが合わず⚪︎△✕が全「-」表示
-//         （データはローカル/Firebaseに生存）
-//    ① sig不一致でも意味ID/順序で復元（寛容apply）
-//    ② 進捗が空なら旧マスター(ステータス付き)から救出
-//    ③ 復元後すぐ新sigで保存→次回から消えない
-//    ④ applyUserProgressToVocabList を恒久的に寛容版へ
-// ==========================================================================
-(function applyVocabProgressRestorePatch(){
-"use strict";
-if (window.__pcvRestoreApplied) return;
-window.__pcvRestoreApplied = true;
-// 廃止: 複数の保存元から「状態が多い方」を推測して自動復元すると、
-// 教材切替のたびに正しい手動セーブを古いデータで上書きするため実行しない。
-return;
-
-function bkNow(){ return (typeof currentTextbook!=='undefined' && currentTextbook)? currentTextbook : 'default'; }
-function uidNow(){ return (typeof myId!=='undefined' && myId && myId!=='GUEST-000')? myId : null; }
-
-function progHasStatus(prog){
-  if(!prog) return false;
-  for(var k in prog){
-    var p=prog[k]; if(!p) continue;
-    if(p.status && p.status!=='none') return true;
-    if(p.meanings){ for(var m in p.meanings){ if(p.meanings[m]&&p.meanings[m].status&&p.meanings[m].status!=='none') return true; } }
-  }
-  return false;
-}
-function wordsHasStatus(words){
-  return (words||[]).some(function(w){
-    return w && ((w.status&&w.status!=='none') || (w.meanings||[]).some(function(m){return m.status&&m.status!=='none';}));
-  });
-}
-
-/* ---- 寛容apply:sig不一致でも意味ID/順序で復元 ---- */
-function lenientApply(){
-  if (typeof vocabList==='undefined' || !vocabList) return;
-  var prog = (typeof currentUserVocabProgress!=='undefined' && currentUserVocabProgress)? currentUserVocabProgress : {};
-  vocabList.forEach(function(w){
-    if(!w) return;
-    var p = prog[String(w.num)];
-    if(!p) return;
-    var keys = p.meanings? Object.keys(p.meanings):[];
-    (w.meanings||[]).forEach(function(m, idx){
-      var mp = (p.meanings && (p.meanings[m.id] || (keys[idx]? p.meanings[keys[idx]]:null))) || null;
-      if(mp){
-        if(mp.status) m.status = mp.status;
-        if(Array.isArray(mp.history)&&mp.history.length) m.history = mp.history.slice(-20);
-      }
-    });
-    if(typeof window.wordOverallStatus==='function'){ w.status = window.wordOverallStatus(w); }
-    else if(p.status){ w.status = p.status; }
-    if(Array.isArray(p.history)&&p.history.length) w.history = p.history.slice(-20);
-  });
-  try{ if(typeof window.rebuildVocabStemIndex==='function') window.rebuildVocabStemIndex(); }catch(e){}
-  try{
-    if(typeof userStats==='object'&&userStats){
-      userStats.vocab_fixed = vocabList.filter(function(w){ return w.meanings && w.meanings.some(function(m){return m.status==='ok';}); }).length;
-    }
-  }catch(e){}
-}
-
-/* ---- 救出:進捗が空なら旧マスター(ステータス付き)から復元 ---- */
-function buildProg(words){
-  var prog={};
-  (words||[]).forEach(function(w){
-    if(!w) return;
-    var meanings={};
-    (w.meanings||[]).forEach(function(m){ meanings[m.id]={status:(m.status||'none'), history:Array.isArray(m.history)?m.history.slice(-20):[]}; });
-    prog[String(w.num)]={
-      sig:(typeof window.buildWordSignature==='function')?window.buildWordSignature(w):String(w.num),
-      status:(w.status||'none'),
-      history:Array.isArray(w.history)?w.history.slice(-20):[],
-      meanings:meanings
-    };
-  });
-  return prog;
-}
-function recoverLocal(){
-  var uid=uidNow(); if(!uid) return false;
-  var bk=bkNow(); var raw=null;
-  try{ raw=localStorage.getItem('core_v4_custom_words_'+uid+'_'+bk); }catch(e){}
-  if(!raw){ try{ raw=localStorage.getItem('core_v4_cache_'+bk); }catch(e){} }
-  if(!raw) return false;
-  var words=null; try{ words=JSON.parse(raw); }catch(e){ return false; }
-  if(!wordsHasStatus(words)) return false;
-  currentUserVocabProgress = buildProg(words);
-  return true;
-}
-function recoverCloud(cb){
-  var uid=uidNow();
-  if(!uid || !window.db || !window.fbGetDoc || !window.fbDoc){ cb(false); return; }
-  try{
-    window.fbGetDoc(window.fbDoc(window.db,'shared','vocab_'+bkNow())).then(function(snap){
-      var words=(snap&&snap.exists()&&snap.data()&&snap.data().custom_words)?snap.data().custom_words:null;
-      if(wordsHasStatus(words)){ currentUserVocabProgress=buildProg(words); cb(true); } else cb(false);
-    }).catch(function(){ cb(false); });
-  }catch(e){ cb(false); }
-}
-
-/* ---- 恒久:applyを寛容版へ（今後の再消失を防止） ---- */
-window.applyUserProgressToVocabList = function(){ lenientApply(); };
-
-function finish(){
-  try{ if(typeof window.renderVocabList==='function') window.renderVocabList(); }catch(e){}
-  try{ if(typeof window.updateReaderWordColors==='function') window.updateReaderWordColors(); }catch(e){}
-  try{ if(typeof window.saveUserVocabProgress==='function') window.saveUserVocabProgress(); }catch(e){}
-}
-function doRestore(){
-  if(progHasStatus(currentUserVocabProgress)){ lenientApply(); finish(); }
-  else if(recoverLocal()){ lenientApply(); finish(); }
-  else recoverCloud(function(ok){ if(ok){ lenientApply(); finish(); } });
-}
-
-/* ---- 起動/タブ切替/教材切替の全てで復元を保証 ---- */
-var __origLoadBook = window.loadCurrentTextbookData;
-if (typeof __origLoadBook==='function'){
-  window.loadCurrentTextbookData = function(){
-    var r = __origLoadBook.apply(this, arguments);
-    if(r && r.then){ r.then(function(){ if(progHasStatus(currentUserVocabProgress)){ lenientApply(); } }).catch(function(){}); }
-    return r;
-  };
-}
-window.onTabChange(function(tabId){
-  if(tabId==='vocab'){ setTimeout(doRestore, 150); }
-});
-(function boot(){
-  function run(){ doRestore(); }
-  if(document.readyState!=='loading') setTimeout(run, 1200);
-  else document.addEventListener('DOMContentLoaded', function(){ setTimeout(run, 1200); });
-})();
-console.log('💾 理解度復元＆再消失防止パッチ 適用完了');
-})();
-// ==========================================================================
-// 📚 理解度「‑」根治パッチ（署名ズレでも復元して正しく保存し直す）
-//    ・sig が合わなくても 意味ID 単位で ⚪︎/△/✕ を復元
-//    ・復元後に正しい sig を付けて保存（次回からズレない）
-//    ・読込完了後と教材切替後に自動で再適用＋再描画
-//    ※ app.js/fix.js/style.css/index.html は不変更／末尾追記のみ
-// ==========================================================================
-(function () {
-"use strict";
-if (window.__vocabSigFallbackApplied) return;
-window.__vocabSigFallbackApplied = true;
-// 廃止: 遅延タイマーでクラウド理解度を再読込する旧処理は、
-// 手動セーブ下書きの適用後に古い値を被せる競合原因になる。
-return;
-
-// ---- applyUserProgressToVocabList を「署名ズレ許容」で上書き ----
-window.applyUserProgressToVocabList = function () {
-var progress = (typeof currentUserVocabProgress !== 'undefined' && currentUserVocabProgress) ? currentUserVocabProgress : {};
-var changed = false;
-vocabList = vocabList.map(function (w) {
-w = window.migrateVocabData([w])[0];
-var key = String(w.num);
-var p = progress[key];
-w.status = "none";
-w.history = [];
-w.meanings = (w.meanings || []).map(function (m) {
-return { id: m.id, text: m.text, status: "none", history: [] };
-});
-if (p) {
-// 署名に関係なく「意味ID」で状態を復元
-w.meanings = w.meanings.map(function (m, idx) {
-var mp = null;
-if (p.meanings) mp = p.meanings[m.id] || p.meanings[String(w.num) + '-' + idx];
-if (!mp && Array.isArray(p.meaningsList)) mp = p.meaningsList[idx];
-if (mp) return { id: m.id, text: m.text, status: (mp.status || "none"), history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
-return m;
-});
-w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
-w.status = window.wordOverallStatus(w);
-p.sig = window.buildWordSignature(w); // 次回ズレないよう更新
-changed = true;
-}
-return w;
-});
-if (typeof userStats !== 'undefined' && userStats) {
-userStats.vocab_fixed = vocabList.filter(function (w) {
-return w.meanings && w.meanings.some(function (m) { return m.status === 'ok'; });
-}).length;
-}
-if (typeof window.rebuildVocabStemIndex === 'function') window.rebuildVocabStemIndex();
-if (changed) {
-clearTimeout(window.__sigSaveT);
-window.__sigSaveT = setTimeout(function () {
-try { if (typeof window.saveUserVocabProgress === 'function') window.saveUserVocabProgress(); } catch (e) {}
-}, 800);
-}
-};
-
-// ---- 読込後・教材切替後に自動で再適用＋再描画 ----
-function reapply() {
-try {
-if (typeof window.loadUserVocabProgress === 'function' && typeof currentTextbook !== 'undefined') {
-window.loadUserVocabProgress(currentTextbook).then(function () {
-window.applyUserProgressToVocabList();
-if (typeof window.renderVocabList === 'function') window.renderVocabList();
-if (typeof window.updateReaderWordColors === 'function') window.updateReaderWordColors();
-}).catch(function () {});
-} else {
-window.applyUserProgressToVocabList();
-if (typeof window.renderVocabList === 'function') window.renderVocabList();
-if (typeof window.updateReaderWordColors === 'function') window.updateReaderWordColors();
-}
-} catch (e) {}
-}
-setTimeout(reapply, 600);
-setTimeout(reapply, 1800);
-var prevSwitch = window.switchTextbookContext;
-if (typeof prevSwitch === 'function' && !prevSwitch.__sigHook) {
-window.switchTextbookContext = function () {
-var r = prevSwitch.apply(this, arguments);
-setTimeout(reapply, 300);
-return r;
-};
-window.switchTextbookContext.__sigHook = true;
-}
-console.log('📚 理解度「‑」根治パッチ（署名ズレ復元）適用完了');
-})();
-// ==========================================================================
-// 📚 理解度復元パッチ（統合パッチで消えた⚪︎△✕を古い保存先から非破壊復元）
-//    ・古い保存先(custom_words_…/Firebase共有)に残る⚪︎△✕を
-//      新しい保存先(user_vocab_progress_…)へ「無い語だけ」埋める
-//    ・今のデータを上書きしない／1冊ずつ1回だけ実行（ガード付き）
-//    ※ app.js/fix.js/style.css/index.html は不変更。multi.js末尾に追記
-// ==========================================================================
-(function applyProgressRecoveryPatch() {
-"use strict";
-if (window.__progressRecoveryApplied) return;
-window.__progressRecoveryApplied = true;
-// 廃止: 旧キャッシュや共有教材からの自動救出は通常ロード中に実行せず、
-// 手動セーブを唯一の復元元として扱う。
-return;
-
-function loggedIn() { return (typeof myId !== 'undefined') && myId && myId !== 'GUEST-000'; }
-function bookKeyNow() { return (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default'; }
-
-function hasStatus(w) {
-if (!w) return false;
-if (w.status && w.status !== 'none') return true;
-if (Array.isArray(w.history) && w.history.length) return true;
-if (Array.isArray(w.meanings)) {
-for (var i = 0; i < w.meanings.length; i++) {
-var m = w.meanings[i];
-if (m && ((m.status && m.status !== 'none') || (Array.isArray(m.history) && m.history.length))) return true;
-}
-}
-return false;
-}
-
-function readOldLocal(bookKey) {
-var uid = (typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000';
-var keys = ['core_v4_custom_words_' + uid + '_' + bookKey, 'core_v4_cache_' + bookKey];
-for (var i = 0; i < keys.length; i++) {
-try {
-var raw = localStorage.getItem(keys[i]);
-if (raw) { var w = JSON.parse(raw); if (Array.isArray(w) && w.length) return w; }
-} catch (e) {}
-}
-return null;
-}
-
-function doRecover(oldWords, bookKey) {
-var byNum = {};
-oldWords.forEach(function (w) { if (w && hasStatus(w)) byNum[String(w.num)] = w; });
-if (!Object.keys(byNum).length) return 0;
-
-var cur = (typeof currentUserVocabProgress !== 'undefined' && currentUserVocabProgress) ? currentUserVocabProgress : {};
-var changed = 0;
-var list = (typeof vocabList !== 'undefined' && vocabList) ? vocabList : [];
-list.forEach(function (w) {
-var key = String(w.num);
-var old = byNum[key];
-if (!old) return;
-var curP = cur[key];
-var curHas = curP && ((curP.status && curP.status !== 'none') ||
-(curP.meanings && Object.keys(curP.meanings).some(function (k) { var m = curP.meanings[k]; return m && m.status && m.status !== 'none'; })));
-if (curHas) return; // 今のデータを絶対に上書きしない
-var meanings = {};
-(w.meanings || []).forEach(function (m, i) {
-var om = null;
-if (Array.isArray(old.meanings)) {
-om = old.meanings.filter(function (m2) { return m2 && m.id && m2.id === m.id; })[0] || old.meanings[i];
-}
-meanings[m.id] = {
-status: om ? (om.status || 'none') : 'none',
-history: (om && Array.isArray(om.history)) ? om.history : (Array.isArray(old.history) ? old.history : [])
-};
-});
-cur[key] = {
-sig: (typeof window.buildWordSignature === 'function') ? window.buildWordSignature(w) : String(w.num),
-status: old.status || 'none',
-history: Array.isArray(old.history) ? old.history : [],
-meanings: meanings
-};
-changed++;
-});
-if (!changed) return 0;
-
-currentUserVocabProgress = cur;
-try { localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(cur)); } catch (e) {}
-if (window.db && window.fbSetDoc && window.fbDoc && loggedIn()) {
-try {
-window.fbSetDoc(window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookKey),
-{ words: cur, wordsJson: JSON.stringify(cur), updatedAt: new Date().toISOString() }, { merge: true })
-.catch(function () {});
-} catch (e) {}
-}
-if (typeof window.applyUserProgressToVocabList === 'function') window.applyUserProgressToVocabList();
-if (typeof window.renderVocabList === 'function') window.renderVocabList();
-return changed;
-}
-
-function recover(bookKey) {
-if (!loggedIn()) return;
-var guard = '__progRecovered_' + bookKey;
-try { if (localStorage.getItem(guard)) return; } catch (e) {}
-var old = readOldLocal(bookKey);
-if (old) {
-var n = doRecover(old, bookKey);
-try { localStorage.setItem(guard, '1'); } catch (e) {}
-if (n && window.showToast) window.showToast('📚 理解度を ' + n + ' 語復元しました', 'ok');
-return;
-}
-if (window.db && window.fbGetDoc && window.fbDoc) {
-window.fbGetDoc(window.fbDoc(window.db, 'shared', 'vocab_' + bookKey)).then(function (snap) {
-var cw = (snap && snap.exists() && snap.data()) ? snap.data().custom_words : null;
-var n = cw ? doRecover(cw, bookKey) : 0;
-try { localStorage.setItem(guard, '1'); } catch (e) {}
-if (n && window.showToast) window.showToast('📚 理解度を ' + n + ' 語復元しました', 'ok');
-}).catch(function () {});
-}
-}
-
-/* 起動時・教材切替時に復元を試行 */
-var __prevLoad = window.loadCurrentTextbookData;
-if (typeof __prevLoad === 'function' && !__prevLoad.__recoveryWrapped) {
-window.loadCurrentTextbookData = function () {
-var r = __prevLoad.apply(this, arguments);
-if (r && r.then) r.then(function () { setTimeout(function () { recover(bookKeyNow()); }, 120); });
-else setTimeout(function () { recover(bookKeyNow()); }, 120);
-return r;
-};
-window.loadCurrentTextbookData.__recoveryWrapped = true;
-}
-var __prevSwitch = window.switchTextbookContext;
-if (typeof __prevSwitch === 'function' && !__prevSwitch.__recoveryWrapped) {
-window.switchTextbookContext = function () {
-var r = __prevSwitch.apply(this, arguments);
-setTimeout(function () { recover(bookKeyNow()); }, 150);
-return r;
-};
-window.switchTextbookContext.__recoveryWrapped = true;
-}
-if (document.readyState !== 'loading') setTimeout(function () { recover(bookKeyNow()); }, 900);
-else document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { recover(bookKeyNow()); }, 900); });
-
-console.log('📚 理解度復元パッチ適用完了');
-})();
-// ==========================================================================
-// 📚 理解度・署名ズレ根治＆復元パッチ（推測排除・保存場所を全走査）
-//    ・理解度は user_vocab_progress(ローカル+Firebase) にのみ存在
-//    ・読込時の sig 一致必須仕様を無視し「単語番号+意味ID/順番」で復元
-//    ・復元後、正しい sig で保存し直し→次回以降ズレない
-//    ・復元件数をトースト+コンソールに報告（0件=データ無し確定）
-//    ※ app.js / fix.js / style.css / index.html は不変更
-// ==========================================================================
-(function applyVocabRestoreRobust() {
-"use strict";
-if (window.__vocabRestoreRobust) return;
-window.__vocabRestoreRobust = true;
-// 廃止: 保存場所を全走査して件数最大のデータを採用する方式は、
-// 古い履歴の方が件数が多いだけで最新データを上書きしてしまう。
-return;
-
-function bookKey() { return (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default'; }
-function uid() { return (typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000'; }
-
-/* ---------- バックアップ全箇所を収集 ---------- */
-function gather(cb) {
-var key = bookKey(), id = uid(), out = [], pend = 0;
-function push(n, w) { out.push({ n: n, w: w }); if (--pend <= 0) cb(out); }
-pend++; try { push('local_progress', JSON.parse(localStorage.getItem('core_v4_user_vocab_progress_' + id + '_' + key) || 'null')); } catch (e) { push('local_progress', null); }
-pend++; try { push('local_custom', JSON.parse(localStorage.getItem('core_v4_custom_words_' + id + '_' + key) || 'null')); } catch (e) { push('local_custom', null); }
-pend++; try { push('local_cache', JSON.parse(localStorage.getItem('core_v4_cache_' + key) || 'null')); } catch (e) { push('local_cache', null); }
-pend++;
-if (window.db && window.fbGetDoc && window.fbDoc) {
-window.fbGetDoc(window.fbDoc(window.db, 'shared', 'vocab_' + key)).then(function (s) {
-push('fb_shared', (s && s.exists() && s.data() && s.data().custom_words) ? s.data().custom_words : null);
-}).catch(function () { push('fb_shared', null); });
-} else push('fb_shared', null);
-pend++;
-if (window.db && window.fbGetDoc && window.fbDoc && id !== 'GUEST-000') {
-window.fbGetDoc(window.fbDoc(window.db, 'users', id, 'vocabProgress', key)).then(function (s) {
-var w = null;
-if (s && s.exists() && s.data()) { var d = s.data(); if (d.wordsJson) { try { w = JSON.parse(d.wordsJson); } catch (e) {} } else if (d.words) w = d.words; }
-push('fb_progress', w);
-}).catch(function () { push('fb_progress', null); });
-} else push('fb_progress', null);
-}
-
-/* ---------- 状態あり件数を数える ---------- */
-function countStat(w) {
-if (!w) return 0; var c = 0;
-if (Array.isArray(w)) { w.forEach(function (x) { if (!x) return; if (x.status && x.status !== 'none') c++; (x.meanings || []).forEach(function (m) { if (m && m.status && m.status !== 'none') c++; }); }); }
-else if (typeof w === 'object') { Object.keys(w).forEach(function (k) { var p = w[k]; if (!p) return; if (p.status && p.status !== 'none') c++; if (p.meanings) Object.keys(p.meanings).forEach(function (mid) { var m = p.meanings[mid]; if (m && m.status && m.status !== 'none') c++; }); }); }
-return c;
-}
-/* ---------- num→{意味ID/順番別status}マップ ---------- */
-function buildMap(src) {
-var map = {}; if (!src) return map;
-if (Array.isArray(src)) {
-src.forEach(function (w) { if (!w) return; var mb = {}, mi = [];
-(w.meanings || []).forEach(function (m) { if (!m) return; mb[String(m.id)] = { s: m.status || 'none', h: m.history || [] }; mi.push({ s: m.status || 'none', h: m.history || [] }); });
-map[String(w.num)] = { s: w.status || 'none', mb: mb, mi: mi }; });
-} else if (typeof src === 'object') {
-Object.keys(src).forEach(function (k) { var p = src[k]; if (!p) return; var mb = {}, mi = [];
-if (p.meanings) Object.keys(p.meanings).forEach(function (mid) { var m = p.meanings[mid]; mb[String(mid)] = { s: m.status || 'none', h: m.history || [] }; mi.push({ s: m.status || 'none', h: m.history || [] }); });
-map[String(k)] = { s: p.status || 'none', mb: mb, mi: mi }; });
-}
-return map;
-}
-
-function restore() {
-try {
-if (typeof vocabList === 'undefined' || !vocabList || !vocabList.length) return;
-gather(function (sources) {
-var best = null, bc = -1;
-sources.forEach(function (s) { var c = countStat(s.w); if (c > bc) { bc = c; best = s; } console.log('[復元] ' + s.n + ': 状態あり ' + c + '件'); });
-if (!best || bc <= 0) { console.warn('[復元] バックアップに理解度が見つかりません（データ消失確定）'); return; }
-var map = buildMap(best.w), changed = 0;
-vocabList.forEach(function (w) {
-if (!w) return; var src = map[String(w.num)]; if (!src) return;
-(w.meanings || []).forEach(function (m, idx) {
-if (!m) return;
-var sm = src.mb[String(m.id)] || src.mi[idx] || null;
-if (sm && sm.s && sm.s !== 'none' && (!m.status || m.status === 'none')) { m.status = sm.s; if (sm.h && sm.h.length) m.history = sm.h; changed++; }
-});
-if (src.s && src.s !== 'none' && (!w.status || w.status === 'none')) w.status = src.s;
-});
-if (changed > 0) {
-try { if (window.saveVocabToStorage) window.saveVocabToStorage(); } catch (e) {}
-try { if (window.saveUserVocabProgress) window.saveUserVocabProgress(); } catch (e) {}
-try { if (window.renderVocabList) window.renderVocabList(); } catch (e) {}
-try { if (window.showToast) window.showToast('📚 理解度を ' + changed + ' 件復元しました', 'ok'); } catch (e) {}
-console.log('[復元] ' + best.n + ' から ' + changed + ' 件復元しました');
-}
-});
-} catch (e) { console.error('[復元] error', e); }
-}
-
-/* 読込完了後と教材切替後に実行 */
-var prev = window.loadCurrentTextbookData;
-if (typeof prev === 'function' && !prev.__restoreWrapped) {
-window.loadCurrentTextbookData = function () {
-var r = prev.apply(this, arguments);
-if (r && r.then) r.then(function () { setTimeout(restore, 100); }); else setTimeout(restore, 200);
-return r;
-};
-prev.__restoreWrapped = true;
-}
-if (document.readyState !== 'loading') setTimeout(restore, 800);
-else document.addEventListener('DOMContentLoaded', function () { setTimeout(restore, 800); });
-console.log('📚 理解度・署名ズレ根治＆復元パッチ 適用完了');
-})();
-// ==========================================================================
 // 🔧 並び替えボタン統一修正パッチ（末尾追記・既存不変更）
 //    ① キャラ/敵/装備すべての並び替えチップを統一data属性で再バインド
 //    ② チップの見た目（石版風・発光・押下フィードバック）を統一
@@ -4933,6 +4466,19 @@ function toast(msg) {
 // クラウド自動保存は行わないが、教材を切り替える前の変更はメモリ上の下書きとして保持する。
 // これが無いと、手動セーブ前に別の教材へ移動した時点で直前の単語帳編集が失われる。
 window.__manualVocabDrafts = window.__manualVocabDrafts || {};
+window.__manualVocabCloudId = function(bookKey){ return encodeURIComponent(String(bookKey||'default')); };
+window.__manualVocabChunkSize = 180000;
+window.__applyManualVocabDraft = function(bookKey,draft){
+  if(!draft||!Array.isArray(draft.master))return false;
+  vocabList=(typeof window.migrateVocabData==='function')?window.migrateVocabData(draft.master):JSON.parse(JSON.stringify(draft.master));
+  if(draft.progress){
+    currentUserVocabProgress=JSON.parse(JSON.stringify(draft.progress));
+    if(typeof window.applyUserProgressToVocabList==='function')window.applyUserProgressToVocabList();
+  }
+  window.__manualVocabDrafts[bookKey]=JSON.parse(JSON.stringify(draft));
+  if(typeof window.renderVocabList==='function')window.renderVocabList();
+  return true;
+};
 window.__captureManualVocabDraft = function() {
   try {
     var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
@@ -4956,13 +4502,36 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
     var result=await __loadBookBeforeManualDraft.apply(this,arguments);
     var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
     var draft=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
+    // ページを開き直した直後はメモリ下書きが無いため、ユーザー専用の
+    // 単語帳ドキュメントを直接取得する。共有教材を復元元にはしない。
+    if(!draft&&window.db&&window.fbGetDoc&&window.fbDoc&&typeof myId!=='undefined'&&myId&&myId!=='GUEST-000'){
+      try{
+        var snap=await window.fbGetDoc(window.fbDoc(window.db,'users',myId,'vocabBooks',window.__manualVocabCloudId(bookKey)));
+        if(snap&&snap.exists()&&snap.data()){
+          var cloud=snap.data();
+          if(cloud.partCount){
+            var draftRaw='';
+            for(var pi=0;pi<cloud.partCount;pi++){
+              var part=await window.fbGetDoc(window.fbDoc(window.db,'users',myId,'vocabBooks',window.__manualVocabCloudId(bookKey),'parts','p'+pi));
+              if(!part||!part.exists())throw new Error('単語帳データの一部が見つかりません');
+              draftRaw+=(part.data()&&part.data().d)||'';
+            }
+            draft=JSON.parse(draftRaw);
+          }else{
+            draft={master:JSON.parse(cloud.masterJson||'[]'),progress:JSON.parse(cloud.progressJson||'{}')};
+          }
+        }
+      }catch(e){console.warn('[save] user vocab book load failed',e);}
+    }
     if(draft&&Array.isArray(draft.master)){
-      vocabList=(typeof window.migrateVocabData==='function')?window.migrateVocabData(draft.master):JSON.parse(JSON.stringify(draft.master));
-      if(draft.progress){
-        currentUserVocabProgress=JSON.parse(JSON.stringify(draft.progress));
-        if(typeof window.applyUserProgressToVocabList==='function')window.applyUserProgressToVocabList();
-      }
-      if(typeof window.renderVocabList==='function')window.renderVocabList();
+      window.__applyManualVocabDraft(bookKey,draft);
+      try{
+        localStorage.setItem('core_v4_cache_'+bookKey,JSON.stringify(draft.master));
+        localStorage.setItem('core_v4_custom_words_'+myId+'_'+bookKey,JSON.stringify(draft.master));
+        if(draft.progress&&typeof window.getVocabProgressStorageKey==='function'){
+          localStorage.setItem(window.getVocabProgressStorageKey(bookKey),JSON.stringify(draft.progress));
+        }
+      }catch(e){}
     }
     return result;
   };
@@ -6549,6 +6118,36 @@ async function saveAll() {
   var chunks=[]; for(var i=0;i<raw.length;i+=CHUNK)chunks.push(raw.slice(i,i+CHUNK)); if(!chunks.length)chunks=[''];
   var meta={savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,partCount:chunks.length,v:3};
   try {
+    // 編集した全教材をユーザー専用ドキュメントへ個別保存する。
+    // ページ再起動後の教材切替はこの確定データを直接読むため、巨大な統合セーブや
+    // 共有教材キャッシュの状態に左右されない。
+    var savedBooks=(data.memory&&data.memory.vocabBooks)||{};
+    var savedBookKeys=Object.keys(savedBooks);
+    for(var bi=0;bi<savedBookKeys.length;bi++){
+      var savedBookKey=savedBookKeys[bi];
+      var bookDraft=savedBooks[savedBookKey]||{};
+      var bookRaw=JSON.stringify({master:bookDraft.master||[],progress:bookDraft.progress||{}});
+      var bookParts=[];
+      for(var bp=0;bp<bookRaw.length;bp+=window.__manualVocabChunkSize)bookParts.push(bookRaw.slice(bp,bp+window.__manualVocabChunkSize));
+      if(!bookParts.length)bookParts=[''];
+      for(var bpi=0;bpi<bookParts.length;bpi++){
+        await window.fbSetDoc(
+          window.fbDoc(window.db,'users',id,'vocabBooks',window.__manualVocabCloudId(savedBookKey),'parts','p'+bpi),
+          {d:bookParts[bpi]},
+          {merge:false}
+        );
+      }
+      await window.fbSetDoc(
+        window.fbDoc(window.db,'users',id,'vocabBooks',window.__manualVocabCloudId(savedBookKey)),
+        {
+          bookKey:savedBookKey,
+          partCount:bookParts.length,
+          updatedAt:save.savedAt
+        },
+        {merge:false}
+      );
+      progress(10+((bi+1)/Math.max(1,savedBookKeys.length))*15,started,'単語帳を保存中');
+    }
     // アプリ本体が起動時に読む正規の理解度ドキュメントも同じ操作内で更新する。
     // フルセーブだけを更新すると、その後の教材ロードが古い理解度で上書きしてしまう。
     if(savedProgress){
