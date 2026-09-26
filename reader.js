@@ -8,6 +8,63 @@
 (function () {
     "use strict";
 
+    // render.js の廃止時に欠落していた履歴描画を reader.js 側で提供する。
+    window.renderHistoryList = function() {
+        var container = document.getElementById('historyListContainer');
+        if (!container) return;
+        container.innerHTML = '';
+        if (!Array.isArray(textHistory) || textHistory.length === 0) {
+            var empty = document.createElement('div');
+            empty.style.cssText = 'color:var(--text-sub);font-size:12px;';
+            empty.textContent = 'ログがありません';
+            container.appendChild(empty);
+            return;
+        }
+        textHistory.forEach(function(entry) {
+            var row = document.createElement('div');
+            row.className = 'list-item-row';
+            var title = document.createElement('div');
+            title.className = 'list-item-title';
+            var titleText = document.createElement('span');
+            titleText.textContent = entry.title || '無題';
+            title.appendChild(titleText);
+            var actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;gap:8px;';
+            var openButton = document.createElement('button');
+            openButton.type = 'button';
+            openButton.className = 'list-action-link';
+            openButton.textContent = '開く';
+            openButton.addEventListener('click', function(event) {
+                if (event) event.stopPropagation();
+                window.analyzeText(entry.text, entry.title || '無題');
+            });
+            var deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.className = 'word-delete-btn';
+            deleteButton.setAttribute('aria-label', '履歴を削除');
+            deleteButton.style.cssText = 'display:flex!important;background:none;border:none;color:var(--text-sub);padding:4px;cursor:pointer;';
+            deleteButton.innerHTML = '<i data-lucide="trash-2" size="14"></i>';
+            deleteButton.addEventListener('click', function(event) {
+                if (event) { event.stopPropagation(); event.preventDefault(); }
+                window.showCustomDeleteHistoryConfirm(entry.id);
+            });
+            actions.appendChild(openButton);
+            actions.appendChild(deleteButton);
+            row.appendChild(title);
+            row.appendChild(actions);
+            container.appendChild(row);
+        });
+        if (typeof window.initLucide === 'function') window.initLucide();
+    };
+
+    window.showCustomDeleteHistoryConfirm = function(id) {
+        textHistory = (Array.isArray(textHistory) ? textHistory : []).filter(function(entry) {
+            return String(entry.id) !== String(id);
+        });
+        localStorage.setItem('textHistory', JSON.stringify(textHistory));
+        window.renderHistoryList();
+    };
+
     window.startAnalysisWithEmbeddedTitle = function() {
         var textareaEl = document.getElementById('englishTextarea');
         if (!textareaEl) return;
