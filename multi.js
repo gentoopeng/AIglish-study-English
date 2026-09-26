@@ -4918,7 +4918,45 @@ function toast(msg) {
 }
 
 /* ---------- 全データ収集 ---------- */
+// クラウド自動保存は行わないが、教材を切り替える前の変更はメモリ上の下書きとして保持する。
+// これが無いと、手動セーブ前に別の教材へ移動した時点で直前の単語帳編集が失われる。
+window.__manualVocabDrafts = window.__manualVocabDrafts || {};
+window.__captureManualVocabDraft = function() {
+  try {
+    var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
+    var master=(typeof window.stripVocabProgressFromWords==='function')
+      ? window.stripVocabProgressFromWords(vocabList)
+      : JSON.parse(JSON.stringify(vocabList||[]));
+    var progress=(typeof window.extractUserProgressFromVocabList==='function')
+      ? window.extractUserProgressFromVocabList()
+      : {};
+    window.__manualVocabDrafts[bookKey]={
+      master:JSON.parse(JSON.stringify(master)),
+      progress:JSON.parse(JSON.stringify(progress))
+    };
+  } catch(e) { console.warn('[save] vocab draft capture failed',e); }
+};
+// 手動セーブ前に教材を行き来しても、共有キャッシュではなく編集中の下書きを表示する。
+if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData==='function'){
+  window.__manualDraftBookLoaderApplied=true;
+  var __loadBookBeforeManualDraft=window.loadCurrentTextbookData;
+  window.loadCurrentTextbookData=async function(){
+    var result=await __loadBookBeforeManualDraft.apply(this,arguments);
+    var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
+    var draft=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
+    if(draft&&Array.isArray(draft.master)){
+      vocabList=(typeof window.migrateVocabData==='function')?window.migrateVocabData(draft.master):JSON.parse(JSON.stringify(draft.master));
+      if(draft.progress){
+        currentUserVocabProgress=JSON.parse(JSON.stringify(draft.progress));
+        if(typeof window.applyUserProgressToVocabList==='function')window.applyUserProgressToVocabList();
+      }
+      if(typeof window.renderVocabList==='function')window.renderVocabList();
+    }
+    return result;
+  };
+}
 function collectAllData() {
+  window.__captureManualVocabDraft();
   var lsData = {};
   try {
     for (var i = 0; i < localStorage.length; i++) {
@@ -4950,6 +4988,7 @@ function collectAllData() {
       ? window.extractUserProgressFromVocabList()
       : ((typeof currentUserVocabProgress !== 'undefined' && currentUserVocabProgress) ? currentUserVocabProgress : {});
   } catch (e) {}
+  try { memData.vocabBooks=JSON.parse(JSON.stringify(window.__manualVocabDrafts||{})); } catch(e) {}
   try { memData.wordMemory = (typeof wordMemory !== 'undefined') ? wordMemory : {}; } catch (e) {}
   try { memData.textHistory = (typeof textHistory !== 'undefined') ? textHistory : []; } catch (e) {}
   try { memData.myBookshelf = (typeof myBookshelf !== 'undefined') ? myBookshelf : []; } catch (e) {}
@@ -6603,6 +6642,24 @@ window.onAppLoaded(function(){
   applySavedMemory(pending.data,pending.id);
   try{
     var bookKey=pending.data.vocabBookKey||((typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default');
+    // セーブ時に編集されていた全教材を復元する。現在開いている1冊だけではなく、
+    // セーブ前に切り替えた教材の追加・削除・理解度も対象にする。
+    if(pending.data.vocabBooks&&typeof pending.data.vocabBooks==='object'){
+      window.__manualVocabDrafts=JSON.parse(JSON.stringify(pending.data.vocabBooks));
+      Object.keys(pending.data.vocabBooks).forEach(function(savedBookKey){
+        var savedBook=pending.data.vocabBooks[savedBookKey]||{};
+        if(Array.isArray(savedBook.master)){
+          if(typeof textbooksCacheMap!=='undefined')textbooksCacheMap[savedBookKey]=savedBook.master;
+          localStorage.setItem('core_v4_cache_'+savedBookKey,JSON.stringify(savedBook.master));
+          localStorage.setItem('core_v4_custom_words_'+pending.id+'_'+savedBookKey,JSON.stringify(savedBook.master));
+        }
+        if(savedBook.progress&&typeof window.getVocabProgressStorageKey==='function'){
+          localStorage.setItem(window.getVocabProgressStorageKey(savedBookKey),JSON.stringify(savedBook.progress));
+          var savedBookMs=Date.parse(pending.savedAt||'')||0;
+          if(savedBookMs)localStorage.setItem(window.getVocabProgressStorageKey(savedBookKey)+'__ts',String(savedBookMs));
+        }
+      });
+    }
     // 単語帳本体もユーザー用キャッシュへ戻す。vocabList だけを戻すと、
     // 次の教材ロードで共有キャッシュに置き換わり、追加・編集した単語が消えていた。
     if(Array.isArray(pending.data.vocabMaster)){
@@ -7733,6 +7790,20 @@ ring.style.top='50%';
 ring.style.transform='translateY(-50%)';
 ring.style.zIndex='80';
 ring.style.overflow='visible';
+}
+function positionHpText(){
+var c=host(); if(!c)return;
+var all=c.querySelectorAll('*');
+for(var i=0;i<all.length;i++){
+var el=all[i];
+if((el.children&&el.children.length>0)||el.closest('#m2AtkRing'))continue;
+var t=(el.textContent||'').trim();
+if(!/^\d[\d,]*(\s*\/\s*\d[\d,]*)?$/.test(t))continue;
+var cs=getComputedStyle(el);
+if(cs.position==='absolute'||cs.position==='fixed'){el.style.right='52px';el.style.left='auto';}
+else{el.style.marginRight='52px';}
+el.style.zIndex='31';
+}
 }
 function positionHpText(){
 var c=host(); if(!c)return;

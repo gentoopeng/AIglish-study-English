@@ -352,6 +352,11 @@ function request(){
 latestThis=this;
 latestArgs=arguments;
 pending=true;
+// クラウドへは送らないが、現在の教材をメモリ上の手動セーブ下書きへ退避する。
+// 教材切替後に flush しても、変更時点の単語帳を失わないために必要。
+if(name==='saveVocabToStorage'&&typeof window.__captureManualVocabDraft==='function'){
+try{ window.__captureManualVocabDraft(); }catch(error){ console.error('単語帳の下書き保持に失敗しました:',error); }
+}
 // 通常操作では保存せず、手動保存・ログアウト時の flush だけで確定する。
 return Promise.resolve();
 }
