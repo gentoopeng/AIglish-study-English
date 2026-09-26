@@ -4499,7 +4499,6 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
   window.__manualDraftBookLoaderApplied=true;
   var __loadBookBeforeManualDraft=window.loadCurrentTextbookData;
   window.loadCurrentTextbookData=async function(){
-    var result=await __loadBookBeforeManualDraft.apply(this,arguments);
     var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
     var draft=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
     // ページを開き直した直後はメモリ下書きが無いため、ユーザー専用の
@@ -4517,22 +4516,31 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
               draftRaw+=(part.data()&&part.data().d)||'';
             }
             draft=JSON.parse(draftRaw);
+            draft.savedAt=cloud.updatedAt||'';
           }else{
-            draft={master:JSON.parse(cloud.masterJson||'[]'),progress:JSON.parse(cloud.progressJson||'{}')};
+            draft={master:JSON.parse(cloud.masterJson||'[]'),progress:JSON.parse(cloud.progressJson||'{}'),savedAt:cloud.updatedAt||''};
           }
         }
       }catch(e){console.warn('[save] user vocab book load failed',e);}
     }
+    // 通常ローダーを呼ぶ前にユーザー専用データをキャッシュへ配置する。
+    // 以前は共有教材を一度描画してから差し替えていたため、起動直後に旧データが
+    // 表示される瞬間や、後続処理が旧データを参照する競合が発生していた。
     if(draft&&Array.isArray(draft.master)){
-      window.__applyManualVocabDraft(bookKey,draft);
       try{
+        if(typeof textbooksCacheMap!=='undefined')textbooksCacheMap[bookKey]=JSON.parse(JSON.stringify(draft.master));
         localStorage.setItem('core_v4_cache_'+bookKey,JSON.stringify(draft.master));
         localStorage.setItem('core_v4_custom_words_'+myId+'_'+bookKey,JSON.stringify(draft.master));
         if(draft.progress&&typeof window.getVocabProgressStorageKey==='function'){
           localStorage.setItem(window.getVocabProgressStorageKey(bookKey),JSON.stringify(draft.progress));
+          var draftMs=Date.parse(draft.savedAt||'')||0;
+          if(draftMs)localStorage.setItem(window.getVocabProgressStorageKey(bookKey)+'__ts',String(draftMs));
         }
       }catch(e){}
     }
+    var result=await __loadBookBeforeManualDraft.apply(this,arguments);
+    // 通常ロード完了後にも同じ確定データを適用し、他のロード処理による上書きを防ぐ。
+    if(draft&&Array.isArray(draft.master))window.__applyManualVocabDraft(bookKey,draft);
     return result;
   };
 }
