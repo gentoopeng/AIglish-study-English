@@ -4943,6 +4943,9 @@ function collectAllData() {
   // 起動中に通常の教材ロードが走って vocabList が置き換わっても、これを最後に適用できる。
   try {
     memData.vocabBookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default';
+    memData.vocabMaster = (typeof window.stripVocabProgressFromWords === 'function')
+      ? window.stripVocabProgressFromWords(vocabList)
+      : JSON.parse(JSON.stringify(vocabList || []));
     memData.vocabProgress = (typeof window.extractUserProgressFromVocabList === 'function')
       ? window.extractUserProgressFromVocabList()
       : ((typeof currentUserVocabProgress !== 'undefined' && currentUserVocabProgress) ? currentUserVocabProgress : {});
@@ -6600,6 +6603,15 @@ window.onAppLoaded(function(){
   applySavedMemory(pending.data,pending.id);
   try{
     var bookKey=pending.data.vocabBookKey||((typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default');
+    // 単語帳本体もユーザー用キャッシュへ戻す。vocabList だけを戻すと、
+    // 次の教材ロードで共有キャッシュに置き換わり、追加・編集した単語が消えていた。
+    if(Array.isArray(pending.data.vocabMaster)){
+      var restoredMaster=pending.data.vocabMaster;
+      if(typeof textbooksCacheMap!=='undefined')textbooksCacheMap[bookKey]=restoredMaster;
+      localStorage.setItem('core_v4_cache_'+bookKey,JSON.stringify(restoredMaster));
+      localStorage.setItem('core_v4_custom_words_'+pending.id+'_'+bookKey,JSON.stringify(restoredMaster));
+      vocabList=(typeof window.migrateVocabData==='function')?window.migrateVocabData(restoredMaster):restoredMaster;
+    }
     // 保存時に確定した理解度を使う。起動途中で読み込まれた古い vocabList から
     // 再抽出すると巻き戻るため、vocabProgress がある場合は再抽出しない。
     if(pending.data.vocabProgress&&typeof pending.data.vocabProgress==='object'){
