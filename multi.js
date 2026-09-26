@@ -7805,6 +7805,20 @@ else{el.style.marginRight='52px';}
 el.style.zIndex='31';
 }
 }
+function positionHpText(){
+var c=host(); if(!c)return;
+var all=c.querySelectorAll('*');
+for(var i=0;i<all.length;i++){
+var el=all[i];
+if((el.children&&el.children.length>0)||el.closest('#m2AtkRing'))continue;
+var t=(el.textContent||'').trim();
+if(!/^\d[\d,]*(\s*\/\s*\d[\d,]*)?$/.test(t))continue;
+var cs=getComputedStyle(el);
+if(cs.position==='absolute'||cs.position==='fixed'){el.style.right='52px';el.style.left='auto';}
+else{el.style.marginRight='52px';}
+el.style.zIndex='31';
+}
+}
 var prevLeft=10;
 function update(){
 var ring=document.getElementById('m2AtkRing');
