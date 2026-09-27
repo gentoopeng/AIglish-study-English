@@ -4501,6 +4501,21 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
   window.loadCurrentTextbookData=async function(){
     var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
     var draft=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
+    // 同じ端末では、手動セーブ時に確定済みのローカル教材を最優先する。
+    // Firebaseを待たずに初回画面を表示できる。
+    if(!draft){
+      try{
+        var localMaster=JSON.parse(localStorage.getItem('core_v4_custom_words_'+myId+'_'+bookKey)||localStorage.getItem('core_v4_cache_'+bookKey)||'null');
+        var localProgressRaw=(typeof window.getVocabProgressStorageKey==='function')?localStorage.getItem(window.getVocabProgressStorageKey(bookKey)):null;
+        if(Array.isArray(localMaster)){
+          draft={
+            master:localMaster,
+            progress:localProgressRaw?JSON.parse(localProgressRaw):{},
+            savedAt:new Date(parseInt((typeof window.getVocabProgressStorageKey==='function'?localStorage.getItem(window.getVocabProgressStorageKey(bookKey)+'__ts'):0)||0)).toISOString()
+          };
+        }
+      }catch(e){}
+    }
     // ページを開き直した直後はメモリ下書きが無いため、ユーザー専用の
     // 単語帳ドキュメントを直接取得する。共有教材を復元元にはしない。
     if(!draft&&window.db&&window.fbGetDoc&&window.fbDoc&&typeof myId!=='undefined'&&myId&&myId!=='GUEST-000'){
@@ -6227,12 +6242,14 @@ async function autoLoadOnce() {
   if(window.__gameSaveLoadedFor===id)return;
   window.__gameSaveLoadedFor=id;
   var cloudSave=null,localSave=null,save=null;
-  try{cloudSave=await fetchCloudSave(id);}catch(e){console.warn('[save] cloud load failed',e);}
   try{localSave=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}
-  if(cloudSave&&localSave){
-    var cloudTime=Date.parse(cloudSave.savedAt||'')||0,localTime=Date.parse(localSave.savedAt||'')||0;
-    save=localTime>cloudTime?localSave:cloudSave;
-  }else save=cloudSave||localSave;
+  // 同じ端末に確定済みセーブがあれば、巨大なクラウド分割データを起動時に
+  // 全件ダウンロードしない。これが長時間の「読み込み中」の原因だった。
+  if(localSave)save=localSave;
+  else{
+    try{cloudSave=await fetchCloudSave(id);}catch(e){console.warn('[save] cloud load failed',e);}
+    save=cloudSave;
+  }
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
     for(var key in stored){try{localStorage.setItem(key,stored[key]);}catch(e){}}
