@@ -202,8 +202,11 @@ const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダ�
      activeWeapon = localStorage.getItem('core_v4_active_weapon') || ""; 
      activeArmor = localStorage.getItem('core_v4_active_armor') || ""; 
      currentTextbook = localStorage.getItem('core_v4_current_textbook_id') || "";
-     // 🌟 起動時に全教材・全単語データをダウンロード＆キャッシュ化
-     await window.preloadAllTextbooksAndVocab();
+     // 全教材のFirebase取得は画面表示を止めずバックグラウンドで行う。
+     // 現在の教材はこの後、端末キャッシュから先に読み込まれる。
+     Promise.resolve(window.preloadAllTextbooksAndVocab()).then(function() {
+         if(typeof window.updateAdminEditBookSelectOptions === 'function') window.updateAdminEditBookSelectOptions();
+     }).catch(function(e) { console.warn('教材のバックグラウンド同期に失敗しました:', e); });
      await window.loadUserStats();
      userStats.goal_text = myTarget; 
      userStats.friends_count = myFriendList.length; 
@@ -7087,13 +7090,21 @@ window.switchReaderSubTab = function(tabName, animDir) {
 // ------------------------------------------------------------------
 // 【7】loadLocalState 上書き（教材同期＋構造初期化）
 // ------------------------------------------------------------------
-window.onAppLoaded(async function() {
+window.onAppLoaded(function() {
   try {
     window.initReaderSubTabStructure();
     window.injectShelfAdminPanel();
-    await window.syncBookshelfIndexFromFirestore();
     window.updateAdminEditShelfSelectOptions();
     window.renderBookshelf();
+    // 本棚のクラウド索引は初期画面を止めず、一度だけバックグラウンド更新する。
+    if (!window.__bookshelfIndexSyncPromise) {
+      window.__bookshelfIndexSyncPromise = Promise.resolve(window.syncBookshelfIndexFromFirestore()).then(function() {
+        window.updateAdminEditShelfSelectOptions();
+        window.renderBookshelf();
+      }).catch(function(e) {
+        console.warn('本棚のバックグラウンド同期に失敗しました:', e);
+      });
+    }
   } catch (e) {
     console.error("本棚タブパッチ初期化エラー:", e);
   }
@@ -7106,10 +7117,8 @@ window.onAppLoaded(async function() {
   function boot() {
     window.initReaderSubTabStructure();
     window.injectShelfAdminPanel();
-    window.syncBookshelfIndexFromFirestore().then(function() {
-      window.updateAdminEditShelfSelectOptions();
-      window.renderBookshelf();
-    }).catch(function() {});
+    window.updateAdminEditShelfSelectOptions();
+    window.renderBookshelf();
   }
   if (document.readyState !== 'loading') {
     setTimeout(boot, 400);
