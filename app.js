@@ -211,8 +211,8 @@ const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダ�
      window.applyProfileToUi();
      if(typeof window.updatePartySlotsUi === 'function') window.updatePartySlotsUi(); 
      window.renderLeaderboard();
-     window.renderHistoryList();
-     window.renderBookshelf(); 
+     if(typeof window.renderHistoryList === 'function') window.renderHistoryList();
+     if(typeof window.renderBookshelf === 'function') window.renderBookshelf();
      window.renderAdminUserList(); 
      window.renderGameLeaderboard('mine');
      window.renderTitles();
@@ -1918,12 +1918,22 @@ window.switchTab('home');
 // ==========================================================================
 // 🚀 完全同期ライフサイクルブートストラップ初期化
 // ==========================================================================
-if (document.readyState === "loading") {
-document.addEventListener("DOMContentLoaded", () => {
-window.loadLocalState(); window.initLucide(); window.initHeroSlider(); window.renderActivityChart();
+// defer スクリプト実行中は readyState が interactive になるが、後続の
+// reader.js 等はまだ未実行である。complete になる前に起動すると
+// renderHistoryList / renderBookshelf が未定義のまま呼ばれるため、
+// DOMContentLoaded（全 defer スクリプト実行後）まで必ず待つ。
+function bootApplicationAfterScripts() {
+Promise.resolve(window.loadLocalState()).catch(function(error) {
+console.error('アプリ初期化に失敗しました:', error);
 });
+window.initLucide();
+window.initHeroSlider();
+if(typeof window.renderActivityChart === 'function') window.renderActivityChart();
+}
+if (document.readyState !== "complete") {
+document.addEventListener("DOMContentLoaded", bootApplicationAfterScripts, { once: true });
 } else {
-window.loadLocalState(); window.initLucide(); window.initHeroSlider(); window.renderActivityChart();
+setTimeout(bootApplicationAfterScripts, 0);
 }
 window.addEventListener("scroll", () => {
 const btn = document.getElementById("scrollToTopBtn");
