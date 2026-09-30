@@ -173,6 +173,16 @@ for (var beforeIndex = 0; beforeIndex < window.__beforeAppLoadHandlers.length; b
     catch (e) { console.error('起動前の準備に失敗しました:', e); }
 }
 const savedId = localStorage.getItem('core_v4_userId');
+// ログイン済みなら通信処理より先に認証画面を閉じる。
+// 起動前フックのFirebase通信が遅くても、画面遷移を妨げない。
+if (savedId) {
+    const gateScreen = document.getElementById('auth-gate-screen');
+    if (gateScreen) gateScreen.style.display = 'none';
+}
+for (var beforeIndex = 0; beforeIndex < window.__beforeAppLoadHandlers.length; beforeIndex++) {
+    try { await window.__beforeAppLoadHandlers[beforeIndex](); }
+    catch (e) { console.error('起動前の準備に失敗しました:', e); }
+}
 geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
 const apiKeyInput = document.getElementById('sidebarApiKeyInput');
 if(apiKeyInput) apiKeyInput.value = geminiApiKey;
@@ -207,10 +217,15 @@ const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダ�
      Promise.resolve(window.preloadAllTextbooksAndVocab()).then(function() {
          if(typeof window.updateAdminEditBookSelectOptions === 'function') window.updateAdminEditBookSelectOptions();
      }).catch(function(e) { console.warn('教材のバックグラウンド同期に失敗しました:', e); });
-     await window.loadUserStats();
+     Promise.resolve(window.loadUserStats()).then(function() {
+         window.applyProfileToUi();
+         window.renderLeaderboard();
+     }).catch(function(e) { console.warn('ユーザー情報のバックグラウンド同期に失敗しました:', e); });
      userStats.goal_text = myTarget; 
      userStats.friends_count = myFriendList.length; 
-     await window.loadCurrentTextbookData();
+     Promise.resolve(window.loadCurrentTextbookData()).catch(function(e) {
+         console.warn('単語帳のバックグラウンド同期に失敗しました:', e);
+     });
      window.applyProfileToUi();
      if(typeof window.updatePartySlotsUi === 'function') window.updatePartySlotsUi(); 
      window.renderLeaderboard();
@@ -230,7 +245,12 @@ const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダ�
 	     if(gateScreen) gateScreen.style.display = 'flex';
 	 }
 for (var afterIndex = 0; afterIndex < window.__afterAppLoadHandlers.length; afterIndex++) {
-    try { await window.__afterAppLoadHandlers[afterIndex](); }
+    try {
+        var afterResult = window.__afterAppLoadHandlers[afterIndex]();
+        if (afterResult && typeof afterResult.catch === 'function') {
+            afterResult.catch(function(e) { console.error('起動後の追加読み込みに失敗しました:', e); });
+        }
+    }
     catch (e) { console.error('起動後の追加読み込みに失敗しました:', e); }
 }
 };
@@ -3539,6 +3559,9 @@ window.showLoginConfirmPopup = function(user) {
     if (!localStorage.getItem("core_v4_totalExp")) localStorage.setItem("core_v4_totalExp", "0");
 
     document.body.removeChild(overlay);
+    const gateScreen = document.getElementById("auth-gate-screen");
+    if (gateScreen) gateScreen.style.display = "none";
+    if (typeof window.forceHidePenguinLoading === "function") window.forceHidePenguinLoading();
     window.loadLocalState();
     Promise.resolve(window.recoverUserToAllUsers(user)).catch(function(e) {
       console.error("ログイン確定時自動復旧エラー:", e);
@@ -4202,6 +4225,13 @@ window.hidePenguinLoading = function() {
     window.__actuallyHidePenguin();
   }
 };
+window.forceHidePenguinLoading = function() {
+  var st = window.__pgLoad;
+  if (!st) return;
+  st.count = 0;
+  if (st.pendingTimer) { clearTimeout(st.pendingTimer); st.pendingTimer = null; }
+  window.__actuallyHidePenguin();
+};
 
 // ------------------------------------------------------------------
 // Phase 3-B：時間がかかる処理をペンギンローディングで包むヘルパー
@@ -4224,9 +4254,7 @@ window.__wrapWithPenguin = function(fnName) {
 
 // ローディングを適用する関数一覧（既存の機能を上書きせず包むだけ）
 [
-  'loadLocalState',               // 起動時の初回読み込み
   'switchTextbookContext',        // 単語帳を切り替えた時
-  'loadCurrentTextbookData',      // 単語帳データ読み込み
   'refreshFriendListFromFirebase',// フレンドリスト更新時
   'handleAuthSubmit',             // ログイン処理
   'startActualGame',              // ゲーム開始時
