@@ -168,6 +168,10 @@ window.__afterAppLoadHandlers = window.__afterAppLoadHandlers || [];
 window.onBeforeAppLoad = function(handler) { if(typeof handler === 'function') window.__beforeAppLoadHandlers.push(handler); };
 window.onAppLoaded = function(handler) { if(typeof handler === 'function') window.__afterAppLoadHandlers.push(handler); };
 window.loadLocalState = async function() {
+for (var beforeIndex = 0; beforeIndex < window.__beforeAppLoadHandlers.length; beforeIndex++) {
+    try { await window.__beforeAppLoadHandlers[beforeIndex](); }
+    catch (e) { console.error('起動前の準備に失敗しました:', e); }
+}
 const savedId = localStorage.getItem('core_v4_userId');
 // ログイン済みなら通信処理より先に認証画面を閉じる。
 // 起動前フックのFirebase通信が遅くても、画面遷移を妨げない。
