@@ -3232,38 +3232,42 @@ console.log("📦 統合機能パッチ（アプリ内完結版）適用完了")
 // ==========================================================================
 
 // ------------------------------------------------------------------
-// 1. getAllUsers: リトライ付きで確実に取得
+// 1. getAllUsers: 端末キャッシュを優先し、通信不良でログインを止めない
 // ------------------------------------------------------------------
 window.getAllUsers = async function() {
-  let users = [];
+  let localUsers = [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem("core_v4_users") || "[]");
+    if (Array.isArray(parsed)) localUsers = parsed;
+  } catch (e) {}
 
-  if (window.db && window.fbGetDoc && window.fbDoc) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const ref = window.fbDoc(window.db, "shared", "all_users");
-        const snap = await window.fbGetDoc(ref);
-        if (snap.exists() && snap.data().users && Array.isArray(snap.data().users)) {
-          users = snap.data().users;
-          break;
-        }
-      } catch (e) {
-        console.error("getAllUsers attempt " + (attempt + 1) + " failed:", e);
-        if (attempt < 2) {
-          await new Promise(function(r) { setTimeout(r, 600); });
-        }
-      }
-    }
+  if (!window.db || !window.fbGetDoc || !window.fbDoc) return localUsers;
+
+  const fetchCloudUsers = async function() {
+    const ref = window.fbDoc(window.db, "shared", "all_users");
+    const snap = await window.fbGetDoc(ref);
+    if (!snap.exists() || !snap.data() || !Array.isArray(snap.data().users)) return [];
+    const cloudUsers = snap.data().users;
+    try { localStorage.setItem("core_v4_users", JSON.stringify(cloudUsers)); } catch (e) {}
+    return cloudUsers;
+  };
+
+  // キャッシュがあれば即座に返し、クラウド更新は裏で行う。
+  if (localUsers.length > 0) {
+    fetchCloudUsers().catch(function(e) { console.warn("ユーザー一覧のバックグラウンド更新に失敗しました:", e); });
+    return localUsers;
   }
 
-  if (users.length === 0) {
-    try {
-      users = JSON.parse(localStorage.getItem("core_v4_users") || "[]");
-    } catch (e) {
-      users = [];
-    }
+  // 初回端末でも通信を最大4秒で打ち切り、ログイン画面を固めない。
+  try {
+    return await Promise.race([
+      fetchCloudUsers(),
+      new Promise(function(resolve) { setTimeout(function() { resolve([]); }, 4000); })
+    ]);
+  } catch (e) {
+    console.warn("ユーザー一覧を取得できませんでした:", e);
+    return [];
   }
-
-  return users;
 };
 
 // ------------------------------------------------------------------
@@ -3346,9 +3350,12 @@ window.findUserInFirebase = async function(userId, pin) {
 
   try {
     const userRef = window.fbDoc(window.db, "users", userId);
-    const snap = await window.fbGetDoc(userRef);
+    const snap = await Promise.race([
+      window.fbGetDoc(userRef),
+      new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 4000); })
+    ]);
 
-    if (snap.exists()) {
+    if (snap && snap.exists()) {
       const data = snap.data();
       if (data.deleted) return null;
       if (data.pin === pin) {
@@ -3524,14 +3531,8 @@ window.showLoginConfirmPopup = function(user) {
     document.body.removeChild(overlay);
   };
 
-  document.getElementById("confirmLoginBtn").onclick = async function() {
-    // ログイン確定時にall_usersへ自動復旧
-    try {
-      await window.recoverUserToAllUsers(user);
-    } catch (e) {
-      console.error("ログイン確定時自動復旧エラー:", e);
-    }
-
+  document.getElementById("confirmLoginBtn").onclick = function() {
+    // ログイン確定は端末へ即時反映する。クラウド復旧を待たせない。
     localStorage.setItem("core_v4_userId", user.id);
     localStorage.setItem("core_v4_userName", user.playerName || "修行者");
     if (!localStorage.getItem("core_v4_userTarget")) localStorage.setItem("core_v4_userTarget", "未設定");
@@ -3539,6 +3540,9 @@ window.showLoginConfirmPopup = function(user) {
 
     document.body.removeChild(overlay);
     window.loadLocalState();
+    Promise.resolve(window.recoverUserToAllUsers(user)).catch(function(e) {
+      console.error("ログイン確定時自動復旧エラー:", e);
+    });
   };
 };
 
