@@ -636,12 +636,54 @@ if(textbooksPool.length === 0) {
      if (book.coverType === "image" && book.cover) {
          coverHtmlStr = `<img src="${book.cover}" style="width:32px; height:36px; object-fit:cover; border-radius:4px;">`;
      }
-     row.innerHTML = `${coverHtmlStr}<span style="font-size:13.5px; font-weight:bold; color:white;">${book.name}</span>`;
+     const stats = window.getTextbookMasteryStats(book.id);
+     row.innerHTML = `${coverHtmlStr}<div style="min-width:0; flex:1;"><div style="font-size:13.5px; font-weight:bold; color:white; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${book.name}</div><div style="display:flex; align-items:center; gap:7px; margin-top:6px;"><div style="height:5px; flex:1; overflow:hidden; border-radius:999px; background:rgba(255,255,255,0.12);"><div style="height:100%; width:${stats.percent}%; border-radius:inherit; background:linear-gradient(90deg,#10B981,#34D399);"></div></div><span style="font-size:9px; color:var(--text-sub); white-space:nowrap;">定着 ${stats.mastered}/${stats.total}（${stats.percent}%）</span></div></div>`;
      container.appendChild(row);
  });
  window.updateAdminEditBookSelectOptions();
  const popup = document.getElementById('textbookSelectPopupFrame');
  if(popup) { popup.style.display = 'flex'; popup.classList.add('show'); }
+};
+
+// 教材選択画面のゲージは、その教材自身の保存済み理解度から計算する。
+// 現在開いている vocabList や全教材共通の統計を流用しない。
+window.getTextbookMasteryStats = function(bookId) {
+  var words = [];
+  if (bookId === currentTextbook && Array.isArray(vocabList) && vocabList.length) {
+    words = vocabList;
+  } else {
+    try {
+      var uid = (typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000';
+      var rawWords = localStorage.getItem('core_v4_user_vocab_book_' + uid + '_' + bookId) ||
+        localStorage.getItem('core_v4_custom_words_' + uid + '_' + bookId) ||
+        localStorage.getItem('core_v4_cache_' + bookId);
+      if (rawWords) words = JSON.parse(rawWords) || [];
+    } catch (e) { words = []; }
+    if (!words.length && textbooksCacheMap && Array.isArray(textbooksCacheMap[bookId])) {
+      words = textbooksCacheMap[bookId];
+    }
+  }
+
+  var progress = {};
+  try {
+    var progressKey = typeof window.getVocabProgressStorageKey === 'function'
+      ? window.getVocabProgressStorageKey(bookId)
+      : 'core_v4_user_vocab_progress_' + ((typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000') + '_' + bookId;
+    progress = JSON.parse(localStorage.getItem(progressKey) || '{}') || {};
+  } catch (e) { progress = {}; }
+
+  var total = words.length;
+  var mastered = words.reduce(function(count, word) {
+    var meanings = Array.isArray(word.meanings) ? word.meanings : [];
+    var saved = progress[String(word.num)] || null;
+    var savedMeanings = saved && saved.meanings ? saved.meanings : {};
+    var fullyMastered = meanings.length > 0 && meanings.every(function(meaning) {
+      var savedMeaning = savedMeanings[meaning.id];
+      return (savedMeaning ? savedMeaning.status : meaning.status) === 'ok';
+    });
+    return count + (fullyMastered ? 1 : 0);
+  }, 0);
+  return { total: total, mastered: mastered, percent: total ? Math.round(mastered / total * 100) : 0 };
 };
 window.switchTextbookContext = async function(bookId) {
 currentTextbook = bookId;

@@ -138,7 +138,8 @@
         if (sts.every(function(s) { return s === 'ok'; })) return 'ok';
         if (sts.some(function(s) { return s === 'bad'; })) return 'bad';
         if (sts.some(function(s) { return s === 'so'; })) return 'so';
-        if (sts.some(function(s) { return s === 'ok'; })) return 'ok';
+        // 一部の意味だけが定着している単語を「定着済み」に含めない。
+        if (sts.some(function(s) { return s === 'ok'; })) return 'so';
         return 'none';
     };
 
