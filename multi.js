@@ -72,7 +72,8 @@ s.textContent = [
 '.m2-me-equip span{font-family:' + F_EMO + ';background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:1px 6px;line-height:1;min-width:20px;text-align:center;}',
 '#m2ArenaRight #multiBossImage{max-width:44vw;max-height:min(34vh,40vw);width:auto;height:auto;object-fit:contain;display:block;}',
 '#m2ArenaRight .m2-sigil{width:120px;height:120px;font-size:56px;}',
-'#m2Ambient{position:fixed;inset:0;z-index:4;pointer-events:none;overflow:hidden;}',
+'#m2Ambient{display:none;position:fixed;inset:0;z-index:4;pointer-events:none;overflow:hidden;}',
+'body.multi-battle-active #m2Ambient{display:block;}',
 '#m2Ambient .m2-fog{position:absolute;inset:-25%;opacity:.5;mix-blend-mode:screen;filter:blur(10px);background:radial-gradient(38% 30% at 22% 28%, rgba(139,0,0,.34), transparent 70%),radial-gradient(34% 26% at 80% 70%, rgba(168,85,247,.22), transparent 72%);animation:m2Fog 24s ease-in-out infinite alternate;}',
 '@keyframes m2Fog{0%{transform:translate3d(-3%,-2%,0) scale(1.06)}100%{transform:translate3d(4%,3%,0) scale(1.16)}}',
 '#m2Ambient .m2-ember{position:absolute;bottom:-12px;border-radius:50%;pointer-events:none;opacity:0;animation:m2Ember linear infinite;}',
@@ -2036,6 +2037,7 @@ startRestoreWatcher();
 var __origCancelPlay = window.cancelMultiBattlePlay;
 window.cancelMultiBattlePlay = function(){
 var r = __origCancelPlay ? __origCancelPlay.apply(this, arguments) : undefined;
+document.body.classList.remove('multi-battle-active');
 startRestoreWatcher();
 return r;
 };
@@ -7728,6 +7730,7 @@ var __origStart=window.startMultiBattlePlay;
 window.startMultiBattlePlay=function(){
  var r=__origStart?__origStart.apply(this,arguments):undefined;
  try{
+  document.body.classList.add('multi-battle-active');
   if(isPvp()){ document.body.classList.add('pvp-mode'); makeOpponents(); buildOppPanel(); }
   else document.body.classList.remove('pvp-mode');
  }catch(e){}

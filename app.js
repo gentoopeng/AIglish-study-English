@@ -8827,6 +8827,22 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
                 vocabMatch.history = agg.slice(-20);
                 vocabMatch.status = window.wordOverallStatus(vocabMatch);
             }
+            // フラッシュカードの回答も単語帳ボタンと同じ正規領域へ即時保存する。
+            // saveVocabToStorage は手動セーブ待ちのため、ここで端末理解度を確定する。
+            try {
+                var flashBookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default';
+                var flashProgress = window.extractUserProgressFromVocabList();
+                var flashProgressKey = window.getVocabProgressStorageKey(flashBookKey);
+                var flashChangedAt = Date.now();
+                currentUserVocabProgress = flashProgress;
+                localStorage.setItem(flashProgressKey, JSON.stringify(flashProgress));
+                localStorage.setItem(flashProgressKey + '__ts', String(flashChangedAt));
+                window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};
+                window.__vocabProgressRevisionByBook[flashBookKey] = (window.__vocabProgressRevisionByBook[flashBookKey] || 0) + 1;
+                if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+            } catch (saveError) {
+                console.error('フラッシュカード理解度の即時保存に失敗しました:', saveError);
+            }
         }
     };
 
@@ -8838,6 +8854,12 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     window.renderFlashcardDeck = function() {
         var r = __prevRenderFlashcardDeckForMeaningPatch.apply(this, arguments);
         try {
+            var answeredCount = Math.min(flashcardCurrentIndex, flashcardOriginQueue.length);
+            var learnedRate = answeredCount > 0 ? Math.round((flashcardLearnedCount / answeredCount) * 100) : 0;
+            var progressText = document.getElementById('flashcardProgressText');
+            if (progressText) {
+                progressText.innerText = '今回の理解度: ◯ ' + flashcardLearnedCount + ' / 回答 ' + answeredCount + '（' + learnedRate + '%）';
+            }
             var wordData = flashcardOriginQueue[flashcardCurrentIndex];
             if (wordData && wordData.totalMeanings && wordData.totalMeanings > 1) {
                 var card = document.getElementById('activeFlashcard');
