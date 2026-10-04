@@ -127,6 +127,40 @@
         });
     };
 
+    // スワイプ確定時だけ表示する軽量な消滅演出。
+    // 指への追尾はせず、8個の粒と1本の輪をCSSだけで短時間描画する。
+    window.showFlashcardVanishBurst = function(x, y, direction) {
+        var burst = document.createElement('div');
+        burst.className = 'fc-vanish-burst fc-vanish-' + direction;
+        burst.style.left = x + 'px';
+        burst.style.top = y + 'px';
+
+        var ring = document.createElement('span');
+        ring.className = 'fc-vanish-ring';
+        burst.appendChild(ring);
+
+        var colors = direction === 'right'
+            ? ['#6EE7B7', '#34D399', '#FFFFFF']
+            : direction === 'left'
+                ? ['#FCA5A5', '#FB7185', '#FFFFFF']
+                : ['#FDE68A', '#F59E0B', '#FFFFFF'];
+        for (var i = 0; i < 8; i++) {
+            var particle = document.createElement('span');
+            particle.className = 'fc-vanish-particle';
+            var angle = (Math.PI * 2 * i / 8) + (i % 2 ? 0.14 : -0.08);
+            var distance = 52 + (i % 3) * 12;
+            particle.style.setProperty('--fc-burst-x', Math.round(Math.cos(angle) * distance) + 'px');
+            particle.style.setProperty('--fc-burst-y', Math.round(Math.sin(angle) * distance) + 'px');
+            particle.style.setProperty('--fc-burst-delay', (i * 12) + 'ms');
+            particle.style.setProperty('--fc-burst-size', (5 + (i % 3) * 2) + 'px');
+            particle.style.background = colors[i % colors.length];
+            particle.style.color = colors[i % colors.length];
+            burst.appendChild(particle);
+        }
+        document.body.appendChild(burst);
+        setTimeout(function() { burst.remove(); }, 650);
+    };
+
     window.renderFlashcardDeck = function() {
         var stage = document.getElementById('flashcardDeckStage');
         if (!stage) return;
@@ -308,6 +342,9 @@
         ripple.style.animationDuration = "0.8s";
         document.body.appendChild(ripple);
         setTimeout(function() { ripple.remove(); }, 800);
+        if (typeof window.showFlashcardVanishBurst === 'function') {
+            window.showFlashcardVanishBurst(releaseX, releaseY, direction);
+        }
         card.remove();
 
         if (direction === 'right') { status = 'ok'; flashcardLearnedCount++; }

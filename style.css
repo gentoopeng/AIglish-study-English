@@ -1316,6 +1316,54 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     will-change: transform;
 }
 
+/* フラッシュ単語を離した地点で一度だけ広がる、軽量な泡・花火演出。 */
+.fc-vanish-burst {
+    position: fixed;
+    width: 0;
+    height: 0;
+    z-index: 5002;
+    pointer-events: none;
+    contain: layout style paint;
+}
+
+.fc-vanish-ring {
+    position: absolute;
+    left: -16px;
+    top: -16px;
+    width: 32px;
+    height: 32px;
+    border: 2px solid rgba(255,255,255,.65);
+    border-radius: 50%;
+    animation: fcVanishRing .48s ease-out forwards;
+}
+
+.fc-vanish-particle {
+    position: absolute;
+    left: calc(var(--fc-burst-size) / -2);
+    top: calc(var(--fc-burst-size) / -2);
+    width: var(--fc-burst-size);
+    height: var(--fc-burst-size);
+    border-radius: 50%;
+    box-shadow: 0 0 7px currentColor;
+    opacity: 0;
+    animation: fcVanishParticle .52s cubic-bezier(.16,.72,.3,1) var(--fc-burst-delay) forwards;
+}
+
+@keyframes fcVanishParticle {
+    0% { transform: translate3d(0,0,0) scale(.35); opacity: 0; }
+    18% { opacity: .95; }
+    100% { transform: translate3d(var(--fc-burst-x),var(--fc-burst-y),0) scale(0); opacity: 0; }
+}
+
+@keyframes fcVanishRing {
+    0% { transform: scale(.25); opacity: .8; }
+    100% { transform: scale(4.4); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fc-vanish-burst { display: none !important; }
+}
+
 @keyframes bubbleFloatAnim {
     0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
     33% { transform: translateY(-8px) scale(1.02) rotate(-1deg); }
