@@ -7749,18 +7749,30 @@ window.saveUserVocabProgress = async function() {
 
 window.loadUserVocabProgress = async function(bookKey) {
     bookKey = bookKey || (typeof currentTextbook !== "undefined" ? currentTextbook : "default");
-    currentUserVocabProgress = {};
     if (typeof myId === "undefined" || !myId) return;
+    window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};
+    var requestRevision = window.__vocabProgressRevisionByBook[bookKey] || 0;
+    var localProgress = {};
     var localTs = 0;
     try {
         var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
-        if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
+        if (raw) localProgress = JSON.parse(raw) || {};
         localTs = parseInt(localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + "__ts") || "0");
     } catch (e) {}
+    if ((currentTextbook || "default") === bookKey) currentUserVocabProgress = localProgress;
     if (myId === "GUEST-000" || !window.db || !window.fbGetDoc || !window.fbDoc) return;
     try {
         var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
         var snap = await window.fbGetDoc(ref);
+        // 通信待ちの間に理解度が変更された可能性があるため、必ず最新の端末値を再取得する。
+        var latestLocalProgress = localProgress;
+        var latestLocalTs = localTs;
+        try {
+            var latestRaw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
+            if (latestRaw) latestLocalProgress = JSON.parse(latestRaw) || {};
+            latestLocalTs = parseInt(localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + "__ts") || "0");
+        } catch (e) {}
+        var changedWhileLoading = (window.__vocabProgressRevisionByBook[bookKey] || 0) !== requestRevision;
         if (snap.exists() && snap.data()) {
             var data = snap.data();
             var cloudProgress = null;
@@ -7768,18 +7780,20 @@ window.loadUserVocabProgress = async function(bookKey) {
             else if (data.words) cloudProgress = data.words;
             var cloudTs = data.updatedAt ? (new Date(data.updatedAt).getTime() || 0) : 0;
             if (cloudProgress && typeof cloudProgress === "object") {
-                if (cloudTs >= localTs) {
+                if (!changedWhileLoading && cloudTs > latestLocalTs) {
                     // クラウドが新しい → 採用
-                    currentUserVocabProgress = cloudProgress;
+                    if ((currentTextbook || "default") === bookKey) currentUserVocabProgress = cloudProgress;
                     try {
                         localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(cloudProgress));
                         localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + "__ts", String(cloudTs));
                     } catch (e) {}
                 } else {
                     // ローカルが新しい → 維持してクラウドへ書き戻し
+                    if ((currentTextbook || "default") === bookKey) currentUserVocabProgress = latestLocalProgress;
                     try {
                         var wref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-                        var wpayload = { wordsJson: JSON.stringify(currentUserVocabProgress), updatedAt: new Date().toISOString() };
+                        var writeBackMs = Math.max(latestLocalTs, Date.now());
+                        var wpayload = { wordsJson: JSON.stringify(latestLocalProgress), updatedAt: new Date(writeBackMs).toISOString() };
                         var wsafe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(wpayload) : wpayload;
                         if (typeof window.fbSetDocWithRetry === "function") window.fbSetDocWithRetry(wref, wsafe);
                         else window.fbSetDoc(wref, wsafe);

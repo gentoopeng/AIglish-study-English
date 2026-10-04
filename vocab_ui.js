@@ -497,6 +497,36 @@
                 if (typeof window.wordOverallStatus === 'function') {
                     vocabList[wIdx].status = window.wordOverallStatus(vocabList[wIdx]);
                 }
+                // 理解度はボタンを押した同じ処理内で端末へ確定する。
+                // 通信・タイマー・手動セーブを待たないため、直後に画面を閉じても失われない。
+                try {
+                    var bookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default';
+                    var progressKey = window.getVocabProgressStorageKey(bookKey);
+                    var progress = {};
+                    try { progress = JSON.parse(localStorage.getItem(progressKey) || '{}') || {}; } catch (readError) { progress = {}; }
+                    var changedWord = vocabList[wIdx];
+                    var wordProgress = {
+                        sig: window.buildWordSignature(changedWord),
+                        status: changedWord.status || 'none',
+                        history: Array.isArray(changedWord.history) ? changedWord.history.slice(-20) : [],
+                        meanings: {}
+                    };
+                    (changedWord.meanings || []).forEach(function(meaning) {
+                        wordProgress.meanings[meaning.id] = {
+                            status: meaning.status || 'none',
+                            history: Array.isArray(meaning.history) ? meaning.history.slice(-20) : []
+                        };
+                    });
+                    progress[String(changedWord.num)] = wordProgress;
+                    currentUserVocabProgress = progress;
+                    var changedAt = Date.now();
+                    localStorage.setItem(progressKey, JSON.stringify(progress));
+                    localStorage.setItem(progressKey + '__ts', String(changedAt));
+                    window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};
+                    window.__vocabProgressRevisionByBook[bookKey] = (window.__vocabProgressRevisionByBook[bookKey] || 0) + 1;
+                } catch (saveError) {
+                    console.error('理解度の即時保存に失敗しました:', saveError);
+                }
                 // 教材切替より前に、変更した教材の状態を同期的に退避する。
                 // 後段の100msタイマーに任せると、その間に教材を切り替えた場合、
                 // 切替先の教材として保存されて元の教材の変更が失われる。
