@@ -1309,6 +1309,13 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     animation: bubbleFloatAnim 4s ease-in-out infinite; 
 }
 
+/* ドラッグ中は待機アニメーションにtransformを奪わせず、指の位置を最優先する。 */
+.flashcard-wrapper-3d.is-dragging {
+    animation: none !important;
+    transition: none !important;
+    will-change: transform;
+}
+
 @keyframes bubbleFloatAnim {
     0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
     33% { transform: translateY(-8px) scale(1.02) rotate(-1deg); }

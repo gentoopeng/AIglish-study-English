@@ -127,33 +127,6 @@
         });
     };
 
-    window.createFlickTrailParticle = function(x, y, type) {
-        var stage = document.getElementById('flashcard-play-screen');
-        if (!stage) return;
-        var p = document.createElement('div');
-        p.className = 'fc-history-bubble';
-        p.style.position = 'absolute';
-        p.style.left = x + "px";
-        p.style.top = y + "px";
-        p.style.width = (Math.random() * 8 + 6) + "px";
-        p.style.height = p.style.width;
-        p.style.pointerEvents = 'none';
-        p.style.zIndex = '400';
-        p.style.opacity = '0.85';
-        p.style.transform = 'translate(-50%, -50%)';
-        p.style.transition = 'all 0.8s cubic-bezier(0.1, 0.8, 0.25, 1)';
-        if (type === 'right') p.classList.add('ok');
-        else if (type === 'left') p.classList.add('bad');
-        else if (type === 'up') p.classList.add('so');
-        else p.style.borderColor = 'rgba(255,255,255,0.6)';
-        stage.appendChild(p);
-        setTimeout(function() {
-            p.style.transform = "translate(" + ((Math.random() - 0.5) * 40) + "px, " + (-60 - Math.random() * 40) + "px) scale(0)";
-            p.style.opacity = '0';
-        }, 10);
-        setTimeout(function() { p.remove(); }, 850);
-    };
-
     window.renderFlashcardDeck = function() {
         var stage = document.getElementById('flashcardDeckStage');
         if (!stage) return;
@@ -197,20 +170,19 @@
             cardTouchStartY = e.clientY;
             isCardFlicking = true;
             cardWrap.setPointerCapture(e.pointerId);
+            cardWrap.classList.add('is-dragging');
             cardWrap.style.transition = 'none';
+            cardWrap.style.animation = 'none';
         });
 
         cardWrap.addEventListener('pointermove', function(e) {
             if (!isCardFlicking || e.pointerId !== activePointerId) return;
             var dx = e.clientX - cardTouchStartX;
             var dy = e.clientY - cardTouchStartY;
-            cardWrap.style.transform = "translate3d(" + dx + "px, " + dy + "px, 0) rotate(" + (dx * 0.05) + "deg)";
+            cardWrap.style.setProperty('transform', "translate3d(" + dx + "px, " + dy + "px, 0) rotate(" + (dx * 0.05) + "deg)", 'important');
             var distance = Math.sqrt(dx * dx + dy * dy);
             var ratio = Math.min(distance / 130, 1);
             var fluidOpacity = Math.pow(ratio, 2.2) * 0.45;
-            if (Math.random() < 0.35) {
-                window.createFlickTrailParticle(e.clientX, e.clientY, 'trail');
-            }
             var rightEdge = document.getElementById('fcEdgeRippleRight');
             var leftEdge = document.getElementById('fcEdgeRippleLeft');
             var topEdge = document.getElementById('fcEdgeRippleTop');
@@ -253,8 +225,10 @@
             else if (dx < -65) { window.swipeFlashcard('left', dx, dy); }
             else if (dy < -65) { window.swipeFlashcard('up', dx, dy); }
             else {
+                cardWrap.classList.remove('is-dragging');
                 cardWrap.style.transition = '';
-                cardWrap.style.transform = "";
+                cardWrap.style.animation = '';
+                cardWrap.style.removeProperty('transform');
                 // スマホはclickの発火を待たず、指を離した瞬間にめくる。
                 cardWrap.classList.toggle('flipped');
                 cardWrap.__ignoreClickUntil = Date.now() + 500;
@@ -271,8 +245,10 @@
             if (e.pointerId !== activePointerId) return;
             activePointerId = null;
             isCardFlicking = false;
+            cardWrap.classList.remove('is-dragging');
             cardWrap.style.transition = '';
-            cardWrap.style.transform = '';
+            cardWrap.style.animation = '';
+            cardWrap.style.removeProperty('transform');
             liveRipple.style.opacity = 0;
         });
 
@@ -318,13 +294,6 @@
             ghost.style.opacity = "0";
         });
         setTimeout(function() { ghost.remove(); }, 850);
-
-        // パーティクル
-        for (var i = 0; i < 15; i++) {
-            setTimeout(function() {
-                window.createFlickTrailParticle(releaseX + (Math.random() - 0.5) * 80, releaseY + (Math.random() - 0.5) * 80, direction);
-            }, i * 15);
-        }
 
         // リップル
         var ripple = document.createElement('div');
