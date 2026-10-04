@@ -1,6 +1,22 @@
 //==========================================================================
 // 🌟 1. 関数のマウント定義・グローバル状態
 // ==========================================================================
+// バージョンは index.html の meta を唯一の基準にする。
+// 過去のパッチやキャッシュが追加した古い表示は削除し、常に1件だけ表示する。
+window.syncDisplayedAppVersion = function() {
+const meta = document.querySelector('meta[name="application-version"]');
+const version = meta ? String(meta.getAttribute('content') || '').trim() : '';
+const canonical = document.getElementById('appVersionDisplay');
+document.querySelectorAll('.sidebar-version').forEach(function(element) {
+if (element !== canonical) element.remove();
+});
+if (canonical) canonical.textContent = version ? 'Version ' + version : '';
+};
+if (document.readyState === 'loading') {
+document.addEventListener('DOMContentLoaded', window.syncDisplayedAppVersion, { once: true });
+} else {
+window.syncDisplayedAppVersion();
+}
 // 管理者権限フラグ
 window.isAdmin = false;
 // 🌟 経験値・レベル・ユーザー統計・プロフィールおよびフレンドリストの包括的保存（Firebase即時同期＆ローカル保存）
