@@ -345,29 +345,29 @@
             }
             if (!vocabMatch.history) vocabMatch.history = [];
             vocabMatch.history.push(status);
-            if (typeof window.saveVocabToStorage === 'function') window.saveVocabToStorage();
         }
         if (typeof userStats !== 'undefined') {
             userStats.flash_count = (userStats.flash_count || 0) + 1;
             userStats.vocab_fixed = (typeof vocabList !== 'undefined') ? vocabList.filter(function(w) { return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; }); }).length : 0;
+        }
+        // 次のカードを最初に表示する。単語帳全体の再描画やランキング更新を
+        // スワイプと同じ処理内で行うと、端末によって操作後に引っ掛かる。
+        flashcardCurrentIndex++;
+        window.renderFlashcardDeck();
+        setTimeout(function() {
             if (typeof window.saveUserStats === 'function') window.saveUserStats();
             if (typeof window.checkAndRewardTitleBonusXP === 'function') window.checkAndRewardTitleBonusXP();
-        }
-        if (typeof window.applyProfileToUi === 'function') window.applyProfileToUi();
-        if (typeof window.updateReaderWordColors === 'function') window.updateReaderWordColors();
-        if (typeof window.renderVocabList === 'function') window.renderVocabList();
-        if (typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
-
-        setTimeout(function() {
-            flashcardCurrentIndex++;
-            window.renderFlashcardDeck();
+            if (typeof window.applyProfileToUi === 'function') window.applyProfileToUi();
+            if (typeof window.updateReaderWordColors === 'function') window.updateReaderWordColors();
+            if (vocabMatch && typeof window.updateVocabCardUi === 'function') window.updateVocabCardUi(vocabMatch.num);
+            if (typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
             var rightEdge3 = document.getElementById('fcEdgeRippleRight');
             var leftEdge3 = document.getElementById('fcEdgeRippleLeft');
             var topEdge3 = document.getElementById('fcEdgeRippleTop');
             if (rightEdge3) rightEdge3.style.opacity = 0;
             if (leftEdge3) leftEdge3.style.opacity = 0;
             if (topEdge3) topEdge3.style.opacity = 0;
-        }, 800);
+        }, 0);
     };
 
     window.quitFlashcardSession = function() {

@@ -226,7 +226,7 @@
         if (sec.style.display === 'block') window.renderBulkDeleteList();
     };
 
-    window.handleBulkWordImport = function() {
+    window.handleBulkWordImport = async function() {
         var input = document.getElementById('bulkWordInput');
         if (!input) return;
         var text = input.value.trim();
@@ -237,7 +237,9 @@
                 if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].word) {
                     if (confirm("バックアップデータで完全に上書きしますか？")) {
                         vocabList = window.migrateVocabData(parsed);
-                        window.saveVocabToStorage();
+                        if (typeof window.saveVocabMasterToStorage === 'function') await window.saveVocabMasterToStorage();
+                        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+                        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
                         window.renderVocabList();
                         window.renderBulkDeleteList();
                         input.value = "";
@@ -266,7 +268,11 @@
         vocabList.sort(function(a, b) { return parseInt(a.num) - parseInt(b.num); });
         userStats.vocab_reg = vocabList.length;
         window.saveUserStats();
-        window.saveVocabToStorage();
+        // 管理者の教材登録は通常の「手動セーブ待ち」に入れず、教材本体を
+        // その場で共有保存先へ確定する。新規教材でも直後から読み直せる。
+        if (typeof window.saveVocabMasterToStorage === 'function') await window.saveVocabMasterToStorage();
+        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         window.renderVocabList();
         window.renderBulkDeleteList();
         input.value = "";

@@ -727,6 +727,7 @@ const selectedBookId = adminSelect.value;
  await window.syncTextbooksIndexFromFirestore();
  let finalCover = adminUploadedBookCoverBase64;
  let finalType = "image";
+ let createdBookId = "";
  if (selectedBookId) {
      const targetIdx = textbooksPool.findIndex(b => b.id === selectedBookId);
      if (targetIdx !== -1) {
@@ -741,15 +742,27 @@ const selectedBookId = adminSelect.value;
          finalCover = "📔";
          finalType = "text";
      }
-     const newBookId = "textbook_" + Date.now();
-     textbooksPool.push({ id: newBookId, name: title, cover: finalCover, coverType: finalType });
-     currentTextbook = newBookId;
-     localStorage.setItem('core_v4_current_textbook_id', newBookId);
+     createdBookId = "textbook_" + Date.now();
+     textbooksPool.push({ id: createdBookId, name: title, cover: finalCover, coverType: finalType });
+     currentTextbook = createdBookId;
+     vocabList = [];
+     currentUserVocabProgress = {};
+     textbooksCacheMap[createdBookId] = [];
+     localStorage.setItem('core_v4_current_textbook_id', createdBookId);
+     localStorage.setItem('core_v4_cache_' + createdBookId, '[]');
+     localStorage.setItem('core_v4_custom_words_' + myId + '_' + createdBookId, '[]');
+     if (typeof window.getVocabProgressStorageKey === 'function') {
+         localStorage.setItem(window.getVocabProgressStorageKey(createdBookId), '{}');
+     }
  }
  if (window.db && window.fbSetDoc && window.fbDoc) {
      try {
          const indexRef = window.fbDoc(window.db, "shared", "textbooks_index");
          await window.fbSetDoc(indexRef, { textbooks: textbooksPool }, { merge: true });
+         if (createdBookId) {
+             const vocabRef = window.fbDoc(window.db, "shared", "vocab_" + createdBookId);
+             await window.fbSetDoc(vocabRef, { custom_words: [], updatedAt: new Date().toISOString() }, { merge: false });
+         }
          alert(`🎉 教材リストデータ『${title}』を配信・適用完了しました！`);
          titleInput.value = "";
          adminSelect.value = "";
@@ -6461,7 +6474,9 @@ window.__finalizeLoadQuiz = function() {
         }
       });
       if (applied > 0) {
-        if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(300);
+        // ロード画面を閉じる前に、回答を端末の正規理解度と手動セーブ用下書きへ確定する。
+        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(300);
       }
     } else {
@@ -6615,17 +6630,8 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
   var progress = {};
   var pkey = (typeof window.getVocabProgressStorageKey === 'function') ? window.getVocabProgressStorageKey(bookId) : ('core_v4_user_vocab_progress_' + myId + '_' + bookId);
   try { progress = JSON.parse(localStorage.getItem(pkey)) || {}; } catch (e) {}
-  if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      var pref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
-      var psnap = await window.fbGetDoc(pref);
-      if (psnap.exists() && psnap.data()) {
-        var pdata = psnap.data();
-        if (pdata.wordsJson) { progress = JSON.parse(pdata.wordsJson); }
-        else if (pdata.words) { progress = pdata.words; }
-      }
-    } catch (e) {}
-  }
+  // クイズ中に端末で更新された理解度を、古いクラウド値で上書きしない。
+  // クラウドへの確定は右上の手動セーブで行う。
   var sig = (typeof window.buildWordSignature === 'function') ? window.buildWordSignature : function(w) { return String(w.num) + '::' + String(w.word || '').toLowerCase(); };
   words.forEach(function(w) {
     var key = String(w.num);
@@ -6667,14 +6673,12 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
     newProgress[key] = wp;
   });
   try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch (e) {}
-  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      var sref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
-      var payload = { wordsJson: JSON.stringify(newProgress), updatedAt: new Date().toISOString() };
-      if (typeof window.fbSetDocWithRetry === 'function') await window.fbSetDocWithRetry(sref, payload);
-      else await window.fbSetDoc(sref, payload);
-    } catch (e) {}
-  }
+  try { localStorage.setItem(pkey + '__ts', String(Date.now())); } catch (e) {}
+  window.__manualVocabDrafts = window.__manualVocabDrafts || {};
+  window.__manualVocabDrafts[bookId] = {
+    master: typeof window.stripVocabProgressFromWords === 'function' ? window.stripVocabProgressFromWords(words) : words,
+    progress: newProgress
+  };
   return applied;
 };
 
