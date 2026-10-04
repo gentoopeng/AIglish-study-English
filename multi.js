@@ -4468,6 +4468,12 @@ function toast(msg) {
 window.__manualVocabDrafts = window.__manualVocabDrafts || {};
 window.__manualVocabCloudId = function(bookKey){ return encodeURIComponent(String(bookKey||'default')); };
 window.__manualVocabChunkSize = 180000;
+window.__gameSaveChecksum = window.__gameSaveChecksum || function(text){
+  var hash=2166136261;
+  text=String(text||'');
+  for(var i=0;i<text.length;i++){hash^=text.charCodeAt(i);hash=Math.imul(hash,16777619);}
+  return (hash>>>0).toString(16);
+};
 window.__applyManualVocabDraft = function(bookKey,draft){
   if(!draft||!Array.isArray(draft.master))return false;
   vocabList=(typeof window.migrateVocabData==='function')?window.migrateVocabData(draft.master):JSON.parse(JSON.stringify(draft.master));
@@ -4526,10 +4532,13 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
           if(cloud.partCount){
             var draftRaw='';
             for(var pi=0;pi<cloud.partCount;pi++){
-              var part=await window.fbGetDoc(window.fbDoc(window.db,'users',myId,'vocabBooks',window.__manualVocabCloudId(bookKey),'parts','p'+pi));
+              var draftPartId=cloud.generation?cloud.generation+'_p'+pi:'p'+pi;
+              var part=await window.fbGetDoc(window.fbDoc(window.db,'users',myId,'vocabBooks',window.__manualVocabCloudId(bookKey),'parts',draftPartId));
               if(!part||!part.exists())throw new Error('単語帳データの一部が見つかりません');
               draftRaw+=(part.data()&&part.data().d)||'';
             }
+            if(cloud.rawLength!=null&&draftRaw.length!==cloud.rawLength)throw new Error('単語帳データの長さが一致しません');
+            if(cloud.checksum&&window.__gameSaveChecksum(draftRaw)!==cloud.checksum)throw new Error('単語帳データの検証に失敗しました');
             draft=JSON.parse(draftRaw);
             draft.savedAt=cloud.updatedAt||'';
           }else{
@@ -6096,7 +6105,12 @@ function loginUid() { var id=uid(); if(id)return id; try{id=localStorage.getItem
 function fbOk() { return !!(window.db && window.fbSetDoc && window.fbGetDoc && window.fbDoc); }
 function localKey(id) { return 'save_studio_' + (id||uid()) + '_' + SLOT; }
 function localMetaKey(id) { return 'game_save_meta_' + (id||uid()); }
+function cloudMetaKey(id) { return 'game_save_cloud_meta_' + (id||uid()); }
 function nowDisplay() { var d=new Date(),p=function(n){return n<10?'0'+n:n;}; return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function saveGeneration(savedAt) { return String(savedAt||Date.now()).replace(/[^0-9A-Za-z]/g,'')+'_'+Math.random().toString(36).slice(2,8); }
+function saveChecksum(text) {
+  return window.__gameSaveChecksum(text);
+}
 function closePanel() { var m=document.getElementById('fbsvModal'); if(m&&m.parentNode)m.parentNode.removeChild(m); }
 function progress(percent, startedAt, text) {
   var box=document.getElementById('fbsvProgress'),fill=document.getElementById('fbsvProgressFill'),label=document.getElementById('fbsvProgressText');
@@ -6119,6 +6133,7 @@ async function saveAll() {
   progress(8,started,'全データを整理中');
   var data=collectAll();
   var save={slot:SLOT,savedAt:new Date().toISOString(),savedAtDisplay:nowDisplay(),data:data};
+  var generation=saveGeneration(save.savedAt);
   // 手動セーブ時点の理解度を、その場で正規のローカル領域にも確定する。
   // 100ms の遅延処理や別の自動保存処理には依存させない。
   try {
@@ -6133,13 +6148,15 @@ async function saveAll() {
   var localSaved=false, cloudSaved=false, localError=null, cloudError=null;
   try { localStorage.setItem(localKey(),raw); localSaved=true; }
   catch(e) { localError=e; console.warn('[save] local save failed',e); }
-  try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay})); } catch(e) {}
+  if(localSaved){
+    try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,source:'local'})); } catch(e) {}
+  }
   if(!fbOk()) {
     if(localSaved){progress(100,started,'端末へ保存完了');return {localSaved:true,cloudSaved:false};}
     throw localError||new Error('保存先に接続できません');
   }
   var chunks=[]; for(var i=0;i<raw.length;i+=CHUNK)chunks.push(raw.slice(i,i+CHUNK)); if(!chunks.length)chunks=[''];
-  var meta={savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,partCount:chunks.length,v:3};
+  var meta={savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,partCount:chunks.length,generation:generation,rawLength:raw.length,checksum:saveChecksum(raw),v:4};
   try {
     // 編集した全教材をユーザー専用ドキュメントへ個別保存する。
     // ページ再起動後の教材切替はこの確定データを直接読むため、巨大な統合セーブや
@@ -6150,12 +6167,13 @@ async function saveAll() {
       var savedBookKey=savedBookKeys[bi];
       var bookDraft=savedBooks[savedBookKey]||{};
       var bookRaw=JSON.stringify({master:bookDraft.master||[],progress:bookDraft.progress||{}});
+      var bookGeneration=saveGeneration(save.savedAt+'_'+savedBookKey);
       var bookParts=[];
       for(var bp=0;bp<bookRaw.length;bp+=window.__manualVocabChunkSize)bookParts.push(bookRaw.slice(bp,bp+window.__manualVocabChunkSize));
       if(!bookParts.length)bookParts=[''];
       for(var bpi=0;bpi<bookParts.length;bpi++){
         await window.fbSetDoc(
-          window.fbDoc(window.db,'users',id,'vocabBooks',window.__manualVocabCloudId(savedBookKey),'parts','p'+bpi),
+          window.fbDoc(window.db,'users',id,'vocabBooks',window.__manualVocabCloudId(savedBookKey),'parts',bookGeneration+'_p'+bpi),
           {d:bookParts[bpi]},
           {merge:false}
         );
@@ -6165,6 +6183,9 @@ async function saveAll() {
         {
           bookKey:savedBookKey,
           partCount:bookParts.length,
+          generation:bookGeneration,
+          rawLength:bookRaw.length,
+          checksum:saveChecksum(bookRaw),
           updatedAt:save.savedAt
         },
         {merge:false}
@@ -6184,15 +6205,21 @@ async function saveAll() {
     // 本文を先に保存し、最後にメタデータを更新する。途中で通信が切れても
     // ローダーが未完成の新規セーブを「保存完了」として選ばない。
     for(var n=0;n<chunks.length;n++){
-      await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts','p'+n),{d:chunks[n]},{merge:false});
+      await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',generation+'_p'+n),{d:chunks[n]},{merge:false});
       progress(15+((n+1)/chunks.length)*80,started,'クラウドへ保存中');
     }
     await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});
+    var verify=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
+    if(!verify||!verify.exists()||!verify.data()||verify.data().generation!==generation)throw new Error('クラウド保存の完了確認に失敗しました');
     cloudSaved=true;
   } catch(e) {
     cloudError=e; console.warn('[save] cloud save failed',e);
   }
-  if(cloudSaved){progress(100,started,'保存完了');return {localSaved:localSaved,cloudSaved:true};}
+  if(cloudSaved){
+    try { localStorage.setItem(cloudMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,generation:generation})); } catch(e) {}
+    if(!localSaved){try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,source:'cloud'})); } catch(e) {}}
+    progress(100,started,'保存完了');return {localSaved:localSaved,cloudSaved:true};
+  }
   if(localSaved){progress(100,started,'端末へ保存完了（クラウド未接続）');return {localSaved:true,cloudSaved:false};}
   throw cloudError||localError||new Error('保存に失敗しました');
 }
@@ -6202,9 +6229,13 @@ async function fetchCloudSave(id) {
   if(!snap||!snap.exists())return null;
   var meta=snap.data()||{}, raw='';
   for(var i=0;i<(meta.partCount||0);i++){
-    var part=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts','p'+i));
-    if(part&&part.exists()&&part.data())raw+=part.data().d||'';
+    var partId=meta.generation?meta.generation+'_p'+i:'p'+i;
+    var part=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',partId));
+    if(!part||!part.exists()||!part.data())throw new Error('セーブデータの一部が見つかりません');
+    raw+=part.data().d||'';
   }
+  if(meta.rawLength!=null&&raw.length!==meta.rawLength)throw new Error('セーブデータの長さが一致しません');
+  if(meta.checksum&&saveChecksum(raw)!==meta.checksum)throw new Error('セーブデータの検証に失敗しました');
   return raw?JSON.parse(raw):null;
 }
 function applySavedMemory(memory,id) {
@@ -6241,14 +6272,23 @@ async function autoLoadOnce() {
   var id=loginUid(); if(!id)return;
   if(window.__gameSaveLoadedFor===id)return;
   window.__gameSaveLoadedFor=id;
-  var cloudSave=null,localSave=null,save=null;
+  var cloudSave=null,localSave=null,save=null,cloudMarker=null;
   try{localSave=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}
-  // 同じ端末に確定済みセーブがあれば、巨大なクラウド分割データを起動時に
-  // 全件ダウンロードしない。これが長時間の「読み込み中」の原因だった。
-  if(localSave)save=localSave;
-  else{
+  try{cloudMarker=JSON.parse(localStorage.getItem(cloudMetaKey(id))||'null');}catch(e){}
+  if(!cloudMarker){
+    try{
+      var fallbackMeta=JSON.parse(localStorage.getItem(localMetaKey(id))||'null');
+      if(fallbackMeta&&fallbackMeta.source==='cloud')cloudMarker=fallbackMeta;
+    }catch(e){}
+  }
+  var localTime=Date.parse(localSave&&localSave.savedAt||'')||0;
+  var markedCloudTime=Date.parse(cloudMarker&&cloudMarker.savedAt||'')||0;
+  // 端末保存に失敗してクラウドだけ成功した場合、古い端末セーブを優先しない。
+  if(!localSave||markedCloudTime>localTime){
     try{cloudSave=await fetchCloudSave(id);}catch(e){console.warn('[save] cloud load failed',e);}
-    save=cloudSave;
+    save=cloudSave||localSave;
+  }else{
+    save=localSave;
   }
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
