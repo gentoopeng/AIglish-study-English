@@ -521,8 +521,7 @@
 
     window.quitFlashcardSession = function() {
         if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
-        if (typeof window.flushAllManualVocabDrafts === 'function') window.flushAllManualVocabDrafts();
-        if (typeof window.flushAllDirtyVocabBooks === 'function') window.flushAllDirtyVocabBooks();
+        if (typeof window.flushChangedVocabData === 'function') window.flushChangedVocabData();
         window.closeFlashcardWordDetails();
         document.body.classList.remove('in-game-active');
         document.getElementById('flashcard-play-screen').style.display = 'none';
@@ -539,8 +538,7 @@
 
     window.finishFlashcardSession = function() {
         if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
-        if (typeof window.flushAllManualVocabDrafts === 'function') window.flushAllManualVocabDrafts();
-        if (typeof window.flushAllDirtyVocabBooks === 'function') window.flushAllDirtyVocabBooks();
+        if (typeof window.flushChangedVocabData === 'function') window.flushChangedVocabData();
         window.closeFlashcardWordDetails();
         document.body.classList.remove('in-game-active');
         var playScreen = document.getElementById('flashcard-play-screen');
@@ -877,6 +875,8 @@
         window.applyProfileToUi();
         window.renderLeaderboard();
         window.renderGameLeaderboard();
+        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+        if (typeof window.flushChangedVocabData === 'function') window.flushChangedVocabData();
     };
 
     // ================================================================

@@ -755,8 +755,12 @@
 
     window.toggleVocabNoteEditor = function(event, wordNum, forceClose) {
         if (event) { event.preventDefault(); event.stopPropagation(); }
-        var editor = document.getElementById('vocabNoteEditor-' + wordNum);
-        var textarea = document.getElementById('vocabNoteInput-' + wordNum);
+        // フラッシュ単語の詳細には単語帳と同じカードが複製されるため、IDだけで
+        // 探すと背面にある単語帳側の入力欄を取得してしまう。押したカードを優先する。
+        var section = event && event.currentTarget && event.currentTarget.closest
+            ? event.currentTarget.closest('.vocab-note-section') : null;
+        var editor = section ? section.querySelector('.vocab-note-editor') : document.getElementById('vocabNoteEditor-' + wordNum);
+        var textarea = section ? section.querySelector('.vocab-note-input') : document.getElementById('vocabNoteInput-' + wordNum);
         var word = vocabList.find(function(item) { return String(item.num) === String(wordNum); });
         if (!editor || !textarea || !word) return;
         var shouldOpen = !forceClose && editor.style.display === 'none';
@@ -770,17 +774,20 @@
     window.saveVocabNote = function(event, wordNum) {
         if (event) { event.preventDefault(); event.stopPropagation(); }
         var word = vocabList.find(function(item) { return String(item.num) === String(wordNum); });
-        var textarea = document.getElementById('vocabNoteInput-' + wordNum);
+        var section = event && event.currentTarget && event.currentTarget.closest
+            ? event.currentTarget.closest('.vocab-note-section') : null;
+        var textarea = section ? section.querySelector('.vocab-note-input') : document.getElementById('vocabNoteInput-' + wordNum);
+        var editor = section ? section.querySelector('.vocab-note-editor') : document.getElementById('vocabNoteEditor-' + wordNum);
         if (!word || !textarea) return;
         word.note = textarea.value.trim().slice(0, 500);
-        var text = document.getElementById('vocabNoteText-' + wordNum);
-        var button = document.getElementById('vocabNoteButton-' + wordNum);
+        var text = section ? section.querySelector('.vocab-note-text') : document.getElementById('vocabNoteText-' + wordNum);
+        var button = section ? section.querySelector('.vocab-note-toggle') : document.getElementById('vocabNoteButton-' + wordNum);
         if (text) {
             text.textContent = word.note;
             text.style.display = word.note ? 'block' : 'none';
         }
         if (button) button.classList.toggle('has-note', !!word.note);
-        window.toggleVocabNoteEditor(null, wordNum, true);
+        if (editor) editor.style.display = 'none';
         if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(word.num);
         if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
     };

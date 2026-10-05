@@ -4628,6 +4628,12 @@ function collectAllData() {
       var k = localStorage.key(i);
       if (!k) continue;
       if (k.indexOf('save_studio_') === 0) continue;
+      // 単語帳本体は memory.vocabBooks に正規化して保存する。同じ内容のキャッシュを
+      // 何重にも含めるとセーブ容量と通信回数が数倍になるため、再生成可能な複製は除外する。
+      if (k.indexOf('core_v4_cache_') === 0 ||
+          k.indexOf('core_v4_custom_words_') === 0 ||
+          k.indexOf('core_v4_user_vocab_book_') === 0 ||
+          k.indexOf('core_v4_vocab_draft_') === 0) continue;
       try { lsData[k] = localStorage.getItem(k); } catch (e) {}
     }
   } catch (e) {}
@@ -4653,7 +4659,16 @@ function collectAllData() {
       ? window.extractUserProgressFromVocabList()
       : ((typeof currentUserVocabProgress !== 'undefined' && currentUserVocabProgress) ? currentUserVocabProgress : {});
   } catch (e) {}
-  try { memData.vocabBooks=JSON.parse(JSON.stringify(window.__manualVocabDrafts||{})); } catch(e) {}
+  try {
+    memData.vocabBooks=JSON.parse(JSON.stringify(window.__manualVocabDrafts||{}));
+    var draftPrefix='core_v4_vocab_draft_'+((typeof myId!=='undefined'&&myId)?myId:'GUEST-000')+'_';
+    for(var di=0;di<localStorage.length;di++){
+      var draftKey=localStorage.key(di);
+      if(!draftKey||draftKey.indexOf(draftPrefix)!==0)continue;
+      var draftBookKey=decodeURIComponent(draftKey.slice(draftPrefix.length));
+      if(!memData.vocabBooks[draftBookKey])memData.vocabBooks[draftBookKey]=JSON.parse(localStorage.getItem(draftKey)||'null');
+    }
+  } catch(e) {}
   try { memData.wordMemory = (typeof wordMemory !== 'undefined') ? wordMemory : {}; } catch (e) {}
   try { memData.textHistory = (typeof textHistory !== 'undefined') ? textHistory : []; } catch (e) {}
   try { memData.myBookshelf = (typeof myBookshelf !== 'undefined') ? myBookshelf : []; } catch (e) {}
@@ -6151,7 +6166,9 @@ if (window.__fbSaveApplied) return;
 window.__fbSaveApplied = true;
 
 var SLOT = 'main';
-var CHUNK = 200000;
+// Firestoreの上限を超えない範囲で1パーツを大きくし、往復回数を抑える。
+var CHUNK = 280000;
+var lastProgressPercent=0,lastRemainingSeconds=null;
 function uid() { return (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000') ? myId : null; }
 function loginUid() { var id=uid(); if(id)return id; try{id=localStorage.getItem('core_v4_userId');}catch(e){} return id&&id!=='GUEST-000'?id:null; }
 function fbOk() { return !!(window.db && window.fbSetDoc && window.fbGetDoc && window.fbDoc); }
@@ -6167,8 +6184,11 @@ function closePanel() { var m=document.getElementById('fbsvModal'); if(m&&m.pare
 function progress(percent, startedAt, text) {
   var box=document.getElementById('fbsvProgress'),fill=document.getElementById('fbsvProgressFill'),label=document.getElementById('fbsvProgressText');
   if(!box||!fill||!label)return;
-  box.style.display='block'; fill.style.width=Math.max(0,Math.min(100,percent))+'%';
-  var elapsed=Math.max(0.1,(Date.now()-startedAt)/1000), remaining=percent>0&&percent<100?Math.max(1,Math.ceil(elapsed*(100-percent)/percent)):0;
+  percent=Math.max(lastProgressPercent,Math.max(0,Math.min(100,percent)));lastProgressPercent=percent;
+  box.style.display='block'; fill.style.width=percent+'%';
+  var elapsed=Math.max(0.1,(Date.now()-startedAt)/1000), estimated=elapsed>=1&&percent>=5&&percent<100?Math.max(1,Math.ceil(elapsed*(100-percent)/percent)):0;
+  if(estimated)lastRemainingSeconds=lastRemainingSeconds==null?estimated:Math.min(lastRemainingSeconds,estimated);
+  var remaining=percent>=100?0:(lastRemainingSeconds||0);
   label.textContent=text+' '+Math.round(percent)+'%'+(remaining?'（残り約'+remaining+'秒）':'');
 }
 function collectAll() {
@@ -6177,11 +6197,12 @@ function collectAll() {
 }
 async function saveAll() {
   var id=uid(); if(!id)throw new Error('先にログインしてください');
+  lastProgressPercent=0;lastRemainingSeconds=null;
   var started=Date.now(); progress(2,started,'データを準備中');
-  if(typeof window.__saveFlush==='function') {
-    try { await window.__saveFlush(); }
-    catch(e) { console.warn('[save] individual data flush failed; continuing full save',e); }
-  }
+  // 手動セーブ自身がメモリと端末の最新値を収集するため、ここで旧個別保存の
+  // ネットワーク完了を待たない。二重送信が長時間化の主因だった。
+  try { if(typeof window.saveVocabProgressLocally==='function')window.saveVocabProgressLocally(null,true); } catch(e) {}
+  try { if(typeof window.__captureManualVocabDraft==='function')window.__captureManualVocabDraft(); } catch(e) {}
   progress(8,started,'全データを整理中');
   var data=collectAll();
   var save={slot:SLOT,savedAt:new Date().toISOString(),savedAtDisplay:nowDisplay(),data:data};
@@ -6214,7 +6235,8 @@ async function saveAll() {
     // ページ再起動後の教材切替はこの確定データを直接読むため、巨大な統合セーブや
     // 共有教材キャッシュの状態に左右されない。
     var savedBooks=(data.memory&&data.memory.vocabBooks)||{};
-    var savedBookKeys=Object.keys(savedBooks);
+    var dirtyBooks=Object.assign({},window.__dirtyManualVocabDrafts||{});
+    var savedBookKeys=Object.keys(savedBooks).filter(function(key){return !!dirtyBooks[key]||key===savedBook;});
     for(var bi=0;bi<savedBookKeys.length;bi++){
       var savedBookKey=savedBookKeys[bi];
       var bookDraft=savedBooks[savedBookKey]||{};
@@ -6242,6 +6264,7 @@ async function saveAll() {
         },
         {merge:false}
       );
+      if(window.__dirtyManualVocabDrafts&&window.__dirtyManualVocabDrafts[savedBookKey]===dirtyBooks[savedBookKey])delete window.__dirtyManualVocabDrafts[savedBookKey];
       progress(10+((bi+1)/Math.max(1,savedBookKeys.length))*15,started,'単語帳を保存中');
     }
     // アプリ本体が起動時に読む正規の理解度ドキュメントも同じ操作内で更新する。

@@ -2504,21 +2504,25 @@ window.flushAllDirtyVocabBooks = function() {
   }));
 };
 
+window.flushChangedVocabData = function() {
+  // 新しい教材下書き保存は単語本体と理解度を一度に保存するため、旧理解度保存を
+  // 同時実行しない。二重通信を避け、変更された教材だけを確定する。
+  if (typeof window.flushAllManualVocabDrafts === "function") return window.flushAllManualVocabDrafts();
+  return window.flushAllDirtyVocabBooks();
+};
+
 window.onTabChange(function(tabId) {
   if (tabId !== "vocab") {
-    window.flushAllDirtyVocabBooks();
-    if (typeof window.flushAllManualVocabDrafts === "function") window.flushAllManualVocabDrafts();
+    window.flushChangedVocabData();
   }
 });
 document.addEventListener("visibilitychange", function() {
   if (document.visibilityState === "hidden") {
-    window.flushAllDirtyVocabBooks();
-    if (typeof window.flushAllManualVocabDrafts === "function") window.flushAllManualVocabDrafts();
+    window.flushChangedVocabData();
   }
 });
 window.addEventListener("pagehide", function() {
-  window.flushAllDirtyVocabBooks();
-  if (typeof window.flushAllManualVocabDrafts === "function") window.flushAllManualVocabDrafts();
+  window.flushChangedVocabData();
 });
 
 window.scheduleVocabProgressSave = function(delay) {
