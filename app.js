@@ -1,6 +1,22 @@
 //==========================================================================
 // 🌟 1. 関数のマウント定義・グローバル状態
 // ==========================================================================
+// バージョンは index.html の meta を唯一の基準にする。
+// 過去のパッチやキャッシュが追加した古い表示は削除し、常に1件だけ表示する。
+window.syncDisplayedAppVersion = function() {
+const meta = document.querySelector('meta[name="application-version"]');
+const version = meta ? String(meta.getAttribute('content') || '').trim() : '';
+const canonical = document.getElementById('appVersionDisplay');
+document.querySelectorAll('.sidebar-version').forEach(function(element) {
+if (element !== canonical) element.remove();
+});
+if (canonical) canonical.textContent = version ? 'Version ' + version : '';
+};
+if (document.readyState === 'loading') {
+document.addEventListener('DOMContentLoaded', window.syncDisplayedAppVersion, { once: true });
+} else {
+window.syncDisplayedAppVersion();
+}
 // 管理者権限フラグ
 window.isAdmin = false;
 // 🌟 経験値・レベル・ユーザー統計・プロフィールおよびフレンドリストの包括的保存（Firebase即時同期＆ローカル保存）
@@ -163,8 +179,22 @@ if (!file.type.startsWith('image/')) {
  reader.readAsDataURL(file);
 };
 // アプリのコアライフサイクル読み込み
+window.__beforeAppLoadHandlers = window.__beforeAppLoadHandlers || [];
+window.__afterAppLoadHandlers = window.__afterAppLoadHandlers || [];
+window.onBeforeAppLoad = function(handler) { if(typeof handler === 'function') window.__beforeAppLoadHandlers.push(handler); };
+window.onAppLoaded = function(handler) { if(typeof handler === 'function') window.__afterAppLoadHandlers.push(handler); };
 window.loadLocalState = async function() {
 const savedId = localStorage.getItem('core_v4_userId');
+// ログイン済みなら通信処理より先に認証画面を閉じる。
+// 起動前フックのFirebase通信が遅くても、画面遷移を妨げない。
+if (savedId) {
+    const gateScreen = document.getElementById('auth-gate-screen');
+    if (gateScreen) gateScreen.style.display = 'none';
+}
+for (var beforeIndex = 0; beforeIndex < window.__beforeAppLoadHandlers.length; beforeIndex++) {
+    try { await window.__beforeAppLoadHandlers[beforeIndex](); }
+    catch (e) { console.error('起動前の準備に失敗しました:', e); }
+}
 geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
 const apiKeyInput = document.getElementById('sidebarApiKeyInput');
 if(apiKeyInput) apiKeyInput.value = geminiApiKey;
@@ -194,17 +224,25 @@ const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダ�
      activeWeapon = localStorage.getItem('core_v4_active_weapon') || ""; 
      activeArmor = localStorage.getItem('core_v4_active_armor') || ""; 
      currentTextbook = localStorage.getItem('core_v4_current_textbook_id') || "";
-     // 🌟 起動時に全教材・全単語データをダウンロード＆キャッシュ化
-     await window.preloadAllTextbooksAndVocab();
-     await window.loadUserStats();
+     // 全教材のFirebase取得は画面表示を止めずバックグラウンドで行う。
+     // 現在の教材はこの後、端末キャッシュから先に読み込まれる。
+     Promise.resolve(window.preloadAllTextbooksAndVocab()).then(function() {
+         if(typeof window.updateAdminEditBookSelectOptions === 'function') window.updateAdminEditBookSelectOptions();
+     }).catch(function(e) { console.warn('教材のバックグラウンド同期に失敗しました:', e); });
+     Promise.resolve(window.loadUserStats()).then(function() {
+         window.applyProfileToUi();
+         window.renderLeaderboard();
+     }).catch(function(e) { console.warn('ユーザー情報のバックグラウンド同期に失敗しました:', e); });
      userStats.goal_text = myTarget; 
      userStats.friends_count = myFriendList.length; 
-     await window.loadCurrentTextbookData();
+     Promise.resolve(window.loadCurrentTextbookData()).catch(function(e) {
+         console.warn('単語帳のバックグラウンド同期に失敗しました:', e);
+     });
      window.applyProfileToUi();
      if(typeof window.updatePartySlotsUi === 'function') window.updatePartySlotsUi(); 
      window.renderLeaderboard();
-     window.renderHistoryList();
-     window.renderBookshelf(); 
+     if(typeof window.renderHistoryList === 'function') window.renderHistoryList();
+     if(typeof window.renderBookshelf === 'function') window.renderBookshelf();
      window.renderAdminUserList(); 
      window.renderGameLeaderboard('mine');
      window.renderTitles();
@@ -215,9 +253,18 @@ const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダ�
      window.relabelUiText();
      window.injectVocabStatsButton();
  } else {
-     const gateScreen = document.getElementById('auth-gate-screen');
-     if(gateScreen) gateScreen.style.display = 'flex';
- }
+	     const gateScreen = document.getElementById('auth-gate-screen');
+	     if(gateScreen) gateScreen.style.display = 'flex';
+	 }
+for (var afterIndex = 0; afterIndex < window.__afterAppLoadHandlers.length; afterIndex++) {
+    try {
+        var afterResult = window.__afterAppLoadHandlers[afterIndex]();
+        if (afterResult && typeof afterResult.catch === 'function') {
+            afterResult.catch(function(e) { console.error('起動後の追加読み込みに失敗しました:', e); });
+        }
+    }
+    catch (e) { console.error('起動後の追加読み込みに失敗しました:', e); }
+}
 };
 // ==========================================================================
 // 🌟 2. グローバル変数（システム全体で使うデータ）
@@ -574,23 +621,115 @@ const container = document.getElementById('textbookListSelectContainer');
 if(!container) return;
 container.innerHTML = "";
 if(textbooksPool.length === 0) {
-     container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding:10px;'>現在、配信中の教材はありません。<br>管理者の配信をお待ちください。</div>";
+     const empty = document.createElement('div');
+     empty.className = 'textbook-list-empty';
+     empty.textContent = '現在、配信中の教材はありません。';
+     container.appendChild(empty);
  }
- textbooksPool.forEach(book => {
-     const row = document.createElement('div');
-     let activeStyle = book.id === currentTextbook ? "border: 1.5px solid var(--cosmic-cyan); background:rgba(0,240,255,0.1);" : "border: 1px solid rgba(255,255,255,0.1);";
-     row.style.cssText = `display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:10px; cursor:pointer; ${activeStyle}`;
+ textbooksPool.forEach((book, index) => {
+     const row = document.createElement('button');
+     row.type = 'button';
+     row.className = 'textbook-list-item' + (book.id === currentTextbook ? ' is-current' : '');
+     row.style.setProperty('--textbook-index', index);
      row.onclick = () => window.switchTextbookContext(book.id);
-     let coverHtmlStr = `<span style="font-size:22px;">${book.cover || "📔"}</span>`;
+
+     const cover = document.createElement('span');
+     cover.className = 'textbook-list-cover';
      if (book.coverType === "image" && book.cover) {
-         coverHtmlStr = `<img src="${book.cover}" style="width:32px; height:36px; object-fit:cover; border-radius:4px;">`;
+         const image = document.createElement('img');
+         image.src = book.cover;
+         image.alt = '';
+         image.loading = 'lazy';
+         cover.appendChild(image);
+     } else {
+         cover.textContent = book.cover || "📔";
      }
-     row.innerHTML = `${coverHtmlStr}<span style="font-size:13.5px; font-weight:bold; color:white;">${book.name}</span>`;
+
+     const details = document.createElement('span');
+     details.className = 'textbook-list-details';
+     const heading = document.createElement('span');
+     heading.className = 'textbook-list-heading';
+     const name = document.createElement('span');
+     name.className = 'textbook-list-name';
+     name.textContent = book.name || '名称未設定の単語帳';
+     heading.appendChild(name);
+     if (book.id === currentTextbook) {
+         const current = document.createElement('span');
+         current.className = 'textbook-list-current';
+         current.textContent = '使用中';
+         heading.appendChild(current);
+     }
+
+     const stats = window.getTextbookMasteryStats(book.id);
+     const progress = document.createElement('span');
+     progress.className = 'textbook-list-progress';
+     const track = document.createElement('span');
+     track.className = 'textbook-list-progress-track';
+     const fill = document.createElement('span');
+     fill.className = 'textbook-list-progress-fill';
+     fill.style.width = Math.max(0, Math.min(100, stats.percent)) + '%';
+     track.appendChild(fill);
+     const progressText = document.createElement('span');
+     progressText.className = 'textbook-list-progress-text';
+     progressText.textContent = stats.mastered + ' / ' + stats.total + ' 語';
+     progress.appendChild(track);
+     progress.appendChild(progressText);
+     details.appendChild(heading);
+     details.appendChild(progress);
+
+     const arrow = document.createElement('span');
+     arrow.className = 'textbook-list-arrow';
+     arrow.setAttribute('aria-hidden', 'true');
+     arrow.textContent = '›';
+     row.appendChild(cover);
+     row.appendChild(details);
+     row.appendChild(arrow);
      container.appendChild(row);
  });
  window.updateAdminEditBookSelectOptions();
  const popup = document.getElementById('textbookSelectPopupFrame');
  if(popup) { popup.style.display = 'flex'; popup.classList.add('show'); }
+};
+
+// 教材選択画面のゲージは、その教材自身の保存済み理解度から計算する。
+// 現在開いている vocabList や全教材共通の統計を流用しない。
+window.getTextbookMasteryStats = function(bookId) {
+  var words = [];
+  if (bookId === currentTextbook && Array.isArray(vocabList) && vocabList.length) {
+    words = vocabList;
+  } else {
+    try {
+      var uid = (typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000';
+      var rawWords = localStorage.getItem('core_v4_user_vocab_book_' + uid + '_' + bookId) ||
+        localStorage.getItem('core_v4_custom_words_' + uid + '_' + bookId) ||
+        localStorage.getItem('core_v4_cache_' + bookId);
+      if (rawWords) words = JSON.parse(rawWords) || [];
+    } catch (e) { words = []; }
+    if (!words.length && textbooksCacheMap && Array.isArray(textbooksCacheMap[bookId])) {
+      words = textbooksCacheMap[bookId];
+    }
+  }
+
+  var progress = {};
+  try {
+    var progressKey = typeof window.getVocabProgressStorageKey === 'function'
+      ? window.getVocabProgressStorageKey(bookId)
+      : 'core_v4_user_vocab_progress_' + ((typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000') + '_' + bookId;
+    progress = JSON.parse(localStorage.getItem(progressKey) || '{}') || {};
+  } catch (e) { progress = {}; }
+
+  var total = words.length;
+  var mastered = words.reduce(function(count, word) {
+    var meanings = Array.isArray(word.meanings) ? word.meanings : [];
+    var saved = progress[String(word.num)] || null;
+    var savedMeanings = saved && saved.meanings ? saved.meanings : {};
+    var fullyMastered = meanings.length > 0 && meanings.every(function(meaning) {
+      var savedMeaning = savedMeanings[meaning.id];
+      return (savedMeaning ? savedMeaning.status : meaning.status) === 'ok';
+    });
+    return count + (fullyMastered ? 1 : 0);
+  }, 0);
+  return { total: total, mastered: mastered, percent: total ? Math.round(mastered / total * 100) : 0 };
 };
 window.switchTextbookContext = async function(bookId) {
 currentTextbook = bookId;
@@ -634,6 +773,7 @@ const selectedBookId = adminSelect.value;
  await window.syncTextbooksIndexFromFirestore();
  let finalCover = adminUploadedBookCoverBase64;
  let finalType = "image";
+ let createdBookId = "";
  if (selectedBookId) {
      const targetIdx = textbooksPool.findIndex(b => b.id === selectedBookId);
      if (targetIdx !== -1) {
@@ -648,15 +788,27 @@ const selectedBookId = adminSelect.value;
          finalCover = "📔";
          finalType = "text";
      }
-     const newBookId = "textbook_" + Date.now();
-     textbooksPool.push({ id: newBookId, name: title, cover: finalCover, coverType: finalType });
-     currentTextbook = newBookId;
-     localStorage.setItem('core_v4_current_textbook_id', newBookId);
+     createdBookId = "textbook_" + Date.now();
+     textbooksPool.push({ id: createdBookId, name: title, cover: finalCover, coverType: finalType });
+     currentTextbook = createdBookId;
+     vocabList = [];
+     currentUserVocabProgress = {};
+     textbooksCacheMap[createdBookId] = [];
+     localStorage.setItem('core_v4_current_textbook_id', createdBookId);
+     localStorage.setItem('core_v4_cache_' + createdBookId, '[]');
+     localStorage.setItem('core_v4_custom_words_' + myId + '_' + createdBookId, '[]');
+     if (typeof window.getVocabProgressStorageKey === 'function') {
+         localStorage.setItem(window.getVocabProgressStorageKey(createdBookId), '{}');
+     }
  }
  if (window.db && window.fbSetDoc && window.fbDoc) {
      try {
          const indexRef = window.fbDoc(window.db, "shared", "textbooks_index");
          await window.fbSetDoc(indexRef, { textbooks: textbooksPool }, { merge: true });
+         if (createdBookId) {
+             const vocabRef = window.fbDoc(window.db, "shared", "vocab_" + createdBookId);
+             await window.fbSetDoc(vocabRef, { custom_words: [], updatedAt: new Date().toISOString() }, { merge: false });
+         }
          alert(`🎉 教材リストデータ『${title}』を配信・適用完了しました！`);
          titleInput.value = "";
          adminSelect.value = "";
@@ -980,6 +1132,10 @@ const overlay = document.getElementById('sidebarOverlay');
 if(menu) menu.classList.toggle('open', open);
 if(overlay) overlay.style.display = open ? 'block' : 'none';
 };
+window.__tabChangeHandlers = window.__tabChangeHandlers || [];
+window.onTabChange = function(handler) {
+if(typeof handler === 'function') window.__tabChangeHandlers.push(handler);
+};
 window.switchTab = function(tabId) {
 document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
 const view = document.getElementById('view-' + tabId);
@@ -997,6 +1153,9 @@ if(tabId === 'admin') {
 if(tabId === 'titles') window.renderTitles(); 
 currentActiveTabId = tabId;
 if(tabId === 'community') window.sortAndRenderFriendList();
+window.__tabChangeHandlers.slice().forEach(function(handler) {
+    try { handler(tabId); } catch (e) { console.error('画面切り替え後の更新に失敗しました:', e); }
+});
 };
 // ==========================================================================
 // 📖 単語帳関連
@@ -1125,90 +1284,6 @@ if(myBookshelf.some(item => item.text === text && item.folder === folder)) { ale
 };
 window.closeWordPopover = function() { document.getElementById('wordPopover').classList.remove('show'); document.getElementById('wordPopover').style.display = 'none'; };
 window.closeReader = function() { document.getElementById('text-input-view').style.display = 'block'; document.getElementById('text-reader-view').style.display = 'none'; currentActiveAiAnalysisCache = null; };
-window.renderActivityChart = function() {
-const chart = document.getElementById('activityBarChart');
-if(!chart) return;
-chart.innerHTML = "";
-const now = new Date();
- let currentDayIdx = now.getDay() - 1; 
- if(currentDayIdx < 0) currentDayIdx = 6; 
- const currentTodayMinutes = todayStudySeconds / 60;
- weeklyStudyMinutesLog[currentDayIdx] = currentTodayMinutes;
- const daysLabels = ["月", "火", "水", "木", "金", "土", "日"];
- daysLabels.forEach((d, idx) => {
-     const wrap = document.createElement('div'); 
-     wrap.className = "bar-wrapper";
-     wrap.style.cssText = "display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; flex: 1; min-width: 0;";
-     let rawMin = weeklyStudyMinutesLog[idx] || 0;
-     let fillHeightPercent = Math.min(100, Math.max(4, Math.round((rawMin / 60) * 100)));
-     const fill = document.createElement('div'); 
-     fill.className = "bar-fill active"; 
-     fill.style.height = `${fillHeightPercent}%`;
-     const valLbl = document.createElement('div'); 
-     valLbl.style.cssText = "font-size: 8px; font-weight: 700; color: #FFFFFF; margin-bottom: 2px; white-space: nowrap;";
-     valLbl.innerText = `${Math.floor(rawMin)}分`;
-     const lbl = document.createElement('div'); 
-     lbl.style.cssText = "font-size: 10px; color: var(--text-sub); margin-top: 4px; font-weight: bold;";
-     lbl.innerText = d;
-     wrap.appendChild(valLbl);
-     wrap.appendChild(fill); 
-     wrap.appendChild(lbl); 
-     chart.appendChild(wrap);
- });
-};
-window.initStudyTimerAndDataRotation = function() {
-const now = new Date();
-const todayStr = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;
-if (lastAccessDateStr && lastAccessDateStr !== todayStr) {
-     let oldDate = new Date(lastAccessDateStr);
-     let oldDayIdx = oldDate.getDay() - 1;
-     if(oldDayIdx < 0) oldDayIdx = 6;
-     weeklyStudyMinutesLog[oldDayIdx] = todayStudySeconds / 60;
-     localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
-     todayStudySeconds = 0;
-     localStorage.setItem('core_v4_study_today_secs', "0");
- }
- lastAccessDateStr = todayStr;
- localStorage.setItem('core_v4_study_last_date', todayStr);
- setInterval(() => {
-     let shouldCount = false;
-     if (currentActiveTabId === "vocab" || currentActiveTabId === "reader") {
-         shouldCount = true;
-     }
-     else if (currentActiveTabId === "game") {
-         const isFcardPlay = (document.getElementById('flashcard-play-screen') && document.getElementById('flashcard-play-screen').style.display === 'flex');
-         const isSoloPlay = (document.getElementById('game-play-screen') && document.getElementById('game-play-screen').style.display === 'block');
-         const isMultiPlay = (document.getElementById('multi-battle-play-screen') && document.getElementById('multi-battle-play-screen').style.display === 'flex');
-         if (isFcardPlay || isSoloPlay || isMultiPlay) {
-             shouldCount = true;
-         }
-     }
-     if (shouldCount) {
-         todayStudySeconds++;
-         localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
-         const currentMin = Math.floor(todayStudySeconds / 60);
-         if (currentMin > userStats.study_burst) {
-             userStats.study_burst = currentMin; 
-             window.saveUserStats();
-             window.checkAndRewardTitleBonusXP();
-         }
-         const minStr = String(currentMin).padStart(2, '0');
-         const secStr = String(todayStudySeconds % 60).padStart(2, '0');
-         const timeDisplayEl = document.getElementById('todayStudyTimeDisplay');
-         if (timeDisplayEl) {
-             timeDisplayEl.innerText = `${minStr}分${secStr}秒`;
-         }
-         window.renderActivityChart();
-     }
- }, 1000);
- const minStr = String(Math.floor(todayStudySeconds / 60)).padStart(2, '0');
- const secStr = String(todayStudySeconds % 60).padStart(2, '0');
- const timeDisplayEl = document.getElementById('todayStudyTimeDisplay');
- if (timeDisplayEl) {
-     timeDisplayEl.innerText = `${minStr}分${secStr}秒`;
- }
- window.renderActivityChart();
-};
 // 🌟 修正：実在ユーザー厳格判定＆本物プロフィール・アイコン取得フレンド追加処理
 window.searchAndAddFriend = async function() {
 const inputEl = document.getElementById('friendSearchInput');
@@ -1551,7 +1626,6 @@ const txt = input.value.trim() || "ダッシュボード"; localStorage.setItem(
 const headerTitleEl = document.getElementById('headerTitleText'); if(headerTitleEl) headerTitleEl.innerText = txt;
 alert("ダッシュボードのタイトルを更新しました！");
 };
-window.logoutToGate = function() { localStorage.clear(); location.reload(); };
 // ==========================================================================
 // 🎮 フラッシュカード（単語フラッシュ）制御モジュール
 // ==========================================================================
@@ -1984,12 +2058,22 @@ window.switchTab('home');
 // ==========================================================================
 // 🚀 完全同期ライフサイクルブートストラップ初期化
 // ==========================================================================
-if (document.readyState === "loading") {
-document.addEventListener("DOMContentLoaded", () => {
-window.loadLocalState(); window.initLucide(); window.initHeroSlider(); window.renderActivityChart();
+// defer スクリプト実行中は readyState が interactive になるが、後続の
+// reader.js 等はまだ未実行である。complete になる前に起動すると
+// renderHistoryList / renderBookshelf が未定義のまま呼ばれるため、
+// DOMContentLoaded（全 defer スクリプト実行後）まで必ず待つ。
+function bootApplicationAfterScripts() {
+Promise.resolve(window.loadLocalState()).catch(function(error) {
+console.error('アプリ初期化に失敗しました:', error);
 });
+window.initLucide();
+window.initHeroSlider();
+if(typeof window.renderActivityChart === 'function') window.renderActivityChart();
+}
+if (document.readyState !== "complete") {
+document.addEventListener("DOMContentLoaded", bootApplicationAfterScripts, { once: true });
 } else {
-window.loadLocalState(); window.initLucide(); window.initHeroSlider(); window.renderActivityChart();
+setTimeout(bootApplicationAfterScripts, 0);
 }
 window.addEventListener("scroll", () => {
 const btn = document.getElementById("scrollToTopBtn");
@@ -2148,6 +2232,7 @@ window.extractUserProgressFromVocabList = function() {
       sig: window.buildWordSignature(w),
       status: w.status || "none",
       history: Array.isArray(w.history) ? w.history.slice(-20) : [],
+      note: String(w.note || ""),
       meanings: {}
     };
     (w.meanings || []).forEach(function(m) {
@@ -2167,6 +2252,7 @@ window.applyUserProgressToVocabList = function() {
     w = window.migrateVocabData([w])[0];
     var key = String(w.num);
     var p = progress[key];
+    w.note = p && typeof p.note === "string" ? p.note : "";
     w.status = "none";
     w.history = [];
     w.meanings = (w.meanings || []).map(function(m) {
@@ -2271,6 +2357,95 @@ window.__vocabSaveTimer = null;
 window.__userStatsTimer = null;
 window.__vocabRenderTimer = null;
 
+// 理解度は通信を待たず、先に端末へ保存する。
+window.saveVocabProgressLocally = function(wordNum, skipDirtyMark) {
+  if (typeof myId === "undefined" || !myId || typeof window.extractUserProgressFromVocabList !== "function") return;
+  var bookKey = currentTextbook || "default";
+  var progress = window.extractUserProgressFromVocabList();
+  var now = Date.now();
+  currentUserVocabProgress = progress;
+  try {
+    localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(progress));
+    localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + "__ts", String(now));
+  } catch (e) {
+    console.error("理解度の端末保存に失敗しました:", e);
+  }
+  if (!skipDirtyMark && typeof window.markVocabProgressDirty === "function") window.markVocabProgressDirty(bookKey, wordNum);
+};
+
+// 変更のあった教材・単語だけを記録し、単語帳を閉じる時にクラウドへ確定する。
+window.__dirtyVocabProgress = window.__dirtyVocabProgress || {};
+window.markVocabProgressDirty = function(bookKey, wordNum) {
+  bookKey = bookKey || currentTextbook || "default";
+  var entry = window.__dirtyVocabProgress[bookKey] || { revision: 0, words: {} };
+  entry.revision++;
+  entry.words[wordNum === undefined || wordNum === null ? "*" : String(wordNum)] = true;
+  window.__dirtyVocabProgress[bookKey] = entry;
+};
+
+window.flushDirtyVocabBook = async function(bookKey) {
+  var entry = window.__dirtyVocabProgress[bookKey];
+  if (!entry) return false;
+  if (typeof myId === "undefined" || !myId || myId === "GUEST-000" || !window.db || !window.fbDoc || !window.fbGetDoc || !window.fbSetDoc) return false;
+  var revision = entry.revision;
+  var changedKeys = Object.keys(entry.words);
+  var progressKey = window.getVocabProgressStorageKey(bookKey);
+  var localProgress = {};
+  try { localProgress = JSON.parse(localStorage.getItem(progressKey) || "{}") || {}; } catch (e) {}
+  try {
+    var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+    var snap = await window.fbGetDoc(ref);
+    var cloudProgress = {};
+    if (snap.exists() && snap.data()) {
+      var data = snap.data();
+      try { cloudProgress = data.wordsJson ? JSON.parse(data.wordsJson) : (data.words || {}); } catch (e) { cloudProgress = {}; }
+    }
+    var merged = Object.assign({}, cloudProgress);
+    if (entry.words["*"]) {
+      Object.keys(localProgress).forEach(function(key) { merged[key] = localProgress[key]; });
+    } else {
+      changedKeys.forEach(function(key) { if (localProgress[key]) merged[key] = localProgress[key]; });
+    }
+    var savedAt = Date.now();
+    await window.fbSetDoc(ref, { wordsJson: JSON.stringify(merged), updatedAt: new Date(savedAt).toISOString(), updatedAtMs: savedAt }, { merge: true });
+    var latestLocal = {};
+    var latestLocalTs = 0;
+    try { latestLocal = JSON.parse(localStorage.getItem(progressKey) || "{}") || {}; } catch (e) {}
+    try { latestLocalTs = parseInt(localStorage.getItem(progressKey + "__ts") || "0") || 0; } catch (e) {}
+    var safeLocal = Object.assign({}, merged, latestLocal);
+    localStorage.setItem(progressKey, JSON.stringify(safeLocal));
+    localStorage.setItem(progressKey + "__ts", String(Math.max(savedAt, latestLocalTs)));
+    if (window.__dirtyVocabProgress[bookKey] && window.__dirtyVocabProgress[bookKey].revision === revision) delete window.__dirtyVocabProgress[bookKey];
+    return true;
+  } catch (error) {
+    console.error("単語帳の変更保存に失敗しました:", error);
+    return false;
+  }
+};
+
+window.flushAllDirtyVocabBooks = function() {
+  return Promise.all(Object.keys(window.__dirtyVocabProgress).map(function(bookKey) {
+    return window.flushDirtyVocabBook(bookKey);
+  }));
+};
+
+window.onTabChange(function(tabId) {
+  if (tabId !== "vocab") {
+    window.flushAllDirtyVocabBooks();
+    if (typeof window.flushAllManualVocabDrafts === "function") window.flushAllManualVocabDrafts();
+  }
+});
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "hidden") {
+    window.flushAllDirtyVocabBooks();
+    if (typeof window.flushAllManualVocabDrafts === "function") window.flushAllManualVocabDrafts();
+  }
+});
+window.addEventListener("pagehide", function() {
+  window.flushAllDirtyVocabBooks();
+  if (typeof window.flushAllManualVocabDrafts === "function") window.flushAllManualVocabDrafts();
+});
+
 window.scheduleVocabProgressSave = function(delay) {
   delay = delay || 500;
   if (window.__vocabSaveTimer) clearTimeout(window.__vocabSaveTimer);
@@ -2333,7 +2508,7 @@ window.vocabCardMatchesFilter = function(w) {
     if (!(w.meanings || []).some(function(m) { return m.status === vocabFilter; })) return false;
   }
   if (searchKeyword) {
-    if (!String(w.word || "").toLowerCase().includes(searchKeyword) && !String(w.meaning || "").includes(searchKeyword)) return false;
+    if (!String(w.word || "").toLowerCase().includes(searchKeyword) && !String(w.meaning || "").includes(searchKeyword) && !String(w.note || "").toLowerCase().includes(searchKeyword)) return false;
   }
   return true;
 };
@@ -3160,26 +3335,6 @@ window.recordLastLoginOnce = async function() {
   try { userStats.lastLoginAt = new Date().toISOString(); await window.saveUserStats(); } catch (e) {}
 };
 
-window.logoutToGate = function() {
-  try {
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-      if (key === "core_v4_userId" || key === "core_v4_userName" || key === "core_v4_userTarget" || key === "core_v4_userTitle" ||
-          key === "core_v4_totalExp" || key === "core_v4_friend_list" || key === "core_v4_rewarded_titles_cache" ||
-          key === "core_v4_active_char" || key === "core_v4_active_weapon" || key === "core_v4_active_armor" ||
-          key === "core_v4_current_textbook_id" || key.indexOf("core_v4_user_stats_") === 0 ||
-          key.indexOf("core_v4_user_avatar_") === 0 || key.indexOf("core_v4_user_vocab_progress_") === 0 ||
-          key.indexOf("core_v4_study_") === 0) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(function(key) { localStorage.removeItem(key); });
-  } catch (e) { localStorage.clear(); }
-  location.reload();
-};
-
 // ------------------------------------------------------------------
 // 15. 管理者: ユーザーID復旧ボックス
 // ------------------------------------------------------------------
@@ -3221,9 +3376,7 @@ window.repairUserIntoAllUsers = async function() {
 // ------------------------------------------------------------------
 // 16. switchTab上書き（全機能のUI注入）
 // ------------------------------------------------------------------
-const __prevSwitchTabForAllPatch = window.switchTab;
-window.switchTab = function(tabId) {
-  const res = __prevSwitchTabForAllPatch ? __prevSwitchTabForAllPatch.apply(this, arguments) : undefined;
+window.onTabChange(function(tabId) {
   if (tabId === "community") {
     window.injectFriendRefreshButton();
     window.refreshFriendListFromFirebase(false);
@@ -3237,15 +3390,12 @@ window.switchTab = function(tabId) {
   if (tabId === "game") {
     window.renderGameLeaderboard();
   }
-  return res;
-};
+});
 
 // ------------------------------------------------------------------
 // 17. loadLocalState上書き（全初期化）
 // ------------------------------------------------------------------
-const __prevLoadLocalStateForAllPatch = window.loadLocalState;
-window.loadLocalState = async function() {
-  const result = __prevLoadLocalStateForAllPatch ? await __prevLoadLocalStateForAllPatch.apply(this, arguments) : undefined;
+window.onAppLoaded(async function() {
   if (myId && myId !== "GUEST-000") {
     window.ensureSeasonUserStats();
     await window.checkAndSettleSeasonTitles();
@@ -3253,8 +3403,7 @@ window.loadLocalState = async function() {
     if (typeof window.renderGameLeaderboard === "function") window.renderGameLeaderboard();
     if (typeof window.renderLeaderboard === "function") window.renderLeaderboard(false);
   }
-  return result;
-};
+});
 
 // ------------------------------------------------------------------
 // 18. 起動時注入
@@ -3273,23 +3422,7 @@ window.loadLocalState = async function() {
   }
 })();
 
-// ------------------------------------------------------------------
-// 19. ページ離脱時のフラッシュ保存
-// ------------------------------------------------------------------
-window.addEventListener("pagehide", function() {
-  if (window.__vocabSaveTimer || window.__userStatsTimer || window.__flashcardSessionActive) {
-    window.flushVocabProgressSave();
-    window.flushUserStatsRefresh();
-  }
-});
-document.addEventListener("visibilitychange", function() {
-  if (document.visibilityState === "hidden") {
-    if (window.__vocabSaveTimer || window.__userStatsTimer || window.__flashcardSessionActive) {
-      window.flushVocabProgressSave();
-      window.flushUserStatsRefresh();
-    }
-  }
-});
+// 保存は右上のセーブボタンから行う。ページ離脱時の自動保存は行わない。
 
 // ------------------------------------------------------------------
 // 20. シーズンランキング定期チェック（60秒間隔）
@@ -3312,38 +3445,42 @@ console.log("📦 統合機能パッチ（アプリ内完結版）適用完了")
 // ==========================================================================
 
 // ------------------------------------------------------------------
-// 1. getAllUsers: リトライ付きで確実に取得
+// 1. getAllUsers: 端末キャッシュを優先し、通信不良でログインを止めない
 // ------------------------------------------------------------------
 window.getAllUsers = async function() {
-  let users = [];
+  let localUsers = [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem("core_v4_users") || "[]");
+    if (Array.isArray(parsed)) localUsers = parsed;
+  } catch (e) {}
 
-  if (window.db && window.fbGetDoc && window.fbDoc) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const ref = window.fbDoc(window.db, "shared", "all_users");
-        const snap = await window.fbGetDoc(ref);
-        if (snap.exists() && snap.data().users && Array.isArray(snap.data().users)) {
-          users = snap.data().users;
-          break;
-        }
-      } catch (e) {
-        console.error("getAllUsers attempt " + (attempt + 1) + " failed:", e);
-        if (attempt < 2) {
-          await new Promise(function(r) { setTimeout(r, 600); });
-        }
-      }
-    }
+  if (!window.db || !window.fbGetDoc || !window.fbDoc) return localUsers;
+
+  const fetchCloudUsers = async function() {
+    const ref = window.fbDoc(window.db, "shared", "all_users");
+    const snap = await window.fbGetDoc(ref);
+    if (!snap.exists() || !snap.data() || !Array.isArray(snap.data().users)) return [];
+    const cloudUsers = snap.data().users;
+    try { localStorage.setItem("core_v4_users", JSON.stringify(cloudUsers)); } catch (e) {}
+    return cloudUsers;
+  };
+
+  // キャッシュがあれば即座に返し、クラウド更新は裏で行う。
+  if (localUsers.length > 0) {
+    fetchCloudUsers().catch(function(e) { console.warn("ユーザー一覧のバックグラウンド更新に失敗しました:", e); });
+    return localUsers;
   }
 
-  if (users.length === 0) {
-    try {
-      users = JSON.parse(localStorage.getItem("core_v4_users") || "[]");
-    } catch (e) {
-      users = [];
-    }
+  // 初回端末でも通信を最大4秒で打ち切り、ログイン画面を固めない。
+  try {
+    return await Promise.race([
+      fetchCloudUsers(),
+      new Promise(function(resolve) { setTimeout(function() { resolve([]); }, 4000); })
+    ]);
+  } catch (e) {
+    console.warn("ユーザー一覧を取得できませんでした:", e);
+    return [];
   }
-
-  return users;
 };
 
 // ------------------------------------------------------------------
@@ -3426,9 +3563,12 @@ window.findUserInFirebase = async function(userId, pin) {
 
   try {
     const userRef = window.fbDoc(window.db, "users", userId);
-    const snap = await window.fbGetDoc(userRef);
+    const snap = await Promise.race([
+      window.fbGetDoc(userRef),
+      new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 4000); })
+    ]);
 
-    if (snap.exists()) {
+    if (snap && snap.exists()) {
       const data = snap.data();
       if (data.deleted) return null;
       if (data.pin === pin) {
@@ -3604,21 +3744,21 @@ window.showLoginConfirmPopup = function(user) {
     document.body.removeChild(overlay);
   };
 
-  document.getElementById("confirmLoginBtn").onclick = async function() {
-    // ログイン確定時にall_usersへ自動復旧
-    try {
-      await window.recoverUserToAllUsers(user);
-    } catch (e) {
-      console.error("ログイン確定時自動復旧エラー:", e);
-    }
-
+  document.getElementById("confirmLoginBtn").onclick = function() {
+    // ログイン確定は端末へ即時反映する。クラウド復旧を待たせない。
     localStorage.setItem("core_v4_userId", user.id);
     localStorage.setItem("core_v4_userName", user.playerName || "修行者");
     if (!localStorage.getItem("core_v4_userTarget")) localStorage.setItem("core_v4_userTarget", "未設定");
     if (!localStorage.getItem("core_v4_totalExp")) localStorage.setItem("core_v4_totalExp", "0");
 
     document.body.removeChild(overlay);
+    const gateScreen = document.getElementById("auth-gate-screen");
+    if (gateScreen) gateScreen.style.display = "none";
+    if (typeof window.forceHidePenguinLoading === "function") window.forceHidePenguinLoading();
     window.loadLocalState();
+    Promise.resolve(window.recoverUserToAllUsers(user)).catch(function(e) {
+      console.error("ログイン確定時自動復旧エラー:", e);
+    });
   };
 };
 
@@ -3660,16 +3800,9 @@ window.autoRecoverCurrentUser = async function() {
 // ------------------------------------------------------------------
 // 8. loadLocalState に自動復旧を組み込み
 // ------------------------------------------------------------------
-const __prevLoadLocalStateForLoginRecovery = window.loadLocalState;
-window.loadLocalState = async function() {
-  const result = __prevLoadLocalStateForLoginRecovery
-    ? await __prevLoadLocalStateForLoginRecovery.apply(this, arguments)
-    : undefined;
-
+window.onAppLoaded(async function() {
   await window.autoRecoverCurrentUser();
-
-  return result;
-};
+});
 
 // ------------------------------------------------------------------
 // 9. 管理者用: 指定ユーザーをall_usersに強制復旧
@@ -4285,6 +4418,13 @@ window.hidePenguinLoading = function() {
     window.__actuallyHidePenguin();
   }
 };
+window.forceHidePenguinLoading = function() {
+  var st = window.__pgLoad;
+  if (!st) return;
+  st.count = 0;
+  if (st.pendingTimer) { clearTimeout(st.pendingTimer); st.pendingTimer = null; }
+  window.__actuallyHidePenguin();
+};
 
 // ------------------------------------------------------------------
 // Phase 3-B：時間がかかる処理をペンギンローディングで包むヘルパー
@@ -4307,9 +4447,7 @@ window.__wrapWithPenguin = function(fnName) {
 
 // ローディングを適用する関数一覧（既存の機能を上書きせず包むだけ）
 [
-  'loadLocalState',               // 起動時の初回読み込み
   'switchTextbookContext',        // 単語帳を切り替えた時
-  'loadCurrentTextbookData',      // 単語帳データ読み込み
   'refreshFriendListFromFirebase',// フレンドリスト更新時
   'handleAuthSubmit',             // ログイン処理
   'startActualGame',              // ゲーム開始時
@@ -4730,6 +4868,7 @@ window.startFlashcardSession = async function() {
 // 終了時に必ず復元（finish / quit 両方をカバー）
 var __prevFinishFlashcardSessionForBookFix = window.finishFlashcardSession;
 window.finishFlashcardSession = function() {
+  if (typeof window.flushAllDirtyVocabBooks === 'function') window.flushAllDirtyVocabBooks();
   if (window.__fcSessionActive || window.__fcSaved) {
     window.__restoreFlashcardSession();
   }
@@ -4795,9 +4934,7 @@ window.renderLeaderboard = async function(force) {
 // E. switchTab 上書き：コミュニティ切替後の transform/opacity 残留を解消
 //    ＋ 保存ボタンの表示状態を同期
 // ------------------------------------------------------------------
-var __prevSwitchTabForRankReset = window.switchTab;
-window.switchTab = function(tabId) {
-  var res = __prevSwitchTabForRankReset ? __prevSwitchTabForRankReset.apply(this, arguments) : undefined;
+window.onTabChange(function(tabId) {
   if (tabId === 'community') {
     var ra = document.getElementById('leaderboardSection') || (document.getElementById('leaderboardContainer') ? document.getElementById('leaderboardContainer').parentElement : null);
     var fa = document.getElementById('friendSection') || (document.getElementById('friendListContainer') ? document.getElementById('friendListContainer').parentElement : null);
@@ -4806,18 +4943,14 @@ window.switchTab = function(tabId) {
     });
   }
   window.injectHeaderSaveButton();
-  return res;
-};
+});
 
 // ------------------------------------------------------------------
 // F. loadLocalState 上書き：起動／ログイン後に保存ボタンを注入
 // ------------------------------------------------------------------
-var __prevLoadLocalStateForSaveBtn = window.loadLocalState;
-window.loadLocalState = async function() {
-  var r = __prevLoadLocalStateForSaveBtn ? await __prevLoadLocalStateForSaveBtn.apply(this, arguments) : undefined;
+window.onAppLoaded(function() {
   window.injectHeaderSaveButton();
-  return r;
-};
+});
 
 // ------------------------------------------------------------------
 // G. 起動時注入
@@ -5118,23 +5251,45 @@ window.saveUserVocabProgress = async function() {
 // ------------------------------------------------------------------
 window.__studyTimerIntervalId = null;
 // ログアウトしても勉強時間データは消さない
-window.logoutToGate = function() {
+window.logoutToGate = async function() {
+  if (window.__logoutInProgress) return;
+  window.__logoutInProgress = true;
   try {
+    if (typeof window.__saveFlush === 'function') {
+      await Promise.race([
+        window.__saveFlush(),
+        new Promise(function(resolve) { setTimeout(resolve, 3000); })
+      ]);
+    }
+  } catch (e) {
+    console.error('ログアウト前の保存に失敗しました:', e);
+  }
+  try {
+    var exactKeys = [
+      'core_v4_userId', 'core_v4_userName', 'core_v4_userTarget', 'core_v4_userTitle',
+      'core_v4_totalExp', 'core_v4_friend_list', 'core_v4_rewarded_titles_cache',
+      'core_v4_active_char', 'core_v4_active_weapon', 'core_v4_active_armor',
+      'core_v4_current_textbook_id'
+    ];
+    exactKeys.forEach(function(key) {
+      try { localStorage.removeItem(key); } catch (e) { console.error('ログアウト情報を削除できませんでした:', key, e); }
+    });
     var keysToRemove = [];
     for (var i = 0; i < localStorage.length; i++) {
       var key = localStorage.key(i);
       if (!key) continue;
       if (key.indexOf('core_v4_study_') === 0) continue;
-      if (key === 'core_v4_userId' || key === 'core_v4_userName' || key === 'core_v4_userTarget' || key === 'core_v4_userTitle' ||
-          key === 'core_v4_totalExp' || key === 'core_v4_friend_list' || key === 'core_v4_rewarded_titles_cache' ||
-          key === 'core_v4_active_char' || key === 'core_v4_active_weapon' || key === 'core_v4_active_armor' ||
-          key === 'core_v4_current_textbook_id' || key.indexOf('core_v4_user_stats_') === 0 ||
-          key.indexOf('core_v4_user_avatar_') === 0 || key.indexOf('core_v4_user_vocab_progress_') === 0) {
+      if (key.indexOf('core_v4_user_stats_') === 0 || key.indexOf('core_v4_user_avatar_') === 0 ||
+          key.indexOf('core_v4_user_vocab_progress_') === 0) {
         keysToRemove.push(key);
       }
     }
-    keysToRemove.forEach(function(key) { localStorage.removeItem(key); });
-  } catch (e) { localStorage.clear(); }
+    keysToRemove.forEach(function(key) {
+      try { localStorage.removeItem(key); } catch (e) { console.error('ユーザー別情報を削除できませんでした:', key, e); }
+    });
+  } catch (e) {
+    console.error('ログアウト情報の削除に失敗しました:', e);
+  }
   location.reload();
 };
 
@@ -5556,25 +5711,6 @@ window.updateLoadQuizBookSelect = function() {
   };
 };
 
-// ------------------------------------------------------------------
-// 【9】loadLocalState 上書き（設定セクションの注入）
-// ------------------------------------------------------------------
-var __prevLoadLocalStateForQuizSettings = window.loadLocalState;
-window.loadLocalState = async function() {
-  var r = __prevLoadLocalStateForQuizSettings ? await __prevLoadLocalStateForQuizSettings.apply(this, arguments) : undefined;
-  window.injectLoadQuizSettings();
-  return r;
-};
-
-// ------------------------------------------------------------------
-// 【10】起動時注入
-// ------------------------------------------------------------------
-(function initLoadQuizSettingsPatch() {
-  function boot() { window.injectLoadQuizSettings(); }
-  if (document.readyState !== 'loading') { setTimeout(boot, 400); }
-  else { document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 400); }); }
-})();
-
 console.log('🎴 第5回パッチ（ロードクイズ番号削除＋出題元単語帳選択）適用完了');
 // ==========================================================================
 // 🎴 第6回パッチ：ロード画面クイズ 完全修正版（自己完結）
@@ -5966,19 +6102,6 @@ window.updateLoadQuizBookSelect = function() {
     if (typeof window.showToast === 'function') window.showToast('🎴 ロードクイズの出題元を設定しました', 'ok');
   };
 };
-
-var __prevLoadLocalStateForQuiz6 = window.loadLocalState;
-window.loadLocalState = async function() {
-  var r = __prevLoadLocalStateForQuiz6 ? await __prevLoadLocalStateForQuiz6.apply(this, arguments) : undefined;
-  window.injectLoadQuizSettings();
-  return r;
-};
-
-(function initPatch6() {
-  function boot() { window.injectLoadQuizSettings(); }
-  if (document.readyState !== 'loading') { setTimeout(boot, 400); }
-  else { document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 400); }); }
-})();
 
 console.log('🎴 第6回パッチ（ロードクイズ完全修正：増殖根絶＋スコアバー削除＋番号削除＋出題元選択）適用完了');
 // ==========================================================================
@@ -6474,7 +6597,12 @@ window.__finalizeLoadQuiz = function() {
         }
       });
       if (applied > 0) {
-        if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(300);
+        // ロード画面を閉じる前に、回答を端末の正規理解度と手動セーブ用下書きへ確定する。
+        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(null, true);
+        if (typeof window.markVocabProgressDirty === 'function') {
+          answers.forEach(function(answer) { window.markVocabProgressDirty(bookId, answer.num); });
+        }
+        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(300);
       }
     } else {
@@ -6537,18 +6665,9 @@ window.updateLoadQuizBookSelect = function() {
   };
 };
 
-var __prevLoadLocalStateForQuiz8 = window.loadLocalState;
-window.loadLocalState = async function() {
-  var r = __prevLoadLocalStateForQuiz8 ? await __prevLoadLocalStateForQuiz8.apply(this, arguments) : undefined;
+window.onAppLoaded(function() {
   window.injectLoadQuizSettings();
-  return r;
-};
-
-(function initPatch8() {
-  function boot() { window.injectLoadQuizSettings(); }
-  if (document.readyState !== 'loading') { setTimeout(boot, 400); }
-  else { document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 400); }); }
-})();
+});
 
 console.log('🎴 第8回パッチ（ロードクイズ完全版：増殖根絶＋スコアバー削除＋番号削除＋出題元選択＋記録B）適用完了');
 // ==========================================================================
@@ -6637,21 +6756,13 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
   var progress = {};
   var pkey = (typeof window.getVocabProgressStorageKey === 'function') ? window.getVocabProgressStorageKey(bookId) : ('core_v4_user_vocab_progress_' + myId + '_' + bookId);
   try { progress = JSON.parse(localStorage.getItem(pkey)) || {}; } catch (e) {}
-  if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      var pref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
-      var psnap = await window.fbGetDoc(pref);
-      if (psnap.exists() && psnap.data()) {
-        var pdata = psnap.data();
-        if (pdata.wordsJson) { progress = JSON.parse(pdata.wordsJson); }
-        else if (pdata.words) { progress = pdata.words; }
-      }
-    } catch (e) {}
-  }
+  // クイズ中に端末で更新された理解度を、古いクラウド値で上書きしない。
+  // クラウドへの確定は右上の手動セーブで行う。
   var sig = (typeof window.buildWordSignature === 'function') ? window.buildWordSignature : function(w) { return String(w.num) + '::' + String(w.word || '').toLowerCase(); };
   words.forEach(function(w) {
     var key = String(w.num);
     var p = progress[key];
+    w.note = p && typeof p.note === 'string' ? p.note : '';
     w.status = 'none';
     w.history = [];
     w.meanings = (w.meanings || []).map(function(m) { return { id: m.id, text: m.text, status: 'none', history: [] }; });
@@ -6684,19 +6795,20 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
   var newProgress = {};
   words.forEach(function(w) {
     var key = String(w.num);
-    var wp = { sig: sig(w), status: w.status || 'none', history: Array.isArray(w.history) ? w.history.slice(-20) : [], meanings: {} };
+    var wp = { sig: sig(w), status: w.status || 'none', history: Array.isArray(w.history) ? w.history.slice(-20) : [], note: String(w.note || ''), meanings: {} };
     (w.meanings || []).forEach(function(m) { wp.meanings[m.id] = { status: m.status || 'none', history: Array.isArray(m.history) ? m.history.slice(-20) : [] }; });
     newProgress[key] = wp;
   });
   try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch (e) {}
-  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      var sref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
-      var payload = { wordsJson: JSON.stringify(newProgress), updatedAt: new Date().toISOString() };
-      if (typeof window.fbSetDocWithRetry === 'function') await window.fbSetDocWithRetry(sref, payload);
-      else await window.fbSetDoc(sref, payload);
-    } catch (e) {}
+  try { localStorage.setItem(pkey + '__ts', String(Date.now())); } catch (e) {}
+  if (typeof window.markVocabProgressDirty === 'function') {
+    answers.forEach(function(answer) { window.markVocabProgressDirty(bookId, answer.num); });
   }
+  window.__manualVocabDrafts = window.__manualVocabDrafts || {};
+  window.__manualVocabDrafts[bookId] = {
+    master: typeof window.stripVocabProgressFromWords === 'function' ? window.stripVocabProgressFromWords(words) : words,
+    progress: newProgress
+  };
   return applied;
 };
 
@@ -7202,20 +7314,25 @@ window.switchReaderSubTab = function(tabName, animDir) {
 // ------------------------------------------------------------------
 // 【7】loadLocalState 上書き（教材同期＋構造初期化）
 // ------------------------------------------------------------------
-var __prevLoadLocalStateForShelfTabPatch = window.loadLocalState;
-window.loadLocalState = async function() {
-  var r = __prevLoadLocalStateForShelfTabPatch ? await __prevLoadLocalStateForShelfTabPatch.apply(this, arguments) : undefined;
+window.onAppLoaded(function() {
   try {
     window.initReaderSubTabStructure();
     window.injectShelfAdminPanel();
-    await window.syncBookshelfIndexFromFirestore();
     window.updateAdminEditShelfSelectOptions();
     window.renderBookshelf();
+    // 本棚のクラウド索引は初期画面を止めず、一度だけバックグラウンド更新する。
+    if (!window.__bookshelfIndexSyncPromise) {
+      window.__bookshelfIndexSyncPromise = Promise.resolve(window.syncBookshelfIndexFromFirestore()).then(function() {
+        window.updateAdminEditShelfSelectOptions();
+        window.renderBookshelf();
+      }).catch(function(e) {
+        console.warn('本棚のバックグラウンド同期に失敗しました:', e);
+      });
+    }
   } catch (e) {
     console.error("本棚タブパッチ初期化エラー:", e);
   }
-  return r;
-};
+});
 
 // ------------------------------------------------------------------
 // 【8】起動時注入
@@ -7224,10 +7341,8 @@ window.loadLocalState = async function() {
   function boot() {
     window.initReaderSubTabStructure();
     window.injectShelfAdminPanel();
-    window.syncBookshelfIndexFromFirestore().then(function() {
-      window.updateAdminEditShelfSelectOptions();
-      window.renderBookshelf();
-    }).catch(function() {});
+    window.updateAdminEditShelfSelectOptions();
+    window.renderBookshelf();
   }
   if (document.readyState !== 'loading') {
     setTimeout(boot, 400);
@@ -7753,26 +7868,7 @@ window.__loadUserSettings = async function() {
 // 【C】変更の自動検知（20秒ごと＋画面を閉じる時）→ クラウドへ保存
 // ------------------------------------------------------------------
 window.__startSettingsSyncLoop = function() {
-    if (window.__settingsSyncLoopStarted) return;
     window.__settingsSyncLoopStarted = true;
-    setInterval(function() {
-        if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
-        if (window.__lastSavedSettingsJson === null) return;
-        try {
-            var cur = JSON.stringify(window.__collectLocalSettings());
-            if (cur !== window.__lastSavedSettingsJson) window.__saveUserSettings();
-        } catch (e) {}
-    }, 20000);
-    var flush = function() {
-        if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
-        if (window.__lastSavedSettingsJson === null) return;
-        try {
-            var cur = JSON.stringify(window.__collectLocalSettings());
-            if (cur !== window.__lastSavedSettingsJson) window.__saveUserSettings();
-        } catch (e) {}
-    };
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'hidden') flush(); });
 };
 
 // ------------------------------------------------------------------
@@ -7829,18 +7925,30 @@ window.saveUserVocabProgress = async function() {
 
 window.loadUserVocabProgress = async function(bookKey) {
     bookKey = bookKey || (typeof currentTextbook !== "undefined" ? currentTextbook : "default");
-    currentUserVocabProgress = {};
     if (typeof myId === "undefined" || !myId) return;
+    window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};
+    var requestRevision = window.__vocabProgressRevisionByBook[bookKey] || 0;
+    var localProgress = {};
     var localTs = 0;
     try {
         var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
-        if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
+        if (raw) localProgress = JSON.parse(raw) || {};
         localTs = parseInt(localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + "__ts") || "0");
     } catch (e) {}
+    if ((currentTextbook || "default") === bookKey) currentUserVocabProgress = localProgress;
     if (myId === "GUEST-000" || !window.db || !window.fbGetDoc || !window.fbDoc) return;
     try {
         var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
         var snap = await window.fbGetDoc(ref);
+        // 通信待ちの間に理解度が変更された可能性があるため、必ず最新の端末値を再取得する。
+        var latestLocalProgress = localProgress;
+        var latestLocalTs = localTs;
+        try {
+            var latestRaw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
+            if (latestRaw) latestLocalProgress = JSON.parse(latestRaw) || {};
+            latestLocalTs = parseInt(localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + "__ts") || "0");
+        } catch (e) {}
+        var changedWhileLoading = (window.__vocabProgressRevisionByBook[bookKey] || 0) !== requestRevision;
         if (snap.exists() && snap.data()) {
             var data = snap.data();
             var cloudProgress = null;
@@ -7848,18 +7956,20 @@ window.loadUserVocabProgress = async function(bookKey) {
             else if (data.words) cloudProgress = data.words;
             var cloudTs = data.updatedAt ? (new Date(data.updatedAt).getTime() || 0) : 0;
             if (cloudProgress && typeof cloudProgress === "object") {
-                if (cloudTs >= localTs) {
+                if (!changedWhileLoading && cloudTs > latestLocalTs) {
                     // クラウドが新しい → 採用
-                    currentUserVocabProgress = cloudProgress;
+                    if ((currentTextbook || "default") === bookKey) currentUserVocabProgress = cloudProgress;
                     try {
                         localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(cloudProgress));
                         localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + "__ts", String(cloudTs));
                     } catch (e) {}
                 } else {
                     // ローカルが新しい → 維持してクラウドへ書き戻し
+                    if ((currentTextbook || "default") === bookKey) currentUserVocabProgress = latestLocalProgress;
                     try {
                         var wref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-                        var wpayload = { wordsJson: JSON.stringify(currentUserVocabProgress), updatedAt: new Date().toISOString() };
+                        var writeBackMs = Math.max(latestLocalTs, Date.now());
+                        var wpayload = { wordsJson: JSON.stringify(latestLocalProgress), updatedAt: new Date(writeBackMs).toISOString() };
                         var wsafe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(wpayload) : wpayload;
                         if (typeof window.fbSetDocWithRetry === "function") window.fbSetDocWithRetry(wref, wsafe);
                         else window.fbSetDoc(wref, wsafe);
@@ -7970,9 +8080,7 @@ window.__startTotalStudyDisplayLoop = function() {
 // ------------------------------------------------------------------
 // 【H】loadLocalState につなげて全体を起動
 // ------------------------------------------------------------------
-var __prevLoadLocalStateForSync3 = window.loadLocalState;
-window.loadLocalState = async function() {
-    var r = __prevLoadLocalStateForSync3 ? await __prevLoadLocalStateForSync3.apply(this, arguments) : undefined;
+window.onAppLoaded(async function() {
     try {
         await window.__loadGlobalSettings();
         await window.__loadUserSettings();
@@ -7982,8 +8090,7 @@ window.loadLocalState = async function() {
     } catch (e) {
         console.error("sync3 loadLocalState error:", e);
     }
-    return r;
-};
+});
 
 // ------------------------------------------------------------------
 // 【I】起動時注入（loadLocalState の保険）
@@ -8662,12 +8769,9 @@ window.injectUsageGuideButton = function() {
 // ------------------------------------------------------------------
 // 【5】loadLocalState に接続 ＋ 起動時注入
 // ------------------------------------------------------------------
-var __prevLoadLocalStateForUsageGuide = window.loadLocalState;
-window.loadLocalState = async function() {
-    var r = __prevLoadLocalStateForUsageGuide ? await __prevLoadLocalStateForUsageGuide.apply(this, arguments) : undefined;
+window.onAppLoaded(function() {
     window.injectUsageGuideButton();
-    return r;
-};
+});
 
 (function initUsageGuidePatch() {
     function boot() { window.injectUsageGuideButton(); }
@@ -8899,6 +9003,23 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
                 vocabMatch.history = agg.slice(-20);
                 vocabMatch.status = window.wordOverallStatus(vocabMatch);
             }
+            // フラッシュカードの回答も単語帳ボタンと同じ正規領域へ即時保存する。
+            // saveVocabToStorage は手動セーブ待ちのため、ここで端末理解度を確定する。
+            try {
+                var flashBookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default';
+                var flashProgress = window.extractUserProgressFromVocabList();
+                var flashProgressKey = window.getVocabProgressStorageKey(flashBookKey);
+                var flashChangedAt = Date.now();
+                currentUserVocabProgress = flashProgress;
+                localStorage.setItem(flashProgressKey, JSON.stringify(flashProgress));
+                localStorage.setItem(flashProgressKey + '__ts', String(flashChangedAt));
+                window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};
+                window.__vocabProgressRevisionByBook[flashBookKey] = (window.__vocabProgressRevisionByBook[flashBookKey] || 0) + 1;
+                if (typeof window.markVocabProgressDirty === 'function') window.markVocabProgressDirty(flashBookKey, vocabMatch ? vocabMatch.num : null);
+                if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+            } catch (saveError) {
+                console.error('フラッシュカード理解度の即時保存に失敗しました:', saveError);
+            }
         }
     };
 
@@ -8910,6 +9031,12 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     window.renderFlashcardDeck = function() {
         var r = __prevRenderFlashcardDeckForMeaningPatch.apply(this, arguments);
         try {
+            var answeredCount = Math.min(flashcardCurrentIndex, flashcardOriginQueue.length);
+            var learnedRate = answeredCount > 0 ? Math.round((flashcardLearnedCount / answeredCount) * 100) : 0;
+            var progressText = document.getElementById('flashcardProgressText');
+            if (progressText) {
+                progressText.innerText = '今回の理解度: ◯ ' + flashcardLearnedCount + ' / 回答 ' + answeredCount + '（' + learnedRate + '%）';
+            }
             var wordData = flashcardOriginQueue[flashcardCurrentIndex];
             if (wordData && wordData.totalMeanings && wordData.totalMeanings > 1) {
                 var card = document.getElementById('activeFlashcard');
@@ -9459,9 +9586,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     // 【9】loadLocalState 接続
     // ------------------------------------------------------------------
-    var __prevLoadLocalStateForCommunityRank = window.loadLocalState;
-    window.loadLocalState = async function() {
-        var r = __prevLoadLocalStateForCommunityRank ? await __prevLoadLocalStateForCommunityRank.apply(this, arguments) : undefined;
+    window.onAppLoaded(function() {
         try {
             window.__startCommunityStudyTimeSync();
             window.__uploadMyLocalBestsOnce();
@@ -9469,8 +9594,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         } catch (e) {
             console.error('コミュニティランキングパッチ初期化エラー:', e);
         }
-        return r;
-    };
+    });
 
     // ------------------------------------------------------------------
     // 【10】起動時注入
@@ -9637,15 +9761,12 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     // 【6】switchTab 上書き：コミュニティ切替時に確実にレイアウトを適用
     // ------------------------------------------------------------------
-    var __prevSwitchTabForFinish = window.switchTab;
-    window.switchTab = function(tabId) {
-        var r = __prevSwitchTabForFinish ? __prevSwitchTabForFinish.apply(this, arguments) : undefined;
+    window.onTabChange(function(tabId) {
         if (tabId === 'community') {
             setTimeout(applyFinishLayout, 80);
             setTimeout(applyFinishLayout, 350);
         }
-        return r;
-    };
+    });
 
     // ------------------------------------------------------------------
     // 【7】起動時注入（第13回パッチのDOM生成を待つため遅延＋再試行）
@@ -9926,66 +10047,20 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     //     既存処理（日跨ぎリセット含む）が走り終わった“後”に
     //     復元を再実行 → リセットに潰された todayStudySeconds を復活
     // ------------------------------------------------------------------
-    var __prevInitStudyTimerForTrigger = window.initStudyTimerAndDataRotation;
-    if (typeof __prevInitStudyTimerForTrigger === 'function') {
-        window.initStudyTimerAndDataRotation = function() {
-            var r = __prevInitStudyTimerForTrigger.apply(this, arguments);
-            // 日跨ぎリセットが復元値を0に潰した可能性があるので再復元
-            sgtRestore();
-            sgtReflectAndDraw();
-            return r;
-        };
-    }
-    
-    // ------------------------------------------------------------------
-    // 【2】shouldCount 非依存ウォッチドッグ（1秒間隔）
-    //     ホーム画面に居ても、毎秒“今日分を反映＋描画”を行う
-    //     → 本日表示とグラフが常に同期し、棒がリアルタイムに立つ
-    //     描画は7要素の軽い全置換＝既存の勉強中描画と競合しても
-    //     同じ値を描くだけなのでチラつかない
-    // ------------------------------------------------------------------
-    if (!window.__sgtWatchdogStarted) {
-        window.__sgtWatchdogStarted = true;
-        setInterval(function() {
-            // ログイン済み・ゲスト問わず描画してズレを防ぐ
-            sgtReflectAndDraw();
-        }, 1000);
-    }
-    
     // ------------------------------------------------------------------
     // 【3】loadLocalState をラップ：完了後に遅延キック
     //     ブートストラップ末尾の renderActivityChart は復元“前”に走るため
     //     全0を描いてしまう。復元“後”に遅延で上書きし直す
     // ------------------------------------------------------------------
-    var __prevLoadLocalStateForTrigger = window.loadLocalState;
-    if (typeof __prevLoadLocalStateForTrigger === 'function') {
-        window.loadLocalState = async function() {
-            var r = await __prevLoadLocalStateForTrigger.apply(this, arguments);
+    window.onAppLoaded(function() {
             var kick = function() { sgtRestore();
                 sgtReflectAndDraw(); };
             setTimeout(kick, 300);
             setTimeout(kick, 900);
             setTimeout(kick, 1800);
-            return r;
-        };
-    }
+    });
     
-    // ------------------------------------------------------------------
-    // 【4】起動時：DOM揃い次第すぐに1回描画（保険）
-    // ------------------------------------------------------------------
-    (function initStudyGraphTriggerPatch() {
-        function boot() {
-            sgtRestore();
-            sgtReflectAndDraw();
-        }
-        if (document.readyState !== 'loading') {
-            setTimeout(boot, 500);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 500); });
-        }
-    })();
-    
-    console.log('📊 第16回パッチ（勉強時間グラフ描画トリガー根治：ホーム毎秒描画＋復元再実行＋遅延キック）適用完了');
+    console.log('📊 第16回パッチ（勉強時間グラフ描画トリガー：復元＋遅延キック）適用完了');
 })();
 // ==========================================================================
 // ⏱️ 第17回パッチ：プレイ時間ランキングの整合性根治（週間 < 今日 の矛盾を撲滅）
@@ -10534,64 +10609,6 @@ window.__updateStudyTimeDisplay = function() {
 //    ・整数分に切り捨て（小数チラつき防止）
 //    ・既存DOMがある場合は値だけ更新（全消去→再構築しない）
 // ------------------------------------------------------------------
-window.renderActivityChart = function() {
-    var chart = document.getElementById('activityBarChart');
-    if (!chart) return;
-
-    var now = new Date();
-    var currentDayIdx = now.getDay() - 1;
-    if (currentDayIdx < 0) currentDayIdx = 6;
-
-    // ✅ 整数分に切り捨て
-    var currentTodayMinutes = Math.floor(todayStudySeconds / 60);
-    weeklyStudyMinutesLog[currentDayIdx] = currentTodayMinutes;
-
-    var daysLabels = ['月', '火', '水', '木', '金', '土', '日'];
-
-    // ✅ 既存バーがある場合は値だけ更新して return（DOM全消去しない）
-    if (chart.children.length === daysLabels.length) {
-        for (var i = 0; i < daysLabels.length; i++) {
-            var wrap = chart.children[i];
-            if (!wrap) continue;
-            var rawMin = weeklyStudyMinutesLog[i] || 0;
-            var pct = Math.min(100, Math.max(4, Math.round((rawMin / 60) * 100)));
-            var fill = wrap.querySelector('.bar-fill');
-            if (fill) fill.style.height = pct + '%';
-            var valLbl = wrap.children[0];
-            if (valLbl) valLbl.innerText = Math.floor(rawMin) + '分';
-        }
-        return;
-    }
-
-    // 初回のみDOM構築
-    chart.innerHTML = '';
-    for (var j = 0; j < daysLabels.length; j++) {
-        var w = document.createElement('div');
-        w.className = 'bar-wrapper';
-        w.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;flex:1;min-width:0;';
-
-        var raw = weeklyStudyMinutesLog[j] || 0;
-        var h = Math.min(100, Math.max(4, Math.round((raw / 60) * 100)));
-
-        var vl = document.createElement('div');
-        vl.style.cssText = 'font-size:8px;font-weight:700;color:#FFFFFF;margin-bottom:2px;white-space:nowrap;';
-        vl.innerText = Math.floor(raw) + '分';
-
-        var f = document.createElement('div');
-        f.className = 'bar-fill active';
-        f.style.height = h + '%';
-
-        var lb = document.createElement('div');
-        lb.style.cssText = 'font-size:10px;color:var(--text-sub);margin-top:4px;font-weight:bold;';
-        lb.innerText = daysLabels[j];
-
-        w.appendChild(vl);
-        w.appendChild(f);
-        w.appendChild(lb);
-        chart.appendChild(w);
-    }
-};
-
 // ------------------------------------------------------------------
 // C. タイマー＆日付ローテーションの完全上書き
 //    ・setInterval 内に毎秒の日付チェックを追加（0時跨ぎ対応）
@@ -10880,35 +10897,6 @@ window.__steToast = function(msg) {
     t.__hideTimer = setTimeout(function() { t.classList.remove('show'); }, 2200);
 };
 
-// ---------- 6. renderActivityChart をラップしてクリック binding ----------
-var __prevRenderForEditor = window.renderActivityChart;
-window.renderActivityChart = function() {
-    var r = __prevRenderForEditor ? __prevRenderForEditor.apply(this, arguments) : undefined;
-
-    var chart = document.getElementById('activityBarChart');
-    if (chart && !chart.__steBound) {
-        chart.__steBound = true;
-        chart.classList.add('editable');
-
-        // イベント移譲：DOM再構築されても1回のbindingで永久に動作
-        chart.addEventListener('click', function(e) {
-            var wrap = e.target.closest('.bar-wrapper');
-            if (!wrap) return;
-            var idx = Array.prototype.indexOf.call(chart.children, wrap);
-            if (idx >= 0) window.__openStudyTimeEditor(idx);
-        });
-
-        // ヒント表示
-        if (!document.getElementById('steHint')) {
-            var hint = document.createElement('div');
-            hint.id = 'steHint';
-            hint.textContent = '💡 バーをタップすると、その日の勉強時間を編集できます';
-            chart.insertAdjacentElement('afterend', hint);
-        }
-    }
-    return r;
-};
-
 console.log('✏️ 第6回パッチ（勉強時間の手動編集）適用完了');
 // ==========================================================================
 // 📅 第7回パッチ：グラフの右端を常に最新（今日）にするローリング表示
@@ -10931,103 +10919,6 @@ console.log('✏️ 第6回パッチ（勉強時間の手動編集）適用完�
     ].join('\n');
     document.head.appendChild(s);
 })();
-
-// ---------- 1. renderActivityChart 差し替え（ローリング順序） ----------
-window.renderActivityChart = function() {
-    var chart = document.getElementById('activityBarChart');
-    if (!chart) return;
-
-    var now = new Date();
-    var currentDayIdx = now.getDay() - 1;
-    if (currentDayIdx < 0) currentDayIdx = 6;
-
-    // 今日の分数（整数）をログに反映
-    weeklyStudyMinutesLog[currentDayIdx] = Math.floor(todayStudySeconds / 60);
-
-    var daysLabels = ['月', '火', '水', '木', '金', '土', '日'];
-
-    // 位置 p（0=左端 〜 6=右端）→ 曜日インデックス・日付
-    // 右端が常に今日、左へ1つずつ過去に遡る
-    function dayIdxAtPos(p) { return (currentDayIdx + p + 1) % 7; }
-    function dateAtPos(p) { return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - p)); }
-    function subLabelFor(p) {
-        var di = dayIdxAtPos(p);
-        if (di === currentDayIdx) return '今日';
-        var d = dateAtPos(p);
-        return (d.getMonth() + 1) + '/' + d.getDate();
-    }
-
-    if (chart.children.length === 7 && chart.__steRolling) {
-        // ---- 既存DOMあり：値だけ更新（全消去しない → チラつかない） ----
-        for (var p = 0; p < 7; p++) {
-            var wrapU = chart.children[p];
-            var diU = dayIdxAtPos(p);
-            wrapU.dataset.dayIdx = diU;
-            wrapU.classList.toggle('ste-today', diU === currentDayIdx);
-            var rawU = weeklyStudyMinutesLog[diU] || 0;
-            var fillU = wrapU.querySelector('.bar-fill');
-            if (fillU) fillU.style.height = Math.min(100, Math.max(4, Math.round((rawU / 60) * 100))) + '%';
-            if (wrapU.children[0]) wrapU.children[0].innerText = Math.floor(rawU) + '分';
-            if (wrapU.children[2]) wrapU.children[2].innerText = daysLabels[diU];
-            if (wrapU.children[3]) wrapU.children[3].innerText = subLabelFor(p);
-        }
-    } else {
-        // ---- 初回：DOM構築 ----
-        chart.innerHTML = '';
-        chart.__steRolling = true;
-        for (var p2 = 0; p2 < 7; p2++) {
-            var di2 = dayIdxAtPos(p2);
-            var isToday2 = (di2 === currentDayIdx);
-            var raw2 = weeklyStudyMinutesLog[di2] || 0;
-
-            var wrap2 = document.createElement('div');
-            wrap2.className = 'bar-wrapper' + (isToday2 ? ' ste-today' : '');
-            wrap2.dataset.dayIdx = di2;
-            wrap2.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;flex:1;min-width:0;';
-
-            var vl2 = document.createElement('div');
-            vl2.style.cssText = 'font-size:8px;font-weight:700;color:#FFFFFF;margin-bottom:2px;white-space:nowrap;';
-            vl2.innerText = Math.floor(raw2) + '分';
-
-            var f2 = document.createElement('div');
-            f2.className = 'bar-fill active';
-            f2.style.height = Math.min(100, Math.max(4, Math.round((raw2 / 60) * 100))) + '%';
-
-            var dl2 = document.createElement('div');
-            dl2.className = 'ste-day-lbl';
-            dl2.innerText = daysLabels[di2];
-
-            var dt2 = document.createElement('div');
-            dt2.className = 'ste-date-lbl';
-            dt2.innerText = subLabelFor(p2);
-
-            wrap2.appendChild(vl2);
-            wrap2.appendChild(f2);
-            wrap2.appendChild(dl2);
-            wrap2.appendChild(dt2);
-            chart.appendChild(wrap2);
-        }
-    }
-
-    // ---------- エディタのバインド（第6回パッチ連携） ----------
-    if (!chart.__steBoundV2 && window.__openStudyTimeEditor) {
-        chart.__steBoundV2 = true;
-        chart.classList.add('editable');
-        // 位置ではなく data-day-idx から曜日を取得 → ローリング後も正確
-        chart.addEventListener('click', function(e) {
-            var wrap = e.target.closest('.bar-wrapper');
-            if (!wrap || wrap.dataset.dayIdx === undefined) return;
-            window.__openStudyTimeEditor(parseInt(wrap.dataset.dayIdx, 10));
-        });
-    }
-    var hint = document.getElementById('steHint');
-    if (!hint) {
-        hint = document.createElement('div');
-        hint.id = 'steHint';
-        chart.insertAdjacentElement('afterend', hint);
-    }
-    hint.textContent = '💡 右端が今日です。バーをタップすると勉強時間を編集できます';
-};
 
 // ---------- 2. 保存後のパルスを正しいバーに出す（第6回パッチ補正） ----------
 if (window.__steSave) {
@@ -11144,6 +11035,8 @@ setInterval(__steSyncAdminUI, 800); // グローバル変数の変化はポー�
 
 // ---------- 2. renderActivityChart 差し替え（比率スケール＋注釈なし） ----------
 window.renderActivityChart = function() {
+    if (typeof window.__steSanitizeStudyData === 'function') window.__steSanitizeStudyData(false);
+    if (!isFinite(Number(todayStudySeconds)) || todayStudySeconds < 0) todayStudySeconds = 0;
     var chart = document.getElementById('activityBarChart');
     if (!chart) return;
 
@@ -11497,45 +11390,6 @@ window.__steSanitizeStudyData = function(verbose) {
 
 // 起動時に即浄化
 window.__steSanitizeStudyData(true);
-
-// ---------- 3. renderActivityChart ラップ：今日のslot不整合を毎描画で是正 ----------
-if (window.renderActivityChart) {
-    var __prevRenderV10 = window.renderActivityChart;
-    window.renderActivityChart = function() {
-        // 描画前に軽量ガード（NaN/負を0に。正当値は触らない）
-        if (!isFinite(Number(todayStudySeconds)) || todayStudySeconds < 0) todayStudySeconds = 0;
-
-        var r = __prevRenderV10.apply(this, arguments);
-
-        // ✅ 核心：今日のslotを「today秒数由来」で必ず再確定
-        //    → 他経路(Firebase同期/元コード描画)が古い145を戻しても、ここで是正
-        var chart = document.getElementById('activityBarChart');
-        if (chart) {
-            var now = new Date();
-            var cur = now.getDay() - 1; if (cur < 0) cur = 6;
-            var correctMin = Math.floor(__steClampSecs(todayStudySeconds) / 60);
-            // グローバルの log も直す
-            if (weeklyStudyMinutesLog[cur] !== correctMin) {
-                weeklyStudyMinutesLog[cur] = correctMin;
-            }
-            // 表示DOMも、今日のバーだけ値/高さを是正（ローリング位置を特定）
-            var wraps = chart.querySelectorAll('.bar-wrapper');
-            for (var i = 0; i < wraps.length; i++) {
-                if (wraps[i].classList.contains('ste-today')) {
-                    var fill = wraps[i].querySelector('.bar-fill');
-                    var maxV = 0;
-                    for (var k = 0; k < 7; k++) maxV = Math.max(maxV, weeklyStudyMinutesLog[k] || 0);
-                    var scale = maxV > 0 ? maxV : 1;
-                    var pct = correctMin <= 0 ? 0 : Math.max(8, Math.round((correctMin / scale) * 100));
-                    if (fill) { fill.style.height = pct + '%'; fill.dataset.zero = correctMin <= 0 ? '1' : '0'; }
-                    if (wraps[i].children[0]) wraps[i].children[0].innerText = correctMin + '分';
-                    break;
-                }
-            }
-        }
-        return r;
-    };
-}
 
 // ---------- 4. __steSave ラップ：保存時に today と log今日slot を同時書き ----------
 if (window.__steSave) {
@@ -12145,10 +11999,9 @@ rm.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
 } catch (e) {}
 }
 
-var __prevLoadLocalStateForRR = window.loadLocalState;
-window.loadLocalState = async function () {
+window.onBeforeAppLoad(async function () {
 try {
-var id = (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000') ? myId : null;
+var id = (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000') ? myId : localStorage.getItem('core_v4_userId');
 if (id) {
 var cloudGen = await rrFetchCloudGen();
 var lgen = rrLocalGen(id);
@@ -12159,7 +12012,6 @@ try { window.__fixLastGen = cloudGen; } catch (e) {}
 }
 }
 } catch (e) {}
-return __prevLoadLocalStateForRR ? __prevLoadLocalStateForRR.apply(this, arguments) : undefined;
-};
+});
 console.log('🧹 app.js 末尾パッチ（リセット復活根治：理解度保持のまま派生データのみ無効化）適用完了');
 })();
