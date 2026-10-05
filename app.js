@@ -625,19 +625,69 @@ const container = document.getElementById('textbookListSelectContainer');
 if(!container) return;
 container.innerHTML = "";
 if(textbooksPool.length === 0) {
-     container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding:10px;'>現在、配信中の教材はありません。<br>管理者の配信をお待ちください。</div>";
+     const empty = document.createElement('div');
+     empty.className = 'textbook-list-empty';
+     empty.textContent = '現在、配信中の教材はありません。';
+     container.appendChild(empty);
  }
- textbooksPool.forEach(book => {
-     const row = document.createElement('div');
-     let activeStyle = book.id === currentTextbook ? "border: 1.5px solid var(--cosmic-cyan); background:rgba(0,240,255,0.1);" : "border: 1px solid rgba(255,255,255,0.1);";
-     row.style.cssText = `display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:10px; cursor:pointer; ${activeStyle}`;
+ textbooksPool.forEach((book, index) => {
+     const row = document.createElement('button');
+     row.type = 'button';
+     row.className = 'textbook-list-item' + (book.id === currentTextbook ? ' is-current' : '');
+     row.style.setProperty('--textbook-index', index);
      row.onclick = () => window.switchTextbookContext(book.id);
-     let coverHtmlStr = `<span style="font-size:22px;">${book.cover || "📔"}</span>`;
+
+     const cover = document.createElement('span');
+     cover.className = 'textbook-list-cover';
      if (book.coverType === "image" && book.cover) {
-         coverHtmlStr = `<img src="${book.cover}" style="width:32px; height:36px; object-fit:cover; border-radius:4px;">`;
+         const image = document.createElement('img');
+         image.src = book.cover;
+         image.alt = '';
+         image.loading = 'lazy';
+         cover.appendChild(image);
+     } else {
+         cover.textContent = book.cover || "📔";
      }
+
+     const details = document.createElement('span');
+     details.className = 'textbook-list-details';
+     const heading = document.createElement('span');
+     heading.className = 'textbook-list-heading';
+     const name = document.createElement('span');
+     name.className = 'textbook-list-name';
+     name.textContent = book.name || '名称未設定の単語帳';
+     heading.appendChild(name);
+     if (book.id === currentTextbook) {
+         const current = document.createElement('span');
+         current.className = 'textbook-list-current';
+         current.textContent = '使用中';
+         heading.appendChild(current);
+     }
+
      const stats = window.getTextbookMasteryStats(book.id);
-     row.innerHTML = `${coverHtmlStr}<div style="min-width:0; flex:1;"><div style="font-size:13.5px; font-weight:bold; color:white; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${book.name}</div><div style="display:flex; align-items:center; gap:7px; margin-top:6px;"><div style="height:5px; flex:1; overflow:hidden; border-radius:999px; background:rgba(255,255,255,0.12);"><div style="height:100%; width:${stats.percent}%; border-radius:inherit; background:linear-gradient(90deg,#10B981,#34D399);"></div></div><span style="font-size:9px; color:var(--text-sub); white-space:nowrap;">定着 ${stats.mastered}/${stats.total}（${stats.percent}%）</span></div></div>`;
+     const progress = document.createElement('span');
+     progress.className = 'textbook-list-progress';
+     const track = document.createElement('span');
+     track.className = 'textbook-list-progress-track';
+     const fill = document.createElement('span');
+     fill.className = 'textbook-list-progress-fill';
+     fill.style.width = Math.max(0, Math.min(100, stats.percent)) + '%';
+     track.appendChild(fill);
+     const progressText = document.createElement('span');
+     progressText.className = 'textbook-list-progress-text';
+     progressText.textContent = stats.mastered + ' / ' + stats.total + ' 語';
+     progress.appendChild(track);
+     progress.appendChild(progressText);
+     details.appendChild(heading);
+     details.appendChild(progress);
+
+     const arrow = document.createElement('span');
+     arrow.className = 'textbook-list-arrow';
+     arrow.setAttribute('aria-hidden', 'true');
+     arrow.textContent = '›';
+     row.appendChild(cover);
+     row.appendChild(details);
+     row.appendChild(arrow);
      container.appendChild(row);
  });
  window.updateAdminEditBookSelectOptions();

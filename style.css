@@ -390,6 +390,123 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .popover-word { font-family: "Times New Roman", serif; font-size: 20px; font-weight: 700; border-bottom: 1px solid var(--border); padding-bottom: 8px; color: var(--text-main); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .popover-meaning { font-size: 14px; color: var(--text-sub); line-height: 1.5; white-space: pre-line; flex: 1; overflow-y: auto; padding-right: 8px; }
 .popover-btns { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+
+/* 教材選択：装飾を抑えた、本棚のような縦一列のリスト。 */
+.popover.textbook-select-popup {
+    gap:0;
+    padding:24px 18px calc(18px + env(safe-area-inset-bottom));
+    max-height:86vh;
+    background:#f2efe8;
+    border-top:1px solid #d7d1c5;
+    border-radius:18px 18px 0 0;
+    color:#24231f;
+    box-shadow:0 -12px 36px rgba(0,0,0,.28);
+}
+.textbook-select-header {
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    padding:0 2px 18px;
+    border-bottom:1px solid #cbc5ba;
+}
+.textbook-select-kicker {
+    color:#81796e;
+    font:600 9px/1.2 system-ui,sans-serif;
+    letter-spacing:.24em;
+}
+.textbook-select-title {
+    margin-top:5px;
+    color:#24231f;
+    font:700 22px/1.25 Georgia,"Yu Mincho",serif;
+    letter-spacing:.02em;
+}
+.textbook-list-select-container {
+    display:flex;
+    flex-direction:column;
+    max-height:58vh;
+    overflow-y:auto;
+    padding:4px 0;
+    scrollbar-width:thin;
+    scrollbar-color:#aaa397 transparent;
+}
+.textbook-list-item {
+    --textbook-index:0;
+    width:100%;
+    display:grid;
+    grid-template-columns:58px minmax(0,1fr) 18px;
+    align-items:center;
+    gap:14px;
+    min-height:92px;
+    padding:10px 4px;
+    border:0;
+    border-bottom:1px solid #d7d1c5;
+    border-radius:0;
+    background:transparent;
+    color:#24231f;
+    text-align:left;
+    cursor:pointer;
+    opacity:0;
+    transform:translateY(10px);
+    animation:textbookListEnter .38s cubic-bezier(.22,.7,.25,1) forwards;
+    animation-delay:calc(var(--textbook-index) * 45ms);
+}
+.textbook-list-item:hover,
+.textbook-list-item:focus-visible { background:#e9e4da; outline:none; }
+.textbook-list-item:active { background:#dfd9cd; }
+.textbook-list-item.is-current { box-shadow:inset 3px 0 0 #8c4f3d; }
+.textbook-list-cover {
+    width:54px;
+    height:70px;
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+    border:1px solid #c8c0b3;
+    border-radius:3px 7px 7px 3px;
+    background:#ddd6c9;
+    font-size:25px;
+    box-shadow:2px 3px 0 #c5beb2;
+}
+.textbook-list-cover img { width:100%; height:100%; display:block; object-fit:cover; }
+.textbook-list-details { min-width:0; display:flex; flex-direction:column; gap:12px; }
+.textbook-list-heading { display:flex; align-items:center; gap:8px; min-width:0; }
+.textbook-list-name {
+    overflow:hidden;
+    color:#24231f;
+    font:700 15px/1.4 Georgia,"Yu Mincho",serif;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.textbook-list-current {
+    flex:none;
+    padding:2px 6px;
+    border:1px solid #a88a7d;
+    border-radius:99px;
+    color:#754536;
+    font:700 9px/1.2 system-ui,sans-serif;
+}
+.textbook-list-progress { display:flex; align-items:center; gap:10px; }
+.textbook-list-progress-track { flex:1; height:3px; overflow:hidden; background:#d2ccc1; }
+.textbook-list-progress-fill { display:block; height:100%; background:#606b57; transition:width .5s ease .18s; }
+.textbook-list-progress-text { flex:none; color:#777064; font:600 10px/1 system-ui,sans-serif; }
+.textbook-list-arrow { color:#8d8579; font:300 24px/1 Georgia,serif; transform:translateX(0); transition:transform .18s ease; }
+.textbook-list-item:hover .textbook-list-arrow,
+.textbook-list-item:focus-visible .textbook-list-arrow { transform:translateX(3px); }
+.textbook-list-empty { padding:34px 10px; color:#777064; font-size:13px; text-align:center; }
+.textbook-select-footer { width:100%; padding-top:14px; text-align:right; }
+.textbook-select-close {
+    padding:7px 2px;
+    border:0;
+    border-bottom:1px solid #777064;
+    background:transparent;
+    color:#4d4942;
+    font:700 12px/1 system-ui,sans-serif;
+    cursor:pointer;
+}
+@keyframes textbookListEnter { to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion:reduce) {
+    .textbook-list-item { opacity:1; transform:none; animation:none; }
+    .textbook-list-progress-fill,.textbook-list-arrow { transition:none; }
+}
 .pop-btn { flex: 1; border: none; height: 38px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; min-width: 22%; }
 
 .party-status-upper-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
@@ -1305,6 +1422,22 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 .flashcard-status-filter.status-none.active { background:rgba(255,255,255,.3); color:#fff; }
 .flashcard-status-filter:active { transform:scale(.94); }
 .flashcard-status-filter-summary { min-height:16px; text-align:center; color:var(--text-sub); font-size:10px; font-weight:700; }
+.flashcard-previous-button {
+    width:38px;
+    height:38px;
+    display:grid;
+    place-items:center;
+    padding:0;
+    border:1px solid rgba(255,255,255,.24);
+    border-radius:50%;
+    background:rgba(15,23,42,.68);
+    color:#fff;
+    box-shadow:none;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+}
+.flashcard-previous-button svg { display:block; }
+.flashcard-previous-button:active:not(:disabled) { transform:scale(.94); background:rgba(99,102,241,.62); }
 .flashcard-previous-button:disabled { opacity:.35; cursor:not-allowed; }
 
 .flashcard-info-button {
@@ -1318,12 +1451,15 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     border-radius: 50%;
     background: rgba(15,23,42,.78);
     color: #fff;
-    font: 800 20px/1 Georgia, serif;
+    display:grid;
+    place-items:center;
+    padding:0;
     box-shadow: 0 6px 22px rgba(0,0,0,.3);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     touch-action: manipulation;
 }
+.flashcard-info-button svg { display:block; }
 
 .flashcard-info-button:active { transform: scale(.94); background: rgba(99,102,241,.72); }
 
@@ -1354,10 +1490,11 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-shadow:0 -18px 50px rgba(0,0,0,.4);
     transform:translateY(105%);
     transition:transform .24s cubic-bezier(.22,.8,.28,1);
+    isolation:isolate;
 }
 .flashcard-detail-sheet.is-open .flashcard-detail-panel { transform:translateY(0); }
 .flashcard-detail-handle { width:42px; height:4px; margin:0 auto 12px; border-radius:99px; background:rgba(255,255,255,.3); }
-.flashcard-detail-close { position:absolute; top:18px; right:18px; width:34px; height:34px; border:0; border-radius:50%; background:rgba(255,255,255,.08); color:#fff; font-size:24px; line-height:1; }
+.flashcard-detail-close { position:absolute; top:14px; right:14px; z-index:1002; width:36px; height:36px; display:grid; place-items:center; padding:0 0 2px; border:1px solid rgba(255,255,255,.18); border-radius:50%; background:rgba(15,23,42,.94); color:#fff; font-size:24px; line-height:1; box-shadow:0 4px 14px rgba(0,0,0,.32); }
 .flashcard-detail-content { padding-top:8px; }
 .flashcard-detail-content .word-row-container { margin-bottom:0; }
 
