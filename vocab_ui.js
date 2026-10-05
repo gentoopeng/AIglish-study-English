@@ -516,6 +516,7 @@
                         sig: window.buildWordSignature(changedWord),
                         status: changedWord.status || 'none',
                         history: Array.isArray(changedWord.history) ? changedWord.history.slice(-20) : [],
+                        note: String(changedWord.note || ''),
                         meanings: {}
                     };
                     (changedWord.meanings || []).forEach(function(meaning) {
@@ -748,7 +749,88 @@
     };
 
     // ================================================================
-    // 11. renderVocabList（メイン表示）
+    // 11. ユーザー個人の単語メモ
+    // ================================================================
+
+    window.toggleVocabNoteEditor = function(event, wordNum, forceClose) {
+        if (event) { event.preventDefault(); event.stopPropagation(); }
+        var editor = document.getElementById('vocabNoteEditor-' + wordNum);
+        var textarea = document.getElementById('vocabNoteInput-' + wordNum);
+        var word = vocabList.find(function(item) { return String(item.num) === String(wordNum); });
+        if (!editor || !textarea || !word) return;
+        var shouldOpen = !forceClose && editor.style.display === 'none';
+        editor.style.display = shouldOpen ? 'block' : 'none';
+        if (shouldOpen) {
+            textarea.value = String(word.note || '');
+            requestAnimationFrame(function() { textarea.focus(); });
+        }
+    };
+
+    window.saveVocabNote = function(event, wordNum) {
+        if (event) { event.preventDefault(); event.stopPropagation(); }
+        var word = vocabList.find(function(item) { return String(item.num) === String(wordNum); });
+        var textarea = document.getElementById('vocabNoteInput-' + wordNum);
+        if (!word || !textarea) return;
+        word.note = textarea.value.trim().slice(0, 500);
+        var text = document.getElementById('vocabNoteText-' + wordNum);
+        var button = document.getElementById('vocabNoteButton-' + wordNum);
+        if (text) {
+            text.textContent = word.note;
+            text.style.display = word.note ? 'block' : 'none';
+        }
+        if (button) button.textContent = word.note ? '📝 メモあり' : '📝 メモを追加';
+        window.toggleVocabNoteEditor(null, wordNum, true);
+        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+    };
+
+    window.createVocabNoteSection = function(word) {
+        var section = document.createElement('div');
+        section.className = 'vocab-note-section';
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.id = 'vocabNoteButton-' + word.num;
+        button.className = 'vocab-note-toggle';
+        button.textContent = word.note ? '📝 メモあり' : '📝 メモを追加';
+        button.onclick = function(event) { window.toggleVocabNoteEditor(event, word.num, false); };
+        var noteText = document.createElement('div');
+        noteText.id = 'vocabNoteText-' + word.num;
+        noteText.className = 'vocab-note-text';
+        noteText.textContent = String(word.note || '');
+        noteText.style.display = word.note ? 'block' : 'none';
+        var editor = document.createElement('div');
+        editor.id = 'vocabNoteEditor-' + word.num;
+        editor.className = 'vocab-note-editor';
+        editor.style.display = 'none';
+        var textarea = document.createElement('textarea');
+        textarea.id = 'vocabNoteInput-' + word.num;
+        textarea.className = 'modern-textarea vocab-note-input';
+        textarea.maxLength = 500;
+        textarea.placeholder = '覚えておきたいことを入力（500文字まで）';
+        var actions = document.createElement('div');
+        actions.className = 'vocab-note-actions';
+        var cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'list-action-link';
+        cancel.textContent = 'キャンセル';
+        cancel.onclick = function(event) { window.toggleVocabNoteEditor(event, word.num, true); };
+        var save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'list-action-link vocab-note-save';
+        save.textContent = 'メモを保存';
+        save.onclick = function(event) { window.saveVocabNote(event, word.num); };
+        actions.appendChild(cancel);
+        actions.appendChild(save);
+        editor.appendChild(textarea);
+        editor.appendChild(actions);
+        section.appendChild(button);
+        section.appendChild(noteText);
+        section.appendChild(editor);
+        return section;
+    };
+
+    // ================================================================
+    // 12. renderVocabList（メイン表示）
     // ================================================================
 
     window.renderVocabList = function() {
@@ -766,7 +848,7 @@
             var n = parseInt(w.num);
             if (!isNaN(n) && (n < startRange || n > endRange)) return false;
             if (vocabFilter !== 'all' && !w.meanings.some(function(m) { return m.status === vocabFilter; })) return false;
-            if (searchKeyword && !(w.word.toLowerCase().includes(searchKeyword) || w.meaning.includes(searchKeyword))) return false;
+            if (searchKeyword && !(w.word.toLowerCase().includes(searchKeyword) || w.meaning.includes(searchKeyword) || String(w.note || '').toLowerCase().includes(searchKeyword))) return false;
             return true;
         });
         filtered.forEach(function(w) {
@@ -815,6 +897,9 @@
                 adminActionButtons = '<div style="position:absolute; right:8px; top:8px; display:flex; gap:2px; z-index:100;"><button class="card-edit-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')"><i data-lucide="edit-3" size="18"></i></button><button class="card-delete-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm(\'' + w.num + '\')"><i data-lucide="trash-2" size="18"></i></button></div>';
             }
             card.innerHTML = adminActionButtons + '<div id="wordCardBody-' + w.num + '"><div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;"><div style="display:flex; align-items:center; gap:8px;"><span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#' + w.num + '</span><span style="font-size:18px; font-weight:800; color:white;">' + w.word + '</span></div></div>' + meaningsHtml + (w.sub ? '<div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;"><button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">サブ情報を展開 <i data-lucide="chevron-down" size="12"></i></button><div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;"><div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">' + w.sub + '</div></div></div>' : '') + '<div data-vocab-history="' + w.num + '" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">' + dotsHtml + '</div></div><div id="wordCardForm-' + w.num + '" style="display:none; padding-top:32px;"><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; display:block; margin-bottom:4px;">単語</label><input type="text" id="inlineEditWordInput-' + w.num + '" class="search-input" style="margin:0;" value="' + w.word + '"></div><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label><div id="inlineEditMeaningsList-' + w.num + '"></div><button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, \'' + w.num + '\')"><i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加</button></div><div style="margin-bottom:14px;"><label style="font-size:11px; color:var(--text-sub); font-weight:700; display:block; margin-bottom:4px;">サブ情報</label><textarea id="inlineEditSubInput-' + w.num + '" class="modern-textarea" style="height:60px; margin:0;">' + (w.sub || "") + '</textarea></div><div style="display:flex; gap:8px;"><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:rgba(255,255,255,0.05); border:1px solid var(--border);" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')">キャンセル</button><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:var(--accent); color:white; border:none;" onclick="window.saveInlineWordEdit(event, \'' + w.num + '\')">保存する</button></div></div>';
+            var cardBody = card.querySelector('#wordCardBody-' + w.num);
+            var history = cardBody ? cardBody.querySelector('[data-vocab-history]') : null;
+            if (cardBody) cardBody.insertBefore(window.createVocabNoteSection(w), history || null);
             container.appendChild(card);
         });
         window.initLucide();

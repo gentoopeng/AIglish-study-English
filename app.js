@@ -2186,6 +2186,7 @@ window.extractUserProgressFromVocabList = function() {
       sig: window.buildWordSignature(w),
       status: w.status || "none",
       history: Array.isArray(w.history) ? w.history.slice(-20) : [],
+      note: String(w.note || ""),
       meanings: {}
     };
     (w.meanings || []).forEach(function(m) {
@@ -2205,6 +2206,7 @@ window.applyUserProgressToVocabList = function() {
     w = window.migrateVocabData([w])[0];
     var key = String(w.num);
     var p = progress[key];
+    w.note = p && typeof p.note === "string" ? p.note : "";
     w.status = "none";
     w.history = [];
     w.meanings = (w.meanings || []).map(function(m) {
@@ -2386,7 +2388,7 @@ window.vocabCardMatchesFilter = function(w) {
     if (!(w.meanings || []).some(function(m) { return m.status === vocabFilter; })) return false;
   }
   if (searchKeyword) {
-    if (!String(w.word || "").toLowerCase().includes(searchKeyword) && !String(w.meaning || "").includes(searchKeyword)) return false;
+    if (!String(w.word || "").toLowerCase().includes(searchKeyword) && !String(w.meaning || "").includes(searchKeyword) && !String(w.note || "").toLowerCase().includes(searchKeyword)) return false;
   }
   return true;
 };
@@ -6636,6 +6638,7 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
   words.forEach(function(w) {
     var key = String(w.num);
     var p = progress[key];
+    w.note = p && typeof p.note === 'string' ? p.note : '';
     w.status = 'none';
     w.history = [];
     w.meanings = (w.meanings || []).map(function(m) { return { id: m.id, text: m.text, status: 'none', history: [] }; });
@@ -6668,7 +6671,7 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
   var newProgress = {};
   words.forEach(function(w) {
     var key = String(w.num);
-    var wp = { sig: sig(w), status: w.status || 'none', history: Array.isArray(w.history) ? w.history.slice(-20) : [], meanings: {} };
+    var wp = { sig: sig(w), status: w.status || 'none', history: Array.isArray(w.history) ? w.history.slice(-20) : [], note: String(w.note || ''), meanings: {} };
     (w.meanings || []).forEach(function(m) { wp.meanings[m.id] = { status: m.status || 'none', history: Array.isArray(m.history) ? m.history.slice(-20) : [] }; });
     newProgress[key] = wp;
   });
