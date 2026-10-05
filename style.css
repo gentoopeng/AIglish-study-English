@@ -396,27 +396,27 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     gap:0;
     padding:24px 18px calc(18px + env(safe-area-inset-bottom));
     max-height:86vh;
-    background:#f2efe8;
-    border-top:1px solid #d7d1c5;
+    background:#1b1c1a;
+    border-top:1px solid #3b3b37;
     border-radius:18px 18px 0 0;
-    color:#24231f;
-    box-shadow:0 -12px 36px rgba(0,0,0,.28);
+    color:#e7e3da;
+    box-shadow:0 -12px 36px rgba(0,0,0,.48);
 }
 .textbook-select-header {
     display:flex;
     flex-direction:column;
     align-items:flex-start;
     padding:0 2px 18px;
-    border-bottom:1px solid #cbc5ba;
+    border-bottom:1px solid #3b3b37;
 }
 .textbook-select-kicker {
-    color:#81796e;
+    color:#999386;
     font:600 9px/1.2 system-ui,sans-serif;
     letter-spacing:.24em;
 }
 .textbook-select-title {
     margin-top:5px;
-    color:#24231f;
+    color:#f0ece3;
     font:700 22px/1.25 Georgia,"Yu Mincho",serif;
     letter-spacing:.02em;
 }
@@ -427,7 +427,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     overflow-y:auto;
     padding:4px 0;
     scrollbar-width:thin;
-    scrollbar-color:#aaa397 transparent;
+    scrollbar-color:#5c5b55 transparent;
 }
 .textbook-list-item {
     --textbook-index:0;
@@ -439,10 +439,10 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     min-height:92px;
     padding:10px 4px;
     border:0;
-    border-bottom:1px solid #d7d1c5;
+    border-bottom:1px solid #363733;
     border-radius:0;
     background:transparent;
-    color:#24231f;
+    color:#e7e3da;
     text-align:left;
     cursor:pointer;
     opacity:0;
@@ -451,27 +451,27 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     animation-delay:calc(var(--textbook-index) * 45ms);
 }
 .textbook-list-item:hover,
-.textbook-list-item:focus-visible { background:#e9e4da; outline:none; }
-.textbook-list-item:active { background:#dfd9cd; }
-.textbook-list-item.is-current { box-shadow:inset 3px 0 0 #8c4f3d; }
+.textbook-list-item:focus-visible { background:#242521; outline:none; }
+.textbook-list-item:active { background:#2b2c28; }
+.textbook-list-item.is-current { box-shadow:inset 3px 0 0 #a66d58; }
 .textbook-list-cover {
     width:54px;
     height:70px;
     display:grid;
     place-items:center;
     overflow:hidden;
-    border:1px solid #c8c0b3;
+    border:1px solid #55534c;
     border-radius:3px 7px 7px 3px;
-    background:#ddd6c9;
+    background:#302f2b;
     font-size:25px;
-    box-shadow:2px 3px 0 #c5beb2;
+    box-shadow:2px 3px 0 #11120f;
 }
 .textbook-list-cover img { width:100%; height:100%; display:block; object-fit:cover; }
 .textbook-list-details { min-width:0; display:flex; flex-direction:column; gap:12px; }
 .textbook-list-heading { display:flex; align-items:center; gap:8px; min-width:0; }
 .textbook-list-name {
     overflow:hidden;
-    color:#24231f;
+    color:#f0ece3;
     font:700 15px/1.4 Georgia,"Yu Mincho",serif;
     text-overflow:ellipsis;
     white-space:nowrap;
@@ -479,26 +479,30 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .textbook-list-current {
     flex:none;
     padding:2px 6px;
-    border:1px solid #a88a7d;
+    border:1px solid #795c50;
     border-radius:99px;
-    color:#754536;
+    color:#d6a28e;
     font:700 9px/1.2 system-ui,sans-serif;
 }
-.textbook-list-progress { display:flex; align-items:center; gap:10px; }
-.textbook-list-progress-track { flex:1; height:3px; overflow:hidden; background:#d2ccc1; }
-.textbook-list-progress-fill { display:block; height:100%; background:#606b57; transition:width .5s ease .18s; }
-.textbook-list-progress-text { flex:none; color:#777064; font:600 10px/1 system-ui,sans-serif; }
-.textbook-list-arrow { color:#8d8579; font:300 24px/1 Georgia,serif; transform:translateX(0); transition:transform .18s ease; }
+.textbook-list-progress { display:flex; flex-direction:column; align-items:stretch; gap:7px; }
+.textbook-list-progress-track { display:flex; width:100%; height:5px; overflow:hidden; border-radius:99px; background:#30312e; }
+.textbook-list-progress-fill { display:block; height:100%; transition:width .5s ease .18s; }
+.textbook-list-progress-fill.is-ok { background:#66836d; }
+.textbook-list-progress-fill.is-so { background:#b49455; }
+.textbook-list-progress-fill.is-bad { background:#a65f59; }
+.textbook-list-progress-fill.is-none { background:#555650; }
+.textbook-list-progress-text { color:#aaa397; font:600 10px/1 system-ui,sans-serif; letter-spacing:.02em; }
+.textbook-list-arrow { color:#77766f; font:300 24px/1 Georgia,serif; transform:translateX(0); transition:transform .18s ease; }
 .textbook-list-item:hover .textbook-list-arrow,
 .textbook-list-item:focus-visible .textbook-list-arrow { transform:translateX(3px); }
-.textbook-list-empty { padding:34px 10px; color:#777064; font-size:13px; text-align:center; }
+.textbook-list-empty { padding:34px 10px; color:#aaa397; font-size:13px; text-align:center; }
 .textbook-select-footer { width:100%; padding-top:14px; text-align:right; }
 .textbook-select-close {
     padding:7px 2px;
     border:0;
-    border-bottom:1px solid #777064;
+    border-bottom:1px solid #817e75;
     background:transparent;
-    color:#4d4942;
+    color:#d1ccc2;
     font:700 12px/1 system-ui,sans-serif;
     cursor:pointer;
 }

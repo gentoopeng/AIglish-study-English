@@ -669,13 +669,21 @@ if(textbooksPool.length === 0) {
      progress.className = 'textbook-list-progress';
      const track = document.createElement('span');
      track.className = 'textbook-list-progress-track';
-     const fill = document.createElement('span');
-     fill.className = 'textbook-list-progress-fill';
-     fill.style.width = Math.max(0, Math.min(100, stats.percent)) + '%';
-     track.appendChild(fill);
+     [
+         { key: 'ok', className: 'is-ok' },
+         { key: 'so', className: 'is-so' },
+         { key: 'bad', className: 'is-bad' },
+         { key: 'none', className: 'is-none' }
+     ].forEach(function(segment) {
+         const fill = document.createElement('span');
+         fill.className = 'textbook-list-progress-fill ' + segment.className;
+         fill.style.width = (stats.total ? stats[segment.key] / stats.total * 100 : (segment.key === 'none' ? 100 : 0)) + '%';
+         track.appendChild(fill);
+     });
+     track.setAttribute('aria-label', '定着' + stats.ok + '、曖昧' + stats.so + '、未定着' + stats.bad + '、未学習' + stats.none);
      const progressText = document.createElement('span');
      progressText.className = 'textbook-list-progress-text';
-     progressText.textContent = stats.mastered + ' / ' + stats.total + ' 語';
+     progressText.textContent = '○' + stats.ok + '  △' + stats.so + '  ×' + stats.bad + '  ー' + stats.none;
      progress.appendChild(track);
      progress.appendChild(progressText);
      details.appendChild(heading);
@@ -722,18 +730,31 @@ window.getTextbookMasteryStats = function(bookId) {
     progress = JSON.parse(localStorage.getItem(progressKey) || '{}') || {};
   } catch (e) { progress = {}; }
 
-  var total = words.length;
-  var mastered = words.reduce(function(count, word) {
+  var counts = { ok: 0, so: 0, bad: 0, none: 0 };
+  words.forEach(function(word) {
     var meanings = Array.isArray(word.meanings) ? word.meanings : [];
     var saved = progress[String(word.num)] || null;
     var savedMeanings = saved && saved.meanings ? saved.meanings : {};
-    var fullyMastered = meanings.length > 0 && meanings.every(function(meaning) {
+    var statuses = meanings.map(function(meaning) {
       var savedMeaning = savedMeanings[meaning.id];
-      return (savedMeaning ? savedMeaning.status : meaning.status) === 'ok';
+      return (savedMeaning ? savedMeaning.status : meaning.status) || 'none';
     });
-    return count + (fullyMastered ? 1 : 0);
-  }, 0);
-  return { total: total, mastered: mastered, percent: total ? Math.round(mastered / total * 100) : 0 };
+    var status = 'none';
+    if (statuses.length && statuses.every(function(value) { return value === 'ok'; })) status = 'ok';
+    else if (statuses.some(function(value) { return value === 'bad'; })) status = 'bad';
+    else if (statuses.some(function(value) { return value === 'so' || value === 'ok'; })) status = 'so';
+    counts[status]++;
+  });
+  var total = words.length;
+  return {
+    total: total,
+    mastered: counts.ok,
+    percent: total ? Math.round(counts.ok / total * 100) : 0,
+    ok: counts.ok,
+    so: counts.so,
+    bad: counts.bad,
+    none: counts.none
+  };
 };
 window.switchTextbookContext = async function(bookId) {
 currentTextbook = bookId;
