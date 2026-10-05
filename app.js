@@ -2312,7 +2312,7 @@ window.__userStatsTimer = null;
 window.__vocabRenderTimer = null;
 
 // 理解度は通信を待たず、先に端末へ保存する。
-window.saveVocabProgressLocally = function() {
+window.saveVocabProgressLocally = function(wordNum, skipDirtyMark) {
   if (typeof myId === "undefined" || !myId || typeof window.extractUserProgressFromVocabList !== "function") return;
   var bookKey = currentTextbook || "default";
   var progress = window.extractUserProgressFromVocabList();
@@ -2324,7 +2324,72 @@ window.saveVocabProgressLocally = function() {
   } catch (e) {
     console.error("理解度の端末保存に失敗しました:", e);
   }
+  if (!skipDirtyMark && typeof window.markVocabProgressDirty === "function") window.markVocabProgressDirty(bookKey, wordNum);
 };
+
+// 変更のあった教材・単語だけを記録し、単語帳を閉じる時にクラウドへ確定する。
+window.__dirtyVocabProgress = window.__dirtyVocabProgress || {};
+window.markVocabProgressDirty = function(bookKey, wordNum) {
+  bookKey = bookKey || currentTextbook || "default";
+  var entry = window.__dirtyVocabProgress[bookKey] || { revision: 0, words: {} };
+  entry.revision++;
+  entry.words[wordNum === undefined || wordNum === null ? "*" : String(wordNum)] = true;
+  window.__dirtyVocabProgress[bookKey] = entry;
+};
+
+window.flushDirtyVocabBook = async function(bookKey) {
+  var entry = window.__dirtyVocabProgress[bookKey];
+  if (!entry) return false;
+  if (typeof myId === "undefined" || !myId || myId === "GUEST-000" || !window.db || !window.fbDoc || !window.fbGetDoc || !window.fbSetDoc) return false;
+  var revision = entry.revision;
+  var changedKeys = Object.keys(entry.words);
+  var progressKey = window.getVocabProgressStorageKey(bookKey);
+  var localProgress = {};
+  try { localProgress = JSON.parse(localStorage.getItem(progressKey) || "{}") || {}; } catch (e) {}
+  try {
+    var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
+    var snap = await window.fbGetDoc(ref);
+    var cloudProgress = {};
+    if (snap.exists() && snap.data()) {
+      var data = snap.data();
+      try { cloudProgress = data.wordsJson ? JSON.parse(data.wordsJson) : (data.words || {}); } catch (e) { cloudProgress = {}; }
+    }
+    var merged = Object.assign({}, cloudProgress);
+    if (entry.words["*"]) {
+      Object.keys(localProgress).forEach(function(key) { merged[key] = localProgress[key]; });
+    } else {
+      changedKeys.forEach(function(key) { if (localProgress[key]) merged[key] = localProgress[key]; });
+    }
+    var savedAt = Date.now();
+    await window.fbSetDoc(ref, { wordsJson: JSON.stringify(merged), updatedAt: new Date(savedAt).toISOString(), updatedAtMs: savedAt }, { merge: true });
+    var latestLocal = {};
+    var latestLocalTs = 0;
+    try { latestLocal = JSON.parse(localStorage.getItem(progressKey) || "{}") || {}; } catch (e) {}
+    try { latestLocalTs = parseInt(localStorage.getItem(progressKey + "__ts") || "0") || 0; } catch (e) {}
+    var safeLocal = Object.assign({}, merged, latestLocal);
+    localStorage.setItem(progressKey, JSON.stringify(safeLocal));
+    localStorage.setItem(progressKey + "__ts", String(Math.max(savedAt, latestLocalTs)));
+    if (window.__dirtyVocabProgress[bookKey] && window.__dirtyVocabProgress[bookKey].revision === revision) delete window.__dirtyVocabProgress[bookKey];
+    return true;
+  } catch (error) {
+    console.error("単語帳の変更保存に失敗しました:", error);
+    return false;
+  }
+};
+
+window.flushAllDirtyVocabBooks = function() {
+  return Promise.all(Object.keys(window.__dirtyVocabProgress).map(function(bookKey) {
+    return window.flushDirtyVocabBook(bookKey);
+  }));
+};
+
+window.onTabChange(function(tabId) {
+  if (tabId !== "vocab") window.flushAllDirtyVocabBooks();
+});
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "hidden") window.flushAllDirtyVocabBooks();
+});
+window.addEventListener("pagehide", function() { window.flushAllDirtyVocabBooks(); });
 
 window.scheduleVocabProgressSave = function(delay) {
   delay = delay || 500;
@@ -4748,6 +4813,7 @@ window.startFlashcardSession = async function() {
 // 終了時に必ず復元（finish / quit 両方をカバー）
 var __prevFinishFlashcardSessionForBookFix = window.finishFlashcardSession;
 window.finishFlashcardSession = function() {
+  if (typeof window.flushAllDirtyVocabBooks === 'function') window.flushAllDirtyVocabBooks();
   if (window.__fcSessionActive || window.__fcSaved) {
     window.__restoreFlashcardSession();
   }
@@ -6477,7 +6543,10 @@ window.__finalizeLoadQuiz = function() {
       });
       if (applied > 0) {
         // ロード画面を閉じる前に、回答を端末の正規理解度と手動セーブ用下書きへ確定する。
-        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(null, true);
+        if (typeof window.markVocabProgressDirty === 'function') {
+          answers.forEach(function(answer) { window.markVocabProgressDirty(bookId, answer.num); });
+        }
         if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(300);
       }
@@ -6677,6 +6746,9 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
   });
   try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch (e) {}
   try { localStorage.setItem(pkey + '__ts', String(Date.now())); } catch (e) {}
+  if (typeof window.markVocabProgressDirty === 'function') {
+    answers.forEach(function(answer) { window.markVocabProgressDirty(bookId, answer.num); });
+  }
   window.__manualVocabDrafts = window.__manualVocabDrafts || {};
   window.__manualVocabDrafts[bookId] = {
     master: typeof window.stripVocabProgressFromWords === 'function' ? window.stripVocabProgressFromWords(words) : words,
@@ -8888,6 +8960,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
                 localStorage.setItem(flashProgressKey + '__ts', String(flashChangedAt));
                 window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};
                 window.__vocabProgressRevisionByBook[flashBookKey] = (window.__vocabProgressRevisionByBook[flashBookKey] || 0) + 1;
+                if (typeof window.markVocabProgressDirty === 'function') window.markVocabProgressDirty(flashBookKey, vocabMatch ? vocabMatch.num : null);
                 if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
             } catch (saveError) {
                 console.error('フラッシュカード理解度の即時保存に失敗しました:', saveError);

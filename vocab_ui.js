@@ -532,6 +532,7 @@
                     localStorage.setItem(progressKey + '__ts', String(changedAt));
                     window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};
                     window.__vocabProgressRevisionByBook[bookKey] = (window.__vocabProgressRevisionByBook[bookKey] || 0) + 1;
+                    if (typeof window.markVocabProgressDirty === 'function') window.markVocabProgressDirty(bookKey, changedWord.num);
                 } catch (saveError) {
                     console.error('理解度の即時保存に失敗しました:', saveError);
                 }
@@ -778,9 +779,9 @@
             text.textContent = word.note;
             text.style.display = word.note ? 'block' : 'none';
         }
-        if (button) button.textContent = word.note ? '📝 メモあり' : '📝 メモを追加';
+        if (button) button.classList.toggle('has-note', !!word.note);
         window.toggleVocabNoteEditor(null, wordNum, true);
-        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(word.num);
         if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
     };
 
@@ -791,7 +792,8 @@
         button.type = 'button';
         button.id = 'vocabNoteButton-' + word.num;
         button.className = 'vocab-note-toggle';
-        button.textContent = word.note ? '📝 メモあり' : '📝 メモを追加';
+        button.textContent = 'メモ';
+        button.classList.toggle('has-note', !!word.note);
         button.onclick = function(event) { window.toggleVocabNoteEditor(event, word.num, false); };
         var noteText = document.createElement('div');
         noteText.id = 'vocabNoteText-' + word.num;
