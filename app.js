@@ -707,12 +707,6 @@ window.openTextbookSelectPopup = function() {
  if(popup) { popup.style.display = 'flex'; popup.classList.add('show'); }
 };
 
-window.isWorkbookTextbook = function(book) {
-  var kind = String(book && (book.type || book.kind || book.category) || '').toLowerCase();
-  var name = String(book && book.name || '');
-  return kind === 'work' || kind === 'workbook' || /ワーク|workbook/i.test(name);
-};
-
 window.renderVocabLibrarySelection = function() {
   var selection = document.getElementById('vocabLibrarySelection');
   if (!selection) return;
@@ -722,21 +716,19 @@ window.renderVocabLibrarySelection = function() {
   if (!books || !works || !workSection) return;
   books.replaceChildren();
   works.replaceChildren();
-  var regularBooks = textbooksPool.filter(function(book) { return !window.isWorkbookTextbook(book); });
-  var workbooks = textbooksPool.filter(window.isWorkbookTextbook);
-  if (!regularBooks.length && !workbooks.length) {
+  if (!textbooksPool.length) {
     var empty = document.createElement('div');
     empty.className = 'vocab-library-empty';
     empty.textContent = '現在、利用できる単語帳はありません。';
     books.appendChild(empty);
   }
-  regularBooks.forEach(function(book, index) {
+  textbooksPool.forEach(function(book, index) {
     books.appendChild(window.createTextbookListItem(book, index, window.selectVocabLibraryBook));
   });
-  workSection.hidden = workbooks.length === 0;
-  workbooks.forEach(function(book, index) {
-    works.appendChild(window.createTextbookListItem(book, regularBooks.length + index, window.selectVocabLibraryBook));
-  });
+  var workCount = typeof window.renderWorkbookLibraryItems === 'function'
+    ? window.renderWorkbookLibraryItems(works, textbooksPool.length)
+    : 0;
+  workSection.hidden = !workCount;
 };
 
 window.showVocabLibrarySelection = function() {

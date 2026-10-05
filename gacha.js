@@ -2397,8 +2397,8 @@ callGeminiExplain(q,a).then(function(txt){body.textContent=txt||'解説を取得
 function statsModal(title,c,due){var m=modal('<h3>📊 '+esc(title)+'</h3><div style="text-align:center;margin:6px 0;">'+donutHtml(c)+'</div><div style="font-size:12px;">⚪︎ '+c.ok+' ／ △ '+c.so+' ／ ✕ '+c.bad+' ／ 未 '+c.none+'（定着率 '+pct(c)+'%）</div><div style="font-size:11px;color:#FCA5A5;margin-top:6px;">🔔 復習期限: '+due+'件</div><div class="vv19-btnrow"><button type="button" class="vv19-save">閉じる</button></div>');m.querySelector('.vv19-save').onclick=function(){closeM(m);};m.onclick=function(e){if(e.target===m)closeM(m);};}
 
 var view,orig,sel,wrk;
-function setup(){view=document.getElementById('view-vocab');if(!view||view.__vv19w)return;view.__vv19w=true;orig=document.createElement('div');while(view.firstChild)orig.appendChild(view.firstChild);view.appendChild(orig);var back=document.createElement('button');back.type='button';back.className='vv19-back';back.textContent='← 教材選択';back.onclick=function(){show('sel');};orig.insertBefore(back,orig.firstChild);sel=document.createElement('div');sel.id='vv19sel';view.appendChild(sel);wrk=document.createElement('div');wrk.id='vv19wrk';view.appendChild(wrk);}
-function show(m){setup();if(!view)return;orig.style.display=(m==='orig')?'':'none';sel.style.display=(m==='sel')?'block':'none';wrk.style.display=(m==='wrk')?'block':'none';if(m==='sel')renderSel();}
+function setup(){view=document.getElementById('view-vocab');if(!view)return;orig=document.getElementById('vocabBookContents');sel=document.getElementById('vocabLibrarySelection');wrk=document.getElementById('vv19wrk');if(!wrk){wrk=document.createElement('div');wrk.id='vv19wrk';wrk.style.display='none';view.appendChild(wrk);}view.__vv19w=true;}
+function show(m){setup();if(!view)return;if(orig)orig.hidden=m!=='orig';if(sel)sel.hidden=m!=='sel';wrk.style.display=(m==='wrk')?'block':'none';if(m==='sel'&&typeof window.showVocabLibrarySelection==='function')window.showVocabLibrarySelection();}
 function readPhoto(input,cb){var f=input.files&&input.files[0];if(!f){cb('');return;}var r=new FileReader();r.onload=function(e){var img=new Image();img.onload=function(){var max=300,w=img.width,h=img.height;if(h>=w){if(h>max){w=Math.round(w*max/h);h=max;}}else{if(w>max){h=Math.round(h*max/w);w=max;}}var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL('image/jpeg',0.7));};img.src=e.target.result;};r.readAsDataURL(f);}
 function histDots(e){return (e.history||[]).slice(-5).map(function(x){var c=x==='ok'?'#10B981':x==='so'?'#F59E0B':'#EF4444';var m=x==='ok'?'○':x==='so'?'△':'✕';return '<span style="background:'+c+';color:'+(x==='so'?'#000':'#fff')+';">'+m+'</span>';}).join('');}
 function histRow(e){var h=histDots(e);return h?'<div class="vv19-hist">'+h+'</div>':'';}
@@ -2426,7 +2426,26 @@ alert(added+'件インポートしました');
 };
 }
 
-function renderSel(){if(!sel)return;var pool=(typeof textbooksPool!=='undefined'&&textbooksPool)?textbooksPool:[];var h='<div class="vv19-head">📚 教材選択</div><div class="vv19-grid">';pool.forEach(function(b){var cov=(b.coverType==='image'&&b.cover)?'<img src="'+b.cover+'" style="'+COVIMG+'">':'<span class="vv19-emo">📔</span>';var c=countsBook(b.id);h+='<div class="vv19-cards" data-v19-book="'+esc(b.id)+'"><div class="vv19-cov">'+cov+'</div><div class="vv19-name">'+short7(b.name)+'</div><div class="vv19-progrow">'+barHtml(c)+'</div></div>';});if(!pool.length)h+='<div style="grid-column:1/-1;text-align:center;color:#8a7a5f;font-size:12px;padding:16px;">配信中の教材がありません</div>';h+='</div><div class="vv19-head" style="margin-top:18px;">📝 ワーク（復習ノート）</div><div class="vv19-grid">';loadW().forEach(function(w){var cov=w.photo?'<img src="'+w.photo+'" style="'+COVIMG+'">':'<span class="vv19-emo">📝</span>';var c=counts(workUnits(w));var d=dueCount(w);h+='<div class="vv19-cards" data-v19-work="'+esc(w.id)+'">'+(d>0?'<span class="vv19-duebadge">🔔'+d+'</span>':'')+'<button type="button" class="vv19-del" data-v19-del="'+esc(w.id)+'">✕</button><div class="vv19-cov">'+cov+'</div><div class="vv19-name">'+short7(w.name)+'</div><div class="vv19-progrow">'+barHtml(c)+'</div></div>';});h+='<div class="vv19-add" data-v19-addwork="1"><span style="font-size:22px;">＋</span>ワークを追加</div></div>';sel.innerHTML=h;}
+window.renderWorkbookLibraryItems=function(container,startIndex){
+if(!container)return 0;
+var list=loadW();
+list.forEach(function(w,index){
+var c=counts(workUnits(w)),total=c.ok+c.so+c.bad+c.none;
+var row=document.createElement('button');row.type='button';row.className='textbook-list-item workbook-list-item';row.style.setProperty('--textbook-index',(startIndex||0)+index);row.onclick=function(){openWork(w.id);};
+var cover=document.createElement('span');cover.className='textbook-list-cover';
+if(w.photo){var img=document.createElement('img');img.src=w.photo;img.alt='';img.loading='lazy';cover.appendChild(img);}else cover.textContent='📝';
+var details=document.createElement('span');details.className='textbook-list-details';
+var heading=document.createElement('span');heading.className='textbook-list-heading';var name=document.createElement('span');name.className='textbook-list-name';name.textContent=w.name||'名称未設定のワーク';heading.appendChild(name);
+var progress=document.createElement('span');progress.className='textbook-list-progress';var track=document.createElement('span');track.className='textbook-list-progress-track';
+[['ok','is-ok'],['so','is-so'],['bad','is-bad'],['none','is-none']].forEach(function(seg){var fill=document.createElement('span');fill.className='textbook-list-progress-fill '+seg[1];fill.style.width=(total?c[seg[0]]/total*100:(seg[0]==='none'?100:0))+'%';track.appendChild(fill);});
+var text=document.createElement('span');text.className='textbook-list-progress-text';text.textContent='○'+c.ok+'  △'+c.so+'  ×'+c.bad+'  ー'+c.none;progress.appendChild(track);progress.appendChild(text);details.appendChild(heading);details.appendChild(progress);
+var arrow=document.createElement('span');arrow.className='textbook-list-arrow';arrow.setAttribute('aria-hidden','true');arrow.textContent='›';row.appendChild(cover);row.appendChild(details);row.appendChild(arrow);
+var remove=document.createElement('span');remove.className='workbook-list-remove';remove.setAttribute('role','button');remove.setAttribute('aria-label','ワークを削除');remove.textContent='×';remove.onclick=function(event){event.preventDefault();event.stopPropagation();confirmModal('ワークを削除','「'+(w.name||'')+'」を削除しますか？',function(){saveW(loadW().filter(function(item){return item.id!==w.id;}));if(typeof window.showVocabLibrarySelection==='function')window.showVocabLibrarySelection();});};row.appendChild(remove);container.appendChild(row);
+});
+var add=document.createElement('button');add.type='button';add.className='vocab-library-add-work';add.textContent='＋ ワークを追加';add.onclick=openAdd;container.appendChild(add);
+return list.length+1;
+};
+function renderSel(){if(typeof window.showVocabLibrarySelection==='function')window.showVocabLibrarySelection();}
 function curW(id){return loadW().find(function(x){return x.id===id;});}
 function saveCur(w){saveW(loadW().map(function(x){return x.id===w.id?w:x;}));}
 function ent(w,n){if(!w.entries)w.entries={};if(!w.entries[n])w.entries[n]={q:'',memo:'',ans:'',status:'none',history:[],subs:[],step:0,lastReview:0,nextReview:0};return w.entries[n];}
@@ -2497,8 +2516,7 @@ if(nl){var nid=nl.getAttribute('data-v19-nlabel');nonumsOf(w).forEach(function(x
 if(sm){var kp=sm.getAttribute('data-v19-smemo').split('_');var en=ent(w,kp[0]);var arr=toSubArray(en);for(var i=0;i<arr.length;i++){if(arr[i].sub===+kp[1]){arr[i].memo=sm.textContent.replace(/\n/g,' ');break;}}saveCur(w);return;}
 var n=q?q.getAttribute('data-v19-q'):mm.getAttribute('data-v19-memo');var en2=ent(w,n);var tx=(q||mm).textContent.replace(/\n/g,' ');if(q)en2.q=tx;else en2.memo=tx;saveCur(w);return;}
 if(t.closest('[data-v19-search]')){wrk.__q=t.value;renderWork(curW(wrk.__id));}},true);
-window.onTabChange(function(t){if(t==='vocab'){setTimeout(function(){show('sel');},60);}});
-(function(){function b(){setup();show('sel');}if(document.readyState!=='loading')setTimeout(b,500);else document.addEventListener('DOMContentLoaded',function(){setTimeout(b,500);});})();
+(function(){function b(){setup();}if(document.readyState!=='loading')setTimeout(b,500);else document.addEventListener('DOMContentLoaded',function(){setTimeout(b,500);});})();
 console.log('📚 単語帳タブ最終版v19（インポート+Gemini解説）適用完了');
 })();
 // =====================================================================

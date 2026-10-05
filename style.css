@@ -445,6 +445,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     color:#e7e3da;
     text-align:left;
     cursor:pointer;
+    position:relative;
     opacity:0;
     transform:translateY(10px);
     animation:textbookListEnter .38s cubic-bezier(.22,.7,.25,1) forwards;
@@ -550,6 +551,33 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .vocab-library-divider::after { content:""; height:1px; flex:1; background:#454640; }
 .vocab-library-divider::after { flex:5; }
 .vocab-library-empty { padding:42px 10px; color:#aaa397; font-size:13px; text-align:center; }
+.vocab-library-add-work {
+    width:100%;
+    margin-top:10px;
+    padding:14px;
+    border:1px dashed #555650;
+    border-radius:8px;
+    background:transparent;
+    color:#c9c4ba;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+}
+.vocab-library-add-work:active { background:#292a27; }
+.workbook-list-remove {
+    position:absolute;
+    top:6px;
+    right:3px;
+    z-index:2;
+    width:24px;
+    height:24px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    color:#938b80;
+    font:600 16px/1 system-ui,sans-serif;
+}
+.workbook-list-remove:active { background:#3a302d; color:#e0aaa0; }
 #vocabBookContents[hidden],
 #vocabLibrarySelection[hidden] { display:none !important; }
 .pop-btn { flex: 1; border: none; height: 38px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; min-width: 22%; }
