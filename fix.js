@@ -914,8 +914,7 @@
     
     // ---- patchCore：loadLocalState / saveUserStats ラップ（save 直前に世代トークン確認） ----
     function patchCore() {
-    var origLoad = window.loadLocalState;
-    window.loadLocalState = function () { var p = origLoad ? origLoad.apply(this, arguments) : Promise.resolve(); return Promise.resolve(p).then(function () { return loadMyData(); }); };
+    window.onAppLoaded(function () { return loadMyData(); });
     var origSave = window.saveUserStats;
     window.saveUserStats = function () {
     // save 直前：世代トークンが新しければローカル派生を潰してから0を書く（復活根絶）
@@ -1872,11 +1871,7 @@ function applySelResetOnLoad(){
  }).catch(function(){});
 }
 /* ---------- 起動フック ---------- */
-var __prevLoad = window.loadLocalState;
-if (typeof __prevLoad==='function' && !__prevLoad.__selWrapped){
- window.loadLocalState = function(){ var r=__prevLoad.apply(this,arguments); setTimeout(applySelResetOnLoad,800); return r; };
- window.loadLocalState.__selWrapped = true;
-}
+window.onAppLoaded(function(){ setTimeout(applySelResetOnLoad,800); });
 /* ---------- ダイアログが開いたら選択を注入 ---------- */
 if (typeof MutationObserver!=='undefined'){
  new MutationObserver(function(){ var ov=document.getElementById('waOverlay'); if(ov&&ov.classList.contains('open')) injectSelect(); }).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
