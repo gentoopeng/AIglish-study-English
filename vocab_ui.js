@@ -835,6 +835,60 @@
     // 12. renderVocabList（メイン表示）
     // ================================================================
 
+    // 単語帳とフラッシュカード詳細で同じカードUIを共有する。
+    // 表示ごとに別実装を持たせないことで、見た目と操作の差を防ぐ。
+    window.createVocabCard = function(w) {
+        var card = document.createElement('div');
+        card.className = "word-row-container";
+        card.setAttribute('style', window.getCardStyleByHistory(w));
+        var hasAnyHistory = w.meanings && w.meanings.some(function(m) { return m.history && m.history.length > 0; });
+        var dotsHtml = "";
+        if (hasAnyHistory) {
+            var groupsHtml = [];
+            w.meanings.forEach(function(m) {
+                var groupHtml = '<div style="display:flex; gap:2px; align-items:center;">';
+                if (m.history && m.history.length > 0) {
+                    m.history.slice(-5).forEach(function(h) {
+                        var mark = h === 'ok' ? '◯' : h === 'so' ? '△' : '✕';
+                        var bg = h === 'ok' ? '#10B981' : h === 'so' ? '#F59E0B' : '#EF4444';
+                        var color = h === 'so' ? '#0F172A' : 'white';
+                        groupHtml += '<span style="padding:2px 4px; border-radius:4px; font-size:9px; font-weight:800; background:' + bg + '; color:' + color + ';">' + mark + '</span>';
+                    });
+                } else {
+                    groupHtml += '<span style="color:var(--text-sub); font-size:10px; padding:0 4px;">-</span>';
+                }
+                groupHtml += '</div>';
+                groupsHtml.push(groupHtml);
+            });
+            dotsHtml = '<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center; justify-content:flex-end; margin-top:0;">';
+            groupsHtml.forEach(function(gh, i) {
+                dotsHtml += gh;
+                if (i < groupsHtml.length - 1) {
+                    if ((i + 1) % 3 === 0) {
+                        dotsHtml += '<div style="flex-basis:100%; height:0;"></div>';
+                    } else {
+                        dotsHtml += '<span style="color:rgba(255,255,255,0.2); font-size:12px; font-weight:bold;">/</span>';
+                    }
+                }
+            });
+            dotsHtml += '</div>';
+        }
+        var meaningsHtml = '<div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px;">';
+        w.meanings.forEach(function(m) {
+            meaningsHtml += '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4;">' + m.text + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
+        });
+        meaningsHtml += '</div>';
+        var adminActionButtons = "";
+        if (window.isAdmin) {
+            adminActionButtons = '<div style="position:absolute; right:8px; top:8px; display:flex; gap:2px; z-index:100;"><button class="card-edit-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')"><i data-lucide="edit-3" size="18"></i></button><button class="card-delete-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm(\'' + w.num + '\')"><i data-lucide="trash-2" size="18"></i></button></div>';
+        }
+        card.innerHTML = adminActionButtons + '<div id="wordCardBody-' + w.num + '"><div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;"><div style="display:flex; align-items:center; gap:8px;"><span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#' + w.num + '</span><span style="font-size:18px; font-weight:800; color:white;">' + w.word + '</span></div></div>' + meaningsHtml + (w.sub ? '<div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;"><button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">サブ情報を展開 <i data-lucide="chevron-down" size="12"></i></button><div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;"><div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">' + w.sub + '</div></div></div>' : '') + '<div data-vocab-history="' + w.num + '" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">' + dotsHtml + '</div></div><div id="wordCardForm-' + w.num + '" style="display:none; padding-top:32px;"><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; display:block; margin-bottom:4px;">単語</label><input type="text" id="inlineEditWordInput-' + w.num + '" class="search-input" style="margin:0;" value="' + w.word + '"></div><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label><div id="inlineEditMeaningsList-' + w.num + '"></div><button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, \'' + w.num + '\')"><i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加</button></div><div style="margin-bottom:14px;"><label style="font-size:11px; color:var(--text-sub); font-weight:700; display:block; margin-bottom:4px;">サブ情報</label><textarea id="inlineEditSubInput-' + w.num + '" class="modern-textarea" style="height:60px; margin:0;">' + (w.sub || "") + '</textarea></div><div style="display:flex; gap:8px;"><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:rgba(255,255,255,0.05); border:1px solid var(--border);" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')">キャンセル</button><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:var(--accent); color:white; border:none;" onclick="window.saveInlineWordEdit(event, \'' + w.num + '\')">保存する</button></div></div>';
+        var cardBody = card.querySelector('#wordCardBody-' + w.num);
+        var history = cardBody ? cardBody.querySelector('[data-vocab-history]') : null;
+        if (cardBody) cardBody.insertBefore(window.createVocabNoteSection(w), history || null);
+        return card;
+    };
+
     window.renderVocabList = function() {
         var container = document.getElementById('vocabListContainer');
         if (!container) return;
@@ -854,55 +908,7 @@
             return true;
         });
         filtered.forEach(function(w) {
-            var card = document.createElement('div');
-            card.className = "word-row-container";
-            card.setAttribute('style', window.getCardStyleByHistory(w));
-            var hasAnyHistory = w.meanings && w.meanings.some(function(m) { return m.history && m.history.length > 0; });
-            var dotsHtml = "";
-            if (hasAnyHistory) {
-                var groupsHtml = [];
-                w.meanings.forEach(function(m) {
-                    var groupHtml = '<div style="display:flex; gap:2px; align-items:center;">';
-                    if (m.history && m.history.length > 0) {
-                        m.history.slice(-5).forEach(function(h) {
-                            var mark = h === 'ok' ? '◯' : h === 'so' ? '△' : '✕';
-                            var bg = h === 'ok' ? '#10B981' : h === 'so' ? '#F59E0B' : '#EF4444';
-                            var color = h === 'so' ? '#0F172A' : 'white';
-                            groupHtml += '<span style="padding:2px 4px; border-radius:4px; font-size:9px; font-weight:800; background:' + bg + '; color:' + color + ';">' + mark + '</span>';
-                        });
-                    } else {
-                        groupHtml += '<span style="color:var(--text-sub); font-size:10px; padding:0 4px;">-</span>';
-                    }
-                    groupHtml += '</div>';
-                    groupsHtml.push(groupHtml);
-                });
-                dotsHtml = '<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center; justify-content:flex-end; margin-top:0;">';
-                groupsHtml.forEach(function(gh, i) {
-                    dotsHtml += gh;
-                    if (i < groupsHtml.length - 1) {
-                        if ((i + 1) % 3 === 0) {
-                            dotsHtml += '<div style="flex-basis:100%; height:0;"></div>';
-                        } else {
-                            dotsHtml += '<span style="color:rgba(255,255,255,0.2); font-size:12px; font-weight:bold;">/</span>';
-                        }
-                    }
-                });
-                dotsHtml += '</div>';
-            }
-            var meaningsHtml = '<div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px;">';
-            w.meanings.forEach(function(m) {
-                meaningsHtml += '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4;">' + m.text + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
-            });
-            meaningsHtml += '</div>';
-            var adminActionButtons = "";
-            if (window.isAdmin) {
-                adminActionButtons = '<div style="position:absolute; right:8px; top:8px; display:flex; gap:2px; z-index:100;"><button class="card-edit-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')"><i data-lucide="edit-3" size="18"></i></button><button class="card-delete-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm(\'' + w.num + '\')"><i data-lucide="trash-2" size="18"></i></button></div>';
-            }
-            card.innerHTML = adminActionButtons + '<div id="wordCardBody-' + w.num + '"><div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;"><div style="display:flex; align-items:center; gap:8px;"><span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#' + w.num + '</span><span style="font-size:18px; font-weight:800; color:white;">' + w.word + '</span></div></div>' + meaningsHtml + (w.sub ? '<div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;"><button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">サブ情報を展開 <i data-lucide="chevron-down" size="12"></i></button><div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;"><div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">' + w.sub + '</div></div></div>' : '') + '<div data-vocab-history="' + w.num + '" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">' + dotsHtml + '</div></div><div id="wordCardForm-' + w.num + '" style="display:none; padding-top:32px;"><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; display:block; margin-bottom:4px;">単語</label><input type="text" id="inlineEditWordInput-' + w.num + '" class="search-input" style="margin:0;" value="' + w.word + '"></div><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label><div id="inlineEditMeaningsList-' + w.num + '"></div><button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, \'' + w.num + '\')"><i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加</button></div><div style="margin-bottom:14px;"><label style="font-size:11px; color:var(--text-sub); font-weight:700; display:block; margin-bottom:4px;">サブ情報</label><textarea id="inlineEditSubInput-' + w.num + '" class="modern-textarea" style="height:60px; margin:0;">' + (w.sub || "") + '</textarea></div><div style="display:flex; gap:8px;"><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:rgba(255,255,255,0.05); border:1px solid var(--border);" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')">キャンセル</button><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:var(--accent); color:white; border:none;" onclick="window.saveInlineWordEdit(event, \'' + w.num + '\')">保存する</button></div></div>';
-            var cardBody = card.querySelector('#wordCardBody-' + w.num);
-            var history = cardBody ? cardBody.querySelector('[data-vocab-history]') : null;
-            if (cardBody) cardBody.insertBefore(window.createVocabNoteSection(w), history || null);
-            container.appendChild(card);
+            container.appendChild(window.createVocabCard(w));
         });
         window.initLucide();
     };

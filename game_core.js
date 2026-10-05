@@ -34,8 +34,41 @@
         document.getElementById('flashcard-setup-screen').style.display = 'block';
         window.updateFlashcardSourceSelectOptions();
         window.setFlashcardDirection('en2ja');
+        window.resetFlashcardStatusFilters();
         window.applyVocabMaxRange();
     };
+
+    var flashcardSelectedStatuses = { ok: true, so: true, bad: true, none: true };
+
+    function updateFlashcardStatusFilterUi() {
+        var labels = { ok: '○', so: '△', bad: '×', none: 'ー' };
+        var selected = [];
+        document.querySelectorAll('.flashcard-status-filter').forEach(function(button) {
+            var enabled = !!flashcardSelectedStatuses[button.dataset.status];
+            button.classList.toggle('active', enabled);
+            button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+            if (enabled) selected.push(labels[button.dataset.status]);
+        });
+        var summary = document.getElementById('flashcardStatusFilterSummary');
+        if (summary) summary.textContent = selected.length === 4 ? 'すべての理解度を出題' : selected.length ? selected.join('・') + 'のみ出題' : '理解度を1つ以上選択してください';
+    }
+
+    window.resetFlashcardStatusFilters = function() {
+        flashcardSelectedStatuses = { ok: true, so: true, bad: true, none: true };
+        updateFlashcardStatusFilterUi();
+    };
+
+    window.toggleFlashcardStatusFilter = function(status) {
+        if (!Object.prototype.hasOwnProperty.call(flashcardSelectedStatuses, status)) return;
+        flashcardSelectedStatuses[status] = !flashcardSelectedStatuses[status];
+        updateFlashcardStatusFilterUi();
+    };
+
+    function getFlashcardWordStatus(word) {
+        if (typeof window.wordOverallStatus === 'function') return window.wordOverallStatus(word);
+        if (word && word.status) return word.status;
+        return 'none';
+    }
 
     window.setFlashcardDirection = function(mode) {
         flashcardDirectionMode = mode;
@@ -63,7 +96,7 @@
         if (typeof vocabList !== 'undefined') {
             pool = vocabList.filter(function(w) {
                 var n = parseInt(w.num);
-                return n >= startNum && n <= endNum;
+                return n >= startNum && n <= endNum && !!flashcardSelectedStatuses[getFlashcardWordStatus(w)];
             }).map(function(w) {
                 return {
                     num: w.num,
@@ -74,7 +107,7 @@
         }
 
         if (pool.length === 0) {
-            alert("指定された範囲または教材にデータが存在しません。");
+            alert("指定した番号と理解度に該当する単語がありません。");
             return;
         }
 
@@ -137,21 +170,6 @@
         }) || null;
     }
 
-    function appendFlashcardDetailRow(parent, label, value, className) {
-        if (!value) return;
-        var row = document.createElement('div');
-        row.className = 'flashcard-detail-row' + (className ? ' ' + className : '');
-        var heading = document.createElement('div');
-        heading.className = 'flashcard-detail-label';
-        heading.textContent = label;
-        var content = document.createElement('div');
-        content.className = 'flashcard-detail-value';
-        content.textContent = value;
-        row.appendChild(heading);
-        row.appendChild(content);
-        parent.appendChild(row);
-    }
-
     window.closeFlashcardWordDetails = function() {
         var sheet = document.getElementById('flashcardWordDetails');
         if (!sheet) return;
@@ -169,7 +187,7 @@
             sheet.id = 'flashcardWordDetails';
             sheet.className = 'flashcard-detail-sheet';
             sheet.setAttribute('aria-hidden', 'true');
-            sheet.innerHTML = '<button type="button" class="flashcard-detail-backdrop" aria-label="詳細を閉じる"></button><section class="flashcard-detail-panel" role="dialog" aria-modal="true" aria-labelledby="flashcardDetailWord"><div class="flashcard-detail-handle"></div><button type="button" class="flashcard-detail-close" aria-label="閉じる">×</button><div id="flashcardDetailContent"></div></section>';
+            sheet.innerHTML = '<button type="button" class="flashcard-detail-backdrop" aria-label="詳細を閉じる"></button><section class="flashcard-detail-panel" role="dialog" aria-modal="true" aria-label="単語の詳細"><div class="flashcard-detail-handle"></div><button type="button" class="flashcard-detail-close" aria-label="閉じる">×</button><div id="flashcardDetailContent" class="flashcard-detail-content"></div></section>';
             sheet.querySelector('.flashcard-detail-backdrop').onclick = window.closeFlashcardWordDetails;
             sheet.querySelector('.flashcard-detail-close').onclick = window.closeFlashcardWordDetails;
             document.body.appendChild(sheet);
@@ -177,51 +195,16 @@
 
         var content = sheet.querySelector('#flashcardDetailContent');
         content.replaceChildren();
-        var number = document.createElement('div');
-        number.className = 'flashcard-detail-number';
-        number.textContent = '#' + String((word && word.num) || current.num || '');
-        var title = document.createElement('h2');
-        title.id = 'flashcardDetailWord';
-        title.className = 'flashcard-detail-word';
-        title.textContent = String((word && word.word) || current.en || '');
-        content.appendChild(number);
-        content.appendChild(title);
-
-        var meanings = word && Array.isArray(word.meanings)
-            ? word.meanings.map(function(meaning) { return meaning && meaning.text; }).filter(Boolean)
-            : [];
-        if (!meanings.length) meanings.push(String((word && word.meaning) || current.ja || ''));
-        appendFlashcardDetailRow(content, '意味', meanings.join('\n'), 'is-meaning');
-        appendFlashcardDetailRow(content, 'サブ情報', word && word.sub ? String(word.sub) : '');
-        appendFlashcardDetailRow(content, 'メモ', word && word.note ? String(word.note) : '');
-
-        var history = [];
-        if (word) {
-            if (Array.isArray(word.meanings)) {
-                word.meanings.forEach(function(meaning) {
-                    if (meaning && Array.isArray(meaning.history)) history = history.concat(meaning.history);
-                });
-            }
-            if (!history.length && Array.isArray(word.history)) history = word.history.slice();
-            if (!history.length && word.status && word.status !== 'none') history.push(word.status);
+        if (word && typeof window.createVocabCard === 'function') {
+            // 単語帳と同じ生成関数を使う。似せた別UIではなく、完全に同じカードを表示する。
+            content.appendChild(window.createVocabCard(word));
+            if (typeof window.initLucide === 'function') window.initLucide();
+        } else {
+            var unavailable = document.createElement('div');
+            unavailable.className = 'word-row-container';
+            unavailable.textContent = '単語の詳細を読み込めませんでした。';
+            content.appendChild(unavailable);
         }
-        var historyRow = document.createElement('div');
-        historyRow.className = 'flashcard-detail-row';
-        var historyLabel = document.createElement('div');
-        historyLabel.className = 'flashcard-detail-label';
-        historyLabel.textContent = '理解度履歴';
-        var historyDots = document.createElement('div');
-        historyDots.className = 'flashcard-detail-history';
-        history.slice(-5).forEach(function(status) {
-            var dot = document.createElement('span');
-            dot.className = 'flashcard-detail-history-dot ' + (status || 'none');
-            dot.textContent = status === 'ok' ? '○' : status === 'so' ? '△' : status === 'bad' ? '×' : '－';
-            historyDots.appendChild(dot);
-        });
-        if (!historyDots.children.length) historyDots.textContent = '履歴なし';
-        historyRow.appendChild(historyLabel);
-        historyRow.appendChild(historyDots);
-        content.appendChild(historyRow);
 
         sheet.setAttribute('aria-hidden', 'false');
         requestAnimationFrame(function() { sheet.classList.add('is-open'); });
@@ -270,6 +253,8 @@
         document.getElementById('flashcardRemainingBadge').innerText = '残り ' + remaining + '枚';
         var progressPercent = flashcardOriginQueue.length > 0 ? Math.round((flashcardLearnedCount / flashcardOriginQueue.length) * 100) : 0;
         document.getElementById('flashcardProgressText').innerText = '表示中の覚えた単語: ' + progressPercent + '%';
+        var previousButton = document.getElementById('flashcardPreviousButton');
+        if (previousButton) previousButton.disabled = flashcardSessionHistory.length === 0;
 
         if (remaining <= 0) {
             alert('🎉 カードの試練達成！\n習得単語数: ' + flashcardLearnedCount + ' / ' + flashcardOriginQueue.length);
@@ -402,6 +387,22 @@
         if (!currentWord) return;
         var cleanKey = String(currentWord.en || '').toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g, "");
         var status = 'none';
+        var vocabIndex = -1;
+        if (typeof vocabList !== 'undefined') {
+            vocabIndex = vocabList.findIndex(function(v) { return String(v.num) === String(currentWord.num); });
+            if (vocabIndex < 0) vocabIndex = vocabList.findIndex(function(v) { return String(v.word || '').toLowerCase() === cleanKey; });
+        }
+        var previousMemory = (typeof wordMemory !== 'undefined' && Object.prototype.hasOwnProperty.call(wordMemory, cleanKey)) ? wordMemory[cleanKey] : undefined;
+        flashcardSessionHistory.push({
+            queueIndex: flashcardCurrentIndex,
+            cleanKey: cleanKey,
+            previousMemory: previousMemory,
+            vocabIndex: vocabIndex,
+            vocabSnapshot: vocabIndex >= 0 ? JSON.parse(JSON.stringify(vocabList[vocabIndex])) : null,
+            learnedCount: flashcardLearnedCount,
+            totalExp: typeof totalExp !== 'undefined' ? totalExp : null,
+            flashCount: typeof userStats !== 'undefined' ? (userStats.flash_count || 0) : null
+        });
 
         var stage = document.getElementById('flashcardDeckStage');
         var rect = card.getBoundingClientRect();
@@ -459,8 +460,7 @@
         }
         var vocabMatch = null;
         if (typeof vocabList !== 'undefined') {
-            vocabMatch = vocabList.find(function(v) { return String(v.num) === String(currentWord.num); });
-            if (!vocabMatch) vocabMatch = vocabList.find(function(v) { return v.word.toLowerCase() === cleanKey; });
+            vocabMatch = vocabIndex >= 0 ? vocabList[vocabIndex] : null;
         }
         if (vocabMatch) {
             vocabMatch.status = status;
@@ -471,6 +471,9 @@
             }
             if (!vocabMatch.history) vocabMatch.history = [];
             vocabMatch.history.push(status);
+            // 回答と同じ処理内で端末へ確定する。終了処理やタイマーまで待たない。
+            if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(vocabMatch.num);
+            if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         }
         if (typeof userStats !== 'undefined') {
             userStats.flash_count = (userStats.flash_count || 0) + 1;
@@ -496,7 +499,30 @@
         }, 0);
     };
 
+    window.goBackFlashcard = function() {
+        if (!flashcardSessionHistory.length) return;
+        var previous = flashcardSessionHistory.pop();
+        flashcardCurrentIndex = previous.queueIndex;
+        flashcardLearnedCount = previous.learnedCount;
+        if (previous.totalExp !== null && typeof totalExp !== 'undefined') totalExp = previous.totalExp;
+        if (previous.flashCount !== null && typeof userStats !== 'undefined') userStats.flash_count = previous.flashCount;
+        if (typeof wordMemory !== 'undefined') {
+            if (previous.previousMemory === undefined) delete wordMemory[previous.cleanKey];
+            else wordMemory[previous.cleanKey] = previous.previousMemory;
+            try { localStorage.setItem('wordMemory', JSON.stringify(wordMemory)); } catch (e) {}
+        }
+        if (previous.vocabIndex >= 0 && previous.vocabSnapshot && typeof vocabList !== 'undefined') {
+            vocabList[previous.vocabIndex] = JSON.parse(JSON.stringify(previous.vocabSnapshot));
+            if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(vocabList[previous.vocabIndex].num);
+            if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+        }
+        window.renderFlashcardDeck();
+    };
+
     window.quitFlashcardSession = function() {
+        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+        if (typeof window.flushAllManualVocabDrafts === 'function') window.flushAllManualVocabDrafts();
+        if (typeof window.flushAllDirtyVocabBooks === 'function') window.flushAllDirtyVocabBooks();
         window.closeFlashcardWordDetails();
         document.body.classList.remove('in-game-active');
         document.getElementById('flashcard-play-screen').style.display = 'none';
@@ -512,6 +538,9 @@
     };
 
     window.finishFlashcardSession = function() {
+        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+        if (typeof window.flushAllManualVocabDrafts === 'function') window.flushAllManualVocabDrafts();
+        if (typeof window.flushAllDirtyVocabBooks === 'function') window.flushAllDirtyVocabBooks();
         window.closeFlashcardWordDetails();
         document.body.classList.remove('in-game-active');
         var playScreen = document.getElementById('flashcard-play-screen');

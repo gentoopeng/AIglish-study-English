@@ -4469,6 +4469,10 @@ function toast(msg) {
 // これが無いと、手動セーブ前に別の教材へ移動した時点で直前の単語帳編集が失われる。
 window.__manualVocabDrafts = window.__manualVocabDrafts || {};
 window.__manualVocabCloudId = function(bookKey){ return encodeURIComponent(String(bookKey||'default')); };
+window.__manualVocabLocalKey = function(bookKey){
+  var id=(typeof myId!=='undefined'&&myId)?myId:'GUEST-000';
+  return 'core_v4_vocab_draft_'+id+'_'+encodeURIComponent(String(bookKey||'default'));
+};
 window.__manualVocabChunkSize = 180000;
 window.__gameSaveChecksum = window.__gameSaveChecksum || function(text){
   var hash=2166136261;
@@ -4496,11 +4500,53 @@ window.__captureManualVocabDraft = function() {
     var progress=(typeof window.extractUserProgressFromVocabList==='function')
       ? window.extractUserProgressFromVocabList()
       : {};
-    window.__manualVocabDrafts[bookKey]={
+    var savedAt=new Date().toISOString();
+    var draft={
       master:JSON.parse(JSON.stringify(master)),
-      progress:JSON.parse(JSON.stringify(progress))
+      progress:JSON.parse(JSON.stringify(progress)),
+      savedAt:savedAt
     };
+    window.__manualVocabDrafts[bookKey]=draft;
+    // メモリだけではブラウザを閉じると消える。変更した瞬間に教材単位の完全な
+    // スナップショットを端末へ同期保存し、クラウド通信の成否とは切り離す。
+    localStorage.setItem(window.__manualVocabLocalKey(bookKey),JSON.stringify(draft));
+    window.__manualVocabDraftRevisions=window.__manualVocabDraftRevisions||{};
+    window.__manualVocabDraftRevisions[bookKey]=(window.__manualVocabDraftRevisions[bookKey]||0)+1;
+    window.__dirtyManualVocabDrafts=window.__dirtyManualVocabDrafts||{};
+    window.__dirtyManualVocabDrafts[bookKey]=window.__manualVocabDraftRevisions[bookKey];
+    return draft;
   } catch(e) { console.warn('[save] vocab draft capture failed',e); }
+};
+
+// 単語帳を閉じる時だけ、変更された教材をクラウドへ確定する。
+// 保存完了メタデータは全パーツ送信後に更新するため、途中送信を復元しない。
+window.flushManualVocabDraft = async function(bookKey){
+  var dirty=window.__dirtyManualVocabDrafts&&window.__dirtyManualVocabDrafts[bookKey];
+  var draft=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
+  if(!dirty||!draft)return false;
+  if(typeof myId==='undefined'||!myId||myId==='GUEST-000'||!window.db||!window.fbSetDoc||!window.fbGetDoc||!window.fbDoc)return false;
+  var raw=JSON.stringify({master:draft.master||[],progress:draft.progress||{},savedAt:draft.savedAt||new Date().toISOString()});
+  var generation=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
+  var parts=[];
+  for(var i=0;i<raw.length;i+=window.__manualVocabChunkSize)parts.push(raw.slice(i,i+window.__manualVocabChunkSize));
+  if(!parts.length)parts=[''];
+  try{
+    var cloudId=window.__manualVocabCloudId(bookKey);
+    for(var pi=0;pi<parts.length;pi++){
+      await window.fbSetDoc(window.fbDoc(window.db,'users',myId,'vocabBooks',cloudId,'parts',generation+'_p'+pi),{d:parts[pi]},{merge:false});
+    }
+    var meta={bookKey:bookKey,partCount:parts.length,generation:generation,rawLength:raw.length,checksum:window.__gameSaveChecksum(raw),updatedAt:draft.savedAt||new Date().toISOString()};
+    var ref=window.fbDoc(window.db,'users',myId,'vocabBooks',cloudId);
+    await window.fbSetDoc(ref,meta,{merge:false});
+    var verify=await window.fbGetDoc(ref);
+    if(!verify||!verify.exists()||!verify.data()||verify.data().generation!==generation)throw new Error('単語帳保存の完了確認に失敗しました');
+    await window.fbSetDoc(window.fbDoc(window.db,'users',myId,'vocabProgress',bookKey),{wordsJson:JSON.stringify(draft.progress||{}),updatedAt:meta.updatedAt},{merge:false});
+    if(window.__dirtyManualVocabDrafts[bookKey]===dirty)delete window.__dirtyManualVocabDrafts[bookKey];
+    return true;
+  }catch(error){console.error('単語帳の変更保存に失敗しました:',error);return false;}
+};
+window.flushAllManualVocabDrafts = function(){
+  return Promise.all(Object.keys(window.__dirtyManualVocabDrafts||{}).map(function(bookKey){return window.flushManualVocabDraft(bookKey);}));
 };
 // 手動セーブ前に教材を行き来しても、共有キャッシュではなく編集中の下書きを表示する。
 if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData==='function'){
@@ -4509,6 +4555,10 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
   window.loadCurrentTextbookData=async function(){
     var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
     var draft=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
+    if(!draft){
+      try{draft=JSON.parse(localStorage.getItem(window.__manualVocabLocalKey(bookKey))||'null');}catch(e){draft=null;}
+      if(draft&&Array.isArray(draft.master))window.__manualVocabDrafts[bookKey]=JSON.parse(JSON.stringify(draft));
+    }
     // 同じ端末では、手動セーブ時に確定済みのローカル教材を最優先する。
     // Firebaseを待たずに初回画面を表示できる。
     if(!draft){

@@ -2384,12 +2384,21 @@ window.flushAllDirtyVocabBooks = function() {
 };
 
 window.onTabChange(function(tabId) {
-  if (tabId !== "vocab") window.flushAllDirtyVocabBooks();
+  if (tabId !== "vocab") {
+    window.flushAllDirtyVocabBooks();
+    if (typeof window.flushAllManualVocabDrafts === "function") window.flushAllManualVocabDrafts();
+  }
 });
 document.addEventListener("visibilitychange", function() {
-  if (document.visibilityState === "hidden") window.flushAllDirtyVocabBooks();
+  if (document.visibilityState === "hidden") {
+    window.flushAllDirtyVocabBooks();
+    if (typeof window.flushAllManualVocabDrafts === "function") window.flushAllManualVocabDrafts();
+  }
 });
-window.addEventListener("pagehide", function() { window.flushAllDirtyVocabBooks(); });
+window.addEventListener("pagehide", function() {
+  window.flushAllDirtyVocabBooks();
+  if (typeof window.flushAllManualVocabDrafts === "function") window.flushAllManualVocabDrafts();
+});
 
 window.scheduleVocabProgressSave = function(delay) {
   delay = delay || 500;
