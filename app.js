@@ -756,10 +756,6 @@ window.selectVocabLibraryBook = async function(bookId) {
   if (contents) contents.hidden = false;
   await window.loadCurrentTextbookData();
 };
-window.onTabChange(function(tabId) {
-  if (tabId === 'vocab') window.showVocabLibrarySelection();
-});
-
 // 教材選択画面のゲージは、その教材自身の保存済み理解度から計算する。
 // 現在開いている vocabList や全教材共通の統計を流用しない。
 window.getTextbookMasteryStats = function(bookId) {
@@ -1239,6 +1235,11 @@ window.__tabChangeHandlers.slice().forEach(function(handler) {
     try { handler(tabId); } catch (e) { console.error('画面切り替え後の更新に失敗しました:', e); }
 });
 };
+// onTabChange の定義後に登録する。定義前に呼ぶと app.js の実行が停止し、
+// その後に定義されるログイン処理まで読み込まれなくなる。
+window.onTabChange(function(tabId) {
+if(tabId === 'vocab') window.showVocabLibrarySelection();
+});
 // ==========================================================================
 // 📖 単語帳関連
 // ==========================================================================
