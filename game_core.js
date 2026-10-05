@@ -127,31 +127,38 @@
         });
     };
 
-    window.createFlickTrailParticle = function(x, y, type) {
-        var stage = document.getElementById('flashcard-play-screen');
-        if (!stage) return;
-        var p = document.createElement('div');
-        p.className = 'fc-history-bubble';
-        p.style.position = 'absolute';
-        p.style.left = x + "px";
-        p.style.top = y + "px";
-        p.style.width = (Math.random() * 8 + 6) + "px";
-        p.style.height = p.style.width;
-        p.style.pointerEvents = 'none';
-        p.style.zIndex = '400';
-        p.style.opacity = '0.85';
-        p.style.transform = 'translate(-50%, -50%)';
-        p.style.transition = 'all 0.8s cubic-bezier(0.1, 0.8, 0.25, 1)';
-        if (type === 'right') p.classList.add('ok');
-        else if (type === 'left') p.classList.add('bad');
-        else if (type === 'up') p.classList.add('so');
-        else p.style.borderColor = 'rgba(255,255,255,0.6)';
-        stage.appendChild(p);
-        setTimeout(function() {
-            p.style.transform = "translate(" + ((Math.random() - 0.5) * 40) + "px, " + (-60 - Math.random() * 40) + "px) scale(0)";
-            p.style.opacity = '0';
-        }, 10);
-        setTimeout(function() { p.remove(); }, 850);
+    // スワイプ確定時だけ表示する軽量な消滅演出。
+    // 指への追尾はせず、8個の粒と1本の輪をCSSだけで短時間描画する。
+    window.showFlashcardVanishBurst = function(x, y, direction) {
+        var burst = document.createElement('div');
+        burst.className = 'fc-vanish-burst fc-vanish-' + direction;
+        burst.style.left = x + 'px';
+        burst.style.top = y + 'px';
+
+        var ring = document.createElement('span');
+        ring.className = 'fc-vanish-ring';
+        burst.appendChild(ring);
+
+        var colors = direction === 'right'
+            ? ['#6EE7B7', '#34D399', '#FFFFFF']
+            : direction === 'left'
+                ? ['#FCA5A5', '#FB7185', '#FFFFFF']
+                : ['#FDE68A', '#F59E0B', '#FFFFFF'];
+        for (var i = 0; i < 8; i++) {
+            var particle = document.createElement('span');
+            particle.className = 'fc-vanish-particle';
+            var angle = (Math.PI * 2 * i / 8) + (i % 2 ? 0.14 : -0.08);
+            var distance = 52 + (i % 3) * 12;
+            particle.style.setProperty('--fc-burst-x', Math.round(Math.cos(angle) * distance) + 'px');
+            particle.style.setProperty('--fc-burst-y', Math.round(Math.sin(angle) * distance) + 'px');
+            particle.style.setProperty('--fc-burst-delay', (i * 12) + 'ms');
+            particle.style.setProperty('--fc-burst-size', (5 + (i % 3) * 2) + 'px');
+            particle.style.background = colors[i % colors.length];
+            particle.style.color = colors[i % colors.length];
+            burst.appendChild(particle);
+        }
+        document.body.appendChild(burst);
+        setTimeout(function() { burst.remove(); }, 650);
     };
 
     window.renderFlashcardDeck = function() {
@@ -182,26 +189,34 @@
 
         cardWrap.onclick = function(e) {
             if (isCardFlicking) return;
+            if (cardWrap.__ignoreClickUntil && Date.now() < cardWrap.__ignoreClickUntil) return;
             cardWrap.classList.toggle('flipped');
         };
 
-        cardWrap.addEventListener('touchstart', function(e) {
-            cardTouchStartX = e.touches[0].clientX;
-            cardTouchStartY = e.touches[0].clientY;
+        // Pointer Eventsに統一し、指・ペン・マウスの位置へカード本体を追尾させる。
+        // touchとclickを別々に登録すると同じ操作が二重に処理されるため使用しない。
+        cardWrap.style.touchAction = 'none';
+        var activePointerId = null;
+        cardWrap.addEventListener('pointerdown', function(e) {
+            if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+            activePointerId = e.pointerId;
+            cardTouchStartX = e.clientX;
+            cardTouchStartY = e.clientY;
             isCardFlicking = true;
-        }, { passive: true });
+            cardWrap.setPointerCapture(e.pointerId);
+            cardWrap.classList.add('is-dragging');
+            cardWrap.style.transition = 'none';
+            cardWrap.style.animation = 'none';
+        });
 
-        cardWrap.addEventListener('touchmove', function(e) {
-            if (!isCardFlicking) return;
-            var dx = e.touches[0].clientX - cardTouchStartX;
-            var dy = e.touches[0].clientY - cardTouchStartY;
-            cardWrap.style.transform = "translate3d(" + dx + "px, " + dy + "px, 0) rotate(" + (dx * 0.05) + "deg)";
+        cardWrap.addEventListener('pointermove', function(e) {
+            if (!isCardFlicking || e.pointerId !== activePointerId) return;
+            var dx = e.clientX - cardTouchStartX;
+            var dy = e.clientY - cardTouchStartY;
+            cardWrap.style.setProperty('transform', "translate3d(" + dx + "px, " + dy + "px, 0) rotate(" + (dx * 0.05) + "deg)", 'important');
             var distance = Math.sqrt(dx * dx + dy * dy);
             var ratio = Math.min(distance / 130, 1);
             var fluidOpacity = Math.pow(ratio, 2.2) * 0.45;
-            if (Math.random() < 0.35) {
-                window.createFlickTrailParticle(e.touches[0].clientX, e.touches[0].clientY, 'trail');
-            }
             var rightEdge = document.getElementById('fcEdgeRippleRight');
             var leftEdge = document.getElementById('fcEdgeRippleLeft');
             var topEdge = document.getElementById('fcEdgeRippleTop');
@@ -231,19 +246,26 @@
                 if (leftEdge) leftEdge.style.opacity = 0;
                 if (topEdge) topEdge.style.opacity = 0;
             }
-        }, { passive: true });
+        });
 
-        cardWrap.addEventListener('touchend', function(e) {
-            if (!isCardFlicking) return;
+        cardWrap.addEventListener('pointerup', function(e) {
+            if (!isCardFlicking || e.pointerId !== activePointerId) return;
             isCardFlicking = false;
-            var dx = e.changedTouches[0].clientX - cardTouchStartX;
-            var dy = e.changedTouches[0].clientY - cardTouchStartY;
+            activePointerId = null;
+            var dx = e.clientX - cardTouchStartX;
+            var dy = e.clientY - cardTouchStartY;
             liveRipple.style.opacity = 0;
             if (dx > 65) { window.swipeFlashcard('right', dx, dy); }
             else if (dx < -65) { window.swipeFlashcard('left', dx, dy); }
             else if (dy < -65) { window.swipeFlashcard('up', dx, dy); }
             else {
-                cardWrap.style.transform = "";
+                cardWrap.classList.remove('is-dragging');
+                cardWrap.style.transition = '';
+                cardWrap.style.animation = '';
+                cardWrap.style.removeProperty('transform');
+                // スマホはclickの発火を待たず、指を離した瞬間にめくる。
+                cardWrap.classList.toggle('flipped');
+                cardWrap.__ignoreClickUntil = Date.now() + 500;
                 var rightEdge2 = document.getElementById('fcEdgeRippleRight');
                 var leftEdge2 = document.getElementById('fcEdgeRippleLeft');
                 var topEdge2 = document.getElementById('fcEdgeRippleTop');
@@ -251,6 +273,17 @@
                 if (leftEdge2) leftEdge2.style.opacity = 0;
                 if (topEdge2) topEdge2.style.opacity = 0;
             }
+        });
+
+        cardWrap.addEventListener('pointercancel', function(e) {
+            if (e.pointerId !== activePointerId) return;
+            activePointerId = null;
+            isCardFlicking = false;
+            cardWrap.classList.remove('is-dragging');
+            cardWrap.style.transition = '';
+            cardWrap.style.animation = '';
+            cardWrap.style.removeProperty('transform');
+            liveRipple.style.opacity = 0;
         });
 
         var frontText = flashcardDirectionMode === 'en2ja' ? wordData.en : wordData.ja;
@@ -296,13 +329,6 @@
         });
         setTimeout(function() { ghost.remove(); }, 850);
 
-        // パーティクル
-        for (var i = 0; i < 15; i++) {
-            setTimeout(function() {
-                window.createFlickTrailParticle(releaseX + (Math.random() - 0.5) * 80, releaseY + (Math.random() - 0.5) * 80, direction);
-            }, i * 15);
-        }
-
         // リップル
         var ripple = document.createElement('div');
         ripple.className = "flashcard-post-ripple firework-余韻-" + direction;
@@ -316,6 +342,9 @@
         ripple.style.animationDuration = "0.8s";
         document.body.appendChild(ripple);
         setTimeout(function() { ripple.remove(); }, 800);
+        if (typeof window.showFlashcardVanishBurst === 'function') {
+            window.showFlashcardVanishBurst(releaseX, releaseY, direction);
+        }
         card.remove();
 
         if (direction === 'right') { status = 'ok'; flashcardLearnedCount++; }
@@ -341,29 +370,29 @@
             }
             if (!vocabMatch.history) vocabMatch.history = [];
             vocabMatch.history.push(status);
-            if (typeof window.saveVocabToStorage === 'function') window.saveVocabToStorage();
         }
         if (typeof userStats !== 'undefined') {
             userStats.flash_count = (userStats.flash_count || 0) + 1;
             userStats.vocab_fixed = (typeof vocabList !== 'undefined') ? vocabList.filter(function(w) { return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; }); }).length : 0;
+        }
+        // 次のカードを最初に表示する。単語帳全体の再描画やランキング更新を
+        // スワイプと同じ処理内で行うと、端末によって操作後に引っ掛かる。
+        flashcardCurrentIndex++;
+        window.renderFlashcardDeck();
+        setTimeout(function() {
             if (typeof window.saveUserStats === 'function') window.saveUserStats();
             if (typeof window.checkAndRewardTitleBonusXP === 'function') window.checkAndRewardTitleBonusXP();
-        }
-        if (typeof window.applyProfileToUi === 'function') window.applyProfileToUi();
-        if (typeof window.updateReaderWordColors === 'function') window.updateReaderWordColors();
-        if (typeof window.renderVocabList === 'function') window.renderVocabList();
-        if (typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
-
-        setTimeout(function() {
-            flashcardCurrentIndex++;
-            window.renderFlashcardDeck();
+            if (typeof window.applyProfileToUi === 'function') window.applyProfileToUi();
+            if (typeof window.updateReaderWordColors === 'function') window.updateReaderWordColors();
+            if (vocabMatch && typeof window.updateVocabCardUi === 'function') window.updateVocabCardUi(vocabMatch.num);
+            if (typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
             var rightEdge3 = document.getElementById('fcEdgeRippleRight');
             var leftEdge3 = document.getElementById('fcEdgeRippleLeft');
             var topEdge3 = document.getElementById('fcEdgeRippleTop');
             if (rightEdge3) rightEdge3.style.opacity = 0;
             if (leftEdge3) leftEdge3.style.opacity = 0;
             if (topEdge3) topEdge3.style.opacity = 0;
-        }, 800);
+        }, 0);
     };
 
     window.quitFlashcardSession = function() {
@@ -385,29 +414,16 @@
         var playScreen = document.getElementById('flashcard-play-screen');
         if (playScreen) playScreen.style.display = 'none';
         var resultScreen = document.getElementById('game-result-screen');
-        if (resultScreen) resultScreen.style.display = 'block';
-        var totalQ = typeof flashcardCurrentIndex !== 'undefined' ? flashcardCurrentIndex : 0;
-        var accuracy = totalQ > 0 ? Math.round((flashcardLearnedCount / totalQ) * 100) : 0;
-        var resScore = document.getElementById('resScore');
-        var resAccuracy = document.getElementById('resAccuracy');
-        var resLblScore = document.getElementById('resLblScore');
-        if (resLblScore) resLblScore.innerText = "学習カード数";
-        if (resScore) resScore.innerText = totalQ;
-        if (resAccuracy) resAccuracy.innerText = accuracy + '%';
-        var resBest = document.getElementById('resBoxBest');
-        var resHigh = document.getElementById('resBoxHigh');
-        if (resBest) resBest.style.display = 'none';
-        if (resHigh) resHigh.style.display = 'none';
-        var histTitle = document.querySelector('#game-result-screen h3.cosmic-list-title');
-        if (histTitle) histTitle.style.display = 'none';
-        var histContainer = document.getElementById('gameHistoryListContainer');
-        if (histContainer) histContainer.style.display = 'none';
+        if (resultScreen) resultScreen.style.display = 'none';
+        var startScreen = document.getElementById('game-start-screen');
+        if (startScreen) startScreen.style.display = 'flex';
+        var lbArea = document.getElementById('gameLeaderboardArea');
+        if (lbArea) lbArea.style.display = 'flex';
         ['fcEdgeRippleRight', 'fcEdgeRippleLeft', 'fcEdgeRippleTop'].forEach(function(id) {
             var el = document.getElementById(id);
             if (el) el.remove();
         });
         if (typeof window.renderGameLeaderboard === 'function') window.renderGameLeaderboard();
-        if (typeof window.saveVocabToStorage === 'function') window.saveVocabToStorage();
     };
     window.quitFlashcardSession = window.finishFlashcardSession;
 
