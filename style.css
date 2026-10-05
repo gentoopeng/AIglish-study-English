@@ -330,6 +330,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .sidebar { position: fixed; top: 0; left: -280px; width: 280px; height: 100vh; background: linear-gradient(160deg, rgba(10, 15, 30, 0.88) 0%, rgba(20, 15, 45, 0.96) 100%) !important; backdrop-filter: blur(25px) !important; -webkit-backdrop-filter: blur(25px) !important; z-index: 2001; transition: left 0.3s cubic-bezier(0.25, 1, 0.5, 1); display: flex; flex-direction: column; border-right: 2px solid transparent; border-image: linear-gradient(to bottom, var(--cosmic-cyan), var(--cosmic-purple-light)) 1; box-shadow: 5px 0 25px rgba(0, 240, 255, 0.3), 10px 0 50px rgba(192, 132, 252, 0.15); }
 .sidebar.open { left: 0; }
 .sidebar-header { padding: 24px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.15); display: flex; align-items: center; gap: 14px; background: linear-gradient(to right, rgba(0, 240, 255, 0.08), transparent); }
+.sidebar-version { margin: 12px 8px 4px; padding: 9px 12px; border: 1px solid rgba(0,240,255,0.2); border-radius: 8px; background: rgba(0,0,0,0.2); color: #94a3b8; font-family: monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-align: center; }
 .sidebar-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--text-main); font-size: 13.5px; font-weight: 700; background: none; border: none; width: calc(100% - 16px); margin: 4px 8px; border-radius: 8px; text-align: left; cursor: pointer; transition: all 0.2s; }
 
 .nav-bar { position: fixed; bottom: 0; left: 0; width: 100vw; height: 60px; background: rgba(15, 23, 42, 0.85) !important; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; justify-content: space-around; align-items: center; z-index: 4000 !important; transition: opacity 0.3s, transform 0.3s; }
@@ -367,6 +368,16 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
 .word-row-container { border-radius: 12px; padding: 14px; margin-bottom: 10px; cursor: pointer; position: relative; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.25); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); box-sizing: border-box; }
 .word-meaning-extra { font-size: 12.5px; color: #FFF; line-height: 1.6; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.25); white-space: pre-line; display: none; }
 .sub-info-block { background: rgba(0, 0, 0, 0.45); padding: 6px 10px; border-radius: 6px; font-size: 12px; color: #FFF; margin-top: 4px; }
+.vocab-note-section { margin-top:8px; }
+.vocab-note-toggle { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); border-radius:999px; color:var(--text-sub); font-size:10px; font-weight:800; padding:5px 11px; cursor:pointer; transition:background .15s,border-color .15s,color .15s; }
+.vocab-note-toggle:active { background:rgba(0,240,255,.10); border-color:rgba(0,240,255,.28); color:#FFF; }
+.vocab-note-toggle.has-note { color:var(--cosmic-cyan); border-color:rgba(0,240,255,.24); background:rgba(0,240,255,.06); }
+.vocab-note-text { margin-top:6px; padding:7px 9px; border-radius:7px; background:rgba(255,255,255,.045); color:rgba(255,255,255,.88); font-size:12px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+.vocab-note-editor { margin-top:6px; padding:8px; border:none; border-radius:9px; background:rgba(255,255,255,.045); }
+.vocab-note-input { height:76px !important; margin:0 0 8px !important; resize:vertical; }
+.vocab-note-actions { display:flex; justify-content:flex-end; gap:8px; }
+.vocab-note-actions .list-action-link { border-radius:999px; padding:6px 12px; }
+.vocab-note-save { background:linear-gradient(135deg,rgba(0,240,255,.22),rgba(192,132,252,.22)) !important; border-color:rgba(0,240,255,.35) !important; color:#FFF !important; }
 .range-box { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; background: rgba(255,255,255,0.15); backdrop-filter: blur(5px); border: 1px solid rgba(255, 255, 255, 0.25); padding: 8px 12px; border-radius: 10px; }
 .range-input { width: 70px; height: 32px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; color: white; text-align: center; }
 .filter-scroller { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; }
@@ -1264,6 +1275,96 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-sizing: border-box;
 }
 
+.flashcard-status-filters {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:12px;
+    padding:10px 0 6px;
+}
+.flashcard-status-filter {
+    width:34px;
+    height:34px;
+    display:grid;
+    place-items:center;
+    padding:0;
+    border:1px solid rgba(255,255,255,.3);
+    border-radius:50%;
+    background:rgba(0,0,0,.5);
+    color:#fff;
+    font-size:14px;
+    font-weight:900;
+    cursor:pointer;
+    opacity:.42;
+    transition:transform .12s ease, opacity .12s ease, background .12s ease;
+}
+.flashcard-status-filter.active { opacity:1; transform:scale(1.06); }
+.flashcard-status-filter.status-ok.active { background:var(--word-ok); color:#000; }
+.flashcard-status-filter.status-so.active { background:var(--word-so); color:#000; }
+.flashcard-status-filter.status-bad.active { background:var(--word-bad); color:#fff; }
+.flashcard-status-filter.status-none.active { background:rgba(255,255,255,.3); color:#fff; }
+.flashcard-status-filter:active { transform:scale(.94); }
+.flashcard-status-filter-summary { min-height:16px; text-align:center; color:var(--text-sub); font-size:10px; font-weight:700; }
+.flashcard-previous-button:disabled { opacity:.35; cursor:not-allowed; }
+
+.flashcard-info-button {
+    position: absolute;
+    left: max(18px, env(safe-area-inset-left));
+    bottom: max(18px, env(safe-area-inset-bottom));
+    z-index: 120;
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(255,255,255,.38);
+    border-radius: 50%;
+    background: rgba(15,23,42,.78);
+    color: #fff;
+    font: 800 20px/1 Georgia, serif;
+    box-shadow: 0 6px 22px rgba(0,0,0,.3);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    touch-action: manipulation;
+}
+
+.flashcard-info-button:active { transform: scale(.94); background: rgba(99,102,241,.72); }
+
+.flashcard-detail-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 7000;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.flashcard-detail-sheet.is-open { visibility: visible; pointer-events: auto; }
+.flashcard-detail-backdrop { position:absolute; inset:0; width:100%; height:100%; border:0; background:rgba(2,6,23,.56); opacity:0; transition:opacity .2s ease; }
+.flashcard-detail-sheet.is-open .flashcard-detail-backdrop { opacity:1; }
+.flashcard-detail-panel {
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:0;
+    max-height:min(72vh, 620px);
+    overflow-y:auto;
+    padding:12px 14px calc(18px + env(safe-area-inset-bottom));
+    border-radius:24px 24px 0 0;
+    border:1px solid rgba(255,255,255,.14);
+    border-bottom:0;
+    background:linear-gradient(180deg, rgba(30,41,59,.98), rgba(15,23,42,.99));
+    color:#fff;
+    box-shadow:0 -18px 50px rgba(0,0,0,.4);
+    transform:translateY(105%);
+    transition:transform .24s cubic-bezier(.22,.8,.28,1);
+}
+.flashcard-detail-sheet.is-open .flashcard-detail-panel { transform:translateY(0); }
+.flashcard-detail-handle { width:42px; height:4px; margin:0 auto 12px; border-radius:99px; background:rgba(255,255,255,.3); }
+.flashcard-detail-close { position:absolute; top:18px; right:18px; width:34px; height:34px; border:0; border-radius:50%; background:rgba(255,255,255,.08); color:#fff; font-size:24px; line-height:1; }
+.flashcard-detail-content { padding-top:8px; }
+.flashcard-detail-content .word-row-container { margin-bottom:0; }
+
+@media (prefers-reduced-motion: reduce) {
+    .flashcard-detail-backdrop, .flashcard-detail-panel { transition:none; }
+}
+
 #flashcard-setup-screen > div {
     background: transparent !important;
     border: none !important;
@@ -1308,6 +1409,61 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     animation: bubbleFloatAnim 4s ease-in-out infinite; 
 }
 
+/* ドラッグ中は待機アニメーションにtransformを奪わせず、指の位置を最優先する。 */
+.flashcard-wrapper-3d.is-dragging {
+    animation: none !important;
+    transition: none !important;
+    will-change: transform;
+}
+
+/* フラッシュ単語を離した地点で一度だけ広がる、軽量な泡・花火演出。 */
+.fc-vanish-burst {
+    position: fixed;
+    width: 0;
+    height: 0;
+    z-index: 5002;
+    pointer-events: none;
+    contain: layout style paint;
+}
+
+.fc-vanish-ring {
+    position: absolute;
+    left: -16px;
+    top: -16px;
+    width: 32px;
+    height: 32px;
+    border: 2px solid rgba(255,255,255,.65);
+    border-radius: 50%;
+    animation: fcVanishRing .48s ease-out forwards;
+}
+
+.fc-vanish-particle {
+    position: absolute;
+    left: calc(var(--fc-burst-size) / -2);
+    top: calc(var(--fc-burst-size) / -2);
+    width: var(--fc-burst-size);
+    height: var(--fc-burst-size);
+    border-radius: 50%;
+    box-shadow: 0 0 7px currentColor;
+    opacity: 0;
+    animation: fcVanishParticle .52s cubic-bezier(.16,.72,.3,1) var(--fc-burst-delay) forwards;
+}
+
+@keyframes fcVanishParticle {
+    0% { transform: translate3d(0,0,0) scale(.35); opacity: 0; }
+    18% { opacity: .95; }
+    100% { transform: translate3d(var(--fc-burst-x),var(--fc-burst-y),0) scale(0); opacity: 0; }
+}
+
+@keyframes fcVanishRing {
+    0% { transform: scale(.25); opacity: .8; }
+    100% { transform: scale(4.4); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fc-vanish-burst { display: none !important; }
+}
+
 @keyframes bubbleFloatAnim {
     0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
     33% { transform: translateY(-8px) scale(1.02) rotate(-1deg); }
@@ -1333,11 +1489,17 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     text-align: center;
     transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
     transform-style: preserve-3d;
+    will-change: transform;
+    -webkit-transform-style: preserve-3d;
     z-index: 2;
 }
 
 .flashcard-wrapper-3d.flipped .flashcard-inner-rotator {
     transform: rotateY(180deg);
+}
+
+.flashcard-wrapper-3d.flipped {
+    animation-play-state: paused;
 }
 
 .flashcard-face-front,
@@ -1651,3 +1813,48 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
     text-overflow: ellipsis !important;
     font-size: 14px !important;
 }
+
+/* 理解度ボタンはタップ終了後の click を待たず pointerdown で反応する。 */
+.word-row-container button[onpointerdown*="updateMeaningStatus"],
+#wordPopover button[onpointerdown*="updateMeaningStatus"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 保存中の上部通知は表示しない。手動保存ボタンは表示する。 */
+#svAutoIndicator,
+#fbSaveInd,
+#svGauge {
+    display: none !important;
+}
+
+/* 単一セーブ画面 */
+.fbsv-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 60060;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(5, 3, 12, 0.82);
+    backdrop-filter: blur(8px);
+}
+.fbsv-card {
+    width: min(92vw, 400px);
+    padding: 22px 18px;
+    border: 1px solid rgba(200, 144, 42, 0.4);
+    border-radius: 18px;
+    background: linear-gradient(168deg, rgba(46, 38, 28, 0.98), rgba(24, 18, 12, 0.99));
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+}
+.fbsv-head, .fbsv-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fbsv-head { margin-bottom: 14px; }
+.fbsv-title { color: #f3e5c0; font-size: 18px; font-weight: 900; }
+.fbsv-close { width: 32px; height: 32px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; background: rgba(255,255,255,.05); color: #fff; }
+.fbsv-row { padding: 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; background: rgba(0,0,0,.25); }
+.fbsv-name { color: #f3e5c0; font-size: 14px; font-weight: 900; }
+.fbsv-date { margin-top: 3px; color: #a89880; font-size: 11px; }
+.fbsv-btn { padding: 10px 18px; border: 1px solid rgba(245,196,81,.5); border-radius: 9px; background: linear-gradient(180deg,#4a3b24,#1f1809); color: #fde68a; font-weight: 900; }
+.fbsv-btn:disabled { opacity: .6; }
+.fbsv-note { margin-top: 14px; padding: 10px 12px; border: 1px dashed rgba(200,144,42,.25); border-radius: 9px; color: #a89880; font-size: 10.5px; line-height: 1.6; }
