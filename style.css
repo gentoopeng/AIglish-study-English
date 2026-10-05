@@ -511,6 +511,47 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     .textbook-list-item { opacity:1; transform:none; animation:none; }
     .textbook-list-progress-fill,.textbook-list-arrow { transition:none; }
 }
+
+/* 単語帳タブを開いた直後に表示する、通常画面の教材一覧。 */
+.vocab-library-selection {
+    min-height:calc(100vh - 150px);
+    padding:8px 2px 28px;
+    color:#e7e3da;
+}
+.vocab-library-header {
+    padding:4px 4px 18px;
+    border-bottom:1px solid #3b3b37;
+}
+.vocab-library-kicker {
+    display:block;
+    margin-bottom:5px;
+    color:#999386;
+    font:600 9px/1.2 system-ui,sans-serif;
+    letter-spacing:.24em;
+}
+.vocab-library-header h2 {
+    margin:0;
+    color:#f0ece3;
+    font:700 22px/1.25 Georgia,"Yu Mincho",serif;
+    letter-spacing:.02em;
+}
+.vocab-library-list { display:flex; flex-direction:column; }
+.vocab-library-work-section[hidden] { display:none; }
+.vocab-library-divider {
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin:22px 0 4px;
+    color:#aaa397;
+    font:700 11px/1 system-ui,sans-serif;
+    letter-spacing:.12em;
+}
+.vocab-library-divider::before,
+.vocab-library-divider::after { content:""; height:1px; flex:1; background:#454640; }
+.vocab-library-divider::after { flex:5; }
+.vocab-library-empty { padding:42px 10px; color:#aaa397; font-size:13px; text-align:center; }
+#vocabBookContents[hidden],
+#vocabLibrarySelection[hidden] { display:none !important; }
 .pop-btn { flex: 1; border: none; height: 38px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; min-width: 22%; }
 
 .party-status-upper-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }

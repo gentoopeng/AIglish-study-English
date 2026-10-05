@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="1.46">
+    <meta name="application-version" content="1.47">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=1.46">
-    <link rel="stylesheet" href="gacha.css?v=1.46">
+    <link rel="stylesheet" href="style.css?v=1.47">
+    <link rel="stylesheet" href="gacha.css?v=1.47">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -269,8 +269,21 @@
         </div>
 
         <div id="view-vocab" class="tab-view">
+            <section id="vocabLibrarySelection" class="vocab-library-selection">
+                <header class="vocab-library-header">
+                    <span class="vocab-library-kicker">VOCABULARY</span>
+                    <h2>単語帳を選ぶ</h2>
+                </header>
+                <div id="vocabLibraryBooks" class="vocab-library-list"></div>
+                <section id="vocabLibraryWorkSection" class="vocab-library-work-section">
+                    <div class="vocab-library-divider"><span>ワーク</span></div>
+                    <div id="vocabLibraryWorks" class="vocab-library-list"></div>
+                </section>
+            </section>
+
+            <div id="vocabBookContents" hidden>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="window.openTextbookSelectPopup()">
+                <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="window.showVocabLibrarySelection()">
                     <div id="vocabCoverContainer" style="width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); font-size:20px; overflow:hidden;">📔</div>
                     <div>
                         <h2 style="margin-bottom:2px; font-size:15px; color:#FFFFFF; display:flex; align-items:center; gap:6px;"><i data-lucide="layers" size="14"></i> <span id="vocabBookTitle">共通英単語100</span></h2>
@@ -299,6 +312,7 @@
             </div>
 
             <div id="vocabListContainer"></div>
+            </div>
         </div>
 
         <div id="view-reader" class="tab-view">
@@ -1092,13 +1106,13 @@
       window.fbSetDoc = setDoc;
       window.fbGetDoc = getDoc;
     </script>
-    <script src="app.js?v=1.46" defer></script>
-    <script src="game_core.js?v=1.46" defer></script>
-    <script src="vocab_ui.js?v=1.46" defer></script>
-    <script src="reader.js?v=1.46" defer></script>
-    <script src="fix.js?v=1.46" defer></script>
-    <script src="multi.js?v=1.46" defer></script>
-    <script src="gacha.js?v=1.46" defer></script>
-    <script src="addon.js?v=1.46" defer></script>
+    <script src="app.js?v=1.47" defer></script>
+    <script src="game_core.js?v=1.47" defer></script>
+    <script src="vocab_ui.js?v=1.47" defer></script>
+    <script src="reader.js?v=1.47" defer></script>
+    <script src="fix.js?v=1.47" defer></script>
+    <script src="multi.js?v=1.47" defer></script>
+    <script src="gacha.js?v=1.47" defer></script>
+    <script src="addon.js?v=1.47" defer></script>
 </body>
 </html>

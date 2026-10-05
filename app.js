@@ -620,22 +620,12 @@ if (textbooksCacheMap[bookKey]) {
  window.applyVocabMaxRange();
  window.injectVocabStatsButton();
 };
-window.openTextbookSelectPopup = function() {
-const container = document.getElementById('textbookListSelectContainer');
-if(!container) return;
-container.innerHTML = "";
-if(textbooksPool.length === 0) {
-     const empty = document.createElement('div');
-     empty.className = 'textbook-list-empty';
-     empty.textContent = '現在、配信中の教材はありません。';
-     container.appendChild(empty);
- }
- textbooksPool.forEach((book, index) => {
+window.createTextbookListItem = function(book, index, onSelect) {
      const row = document.createElement('button');
      row.type = 'button';
      row.className = 'textbook-list-item' + (book.id === currentTextbook ? ' is-current' : '');
      row.style.setProperty('--textbook-index', index);
-     row.onclick = () => window.switchTextbookContext(book.id);
+     row.onclick = () => onSelect(book.id);
 
      const cover = document.createElement('span');
      cover.className = 'textbook-list-cover';
@@ -696,12 +686,79 @@ if(textbooksPool.length === 0) {
      row.appendChild(cover);
      row.appendChild(details);
      row.appendChild(arrow);
-     container.appendChild(row);
+     return row;
+};
+
+window.openTextbookSelectPopup = function() {
+ const container = document.getElementById('textbookListSelectContainer');
+ if(!container) return;
+ container.innerHTML = "";
+ if(textbooksPool.length === 0) {
+     const empty = document.createElement('div');
+     empty.className = 'textbook-list-empty';
+     empty.textContent = '現在、配信中の教材はありません。';
+     container.appendChild(empty);
+ }
+ textbooksPool.forEach((book, index) => {
+     container.appendChild(window.createTextbookListItem(book, index, window.switchTextbookContext));
  });
  window.updateAdminEditBookSelectOptions();
  const popup = document.getElementById('textbookSelectPopupFrame');
  if(popup) { popup.style.display = 'flex'; popup.classList.add('show'); }
 };
+
+window.isWorkbookTextbook = function(book) {
+  var kind = String(book && (book.type || book.kind || book.category) || '').toLowerCase();
+  var name = String(book && book.name || '');
+  return kind === 'work' || kind === 'workbook' || /ワーク|workbook/i.test(name);
+};
+
+window.renderVocabLibrarySelection = function() {
+  var selection = document.getElementById('vocabLibrarySelection');
+  if (!selection) return;
+  var books = document.getElementById('vocabLibraryBooks');
+  var works = document.getElementById('vocabLibraryWorks');
+  var workSection = document.getElementById('vocabLibraryWorkSection');
+  if (!books || !works || !workSection) return;
+  books.replaceChildren();
+  works.replaceChildren();
+  var regularBooks = textbooksPool.filter(function(book) { return !window.isWorkbookTextbook(book); });
+  var workbooks = textbooksPool.filter(window.isWorkbookTextbook);
+  if (!regularBooks.length && !workbooks.length) {
+    var empty = document.createElement('div');
+    empty.className = 'vocab-library-empty';
+    empty.textContent = '現在、利用できる単語帳はありません。';
+    books.appendChild(empty);
+  }
+  regularBooks.forEach(function(book, index) {
+    books.appendChild(window.createTextbookListItem(book, index, window.selectVocabLibraryBook));
+  });
+  workSection.hidden = workbooks.length === 0;
+  workbooks.forEach(function(book, index) {
+    works.appendChild(window.createTextbookListItem(book, regularBooks.length + index, window.selectVocabLibraryBook));
+  });
+};
+
+window.showVocabLibrarySelection = function() {
+  var selection = document.getElementById('vocabLibrarySelection');
+  var contents = document.getElementById('vocabBookContents');
+  if (selection) selection.hidden = false;
+  if (contents) contents.hidden = true;
+  window.renderVocabLibrarySelection();
+};
+
+window.selectVocabLibraryBook = async function(bookId) {
+  currentTextbook = bookId;
+  localStorage.setItem('core_v4_current_textbook_id', bookId);
+  var selection = document.getElementById('vocabLibrarySelection');
+  var contents = document.getElementById('vocabBookContents');
+  if (selection) selection.hidden = true;
+  if (contents) contents.hidden = false;
+  await window.loadCurrentTextbookData();
+};
+window.onTabChange(function(tabId) {
+  if (tabId === 'vocab') window.showVocabLibrarySelection();
+});
 
 // 教材選択画面のゲージは、その教材自身の保存済み理解度から計算する。
 // 現在開いている vocabList や全教材共通の統計を流用しない。
