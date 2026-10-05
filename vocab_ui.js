@@ -138,7 +138,8 @@
         if (sts.every(function(s) { return s === 'ok'; })) return 'ok';
         if (sts.some(function(s) { return s === 'bad'; })) return 'bad';
         if (sts.some(function(s) { return s === 'so'; })) return 'so';
-        if (sts.some(function(s) { return s === 'ok'; })) return 'ok';
+        // 一部の意味だけが定着している単語を「定着済み」に含めない。
+        if (sts.some(function(s) { return s === 'ok'; })) return 'so';
         return 'none';
     };
 
@@ -225,7 +226,7 @@
         if (sec.style.display === 'block') window.renderBulkDeleteList();
     };
 
-    window.handleBulkWordImport = function() {
+    window.handleBulkWordImport = async function() {
         var input = document.getElementById('bulkWordInput');
         if (!input) return;
         var text = input.value.trim();
@@ -236,7 +237,9 @@
                 if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].word) {
                     if (confirm("バックアップデータで完全に上書きしますか？")) {
                         vocabList = window.migrateVocabData(parsed);
-                        window.saveVocabToStorage();
+                        if (typeof window.saveVocabMasterToStorage === 'function') await window.saveVocabMasterToStorage();
+                        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+                        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
                         window.renderVocabList();
                         window.renderBulkDeleteList();
                         input.value = "";
@@ -265,7 +268,11 @@
         vocabList.sort(function(a, b) { return parseInt(a.num) - parseInt(b.num); });
         userStats.vocab_reg = vocabList.length;
         window.saveUserStats();
-        window.saveVocabToStorage();
+        // 管理者の教材登録は通常の「手動セーブ待ち」に入れず、教材本体を
+        // その場で共有保存先へ確定する。新規教材でも直後から読み直せる。
+        if (typeof window.saveVocabMasterToStorage === 'function') await window.saveVocabMasterToStorage();
+        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
+        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         window.renderVocabList();
         window.renderBulkDeleteList();
         input.value = "";
@@ -475,7 +482,7 @@
     // ================================================================
 
     window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
-        if (event) event.stopPropagation();
+        if (event) { event.preventDefault(); event.stopPropagation(); }
         var wIdx = vocabList.findIndex(function(w) { return String(w.num) === String(wordNum); });
         if (wIdx >= 0) {
             var mIdx = vocabList[wIdx].meanings.findIndex(function(m) { return String(m.id) === String(meaningId); });
@@ -489,13 +496,103 @@
                     vocabList[wIdx].meanings[mIdx].history.push(status);
                     totalExp += 1;
                 }
-                userStats.vocab_fixed = vocabList.filter(function(w) { return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; }); }).length;
-                window.saveUserStats();
-                window.checkAndRewardTitleBonusXP();
-                window.saveVocabToStorage();
-                window.renderVocabList();
-                window.applyProfileToUi();
-                window.renderLeaderboard();
+                var combinedHistory = [];
+                vocabList[wIdx].meanings.forEach(function(meaning) {
+                    if (meaning.history && meaning.history.length) combinedHistory = combinedHistory.concat(meaning.history);
+                });
+                vocabList[wIdx].history = combinedHistory.slice(-20);
+                if (typeof window.wordOverallStatus === 'function') {
+                    vocabList[wIdx].status = window.wordOverallStatus(vocabList[wIdx]);
+                }
+                // 理解度はボタンを押した同じ処理内で端末へ確定する。
+                // 通信・タイマー・手動セーブを待たないため、直後に画面を閉じても失われない。
+                try {
+                    var bookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default';
+                    var progressKey = window.getVocabProgressStorageKey(bookKey);
+                    var progress = {};
+                    try { progress = JSON.parse(localStorage.getItem(progressKey) || '{}') || {}; } catch (readError) { progress = {}; }
+                    var changedWord = vocabList[wIdx];
+                    var wordProgress = {
+                        sig: window.buildWordSignature(changedWord),
+                        status: changedWord.status || 'none',
+                        history: Array.isArray(changedWord.history) ? changedWord.history.slice(-20) : [],
+                        note: String(changedWord.note || ''),
+                        meanings: {}
+                    };
+                    (changedWord.meanings || []).forEach(function(meaning) {
+                        wordProgress.meanings[meaning.id] = {
+                            status: meaning.status || 'none',
+                            history: Array.isArray(meaning.history) ? meaning.history.slice(-20) : []
+                        };
+                    });
+                    progress[String(changedWord.num)] = wordProgress;
+                    currentUserVocabProgress = progress;
+                    var changedAt = Date.now();
+                    localStorage.setItem(progressKey, JSON.stringify(progress));
+                    localStorage.setItem(progressKey + '__ts', String(changedAt));
+                    window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};
+                    window.__vocabProgressRevisionByBook[bookKey] = (window.__vocabProgressRevisionByBook[bookKey] || 0) + 1;
+                    if (typeof window.markVocabProgressDirty === 'function') window.markVocabProgressDirty(bookKey, changedWord.num);
+                } catch (saveError) {
+                    console.error('理解度の即時保存に失敗しました:', saveError);
+                }
+                // 教材切替より前に、変更した教材の状態を同期的に退避する。
+                // 後段の100msタイマーに任せると、その間に教材を切り替えた場合、
+                // 切替先の教材として保存されて元の教材の変更が失われる。
+                if (typeof window.__captureManualVocabDraft === 'function') {
+                    window.__captureManualVocabDraft();
+                }
+                // 押したボタンだけを先に更新し、一覧全体の描画や通信を待たせない。
+                if (event && event.currentTarget && event.currentTarget.parentElement) {
+                    var colors = { ok: 'var(--word-ok)', so: 'var(--word-so)', bad: 'var(--word-bad)', none: 'rgba(255,255,255,0.3)' };
+                    Array.prototype.forEach.call(event.currentTarget.parentElement.children, function(button) {
+                        button.style.background = 'rgba(0,0,0,0.5)';
+                        button.style.color = 'white';
+                    });
+                    event.currentTarget.style.background = colors[status] || colors.none;
+                    event.currentTarget.style.color = status === 'bad' ? '#FFF' : (status === 'none' ? 'white' : '#000');
+                    var card = event.currentTarget.closest ? event.currentTarget.closest('.word-row-container') : null;
+                    if (card) card.setAttribute('style', window.getCardStyleByHistory(vocabList[wIdx]));
+                }
+                // 履歴部分も対象カードだけ即時更新し、一覧全体を作り直さない。
+                var historyRow = document.querySelector('[data-vocab-history="' + String(wordNum) + '"]');
+                if (historyRow) {
+                    var historyHtml = '';
+                    vocabList[wIdx].meanings.forEach(function(meaning, meaningIndex) {
+                        var marks = '';
+                        (meaning.history || []).slice(-5).forEach(function(value) {
+                            var mark = value === 'ok' ? '◯' : value === 'so' ? '△' : '✕';
+                            var bg = value === 'ok' ? '#10B981' : value === 'so' ? '#F59E0B' : '#EF4444';
+                            var color = value === 'so' ? '#0F172A' : 'white';
+                            marks += '<span style="padding:2px 4px;border-radius:4px;font-size:9px;font-weight:800;background:' + bg + ';color:' + color + ';">' + mark + '</span>';
+                        });
+                        if (!marks) marks = '<span style="color:var(--text-sub);font-size:10px;padding:0 4px;">-</span>';
+                        historyHtml += '<div style="display:flex;gap:2px;align-items:center;">' + marks + '</div>';
+                        if (meaningIndex < vocabList[wIdx].meanings.length - 1) historyHtml += '<span style="color:rgba(255,255,255,0.2);font-size:12px;font-weight:bold;">/</span>';
+                    });
+                    historyRow.innerHTML = historyHtml;
+                }
+                if (typeof window.updateVocabCardUi === 'function') window.updateVocabCardUi(wordNum);
+                // 原因だった全単語の集計・端末保存・一覧再描画は、描画後に1回へまとめる。
+                var queueWork = function() {
+                    if (window.__meaningStatusWorkTimer) clearTimeout(window.__meaningStatusWorkTimer);
+                    window.__meaningStatusWorkTimer = setTimeout(function() {
+                        window.__meaningStatusWorkTimer = null;
+                        userStats.vocab_fixed = vocabList.filter(function(w) {
+                            return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; });
+                        }).length;
+                        window.saveUserStats();
+                        window.checkAndRewardTitleBonusXP();
+                        window.saveVocabToStorage();
+                        if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(1000);
+                        else {
+                            window.applyProfileToUi();
+                            window.renderLeaderboard();
+                        }
+                    }, 100);
+                };
+                if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(queueWork);
+                else queueWork();
             }
         }
     };
@@ -513,7 +610,7 @@
         document.getElementById('popWordNum').innerText = '#' + vocabItem.num;
         var meaningHtml = "";
         vocabItem.meanings.forEach(function(m) {
-            meaningHtml += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:6px;"> <span style="font-size:14px; color:white; flex:1; line-height:1.4;">' + m.text + '</span> <div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'so\', event)">△</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'none\', event)">ー</button> </div> </div>';
+            meaningHtml += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:6px;"> <span style="font-size:14px; color:white; flex:1; line-height:1.4;">' + m.text + '</span> <div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'so\', event)">△</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button> <button style="width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatusFromPopover(\'' + vocabItem.num + '\', \'' + m.id + '\', \'none\', event)">ー</button> </div> </div>';
         });
         document.getElementById('popMeaning').innerHTML = meaningHtml;
         document.getElementById('popoverStatusBtns').style.display = "none";
@@ -524,7 +621,7 @@
 
     window.updateMeaningStatusFromPopover = function(wordNum, meaningId, status, event) {
         if (event) event.stopPropagation();
-        window.updateMeaningStatus(wordNum, meaningId, status, null);
+        window.updateMeaningStatus(wordNum, meaningId, status, event);
         var vocabItem = vocabList.find(function(w) { return String(w.num) === String(wordNum); });
         if (vocabItem) {
             window.openWordPopoverFromVocab(null, vocabItem, document.getElementById('popWord').innerText);
@@ -653,8 +750,144 @@
     };
 
     // ================================================================
-    // 11. renderVocabList（メイン表示）
+    // 11. ユーザー個人の単語メモ
     // ================================================================
+
+    window.toggleVocabNoteEditor = function(event, wordNum, forceClose) {
+        if (event) { event.preventDefault(); event.stopPropagation(); }
+        var editor = document.getElementById('vocabNoteEditor-' + wordNum);
+        var textarea = document.getElementById('vocabNoteInput-' + wordNum);
+        var word = vocabList.find(function(item) { return String(item.num) === String(wordNum); });
+        if (!editor || !textarea || !word) return;
+        var shouldOpen = !forceClose && editor.style.display === 'none';
+        editor.style.display = shouldOpen ? 'block' : 'none';
+        if (shouldOpen) {
+            textarea.value = String(word.note || '');
+            requestAnimationFrame(function() { textarea.focus(); });
+        }
+    };
+
+    window.saveVocabNote = function(event, wordNum) {
+        if (event) { event.preventDefault(); event.stopPropagation(); }
+        var word = vocabList.find(function(item) { return String(item.num) === String(wordNum); });
+        var textarea = document.getElementById('vocabNoteInput-' + wordNum);
+        if (!word || !textarea) return;
+        word.note = textarea.value.trim().slice(0, 500);
+        var text = document.getElementById('vocabNoteText-' + wordNum);
+        var button = document.getElementById('vocabNoteButton-' + wordNum);
+        if (text) {
+            text.textContent = word.note;
+            text.style.display = word.note ? 'block' : 'none';
+        }
+        if (button) button.classList.toggle('has-note', !!word.note);
+        window.toggleVocabNoteEditor(null, wordNum, true);
+        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(word.num);
+        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+    };
+
+    window.createVocabNoteSection = function(word) {
+        var section = document.createElement('div');
+        section.className = 'vocab-note-section';
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.id = 'vocabNoteButton-' + word.num;
+        button.className = 'vocab-note-toggle';
+        button.textContent = 'メモ';
+        button.classList.toggle('has-note', !!word.note);
+        button.onclick = function(event) { window.toggleVocabNoteEditor(event, word.num, false); };
+        var noteText = document.createElement('div');
+        noteText.id = 'vocabNoteText-' + word.num;
+        noteText.className = 'vocab-note-text';
+        noteText.textContent = String(word.note || '');
+        noteText.style.display = word.note ? 'block' : 'none';
+        var editor = document.createElement('div');
+        editor.id = 'vocabNoteEditor-' + word.num;
+        editor.className = 'vocab-note-editor';
+        editor.style.display = 'none';
+        var textarea = document.createElement('textarea');
+        textarea.id = 'vocabNoteInput-' + word.num;
+        textarea.className = 'modern-textarea vocab-note-input';
+        textarea.maxLength = 500;
+        textarea.placeholder = '覚えておきたいことを入力（500文字まで）';
+        var actions = document.createElement('div');
+        actions.className = 'vocab-note-actions';
+        var cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'list-action-link';
+        cancel.textContent = 'キャンセル';
+        cancel.onclick = function(event) { window.toggleVocabNoteEditor(event, word.num, true); };
+        var save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'list-action-link vocab-note-save';
+        save.textContent = 'メモを保存';
+        save.onclick = function(event) { window.saveVocabNote(event, word.num); };
+        actions.appendChild(cancel);
+        actions.appendChild(save);
+        editor.appendChild(textarea);
+        editor.appendChild(actions);
+        section.appendChild(button);
+        section.appendChild(noteText);
+        section.appendChild(editor);
+        return section;
+    };
+
+    // ================================================================
+    // 12. renderVocabList（メイン表示）
+    // ================================================================
+
+    // 単語帳とフラッシュカード詳細で同じカードUIを共有する。
+    // 表示ごとに別実装を持たせないことで、見た目と操作の差を防ぐ。
+    window.createVocabCard = function(w) {
+        var card = document.createElement('div');
+        card.className = "word-row-container";
+        card.setAttribute('style', window.getCardStyleByHistory(w));
+        var hasAnyHistory = w.meanings && w.meanings.some(function(m) { return m.history && m.history.length > 0; });
+        var dotsHtml = "";
+        if (hasAnyHistory) {
+            var groupsHtml = [];
+            w.meanings.forEach(function(m) {
+                var groupHtml = '<div style="display:flex; gap:2px; align-items:center;">';
+                if (m.history && m.history.length > 0) {
+                    m.history.slice(-5).forEach(function(h) {
+                        var mark = h === 'ok' ? '◯' : h === 'so' ? '△' : '✕';
+                        var bg = h === 'ok' ? '#10B981' : h === 'so' ? '#F59E0B' : '#EF4444';
+                        var color = h === 'so' ? '#0F172A' : 'white';
+                        groupHtml += '<span style="padding:2px 4px; border-radius:4px; font-size:9px; font-weight:800; background:' + bg + '; color:' + color + ';">' + mark + '</span>';
+                    });
+                } else {
+                    groupHtml += '<span style="color:var(--text-sub); font-size:10px; padding:0 4px;">-</span>';
+                }
+                groupHtml += '</div>';
+                groupsHtml.push(groupHtml);
+            });
+            dotsHtml = '<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center; justify-content:flex-end; margin-top:0;">';
+            groupsHtml.forEach(function(gh, i) {
+                dotsHtml += gh;
+                if (i < groupsHtml.length - 1) {
+                    if ((i + 1) % 3 === 0) {
+                        dotsHtml += '<div style="flex-basis:100%; height:0;"></div>';
+                    } else {
+                        dotsHtml += '<span style="color:rgba(255,255,255,0.2); font-size:12px; font-weight:bold;">/</span>';
+                    }
+                }
+            });
+            dotsHtml += '</div>';
+        }
+        var meaningsHtml = '<div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px;">';
+        w.meanings.forEach(function(m) {
+            meaningsHtml += '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4;">' + m.text + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
+        });
+        meaningsHtml += '</div>';
+        var adminActionButtons = "";
+        if (window.isAdmin) {
+            adminActionButtons = '<div style="position:absolute; right:8px; top:8px; display:flex; gap:2px; z-index:100;"><button class="card-edit-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')"><i data-lucide="edit-3" size="18"></i></button><button class="card-delete-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm(\'' + w.num + '\')"><i data-lucide="trash-2" size="18"></i></button></div>';
+        }
+        card.innerHTML = adminActionButtons + '<div id="wordCardBody-' + w.num + '"><div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;"><div style="display:flex; align-items:center; gap:8px;"><span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#' + w.num + '</span><span style="font-size:18px; font-weight:800; color:white;">' + w.word + '</span></div></div>' + meaningsHtml + (w.sub ? '<div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;"><button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">サブ情報を展開 <i data-lucide="chevron-down" size="12"></i></button><div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;"><div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">' + w.sub + '</div></div></div>' : '') + '<div data-vocab-history="' + w.num + '" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">' + dotsHtml + '</div></div><div id="wordCardForm-' + w.num + '" style="display:none; padding-top:32px;"><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; display:block; margin-bottom:4px;">単語</label><input type="text" id="inlineEditWordInput-' + w.num + '" class="search-input" style="margin:0;" value="' + w.word + '"></div><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label><div id="inlineEditMeaningsList-' + w.num + '"></div><button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, \'' + w.num + '\')"><i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加</button></div><div style="margin-bottom:14px;"><label style="font-size:11px; color:var(--text-sub); font-weight:700; display:block; margin-bottom:4px;">サブ情報</label><textarea id="inlineEditSubInput-' + w.num + '" class="modern-textarea" style="height:60px; margin:0;">' + (w.sub || "") + '</textarea></div><div style="display:flex; gap:8px;"><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:rgba(255,255,255,0.05); border:1px solid var(--border);" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')">キャンセル</button><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:var(--accent); color:white; border:none;" onclick="window.saveInlineWordEdit(event, \'' + w.num + '\')">保存する</button></div></div>';
+        var cardBody = card.querySelector('#wordCardBody-' + w.num);
+        var history = cardBody ? cardBody.querySelector('[data-vocab-history]') : null;
+        if (cardBody) cardBody.insertBefore(window.createVocabNoteSection(w), history || null);
+        return card;
+    };
 
     window.renderVocabList = function() {
         var container = document.getElementById('vocabListContainer');
@@ -671,60 +904,11 @@
             var n = parseInt(w.num);
             if (!isNaN(n) && (n < startRange || n > endRange)) return false;
             if (vocabFilter !== 'all' && !w.meanings.some(function(m) { return m.status === vocabFilter; })) return false;
-            if (searchKeyword && !(w.word.toLowerCase().includes(searchKeyword) || w.meaning.includes(searchKeyword))) return false;
+            if (searchKeyword && !(w.word.toLowerCase().includes(searchKeyword) || w.meaning.includes(searchKeyword) || String(w.note || '').toLowerCase().includes(searchKeyword))) return false;
             return true;
         });
         filtered.forEach(function(w) {
-            var card = document.createElement('div');
-            card.className = "word-row-container";
-            card.setAttribute('style', window.getCardStyleByHistory(w));
-            card.onclick = function(e) {
-                if (e.target.closest('button') || e.target.closest('.word-expand-toggle') || e.target.closest('input') || e.target.closest('textarea')) return;
-                window.openWordPopoverFromVocab(e, w, w.word);
-            };
-            var hasAnyHistory = w.meanings && w.meanings.some(function(m) { return m.history && m.history.length > 0; });
-            var dotsHtml = "";
-            if (hasAnyHistory) {
-                var groupsHtml = [];
-                w.meanings.forEach(function(m) {
-                    var groupHtml = '<div style="display:flex; gap:2px; align-items:center;">';
-                    if (m.history && m.history.length > 0) {
-                        m.history.slice(-5).forEach(function(h) {
-                            var mark = h === 'ok' ? '◯' : h === 'so' ? '△' : '✕';
-                            var bg = h === 'ok' ? '#10B981' : h === 'so' ? '#F59E0B' : '#EF4444';
-                            var color = h === 'so' ? '#0F172A' : 'white';
-                            groupHtml += '<span style="padding:2px 4px; border-radius:4px; font-size:9px; font-weight:800; background:' + bg + '; color:' + color + ';">' + mark + '</span>';
-                        });
-                    } else {
-                        groupHtml += '<span style="color:var(--text-sub); font-size:10px; padding:0 4px;">-</span>';
-                    }
-                    groupHtml += '</div>';
-                    groupsHtml.push(groupHtml);
-                });
-                dotsHtml = '<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center; justify-content:flex-end; margin-top:0;">';
-                groupsHtml.forEach(function(gh, i) {
-                    dotsHtml += gh;
-                    if (i < groupsHtml.length - 1) {
-                        if ((i + 1) % 3 === 0) {
-                            dotsHtml += '<div style="flex-basis:100%; height:0;"></div>';
-                        } else {
-                            dotsHtml += '<span style="color:rgba(255,255,255,0.2); font-size:12px; font-weight:bold;">/</span>';
-                        }
-                    }
-                });
-                dotsHtml += '</div>';
-            }
-            var meaningsHtml = '<div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 6px;">';
-            w.meanings.forEach(function(m) {
-                meaningsHtml += '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4;">' + m.text + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onclick="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
-            });
-            meaningsHtml += '</div>';
-            var adminActionButtons = "";
-            if (window.isAdmin) {
-                adminActionButtons = '<div style="position:absolute; right:8px; top:8px; display:flex; gap:2px; z-index:100;"><button class="card-edit-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')"><i data-lucide="edit-3" size="18"></i></button><button class="card-delete-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm(\'' + w.num + '\')"><i data-lucide="trash-2" size="18"></i></button></div>';
-            }
-            card.innerHTML = adminActionButtons + '<div id="wordCardBody-' + w.num + '"><div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;"><div style="display:flex; align-items:center; gap:8px;"><span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#' + w.num + '</span><span style="font-size:18px; font-weight:800; color:white;">' + w.word + '</span></div></div>' + meaningsHtml + (w.sub ? '<div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;"><button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">サブ情報を展開 <i data-lucide="chevron-down" size="12"></i></button><div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;"><div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">' + w.sub + '</div></div></div>' : '') + '<div style="display:flex; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">' + dotsHtml + '</div></div><div id="wordCardForm-' + w.num + '" style="display:none; padding-top:32px;"><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; display:block; margin-bottom:4px;">単語</label><input type="text" id="inlineEditWordInput-' + w.num + '" class="search-input" style="margin:0;" value="' + w.word + '"></div><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label><div id="inlineEditMeaningsList-' + w.num + '"></div><button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, \'' + w.num + '\')"><i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加</button></div><div style="margin-bottom:14px;"><label style="font-size:11px; color:var(--text-sub); font-weight:700; display:block; margin-bottom:4px;">サブ情報</label><textarea id="inlineEditSubInput-' + w.num + '" class="modern-textarea" style="height:60px; margin:0;">' + (w.sub || "") + '</textarea></div><div style="display:flex; gap:8px;"><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:rgba(255,255,255,0.05); border:1px solid var(--border);" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')">キャンセル</button><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:var(--accent); color:white; border:none;" onclick="window.saveInlineWordEdit(event, \'' + w.num + '\')">保存する</button></div></div>';
-            container.appendChild(card);
+            container.appendChild(window.createVocabCard(w));
         });
         window.initLucide();
     };

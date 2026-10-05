@@ -10,12 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
+    <meta name="application-version" content="1.48">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="gacha.css">
+    <link rel="stylesheet" href="style.css?v=1.48">
+    <link rel="stylesheet" href="gacha.css?v=1.48">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -155,6 +157,7 @@
                     <i data-lucide="shield-alert" size="16"></i> 🛠️ 管理者メニュー
                 </button>
             </div>
+            <div id="appVersionDisplay" class="sidebar-version" aria-label="アプリのバージョン"></div>
         </div>
     </div>
 
@@ -265,8 +268,21 @@
         </div>
 
         <div id="view-vocab" class="tab-view">
+            <section id="vocabLibrarySelection" class="vocab-library-selection">
+                <header class="vocab-library-header">
+                    <span class="vocab-library-kicker">VOCABULARY</span>
+                    <h2>単語帳を選ぶ</h2>
+                </header>
+                <div id="vocabLibraryBooks" class="vocab-library-list"></div>
+                <section id="vocabLibraryWorkSection" class="vocab-library-work-section">
+                    <div class="vocab-library-divider"><span>ワーク</span></div>
+                    <div id="vocabLibraryWorks" class="vocab-library-list"></div>
+                </section>
+            </section>
+
+            <div id="vocabBookContents" hidden>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="window.openTextbookSelectPopup()">
+                <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="window.showVocabLibrarySelection()">
                     <div id="vocabCoverContainer" style="width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.05); font-size:20px; overflow:hidden;">📔</div>
                     <div>
                         <h2 style="margin-bottom:2px; font-size:15px; color:#FFFFFF; display:flex; align-items:center; gap:6px;"><i data-lucide="layers" size="14"></i> <span id="vocabBookTitle">共通英単語100</span></h2>
@@ -295,6 +311,7 @@
             </div>
 
             <div id="vocabListContainer"></div>
+            </div>
         </div>
 
         <div id="view-reader" class="tab-view">
@@ -493,6 +510,17 @@
                             </div>
                         </div>
 
+                        <div style="text-align:left; margin-bottom:20px;">
+                            <div style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; margin-bottom:8px;">③ 理解度で絞り込み</div>
+                            <div id="flashcardStatusFilters" class="flashcard-status-filters" aria-label="出題する理解度">
+                                <button type="button" class="flashcard-status-filter status-ok active" data-status="ok" aria-pressed="true" onclick="toggleFlashcardStatusFilter('ok')">○</button>
+                                <button type="button" class="flashcard-status-filter status-so active" data-status="so" aria-pressed="true" onclick="toggleFlashcardStatusFilter('so')">△</button>
+                                <button type="button" class="flashcard-status-filter status-bad active" data-status="bad" aria-pressed="true" onclick="toggleFlashcardStatusFilter('bad')">×</button>
+                                <button type="button" class="flashcard-status-filter status-none active" data-status="none" aria-pressed="true" onclick="toggleFlashcardStatusFilter('none')">ー</button>
+                            </div>
+                            <div id="flashcardStatusFilterSummary" class="flashcard-status-filter-summary">すべての理解度を出題</div>
+                        </div>
+
                         <button class="modern-btn" style="height:48px; font-size:16px; border-color:var(--cosmic-purple-light) !important; color:#FFFFFF !important;" onclick="startFlashcardSession()">
                             カードを開始する
                         </button>
@@ -505,6 +533,7 @@
                 <div id="flashcard-play-screen" style="display:none; height:100%; flex-direction:column; position:relative; overflow:hidden; padding-top:4px; box-sizing:border-box;">
                     <div style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:0 4px; margin-bottom:12px; z-index:100;">
                         <button class="game-finish-inline-btn" style="background:rgba(0,0,0,0.6);" onclick="quitFlashcardSession()">戻る</button>
+                        <button id="flashcardPreviousButton" class="flashcard-previous-button" type="button" onclick="goBackFlashcard()" aria-label="ひとつ前の単語に戻る" title="ひとつ前の単語に戻る" disabled><i data-lucide="undo-2" size="20" aria-hidden="true"></i></button>
                         <span id="flashcardRemainingBadge" style="background:rgba(99,102,241,0.4); color:white; font-size:11px; font-weight:800; padding:4px 10px; border-radius:20px; border:1px solid var(--accent);">残り --枚</span>
                     </div>
 
@@ -524,9 +553,10 @@
                     </div>
 
                     <div class="card" style="padding:10px; margin-bottom:4px; text-align:center; background:rgba(15,23,42,0.8) !important;">
-                        <div style="font-size:10px; color:#FFFFFF; font-weight:bold;" id="flashcardProgressText">表示中の覚えた単語: --%</div>
+                        <div style="font-size:10px; color:#FFFFFF; font-weight:bold;" id="flashcardProgressText">今回の理解度: ◯ 0 / 回答 0（0%）</div>
                         <div id="fcHistoryContainer" class="fc-history-container"></div>
                     </div>
+                    <button id="flashcardInfoButton" class="flashcard-info-button" type="button" onclick="window.openFlashcardWordDetails()" aria-label="この単語の詳細を見る"><i data-lucide="info" size="20" aria-hidden="true"></i></button>
                 </div>
 
                 <div id="multi-battle-choice-screen" style="display:none; height:100%;">
@@ -1032,11 +1062,11 @@
         <button class="nav-item" id="nav-party" onclick="window.switchTab('party')"><i data-lucide="swords" size="18"></i> 編成</button>
     </div>
 
-    <div id="textbookSelectPopupFrame" class="popover">
-        <div class="popover-word"><span>📚 教材・単語帳の切り替え</span></div>
-        <div id="textbookListSelectContainer" style="display:flex; flex-direction:column; gap:10px; max-height:40vh; overflow-y:auto; padding-right:4px;"></div>
-        <div style="text-align: right; width: 100%; margin-top:8px;">
-            <button class="pop-btn" style="background:var(--border); color:var(--text-main); max-width: 64px;" onclick="document.getElementById('textbookSelectPopupFrame').classList.remove('show'); document.getElementById('textbookSelectPopupFrame').style.display='none';">閉じる</button>
+    <div id="textbookSelectPopupFrame" class="popover textbook-select-popup">
+        <div class="textbook-select-header"><span class="textbook-select-kicker">LIBRARY</span><span class="textbook-select-title">単語帳を選ぶ</span></div>
+        <div id="textbookListSelectContainer" class="textbook-list-select-container"></div>
+        <div class="textbook-select-footer">
+            <button class="textbook-select-close" type="button" onclick="document.getElementById('textbookSelectPopupFrame').classList.remove('show'); document.getElementById('textbookSelectPopupFrame').style.display='none';">閉じる</button>
         </div>
     </div>
 
@@ -1075,14 +1105,13 @@
       window.fbSetDoc = setDoc;
       window.fbGetDoc = getDoc;
     </script>
-    <script src="app.js" defer></script>
-    <script src="game_core.js" defer></script>
-    <script src="vocab_ui.js" defer></script>
-    <script src="reader.js" defer></script>
+    <script src="app.js?v=1.48" defer></script>
+    <script src="game_core.js?v=1.48" defer></script>
+    <script src="vocab_ui.js?v=1.48" defer></script>
+    <script src="reader.js?v=1.48" defer></script>
+    <script src="fix.js?v=1.48" defer></script>
+    <script src="multi.js?v=1.48" defer></script>
+    <script src="gacha.js?v=1.48" defer></script>
+    <script src="addon.js?v=1.48" defer></script>
 </body>
 </html>
-<script src="fix.js" defer></script>
-<script src="multi.js" defer></script>
-<script src="gacha.js" defer></script>
-<script src="multi.js" defer></script>
-<script src="addon.js" defer></script>  <!-- ←この1行を追加 -->
