@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="1.40">
+    <meta name="application-version" content="1.41">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=1.40">
-    <link rel="stylesheet" href="gacha.css?v=1.40">
+    <link rel="stylesheet" href="style.css?v=1.41">
+    <link rel="stylesheet" href="gacha.css?v=1.41">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -531,6 +531,7 @@
                         <div style="font-size:10px; color:#FFFFFF; font-weight:bold;" id="flashcardProgressText">今回の理解度: ◯ 0 / 回答 0（0%）</div>
                         <div id="fcHistoryContainer" class="fc-history-container"></div>
                     </div>
+                    <button id="flashcardInfoButton" class="flashcard-info-button" type="button" onclick="window.openFlashcardWordDetails()" aria-label="この単語の詳細を見る">i</button>
                 </div>
 
                 <div id="multi-battle-choice-screen" style="display:none; height:100%;">
@@ -1079,13 +1080,13 @@
       window.fbSetDoc = setDoc;
       window.fbGetDoc = getDoc;
     </script>
-    <script src="app.js?v=1.40" defer></script>
-    <script src="game_core.js?v=1.40" defer></script>
-    <script src="vocab_ui.js?v=1.40" defer></script>
-    <script src="reader.js?v=1.40" defer></script>
-    <script src="fix.js?v=1.40" defer></script>
-    <script src="multi.js?v=1.40" defer></script>
-    <script src="gacha.js?v=1.40" defer></script>
-    <script src="addon.js?v=1.40" defer></script>
+    <script src="app.js?v=1.41" defer></script>
+    <script src="game_core.js?v=1.41" defer></script>
+    <script src="vocab_ui.js?v=1.41" defer></script>
+    <script src="reader.js?v=1.41" defer></script>
+    <script src="fix.js?v=1.41" defer></script>
+    <script src="multi.js?v=1.41" defer></script>
+    <script src="gacha.js?v=1.41" defer></script>
+    <script src="addon.js?v=1.41" defer></script>
 </body>
 </html>

@@ -127,6 +127,107 @@
         });
     };
 
+    function findCurrentFlashcardVocab() {
+        var current = flashcardOriginQueue[flashcardCurrentIndex];
+        if (!current || typeof vocabList === 'undefined') return null;
+        return vocabList.find(function(word) {
+            return String(word.num) === String(current.num);
+        }) || vocabList.find(function(word) {
+            return String(word.word || '').toLowerCase() === String(current.en || '').toLowerCase();
+        }) || null;
+    }
+
+    function appendFlashcardDetailRow(parent, label, value, className) {
+        if (!value) return;
+        var row = document.createElement('div');
+        row.className = 'flashcard-detail-row' + (className ? ' ' + className : '');
+        var heading = document.createElement('div');
+        heading.className = 'flashcard-detail-label';
+        heading.textContent = label;
+        var content = document.createElement('div');
+        content.className = 'flashcard-detail-value';
+        content.textContent = value;
+        row.appendChild(heading);
+        row.appendChild(content);
+        parent.appendChild(row);
+    }
+
+    window.closeFlashcardWordDetails = function() {
+        var sheet = document.getElementById('flashcardWordDetails');
+        if (!sheet) return;
+        sheet.classList.remove('is-open');
+        sheet.setAttribute('aria-hidden', 'true');
+    };
+
+    window.openFlashcardWordDetails = function() {
+        var current = flashcardOriginQueue[flashcardCurrentIndex];
+        if (!current) return;
+        var word = findCurrentFlashcardVocab();
+        var sheet = document.getElementById('flashcardWordDetails');
+        if (!sheet) {
+            sheet = document.createElement('div');
+            sheet.id = 'flashcardWordDetails';
+            sheet.className = 'flashcard-detail-sheet';
+            sheet.setAttribute('aria-hidden', 'true');
+            sheet.innerHTML = '<button type="button" class="flashcard-detail-backdrop" aria-label="詳細を閉じる"></button><section class="flashcard-detail-panel" role="dialog" aria-modal="true" aria-labelledby="flashcardDetailWord"><div class="flashcard-detail-handle"></div><button type="button" class="flashcard-detail-close" aria-label="閉じる">×</button><div id="flashcardDetailContent"></div></section>';
+            sheet.querySelector('.flashcard-detail-backdrop').onclick = window.closeFlashcardWordDetails;
+            sheet.querySelector('.flashcard-detail-close').onclick = window.closeFlashcardWordDetails;
+            document.body.appendChild(sheet);
+        }
+
+        var content = sheet.querySelector('#flashcardDetailContent');
+        content.replaceChildren();
+        var number = document.createElement('div');
+        number.className = 'flashcard-detail-number';
+        number.textContent = '#' + String((word && word.num) || current.num || '');
+        var title = document.createElement('h2');
+        title.id = 'flashcardDetailWord';
+        title.className = 'flashcard-detail-word';
+        title.textContent = String((word && word.word) || current.en || '');
+        content.appendChild(number);
+        content.appendChild(title);
+
+        var meanings = word && Array.isArray(word.meanings)
+            ? word.meanings.map(function(meaning) { return meaning && meaning.text; }).filter(Boolean)
+            : [];
+        if (!meanings.length) meanings.push(String((word && word.meaning) || current.ja || ''));
+        appendFlashcardDetailRow(content, '意味', meanings.join('\n'), 'is-meaning');
+        appendFlashcardDetailRow(content, 'サブ情報', word && word.sub ? String(word.sub) : '');
+        appendFlashcardDetailRow(content, 'メモ', word && word.note ? String(word.note) : '');
+
+        var history = [];
+        if (word) {
+            if (Array.isArray(word.meanings)) {
+                word.meanings.forEach(function(meaning) {
+                    if (meaning && Array.isArray(meaning.history)) history = history.concat(meaning.history);
+                });
+            }
+            if (!history.length && Array.isArray(word.history)) history = word.history.slice();
+            if (!history.length && word.status && word.status !== 'none') history.push(word.status);
+        }
+        var historyRow = document.createElement('div');
+        historyRow.className = 'flashcard-detail-row';
+        var historyLabel = document.createElement('div');
+        historyLabel.className = 'flashcard-detail-label';
+        historyLabel.textContent = '理解度履歴';
+        var historyDots = document.createElement('div');
+        historyDots.className = 'flashcard-detail-history';
+        history.slice(-5).forEach(function(status) {
+            var dot = document.createElement('span');
+            dot.className = 'flashcard-detail-history-dot ' + (status || 'none');
+            dot.textContent = status === 'ok' ? '○' : status === 'so' ? '△' : status === 'bad' ? '×' : '－';
+            historyDots.appendChild(dot);
+        });
+        if (!historyDots.children.length) historyDots.textContent = '履歴なし';
+        historyRow.appendChild(historyLabel);
+        historyRow.appendChild(historyDots);
+        content.appendChild(historyRow);
+
+        sheet.setAttribute('aria-hidden', 'false');
+        requestAnimationFrame(function() { sheet.classList.add('is-open'); });
+        sheet.querySelector('.flashcard-detail-close').focus();
+    };
+
     // スワイプ確定時だけ表示する軽量な消滅演出。
     // 指への追尾はせず、8個の粒と1本の輪をCSSだけで短時間描画する。
     window.showFlashcardVanishBurst = function(x, y, direction) {
@@ -396,6 +497,7 @@
     };
 
     window.quitFlashcardSession = function() {
+        window.closeFlashcardWordDetails();
         document.body.classList.remove('in-game-active');
         document.getElementById('flashcard-play-screen').style.display = 'none';
         var startScreen = document.getElementById('game-start-screen');
@@ -410,6 +512,7 @@
     };
 
     window.finishFlashcardSession = function() {
+        window.closeFlashcardWordDetails();
         document.body.classList.remove('in-game-active');
         var playScreen = document.getElementById('flashcard-play-screen');
         if (playScreen) playScreen.style.display = 'none';
