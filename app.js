@@ -2708,7 +2708,7 @@ window.preloadAllTextbooksAndVocab = async function() {
   }
 };
 
-window.loadCurrentTextbookData = async function() {
+window.loadCurrentTextbookData = async function(options) {
   let storedWords = [];
   const bookKey = currentTextbook || "default";
   const uid = (typeof myId !== "undefined" && myId) ? myId : "GUEST-000";
@@ -2722,7 +2722,12 @@ window.loadCurrentTextbookData = async function() {
   }
   storedWords = window.stripVocabProgressFromWords(storedWords);
   vocabList = window.migrateVocabData(storedWords);
-  await window.loadUserVocabProgress(bookKey);
+  // 保存済み教材のローカル理解度がある時は、表示前の通信を不要にする。
+  if (options && options.localProgress) {
+    currentUserVocabProgress = options.localProgress;
+  } else {
+    await window.loadUserVocabProgress(bookKey);
+  }
   window.applyUserProgressToVocabList();
   if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
   userStats.vocab_reg = vocabList.length;
