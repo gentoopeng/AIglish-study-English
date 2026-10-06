@@ -2092,7 +2092,7 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .library-toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
 .library-toolbar button { border:1px solid rgba(220,211,186,.28); border-radius:20px; background:rgba(15,23,42,.32); padding:9px 14px; color:#eee8da; font:600 12px/1.3 system-ui,sans-serif; cursor:pointer; transition:background .18s,transform .18s; }
 .library-toolbar button:hover { background:rgba(220,211,186,.12); transform:translateY(-2px); }
-.vocab-library-manage-button { flex:0 0 36px; padding:0; border:0; background:transparent; color:var(--text-sub); font-size:22px; cursor:pointer; transition:color .18s; }
+.vocab-library-manage-button { flex:0 0 28px; min-height:44px; padding:0; border:0; background:transparent; color:var(--text-sub); font-size:16px; cursor:pointer; transition:color .18s; }
 .vocab-library-manage-button:hover { color:#eee8da; }
 .library-editor-dialog { width:min(440px,calc(100vw - 32px)); max-height:85dvh; box-sizing:border-box; overflow:auto; padding:24px; border:1px solid rgba(213,201,172,.3); border-radius:20px; background:linear-gradient(150deg,rgba(27,35,49,.96),rgba(15,22,36,.98)); color:#eee8da; box-shadow:0 24px 80px rgba(0,0,0,.4); animation:libraryDialogEnter .22s ease-out; }
 .library-editor-dialog::backdrop { background:rgba(8,14,24,.55); backdrop-filter:blur(4px); animation:libraryBackdropEnter .22s ease-out; }
@@ -2120,3 +2120,10 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 @keyframes libraryBackdropEnter { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion:reduce) { .library-editor-dialog,.library-editor-dialog::backdrop,.library-catalog-item { animation:none; } .library-toolbar button,.vocab-library-manage-button,.library-editor-actions button { transition:none; } .library-toolbar button:hover { transform:none; } }
 .textbook-list-visibility { flex:none; color:#aaa397; font:600 9px/1.3 system-ui,sans-serif; white-space:nowrap; }
+
+.vocab-library-flash-button { flex:0 0 32px; align-self:center; height:36px; margin:4px 5px; border:1px solid rgba(198,183,144,.35); border-radius:11px; background:linear-gradient(145deg,rgba(198,183,144,.1),rgba(198,183,144,.02)); color:#d8cba9; transition:background .18s,transform .18s; }
+.vocab-library-flash-button:hover { background:rgba(198,183,144,.16); transform:translateX(1px); }
+.library-cover-preview { width:70px; height:92px; object-fit:cover; border-radius:8px; margin-top:8px; }
+.library-prompt-copy { display:block; padding:4px 0; border:0; background:transparent; color:inherit; font-size:10px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.library-prompt-fallback { width:100%; height:100px; font-size:11px; }
+@media(prefers-reduced-motion:reduce){.vocab-library-flash-button{transition:none;} .vocab-library-flash-button:hover{transform:none;}}

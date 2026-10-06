@@ -231,46 +231,37 @@
         if (sec.style.display === 'block') window.renderBulkDeleteList();
     };
 
+    window.parseVocabImport = function(text, existing) {
+        text = text.trim();
+        if (!text) return JSON.parse(JSON.stringify(existing || []));
+        if (text[0] === '[') {
+            var parsed = JSON.parse(text);
+            if (!Array.isArray(parsed) || !parsed.every(function(w) { return w && w.word && Number.isInteger(Number(w.num)) && Number(w.num) > 0; })) throw new Error('JSONには番号と単語を指定してください。');
+            return window.migrateVocabData(parsed);
+        }
+        var words = JSON.parse(JSON.stringify(existing || []));
+        text.split('\n').forEach(function(line, index) {
+            if (!line.trim()) return;
+            var parts = line.split(':');
+            if (parts.length < 3 || !Number.isInteger(Number(parts[0])) || Number(parts[0]) < 1 || !parts[1].trim() || !parts[2].trim()) throw new Error((index + 1) + '行目を「番号:単語:意味:サブ情報」で入力してください。');
+            var num = parts[0].trim();
+            var meaning = parts[2].trim().replace(/(動|名|形|副|代|接|前|自動|他動)[:：]\s*/g, '').replace(/^[ ,　]+/, '');
+            var word = window.migrateVocabData([{num:num,word:parts[1].trim(),meaning:meaning,sub:parts.slice(3).join(':').trim(),status:'none',history:[]}])[0];
+            var at = words.findIndex(function(w) { return String(w.num) === String(num); });
+            if (at >= 0) words[at] = word; else words.push(word);
+        });
+        words.sort(function(a,b) { return Number(a.num) - Number(b.num); });
+        return words;
+    };
+
     window.handleBulkWordImport = async function() {
         var input = document.getElementById('bulkWordInput');
         if (!input) return;
         var text = input.value.trim();
         if (!text) return;
-        if (text.startsWith("[") && text.endsWith("]")) {
-            try {
-                var parsed = JSON.parse(text);
-                if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].word) {
-                    if (confirm("バックアップデータで完全に上書きしますか？")) {
-                        vocabList = window.migrateVocabData(parsed);
-                        if (typeof window.saveVocabMasterToStorage === 'function') await window.saveVocabMasterToStorage();
-                        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally();
-                        if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
-                        window.renderVocabList();
-                        window.renderBulkDeleteList();
-                        input.value = "";
-                        alert("統合完了しました！");
-                        return;
-                    }
-                }
-            } catch (e) {}
-        }
-        text.split('\n').forEach(function(line) {
-            var parts = line.split(':');
-            if (parts.length >= 3) {
-                var num = parts[0].trim(),
-                    word = parts[1].trim(),
-                    sub = parts[3] ? parts[3].trim() : "";
-                var meaning = parts[2].trim().replace(/(動|名|形|副|代|接|前|自動|他動)[:：]\s*/g, '').replace(/^[ ,　]+/, '');
-                if (num && word && meaning) {
-                    var existingIdx = vocabList.findIndex(function(w) { return String(w.num) === String(num); });
-                    var newWord = { num: num, word: word, meaning: meaning, sub: sub, status: "none", history: [] };
-                    newWord = window.migrateVocabData([newWord])[0];
-                    if (existingIdx >= 0) vocabList[existingIdx] = newWord;
-                    else vocabList.push(newWord);
-                }
-            }
-        });
-        vocabList.sort(function(a, b) { return parseInt(a.num) - parseInt(b.num); });
+        if (text[0] === '[' && !confirm("バックアップデータで完全に上書きしますか？")) return;
+        try { vocabList = window.parseVocabImport(text, vocabList); }
+        catch (error) { alert(error.message); return; }
         userStats.vocab_reg = vocabList.length;
         window.saveUserStats();
         // 管理者の教材登録は通常の「手動セーブ待ち」に入れず、教材本体を
