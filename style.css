@@ -396,7 +396,8 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     gap:0;
     padding:24px 18px calc(18px + env(safe-area-inset-bottom));
     max-height:86vh;
-    background:#1b1c1a;
+    background:rgba(18,24,32,.55);
+    backdrop-filter:blur(3px);
     border-top:1px solid #3b3b37;
     border-radius:18px 18px 0 0;
     color:#e7e3da;
@@ -2070,11 +2071,18 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .fbsv-note { margin-top: 14px; padding: 10px 12px; border: 1px dashed rgba(200,144,42,.25); border-radius: 9px; color: #a89880; font-size: 10.5px; line-height: 1.6; }
 
 /* 単語帳一覧から開くフラッシュ単語設定 */
-.vocab-library-book-entry { display:flex; align-items:stretch; gap:8px; }
-.vocab-library-book-entry > .textbook-list-item { flex:1; min-width:0; }
-.vocab-library-flash-button { flex:0 0 44px; border:1px solid var(--border); border-radius:12px; background:var(--card-bg); color:var(--cosmic-cyan); font-size:30px; cursor:pointer; }
-.vocab-library-flash-button:hover { background:var(--input-bg); }
+.vocab-library-book-entry { display:flex; align-items:stretch; border-bottom:1px solid rgba(255,255,255,.16); }
+.vocab-library-book-entry > .textbook-list-item { flex:1; min-width:0; grid-template-columns:58px minmax(0,1fr); border-bottom:0; }
+.vocab-library-flash-button { flex:0 0 44px; padding:0; border:0; border-radius:0; background:transparent; color:var(--text-sub); font:300 26px/1 Georgia,serif; cursor:pointer; }
+.vocab-library-flash-button:hover { color:var(--text-main); background:rgba(255,255,255,.06); }
 .vocab-library-flash-button:focus-visible { outline:2px solid var(--cosmic-cyan); outline-offset:2px; }
+.vocab-library-list .textbook-list-item:hover,
+.vocab-library-list .textbook-list-item:focus-visible,
+.textbook-select-popup .textbook-list-item:hover,
+.textbook-select-popup .textbook-list-item:focus-visible { background:rgba(255,255,255,.06); }
+.vocab-library-list .textbook-list-item:active,
+.textbook-select-popup .textbook-list-item:active { background:rgba(255,255,255,.1); }
+.vocab-library-list .textbook-list-item { opacity:1; transform:none; animation:none; }
 .book-flashcard-dialog { width:min(420px,calc(100vw - 32px)); max-height:85dvh; overflow:auto; box-sizing:border-box; padding:20px; border:1px solid var(--cosmic-purple-light); border-radius:20px; background:var(--card-bg,#161c2d); color:var(--text-main,#fff); }
 .book-flashcard-dialog::backdrop { background:rgba(0,0,0,.72); backdrop-filter:blur(5px); }
 .book-flashcard-dialog > h2 { margin:0 0 12px; font-size:18px; text-align:center; }

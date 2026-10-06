@@ -4656,11 +4656,19 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
         }
       }catch(e){}
     }
-    var result=await __loadBookBeforeManualDraft.apply(this,arguments);
+    var displayedSavedAt=draft&&draft.savedAt;
+    var hasLocalDraft=draft&&Array.isArray(draft.master)&&draft.progress;
+    var result=hasLocalDraft
+      ?await __loadBookBeforeManualDraft.call(this,{localProgress:draft.progress})
+      :await __loadBookBeforeManualDraft.apply(this,arguments);
     // 通信中の編集を古いスナップショットで巻き戻さず、切替前の結果も適用しない。
     if(!isCurrentRequest())return result;
     draft=latestDraft(draft);
-    if(draft&&Array.isArray(draft.master))window.__applyManualVocabDraft(bookKey,draft);
+    if(draft&&Array.isArray(draft.master)){
+      // 通常ローダーが同じ下書きを描画済みなら、カード一覧を作り直さない。
+      if(!hasLocalDraft||draft.savedAt!==displayedSavedAt)window.__applyManualVocabDraft(bookKey,draft);
+      else window.__manualVocabDrafts[bookKey]=JSON.parse(JSON.stringify(draft));
+    }
     return result;
   };
 }

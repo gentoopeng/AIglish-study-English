@@ -56,3 +56,15 @@ test('a cloud response after account switching cannot write into the new account
  release({exists:()=>true,data:()=>({wordsJson:JSON.stringify({1:{status:'bad'}}),updatedAt:new Date().toISOString()})});await pending;
  assert.equal(values.size,0);assert.equal(writes.length,0);
 });
+const bookStart=appSource.indexOf('window.loadCurrentTextbookData = async function(options) {');
+const bookLoader=appSource.slice(bookStart,appSource.indexOf('\n};',bookStart)+3);
+test('a cached textbook displays saved progress without waiting for cloud access',async()=>{
+ let reads=0,renders=0;
+ const progress={1:{status:'ok'}};
+ const ctx={currentTextbook:'book-a',myId:'user-a',textbooksCacheMap:{'book-a':[{num:1,word:'study'}]},textbooksPool:[],userStats:{},document:{getElementById:()=>null},localStorage:{getItem:()=>null},stripVocabProgressFromWords:words=>words,migrateVocabData:words=>words,loadUserVocabProgress:()=>{reads++;return new Promise(()=>{})},applyUserProgressToVocabList:()=>{},updateFlashcardSourceSelectOptions:()=>{},renderVocabList:()=>renders++};
+ ctx.window=ctx;vm.runInNewContext(bookLoader,ctx);await ctx.loadCurrentTextbookData({localProgress:progress});
+ assert.equal(reads,0);assert.equal(renders,1);assert.equal(ctx.currentUserVocabProgress,progress);
+});
+test('a cached draft is not applied and rendered twice when unchanged',async()=>{
+ const {ctx,release}=setup();const pending=ctx.loadCurrentTextbookData();release();await pending;assert.equal(ctx.applied,undefined);
+});
