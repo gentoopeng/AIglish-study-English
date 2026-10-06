@@ -4473,6 +4473,31 @@ window.__manualVocabLocalKey = function(bookKey){
   var id=(typeof myId!=='undefined'&&myId)?myId:'GUEST-000';
   return 'core_v4_vocab_draft_'+id+'_'+encodeURIComponent(String(bookKey||'default'));
 };
+window.__vocabSavedAtMs = function(value){
+  if(typeof value==='number')return isFinite(value)?value:0;
+  return Date.parse(value||'')||0;
+};
+// 教材の下書きと理解度キャッシュのうち、新しい方を必ず採用する。
+// タスクキル直前は理解度キャッシュだけが一瞬先に更新されることがあるため、
+// 下書きだけを復元すると最後の操作が巻き戻ってしまう。
+window.__mergeNewestLocalVocabProgress = function(bookKey,draft){
+  if(!draft||typeof draft!=='object')return draft;
+  try{
+    var progressKey=window.getVocabProgressStorageKey(bookKey);
+    var progressMs=parseInt(localStorage.getItem(progressKey+'__ts')||'0')||0;
+    var draftMs=window.__vocabSavedAtMs(draft.savedAt);
+    var raw=localStorage.getItem(progressKey);
+    if(raw&&progressMs>=draftMs){
+      var progress=JSON.parse(raw);
+      if(progress&&typeof progress==='object'){
+        draft=JSON.parse(JSON.stringify(draft));
+        draft.progress=progress;
+        draft.savedAt=new Date(progressMs||Date.now()).toISOString();
+      }
+    }
+  }catch(e){}
+  return draft;
+};
 window.__manualVocabChunkSize = 180000;
 window.__gameSaveChecksum = window.__gameSaveChecksum || function(text){
   var hash=2166136261;
@@ -4559,6 +4584,8 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
       try{draft=JSON.parse(localStorage.getItem(window.__manualVocabLocalKey(bookKey))||'null');}catch(e){draft=null;}
       if(draft&&Array.isArray(draft.master))window.__manualVocabDrafts[bookKey]=JSON.parse(JSON.stringify(draft));
     }
+    draft=window.__mergeNewestLocalVocabProgress(bookKey,draft);
+    if(draft&&Array.isArray(draft.master))window.__manualVocabDrafts[bookKey]=JSON.parse(JSON.stringify(draft));
     // 同じ端末では、手動セーブ時に確定済みのローカル教材を最優先する。
     // Firebaseを待たずに初回画面を表示できる。
     if(!draft){
@@ -6367,7 +6394,12 @@ async function autoLoadOnce() {
   }
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
-    for(var key in stored){try{localStorage.setItem(key,stored[key]);}catch(e){}}
+    for(var key in stored){
+      // 理解度は回答のたびに専用領域へ即時保存される。統合セーブはそれより古い
+      // 場合があるため、ここで一括復元するとタスクキル後に回答が消えてしまう。
+      if(key.indexOf('core_v4_user_vocab_progress_')===0)continue;
+      try{localStorage.setItem(key,stored[key]);}catch(e){}
+    }
   }
   if(save&&save.data&&save.data.memory){
     window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt||'',data:save.data.memory};
@@ -6396,18 +6428,39 @@ window.onAppLoaded(function(){
     // セーブ時に編集されていた全教材を復元する。現在開いている1冊だけではなく、
     // セーブ前に切り替えた教材の追加・削除・理解度も対象にする。
     if(pending.data.vocabBooks&&typeof pending.data.vocabBooks==='object'){
-      window.__manualVocabDrafts=JSON.parse(JSON.stringify(pending.data.vocabBooks));
+      window.__manualVocabDrafts=window.__manualVocabDrafts||{};
       Object.keys(pending.data.vocabBooks).forEach(function(savedBookKey){
         var savedBook=pending.data.vocabBooks[savedBookKey]||{};
-        if(Array.isArray(savedBook.master)){
-          if(typeof textbooksCacheMap!=='undefined')textbooksCacheMap[savedBookKey]=savedBook.master;
-          localStorage.setItem('core_v4_cache_'+savedBookKey,JSON.stringify(savedBook.master));
-          localStorage.setItem('core_v4_custom_words_'+pending.id+'_'+savedBookKey,JSON.stringify(savedBook.master));
+        var fullSaveMs=window.__vocabSavedAtMs(savedBook.savedAt||pending.savedAt);
+        var localDraft=null;
+        try{localDraft=JSON.parse(localStorage.getItem(window.__manualVocabLocalKey(savedBookKey))||'null');}catch(e){}
+        localDraft=window.__mergeNewestLocalVocabProgress(savedBookKey,localDraft);
+        var localMs=window.__vocabSavedAtMs(localDraft&&localDraft.savedAt);
+        var chosen=(localDraft&&localMs>fullSaveMs)?localDraft:savedBook;
+        // 下書き作成の直前にアプリが終了しても、先に同期保存された理解度本体は残る。
+        // 下書きの有無にかかわらず、この専用スナップショットを最後に比較する。
+        try{
+          var directProgressKey=window.getVocabProgressStorageKey(savedBookKey);
+          var directProgressMs=parseInt(localStorage.getItem(directProgressKey+'__ts')||'0')||0;
+          var chosenMsBeforeDirect=window.__vocabSavedAtMs(chosen&&chosen.savedAt)||fullSaveMs;
+          if(directProgressMs>chosenMsBeforeDirect){
+            var directProgress=JSON.parse(localStorage.getItem(directProgressKey)||'{}');
+            chosen=JSON.parse(JSON.stringify(chosen||{}));
+            chosen.progress=directProgress&&typeof directProgress==='object'?directProgress:{};
+            chosen.savedAt=new Date(directProgressMs).toISOString();
+          }
+        }catch(e){}
+        window.__manualVocabDrafts[savedBookKey]=JSON.parse(JSON.stringify(chosen));
+        if(Array.isArray(chosen.master)){
+          if(typeof textbooksCacheMap!=='undefined')textbooksCacheMap[savedBookKey]=chosen.master;
+          localStorage.setItem('core_v4_cache_'+savedBookKey,JSON.stringify(chosen.master));
+          localStorage.setItem('core_v4_custom_words_'+pending.id+'_'+savedBookKey,JSON.stringify(chosen.master));
         }
-        if(savedBook.progress&&typeof window.getVocabProgressStorageKey==='function'){
-          localStorage.setItem(window.getVocabProgressStorageKey(savedBookKey),JSON.stringify(savedBook.progress));
-          var savedBookMs=Date.parse(pending.savedAt||'')||0;
-          if(savedBookMs)localStorage.setItem(window.getVocabProgressStorageKey(savedBookKey)+'__ts',String(savedBookMs));
+        if(chosen.progress&&typeof window.getVocabProgressStorageKey==='function'){
+          var chosenMs=window.__vocabSavedAtMs(chosen.savedAt)||fullSaveMs;
+          localStorage.setItem(window.getVocabProgressStorageKey(savedBookKey),JSON.stringify(chosen.progress));
+          if(chosenMs)localStorage.setItem(window.getVocabProgressStorageKey(savedBookKey)+'__ts',String(chosenMs));
+          if(savedBookKey===bookKey)currentUserVocabProgress=JSON.parse(JSON.stringify(chosen.progress));
         }
       });
     }
@@ -6423,15 +6476,27 @@ window.onAppLoaded(function(){
     // 保存時に確定した理解度を使う。起動途中で読み込まれた古い vocabList から
     // 再抽出すると巻き戻るため、vocabProgress がある場合は再抽出しない。
     if(pending.data.vocabProgress&&typeof pending.data.vocabProgress==='object'){
-      currentUserVocabProgress=pending.data.vocabProgress;
+      var pendingMs=window.__vocabSavedAtMs(pending.savedAt);
+      var currentProgressKey=window.getVocabProgressStorageKey(bookKey);
+      var currentLocalMs=parseInt(localStorage.getItem(currentProgressKey+'__ts')||'0')||0;
+      if(currentLocalMs<=pendingMs){
+        currentUserVocabProgress=pending.data.vocabProgress;
+      }else{
+        try{currentUserVocabProgress=JSON.parse(localStorage.getItem(currentProgressKey)||'{}')||{};}catch(e){}
+      }
       if(typeof window.applyUserProgressToVocabList==='function')window.applyUserProgressToVocabList();
     }else if(typeof window.extractUserProgressFromVocabList==='function'){
       currentUserVocabProgress=window.extractUserProgressFromVocabList();
     }
     if(typeof window.getVocabProgressStorageKey==='function'){
-      localStorage.setItem(window.getVocabProgressStorageKey(bookKey),JSON.stringify(currentUserVocabProgress||{}));
-      var restoredMs=Date.parse(pending.savedAt||'')||0;
-      if(restoredMs)localStorage.setItem(window.getVocabProgressStorageKey(bookKey)+'__ts',String(restoredMs));
+      var finalProgressKey=window.getVocabProgressStorageKey(bookKey);
+      var existingMs=parseInt(localStorage.getItem(finalProgressKey+'__ts')||'0')||0;
+      var restoredMs=window.__vocabSavedAtMs(pending.savedAt);
+      // 古い統合セーブの日時で、新しい理解度の日時を戻さない。
+      if(existingMs<=restoredMs){
+        localStorage.setItem(finalProgressKey,JSON.stringify(currentUserVocabProgress||{}));
+        if(restoredMs)localStorage.setItem(finalProgressKey+'__ts',String(restoredMs));
+      }
     }
   }catch(e){console.warn('[save] vocab progress restore failed',e);}
   try{if(typeof window.applyProfileToUi==='function')window.applyProfileToUi();}catch(e){}
