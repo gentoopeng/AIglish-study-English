@@ -4579,6 +4579,19 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
   var __loadBookBeforeManualDraft=window.loadCurrentTextbookData;
   window.loadCurrentTextbookData=async function(){
     var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
+    var requestUserId=myId;
+    function isCurrentRequest(){
+      return myId===requestUserId&&(currentTextbook||'default')===bookKey;
+    }
+    function latestDraft(fallback){
+      var latest=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
+      try{
+        var stored=JSON.parse(localStorage.getItem(window.__manualVocabLocalKey(bookKey))||'null');
+        if(stored&&Array.isArray(stored.master)&&(!latest||window.__vocabSavedAtMs(stored.savedAt)>window.__vocabSavedAtMs(latest.savedAt)))latest=stored;
+      }catch(e){}
+      if(!latest||window.__vocabSavedAtMs(fallback&&fallback.savedAt)>window.__vocabSavedAtMs(latest.savedAt))latest=fallback;
+      return window.__mergeNewestLocalVocabProgress(bookKey,latest);
+    }
     var draft=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
     if(!draft){
       try{draft=JSON.parse(localStorage.getItem(window.__manualVocabLocalKey(bookKey))||'null');}catch(e){draft=null;}
@@ -4626,6 +4639,8 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
         }
       }catch(e){console.warn('[save] user vocab book load failed',e);}
     }
+    if(!isCurrentRequest())return;
+    draft=latestDraft(draft);
     // 通常ローダーを呼ぶ前にユーザー専用データをキャッシュへ配置する。
     // 以前は共有教材を一度描画してから差し替えていたため、起動直後に旧データが
     // 表示される瞬間や、後続処理が旧データを参照する競合が発生していた。
@@ -4642,7 +4657,9 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
       }catch(e){}
     }
     var result=await __loadBookBeforeManualDraft.apply(this,arguments);
-    // 通常ロード完了後にも同じ確定データを適用し、他のロード処理による上書きを防ぐ。
+    // 通信中の編集を古いスナップショットで巻き戻さず、切替前の結果も適用しない。
+    if(!isCurrentRequest())return result;
+    draft=latestDraft(draft);
     if(draft&&Array.isArray(draft.master))window.__applyManualVocabDraft(bookKey,draft);
     return result;
   };
@@ -6398,6 +6415,16 @@ async function autoLoadOnce() {
       // 理解度は回答のたびに専用領域へ即時保存される。統合セーブはそれより古い
       // 場合があるため、ここで一括復元するとタスクキル後に回答が消えてしまう。
       if(key.indexOf('core_v4_user_vocab_progress_')===0)continue;
+      if(key.indexOf('core_v4_vocab_draft_')===0){
+        try{
+          var existingDraft=JSON.parse(localStorage.getItem(key)||'null');
+          var savedDraft=JSON.parse(stored[key]||'null');
+          if(existingDraft&&(Date.parse(existingDraft.savedAt||'')||0)>(Date.parse(savedDraft&&savedDraft.savedAt||'')||0))continue;
+        }catch(e){
+          // 壊れた統合セーブで、端末に残る下書きを上書きしない。
+          if(localStorage.getItem(key))continue;
+        }
+      }
       try{localStorage.setItem(key,stored[key]);}catch(e){}
     }
   }
@@ -6468,6 +6495,10 @@ window.onAppLoaded(function(){
     // 次の教材ロードで共有キャッシュに置き換わり、追加・編集した単語が消えていた。
     if(Array.isArray(pending.data.vocabMaster)){
       var restoredMaster=pending.data.vocabMaster;
+      var currentDraft=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
+      if(currentDraft&&Array.isArray(currentDraft.master)&&window.__vocabSavedAtMs(currentDraft.savedAt)>window.__vocabSavedAtMs(pending.savedAt)){
+        restoredMaster=currentDraft.master;
+      }
       if(typeof textbooksCacheMap!=='undefined')textbooksCacheMap[bookKey]=restoredMaster;
       localStorage.setItem('core_v4_cache_'+bookKey,JSON.stringify(restoredMaster));
       localStorage.setItem('core_v4_custom_words_'+pending.id+'_'+bookKey,JSON.stringify(restoredMaster));
