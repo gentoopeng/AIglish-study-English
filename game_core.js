@@ -64,9 +64,9 @@
         updateFlashcardStatusFilterUi();
     };
 
-    function getFlashcardWordStatus(word) {
-        if (typeof window.wordOverallStatus === 'function') return window.wordOverallStatus(word);
-        if (word && word.status) return word.status;
+    function getFlashcardMeaningStatus(meaning, word) {
+        if (meaning && meaning.status) return meaning.status;
+        if (word && (!word.meanings || !word.meanings.length) && word.status) return word.status;
         return 'none';
     }
 
@@ -94,15 +94,21 @@
 
         var pool = [];
         if (typeof vocabList !== 'undefined') {
-            pool = vocabList.filter(function(w) {
+            vocabList.forEach(function(w) {
                 var n = parseInt(w.num);
-                return n >= startNum && n <= endNum && !!flashcardSelectedStatuses[getFlashcardWordStatus(w)];
-            }).map(function(w) {
-                return {
-                    num: w.num,
-                    en: w.word,
-                    ja: w.meanings && w.meanings[0] ? w.meanings[0].text : w.meaning
-                };
+                if (n < startNum || n > endNum) return;
+                var meanings = w.meanings && w.meanings.length ? w.meanings : [{ id: null, text: w.meaning, status: w.status || 'none', history: w.history || [] }];
+                meanings.forEach(function(meaning, meaningIndex) {
+                    var meaningStatus = getFlashcardMeaningStatus(meaning, w);
+                    if (!flashcardSelectedStatuses[meaningStatus]) return;
+                    pool.push({
+                        num: w.num,
+                        en: w.word,
+                        ja: meaning.text || w.meaning || '',
+                        meaningId: meaning.id !== undefined && meaning.id !== null ? String(meaning.id) : null,
+                        meaningIndex: meaningIndex
+                    });
+                });
             });
         }
 
@@ -144,8 +150,16 @@
         }
         var targetHistory = [];
         if (vocabMatch) {
-            if (vocabMatch.history && vocabMatch.history.length > 0) targetHistory = targetHistory.concat(vocabMatch.history);
-            else if (vocabMatch.status && vocabMatch.status !== 'none') targetHistory.push(vocabMatch.status);
+            var targetMeaning = null;
+            if (vocabMatch.meanings && vocabMatch.meanings.length) {
+                if (wordData.meaningId !== null && wordData.meaningId !== undefined) {
+                    targetMeaning = vocabMatch.meanings.find(function(meaning) { return String(meaning.id) === String(wordData.meaningId); });
+                }
+                if (!targetMeaning) targetMeaning = vocabMatch.meanings[wordData.meaningIndex || 0];
+            }
+            if (targetMeaning && targetMeaning.history && targetMeaning.history.length > 0) targetHistory = targetHistory.concat(targetMeaning.history);
+            else if (targetMeaning && targetMeaning.status && targetMeaning.status !== 'none') targetHistory.push(targetMeaning.status);
+            else if ((!vocabMatch.meanings || !vocabMatch.meanings.length) && vocabMatch.history && vocabMatch.history.length > 0) targetHistory = targetHistory.concat(vocabMatch.history);
         } else {
             var memStatus = (typeof wordMemory !== 'undefined') ? wordMemory[cleanKey] : null;
             if (memStatus && memStatus !== 'none') targetHistory.push(memStatus);
@@ -454,26 +468,41 @@
         else if (direction === 'up') { status = 'so'; }
 
         if (typeof totalExp !== 'undefined') totalExp += 1;
-        if (typeof wordMemory !== 'undefined') {
-            wordMemory[cleanKey] = status;
-            try { localStorage.setItem('wordMemory', JSON.stringify(wordMemory)); } catch (e) {}
-        }
         var vocabMatch = null;
         if (typeof vocabList !== 'undefined') {
             vocabMatch = vocabIndex >= 0 ? vocabList[vocabIndex] : null;
         }
         if (vocabMatch) {
-            vocabMatch.status = status;
+            var answeredMeaning = null;
             if (vocabMatch.meanings && vocabMatch.meanings.length > 0) {
-                vocabMatch.meanings[0].status = status;
-                if (!vocabMatch.meanings[0].history) vocabMatch.meanings[0].history = [];
-                vocabMatch.meanings[0].history.push(status);
+                if (currentWord.meaningId !== null && currentWord.meaningId !== undefined) {
+                    answeredMeaning = vocabMatch.meanings.find(function(meaning) { return String(meaning.id) === String(currentWord.meaningId); });
+                }
+                if (!answeredMeaning) answeredMeaning = vocabMatch.meanings[currentWord.meaningIndex || 0];
             }
-            if (!vocabMatch.history) vocabMatch.history = [];
-            vocabMatch.history.push(status);
+            if (answeredMeaning) {
+                answeredMeaning.status = status;
+                if (!answeredMeaning.history) answeredMeaning.history = [];
+                answeredMeaning.history.push(status);
+                answeredMeaning.history = answeredMeaning.history.slice(-20);
+                vocabMatch.status = typeof window.wordOverallStatus === 'function' ? window.wordOverallStatus(vocabMatch) : status;
+            } else {
+                vocabMatch.status = status;
+                if (!vocabMatch.history) vocabMatch.history = [];
+                vocabMatch.history.push(status);
+                vocabMatch.history = vocabMatch.history.slice(-20);
+            }
+            // 単語単位の補助記憶には、特定の意味の回答ではなく全意味から求めた状態を入れる。
+            if (typeof wordMemory !== 'undefined') {
+                wordMemory[cleanKey] = vocabMatch.status || status;
+                try { localStorage.setItem('wordMemory', JSON.stringify(wordMemory)); } catch (e) {}
+            }
             // 回答と同じ処理内で端末へ確定する。終了処理やタイマーまで待たない。
             if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(vocabMatch.num);
             if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+        } else if (typeof wordMemory !== 'undefined') {
+            wordMemory[cleanKey] = status;
+            try { localStorage.setItem('wordMemory', JSON.stringify(wordMemory)); } catch (e) {}
         }
         if (typeof userStats !== 'undefined') {
             userStats.flash_count = (userStats.flash_count || 0) + 1;
