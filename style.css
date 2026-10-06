@@ -2127,3 +2127,49 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .library-prompt-copy { display:block; padding:4px 0; border:0; background:transparent; color:inherit; font-size:10px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
 .library-prompt-fallback { width:100%; height:100px; font-size:11px; }
 @media(prefers-reduced-motion:reduce){.vocab-library-flash-button{transition:none;} .vocab-library-flash-button:hover{transform:none;}}
+
+/* Workbooks share the vocabulary library's rows, controls and native dialogs. */
+#workbookContents[hidden] { display:none !important; }
+#vocabLibraryWorks > .library-toolbar { margin:10px 0 14px; }
+.workbook-review-count { align-self:center; flex:0 0 42px; min-height:44px; padding:4px; border:0; background:transparent; color:#d8cba9; cursor:pointer; }
+.workbook-review-count small,.workbook-review-count strong { display:block; }
+.workbook-review-count small { font-size:9px; color:#aaa397; }
+.workbook-review-count strong { font:600 17px/1.4 Georgia,serif; }
+.workbook-review-count:hover { background:rgba(198,183,144,.08); border-radius:10px; }
+.workbook-range-fields { display:flex; gap:8px; align-items:center; }
+.workbook-range-fields input { min-width:0; }
+.library-editor-dialog .workbook-checkbox { width:auto; margin-right:8px; accent-color:#c6b790; }
+.workbook-content-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.workbook-back { display:flex; align-items:center; gap:10px; padding:0; border:0; background:transparent; text-align:left; color:#fff; cursor:pointer; }
+.workbook-back strong { display:block; font-size:15px; overflow-wrap:anywhere; }
+.workbook-back small { display:block; color:var(--text-sub); font-size:10px; margin-top:2px; }
+.workbook-small-cover { width:36px; height:36px; flex:none; border-radius:50%; background:rgba(255,255,255,.05); display:grid; place-items:center; overflow:hidden; font-size:20px; }
+.workbook-small-cover img { width:100%; height:100%; object-fit:cover; }
+.workbook-study-toolbar { margin:0 0 14px; }
+.workbook-unit-heading { display:flex; align-items:center; justify-content:space-between; }
+.workbook-unit-heading .vocab-library-manage-button { min-height:28px; }
+.workbook-unit-heading .word-num-badge { background:rgba(255,255,255,.3); color:#fff; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; }
+.workbook-question { color:#fff; font-size:16px; font-weight:700; line-height:1.6; margin:8px 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.workbook-status-line { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-top:10px; padding:6px 0; border-top:1px solid rgba(255,255,255,.2); }
+.workbook-next-review { font-size:11px; color:var(--text-sub); overflow-wrap:anywhere; }
+.workbook-next-review.is-due { color:#f1aaa1; }
+.workbook-status-buttons { display:flex; gap:4px; flex-shrink:0; }
+.workbook-status-button { width:24px; height:24px; padding:0; border-radius:50%; border:1px solid rgba(255,255,255,.3); background:rgba(0,0,0,.5); color:white; font-size:10px; font-weight:900; cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+.workbook-status-button[aria-pressed="true"].status-ok { background:var(--word-ok); color:#000; }
+.workbook-status-button[aria-pressed="true"].status-so { background:var(--word-so); color:#000; }
+.workbook-status-button[aria-pressed="true"].status-bad { background:var(--word-bad); }
+.workbook-status-button[aria-pressed="true"].status-none { background:rgba(255,255,255,.3); }
+.workbook-unit-card .word-static-info { margin-top:8px; font-size:11px; color:#C7D2FE; }
+.workbook-unit-card .word-static-info summary { cursor:pointer; padding:4px 0; }
+.workbook-unit-card .sub-info-block { margin-top:6px; padding:6px 10px; border-radius:6px; background:rgba(0,0,0,.45); font-size:12px; line-height:1.6; color:#fff; white-space:pre-wrap; overflow-wrap:anywhere; }
+.workbook-unit-footer { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,.1); }
+.workbook-history { display:flex; gap:2px; }
+.workbook-history span { font-size:9px; font-weight:800; padding:2px 4px; border-radius:4px; color:#fff; }
+.workbook-history .status-ok { background:#10B981; }
+.workbook-history .status-so { background:#F59E0B; color:#0f172a; }
+.workbook-history .status-bad { background:#EF4444; }
+.workbook-unit-card button:focus-visible,.workbook-review-count:focus-visible,.workbook-back:focus-visible { outline:2px solid #b7aa85; outline-offset:3px; }
+.workbook-postpone { border:0; padding:4px 0; background:transparent; color:var(--text-sub); font-size:10px; cursor:pointer; }
+.workbook-postpone:hover { color:#eee8da; }
+.workbook-ai-help { color:#C7D2FE; margin:6px 0; }
+#workbookExplanation { white-space:pre-wrap; overflow-wrap:anywhere; }
