@@ -74,6 +74,8 @@
         dialog.showModal();
         return dialog;
     }
+    window.openLibraryDialog = open;
+    window.closeLibraryDialog = close;
     window.openLibraryBookEditor = function(bookId) {
         var editorUserId = userId();
         var book = textbooksPool.find(function(item) { return item.id === bookId; });

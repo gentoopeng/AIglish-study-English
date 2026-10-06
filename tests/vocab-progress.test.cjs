@@ -75,3 +75,11 @@ test('restart does not restore a deleted textbook from an older library snapshot
  values.set(key,JSON.stringify(latest));values.set('save',JSON.stringify({savedAt:new Date(2000).toISOString(),data:{localStorage:{[key]:JSON.stringify(old)}}}));
  const ctx={loginUid:()=> 'user-a',localKey:()=> 'save',cloudMetaKey:()=> 'cloud-meta',localMetaKey:()=> 'local-meta',console,localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)}};ctx.window=ctx;vm.runInNewContext(autoLoader,ctx);await ctx.autoLoadOnce();assert.deepEqual(JSON.parse(values.get(key)),latest);
 });
+test('restart preserves newer workbook answers and deletions against an older integrated save',async()=>{
+ for(const latest of ['[]',JSON.stringify([{id:'new',units:[{status:'ok'}]}])]){
+  const values=new Map();const key='vv4_works_user-a';
+  values.set(key,latest);values.set(key+'__ts','3000');
+  values.set('save',JSON.stringify({savedAt:new Date(2000).toISOString(),data:{localStorage:{[key]:JSON.stringify([{id:'old'}]),[key+'__ts']:'1000'}}}));
+  const ctx={loginUid:()=> 'user-a',localKey:()=> 'save',cloudMetaKey:()=> 'cloud-meta',localMetaKey:()=> 'local-meta',console,localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)}};ctx.window=ctx;vm.runInNewContext(autoLoader,ctx);await ctx.autoLoadOnce();assert.equal(values.get(key),latest);assert.equal(values.get(key+'__ts'),'3000');
+ }
+});
