@@ -248,7 +248,7 @@ const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダ�
      if(typeof window.renderHistoryList === 'function') window.renderHistoryList();
      if(typeof window.renderBookshelf === 'function') window.renderBookshelf();
      window.renderAdminUserList(); 
-     window.renderGameLeaderboard('mine');
+     ;
      window.renderTitles();
      window.initStudyTimerAndDataRotation();
      const codeBadge = document.getElementById('myFriendCodeDisplay');
@@ -286,15 +286,7 @@ let textbooksPool = [];
 let textbooksCacheMap = {}; // 単語データキャッシュ用のマップオブジェクト
 let adminUploadedBookCoverBase64 = "";
 let isLevelRankExpanded = false;
-let isGameTargetExpanded = false;
-let selectedQuestionMode = 'ja2en';
-let currentQuestionType = 'ja2en';
-let currentGameDifficulty = 'normal';
-let gameMistakeCount = 0;
 let gameComboCount = 0;
-let gameComboTotalScore = 0;
-let gameHistoryLog = [];
-let gameBestScore = 0;
 let activeCharacter = "";
 let activeWeapon = "";
 let activeArmor = "";
@@ -307,9 +299,6 @@ let cardTouchStartX = 0;
 let cardTouchStartY = 0;
 let isCardFlicking = false;
 let flashcardSessionHistory = [];
-let currentLbMode = 'ja2en';
-let currentLbDiff = 'endless';
-let currentLbType = 'mine';
 const SHARED_DEFAULT_VOCAB_DATA = [];
 let dictionaryData = [];
 let wordMemory = JSON.parse(localStorage.getItem('wordMemory')) || {};
@@ -324,12 +313,8 @@ let currentTargetWordToken = null;
 let currentActiveTitleVocabNum = null;
 let currentActiveAiAnalysisCache = null;
 let gameTimerInterval = null;
-let gameRemainingTime = 45;
-let gameScoreCount = 0;
 let gameCurrentWordsQueue = [];
 let gameCurrentIndex = 0;
-let isGameProcessingAnswer = false;
-let isGameTimerPaused = false;
 let currentMultiMode = 'coop';
 let multiBossMaxHp = 100000;
 let multiBossHp = 100000;
@@ -437,25 +422,7 @@ const RARITY_MAP = [
 // ==========================================================================
 // 🌟 3. 各種機能の定義
 // ==========================================================================
-window.callGeminiGameJudge = async function(question, correctAnswer, userAns, mode) {
-if (!geminiApiKey) return { status:  "NG", alternatives:  "特になし" };
-try {
-const url =  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}` ;
-const prompt =  "採点AIです。JSONフォーマットで返してください。\n問題: " + question +  "\n模範解答: " + correctAnswer +  "\nユーザー解答: " + userAns +  "\n出力形式: {\"status\": \"OK/SO/NG\", \"alternatives\": \"別解\"}";
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-    });
-    if (!response.ok) return { status: "NG", alternatives: "特になし" };
-    const data = await response.json();
-    const cleanJsonText = data.candidates[0].content.parts[0].text.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
-    return JSON.parse(cleanJsonText);
-} catch (e) {
-    console.error("Gemini Judge Error:", e);
-    return { status: "NG", alternatives: "特になし" };
-}
-};
+
 window.renderLeaderboard = function() {
 const container = document.getElementById('leaderboardContainer');
 if(!container) return;
@@ -1227,7 +1194,7 @@ const nav = document.getElementById('nav-' + tabId);
 if(nav) nav.classList.add('active');
 window.toggleSidebar(false);
 if(tabId !== 'reader' && typeof window.closeReader === 'function') window.closeReader();
-if(tabId === 'game') window.renderGameLeaderboard('mine');
+
 if(tabId === 'admin') {
     window.renderAdminUserList();
     window.updateAdminEditBookSelectOptions();
@@ -2793,8 +2760,6 @@ window.__flashcardNextDelay = 150;
 // ------------------------------------------------------------------
 // 6. シーズンランキング
 // ------------------------------------------------------------------
-window.__gameLbTab = window.__gameLbTab || "hall";
-window.__seasonLbView = window.__seasonLbView || "current";
 window.__seasonRankingAnchor = window.__seasonRankingAnchor || new Date(2026, 6, 27, 0, 0, 0);
 
 window.getSeasonModeOrder = function() { return ["ja2en", "en2ja", "mixed"]; };
@@ -2858,154 +2823,19 @@ window.makeRankingDateStr = function(d) {
   return (d.getMonth() + 1) + "/" + d.getDate() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 };
 
-window.submitHallScore = async function(mode, score, oldBest) {
-  if (!mode || score <= 0 || !myId || myId === "GUEST-000") return;
-  const bestKey = "cosmic_best_" + mode + "_endless";
-  if (!window.db || !window.fbSetDoc || !window.fbDoc || !window.fbGetDoc) {
-    if (score > oldBest) localStorage.setItem(bestKey, String(score));
-    return;
-  }
-  try {
-    const ref = window.fbDoc(window.db, "shared", "game_hall_" + mode);
-    const snap = await window.fbGetDoc(ref);
-    let scores = snap.exists() && snap.data().scores ? snap.data().scores : [];
-    const existing = scores.find(function(s) { return s.id === myId; });
-    const currentBest = existing ? Math.max(existing.score, oldBest) : oldBest;
-    if (score <= currentBest) {
-      if (existing) localStorage.setItem(bestKey, String(existing.score));
-      return;
-    }
-    localStorage.setItem(bestKey, String(score));
-    const now = new Date();
-    scores = scores.filter(function(s) { return s.id !== myId; });
-    scores.push({ id: myId, name: myName, score: score, timestamp: now.getTime(), date: window.makeRankingDateStr(now) });
-    scores = window.sortRankingScores(scores).slice(0, 20);
-    await window.fbSetDoc(ref, { scores: scores, updatedAt: now.toISOString() }, { merge: true });
-  } catch (e) {}
-};
 
-window.submitSeasonScore = async function(mode, score) {
-  if (!mode || score <= 0 || !myId || myId === "GUEST-000") return;
-  const seasonNo = window.getCurrentSeasonNo();
-  if (seasonNo <= 0) return;
-  const seasonMode = window.getSeasonMode(seasonNo);
-  if (mode !== seasonMode) return;
-  const bestKey = "season_best_" + seasonNo + "_" + mode + "_" + myId;
-  const oldBest = parseInt(localStorage.getItem(bestKey) || "0");
-  if (!window.db || !window.fbSetDoc || !window.fbDoc || !window.fbGetDoc) {
-    if (score > oldBest) localStorage.setItem(bestKey, String(score));
-    return;
-  }
-  try {
-    const docName = "game_season_" + seasonNo + "_" + mode;
-    const ref = window.fbDoc(window.db, "shared", docName);
-    const snap = await window.fbGetDoc(ref);
-    let scores = snap.exists() && snap.data().scores ? snap.data().scores : [];
-    const existing = scores.find(function(s) { return s.id === myId; });
-    const currentBest = existing ? Math.max(existing.score, oldBest) : oldBest;
-    if (score <= currentBest) {
-      if (existing) localStorage.setItem(bestKey, String(existing.score));
-      return;
-    }
-    localStorage.setItem(bestKey, String(score));
-    const now = new Date();
-    scores = scores.filter(function(s) { return s.id !== myId; });
-    scores.push({ id: myId, name: myName, score: score, timestamp: now.getTime(), date: window.makeRankingDateStr(now) });
-    scores = window.sortRankingScores(scores).slice(0, 20);
-    await window.fbSetDoc(ref, { seasonNo: seasonNo, mode: mode, scores: scores, updatedAt: now.toISOString() }, { merge: true });
-  } catch (e) {}
-};
 
-window.checkAndSettleSeasonTitles = async function() {
-  if (!myId || myId === "GUEST-000") return;
-  window.ensureSeasonUserStats();
-  const currentSeasonNo = window.getCurrentSeasonNo();
-  if (currentSeasonNo <= 1) return;
-  let changed = false;
-  for (let seasonNo = 1; seasonNo < currentSeasonNo; seasonNo++) {
-    if (userStats.settledSeasons.includes(seasonNo)) continue;
-    const mode = window.getSeasonMode(seasonNo);
-    try {
-      if (window.db && window.fbGetDoc && window.fbDoc) {
-        const ref = window.fbDoc(window.db, "shared", "game_season_" + seasonNo + "_" + mode);
-        const snap = await window.fbGetDoc(ref);
-        if (snap.exists() && snap.data().scores) {
-          const scores = window.sortRankingScores(snap.data().scores);
-          const myIndex = scores.findIndex(function(s) { return s.id === myId; });
-          if (myIndex >= 0 && myIndex < 3) {
-            const rank = myIndex + 1;
-            const modeLabel = window.getSeasonModeLabel(mode);
-            const titleName = "第" + seasonNo + "シーズン" + modeLabel + "ランキング" + rank + "位";
-            if (!userStats.seasonTitles.includes(titleName)) {
-              userStats.seasonTitles.push(titleName);
-              changed = true;
-            }
-          }
-        }
-      }
-    } catch (e) {}
-    userStats.settledSeasons.push(seasonNo);
-    changed = true;
-  }
-  if (changed) {
-    await window.saveUserStats();
-    if (typeof window.renderTitles === "function") window.renderTitles();
-  }
-};
+
+
+
 
 // ------------------------------------------------------------------
 // 7. ゲームランキングUI（殿堂/シーズン切替）
 // ------------------------------------------------------------------
-window.setGameLbTab = function(tab) { window.__gameLbTab = tab; window.renderGameLeaderboard(); };
-window.setSeasonLbView = function(view) { window.__seasonLbView = view; window.renderGameLeaderboard(); };
 
-window.injectGameLbControls = function() {
-  const container = document.getElementById("leaderboardListContainer");
-  if (!container || !container.parentNode) return;
-  let ctrl = document.getElementById("gameLbTabControl");
-  if (!ctrl) {
-    ctrl = document.createElement("div");
-    ctrl.id = "gameLbTabControl";
-    container.parentNode.insertBefore(ctrl, container);
-  }
-  const seasonNo = window.getCurrentSeasonNo();
-  const tabBtn = function(active) {
-    return "flex:1; padding:8px 10px; border-radius:8px; border:1px solid " + (active ? "var(--cosmic-cyan)" : "rgba(255,255,255,0.15)") + "; background:" + (active ? "linear-gradient(135deg, rgba(0,240,255,0.25) 0%, rgba(192,132,252,0.25) 100%)" : "rgba(7,11,25,0.6)") + "; color:" + (active ? "#FFFFFF" : "var(--text-sub)") + "; font-size:12px; font-weight:900; cursor:pointer;";
-  };
-  const subBtn = function(active) {
-    return "flex:1; padding:6px 8px; border-radius:8px; border:1px solid " + (active ? "var(--cosmic-purple-light)" : "rgba(255,255,255,0.12)") + "; background:" + (active ? "rgba(192,132,252,0.22)" : "rgba(0,0,0,0.35)") + "; color:" + (active ? "#FFFFFF" : "var(--text-sub)") + "; font-size:11px; font-weight:800; cursor:pointer;";
-  };
-  let seasonControls = "";
-  if (window.__gameLbTab === "season") {
-    const curActive = window.__seasonLbView === "current";
-    const prevActive = window.__seasonLbView === "previous";
-    let infoHtml = "";
-    if (seasonNo <= 0) {
-      infoHtml = '<div style="margin-top:8px; font-size:11px; color:var(--cosmic-cyan); font-weight:800;">' + window.getSeasonStartCountdownText() + '</div>';
-    } else {
-      const viewNo = curActive ? seasonNo : seasonNo - 1;
-      if (viewNo <= 0) {
-        infoHtml = '<div style="margin-top:8px; font-size:11px; color:var(--text-sub); font-weight:700;">前シーズンはありません。</div>';
-      } else {
-        const mode = window.getSeasonMode(viewNo);
-        const modeLabel = window.getSeasonModeLabel(mode);
-        const start = window.getSeasonStart(viewNo);
-        const end = window.getSeasonEnd(viewNo);
-        const statusText = curActive ? window.getSeasonRemainingText(viewNo) : "終了";
-        infoHtml = '<div style="margin-top:8px; font-size:11px; color:var(--text-sub); line-height:1.5;">' +
-          '<div style="color:var(--cosmic-cyan); font-weight:900;">第' + viewNo + 'シーズン（' + modeLabel + '）</div>' +
-          '<div>' + window.formatSeasonDate(start) + ' 〜 ' + window.formatSeasonDate(end) + '</div>' +
-          '<div style="color:#FFFFFF; font-weight:800;">' + statusText + '</div></div>';
-      }
-    }
-    seasonControls = '<div style="display:flex; gap:8px; margin-top:8px;">' +
-      '<button style="' + subBtn(curActive) + '" onclick="window.setSeasonLbView(\'current\')">現在のシーズン</button>' +
-      '<button style="' + subBtn(prevActive) + '" onclick="window.setSeasonLbView(\'previous\')">前シーズン</button></div>' + infoHtml;
-  }
-  ctrl.innerHTML = '<div style="display:flex; gap:8px; margin-bottom:10px;">' +
-    '<button style="' + tabBtn(window.__gameLbTab === "hall") + '" onclick="window.setGameLbTab(\'hall\')">殿堂</button>' +
-    '<button style="' + tabBtn(window.__gameLbTab === "season") + '" onclick="window.setGameLbTab(\'season\')">シーズン</button></div>' + seasonControls;
-};
+
+
+
 
 window.buildRankingRowHtml = function(record, index) {
   const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "white", "white", "white"];
@@ -3024,21 +2854,8 @@ window.buildRankingRowHtml = function(record, index) {
 // ------------------------------------------------------------------
 // 8. endGameSession上書き（殿堂＋シーズン保存）
 // ------------------------------------------------------------------
-const __originalEndGameSessionForPatch = window.endGameSession;
-window.endGameSession = async function() {
-  const mode = selectedQuestionMode;
-  const score = gameScoreCount;
-  const isEndless = currentGameDifficulty === "endless";
-  const oldBest = parseInt(localStorage.getItem("cosmic_best_" + mode + "_endless") || "0");
-  if (typeof __originalEndGameSessionForPatch === "function") {
-    __originalEndGameSessionForPatch.apply(this, arguments);
-  }
-  if (isEndless && score > 0 && myId && myId !== "GUEST-000") {
-    await window.submitHallScore(mode, score, oldBest);
-    await window.submitSeasonScore(mode, score);
-    if (typeof window.renderGameLeaderboard === "function") window.renderGameLeaderboard();
-  }
-};
+
+
 
 // ------------------------------------------------------------------
 // 9. シーズン称号表示
@@ -3484,7 +3301,7 @@ window.onTabChange(function(tabId) {
     if (typeof window.updateAdminEditBookSelectOptions === "function") window.updateAdminEditBookSelectOptions(currentTextbook || "");
   }
   if (tabId === "game") {
-    window.renderGameLeaderboard();
+    ;
   }
 });
 
@@ -3494,9 +3311,9 @@ window.onTabChange(function(tabId) {
 window.onAppLoaded(async function() {
   if (myId && myId !== "GUEST-000") {
     window.ensureSeasonUserStats();
-    await window.checkAndSettleSeasonTitles();
+
     await window.recordLastLoginOnce();
-    if (typeof window.renderGameLeaderboard === "function") window.renderGameLeaderboard();
+
     if (typeof window.renderLeaderboard === "function") window.renderLeaderboard(false);
   }
 });
@@ -3523,17 +3340,7 @@ window.onAppLoaded(async function() {
 // ------------------------------------------------------------------
 // 20. シーズンランキング定期チェック（60秒間隔）
 // ------------------------------------------------------------------
-if (!window.__seasonRankingIntervalStarted) {
-  window.__seasonRankingIntervalStarted = true;
-  setInterval(function() {
-    if (myId && myId !== "GUEST-000") {
-      window.checkAndSettleSeasonTitles();
-      if (window.__gameLbTab === "season" && typeof window.renderGameLeaderboard === "function") {
-        window.renderGameLeaderboard();
-      }
-    }
-  }, 60000);
-}
+
 
 console.log("📦 統合機能パッチ（アプリ内完結版）適用完了");
 // ==========================================================================
@@ -4546,11 +4353,9 @@ window.__wrapWithPenguin = function(fnName) {
   'switchTextbookContext',        // 単語帳を切り替えた時
   'refreshFriendListFromFirebase',// フレンドリスト更新時
   'handleAuthSubmit',             // ログイン処理
-  'startActualGame',              // ゲーム開始時
   'startFlashcardSession',        // フラッシュカード開始時
   'analyzeText',                  // 長文解析時
-  'endGameSession',               // ゲーム終了時
-  'saveSidebarProfile',           // プロフィール保存時
+    'saveSidebarProfile',           // プロフィール保存時
   'searchAndAddFriend'            // フレンド追加時
 ].forEach(function(fn){ window.__wrapWithPenguin(fn); });
 
@@ -8602,7 +8407,7 @@ console.log('🔤 第12回パッチ（フラッシュ単語テキスト横拡張
 window.__USAGE_GUIDE_STEPS = [
     { icon: 'user-check', head: 'アカウントを作る／ログインする', desc: '初めての方は「新規作成」でプレイヤー名・本名・年齢・4桁の暗証番号を登録。発行されたIDはログインに必要なので必ずメモして。2回目以降はID＋暗証番号でログイン。' },
     { icon: 'book-marked', head: '単語帳で単語を覚える', desc: '単語をタップして意味を確認し、右の4つのボタンで理解度をマーク。⚪︎＝定着／△＝曖昧／✕＝不可／ー＝リセット。覚えるほど経験値(XP)が溜まってレベルが上がります。' },
-    { icon: 'zap', head: 'フラッシュ＆ゲームで定着させる', desc: 'ゲームタブの「フラッシュ単語」でめくり学習、「単語の試練」でタイピングテスト。苦手な単語ほど繰り返し出るので、自然と記憶に定着します。' }
+    { icon: 'zap', head: 'フラッシュ＆ゲームで定着させる', desc: '単語帳一覧の「›」からフラッシュ単語を開始できます。ゲームタブの「単語の迷宮」でバトルにも挑戦できます。' }
 ];
 
 window.__USAGE_GUIDE_SECTIONS = [
@@ -8641,15 +8446,8 @@ window.__USAGE_GUIDE_SECTIONS = [
               '<li><strong>🔄 最新情報に更新</strong>で、相手のレベルやログイン時刻をクラウドから再取得。</li></ul>'
     },
     {
-        icon: 'swords', title: '🎮 単語テスト（単語の試練）',
-        html: '<p>制限時間内に英訳・和訳・まぜまぜで答えるタイピングバトル。</p>' +
-              '<ul><li>難易度は <strong>ノーマル(3分)／ハード(7分)／エキスパート(15分)</strong>。</li>' +
-              '<li><strong>エンドレス</strong>は時間無制限・ハート5個。5回ミスで終了。</li>' +
-              '<li>正解はAIが採点（◎正解／○おまけ正解）。連続正解で<strong>コンボボーナス</strong>が乗ります。</li></ul>'
-    },
-    {
         icon: 'layers', title: '🃏 フラッシュ単語',
-        html: '<p>泡カードをめくって、直感で仕分ける学習モード。</p>' +
+        html: '<p>単語帳一覧の「›」から設定を開き、カードをめくって学習します。</p>' +
               '<ul><li>カードを<strong>タップ</strong>で裏返して答えを確認。</li>' +
               '<li><strong>右スワイプ＝⚪︎覚えた</strong>／<strong>左スワイプ＝✕覚えてない</strong>／<strong>上スワイプ＝△スキップ</strong>。</li>' +
               '<li>設定で<strong>出題する教材</strong>と<strong>方向（英→和／和→英）</strong>を選べます。</li></ul>'
@@ -9206,8 +9004,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // 【1】状態変数と日付・時間ヘルパー
     // ------------------------------------------------------------------
     window.__communityRankType = window.__communityRankType || 'level';   // level|score|time|flash
-    window.__communityScoreMode = window.__communityScoreMode || 'ja2en'; // ja2en|en2ja|mixed
-    window.__communityScoreDiff = window.__communityScoreDiff || 'endless'; // endless|normal|hard|expert
     window.__communityTimeRange = window.__communityTimeRange || 'total'; // total|weekly|daily
 
     window.__getTodayKey = function() {
@@ -9270,56 +9066,14 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     // 【3】難易度別スコアのクラウド送信（エンドレスは既存の殿堂を使用）
     // ------------------------------------------------------------------
-    window.submitDifficultyScore = async function(mode, difficulty, score) {
-        if (!mode || !difficulty || difficulty === 'endless' || score <= 0) return;
-        if (!myId || myId === 'GUEST-000') return;
-        if (!window.db || !window.fbSetDoc || !window.fbDoc || !window.fbGetDoc) return;
-        try {
-            var ref = window.fbDoc(window.db, 'shared', 'game_hall_' + mode + '_' + difficulty);
-            var snap = await window.fbGetDoc(ref);
-            var scores = (snap.exists() && snap.data().scores) ? snap.data().scores : [];
-            var existing = scores.find(function(s) { return s.id === myId; });
-            var currentBest = existing ? existing.score : 0;
-            if (score <= currentBest) return;
-            var now = new Date();
-            scores = scores.filter(function(s) { return s.id !== myId; });
-            scores.push({ id: myId, name: myName, score: score, timestamp: now.getTime(), date: window.makeRankingDateStr(now) });
-            scores = window.sortRankingScores(scores).slice(0, 20);
-            await window.fbSetDoc(ref, { scores: scores, updatedAt: now.toISOString() }, { merge: true });
-        } catch (e) {
-            console.error('submitDifficultyScore error:', e);
-        }
-    };
+
 
     // ゲーム終了時にノーマル〜エキスパートのスコアも自動送信
-    var __prevEndGameSessionForCommunityRank = window.endGameSession;
-    window.endGameSession = async function() {
-        var mode = selectedQuestionMode;
-        var diff = currentGameDifficulty;
-        var score = gameScoreCount;
-        var r = __prevEndGameSessionForCommunityRank ? await __prevEndGameSessionForCommunityRank.apply(this, arguments) : undefined;
-        if (diff !== 'endless' && score > 0) {
-            try { await window.submitDifficultyScore(mode, diff, score); } catch (e) {}
-        }
-        return r;
-    };
+
+
 
     // 起動時に既存のローカルベストを一度だけクラウドへ反映（自分の過去分も載る）
-    window.__uploadMyLocalBestsOnce = async function() {
-        if (!myId || myId === 'GUEST-000') return;
-        try { if (localStorage.getItem('core_v4_local_bests_uploaded_' + myId)) return; } catch (e) {}
-        var modes = ['ja2en', 'en2ja', 'mixed'];
-        var diffs = ['normal', 'hard', 'expert'];
-        for (var mi = 0; mi < modes.length; mi++) {
-            for (var di = 0; di < diffs.length; di++) {
-                var best = parseInt(localStorage.getItem('cosmic_best_' + modes[mi] + '_' + diffs[di]) || '0');
-                if (best > 0) {
-                    try { await window.submitDifficultyScore(modes[mi], diffs[di], best); } catch (e) {}
-                }
-            }
-        }
-        try { localStorage.setItem('core_v4_local_bests_uploaded_' + myId, '1'); } catch (e) {}
-    };
+
 
     // ------------------------------------------------------------------
     // 【4】全ユーザー取得（レベルEXP・プレイ時間・フラッシュ回数つき）
@@ -9434,50 +9188,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         container.innerHTML = html;
     };
 
-    window.__communityScoreCache = {};
-    window.__communityScoreCacheAt = {};
-    window.drawCommunityScoreRanking = async function(container) {
-        var mode = window.__communityScoreMode;
-        var diff = window.__communityScoreDiff;
-        var docName = (diff === 'endless') ? ('game_hall_' + mode) : ('game_hall_' + mode + '_' + diff);
-        var cacheKey = mode + '_' + diff;
-        var now = Date.now();
-
-        var scores = null;
-        if (window.__communityScoreCache[cacheKey] && (now - window.__communityScoreCacheAt[cacheKey] < 30000)) {
-            scores = window.__communityScoreCache[cacheKey];
-        } else {
-            container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ランキングを取得中...</div>';
-            scores = [];
-            if (window.db && window.fbGetDoc && window.fbDoc) {
-                try {
-                    var ref = window.fbDoc(window.db, 'shared', docName);
-                    var snap = await window.fbGetDoc(ref);
-                    if (snap.exists() && snap.data().scores) scores = window.sortRankingScores(snap.data().scores);
-                } catch (e) {}
-            }
-            if (scores.length === 0) {
-                var localBest = parseInt(localStorage.getItem('cosmic_best_' + mode + '_' + diff) || '0');
-                if (localBest > 0 && myId && myId !== 'GUEST-000') {
-                    scores = [{ id: myId, name: myName, score: localBest, date: 'ローカル記録', timestamp: 0 }];
-                }
-            }
-            window.__communityScoreCache[cacheKey] = scores;
-            window.__communityScoreCacheAt[cacheKey] = now;
-        }
-
-        if (scores.length === 0) {
-            var modeLabel = (mode === 'ja2en') ? '和訳' : (mode === 'en2ja') ? '英訳' : 'まぜ';
-            var diffLabel = (diff === 'endless') ? 'エンドレス' : (diff === 'normal') ? 'ノーマル' : (diff === 'hard') ? 'ハード' : 'エキスパート';
-            container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">' + modeLabel + '・' + diffLabel + ' のランキングはまだありません。</div>';
-            return;
-        }
-        var html = '';
-        scores.forEach(function(record, index) {
-            html += window.buildRankingRowHtml(record, index);
-        });
-        container.innerHTML = html;
-    };
 
     // ------------------------------------------------------------------
     // 【7】セレクターUI（スワイプ式ピル）
@@ -9534,7 +9244,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         if (!scroller) return;
         var types = [
             { key: 'level', label: '🏆 レベル' },
-            { key: 'score', label: '🎯 シングルスコア' },
             { key: 'time', label: '⏱️ プレイ時間' },
             { key: 'flash', label: '🃏 フラッシュ' }
         ];
@@ -9555,7 +9264,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         }
         var headingTexts = {
             level: '🏆 レベルランキング（自分と全ユーザー）',
-            score: '🎯 シングルプレイスコアランキング',
             time: '⏱️ プレイ時間ランキング',
             flash: '🃏 フラッシュスワイプ回数ランキング'
         };
@@ -9570,31 +9278,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         if (!subContainer) return;
         var type = window.__communityRankType;
         var html = '';
-        if (type === 'score') {
-            var modes = [
-                { key: 'ja2en', label: '和訳' },
-                { key: 'en2ja', label: '英訳' },
-                { key: 'mixed', label: 'まぜ' }
-            ];
-            html += '<div class="community-rank-subrow">';
-            modes.forEach(function(m) {
-                var active = (window.__communityScoreMode === m.key);
-                html += '<button type="button" class="community-rank-subpill' + (active ? ' community-rank-subpill-active' : '') + '" data-score-mode="' + m.key + '">' + m.label + '</button>';
-            });
-            html += '</div>';
-            var diffs = [
-                { key: 'endless', label: 'エンドレス' },
-                { key: 'normal', label: 'ノーマル' },
-                { key: 'hard', label: 'ハード' },
-                { key: 'expert', label: 'エキスパート' }
-            ];
-            html += '<div class="community-rank-subrow">';
-            diffs.forEach(function(d) {
-                var active = (window.__communityScoreDiff === d.key);
-                html += '<button type="button" class="community-rank-subpill' + (active ? ' community-rank-subpill-active' : '') + '" data-score-diff="' + d.key + '">' + d.label + '</button>';
-            });
-            html += '</div>';
-        } else if (type === 'time') {
+        if (type === 'time') {
             var ranges = [
                 { key: 'total', label: '総計' },
                 { key: 'weekly', label: '週間' },
@@ -9619,8 +9303,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
                 };
             }
         };
-        bind('[data-score-mode]', 'data-score-mode', '__communityScoreMode');
-        bind('[data-score-diff]', 'data-score-diff', '__communityScoreDiff');
         bind('[data-time-range]', 'data-time-range', '__communityTimeRange');
     };
 
@@ -9639,10 +9321,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         window.injectCommunityRankingUI();
 
         var type = window.__communityRankType;
-        if (type === 'score') {
-            await window.drawCommunityScoreRanking(container);
-            return;
-        }
+
 
         var selfAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || '';
         var selfUser = {
@@ -9689,7 +9368,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     window.onAppLoaded(function() {
         try {
             window.__startCommunityStudyTimeSync();
-            window.__uploadMyLocalBestsOnce();
+            ;
             window.injectCommunityRankingUI();
         } catch (e) {
             console.error('コミュニティランキングパッチ初期化エラー:', e);
