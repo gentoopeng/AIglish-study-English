@@ -614,6 +614,12 @@ window.createTextbookListItem = function(book, index, onSelect) {
      name.className = 'textbook-list-name';
      name.textContent = book.name || '名称未設定の単語帳';
      heading.appendChild(name);
+     if (book.personal) {
+         const visibility = document.createElement('span');
+         visibility.className = 'textbook-list-visibility';
+         visibility.textContent = book.visibility === 'public' ? '公開' : '自分だけ';
+         heading.appendChild(visibility);
+     }
      if (book.id === currentTextbook) {
          const current = document.createElement('span');
          current.className = 'textbook-list-current';
@@ -701,7 +707,13 @@ window.renderVocabLibrarySelection = function() {
     flash.setAttribute('aria-label', book.name + 'のフラッシュ単語設定');
     flash.title = 'フラッシュ単語';
     flash.onclick = function() { window.openBookFlashcardSettings(book.id); };
-    entry.append(row, flash);
+    var manage = document.createElement('button');
+    manage.type = 'button';
+    manage.className = 'vocab-library-manage-button';
+    manage.textContent = '⋯';
+    manage.setAttribute('aria-label', book.name + 'の管理');
+    manage.onclick = function() { window.openLibraryBookActions(book.id); };
+    entry.append(row, flash, manage);
     books.appendChild(entry);
   });
   var workCount = typeof window.renderWorkbookLibraryItems === 'function'
@@ -853,7 +865,7 @@ const selectedBookId = adminSelect.value;
  if (window.db && window.fbSetDoc && window.fbDoc) {
      try {
          const indexRef = window.fbDoc(window.db, "shared", "textbooks_index");
-         await window.fbSetDoc(indexRef, { textbooks: textbooksPool }, { merge: true });
+         await window.fbSetDoc(indexRef, { textbooks: textbooksPool.filter(function(book) { return !book.personal; }) }, { merge: true });
          if (createdBookId) {
              const vocabRef = window.fbDoc(window.db, "shared", "vocab_" + createdBookId);
              await window.fbSetDoc(vocabRef, { custom_words: [], updatedAt: new Date().toISOString() }, { merge: false });
@@ -884,7 +896,7 @@ const targetBook = textbooksPool.find(b => b.id === selectedBookId);
  if (window.db && window.fbSetDoc && window.fbDoc) {
      try {
          const indexRef = window.fbDoc(window.db, "shared", "textbooks_index");
-         await window.fbSetDoc(indexRef, { textbooks: textbooksPool }, { merge: true });
+         await window.fbSetDoc(indexRef, { textbooks: textbooksPool.filter(function(book) { return !book.personal; }) }, { merge: true });
          alert("🎉 指定された教材を完全にシステムから削除・同期しました。");
          const titleInput = document.getElementById('adminNewBookTitle');
          if(titleInput) titleInput.value = "";

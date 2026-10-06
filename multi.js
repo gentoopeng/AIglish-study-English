@@ -6423,6 +6423,13 @@ async function autoLoadOnce() {
       // 理解度は回答のたびに専用領域へ即時保存される。統合セーブはそれより古い
       // 場合があるため、ここで一括復元するとタスクキル後に回答が消えてしまう。
       if(key.indexOf('core_v4_user_vocab_progress_')===0)continue;
+      if(key.indexOf('core_v4_personal_library_')===0){
+        try{
+          var localLibrary=JSON.parse(localStorage.getItem(key)||'null');
+          var savedLibrary=JSON.parse(stored[key]||'null');
+          if(localLibrary&&(Date.parse(localLibrary.savedAt||'')||0)>(Date.parse(savedLibrary&&savedLibrary.savedAt||save.savedAt||'')||0))continue;
+        }catch(e){if(localStorage.getItem(key))continue;}
+      }
       if(key.indexOf('core_v4_vocab_draft_')===0){
         try{
           var existingDraft=JSON.parse(localStorage.getItem(key)||'null');
