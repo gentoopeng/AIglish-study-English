@@ -788,7 +788,7 @@
         if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
     };
 
-    window.createVocabNoteSection = function(word) {
+    window.createVocabNoteSection = function(word, handlers) {
         var section = document.createElement('div');
         section.className = 'vocab-note-section';
         var button = document.createElement('button');
@@ -831,6 +831,23 @@
         section.appendChild(button);
         section.appendChild(noteText);
         section.appendChild(editor);
+        if (handlers) {
+            // Workbooks use this exact note UI with their own storage callback.
+            [button, noteText, editor, textarea].forEach(function(el) { el.removeAttribute('id'); });
+            function toggle(open) {
+                editor.style.display = open ? 'block' : 'none';
+                if (open) { textarea.value = String(word.note || ''); requestAnimationFrame(function() { textarea.focus(); }); }
+            }
+            button.onclick = function(event) { event.preventDefault(); event.stopPropagation(); toggle(editor.style.display === 'none'); };
+            cancel.onclick = function(event) { event.preventDefault(); event.stopPropagation(); toggle(false); };
+            save.onclick = function(event) {
+                event.preventDefault(); event.stopPropagation();
+                var note = textarea.value.trim().slice(0, 500);
+                if (handlers.save(note) === false) return;
+                word.note = note; noteText.textContent = note; noteText.style.display = note ? 'block' : 'none';
+                button.classList.toggle('has-note', !!note); toggle(false);
+            };
+        }
         return section;
     };
 

@@ -2173,3 +2173,10 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .workbook-postpone:hover { color:#eee8da; }
 .workbook-ai-help { color:#C7D2FE; margin:6px 0; }
 #workbookExplanation { white-space:pre-wrap; overflow-wrap:anywhere; }
+.workbook-unit-card .workbook-inline-input { display:block; width:100%; box-sizing:border-box; min-height:32px; padding:6px 0; border:1px solid transparent; border-radius:6px; background:transparent; color:#fff; resize:vertical; font:inherit; line-height:1.6; }
+.workbook-unit-card .workbook-inline-input.workbook-question { font-size:16px; font-weight:700; }
+.workbook-unit-card .workbook-inline-input.sub-info-block { padding:6px 10px; background:rgba(0,0,0,.25); font-size:12px; }
+.workbook-inline-input:focus { outline:1px solid rgba(198,183,144,.65); background:rgba(0,0,0,.15); }
+.workbook-inline-input::placeholder { color:var(--text-sub); font-size:12px; font-weight:400; }
+.workbook-inline-error:empty { display:none; }
+.workbook-ai-help[hidden],.library-toolbar button[hidden] { display:none !important; }

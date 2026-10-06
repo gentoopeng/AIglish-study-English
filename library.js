@@ -78,7 +78,7 @@
     window.closeLibraryDialog = close;
     window.openLibraryBookEditor = function(bookId) {
         var editorUserId = userId();
-        var book = textbooksPool.find(function(item) { return item.id === bookId; });
+        var book = textbooksPool.find(function(item) { return item.id === bookId; }) || readLibrary().books.find(function(item) { return item.id === bookId; });
         if (bookId && (!book || !window.isPersonalTextbook(bookId))) return;
         var modal = open(book ? '単語帳を編集' : '新しい単語帳',
             '<form id="libraryBookForm"><label for="libraryBookName">単語帳の名前</label><input id="libraryBookName" maxlength="80" required placeholder="例：毎日の英単語">' +
@@ -188,7 +188,7 @@
             for(var ref of refs)await window.fbDeleteDoc(ref);
             await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'vocabBooks',cloudId));
             await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'vocabProgress',id));
-            if(book.visibility==='public')await publish({id:id,visibility:'private'},[],book);
+            if(book.personal&&book.visibility==='public')await publish({id:id,visibility:'private'},[],book);
         }
         if(userId()!==uid)throw new Error('ユーザーが切り替わりました。開き直してください。');
         if(window.__pendingGameSaveMemory&&window.__pendingGameSaveMemory.id===uid)scrubSave({memory:window.__pendingGameSaveMemory.data},id);
@@ -199,20 +199,25 @@
 
     window.openLibraryBookActions = function(bookId) {
         var actionUserId = userId();
-        var book = textbooksPool.find(function(item) { return item.id === bookId; });
+        var book = textbooksPool.find(function(item) { return item.id === bookId; }) || readLibrary().books.find(function(item) { return item.id === bookId; });
         if (!book) return;
         var own = window.isPersonalTextbook(bookId);
         var modal = open(book.name, '<div class="library-editor-actions library-editor-actions-stack">' +
             (own ? '<button type="button" id="libraryEditBook">名前・表紙を編集 / 単語を追加</button>' : '') +
-            '<button type="button" id="libraryRemoveBook" class="library-editor-danger">' + '自分の一覧から外す' + '</button>' + (own ? '<button type="button" id="libraryEraseBook" class="library-editor-danger">単語帳を完全削除</button>' : '') + '<button type="button" data-library-close>閉じる</button></div>');
+            (readLibrary().hidden.indexOf(bookId) >= 0 ? '<button type="button" id="libraryRestoreBook">一覧に戻す</button>' : '') +
+            '<button type="button" id="libraryRemoveBook" class="library-editor-danger">' + '自分の一覧から外す' + '</button>' + '<button type="button" id="libraryEraseBook" class="library-editor-danger">' + (own ? '単語帳を完全削除' : '自分の単語帳データを完全削除') + '</button>' + '<button type="button" data-library-close>閉じる</button></div>');
         if (own) modal.querySelector('#libraryEditBook').onclick = function() { window.openLibraryBookEditor(bookId); };
+        var restore = modal.querySelector('#libraryRestoreBook');
+        if (restore) restore.onclick = function() { var data = readLibrary(); data.hidden = data.hidden.filter(function(id) { return id !== bookId; }); persist(data); close(); };
         function removeBook(permanent) {
             var confirmDialog = open('「' + book.name + '」を' + (permanent ? '完全削除しますか？' : '一覧から外しますか？'),
-                '<p class="library-editor-hint">' + (permanent ? '単語・理解度・保存済みセーブ内のデータと公開一覧から削除します。元に戻せません。他の人が追加したコピーは残ります。' : '一覧から非表示にします。単語と学習データは残ります。') + '</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryConfirmRemove" class="library-editor-danger">' + (permanent ? '完全削除する' : '一覧から外す') + '</button></div>');
+                '<p class="library-editor-hint">' + (permanent ? (own ? '単語・理解度・保存済みセーブ内のデータと公開一覧から削除します。元に戻せません。他の人が追加したコピーは残ります。' : 'この端末と自分のクラウドにある単語帳・学習データを削除します。他の人と配信用の原本は残ります。') : '一覧から非表示にします。単語と学習データは残ります。') + '</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryConfirmRemove" class="library-editor-danger">' + (permanent ? '完全削除する' : '一覧から外す') + '</button></div>');
             confirmDialog.querySelector('#libraryConfirmRemove').onclick = async function() {
                 var remove = confirmDialog.querySelector('#libraryConfirmRemove');
                 if (remove.disabled) return;
                 remove.disabled = true;
+                var removeLabel = remove.textContent;
+                remove.textContent = permanent ? '削除中…' : '変更中…';
                 try {
                     if (userId() !== actionUserId) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
                     if (permanent) await eraseBook(bookId,book);
@@ -227,11 +232,24 @@
                     }
                     window.showVocabLibrarySelection(); close();
                 } catch (error) { confirmDialog.querySelector('.library-editor-error').textContent = error.message; }
-                finally { remove.disabled = false; }
+                finally { remove.disabled = false; remove.textContent = removeLabel; }
             };
         }
         modal.querySelector('#libraryRemoveBook').onclick=function(){removeBook(false);};
-        if(own)modal.querySelector('#libraryEraseBook').onclick=function(){removeBook(true);};
+        modal.querySelector('#libraryEraseBook').onclick=function(){removeBook(true);};
+    };
+    window.openHiddenTextbookList = function() {
+        var data = readLibrary();
+        var modal = open('非表示の自分の単語帳', '<div id="libraryHiddenBooks"></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
+        var list = modal.querySelector('#libraryHiddenBooks');
+        data.books.filter(function(book) { return data.hidden.indexOf(book.id) >= 0; }).forEach(function(book) {
+            var row = document.createElement('div'); row.className = 'library-catalog-item';
+            var name = document.createElement('div'); name.textContent = book.name;
+            var manage = document.createElement('button'); manage.type = 'button'; manage.textContent = '管理';
+            manage.onclick = function() { window.openLibraryBookActions(book.id); };
+            row.append(name, manage); list.append(row);
+        });
+        if (!list.children.length) list.textContent = '非表示の自分の単語帳はありません。';
     };
     window.openPublicTextbookCatalog = async function() {
         var catalog = open('みんなの単語帳', '<p class="library-editor-hint">公開された単語帳を、自分用に追加できます。</p><div id="libraryCatalog" aria-live="polite">読み込み中…</div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
@@ -275,7 +293,7 @@
         } catch (error) { list.textContent = error.message; }
     };
     var render = window.renderVocabLibrarySelection;
-    window.renderVocabLibrarySelection = function() { refreshPool(); return render.apply(this, arguments); };
+    window.renderVocabLibrarySelection = function() { refreshPool(); var hidden = document.getElementById('libraryHiddenBooksButton'); if(hidden){var data=readLibrary();hidden.hidden=!data.books.some(function(book){return data.hidden.indexOf(book.id)>=0;});} return render.apply(this, arguments); };
     window.onAppLoaded(function() { refreshPool(); window.renderVocabLibrarySelection(); });
     window.renderVocabLibrarySelection();
 })();
