@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="1.72">
+    <meta name="application-version" content="1.82">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=1.72">
-    <link rel="stylesheet" href="gacha.css?v=1.72">
+    <link rel="stylesheet" href="style.css?v=1.82">
+    <link rel="stylesheet" href="gacha.css?v=1.82">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -378,7 +378,7 @@
             </div>
         </div>
 
-        <div id="view-community" class="tab-view" style="position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10; padding: 0 !important;">
+        <div id="view-community" class="tab-view" style="position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: hidden; z-index: 10; padding: 0 !important;">
             
             <div style="flex: 0 0 100vw; width: 100vw; height: 100%; scroll-snap-align: center; box-sizing: border-box; padding: 20px 16px; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid var(--cosmic-cyan); padding-bottom: 6px;">
@@ -421,19 +421,7 @@
                     <div id="leaderboardContainer" style="display: flex; flex-direction: column; gap: 4px;"></div>
                 </div>
 
-                <div class="card" id="gameLeaderboardArea" style="display:flex; flex-direction:column; padding: 14px;">
-                    <h2 style="margin-bottom: 10px; font-size: 12px; color: var(--cosmic-purple-light) !important;"><i data-lucide="medal"></i> 単語テスト ハイスコアランキング</h2>
                     
-                    <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
-                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
-                            <button class="modern-btn" id="lbBtnModeJa" style="height:28px; font-size:11px; padding:0; background:linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(192, 132, 252, 0.4) 100%); box-shadow:0 0 10px rgba(0, 240, 255, 0.4);" onclick="setLbMode('ja2en')">英訳</button>
-                            <button class="modern-btn" id="lbBtnModeEn" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('en2ja')">和訳</button>
-                            <button class="modern-btn" id="lbBtnModeMix" style="height:28px; font-size:11px; padding:0;" onclick="setLbMode('mixed')">まぜ</button>
-                        </div>
-                    </div>
-
-                    <div id="leaderboardListContainer" style="min-height: 140px; background:rgba(7, 11, 25, 0.6); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:4px; font-size:12px;"></div>
-                </div>
             </div>
 
         </div>
@@ -453,24 +441,11 @@
         <div id="view-game" class="tab-view">
             <div id="cosmic-game-wrapper" class="cosmic-game-bg">
                 
-                <div id="game-start-screen" class="game-swipe-container" style="display:flex; position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: auto; scroll-snap-type: x mandatory; z-index: 10;">
+                <div id="game-start-screen" class="game-swipe-container" style="display:flex; position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: hidden; z-index: 10;">
                     
-                    <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('sinkai.png'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 80px; box-sizing: border-box;">
-                        <div class="tower-title-container">
-                            <div class="tower-title-text" style="color: var(--cosmic-purple-light); text-shadow: 0 4px 15px rgba(192, 132, 252, 0.6);">フラッシュ単語</div>
-                            <div class="tower-title-line" style="background: linear-gradient(90deg, transparent 0%, var(--cosmic-purple-light) 50%, transparent 100%);"></div>
-                        </div>
-                        <button class="multi-start-btn" style="color: var(--cosmic-purple-light); border-color: var(--cosmic-purple-light); text-shadow: 0 0 10px var(--cosmic-purple-light), 0 0 20px var(--cosmic-purple-light); box-shadow: 0 0 15px rgba(192, 132, 252, 0.4), inset 0 0 15px rgba(192, 132, 252, 0.4) !important;" onclick="showFlashcardSetupScreen()">START</button>
-                    </div>
 
-                    <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('haikei.png'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 80px; box-sizing: border-box;">
-                        <div class="tower-title-container">
-                            <div class="tower-title-text" style="color: var(--cosmic-cyan); text-shadow: 0 4px 15px rgba(0, 240, 255, 0.6);">単語の試練</div>
-                            <div class="tower-title-line" style="background: linear-gradient(90deg, transparent 0%, var(--cosmic-cyan) 50%, transparent 100%);"></div>
-                        </div>
-                        <div style="position: absolute; bottom: 145px; color: rgba(255,255,255,0.7); font-size: 11px; font-weight: bold; letter-spacing: 0.5px; animation: gentleBlink 1.5s infinite alternate ease-in-out;">← スワイプでモード切替 →</div>
-                        <button class="multi-start-btn" style="color: var(--cosmic-cyan); border-color: var(--cosmic-cyan); text-shadow: 0 0 10px var(--cosmic-cyan), 0 0 20px var(--cosmic-cyan); box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 0 15px rgba(0, 240, 255, 0.4) !important;" onclick="showModeSelectScreen()">START</button>
-                    </div>
+
+
 
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('tawa.png'); background-size: cover; background-position: top center; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding-bottom: 80px; box-sizing: border-box;">
                         <div class="tower-title-container">
@@ -760,143 +735,13 @@
                     </div>
                 </div>
 
-                <div id="game-mode-select-screen" style="display:none; margin-top: 14px;">
-                    <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-cyan);">
-                        <h2 style="color:white; justify-content:center; margin-bottom:12px;"><i data-lucide="settings-2"></i> 出題モード選択</h2>
                         
-                        <div style="display:flex; flex-direction:column; gap:12px;">
-                            <button class="modern-btn" onclick="goToDifficultySelect('ja2en')">裏：意味を先に</button>
-                            <button class="modern-btn" onclick="goToDifficultySelect('en2ja')">表：英単語を先に</button>
-                            <button class="modern-btn" onclick="goToDifficultySelect('mixed')">まぜまぜ (ランダム)</button>
-                        </div>
                         
-                        <button class="game-finish-inline-btn" style="margin: 16px auto 0 auto; height:36px; font-size:12px;" onclick="backToGameMenu()"><i data-lucide="arrow-left" size="14"></i> 戻る</button>
-                    </div>
-                </div>
 
-                <div id="game-difficulty-select-screen" style="display:none; margin-top: 14px;">
-                    <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-purple-light);">
-                        <h2 style="color:white; justify-content:center; margin-bottom:12px;"><i data-lucide="zap"></i> 難易度選択</h2>
                         
-                        <div style="display:flex; flex-direction:column; gap:12px;">
-                            <button class="modern-btn" onclick="startActualGame('normal')">ノーマル (3分)</button>
-                            <button class="modern-btn" onclick="startActualGame('hard')">ハード (7分)</button>
-                            <button class="modern-btn" onclick="startActualGame('expert')">エキスパート (15分)</button>
-                            <button class="modern-btn" onclick="startActualGame('endless')">エンドレス</button>
-                        </div>
                         
-                        <button class="game-finish-inline-btn" style="margin: 16px auto 0 auto; height:36px; font-size:12px;" onclick="backToModeSelect()"><i data-lucide="arrow-left" size="14"></i> モード選択へ戻る</button>
-                    </div>
-                </div>
 
-                <div id="game-play-screen" style="display:none;">
-                    <div class="game-header-console-row">
-                        <div>
-                            <button class="game-finish-inline-btn" id="gameFinishBtn" onclick="endGameSession()">
-                                <i data-lucide="check" size="12"></i> 終了
-                            </button>
-                        </div>
                         
-                        <div class="game-unified-console game-cosmic-glow-box" id="gameTimerFrame">
-                            <div class="console-segment">
-                                <span class="console-label">TIME / LIFE</span>
-                                <span class="console-val cosmic-neon-blue-text" id="gameTimerNum">45</span>
-                            </div>
-                            <div class="console-divider"></div>
-                            <div class="console-segment">
-                                <span class="console-label">SCORE</span>
-                                <span class="console-val cosmic-neon-purple-text" id="gameScoreNum">0000</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="game-scrollable-content">
-                        <div class="card game-main-play-card game-cosmic-glow-box" style="padding: 24px 16px; margin-bottom: 16px; position: relative;">
-                            
-                            <div id="giantJudgmentOverlay" class="giant-judgment-overlay">
-                                <div id="giantScorePopup" class="giant-score-popup"></div>
-                                <div class="giant-mark" id="giantJudgmentMark">◎</div>
-                                <div class="giant-text" id="giantJudgmentText">正解</div>
-                            </div>
-
-                            <div class="game-word-display cosmic-neon-text-glow" id="gameWordTarget">---</div>
-
-                            <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-                                <input type="text" id="gameAnswerInput" class="search-input game-cosmic-input-glow" style="flex:1; height:46px; font-size:16px; text-align:center; margin-bottom:0; background:rgba(7, 11, 25, 0.95);" onkeydown="if(event.key === 'Enter') submitGameAnswer()">
-                                
-                                <div id="gameActiveCharacterContainer" style="width: 50px; height: 50px; display:none; flex-shrink: 0; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--cosmic-cyan); align-items:center; justify-content:center; overflow:hidden; box-shadow: 0 0 10px rgba(0,240,255,0.2);">
-                                    <img id="gameActiveCharacterImg" src="" alt="character" style="max-width:100%; max-height:100%; object-fit:contain;">
-                                </div>
-                            </div>
-                            
-                            <button class="modern-btn" id="gameSubmitBtn" style="height:44px; width:100%; font-size:14px;" onclick="submitGameAnswer()">
-                                OK
-                            </button>
-
-                            <div id="persistentComboContainer" class="persistent-combo-container" style="display:none;">
-                                <span id="persistentComboText" class="combo-text"></span>
-                                <span id="persistentComboScore" class="combo-score"></span>
-                            </div>
-                        </div>
-
-                        <div id="gameJudgingIndicator" class="game-judging-loader" style="display:none; margin-top: 8px;">
-                            <i data-lucide="loader" class="animate-spin" size="14"></i> 判定中...
-                        </div>
-
-                        <div id="gameDetailFeedback" style="font-size: 12px; line-height: 1.5; margin-bottom: 20px;">
-                            <div id="feedbackWaiting" style="display:none;"></div> 
-                            
-                            <div id="feedbackContent" style="display:none; background: rgba(7, 11, 25, 0.85); padding: 16px; padding-bottom: 60px; border-radius: 12px; border: 1px solid var(--cosmic-cyan); position: relative; box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);">
-                                <div style="margin-bottom:10px;">
-                                    <span class="title-label" style="color:var(--cosmic-cyan); font-weight:700; font-size:11px;">あなたの入力</span> 
-                                    <div id="feedbackUserAns" style="font-weight:700; color:white; margin-top:2px; font-size:14px;">-</div>
-                                </div>
-                                <div style="margin-bottom:10px;">
-                                    <span class="title-label" style="color:var(--word-ok); font-weight:700; font-size:11px;">正答</span> 
-                                    <div id="feedbackCorrectAns" class="ans-main" style="margin-top:2px; font-weight:700; color:var(--word-ok); font-size:14px;"></div>
-                                </div>
-                                <div id="feedbackDiffAnswersRow" style="display:none;">
-                                    <span class="title-label" style="color:var(--cosmic-purple-light); font-weight:700; font-size:11px;">AI解説</span> 
-                                    <div id="feedbackOtherAns" class="ans-others" style="margin-top:2px; color:#A5B4FC; font-size:11.5px;">-</div>
-                                </div>
-
-                                <button class="modern-btn" id="gameNextBtn" style="position: absolute; bottom: 12px; right: 12px; height: 36px; width: auto; padding: 0 16px; display:none; border-image: linear-gradient(135deg, #10B981, #34D399) 1 !important; z-index: 10;" onclick="goToNextGameWord()">
-                                    次の問題へ <i data-lucide="arrow-right" size="14"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="game-result-screen" style="display:none;">
-                    <div class="card game-result-card game-cosmic-glow-box" style="padding:20px 16px;">
-                        <div style="text-align:center;">
-                            <i data-lucide="trophy" class="cosmic-neon-text-glow" size="40" style="margin: 0 auto 8px auto;"></i>
-                            <h2 style="justify-content:center; font-size:18px; color:white; margin-bottom:14px;">RESULT</h2>
-                        </div>
-                        <div class="cosmic-stats-grid">
-                            <div class="stat-box game-cosmic-glow-box">
-                                <div class="stat-lbl">SCORE</div>
-                                <div class="stat-val cosmic-neon-purple-text" id="resScore">0</div>
-                            </div>
-                            <div class="stat-box game-cosmic-glow-box">
-                                <div class="stat-lbl">ACCURACY</div>
-                                <div class="stat-val cosmic-neon-blue-text" id="resAccuracy">0%</div>
-                            </div>
-                            <div class="stat-box game-cosmic-glow-box">
-                                <div class="stat-lbl">MY BEST</div>
-                                <div class="stat-val cosmic-neon-blue-text" id="resBestScore">0</div>
-                            </div>
-                            <div class="stat-box game-cosmic-glow-box">
-                                <div class="stat-lbl">HIGH SCORE</div>
-                                <div class="stat-val cosmic-neon-purple-text" id="resCommBest">0</div>
-                            </div>
-                        </div>
-                        <h3 class="cosmic-list-title"><i data-lucide="list-ordered" size="14"></i> LOG</h3>
-                        <div class="cosmic-history-scroll game-cosmic-glow-box" id="gameHistoryListContainer"></div>
-                        <button class="modern-btn" style="margin-top:16px;" onclick="backToGameMenu()">CLOSE</button>
-                    </div>
-                </div>
 
             </div>
         </div>
@@ -1106,13 +951,13 @@
       window.fbSetDoc = setDoc;
       window.fbGetDoc = getDoc;
     </script>
-    <script src="app.js?v=1.72" defer></script>
-    <script src="game_core.js?v=1.72" defer></script>
-    <script src="vocab_ui.js?v=1.72" defer></script>
-    <script src="reader.js?v=1.72" defer></script>
-    <script src="fix.js?v=1.72" defer></script>
-    <script src="multi.js?v=1.72" defer></script>
-    <script src="gacha.js?v=1.72" defer></script>
-    <script src="addon.js?v=1.72" defer></script>
+    <script src="app.js?v=1.82" defer></script>
+    <script src="game_core.js?v=1.82" defer></script>
+    <script src="vocab_ui.js?v=1.82" defer></script>
+    <script src="reader.js?v=1.82" defer></script>
+    <script src="fix.js?v=1.82" defer></script>
+    <script src="multi.js?v=1.82" defer></script>
+    <script src="gacha.js?v=1.82" defer></script>
+    <script src="addon.js?v=1.82" defer></script>
 </body>
 </html>
