@@ -8005,6 +8005,8 @@ window.saveUserVocabProgress = async function() {
 window.loadUserVocabProgress = async function(bookKey) {
     bookKey = bookKey || (typeof currentTextbook !== "undefined" ? currentTextbook : "default");
     if (typeof myId === "undefined" || !myId) return;
+    var requestUserId = myId;
+    var progressKey = window.getVocabProgressStorageKey(bookKey);
     window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};
     var requestRevision = window.__vocabProgressRevisionByBook[bookKey] || 0;
     var localProgress = {};
@@ -8019,13 +8021,15 @@ window.loadUserVocabProgress = async function(bookKey) {
     try {
         var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
         var snap = await window.fbGetDoc(ref);
+        // ログアウト・別ユーザーへのログイン後に旧ユーザーの応答を保存しない。
+        if (myId !== requestUserId) return;
         // 通信待ちの間に理解度が変更された可能性があるため、必ず最新の端末値を再取得する。
         var latestLocalProgress = localProgress;
         var latestLocalTs = localTs;
         try {
-            var latestRaw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
+            var latestRaw = localStorage.getItem(progressKey);
             if (latestRaw) latestLocalProgress = JSON.parse(latestRaw) || {};
-            latestLocalTs = parseInt(localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + "__ts") || "0");
+            latestLocalTs = parseInt(localStorage.getItem(progressKey + "__ts") || "0");
         } catch (e) {}
         var changedWhileLoading = (window.__vocabProgressRevisionByBook[bookKey] || 0) !== requestRevision;
         if (snap.exists() && snap.data()) {
