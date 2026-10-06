@@ -322,7 +322,8 @@
             const text = screen.querySelector('#workbookSearch').value.toLowerCase();
             const start = Number(screen.querySelector('#workbookRangeStart').value) || work.from, end = Number(screen.querySelector('#workbookRangeEnd').value) || work.to;
             const container = screen.querySelector('#workbookUnitList'); container.replaceChildren();
-            visibleUnits(work).filter(u => u.num >= start && u.num <= end && (!dueOnly || isDue(u)) && (filter === 'all' || u.status === filter) && (!text || [label(work, u), u.q, u.ans, u.memo, u.note].join(' ').toLowerCase().includes(text))).sort((a, b) => a.num - b.num || a.subNumber - b.subNumber).forEach(u => container.append(unitCard(work, u)));
+            const displayedWork = current() || work;
+            visibleUnits(displayedWork).filter(u => u.num >= start && u.num <= end && (!dueOnly || isDue(u)) && (filter === 'all' || u.status === filter) && (!text || [label(work, u), u.q, u.ans, u.memo, u.note].join(' ').toLowerCase().includes(text))).sort((a, b) => a.num - b.num || a.subNumber - b.subNumber).forEach(u => container.append(unitCard(displayedWork, u)));
             if (!container.children.length) container.innerHTML = '<p class="vocab-library-empty">該当する問題はありません。</p>';
         };
         ['#workbookSearch', '#workbookRangeStart', '#workbookRangeEnd'].forEach(selector => screen.querySelector(selector).oninput = renderList);
@@ -332,17 +333,38 @@
         const card = document.createElement('div'); card.className = 'word-row-container workbook-unit-card'; card.dataset.unitId = unit.id;
         card.setAttribute('style', window.getCardStyleByHistory({history: unit.history, meanings: [{history: unit.history}]}));
         const dueText = unit.nextReview ? (isDue(unit) ? '復習期限 ' : '次回 ') + dateString(unit.nextReview) : '復習予定なし';
-        card.innerHTML = '<div class="word-main-line workbook-unit-heading"><span class="word-num-badge">' + esc(label(work, unit)) + '</span><button type="button" class="vocab-library-manage-button" aria-label="' + esc(label(work, unit)) + 'を編集">⋯</button></div>' +
-            (unit.q ? '<div class="workbook-question">' + esc(unit.q) + '</div>' : '') +
+        card.innerHTML = '<div class="word-main-line workbook-unit-heading"><span class="word-num-badge">' + esc(label(work, unit)) + '</span><button type="button" class="vocab-library-manage-button" aria-label="' + esc(label(work, unit)) + 'の復習設定">⋯</button></div>' +
+            '<textarea class="workbook-inline-input workbook-question" data-field="q" rows="1" aria-label="' + esc(label(work, unit)) + 'の問題文" placeholder="問題文を入力（任意）">' + esc(unit.q) + '</textarea>' +
             '<div class="workbook-status-line"><span class="workbook-next-review' + (isDue(unit) ? ' is-due' : '') + '">' + dueText + '</span><div class="workbook-status-buttons">' + Object.entries(STATUS).map(([status, symbol]) => '<button type="button" data-status="' + status + '" class="workbook-status-button status-' + status + '" aria-label="' + esc(label(work, unit)) + 'の理解度 ' + symbol + '" aria-pressed="' + (unit.status === status) + '">' + symbol + '</button>').join('') + '</div></div>' +
-            (unit.q ? '<button type="button" class="workbook-ai-help library-prompt-copy">AIで解説を見る</button>' : '') +
-            (unit.ans ? '<details class="word-static-info"><summary>答えを表示</summary><div class="sub-info-block">' + esc(unit.ans) + '</div></details>' : '') +
-            (unit.memo ? '<details class="word-static-info"><summary>補足・メモを展開</summary><div class="sub-info-block">' + esc(unit.memo) + '</div></details>' : '') +
-            (unit.note ? '<details class="word-static-info"><summary>自分のメモ</summary><div class="sub-info-block">' + esc(unit.note) + '</div></details>' : '') +
+            '<button type="button" class="workbook-ai-help library-prompt-copy">AIで解説を見る</button>' +
+            '<details class="word-static-info"><summary>答えを表示・編集</summary><textarea class="workbook-inline-input sub-info-block" data-field="ans" rows="1" aria-label="' + esc(label(work, unit)) + 'の答え" placeholder="答えを入力（任意）">' + esc(unit.ans) + '</textarea></details>' +
+            '<details class="word-static-info"><summary>補足を表示・編集</summary><textarea class="workbook-inline-input sub-info-block" data-field="memo" rows="1" aria-label="' + esc(label(work, unit)) + 'の補足" placeholder="補足を入力（公開対象）">' + esc(unit.memo) + '</textarea></details>' +
             '<div class="workbook-unit-footer"><button type="button" class="list-action-link workbook-postpone">今回だけ延期</button><div class="workbook-history">' + (unit.history || []).slice(-5).map(s => '<span class="status-' + s + '">' + STATUS[s] + '</span>').join('') + '</div></div>';
         card.querySelector('.vocab-library-manage-button').onclick = () => openUnitEditor(work.id, unit.id);
-        const help = card.querySelector('.workbook-ai-help'); if (help) help.onclick = () => openExplanation(unit);
+        const help = card.querySelector('.workbook-ai-help'); if (help) { help.hidden = !unit.q.trim(); help.onclick = () => { const fresh = load().find(w => w.id === work.id); const target = fresh && fresh.units.find(u => u.id === unit.id); if (target) openExplanation(target); }; }
         card.querySelector('.workbook-postpone').onclick = () => openPostpone(work.id, [unit.id]);
+        const editorOwner = uid();
+        function saveField(field, value) {
+            try {
+                if (editorOwner !== uid()) throw new Error('ユーザーが切り替わりました。開き直してください。');
+                const fresh = load().find(w => w.id === work.id), target = fresh && fresh.units.find(u => u.id === unit.id);
+                if (!target) throw new Error('この問題は削除されました。ワークを開き直してください。');
+                target[field] = value; put(fresh);
+                window.renderVocabLibrarySelection();
+                card.querySelector('.workbook-inline-error').textContent = '';
+                return true;
+            } catch (error) { card.querySelector('.workbook-inline-error').textContent = '保存できませんでした。' + error.message; return false; }
+        }
+        const error = document.createElement('p'); error.className = 'library-editor-error workbook-inline-error'; error.setAttribute('role', 'alert'); card.append(error);
+        card.querySelectorAll('[data-field]').forEach(input => {
+            function resize() { input.style.height = 'auto'; input.style.height = Math.max(32, input.scrollHeight) + 'px'; }
+            input.oninput = () => { saveField(input.dataset.field, input.value); if (input.dataset.field === 'q' && help) help.hidden = !input.value.trim(); resize(); };
+            input.onfocus = resize;
+            requestAnimationFrame(() => { if (input.isConnected) resize(); });
+        });
+        const notes = window.createVocabNoteSection(unit, {save: value => saveField('note', value)});
+        card.querySelector('.workbook-unit-footer').before(notes);
+
         card.querySelectorAll('[data-status]').forEach(button => button.onpointerdown = event => {
             if (event.button !== 0) return; event.preventDefault(); updateMark(button.dataset.status);
         });
@@ -367,8 +389,8 @@
     }
     function openUnitEditor(workId, unitId) {
         const owner = uid(), work = load().find(w => w.id === workId), unit = work && work.units.find(u => u.id === unitId); if (!unit) return;
-        const modal = dialog(label(work, unit) + 'を編集', '<form><label for="workbookQuestion">問題文（任意）</label><textarea id="workbookQuestion" rows="3"></textarea><label for="workbookAnswer">答え（任意）</label><textarea id="workbookAnswer" rows="2"></textarea><label for="workbookMemo">補足（公開対象）</label><textarea id="workbookMemo" rows="2"></textarea><label for="workbookNote">自分のメモ・間違えた理由（非公開）</label><textarea id="workbookNote" rows="2"></textarea><label for="workbookUseDefault"><input type="checkbox" id="workbookUseDefault" class="workbook-checkbox">ワーク全体の復習設定を使う</label><div id="workbookUnitRule">' + ruleFields('workbookUnitReview', unit.review || work.review) + '</div>' + actions('変更を保存') + '</form>');
-        const form = modal.querySelector('form'); form.querySelector('#workbookQuestion').value = unit.q; form.querySelector('#workbookAnswer').value = unit.ans; form.querySelector('#workbookMemo').value = unit.memo; form.querySelector('#workbookNote').value = unit.note;
+        const modal = dialog(label(work, unit) + 'の復習設定', '<form><label for="workbookUseDefault"><input type="checkbox" id="workbookUseDefault" class="workbook-checkbox">ワーク全体の復習設定を使う</label><div id="workbookUnitRule">' + ruleFields('workbookUnitReview', unit.review || work.review) + '</div>' + actions('変更を保存') + '</form>');
+        const form = modal.querySelector('form');
         const useDefault = form.querySelector('#workbookUseDefault'); useDefault.checked = !unit.review;
         useDefault.onchange = () => {const box = form.querySelector('#workbookUnitRule'); box.hidden = useDefault.checked; box.querySelectorAll('input,select').forEach(el => el.disabled = useDefault.checked);};
         bindRule(form, 'workbookUnitReview', unit.review || work.review); useDefault.onchange();
@@ -377,7 +399,7 @@
             try {
                 if (owner !== uid()) throw new Error('ユーザーが切り替わりました。開き直してください。');
                 const fresh = load().find(w => w.id === workId), target = fresh.units.find(u => u.id === unitId), oldRule = JSON.stringify(target.review);
-                target.q = form.querySelector('#workbookQuestion').value.trim(); target.ans = form.querySelector('#workbookAnswer').value.trim(); target.memo = form.querySelector('#workbookMemo').value.trim(); target.note = form.querySelector('#workbookNote').value.trim(); target.review = useDefault.checked ? null : readRule(form, 'workbookUnitReview');
+                target.review = useDefault.checked ? null : readRule(form, 'workbookUnitReview');
                 if (JSON.stringify(target.review) !== oldRule) schedule(fresh, target, Date.now(), false);
                 put(fresh); close(); repaint();
             } catch (error) { form.querySelector('.library-editor-error').textContent = error.message; }
