@@ -68,3 +68,10 @@ test('a cached textbook displays saved progress without waiting for cloud access
 test('a cached draft is not applied and rendered twice when unchanged',async()=>{
  const {ctx,release}=setup();const pending=ctx.loadCurrentTextbookData();release();await pending;assert.equal(ctx.applied,undefined);
 });
+test('restart does not restore a deleted textbook from an older library snapshot',async()=>{
+ const values=new Map();const key='core_v4_personal_library_user-a';
+ const latest={books:[],hidden:['deleted-book'],savedAt:new Date(3000).toISOString()};
+ const old={books:[{id:'deleted-book'}],hidden:[],savedAt:new Date(1000).toISOString()};
+ values.set(key,JSON.stringify(latest));values.set('save',JSON.stringify({savedAt:new Date(2000).toISOString(),data:{localStorage:{[key]:JSON.stringify(old)}}}));
+ const ctx={loginUid:()=> 'user-a',localKey:()=> 'save',cloudMetaKey:()=> 'cloud-meta',localMetaKey:()=> 'local-meta',console,localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)}};ctx.window=ctx;vm.runInNewContext(autoLoader,ctx);await ctx.autoLoadOnce();assert.deepEqual(JSON.parse(values.get(key)),latest);
+});

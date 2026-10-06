@@ -470,6 +470,8 @@
 
         var frontText = flashcardDirectionMode === 'en2ja' ? wordData.en : wordData.ja;
         var backText = flashcardDirectionMode === 'en2ja' ? wordData.ja : wordData.en;
+        frontText = window.escapeVocabText(frontText);
+        backText = window.escapeVocabText(backText);
         var customStyle = (typeof window.getFlashcardStyleByHistory === 'function') ? window.getFlashcardStyleByHistory(wordData) : "";
         cardWrap.innerHTML += '<div class="flashcard-inner-rotator" style="z-index:2;"><div class="flashcard-face-front" style="' + customStyle + '"><span style="font-size:11px; color:var(--text-sub); position:absolute; top:24px; font-weight:800;">#' + wordData.num + '</span><div style="font-size:24px; font-weight:900; font-family:\'Times New Roman\', serif; word-break:break-word; text-align:center; padding:0 15px; color:#FFFFFF;">' + frontText + '</div></div><div class="flashcard-face-back" style="' + customStyle + '"><div style="font-size:16px; font-weight:700; word-break:break-word; text-align:center; color:#FFFFFF; padding:0 15px; line-height:1.5;">' + backText + '</div></div></div>';
         stage.appendChild(cardWrap);

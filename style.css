@@ -2088,3 +2088,35 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .book-flashcard-dialog > h2 { margin:0 0 12px; font-size:18px; text-align:center; }
 .book-flashcard-dialog #flashcard-setup-screen { margin-top:0 !important; }
 .book-flashcard-dialog #flashcard-setup-screen > .card { margin:0; }
+
+.library-toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+.library-toolbar button { border:1px solid rgba(220,211,186,.28); border-radius:20px; background:rgba(15,23,42,.32); padding:9px 14px; color:#eee8da; font:600 12px/1.3 system-ui,sans-serif; cursor:pointer; transition:background .18s,transform .18s; }
+.library-toolbar button:hover { background:rgba(220,211,186,.12); transform:translateY(-2px); }
+.vocab-library-manage-button { flex:0 0 36px; padding:0; border:0; background:transparent; color:var(--text-sub); font-size:22px; cursor:pointer; transition:color .18s; }
+.vocab-library-manage-button:hover { color:#eee8da; }
+.library-editor-dialog { width:min(440px,calc(100vw - 32px)); max-height:85dvh; box-sizing:border-box; overflow:auto; padding:24px; border:1px solid rgba(213,201,172,.3); border-radius:20px; background:linear-gradient(150deg,rgba(27,35,49,.96),rgba(15,22,36,.98)); color:#eee8da; box-shadow:0 24px 80px rgba(0,0,0,.4); animation:libraryDialogEnter .22s ease-out; }
+.library-editor-dialog::backdrop { background:rgba(8,14,24,.55); backdrop-filter:blur(4px); animation:libraryBackdropEnter .22s ease-out; }
+.library-editor-eyebrow { color:#a8a08f; font:600 9px/1.4 system-ui,sans-serif; letter-spacing:.2em; }
+.library-editor-dialog h2 { margin:8px 0 20px; font:700 22px/1.4 Georgia,"Yu Mincho",serif; overflow-wrap:anywhere; }
+.library-editor-dialog label { display:block; margin:16px 0 7px; font-size:12px; color:#cbc4b5; }
+.library-editor-dialog input,.library-editor-dialog select,.library-editor-dialog textarea { width:100%; box-sizing:border-box; padding:11px; border:1px solid rgba(224,219,203,.22); border-radius:10px; background:rgba(0,0,0,.18); color:#eee8da; font:14px/1.5 system-ui,sans-serif; }
+.library-editor-dialog textarea { resize:vertical; min-height:90px; }
+.library-editor-dialog :focus-visible,.library-toolbar button:focus-visible,.vocab-library-manage-button:focus-visible { outline:2px solid #b7aa85; outline-offset:3px; }
+.library-editor-hint { color:#aba596; font-size:11px; line-height:1.7; }
+.library-editor-error { color:#ffb2a9; font-size:12px; line-height:1.6; }
+.library-editor-actions { display:flex; gap:8px; margin-top:20px; }
+.library-editor-actions button { flex:1; border:1px solid rgba(224,219,203,.22); border-radius:10px; padding:12px; background:transparent; color:#ddd6c6; font-size:12px; cursor:pointer; transition:background .18s; }
+.library-editor-actions button:hover { background:rgba(224,219,203,.1); }
+.library-editor-actions .library-editor-primary { background:#c6b790; color:#18202d; border-color:transparent; font-weight:700; }
+.library-editor-actions .library-editor-danger { color:#f1aaa1; border-color:rgba(241,170,161,.3); }
+.library-editor-actions-stack { flex-direction:column; }
+.library-editor-actions button:disabled { opacity:.5; cursor:wait; }
+.library-catalog-item { display:flex; align-items:center; gap:12px; padding:14px 0; border-bottom:1px solid rgba(224,219,203,.15); animation:libraryDialogEnter .22s ease-out; }
+.library-catalog-item > div { flex:1; min-width:0; }
+.library-catalog-item strong { display:block; overflow-wrap:anywhere; font-size:14px; }
+.library-catalog-item small { display:block; margin-top:6px; color:#aba596; }
+.library-catalog-item button { border:1px solid rgba(224,219,203,.25); background:transparent; border-radius:16px; padding:8px 12px; color:#ddd6c6; cursor:pointer; }
+@keyframes libraryDialogEnter { from { opacity:0; transform:translateY(12px) scale(.98); } to { opacity:1; transform:none; } }
+@keyframes libraryBackdropEnter { from { opacity:0; } to { opacity:1; } }
+@media (prefers-reduced-motion:reduce) { .library-editor-dialog,.library-editor-dialog::backdrop,.library-catalog-item { animation:none; } .library-toolbar button,.vocab-library-manage-button,.library-editor-actions button { transition:none; } .library-toolbar button:hover { transform:none; } }
+.textbook-list-visibility { flex:none; color:#aaa397; font:600 9px/1.3 system-ui,sans-serif; white-space:nowrap; }
