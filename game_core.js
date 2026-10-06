@@ -40,6 +40,87 @@
 
     var flashcardSelectedStatuses = { ok: true, so: true, bad: true, none: true };
 
+    var bookSettingsDialog = null;
+    var settingsHome = null;
+    var settingsNext = null;
+    var settingsOpener = null;
+    var startingBookSettings = false;
+
+    window.openBookFlashcardSettings = function(bookId) {
+        if (bookSettingsDialog) return;
+        var book = textbooksPool.find(function(item) { return item.id === bookId; });
+        if (!book) return;
+        var settings = document.getElementById('flashcard-setup-screen');
+        settingsHome = settings.parentNode;
+        settingsNext = settings.nextSibling;
+        settingsOpener = document.activeElement;
+        var dialog = document.createElement('dialog');
+        dialog.className = 'book-flashcard-dialog';
+        dialog.setAttribute('aria-label', book.name + 'のフラッシュ単語設定');
+        var title = document.createElement('h2');
+        title.textContent = book.name;
+        dialog.append(title, settings);
+        document.body.appendChild(dialog);
+        bookSettingsDialog = dialog;
+        window.updateFlashcardSourceSelectOptions();
+        document.getElementById('flashcardSourceSelect').value = bookId;
+        window.setFlashcardDirection('en2ja');
+        window.resetFlashcardStatusFilters();
+        var words = typeof textbooksCacheMap !== 'undefined' && textbooksCacheMap[bookId];
+        if (!words) {
+            try { words = JSON.parse(localStorage.getItem('core_v4_cache_' + bookId) || '[]'); } catch (e) { words = []; }
+        }
+        var nums = (words || []).map(function(word) { return Number(word.num); }).filter(Number.isFinite);
+        document.getElementById('flashcardRangeStart').value = nums.length ? Math.min.apply(null, nums) : 1;
+        document.getElementById('flashcardRangeEnd').value = nums.length ? Math.max.apply(null, nums) : 100;
+        settings.style.display = 'block';
+        dialog.addEventListener('cancel', function(event) { event.preventDefault(); closeBookSettings(); });
+        dialog.addEventListener('click', function(event) { if (event.target === dialog) closeBookSettings(); });
+        dialog.showModal();
+    };
+
+    function closeBookSettings() {
+        if (!bookSettingsDialog) return;
+        var settings = document.getElementById('flashcard-setup-screen');
+        settingsHome.insertBefore(settings, settingsNext);
+        settings.style.display = 'none';
+        bookSettingsDialog.close();
+        bookSettingsDialog.remove();
+        bookSettingsDialog = null;
+        if (settingsOpener && settingsOpener.isConnected) settingsOpener.focus();
+    }
+
+    window.startFlashcardFromSettings = async function() {
+        if (startingBookSettings) return;
+        var start = Number(document.getElementById('flashcardRangeStart').value);
+        var end = Number(document.getElementById('flashcardRangeEnd').value);
+        if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) {
+            alert('出題範囲は1以上の整数で、開始番号以下にならない終了番号を指定してください。');
+            return;
+        }
+        if (!Object.keys(flashcardSelectedStatuses).some(function(key) { return flashcardSelectedStatuses[key]; })) {
+            alert('出題する理解度を1つ以上選択してください。');
+            return;
+        }
+        if (bookSettingsDialog) {
+            var activeDialog = bookSettingsDialog;
+            var selectedBook = document.getElementById('flashcardSourceSelect').value;
+            startingBookSettings = true;
+            try {
+                await window.selectVocabLibraryBook(selectedBook);
+            } finally {
+                startingBookSettings = false;
+            }
+            // 教材ロードによる範囲の初期化後も、ポップアップで選んだ値を使う。
+            document.getElementById('flashcardRangeStart').value = start;
+            document.getElementById('flashcardRangeEnd').value = end;
+            if (bookSettingsDialog !== activeDialog) return;
+            closeBookSettings();
+            window.switchTab('game');
+        }
+        await window.startFlashcardSession();
+    };
+
     function updateFlashcardStatusFilterUi() {
         var labels = { ok: '○', so: '△', bad: '×', none: 'ー' };
         var selected = [];
@@ -79,6 +160,7 @@
     };
 
     window.backToGameMenuFromCardSetup = function() {
+        if (bookSettingsDialog) { closeBookSettings(); return; }
         document.getElementById('flashcard-setup-screen').style.display = 'none';
         var startScreen = document.getElementById('game-start-screen');
         if (startScreen) startScreen.style.display = 'flex';

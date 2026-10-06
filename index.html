@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="1.52">
+    <meta name="application-version" content="1.62">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=1.52">
-    <link rel="stylesheet" href="gacha.css?v=1.52">
+    <link rel="stylesheet" href="style.css?v=1.62">
+    <link rel="stylesheet" href="gacha.css?v=1.62">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -497,8 +497,8 @@
                         <div style="text-align:left; margin-bottom:16px;">
                             <div style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; margin-bottom:6px;">① モード選択</div>
                             <div style="display:flex; justify-content:center; gap:8px; margin-bottom:14px;">
-                                <button class="pill-btn active" id="btnCardEn2Ja" onclick="setFlashcardDirection('en2ja')">和訳 (英→和)</button>
-                                <button class="pill-btn" id="btnCardJa2en" onclick="setFlashcardDirection('ja2en')">英訳 (和→英)</button>
+                                <button class="pill-btn active" id="btnCardEn2Ja" onclick="setFlashcardDirection('en2ja')">表：英単語を先に</button>
+                                <button class="pill-btn" id="btnCardJa2en" onclick="setFlashcardDirection('ja2en')">裏：意味を先に</button>
                             </div>
                         </div>
 
@@ -522,7 +522,7 @@
                             <div id="flashcardStatusFilterSummary" class="flashcard-status-filter-summary">すべての理解度を出題</div>
                         </div>
 
-                        <button class="modern-btn" style="height:48px; font-size:16px; border-color:var(--cosmic-purple-light) !important; color:#FFFFFF !important;" onclick="startFlashcardSession()">
+                        <button class="modern-btn" style="height:48px; font-size:16px; border-color:var(--cosmic-purple-light) !important; color:#FFFFFF !important;" onclick="startFlashcardFromSettings()">
                             カードを開始する
                         </button>
                         <button class="game-finish-inline-btn" style="margin: 16px auto 0 auto; background:none; border:none; box-shadow:none;" onclick="backToGameMenuFromCardSetup()">
@@ -765,8 +765,8 @@
                         <h2 style="color:white; justify-content:center; margin-bottom:12px;"><i data-lucide="settings-2"></i> 出題モード選択</h2>
                         
                         <div style="display:flex; flex-direction:column; gap:12px;">
-                            <button class="modern-btn" onclick="goToDifficultySelect('ja2en')">英訳 (和→英)</button>
-                            <button class="modern-btn" onclick="goToDifficultySelect('en2ja')">和訳 (英→和)</button>
+                            <button class="modern-btn" onclick="goToDifficultySelect('ja2en')">裏：意味を先に</button>
+                            <button class="modern-btn" onclick="goToDifficultySelect('en2ja')">表：英単語を先に</button>
                             <button class="modern-btn" onclick="goToDifficultySelect('mixed')">まぜまぜ (ランダム)</button>
                         </div>
                         
@@ -1106,13 +1106,13 @@
       window.fbSetDoc = setDoc;
       window.fbGetDoc = getDoc;
     </script>
-    <script src="app.js?v=1.52" defer></script>
-    <script src="game_core.js?v=1.52" defer></script>
-    <script src="vocab_ui.js?v=1.52" defer></script>
-    <script src="reader.js?v=1.52" defer></script>
-    <script src="fix.js?v=1.52" defer></script>
-    <script src="multi.js?v=1.52" defer></script>
-    <script src="gacha.js?v=1.52" defer></script>
-    <script src="addon.js?v=1.52" defer></script>
+    <script src="app.js?v=1.62" defer></script>
+    <script src="game_core.js?v=1.62" defer></script>
+    <script src="vocab_ui.js?v=1.62" defer></script>
+    <script src="reader.js?v=1.62" defer></script>
+    <script src="fix.js?v=1.62" defer></script>
+    <script src="multi.js?v=1.62" defer></script>
+    <script src="gacha.js?v=1.62" defer></script>
+    <script src="addon.js?v=1.62" defer></script>
 </body>
 </html>

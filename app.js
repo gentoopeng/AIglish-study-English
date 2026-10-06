@@ -723,7 +723,19 @@ window.renderVocabLibrarySelection = function() {
     books.appendChild(empty);
   }
   textbooksPool.forEach(function(book, index) {
-    books.appendChild(window.createTextbookListItem(book, index, window.selectVocabLibraryBook));
+    var row = window.createTextbookListItem(book, index, window.selectVocabLibraryBook);
+    row.querySelector('.textbook-list-arrow').remove();
+    var entry = document.createElement('div');
+    entry.className = 'vocab-library-book-entry';
+    var flash = document.createElement('button');
+    flash.type = 'button';
+    flash.className = 'vocab-library-flash-button';
+    flash.textContent = '›';
+    flash.setAttribute('aria-label', book.name + 'のフラッシュ単語設定');
+    flash.title = 'フラッシュ単語';
+    flash.onclick = function() { window.openBookFlashcardSettings(book.id); };
+    entry.append(row, flash);
+    books.appendChild(entry);
   });
   var workCount = typeof window.renderWorkbookLibraryItems === 'function'
     ? window.renderWorkbookLibraryItems(works, textbooksPool.length)
