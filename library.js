@@ -13,7 +13,7 @@
     function refreshPool() {
         var data = readLibrary();
         var shared = textbooksPool.filter(function(book) { return !book.personal; });
-        textbooksPool = shared.filter(function(book) { return data.hidden.indexOf(book.id) < 0; }).concat(data.books);
+        textbooksPool = shared.filter(function(book) { return data.hidden.indexOf(book.id) < 0; }).concat(data.books.filter(function(book){return data.hidden.indexOf(book.id)<0;}));
     }
     function persist(data) {
         data.savedAt = new Date().toISOString();
@@ -49,7 +49,7 @@
         if (record.visibility === 'public') {
             if (userId() === 'GUEST-000') throw new Error('みんなに公開するにはログインしてください。自分だけの単語帳はゲストでも作れます。');
             if (!cloudAvailable()) throw new Error('公開先に接続できません。「自分だけ」で保存するか、接続後にもう一度お試しください。');
-            await window.fbSetDoc(publicRef(record.id), { ownerId: userId(), name: record.name, cover: record.cover, masterJson: JSON.stringify(window.stripVocabProgressFromWords(master)), updatedAt: new Date().toISOString() }, { merge: false });
+            await window.fbSetDoc(publicRef(record.id), { ownerId: userId(), name: record.name, cover: record.cover, coverType: record.coverType, masterJson: JSON.stringify(window.stripVocabProgressFromWords(master)), updatedAt: new Date().toISOString() }, { merge: false });
         } else if (previous && previous.visibility === 'public') {
             if (!cloudAvailable() || !window.fbDeleteDoc) throw new Error('公開の取り消しには接続が必要です。接続後にもう一度お試しください。');
             await window.fbDeleteDoc(publicRef(record.id));
@@ -74,28 +74,34 @@
         dialog.showModal();
         return dialog;
     }
-    function wordsFromText(text, start) {
-        return text.split('\n').filter(function(line) { return line.trim(); }).map(function(line, index) {
-            var match = line.match(/^\s*(.*?)\s*[:：\t]\s*(.*?)\s*$/);
-            if (!match || !match[1] || !match[2]) throw new Error((index + 1) + '行目を「英単語 : 意味」の形式で入力してください。');
-            return { num: start + index, word: match[1], meaning: match[2], meanings: [{ id: (start + index) + '-0', text: match[2] }] };
-        });
-    }
     window.openLibraryBookEditor = function(bookId) {
         var editorUserId = userId();
         var book = textbooksPool.find(function(item) { return item.id === bookId; });
         if (bookId && (!book || !window.isPersonalTextbook(bookId))) return;
         var modal = open(book ? '単語帳を編集' : '新しい単語帳',
             '<form id="libraryBookForm"><label for="libraryBookName">単語帳の名前</label><input id="libraryBookName" maxlength="80" required placeholder="例：毎日の英単語">' +
-            '<label for="libraryBookCover">表紙</label><select id="libraryBookCover"><option value="📘">📘 青い本</option><option value="📕">📕 赤い本</option><option value="📗">📗 緑の本</option><option value="🌙">🌙 月</option><option value="✨">✨ 星</option></select>' +
+            '<label for="libraryBookCover">表紙の写真</label><input type="file" id="libraryBookCover" accept="image/*"><img id="libraryBookCoverPreview" class="library-cover-preview" alt="表紙プレビュー" hidden>' +
             '<label for="libraryBookVisibility">公開範囲</label><select id="libraryBookVisibility"><option value="private">自分だけ</option><option value="public">みんなに公開</option></select>' +
-            '<label for="libraryBookWords">' + (book ? '単語を追加' : '最初の単語（あとから追加できます）') + '</label><textarea id="libraryBookWords" rows="5" placeholder="study : 学ぶ\nread : 読む"></textarea>' +
-            '<p class="library-editor-hint">1行に「英単語 : 意味」。公開するのは単語帳の内容だけです。理解度・履歴・メモは公開しません。</p><p class="library-editor-error" role="alert"></p>' +
+            '<label for="libraryBookWords">' + (book ? '単語を追加' : '最初の単語（あとから追加できます）') + '</label><textarea id="libraryBookWords" rows="5" placeholder="1:follow:①〜に従う②〜に続く:as follows 次のように…\n2:read:読む:read a book"></textarea>' +
+            '<p class="library-editor-hint">番号:単語:意味:サブ情報（任意）。①②で複数の意味を登録できます。JSONバックアップにも対応。<button type="button" id="libraryCopyPhotoPrompt" class="library-prompt-copy">写真から抽出するAI用プロンプトをコピー</button>公開されるのは単語帳の内容だけです。</p><p class="library-editor-error" role="alert"></p>' +
             '<div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="submit" class="library-editor-primary">' + (book ? '変更を保存' : '単語帳を作る') + '</button></div></form>');
         var form = modal.querySelector('form');
+        var cover = book && book.coverType === 'image' ? book.cover : '';
+        var coverReady = Promise.resolve();
+        function previewCover() { var preview=form.querySelector('#libraryBookCoverPreview');preview.hidden=!cover;if(cover)preview.src=cover; }
+        previewCover();
+        form.querySelector('#libraryBookCover').onchange=function(){
+            var file=this.files[0];if(!file)return;
+            coverReady=new Promise(function(resolve,reject){
+                if(!file.type.startsWith('image/')){reject(new Error('画像ファイルを選んでください。'));return;}
+                var reader=new FileReader();reader.onerror=function(){reject(new Error('画像を読み込めませんでした。'));};
+                reader.onload=function(){var image=new Image();image.onerror=function(){reject(new Error('画像を開けませんでした。'));};image.onload=function(){var scale=Math.min(1,240/Math.max(image.width,image.height));var canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);cover=canvas.toDataURL('image/jpeg',.8);previewCover();resolve();};image.src=reader.result;};reader.readAsDataURL(file);
+            });
+            coverReady.catch(function(error){form.querySelector('.library-editor-error').textContent=error.message;});
+        };
+        form.querySelector('#libraryCopyPhotoPrompt').onclick=async function(){var button=this;var prompt='添付写真に写っている英単語帳を読み取り、次の形式だけで出力してください。1行に1語、番号:英単語:日本語の意味:サブ情報。元の番号を保持し、複数の意味は①意味②意味のように並べてください。サブ情報には熟語・例文・補足を入れ、なければ空欄にしてください。区切りのコロンは半角を使い、各項目の内部にはコロンを使わないでください。写真で読めない箇所は推測せず、その行を省略してください。コードブロックや見出し、余分な説明は付けず、登録用の行だけを返してください。例: 1:follow:①〜に従う②〜に続く:as follows 次のように';try{await navigator.clipboard.writeText(prompt);button.textContent='コピーしました';}catch(e){var fallback=document.createElement('textarea');fallback.className='library-prompt-fallback';fallback.readOnly=true;fallback.value=prompt;button.after(fallback);fallback.select();button.textContent='下の文を選択してコピーしてください';}};
         if (book) {
             form.querySelector('#libraryBookName').value = book.name;
-            form.querySelector('#libraryBookCover').value = book.cover;
             form.querySelector('#libraryBookVisibility').value = book.visibility || 'private';
         }
         form.onsubmit = async function(event) {
@@ -109,10 +115,11 @@
                 if (!name) throw new Error('単語帳の名前を入力してください。');
                 var id = bookId || 'personal_' + crypto.randomUUID();
                 var master = book ? JSON.parse(localStorage.getItem('core_v4_custom_words_' + userId() + '_' + id) || localStorage.getItem('core_v4_cache_' + id) || '[]') : [];
-                var start = master.reduce(function(max, word) { return Math.max(max, Number(word.num) || 0); }, 0) + 1;
-                var added = wordsFromText(form.querySelector('#libraryBookWords').value, start);
-                master = master.concat(added);
-                var record = { id: id, name: name, cover: form.querySelector('#libraryBookCover').value, coverType: 'text', personal: true, visibility: form.querySelector('#libraryBookVisibility').value };
+                var importText=form.querySelector('#libraryBookWords').value.trim();
+                if(book&&importText[0]==='['&&!confirm('バックアップデータで完全に上書きしますか？'))return;
+                master=window.parseVocabImport(importText,master);
+                await coverReady;
+                var record = { id: id, name: name, cover: cover || '📔', coverType: cover ? 'image' : 'text', personal: true, visibility: form.querySelector('#libraryBookVisibility').value };
                 await publish(record, master, book);
                 if (userId() !== editorUserId) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
                 var data = readLibrary();
@@ -123,6 +130,7 @@
                 textbooksCacheMap[id] = master;
                 // Keep progress and a complete draft together for restart and manual cloud saves.
                 var progress = JSON.parse(localStorage.getItem(window.getVocabProgressStorageKey(id)) || '{}');
+                if(importText[0]==='['){progress={};master.forEach(function(w){var meanings={};(w.meanings||[]).forEach(function(m){meanings[m.id]={status:m.status||'none',history:m.history||[]};});progress[String(w.num)]={sig:window.buildWordSignature(w),status:w.status||'none',history:w.history||[],note:w.note||'',meanings:meanings};});localStorage.setItem(window.getVocabProgressStorageKey(id),JSON.stringify(progress));localStorage.setItem(window.getVocabProgressStorageKey(id)+'__ts',String(Date.now()));}
                 var draft = { master: master, progress: progress, savedAt: new Date().toISOString() };
                 localStorage.setItem(window.__manualVocabLocalKey(id), JSON.stringify(draft));
                 window.__manualVocabDrafts[id] = draft;
@@ -136,6 +144,57 @@
             finally { submit.disabled = false; }
         };
     };
+    function bookStorageKeys(id) {
+        var progress=window.getVocabProgressStorageKey(id);
+        return ['core_v4_custom_words_'+userId()+'_'+id,'core_v4_cache_'+id,'core_v4_user_vocab_book_'+userId()+'_'+id,window.__manualVocabLocalKey(id),progress,progress+'__ts'];
+    }
+    function scrubSave(save,id) {
+        var data=save.data||save, storage=data.localStorage||{}, memory=data.memory||{};
+        bookStorageKeys(id).forEach(function(k){delete storage[k];});
+        if(storage[key()]){var library=JSON.parse(storage[key()]);library.books=library.books.filter(function(b){return b.id!==id;});if(library.hidden.indexOf(id)<0)library.hidden.push(id);library.savedAt=new Date().toISOString();storage[key()]=JSON.stringify(library);}
+        if(memory.vocabBooks)delete memory.vocabBooks[id];
+        if(memory.textbooksPool)memory.textbooksPool=memory.textbooksPool.filter(function(b){return b.id!==id;});
+        if(memory.vocabBookKey===id||memory.currentTextbook===id){memory.vocabBookKey='';memory.currentTextbook='';memory.vocabList=[];memory.vocabMaster=[];memory.vocabProgress={};}
+        if(storage.core_v4_current_textbook_id===id)storage.core_v4_current_textbook_id='';
+        return save;
+    }
+    async function eraseBook(id,book) {
+        var uid=userId();
+        var localSaves=[];
+        for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k.startsWith('save_studio_'+uid+'_'))localSaves.push([k,JSON.stringify(scrubSave(JSON.parse(localStorage.getItem(k)),id))]);}
+        if(uid!=='GUEST-000') {
+            if(!cloudAvailable()||!window.fbDeleteDoc)throw new Error('完全削除にはクラウド接続が必要です。接続後に再度お試しください。');
+            var saves=await window.fbGetDocs(window.fbCollection(window.db,'users',uid,'saves'));
+            var jobs=[];saves.forEach(function(doc){jobs.push(doc);});
+            for(var doc of jobs){
+                var meta=doc.data(), raw='', parts=[];
+                if(meta.partCount){
+                    var snapshot=await window.fbGetDocs(window.fbCollection(window.db,'users',uid,'saves',doc.id,'parts'));
+                    snapshot.forEach(function(p){parts.push(p);});
+                    for(var n=0;n<meta.partCount;n++){var part=parts.find(function(p){return p.id===(meta.generation?meta.generation+'_p'+n:'p'+n);});if(!part)throw new Error('古いセーブの読み込みに失敗しました。削除を中止しました。');raw+=part.data().d;}
+                    if((meta.rawLength!=null&&meta.rawLength!==raw.length)||(meta.checksum&&meta.checksum!==window.__gameSaveChecksum(raw)))throw new Error('古いセーブを検証できません。削除を中止しました。');
+                    var clean=JSON.stringify(scrubSave(JSON.parse(raw),id));var generation='delete_'+crypto.randomUUID(),chunks=[];
+                    for(var offset=0;offset<clean.length;offset+=280000)chunks.push(clean.slice(offset,offset+280000));
+                    for(var p=0;p<chunks.length;p++)await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id,'parts',generation+'_p'+p),{d:chunks[p]},{merge:false});
+                    await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),Object.assign({},meta,{generation:generation,partCount:chunks.length,rawLength:clean.length,checksum:window.__gameSaveChecksum(clean)}),{merge:false});
+                    for(var old of parts)await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id,'parts',old.id));
+                }else if(meta.data){await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),scrubSave(meta,id),{merge:false});}
+            }
+            var cloudId=window.__manualVocabCloudId(id);
+            var bookParts=await window.fbGetDocs(window.fbCollection(window.db,'users',uid,'vocabBooks',cloudId,'parts'));
+            var refs=[];bookParts.forEach(function(p){refs.push(window.fbDoc(window.db,'users',uid,'vocabBooks',cloudId,'parts',p.id));});
+            for(var ref of refs)await window.fbDeleteDoc(ref);
+            await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'vocabBooks',cloudId));
+            await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'vocabProgress',id));
+            if(book.visibility==='public')await publish({id:id,visibility:'private'},[],book);
+        }
+        if(userId()!==uid)throw new Error('ユーザーが切り替わりました。開き直してください。');
+        if(window.__pendingGameSaveMemory&&window.__pendingGameSaveMemory.id===uid)scrubSave({memory:window.__pendingGameSaveMemory.data},id);
+        localSaves.forEach(function(save){localStorage.setItem(save[0],save[1]);});
+        bookStorageKeys(id).forEach(function(k){localStorage.removeItem(k);});
+        [textbooksCacheMap,window.__manualVocabDrafts,window.__dirtyManualVocabDrafts,window.__manualVocabDraftRevisions,window.__dirtyVocabProgress].forEach(function(map){if(map)delete map[id];});
+    }
+
     window.openLibraryBookActions = function(bookId) {
         var actionUserId = userId();
         var book = textbooksPool.find(function(item) { return item.id === bookId; });
@@ -143,21 +202,21 @@
         var own = window.isPersonalTextbook(bookId);
         var modal = open(book.name, '<div class="library-editor-actions library-editor-actions-stack">' +
             (own ? '<button type="button" id="libraryEditBook">名前・表紙を編集 / 単語を追加</button>' : '') +
-            '<button type="button" id="libraryRemoveBook" class="library-editor-danger">' + (own ? '単語帳を削除' : '自分の一覧から外す') + '</button><button type="button" data-library-close>閉じる</button></div>');
+            '<button type="button" id="libraryRemoveBook" class="library-editor-danger">' + '自分の一覧から外す' + '</button>' + (own ? '<button type="button" id="libraryEraseBook" class="library-editor-danger">単語帳を完全削除</button>' : '') + '<button type="button" data-library-close>閉じる</button></div>');
         if (own) modal.querySelector('#libraryEditBook').onclick = function() { window.openLibraryBookEditor(bookId); };
-        modal.querySelector('#libraryRemoveBook').onclick = function() {
-            var confirmDialog = open('「' + book.name + '」を' + (own ? '削除しますか？' : '一覧から外しますか？'),
-                '<p class="library-editor-hint">' + (own ? (book.visibility === 'public' ? '公開一覧からも削除します。他の人が自分用に追加したコピーは残ります。' : '削除した単語帳は一覧に表示されなくなります。') : '配信された単語帳と他の人の学習データには影響しません。') + '</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryConfirmRemove" class="library-editor-danger">' + (own ? '削除する' : '一覧から外す') + '</button></div>');
+        function removeBook(permanent) {
+            var confirmDialog = open('「' + book.name + '」を' + (permanent ? '完全削除しますか？' : '一覧から外しますか？'),
+                '<p class="library-editor-hint">' + (permanent ? '単語・理解度・保存済みセーブ内のデータと公開一覧から削除します。元に戻せません。他の人が追加したコピーは残ります。' : '一覧から非表示にします。単語と学習データは残ります。') + '</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryConfirmRemove" class="library-editor-danger">' + (permanent ? '完全削除する' : '一覧から外す') + '</button></div>');
             confirmDialog.querySelector('#libraryConfirmRemove').onclick = async function() {
                 var remove = confirmDialog.querySelector('#libraryConfirmRemove');
                 if (remove.disabled) return;
                 remove.disabled = true;
                 try {
                     if (userId() !== actionUserId) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
-                    if (own && book.visibility === 'public') await publish({id:bookId,visibility:'private'}, [], book);
+                    if (permanent) await eraseBook(bookId,book);
                     if (userId() !== actionUserId) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
                     var data = readLibrary();
-                    data.books = data.books.filter(function(item) { return item.id !== bookId; });
+                    if(permanent)data.books = data.books.filter(function(item) { return item.id !== bookId; });
                     if (data.hidden.indexOf(bookId) < 0) data.hidden.push(bookId);
                     persist(data);
                     if (currentTextbook === bookId) {
@@ -168,7 +227,9 @@
                 } catch (error) { confirmDialog.querySelector('.library-editor-error').textContent = error.message; }
                 finally { remove.disabled = false; }
             };
-        };
+        }
+        modal.querySelector('#libraryRemoveBook').onclick=function(){removeBook(false);};
+        if(own)modal.querySelector('#libraryEraseBook').onclick=function(){removeBook(true);};
     };
     window.openPublicTextbookCatalog = async function() {
         var catalog = open('みんなの単語帳', '<p class="library-editor-hint">公開された単語帳を、自分用に追加できます。</p><div id="libraryCatalog" aria-live="polite">読み込み中…</div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
@@ -202,7 +263,7 @@
                         localStorage.setItem(window.__manualVocabLocalKey(id), JSON.stringify(draft));
                         textbooksCacheMap[id] = clean; window.__manualVocabDrafts[id] = draft;
                         var ownLibrary = readLibrary();
-                        ownLibrary.books.push({id:id,name:data.name,cover:'📘',coverType:'text',personal:true,visibility:'private'});
+                        ownLibrary.books.push({id:id,name:data.name,cover:data.coverType==='image'&&/^data:image\/(jpeg|png|webp);base64,/.test(data.cover||'')?data.cover:'📘',coverType:data.coverType==='image'&&/^data:image\/(jpeg|png|webp);base64,/.test(data.cover||'')?'image':'text',personal:true,visibility:'private'});
                         persist(ownLibrary); add.textContent = '追加済み'; add.disabled = true;
                     } catch (error) { list.textContent = '追加できませんでした。' + error.message; }
                 };

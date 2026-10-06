@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="1.92">
+    <meta name="application-version" content="2.02">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=1.92">
-    <link rel="stylesheet" href="gacha.css?v=1.92">
+    <link rel="stylesheet" href="style.css?v=2.02">
+    <link rel="stylesheet" href="gacha.css?v=2.02">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -838,58 +838,6 @@
                     <input type="text" id="adminNoticeInput" class="search-input" placeholder="表示したいお知らせメッセージを入力...">
                     <button class="modern-btn" style="margin-bottom: 24px;" onclick="window.saveAdminSystemSettings()">設定を配信・適用する</button>
                     
-                    <h2 style="color:var(--admin-accent); border-top:1px solid var(--border); padding-top:20px; margin-top:20px;">
-                        <i data-lucide="book-open"></i> 📖 教材・単語帳の管理配信システム
-                    </h2>
-                    
-                    <div style="background:rgba(255,255,255,0.02); padding:14px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); margin-bottom:16px;">
-                        <label style="font-size:11px; font-weight:700; color:var(--text-sub); display:block; margin-bottom:4px;">対象単語帳の指定（新規 or 既存編集）</label>
-                        <select id="adminEditBookSelect" class="search-input" style="background:var(--input-bg); color:white; margin-bottom:12px;" onchange="window.handleAdminEditSelectChange(this.value)">
-                            <option value="">➕ 新規教材として一斉配信登録</option>
-                        </select>
-                        
-                        <label style="font-size:11px; font-weight:700; color:var(--cosmic-cyan); display:block; margin-bottom:4px;">単語帳の名前</label>
-                        <input type="text" id="adminNewBookTitle" class="search-input" placeholder="例: 歴史の重要単語帳" style="margin-bottom:12px;">
-                        
-                        <label style="font-size:11px; font-weight:700; color:var(--cosmic-purple-light); display:block; margin-bottom:4px;">単語帳の表紙アイコン画像 (Canvas高圧縮ミラー変換)</label>
-                        <input type="file" id="adminBookCoverFileUploader" class="search-input" accept="image/*" style="padding-top:8px; font-size:12px; height:38px; margin-bottom:16px;" onchange="window.handleAdminBookCoverUpload(event)">
-                        
-                        <button class="modern-btn" id="adminBookSubmitBtn" style="background:rgba(192,132,252,0.15) !important;" onclick="window.saveOrUpdateTextbookFromAdmin()">
-                            新規教材として一斉配信登録
-                        </button>
-                    </div>
-
-                    <button class="modern-btn" style="border-color:var(--cosmic-cyan) !important; color:var(--cosmic-cyan) !important; margin-bottom: 16px;" onclick="toggleBulkImportCard()">
-                        🛠️ 選択中単語帳の中身を一括登録（インポート）パネル
-                    </button>
-
-                    <div class="card" id="bulkImportToggleSection" style="display: none; border: 1px solid var(--admin-accent); background:rgba(0,0,0,0.4) !important; padding:14px;">
-                        <h2 style="color:var(--cosmic-cyan);"><i data-lucide="file-spreadsheet" size="14"></i> 選択中教材への中身一括インポート</h2>
-                        <textarea id="bulkWordInput" class="modern-textarea" style="height: 100px;" placeholder="番号:単語:メイン意味:サブ情報&#10;例:&#10;1:follow:①〜に従う②〜に続く:as follow 次のように..."></textarea>
-                        
-                        <button class="modern-btn" style="background:var(--accent) !important; margin-bottom:16px;" onclick="handleBulkWordImport()">
-                            この教材に中身をまとめて流し込み登録
-                        </button>
-
-                        <h2 style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; color: var(--admin-accent);">
-                            <i data-lucide="check-square" size="14"></i> 中身の一括削除・リセット管理
-                        </h2>
-                        <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
-                            <button class="list-action-link" onclick="selectAllBulkDelete(true)">すべて選択</button>
-                            <button class="list-action-link" onclick="selectAllBulkDelete(false)">解除</button>
-                            
-                            <div style="margin-left: auto; display: flex; gap: 8px;">
-                                <button class="list-action-link" style="background: rgba(16, 185, 129, 0.2); color: #10B981; border-color: #10B981;" onclick="handleBulkResetExecute()">
-                                    理解度クリア
-                                </button>
-                                <button class="list-action-link" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border-color: #EF4444;" onclick="handleBulkDeleteExecute()">
-                                    データ削除
-                                </button>
-                            </div>
-                        </div>
-                        <div id="bulkDeleteListContainer" style="max-height: 200px; overflow-y: auto; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--border); padding: 8px;"></div>
-                    </div>
-
                     <label style="font-size:12px; font-weight:700; display:block; margin-top: 24px; margin-bottom:6px; color:#F87171;">⚠️ スコア管理（リセット機能）</label>
                     <button class="modern-btn" style="margin-bottom: 10px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetLeaderboard()"><i data-lucide="trash-2" size="16"></i> ランキング履歴をリセット</button>
                     <button class="modern-btn" style="border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetBestScore()"><i data-lucide="trash-2" size="16"></i> ベストスコアをリセット</button>
@@ -955,14 +903,14 @@
       window.fbGetDocs = getDocs;
       window.fbDeleteDoc = deleteDoc;
     </script>
-    <script src="app.js?v=1.92" defer></script>
-    <script src="game_core.js?v=1.92" defer></script>
-    <script src="vocab_ui.js?v=1.92" defer></script>
-    <script src="reader.js?v=1.92" defer></script>
-    <script src="fix.js?v=1.92" defer></script>
-    <script src="multi.js?v=1.92" defer></script>
-    <script src="gacha.js?v=1.92" defer></script>
-    <script src="addon.js?v=1.92" defer></script>
-    <script src="library.js?v=1.92" defer></script>
+    <script src="app.js?v=2.02" defer></script>
+    <script src="game_core.js?v=2.02" defer></script>
+    <script src="vocab_ui.js?v=2.02" defer></script>
+    <script src="reader.js?v=2.02" defer></script>
+    <script src="fix.js?v=2.02" defer></script>
+    <script src="multi.js?v=2.02" defer></script>
+    <script src="gacha.js?v=2.02" defer></script>
+    <script src="addon.js?v=2.02" defer></script>
+    <script src="library.js?v=2.02" defer></script>
 </body>
 </html>
