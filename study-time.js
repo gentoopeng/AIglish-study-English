@@ -111,7 +111,7 @@
     function format(ms) {const seconds=Math.floor(positive(ms)/1000);return String(Math.floor(seconds/3600)).padStart(2,'0')+':'+String(Math.floor(seconds/60)%60).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');}
     function renderDisplay() {
         if(!data)return;const ms=dayMilliseconds(data.days[dateKey(Date.now())]);
-        const header=document.getElementById('headerStudyTime');if(header)header.textContent='今日 '+format(ms);
+        const header=document.getElementById('headerStudyTime');if(header)header.textContent=format(ms);
         const live=document.getElementById('studyLiveTime');if(live)live.textContent=format(ms);
         const totalLabel=document.getElementById('totalStudyTimeValue');if(totalLabel)totalLabel.textContent=format(total(data));
         const state=document.getElementById('studyTimerStatus');if(state)state.textContent=active?(leader?'計測中':'別のタブで計測中'):paused?'一時停止中':'待機中';
