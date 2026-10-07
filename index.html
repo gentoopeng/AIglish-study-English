@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="2.52">
+    <meta name="application-version" content="2.62">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=2.52">
-    <link rel="stylesheet" href="gacha.css?v=2.52">
+    <link rel="stylesheet" href="style.css?v=2.62">
+    <link rel="stylesheet" href="gacha.css?v=2.62">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -219,8 +219,7 @@
                     <span id="todayStudyTimeDisplay" style="font-size: 15px; font-weight: 900; color: #FFFFFF; font-family: monospace; text-shadow: 0 0 8px #F59E0B;">00分00秒</span>
                 </div>
 
-                <h2><i data-lucide="trending-up" size="14"></i> 最近7日間の学習アクティビティ</h2>
-                <div class="bar-chart-container" id="activityBarChart"></div>
+
             </div>
 
             <h2><i data-lucide="compass" size="14"></i> クイックアクセス</h2>
@@ -440,10 +439,9 @@
         </div>
 
         <div id="view-study" class="tab-view">
-            <header class="vocab-library-header"><span class="vocab-library-kicker">STUDY TIME</span><h2>勉強時間</h2></header>
-            <section class="card study-live-card"><p class="study-caption">今日の勉強時間</p><strong id="studyLiveTime">00:00:00</strong><p id="studyTimerStatus" role="status">待機中</p><div class="library-toolbar"><button type="button" id="studyTimerToggle">開始</button></div><p class="library-editor-hint">単語帳・ワーク・リーダー・プレイ中は自動計測。紙の教材は「開始」で計測できます。画面を隠した間は計測を止めます。</p></section>
+            <section class="card study-live-card"><p class="study-caption">今日の勉強時間</p><strong id="studyLiveTime">00:00:00</strong><div class="library-toolbar"><button type="button" id="studyTimerToggle">開始</button></div></section>
             <section class="card"><div class="study-month-header"><button type="button" id="studyPreviousMonth" aria-label="前の月">‹</button><h2 id="studyMonthTitle"></h2><button type="button" id="studyNextMonth" aria-label="次の月">›</button></div><div class="study-calendar-weekdays" aria-hidden="true"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div><div id="studyCalendar" class="study-calendar"></div><p id="studySelectedDay"></p><button type="button" id="studyEditDay" class="study-text-button">この日の時間を編集</button></section>
-            <section class="card"><h2>フレンドの勉強時間ランキング</h2><div class="filter-scroller" id="studyRankRanges"><button class="pill-btn active" type="button" data-range="daily">今日</button><button class="pill-btn" type="button" data-range="weekly">今週</button><button class="pill-btn" type="button" data-range="total">累計</button></div><button type="button" id="studyRefreshRanking" class="study-text-button">更新</button><div id="studyFriendRanking"></div></section>
+            <section class="card study-podium-card"><div class="study-podium-heading"><h2>今日の表彰台</h2><button type="button" id="studyRefreshRanking" class="study-text-button">更新</button></div><div id="studyFriendRanking" aria-live="polite"></div><p id="studyRankingMessage" class="library-editor-hint"></p></section>
         </div>
         <div id="view-game" class="tab-view">
             <div id="cosmic-game-wrapper" class="cosmic-game-bg">
@@ -909,17 +907,17 @@
       window.fbGetDocs = getDocs;
       window.fbDeleteDoc = deleteDoc;
     </script>
-    <script src="app.js?v=2.52" defer></script>
-    <script src="game_core.js?v=2.52" defer></script>
-    <script src="vocab_ui.js?v=2.52" defer></script>
-    <script src="reader.js?v=2.52" defer></script>
-    <script src="fix.js?v=2.52" defer></script>
-    <script src="multi.js?v=2.52" defer></script>
-    <script src="gacha.js?v=2.52" defer></script>
-    <script src="addon.js?v=2.52" defer></script>
-    <script src="library.js?v=2.52" defer></script>
-    <script src="workbook.js?v=2.52" defer></script>
-    <script src="shared-notes.js?v=2.52" defer></script>
-    <script src="study-time.js?v=2.52" defer></script>
+    <script src="app.js?v=2.62" defer></script>
+    <script src="game_core.js?v=2.62" defer></script>
+    <script src="vocab_ui.js?v=2.62" defer></script>
+    <script src="reader.js?v=2.62" defer></script>
+    <script src="fix.js?v=2.62" defer></script>
+    <script src="multi.js?v=2.62" defer></script>
+    <script src="gacha.js?v=2.62" defer></script>
+    <script src="addon.js?v=2.62" defer></script>
+    <script src="library.js?v=2.62" defer></script>
+    <script src="workbook.js?v=2.62" defer></script>
+    <script src="shared-notes.js?v=2.62" defer></script>
+    <script src="study-time.js?v=2.62" defer></script>
 </body>
 </html>

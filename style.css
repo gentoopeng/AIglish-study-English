@@ -2223,3 +2223,25 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 #activityBarChart .bar-track { width:70%; flex:1; min-height:0; display:flex; align-items:flex-end; border-radius:5px; background:rgba(255,255,255,.04); }
 #activityBarChart .bar-fill { width:100%; background:linear-gradient(0deg,var(--cosmic-cyan),var(--cosmic-purple-light)); border-radius:5px; }
 #activityBarChart .bar-wrap small { font-size:9px; }
+#view-study { font-family:"Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",Georgia,serif; color:#eee8da; }
+#view-study button,#view-study h2 { font-family:inherit; }
+#view-study .card { border:1px solid rgba(218,204,169,.13); background:linear-gradient(145deg,rgba(23,30,45,.92),rgba(12,19,33,.95)); box-shadow:0 12px 32px rgba(0,0,0,.13); }
+.study-live-card { text-align:center; padding:30px 20px; }
+.study-caption { letter-spacing:.16em; }
+#studyLiveTime { font-family:Georgia,"Yu Mincho",serif; font-weight:400; font-size:clamp(34px,9vw,48px); letter-spacing:.06em; }
+#view-study .library-toolbar { justify-content:center; margin-top:20px; }
+#studyTimerToggle { padding:8px 30px; border:1px solid rgba(218,204,169,.35); border-radius:24px; background:transparent; color:#eee8da; letter-spacing:.14em; cursor:pointer; }
+.study-day small { font-family:Georgia,serif; }
+.study-podium-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.study-podium-heading h2 { font-size:16px; font-weight:400; letter-spacing:.1em; }
+.study-podium { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:end; gap:8px; margin-top:25px; }
+.study-podium-place { min-width:0; text-align:center; animation:studyPodiumAppear .45s ease both; }
+.study-podium-name { display:block; overflow-wrap:anywhere; font-size:11px; margin-bottom:8px; line-height:1.6; }
+.study-podium-place strong { display:block; font:400 13px/1.5 Georgia,serif; font-variant-numeric:tabular-nums; margin-bottom:12px; }
+.study-podium-step { height:78px; display:flex; align-items:center; justify-content:center; font:400 32px Georgia,serif; border:1px solid rgba(212,195,156,.22); border-radius:8px 8px 0 0; background:linear-gradient(180deg,rgba(180,179,182,.18),rgba(180,179,182,.03)); }
+.place-1 .study-podium-step { height:115px; color:#e6ce92; background:linear-gradient(180deg,rgba(210,178,103,.22),rgba(210,178,103,.04)); border-color:rgba(210,178,103,.4); }
+.place-3 .study-podium-step { height:56px; color:#d0a17e; background:linear-gradient(180deg,rgba(185,131,94,.18),rgba(185,131,94,.03)); }
+.study-podium-place.is-self .study-podium-name { color:#e6ce92; }
+.study-podium-empty { text-align:center; font-size:12px; line-height:1.9; color:var(--text-sub); padding:20px 0; }
+@keyframes studyPodiumAppear { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@media(prefers-reduced-motion:reduce) { .study-podium-place { animation:none; } }

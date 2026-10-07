@@ -7280,8 +7280,8 @@ console.log("📚 本棚タブパッチ（スワイプ切替＋教材本棚シ�
 // ------------------------------------------------------------------
 window.__STATS_COUNTER_KEYS = [
     'test_count', 'combo_max', 'multi_win', 'high_score', 'mistake_count',
-    'vocab_reg', 'vocab_fixed', 'delete_count', 'study_burst', 'reader_open',
-    'flash_count', 'friends_count', 'user_level', 'gold_spent', 'study_total_secs'
+    'vocab_reg', 'vocab_fixed', 'delete_count', 'reader_open',
+    'flash_count', 'friends_count', 'user_level', 'gold_spent'
 ];
 
 // ------------------------------------------------------------------
