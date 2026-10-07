@@ -1,0 +1,126 @@
+// Cumulative learning records and a shared, accessible podium presentation.
+(function () {
+    'use strict';
+    const nonnegative = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+    const empty = () => ({version:1, words:{}, flash:{baseline:0,sources:{}}});
+    function merge(left,right) {
+        const result=empty();
+        [left,right].forEach(record=>{
+            if(typeof record==='string'){try{record=JSON.parse(record);}catch(e){return;}}
+            if(!record||record.version!==1)return;
+            Object.keys(record.words||{}).forEach(key=>{result.words[key]=1;});
+            result.flash.baseline=Math.max(result.flash.baseline,nonnegative(record.flash&&record.flash.baseline));
+            Object.entries(record.flash&&record.flash.sources||{}).forEach(([id,value])=>{result.flash.sources[id]=Math.max(result.flash.sources[id]||0,nonnegative(value));});
+        });return result;
+    }
+    const wordCount = record => Object.keys(record&&record.words||{}).length;
+    const flashCount = record => nonnegative(record&&record.flash&&record.flash.baseline)+Object.values(record&&record.flash&&record.flash.sources||{}).reduce((sum,value)=>sum+nonnegative(value),0);
+    const wordKey=(book,num)=>JSON.stringify([String(book),String(num)]);
+    const rated=word=>['ok','so','bad'].includes(word&&word.status)||Object.values(word&&word.meanings||{}).some(meaning=>['ok','so','bad'].includes(meaning.status));
+    window.LearningRankingModel={empty,merge,wordCount,flashCount,wordKey,rated};
+    const owner=()=>typeof myId==='string'?myId:'GUEST-000';
+    const storageKey=id=>'core_v4_learning_ranking_'+id;
+    let device=localStorage.getItem('aiglish_ranking_device');if(!device){device=crypto.randomUUID();localStorage.setItem('aiglish_ranking_device',device);}
+    const sourceId=device+'.'+crypto.randomUUID();
+    let user='',record=empty(),metric='time',cache=[],cacheAt=0,cacheReady=false,inflight=null,generation=0;
+    const queues=new Map();
+    function read(id){try{return JSON.parse(localStorage.getItem(storageKey(id))||'null');}catch(e){return null;}}
+    function store(key,value){try{localStorage.setItem(key,value);}catch(error){console.warn('ランキング記録を端末へ保存できませんでした',error);}}
+    function persist(){if(owner()!==user)return;store(storageKey(user),JSON.stringify(record));userStats.learning_ranking_json=JSON.stringify(record);delete userStats.learning_ranking;userStats.learning_ranking_owner=user;userStats.vocab_rated_count=wordCount(record);userStats.flash_count=flashCount(record);}
+    function ensure(){
+        const id=owner();if(user===id)return;
+        user=id;cache=[];cacheAt=0;cacheReady=false;generation++;
+        const saved=read(id),remote=userStats.learning_ranking_owner&&userStats.learning_ranking_owner!==id?null:(userStats.learning_ranking_json||userStats.learning_ranking);
+        record=merge(saved,remote);if(!saved&&!remote&&(!userStats.learning_ranking_owner||userStats.learning_ranking_owner===id))record.flash.baseline=nonnegative(userStats.flash_count);
+        // Import existing per-book progress, without conflating repeated meanings.
+        const prefix='core_v4_user_vocab_progress_'+id+'_';
+        for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(!key.startsWith(prefix)||key.endsWith('__ts'))continue;try{const progress=JSON.parse(localStorage.getItem(key));Object.entries(progress||{}).forEach(([num,word])=>{if(rated(word))record.words[wordKey(key.slice(prefix.length),num)]=1;});}catch(e){}}
+        readSwipeJournals();persist();
+    }
+    function scanCurrent(){if(typeof vocabList==='undefined'||typeof currentTextbook==='undefined'||!currentTextbook)return;vocabList.forEach(word=>{if(rated(word))record.words[wordKey(currentTextbook,word.num)]=1;});}
+    function readSwipeJournals(){const prefix='core_v4_ranking_swipes_'+user+'_';for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key.startsWith(prefix)){const id=key.slice(prefix.length);record.flash.sources[id]=Math.max(record.flash.sources[id]||0,nonnegative(localStorage.getItem(key)));}}}
+    window.syncRankingMetrics=function(){ensure();record=merge(record,read(user));if(!userStats.learning_ranking_owner||userStats.learning_ranking_owner===user)record=merge(record,userStats.learning_ranking_json||userStats.learning_ranking);readSwipeJournals();scanCurrent();persist();};
+    window.recordRankedWord=function(book,num){if(!book)return;ensure();record=merge(record,read(user));record.words[wordKey(book,num)]=1;persist();};
+    window.recordRankedSwipe=function(){ensure();record=merge(record,read(user));record.flash.sources[sourceId]=nonnegative(record.flash.sources[sourceId])+1;store('core_v4_ranking_swipes_'+user+'_'+sourceId,String(record.flash.sources[sourceId]));persist();};
+    const oldSave=window.saveUserStats;
+    window.saveUserStats=function(){
+        window.syncRankingMetrics();const id=user,local=JSON.parse(JSON.stringify(record));
+        const saving=oldSave.apply(this,arguments);
+        if(id==='GUEST-000'||!window.fbRunTransaction||!window.db)return saving;
+        const previous=queues.get(id)||Promise.resolve();
+        const next=Promise.all([Promise.resolve(saving),previous]).then(()=>window.fbRunTransaction(window.db,async transaction=>{
+            const ref=window.fbDoc(window.db,'users',id),snap=await transaction.get(ref),cloud=snap.exists()?(snap.data().learningRankingJson||snap.data().learningRanking):null;
+            const combined=merge(cloud,local);transaction.set(ref,{learningRankingJson:JSON.stringify(combined)},{merge:true});return combined;
+        })).then(combined=>{if(owner()===id&&user===id){record=merge(record,combined);persist();}}).catch(error=>{console.warn('ランキング記録の同期を次回に再試行します',error);});
+        queues.set(id,next);return next;
+    };
+    const oldLoad=window.loadUserStats;
+    window.loadUserStats=async function(){
+        const id=owner();ensure();
+        if(id!=='GUEST-000'&&window.fbGetDoc&&window.db){
+            try{
+                const snap=await window.fbGetDoc(window.fbDoc(window.db,'users',id));
+                if(owner()!==id)return;
+                if(snap.exists()){
+                    const doc=snap.data(),stats=statsOf(doc),cloudRecord=doc.learningRankingJson||doc.learningRanking||stats.learning_ranking_json||stats.learning_ranking;
+                    record=merge(record,cloudRecord);
+                    if(!cloudRecord){
+                        record.flash.baseline=Math.max(record.flash.baseline,nonnegative(stats.flash_count));
+                        if(window.fbGetDocs&&window.fbCollection){
+                            const progress=await window.fbGetDocs(window.fbCollection(window.db,'users',id,'vocabProgress'));
+                            if(owner()!==id)return;
+                            progress.forEach(book=>{try{const data=book.data(),words=data.wordsJson?JSON.parse(data.wordsJson):data.words||{};Object.entries(words).forEach(([num,word])=>{if(rated(word))record.words[wordKey(book.id,num)]=1;});}catch(e){}});
+                        }
+                    }
+                    persist();
+                }
+            }catch(e){console.warn('既存のランキング記録は次回接続時に取り込みます',e);}
+        }
+        if(owner()!==id)return;
+        const result=await oldLoad.apply(this,arguments);
+        if(owner()===id){record=merge(record,userStats.learning_ranking_json||userStats.learning_ranking);persist();render();}return result;
+    };
+    function name(element,value){element.replaceChildren();String(value||'ユーザー').trim().split(/\s+/u).forEach((part,index)=>{if(index)element.append(document.createElement('br'));element.append(document.createTextNode(part));});}
+    function avatar(value,label){const frame=document.createElement('span');frame.className='podium-avatar';const safe=typeof value==='string'&&(/^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(value));if(safe){const img=document.createElement('img');img.src=value;img.alt=String(label||'ユーザー')+'のアイコン';img.referrerPolicy='no-referrer';img.onerror=()=>{frame.textContent=String(label||'人').trim().slice(0,1);};frame.append(img);}else{frame.textContent=String(label||'人').trim().slice(0,1);}return frame;}
+    window.RankingVisuals={name,avatar};
+    const labels={time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
+    const descriptions={time:'これまでに計測した勉強時間の合計',words:'○・△・×を付けた単語の累計。同じ単語は1語として計測',flash:'カードをスワイプした累計。前のカードに戻っても記録'};
+    const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
+    const value=(row,key)=>key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
+    function statsOf(doc){const source=doc.userStatsJson?JSON.parse(doc.userStatsJson):doc.userStats||{};return source&&typeof source==='object'?source:{};}
+    function row(id,doc){const stats=statsOf(doc),combined=merge(stats.learning_ranking_json||stats.learning_ranking,doc.learningRankingJson||doc.learningRanking),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',time:Math.floor(window.StudyTimeModel.total(ledger)/1000),words:wordCount(combined),flash:combined.flash.baseline||Object.keys(combined.flash.sources).length?flashCount(combined):nonnegative(stats.flash_count)};}
+    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,learningRanking:record});}
+    function detail(entry,rank,context){
+        const dialog=window.openLibraryDialog('学習記録','<div class="ranking-detail"><div class="ranking-detail-person"></div><p class="ranking-detail-place"></p><dl></dl></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
+        dialog.querySelector('.library-editor-eyebrow').textContent='LEARNING RECORDS';
+        const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');name(heading,entry.name);person.append(avatar(entry.avatar,entry.name),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[metric])+' · '+(rank?rank+'位':entry[metric]>0?'順位未取得':'未計測');
+        Object.keys(labels).forEach(key=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=labels[key];dd.textContent=value(entry,key);dialog.querySelector('dl').append(dt,dd);});
+    }
+    window.RankingVisuals.detailStudy=function(entry,rank){const known=row(entry.id,{playerName:entry.name,avatar:entry.avatar,userStats:entry.getStats?entry.getStats():{}});detail(known,rank,'今日の勉強時間');const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent='今日の勉強時間';dd.textContent=duration(entry.seconds);const dl=document.querySelector('.ranking-detail dl');dl.prepend(dt,dd);};
+    function render(){
+        const host=document.getElementById('rankingPodium');if(!host)return;ensure();const local=self(),rows=cache.filter(entry=>entry.id!==user);if(user!=='GUEST-000')rows.push(local);
+        rows.sort((a,b)=>b[metric]-a[metric]||a.id.localeCompare(b.id));const measured=rows.filter(entry=>entry[metric]>0),top=cacheReady?measured.slice(0,3):[];
+        document.getElementById('rankingDescription').textContent=descriptions[metric];document.querySelectorAll('[data-ranking-metric]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.rankingMetric===metric)));
+        host.replaceChildren();const podium=document.createElement('div');podium.className='learning-podium';
+        [1,0,2].forEach(index=>{const entry=top[index],place=index+1,column=document.createElement(entry?'button':'div');column.className='learning-podium-place place-'+place+(entry&&entry.id===user?' is-self':'')+(!entry?' is-empty':'');if(entry){column.type='button';column.setAttribute('aria-label',place+'位 '+entry.name+'の詳細');column.onclick=()=>detail(entry,place);column.append(avatar(entry.avatar,entry.name));const nickname=document.createElement('span');nickname.className='podium-name';name(nickname,entry.name);const amount=document.createElement('strong');amount.textContent=value(entry,metric);column.append(nickname,amount);}else{const blank=document.createElement('span');blank.className='podium-empty-label';blank.textContent='—';column.append(blank);column.setAttribute('aria-label',place+'位 未計測');}const step=document.createElement('span');step.className='podium-step';step.textContent=String(place);column.append(step);podium.append(column);});host.append(podium);
+        const own=document.getElementById('rankingSelf');own.replaceChildren();const ownRank=cacheReady?measured.findIndex(entry=>entry.id===user)+1:0;const button=document.createElement('button');button.type='button';button.className='ranking-self-button';button.onclick=()=>detail(local,ownRank);const text=document.createElement('span');text.textContent=user==='GUEST-000'?'あなたの記録（ゲスト）':'あなた · '+(ownRank?ownRank+'位':local[metric]>0?'順位未取得':'未計測');const amount=document.createElement('strong');amount.textContent=value(local,metric);button.append(avatar(local.avatar,local.name),text,amount);own.append(button);
+    }
+    async function refresh(force){
+        ensure();if(user==='GUEST-000'){render();document.getElementById('rankingMessage').textContent='ログインすると全ユーザーの表彰台に参加できます。';return;}
+        if(!force&&Date.now()-cacheAt<60000){render();return;}
+        if(inflight&&inflight.id===user)return inflight.promise;
+        const id=user,token=++generation,button=document.getElementById('rankingRefresh'),message=document.getElementById('rankingMessage');button.disabled=true;message.textContent='記録を取得中…';
+        const task=(async()=>{try{if(!window.db||!window.fbGetDocs)throw new Error('接続待ち');const snapshot=await window.fbGetDocs(window.fbCollection(window.db,'users')),list=[];snapshot.forEach(doc=>{const source=doc.data();if(source.deleted||doc.id==='GUEST-000')return;try{list.push(row(doc.id,source));}catch(e){}});if(owner()===id&&generation===token){cache=list;cacheReady=true;cacheAt=Date.now();message.textContent='';render();}}catch(error){if(owner()===id&&generation===token){message.textContent='記録を取得できませんでした。更新で再試行できます。';render();}}finally{if(generation===token)button.disabled=false;if(inflight&&inflight.id===id)inflight=null;}})();inflight={id,promise:task};return task;
+    }
+    // Compatibility names keep old save files readable; title behavior is retired.
+    ['renderTitles','renderSeasonTitles','equipTitle','unequipTitle','checkAndRewardTitleBonusXP','updateTitleProgressUI'].forEach(key=>{window[key]=function(){};});
+    window.showTitlesPage=function(){window.switchTab('titles');};
+    window.injectCommunityRankingUI=function(){};window.renderCommunityRankPills=function(){};window.renderCommunityRankSubPills=function(){};
+    window.renderLeaderboard=function(force){render();if(typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')return refresh(!!force);};
+    document.querySelectorAll('[data-ranking-metric]').forEach(button=>button.onclick=()=>{metric=button.dataset.rankingMetric;render();});
+    document.getElementById('rankingRefresh').onclick=()=>refresh(true);
+    window.onTabChange(tab=>{if(tab==='titles'){render();refresh(false);}else if(tab==='vocab'){ensure();scanCurrent();persist();}});
+    window.onAppLoaded(()=>{user='';ensure();render();});
+    window.addEventListener('storage',event=>{if(event.key===storageKey(owner())){ensure();record=merge(record,read(user));persist();render();}});
+    window.LearningRanking={render,refresh};
+})();

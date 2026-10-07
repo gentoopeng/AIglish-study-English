@@ -148,16 +148,17 @@
     }
     function renderRanking() {
         const container=document.getElementById('studyFriendRanking');if(!container||!data)return;
-        const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false,id:f.id}));
-        if(user!=='GUEST-000')rows.push({name:(myName||'あなた')+'（あなた）',seconds:Math.floor(rangeValue(data,'daily',Date.now())/1000),self:true,id:user});
+        const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false,id:f.id,avatar:f.avatar||'',getStats:()=>f.stats}));
+        if(user!=='GUEST-000')rows.push({name:(myName||'あなた'),seconds:Math.floor(rangeValue(data,'daily',Date.now())/1000),self:true,id:user,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',getStats:()=>userStats});
         const top=rows.filter(r=>r.seconds>=300).sort((a,b)=>b.seconds-a.seconds||a.id.localeCompare(b.id)).slice(0,3);
         const signature=JSON.stringify(top);if(container.dataset.signature===signature)return;container.dataset.signature=signature;container.replaceChildren();
         if(!top.length){const hint=document.createElement('p');hint.className='study-podium-empty';hint.textContent='今日5分以上勉強したユーザーが、ここに登場します。';container.append(hint);return;}
         const podium=document.createElement('div');podium.className='study-podium';
-        [1,0,2].forEach(index=>{const record=top[index],place=index+1;const column=document.createElement('div');column.className='study-podium-place place-'+place+(record&&record.self?' is-self':'');if(!record){column.classList.add('is-empty');column.setAttribute('aria-hidden','true');podium.append(column);return;}
-            const name=document.createElement('span');name.className='study-podium-name';name.textContent=record.name;
+        [1,0,2].forEach(index=>{const record=top[index],place=index+1;const column=document.createElement(record?'button':'div');column.className='study-podium-place place-'+place+(record&&record.self?' is-self':'');if(!record){column.classList.add('is-empty');column.setAttribute('aria-hidden','true');podium.append(column);return;}
+            column.type='button';column.setAttribute('aria-label',place+'位 '+record.name+'の今日の学習記録');column.onclick=()=>{if(window.RankingVisuals)window.RankingVisuals.detailStudy(record,place);};
+            const name=document.createElement('span');name.className='study-podium-name';if(window.RankingVisuals)window.RankingVisuals.name(name,record.name);else name.textContent=record.name;
             const time=document.createElement('strong');time.textContent=format(record.seconds*1000);
-            const step=document.createElement('div');step.className='study-podium-step';step.textContent=String(place);column.append(name,time,step);podium.append(column);
+            const step=document.createElement('div');step.className='study-podium-step';step.textContent=String(place);if(window.RankingVisuals)column.append(window.RankingVisuals.avatar(record.avatar,record.name));column.append(name,time,step);podium.append(column);
         });container.append(podium);
     }
     async function refreshRanking() {
@@ -166,7 +167,7 @@
         try {
             if(!window.db||!window.fbGetDocs||!window.fbCollection)throw new Error('接続後に更新してください。');
             const snapshot=await window.fbGetDocs(window.fbCollection(window.db,'users'));const records=[];
-            snapshot.forEach(doc=>{const remote=doc.data();try{const stats=typeof remote.userStatsJson==='string'?JSON.parse(remote.userStatsJson):remote.userStats||{};records.push({id:doc.id,name:remote.playerName||remote.name||doc.id,stats});}catch(e){}});
+            snapshot.forEach(doc=>{const remote=doc.data();if(remote.deleted)return;try{const stats=typeof remote.userStatsJson==='string'?JSON.parse(remote.userStatsJson):remote.userStats||{};records.push({id:doc.id,name:remote.playerName||remote.name||doc.id,avatar:remote.avatar||'',stats});}catch(e){}});
             if(user===owner&&uid()===owner){ranking=records;renderRanking();}
         }catch(e){if(uid()===owner)message.textContent='表彰台を取得できませんでした。'+e.message;}
         finally{rankingLoading=false;button.disabled=false;button.textContent='更新';}
