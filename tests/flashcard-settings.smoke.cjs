@@ -15,7 +15,7 @@ for(const status of ['so','bad','none'])await page.locator('dialog [data-status=
 await page.locator('#btnCardJa2en').click();await page.getByRole('button',{name:'カードを開始する'}).click();
 await page.waitForFunction(()=>flashcardOriginQueue.length>0&&currentTextbook==='test-book');
 const result=await page.evaluate(()=>({queue:flashcardOriginQueue,mode:flashcardDirectionMode,version:document.getElementById('appVersionDisplay').textContent}));
-assert.equal(result.queue.length,1);assert.equal(result.queue[0].num,2);assert.equal(result.mode,'ja2en');assert.equal(result.version,'Version 2.42');assert.equal(await page.locator('dialog').count(),0);
+assert.equal(result.queue.length,1);assert.equal(result.queue[0].num,2);assert.equal(result.mode,'ja2en');assert.equal(result.version,'Version 2.52');assert.equal(await page.locator('dialog').count(),0);
 await page.evaluate(()=>window.finishFlashcardSession());
 assert.deepEqual(await page.locator('#game-start-screen .tower-title-text').allTextContents(),['単語の迷宮']);
 assert.equal(await page.locator('#game-mode-select-screen, #game-difficulty-select-screen, #game-play-screen, #game-result-screen, #gameLeaderboardArea').count(),0);
@@ -24,5 +24,5 @@ await page.locator('#game-start-screen button').click();
 await page.locator('#multi-battle-choice-screen').waitFor({state:'visible'});
 await page.evaluate(()=>window.cancelMultiBattleChoice());
 assert.deepEqual(errors,[]);
-console.log('PASS: labyrinth-only game menu and mobile popup, Escape, selected book, range, understanding filter, reverse side and version 2.42');await browser.close();
+console.log('PASS: labyrinth-only game menu and mobile popup, Escape, selected book, range, understanding filter, reverse side and version 2.52');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

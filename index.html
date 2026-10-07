@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="2.42">
+    <meta name="application-version" content="2.52">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=2.42">
-    <link rel="stylesheet" href="gacha.css?v=2.42">
+    <link rel="stylesheet" href="style.css?v=2.52">
+    <link rel="stylesheet" href="gacha.css?v=2.52">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -118,6 +118,7 @@
             </div>
         </div>
         
+        <button type="button" class="study-tower-link" onclick="window.switchTab('game')"><i data-lucide="castle" size="16"></i> 単語の迷宮</button>
         <div style="padding: 16px; flex:1; overflow-y: auto; display:flex; flex-direction:column; gap:16px;">
             <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
                 <!-- アバター写真登録ボタン -->
@@ -403,7 +404,6 @@
                     <select id="friendSortSelect" class="search-input" style="width: 140px; height: 28px; font-size: 11px; font-weight: bold; padding: 0 6px; margin-bottom: 0; background: var(--input-bg); color: white;" onchange="window.sortAndRenderFriendList()">
                         <option value="login" selected>最終ログイン順</option>
                         <option value="level">レベル順</option>
-                        <option value="studyTime">勉強時間順</option>
                     </select>
                 </div>
 
@@ -439,6 +439,12 @@
             <div id="titles-list"></div>
         </div>
 
+        <div id="view-study" class="tab-view">
+            <header class="vocab-library-header"><span class="vocab-library-kicker">STUDY TIME</span><h2>勉強時間</h2></header>
+            <section class="card study-live-card"><p class="study-caption">今日の勉強時間</p><strong id="studyLiveTime">00:00:00</strong><p id="studyTimerStatus" role="status">待機中</p><div class="library-toolbar"><button type="button" id="studyTimerToggle">開始</button></div><p class="library-editor-hint">単語帳・ワーク・リーダー・プレイ中は自動計測。紙の教材は「開始」で計測できます。画面を隠した間は計測を止めます。</p></section>
+            <section class="card"><div class="study-month-header"><button type="button" id="studyPreviousMonth" aria-label="前の月">‹</button><h2 id="studyMonthTitle"></h2><button type="button" id="studyNextMonth" aria-label="次の月">›</button></div><div class="study-calendar-weekdays" aria-hidden="true"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div><div id="studyCalendar" class="study-calendar"></div><p id="studySelectedDay"></p><button type="button" id="studyEditDay" class="study-text-button">この日の時間を編集</button></section>
+            <section class="card"><h2>フレンドの勉強時間ランキング</h2><div class="filter-scroller" id="studyRankRanges"><button class="pill-btn active" type="button" data-range="daily">今日</button><button class="pill-btn" type="button" data-range="weekly">今週</button><button class="pill-btn" type="button" data-range="total">累計</button></div><button type="button" id="studyRefreshRanking" class="study-text-button">更新</button><div id="studyFriendRanking"></div></section>
+        </div>
         <div id="view-game" class="tab-view">
             <div id="cosmic-game-wrapper" class="cosmic-game-bg">
                 
@@ -852,7 +858,7 @@
         <button class="nav-item" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
         <button class="nav-item" id="nav-reader" onclick="window.switchTab('reader')"><i data-lucide="file-text" size="18"></i> リーダー</button>
         <button class="nav-item" id="nav-community" onclick="window.switchTab('community')"><i data-lucide="users" size="18"></i> フレンド</button>
-        <button class="nav-item" id="nav-game" onclick="window.switchTab('game')"><i data-lucide="gamepad-2" size="18"></i> ゲーム</button>
+        <button class="nav-item" id="nav-study" onclick="window.switchTab('study')"><i data-lucide="clock" size="18"></i> 勉強時間</button>
         <button class="nav-item" id="nav-titles" onclick="window.switchTab('titles')"><i data-lucide="award" size="18"></i> 称号</button>
         <button class="nav-item" id="nav-party" onclick="window.switchTab('party')"><i data-lucide="swords" size="18"></i> 編成</button>
     </div>
@@ -903,16 +909,17 @@
       window.fbGetDocs = getDocs;
       window.fbDeleteDoc = deleteDoc;
     </script>
-    <script src="app.js?v=2.42" defer></script>
-    <script src="game_core.js?v=2.42" defer></script>
-    <script src="vocab_ui.js?v=2.42" defer></script>
-    <script src="reader.js?v=2.42" defer></script>
-    <script src="fix.js?v=2.42" defer></script>
-    <script src="multi.js?v=2.42" defer></script>
-    <script src="gacha.js?v=2.42" defer></script>
-    <script src="addon.js?v=2.42" defer></script>
-    <script src="library.js?v=2.42" defer></script>
-    <script src="workbook.js?v=2.42" defer></script>
-    <script src="shared-notes.js?v=2.42" defer></script>
+    <script src="app.js?v=2.52" defer></script>
+    <script src="game_core.js?v=2.52" defer></script>
+    <script src="vocab_ui.js?v=2.52" defer></script>
+    <script src="reader.js?v=2.52" defer></script>
+    <script src="fix.js?v=2.52" defer></script>
+    <script src="multi.js?v=2.52" defer></script>
+    <script src="gacha.js?v=2.52" defer></script>
+    <script src="addon.js?v=2.52" defer></script>
+    <script src="library.js?v=2.52" defer></script>
+    <script src="workbook.js?v=2.52" defer></script>
+    <script src="shared-notes.js?v=2.52" defer></script>
+    <script src="study-time.js?v=2.52" defer></script>
 </body>
 </html>
