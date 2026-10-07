@@ -2249,10 +2249,13 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .study-week-chart { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; margin-top:20px; }
 .study-week-column { display:flex; flex-direction:column; align-items:center; gap:8px; min-width:0; }
 .study-week-value { font:400 9px/1.3 Georgia,serif; color:#aaa595; font-variant-numeric:tabular-nums; }
-.study-week-track { height:140px; width:65%; display:flex; align-items:flex-end; background:rgba(255,255,255,.035); border-radius:5px; overflow:hidden; }
-.study-week-fill { width:100%; border-radius:5px; background:linear-gradient(0deg,#696b84,#b9b2a2); transition:height .35s ease; }
-.study-week-column.is-today .study-week-fill { background:linear-gradient(0deg,#8b7655,#e0c588); }
+.study-week-track { height:140px; width:65%; display:flex; align-items:flex-end; background:transparent; border-radius:5px; overflow:hidden; }
+.study-week-fill { width:100%; border-radius:5px; background:linear-gradient(0deg,#a5a9bf,#e0ded6); transition:height .35s ease; }
+.study-week-column.is-today .study-week-fill { background:linear-gradient(0deg,#bb9451,#f1d291); }
 .study-week-column small { font-size:11px; color:#aaa595; }
 #studyWeekTotal { text-align:right; margin:18px 0 0; color:#ddd3bd; font-size:13px; font-variant-numeric:tabular-nums; }
 #studyNextWeek:disabled { opacity:.3; cursor:default; }
 @media(prefers-reduced-motion:reduce) { .study-week-fill { transition:none; } }
+
+.flashcard-part-of-speech { position:absolute; top:calc(50% + 132px); left:50%; transform:translateX(-50%); color:#d9d4c8; font:400 12px/1.4 "Yu Mincho","Hiragino Mincho ProN",serif; letter-spacing:.12em; pointer-events:none; }
+.flashcard-part-of-speech[hidden] { display:none; }

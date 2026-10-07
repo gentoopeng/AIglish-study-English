@@ -5,6 +5,35 @@
 (function() {
     "use strict";
 
+    // Prefer the selected meaning's grammatical label; words can have different parts of speech per sense.
+    window.getFlashcardPartOfSpeech = function(word, meaning) {
+        var labels = [
+            {short:'名',name:'名詞',aliases:['名詞','noun','n']},
+            {short:'動',name:'動詞',aliases:['動詞','自動詞','他動詞','verb','v','vi','vt','自','他']},
+            {short:'形',name:'形容詞',aliases:['形容詞','adjective','adj']},
+            {short:'副',name:'副詞',aliases:['副詞','adverb','adv']},
+            {short:'前',name:'前置詞',aliases:['前置詞','preposition','prep']},
+            {short:'接',name:'接続詞',aliases:['接続詞','conjunction','conj']},
+            {short:'代',name:'代名詞',aliases:['代名詞','pronoun','pron']},
+            {short:'冠',name:'冠詞',aliases:['冠詞','article','art']},
+            {short:'助',name:'助動詞',aliases:['助動詞','auxiliary','aux']},
+            {short:'間',name:'間投詞',aliases:['間投詞','感嘆詞','interjection','interj']}
+        ];
+        function detect(text, metadata) {
+            var value=String(text||'').trim().toLowerCase();
+            return labels.filter(function(label) {
+                return [label.short].concat(label.aliases).some(function(alias) {
+                    if(metadata && value.split(/[\s,、・/|]+/).some(function(part){return part.replace(/\.$/,'')===alias;}))return true;
+                    // Only explicit grammatical annotations; ordinary translation text is not a reliable classifier.
+                    return new RegExp('(?:^|[\\[【（(〈<、・/])\\s*'+alias+'\\.?\\s*(?:[\\]】）)〉>:：、・/]|(?=\\s))','i').test(value);
+                });
+            });
+        }
+        var candidates=[{text:meaning&&meaning.partOfSpeech||meaning&&meaning.pos,meta:true},{text:meaning&&meaning.text,meta:false},{text:word&&word.partOfSpeech||word&&word.pos,meta:true},{text:word&&word.sub,meta:true}];
+        for(var i=0;i<candidates.length;i++){var found=detect(candidates[i].text,candidates[i].meta);if(found.length)return {short:found.map(function(label){return label.short;}).join('・'),name:found.map(function(label){return label.name;}).join('・')};}
+        return null;
+    };
+
     // ================================================================
     // 1. フラッシュカード関連
     // ================================================================
@@ -188,7 +217,8 @@
                         en: w.word,
                         ja: meaning.text || w.meaning || '',
                         meaningId: meaning.id !== undefined && meaning.id !== null ? String(meaning.id) : null,
-                        meaningIndex: meaningIndex
+                        meaningIndex: meaningIndex,
+                        partOfSpeech: window.getFlashcardPartOfSpeech(w,meaning)
                     });
                 });
             });
@@ -359,6 +389,8 @@
         }
 
         var wordData = flashcardOriginQueue[flashcardCurrentIndex];
+        var posLabel=document.getElementById('flashcardPartOfSpeech');
+        if(posLabel){posLabel.hidden=!wordData.partOfSpeech;posLabel.textContent=wordData.partOfSpeech?wordData.partOfSpeech.short:'';posLabel.title=wordData.partOfSpeech?wordData.partOfSpeech.name:'';posLabel.setAttribute('aria-label',wordData.partOfSpeech?wordData.partOfSpeech.name:'');}
         window.renderFlashcardHistoryBubbles(wordData);
         var cardWrap = document.createElement('div');
         cardWrap.className = "flashcard-wrapper-3d";

@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="2.72">
+    <meta name="application-version" content="2.82">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=2.72">
-    <link rel="stylesheet" href="gacha.css?v=2.72">
+    <link rel="stylesheet" href="style.css?v=2.82">
+    <link rel="stylesheet" href="gacha.css?v=2.82">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -100,7 +100,7 @@
         <button class="menu-trigger" onclick="toggleSidebar(true)"><i data-lucide="menu" size="20"></i></button>
         <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
             <span id="headerTitleText">ダッシュボード</span>
-            <span id="headerStudyTime" class="header-study-time" aria-label="今日の勉強時間">今日 00:00:00</span>
+            <span id="headerStudyTime" class="header-study-time" aria-label="今日の勉強時間">00:00:00</span>
         </div>
 
     </div>
@@ -520,6 +520,7 @@
                         </div>
 
                         <div id="flashcardDeckStage"></div>
+                        <small id="flashcardPartOfSpeech" class="flashcard-part-of-speech" hidden></small>
                     </div>
 
                     <div class="card" style="padding:10px; margin-bottom:4px; text-align:center; background:rgba(15,23,42,0.8) !important;">
@@ -896,17 +897,17 @@
       window.fbGetDocs = getDocs;
       window.fbDeleteDoc = deleteDoc;
     </script>
-    <script src="app.js?v=2.72" defer></script>
-    <script src="game_core.js?v=2.72" defer></script>
-    <script src="vocab_ui.js?v=2.72" defer></script>
-    <script src="reader.js?v=2.72" defer></script>
-    <script src="fix.js?v=2.72" defer></script>
-    <script src="multi.js?v=2.72" defer></script>
-    <script src="gacha.js?v=2.72" defer></script>
-    <script src="addon.js?v=2.72" defer></script>
-    <script src="library.js?v=2.72" defer></script>
-    <script src="workbook.js?v=2.72" defer></script>
-    <script src="shared-notes.js?v=2.72" defer></script>
-    <script src="study-time.js?v=2.72" defer></script>
+    <script src="app.js?v=2.82" defer></script>
+    <script src="game_core.js?v=2.82" defer></script>
+    <script src="vocab_ui.js?v=2.82" defer></script>
+    <script src="reader.js?v=2.82" defer></script>
+    <script src="fix.js?v=2.82" defer></script>
+    <script src="multi.js?v=2.82" defer></script>
+    <script src="gacha.js?v=2.82" defer></script>
+    <script src="addon.js?v=2.82" defer></script>
+    <script src="library.js?v=2.82" defer></script>
+    <script src="workbook.js?v=2.82" defer></script>
+    <script src="shared-notes.js?v=2.82" defer></script>
+    <script src="study-time.js?v=2.82" defer></script>
 </body>
 </html>
