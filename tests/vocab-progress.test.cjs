@@ -89,3 +89,8 @@ test('restart does not re-enable sharing over a newer private-note preference',a
  values.set(key,JSON.stringify(latest));values.set('save',JSON.stringify({savedAt:new Date(2000).toISOString(),data:{localStorage:{[key]:JSON.stringify({enabled:true,savedAt:new Date(1000).toISOString()})}}}));
  const ctx={loginUid:()=> 'user-a',localKey:()=> 'save',cloudMetaKey:()=> 'cloud-meta',localMetaKey:()=> 'local-meta',console,localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)}};ctx.window=ctx;vm.runInNewContext(autoLoader,ctx);await ctx.autoLoadOnce();assert.deepEqual(JSON.parse(values.get(key)),latest);
 });
+test('restart cannot overwrite a newer dated study ledger with an old save',async()=>{
+ const values=new Map();const key='aiglish_study_ledger_user-a';const latest={version:1,updatedAt:3000,days:{'2026-10-07':{sources:{device:12345}}}};
+ values.set(key,JSON.stringify(latest));values.set('save',JSON.stringify({savedAt:new Date(2000).toISOString(),data:{localStorage:{[key]:JSON.stringify({version:1,updatedAt:1000,days:{}})}}}));
+ const ctx={loginUid:()=> 'user-a',localKey:()=> 'save',cloudMetaKey:()=> 'cloud-meta',localMetaKey:()=> 'local-meta',console,localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)}};ctx.window=ctx;vm.runInNewContext(autoLoader,ctx);await ctx.autoLoadOnce();assert.deepEqual(JSON.parse(values.get(key)),latest);
+});
