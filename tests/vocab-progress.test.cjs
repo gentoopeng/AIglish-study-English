@@ -83,3 +83,9 @@ test('restart preserves newer workbook answers and deletions against an older in
   const ctx={loginUid:()=> 'user-a',localKey:()=> 'save',cloudMetaKey:()=> 'cloud-meta',localMetaKey:()=> 'local-meta',console,localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)}};ctx.window=ctx;vm.runInNewContext(autoLoader,ctx);await ctx.autoLoadOnce();assert.equal(values.get(key),latest);assert.equal(values.get(key+'__ts'),'3000');
  }
 });
+test('restart does not re-enable sharing over a newer private-note preference',async()=>{
+ const values=new Map();const key='core_v4_vocab_note_sharing_user-a_word';
+ const latest={enabled:false,published:false,savedAt:new Date(3000).toISOString()};
+ values.set(key,JSON.stringify(latest));values.set('save',JSON.stringify({savedAt:new Date(2000).toISOString(),data:{localStorage:{[key]:JSON.stringify({enabled:true,savedAt:new Date(1000).toISOString()})}}}));
+ const ctx={loginUid:()=> 'user-a',localKey:()=> 'save',cloudMetaKey:()=> 'cloud-meta',localMetaKey:()=> 'local-meta',console,localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)}};ctx.window=ctx;vm.runInNewContext(autoLoader,ctx);await ctx.autoLoadOnce();assert.deepEqual(JSON.parse(values.get(key)),latest);
+});
