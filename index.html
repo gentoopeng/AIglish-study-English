@@ -10,18 +10,18 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="2.82">
+    <meta name="application-version" content="2.92">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=2.82">
-    <link rel="stylesheet" href="gacha.css?v=2.82">
+    <link rel="stylesheet" href="style.css?v=2.92">
+    <link rel="stylesheet" href="gacha.css?v=2.92">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
-            display: flex !important;
+            display: block !important;
             flex-wrap: nowrap !important;
         }
     </style>
@@ -372,8 +372,7 @@
             
             <div style="flex: 0 0 100vw; width: 100vw; height: 100%; scroll-snap-align: center; box-sizing: border-box; padding: 20px 16px; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid var(--cosmic-cyan); padding-bottom: 6px;">
-                    <h2 style="margin-bottom: 0; font-size: 15px; color: var(--cosmic-cyan) !important;"><i data-lucide="users"></i> フレンドリスト (1 / 2)</h2>
-                    <span style="font-size: 10px; color: var(--text-sub); font-weight: 800;">👉 スワイプでスコアボード</span>
+                    <h2 style="margin-bottom: 0; font-size: 15px; color: var(--cosmic-cyan) !important;"><i data-lucide="users"></i> フレンドリスト</h2>
                 </div>
 
                 <div class="card" style="border: 1px dashed var(--cosmic-cyan); margin-bottom: 14px; padding: 12px;">
@@ -398,23 +397,12 @@
                 </div>
             </div>
 
-            <div style="flex: 0 0 100vw; width: 100vw; height: 100%; scroll-snap-align: center; box-sizing: border-box; padding: 20px 16px; overflow-y: auto;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid var(--cosmic-purple-light); padding-bottom: 6px;">
-                    <span style="font-size: 10px; color: var(--text-sub); font-weight: 800;">👈 スワイプでフレンド</span>
-                    <h2 style="margin-bottom: 0; font-size: 15px; color: var(--cosmic-purple-light) !important;"><i data-lucide="trophy"></i> 総合スコアボード (2 / 2)</h2>
-                </div>
-
-                <div class="card" style="margin-bottom: 14px; padding: 14px;">
-                    <h2 style="font-size: 12px; color: var(--cosmic-cyan) !important; margin-bottom: 10px;"><i data-lucide="award"></i> 修行者EXPランキング (自分と全ユーザー)</h2>
-                    <div id="leaderboardContainer" style="display: flex; flex-direction: column; gap: 4px;"></div>
-                </div>
-
-                    
-            </div>
-
         </div>
 
         <div id="view-titles" class="tab-view">
+            <nav class="titles-page-nav" aria-label="称号タブの表示切り替え"><button type="button" aria-pressed="true" onclick="window.showTitlesPage(0)">称号</button><button type="button" aria-pressed="false" onclick="window.showTitlesPage(1)">ランキング</button></nav>
+            <div id="titlesPages" class="titles-pages">
+                <section id="titlesCollection" class="titles-page" aria-label="称号コレクション">
             <div class="card" style="border: 1.5px solid var(--cosmic-purple-light) !important; box-shadow: 0 0 15px rgba(192, 132, 252, 0.25) !important;">
                 <h2>🏅 称号進化コレクション進捗</h2>
                 <div style="font-size:12px; color:var(--text-sub); margin-bottom:6px;">総獲得数: <span id="title-progress-text" style="color:white; font-weight:bold;">0 / 0個</span></div>
@@ -423,7 +411,12 @@
                 </div>
                 <div style="font-size:11px; color:var(--text-sub); margin-top:8px;">現在装備中: <strong id="equipped-title-display" style="color:var(--word-so);">称号なし</strong></div>
             </div>
-            <div id="titles-list"></div>
+                    <div id="titles-list"></div>
+                </section>
+                <section class="titles-page" aria-label="ランキングページ">
+            <section id="leaderboardSection" class="card titles-ranking-section" aria-label="ランキング"><h2 id="titlesRankingHeading">ランキング</h2><div id="leaderboardContainer" style="display:flex;flex-direction:column;gap:4px;"></div></section>
+                </section>
+            </div>
         </div>
 
         <div id="view-study" class="tab-view">
@@ -876,7 +869,7 @@
 
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-      import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+      import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
       const firebaseConfig = {
         apiKey: "AIzaSyC19ImKVSr4_xWi3eGJbzmMFseePBDJxV8",
@@ -896,18 +889,20 @@
       window.fbCollection = collection;
       window.fbGetDocs = getDocs;
       window.fbDeleteDoc = deleteDoc;
+      window.fbRunTransaction = runTransaction;
     </script>
-    <script src="app.js?v=2.82" defer></script>
-    <script src="game_core.js?v=2.82" defer></script>
-    <script src="vocab_ui.js?v=2.82" defer></script>
-    <script src="reader.js?v=2.82" defer></script>
-    <script src="fix.js?v=2.82" defer></script>
-    <script src="multi.js?v=2.82" defer></script>
-    <script src="gacha.js?v=2.82" defer></script>
-    <script src="addon.js?v=2.82" defer></script>
-    <script src="library.js?v=2.82" defer></script>
-    <script src="workbook.js?v=2.82" defer></script>
-    <script src="shared-notes.js?v=2.82" defer></script>
-    <script src="study-time.js?v=2.82" defer></script>
+    <script src="library-state.js?v=2.92" defer></script>
+    <script src="app.js?v=2.92" defer></script>
+    <script src="game_core.js?v=2.92" defer></script>
+    <script src="vocab_ui.js?v=2.92" defer></script>
+    <script src="reader.js?v=2.92" defer></script>
+    <script src="fix.js?v=2.92" defer></script>
+    <script src="multi.js?v=2.92" defer></script>
+    <script src="gacha.js?v=2.92" defer></script>
+    <script src="addon.js?v=2.92" defer></script>
+    <script src="library.js?v=2.92" defer></script>
+    <script src="workbook.js?v=2.92" defer></script>
+    <script src="shared-notes.js?v=2.92" defer></script>
+    <script src="study-time.js?v=2.92" defer></script>
 </body>
 </html>

@@ -692,6 +692,11 @@
             var itemRow = document.createElement('div');
             itemRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px;";
             itemRow.innerHTML = '<input type="text" class="search-input inline-m-input-' + wordNum + '" style="margin:0; flex:1; height:36px;" value="' + window.escapeVocabText(m.text) + '"><button class="list-action-link" style="background:#EF4444; color:white; border:none; padding:0 10px; height:36px; display:flex; align-items:center;" onclick="window.removeInlineMeaningField(event, \'' + wordNum + '\', ' + index + ')"><i data-lucide="trash-2" size="14"></i></button>';
+            itemRow.querySelector('input').style.minWidth='0';
+            var posSelect=document.createElement('select');posSelect.className='inline-pos-input';posSelect.setAttribute('aria-label','意味'+(index+1)+'の品詞');
+            [['','品詞未設定'],['名','名詞'],['動','動詞'],['形','形容詞'],['形動','形容動詞'],['助詞','助詞'],['連','連体詞'],['副','副詞'],['前','前置詞'],['接','接続詞'],['代','代名詞'],['冠','冠詞'],['助','助動詞'],['間','間投詞']].forEach(function(item){var option=document.createElement('option');option.value=item[0];option.textContent=item[1];posSelect.appendChild(option);});
+            var registered=window.getFlashcardPartOfSpeech?window.getFlashcardPartOfSpeech(wEl,m):null;if(registered&&!Array.from(posSelect.options).some(function(option){return option.value===registered.short;})){var compound=document.createElement('option');compound.value=registered.short;compound.textContent=registered.name;posSelect.appendChild(compound);}posSelect.value=registered&&registered.short||'';
+            itemRow.insertBefore(posSelect,itemRow.lastElementChild);
             listContainer.appendChild(itemRow);
         });
         window.initLucide();
@@ -733,6 +738,7 @@
                 updatedMeanings.push({
                     id: oldM ? oldM.id : wordNum + '-' + idx + '-' + Date.now(),
                     text: txt,
+                    partOfSpeech: inp.parentElement.querySelector('.inline-pos-input').value,
                     status: oldM ? oldM.status : "none",
                     history: oldM ? oldM.history : []
                 });
@@ -741,6 +747,7 @@
         vocabList[wIdx].meanings = updatedMeanings;
         vocabList[wIdx].meaning = updatedMeanings.map(function(m, i) { return (updatedMeanings.length > 1 ? '①②③④⑤⑥⑦⑧⑨⑩' [i] + m.text : m.text); }).join("");
         window.saveVocabToStorage();
+        if(window.__captureManualVocabDraft)window.__captureManualVocabDraft();
         window.renderVocabList();
         alert("単語情報を更新しました！");
     };

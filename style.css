@@ -2259,3 +2259,17 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 
 .flashcard-part-of-speech { position:absolute; top:calc(50% + 132px); left:50%; transform:translateX(-50%); color:#d9d4c8; font:400 12px/1.4 "Yu Mincho","Hiragino Mincho ProN",serif; letter-spacing:.12em; pointer-events:none; }
 .flashcard-part-of-speech[hidden] { display:none; }
+/* Keep Latin digits on the baseline in mixed Japanese book names. */
+.textbook-list-name { font-family:"Noto Serif JP","Yu Mincho","Hiragino Mincho ProN",serif; font-variant-numeric:lining-nums tabular-nums; font-feature-settings:"lnum" 1,"tnum" 1; letter-spacing:normal; }
+.inline-pos-input { width:88px; flex:none; height:36px; margin:0 6px; padding:0 4px; border:1px solid var(--border); border-radius:8px; background:var(--input-bg); color:var(--text-main); font-size:11px; }
+#view-titles .titles-ranking-section { margin-top:24px; }
+#view-titles #crRankShell #leaderboardContainer { max-height:none; min-height:0; overflow:visible; }
+#view-titles { position:fixed; top:56px; bottom:60px; left:0; width:100vw; padding:16px; }
+#view-titles.active { display:flex; flex-direction:column; }
+.titles-page-nav { display:flex; gap:8px; flex:none; margin-bottom:14px; }
+.titles-page-nav button { border:1px solid rgba(192,132,252,.3); border-radius:20px; background:transparent; color:#cbd5e1; padding:8px 20px; cursor:pointer; font-size:12px; }
+.titles-page-nav button[aria-pressed="true"] { background:rgba(192,132,252,.18); color:#eee8da; border-color:var(--cosmic-purple-light); }
+.titles-pages { display:flex; flex:1; min-height:0; width:100%; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x mandatory; scrollbar-width:none; }
+.titles-pages::-webkit-scrollbar { display:none; }
+.titles-page { flex:0 0 100%; width:100%; min-width:0; height:100%; overflow-y:auto; scroll-snap-align:start; box-sizing:border-box; padding-bottom:12px; }
+#view-titles .titles-ranking-section { margin-top:0; }
