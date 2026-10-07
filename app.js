@@ -2144,89 +2144,17 @@ coverContainer.innerText = match.cover || "📔";
 if(typeof window.renderVocabList === 'function') window.renderVocabList();
 };
 // コミュニティ・ランキング表示の修正
-(function initCommunityAndBlockMock() {
-let startX = 0, startY = 0, currentX = 0, isDragging = false, isHorizontal = null, currentCommunityTab = 'ranking';
-const communityView = document.getElementById('view-community');
-function getAreas() {
-return {
-rankArea: document.getElementById('leaderboardSection') || document.getElementById('leaderboardContainer')?.parentElement,
-friendArea: document.getElementById('friendSection') || document.getElementById('friendListContainer')?.parentElement,
-tabRank: document.getElementById('tabBtnRank') || document.getElementById('btnCommunityRank'),
-tabFriend: document.getElementById('tabBtnFriend') || document.getElementById('btnCommunityFriend')
+// Rankings live in the titles tab; friends no longer have horizontal sub-pages.
+window.showTitlesPage=function(index){
+    var pages=document.getElementById('titlesPages');if(!pages)return;
+    var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    pages.scrollTo({left:pages.clientWidth*index,behavior:reduced?'auto':'smooth'});
+    document.querySelectorAll('.titles-page-nav button').forEach(function(button,i){button.setAttribute('aria-pressed',String(i===index));});
 };
-}
-if (communityView) {
-const style = document.createElement('style');
-style.innerHTML = `@keyframes slideInFromRight { 0% { opacity: 0; transform: translateX(50px); } 100% { opacity: 1; transform: translateX(0); } } @keyframes slideInFromLeft { 0% { opacity: 0; transform: translateX(-50px); } 100% { opacity: 1; transform: translateX(0); } } .slide-from-right { animation: slideInFromRight 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards; } .slide-from-left { animation: slideInFromLeft 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards; }`;
-document.head.appendChild(style);
-    communityView.addEventListener('touchstart', e => {
-         if (e.target.closest('#gameLeaderboardArea button') || e.target.closest('#lbBtnModeJa') || e.target.closest('#lbBtnModeEn') || e.target.closest('#lbBtnModeMix')) {
-             isDragging = false;
-             return;
-         }
-         startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-         isDragging = true; isHorizontal = null;
-         const { rankArea, friendArea } = getAreas();
-         if (rankArea) rankArea.style.transition = 'none';
-         if (friendArea) friendArea.style.transition = 'none';
-     }, { passive: true });
-     communityView.addEventListener('touchmove', e => {
-         if (!isDragging) return;
-         currentX = e.touches[0].clientX; let currentY = e.touches[0].clientY;
-         let diffX = currentX - startX, diffY = currentY - startY;
-         if (isHorizontal === null) {
-             if (Math.abs(diffX) > Math.abs(diffY)) isHorizontal = true; 
-             else { isHorizontal = false; isDragging = false; return; }
-         }
-         if (!isHorizontal) return;
-         const { rankArea, friendArea } = getAreas();
-         const activeArea = currentCommunityTab === 'ranking' ? rankArea : friendArea;
-         if ((currentCommunityTab === 'ranking' && diffX < 0) || (currentCommunityTab === 'friend' && diffX > 0)) diffX = diffX * 0.2; 
-         if (activeArea) {
-             activeArea.style.transform = `translateX(${diffX}px)`;
-             activeArea.style.opacity = 1 - (Math.abs(diffX) / window.innerWidth) * 1.5;
-         }
-     }, { passive: true });
-     communityView.addEventListener('touchend', e => {
-         if (!isDragging) { isHorizontal = null; return; }
-         isDragging = false; isHorizontal = null;
-         let diffX = currentX - startX;
-         const threshold = window.innerWidth * 0.15; 
-         const { rankArea, friendArea } = getAreas();
-         const activeArea = currentCommunityTab === 'ranking' ? rankArea : friendArea;
-         if (activeArea) activeArea.style.transition = 'all 0.25s cubic-bezier(0.25, 1, 0.5, 1)'; 
-         if (diffX > threshold && currentCommunityTab === 'ranking') {
-             if (activeArea) { activeArea.style.transform = `translateX(50px)`; activeArea.style.opacity = 0; }
-             setTimeout(() => window.switchCommunitySubTab('friend', 'left'), 100);
-         } else if (diffX < -threshold && currentCommunityTab === 'friend') {
-             if (activeArea) { activeArea.style.transform = `translateX(-50px)`; activeArea.style.opacity = 0; }
-             setTimeout(() => window.switchCommunitySubTab('ranking', 'right'), 100);
-         } else {
-             if (activeArea) { activeArea.style.transform = `translateX(0px)`; activeArea.style.opacity = 1; }
-         }
-     }, { passive: true });
- }
- window.switchCommunitySubTab = function(tabName, animDir = 'none') {
-     currentCommunityTab = tabName;
-     const { rankArea, friendArea, tabRank, tabFriend } = getAreas();
-     if (rankArea) { rankArea.style.transition = 'none'; rankArea.style.transform = 'translateX(0)'; rankArea.style.opacity = '1'; rankArea.classList.remove('slide-from-right', 'slide-from-left'); void rankArea.offsetWidth; }
-     if (friendArea) { friendArea.style.transition = 'none'; friendArea.style.transform = 'translateX(0)'; friendArea.style.opacity = '1'; friendArea.classList.remove('slide-from-right', 'slide-from-left'); void friendArea.offsetWidth; }
-     let animClass = animDir === 'right' ? 'slide-from-right' : animDir === 'left' ? 'slide-from-left' : '';
-     if (tabName === 'ranking') {
-         if (rankArea) { rankArea.style.display = 'block'; if (animClass) rankArea.classList.add(animClass); }
-         if (friendArea) friendArea.style.display = 'none';
-         if (tabRank) tabRank.classList.add('active');
-         if (tabFriend) tabFriend.classList.remove('active');
-         if(typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
-     } else if (tabName === 'friend') {
-         if (rankArea) { rankArea.style.display = 'none'; }
-         if (friendArea) { friendArea.style.display = 'block'; if (animClass) friendArea.classList.add(animClass); }
-         if (tabRank) tabRank.classList.remove('active');
-         if (tabFriend) tabFriend.classList.add('active');
-         if(typeof window.sortAndRenderFriendList === 'function') window.sortAndRenderFriendList();
-     }
- };
-})();
+var titlesPages=document.getElementById('titlesPages');
+if(titlesPages)titlesPages.addEventListener('scroll',function(){var index=Math.round(titlesPages.scrollLeft/Math.max(1,titlesPages.clientWidth));document.querySelectorAll('.titles-page-nav button').forEach(function(button,i){button.setAttribute('aria-pressed',String(i===index));});},{passive:true});
+window.switchCommunitySubTab=function(tabName){window.switchTab(tabName==='ranking'?'titles':'community');if(tabName==='ranking')window.showTitlesPage(1);};
+window.onTabChange(function(tabId){if(tabId==='titles')window.renderLeaderboard();});
 // ==========================================================================
 // 📦 統合機能パッチ（アプリ内完結版）
 // ==========================================================================
@@ -2252,9 +2180,12 @@ window.buildWordSignature = function(w) {
 window.stripVocabProgressFromWords = function(words) {
   return (words || []).map(function(w) {
     var clean = { num: w.num, word: w.word, meaning: w.meaning || "", sub: w.sub || "" };
+    if(w.partOfSpeech||w.pos)clean.partOfSpeech=String(w.partOfSpeech||w.pos);
     if (Array.isArray(w.meanings) && w.meanings.length > 0) {
       clean.meanings = w.meanings.map(function(m, i) {
-        return { id: m.id || (String(w.num) + "-" + i), text: m.text || "" };
+        var meaning={ id: m.id || (String(w.num) + "-" + i), text: m.text || "" };
+        if(m.partOfSpeech||m.pos)meaning.partOfSpeech=String(m.partOfSpeech||m.pos);
+        return meaning;
       });
     }
     return clean;
@@ -2293,7 +2224,7 @@ window.applyUserProgressToVocabList = function() {
     w.status = "none";
     w.history = [];
     w.meanings = (w.meanings || []).map(function(m) {
-      return { id: m.id, text: m.text, status: "none", history: [] };
+      return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status: "none", history: [] };
     });
     if (p && p.sig === window.buildWordSignature(w)) {
       w.status = p.status || "none";
@@ -2301,7 +2232,7 @@ window.applyUserProgressToVocabList = function() {
       w.meanings = w.meanings.map(function(m) {
         var mp = p.meanings ? p.meanings[m.id] : null;
         if (mp) {
-          return { id: m.id, text: m.text, status: mp.status || "none", history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
+          return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status: mp.status || "none", history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
         }
         return m;
       });
@@ -2396,6 +2327,7 @@ window.__vocabRenderTimer = null;
 
 // 理解度は通信を待たず、先に端末へ保存する。
 window.saveVocabProgressLocally = function(wordNum, skipDirtyMark) {
+  if(window.LibraryState&&window.LibraryState.isDeleted('book',currentTextbook||'default'))return;
   if (typeof myId === "undefined" || !myId || typeof window.extractUserProgressFromVocabList !== "function") return;
   var bookKey = currentTextbook || "default";
   var progress = window.extractUserProgressFromVocabList();
@@ -2662,6 +2594,7 @@ window.loadCurrentTextbookData = async function(options) {
   let storedWords = [];
   const bookKey = currentTextbook || "default";
   const uid = (typeof myId !== "undefined" && myId) ? myId : "GUEST-000";
+  if(window.LibraryState&&window.LibraryState.isDeleted('book',bookKey,uid))return;
   const currentLocalKey = "core_v4_custom_words_" + uid + "_" + bookKey;
   if (textbooksCacheMap[bookKey]) {
     storedWords = textbooksCacheMap[bookKey];
@@ -5452,13 +5385,13 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
     var key = String(w.num);
     var p = progress[key];
     w.status = 'none'; w.history = [];
-    w.meanings = (w.meanings||[]).map(function(m){ return {id:m.id, text:m.text, status:'none', history:[]}; });
+    w.meanings = (w.meanings||[]).map(function(m){ return {id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:'none', history:[]}; });
     if (p && p.sig === window.buildWordSignature(w)) {
       w.status = p.status || 'none';
       w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
       w.meanings = w.meanings.map(function(m){
         var mp = p.meanings ? p.meanings[m.id] : null;
-        if (mp) return {id:m.id, text:m.text, status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[]};
+        if (mp) return {id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[]};
         return m;
       });
     }
@@ -5853,13 +5786,13 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
     var key = String(w.num);
     var p = progress[key];
     w.status = 'none'; w.history = [];
-    w.meanings = (w.meanings || []).map(function(m){ return { id:m.id, text:m.text, status:'none', history:[] }; });
+    w.meanings = (w.meanings || []).map(function(m){ return { id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:'none', history:[] }; });
     if (p && p.sig === window.buildWordSignature(w)) {
       w.status = p.status || 'none';
       w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
       w.meanings = w.meanings.map(function(m){
         var mp = p.meanings ? p.meanings[m.id] : null;
-        if (mp) return { id:m.id, text:m.text, status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[] };
+        if (mp) return { id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[] };
         return m;
       });
     }
@@ -6405,13 +6338,13 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
     var key = String(w.num);
     var p = progress[key];
     w.status = 'none'; w.history = [];
-    w.meanings = (w.meanings || []).map(function(m){ return { id:m.id, text:m.text, status:'none', history:[] }; });
+    w.meanings = (w.meanings || []).map(function(m){ return { id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:'none', history:[] }; });
     if (p && p.sig === sig(w)) {
       w.status = p.status || 'none';
       w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
       w.meanings = w.meanings.map(function(m){
         var mp = p.meanings ? p.meanings[m.id] : null;
-        if (mp) return { id:m.id, text:m.text, status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[] };
+        if (mp) return { id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[] };
         return m;
       });
     }
@@ -6649,13 +6582,13 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
     w.note = p && typeof p.note === 'string' ? p.note : '';
     w.status = 'none';
     w.history = [];
-    w.meanings = (w.meanings || []).map(function(m) { return { id: m.id, text: m.text, status: 'none', history: [] }; });
+    w.meanings = (w.meanings || []).map(function(m) { return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status: 'none', history: [] }; });
     if (p && p.sig === sig(w)) {
       w.status = p.status || 'none';
       w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
       w.meanings = w.meanings.map(function(m) {
         var mp = p.meanings ? p.meanings[m.id] : null;
-        if (mp) return { id: m.id, text: m.text, status: mp.status || 'none', history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
+        if (mp) return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status: mp.status || 'none', history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
         return m;
       });
     }
@@ -7827,7 +7760,7 @@ window.loadUserVocabProgress = async function(bookKey) {
         var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
         var snap = await window.fbGetDoc(ref);
         // ログアウト・別ユーザーへのログイン後に旧ユーザーの応答を保存しない。
-        if (myId !== requestUserId) return;
+        if (myId !== requestUserId || (window.LibraryState&&window.LibraryState.isDeleted('book',bookKey,requestUserId))) return;
         // 通信待ちの間に理解度が変更された可能性があるため、必ず最新の端末値を再取得する。
         var latestLocalProgress = localProgress;
         var latestLocalTs = localTs;
@@ -7859,8 +7792,8 @@ window.loadUserVocabProgress = async function(bookKey) {
                         var writeBackMs = Math.max(latestLocalTs, Date.now());
                         var wpayload = { wordsJson: JSON.stringify(latestLocalProgress), updatedAt: new Date(writeBackMs).toISOString() };
                         var wsafe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(wpayload) : wpayload;
-                        if (typeof window.fbSetDocWithRetry === "function") window.fbSetDocWithRetry(wref, wsafe);
-                        else window.fbSetDoc(wref, wsafe);
+                        if (typeof window.fbSetDocWithRetry === "function") await window.fbSetDocWithRetry(wref, wsafe);
+                        else await window.fbSetDoc(wref, wsafe);
                     } catch (e) {}
                 }
             }
@@ -9145,24 +9078,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     // 【7】セレクターUI（スワイプ式ピル）
     // ------------------------------------------------------------------
-    window.__findCommunityRankHeading = function() {
-        var section = document.getElementById('leaderboardSection');
-        if (!section) return null;
-        var candidates = section.querySelectorAll('h1, h2, h3, h4, div, span, p');
-        for (var i = 0; i < candidates.length; i++) {
-            var el = candidates[i];
-            var txt = el.textContent || '';
-            if (txt.indexOf('EXPランキング') !== -1) {
-                var children = el.querySelectorAll('h1,h2,h3,h4,div,span,p');
-                var hasChildWithText = false;
-                for (var j = 0; j < children.length; j++) {
-                    if ((children[j].textContent || '').indexOf('EXPランキング') !== -1) { hasChildWithText = true; break; }
-                }
-                if (!hasChildWithText) return el;
-            }
-        }
-        return null;
-    };
+    window.__findCommunityRankHeading = function() {return document.getElementById('titlesRankingHeading');};
 
     window.injectCommunityRankingUI = function() {
         var container = document.getElementById('leaderboardContainer');
@@ -9367,7 +9283,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         st.id = 'communityRankFinishCss';
         st.textContent = [
             // 外側の元カードを“器”だけにして透明化（内側の2枠を目立たせる）
-            '#view-community .cr-outer-shell{background:transparent !important;border:none !important;box-shadow:none !important;padding:0 !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}',
+            '#view-titles .cr-outer-shell{background:transparent !important;border:none !important;box-shadow:none !important;padding:0 !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}',
             // 選択エリアの枠（シアン発光）
             '#crSelectShell{border:1px solid rgba(0,240,255,0.32);background:rgba(7,11,25,0.5);border-radius:14px;padding:12px 12px 10px;margin-bottom:12px;box-shadow:0 0 16px rgba(0,240,255,0.12), inset 0 0 18px rgba(0,240,255,0.06);}',
             '#crSelectShell > *{margin-top:0;}',

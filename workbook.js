@@ -73,11 +73,11 @@
     function load() {
         const raw = JSON.parse(localStorage.getItem(key()) || '[]');
         if (!Array.isArray(raw)) throw new Error('ワーク一覧を読み込めませんでした。');
-        return raw.map(migrate);
+        return raw.filter(work=>!(window.LibraryState&&window.LibraryState.isDeleted('work',work.id))).map(migrate);
     }
     function save(works) {
         // Write immediately; an old integrated save must never replace a newer answer.
-        localStorage.setItem(key(), JSON.stringify(works));
+        localStorage.setItem(key(), JSON.stringify(works.filter(work=>!(window.LibraryState&&window.LibraryState.isDeleted('work',work.id)))));
         localStorage.setItem(stampKey(), String(Date.now()));
     }
     function current() { return load().find(w => w.id === activeId); }
@@ -144,6 +144,7 @@
     }
     function cloud() { return !!(window.db && window.fbDoc && window.fbSetDoc && window.fbGetDocs && window.fbCollection); }
     async function publish(work, previous, owner) {
+        if(window.LibraryState&&window.LibraryState.isDeleted('work',work.id,owner))throw new Error('このワークは削除済みです。');
         if (work.visibility === 'public') {
             if (owner === 'GUEST-000') throw new Error('みんなに公開するにはログインしてください。');
             if (!cloud()) throw new Error('公開先に接続できません。「自分だけ」で保存するか、接続後にお試しください。');
@@ -156,6 +157,7 @@
         }
     }
     function put(work) {
+        if(window.LibraryState&&window.LibraryState.isDeleted('work',work.id))throw new Error('このワークは削除済みです。');
         const works = load(), index = works.findIndex(w => w.id === work.id);
         if (index >= 0) works[index] = work; else works.push(work);
         save(works);
@@ -257,6 +259,7 @@
                 if (changed) work.units.forEach(u => schedule(work, u, Date.now(), false));
                 await publish(work, previous, owner);
                 if (owner !== uid()) throw new Error('ユーザーが切り替わりました。開き直してください。');
+                if(window.LibraryState&&window.LibraryState.isDeleted('work',work.id,owner)){if(work.visibility==='public'&&window.fbDeleteDoc)await window.fbDeleteDoc(window.fbDoc(window.db,'publicWorkbooks',work.id));throw new Error('このワークは削除済みです。');}
                 put(work); close(); repaint();
             } catch (error) { form.querySelector('.library-editor-error').textContent = error.message; }
             finally { submit.disabled = false; }
@@ -461,18 +464,18 @@
     }
     function openActions(id) {
         const work = load().find(w => w.id === id); if (!work) return;
-        const modal = dialog(work.name, '<div class="library-editor-actions library-editor-actions-stack"><button id="workbookEdit" type="button">名前・表紙・復習設定 / 問題を追加</button><button id="workbookBackup" type="button">JSONバックアップを保存</button><button id="workbookDelete" type="button" class="library-editor-danger">ワークを削除</button><button type="button" data-library-close>閉じる</button></div>');
+        const modal = dialog(work.name, '<div class="library-editor-actions library-editor-actions-stack"><button id="workbookEdit" type="button">名前・表紙・復習設定 / 問題を追加</button><button id="workbookBackup" type="button">JSONバックアップを保存</button><button id="workbookDelete" type="button" class="library-editor-danger">ワークを完全削除</button><button type="button" data-library-close>閉じる</button></div>');
         modal.querySelector('#workbookEdit').onclick = () => window.openWorkbookEditor(id);
         modal.querySelector('#workbookBackup').onclick = () => {
             const blob = new Blob([JSON.stringify(work.units, null, 2)], {type: 'application/json'}), url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'workbook-backup.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
         };
         modal.querySelector('#workbookDelete').onclick = () => {
-            const owner = uid(); const confirmDialog = dialog('「' + work.name + '」を削除しますか？', '<p class="library-editor-hint">このワークの問題と学習記録を削除します。公開している場合は公開一覧からも取り消します。他の人のコピーは残ります。</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="workbookConfirmDelete" class="library-editor-danger">削除する</button></div>');
+            const owner = uid(); const confirmDialog = dialog('「' + work.name + '」を完全削除しますか？', '<p class="library-editor-hint">このワークの問題と学習記録を、保存済みセーブからも完全に削除します。公開している場合は公開一覧からも取り消します。他の人のコピーは残ります。</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="workbookConfirmDelete" class="library-editor-danger">完全削除する</button></div>');
             confirmDialog.querySelector('#workbookConfirmDelete').onclick = async function () {
                 if (this.disabled) return; this.disabled = true;
                 try {
                     if (owner !== uid()) throw new Error('ユーザーが切り替わりました。開き直してください。');
-                    await publish({id, visibility: 'private'}, work, owner);
+                    await window.eraseLibraryItem(id,work,'work');
                     if (owner !== uid()) throw new Error('ユーザーが切り替わりました。開き直してください。');
                     save(load().filter(w => w.id !== id)); close(); window.showVocabLibrarySelection();
                 } catch (error) {confirmDialog.querySelector('.library-editor-error').textContent = error.message; this.disabled = false;}
@@ -517,4 +520,5 @@
     // Exposed pure operations support storage/review validation without Firebase writes.
     window.WorkbookModel = {policy, dateTime, addDays, cleanUnit, migrate, mark, schedule, isDue, importUnits, publicContent};
     ensureScreen(); window.renderVocabLibrarySelection();
+    window.addEventListener('storage',event=>{if(window.LibraryState&&event.key===window.LibraryState.storageKey(uid())){if(activeId&&window.LibraryState.isDeleted('work',activeId))window.showVocabLibrarySelection();repaint();}});
 })();

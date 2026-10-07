@@ -8,14 +8,16 @@
         if (!raw) return { books: [], hidden: [] };
         var data = JSON.parse(raw);
         if (!data || !Array.isArray(data.books) || !Array.isArray(data.hidden)) throw new Error('単語帳一覧を読み込めませんでした。再読み込みしてください。');
+        if(window.LibraryState)data.books=data.books.filter(function(book){return !window.LibraryState.isDeleted('book',book.id);});
         return data;
     }
     function refreshPool() {
         var data = readLibrary();
-        var shared = textbooksPool.filter(function(book) { return !book.personal; });
+        var shared = textbooksPool.filter(function(book) { return !book.personal && !(window.LibraryState&&window.LibraryState.isDeleted('book',book.id)); });
         textbooksPool = shared.filter(function(book) { return data.hidden.indexOf(book.id) < 0; }).concat(data.books.filter(function(book){return data.hidden.indexOf(book.id)<0;}));
     }
     function persist(data) {
+        if(window.LibraryState)data.books=data.books.filter(function(book){return !window.LibraryState.isDeleted('book',book.id);});
         data.savedAt = new Date().toISOString();
         localStorage.setItem(key(), JSON.stringify(data));
         refreshPool();
@@ -41,11 +43,28 @@
         window.saveVocabProgressLocally();
         window.__captureManualVocabDraft();
     };
+    ['saveVocabToStorage','saveUserVocabProgress','saveVocabMasterToStorage'].forEach(function(name){
+        var original=window[name];
+        window[name]=function(){
+            if(!currentTextbook&&vocabList.length===0)return Promise.resolve(false);
+            if(window.LibraryState&&window.LibraryState.isDeleted('book',currentTextbook||'default'))return Promise.resolve(false);
+            var owner=userId(),self=this,args=arguments;
+            return window.LibraryState?window.LibraryState.track(owner,function(){return original.apply(self,args);}):original.apply(self,args);
+        };
+    });
+    var originalProgressLoad=window.loadUserVocabProgress;
+    window.loadUserVocabProgress=function(bookKey){
+        bookKey=bookKey||currentTextbook||'default';
+        if(window.LibraryState&&window.LibraryState.isDeleted('book',bookKey))return Promise.resolve(false);
+        var owner=userId(),self=this;
+        return window.LibraryState?window.LibraryState.track(owner,function(){return originalProgressLoad.call(self,bookKey);}):originalProgressLoad.call(self,bookKey);
+    };
     var dialog = null;
     var opener = null;
     function cloudAvailable() { return !!(window.db && window.fbDoc && window.fbSetDoc && window.fbGetDocs && window.fbCollection); }
     function publicRef(id) { return window.fbDoc(window.db, 'publicTextbooks', id); }
     async function publish(record, master, previous) {
+        if(window.LibraryState&&window.LibraryState.isDeleted('book',record.id))throw new Error('この単語帳は削除済みです。');
         if (record.visibility === 'public') {
             if (userId() === 'GUEST-000') throw new Error('みんなに公開するにはログインしてください。自分だけの単語帳はゲストでも作れます。');
             if (!cloudAvailable()) throw new Error('公開先に接続できません。「自分だけ」で保存するか、接続後にもう一度お試しください。');
@@ -124,6 +143,7 @@
                 var record = { id: id, name: name, cover: cover || '📔', coverType: cover ? 'image' : 'text', personal: true, visibility: form.querySelector('#libraryBookVisibility').value };
                 await publish(record, master, book);
                 if (userId() !== editorUserId) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
+                if(window.LibraryState&&window.LibraryState.isDeleted('book',id)){if(record.visibility==='public'&&window.fbDeleteDoc)await window.fbDeleteDoc(publicRef(id));throw new Error('この単語帳は削除済みです。');}
                 var data = readLibrary();
                 var index = data.books.findIndex(function(item) { return item.id === id; });
                 if (index < 0) data.books.push(record); else data.books[index] = record;
@@ -150,7 +170,8 @@
         var progress=window.getVocabProgressStorageKey(id);
         return ['core_v4_custom_words_'+userId()+'_'+id,'core_v4_cache_'+id,'core_v4_user_vocab_book_'+userId()+'_'+id,window.__manualVocabLocalKey(id),progress,progress+'__ts'];
     }
-    function scrubSave(save,id) {
+    function scrubSave(save,id,kind,owner) {
+        if(window.LibraryState)return window.LibraryState.sanitizeSave(save,owner||userId());
         var data=save.data||save, storage=data.localStorage||{}, memory=data.memory||{};
         bookStorageKeys(id).forEach(function(k){delete storage[k];});
         if(storage[key()]){var library=JSON.parse(storage[key()]);library.books=library.books.filter(function(b){return b.id!==id;});if(library.hidden.indexOf(id)<0)library.hidden.push(id);library.savedAt=new Date().toISOString();storage[key()]=JSON.stringify(library);}
@@ -160,10 +181,13 @@
         if(storage.core_v4_current_textbook_id===id)storage.core_v4_current_textbook_id='';
         return save;
     }
-    async function eraseBook(id,book) {
+    async function eraseBook(id,book,kind) {
+        kind=kind||'book';
         var uid=userId();
+        if(window.LibraryState){await window.LibraryState.mark(kind,id,book,uid);await window.LibraryState.waitForWrites(uid);}
+
         var localSaves=[];
-        for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k.startsWith('save_studio_'+uid+'_'))localSaves.push([k,JSON.stringify(scrubSave(JSON.parse(localStorage.getItem(k)),id))]);}
+        for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k.startsWith('save_studio_'+uid+'_'))localSaves.push([k,JSON.stringify(scrubSave(JSON.parse(localStorage.getItem(k)),id,kind,uid))]);}
         if(uid!=='GUEST-000') {
             if(!cloudAvailable()||!window.fbDeleteDoc)throw new Error('完全削除にはクラウド接続が必要です。接続後に再度お試しください。');
             var saves=await window.fbGetDocs(window.fbCollection(window.db,'users',uid,'saves'));
@@ -175,28 +199,66 @@
                     snapshot.forEach(function(p){parts.push(p);});
                     for(var n=0;n<meta.partCount;n++){var part=parts.find(function(p){return p.id===(meta.generation?meta.generation+'_p'+n:'p'+n);});if(!part)throw new Error('古いセーブの読み込みに失敗しました。削除を中止しました。');raw+=part.data().d;}
                     if((meta.rawLength!=null&&meta.rawLength!==raw.length)||(meta.checksum&&meta.checksum!==window.__gameSaveChecksum(raw)))throw new Error('古いセーブを検証できません。削除を中止しました。');
-                    var clean=JSON.stringify(scrubSave(JSON.parse(raw),id));var generation='delete_'+crypto.randomUUID(),chunks=[];
+                    var clean=JSON.stringify(scrubSave(JSON.parse(raw),id,kind,uid));var generation='delete_'+crypto.randomUUID(),chunks=[];
                     for(var offset=0;offset<clean.length;offset+=280000)chunks.push(clean.slice(offset,offset+280000));
                     for(var p=0;p<chunks.length;p++)await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id,'parts',generation+'_p'+p),{d:chunks[p]},{merge:false});
                     await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),Object.assign({},meta,{generation:generation,partCount:chunks.length,rawLength:clean.length,checksum:window.__gameSaveChecksum(clean)}),{merge:false});
                     for(var old of parts)await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id,'parts',old.id));
-                }else if(meta.data){await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),scrubSave(meta,id),{merge:false});}
+                }else if(meta.data){await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),scrubSave(meta,id,kind,uid),{merge:false});}
             }
+            if(kind==='book'){
             var cloudId=window.__manualVocabCloudId(id);
             var bookParts=await window.fbGetDocs(window.fbCollection(window.db,'users',uid,'vocabBooks',cloudId,'parts'));
             var refs=[];bookParts.forEach(function(p){refs.push(window.fbDoc(window.db,'users',uid,'vocabBooks',cloudId,'parts',p.id));});
             for(var ref of refs)await window.fbDeleteDoc(ref);
             await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'vocabBooks',cloudId));
             await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'vocabProgress',id));
-            if(book.personal&&book.visibility==='public')await publish({id:id,visibility:'private'},[],book);
+            if(book.personal)await window.fbDeleteDoc(window.fbDoc(window.db,'publicTextbooks',id));
+            }else{
+                var publicWorkRef=window.fbDoc(window.db,'publicWorkbooks',id);
+                if(window.fbGetDoc){var publicWork=await window.fbGetDoc(publicWorkRef);if(publicWork&&publicWork.exists()&&publicWork.data().ownerId===uid)await window.fbDeleteDoc(publicWorkRef);}
+                else if(book.visibility==='public')await window.fbDeleteDoc(publicWorkRef);
+                // Legacy workbooks were published in a shared array. Remove only this owner's entry atomically.
+                if(window.fbRunTransaction){
+                    var legacyRef=window.fbDoc(window.db,'public_works','all');
+                    await window.fbRunTransaction(window.db,async function(transaction){
+                        var legacy=await transaction.get(legacyRef);if(!legacy.exists()||!legacy.data().worksJson)return;
+                        var records=JSON.parse(legacy.data().worksJson);if(!Array.isArray(records))throw new Error('従来の公開ワーク一覧を確認できませんでした。');
+                        var kept=records.filter(function(record){return !(record.id===id&&record.sharedBy===uid);});
+                        if(kept.length!==records.length)transaction.set(legacyRef,{worksJson:JSON.stringify(kept),updatedAt:Date.now()},{merge:true});
+                    });
+                }
+            }
+
         }
         if(userId()!==uid)throw new Error('ユーザーが切り替わりました。開き直してください。');
-        if(window.__pendingGameSaveMemory&&window.__pendingGameSaveMemory.id===uid)scrubSave({memory:window.__pendingGameSaveMemory.data},id);
+        if(window.__pendingGameSaveMemory&&window.__pendingGameSaveMemory.id===uid)scrubSave({memory:window.__pendingGameSaveMemory.data},id,kind,uid);
         localSaves.forEach(function(save){localStorage.setItem(save[0],save[1]);});
-        bookStorageKeys(id).forEach(function(k){localStorage.removeItem(k);});
-        [textbooksCacheMap,window.__manualVocabDrafts,window.__dirtyManualVocabDrafts,window.__manualVocabDraftRevisions,window.__dirtyVocabProgress].forEach(function(map){if(map)delete map[id];});
+        if(kind==='book')bookStorageKeys(id).forEach(function(k){localStorage.removeItem(k);});
+        if(kind==='book')[textbooksCacheMap,window.__manualVocabDrafts,window.__dirtyManualVocabDrafts,window.__manualVocabDraftRevisions,window.__dirtyVocabProgress].forEach(function(map){if(map)delete map[id];});
+        if(window.LibraryState){window.LibraryState.cleanLocal(uid);await window.LibraryState.complete(kind,id,uid);}
     }
 
+    window.eraseLibraryItem=eraseBook;
+    var retrying=false;
+    async function retryPendingDeletions(){
+        if(retrying||!window.LibraryState)return;retrying=true;
+        try{var owner=userId();await window.LibraryState.loadCloud(owner);if(userId()!==owner)return;for(var item of Object.values(window.LibraryState.read(owner))){if(userId()!==owner)return;if(item.pending)await eraseBook(item.id,item.metadata,item.kind);}window.LibraryState.cleanLocal(owner);}
+        catch(e){console.warn('削除の同期は接続後に再試行します',e);}
+        finally{retrying=false;}
+    }
+    setInterval(function(){if(window.LibraryState&&Object.values(window.LibraryState.read()).some(function(item){return item.pending;}))retryPendingDeletions();},30000);
+    function applyDeletionVisibility(){
+        if(!window.LibraryState)return;
+        if(currentTextbook&&window.LibraryState.isDeleted('book',currentTextbook)){
+            var play=document.getElementById('flashcard-play-screen');if(play&&play.style.display!=='none'&&window.finishFlashcardSession)window.finishFlashcardSession();
+            currentTextbook='';vocabList=[];currentUserVocabProgress={};localStorage.setItem('core_v4_current_textbook_id','');window.showVocabLibrarySelection();
+        }
+        refreshPool();window.renderVocabLibrarySelection();
+    }
+    window.addEventListener('storage',function(event){if(window.LibraryState&&event.key===window.LibraryState.storageKey(userId()))applyDeletionVisibility();});
+    window.addEventListener('online',retryPendingDeletions);
+    window.onAppLoaded(retryPendingDeletions);
     window.openLibraryBookActions = function(bookId) {
         var actionUserId = userId();
         var book = textbooksPool.find(function(item) { return item.id === bookId; }) || readLibrary().books.find(function(item) { return item.id === bookId; });
@@ -220,7 +282,7 @@
                 remove.textContent = permanent ? '削除中…' : '変更中…';
                 try {
                     if (userId() !== actionUserId) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
-                    if (permanent) await eraseBook(bookId,book);
+                    if (permanent) await eraseBook(bookId,Object.assign({},book,{personal:own}));
                     if (userId() !== actionUserId) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
                     var data = readLibrary();
                     if(permanent)data.books = data.books.filter(function(item) { return item.id !== bookId; });
@@ -275,7 +337,7 @@
                     try {
                         var id = 'personal_' + crypto.randomUUID();
                         var clean = master.map(function(word, index) {
-                            return {num:index+1,word:word.word,meaning:word.meaning,sub:typeof word.sub==='string'?word.sub:'',meanings:(Array.isArray(word.meanings)&&word.meanings.length?word.meanings:[{text:word.meaning}]).map(function(meaning, i){return {id:(index+1)+'-'+i,text:String(meaning.text||'')};})};
+                            return {num:index+1,word:word.word,meaning:word.meaning,sub:typeof word.sub==='string'?word.sub:'',meanings:(Array.isArray(word.meanings)&&word.meanings.length?word.meanings:[{text:word.meaning}]).map(function(meaning, i){return {id:(index+1)+'-'+i,text:String(meaning.text||''),partOfSpeech:String(meaning.partOfSpeech||meaning.pos||word.partOfSpeech||word.pos||'')};})};
                         });
                         var draft = {master:clean,progress:{},savedAt:new Date().toISOString()};
                         localStorage.setItem('core_v4_custom_words_' + userId() + '_' + id, JSON.stringify(clean));
