@@ -6437,6 +6437,11 @@ async function autoLoadOnce() {
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
     for(var key in stored){
+      if(key==='aiglish_ranking_device')continue; // Device counters must keep this browser's identity.
+      if(key==='core_v4_learning_ranking_'+id&&window.LearningRankingModel){
+        try{localStorage.setItem(key,JSON.stringify(window.LearningRankingModel.merge(JSON.parse(localStorage.getItem(key)||'null'),JSON.parse(stored[key]||'null'))));}catch(e){}
+        continue;
+      }
       if(window.LibraryState&&key===window.LibraryState.storageKey(id)){localStorage.setItem(key,JSON.stringify(window.LibraryState.merge(window.LibraryState.read(id),JSON.parse(stored[key]))));continue;}
       // 理解度は回答のたびに専用領域へ即時保存される。統合セーブはそれより古い
       // 場合があるため、ここで一括復元するとタスクキル後に回答が消えてしまう。

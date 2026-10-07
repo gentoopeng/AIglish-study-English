@@ -624,6 +624,8 @@
         }
         if (typeof userStats !== 'undefined') {
             userStats.flash_count = (userStats.flash_count || 0) + 1;
+            if (window.recordRankedSwipe) window.recordRankedSwipe();
+            if (vocabMatch && window.recordRankedWord) window.recordRankedWord(currentTextbook, vocabMatch.num);
             userStats.vocab_fixed = (typeof vocabList !== 'undefined') ? vocabList.filter(function(w) { return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; }); }).length : 0;
         }
         // 次のカードを最初に表示する。単語帳全体の再描画やランキング更新を
@@ -653,6 +655,7 @@
         flashcardLearnedCount = previous.learnedCount;
         if (previous.totalExp !== null && typeof totalExp !== 'undefined') totalExp = previous.totalExp;
         if (previous.flashCount !== null && typeof userStats !== 'undefined') userStats.flash_count = previous.flashCount;
+        if (window.syncRankingMetrics) window.syncRankingMetrics(); // Swipes remain counted when going back.
         if (typeof wordMemory !== 'undefined') {
             if (previous.previousMemory === undefined) delete wordMemory[previous.cleanKey];
             else wordMemory[previous.cleanKey] = previous.previousMemory;

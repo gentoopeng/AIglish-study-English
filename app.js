@@ -1442,7 +1442,6 @@ if (myFriendList.length === 0) {
                      <span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
 
                  </div>
-                 <div style="font-size:10px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">${f.title}</div>
                  <div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">
                      <span>⏱️ 勉強時間: <strong style="color:white;">${f.studyTime}分</strong></span>
                      <span>🔑 ID: ${f.code}</span>
@@ -1472,7 +1471,7 @@ await window.saveUserStats();
 window.saveSidebarProfile = async function() {
 geminiApiKey = document.getElementById('sidebarApiKeyInput').value.trim(); localStorage.setItem('core_v4_geminiKey', geminiApiKey);
 myName = document.getElementById('sideInputName').value.trim() || myName; myTarget = document.getElementById('sideInputTarget').value.trim() || myTarget;
-selectedTitle = document.getElementById('sideSelectTitle').value;
+selectedTitle = ''; // Titles are retired.
 localStorage.setItem('core_v4_userName', myName);
  localStorage.setItem('core_v4_userTarget', myTarget);
  localStorage.setItem('core_v4_userTitle', selectedTitle);
@@ -5203,7 +5202,6 @@ window.sortAndRenderFriendList = function() {
             '<span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.name + '</span>' +
             '' +
           '</div>' +
-          '<div style="font-size:10px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">' + f.title + '</div>' +
           '<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">' +
             '' +
             '<span>🔑 ID: ' + f.code + '</span>' +
@@ -7845,7 +7843,6 @@ window.sortAndRenderFriendList = function() {
             '<span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.name + '</span>' +
             '' +
             '</div>' +
-            '<div style="font-size:10px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">' + f.title + '</div>' +
             '<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">' +
             '' +
             '<span>🔑 ID: ' + f.code + '</span>' +
@@ -8358,7 +8355,7 @@ window.__USAGE_GUIDE_SECTIONS = [
         icon: 'users', title: '👥 フレンド',
         html: '<p>相手の<strong>IDコード</strong>で検索・追加して、修行仲間とつながります。</p>' +
               '<ul><li>並び替えは「最終ログイン順」。</li>' +
-              '<li>画面を<strong>左右スワイプ</strong>すると、フレンド一覧とランキングが切り替わります。</li>' +
+              '<li><strong>ランキングタブ</strong>で全ユーザーの学習記録を確認できます。</li>' +
               '<li><strong>🔄 最新情報に更新</strong>で、相手のプロフィールやログイン時刻をクラウドから再取得。</li></ul>'
     },
     {
@@ -8369,18 +8366,16 @@ window.__USAGE_GUIDE_SECTIONS = [
               '<li>設定で<strong>出題する教材</strong>と<strong>方向（英→和／和→英）</strong>を選べます。</li></ul>'
     },
     {
-        icon: 'award', title: '🏅 称号コレクション',
-        html: '<p>さまざまな課題を達成して称号を解放し、プロフィールに<strong>装備</strong>できます。</p>' +
-              '<ul><li>進化称号は<strong>5段階</strong>。達成するほどレアリティが上がります。</li>' +
-              '<li>条件を満たすと<strong>特別称号</strong>や<strong>シーズン称号</strong>も解放。</li>' +
-              '<li>段階が進むごとに称号が解放されます。</li></ul>'
+        icon: 'medal', title: '🏅 ランキング',
+        html: '<p>合計勉強時間、理解度を付けた単語数、フラッシュのスワイプ数を切り替えて確認できます。</p>' +
+              '<p>上位3名の表彰台をタップすると、それぞれの学習記録が開きます。</p>'
     },
     {
         icon: 'cloud', title: '💾 保存と同期',
         html: '<p>あなたのデータは<strong>端末</strong>と<strong>クラウド</strong>の両方に保存されます。</p>' +
               '<ul><li>同じIDでログインすれば、<strong>別の端末でも続きから</strong>再開できます。</li>' +
               '<li>右上の <strong>💾 ボタン</strong>で手動保存。大事な進捗はこまめに保存を。</li>' +
-              '<li>理解度・称号・設定類は、できるだけ<strong>新しい方が優先</strong>されるよう同期されます。</li></ul>'
+              '<li>理解度・学習記録・設定類は、できるだけ<strong>新しい方が優先</strong>されるよう同期されます。</li></ul>'
     }
 ];
 

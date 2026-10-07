@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="2.92">
+    <meta name="application-version" content="3.02">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=2.92">
-    <link rel="stylesheet" href="gacha.css?v=2.92">
+    <link rel="stylesheet" href="style.css?v=3.02">
+    <link rel="stylesheet" href="gacha.css?v=3.02">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -128,13 +128,7 @@
                 <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">🎯 現在の学習目標</div>
                 <input type="text" id="sideInputTarget" class="search-input" style="height:34px; margin-bottom:8px; font-size:12px;" placeholder="目標を入力">
                 
-                <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">🏅 称号の変更</div>
-                <select id="sideSelectTitle" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px; background:var(--input-bg); color:white;">
-                    <option value="称号なし">称号なし</option>
-                    <option value="単語の探求者">単探求者</option>
-                    <option value="シスタマスター">シスタマスター</option>
-                    <option value="解読の達人">解読 of 達人</option>
-                </select>
+
 
                 <div style="font-size: 11px; font-weight:700; color:var(--accent); margin-top:4px; margin-bottom:8px;">🤖 Gemini AI APIキー</div>
                 <input type="password" id="sidebarApiKeyInput" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px;" placeholder="AI用APIキーを入力...">
@@ -198,7 +192,7 @@
                     
                     <div class="profile-text-content-zone">
                         <div id="profPlayerName" class="player-name-neon-text">プレイヤー1</div>
-                        <div id="profTitleLabel" class="player-title-sub-text">称号なし ⚡</div>
+
                         
                         <div class="target-capsule-neon-wrapper">
                             <i data-lucide="target" size="11"></i>
@@ -400,23 +394,15 @@
         </div>
 
         <div id="view-titles" class="tab-view">
-            <nav class="titles-page-nav" aria-label="称号タブの表示切り替え"><button type="button" aria-pressed="true" onclick="window.showTitlesPage(0)">称号</button><button type="button" aria-pressed="false" onclick="window.showTitlesPage(1)">ランキング</button></nav>
-            <div id="titlesPages" class="titles-pages">
-                <section id="titlesCollection" class="titles-page" aria-label="称号コレクション">
-            <div class="card" style="border: 1.5px solid var(--cosmic-purple-light) !important; box-shadow: 0 0 15px rgba(192, 132, 252, 0.25) !important;">
-                <h2>🏅 称号進化コレクション進捗</h2>
-                <div style="font-size:12px; color:var(--text-sub); margin-bottom:6px;">総獲得数: <span id="title-progress-text" style="color:white; font-weight:bold;">0 / 0個</span></div>
-                <div class="multi-hp-bar" style="height:10px; border-color:var(--cosmic-purple-light);">
-                    <div id="title-progress-bar" class="multi-party-hp-fill" style="width:0%; background:linear-gradient(90deg, var(--cosmic-purple-light), var(--cosmic-purple-deep));"></div>
-                </div>
-                <div style="font-size:11px; color:var(--text-sub); margin-top:8px;">現在装備中: <strong id="equipped-title-display" style="color:var(--word-so);">称号なし</strong></div>
-            </div>
-                    <div id="titles-list"></div>
-                </section>
-                <section class="titles-page" aria-label="ランキングページ">
-            <section id="leaderboardSection" class="card titles-ranking-section" aria-label="ランキング"><h2 id="titlesRankingHeading">ランキング</h2><div id="leaderboardContainer" style="display:flex;flex-direction:column;gap:4px;"></div></section>
-                </section>
-            </div>
+            <section class="ranking-stage" aria-label="全ユーザーのランキング">
+                <header class="ranking-header"><div><span class="ranking-eyebrow">LEARNING RECORDS</span><h2>ランキング</h2></div><button id="rankingRefresh" type="button" aria-label="ランキングを更新">↻</button></header>
+                <div class="ranking-metrics" aria-label="計測内容"><button type="button" data-ranking-metric="time" aria-pressed="true">合計勉強時間</button><button type="button" data-ranking-metric="words" aria-pressed="false">理解度の記録</button><button type="button" data-ranking-metric="flash" aria-pressed="false">フラッシュ</button></div>
+                <p id="rankingDescription" class="ranking-description"></p>
+                <div id="rankingPodium" class="ranking-podium-host" aria-live="polite"></div>
+                <div id="rankingSelf" class="ranking-self"></div>
+                <p id="rankingMessage" class="ranking-message" role="status"></p>
+                <small class="ranking-hint">表彰台をタップして詳細を見る</small>
+            </section>
         </div>
 
         <div id="view-study" class="tab-view">
@@ -840,7 +826,7 @@
         <button class="nav-item" id="nav-reader" onclick="window.switchTab('reader')"><i data-lucide="file-text" size="18"></i> リーダー</button>
         <button class="nav-item" id="nav-community" onclick="window.switchTab('community')"><i data-lucide="users" size="18"></i> フレンド</button>
         <button class="nav-item" id="nav-study" onclick="window.switchTab('study')"><i data-lucide="clock" size="18"></i> 勉強時間</button>
-        <button class="nav-item" id="nav-titles" onclick="window.switchTab('titles')"><i data-lucide="award" size="18"></i> 称号</button>
+        <button class="nav-item" id="nav-titles" onclick="window.switchTab('titles')"><i data-lucide="medal" size="18"></i> ランキング</button>
         <button class="nav-item" id="nav-party" onclick="window.switchTab('party')"><i data-lucide="swords" size="18"></i> 編成</button>
     </div>
 
@@ -891,18 +877,19 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <script src="library-state.js?v=2.92" defer></script>
-    <script src="app.js?v=2.92" defer></script>
-    <script src="game_core.js?v=2.92" defer></script>
-    <script src="vocab_ui.js?v=2.92" defer></script>
-    <script src="reader.js?v=2.92" defer></script>
-    <script src="fix.js?v=2.92" defer></script>
-    <script src="multi.js?v=2.92" defer></script>
-    <script src="gacha.js?v=2.92" defer></script>
-    <script src="addon.js?v=2.92" defer></script>
-    <script src="library.js?v=2.92" defer></script>
-    <script src="workbook.js?v=2.92" defer></script>
-    <script src="shared-notes.js?v=2.92" defer></script>
-    <script src="study-time.js?v=2.92" defer></script>
+    <script src="library-state.js?v=3.02" defer></script>
+    <script src="app.js?v=3.02" defer></script>
+    <script src="game_core.js?v=3.02" defer></script>
+    <script src="vocab_ui.js?v=3.02" defer></script>
+    <script src="reader.js?v=3.02" defer></script>
+    <script src="fix.js?v=3.02" defer></script>
+    <script src="multi.js?v=3.02" defer></script>
+    <script src="gacha.js?v=3.02" defer></script>
+    <script src="addon.js?v=3.02" defer></script>
+    <script src="library.js?v=3.02" defer></script>
+    <script src="workbook.js?v=3.02" defer></script>
+    <script src="shared-notes.js?v=3.02" defer></script>
+    <script src="study-time.js?v=3.02" defer></script>
+    <script src="ranking.js?v=3.02" defer></script>
 </body>
 </html>

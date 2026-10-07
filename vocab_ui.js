@@ -492,6 +492,7 @@
                     vocabList[wIdx].meanings[mIdx].history.push(status);
 
                 }
+                if (status !== 'none' && window.recordRankedWord) window.recordRankedWord(currentTextbook, wordNum);
                 var combinedHistory = [];
                 vocabList[wIdx].meanings.forEach(function(meaning) {
                     if (meaning.history && meaning.history.length) combinedHistory = combinedHistory.concat(meaning.history);

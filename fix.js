@@ -461,7 +461,6 @@
     function expNow() { var exp = gExp(); var s = (exp || 0).toLocaleString() + ' XP'; var lv = lvOf(exp); if (lv >= 0) s += '（Lv ' + lv + '）'; return s; }
     function titleNow() { var t = gTitle() || '称号なし'; var DB = titleDB(); var stats = readStats(); var earned = 0; DB.forEach(function (tt) { if (reachedStepOf(tt, stats[tt.id] || 0) > 0) earned++; }); return t + (DB.length ? '　[' + earned + '/' + DB.length + ' 獲得]' : ''); }
     function items() { var us = gStats() || {}; return [
-    { icon: '🏅', name: '称号', desc: '獲得条件・進捗・未取得化', now: titleNow, edit: { type: 'title', get: function () { return gTitle() || ''; }, set: function (v) { sTitle(v || '称号なし'); } }, reset: function () { sTitle('称号なし'); } },
     { icon: '🎯', name: '目標', desc: 'プロフィールの目標を書き換えます', now: function () { return gTarget() || '未設定'; }, edit: { type: 'text', get: function () { return gTarget() || ''; }, set: function (v) { sTarget(v || '未設定'); } }, reset: function () { sTarget('未設定'); } },
     { icon: '🔥', name: '連続学習の最高記録', desc: 'いちばん長く続けた分数の記録', now: function () { return (us.study_burst || 0) + ' 分'; }, edit: { type: 'number', unit: '分', get: function () { return (gStats() && gStats().study_burst) || 0; }, set: function (v) { var s = gStats() || {}; s.study_burst = clampInt(v); sStats(s); } }, reset: function () { var s = gStats() || {}; s.study_burst = 0; sStats(s); } },
     { icon: '⏱️', name: '今日の勉強時間', desc: '今日のカウンター（分単位で指定）', now: function () { var s = gSecs() || 0; return Math.floor(s / 60) + '分' + (s % 60) + '秒'; }, edit: { type: 'number', unit: '分', get: function () { return Math.floor((gSecs() || 0) / 60); }, set: function (v) { sSecs(clampInt(v) * 60); } }, reset: function () { sSecs(0); } },
@@ -904,7 +903,7 @@
     if (!parent) return;
     var btnCard = document.createElement('div'); btnCard.className = 'card'; btnCard.id = 'admDataBtnCard';
     btnCard.style.cssText = 'cursor:pointer;border:1px solid rgba(0,240,255,0.35);background:linear-gradient(135deg, rgba(0,240,255,0.08), rgba(192,132,252,0.06));box-shadow:0 0 15px rgba(0,240,255,0.15);transition:all .2s;display:flex;align-items:center;gap:12px;';
-    btnCard.innerHTML = '<div style="width:42px;height:42px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(0,240,255,0.12);border:1px solid rgba(0,240,255,0.35);box-shadow:0 0 12px rgba(0,240,255,0.25);">🗄️</div><div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:900;color:#fff;letter-spacing:.5px;">データ管理</div><div style="font-size:10.5px;color:var(--text-sub);margin-top:2px;">称号・経験値・勉強時間などをユーザーごとに編集／リセット</div></div><div style="color:var(--cosmic-cyan);font-weight:900;font-size:18px;">›</div>';
+    btnCard.innerHTML = '<div style="width:42px;height:42px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(0,240,255,0.12);border:1px solid rgba(0,240,255,0.35);box-shadow:0 0 12px rgba(0,240,255,0.25);">🗄️</div><div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:900;color:#fff;letter-spacing:.5px;">データ管理</div><div style="font-size:10.5px;color:var(--text-sub);margin-top:2px;">勉強時間などをユーザーごとに編集／リセット</div></div><div style="color:var(--cosmic-cyan);font-weight:900;font-size:18px;">›</div>';
     btnCard.onmouseenter = function () { this.style.boxShadow = '0 0 22px rgba(0,240,255,0.35)'; this.style.transform = 'translateY(-1px)'; };
     btnCard.onmouseleave = function () { this.style.boxShadow = '0 0 15px rgba(0,240,255,0.15)'; this.style.transform = ''; };
     btnCard.onclick = function () { openPanel(); };
@@ -953,7 +952,7 @@
     function boot() {
     if (typeof window.saveUserStats === 'function' && typeof window.loadLocalState === 'function') {
     patchCore(); installBannerKiller();
-    loadTitleConfig().then(function () {
+    Promise.resolve().then(function () {
     loadMyData(); injectAdminDataButton(); killResidueBanner(); fixStudySyncStart();
     // 起動時に世代トークンを1回読んでキャッシュ
     netReadShared('app_settings').then(function (cfg) { window.__fixLastGen = (cfg && cfg.resetGeneration) ? parseInt(cfg.resetGeneration) || 0 : 0; }).catch(function () {});
@@ -1733,7 +1732,6 @@ if (window.__wipeSelectMerged) return;
 window.__wipeSelectMerged = true;
 
 var CATS = [
- {id:'title', label:'称号'},
  {id:'study', label:'勉強時間'},
  {id:'vocab', label:'単語理解度'},
  {id:'game',  label:'ゲーム/ランキング'},
