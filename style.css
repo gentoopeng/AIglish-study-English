@@ -2245,3 +2245,14 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .study-podium-empty { text-align:center; font-size:12px; line-height:1.9; color:var(--text-sub); padding:20px 0; }
 @keyframes studyPodiumAppear { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 @media(prefers-reduced-motion:reduce) { .study-podium-place { animation:none; } }
+.header-study-time { padding:6px 10px; border:1px solid rgba(218,204,169,.28); border-radius:8px; color:#eee8da; font:400 13px/1.3 Georgia,"Yu Mincho",serif; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.study-week-chart { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; margin-top:20px; }
+.study-week-column { display:flex; flex-direction:column; align-items:center; gap:8px; min-width:0; }
+.study-week-value { font:400 9px/1.3 Georgia,serif; color:#aaa595; font-variant-numeric:tabular-nums; }
+.study-week-track { height:140px; width:65%; display:flex; align-items:flex-end; background:rgba(255,255,255,.035); border-radius:5px; overflow:hidden; }
+.study-week-fill { width:100%; border-radius:5px; background:linear-gradient(0deg,#696b84,#b9b2a2); transition:height .35s ease; }
+.study-week-column.is-today .study-week-fill { background:linear-gradient(0deg,#8b7655,#e0c588); }
+.study-week-column small { font-size:11px; color:#aaa595; }
+#studyWeekTotal { text-align:right; margin:18px 0 0; color:#ddd3bd; font-size:13px; font-variant-numeric:tabular-nums; }
+#studyNextWeek:disabled { opacity:.3; cursor:default; }
+@media(prefers-reduced-motion:reduce) { .study-week-fill { transition:none; } }

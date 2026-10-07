@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="2.62">
+    <meta name="application-version" content="2.72">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=2.62">
-    <link rel="stylesheet" href="gacha.css?v=2.62">
+    <link rel="stylesheet" href="style.css?v=2.72">
+    <link rel="stylesheet" href="gacha.css?v=2.72">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -95,17 +95,14 @@
         </div>
     </div>
 
-    <!-- ダッシュボード文字の右隣にリアルタイム同期レベル表示テキストを追加 -->
+    <!-- 今日の勉強時間を全画面共通ヘッダーに表示 -->
     <div class="app-header">
         <button class="menu-trigger" onclick="toggleSidebar(true)"><i data-lucide="menu" size="20"></i></button>
         <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
             <span id="headerTitleText">ダッシュボード</span>
-            <span id="headerLevelTextSlot" class="header-cosmic-level-badge">Lv.1</span>
+            <span id="headerStudyTime" class="header-study-time" aria-label="今日の勉強時間">今日 00:00:00</span>
         </div>
-        <!-- リアルタイムレベル進捗グラデーションバーメーター -->
-        <div id="header-level-bar-container" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: rgba(255,255,255,0.1); overflow: hidden;">
-            <div id="header-level-bar-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--cosmic-cyan), var(--cosmic-purple-light)); transition: width 0.3s ease;"></div>
-        </div>
+
     </div>
 
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar(false)"></div>
@@ -209,14 +206,6 @@
                         </div>
                     </div>
                     
-                </div>
-
-                <div id="studyTimeLiveBadgeFrame" style="display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.6) 100%); border: 1px solid rgba(245, 158, 11, 0.4); box-shadow: 0 0 10px rgba(245, 158, 11, 0.15); border-radius: 10px; padding: 10px 14px; margin-top: 14px; margin-bottom: 14px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <i data-lucide="timer" style="color: #F59E0B; width: 16px; height: 16px;"></i>
-                        <span style="font-size: 11px; font-weight: 800; color: #E2E8F0; letter-spacing: 0.5px;">本日の総勉強時間 (リアルタイム)</span>
-                    </div>
-                    <span id="todayStudyTimeDisplay" style="font-size: 15px; font-weight: 900; color: #FFFFFF; font-family: monospace; text-shadow: 0 0 8px #F59E0B;">00分00秒</span>
                 </div>
 
 
@@ -402,7 +391,6 @@
                     <span style="font-size: 11px; font-weight: bold; color: var(--text-sub);"><i data-lucide="arrow-down-up" size="12" style="vertical-align:middle; margin-right:2px;"></i> 表示並び替え</span>
                     <select id="friendSortSelect" class="search-input" style="width: 140px; height: 28px; font-size: 11px; font-weight: bold; padding: 0 6px; margin-bottom: 0; background: var(--input-bg); color: white;" onchange="window.sortAndRenderFriendList()">
                         <option value="login" selected>最終ログイン順</option>
-                        <option value="level">レベル順</option>
                     </select>
                 </div>
 
@@ -440,8 +428,9 @@
 
         <div id="view-study" class="tab-view">
             <section class="card study-live-card"><p class="study-caption">今日の勉強時間</p><strong id="studyLiveTime">00:00:00</strong><div class="library-toolbar"><button type="button" id="studyTimerToggle">開始</button></div></section>
-            <section class="card"><div class="study-month-header"><button type="button" id="studyPreviousMonth" aria-label="前の月">‹</button><h2 id="studyMonthTitle"></h2><button type="button" id="studyNextMonth" aria-label="次の月">›</button></div><div class="study-calendar-weekdays" aria-hidden="true"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div><div id="studyCalendar" class="study-calendar"></div><p id="studySelectedDay"></p><button type="button" id="studyEditDay" class="study-text-button">この日の時間を編集</button></section>
             <section class="card study-podium-card"><div class="study-podium-heading"><h2>今日の表彰台</h2><button type="button" id="studyRefreshRanking" class="study-text-button">更新</button></div><div id="studyFriendRanking" aria-live="polite"></div><p id="studyRankingMessage" class="library-editor-hint"></p></section>
+            <section class="card"><div class="study-month-header"><button type="button" id="studyPreviousMonth" aria-label="前の月">‹</button><h2 id="studyMonthTitle"></h2><button type="button" id="studyNextMonth" aria-label="次の月">›</button></div><div class="study-calendar-weekdays" aria-hidden="true"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div><div id="studyCalendar" class="study-calendar"></div><p id="studySelectedDay"></p><button type="button" id="studyEditDay" class="study-text-button">この日の時間を編集</button></section>
+            <section class="card study-week-card"><div class="study-month-header"><button id="studyPreviousWeek" type="button" aria-label="前の週">‹</button><h2>週間勉強時間</h2><button id="studyNextWeek" type="button" aria-label="次の週">›</button></div><p id="studyWeekRange" class="study-caption"></p><div id="studyWeekChart" class="study-week-chart" role="img"></div><p id="studyWeekTotal"></p></section>
         </div>
         <div id="view-game" class="tab-view">
             <div id="cosmic-game-wrapper" class="cosmic-game-bg">
@@ -907,17 +896,17 @@
       window.fbGetDocs = getDocs;
       window.fbDeleteDoc = deleteDoc;
     </script>
-    <script src="app.js?v=2.62" defer></script>
-    <script src="game_core.js?v=2.62" defer></script>
-    <script src="vocab_ui.js?v=2.62" defer></script>
-    <script src="reader.js?v=2.62" defer></script>
-    <script src="fix.js?v=2.62" defer></script>
-    <script src="multi.js?v=2.62" defer></script>
-    <script src="gacha.js?v=2.62" defer></script>
-    <script src="addon.js?v=2.62" defer></script>
-    <script src="library.js?v=2.62" defer></script>
-    <script src="workbook.js?v=2.62" defer></script>
-    <script src="shared-notes.js?v=2.62" defer></script>
-    <script src="study-time.js?v=2.62" defer></script>
+    <script src="app.js?v=2.72" defer></script>
+    <script src="game_core.js?v=2.72" defer></script>
+    <script src="vocab_ui.js?v=2.72" defer></script>
+    <script src="reader.js?v=2.72" defer></script>
+    <script src="fix.js?v=2.72" defer></script>
+    <script src="multi.js?v=2.72" defer></script>
+    <script src="gacha.js?v=2.72" defer></script>
+    <script src="addon.js?v=2.72" defer></script>
+    <script src="library.js?v=2.72" defer></script>
+    <script src="workbook.js?v=2.72" defer></script>
+    <script src="shared-notes.js?v=2.72" defer></script>
+    <script src="study-time.js?v=2.72" defer></script>
 </body>
 </html>

@@ -106,29 +106,9 @@ if (storedStats) userStats = JSON.parse(storedStats);
  }
 };
 // 🌟 累計XPからレベル、次への必要XP、および現在のレベル内進捗%を計算する関数
-window.calculateLevelFromExp = function(exp) {
-if (exp <= 0) {
-return { level: 1, nextLevelRequiredExp: 26, progressPercent: 0 };
-}
-let a = 6;
- let b = 20;
- let c = -exp;
- let discriminant = (b * b) - (4 * a * c);
- let exactLevel = (-b + Math.sqrt(discriminant)) / (2 * a);
- let level = Math.floor(exactLevel);
- if (level < 1) level = 1;
- let currentLevelBaseExp = (6 * level * level) + (20 * level);
- let nextLevel = level + 1;
- let nextLevelBaseExp = (6 * nextLevel * nextLevel) + (20 * nextLevel);
- let nextLevelRequiredExp = nextLevelBaseExp - exp;
- let levelRangeRange = nextLevelBaseExp - currentLevelBaseExp;
- let levelGainedProgress = exp - currentLevelBaseExp;
- let progressPercent = Math.min(100, Math.max(0, Math.round((levelGainedProgress / levelRangeRange) * 100)));
- return {
-     level: level,
-     nextLevelRequiredExp: nextLevelRequiredExp,
-     progressPercent: progressPercent
- };
+// Compatibility for older save and tower code; player levels are retired.
+window.calculateLevelFromExp = function() {
+    return {level:1,nextLevelRequiredExp:0,progressPercent:0};
 };
 // 🌟 アバター画像のCanvas圧縮登録処理（Firebaseへ即時同期）
 window.handleAvatarImageUpload = function(event) {
@@ -360,7 +340,6 @@ const TITLE_DATABASE = [
 { id: 'reader_open', name: '読解 of 旅人', steps: [3, 10, 25, 50, 99], desc: 'スマート長文リーダーを起動して解析した総回数', unit: '回' },
 { id: 'flash_count', name: '手のひら返し', steps: [10, 100, 500, 2500, 9999], desc: 'フラッシュカード単語をめくって学習した総回数', unit: '回' },
 { id: 'friends_count', name: 'friends', steps: [1, 5, 10, 25, 50], desc: '追加して登録を完了したフレンドの総人数', unit: '人' },
-{ id: 'user_level', name: 'ガチ勢', steps: [5, 10, 25, 50, 99], desc: '自身の現在の総合プレイヤーレベル到達値', unit: 'Lvl' }
 ];
 const SPECIAL_TITLES = [
 { id: 'goal_setting', name: '必勝', desc: 'プロフィール目標に「大学合格」の文字を入れる', check: () => userStats.goal_text.includes('大学合格') },
@@ -381,22 +360,14 @@ TITLE_DATABASE.forEach(title => {
          rewardedTitlesStepsCache[title.id] = 0;
      }
      if (currentStepReached > rewardedTitlesStepsCache[title.id]) {
-         for (let step = rewardedTitlesStepsCache[title.id] + 1; step <= currentStepReached; step++) {
-             let bonus = 10; 
-             if (step === 2) bonus = 100; 
-             if (step === 3) bonus = 500; 
-             if (step === 4) bonus = 2500; 
-             if (step === 5) bonus = 7777; 
-             totalExp += bonus;
-             xpAddedFlag = true;
-         }
+         xpAddedFlag = true;
          rewardedTitlesStepsCache[title.id] = currentStepReached;
      }
  });
  SPECIAL_TITLES.forEach(title => {
      const isUnlocked = title.check();
      if (isUnlocked && !rewardedTitlesStepsCache[title.id]) {
-         totalExp += 7777; 
+
          rewardedTitlesStepsCache[title.id] = 1;
          xpAddedFlag = true;
      }
@@ -1469,7 +1440,7 @@ if (myFriendList.length === 0) {
              <div style="flex:1; min-width:0;">
                  <div style="display:flex; align-items:baseline; gap:6px;">
                      <span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
-                     <span style="font-size:10px; font-weight:900; color:var(--cosmic-cyan); flex-shrink:0;">LV.${f.level}</span>
+
                  </div>
                  <div style="font-size:10px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">${f.title}</div>
                  <div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">
@@ -2154,7 +2125,7 @@ if(typeof originalApplyProfileToUi === 'function') originalApplyProfileToUi();
 if(typeof window.calculateLevelFromExp === 'function') {
 let lvlData = window.calculateLevelFromExp(totalExp);
 const profTitleEl = document.getElementById('profTitleLabel');
-if(profTitleEl) profTitleEl.innerText = `${selectedTitle} ⚡ (あと ${lvlData.nextLevelRequiredExp} XPで Lvl.Up)`;
+if(profTitleEl) profTitleEl.innerText = selectedTitle + " ⚡";
 const headerLevelTextEl = document.getElementById('headerLevelTextSlot');
 if(headerLevelTextEl) headerLevelTextEl.innerText = `Lv.${lvlData.level} [Next:${lvlData.nextLevelRequiredExp}]`;
 }
@@ -2748,7 +2719,7 @@ window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
     vocabList[wIdx].meanings[mIdx].status = status;
     if (!vocabList[wIdx].meanings[mIdx].history) vocabList[wIdx].meanings[mIdx].history = [];
     vocabList[wIdx].meanings[mIdx].history.push(status);
-    totalExp += 1;
+
   }
   var agg = [];
   vocabList[wIdx].meanings.forEach(function(m) {
@@ -5297,7 +5268,7 @@ window.sortAndRenderFriendList = function() {
         '<div style="flex:1; min-width:0;">' +
           '<div style="display:flex; align-items:baseline; gap:6px;">' +
             '<span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.name + '</span>' +
-            '<span style="font-size:10px; font-weight:900; color:var(--cosmic-cyan); flex-shrink:0;">LV.' + f.level + '</span>' +
+            '' +
           '</div>' +
           '<div style="font-size:10px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">' + f.title + '</div>' +
           '<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">' +
@@ -7939,7 +7910,7 @@ window.sortAndRenderFriendList = function() {
             '<div style="flex:1; min-width:0;">' +
             '<div style="display:flex; align-items:baseline; gap:6px;">' +
             '<span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.name + '</span>' +
-            '<span style="font-size:10px; font-weight:900; color:var(--cosmic-cyan); flex-shrink:0;">LV.' + f.level + '</span>' +
+            '' +
             '</div>' +
             '<div style="font-size:10px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">' + f.title + '</div>' +
             '<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">' +
@@ -8418,14 +8389,14 @@ console.log('🔤 第12回パッチ（フラッシュ単語テキスト横拡張
 // ------------------------------------------------------------------
 window.__USAGE_GUIDE_STEPS = [
     { icon: 'user-check', head: 'アカウントを作る／ログインする', desc: '初めての方は「新規作成」でプレイヤー名・本名・年齢・4桁の暗証番号を登録。発行されたIDはログインに必要なので必ずメモして。2回目以降はID＋暗証番号でログイン。' },
-    { icon: 'book-marked', head: '単語帳で単語を覚える', desc: '単語をタップして意味を確認し、右の4つのボタンで理解度をマーク。⚪︎＝定着／△＝曖昧／✕＝不可／ー＝リセット。覚えるほど経験値(XP)が溜まってレベルが上がります。' },
+    { icon: 'book-marked', head: '単語帳で単語を覚える', desc: '単語をタップして意味を確認し、右の4つのボタンで理解度をマーク。⚪︎＝定着／△＝曖昧／✕＝不可／ー＝リセット。理解度と復習の記録が保存されます。' },
     { icon: 'zap', head: 'フラッシュ＆ゲームで定着させる', desc: '単語帳一覧の「›」からフラッシュ単語を開始できます。ゲームタブの「単語の迷宮」でバトルにも挑戦できます。' }
 ];
 
 window.__USAGE_GUIDE_SECTIONS = [
     {
         icon: 'home', title: '🏠 ホーム',
-        html: '<p>あなたの<strong>司令部</strong>。プロフィールカードにレベル・装備中の称号・学習目標が表示されます。</p>' +
+        html: '<p>あなたの<strong>司令部</strong>。プロフィールカードに装備中の称号・学習目標が表示されます。</p>' +
               '<ul><li><strong>本日の総勉強時間</strong>はリアルタイムでカウント（単語帳・リーダー・プレイ中に増えます）。</li>' +
               '<li><strong>最近7日間のアクティビティ</strong>グラフで、勉強の習慣をひと目で確認。</li>' +
               '<li>右上の <strong>💾 ボタン</strong>で、いつでもデータを明示保存できます。</li></ul>'
@@ -8453,9 +8424,9 @@ window.__USAGE_GUIDE_SECTIONS = [
     {
         icon: 'users', title: '👥 フレンド',
         html: '<p>相手の<strong>IDコード</strong>で検索・追加して、修行仲間とつながります。</p>' +
-              '<ul><li>並び替えは「最終ログイン順／レベル順／勉強時間順」。</li>' +
+              '<ul><li>並び替えは「最終ログイン順」。</li>' +
               '<li>画面を<strong>左右スワイプ</strong>すると、フレンド一覧とランキングが切り替わります。</li>' +
-              '<li><strong>🔄 最新情報に更新</strong>で、相手のレベルやログイン時刻をクラウドから再取得。</li></ul>'
+              '<li><strong>🔄 最新情報に更新</strong>で、相手のプロフィールやログイン時刻をクラウドから再取得。</li></ul>'
     },
     {
         icon: 'layers', title: '🃏 フラッシュ単語',
@@ -8469,14 +8440,14 @@ window.__USAGE_GUIDE_SECTIONS = [
         html: '<p>さまざまな課題を達成して称号を解放し、プロフィールに<strong>装備</strong>できます。</p>' +
               '<ul><li>進化称号は<strong>5段階</strong>。達成するほどレアリティが上がります。</li>' +
               '<li>条件を満たすと<strong>特別称号</strong>や<strong>シーズン称号</strong>も解放。</li>' +
-              '<li>段階が進むごとに<strong>ボーナスXP</strong>が貰えて、レベル上げにも貢献。</li></ul>'
+              '<li>段階が進むごとに称号が解放されます。</li></ul>'
     },
     {
         icon: 'cloud', title: '💾 保存と同期',
         html: '<p>あなたのデータは<strong>端末</strong>と<strong>クラウド</strong>の両方に保存されます。</p>' +
               '<ul><li>同じIDでログインすれば、<strong>別の端末でも続きから</strong>再開できます。</li>' +
               '<li>右上の <strong>💾 ボタン</strong>で手動保存。大事な進捗はこまめに保存を。</li>' +
-              '<li>理解度・レベル・称号・設定類は、できるだけ<strong>新しい方が優先</strong>されるよう同期されます。</li></ul>'
+              '<li>理解度・称号・設定類は、できるだけ<strong>新しい方が優先</strong>されるよう同期されます。</li></ul>'
     }
 ];
 
@@ -9015,7 +8986,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     // 【1】状態変数と日付・時間ヘルパー
     // ------------------------------------------------------------------
-    window.__communityRankType = window.__communityRankType || 'level';   // level|score|time|flash
+    window.__communityRankType = 'flash';   // level|score|time|flash
     window.__communityTimeRange = window.__communityTimeRange || 'total'; // total|weekly|daily
 
     window.__getTodayKey = function() {
@@ -9225,7 +9196,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         var scroller = document.getElementById('communityRankMainScroller');
         if (!scroller) return;
         var types = [
-            { key: 'level', label: '🏆 レベル' },
             { key: 'flash', label: '🃏 フラッシュ' }
         ];
         var html = '';

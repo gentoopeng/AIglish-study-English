@@ -44,14 +44,18 @@
         if(today){const ms=Math.min(DAY,Math.max(positive(stats.study_today_secs),positive(local.today))*1000);const day=data.days[today]||(data.days[today]={sources:{}});day.sources.legacy=Math.max(positive(day.sources.legacy),ms);}
         data.offset=Math.max(0,Math.max(positive(stats.study_total_secs),positive(local.total))*1000-total(data));return data;
     }
+    function weekValues(ledger,start) {
+        return Array.from({length:7},(_,index)=>{const day=new Date(dateAt(start));day.setDate(day.getDate()+index);const date=dateKey(day);return {date,ms:dayMilliseconds(ledger.days[date])};});
+    }
     const RESET_EPOCH='study-reset-2.62';
     function resetLedger(ledger) {return ledger&&ledger.epoch===RESET_EPOCH?ledger:{version:1,epoch:RESET_EPOCH,days:{},offset:0,updatedAt:0};}
     function mergeCurrent(left,right) {return merge(resetLedger(left),resetLedger(right));}
-    const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent};
+    const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent,weekValues};
     window.StudyTimeModel=model;
     let user='',data=null,manual=false,paused=false,active=false,leader=false,lockPending=false,release=null,lastMono=performance.now(),lastWall=Date.now(),lastCloud=0;
     let month=new Date();month.setDate(1);let selected=dateKey(Date.now()),rankRange='daily',ranking=[],rankingLoading=false;
     let fallbackLease=false;
+    let selectedWeek=weekStart(Date.now());
     const tabId=crypto.randomUUID();
     let device=localStorage.getItem('aiglish_study_device');if(!device){device=crypto.randomUUID();localStorage.setItem('aiglish_study_device',device);}
     const uid=()=>myId||'';
@@ -107,14 +111,14 @@
     function format(ms) {const seconds=Math.floor(positive(ms)/1000);return String(Math.floor(seconds/3600)).padStart(2,'0')+':'+String(Math.floor(seconds/60)%60).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');}
     function renderDisplay() {
         if(!data)return;const ms=dayMilliseconds(data.days[dateKey(Date.now())]);
-        const home=document.getElementById('todayStudyTimeDisplay');if(home)home.textContent=format(ms);
+        const header=document.getElementById('headerStudyTime');if(header)header.textContent='今日 '+format(ms);
         const live=document.getElementById('studyLiveTime');if(live)live.textContent=format(ms);
         const totalLabel=document.getElementById('totalStudyTimeValue');if(totalLabel)totalLabel.textContent=format(total(data));
         const state=document.getElementById('studyTimerStatus');if(state)state.textContent=active?(leader?'計測中':'別のタブで計測中'):paused?'一時停止中':'待機中';
         const button=document.getElementById('studyTimerToggle');if(button)button.textContent=manual?'一時停止':'開始';
         const selectedLabel=document.getElementById('studySelectedDay');if(selectedLabel)selectedLabel.textContent=selected+' · '+format(dayMilliseconds(data.days[selected]));
         const todayButton=document.querySelector('#studyCalendar [data-date="'+dateKey(Date.now())+'"] small');if(todayButton)todayButton.textContent=format(ms);
-        if(currentActiveTabId==='study')renderRanking();
+        if(currentActiveTabId==='study'){renderRanking();chart();}
     }
     function renderCalendar() {
         const container=document.getElementById('studyCalendar');if(!container||!data)return;
@@ -130,9 +134,14 @@
         modal.querySelector('form').onsubmit=event=>{event.preventDefault();try{if(uid()!==owner)throw new Error('ユーザーが切り替わりました。');const minutes=Number(modal.querySelector('input').value);if(!Number.isFinite(minutes)||minutes<0||minutes>1440)throw new Error('0〜1440分で入力してください。');tick();editDay(data,date,minutes*60000,Date.now());persist();sync();renderCalendar();window.renderActivityChart();if(window.saveUserStats)window.saveUserStats();window.closeLibraryDialog();}catch(e){modal.querySelector('.library-editor-error').textContent=e.message;}};
     }
     function chart() {
-        const container=document.getElementById('activityBarChart');if(!container||!data)return;
-        container.replaceChildren();const values=[];for(let ago=6;ago>=0;ago--){const d=new Date();d.setDate(d.getDate()-ago);values.push({date:dateKey(d),ms:dayMilliseconds(data.days[dateKey(d)])});}const max=Math.max(1,...values.map(v=>v.ms));
-        values.forEach(({date,ms})=>{const bar=document.createElement('div');bar.className='bar-wrap';bar.innerHTML='<span>'+Math.floor(ms/60000)+'分</span><div class="bar-track"><div class="bar-fill" style="height:'+(ms/max*100)+'%"></div></div><small>'+date.slice(5)+'</small>';bar.tabIndex=0;bar.setAttribute('role','button');bar.setAttribute('aria-label',date+'の勉強時間を編集');bar.onclick=()=>editDate(date);bar.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();editDate(date);}};container.append(bar);});
+        const container=document.getElementById('studyWeekChart');if(!container||!data)return;
+        const values=weekValues(data,selectedWeek),signature=JSON.stringify(values);if(container.dataset.signature===signature)return;container.dataset.signature=signature;container.replaceChildren();
+        const max=Math.max(60000,...values.map(v=>v.ms)),labels=['月','火','水','木','金','土','日'];
+        document.getElementById('studyWeekRange').textContent=values[0].date+' — '+values[6].date;
+        document.getElementById('studyWeekTotal').textContent='合計 '+format(values.reduce((sum,v)=>sum+v.ms,0));
+        container.setAttribute('aria-label',values.map((v,i)=>labels[i]+'曜日 '+format(v.ms)).join('、'));
+        values.forEach(({date,ms},index)=>{const column=document.createElement('div');column.className='study-week-column'+(date===dateKey(Date.now())?' is-today':'');const time=document.createElement('span');time.className='study-week-value';time.textContent=format(ms);const track=document.createElement('div');track.className='study-week-track';const fill=document.createElement('div');fill.className='study-week-fill';fill.style.height=(ms/max*100)+'%';track.append(fill);const label=document.createElement('small');label.textContent=labels[index];column.append(time,track,label);container.append(column);});
+        document.getElementById('studyNextWeek').disabled=selectedWeek>=weekStart(Date.now());
     }
     function friendValue(entry) {
         return Math.floor(rangeValue(resetLedger((entry.stats||{}).study_calendar_v2),'daily',Date.now())/1000);
@@ -174,6 +183,8 @@
     const oldLogout=window.logoutToGate;window.logoutToGate=async function(){tick();active=false;unlock();return oldLogout.apply(this,arguments);};
     document.getElementById('studyTimerToggle').onclick=()=>{tick();manual=!manual;paused=!manual;active=eligible();if(active)claim();else unlock();renderDisplay();};
     document.getElementById('studyPreviousMonth').onclick=()=>{month.setMonth(month.getMonth()-1);renderCalendar();};document.getElementById('studyNextMonth').onclick=()=>{month.setMonth(month.getMonth()+1);renderCalendar();};
+    document.getElementById('studyPreviousWeek').onclick=()=>{const day=new Date(dateAt(selectedWeek));day.setDate(day.getDate()-7);selectedWeek=dateKey(day);chart();};
+    document.getElementById('studyNextWeek').onclick=()=>{const day=new Date(dateAt(selectedWeek));day.setDate(day.getDate()+7);selectedWeek=dateKey(day);chart();};
     document.getElementById('studyEditDay').onclick=()=>editDate(selected);document.getElementById('studyRefreshRanking').onclick=refreshRanking;
     document.querySelectorAll('#studyRankRanges [data-range]').forEach(button=>button.onclick=()=>{rankRange=button.dataset.range;document.querySelectorAll('#studyRankRanges button').forEach(b=>b.classList.toggle('active',b===button));renderRanking();});
     document.addEventListener('visibilitychange',()=>{tick();if(document.visibilityState!=='visible'){active=false;unlock();}else{lastMono=performance.now();lastWall=Date.now();active=eligible();claim();}if(user&&user!=='GUEST-000'&&window.saveUserStats)window.saveUserStats();});

@@ -348,6 +348,7 @@
     function fixStudySyncStart() {
     if (window.__fixStudySyncId) return;
     window.__fixStudySyncId = setInterval(function () {
+    if(window.StudyTime)return;
     try {
     var t = todayStr(); var wk = weekKeyOf();
     var count = false;
@@ -379,9 +380,9 @@
     titleDB().forEach(function (t) {
     var val = userStats[t.id] || 0; var cur = reachedStepOf(t, val);
     if (!rewardedTitlesStepsCache[t.id]) rewardedTitlesStepsCache[t.id] = 0;
-    if (cur > rewardedTitlesStepsCache[t.id]) { for (var s = rewardedTitlesStepsCache[t.id] + 1; s <= cur; s++) { totalExp += bonusForStep(t, s); added = true; } rewardedTitlesStepsCache[t.id] = cur; }
+    if (cur > rewardedTitlesStepsCache[t.id]) { added = true; rewardedTitlesStepsCache[t.id] = cur; }
     });
-    specialDB().forEach(function (t) { var unlocked = false; try { unlocked = t.check(); } catch (e) {} if (unlocked && !rewardedTitlesStepsCache[t.id]) { totalExp += 7777; rewardedTitlesStepsCache[t.id] = 1; added = true; } });
+    specialDB().forEach(function (t) { var unlocked = false; try { unlocked = t.check(); } catch (e) {} if (unlocked && !rewardedTitlesStepsCache[t.id]) { rewardedTitlesStepsCache[t.id] = 1; added = true; } });
     if (added) {
     try { localStorage.setItem('core_v4_totalExp', totalExp); } catch (e) {}
     try { localStorage.setItem('core_v4_rewarded_titles_cache', JSON.stringify(rewardedTitlesStepsCache)); } catch (e) {}
@@ -460,8 +461,7 @@
     function expNow() { var exp = gExp(); var s = (exp || 0).toLocaleString() + ' XP'; var lv = lvOf(exp); if (lv >= 0) s += '（Lv ' + lv + '）'; return s; }
     function titleNow() { var t = gTitle() || '称号なし'; var DB = titleDB(); var stats = readStats(); var earned = 0; DB.forEach(function (tt) { if (reachedStepOf(tt, stats[tt.id] || 0) > 0) earned++; }); return t + (DB.length ? '　[' + earned + '/' + DB.length + ' 獲得]' : ''); }
     function items() { var us = gStats() || {}; return [
-    { icon: '⚡', name: '経験値・レベル', desc: 'レベルは経験値から自動で決まります', now: expNow, edit: { type: 'exp', get: function () { return gExp() || 0; }, set: function (v) { sExp(clampInt(v)); } }, reset: function () { sExp(0); } },
-    { icon: '🏅', name: '称号', desc: '報酬XP(レア度共通)・獲得条件(称号ごと)・進捗・未取得化', now: titleNow, edit: { type: 'title', get: function () { return gTitle() || ''; }, set: function (v) { sTitle(v || '称号なし'); } }, reset: function () { sTitle('称号なし'); } },
+    { icon: '🏅', name: '称号', desc: '獲得条件・進捗・未取得化', now: titleNow, edit: { type: 'title', get: function () { return gTitle() || ''; }, set: function (v) { sTitle(v || '称号なし'); } }, reset: function () { sTitle('称号なし'); } },
     { icon: '🎯', name: '目標', desc: 'プロフィールの目標を書き換えます', now: function () { return gTarget() || '未設定'; }, edit: { type: 'text', get: function () { return gTarget() || ''; }, set: function (v) { sTarget(v || '未設定'); } }, reset: function () { sTarget('未設定'); } },
     { icon: '🔥', name: '連続学習の最高記録', desc: 'いちばん長く続けた分数の記録', now: function () { return (us.study_burst || 0) + ' 分'; }, edit: { type: 'number', unit: '分', get: function () { return (gStats() && gStats().study_burst) || 0; }, set: function (v) { var s = gStats() || {}; s.study_burst = clampInt(v); sStats(s); } }, reset: function () { var s = gStats() || {}; s.study_burst = 0; sStats(s); } },
     { icon: '⏱️', name: '今日の勉強時間', desc: '今日のカウンター（分単位で指定）', now: function () { var s = gSecs() || 0; return Math.floor(s / 60) + '分' + (s % 60) + '秒'; }, edit: { type: 'number', unit: '分', get: function () { return Math.floor((gSecs() || 0) / 60); }, set: function (v) { sSecs(clampInt(v) * 60); } }, reset: function () { sSecs(0); } },
@@ -696,11 +696,10 @@
     return '<div class="admEdit">' +
     '<div class="lab">表示中の称号</div>' +
     '<div class="line"><input type="text" data-val="1" maxlength="40"><button type="button" class="back ste-tt-clearbtn" data-tt-clear="1">称号なし</button></div>' +
-    '<div class="ste-tt-sec"><div class="lab">🎁 報酬XP — 全称号共通・レア度ごと</div><div data-tt-bonuscommon="1"></div></div>' +
     '<div class="ste-tt-sec"><div class="lab">進化称号 — 進捗 / 未取得化 / 獲得条件の編集</div><div data-tt-progress="1"></div></div>' +
     '<div class="ste-tt-sec"><div class="lab">特別称号</div><div data-tt-special="1"></div></div>' +
     '<div class="ste-tt-sec"><div class="lab">シーズン称号</div><div data-tt-season="1"></div></div>' +
-    '<div class="ste-tt-note">※「🎁 報酬XP」はレア度ごとに全局所・全ユーザー共通で決まります。各称号の「⚙️ 獲得条件」は必要量のみ（称号ごと）。<br>※「未取得にする」は進捗を0にし獲得フラグも消すので再取得できます。他ユーザー編集中は進捗のみリセット可（獲得フラグは端末ごと）。</div>' +
+    '<div class="ste-tt-note">※「未取得にする」は進捗を0にし獲得フラグも消すので再取得できます。他ユーザー編集中は進捗のみリセット可（獲得フラグは端末ごと）。</div>' +
     '<div class="saveRow"><button class="back" type="button">やめる</button><button class="go" type="button">表示称号を保存</button></div></div>';
     }
     if (e.type === 'week') {
@@ -749,7 +748,7 @@
     var cfgBox = card.querySelector('[data-cfg-box]');
     btns[2].onclick = function () { cfgBox.classList.toggle('open'); };
     function readCfgSteps() { var sa = []; for (var j = 0; j < 5; j++) sa[j] = clampInt(parseInt(card.querySelector('[data-cfg-step="' + j + '"]').value, 10)); return sa; }
-    function paintExt() { var sa = readCfgSteps(); var base = sa[4]; var bxp = bonusesCommon()[4]; var ext = card.querySelector('[data-cfg-ext]'); var lines = ''; for (var k = 1; k <= 3; k++) { var thr = Math.floor(base * Math.pow(2, k)); lines += '【レジェンダリー' + plusStr(k) + '】 必要量 <b>' + thr + '</b>' + (t.unit || '') + ' / ボナス <b>' + bxp + '</b>XP<br>'; } ext.innerHTML = '📈 レジェンダリー超え（必要量は×2ずつ／XPは上の「🎁 報酬XP」のレジェンダリー値と同額）：<br>' + lines + '<span style="opacity:.7;">＋はさらに×2ずつ無限に延伸します。</span>'; }
+    function paintExt() { var sa = readCfgSteps(); var base = sa[4]; var ext = card.querySelector('[data-cfg-ext]'); var lines = ''; for (var k = 1; k <= 3; k++) { var thr = Math.floor(base * Math.pow(2, k)); lines += '【レジェンダリー' + plusStr(k) + '】 必要量 <b>' + thr + '</b>' + (t.unit || '') + '<br>'; } ext.innerHTML = '📈 レジェンダリー超え（必要量は×2ずつ）：<br>' + lines + '<span style="opacity:.7;">＋はさらに×2ずつ無限に延伸します。</span>'; }
     card.querySelectorAll('[data-cfg-step]').forEach(function (el) { el.addEventListener('input', function () { var ext = card.querySelector('[data-cfg-ext]'); if (ext && ext.classList.contains('open')) paintExt(); }); });
     var extToggle = card.querySelector('[data-cfg-exttoggle]'); var extBox = card.querySelector('[data-cfg-ext]');
     extToggle.onclick = function () { var open = extBox.classList.toggle('open'); extToggle.innerText = open ? '▼ レジェンダリー超えの必要量を隠す' : '▶ レジェンダリー超えの必要量を見る'; if (open) paintExt(); };
@@ -1734,7 +1733,6 @@ if (window.__wipeSelectMerged) return;
 window.__wipeSelectMerged = true;
 
 var CATS = [
- {id:'exp',   label:'経験値/レベル'},
  {id:'title', label:'称号'},
  {id:'study', label:'勉強時間'},
  {id:'vocab', label:'単語理解度'},

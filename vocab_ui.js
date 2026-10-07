@@ -490,7 +490,7 @@
                     vocabList[wIdx].meanings[mIdx].status = status;
                     if (!vocabList[wIdx].meanings[mIdx].history) vocabList[wIdx].meanings[mIdx].history = [];
                     vocabList[wIdx].meanings[mIdx].history.push(status);
-                    totalExp += 1;
+
                 }
                 var combinedHistory = [];
                 vocabList[wIdx].meanings.forEach(function(meaning) {
