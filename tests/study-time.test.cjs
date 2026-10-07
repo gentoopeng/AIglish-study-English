@@ -8,3 +8,5 @@ test('historical weekday logs are dated from their actual last recorded day, not
 test('weekly totals use calendar dates and exclude last week',()=>{const ledger=empty(),old=new Date(2026,9,4,12).getTime(),now=new Date(2026,9,7,12).getTime();m.accrue(ledger,'d',old,old+60000);m.accrue(ledger,'d',now,now+120000);assert.equal(m.rangeValue(ledger,'weekly',now),120000);assert.equal(m.total(ledger),180000);});
 
 test('reset discards old local and cloud time once and preserves new-generation saves',()=>{const old=empty();m.accrue(old,'old',0,999999);const fresh=m.mergeCurrent(null,old);assert.equal(m.total(fresh),0);m.accrue(fresh,'new',0,1500);assert.equal(m.total(m.mergeCurrent(fresh,old)),1500);assert.equal(m.total(m.mergeCurrent(null,fresh)),1500);});
+
+test('weekly graph always has seven calendar dates across month boundaries',()=>{const data=empty();m.accrue(data,'d',new Date(2026,8,30,12).getTime(),new Date(2026,8,30,12).getTime()+60000);const values=m.weekValues(data,'2026-09-28');assert.equal(values.length,7);assert.equal(values[2].ms,60000);assert.equal(values[6].date,'2026-10-04');});

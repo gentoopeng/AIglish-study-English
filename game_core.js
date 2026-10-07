@@ -551,7 +551,7 @@
         else if (direction === 'left') { status = 'bad'; }
         else if (direction === 'up') { status = 'so'; }
 
-        if (typeof totalExp !== 'undefined') totalExp += 1;
+
         var vocabMatch = null;
         if (typeof vocabList !== 'undefined') {
             vocabMatch = vocabIndex >= 0 ? vocabList[vocabIndex] : null;

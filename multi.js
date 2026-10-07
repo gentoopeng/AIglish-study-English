@@ -472,7 +472,7 @@ if (!layer) { layer = document.createElement('div'); layer.id = 'm2RewardLayer';
 var r = bossRect();
 var baseY = r.top + r.height / 2;
 var items = [];
-items.push({ cls: 'xp', ic: '✦', txt: '+' + reward.xp + ' XP', delay: 0 });
+
 items.push({ cls: 'gold', ic: '🪙', txt: '+' + reward.gold, delay: 120 });
 if (reward.ticketGot) items.push({ cls: 'ticket', ic: '🎟️', txt: 'チケット GET!', delay: 260 });
 items.forEach(function (it) {
@@ -509,12 +509,12 @@ var cur = M2().current;
 if (!cur) return;
 var rw = rewardForRarity(cur.rarity);
 var ticketGot = Math.random() < rw.ticketRate;
-var reward = { xp: rw.xp, gold: rw.gold, ticketGot: ticketGot };
+var reward = { xp: 0, gold: rw.gold, ticketGot: ticketGot };
 var s = M2().session;
 if (!s) s = M2().session = freshSession();
 s.kills++; s.xp += reward.xp; s.gold += reward.gold;
 if (ticketGot) s.tickets++;
-try { totalExp = (parseInt(totalExp) || 0) + reward.xp; } catch (e) {}
+
 try {
 if (typeof userStats === 'object' && userStats) {
 userStats.gold = (parseInt(userStats.gold) || 0) + reward.gold;
@@ -550,7 +550,7 @@ sparks += '<span class="m2-result-spark" style="left:' + left + '%;width:' + sz 
 }
 var stats = [
 { lbl: '⚔️ 討伐数', val: s.kills, suf: '体', ac: '#f43f5e' },
-{ lbl: '✦ 獲得XP', val: s.xp, suf: '', ac: '#22d3ee' },
+
 { lbl: '🪙 獲得ゴールド', val: s.gold, suf: '', ac: '#fbbf24' },
 { lbl: '🎟️ ガチャチケット', val: s.tickets, suf: '枚', ac: '#e879f9' },
 { lbl: '🔥 最大コンボ', val: s.maxCombo, suf: 'COMBO', ac: '#fb923c' },
@@ -3411,7 +3411,7 @@ ptyTorchHtml() + '</div>' +
 '<div class="pty-search-wrap"><span class="pty-search-ico">🔍</span><input type="text" id="ptySearch" class="pty-search" placeholder="名前で検索…" value="' + esc(pu.search) + '"></div>' +
 '<div class="pty-rarity' + (pu.cat === 'enemy' ? ' show' : '') + '" id="ptyRarity">' + rchip('ALL', 'ALL') + rchip('C', 'C') + rchip('UC', 'UC') + rchip('R', 'R') + rchip('SR', 'SR') + '</div>' +
 '<div class="pty-list" id="ptyList"></div></div>' +
-'<div class="pty-gasha" id="ptyGasha"><span class="pty-gasha-ico">🎰</span><span class="pty-gasha-body"><span class="pty-gasha-name">キャラクター＆武器ガシャ</span><span class="pty-gasha-desc">学習で溜めたEXPを使って新しい力を手に入れよう</span></span><span class="pty-gasha-lock">🔒 準備中</span></div>' +
+'<div class="pty-gasha" id="ptyGasha"><span class="pty-gasha-ico">🎰</span><span class="pty-gasha-body"><span class="pty-gasha-name">キャラクター＆武器ガシャ</span><span class="pty-gasha-desc">学習で集めた報酬を使って新しい力を手に入れよう</span></span><span class="pty-gasha-lock">🔒 準備中</span></div>' +
 '</div>';
 renderEquipSlots();
 renderPartyList();
@@ -3795,7 +3795,7 @@ pgfTorch() + '</div>' +
 '<div class="pgf-gate"><div class="pgf-ring pgf-ring-outer"></div><div class="pgf-ring pgf-ring-inner"></div><div class="pgf-core">🎰</div></div>' +
 '<div class="pgf-ticket">🎟️ 所持チケット <b id="pgfTickets">0</b></div>' +
 '<div class="pgf-name">キャラクター＆武器ガシャ</div>' +
-'<div class="pgf-desc">学習で溜めたEXPを使って新しい力を手に入れよう</div>' +
+'<div class="pgf-desc">学習で集めた報酬を使って新しい力を手に入れよう</div>' +
 '<div class="pgf-lock">🔒 準備中</div>' +
 '<button type="button" class="pgf-back" id="pgfBack">← 編成に戻る</button>';
 }
@@ -5425,7 +5425,7 @@ style.textContent = [
 (document.head || document.documentElement).appendChild(style);
 
 var steps = [
-{ icon: '📚', title: '単語を覚える', desc: '「単語帳」タブで単語をタップし、⚪︎△✕で理解度を記録しよう。覚えるほどレベルが上がる！' },
+{ icon: '📚', title: '単語を覚える', desc: '「単語帳」タブで単語をタップし、⚪︎△✕で理解度を記録しよう。理解度を記録して復習しよう！' },
 { icon: '⚔️', title: 'バトルに挑む', desc: '「ゲーム」タブでバトル！単語を答えて敵にダメージ。コンボをつなげて大ダメージを与えよう。' },
 { icon: '🎰', title: 'ガチャで仲間を増やす', desc: 'バトルで手に入れたゴールドでガチャ！新しいキャラや武器を手に入れてパーティを強化しよう。' }
 ];
@@ -7376,9 +7376,6 @@ if(Math.random()<(SHARD_RATE[rar]||0.25)){
 imgDrop(SHARD_IMG[rar]||'kakerac.png','mdrop-shard',cx,cy,'💎');
 try{ if(typeof userStats==='object'&&userStats){ var k='gacha_shard_'+rar; userStats[k]=(parseInt(userStats[k])||0)+1; if(typeof window.saveUserStats==='function')window.saveUserStats(); } }catch(e){}
 }
-/* EXP（見た目のみ・付与は既存側） */
-var ex=1+(Math.random()<0.4?1:0);
-for(var j=0;j<ex;j++) expDrop(cx,cy);
 }
 
 /* 敵が倒れた瞬間(m2-die)に発火 */

@@ -100,7 +100,7 @@
             submitButton.dataset.originalHtml = submitButton.innerHTML;
             submitButton.textContent = "解析しています…";
         }
-        totalExp += 5;
+
         userStats.reader_open++;
         window.saveUserStats();
         window.checkAndRewardTitleBonusXP();
@@ -207,7 +207,7 @@
         if (currentTargetWordToken && !currentTargetVocabNum) {
             wordMemory[currentTargetWordToken] = status;
             localStorage.setItem('wordMemory', JSON.stringify(wordMemory));
-            totalExp += 1;
+
             window.saveUserStats();
             window.updateReaderWordColors();
         }
