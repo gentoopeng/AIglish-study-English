@@ -44,7 +44,10 @@
         if(today){const ms=Math.min(DAY,Math.max(positive(stats.study_today_secs),positive(local.today))*1000);const day=data.days[today]||(data.days[today]={sources:{}});day.sources.legacy=Math.max(positive(day.sources.legacy),ms);}
         data.offset=Math.max(0,Math.max(positive(stats.study_total_secs),positive(local.total))*1000-total(data));return data;
     }
-    const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy};
+    const RESET_EPOCH='study-reset-2.62';
+    function resetLedger(ledger) {return ledger&&ledger.epoch===RESET_EPOCH?ledger:{version:1,epoch:RESET_EPOCH,days:{},offset:0,updatedAt:0};}
+    function mergeCurrent(left,right) {return merge(resetLedger(left),resetLedger(right));}
+    const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent};
     window.StudyTimeModel=model;
     let user='',data=null,manual=false,paused=false,active=false,leader=false,lockPending=false,release=null,lastMono=performance.now(),lastWall=Date.now(),lastCloud=0;
     let month=new Date();month.setDate(1);let selected=dateKey(Date.now()),rankRange='daily',ranking=[],rankingLoading=false;
@@ -55,18 +58,13 @@
     const storageKey=id=>'aiglish_study_ledger_'+id;
     function read(id) {try{return JSON.parse(localStorage.getItem(storageKey(id))||'null');}catch(e){return null;}}
     function persist() {if(!user||!data)return;data.updatedAt=Date.now();try{localStorage.setItem(storageKey(user),JSON.stringify(data));}catch(e){const status=document.getElementById('studyTimerStatus');if(status)status.textContent='保存できません。ブラウザーの空き容量を確認してください。';console.error('勉強時間を保存できませんでした',e);}}
-    function localLegacy(id) {
-        if(localStorage.getItem('core_v4_userId')!==id)return {};
-        let log=[];try{log=JSON.parse(localStorage.getItem('core_v4_study_weekly_log')||'[]');}catch(e){}
-        return {date:localStorage.getItem('core_v4_study_last_date'),today:localStorage.getItem('core_v4_study_today_secs'),total:localStorage.getItem('core_v4_study_total_secs'),log};
-    }
     function ensureUser() {
         const next=uid();if(next===user)return;
         unlock();user=next;manual=false;paused=false;active=false;lastMono=performance.now();lastWall=Date.now();ranking=[];
         if(!user){data=null;return;}
         let stats={};try{stats=JSON.parse(localStorage.getItem('core_v4_user_stats_'+user)||'{}');}catch(e){}
-        const saved=read(user);data=saved&&saved.version===1?merge(null,saved):legacy(stats,localLegacy(user),Date.now());
-        if(stats.study_calendar)data=merge(data,stats.study_calendar);
+        const saved=read(user);data=mergeCurrent(null,saved);
+        if(stats.study_calendar_v2)data=mergeCurrent(data,stats.study_calendar_v2);
         persist();sync();renderCalendar();renderRanking();
     }
     function visible(id) {const el=document.getElementById(id);return !!(el&&getComputedStyle(el).display!=='none'&&el.getClientRects().length);}
@@ -91,7 +89,7 @@
         const mono=performance.now(),wall=Date.now(),elapsed=mono-lastMono;
         if(fallbackLease){let lease;try{lease=JSON.parse(localStorage.getItem('aiglish_study_lease_'+user)||'null');}catch(e){}if(!lease||lease.tab!==tabId){leader=false;fallbackLease=false;}}
         // Hidden/suspended pages never accrue the time that elapsed before resuming.
-        if(active&&leader&&elapsed>0&&elapsed<60000){data=merge(data,read(user));accrue(data,device,lastWall,lastWall+elapsed);persist();}
+        if(active&&leader&&elapsed>0&&elapsed<60000){data=mergeCurrent(data,read(user));accrue(data,device,lastWall,lastWall+elapsed);persist();}
         lastMono=mono;lastWall=wall;active=eligible();
         if(!active)unlock();else if(!leader)claim();else if(fallbackLease)localStorage.setItem('aiglish_study_lease_'+user,JSON.stringify({tab:tabId,expires:wall+3000}));
         sync();renderDisplay();
@@ -102,8 +100,8 @@
         const now=Date.now(),today=dateKey(now),day=new Date(now),week=weekStart(now);
         todayStudySeconds=Math.floor(dayMilliseconds(data.days[today])/1000);lastAccessDateStr=today;
         weeklyStudyMinutesLog=Array(7).fill(0);for(let ago=0;ago<7;ago++){const d=new Date(day);d.setDate(d.getDate()-ago);weeklyStudyMinutesLog[(d.getDay()+6)%7]=dayMilliseconds(data.days[dateKey(d)])/60000;}
-        Object.assign(userStats,{study_today_secs:todayStudySeconds,study_today_date:today.replace(/-0/g,'-'),study_week_secs:Math.floor(rangeValue(data,'weekly',now)/1000),study_week_key:week.replace(/-0/g,'-'),study_total_secs:Math.floor(total(data)/1000),study_weekly_log:weeklyStudyMinutesLog.slice(),study_last_date:today.replace(/-0/g,'-'),study_calendar:JSON.parse(JSON.stringify(data))});
-        userStats.study_burst=Math.max(positive(userStats.study_burst),Math.floor(todayStudySeconds/60));
+        Object.assign(userStats,{study_today_secs:todayStudySeconds,study_today_date:today.replace(/-0/g,'-'),study_week_secs:Math.floor(rangeValue(data,'weekly',now)/1000),study_week_key:week.replace(/-0/g,'-'),study_total_secs:Math.floor(total(data)/1000),study_weekly_log:weeklyStudyMinutesLog.slice(),study_last_date:today.replace(/-0/g,'-'),study_calendar_v2:JSON.parse(JSON.stringify(data))});
+        userStats.study_burst=Math.floor(Math.max(0,...Object.values(data.days).map(dayMilliseconds))/60000);
         localStorage.setItem('core_v4_study_today_secs',String(todayStudySeconds));localStorage.setItem('core_v4_study_last_date',today);localStorage.setItem('core_v4_study_weekly_log',JSON.stringify(weeklyStudyMinutesLog));localStorage.setItem('core_v4_study_total_secs',String(userStats.study_total_secs));
     }
     function format(ms) {const seconds=Math.floor(positive(ms)/1000);return String(Math.floor(seconds/3600)).padStart(2,'0')+':'+String(Math.floor(seconds/60)%60).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');}
@@ -137,32 +135,41 @@
         values.forEach(({date,ms})=>{const bar=document.createElement('div');bar.className='bar-wrap';bar.innerHTML='<span>'+Math.floor(ms/60000)+'分</span><div class="bar-track"><div class="bar-fill" style="height:'+(ms/max*100)+'%"></div></div><small>'+date.slice(5)+'</small>';bar.tabIndex=0;bar.setAttribute('role','button');bar.setAttribute('aria-label',date+'の勉強時間を編集');bar.onclick=()=>editDate(date);bar.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();editDate(date);}};container.append(bar);});
     }
     function friendValue(entry) {
-        const stats=entry.stats||{};if(stats.study_calendar)return Math.floor(rangeValue(stats.study_calendar,rankRange,Date.now())/1000);
-        if(rankRange==='daily')return normalizeDate(stats.study_today_date)===dateKey(Date.now())?positive(stats.study_today_secs):0;
-        if(rankRange==='weekly')return normalizeDate(stats.study_week_key)===weekStart(Date.now())?positive(stats.study_week_secs):0;
-        return positive(stats.study_total_secs||entry.studyTotalSecs);
+        return Math.floor(rangeValue(resetLedger((entry.stats||{}).study_calendar_v2),'daily',Date.now())/1000);
     }
     function renderRanking() {
         const container=document.getElementById('studyFriendRanking');if(!container||!data)return;
-        container.replaceChildren();const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false}));rows.push({name:(myName||'あなた')+'（あなた）',seconds:Math.floor(rangeValue(data,rankRange,Date.now())/1000),self:true});rows.sort((a,b)=>b.seconds-a.seconds);
-        rows.forEach((record,index)=>{const row=document.createElement('div');row.className='study-rank-row'+(record.self?' is-self':'');const name=document.createElement('span');name.textContent=(index+1)+'. '+record.name;const value=document.createElement('strong');value.textContent=format(record.seconds*1000);row.append(name,value);container.append(row);});
-        if(user==='GUEST-000'){const hint=document.createElement('p');hint.className='library-editor-hint';hint.textContent='フレンドのランキングはログイン後に表示されます。';container.append(hint);}
+        const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false,id:f.id}));
+        if(user!=='GUEST-000')rows.push({name:(myName||'あなた')+'（あなた）',seconds:Math.floor(rangeValue(data,'daily',Date.now())/1000),self:true,id:user});
+        const top=rows.filter(r=>r.seconds>=300).sort((a,b)=>b.seconds-a.seconds||a.id.localeCompare(b.id)).slice(0,3);
+        const signature=JSON.stringify(top);if(container.dataset.signature===signature)return;container.dataset.signature=signature;container.replaceChildren();
+        if(!top.length){const hint=document.createElement('p');hint.className='study-podium-empty';hint.textContent='今日5分以上勉強したユーザーが、ここに登場します。';container.append(hint);return;}
+        const podium=document.createElement('div');podium.className='study-podium';
+        [1,0,2].forEach(index=>{const record=top[index],place=index+1;const column=document.createElement('div');column.className='study-podium-place place-'+place+(record&&record.self?' is-self':'');if(!record){column.classList.add('is-empty');column.setAttribute('aria-hidden','true');podium.append(column);return;}
+            const name=document.createElement('span');name.className='study-podium-name';name.textContent=record.name;
+            const time=document.createElement('strong');time.textContent=format(record.seconds*1000);
+            const step=document.createElement('div');step.className='study-podium-step';step.textContent=String(place);column.append(name,time,step);podium.append(column);
+        });container.append(podium);
     }
     async function refreshRanking() {
-        ensureUser();if(rankingLoading||!user||user==='GUEST-000')return;
-        const owner=user;rankingLoading=true;const button=document.getElementById('studyRefreshRanking');button.disabled=true;button.textContent='更新中…';
-        try{if(!window.db||!window.fbGetDoc||!window.fbDoc)throw new Error('接続できません。接続後に更新してください。');const friends=Array.isArray(myFriendList)?myFriendList:[];const records=await Promise.all(friends.map(async friend=>{const id=friend.code||friend.id;try{const snap=await window.fbGetDoc(window.fbDoc(window.db,'users',id));if(!snap||!snap.exists())return null;const remote=snap.data();let stats=remote.userStats||{};if(typeof remote.userStatsJson==='string')stats=JSON.parse(remote.userStatsJson);return {id,name:remote.playerName||remote.name||friend.name,stats,studyTotalSecs:friend.studyTotalSecs};}catch(e){return {id,name:friend.name,stats:friend.stats||{},studyTotalSecs:friend.studyTotalSecs};}}));if(user===owner&&uid()===owner){ranking=records.filter(Boolean);renderRanking();}}
-        catch(e){const message=document.createElement('p');message.className='library-editor-error';message.textContent=e.message;document.getElementById('studyFriendRanking').append(message);}
+        ensureUser();if(rankingLoading||!user)return;
+        const owner=user;rankingLoading=true;const button=document.getElementById('studyRefreshRanking'),message=document.getElementById('studyRankingMessage');button.disabled=true;button.textContent='更新中…';message.textContent='';
+        try {
+            if(!window.db||!window.fbGetDocs||!window.fbCollection)throw new Error('接続後に更新してください。');
+            const snapshot=await window.fbGetDocs(window.fbCollection(window.db,'users'));const records=[];
+            snapshot.forEach(doc=>{const remote=doc.data();try{const stats=typeof remote.userStatsJson==='string'?JSON.parse(remote.userStatsJson):remote.userStats||{};records.push({id:doc.id,name:remote.playerName||remote.name||doc.id,stats});}catch(e){}});
+            if(user===owner&&uid()===owner){ranking=records;renderRanking();}
+        }catch(e){if(uid()===owner)message.textContent='表彰台を取得できませんでした。'+e.message;}
         finally{rankingLoading=false;button.disabled=false;button.textContent='更新';}
     }
     function init(){ensureUser();tick();chart();renderCalendar();}
-    window.StudyTime={init,sync,tick,mergeCloud:calendar=>{ensureUser();if(data){data=merge(data,calendar);persist();sync();renderCalendar();chart();}}};
+    window.StudyTime={init,sync,tick,mergeCloud:calendar=>{ensureUser();if(data){data=mergeCurrent(data,calendar);persist();sync();renderCalendar();chart();}}};
     window.initStudyTimerAndDataRotation=init;
     window.__updateStudyTimeDisplay=()=>{sync();renderDisplay();};window.renderActivityChart=chart;window.__steSanitizeStudyData=()=>false;
     window.__openStudyTimeEditor=day=>{const d=new Date();d.setDate(d.getDate()-(((d.getDay()+6)%7-day+7)%7));editDate(dateKey(d));};
     const oldLoad=window.loadUserStats;
-    window.loadUserStats=async function(){const owner=uid(),result=await oldLoad.apply(this,arguments);if(uid()===owner){ensureUser();if(userStats.study_calendar)data=merge(data,userStats.study_calendar);else if(data)data=merge(data,legacy(userStats,{},Date.now()));persist();sync();renderCalendar();chart();}return result;};
-    const oldSave=window.saveUserStats;window.saveUserStats=function(){if(data&&uid()===user&&userStats.study_calendar)data=merge(data,userStats.study_calendar);sync();return oldSave.apply(this,arguments);};
+    window.loadUserStats=async function(){const owner=uid(),result=await oldLoad.apply(this,arguments);if(uid()===owner){ensureUser();if(userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);persist();sync();renderCalendar();chart();}return result;};
+    const oldSave=window.saveUserStats;window.saveUserStats=function(){if(data&&uid()===user&&userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);sync();return oldSave.apply(this,arguments);};
     const oldSwitch=window.switchTab;window.switchTab=function(tab){tick();const result=oldSwitch.apply(this,arguments);active=eligible();lastMono=performance.now();lastWall=Date.now();if(!active)unlock();else claim();if(tab==='study'){renderCalendar();refreshRanking();}return result;};
     const oldLogout=window.logoutToGate;window.logoutToGate=async function(){tick();active=false;unlock();return oldLogout.apply(this,arguments);};
     document.getElementById('studyTimerToggle').onclick=()=>{tick();manual=!manual;paused=!manual;active=eligible();if(active)claim();else unlock();renderDisplay();};
@@ -170,6 +177,6 @@
     document.getElementById('studyEditDay').onclick=()=>editDate(selected);document.getElementById('studyRefreshRanking').onclick=refreshRanking;
     document.querySelectorAll('#studyRankRanges [data-range]').forEach(button=>button.onclick=()=>{rankRange=button.dataset.range;document.querySelectorAll('#studyRankRanges button').forEach(b=>b.classList.toggle('active',b===button));renderRanking();});
     document.addEventListener('visibilitychange',()=>{tick();if(document.visibilityState!=='visible'){active=false;unlock();}else{lastMono=performance.now();lastWall=Date.now();active=eligible();claim();}if(user&&user!=='GUEST-000'&&window.saveUserStats)window.saveUserStats();});
-    window.addEventListener('pagehide',()=>{tick();active=false;unlock();persist();});window.addEventListener('storage',event=>{if(user&&event.key===storageKey(user)){data=merge(data,read(user));sync();renderCalendar();}});
+    window.addEventListener('pagehide',()=>{tick();active=false;unlock();persist();});window.addEventListener('storage',event=>{if(user&&event.key===storageKey(user)){data=mergeCurrent(data,read(user));sync();renderCalendar();}});
     setInterval(tick,500);setInterval(chart,10000);window.onAppLoaded(init);init();
 })();
