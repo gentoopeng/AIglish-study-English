@@ -2194,3 +2194,5 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .shared-vocab-note-more[hidden],.shared-vocab-note-unshare[hidden] { display:none !important; }
 .vocab-note-actions { flex-wrap:wrap; }
 .shared-vocab-note-share,.shared-vocab-note-unshare { background:transparent; border:1px solid rgba(255,255,255,.14); color:#C7D2FE; font-size:10px; cursor:pointer; }
+.shared-vocab-note-sharing { display:flex; align-items:center; gap:6px; margin:6px 0 8px; color:var(--text-sub); font-size:11px; cursor:pointer; }
+.shared-vocab-note-checkbox { margin:0; width:14px; height:14px; accent-color:var(--cosmic-cyan); }
