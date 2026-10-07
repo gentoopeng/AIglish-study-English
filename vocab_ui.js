@@ -764,6 +764,7 @@
         if (shouldOpen) {
             textarea.value = String(word.note || '');
             requestAnimationFrame(function() { textarea.focus(); });
+            if (section) section.dispatchEvent(new Event('vocab-note-open'));
         }
     };
 
@@ -848,6 +849,7 @@
                 button.classList.toggle('has-note', !!note); toggle(false);
             };
         }
+        if (!handlers && window.attachSharedVocabNotes) window.attachSharedVocabNotes(section, word);
         return section;
     };
 

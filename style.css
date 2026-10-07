@@ -2180,3 +2180,17 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .workbook-inline-input::placeholder { color:var(--text-sub); font-size:12px; font-weight:400; }
 .workbook-inline-error:empty { display:none; }
 .workbook-ai-help[hidden],.library-toolbar button[hidden] { display:none !important; }
+.shared-vocab-notes { margin:8px 0 10px; padding-top:8px; border-top:1px dashed rgba(255,255,255,.12); }
+.shared-vocab-notes-heading { font-size:10px; color:var(--text-sub); margin-bottom:5px; }
+.shared-vocab-notes-list,.shared-vocab-notes-message,.shared-vocab-notes-hint { font-size:10px; color:var(--text-sub); line-height:1.6; }
+.shared-vocab-notes-message { margin:4px 0; overflow-wrap:anywhere; }
+.shared-vocab-notes-hint { margin:4px 0 8px; }
+.shared-vocab-note-row { display:flex; align-items:baseline; gap:6px; margin:5px 0; }
+.shared-vocab-note-preview { flex:1; min-width:0; max-width:calc(100% - 70px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:rgba(255,255,255,.8); font-size:12px; }
+.shared-vocab-note-more { flex:none; width:64px; padding:0; border:0; background:transparent; color:#C7D2FE; font-size:10px; cursor:pointer; }
+.shared-vocab-note-row.is-expanded { display:block; }
+.shared-vocab-note-row.is-expanded .shared-vocab-note-preview { display:block; max-width:100%; white-space:pre-wrap; overflow-wrap:anywhere; }
+.shared-vocab-note-row.is-expanded .shared-vocab-note-more { display:block; margin:4px 0 0 auto; }
+.shared-vocab-note-more[hidden],.shared-vocab-note-unshare[hidden] { display:none !important; }
+.vocab-note-actions { flex-wrap:wrap; }
+.shared-vocab-note-share,.shared-vocab-note-unshare { background:transparent; border:1px solid rgba(255,255,255,.14); color:#C7D2FE; font-size:10px; cursor:pointer; }
