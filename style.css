@@ -2422,3 +2422,35 @@ html.ios-stable-rendering body .shop-product-locked .shop-item-preview::after{co
 .admin-auth-actions{display:flex;gap:10px;margin-top:20px;}.admin-auth-actions button{flex:1;min-height:44px;border:1px solid #69718a;border-radius:10px;background:#1e2940;color:#f0e4c8;font-size:14px;cursor:pointer;}
 body.password-prompt-open .container,body.password-prompt-open .app-header,body.password-prompt-open .nav-bar,body.password-prompt-open .app-starfield{visibility:hidden!important;}
 body.password-prompt-open *,body.password-prompt-open *::before,body.password-prompt-open *::after{animation-play-state:paused!important;}
+/* Native keyboard in a static child document; authentication never reloads the app. */
+.product-access-dialog{width:min(360px,calc(100vw - 24px));height:280px;max-height:calc(100svh - 24px);padding:0;border:1px solid #596176;border-radius:18px;background:#0b1220;overflow:hidden;box-sizing:border-box;box-shadow:none;}
+.product-access-dialog::backdrop{background:#0b1220;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.product-access-dialog iframe{display:block;width:100%;height:100%;border:0;background:#0b1220;}
+/* Compact product editor; labels and checkbox dimensions override library defaults. */
+.library-editor-dialog.shop-editor-dialog{width:min(400px,calc(100vw - 24px));max-height:calc(100svh - 24px);padding:18px;overflow:auto;}
+.shop-editor-dialog .library-editor-eyebrow{display:none;}
+.shop-editor-dialog h2{font-size:20px;margin:0 0 14px;}
+.shop-editor-dialog .shop-admin-form{gap:8px;margin:0;}
+.shop-editor-fields{min-width:0;margin:0;padding:0;border:0;display:grid;gap:12px;}
+.shop-editor-dialog .shop-admin-form label{margin:0;gap:5px;min-width:0;}
+.shop-editor-art{display:flex;align-items:center;gap:14px;}
+.shop-editor-art #shopPreview{flex:0 0 58px;}
+.shop-editor-art .shop-item-preview{width:58px;height:58px;}
+.shop-editor-dialog .shop-photo-picker{position:relative;border:1px solid #c9b97a40;border-radius:10px;padding:12px 16px;color:#ded2b1;cursor:pointer;overflow:hidden;}
+.shop-editor-dialog .shop-photo-picker input{position:absolute;inset:0;margin:0;padding:0;opacity:0;cursor:pointer;}
+.shop-editor-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;}
+.shop-editor-dialog .shop-admin-form input:not([type=checkbox]),.shop-editor-dialog .shop-admin-form select{font-size:16px;min-height:40px;padding:8px;}
+.shop-editor-dialog .shop-admin-form .shop-enabled{display:flex;align-items:center;gap:9px;min-height:32px;white-space:nowrap;}
+.shop-editor-dialog .shop-enabled input[type=checkbox]{width:18px;height:18px;min-height:0;padding:0;margin:0;flex:0 0 18px;accent-color:#c6b790;}
+.shop-editor-dialog .shop-enabled span{flex:0 0 auto;}
+.shop-editor-dialog .shop-save-status{min-height:32px;margin:0;font-size:11px;line-height:1.45;overflow-wrap:anywhere;}
+.shop-editor-dialog .library-editor-actions{margin-top:0;}
+.shop-editor-dialog .library-editor-actions button{min-height:42px;}
+.shop-product-manager{padding:14px;}
+.shop-product-manager .admin-content{gap:8px;}
+.shop-product-manager .appearance-admin-item{padding:9px 12px;gap:12px;min-height:54px;}
+.shop-product-manager .appearance-admin-item .shop-item-preview{width:34px;height:34px;font-size:24px;}
+.shop-product-manager .appearance-admin-item>span:last-child{min-width:0;font-size:11px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;}
+@media(max-height:600px){.library-editor-dialog.shop-editor-dialog{padding:12px;}.shop-editor-dialog h2{margin-bottom:8px;font-size:18px;}.shop-editor-fields{gap:8px;}.shop-editor-art #shopPreview{flex-basis:40px;}.shop-editor-art .shop-item-preview{width:40px;height:40px;}.shop-editor-dialog .shop-photo-picker{padding:9px 12px;}.shop-editor-dialog .shop-admin-form input:not([type=checkbox]),.shop-editor-dialog .shop-admin-form select{padding:6px;min-height:36px;}.shop-editor-dialog .shop-save-status{min-height:26px;}}
+
+.library-editor-dialog.shop-editor-dialog.compact-native-modal{padding:12px;}.shop-editor-dialog.compact-native-modal h2{margin-bottom:8px;font-size:18px;}.shop-editor-fields{gap:8px;}.shop-editor-art #shopPreview{flex-basis:40px;}.shop-editor-art .shop-item-preview{width:40px;height:40px;}.shop-editor-dialog.compact-native-modal .shop-photo-picker{padding:9px 12px;}.shop-editor-dialog.compact-native-modal .shop-admin-form input:not([type=checkbox]),.shop-editor-dialog.compact-native-modal .shop-admin-form select{padding:6px;min-height:36px;}.shop-editor-dialog.compact-native-modal .shop-save-status{min-height:26px;}
