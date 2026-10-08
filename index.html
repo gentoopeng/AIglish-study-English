@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="4.42">
+    <meta name="application-version" content="4.52">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=4.42">
-    <link rel="stylesheet" href="gacha.css?v=4.42">
+    <link rel="stylesheet" href="style.css?v=4.52">
+    <link rel="stylesheet" href="gacha.css?v=4.52">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -145,21 +145,6 @@
     <div class="container">
 
         <div id="view-home" class="tab-view active">
-            <div class="home-cover-image-container" style="text-align: center;">
-
-                
-                <div class="hero-slider-container">
-                    <div class="hero-slider-track" id="heroSliderTrack">
-                        <div class="hero-slide"><div class="slide-title-readable">勉強に飽きない新感覚のアプリケーション</div><div class="slide-desc-readable">友達と競ったり一人で勉強したりと<br>使い方はいろいろ</div></div>
-                        <div class="hero-slide"><div class="slide-title-readable">AI搭載により自動で英文を和訳</div><div class="slide-desc-readable">重要なところをチェック<br>スマホだけで勉強できる</div></div>
-                        <div class="hero-slide"><div class="slide-title-readable">リアルタイムマッチングで友達とバトル</div><div class="slide-desc-readable">ランキング機能で競争心を高めて<br>学力もアップ</div></div>
-                        <div class="hero-slide"><div class="slide-title-readable">やり込み機能が満載</div><div class="slide-desc-readable">イベントも定期的に行われるので<br>飽きないシステム</div></div>
-                        <div class="hero-slide"><div class="slide-title-readable">完全無料で誰でも使える</div><div class="slide-desc-readable">単語を極めるには<br>もってこいの逸品</div></div>
-                    </div>
-                </div>
-
-            </div>
-
             <!-- シアン色のコズミックアナウンス（お知らせ）表示枠 -->
             <div id="adminNoticeDisplayFrame" class="card cosmic-notice-board-card" style="display: none;">
                 <div class="notice-board-header">
@@ -170,6 +155,7 @@
             </div>
 
             <section id="homeProfile" class="home-profile"></section>
+            <section id="homeShop" class="home-shop"></section>
         </div>
 
         <div id="view-vocab" class="tab-view">
@@ -713,27 +699,7 @@
         </div>
 
         <div id="view-admin" class="tab-view">
-            <div class="card admin-card-border">
-                <h2 style="color:var(--admin-accent);"><i data-lucide="shield" style="color:var(--admin-accent);"></i> 🛠️ コアシステム管理設定パネル</h2>
-                
-                <h2 style="color:var(--admin-accent); margin-top:24px;"><i data-lucide="users"></i> ユーザー管理 (全プレイヤー一覧)</h2>
-                <div id="adminUserListContainer" style="max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 8px; border: 1px solid var(--border); margin-bottom: 20px;">
-                </div>
-
-                <div style="margin-bottom:14px;">
-                    <label style="font-size:12px; font-weight:700; display:block; margin-top: 14px; margin-bottom:6px; color:var(--cosmic-cyan);">📝 ダッシュボードのタイトル設定</label>
-                    <input type="text" id="adminDashboardTitleInput" class="search-input" placeholder="例: ダッシュボード">
-                    <button class="modern-btn" style="margin-bottom: 24px;" onclick="saveAdminDashboardTitle()">タイトルを変更・保存する</button>
-
-                    <label style="font-size:12px; font-weight:700; display:block; margin-bottom:6px;">全ユーザー向け配信アナウンスメッセージ</label>
-                    <input type="text" id="adminNoticeInput" class="search-input" placeholder="表示したいお知らせメッセージを入力...">
-                    <button class="modern-btn" style="margin-bottom: 24px;" onclick="window.saveAdminSystemSettings()">設定を配信・適用する</button>
-                    
-                    <label style="font-size:12px; font-weight:700; display:block; margin-top: 24px; margin-bottom:6px; color:#F87171;">⚠️ スコア管理（リセット機能）</label>
-                    <button class="modern-btn" style="margin-bottom: 10px; border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetLeaderboard()"><i data-lucide="trash-2" size="16"></i> ランキング履歴をリセット</button>
-                    <button class="modern-btn" style="border-image: linear-gradient(135deg, #EF4444, #F87171) 1 !important; color: #F87171 !important;" onclick="window.resetBestScore()"><i data-lucide="trash-2" size="16"></i> ベストスコアをリセット</button>
-                </div>
-            </div>
+            <section id="adminHub" class="admin-hub"></section>
         </div>
 
     </div>
@@ -795,23 +761,23 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <script src="library-state.js?v=4.42" defer></script>
-    <script src="app.js?v=4.42" defer></script>
-    <script src="game_core.js?v=4.42" defer></script>
-    <script src="vocab_ui.js?v=4.42" defer></script>
-    <script src="reader.js?v=4.42" defer></script>
-    <script src="fix.js?v=4.42" defer></script>
-    <script src="multi.js?v=4.42" defer></script>
-    <script src="gacha.js?v=4.42" defer></script>
-    <script src="addon.js?v=4.42" defer></script>
-    <script src="library.js?v=4.42" defer></script>
-    <script src="workbook.js?v=4.42" defer></script>
-    <script src="shared-notes.js?v=4.42" defer></script>
-    <script src="study-time.js?v=4.42" defer></script>
-    <script src="ranking.js?v=4.42" defer></script>
-    <script src="autosave.js?v=4.42" defer></script>
-    <script src="people.js?v=4.42" defer></script>
-    <script src="profile-shop.js?v=4.42" defer></script>
-    <script src="profile-customization.js?v=4.42" defer></script>
+    <script src="library-state.js?v=4.52" defer></script>
+    <script src="app.js?v=4.52" defer></script>
+    <script src="game_core.js?v=4.52" defer></script>
+    <script src="vocab_ui.js?v=4.52" defer></script>
+    <script src="reader.js?v=4.52" defer></script>
+    <script src="fix.js?v=4.52" defer></script>
+    <script src="multi.js?v=4.52" defer></script>
+    <script src="gacha.js?v=4.52" defer></script>
+    <script src="addon.js?v=4.52" defer></script>
+    <script src="library.js?v=4.52" defer></script>
+    <script src="workbook.js?v=4.52" defer></script>
+    <script src="shared-notes.js?v=4.52" defer></script>
+    <script src="study-time.js?v=4.52" defer></script>
+    <script src="ranking.js?v=4.52" defer></script>
+    <script src="autosave.js?v=4.52" defer></script>
+    <script src="people.js?v=4.52" defer></script>
+    <script src="profile-shop.js?v=4.52" defer></script>
+    <script src="profile-customization.js?v=4.52" defer></script>
 </body>
 </html>

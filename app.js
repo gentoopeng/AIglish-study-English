@@ -3167,7 +3167,7 @@ window.recordLastLoginOnce = async function() {
 // ------------------------------------------------------------------
 // 15. 管理者: ユーザーID復旧ボックス
 // ------------------------------------------------------------------
-window.injectAdminUserRepairBox = function() {
+window.injectAdminUserRepairBox = function() { return; // Retired duplicate account panel.
   if (document.getElementById("adminUserRepairBox")) return;
   const container = document.getElementById("adminUserListContainer");
   if (!container || !container.parentNode) return;
