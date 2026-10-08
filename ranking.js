@@ -17,7 +17,8 @@
     const flashCount = record => nonnegative(record&&record.flash&&record.flash.baseline)+Object.values(record&&record.flash&&record.flash.sources||{}).reduce((sum,value)=>sum+nonnegative(value),0);
     const wordKey=(book,num)=>JSON.stringify([String(book),String(num)]);
     const rated=word=>['ok','so','bad'].includes(word&&word.status)||Object.values(word&&word.meanings||{}).some(meaning=>['ok','so','bad'].includes(meaning.status));
-    window.LearningRankingModel={empty,merge,wordCount,flashCount,wordKey,rated};
+    function fromProfile(doc){let result=empty();[doc.userStatsJson,doc.statistics,doc.user_stats,doc.stats,doc.userStats].forEach(stats=>{if(typeof stats==='string'){try{stats=JSON.parse(stats);}catch(e){return;}}if(stats)result=merge(result,stats.learning_ranking_v2_json);});return merge(result,doc.learningRankingV2Json);}
+    window.LearningRankingModel={empty,merge,wordCount,flashCount,wordKey,rated,fromProfile};
     const owner=()=>typeof myId==='string'?myId:'GUEST-000';
     const storageKey=id=>'core_v4_learning_ranking_v2_'+id;
     let device=localStorage.getItem('aiglish_ranking_device');if(!device){device=crypto.randomUUID();localStorage.setItem('aiglish_ranking_device',device);}
@@ -37,20 +38,32 @@
     function scanCurrent(){} // Only explicit rating actions count in this generation.
     function readSwipeJournals(){const prefix='core_v4_ranking_swipes_v2_'+user+'_';for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key.startsWith(prefix)){const id=key.slice(prefix.length);record.flash.sources[id]=Math.max(record.flash.sources[id]||0,nonnegative(localStorage.getItem(key)));}}}
     window.syncRankingMetrics=function(){ensure();record=merge(record,read(user));if(!userStats.learning_ranking_owner||userStats.learning_ranking_owner===user)record=merge(record,userStats.learning_ranking_v2_json||userStats.learning_ranking);readSwipeJournals();scanCurrent();persist();};
-    window.recordRankedWord=function(book,num){if(!book)return;ensure();record=merge(record,read(user));record.words[wordKey(book,num)]=1;persist();};
-    window.recordRankedSwipe=function(){ensure();record=merge(record,read(user));record.flash.sources[sourceId]=nonnegative(record.flash.sources[sourceId])+1;store('core_v4_ranking_swipes_v2_'+user+'_'+sourceId,String(record.flash.sources[sourceId]));persist();};
+    window.recordRankedWord=function(book,num){if(!book)return;ensure();record=merge(record,read(user));record.words[wordKey(book,num)]=1;persist();scheduleSync();};
+    window.recordRankedSwipe=function(){ensure();record=merge(record,read(user));record.flash.sources[sourceId]=nonnegative(record.flash.sources[sourceId])+1;store('core_v4_ranking_swipes_v2_'+user+'_'+sourceId,String(record.flash.sources[sourceId]));persist();scheduleSync();};
+    let syncTimer=null;
+    function scheduleSync(){if(!syncTimer)syncTimer=setTimeout(()=>{syncTimer=null;syncCloud();},2000);}
+    async function syncCloud(){
+        window.syncRankingMetrics();const id=user;
+        if(id==='GUEST-000'||!window.fbRunTransaction||!window.db)return false;
+        if(queues.has(id))return queues.get(id);
+        const local=JSON.parse(JSON.stringify(record)),time=window.StudyTime.snapshot();
+        const task=(async()=>{try{
+            const combined=await window.fbRunTransaction(window.db,async transaction=>{
+                const ref=window.fbDoc(window.db,'users',id),snap=await transaction.get(ref);
+                const merged=merge(fromProfile(snap.exists()?snap.data():{}),local);
+                const study=window.StudyTimeModel.mergeCurrent(window.StudyTimeModel.readStats(snap.exists()?snap.data():{}).study_calendar_v2,time);
+                transaction.set(ref,{learningRankingV2Json:JSON.stringify(merged),studyLedgerJson:JSON.stringify(study)},{merge:true});return merged;
+            });
+            if(owner()===id&&user===id){record=merge(record,combined);persist();if(JSON.stringify(merge(record,local))!==JSON.stringify(merge(combined,local)))scheduleSync();}
+            return true;
+        }catch(error){console.warn('ランキング記録の同期を次回に再試行します',error);return false;}finally{queues.delete(id);}})();
+        queues.set(id,task);return task;
+    }
     const oldSave=window.saveUserStats;
-    window.saveUserStats=function(){
-        window.syncRankingMetrics();const id=user,local=JSON.parse(JSON.stringify(record)),time=window.StudyTime.snapshot();
-        const saving=oldSave.apply(this,arguments);
-        if(id==='GUEST-000'||!window.fbRunTransaction||!window.db)return saving;
-        const previous=queues.get(id)||Promise.resolve();
-        const next=Promise.all([Promise.resolve(saving),previous]).then(()=>window.fbRunTransaction(window.db,async transaction=>{
-            const ref=window.fbDoc(window.db,'users',id),snap=await transaction.get(ref),cloud=snap.exists()?(snap.data().learningRankingV2Json||null):null;
-            const combined=merge(cloud,local);const study=window.StudyTimeModel.mergeCurrent(window.StudyTimeModel.readStats(snap.exists()?snap.data():{}).study_calendar_v2,time);transaction.set(ref,{learningRankingV2Json:JSON.stringify(combined),studyLedgerJson:JSON.stringify(study)},{merge:true});return combined;
-        })).then(combined=>{if(owner()===id&&user===id){record=merge(record,combined);persist();}}).catch(error=>{console.warn('ランキング記録の同期を次回に再試行します',error);});
-        queues.set(id,next);return next;
-    };
+    window.saveUserStats=function(){window.syncRankingMetrics();const syncing=syncCloud();const saving=oldSave.apply(this,arguments);return Promise.all([Promise.resolve(saving),syncing]).then(([result])=>result);};
+    setInterval(()=>syncCloud(),30000);
+    window.addEventListener('online',scheduleSync);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')syncCloud();});
     const oldLoad=window.loadUserStats;
     window.loadUserStats=async function(){
         const id=owner();ensure();
@@ -61,7 +74,7 @@
                 if(snap.exists()){
                     const doc=snap.data(),stats=statsOf(doc);
                     if(window.StudyTime&&stats.study_calendar_v2)window.StudyTime.mergeCloud(stats.study_calendar_v2);
-                    const cloudRecord=doc.learningRankingV2Json||stats.learning_ranking_v2_json||stats.learning_ranking;
+                    const cloudRecord=fromProfile(doc);
                     record=merge(record,cloudRecord);
                     persist();
                 }
@@ -78,7 +91,7 @@
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
     const value=(row,key)=>key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
     function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
-    function row(id,doc){const stats=statsOf(doc),combined=merge(stats.learning_ranking_v2_json||stats.learning_ranking,doc.learningRankingV2Json),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:flashCount(combined)};}
+    function row(id,doc){const stats=statsOf(doc),combined=fromProfile(doc),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:flashCount(combined)};}
     function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,learningRankingV2Json:JSON.stringify(record)});}
     function detail(entry,rank,context){
         const detailKey=Object.keys(labels).find(key=>labels[key]===context)||'time';
@@ -111,7 +124,7 @@
         if(!force&&Date.now()-cacheAt<60000){render();return;}
         if(inflight&&inflight.id===user)return inflight.promise;
         const id=user,token=++generation,button=document.getElementById('rankingRefresh'),message=document.getElementById('rankingMessage');button.disabled=true;message.textContent='記録を取得中…';
-        const task=(async()=>{try{if(!window.db||!window.fbGetDocs)throw new Error('接続待ち');const snapshot=await window.fbGetDocs(window.fbCollection(window.db,'users')),list=[];snapshot.forEach(doc=>{const source=doc.data();if(source.deleted||doc.id==='GUEST-000')return;try{list.push(row(doc.id,source));}catch(e){}});if(owner()===id&&generation===token){cache=list;cacheReady=true;cacheAt=Date.now();message.textContent='';render();}}catch(error){if(owner()===id&&generation===token){message.textContent='記録を取得できませんでした。更新で再試行できます。';render();}}finally{if(generation===token)button.disabled=false;if(inflight&&inflight.id===id)inflight=null;}})();inflight={id,promise:task};return task;
+        const task=(async()=>{try{if(!window.db||!window.fbGetDocs)throw new Error('接続待ち');await syncCloud();const snapshot=await window.fbGetDocs(window.fbCollection(window.db,'users')),list=[];snapshot.forEach(doc=>{const source=doc.data();if(source.deleted||doc.id==='GUEST-000')return;try{list.push(row(doc.id,source));}catch(e){}});if(owner()===id&&generation===token){cache=list;cacheReady=true;cacheAt=Date.now();message.textContent='';render();}}catch(error){if(owner()===id&&generation===token){message.textContent='記録を取得できませんでした。更新で再試行できます。';render();}}finally{if(generation===token)button.disabled=false;if(inflight&&inflight.id===id)inflight=null;}})();inflight={id,promise:task};return task;
     }
     // Compatibility names keep old save files readable; title behavior is retired.
     ['renderTitles','renderSeasonTitles','equipTitle','unequipTitle','checkAndRewardTitleBonusXP','updateTitleProgressUI'].forEach(key=>{window[key]=function(){};});
@@ -122,5 +135,5 @@
     window.onTabChange(tab=>{if(tab==='titles'){render();refresh(false);}else if(tab==='vocab'){ensure();scanCurrent();persist();}});
     window.onAppLoaded(()=>{ensure();window.syncRankingMetrics();render();});
     window.addEventListener('storage',event=>{if(event.key===storageKey(owner())){ensure();record=merge(record,read(user));persist();render();}});
-    window.LearningRanking={render,refresh};
+    window.LearningRanking={render,refresh,sync:syncCloud,snapshot:()=>{window.syncRankingMetrics();return JSON.parse(JSON.stringify(record));}};
 })();
