@@ -561,6 +561,7 @@ if (textbooksCacheMap[bookKey]) {
 window.createTextbookListItem = function(book, index, onSelect) {
      const row = document.createElement('button');
      row.type = 'button';
+     row.dataset.bookId=book.id;
      row.className = 'textbook-list-item' + (book.id === currentTextbook ? ' is-current' : '');
      row.style.setProperty('--textbook-index', index);
      row.onclick = () => onSelect(book.id);
@@ -6164,6 +6165,8 @@ window.__initLoadQuiz = function(ov) {
   };
   var setup = function(words, bookId, name) {
     if (!words || words.length === 0) { hideAll(); return; }
+    if(window.filterLoadingQuizWords)words=window.filterLoadingQuizWords(words,bookId);
+    if(!words.length){hideAll();return;}
     q.words = words.slice().sort(function(){ return Math.random() - 0.5; }).slice(0, 20);
     q.active = true;
     q.bookId = bookId;

@@ -878,6 +878,7 @@
         });
         var card = document.createElement('div');
         card.className = "word-row-container";
+        card.dataset.wordNum=w.num;
         card.setAttribute('style', cardStyle);
         var hasAnyHistory = w.meanings && w.meanings.some(function(m) { return m.history && m.history.length > 0; });
         var dotsHtml = "";
