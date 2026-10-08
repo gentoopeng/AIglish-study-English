@@ -117,9 +117,12 @@
         sync();renderDisplay();
         if(wall-lastCloud>30000){lastCloud=wall;if(user!=='GUEST-000'&&typeof window.saveUserStats==='function')window.saveUserStats();}
     }
+    let syncedLedger=null,syncedStats=null,syncedRevision=-1,syncedDay="",lastChart=0;
     function sync() {
         if(!data||uid()!==user)return;
         const now=Date.now(),today=dateKey(now),day=new Date(now),week=weekStart(now);
+        if(data===syncedLedger&&userStats===syncedStats&&data.updatedAt===syncedRevision&&today===syncedDay)return;
+        syncedLedger=data;syncedStats=userStats;syncedRevision=data.updatedAt;syncedDay=today;
         todayStudySeconds=Math.floor(dayMilliseconds(data.days[today])/1000);lastAccessDateStr=today;
         weeklyStudyMinutesLog=Array(7).fill(0);for(let ago=0;ago<7;ago++){const d=new Date(day);d.setDate(d.getDate()-ago);weeklyStudyMinutesLog[(d.getDay()+6)%7]=dayMilliseconds(data.days[dateKey(d)])/60000;}
         Object.assign(userStats,{study_today_secs:todayStudySeconds,study_today_date:today.replace(/-0/g,'-'),study_week_secs:Math.floor(rangeValue(data,'weekly',now)/1000),study_week_key:week.replace(/-0/g,'-'),study_total_secs:Math.floor(total(data)/1000),study_weekly_log:weeklyStudyMinutesLog.slice(),study_last_date:today.replace(/-0/g,'-'),study_calendar_v2:JSON.parse(JSON.stringify(data))});
@@ -127,16 +130,17 @@
         localStorage.setItem('core_v4_study_today_secs',String(todayStudySeconds));localStorage.setItem('core_v4_study_last_date',today);localStorage.setItem('core_v4_study_weekly_log',JSON.stringify(weeklyStudyMinutesLog));localStorage.setItem('core_v4_study_total_secs',String(userStats.study_total_secs));
     }
     function format(ms) {const seconds=Math.floor(positive(ms)/1000);return String(Math.floor(seconds/3600)).padStart(2,'0')+':'+String(Math.floor(seconds/60)%60).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');}
+    function text(el,value){if(el&&el.textContent!==value)el.textContent=value;}
     function renderDisplay() {
         if(!data)return;const ms=dayMilliseconds(data.days[dateKey(Date.now())]);
-        const header=document.getElementById('headerStudyTime');if(header)header.textContent=format(ms);
-        const live=document.getElementById('studyLiveTime');if(live)live.textContent=format(ms);
-        const totalLabel=document.getElementById('totalStudyTimeValue');if(totalLabel)totalLabel.textContent=format(total(data));
-        const state=document.getElementById('studyTimerStatus');if(state)state.textContent=active?(leader?'計測中':'別のタブで計測中'):paused?'一時停止中':'待機中';
-        const button=document.getElementById('studyTimerToggle');if(button)button.textContent=manual?'一時停止':'開始';
-        const selectedLabel=document.getElementById('studySelectedDay');if(selectedLabel)selectedLabel.textContent=selected+' · '+format(dayMilliseconds(data.days[selected]));
-        const todayButton=document.querySelector('#studyCalendar [data-date="'+dateKey(Date.now())+'"] small');if(todayButton)todayButton.textContent=format(ms);
-        if(currentActiveTabId==='study'){renderRanking();chart();}
+        const header=document.getElementById('headerStudyTime');text(header,format(ms));
+        const live=document.getElementById('studyLiveTime');text(live,format(ms));
+        const totalLabel=document.getElementById('totalStudyTimeValue');text(totalLabel,format(total(data)));
+        const state=document.getElementById('studyTimerStatus');text(state,active?(leader?'計測中':'別のタブで計測中'):paused?'一時停止中':'待機中');
+        const button=document.getElementById('studyTimerToggle');text(button,manual?'一時停止':'開始');
+        const selectedLabel=document.getElementById('studySelectedDay');text(selectedLabel,selected+' · '+format(dayMilliseconds(data.days[selected])));
+        const todayButton=document.querySelector('#studyCalendar [data-date="'+dateKey(Date.now())+'"] small');text(todayButton,format(ms));
+        if(currentActiveTabId==='study'){renderRanking();if(performance.now()-lastChart>=5000){lastChart=performance.now();chart();}}
     }
     function renderCalendar() {
         const container=document.getElementById('studyCalendar');if(!container||!data)return;
@@ -164,15 +168,18 @@
     function friendValue(entry) {
         return rankingSeconds(entry.stats||{},'daily',Date.now());
     }
+    let podiumShape=null;
     function renderRanking() {
         const container=document.getElementById('studyFriendRanking');if(!container||!data)return;
         const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false,id:f.id,avatar:f.avatar||'',getStats:()=>f.stats}));
         if(user!=='GUEST-000')rows.push({name:(myName||'あなた'),seconds:Math.floor(rangeValue(data,'daily',Date.now())/1000),self:true,id:user,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',getStats:()=>userStats});
         const top=rows.filter(r=>r.seconds>=300).sort((a,b)=>b.seconds-a.seconds||a.id.localeCompare(b.id)).slice(0,3);
-        const signature=JSON.stringify(top);if(container.dataset.signature===signature)return;container.dataset.signature=signature;
-        const shape=JSON.stringify([user,...top.map(record=>[record.id,record.name,record.avatar])]);
-        if(container.dataset.shape===shape){top.forEach((record,index)=>{const column=container.querySelector('.place-'+(index+1));if(column){column.querySelector('strong').textContent=format(record.seconds*1000);column.onclick=()=>{if(window.RankingVisuals)window.RankingVisuals.detailStudy(record,index+1);};}});return;}
-        const mounted=container.dataset.shape!==undefined;container.dataset.shape=shape;container.replaceChildren();
+        const signature=JSON.stringify(top.map(row=>[row.id,row.seconds]));
+        const shape=[[user],...top.map(record=>[record.id,record.name,record.avatar])];
+        const same=podiumShape&&podiumShape.length===shape.length&&podiumShape.every((row,i)=>row.length===shape[i].length&&row.every((value,j)=>value===shape[i][j]));
+        if(same&&container.dataset.signature===signature)return;container.dataset.signature=signature;
+        if(same){top.forEach((record,index)=>{const column=container.querySelector('.place-'+(index+1));if(column){column.querySelector('strong').textContent=format(record.seconds*1000);column.onclick=()=>{if(window.RankingVisuals)window.RankingVisuals.detailStudy(record,index+1);};}});return;}
+        const mounted=podiumShape!==null;podiumShape=shape;container.replaceChildren();
         if(!top.length){const hint=document.createElement('p');hint.className='study-podium-empty';hint.textContent='今日5分以上勉強したユーザーが、ここに登場します。';container.append(hint);return;}
         const podium=document.createElement('div');podium.className='study-podium';
         [1,0,2].forEach(index=>{const record=top[index],place=index+1;const column=document.createElement(record?'button':'div');column.className='study-podium-place place-'+place+(record&&record.self?' is-self':'')+(mounted?' podium-mounted':'');if(!record){column.classList.add('is-empty');column.setAttribute('aria-hidden','true');podium.append(column);return;}
@@ -211,5 +218,5 @@
     document.querySelectorAll('#studyRankRanges [data-range]').forEach(button=>button.onclick=()=>{rankRange=button.dataset.range;document.querySelectorAll('#studyRankRanges button').forEach(b=>b.classList.toggle('active',b===button));renderRanking();});
     document.addEventListener('visibilitychange',()=>{tick();if(document.visibilityState!=='visible'){active=false;unlock();}else{lastMono=performance.now();lastWall=Date.now();active=eligible();claim();}if(user&&user!=='GUEST-000'&&window.saveUserStats)window.saveUserStats();});
     window.addEventListener('pagehide',()=>{tick();active=false;unlock();persist();});window.addEventListener('storage',event=>{if(user&&event.key===storageKey(user)){data=mergeCurrent(data,read(user));sync();renderCalendar();}});
-    setInterval(tick,500);setInterval(chart,10000);window.onAppLoaded(init);init();
+    setInterval(tick,500);(window.ViewWork?.interval || setInterval)(chart,10000,['study']);window.onAppLoaded(init);init();
 })();

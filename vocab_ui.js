@@ -928,6 +928,8 @@
         return card;
     };
 
+    var vocabPage=0,vocabPageFilter="";
+    const vocabPageSize=40;
     window.renderVocabList = function() {
         var container = document.getElementById('vocabListContainer');
         if (!container) return;
@@ -946,9 +948,21 @@
             if (searchKeyword && !(w.word.toLowerCase().includes(searchKeyword) || w.meaning.includes(searchKeyword) || String(w.note || '').toLowerCase().includes(searchKeyword))) return false;
             return true;
         });
-        filtered.forEach(function(w) {
-            container.appendChild(window.createVocabCard(w));
+        var signature=JSON.stringify([currentTextbook,startRange,endRange,searchKeyword,vocabFilter]);
+        if(signature!==vocabPageFilter){vocabPage=0;vocabPageFilter=signature;}
+        vocabPage=Math.min(vocabPage,Math.max(0,Math.ceil(filtered.length/vocabPageSize)-1));
+        var fragment=document.createDocumentFragment();
+        filtered.slice(vocabPage*vocabPageSize,(vocabPage+1)*vocabPageSize).forEach(function(w) {
+            fragment.appendChild(window.createVocabCard(w));
         });
+        container.appendChild(fragment);
+        if(filtered.length>vocabPageSize){
+            const nav=document.createElement('nav');nav.className='vocab-pages';nav.setAttribute('aria-label','単語一覧のページ');
+            const previous=document.createElement('button'),next=document.createElement('button'),label=document.createElement('span');
+            previous.type=next.type='button';previous.textContent='前へ';next.textContent='次へ';previous.disabled=vocabPage===0;next.disabled=(vocabPage+1)*vocabPageSize>=filtered.length;
+            label.textContent=(vocabPage*vocabPageSize+1)+'–'+Math.min((vocabPage+1)*vocabPageSize,filtered.length)+' / '+filtered.length;
+            previous.onclick=()=>{vocabPage--;window.renderVocabList();};next.onclick=()=>{vocabPage++;window.renderVocabList();};nav.append(previous,label,next);container.append(nav);
+        }
         window.initLucide();
     };
 

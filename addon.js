@@ -215,7 +215,7 @@ var m=statsFor(id);
 fixStats(m);
 bindSkills(m);
 }
-setInterval(tick,500);
+(window.ViewWork?.interval || setInterval)(tick, 500, ['party','game']);
 console.log('📚 図鑑強化パッチv2適用完了');
 })();
 
@@ -292,10 +292,10 @@ var r=__origRenderParty?__origRenderParty.apply(this,arguments):undefined;
 setTimeout(fixBattleIcon,40); setTimeout(fixCharSlot,40);
 return r;
 };
-setInterval(function(){
+(window.ViewWork?.interval || setInterval)(function(){
 var v=document.getElementById('view-party');
 if(v&&v.classList.contains('active')) fixCharSlot();
-},800);
+}, 800, ['party','game']);
 console.log('🎴 グリッド修正パッチ適用完了');
 })();
 
@@ -434,7 +434,7 @@ setTimeout(function(){if(p.parentNode)p.parentNode.removeChild(p);},2800);
 }
 /* HP増加を検知して回復演出 */
 var lastHp={};
-setInterval(function(){
+(window.ViewWork?.interval || setInterval)(function(){
 try{
 if(typeof multiPartyMembers==='undefined'||!multiPartyMembers)return;
 multiPartyMembers.forEach(function(m){
@@ -443,7 +443,7 @@ if(prev!=null&&m.hp>prev)healNum(m.id,m.hp-prev);
 lastHp[m.id]=m.hp;
 });
 }catch(e){}
-},300);
+}, 300, ['party','game']);
 /* ゲージMAXでキャラ別スキル2演出 */
 var __prevFlickFx=window.processMultiFlickAnswer;
 window.processMultiFlickAnswer=function(ci){

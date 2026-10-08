@@ -3864,7 +3864,8 @@ console.log("🔐 ログイン安定化＆自動復旧パッチ 適用完了");
   });
 
   if (document.body) {
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    var gate = document.getElementById("auth-gate-screen");
+    if(gate) observer.observe(gate, { childList: true, subtree: true, attributes: true, attributeFilter:["style","class"] });
   }
 
 })();
@@ -10757,27 +10758,11 @@ console.log('🔒 第8回パッチ（高さ正規化＋注釈削除＋編集を�
 
 // ---------- 1. 総勉強時間ラベルのコントラスト修正 ----------
 window.__steFixContrast = function() {
-    if (!document.body || document.body.classList.contains('shop-editing-active')) return;
-    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-        acceptNode: function(n) {
-            if (!n.nodeValue || n.nodeValue.indexOf('総勉強時間') < 0) return NodeFilter.FILTER_REJECT;
-            var p = n.parentNode;
-            if (!p || p.nodeType !== 1) return NodeFilter.FILTER_REJECT;
-            if (p.getAttribute('data-ste-fixed') === '1') return NodeFilter.FILTER_REJECT;
-            // 入力欄など編集UIの中は対象外
-            if (p.closest && p.closest('#studyTimeEditorOverlay')) return NodeFilter.FILTER_REJECT;
-            return NodeFilter.FILTER_ACCEPT;
-        }
-    });
-    var node;
-    while ((node = walker.nextNode())) {
-        var el = node.parentNode;
-        el.setAttribute('data-ste-fixed', '1');
-    }
+    // The current UI has a fixed label; do not scan every word, note and hidden view.
+    var label = document.getElementById('totalStudyTimeLabel');
+    if (label && label.getAttribute('data-ste-fixed') !== '1') label.setAttribute('data-ste-fixed','1');
 };
-// 初回＋軽い間隔で再適用（タブ切替後のDOM差し替えにも追従）
 window.__steFixContrast();
-setInterval(window.__steFixContrast, 1500);
 
 // ---------- 2. 編集モーダルへ直接入力欄を注入 ----------
 window.__steInjectDirectInput = function() {
@@ -11159,7 +11144,7 @@ console.log('🧹 第10回パッチ（データ浄化＋不整合修正＋管理
         window.__bridge = s;
         var w = window.__bridgeWrite; // fix.js → 本体 へ
         if (w) { window.__bridgeWrite = null; for (var k in w) { try { if (typeof eval(k) !== "undefined") eval(k + " = w[k]"); } catch (e) {} } }
-    }, 120);
+    }, 1000);
 })();
 // ==========================================================================
 //  app.js 末尾パッチ：データリセット後の“復活”を根治（理解度は残す）
