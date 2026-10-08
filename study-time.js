@@ -35,11 +35,17 @@
     function weekStart(now) {const d=new Date(now);d.setDate(d.getDate()-((d.getDay()+6)%7));d.setHours(0,0,0,0);return dateKey(d);}
     function rangeValue(data,range,now) {if(range==='daily')return dayMilliseconds(data.days[dateKey(now)]);if(range==='weekly'){const start=weekStart(now),end=dateKey(now);return Object.entries(data.days).reduce((sum,[date,day])=>sum+(date>=start&&date<=end?dayMilliseconds(day):0),0);}return total(data);}
     function readStats(doc) {
-        let legacy={};try{legacy=typeof doc.userStatsJson==='string'?JSON.parse(doc.userStatsJson):{};}catch(e){}
-        if(!legacy||typeof legacy!=='object')legacy={};
-        const current=doc.userStats&&typeof doc.userStats==='object'?doc.userStats:{};
-        const result=Object.assign({},legacy,current);
-        if(legacy.study_calendar_v2||current.study_calendar_v2)result.study_calendar_v2=mergeCurrent(legacy.study_calendar_v2,current.study_calendar_v2);
+        const result={};let ledger=null,hasLedger=false;
+        // Older profile saves write `stats` and can leave `userStats` null.
+        [doc.userStatsJson,doc.statistics,doc.user_stats,doc.stats,doc.userStats].forEach(source=>{
+            if(typeof source==='string'){try{source=JSON.parse(source);}catch(e){return;}}
+            if(!source||typeof source!=='object'||Array.isArray(source))return;
+            Object.assign(result,source);
+            if(source.study_calendar_v2){ledger=mergeCurrent(ledger,source.study_calendar_v2);hasLedger=true;}
+        });
+        if(hasLedger)result.study_calendar_v2=ledger;
+        if(result.study_today_secs===undefined&&doc.todayStudySeconds!==undefined)result.study_today_secs=positive(doc.todayStudySeconds);
+        if(!result.study_today_date&&doc.lastAccessDateStr)result.study_today_date=doc.lastAccessDateStr;
         return result;
     }
     function rankingSeconds(stats,range,now) {
