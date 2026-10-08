@@ -208,6 +208,7 @@ else{det.style.display='';det.dataset.for=skill.n;det.innerHTML='<b>'+skill.n+'<
 });
 }
 function tick(){
+if(document.visibilityState==='hidden'||!document.getElementById('view-party')?.classList.contains('active'))return;
 hideUnowned();
 var id=activeId();if(!id)return;
 var m=statsFor(id);
