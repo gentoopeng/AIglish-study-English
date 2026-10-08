@@ -53,6 +53,7 @@
         if(storage[libraryKey]){
             const incoming=JSON.parse(storage[libraryKey]),existing=JSON.parse(localStorage.getItem(libraryKey)||'null');
             if(existing&&Array.isArray(existing.hidden))incoming.hidden=Array.from(new Set((incoming.hidden||[]).concat(existing.hidden)));
+            if(existing&&Array.isArray(existing.books)){const books=new Map((incoming.books||[]).map(book=>[book.id,book]));existing.books.forEach(book=>{const remote=books.get(book.id);if(!remote||Date.parse(book.updatedAt||existing.savedAt||'')>Date.parse(remote.updatedAt||incoming.savedAt||''))books.set(book.id,book);});incoming.books=Array.from(books.values());}
             storage[libraryKey]=JSON.stringify(incoming);
         }
         Object.values(registry).forEach(item => {

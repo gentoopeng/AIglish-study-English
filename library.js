@@ -19,11 +19,28 @@
     function persist(data) {
         if(window.LibraryState)data.books=data.books.filter(function(book){return !window.LibraryState.isDeleted('book',book.id);});
         data.savedAt = new Date().toISOString();
+        data.books.forEach(function(book){book.updatedAt=data.savedAt;});
         localStorage.setItem(key(), JSON.stringify(data));
+        if(window.queueBackgroundSave)window.queueBackgroundSave();
+        syncLibraryCloud(data).catch(function(error){console.warn('単語帳一覧の同期を次回に再試行します',error);});
         refreshPool();
         window.renderVocabLibrarySelection();
         window.updateFlashcardSourceSelectOptions();
     }
+    function mergeLibraries(local,remote,owner){
+        owner=owner||userId();
+        local=local||{books:[],hidden:[]};remote=remote||{books:[],hidden:[]};
+        var books=new Map();[remote,local].forEach(function(list){(list.books||[]).forEach(function(book){var existing=books.get(book.id);if(!existing||(Date.parse(book.updatedAt||list.savedAt||'')||0)>=(Date.parse(existing.updatedAt||remote.savedAt||'')||0))books.set(book.id,book);});});
+        var latest=Date.parse(local.savedAt||'')>=Date.parse(remote.savedAt||'')?local:remote;
+        return {books:Array.from(books.values()).filter(function(book){return !(window.LibraryState&&window.LibraryState.isDeleted('book',book.id,owner));}),hidden:latest.hidden||[],savedAt:latest.savedAt||''};
+    }
+    async function syncLibraryCloud(snapshot){
+        var owner=userId();if(owner==='GUEST-000'||!window.db||!window.fbRunTransaction)return;
+        var ref=window.fbDoc(window.db,'users',owner,'library','catalog');
+        var result=await window.fbRunTransaction(window.db,async function(tx){var doc=await tx.get(ref),remote=doc.exists()?JSON.parse(doc.data().libraryJson||'null'):null;var merged=mergeLibraries(snapshot,remote,owner);tx.set(ref,{libraryJson:JSON.stringify(merged)},{merge:true});return merged;});
+        if(userId()===owner){localStorage.setItem(key(),JSON.stringify(mergeLibraries(readLibrary(),result)));refreshPool();window.renderVocabLibrarySelection();}
+    }
+    window.onAppLoaded(async function(){var owner=userId();if(owner==='GUEST-000'||!window.db||!window.fbGetDoc)return;try{var doc=await window.fbGetDoc(window.fbDoc(window.db,'users',owner,'library','catalog'));if(userId()!==owner)return;if(doc.exists()){localStorage.setItem(key(),JSON.stringify(mergeLibraries(readLibrary(),JSON.parse(doc.data().libraryJson||'null'))));refreshPool();window.renderVocabLibrarySelection();}await syncLibraryCloud(readLibrary());}catch(error){console.warn('単語帳一覧は端末の保存を使います',error);}});
     window.isPersonalTextbook = function(bookId) {
         return readLibrary().books.some(function(book) { return book.id === bookId; });
     };
@@ -346,7 +363,7 @@
                         textbooksCacheMap[id] = clean; window.__manualVocabDrafts[id] = draft;
                         var ownLibrary = readLibrary();
                         ownLibrary.books.push({id:id,name:data.name,cover:data.coverType==='image'&&/^data:image\/(jpeg|png|webp);base64,/.test(data.cover||'')?data.cover:'📘',coverType:data.coverType==='image'&&/^data:image\/(jpeg|png|webp);base64,/.test(data.cover||'')?'image':'text',personal:true,visibility:'private'});
-                        persist(ownLibrary); add.textContent = '追加済み'; add.disabled = true;
+                        window.__dirtyManualVocabDrafts=window.__dirtyManualVocabDrafts||{};window.__dirtyManualVocabDrafts[id]=draft.savedAt;persist(ownLibrary); add.textContent = '追加済み'; add.disabled = true;
                     } catch (error) { list.textContent = '追加できませんでした。' + error.message; }
                 };
                 row.append(details, add); list.appendChild(row);
