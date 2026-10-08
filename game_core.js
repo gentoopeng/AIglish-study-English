@@ -625,6 +625,7 @@
         if (typeof userStats !== 'undefined') {
             userStats.flash_count = (userStats.flash_count || 0) + 1;
             if (window.recordRankedSwipe) window.recordRankedSwipe();
+            if (window.noteFlashSwipe) window.noteFlashSwipe();
             if (vocabMatch && window.recordRankedWord) window.recordRankedWord(currentTextbook, vocabMatch.num);
             userStats.vocab_fixed = (typeof vocabList !== 'undefined') ? vocabList.filter(function(w) { return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; }); }).length : 0;
         }
@@ -686,6 +687,7 @@
     };
 
     window.finishFlashcardSession = function() {
+        if(window.flushFlashAutosave)window.flushFlashAutosave();
         if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         if (typeof window.flushChangedVocabData === 'function') window.flushChangedVocabData();
         window.closeFlashcardWordDetails();
