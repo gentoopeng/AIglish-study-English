@@ -4184,6 +4184,11 @@ window.__renderPenguinOverlay = function(message) {
   window.__pgLoad.overlay = ov;
   requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
 };
+window.__updatePenguinText = function(message) {
+  var overlay = window.__pgLoad && window.__pgLoad.overlay;
+  var label = overlay && overlay.querySelector('.penguin-loading-text');
+  if (label) label.textContent = message || '読み込み中';
+};
 window.showPenguinLoading = function(message) {
   var st = window.__pgLoad;
   st.count++;
@@ -10752,7 +10757,7 @@ console.log('🔒 第8回パッチ（高さ正規化＋注釈削除＋編集を�
 
 // ---------- 1. 総勉強時間ラベルのコントラスト修正 ----------
 window.__steFixContrast = function() {
-    if (!document.body) return;
+    if (!document.body || document.body.classList.contains('shop-editing-active')) return;
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
         acceptNode: function(n) {
             if (!n.nodeValue || n.nodeValue.indexOf('総勉強時間') < 0) return NodeFilter.FILTER_REJECT;

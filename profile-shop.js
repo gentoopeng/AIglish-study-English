@@ -24,15 +24,37 @@ function smallImage(entry){if(entry.thumbnail)return Promise.resolve(entry.thumb
 function badge(entry){const el=document.createElement('span');el.className='shop-item-preview';if(entry.image){const img=document.createElement('img');img.loading='lazy';img.decoding='async';img.alt=entry.name;el.append(img);smallImage(entry).then(source=>{if(img.isConnected)img.src=source;}).catch(()=>{if(el.isConnected)el.textContent='◇';});}else if(entry.id==='wood')el.classList.add('profile-frame-wood');else el.textContent=entry.kind==='frame'?'◯':'◇';return el;}
 async function buy(id){const account=uid();if(account==='GUEST-000')throw Error('購入にはログインが必要です。');if(!window.fbRunTransaction||!window.db)throw Error('接続後にもう一度お試しください。');await window.saveUserStats();if(uid()!==account)throw Error('ユーザーが切り替わりました。');const result=await window.fbRunTransaction(window.db,async tx=>{const productDoc=await tx.get(window.fbDoc(window.db,'profileShopItems',id));if(!productDoc.exists())throw Error('商品が見つかりません。');const product=item(Object.assign({},productDoc.data(),{id}));const ref=window.fbDoc(window.db,'users',account),userDoc=await tx.get(ref),doc=userDoc.exists()?userDoc.data():{},stats=window.StudyTimeModel.readStats(doc),purchase=purchaseResult(parse(doc.profileShopOwnedJson,[]),stats.gold||0,product);if(purchase.charged||!parse(doc.profileShopOwnedJson,[]).includes(id))tx.set(ref,{profileShopOwnedJson:JSON.stringify(purchase.owned),userStats:{gold:purchase.gold},stats:{gold:purchase.gold}},{merge:true});return purchase;});if(uid()!==account)return;localStorage.setItem(ownedKey(account),JSON.stringify(union(owned(),result.owned)));userStats.gold=result.gold;localStorage.setItem('core_v4_user_stats_'+account,JSON.stringify(userStats));if(window.queueBackgroundSave)window.queueBackgroundSave();return result;}
 async function open(kind){await refresh(true);const titles={frame:'アイコンフレーム',profileBackground:'プロフィール背景',appBackground:'アプリ背景'};const modal=window.openLibraryDialog(titles[kind],'<div class="appearance-shop-list"></div><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>'),account=uid(),list=modal.querySelector('.appearance-shop-list');const add=(entry)=>{const row=document.createElement('div');row.className='appearance-shop-item';const info=document.createElement('span'),name=document.createElement('strong'),cost=document.createElement('small');name.textContent=entry.name;cost.textContent=entry.id==='wood'||owned().includes(entry.id)?'所有済み':entry.price.toLocaleString('ja-JP')+' コイン';info.append(name,cost);const button=document.createElement('button');button.type='button';button.textContent=entry.id==='wood'||owned().includes(entry.id)?'設定':'購入';button.onclick=async()=>{if(uid()!==account)return;button.disabled=true;try{if(entry.id!=='wood'&&!owned().includes(entry.id)){const current=catalog.find(item=>item.id===entry.id);if(!window.confirm(current.name+'を'+current.price+'ゴールドで購入しますか？'))return;await buy(entry.id);}if(uid()!==account)return;window.ProfileCustomization.select(kind,entry.id);window.closeLibraryDialog();}catch(error){modal.querySelector('.library-editor-error').textContent=error.message;}finally{button.disabled=false;}};row.classList.toggle('shop-product-locked',entry.id!=='wood'&&!owned().includes(entry.id));row.append(badge(entry),info,button);list.append(row);};if(kind!=='frame'){const row=document.createElement('button');row.type='button';row.className='appearance-default';row.textContent=kind==='appBackground'?'動く星空':'標準';row.onclick=()=>{window.ProfileCustomization.select(kind,'default');window.closeLibraryDialog();};list.append(row);}catalog.filter(entry=>entry.kind===kind&&(entry.enabled||owned().includes(entry.id))).forEach(add);}
+async function prepareArtwork(value,kind,isCurrent){
+ const file=typeof value==='string'?await (await fetch(value)).blob():value;
+ const format=kind==='frame'?'image/png':'image/jpeg';
+ let image=await window.ProfileCustomization.imageFile(file,kind==='frame'?240:400,format,isCurrent,.45);
+ if(image.length>175000)image=await window.ProfileCustomization.imageFile(await (await fetch(image)).blob(),160,format,isCurrent,.4);
+ const thumbnail=await window.ProfileCustomization.imageFile(await (await fetch(image)).blob(),48,'image/png',isCurrent);
+ return {image,thumbnail};
+}
+function saveQuiz(){
+ if(!window.showPenguinLoading||!window.__pgLoad)return ()=>{};
+ window.showPenguinLoading('商品を保存しています');
+ const state=window.__pgLoad;
+ if(state.pendingTimer){clearTimeout(state.pendingTimer);state.pendingTimer=null;}
+ if(!state.overlay)window.__renderPenguinOverlay('商品を保存しています');
+ state.visible=true;state.shownAt=Date.now();
+ const overlay=state.overlay,host=document.createElement('dialog');host.className='shop-save-quiz-dialog';host.setAttribute('aria-label','商品保存中のロードクイズ');
+ overlay.querySelectorAll('.lq-spark').forEach(el=>el.remove());
+ const back=document.createElement('button');back.type='button';back.className='shop-save-quiz-back';back.textContent='編集に戻る';host.append(overlay,back);document.body.append(host);host.addEventListener('cancel',event=>{event.preventDefault();finish();});host.showModal();
+ let ended=false;
+ function finish(){if(ended)return;ended=true;if(overlay.parentNode===host)document.body.append(overlay);host.close();host.remove();window.hidePenguinLoading();}
+ back.onclick=finish;return finish;
+}
 function deadline(task,ms=12000){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{const error=Error('通信待ちです。入力内容を保持しています。「保存を確認」で再試行できます。');error.code='shop-save-timeout';reject(error);},ms);Promise.resolve(task).then(value=>{clearTimeout(timer);resolve(value);},error=>{clearTimeout(timer);reject(error);});});}
 async function editor(id){
  if(!secure()){requireAdmin(()=>editor(id));return;}
  const account=uid(),old=catalog.find(entry=>entry.id===id),data=old?Object.assign({},old):{id:'item-'+crypto.randomUUID(),kind:'frame',name:'',price:0,image:'',enabled:false};
  const modal=window.openLibraryDialog(old?'商品を編集':'商品を追加',
-  '<form class="shop-admin-form"><fieldset class="shop-editor-fields"><div class="shop-editor-art"><div id="shopPreview"></div><label class="shop-photo-picker"><span>写真のインポート</span><input id="shopImage" type="file" accept="image/png,image/jpeg,image/webp"></label></div>'+
+  '<form class="shop-admin-form" novalidate><fieldset class="shop-editor-fields"><div class="shop-editor-art"><div id="shopPreview"></div><label class="shop-photo-picker"><span>写真のインポート</span><input id="shopImage" type="file" accept="image/png,image/jpeg,image/webp"></label></div>'+
   '<label>商品名<input id="shopName" maxlength="50" required></label><div class="shop-editor-pair"><label>種類<select id="shopKind"><option value="frame">フレーム</option><option value="profileBackground">カード背景</option><option value="appBackground">アプリ背景</option></select></label><label>必要コイン数<input id="shopPrice" type="number" inputmode="numeric" min="0" max="100000000" required></label></div>'+
   '<label class="shop-enabled"><input type="checkbox" id="shopEnabled"><span>販売する</span></label></fieldset><p class="library-editor-error shop-save-status" role="status" aria-live="polite"></p><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button><button type="submit" class="library-editor-primary">保存</button></div></form>');
- modal.classList.add('shop-editor-dialog');
+ modal.classList.add('shop-editor-dialog');document.body.classList.add('shop-editing-active');modal.addEventListener('close',()=>{if(!document.querySelector('.shop-editor-dialog[open]'))document.body.classList.remove('shop-editing-active');});
  window.fitNativeModal?.(modal);
  const form=modal.querySelector('form'),fields=form.querySelector('fieldset'),button=form.querySelector('[type=submit]'),status=form.querySelector('.shop-save-status');
  form.querySelector('#shopKind').value=data.kind;form.querySelector('#shopName').value=data.name;form.querySelector('#shopPrice').value=data.price;form.querySelector('#shopEnabled').checked=data.enabled;form.querySelector('#shopPreview').append(badge(data));
@@ -46,25 +68,30 @@ async function editor(id){
   const request=++uploadRevision,file=e.target.files[0];if(!file)return;
   busy(true,'画像を読み込み中…');status.textContent='写真を準備しています…';
   try{
-   const format=form.querySelector('#shopKind').value==='frame'?'image/png':'image/jpeg';
-   let image=await window.ProfileCustomization.imageFile(file,600,format,()=>request===uploadRevision&&current());if(request!==uploadRevision||!current())return;
-   if(image.length>600000){const bounded=await (await fetch(image)).blob();image=await window.ProfileCustomization.imageFile(bounded,320,format,()=>request===uploadRevision&&current());if(request!==uploadRevision||!current())return;}
-   data.image=image;data.thumbnail='';thumbnails.delete(data.id);data.thumbnail=await smallImage(data);if(request!==uploadRevision||!current())return;
+   const art=await prepareArtwork(file,form.querySelector('#shopKind').value,()=>request===uploadRevision&&current());if(request!==uploadRevision||!current())return;Object.assign(data,art);thumbnails.delete(data.id);
    form.querySelector('#shopPreview').replaceChildren(badge(data));status.textContent='写真を変更しました。保存で確定します。';
   }catch(error){if(current())status.textContent=error.message;}
   finally{if(request===uploadRevision&&current())busy(false,'保存');}
  };
  form.onsubmit=async e=>{
   e.preventDefault();if(saving||!current())return;
+  let finishQuiz=()=>{};
   saving=true;busy(true,pendingSave?'確認中…':'保存中…');status.textContent=pendingSave?'保存結果を確認しています…':'クラウドへ保存しています…';
   try{
+   finishQuiz=saveQuiz();
+   await new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));
    if(!secure())throw Error('管理者パスワードで再認証してください。');
    if(navigator.onLine===false)throw Error('オフラインです。入力内容は保持しています。接続後に保存してください。');
    if(!window.db||!window.fbSetDoc||!window.fbGetDoc)throw Error('接続の準備ができていません。少し待って保存してください。');
    if(!pendingSave){
-    const record=item(Object.assign({},data,{kind:form.querySelector('#shopKind').value,name:form.querySelector('#shopName').value,price:Number(form.querySelector('#shopPrice').value),enabled:form.querySelector('#shopEnabled').checked,updatedAt:Date.now()}));
-    const ref=window.fbDoc(window.db,'profileShopItems',record.id);
+    const name=form.querySelector('#shopName').value.trim(),price=form.querySelector('#shopPrice').value;
+    if(!name)throw Error('商品名を入力してください。');if(!price.trim())throw Error('必要コイン数を入力してください。');
+    const draft=Object.assign({},data,{kind:form.querySelector('#shopKind').value,name,price:Number(price),enabled:form.querySelector('#shopEnabled').checked,updatedAt:Date.now()});
+    item(draft);
     pendingSave=(async()=>{
+     if(draft.image)Object.assign(draft,await prepareArtwork(draft.image,draft.kind,()=>uid()===account));
+     if(uid()!==account||!secure())throw Error('管理者パスワードで再認証してください。');
+     const record=item(draft),ref=window.fbDoc(window.db,'profileShopItems',record.id);
      await window.fbSetDoc(ref,record,{merge:false});if(current())status.textContent='保存結果を確認しています…';
      const read=window.fbGetDocFromServer||window.fbGetDoc,snapshot=await read(ref);
      if(!snapshot.exists()||JSON.stringify(item(Object.assign({},snapshot.data(),{id:record.id})))!==JSON.stringify(record))throw Error('保存を確認できませんでした。内容を確認して再度保存してください。');
@@ -76,7 +103,7 @@ async function editor(id){
    }
    await deadline(pendingSave);saved();
   }catch(error){failure(error);}
-  finally{saving=false;}
+  finally{saving=false;finishQuiz();}
  };
 }
 let category='frame',adminTab='products';

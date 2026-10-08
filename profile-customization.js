@@ -24,13 +24,13 @@ function apply(data=read()){
 async function sync(){const id=owner();if(saving||!pending.has(id)||id==='GUEST-000'||!window.db||!window.fbRunTransaction)return;saving=true;const local=read(),name=myName,target=myTarget,photo=localStorage.getItem('core_v4_user_avatar_'+id)||'';try{const result=await window.fbRunTransaction(window.db,async tx=>{const ref=window.fbDoc(window.db,'users',id),snap=await tx.get(ref),data=merge(local,snap.exists()?snap.data().profileCustomizationJson:null);tx.set(ref,{profileCustomizationJson:JSON.stringify(data),playerName:data.nickname===null?name:data.nickname,userTarget:data.goal===null?target:data.goal,avatar:data.avatar===null?photo:data.avatar},{merge:true});return data;});if(owner()===id){const current=read();if(current.updatedAt===local.updatedAt)pending.delete(id);const combined=merge(current,result);localStorage.setItem(key(id),JSON.stringify(combined));restoreIdentity(combined);apply();}}catch(error){console.warn('プロフィールは接続後に再同期します',error);}finally{saving=false;}}
 let imageRequests=0;
 let imageQueue=Promise.resolve();
-async function imageFile(file,size=800,format='image/jpeg',isCurrent=()=>true){
+async function imageFile(file,size=800,format='image/jpeg',isCurrent=()=>true,quality=.65){
  if(!file||!file.type.startsWith('image/'))throw Error('写真を選んでください。');
  imageRequests++;const saveButton=document.querySelector('#profileForm button[type=submit]');if(saveButton)saveButton.disabled=true;
  const work=async()=>{if(!isCurrent())throw Error('画像の読み込みを中止しました。');let bitmap=null,url='',canvas=null;try{
    if(window.createImageBitmap){try{bitmap=await createImageBitmap(file,{resizeWidth:size,resizeQuality:'high',imageOrientation:'from-image'});}catch(error){}}
    if(!bitmap){url=URL.createObjectURL(file);bitmap=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('写真を開けませんでした。'));img.src=url;});}
-   const scale=Math.min(1,size/Math.max(bitmap.width,bitmap.height));canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);return canvas.toDataURL(format,.65);
+   const scale=Math.min(1,size/Math.max(bitmap.width,bitmap.height));canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);return canvas.toDataURL(format,quality);
  }finally{if(bitmap&&bitmap.close)bitmap.close();if(bitmap&&url)bitmap.src='';if(url)URL.revokeObjectURL(url);if(canvas){canvas.width=0;canvas.height=0;}}};
  const result=imageQueue.then(work,work);imageQueue=result.catch(()=>{});
  return result.finally(()=>{imageRequests--;if(saveButton&&imageRequests===0)saveButton.disabled=false;});
