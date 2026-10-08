@@ -34,6 +34,14 @@
     function total(data) {return positive(data.offset)+Object.values(data.days).reduce((sum,day)=>sum+dayMilliseconds(day),0);}
     function weekStart(now) {const d=new Date(now);d.setDate(d.getDate()-((d.getDay()+6)%7));d.setHours(0,0,0,0);return dateKey(d);}
     function rangeValue(data,range,now) {if(range==='daily')return dayMilliseconds(data.days[dateKey(now)]);if(range==='weekly'){const start=weekStart(now),end=dateKey(now);return Object.entries(data.days).reduce((sum,[date,day])=>sum+(date>=start&&date<=end?dayMilliseconds(day):0),0);}return total(data);}
+    function readStats(doc) {
+        let legacy={};try{legacy=typeof doc.userStatsJson==='string'?JSON.parse(doc.userStatsJson):{};}catch(e){}
+        if(!legacy||typeof legacy!=='object')legacy={};
+        const current=doc.userStats&&typeof doc.userStats==='object'?doc.userStats:{};
+        const result=Object.assign({},legacy,current);
+        if(legacy.study_calendar_v2||current.study_calendar_v2)result.study_calendar_v2=mergeCurrent(legacy.study_calendar_v2,current.study_calendar_v2);
+        return result;
+    }
     function legacy(stats,local,now) {
         const data={version:1,days:{},offset:0,updatedAt:now},last=normalizeDate(stats.study_last_date||stats.study_weekly_log_today_date||local.date);
         const logs=Array.isArray(stats.study_weekly_log)?stats.study_weekly_log:local.log;
@@ -50,7 +58,7 @@
     const RESET_EPOCH='study-reset-2.62';
     function resetLedger(ledger) {return ledger&&ledger.epoch===RESET_EPOCH?ledger:{version:1,epoch:RESET_EPOCH,days:{},offset:0,updatedAt:0};}
     function mergeCurrent(left,right) {return merge(resetLedger(left),resetLedger(right));}
-    const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent,weekValues};
+    const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent,weekValues,readStats};
     window.StudyTimeModel=model;
     let user='',data=null,manual=false,paused=false,active=false,leader=false,lockPending=false,release=null,lastMono=performance.now(),lastWall=Date.now(),lastCloud=0;
     let month=new Date();month.setDate(1);let selected=dateKey(Date.now()),rankRange='daily',ranking=[],rankingLoading=false;
@@ -151,10 +159,13 @@
         const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false,id:f.id,avatar:f.avatar||'',getStats:()=>f.stats}));
         if(user!=='GUEST-000')rows.push({name:(myName||'あなた'),seconds:Math.floor(rangeValue(data,'daily',Date.now())/1000),self:true,id:user,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',getStats:()=>userStats});
         const top=rows.filter(r=>r.seconds>=300).sort((a,b)=>b.seconds-a.seconds||a.id.localeCompare(b.id)).slice(0,3);
-        const signature=JSON.stringify(top);if(container.dataset.signature===signature)return;container.dataset.signature=signature;container.replaceChildren();
+        const signature=JSON.stringify(top);if(container.dataset.signature===signature)return;container.dataset.signature=signature;
+        const shape=JSON.stringify([user,...top.map(record=>[record.id,record.name,record.avatar])]);
+        if(container.dataset.shape===shape){top.forEach((record,index)=>{const column=container.querySelector('.place-'+(index+1));if(column){column.querySelector('strong').textContent=format(record.seconds*1000);column.onclick=()=>{if(window.RankingVisuals)window.RankingVisuals.detailStudy(record,index+1);};}});return;}
+        const mounted=container.dataset.shape!==undefined;container.dataset.shape=shape;container.replaceChildren();
         if(!top.length){const hint=document.createElement('p');hint.className='study-podium-empty';hint.textContent='今日5分以上勉強したユーザーが、ここに登場します。';container.append(hint);return;}
         const podium=document.createElement('div');podium.className='study-podium';
-        [1,0,2].forEach(index=>{const record=top[index],place=index+1;const column=document.createElement(record?'button':'div');column.className='study-podium-place place-'+place+(record&&record.self?' is-self':'');if(!record){column.classList.add('is-empty');column.setAttribute('aria-hidden','true');podium.append(column);return;}
+        [1,0,2].forEach(index=>{const record=top[index],place=index+1;const column=document.createElement(record?'button':'div');column.className='study-podium-place place-'+place+(record&&record.self?' is-self':'')+(mounted?' podium-mounted':'');if(!record){column.classList.add('is-empty');column.setAttribute('aria-hidden','true');podium.append(column);return;}
             column.type='button';column.setAttribute('aria-label',place+'位 '+record.name+'の今日の学習記録');column.onclick=()=>{if(window.RankingVisuals)window.RankingVisuals.detailStudy(record,place);};
             const name=document.createElement('span');name.className='study-podium-name';if(window.RankingVisuals)window.RankingVisuals.name(name,record.name);else name.textContent=record.name;
             const time=document.createElement('strong');time.textContent=format(record.seconds*1000);
@@ -167,7 +178,7 @@
         try {
             if(!window.db||!window.fbGetDocs||!window.fbCollection)throw new Error('接続後に更新してください。');
             const snapshot=await window.fbGetDocs(window.fbCollection(window.db,'users'));const records=[];
-            snapshot.forEach(doc=>{const remote=doc.data();if(remote.deleted)return;try{const stats=typeof remote.userStatsJson==='string'?JSON.parse(remote.userStatsJson):remote.userStats||{};records.push({id:doc.id,name:remote.playerName||remote.name||doc.id,avatar:remote.avatar||'',stats});}catch(e){}});
+            snapshot.forEach(doc=>{const remote=doc.data();if(remote.deleted)return;try{const stats=readStats(remote);records.push({id:doc.id,name:remote.playerName||remote.name||doc.id,avatar:remote.avatar||'',stats});}catch(e){}});
             if(user===owner&&uid()===owner){ranking=records;renderRanking();}
         }catch(e){if(uid()===owner)message.textContent='表彰台を取得できませんでした。'+e.message;}
         finally{rankingLoading=false;button.disabled=false;button.textContent='更新';}

@@ -22,10 +22,10 @@
     const storageKey=id=>'core_v4_learning_ranking_'+id;
     let device=localStorage.getItem('aiglish_ranking_device');if(!device){device=crypto.randomUUID();localStorage.setItem('aiglish_ranking_device',device);}
     const sourceId=device+'.'+crypto.randomUUID();
-    let user='',record=empty(),metric='time',cache=[],cacheAt=0,cacheReady=false,inflight=null,generation=0;
+    let user='',record=empty(),cache=[],cacheAt=0,cacheReady=false,inflight=null,generation=0;
     const queues=new Map();
     function read(id){try{return JSON.parse(localStorage.getItem(storageKey(id))||'null');}catch(e){return null;}}
-    function store(key,value){try{localStorage.setItem(key,value);}catch(error){console.warn('ランキング記録を端末へ保存できませんでした',error);}}
+    function store(key,value){try{if(localStorage.getItem(key)!==value)localStorage.setItem(key,value);}catch(error){console.warn('ランキング記録を端末へ保存できませんでした',error);}}
     function persist(){if(owner()!==user)return;store(storageKey(user),JSON.stringify(record));userStats.learning_ranking_json=JSON.stringify(record);delete userStats.learning_ranking;userStats.learning_ranking_owner=user;userStats.vocab_rated_count=wordCount(record);userStats.flash_count=flashCount(record);}
     function ensure(){
         const id=owner();if(user===id)return;
@@ -84,26 +84,36 @@
     function avatar(value,label){const frame=document.createElement('span');frame.className='podium-avatar';const safe=typeof value==='string'&&(/^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(value));if(safe){const img=document.createElement('img');img.src=value;img.alt=String(label||'ユーザー')+'のアイコン';img.referrerPolicy='no-referrer';img.onerror=()=>{frame.textContent=String(label||'人').trim().slice(0,1);};frame.append(img);}else{frame.textContent=String(label||'人').trim().slice(0,1);}return frame;}
     window.RankingVisuals={name,avatar};
     const labels={time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
-    const descriptions={time:'これまでに計測した勉強時間の合計',words:'○・△・×を付けた単語の累計。同じ単語は1語として計測',flash:'カードをスワイプした累計。前のカードに戻っても記録'};
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
     const value=(row,key)=>key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
-    function statsOf(doc){const source=doc.userStatsJson?JSON.parse(doc.userStatsJson):doc.userStats||{};return source&&typeof source==='object'?source:{};}
+    function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
     function row(id,doc){const stats=statsOf(doc),combined=merge(stats.learning_ranking_json||stats.learning_ranking,doc.learningRankingJson||doc.learningRanking),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',time:Math.floor(window.StudyTimeModel.total(ledger)/1000),words:wordCount(combined),flash:combined.flash.baseline||Object.keys(combined.flash.sources).length?flashCount(combined):nonnegative(stats.flash_count)};}
     function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,learningRanking:record});}
     function detail(entry,rank,context){
+        const detailKey=Object.keys(labels).find(key=>labels[key]===context)||'time';
         const dialog=window.openLibraryDialog('学習記録','<div class="ranking-detail"><div class="ranking-detail-person"></div><p class="ranking-detail-place"></p><dl></dl></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
         dialog.querySelector('.library-editor-eyebrow').textContent='LEARNING RECORDS';
-        const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');name(heading,entry.name);person.append(avatar(entry.avatar,entry.name),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[metric])+' · '+(rank?rank+'位':entry[metric]>0?'順位未取得':'未計測');
+        const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');name(heading,entry.name);person.append(avatar(entry.avatar,entry.name),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[detailKey])+' · '+(rank?rank+'位':entry[detailKey]>0?'順位未取得':'未計測');
         Object.keys(labels).forEach(key=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=labels[key];dd.textContent=value(entry,key);dialog.querySelector('dl').append(dt,dd);});
     }
     window.RankingVisuals.detailStudy=function(entry,rank){const known=row(entry.id,{playerName:entry.name,avatar:entry.avatar,userStats:entry.getStats?entry.getStats():{}});detail(known,rank,'今日の勉強時間');const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent='今日の勉強時間';dd.textContent=duration(entry.seconds);const dl=document.querySelector('.ranking-detail dl');dl.prepend(dt,dd);};
     function render(){
         const host=document.getElementById('rankingPodium');if(!host)return;ensure();const local=self(),rows=cache.filter(entry=>entry.id!==user);if(user!=='GUEST-000')rows.push(local);
-        rows.sort((a,b)=>b[metric]-a[metric]||a.id.localeCompare(b.id));const measured=rows.filter(entry=>entry[metric]>0),top=cacheReady?measured.slice(0,3):[];
-        document.getElementById('rankingDescription').textContent=descriptions[metric];document.querySelectorAll('[data-ranking-metric]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.rankingMetric===metric)));
-        host.replaceChildren();const podium=document.createElement('div');podium.className='learning-podium';
-        [1,0,2].forEach(index=>{const entry=top[index],place=index+1,column=document.createElement(entry?'button':'div');column.className='learning-podium-place place-'+place+(entry&&entry.id===user?' is-self':'')+(!entry?' is-empty':'');if(entry){column.type='button';column.setAttribute('aria-label',place+'位 '+entry.name+'の詳細');column.onclick=()=>detail(entry,place);column.append(avatar(entry.avatar,entry.name));const nickname=document.createElement('span');nickname.className='podium-name';name(nickname,entry.name);const amount=document.createElement('strong');amount.textContent=value(entry,metric);column.append(nickname,amount);}else{const blank=document.createElement('span');blank.className='podium-empty-label';blank.textContent='—';column.append(blank);column.setAttribute('aria-label',place+'位 未計測');}const step=document.createElement('span');step.className='podium-step';step.textContent=String(place);column.append(step);podium.append(column);});host.append(podium);
-        const own=document.getElementById('rankingSelf');own.replaceChildren();const ownRank=cacheReady?measured.findIndex(entry=>entry.id===user)+1:0;const button=document.createElement('button');button.type='button';button.className='ranking-self-button';button.onclick=()=>detail(local,ownRank);const text=document.createElement('span');text.textContent=user==='GUEST-000'?'あなたの記録（ゲスト）':'あなた · '+(ownRank?ownRank+'位':local[metric]>0?'順位未取得':'未計測');const amount=document.createElement('strong');amount.textContent=value(local,metric);button.append(avatar(local.avatar,local.name),text,amount);own.append(button);
+        Object.keys(labels).forEach(key=>{
+            let section=host.querySelector('[data-podium-metric="'+key+'"]');
+            if(!section){section=document.createElement('section');section.className='ranking-mini-panel';section.dataset.podiumMetric=key;const heading=document.createElement('h3');heading.textContent=labels[key];const podium=document.createElement('div');podium.className='learning-podium';const own=document.createElement('button');own.type='button';own.className='ranking-mini-self';section.append(heading,podium,own);host.append(section);}
+            const measured=rows.filter(entry=>entry[key]>0).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)),top=cacheReady?measured.slice(0,3):[],podium=section.querySelector('.learning-podium');
+            const shape=JSON.stringify([user,...top.map(entry=>[entry.id,entry.name,entry.avatar])]);
+            if(section.dataset.shape!==shape){
+                const mounted=section.dataset.shape!==undefined;section.dataset.shape=shape;podium.replaceChildren();
+                [1,0,2].forEach(index=>{const entry=top[index],place=index+1,column=document.createElement(entry?'button':'div');column.dataset.place=String(place);column.className='learning-podium-place place-'+place+(entry&&entry.id===user?' is-self':'')+(!entry?' is-empty':'')+(mounted?' podium-mounted':'');
+                    if(entry){column.type='button';column.append(avatar(entry.avatar,entry.name));const nickname=document.createElement('span');nickname.className='podium-name';name(nickname,entry.name);const amount=document.createElement('strong');column.append(nickname,amount);}else{const blank=document.createElement('span');blank.className='podium-empty-label';blank.textContent='—';column.append(blank);column.setAttribute('aria-label',place+'位 未計測');}
+                    const step=document.createElement('span');step.className='podium-step';step.textContent=String(place);column.append(step);podium.append(column);
+                });
+            }
+            top.forEach((entry,index)=>{const column=podium.querySelector('[data-place="'+(index+1)+'"]'),amount=column.querySelector('strong'),text=value(entry,key);if(amount.textContent!==text)amount.textContent=text;column.setAttribute('aria-label',labels[key]+' '+(index+1)+'位 '+entry.name+'の詳細');column.onclick=()=>detail(entry,index+1,labels[key]);});
+            const ownRank=cacheReady?measured.findIndex(entry=>entry.id===user)+1:0,own=section.querySelector('.ranking-mini-self'),text=(user==='GUEST-000'?'あなた（ゲスト）':'あなた · '+(ownRank?ownRank+'位':local[key]>0?'順位未取得':'未計測'))+'　'+value(local,key);if(own.textContent!==text)own.textContent=text;own.onclick=()=>detail(local,ownRank,labels[key]);
+        });
     }
     async function refresh(force){
         ensure();if(user==='GUEST-000'){render();document.getElementById('rankingMessage').textContent='ログインすると全ユーザーの表彰台に参加できます。';return;}
@@ -117,10 +127,9 @@
     window.showTitlesPage=function(){window.switchTab('titles');};
     window.injectCommunityRankingUI=function(){};window.renderCommunityRankPills=function(){};window.renderCommunityRankSubPills=function(){};
     window.renderLeaderboard=function(force){render();if(typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')return refresh(!!force);};
-    document.querySelectorAll('[data-ranking-metric]').forEach(button=>button.onclick=()=>{metric=button.dataset.rankingMetric;render();});
     document.getElementById('rankingRefresh').onclick=()=>refresh(true);
     window.onTabChange(tab=>{if(tab==='titles'){render();refresh(false);}else if(tab==='vocab'){ensure();scanCurrent();persist();}});
-    window.onAppLoaded(()=>{user='';ensure();render();});
+    window.onAppLoaded(()=>{ensure();window.syncRankingMetrics();render();});
     window.addEventListener('storage',event=>{if(event.key===storageKey(owner())){ensure();record=merge(record,read(user));persist();render();}});
     window.LearningRanking={render,refresh};
 })();

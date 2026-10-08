@@ -2313,3 +2313,19 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .study-podium-place[type=button]{background:transparent;border:0;padding:0;color:inherit;font:inherit;cursor:pointer;transition:filter .3s;}
 .study-podium-place[type=button]:hover{filter:brightness(1.15);}
 .learning-podium-place:focus-visible,.ranking-metrics button:focus-visible,.ranking-self-button:focus-visible,.study-podium-place:focus-visible,#rankingRefresh:focus-visible{outline:2px solid #e5cf91;outline-offset:4px;border-radius:12px;}
+/* Three complete podiums share the viewport; numeric updates never replay entry motion. */
+.ranking-podium-grid{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:10px;align-items:stretch;}
+.ranking-mini-panel{min-height:0;display:flex;flex-direction:column;border:1px solid #c4b5fd28;background:#21172f35;border-radius:16px;padding:8px 12px;}
+.ranking-mini-panel h3{font:500 12px 'Noto Serif JP','Yu Mincho',serif;letter-spacing:1px;margin:0 0 4px;color:#e5cf91;}
+.ranking-mini-panel .learning-podium{flex:1;min-height:0;padding:0;gap:10px;}
+.ranking-mini-panel .podium-avatar,.ranking-mini-panel .place-1 .podium-avatar{width:30px;height:30px;font-size:16px;animation:none;}
+.ranking-mini-panel .podium-name{font-size:10px;line-height:1.25;margin:3px 0;}
+.ranking-mini-panel .learning-podium-place>strong{font-size:10px;min-height:12px;margin:0 0 4px;}
+.ranking-mini-panel .podium-step{height:28px;padding-top:2px;font-size:18px;border-radius:7px 7px 2px 2px;}
+.ranking-mini-panel .place-1 .podium-step{height:42px;}.ranking-mini-panel .place-3 .podium-step{height:20px;}
+.ranking-mini-self{flex-shrink:0;text-align:right;font:10px 'Noto Serif JP',serif;background:transparent;border:0;color:#bdb2cd;padding:5px 0 0;}
+.podium-mounted{animation:none!important;}.ranking-mini-panel .podium-step:after{animation:none;}
+@media(max-height:700px){.ranking-podium-grid{gap:5px;}.ranking-mini-panel{padding:4px 8px;border-radius:12px;}.ranking-mini-panel h3{font-size:10px;margin:0 0 2px;}.ranking-mini-panel .podium-avatar,.ranking-mini-panel .place-1 .podium-avatar{width:22px;height:22px;font-size:12px;}.ranking-mini-panel .podium-name{font-size:9px;margin:2px 0;}.ranking-mini-panel .learning-podium-place>strong{font-size:9px;margin-bottom:2px;}.ranking-mini-panel .podium-step{height:16px;font-size:12px;padding:0;}.ranking-mini-panel .place-1 .podium-step{height:24px;}.ranking-mini-panel .place-3 .podium-step{height:12px;}.ranking-mini-self{font-size:9px;padding-top:2px;}}
+.ranking-mini-panel{display:grid;grid-template-rows:auto minmax(0,1fr) 18px;row-gap:3px;}
+.ranking-mini-self{padding:0;align-self:end;line-height:14px;}
+@media(max-height:700px){.ranking-mini-panel{grid-template-rows:auto minmax(0,1fr) 13px;row-gap:2px;}.ranking-mini-self{line-height:11px;}}
