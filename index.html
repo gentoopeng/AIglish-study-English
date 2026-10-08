@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="4.92">
+    <meta name="application-version" content="5.02">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=4.92">
-    <link rel="stylesheet" href="gacha.css?v=4.92">
+    <link rel="stylesheet" href="style.css?v=5.02">
+    <link rel="stylesheet" href="gacha.css?v=5.02">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -45,15 +45,14 @@
         </button>
     </div>
 
-    <div id="adminPassOverlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); z-index:9000; justify-content:center; align-items:center; backdrop-filter:blur(8px);">
-        <div class="card game-cosmic-glow-box" style="width: 85%; max-width: 320px; text-align: center; padding: 24px;">
-            <i data-lucide="shield-alert" size="36" style="color:var(--admin-accent); margin-bottom:12px;"></i>
-            <h2 style="color:white; justify-content:center; margin-bottom:16px;">管理者アクセス</h2>
-            <p style="font-size:11px; color:var(--text-sub); margin-bottom:16px;">システムを書き換える権限が必要です。<br>合言葉を入力してください。</p>
-            <input type="password" id="adminPassInput" class="search-input" style="text-align:center; font-family:monospace; margin-bottom:16px;" placeholder="パスワードを入力">
-            <div style="display:flex; gap:8px;">
-                <button class="modern-btn" style="flex:1; background:rgba(0,0,0,0.5) !important;" onclick="document.getElementById('adminPassOverlay').style.display='none'">戻る</button>
-                <button class="modern-btn" style="flex:1; border-color:var(--admin-accent) !important; color:var(--admin-accent) !important;" onclick="checkAdminPassword()">認証</button>
+    <div id="adminPassOverlay" class="admin-auth-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="adminPassTitle">
+        <div class="admin-auth-card">
+            <h2 id="adminPassTitle">管理者アクセス</h2>
+            <label for="adminPassInput">パスワード</label>
+            <input type="password" id="adminPassInput" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="パスワードを入力">
+            <div class="admin-auth-actions">
+                <button type="button" onclick="window.closeAdminPassword()">戻る</button>
+                <button type="button" onclick="checkAdminPassword()">認証</button>
             </div>
         </div>
     </div>
@@ -761,23 +760,23 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <script src="library-state.js?v=4.92" defer></script>
-    <script src="app.js?v=4.92" defer></script>
-    <script src="game_core.js?v=4.92" defer></script>
-    <script src="vocab_ui.js?v=4.92" defer></script>
-    <script src="reader.js?v=4.92" defer></script>
-    <script src="fix.js?v=4.92" defer></script>
-    <script src="multi.js?v=4.92" defer></script>
-    <script src="gacha.js?v=4.92" defer></script>
-    <script src="addon.js?v=4.92" defer></script>
-    <script src="library.js?v=4.92" defer></script>
-    <script src="workbook.js?v=4.92" defer></script>
-    <script src="shared-notes.js?v=4.92" defer></script>
-    <script src="study-time.js?v=4.92" defer></script>
-    <script src="ranking.js?v=4.92" defer></script>
-    <script src="autosave.js?v=4.92" defer></script>
-    <script src="people.js?v=4.92" defer></script>
-    <script src="profile-shop.js?v=4.92" defer></script>
-    <script src="profile-customization.js?v=4.92" defer></script>
+    <script src="library-state.js?v=5.02" defer></script>
+    <script src="app.js?v=5.02" defer></script>
+    <script src="game_core.js?v=5.02" defer></script>
+    <script src="vocab_ui.js?v=5.02" defer></script>
+    <script src="reader.js?v=5.02" defer></script>
+    <script src="fix.js?v=5.02" defer></script>
+    <script src="multi.js?v=5.02" defer></script>
+    <script src="gacha.js?v=5.02" defer></script>
+    <script src="addon.js?v=5.02" defer></script>
+    <script src="library.js?v=5.02" defer></script>
+    <script src="workbook.js?v=5.02" defer></script>
+    <script src="shared-notes.js?v=5.02" defer></script>
+    <script src="study-time.js?v=5.02" defer></script>
+    <script src="ranking.js?v=5.02" defer></script>
+    <script src="autosave.js?v=5.02" defer></script>
+    <script src="people.js?v=5.02" defer></script>
+    <script src="profile-shop.js?v=5.02" defer></script>
+    <script src="profile-customization.js?v=5.02" defer></script>
 </body>
 </html>

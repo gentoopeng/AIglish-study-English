@@ -1627,11 +1627,18 @@ window.saveUserStats();
 window.applyProfileToUi();
 window.renderTitles();
 };
+window.closeAdminPassword = function() {
+const overlay=document.getElementById('adminPassOverlay'),input=document.getElementById('adminPassInput');
+if(input){input.blur();input.value='';}
+if(overlay)overlay.style.display='none';
+document.body.classList.remove('password-prompt-open');
+if(window.resumeBackgroundSave)setTimeout(window.resumeBackgroundSave,1000);
+};
 window.enterAdminModeDirect = function() {
 const overlay = document.getElementById('adminPassOverlay');
 const input = document.getElementById('adminPassInput');
 if (overlay && input) {
-input.value = ""; overlay.style.display = 'flex'; input.focus();
+input.value = ""; document.body.classList.add('password-prompt-open'); overlay.style.display = 'flex';
 } else {
 const pass = prompt("管理者専用アクセスです。\nパスワードを入力してください。");
 if (pass === "tukinokopanda" || pass === "tutinokopanda") {
@@ -1647,7 +1654,7 @@ const input = document.getElementById('adminPassInput');
 const overlay = document.getElementById('adminPassOverlay');
 if (input && (input.value === "tukinokopanda" || input.value === "tutinokopanda")) {
 window.isAdmin = true;
-overlay.style.display = 'none';
+window.closeAdminPassword();
 // Authentication must not rebuild the hidden vocabulary list.
 window.switchTab('admin');
 } else {

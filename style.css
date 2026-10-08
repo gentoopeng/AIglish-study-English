@@ -2390,3 +2390,12 @@ body.app-suspended .app-starfield::before{animation-play-state:paused!important;
 @media(prefers-reduced-motion:reduce){.app-starfield.photographic-night::before{animation:none;will-change:auto;}}
 
 .shop-pages{display:flex;justify-content:center;align-items:center;gap:15px;padding-top:10px;color:#a7b3c7;font-size:11px;}.shop-pages button{border:1px solid #c9b97a40;border-radius:8px;background:#07102070;color:#d5c494;padding:6px 12px;}.shop-pages button:disabled{opacity:.3;}body.shop-admin-active .app-starfield::before{animation-play-state:paused!important;}body.shop-admin-active .profile-orbit{animation-play-state:paused!important;}
+
+/* Authentication is a static surface: no backdrop capture, glow or automatic keyboard zoom. */
+.admin-auth-overlay{position:fixed;inset:0;z-index:9000;justify-content:center;align-items:center;padding:24px;box-sizing:border-box;background:#0b1220;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;overflow:auto;}
+.admin-auth-card{width:100%;max-width:320px;padding:24px;border:1px solid #58617b;border-radius:18px;background:#151e30;box-sizing:border-box;box-shadow:none;}
+.admin-auth-card h2{margin:0 0 22px;color:#eee8dc;font-size:20px;}.admin-auth-card label{display:block;margin-bottom:10px;color:#aeb8cd;font-size:12px;}
+#adminPassInput{display:block;width:100%;box-sizing:border-box;min-height:48px;border:1px solid #596176;border-radius:10px;padding:12px;background:#0d1525;color:white;font-size:16px;line-height:1.4;}
+.admin-auth-actions{display:flex;gap:10px;margin-top:20px;}.admin-auth-actions button{flex:1;min-height:44px;border:1px solid #69718a;border-radius:10px;background:#1e2940;color:#f0e4c8;font-size:14px;cursor:pointer;}
+body.password-prompt-open .container,body.password-prompt-open .app-header,body.password-prompt-open .nav-bar,body.password-prompt-open .app-starfield{visibility:hidden!important;}
+body.password-prompt-open *,body.password-prompt-open *::before,body.password-prompt-open *::after{animation-play-state:paused!important;}
