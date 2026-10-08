@@ -87,7 +87,7 @@
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
     const value=(row,key)=>key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
     function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
-    function row(id,doc){const stats=statsOf(doc),combined=merge(stats.learning_ranking_json||stats.learning_ranking,doc.learningRankingJson||doc.learningRanking),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',time:Math.floor(window.StudyTimeModel.total(ledger)/1000),words:wordCount(combined),flash:combined.flash.baseline||Object.keys(combined.flash.sources).length?flashCount(combined):nonnegative(stats.flash_count)};}
+    function row(id,doc){const stats=statsOf(doc),combined=merge(stats.learning_ranking_json||stats.learning_ranking,doc.learningRankingJson||doc.learningRanking),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:combined.flash.baseline||Object.keys(combined.flash.sources).length?flashCount(combined):nonnegative(stats.flash_count)};}
     function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,learningRanking:record});}
     function detail(entry,rank,context){
         const detailKey=Object.keys(labels).find(key=>labels[key]===context)||'time';

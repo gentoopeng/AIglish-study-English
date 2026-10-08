@@ -42,6 +42,12 @@
         if(legacy.study_calendar_v2||current.study_calendar_v2)result.study_calendar_v2=mergeCurrent(legacy.study_calendar_v2,current.study_calendar_v2);
         return result;
     }
+    function rankingSeconds(stats,range,now) {
+        // Legacy public counters are display-only; never import them into the timer.
+        if(stats.study_calendar_v2)return Math.floor(rangeValue(resetLedger(stats.study_calendar_v2),range,now)/1000);
+        if(range==='daily')return normalizeDate(stats.study_today_date||stats.study_last_date)===dateKey(now)?positive(stats.study_today_secs):0;
+        return positive(stats.study_total_secs);
+    }
     function legacy(stats,local,now) {
         const data={version:1,days:{},offset:0,updatedAt:now},last=normalizeDate(stats.study_last_date||stats.study_weekly_log_today_date||local.date);
         const logs=Array.isArray(stats.study_weekly_log)?stats.study_weekly_log:local.log;
@@ -58,7 +64,7 @@
     const RESET_EPOCH='study-reset-2.62';
     function resetLedger(ledger) {return ledger&&ledger.epoch===RESET_EPOCH?ledger:{version:1,epoch:RESET_EPOCH,days:{},offset:0,updatedAt:0};}
     function mergeCurrent(left,right) {return merge(resetLedger(left),resetLedger(right));}
-    const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent,weekValues,readStats};
+    const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent,weekValues,readStats,rankingSeconds};
     window.StudyTimeModel=model;
     let user='',data=null,manual=false,paused=false,active=false,leader=false,lockPending=false,release=null,lastMono=performance.now(),lastWall=Date.now(),lastCloud=0;
     let month=new Date();month.setDate(1);let selected=dateKey(Date.now()),rankRange='daily',ranking=[],rankingLoading=false;
@@ -152,7 +158,7 @@
         document.getElementById('studyNextWeek').disabled=selectedWeek>=weekStart(Date.now());
     }
     function friendValue(entry) {
-        return Math.floor(rangeValue(resetLedger((entry.stats||{}).study_calendar_v2),'daily',Date.now())/1000);
+        return rankingSeconds(entry.stats||{},'daily',Date.now());
     }
     function renderRanking() {
         const container=document.getElementById('studyFriendRanking');if(!container||!data)return;
