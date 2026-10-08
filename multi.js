@@ -6257,7 +6257,9 @@ function collectAll() {
   if(typeof window.__collectGameSaveData==='function') return window.__collectGameSaveData();
   var ls={}; for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k)ls[k]=localStorage.getItem(k);} return {localStorage:ls,memory:{}};
 }
-function saveAll() {return window.LibraryState?window.LibraryState.track(uid(),saveAllContents):saveAllContents();}
+var pendingSave=null;
+function saveAll() {if(pendingSave)return pendingSave;var task=window.LibraryState?window.LibraryState.track(uid(),saveAllContents):saveAllContents();pendingSave=Promise.resolve(task).finally(function(){pendingSave=null;});return pendingSave;}
+window.__backgroundSaveAll=saveAll;
 async function saveAllContents() {
   var id=uid(); if(!id)throw new Error('先にログインしてください');
   lastProgressPercent=0;lastRemainingSeconds=null;
