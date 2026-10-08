@@ -12,6 +12,9 @@
     }
     function idleSave(){if(window.requestIdleCallback)window.requestIdleCallback(save,{timeout:3000});else setTimeout(save,0);}
     window.queueBackgroundSave=function(){changed();if(!timer)timer=setTimeout(idleSave,3000);};
+    let flashOwner='',flashSwipes=0;
+    window.noteFlashSwipe=function(){if(flashOwner!==id()){flashOwner=id();flashSwipes=0;}flashSwipes++;changed();if(flashSwipes%5===0)window.queueBackgroundSave();};
+    window.flushFlashAutosave=function(){if(flashSwipes)window.queueBackgroundSave();};
     document.addEventListener('input',changed,{passive:true});document.addEventListener('change',changed,{passive:true});
     ['markVocabProgressDirty'].forEach(name=>{const original=window[name];if(typeof original==='function')window[name]=function(){changed();return original.apply(this,arguments);};});
     setInterval(()=>{if(owner!==id()){owner=id();revision=0;saved=0;}if(revision!==saved)idleSave();},60000);
