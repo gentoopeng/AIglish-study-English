@@ -2387,6 +2387,29 @@ html body::after{background:var(--app-shop-background,linear-gradient(135deg,#09
 /* Avoid overlapping full-screen blur surfaces on mobile browsers. */
 @media(max-width:900px){.card,.app-header,.nav-bar,.sidebar,.sidebar-overlay,.word-row-container,.home-shop,.admin-hub,.auth-card,.login-confirm-overlay{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}.library-editor-dialog::backdrop,.book-flashcard-dialog::backdrop{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}}
 body.app-suspended .app-starfield::before{animation-play-state:paused!important;}
+/* iOS Safari and installed home-screen apps: one static photo, no backdrop captures.
+   Include late injected game/dialog styles using a priority cascade layer.
+   Transforms used to flip flashcards remain functional. No storage is changed. */
+@layer rendering-safety {
+html.ios-stable-rendering body,
+html.ios-stable-rendering body *,
+html.ios-stable-rendering body *::before,
+html.ios-stable-rendering body *::after,
+html.ios-stable-rendering body::before,
+html.ios-stable-rendering body::after{
+animation:none!important;
+transition:none!important;
+backdrop-filter:none!important;
+-webkit-backdrop-filter:none!important;
+filter:none!important;
+will-change:auto!important;
+}
+}
+html.ios-stable-rendering body .app-starfield.photographic-night::before{display:none!important;}
+html.ios-stable-rendering body .profile-orbit{display:none!important;}
+/* Preserve the locked preview without a blur render surface. */
+html.ios-stable-rendering body .shop-product-locked .shop-item-preview{position:relative;}
+html.ios-stable-rendering body .shop-product-locked .shop-item-preview::after{content:'';position:absolute;inset:0;background:#10172bd9;border-radius:inherit;pointer-events:none;}
 @media(prefers-reduced-motion:reduce){.app-starfield.photographic-night::before{animation:none;will-change:auto;}}
 
 .shop-pages{display:flex;justify-content:center;align-items:center;gap:15px;padding-top:10px;color:#a7b3c7;font-size:11px;}.shop-pages button{border:1px solid #c9b97a40;border-radius:8px;background:#07102070;color:#d5c494;padding:6px 12px;}.shop-pages button:disabled{opacity:.3;}body.shop-admin-active .app-starfield::before{animation-play-state:paused!important;}body.shop-admin-active .profile-orbit{animation-play-state:paused!important;}

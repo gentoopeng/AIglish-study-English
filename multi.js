@@ -3981,20 +3981,25 @@ var stats=body.querySelector('.pty-stats');
 if(!stats){ stats=document.createElement('div'); stats.className='pty-stats';
 var top=body.querySelector('.pty-card-top');
 if(top&&top.nextSibling) body.insertBefore(stats,top.nextSibling); else body.appendChild(stats); }
-stats.innerHTML='<span class="pty-stat">❤️ HP <b>'+c.hp+'</b></span>'+
+var html='<span class="pty-stat">❤️ HP <b>'+c.hp+'</b></span>'+
 '<span class="pty-stat">⚔️ 攻撃 <b>'+c.atk+'</b></span>'+
 '<span class="pty-stat up">Lv.'+c.lv+'</span>';
+if(stats.innerHTML!==html) stats.innerHTML=html;
 });
 }
 
 /* ---------- ① 並び替えボタンを統一 ---------- */
 function renderUniChips(list){
 var cat=curCat();
+var signature=cat+'|'+(window.__uniSort[cat]||'no');
+var existing=list.querySelector('[data-uni-row]');
+if(existing&&existing.dataset.uniSignature===signature) return;
 // 既存のバラバラな並び替えボタンを除去
 list.querySelectorAll('.dx2-sort').forEach(function(el){ el.remove(); });
 var old=list.querySelector('[data-uni-row]'); if(old) old.remove();
 var row=document.createElement('div');
 row.setAttribute('data-uni-row','1');
+row.dataset.uniSignature=signature;
 row.className='dx2-sort';
 row.style.cssText='display:flex;gap:6px;justify-content:center;margin:6px 0;flex-wrap:wrap;';
 row.innerHTML=UNI.map(function(u){
@@ -4017,14 +4022,24 @@ if(key==='no') return (+a.dataset.uniOrig)-(+b.dataset.uniOrig);
 var va=valFor(a), vb=valFor(b);
 return (vb[key]||0)-(va[key]||0);
 });
+var current=Array.prototype.slice.call(list.querySelectorAll(sel));
+if(cards.some(function(card,i){return card!==current[i];})) {
 cards.forEach(function(c){ list.appendChild(c); });
+}
 }
 
 function refresh(){
-var list=document.getElementById('ptyList'); if(!list) return;
+if(!partyVisible()) return;
+var list=document.getElementById('ptyList');
+// The newer catalogue owns its controls and stats. Do not replace them.
+if(!list||list.classList.contains('pcv-active')||list.classList.contains('gm-active')) return;
+// Disconnect while writing so our own mutations cannot enqueue another refresh.
+if(mo) mo.disconnect();
+try {
 renderUniChips(list);
 fixCharStats();
 reorder(list);
+} finally { observeList(); }
 }
 
 /* ---------- 並び替えクリック ---------- */
@@ -4039,16 +4054,30 @@ refresh();
 
 /* ---------- 描画のたびに自動追従 ---------- */
 var tm=null;
-function queue(){ clearTimeout(tm); tm=setTimeout(refresh,40); }
+var mo=null;
+function partyVisible(){
+var view=document.getElementById('view-party');
+return !document.hidden&&view&&view.classList.contains('active');
+}
+function queue(){ if(!partyVisible()||tm!==null) return; tm=setTimeout(function(){tm=null;refresh();},40); }
+function observeList(){
+if(!mo) return;
+mo.disconnect();
+var l=document.getElementById('ptyList');
+if(partyVisible()&&l&&!l.matches('.pcv-active,.gm-active')) mo.observe(l,{childList:true,subtree:true});
+}
 if (typeof MutationObserver!=='undefined') {
-var mo=new MutationObserver(queue);
-var boot=function(){ var l=document.getElementById('ptyList'); if(l) mo.observe(l,{childList:true,subtree:true}); };
+mo=new MutationObserver(queue);
+var boot=observeList;
 if(document.readyState!=='loading') setTimeout(boot,400);
 else document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,400);});
 }
 window.onTabChange(function(tabId){
+clearTimeout(tm);tm=null;
+observeList();
 if(tabId==='party') setTimeout(refresh,60);
 });
+document.addEventListener('visibilitychange',function(){clearTimeout(tm);tm=null;observeList();if(partyVisible()) queue();});
 setInterval(refresh, 800);
 console.log('🐧 編成統一パッチ（並び替え統一＋Lv連動＋攻撃実数値）適用完了');
 })();

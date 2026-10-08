@@ -935,6 +935,7 @@ function renderCharDex() {
 var list = document.getElementById('ptyList');
 var pu = window.__partyUi;
 if (!list || !pu) return;
+if(document.hidden||!document.getElementById('view-party')?.classList.contains('active')||list.classList.contains('gm-active')) return;
 if (pu.cat !== 'char') { list.classList.remove('gcx-active'); return; }
 var s = stF();
 var owned = (s && (s.gacha_inv_char || [])) || [];
@@ -1905,6 +1906,7 @@ list.innerHTML = html;
 function onMut() {
 var list = document.getElementById('ptyList');
 if (!list || !list.__pcvBound) return;
+if(document.hidden||!document.getElementById('view-party')?.classList.contains('active')||list.classList.contains('gm-active')) return;
 var pu = PU(); if (!pu || pu.cat === 'enemy') return;
 if (list.querySelector('.gcx-list,.gcx-card') || list.querySelector('.pty-card:not(.pcv-card)')) { renderOwn(list); return; }
 if (!(list.classList.contains('pcv-active') && list.dataset.pcvSig === desiredSig())) renderOwn(list);
@@ -2102,6 +2104,7 @@ pills.appendChild(b);
 
 /* ---------- 表示制御（1箇所だけ・200ms） ---------- */
 function sync(){
+if(document.hidden||!document.getElementById('view-party')?.classList.contains('active')) return;
 var pu=PU();
 ensurePill();
 var on=(pu.cat==='kakera');
@@ -2124,6 +2127,7 @@ sync();
 /* ---------- ③ 攻撃力実数値 ---------- */
 var BASE={SR:{hp:1000,atk:100},R:{hp:850,atk:85},UC:{hp:700,atk:70},C:{hp:500,atk:50}};
 function fixCards(){
+if(document.hidden||!document.getElementById('view-party')?.classList.contains('active')) return;
 var cards=document.querySelectorAll('.pcv-card[data-pcvcard^="char_"],.pty-card[data-pcvcard^="char_"]');
 for(var i=0;i<cards.length;i++){
 var id=(cards[i].getAttribute('data-pcvcard')||'').replace('char_','');
@@ -2133,8 +2137,8 @@ var b=(id==='tangon')?{hp:1000,atk:125}:BASE[rar];
 var hp=Math.round(b.hp*(1+lv/100)),atk=Math.round(b.atk*(1+lv/100));
 var sts=cards[i].querySelectorAll('.pty-stat');
 for(var j=0;j<sts.length;j++){var t=sts[j].textContent||'';var bb=sts[j].querySelector('b');if(!bb)continue;
-if(t.indexOf('HP')>=0&&t.indexOf('強化')<0)bb.textContent=hp;
-else if(t.indexOf('攻撃')>=0)bb.textContent=atk;}
+if(t.indexOf('HP')>=0&&t.indexOf('強化')<0&&bb.textContent!==String(hp))bb.textContent=hp;
+else if(t.indexOf('攻撃')>=0&&bb.textContent!==String(atk))bb.textContent=atk;}
 }
 }
 setInterval(fixCards,400);
@@ -2243,7 +2247,12 @@ var handlers=[],pending=false;
 function run(){pending=false;handlers.slice().forEach(function(handler){try{handler();}catch(e){console.error('[gacha DOM]',e);}});}
 function schedule(){if(!pending){pending=true;requestAnimationFrame(run);}}
 window.onGachaDomChange=function(handler){if(typeof handler!=='function')return;handlers.push(handler);schedule();};
-if(typeof MutationObserver!=='undefined')new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});
+function relevant(node){return node&&node.nodeType===1&&node.closest('#view-party,.gm-modal,.pcv-modal');}
+// A study timer or home/profile update is unrelated to catalogue enhancement.
+// Do not scan every button in the app on those mutations.
+if(typeof MutationObserver!=='undefined')new MutationObserver(function(records){
+if(records.some(function(record){return relevant(record.target)||Array.prototype.some.call(record.addedNodes,relevant);}))schedule();
+}).observe(document.body,{childList:true,subtree:true});
 else setInterval(schedule,700);
 })();
 // =====================================================================
