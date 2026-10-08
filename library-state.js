@@ -61,6 +61,8 @@
         // Always merge the immutable deletion history before restoring any contents.
         let registry = read(owner);
         if (storage[storageKey(owner)]) {try {registry = merge(registry, JSON.parse(storage[storageKey(owner)]));} catch (e) {}}
+        const profileKey='core_v4_profile_customization_'+owner;
+        if(storage[profileKey]&&window.ProfileCustomizationModel)storage[profileKey]=JSON.stringify(window.ProfileCustomizationModel.merge(localStorage.getItem(profileKey),storage[profileKey]));
         const libraryKey='core_v4_personal_library_'+owner;
         if(storage[libraryKey])storage[libraryKey]=JSON.stringify(mergeCatalog(JSON.parse(storage[libraryKey]),JSON.parse(localStorage.getItem(libraryKey)||'null'),owner));
         Object.values(registry).forEach(item => {

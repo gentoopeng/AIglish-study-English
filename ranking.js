@@ -85,15 +85,15 @@
         const result=await oldLoad.apply(this,arguments);
         if(owner()===id){record=merge(record,userStats.learning_ranking_v2_json||userStats.learning_ranking);persist();render();}return result;
     };
-    function name(element,value){element.replaceChildren();String(value||'ユーザー').trim().split(/\s+/u).forEach((part,index)=>{if(index)element.append(document.createElement('br'));element.append(document.createTextNode(part));});}
-    function avatar(value,label){const frame=document.createElement('span');frame.className='podium-avatar';const safe=typeof value==='string'&&(/^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(value));if(safe){const img=document.createElement('img');img.src=value;img.alt=String(label||'ユーザー')+'のアイコン';img.referrerPolicy='no-referrer';img.onerror=()=>{frame.textContent=String(label||'人').trim().slice(0,1);};frame.append(img);}else{frame.textContent=String(label||'人').trim().slice(0,1);}return frame;}
+    function name(element,value,appearance){if(window.ProfileCustomizationModel)element.style.color=window.ProfileCustomizationModel.normalize(appearance).nicknameColor;element.replaceChildren();String(value||'ユーザー').trim().split(/\s+/u).forEach((part,index)=>{if(index)element.append(document.createElement('br'));element.append(document.createTextNode(part));});}
+    function avatar(value,label,appearance){const frame=document.createElement('span');frame.className='podium-avatar';if(window.ProfileCustomizationModel)frame.classList.add('profile-frame-wood');const safe=typeof value==='string'&&(/^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(value));if(safe){const img=document.createElement('img');img.src=value;img.alt=String(label||'ユーザー')+'のアイコン';img.referrerPolicy='no-referrer';img.onerror=()=>{frame.textContent=String(label||'人').trim().slice(0,1);};frame.append(img);}else{frame.textContent=String(label||'人').trim().slice(0,1);}return frame;}
     window.RankingVisuals={name,avatar};
     const labels={time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
     const value=(row,key)=>key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
     function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
-    function row(id,doc){const stats=statsOf(doc),combined=fromProfile(doc),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:flashCount(combined)};}
-    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,learningRankingV2Json:JSON.stringify(record)});}
+    function row(id,doc){const stats=statsOf(doc),combined=fromProfile(doc),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',appearance:doc.profileCustomizationJson||null,time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:flashCount(combined)};}
+    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record)});}
     async function detail(entry,rank,context){
         const account=owner();
         try{if(window.db&&window.fbGetDoc){if(entry.id===account)await syncCloud();const snap=await window.fbGetDoc(window.fbDoc(window.db,'users',entry.id));if(owner()!==account)return;if(snap.exists()){const latest=row(entry.id,snap.data());entry=entry.id===account?self():latest;}}}catch(error){console.warn('最新の学習記録を取得できませんでした',error);}
@@ -103,7 +103,7 @@
         const detailKey=Object.keys(labels).find(key=>labels[key]===context)||'time';
         const dialog=window.openLibraryDialog('学習記録','<div class="ranking-detail"><div class="ranking-detail-person"></div><p class="ranking-detail-place"></p><dl></dl></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
         dialog.querySelector('.library-editor-eyebrow').textContent='LEARNING RECORDS';
-        const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');name(heading,entry.name);person.append(avatar(entry.avatar,entry.name),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[detailKey])+' · '+(rank?rank+'位':entry[detailKey]>0?'順位未取得':'未計測');
+        const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');name(heading,entry.name,entry.appearance);person.append(avatar(entry.avatar,entry.name,entry.appearance),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[detailKey])+' · '+(rank?rank+'位':entry[detailKey]>0?'順位未取得':'未計測');
         Object.keys(labels).forEach(key=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=labels[key];dd.textContent=value(entry,key);dialog.querySelector('dl').append(dt,dd);});
     }
     window.RankingVisuals.detailStudy=function(entry,rank){const known=row(entry.id,{playerName:entry.name,avatar:entry.avatar,userStats:entry.getStats?entry.getStats():{}});showDetail(known,rank,'今日の勉強時間');const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent='今日の勉強時間';dd.textContent=duration(entry.seconds);const dl=document.querySelector('.ranking-detail dl');dl.prepend(dt,dd);};
@@ -113,11 +113,11 @@
             let section=host.querySelector('[data-podium-metric="'+key+'"]');
             if(!section){section=document.createElement('section');section.className='ranking-mini-panel';section.dataset.podiumMetric=key;const heading=document.createElement('h3');heading.textContent=labels[key];const podium=document.createElement('div');podium.className='learning-podium';const own=document.createElement('button');own.type='button';own.className='ranking-mini-self';section.append(heading,podium,own);host.append(section);}
             const measured=rows.filter(entry=>entry[key]>0).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)),top=cacheReady?measured.slice(0,3):[],podium=section.querySelector('.learning-podium');
-            const shape=JSON.stringify([user,...top.map(entry=>[entry.id,entry.name,entry.avatar])]);
+            const shape=JSON.stringify([user,...top.map(entry=>[entry.id,entry.name,entry.avatar,entry.appearance])]);
             if(section.dataset.shape!==shape){
                 const mounted=section.dataset.shape!==undefined;section.dataset.shape=shape;podium.replaceChildren();
                 [1,0,2].forEach(index=>{const entry=top[index],place=index+1,column=document.createElement(entry?'button':'div');column.dataset.place=String(place);column.className='learning-podium-place place-'+place+(entry&&entry.id===user?' is-self':'')+(!entry?' is-empty':'')+(mounted?' podium-mounted':'');
-                    if(entry){column.type='button';column.append(avatar(entry.avatar,entry.name));const nickname=document.createElement('span');nickname.className='podium-name';name(nickname,entry.name);const amount=document.createElement('strong');column.append(nickname,amount);}else{const blank=document.createElement('span');blank.className='podium-empty-label';blank.textContent='—';column.append(blank);column.setAttribute('aria-label',place+'位 未計測');}
+                    if(entry){column.type='button';column.append(avatar(entry.avatar,entry.name,entry.appearance));const nickname=document.createElement('span');nickname.className='podium-name';name(nickname,entry.name,entry.appearance);const amount=document.createElement('strong');column.append(nickname,amount);}else{const blank=document.createElement('span');blank.className='podium-empty-label';blank.textContent='—';column.append(blank);column.setAttribute('aria-label',place+'位 未計測');}
                     const step=document.createElement('span');step.className='podium-step';step.textContent=String(place);column.append(step);podium.append(column);
                 });
             }

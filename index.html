@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="4.12">
+    <meta name="application-version" content="4.32">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=4.12">
-    <link rel="stylesheet" href="gacha.css?v=4.12">
+    <link rel="stylesheet" href="style.css?v=4.32">
+    <link rel="stylesheet" href="gacha.css?v=4.32">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -118,23 +118,11 @@
         <button type="button" class="study-tower-link" onclick="window.switchTab('game')"><i data-lucide="castle" size="16"></i> 単語の迷宮</button>
         <div style="padding: 16px; flex:1; overflow-y: auto; display:flex; flex-direction:column; gap:16px;">
             <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
-                <!-- アバター写真登録ボタン -->
-                <div style="font-size: 11px; font-weight:700; color:var(--cosmic-cyan); margin-bottom:8px;">📸 アバター写真を登録</div>
-                <input type="file" id="avatarImageUploader" class="search-input" style="padding-top:8px; font-size:12px; height:38px;" accept="image/*" onchange="window.handleAvatarImageUpload(event)">
-                
-                <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">👤 プレイヤー名変更</div>
-                <input type="text" id="sideInputName" class="search-input" style="height:34px; margin-bottom:8px; font-size:12px;" placeholder="名前を入力">
-                
-                <div style="font-size: 11px; font-weight:700; color:var(--text-sub); margin-bottom:8px;">🎯 現在の学習目標</div>
-                <input type="text" id="sideInputTarget" class="search-input" style="height:34px; margin-bottom:8px; font-size:12px;" placeholder="目標を入力">
-                
-
-
                 <div style="font-size: 11px; font-weight:700; color:var(--accent); margin-top:4px; margin-bottom:8px;">🤖 Gemini AI APIキー</div>
                 <input type="password" id="sidebarApiKeyInput" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px;" placeholder="AI用APIキーを入力...">
                 
                 <div style="display: flex; gap: 8px;">
-                    <button class="modern-btn" style="height:32px; font-size:12px;" onclick="saveSidebarProfile()">
+                    <button class="modern-btn" style="height:32px; font-size:12px;" onclick="window.saveSidebarApiKey()">
                         設定を保存して適用
                     </button>
                 </div>
@@ -181,6 +169,7 @@
                 <div id="adminNoticeTextContent" class="notice-board-body-text">現在、管理者からのお知らせはありません。</div>
             </div>
 
+            <section id="homeProfile" class="home-profile"></section>
         </div>
 
         <div id="view-vocab" class="tab-view">
@@ -806,21 +795,22 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <script src="library-state.js?v=4.12" defer></script>
-    <script src="app.js?v=4.12" defer></script>
-    <script src="game_core.js?v=4.12" defer></script>
-    <script src="vocab_ui.js?v=4.12" defer></script>
-    <script src="reader.js?v=4.12" defer></script>
-    <script src="fix.js?v=4.12" defer></script>
-    <script src="multi.js?v=4.12" defer></script>
-    <script src="gacha.js?v=4.12" defer></script>
-    <script src="addon.js?v=4.12" defer></script>
-    <script src="library.js?v=4.12" defer></script>
-    <script src="workbook.js?v=4.12" defer></script>
-    <script src="shared-notes.js?v=4.12" defer></script>
-    <script src="study-time.js?v=4.12" defer></script>
-    <script src="ranking.js?v=4.12" defer></script>
-    <script src="autosave.js?v=4.12" defer></script>
-    <script src="people.js?v=4.12" defer></script>
+    <script src="library-state.js?v=4.32" defer></script>
+    <script src="app.js?v=4.32" defer></script>
+    <script src="game_core.js?v=4.32" defer></script>
+    <script src="vocab_ui.js?v=4.32" defer></script>
+    <script src="reader.js?v=4.32" defer></script>
+    <script src="fix.js?v=4.32" defer></script>
+    <script src="multi.js?v=4.32" defer></script>
+    <script src="gacha.js?v=4.32" defer></script>
+    <script src="addon.js?v=4.32" defer></script>
+    <script src="library.js?v=4.32" defer></script>
+    <script src="workbook.js?v=4.32" defer></script>
+    <script src="shared-notes.js?v=4.32" defer></script>
+    <script src="study-time.js?v=4.32" defer></script>
+    <script src="ranking.js?v=4.32" defer></script>
+    <script src="autosave.js?v=4.32" defer></script>
+    <script src="people.js?v=4.32" defer></script>
+    <script src="profile-customization.js?v=4.32" defer></script>
 </body>
 </html>
