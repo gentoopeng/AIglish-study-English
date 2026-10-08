@@ -93,14 +93,19 @@
     function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
     function row(id,doc){const stats=statsOf(doc),combined=fromProfile(doc),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:flashCount(combined)};}
     function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,learningRankingV2Json:JSON.stringify(record)});}
-    function detail(entry,rank,context){
+    async function detail(entry,rank,context){
+        const account=owner();
+        try{if(window.db&&window.fbGetDoc){if(entry.id===account)await syncCloud();const snap=await window.fbGetDoc(window.fbDoc(window.db,'users',entry.id));if(owner()!==account)return;if(snap.exists()){const latest=row(entry.id,snap.data());entry=entry.id===account?self():latest;}}}catch(error){console.warn('最新の学習記録を取得できませんでした',error);}
+        return showDetail(entry,rank,context);
+    }
+    function showDetail(entry,rank,context){
         const detailKey=Object.keys(labels).find(key=>labels[key]===context)||'time';
         const dialog=window.openLibraryDialog('学習記録','<div class="ranking-detail"><div class="ranking-detail-person"></div><p class="ranking-detail-place"></p><dl></dl></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
         dialog.querySelector('.library-editor-eyebrow').textContent='LEARNING RECORDS';
         const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');name(heading,entry.name);person.append(avatar(entry.avatar,entry.name),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[detailKey])+' · '+(rank?rank+'位':entry[detailKey]>0?'順位未取得':'未計測');
         Object.keys(labels).forEach(key=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=labels[key];dd.textContent=value(entry,key);dialog.querySelector('dl').append(dt,dd);});
     }
-    window.RankingVisuals.detailStudy=function(entry,rank){const known=row(entry.id,{playerName:entry.name,avatar:entry.avatar,userStats:entry.getStats?entry.getStats():{}});detail(known,rank,'今日の勉強時間');const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent='今日の勉強時間';dd.textContent=duration(entry.seconds);const dl=document.querySelector('.ranking-detail dl');dl.prepend(dt,dd);};
+    window.RankingVisuals.detailStudy=function(entry,rank){const known=row(entry.id,{playerName:entry.name,avatar:entry.avatar,userStats:entry.getStats?entry.getStats():{}});showDetail(known,rank,'今日の勉強時間');const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent='今日の勉強時間';dd.textContent=duration(entry.seconds);const dl=document.querySelector('.ranking-detail dl');dl.prepend(dt,dd);};
     function render(){
         const host=document.getElementById('rankingPodium');if(!host)return;ensure();const local=self(),rows=cache.filter(entry=>entry.id!==user);if(user!=='GUEST-000')rows.push(local);
         Object.keys(labels).forEach(key=>{
@@ -135,5 +140,7 @@
     window.onTabChange(tab=>{if(tab==='titles'){render();refresh(false);}else if(tab==='vocab'){ensure();scanCurrent();persist();}});
     window.onAppLoaded(()=>{ensure();window.syncRankingMetrics();render();});
     window.addEventListener('storage',event=>{if(event.key===storageKey(owner())){ensure();record=merge(record,read(user));persist();render();}});
+    setInterval(()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(true);},30000);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(true);});
     window.LearningRanking={render,refresh,sync:syncCloud,snapshot:()=>{window.syncRankingMetrics();return JSON.parse(JSON.stringify(record));}};
 })();
