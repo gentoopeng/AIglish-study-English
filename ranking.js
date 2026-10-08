@@ -78,6 +78,7 @@
                     record=merge(record,cloudRecord);
                     persist();
                 }
+                if(window.__readLearningRankingBackup){const backup=await window.__readLearningRankingBackup(id);if(owner()!==id)return;record=merge(record,backup);persist();scheduleSync();}
             }catch(e){console.warn('既存のランキング記録は次回接続時に取り込みます',e);}
         }
         if(owner()!==id)return;
