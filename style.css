@@ -2329,3 +2329,16 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .ranking-mini-panel{display:grid;grid-template-rows:auto minmax(0,1fr) 18px;row-gap:3px;}
 .ranking-mini-self{padding:0;align-self:end;line-height:14px;}
 @media(max-height:700px){.ranking-mini-panel{grid-template-rows:auto minmax(0,1fr) 13px;row-gap:2px;}.ranking-mini-self{line-height:11px;}}
+/* Reserve all of each panel for its podium; the former footer could collide in Safari. */
+.ranking-header{justify-content:flex-end;padding:0 0 6px;height:28px;}
+.ranking-header #rankingRefresh{width:28px;height:28px;font-size:19px;}
+.ranking-mini-panel{grid-template-rows:18px minmax(0,1fr);box-sizing:border-box;overflow:hidden;padding:10px 12px;}
+.ranking-mini-self{display:none!important;}
+.ranking-mini-panel .learning-podium{height:100%;box-sizing:border-box;align-items:end;}
+.ranking-mini-panel .learning-podium-place{min-height:0;max-height:100%;box-sizing:border-box;}
+.ranking-mini-panel .podium-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;max-height:28px;}
+@media(max-height:700px){.ranking-mini-panel{grid-template-rows:14px minmax(0,1fr);padding:6px 8px;}}
+.ranking-mini-panel .podium-name{font-size:clamp(10px,2.7vw,12px)!important;line-height:1.35!important;max-height:2.7em;}
+.ranking-mini-panel .podium-step{box-sizing:border-box;line-height:1;font-size:14px;padding:2px 0;}
+.ranking-mini-panel .place-1 .podium-step{font-size:20px;padding-top:8px;}
+@media(max-height:700px){.ranking-mini-panel .podium-step{font-size:10px;padding:0;}.ranking-mini-panel .place-1 .podium-step{font-size:14px;padding-top:3px;}}
