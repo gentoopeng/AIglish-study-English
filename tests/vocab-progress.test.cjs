@@ -101,8 +101,8 @@ test('a delayed progress response cannot recreate a deleted book in local or clo
 
 test('old integrated saves merge learning records without replacing this device identity',async()=>{
  const rankingSource=fs.readFileSync(path.join(__dirname,'../ranking.js'),'utf8');const modelContext={window:{}};vm.runInNewContext(rankingSource.slice(0,rankingSource.indexOf('    const owner='))+'})();',modelContext);
- const model=modelContext.window.LearningRankingModel,values=new Map(),key='core_v4_learning_ranking_user-a';
- values.set('aiglish_ranking_device','this-device');values.set(key,JSON.stringify({version:1,words:{recent:1},flash:{baseline:4,sources:{phone:5}}}));
- values.set('save',JSON.stringify({savedAt:new Date(2000).toISOString(),data:{localStorage:{aiglish_ranking_device:'another-device',[key]:JSON.stringify({version:1,words:{old:1},flash:{baseline:4,sources:{phone:2,laptop:3}}})}}}));
+ const model=modelContext.window.LearningRankingModel,values=new Map(),key='core_v4_learning_ranking_v2_user-a';
+ values.set('aiglish_ranking_device','this-device');values.set(key,JSON.stringify({version:2,epoch:"learning-reset-3.52",words:{recent:1},flash:{baseline:4,sources:{phone:5}}}));
+ values.set('save',JSON.stringify({savedAt:new Date(2000).toISOString(),data:{localStorage:{aiglish_ranking_device:'another-device',[key]:JSON.stringify({version:2,epoch:"learning-reset-3.52",words:{old:1},flash:{baseline:4,sources:{phone:2,laptop:3}}})}}}));
  const ctx={LearningRankingModel:model,loginUid:()=> 'user-a',localKey:()=> 'save',cloudMetaKey:()=> 'cloud-meta',localMetaKey:()=> 'local-meta',console,localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)}};ctx.window=ctx;vm.runInNewContext(autoLoader,ctx);await ctx.autoLoadOnce();const merged=JSON.parse(values.get(key));assert.equal(model.wordCount(merged),2);assert.equal(model.flashCount(merged),12);assert.equal(values.get('aiglish_ranking_device'),'this-device');
 });

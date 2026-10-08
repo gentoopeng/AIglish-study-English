@@ -43,6 +43,7 @@
             Object.assign(result,source);
             if(source.study_calendar_v2){ledger=mergeCurrent(ledger,source.study_calendar_v2);hasLedger=true;}
         });
+        if(doc.studyLedgerJson){try{ledger=mergeCurrent(ledger,JSON.parse(doc.studyLedgerJson));hasLedger=true;}catch(e){}}
         if(hasLedger)result.study_calendar_v2=ledger;
         if(result.study_today_secs===undefined&&doc.todayStudySeconds!==undefined)result.study_today_secs=positive(doc.todayStudySeconds);
         if(!result.study_today_date&&doc.lastAccessDateStr)result.study_today_date=doc.lastAccessDateStr;
@@ -78,13 +79,13 @@
     const uid=()=>myId||'';
     const storageKey=id=>'aiglish_study_ledger_'+id;
     function read(id) {try{return JSON.parse(localStorage.getItem(storageKey(id))||'null');}catch(e){return null;}}
-    function persist() {if(!user||!data)return;data.updatedAt=Date.now();try{localStorage.setItem(storageKey(user),JSON.stringify(data));}catch(e){const status=document.getElementById('studyTimerStatus');if(status)status.textContent='保存できません。ブラウザーの空き容量を確認してください。';console.error('勉強時間を保存できませんでした',e);}}
+    function persist() {if(!user||!data)return;data.updatedAt=Date.now();try{const previous=read(user);if(previous&&previous.epoch===RESET_EPOCH)localStorage.setItem(storageKey(user)+'_backup',JSON.stringify(mergeCurrent(previous,data)));localStorage.setItem(storageKey(user),JSON.stringify(data));}catch(e){const status=document.getElementById('studyTimerStatus');if(status)status.textContent='保存できません。ブラウザーの空き容量を確認してください。';console.error('勉強時間を保存できませんでした',e);}}
     function ensureUser() {
         const next=uid();if(next===user)return;
         unlock();user=next;manual=false;paused=false;active=false;lastMono=performance.now();lastWall=Date.now();ranking=[];
         if(!user){data=null;return;}
         let stats={};try{stats=JSON.parse(localStorage.getItem('core_v4_user_stats_'+user)||'{}');}catch(e){}
-        const saved=read(user);data=mergeCurrent(null,saved);
+        const saved=read(user);let backup=null;try{backup=JSON.parse(localStorage.getItem(storageKey(user)+'_backup')||'null');}catch(e){}data=mergeCurrent(saved,backup);
         if(stats.study_calendar_v2)data=mergeCurrent(data,stats.study_calendar_v2);
         persist();sync();renderCalendar();renderRanking();
     }
@@ -192,8 +193,8 @@
         }catch(e){if(uid()===owner)message.textContent='表彰台を取得できませんでした。'+e.message;}
         finally{rankingLoading=false;button.disabled=false;button.textContent='更新';}
     }
-    function init(){ensureUser();tick();chart();renderCalendar();}
-    window.StudyTime={init,sync,tick,mergeCloud:calendar=>{ensureUser();if(data){data=mergeCurrent(data,calendar);persist();sync();renderCalendar();chart();}}};
+    function init(){ensureUser();if(data&&userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);tick();chart();renderCalendar();}
+    window.StudyTime={init,sync,tick,snapshot:()=>{ensureUser();return data?JSON.parse(JSON.stringify(data)):null;},mergeCloud:calendar=>{ensureUser();if(data){data=mergeCurrent(data,calendar);persist();sync();renderCalendar();chart();}}};
     window.initStudyTimerAndDataRotation=init;
     window.__updateStudyTimeDisplay=()=>{sync();renderDisplay();};window.renderActivityChart=chart;window.__steSanitizeStudyData=()=>false;
     window.__openStudyTimeEditor=day=>{const d=new Date();d.setDate(d.getDate()-(((d.getDay()+6)%7-day+7)%7));editDate(dateKey(d));};

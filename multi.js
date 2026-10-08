@@ -6386,7 +6386,7 @@ function applySavedMemory(memory,id) {
   try{if(memory.myTarget!=null)myTarget=memory.myTarget;}catch(e){}
   try{if(memory.selectedTitle!=null)selectedTitle=memory.selectedTitle;}catch(e){}
   try{if(Array.isArray(memory.myFriendList))myFriendList=memory.myFriendList;}catch(e){}
-  try{if(memory.userStats)userStats=memory.userStats;}catch(e){}
+  try{if(memory.userStats){userStats=memory.userStats;if(window.StudyTime&&loginUid()===id&&memory.userStats.study_calendar_v2)window.StudyTime.mergeCloud(memory.userStats.study_calendar_v2);}}catch(e){}
   try{if(memory.todayStudySeconds!=null)todayStudySeconds=memory.todayStudySeconds;}catch(e){}
   try{if(Array.isArray(memory.weeklyStudyMinutesLog))weeklyStudyMinutesLog=memory.weeklyStudyMinutesLog;}catch(e){}
   try{if(memory.lastAccessDateStr!=null)lastAccessDateStr=memory.lastAccessDateStr;}catch(e){}
@@ -6438,7 +6438,8 @@ async function autoLoadOnce() {
     var stored=save.data.localStorage;
     for(var key in stored){
       if(key==='aiglish_ranking_device')continue; // Device counters must keep this browser's identity.
-      if(key==='core_v4_learning_ranking_'+id&&window.LearningRankingModel){
+      if(key==='core_v4_learning_ranking_'+id&&localStorage.getItem(key))continue;
+      if(key==='core_v4_learning_ranking_v2_'+id&&window.LearningRankingModel){
         try{localStorage.setItem(key,JSON.stringify(window.LearningRankingModel.merge(JSON.parse(localStorage.getItem(key)||'null'),JSON.parse(stored[key]||'null'))));}catch(e){}
         continue;
       }
