@@ -1179,10 +1179,7 @@ if(nav) nav.classList.add('active');
 window.toggleSidebar(false);
 if(tabId !== 'reader' && typeof window.closeReader === 'function') window.closeReader();
 
-if(tabId === 'admin') {
-    window.renderAdminUserList();
-    window.updateAdminEditBookSelectOptions();
-}
+// The shop hub owns administration; retired book panels must not block navigation.
 if(tabId === 'titles') window.renderTitles(); 
 currentActiveTabId = tabId;
 if(tabId === 'community') window.sortAndRenderFriendList();
