@@ -1627,39 +1627,12 @@ window.saveUserStats();
 window.applyProfileToUi();
 window.renderTitles();
 };
-window.closeAdminPassword = function() {
-const overlay=document.getElementById('adminPassOverlay'),input=document.getElementById('adminPassInput');
-if(input){input.blur();input.value='';}
-if(overlay)overlay.style.display='none';
-document.body.classList.remove('password-prompt-open');
-if(window.resumeBackgroundSave)setTimeout(window.resumeBackgroundSave,1000);
-};
 window.enterAdminModeDirect = function() {
-const overlay = document.getElementById('adminPassOverlay');
-const input = document.getElementById('adminPassInput');
-if (overlay && input) {
-input.value = ""; document.body.classList.add('password-prompt-open'); overlay.style.display = 'flex';
-} else {
-const pass = prompt("管理者専用アクセスです。\nパスワードを入力してください。");
-if (pass === "tukinokopanda" || pass === "tutinokopanda") {
-window.isAdmin = true;
-// Authentication must not rebuild the hidden vocabulary list.
-window.switchTab('admin');
-}
-else if (pass !== null) { alert("⚠️ パスワードが違います。アクセスが拒否されました。"); }
-}
-};
-window.checkAdminPassword = function() {
-const input = document.getElementById('adminPassInput');
-const overlay = document.getElementById('adminPassOverlay');
-if (input && (input.value === "tukinokopanda" || input.value === "tutinokopanda")) {
-window.isAdmin = true;
-window.closeAdminPassword();
-// Authentication must not rebuild the hidden vocabulary list.
-window.switchTab('admin');
-} else {
-alert("⚠️ パスワードが違います。アクセスが拒否されました。"); if(input) input.value = "";
-}
+const owner=myId||'GUEST-000';
+try{localStorage.setItem('core_v4_autosave_pending_'+owner,'1');}catch(error){console.warn('保存待ちの状態を記録できませんでした',error);}
+sessionStorage.removeItem('aiglish_admin_access_ticket');
+sessionStorage.setItem('aiglish_admin_access_pending',JSON.stringify({owner,nonce:crypto.randomUUID(),createdAt:Date.now(),returnTo:location.href}));
+location.replace(new URL('admin-access.html',location.href).href);
 };
 window.saveAdminDashboardTitle = function() {
 const input = document.getElementById('adminDashboardTitleInput'); if(!input) return;
