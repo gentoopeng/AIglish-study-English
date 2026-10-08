@@ -7291,6 +7291,7 @@ window.loadUserStats = async function() {
             const snap = await window.fbGetDoc(userRef);
             if (snap.exists()) {
                 const data = snap.data();
+                if(window.StudyTimeModel)data.userStats=window.StudyTimeModel.readStats(data);
                 if (data.userStats) {
                     // ★ カウンタは「ローカルとクラウドの大きい方」を採用
                     const merged = data.userStats;

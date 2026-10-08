@@ -62,7 +62,9 @@
                 const snap=await window.fbGetDoc(window.fbDoc(window.db,'users',id));
                 if(owner()!==id)return;
                 if(snap.exists()){
-                    const doc=snap.data(),stats=statsOf(doc),cloudRecord=doc.learningRankingJson||doc.learningRanking||stats.learning_ranking_json||stats.learning_ranking;
+                    const doc=snap.data(),stats=statsOf(doc);
+                    if(window.StudyTime&&stats.study_calendar_v2)window.StudyTime.mergeCloud(stats.study_calendar_v2);
+                    const cloudRecord=doc.learningRankingJson||doc.learningRanking||stats.learning_ranking_json||stats.learning_ranking;
                     record=merge(record,cloudRecord);
                     if(!cloudRecord){
                         record.flash.baseline=Math.max(record.flash.baseline,nonnegative(stats.flash_count));

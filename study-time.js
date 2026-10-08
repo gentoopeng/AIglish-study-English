@@ -49,10 +49,7 @@
         return result;
     }
     function rankingSeconds(stats,range,now) {
-        // Legacy public counters are display-only; never import them into the timer.
-        if(stats.study_calendar_v2)return Math.floor(rangeValue(resetLedger(stats.study_calendar_v2),range,now)/1000);
-        if(range==='daily')return normalizeDate(stats.study_today_date||stats.study_last_date)===dateKey(now)?positive(stats.study_today_secs):0;
-        return positive(stats.study_total_secs);
+        return Math.floor(rangeValue(resetLedger(stats.study_calendar_v2),range,now)/1000);
     }
     function legacy(stats,local,now) {
         const data={version:1,days:{},offset:0,updatedAt:now},last=normalizeDate(stats.study_last_date||stats.study_weekly_log_today_date||local.date);
