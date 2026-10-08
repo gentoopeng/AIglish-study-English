@@ -2388,3 +2388,5 @@ html body::after{background:var(--app-shop-background,linear-gradient(135deg,#09
 @media(max-width:900px){.card,.app-header,.nav-bar,.sidebar,.sidebar-overlay,.word-row-container,.home-shop,.admin-hub,.auth-card,.login-confirm-overlay{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}.library-editor-dialog::backdrop,.book-flashcard-dialog::backdrop{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}}
 body.app-suspended .app-starfield::before{animation-play-state:paused!important;}
 @media(prefers-reduced-motion:reduce){.app-starfield.photographic-night::before{animation:none;will-change:auto;}}
+
+.shop-pages{display:flex;justify-content:center;align-items:center;gap:15px;padding-top:10px;color:#a7b3c7;font-size:11px;}.shop-pages button{border:1px solid #c9b97a40;border-radius:8px;background:#07102070;color:#d5c494;padding:6px 12px;}.shop-pages button:disabled{opacity:.3;}body.shop-admin-active .app-starfield::before{animation-play-state:paused!important;}body.shop-admin-active .profile-orbit{animation-play-state:paused!important;}
