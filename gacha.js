@@ -723,7 +723,7 @@ function isAdmin() {
   } catch (e) {}
   return false;
 }
-function injectAdmin() {
+function injectAdmin() { return; // Management is centralized in the shop hub.
   if (!isAdmin()) return;
   if (document.getElementById('gcAdminCard')) return;
   var host = document.getElementById('admList') || document.querySelector('.admin-panel') || document.querySelector('[class*="admin"]');
@@ -1001,6 +1001,7 @@ console.log('🎰 gacha修正パッチ（ヘッダーXP統一＋↓変換＋図�
 // =====================================================================
 (function () {
 "use strict";
+return; // Retired duplicate gacha administration UI.
 if (window.__gachaAdminV3) return;
 window.__gachaAdminV3 = true;
 

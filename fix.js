@@ -899,7 +899,7 @@
     }
     
     // ---- データ管理ボタン注入 ----
-    function injectAdminDataButton() {
+    function injectAdminDataButton() { return; // Retired duplicate management panel.
     if (document.getElementById('admDataBtnCard')) return;
     var anchor = document.getElementById('adminUserListContainer'); var insertAfter = null, parent = null;
     if (anchor) { var card = anchor.closest('.card'); if (card && card.parentNode) { insertAfter = card; parent = card.parentNode; } }
