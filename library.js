@@ -16,7 +16,9 @@
         var shared = textbooksPool.filter(function(book) { return !book.personal && !(window.LibraryState&&window.LibraryState.isDeleted('book',book.id)); });
         textbooksPool = shared.filter(function(book) { return data.hidden.indexOf(book.id) < 0; }).concat(data.books.filter(function(book){return data.hidden.indexOf(book.id)<0;}));
     }
+    const pendingCatalogs=new Set();
     function persist(data) {
+        pendingCatalogs.add(userId());
         if(window.LibraryState)data.books=data.books.filter(function(book){return !window.LibraryState.isDeleted('book',book.id);});
         data.savedAt = new Date().toISOString();
         data.books.forEach(function(book){book.updatedAt=data.savedAt;});
@@ -28,19 +30,18 @@
         window.updateFlashcardSourceSelectOptions();
     }
     function mergeLibraries(local,remote,owner){
-        owner=owner||userId();
-        local=local||{books:[],hidden:[]};remote=remote||{books:[],hidden:[]};
-        var books=new Map();[remote,local].forEach(function(list){(list.books||[]).forEach(function(book){var existing=books.get(book.id);if(!existing||(Date.parse(book.updatedAt||list.savedAt||'')||0)>=(Date.parse(existing.updatedAt||remote.savedAt||'')||0))books.set(book.id,book);});});
-        var latest=Date.parse(local.savedAt||'')>=Date.parse(remote.savedAt||'')?local:remote;
-        return {books:Array.from(books.values()).filter(function(book){return !(window.LibraryState&&window.LibraryState.isDeleted('book',book.id,owner));}),hidden:latest.hidden||[],savedAt:latest.savedAt||''};
+        return window.LibraryState.mergeCatalog(local,remote,owner||userId());
     }
+    function setHidden(data,id,hidden){data.visibility=data.visibility||{};data.visibility[id]={hidden:!!hidden,updatedAt:Math.max(Date.now(),Number(data.visibility[id]&&data.visibility[id].updatedAt||0)+1)};data.hidden=(data.hidden||[]).filter(value=>value!==id);if(hidden)data.hidden.push(id);}
     async function syncLibraryCloud(snapshot){
         var owner=userId();if(owner==='GUEST-000'||!window.db||!window.fbRunTransaction)return;
         var ref=window.fbDoc(window.db,'users',owner,'library','catalog');
         var result=await window.fbRunTransaction(window.db,async function(tx){var doc=await tx.get(ref),remote=doc.exists()?JSON.parse(doc.data().libraryJson||'null'):null;var merged=mergeLibraries(snapshot,remote,owner);tx.set(ref,{libraryJson:JSON.stringify(merged)},{merge:true});return merged;});
-        if(userId()===owner){localStorage.setItem(key(),JSON.stringify(mergeLibraries(readLibrary(),result)));refreshPool();window.renderVocabLibrarySelection();}
+        if(userId()===owner){localStorage.setItem(key(),JSON.stringify(mergeLibraries(readLibrary(),result)));if(readLibrary().savedAt===result.savedAt)pendingCatalogs.delete(owner);refreshPool();window.renderVocabLibrarySelection();}
     }
-    window.onAppLoaded(async function(){var owner=userId();if(owner==='GUEST-000'||!window.db||!window.fbGetDoc)return;try{var doc=await window.fbGetDoc(window.fbDoc(window.db,'users',owner,'library','catalog'));if(userId()!==owner)return;if(doc.exists()){localStorage.setItem(key(),JSON.stringify(mergeLibraries(readLibrary(),JSON.parse(doc.data().libraryJson||'null'))));refreshPool();window.renderVocabLibrarySelection();}await syncLibraryCloud(readLibrary());}catch(error){console.warn('単語帳一覧は端末の保存を使います',error);}});
+    function retryCatalog(){if(pendingCatalogs.has(userId()))syncLibraryCloud(readLibrary()).catch(function(error){console.warn('単語帳一覧の再同期を保留します',error);});}
+    setInterval(retryCatalog,30000);window.addEventListener('online',retryCatalog);
+    window.onAppLoaded(async function(){var owner=userId();if(owner==='GUEST-000'||!window.db||!window.fbGetDoc)return;try{var doc=await window.fbGetDoc(window.fbDoc(window.db,'users',owner,'library','catalog'));if(userId()!==owner)return;if(doc.exists()){localStorage.setItem(key(),JSON.stringify(mergeLibraries(readLibrary(),JSON.parse(doc.data().libraryJson||'null'))));refreshPool();window.renderVocabLibrarySelection();}await syncLibraryCloud(readLibrary());}catch(error){pendingCatalogs.add(owner);console.warn('単語帳一覧は端末の保存を使います',error);}});
     window.isPersonalTextbook = function(bookId) {
         return readLibrary().books.some(function(book) { return book.id === bookId; });
     };
@@ -201,7 +202,7 @@
     async function eraseBook(id,book,kind) {
         kind=kind||'book';
         var uid=userId();
-        if(window.LibraryState){await window.LibraryState.mark(kind,id,book,uid);await window.LibraryState.waitForWrites(uid);}
+        if(window.LibraryState){await window.LibraryState.mark(kind,id,book,uid);window.LibraryState.cleanLocal(uid);await window.LibraryState.waitForWrites(uid);}
 
         var localSaves=[];
         for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k.startsWith('save_studio_'+uid+'_'))localSaves.push([k,JSON.stringify(scrubSave(JSON.parse(localStorage.getItem(k)),id,kind,uid))]);}
@@ -230,7 +231,7 @@
             for(var ref of refs)await window.fbDeleteDoc(ref);
             await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'vocabBooks',cloudId));
             await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'vocabProgress',id));
-            if(book.personal)await window.fbDeleteDoc(window.fbDoc(window.db,'publicTextbooks',id));
+            if(book.personal){var publicBookRef=window.fbDoc(window.db,'publicTextbooks',id);var publicBook=await window.fbGetDoc(publicBookRef);if(publicBook.exists()&&publicBook.data().ownerId===uid)await window.fbDeleteDoc(publicBookRef);}
             }else{
                 var publicWorkRef=window.fbDoc(window.db,'publicWorkbooks',id);
                 if(window.fbGetDoc){var publicWork=await window.fbGetDoc(publicWorkRef);if(publicWork&&publicWork.exists()&&publicWork.data().ownerId===uid)await window.fbDeleteDoc(publicWorkRef);}
@@ -287,7 +288,7 @@
             '<button type="button" id="libraryRemoveBook" class="library-editor-danger">' + '自分の一覧から外す' + '</button>' + '<button type="button" id="libraryEraseBook" class="library-editor-danger">' + (own ? '単語帳を完全削除' : '自分の単語帳データを完全削除') + '</button>' + '<button type="button" data-library-close>閉じる</button></div>');
         if (own) modal.querySelector('#libraryEditBook').onclick = function() { window.openLibraryBookEditor(bookId); };
         var restore = modal.querySelector('#libraryRestoreBook');
-        if (restore) restore.onclick = function() { var data = readLibrary(); data.hidden = data.hidden.filter(function(id) { return id !== bookId; }); persist(data); close(); };
+        if (restore) restore.onclick = function() { var data = readLibrary(); setHidden(data,bookId,false); persist(data); close(); };
         function removeBook(permanent) {
             var confirmDialog = open('「' + book.name + '」を' + (permanent ? '完全削除しますか？' : '一覧から外しますか？'),
                 '<p class="library-editor-hint">' + (permanent ? (own ? '単語・理解度・保存済みセーブ内のデータと公開一覧から削除します。元に戻せません。他の人が追加したコピーは残ります。' : 'この端末と自分のクラウドにある単語帳・学習データを削除します。他の人と配信用の原本は残ります。') : '一覧から非表示にします。単語と学習データは残ります。') + '</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryConfirmRemove" class="library-editor-danger">' + (permanent ? '完全削除する' : '一覧から外す') + '</button></div>');
@@ -303,14 +304,14 @@
                     if (userId() !== actionUserId) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
                     var data = readLibrary();
                     if(permanent)data.books = data.books.filter(function(item) { return item.id !== bookId; });
-                    if (data.hidden.indexOf(bookId) < 0) data.hidden.push(bookId);
+                    setHidden(data,bookId,true);
                     persist(data);
                     if (currentTextbook === bookId) {
                         currentTextbook = ''; vocabList = []; currentUserVocabProgress = {};
                         localStorage.setItem('core_v4_current_textbook_id', '');
                     }
                     window.showVocabLibrarySelection(); close();
-                } catch (error) { confirmDialog.querySelector('.library-editor-error').textContent = error.message; }
+                } catch (error) { confirmDialog.querySelector('.library-editor-error').textContent = error.message;if(window.LibraryState&&window.LibraryState.isDeleted('book',bookId)){refreshPool();window.renderVocabLibrarySelection();} }
                 finally { remove.disabled = false; remove.textContent = removeLabel; }
             };
         }

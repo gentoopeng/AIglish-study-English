@@ -6269,6 +6269,7 @@ async function saveAllContents() {
   try { if(typeof window.saveVocabProgressLocally==='function')window.saveVocabProgressLocally(null,true); } catch(e) {}
   try { if(typeof window.__captureManualVocabDraft==='function')window.__captureManualVocabDraft(); } catch(e) {}
   progress(8,started,'全データを整理中');
+  if(window.syncRankingMetrics)window.syncRankingMetrics();
   var data=collectAll();
   var save={slot:SLOT,savedAt:new Date().toISOString(),savedAtDisplay:nowDisplay(),data:data};
   if(window.LibraryState)window.LibraryState.sanitizeSave(save,id);
@@ -6350,6 +6351,12 @@ async function saveAllContents() {
       await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',generation+'_p'+n),{d:chunks[n]},{merge:false});
       progress(15+((n+1)/chunks.length)*80,started,'クラウドへ保存中');
     }
+    // Full backups and public ranking must commit the same captured learning record.
+    if(window.LearningRankingModel&&window.fbRunTransaction){
+      var rankingRecord=window.LearningRankingModel.merge(null,data.localStorage&&data.localStorage['core_v4_learning_ranking_v2_'+id]);
+      meta.learningRankingV2Json=JSON.stringify(rankingRecord);
+      await window.fbRunTransaction(window.db,async function(tx){var ref=window.fbDoc(window.db,'users',id),snap=await tx.get(ref);var merged=window.LearningRankingModel.merge(window.LearningRankingModel.fromProfile(snap.exists()?snap.data():{}),rankingRecord);tx.set(ref,{learningRankingV2Json:JSON.stringify(merged)},{merge:true});});
+    }
     await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});
     var verify=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
     if(!verify||!verify.exists()||!verify.data()||verify.data().generation!==generation)throw new Error('クラウド保存の完了確認に失敗しました');
@@ -6380,6 +6387,12 @@ async function fetchCloudSave(id) {
   if(meta.checksum&&saveChecksum(raw)!==meta.checksum)throw new Error('セーブデータの検証に失敗しました');
   return raw?JSON.parse(raw):null;
 }
+window.__readLearningRankingBackup=async function(id){
+  var manifest=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
+  if(manifest.exists()&&manifest.data().learningRankingV2Json)return window.LearningRankingModel.merge(null,manifest.data().learningRankingV2Json);
+  var save=await fetchCloudSave(id),data=save&&save.data||{};
+  return window.LearningRankingModel.merge(data.localStorage&&data.localStorage['core_v4_learning_ranking_v2_'+id],data.memory&&data.memory.userStats&&data.memory.userStats.learning_ranking_v2_json);
+};
 function applySavedMemory(memory,id) {
   if(!memory||typeof memory!=='object')return;
   if(window.LibraryState)window.LibraryState.sanitizeSave({memory:memory},id);

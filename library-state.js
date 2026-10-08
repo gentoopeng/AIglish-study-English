@@ -18,13 +18,13 @@
     function cloudReady() { return !!(window.db && window.fbDoc && window.fbSetDoc && window.fbCollection && window.fbGetDocs); }
     async function mark(kind, id, metadata, owner = currentUser()) {
         const existing = read(owner)[kind + ':' + id];
-        if (existing) return existing;
-        const item = {kind, id, metadata:{id,personal:!!(metadata&&metadata.personal),visibility:metadata&&metadata.visibility||'private'}, deletedAt:Date.now(), updatedAt:Date.now(), pending:true};
-        if (owner !== 'GUEST-000') {
-            if (!cloudReady()) throw new Error('完全削除にはクラウド接続が必要です。接続後に再度お試しください。');
-            await window.fbSetDoc(window.fbDoc(window.db, 'users', owner, 'libraryDeletions', encodeURIComponent(kind + ':' + id)), item, {merge:false});
-        }
+        const item = existing || {kind, id, metadata:{id,personal:!!(metadata&&metadata.personal),visibility:metadata&&metadata.visibility||'private'}, deletedAt:Date.now(), updatedAt:Date.now(), pending:true};
+        // Record intent before the network; an interrupted request cannot resurrect contents.
         localStorage.setItem(storageKey(owner), JSON.stringify(merge(read(owner), {[kind + ':' + id]:item})));
+        if (owner !== 'GUEST-000' && cloudReady()) {
+            try {await window.fbSetDoc(window.fbDoc(window.db, 'users', owner, 'libraryDeletions', encodeURIComponent(kind + ':' + id)), item, {merge:false});}
+            catch(error){console.warn('削除の記録は接続後に再送します',error);}
+        }
         return item;
     }
     async function complete(kind, id, owner = currentUser()) {
@@ -44,18 +44,25 @@
             'core_v4_vocab_draft_' + owner + '_' + encodeURIComponent(id), 'core_v4_user_vocab_progress_' + owner + '_' + id,
             'core_v4_user_vocab_progress_' + owner + '_' + id + '__ts'];
     }
+    function mergeCatalog(left,right,owner=currentUser()) {
+        left=left||{books:[],hidden:[]};right=right||{books:[],hidden:[]};
+        const books=new Map(),visibility={};
+        [left,right].forEach(list=>{
+            (list.books||[]).forEach(book=>{const old=books.get(book.id);if(!old||(Date.parse(book.updatedAt||list.savedAt||'')||0)>=(Date.parse(old.updatedAt||'')||0))books.set(book.id,Object.assign({},book,{updatedAt:book.updatedAt||list.savedAt}));});
+            const states=Object.assign({},list.visibility||{});
+            (list.hidden||[]).forEach(id=>{if(!states[id])states[id]={hidden:true,updatedAt:Date.parse(list.savedAt||'')||0,legacy:true};});
+            Object.entries(states).forEach(([id,state])=>{const old=visibility[id];if(!old||(old.legacy&&!state.legacy)||(!!old.legacy===!!state.legacy&&(Number(state.updatedAt)>Number(old.updatedAt)||(Number(state.updatedAt)===Number(old.updatedAt)&&state.hidden))))visibility[id]=state;});
+        });
+        const latest=(Date.parse(left.savedAt||'')||0)>=(Date.parse(right.savedAt||'')||0)?left:right;
+        return {books:Array.from(books.values()).filter(book=>!isDeleted('book',book.id,owner)),visibility,hidden:Object.keys(visibility).filter(id=>visibility[id].hidden),savedAt:latest.savedAt||''};
+    }
     function sanitizeSave(save, owner = currentUser()) {
         const data = save.data || save, storage = data.localStorage || {}, memory = data.memory || {};
         // Always merge the immutable deletion history before restoring any contents.
         let registry = read(owner);
         if (storage[storageKey(owner)]) {try {registry = merge(registry, JSON.parse(storage[storageKey(owner)]));} catch (e) {}}
         const libraryKey='core_v4_personal_library_'+owner;
-        if(storage[libraryKey]){
-            const incoming=JSON.parse(storage[libraryKey]),existing=JSON.parse(localStorage.getItem(libraryKey)||'null');
-            if(existing&&Array.isArray(existing.hidden))incoming.hidden=Array.from(new Set((incoming.hidden||[]).concat(existing.hidden)));
-            if(existing&&Array.isArray(existing.books)){const books=new Map((incoming.books||[]).map(book=>[book.id,book]));existing.books.forEach(book=>{const remote=books.get(book.id);if(!remote||Date.parse(book.updatedAt||existing.savedAt||'')>Date.parse(remote.updatedAt||incoming.savedAt||''))books.set(book.id,book);});incoming.books=Array.from(books.values());}
-            storage[libraryKey]=JSON.stringify(incoming);
-        }
+        if(storage[libraryKey])storage[libraryKey]=JSON.stringify(mergeCatalog(JSON.parse(storage[libraryKey]),JSON.parse(localStorage.getItem(libraryKey)||'null'),owner));
         Object.values(registry).forEach(item => {
             const id = item.id;
             if (item.kind === 'work') {
@@ -90,5 +97,5 @@
         promise.then(() => pending.delete(promise), () => pending.delete(promise));return promise;
     }
     async function waitForWrites(owner) {const pending = writes.get(owner);if (pending) await Promise.allSettled(Array.from(pending));}
-    window.LibraryState = {storageKey, read, merge, isDeleted, mark, complete, loadCloud, bookKeys, sanitizeSave, cleanLocal, track, waitForWrites};
+    window.LibraryState = {storageKey, read, merge, mergeCatalog, isDeleted, mark, complete, loadCloud, bookKeys, sanitizeSave, cleanLocal, track, waitForWrites};
 })();
