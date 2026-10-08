@@ -79,6 +79,7 @@
         // Write immediately; an old integrated save must never replace a newer answer.
         localStorage.setItem(key(), JSON.stringify(works.filter(work=>!(window.LibraryState&&window.LibraryState.isDeleted('work',work.id)))));
         localStorage.setItem(stampKey(), String(Date.now()));
+        if(window.queueBackgroundSave)window.queueBackgroundSave();
     }
     function current() { return load().find(w => w.id === activeId); }
     function label(work, unit) {
@@ -478,7 +479,7 @@
                     await window.eraseLibraryItem(id,work,'work');
                     if (owner !== uid()) throw new Error('ユーザーが切り替わりました。開き直してください。');
                     save(load().filter(w => w.id !== id)); close(); window.showVocabLibrarySelection();
-                } catch (error) {confirmDialog.querySelector('.library-editor-error').textContent = error.message; this.disabled = false;}
+                } catch (error) {confirmDialog.querySelector('.library-editor-error').textContent = error.message; if(window.LibraryState&&window.LibraryState.isDeleted('work',id))window.showVocabLibrarySelection(); this.disabled = false;}
             };
         };
     }
