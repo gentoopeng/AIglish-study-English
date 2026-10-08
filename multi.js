@@ -4391,6 +4391,7 @@ else c.classList.remove('on');
 
 /* ---------- 4. 描画後のチップ状態同期（ウォッチドッグ） ---------- */
 setInterval(function() {
+if(document.visibilityState==='hidden'||!document.getElementById('view-party')?.classList.contains('active'))return;
 updateChipVisuals();
 // チップがテキストノードだけで span になっていたら button 相当のスタイルを強制付与
 var chips = document.querySelectorAll('#view-party .dx2-sortchip,#view-party [data-uni-sort],#view-party [data-pcvsort],#view-party [data-dx2sort]');
@@ -4529,8 +4530,8 @@ window.__captureManualVocabDraft = function() {
       : {};
     var savedAt=new Date().toISOString();
     var draft={
-      master:JSON.parse(JSON.stringify(master)),
-      progress:JSON.parse(JSON.stringify(progress)),
+      master:master,
+      progress:progress,
       savedAt:savedAt
     };
     window.__manualVocabDrafts[bookKey]=draft;
@@ -6268,7 +6269,7 @@ async function saveAllContents() {
   // 手動セーブ自身がメモリと端末の最新値を収集するため、ここで旧個別保存の
   // ネットワーク完了を待たない。二重送信が長時間化の主因だった。
   try { if(typeof window.saveVocabProgressLocally==='function')window.saveVocabProgressLocally(null,true); } catch(e) {}
-  try { if(typeof window.__captureManualVocabDraft==='function')window.__captureManualVocabDraft(); } catch(e) {}
+  // collectAllData captures the draft once; do not allocate it twice per backup.
   progress(8,started,'全データを整理中');
   if(window.syncRankingMetrics)window.syncRankingMetrics();
   var data=collectAll();
@@ -7758,7 +7759,7 @@ if(num) num.textContent=String(Math.ceil(left));
 if(left>prevLeft+0.5){ ring.classList.remove('m2-ring-flash'); void ring.offsetWidth; ring.classList.add('m2-ring-flash'); setTimeout(function(){ring.classList.remove('m2-ring-flash');},420); }
 prevLeft=left;
 }
-setInterval(function(){ ensure(); update(); positionHpText(); },100);
+setInterval(function(){ if(document.visibilityState==='hidden'||!document.getElementById('multi-battle-play-screen')||document.getElementById('multi-battle-play-screen').style.display==='none')return;ensure(); update(); positionHpText(); },100);
 console.log('⏱️ 敵行動 円形ゲージv3適用完了');
 })();
 // =====================================================================
