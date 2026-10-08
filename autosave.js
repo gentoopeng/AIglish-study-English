@@ -3,7 +3,7 @@
     let revision=0,saved=0,pending=false,timer=null;
     const id=()=>typeof myId==='string'?myId:'';
     let owner=id();
-    function changed(event){if(event?.target?.closest?.('#adminPassOverlay'))return;if(owner!==id()){owner=id();revision=0;saved=0;}revision++;window.localStorage?.setItem('core_v4_autosave_pending_'+owner,'1');}
+    function changed(event){if(event?.target?.closest?.('#adminPassOverlay,.shop-admin-form'))return;if(owner!==id()){owner=id();revision=0;saved=0;}revision++;window.localStorage?.setItem('core_v4_autosave_pending_'+owner,'1');}
     async function save(){
         timer=null;if(document.body?.classList?.contains('password-prompt-open'))return;if(pending||revision===saved||!owner||owner==='GUEST-000'||!window.__backgroundSaveAll)return;
         const account=owner,version=revision;pending=true;

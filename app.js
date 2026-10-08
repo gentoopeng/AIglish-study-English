@@ -1628,11 +1628,25 @@ window.applyProfileToUi();
 window.renderTitles();
 };
 window.enterAdminModeDirect = function() {
-const owner=myId||'GUEST-000';
-try{localStorage.setItem('core_v4_autosave_pending_'+owner,'1');}catch(error){console.warn('保存待ちの状態を記録できませんでした',error);}
+if(document.getElementById('productAccessDialog')) return;
+const owner=myId||'GUEST-000',nonce=crypto.randomUUID();
 sessionStorage.removeItem('aiglish_admin_access_ticket');
-sessionStorage.setItem('aiglish_admin_access_pending',JSON.stringify({owner,nonce:crypto.randomUUID(),createdAt:Date.now(),returnTo:location.href}));
-location.replace(new URL('admin-access.html',location.href).href);
+sessionStorage.setItem('aiglish_admin_access_pending',JSON.stringify({owner,nonce,createdAt:Date.now(),returnTo:location.href}));
+const dialog=document.createElement('dialog');dialog.id='productAccessDialog';dialog.className='product-access-dialog';dialog.setAttribute('aria-label','商品管理の認証');
+const frame=document.createElement('iframe');frame.title='管理者パスワード';const accessUrl=new URL('admin-access.html?embedded=1',location.href);accessUrl.searchParams.set('v',document.querySelector('meta[name=application-version]')?.content||'');frame.src=accessUrl.href;dialog.append(frame);
+let finished=false;
+function finish(verified){
+if(finished)return;finished=true;window.removeEventListener('message',receive);
+dialog.close();dialog.remove();document.body.classList.remove('password-prompt-open');
+if(!verified){sessionStorage.removeItem('aiglish_admin_access_pending');sessionStorage.removeItem('aiglish_admin_access_ticket');}
+else window.dispatchEvent(new Event('admin-access-complete'));
+if(window.resumeBackgroundSave)window.resumeBackgroundSave();
+}
+function receive(event){if(event.origin!==location.origin||event.source!==frame.contentWindow||event.data?.type!=='aiglish-admin-access'||event.data.nonce!==nonce)return;finish(event.data.verified===true);}
+window.addEventListener('message',receive);
+dialog.addEventListener('cancel',event=>{event.preventDefault();finish(false);});
+dialog.addEventListener('click',event=>{if(event.target===dialog)finish(false);});
+document.body.append(dialog);document.body.classList.add('password-prompt-open');dialog.showModal();window.fitNativeModal?.(dialog);
 };
 window.saveAdminDashboardTitle = function() {
 const input = document.getElementById('adminDashboardTitleInput'); if(!input) return;
