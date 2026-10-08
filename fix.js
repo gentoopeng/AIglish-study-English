@@ -290,6 +290,8 @@
     var bSecs = get('study_secs'), bDate = get('study_date'), bWeek = get('study_week');
     var bWord = get('wordMemory'), bText = get('textHistory'), bBook = get('myBookshelf'), bFold = get('myFolders');
     return netReadOf(id).then(function (net) {
+    if(selfMyId()!==id)return;
+    if(window.StudyTime&&window.StudyTimeModel&&net){var ledger=window.StudyTimeModel.readStats(net).study_calendar_v2;if(ledger)window.StudyTime.mergeCloud(ledger);}
     function P(nkeys, bval, parser) { var nv = pickNet(net, nkeys); if (nv !== undefined && nv !== null) return parser ? parser(nv) : nv; if (bval !== null && bval !== undefined) return parser ? parser(bval) : bval; return undefined; }
     var nm = P(K.name, bName); if (nm !== undefined) selfS('myName', nm || 'プレイヤー1');
     var ex = P(K.exp, bExp, function (x) { return parseInt(x, 10) || 0; }); if (ex !== undefined) selfS('totalExp', ex);
@@ -298,10 +300,11 @@
     var fr = P(K.friends, bFriends, function (x) { var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (fr !== undefined) selfS('myFriendList', fr || []);
     var st = P(K.stats, null);
     if (!isOther()) { var cur = selfG('userStats') || {}; st = mergeStats(cur, (st && typeof st === 'object') ? st : {}); }
-    if (st !== undefined && typeof st === 'object') selfS('userStats', st || {});
+    if (!window.StudyTime && st !== undefined && typeof st === 'object') selfS('userStats', st || {});
     var sc = P(K.secs, bSecs, function (x) { return clampSec(parseInt(x, 10) || 0); });
     var dt = P(K.date, bDate);
     var wk = P(K.week, bWeek, function (x) { return cleanWeek(parseMaybeJSON(x)); });
+    if (!window.StudyTime) {
     if (accountChanged) {
     selfS('todayStudySeconds', (sc !== undefined && sc !== null) ? sc : 0);
     selfS('lastAccessDateStr', (dt !== undefined && dt !== null && dt !== '') ? dt : todayStr());
@@ -310,6 +313,7 @@
     if (sc !== undefined) selfS('todayStudySeconds', sc);
     if (dt !== undefined) selfS('lastAccessDateStr', dt || '');
     if (wk !== undefined) selfS('weeklyStudyMinutesLog', wk);
+    }
     }
     var wo = P(K.word, bWord, function (x) { var p = parseMaybeJSON(x); return (p && typeof p === 'object') ? p : {}; }); if (wo !== undefined) selfS('wordMemory', wo || {});
     var tx = P(K.text, bText, function (x) { var p = parseMaybeJSON(x); return Array.isArray(p) ? p : []; }); if (tx !== undefined) selfS('textHistory', tx || []);
@@ -331,7 +335,7 @@
     set('name', selfG('myName') || ''); set('exp', String(selfG('totalExp') || 0)); set('title', selfG('selectedTitle') || ''); set('target', selfG('myTarget') || ''); set('friends', JSON.stringify(selfG('myFriendList') || []));
     set('study_secs', String(selfG('todayStudySeconds') || 0)); set('study_date', selfG('lastAccessDateStr') || todayStr()); set('study_week', JSON.stringify(selfG('weeklyStudyMinutesLog') || [0,0,0,0,0,0,0]));
     set('wordMemory', JSON.stringify(selfG('wordMemory') || {})); set('textHistory', JSON.stringify(selfG('textHistory') || [])); set('myBookshelf', JSON.stringify(selfG('myBookshelf') || [])); set('myFolders', JSON.stringify(selfG('myFolders') || ['未分類']));
-    return fbWriteOf(id, snapToPayload({ myName: selfG('myName'), totalExp: selfG('totalExp'), selectedTitle: selfG('selectedTitle'), myTarget: selfG('myTarget'), myFriendList: selfG('myFriendList'), userStats: selfG('userStats'), todayStudySeconds: selfG('todayStudySeconds'), weeklyStudyMinutesLog: selfG('weeklyStudyMinutesLog'), lastAccessDateStr: selfG('lastAccessDateStr'), wordMemory: selfG('wordMemory'), textHistory: selfG('textHistory'), myBookshelf: selfG('myBookshelf'), myFolders: selfG('myFolders') })).catch(function () { toast('⚠️ 端末内にだけ保存しました。ネット復帰後に再同期'); });
+    var payload=snapToPayload({ myName: selfG('myName'), totalExp: selfG('totalExp'), selectedTitle: selfG('selectedTitle'), myTarget: selfG('myTarget'), myFriendList: selfG('myFriendList'), userStats: selfG('userStats'), todayStudySeconds: selfG('todayStudySeconds'), weeklyStudyMinutesLog: selfG('weeklyStudyMinutesLog'), lastAccessDateStr: selfG('lastAccessDateStr'), wordMemory: selfG('wordMemory'), textHistory: selfG('textHistory'), myBookshelf: selfG('myBookshelf'), myFolders: selfG('myFolders') });if(window.StudyTime){delete payload.stats;delete payload.userStats;delete payload.todayStudySeconds;delete payload.weeklyStudyMinutesLog;delete payload.lastAccessDateStr;}return fbWriteOf(id,payload).catch(function () { toast('⚠️ 端末内にだけ保存しました。ネット復帰後に再同期'); });
     }
     function saveOther() { var t = T(); if (!t || t.mode !== 'other' || !t.uid) return Promise.resolve(); return fbWriteOf(t.uid, snapToPayload(t.snap || {}, { _editedByAdmin: true })).catch(function () { toast('⚠️ 保存に失敗しました'); }); }
     function refreshDisplay() { try { if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay(); } catch (e) {} try { if (window.renderActivityChart) window.renderActivityChart(); } catch (e) {} }
