@@ -29,3 +29,13 @@ Administration also previously rendered every product image and recreated the sc
 Repeated catalogue reads are coalesced for 60 seconds; changing admin tabs/pages does not refetch all artwork. Fetch completion only redraws the current, unchanged management session when the catalogue changed and no editor is open. Pending updates cannot recreate a screen the user left. Background movement pauses in administration.
 
 `tests/shop-admin-stability.smoke.cjs` exercises 40 distinct 2048-pixel photographs, bounded pagination, 30 editor opens/closes, post-GC JS heap growth and one catalogue fetch. This is synthetic Chromium coverage, not reproduction of the affected browser's termination. At the time of the investigation a read-only query of the live product collection returned zero products, so large live catalogue images alone cannot be established as the cause of this user's report.
+
+## Follow-up: password screen itself (5.02)
+
+The user clarified that the crash occurs every time while the password screen is open, before successful authentication. The earlier management tests primarily passed through this screen quickly and did not model remaining in it.
+
+The password overlay still contained an inline full-screen `backdrop-filter:blur(8px)` and a glowing game card. This overlay was missed by the prior mobile blur selectors. Opening it also immediately focused a 14-pixel password input, which can activate the mobile keyboard and automatic viewport zoom at the same time as the overlay appears. These are concrete rendering hazards; the actual Safari termination has not been reproduced.
+
+The screen is now an opaque, static surface without backdrop filters or game effects. Background panels are hidden and animations pause while it is open. The input is 16 pixels and no longer receives automatic focus. Password input events do not mark learning data dirty, and pending background snapshots defer until the prompt closes; pending learning changes are retained and saving resumes afterward. Closing clears and blurs the password field. The visibility state class does not use an `admin-` prefix, avoiding false matches in legacy role detectors.
+
+Coverage includes 31 password prompt opens, wrong-password/cancel paths, a 10-second dwell, simulated viewport shrink, no automatic focus, paused background movement, and deferred save/resume. Unit tests cover password events not scheduling snapshots. Safari/WebKit installation was attempted, but browser downloads were blocked with HTTP 403 “Domain forbidden”; these checks therefore ran in Chromium and cannot certify real-device Safari behavior.
