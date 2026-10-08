@@ -4689,7 +4689,7 @@ function collectAllData() {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
       if (!k) continue;
-      if (k.indexOf('save_studio_') === 0) continue;
+      if (k.indexOf('save_studio_') === 0 || k === 'aiglish_profile_shop_catalog') continue;
       // 単語帳本体は memory.vocabBooks に正規化して保存する。同じ内容のキャッシュを
       // 何重にも含めるとセーブ容量と通信回数が数倍になるため、再生成可能な複製は除外する。
       if (k.indexOf('core_v4_cache_') === 0 ||
@@ -5749,6 +5749,7 @@ window.__fixPatch3Applied = true;
 
 /* 収集時に除外する巨大キャッシュキーのプレフィックス */
 var EXCLUDE_PREFIXES = [
+'aiglish_profile_shop_catalog', // Global artwork is fetched separately, never duplicated in personal backups.
 'save_studio_',      // セーブデータ本体（自分自身を含めない）
 'core_v4_cache_',    // 単語帳キャッシュ（巨大）
 'core_v4_user_avatar_' // アバター画像base64（巨大）
@@ -6278,10 +6279,11 @@ async function saveAllContents() {
   // 100ms の遅延処理や別の自動保存処理には依存させない。
   try {
     var savedProgress=data.memory&&data.memory.vocabProgress;
+    if(savedProgress){var progressBook=data.memory.vocabBookKey||'default';var cachedProgress=JSON.parse(localStorage.getItem(window.getVocabProgressStorageKey(progressBook))||'{}');savedProgress=Object.assign({},savedProgress,cachedProgress);data.memory.vocabProgress=savedProgress;}
     var savedBook=data.memory&&data.memory.vocabBookKey||'default';
     if(savedProgress&&typeof window.getVocabProgressStorageKey==='function'){
       localStorage.setItem(window.getVocabProgressStorageKey(savedBook),JSON.stringify(savedProgress));
-      localStorage.setItem(window.getVocabProgressStorageKey(savedBook)+'__ts',String(Date.parse(save.savedAt)));
+      // A backup is not a new rating: keep the actual last-edit timestamp.
     }
   } catch(e) { console.warn('[save] vocab snapshot write failed',e); }
   var raw=JSON.stringify(save);
@@ -6338,11 +6340,16 @@ async function saveAllContents() {
     // アプリ本体が起動時に読む正規の理解度ドキュメントも同じ操作内で更新する。
     // フルセーブだけを更新すると、その後の教材ロードが古い理解度で上書きしてしまう。
     if(savedProgress&&!(window.LibraryState&&window.LibraryState.isDeleted('book',savedBook,id))){
-      await window.fbSetDoc(
-        window.fbDoc(window.db,'users',id,'vocabProgress',savedBook),
-        {wordsJson:JSON.stringify(savedProgress),updatedAt:save.savedAt},
-        {merge:false}
-      );
+      var progressRef=window.fbDoc(window.db,'users',id,'vocabProgress',savedBook);
+      var progressEditedAt=Number(data.localStorage&&data.localStorage[window.getVocabProgressStorageKey(savedBook)+'__ts'])||0;
+      if(window.fbRunTransaction)await window.fbRunTransaction(window.db,async function(tx){
+        var doc=await tx.get(progressRef),remote=doc.exists()?doc.data():{},remoteWords={};
+        try{remoteWords=JSON.parse(remote.wordsJson||'{}');}catch(e){}
+        var remoteAt=Number(remote.updatedAtMs)||Date.parse(remote.updatedAt||'')||0;
+        var merged=remoteAt>progressEditedAt?Object.assign({},savedProgress,remoteWords):Object.assign({},remoteWords,savedProgress);
+        tx.set(progressRef,{wordsJson:JSON.stringify(merged),updatedAt:new Date(Math.max(remoteAt,progressEditedAt)).toISOString(),updatedAtMs:Math.max(remoteAt,progressEditedAt)},{merge:true});
+      });
+      else if(progressEditedAt)await window.fbSetDoc(progressRef,{wordsJson:JSON.stringify(savedProgress),updatedAt:new Date(progressEditedAt).toISOString()},{merge:true});
       progress(15,started,'理解度を保存中');
     }
     // 本文を先に保存し、最後にメタデータを更新する。途中で通信が切れても
