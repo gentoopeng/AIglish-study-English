@@ -1636,7 +1636,7 @@ input.value = ""; overlay.style.display = 'flex'; input.focus();
 const pass = prompt("管理者専用アクセスです。\nパスワードを入力してください。");
 if (pass === "tukinokopanda" || pass === "tutinokopanda") {
 window.isAdmin = true;
-window.renderVocabList();
+// Authentication must not rebuild the hidden vocabulary list.
 window.switchTab('admin');
 }
 else if (pass !== null) { alert("⚠️ パスワードが違います。アクセスが拒否されました。"); }
@@ -1648,7 +1648,7 @@ const overlay = document.getElementById('adminPassOverlay');
 if (input && (input.value === "tukinokopanda" || input.value === "tutinokopanda")) {
 window.isAdmin = true;
 overlay.style.display = 'none';
-window.renderVocabList();
+// Authentication must not rebuild the hidden vocabulary list.
 window.switchTab('admin');
 } else {
 alert("⚠️ パスワードが違います。アクセスが拒否されました。"); if(input) input.value = "";
