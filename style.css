@@ -2461,3 +2461,5 @@ body.shop-editing-active .container,body.shop-editing-active .app-header,body.sh
 .shop-save-quiz-dialog #penguinLoadingOverlay{z-index:0!important;background:#0b1220!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
 
 .shop-save-quiz-back { position:absolute;bottom:calc(18px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:1;white-space:nowrap;padding:10px 20px;background:#172033;color:#e5e7eb;border:1px solid #667085;border-radius:12px; }
+
+.vocab-pages{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0;font-size:12px;color:var(--text-sub);}.vocab-pages button{padding:10px 20px;border:1px solid var(--border);border-radius:12px;background:var(--card-bg);color:var(--text-main);}.vocab-pages button:disabled{opacity:.35;}

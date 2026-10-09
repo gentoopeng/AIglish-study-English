@@ -4078,7 +4078,7 @@ observeList();
 if(tabId==='party') setTimeout(refresh,60);
 });
 document.addEventListener('visibilitychange',function(){clearTimeout(tm);tm=null;observeList();if(partyVisible()) queue();});
-setInterval(refresh, 800);
+(window.ViewWork?.interval || setInterval)(refresh, 800, ['party','game']);
 console.log('🐧 編成統一パッチ（並び替え統一＋Lv連動＋攻撃実数値）適用完了');
 })();
 // ==========================================================================
@@ -4255,7 +4255,7 @@ function tick(){ recordEncounter(); bindSearch();
 var list=document.getElementById('ptyList');
 if(list&&!list.querySelector('.pcv-lock')){ /* 旧パッチが残っていても上書きで正す */ }
 }
-setInterval(tick,400);
+(window.ViewWork?.interval || setInterval)(tick, 400, ['party','game']);
 window.onTabChange(function(t){ if(t==='party')setTimeout(function(){bindSearch();renderDex();},40); });
 (function(){function run(){bindSearch(); if(PU().cat)renderDex();}
 if(document.readyState!=='loading')setTimeout(run,450); else document.addEventListener('DOMContentLoaded',function(){setTimeout(run,450);});})();
@@ -4419,7 +4419,7 @@ else c.classList.remove('on');
 }
 
 /* ---------- 4. 描画後のチップ状態同期（ウォッチドッグ） ---------- */
-setInterval(function() {
+(window.ViewWork?.interval || setInterval)(function() {
 if(document.visibilityState==='hidden'||!document.getElementById('view-party')?.classList.contains('active'))return;
 updateChipVisuals();
 // チップがテキストノードだけで span になっていたら button 相当のスタイルを強制付与
@@ -4432,7 +4432,7 @@ c.style.cursor = 'pointer';
 // role 付与でアクセシビリティも担保
 if (!c.getAttribute('role')) c.setAttribute('role', 'button');
 }
-}, 400);
+}, 400, ['party','game']);
 
 /* ---------- 5. switchTab ラップ：タブ切替時にチップ状態を再同期 ---------- */
 window.onTabChange(function(tabId) {
@@ -5357,7 +5357,7 @@ if(!list)return;
 if(!list.querySelector('.gm-grid')&&!list.querySelector('.gm-empty'))gmRender();
 else if(!list.classList.contains('gm-active'))gmRender();
 }
-setInterval(gmWatch,250);
+(window.ViewWork?.interval || setInterval)(gmWatch, 250, ['party','game']);
 window.onTabChange(function(tabId){
 if(tabId==='party'){setTimeout(gmReplace,50);setTimeout(gmReplace,200);}
 });
@@ -6830,10 +6830,10 @@ function _syncPity() {
 window.onTabChange(function (tabId) {
     if (tabId === 'party') setTimeout(_fixPartyCards, 120);
 });
-setInterval(function () {
+(window.ViewWork?.interval || setInterval)(function () {
     _fixPartyCards();
     _syncPity();
-}, 700);
+}, 700, ['party','game']);
 
 console.log('🛠️ 最終修正パッチ（セーブ即時反映＋ログインボーナス即発火＋攻撃実数値＋強化復旧＋進捗同期）適用完了');
 })();
@@ -7029,10 +7029,10 @@ function syncPityGauge() {
 window.onTabChange(function(tabId) {
     if (tabId === 'party') setTimeout(fixPartyCards, 150);
 });
-setInterval(function() {
+(window.ViewWork?.interval || setInterval)(function() {
     fixPartyCards();
     syncPityGauge();
-}, 800);
+}, 800, ['party','game']);
 
 console.log('🔧 最終修正パッチv2（セーブ/ログインボーナス/攻撃実数値/強化復旧/進捗同期/Firestore負荷軽減）適用完了');
 })();
@@ -7242,7 +7242,7 @@ if(mnum){el.textContent=String(Math.floor(+mnum[1]/2));}
 });
 }
 }
-setInterval(styleResult,800);
+(window.ViewWork?.interval || setInterval)(styleResult, 800, ['party','game']);
 
 console.log('⚔️ 戦闘ループ強化パッチ適用完了');
 })();
@@ -7322,11 +7322,11 @@ p.style.pointerEvents='';p.style.opacity='';
 
 /* ===== 統合ループ（300ms・軽量） ===== */
 var tick=0;
-setInterval(function(){
+(window.ViewWork?.interval || setInterval)(function(){
 tick++;
 updateGauge();
 if(tick%5===0)unlockSoon();
-},300);
+}, 300, ['party','game']);
 
 console.log('⚡ 戦闘最適化＋操作改版パッチ適用完了');
 })();
@@ -7474,7 +7474,7 @@ if(b.classList.contains('m2-die')){ var cur=null; try{cur=M2().current;}catch(e)
 });
 mo.observe(b,{attributes:true,attributeFilter:['class']});
 }
-setInterval(bindBoss,800);
+(window.ViewWork?.interval || setInterval)(bindBoss, 800, ['party','game']);
 console.log('💰 実画像ドロップパッチ適用完了');
 })();
 // =====================================================================
@@ -7563,6 +7563,7 @@ for(var i=0;i<inner.length;i++){ if(inner[i].parentNode)inner[i].parentNode.remo
 }
 }
 var mo=new MutationObserver(function(muts){
+if(document.hidden||!document.getElementById("view-party")?.classList.contains("active")&&!document.getElementById("view-game")?.classList.contains("active"))return;
 for(var i=0;i<muts.length;i++){
 var added=muts[i].addedNodes; if(!added)continue;
 for(var j=0;j<added.length;j++) killCenter(added[j]);
@@ -7642,7 +7643,7 @@ var __sw=window.selectWeapon;
 window.selectWeapon=function(){ var r=__sw?__sw.apply(this,arguments):undefined; setTimeout(sync,60); return r; };
 var __sb=window.startMultiBattlePlay;
 window.startMultiBattlePlay=function(){ var r=__sb?__sb.apply(this,arguments):undefined; setTimeout(sync,60); return r; };
-setInterval(sync,800);
+(window.ViewWork?.interval || setInterval)(sync, 800, ['party','game']);
 console.log('🔥 中央武器アイコン同期v2(画像+ガチャ対応)適用完了');
 })();
 // =====================================================================
@@ -7788,7 +7789,7 @@ if(num) num.textContent=String(Math.ceil(left));
 if(left>prevLeft+0.5){ ring.classList.remove('m2-ring-flash'); void ring.offsetWidth; ring.classList.add('m2-ring-flash'); setTimeout(function(){ring.classList.remove('m2-ring-flash');},420); }
 prevLeft=left;
 }
-setInterval(function(){ if(document.visibilityState==='hidden'||!document.getElementById('multi-battle-play-screen')||document.getElementById('multi-battle-play-screen').style.display==='none')return;ensure(); update(); positionHpText(); },100);
+(window.ViewWork?.interval || setInterval)(function(){ if(document.visibilityState==='hidden'||!document.getElementById('multi-battle-play-screen')||document.getElementById('multi-battle-play-screen').style.display==='none')return;ensure(); update(); positionHpText(); }, 100, ['party','game']);
 console.log('⏱️ 敵行動 円形ゲージv3適用完了');
 })();
 // =====================================================================
@@ -7856,7 +7857,7 @@ try{ if(window.renderMultiParty)window.renderMultiParty(); }catch(e){}
 return __sb?__sb.apply(this,arguments):undefined;
 };
 
-setInterval(addOneOption,800);
+(window.ViewWork?.interval || setInterval)(addOneOption, 800, ['party','game']);
 console.log('👤 1人(ソロ)マルチv2(4列レイアウト修正)適用完了');
 })();
 // =====================================================================
@@ -7898,7 +7899,7 @@ if(!document.body.classList.contains('in-game-active')) return;
 var rows=document.querySelectorAll('.multi-party-member.m2-ally');
 for(var i=0;i<rows.length;i++){ if(rows[i].parentNode) rows[i].parentNode.removeChild(rows[i]); }
 }
-setInterval(function(){ truncateToSelf(); cleanDom(); },400);
+(window.ViewWork?.interval || setInterval)(function(){ truncateToSelf(); cleanDom(); }, 400, ['party','game']);
 console.log('👤 ソロ時ALLY表示根治v3適用完了');
 })();
 // =====================================================================
@@ -8169,7 +8170,7 @@ vis.style.width=r.width+'px'; vis.style.height=r.height+'px';
 vis.style.opacity='0'; vis.style.pointerEvents='none';
 }
 }
-setInterval(tick,300);
+(window.ViewWork?.interval || setInterval)(tick, 300, ['party','game']);
 console.log('⚔️ 対人戦ビジュアル修正パッチ適用完了');
 })();
 // =====================================================================

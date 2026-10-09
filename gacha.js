@@ -809,7 +809,7 @@ window.onAppLoaded(function () { gachaAfterLogin(); });
     });
     obs.observe(view, { childList: true, subtree: true });
   }
-  function boot() { observe(); gachaTick(); setInterval(gachaTick, 900); setInterval(function () { if (loggedIn()) checkLoginBonus(); }, 60000); }
+  function boot() { observe(); gachaTick(); (window.ViewWork?.interval || setInterval)(gachaTick, 900, ['party']); setInterval(function () { if (loggedIn()) checkLoginBonus(); }, 60000); }
   if (document.readyState !== 'loading') setTimeout(boot, 450);
   else document.addEventListener('DOMContentLoaded', function () { setTimeout(boot, 450); });
 })();
@@ -982,7 +982,7 @@ fixDupeText();
 var pu = window.__partyUi;
 if (pu && pu.cat === 'char') renderCharDex();
 }
-setInterval(tick, 500);
+(window.ViewWork?.interval || setInterval)(tick, 500, ['party']);
 window.onTabChange(function (tabId) {
 if (tabId === 'party') setTimeout(function () { renderCharDex(); renderHeaderBadges(); }, 60);
 });
@@ -1179,10 +1179,10 @@ function attach() {
     }
   }
 }
-setInterval(function () {
+(window.ViewWork?.interval || setInterval)(function () {
   attach();
   if (document.getElementById('admPanel')) ensure();
-}, 700);
+}, 700, ['party']);
 console.log('🎰 ガチャ管理V3（.in 表示保証＋全消去追従）適用完了');
 })();
 // =====================================================================
@@ -1470,6 +1470,7 @@ if (g) handleGrid(g);
 }
 if (typeof MutationObserver !== 'undefined') {
 var mo = new MutationObserver(function (muts) {
+if(document.hidden||!document.getElementById("view-party")?.classList.contains("active")&&!document.getElementById("view-game")?.classList.contains("active"))return;
 for (var i = 0; i < muts.length; i++) {
 var added = muts[i].addedNodes;
 if (!added) continue;
@@ -1653,6 +1654,7 @@ step();
 /* ---------- ② カード切替時にヒントを脈動 ---------- */
 if (typeof MutationObserver !== 'undefined') {
 var mo = new MutationObserver(function (muts) {
+if(document.hidden||!document.getElementById("view-party")?.classList.contains("active")&&!document.getElementById("view-game")?.classList.contains("active"))return;
 for (var i = 0; i < muts.length; i++) {
 var t = muts[i].target;
 if (t && t.classList && (t.classList.contains('g10v2-hint') || t.classList.contains('tsg-hint'))) {
@@ -1712,6 +1714,7 @@ if (b.parentNode) b.parentNode.removeChild(b);
 
 if (typeof MutationObserver !== 'undefined') {
 var mo = new MutationObserver(function (muts) {
+if(document.hidden||!document.getElementById("view-party")?.classList.contains("active")&&!document.getElementById("view-game")?.classList.contains("active"))return;
 for (var i = 0; i < muts.length; i++) {
 var added = muts[i].addedNodes;
 if (!added) continue;
@@ -1955,12 +1958,12 @@ card.classList.toggle('open', !!PU().expanded[key]);
 }
 
 /* ---------- 起動・監視 ---------- */
-setInterval(function () {
+(window.ViewWork?.interval || setInterval)(function () {
 var list = document.getElementById('ptyList');
 if (!list) return;
 bindList(list);
 onMut();
-}, 250);
+}, 250, ['party']);
 console.log('🐧 味方/装備図鑑パッチ（点滅根治＋並び替え追加）適用完了');
 })();
 // ==========================================================================
@@ -2017,7 +2020,7 @@ if (!list) return;
 if (!list.__sealed) seal(list);
 list.classList.remove('gcx-active'); // 残った gcx-active を剥がす
 }
-setInterval(reseal, 300);
+(window.ViewWork?.interval || setInterval)(reseal, 300, ['party']);
 reseal();
 
 console.log('🛡️ 点滅根治v2（gcx書込吸収＝書換戦争停止）適用完了');
@@ -2114,7 +2117,7 @@ if(on){buildArea();updateNums();}
 var pills=document.querySelectorAll('.pty-pills .pty-pill');
 for(var i=0;i<pills.length;i++)pills[i].classList.toggle('active',pills[i].getAttribute('data-pill')===pu.cat);
 }
-setInterval(sync,200);
+(window.ViewWork?.interval || setInterval)(sync, 200, ['party']);
 
 /* ---------- ピルクリック（stopPropagationしない＝他を壊さない） ---------- */
 document.addEventListener('click',function(e){
@@ -2141,7 +2144,7 @@ if(t.indexOf('HP')>=0&&t.indexOf('強化')<0&&bb.textContent!==String(hp))bb.tex
 else if(t.indexOf('攻撃')>=0&&bb.textContent!==String(atk))bb.textContent=atk;}
 }
 }
-setInterval(fixCards,400);
+(window.ViewWork?.interval || setInterval)(fixCards, 400, ['party']);
 
 /* ---------- ⑤ gold/ticket アイコン ---------- */
 function fixBadges(){
@@ -2150,7 +2153,7 @@ if(g&&!g.querySelector('.us-gimg')){var n=(g.textContent||'').replace(/[^0-9,]/g
 var t=document.querySelector('.gch-badge.ticket');
 if(t&&!t.querySelector('.us-timg')){var m=(t.textContent||'').replace(/[^0-9,]/g,'');t.innerHTML='<img src="gachatike.png" class="us-timg" onerror="this.style.display=\'none\'"><span>'+m+'</span>';}
 }
-setInterval(fixBadges,500);
+(window.ViewWork?.interval || setInterval)(fixBadges, 500, ['party']);
 
 console.log('🎯 統合安定化パッチ適用完了');
 })();
@@ -2235,7 +2238,7 @@ function tick(){
 blockOldAdmin();
 ensureStableBadges();
 }
-setInterval(tick, 250);
+(window.ViewWork?.interval || setInterval)(tick, 1000, []);
 tick();
 console.log('🧹 ヘッダー安定化＋旧ガチャ管理カード削除パッチ適用完了');
 })();
