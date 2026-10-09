@@ -2225,9 +2225,6 @@ html body{background-image:none!important;}.container{position:relative;z-index:
 .sidebar-background{padding:12px;border:1px solid var(--border);border-radius:10px;background:#10172b;display:grid;gap:12px;}
 .sidebar-background h3{margin:0;font-size:13px;color:var(--text-main);}
 .sidebar-background-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.sidebar-background-choices button,.sidebar-background-upload{font:inherit;font-size:12px;border:1px solid var(--border);border-radius:8px;padding:10px 8px;background:#172033;color:var(--text-main);text-align:center;cursor:pointer;}
-.sidebar-background-choices button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);}
-.sidebar-background-choices button:disabled{opacity:.4;cursor:default;}
 .sidebar-background-upload{display:grid;gap:8px;}.sidebar-background-upload input{max-width:100%;min-width:0;font:12px system-ui;}
 #sidebarBackgroundFocus{font-size:12px;line-height:1.8;}#sidebarBackgroundFocus input{display:block;width:100%;accent-color:var(--accent);}
 #sidebarBackgroundFocus[hidden]{display:none;}#sidebarBackgroundStatus{margin:0;font-size:12px;line-height:1.6;color:var(--text-sub);}
@@ -2243,3 +2240,34 @@ html body .app-header,html body .nav-bar,html body .sidebar{background:rgba(15,2
 .background-admin-dialog [hidden],#backgroundAdminControls[hidden],#backgroundAdminAuth[hidden]{display:none!important;}
 #backgroundAdminClose{width:100%;margin-top:16px;}#backgroundAdminSaveStatus,#backgroundAdminAuthStatus{font-size:12px;margin:0;line-height:1.5;}
 html.pwa-recovery-rendering body::after{background-image:none!important;background-color:#0f172a!important;}
+
+/* One lightweight picker for every tab. Native horizontal scrolling; no backdrop blur. */
+html body .app-header { box-sizing:border-box; padding:0 54px; gap:3px; }
+.header-clock-group { display:flex; align-items:center; gap:3px; min-width:0; }
+#headerBackgroundButton { flex:none; display:flex; align-items:center; justify-content:center; width:30px; height:36px; padding:0; border:0; border-radius:8px; background:transparent; color:#d6caaa; cursor:pointer; }
+#headerBackgroundButton:focus-visible { outline:2px solid #d6caaa; outline-offset:1px; }
+html body .app-header .header-study-time { padding:6px; font-size:12px; }
+html body .app-header .hf-stable { gap:5px; margin-left:0; }
+html body .app-header .hf-badge { gap:2px; }
+.background-picker-dialog { box-sizing:border-box; width:min(480px,calc(100vw - 28px)); max-height:calc(100dvh - 32px); padding:18px 0 12px; border:1px solid #a69b7c66; border-radius:20px; background:#10192b; color:#eee8da; overflow:hidden; box-shadow:0 12px 40px #0008; }
+.background-picker-dialog::backdrop { background:#060b15b3; backdrop-filter:none; }
+.background-picker-heading { display:flex; align-items:center; justify-content:space-between; padding:0 20px 14px; }
+.background-picker-heading h2 { margin:0; font:400 18px Georgia,"Yu Mincho",serif; letter-spacing:.15em; }
+#backgroundPickerClose { width:32px; height:32px; padding:0; border:1px solid #ffffff33; border-radius:50%; background:transparent; color:inherit; font:24px/1 system-ui; cursor:pointer; }
+.background-picker-slides { display:flex; gap:14px; padding:4px 20px 12px; overflow-x:auto; overscroll-behavior-x:contain; scroll-snap-type:x mandatory; scroll-padding:20px; touch-action:pan-x; }
+.background-preview { flex:0 0 min(56vw,180px); min-width:0; padding:4px; background:transparent; border:1px solid #ffffff22; border-radius:13px; color:#c6c8cf; scroll-snap-align:center; cursor:pointer; }
+.background-preview img { display:block; width:100%; aspect-ratio:var(--preview-ratio,9/19.5); max-height:48dvh; object-fit:cover; border-radius:9px; pointer-events:none; }
+.background-preview span { display:block; padding:10px 3px 6px; font:12px/1.4 system-ui; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.background-preview[aria-pressed="true"] { border:2px solid #ddc984; padding:3px; color:#f0dfac; }
+#backgroundPickerStatus { min-height:18px; margin:8px 20px 0; font:12px/1.5 system-ui; color:#b8bdc9; }
+.background-admin-dialog input[type="text"],.background-admin-dialog select { box-sizing:border-box; width:100%; padding:10px; margin-top:6px; border:1px solid #ffffff33; border-radius:8px; background:#172033; color:#fff; font:16px system-ui; }
+@media(max-width:360px) {
+ html body .app-header { padding:0 44px; gap:1px; }
+ html body .app-header .menu-trigger { left:8px; width:30px; }
+ html body .app-header #headerSaveBtn { right:8px!important; width:30px!important; }
+ html body .app-header .hf-stable { gap:3px; }
+ html body .app-header .hf-badge span { font-size:10px; }
+ html body .app-header .hf-img { width:18px; height:18px; }
+ #headerBackgroundButton { width:26px; }
+ html body .app-header .header-study-time { padding:6px 4px; font-size:11px; }
+}
