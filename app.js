@@ -116,6 +116,7 @@ window.__afterAppLoadHandlers = window.__afterAppLoadHandlers || [];
 window.onBeforeAppLoad = function(handler) { if(typeof handler === 'function') window.__beforeAppLoadHandlers.push(handler); };
 window.onAppLoaded = function(handler) { if(typeof handler === 'function') window.__afterAppLoadHandlers.push(handler); };
 window.loadLocalState = async function() {
+window.__learningBootReady=false;
 for (var beforeIndex = 0; beforeIndex < window.__beforeAppLoadHandlers.length; beforeIndex++) {
     try { await window.__beforeAppLoadHandlers[beforeIndex](); }
     catch (e) { console.error('起動前の準備に失敗しました:', e); }
@@ -126,10 +127,6 @@ const savedId = localStorage.getItem('core_v4_userId');
 if (savedId) {
     const gateScreen = document.getElementById('auth-gate-screen');
     if (gateScreen) gateScreen.style.display = 'none';
-}
-for (var beforeIndex = 0; beforeIndex < window.__beforeAppLoadHandlers.length; beforeIndex++) {
-    try { await window.__beforeAppLoadHandlers[beforeIndex](); }
-    catch (e) { console.error('起動前の準備に失敗しました:', e); }
 }
 geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
 const apiKeyInput = document.getElementById('sidebarApiKeyInput');
@@ -157,9 +154,7 @@ if(apiKeyInput) apiKeyInput.value = geminiApiKey;
      }).catch(function(e) { console.warn('ユーザー情報のバックグラウンド同期に失敗しました:', e); });
      userStats.goal_text = myTarget; 
      userStats.friends_count = myFriendList.length; 
-     Promise.resolve(window.loadCurrentTextbookData()).catch(function(e) {
-         console.warn('単語帳のバックグラウンド同期に失敗しました:', e);
-     });
+     await window.loadCurrentTextbookData();
      window.applyProfileToUi();
      if(typeof window.updatePartySlotsUi === 'function') window.updatePartySlotsUi(); 
      window.renderLeaderboard();
@@ -187,6 +182,9 @@ for (var afterIndex = 0; afterIndex < window.__afterAppLoadHandlers.length; afte
     }
     catch (e) { console.error('起動後の追加読み込みに失敗しました:', e); }
 }
+window.__learningBootReady=true;
+window.dispatchEvent(new Event('learning-data-ready'));
+if(window.resumeBackgroundSave)window.resumeBackgroundSave();
 };
 // ==========================================================================
 // 🌟 2. グローバル変数（システム全体で使うデータ）
@@ -2150,12 +2148,14 @@ window.saveVocabProgressLocally = function(wordNum, skipDirtyMark) {
   if(window.LibraryState&&window.LibraryState.isDeleted('book',currentTextbook||'default'))return;
   if (typeof myId === "undefined" || !myId || typeof window.extractUserProgressFromVocabList !== "function") return;
   var bookKey = currentTextbook || "default";
+  if(window.LearningData&&!window.LearningData.canSave(bookKey))return;
   var rendered = window.extractUserProgressFromVocabList(), stored = {};
   try { stored = JSON.parse(localStorage.getItem(window.getVocabProgressStorageKey(bookKey)) || '{}'); } catch(e) {}
   var progress = Object.assign({}, stored);
   if(wordNum !== null && wordNum !== undefined){if(rendered[String(wordNum)])progress[String(wordNum)]=rendered[String(wordNum)];}
   else Object.keys(rendered).forEach(function(key){if(!progress[key])progress[key]=rendered[key];});
   var now = skipDirtyMark && JSON.stringify(progress) === JSON.stringify(stored) ? Number(localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + '__ts')) || 0 : Date.now();
+  if(window.LearningData){progress=window.LearningData.commit(bookKey,rendered,wordNum);now=wordNum!==null&&wordNum!==undefined&&progress[String(wordNum)]?Number(progress[String(wordNum)].editedAt)||0:Number(localStorage.getItem(window.getVocabProgressStorageKey(bookKey)+"__ts"))||0;}
   currentUserVocabProgress = progress;
   try {
     localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(progress));
@@ -2416,6 +2416,7 @@ window.preloadAllTextbooksAndVocab = async function() {
 
 window.loadCurrentTextbookData = async function(options) {
   let storedWords = [];
+  const request=window.__vocabMasterLoadSequence=(window.__vocabMasterLoadSequence||0)+1;
   const bookKey = currentTextbook || "default";
   const uid = (typeof myId !== "undefined" && myId) ? myId : "GUEST-000";
   if(window.LibraryState&&window.LibraryState.isDeleted('book',bookKey,uid))return;
@@ -2428,13 +2429,16 @@ window.loadCurrentTextbookData = async function(options) {
     else storedWords = JSON.parse(localStorage.getItem(currentLocalKey) || "[]");
   }
   storedWords = window.stripVocabProgressFromWords(storedWords);
-  vocabList = window.migrateVocabData(storedWords);
+  const loadedWords = window.migrateVocabData(storedWords);
   // 保存済み教材のローカル理解度がある時は、表示前の通信を不要にする。
   if (options && options.localProgress) {
     currentUserVocabProgress = options.localProgress;
   } else {
     await window.loadUserVocabProgress(bookKey);
   }
+  if(myId!==uid||(currentTextbook||"default")!==bookKey||window.__vocabMasterLoadSequence!==request)return;
+  vocabList=loadedWords;
+  if(window.LearningData)currentUserVocabProgress=window.LearningData.restore(bookKey,currentUserVocabProgress);
   window.applyUserProgressToVocabList();
   if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
   userStats.vocab_reg = vocabList.length;
@@ -2465,6 +2469,7 @@ window.loadCurrentTextbookData = async function(options) {
 // ------------------------------------------------------------------
 window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
   if (event) event.stopPropagation();
+  if(window.LearningData&&!window.LearningData.canSave(currentTextbook||"default")){if(window.showToast)window.showToast("理解度を読み込んでいます。完了後に回答してください。","err");return;}
   var wIdx = vocabList.findIndex(function(w) { return String(w.num) === String(wordNum); });
   if (wIdx < 0) return;
   var mIdx = vocabList[wIdx].meanings.findIndex(function(m) { return String(m.id) === String(meaningId); });
@@ -6397,7 +6402,9 @@ window.loadUserVocabProgress = async function(bookKey) {
 // 【3】__applyQuizAnswersToBook 上書き（ロードクイズの別教材保存も wordsJson に）
 // ------------------------------------------------------------------
 window.__applyQuizAnswersToBook = async function(bookId, answers) {
+  var answerOwner=myId;
   var master = await window.__getBookMasterWords(bookId);
+  if(myId!==answerOwner)return 0;
   if (!master || master.length === 0) return 0;
   var words = (typeof window.migrateVocabData === 'function') ? window.migrateVocabData(master.map(function(w) { return Object.assign({}, w); })) : master.map(function(w) { return Object.assign({}, w); });
   var progress = {};
@@ -6446,6 +6453,10 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
     (w.meanings || []).forEach(function(m) { wp.meanings[m.id] = { status: m.status || 'none', history: Array.isArray(m.history) ? m.history.slice(-20) : [] }; });
     newProgress[key] = wp;
   });
+  if(window.LearningData){
+    var answered=newProgress;newProgress=window.LearningData.read(bookId);
+    answers.forEach(function(answer){if(answered[String(answer.num)]&&words.some(w=>String(w.num)===String(answer.num)&&String(w.word)===String(answer.word)))newProgress=window.LearningData.commit(bookId,answered,answer.num,true);});
+  }
   try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch (e) {}
   try { localStorage.setItem(pkey + '__ts', String(Date.now())); } catch (e) {}
   if (typeof window.markVocabProgressDirty === 'function') {
@@ -7486,6 +7497,7 @@ window.saveUserVocabProgress = async function() {
     if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
     if (typeof myId === "undefined" || !myId) return;
     var bookKey = (typeof currentTextbook !== "undefined" && currentTextbook) ? currentTextbook : "default";
+    if(window.LearningData&&!window.LearningData.canSave(bookKey))throw new Error("読み込み中のため保存を保留しました");
     window.saveVocabProgressLocally(null, true);
     currentUserVocabProgress = JSON.parse(localStorage.getItem(window.getVocabProgressStorageKey(bookKey)) || "{}");
     var nowMs = Number(localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + "__ts")) || Date.now();
@@ -7525,6 +7537,7 @@ window.loadUserVocabProgress = async function(bookKey) {
         if (raw) localProgress = JSON.parse(raw) || {};
         localTs = parseInt(localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + "__ts") || "0");
     } catch (e) {}
+    if(window.LearningData)localProgress=window.LearningData.read(bookKey);
     if ((currentTextbook || "default") === bookKey) currentUserVocabProgress = localProgress;
     if (myId === "GUEST-000" || !window.db || !window.fbGetDoc || !window.fbDoc) return;
     try {
@@ -7548,7 +7561,8 @@ window.loadUserVocabProgress = async function(bookKey) {
             else if (data.words) cloudProgress = data.words;
             var cloudTs = data.updatedAt ? (new Date(data.updatedAt).getTime() || 0) : 0;
             if (cloudProgress && typeof cloudProgress === "object") {
-                if (!changedWhileLoading && cloudTs > latestLocalTs) {
+                if (!changedWhileLoading && (cloudTs > latestLocalTs || (window.LearningData&&!window.LearningData.hasAnswers(latestLocalProgress)))) {
+                    if(window.LearningData)cloudProgress=window.LearningData.restore(bookKey,cloudProgress);
                     // クラウドが新しい → 採用
                     if ((currentTextbook || "default") === bookKey) currentUserVocabProgress = Object.assign({}, latestLocalProgress, cloudProgress);
                     try {
@@ -8527,6 +8541,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
                 var flashProgress = window.extractUserProgressFromVocabList();
                 var flashProgressKey = window.getVocabProgressStorageKey(flashBookKey);
                 var flashChangedAt = Date.now();
+                if(window.LearningData)flashProgress=window.LearningData.commit(flashBookKey,flashProgress,vocabMatch&&vocabMatch.num);
                 currentUserVocabProgress = flashProgress;
                 localStorage.setItem(flashProgressKey, JSON.stringify(flashProgress));
                 localStorage.setItem(flashProgressKey + '__ts', String(flashChangedAt));

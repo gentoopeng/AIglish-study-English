@@ -186,7 +186,7 @@
     };
     function bookStorageKeys(id) {
         var progress=window.getVocabProgressStorageKey(id);
-        return ['core_v4_custom_words_'+userId()+'_'+id,'core_v4_cache_'+id,'core_v4_user_vocab_book_'+userId()+'_'+id,window.__manualVocabLocalKey(id),progress,progress+'__ts'];
+        return ['core_v4_custom_words_'+userId()+'_'+id,'core_v4_cache_'+id,'core_v4_user_vocab_book_'+userId()+'_'+id,window.__manualVocabLocalKey(id),progress,progress+'__ts','aiglish_learning_recovery_'+userId()+'_'+id];
     }
     function scrubSave(save,id,kind,owner) {
         if(window.LibraryState)return window.LibraryState.sanitizeSave(save,owner||userId());
