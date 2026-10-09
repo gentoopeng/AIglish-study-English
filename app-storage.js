@@ -7,7 +7,9 @@ let database=null,running=null,retry=null,scheduled=false,lastFailure=null,revis
 const nativeKeys=()=>Object.keys(native);
 const owned=key=>/^(core_v4_|aiglish_|save_studio_|vv4_|b3_|__ste_reset_gen_)/.test(key)||['wordMemory','textHistory','myBookshelf','myFolders'].includes(key);
 // Ratings keep a synchronous working copy; IndexedDB is also a durable mirror.
-const critical=key=>key.startsWith('core_v4_user_vocab_progress_')||key.startsWith('aiglish_learning_recovery_');
+const critical=key=>key.startsWith('core_v4_user_vocab_progress_')||key.startsWith('aiglish_learning_recovery_')||(key.startsWith('aiglish_app_background_')&&!key.startsWith('aiglish_app_background_catalog_'));
+// Mirror small catalogues too, without pushing large photographs into native storage.
+const mirrored=key=>critical(key)||key.startsWith('aiglish_app_background_catalog_');
 function keys(){if(keysRevision!==revision){const names=new Set(nativeKeys());for(const [key,value] of values){if(value===null)names.delete(key);else names.add(key);}keyCache=[...names];keysRevision=revision;}return keyCache;}
 function get(key){key=String(key);return values.has(key)?values.get(key):rawGet(key);}
 function failure(error){const changed=!lastFailure;lastFailure=error;if(changed){console.warn('端末の保存先を利用できません。保存データは消していません。',error);window.dispatchEvent(new CustomEvent('app-storage-error',{detail:'端末への保存を確認できません。空き容量・ブラウザー設定を確認してください。'}));}}
@@ -29,7 +31,7 @@ function write(key,value){key=String(key);value=String(value);if(get(key)===valu
  const prior=rawGet(key);let synchronous=false;
  // A paired timestamp must not commit before its overflow snapshot.
  const overflowStamp=key.endsWith('__ts')&&pending.has(key.slice(0,-4))&&nativeWrites.get(key.slice(0,-4))!==pending.get(key.slice(0,-4));
- if(!overflowStamp&&(critical(key)||value.length<large)){try{rawSet(key,value);synchronous=true;revision++;if(!values.has(key)&&!critical(key))return;}catch(error){if(error.name!=='QuotaExceededError'&&error.code!==22&&error.code!==1014)throw error;}}
+ if(!overflowStamp&&(critical(key)||value.length<large)){try{rawSet(key,value);synchronous=true;revision++;if(!values.has(key)&&!mirrored(key))return;}catch(error){if(error.name!=='QuotaExceededError'&&error.code!==22&&error.code!==1014)throw error;}}
  if(!originals.has(key))originals.set(key,prior);
  if(synchronous)nativeWrites.set(key,value);else nativeWrites.delete(key);
  values.set(key,value);pending.set(key,value);revision++;schedule();
@@ -57,7 +59,10 @@ const ready=(async()=>{
  for(const key of nativeKeys()){const value=rawGet(key);if(!owned(key)||value===null||pending.has(key))continue;
   // A surviving native value may have been written by an older open app/tab.
   // Never hide it behind an older IndexedDB snapshot.
-  if(values.has(key)||value.length>=large||critical(key)){
+  if(values.has(key)||value.length>=large||mirrored(key)){
+   // Background metadata can survive in native storage with an older timestamp.
+   // Prefer the confirmed IndexedDB copy when it is newer.
+   if(key.startsWith('aiglish_app_background_')&&values.has(key)){try{if((JSON.parse(values.get(key)).updatedAt||0)>(JSON.parse(value).updatedAt||0)){try{if(!critical(key)&&values.get(key).length>=large)rawRemove(key);else rawSet(key,values.get(key));}catch(error){rawRemove(key);}continue;}}catch(error){}}
    const differs=values.get(key)!==value;values.set(key,value);
    if(differs){originals.set(key,value);pending.set(key,value);}
    if(critical(key))nativeWrites.set(key,value);
