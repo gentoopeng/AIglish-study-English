@@ -15,7 +15,7 @@ for(const status of ['so','bad','none'])await page.locator('dialog [data-status=
 await page.locator('#btnCardJa2en').click();await page.getByRole('button',{name:'カードを開始する'}).click();
 await page.waitForFunction(()=>flashcardOriginQueue.length>0&&currentTextbook==='test-book');
 const result=await page.evaluate(()=>({queue:flashcardOriginQueue,mode:flashcardDirectionMode,version:document.getElementById('appVersionDisplay').textContent}));
-assert.equal(await page.locator('#flashcardPartOfSpeech').textContent(),'動');assert.equal(await page.locator('#flashcardPartOfSpeech').isVisible(),true);assert.equal(result.queue.length,1);assert.equal(result.queue[0].num,2);assert.equal(result.mode,'ja2en');assert.equal(result.version,'Version 6.82');assert.equal(await page.locator('dialog').count(),0);
+assert.equal(await page.locator('#flashcardPartOfSpeech').textContent(),'動');assert.equal(await page.locator('#flashcardPartOfSpeech').isVisible(),true);assert.equal(result.queue.length,1);assert.equal(result.queue[0].num,2);assert.equal(result.mode,'ja2en');assert.equal(result.version,'Version 10.10.00.25');assert.equal(await page.locator('dialog').count(),0);
 const beforeSwipe=await page.evaluate(()=>userStats.flash_count);await page.evaluate(()=>window.swipeFlashcard('right',100,0));assert.equal(await page.evaluate(()=>userStats.flash_count),beforeSwipe+1);assert.ok(await page.evaluate(()=>userStats.vocab_rated_count)>=1);await page.evaluate(()=>window.finishFlashcardSession());assert.equal(await page.locator('#view-vocab').evaluate(el=>el.classList.contains('active')),true);assert.equal(await page.locator('#nav-vocab').evaluate(el=>el.classList.contains('active')),true);await page.evaluate(()=>window.switchTab('game'));
 assert.deepEqual(await page.locator('#game-start-screen .tower-title-text').allTextContents(),['単語の迷宮']);
 assert.equal(await page.locator('#game-mode-select-screen, #game-difficulty-select-screen, #game-play-screen, #game-result-screen, #gameLeaderboardArea').count(),0);
@@ -24,5 +24,5 @@ await page.locator('#game-start-screen button').click();
 await page.locator('#multi-battle-choice-screen').waitFor({state:'visible'});
 await page.evaluate(()=>window.cancelMultiBattleChoice());
 assert.deepEqual(errors,[]);
-console.log('PASS: labyrinth-only game menu and mobile popup, Escape, selected book, range, understanding filter, reverse side and version 6.82');await browser.close();
+console.log('PASS: labyrinth-only game menu and mobile popup, Escape, selected book, range, understanding filter, reverse side and version 10.10.00.25');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -20,8 +20,10 @@ const selected=()=>settings.backgrounds.find(item=>item.id===settings.selected);
 function message(text){picker.querySelector('#backgroundPickerStatus').textContent=text;admin.querySelector('#backgroundAdminSaveStatus').textContent=text;}
 function read(id){
  try{
-  const value=JSON.parse(localStorage.getItem(key(id))||'null');if(!value)return empty();
+  const preferences=JSON.parse(localStorage.getItem(key(id))||'null');
   const catalog=JSON.parse(localStorage.getItem(catalogKey(id))||'null');
+  // A missing preference must not hide the independently durable photo catalogue.
+  const value=preferences||catalog||{};
   const entries=catalog&&Array.isArray(catalog.backgrounds)?catalog.backgrounds:value.backgrounds;
   const backgrounds=[],ids=new Set();
   for(const item of Array.isArray(entries)?entries.slice(0,12):[]){
@@ -61,7 +63,7 @@ async function save(next,success='背景を保存しました。'){
  const id=account,token=++saveRevision;next.updatedAt=Math.max(Date.now(),settings.updatedAt+1);message('保存しています…');
  try{
   // Selecting a photo writes only small preferences, not the entire image gallery.
-  if(next.backgrounds!==settings.backgrounds||!localStorage.getItem(catalogKey(id)))localStorage.setItem(catalogKey(id),JSON.stringify({backgrounds:next.backgrounds,updatedAt:next.updatedAt}));
+  if(next.backgrounds!==settings.backgrounds||!localStorage.getItem(catalogKey(id)))localStorage.setItem(catalogKey(id),JSON.stringify({backgrounds:next.backgrounds,mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));
   localStorage.setItem(key(id),JSON.stringify({mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));settings=next;loadedPreferences=localStorage.getItem(key(id));loadedCatalog=localStorage.getItem(catalogKey(id));apply();
   if(window.AppStorage)await window.AppStorage.flush();
   if(owner()!==id||token!==saveRevision)return false;
