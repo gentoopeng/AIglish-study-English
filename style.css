@@ -2210,9 +2210,9 @@ html.ios-stable-rendering body .flashcard-post-ripple{animation:fcFireworkSparkl
 
 
 /* A single static surface, without home/profile/shop renderers. */
-html body::after{background:linear-gradient(#08112266,#08112288),url('tango.png') center/cover!important;animation:none!important;}
+html body::after{background:linear-gradient(#08112266,#08112288),var(--app-background-image,url('tango.png')) var(--app-background-position,center)/cover no-repeat!important;animation:none!important;}
 html body .tab-view::before{display:none!important;background-image:none!important;}
-html body{background-image:none!important;}.container{position:relative;z-index:1;}
+html body{background-image:none!important;isolation:isolate;}.container{position:relative;z-index:1;}
 .sidebar-profile-form{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:#10172b;}
 .sidebar-profile-form label{font-size:12px;color:var(--text-sub);}
 .sidebar-profile-form input{width:100%;min-width:0;box-sizing:border-box;font:16px system-ui;padding:10px;border:1px solid var(--border);border-radius:8px;background:#172033;color:var(--text-main);}
@@ -2221,3 +2221,13 @@ html body{background-image:none!important;}.container{position:relative;z-index:
 .loading-quiz-pin{display:inline-block;width:17px;height:17px;color:#d8c48e;margin-left:8px;vertical-align:middle;flex-shrink:0;}.word-row-container>.loading-quiz-pin{float:right;}.quiz-range{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;}
 
 #appStartupStatus{position:fixed;top:80px;left:16px;right:16px;z-index:100001;padding:14px;background:#10172b;color:#eee;font:14px system-ui;border-radius:10px;}#appStartupStatus[hidden]{display:none;}
+
+.sidebar-background{padding:12px;border:1px solid var(--border);border-radius:10px;background:#10172b;display:grid;gap:12px;}
+.sidebar-background h3{margin:0;font-size:13px;color:var(--text-main);}
+.sidebar-background-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.sidebar-background-choices button,.sidebar-background-upload{font:inherit;font-size:12px;border:1px solid var(--border);border-radius:8px;padding:10px 8px;background:#172033;color:var(--text-main);text-align:center;cursor:pointer;}
+.sidebar-background-choices button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);}
+.sidebar-background-choices button:disabled{opacity:.4;cursor:default;}
+.sidebar-background-upload{display:grid;gap:8px;}.sidebar-background-upload input{max-width:100%;min-width:0;font:12px system-ui;}
+#sidebarBackgroundFocus{font-size:12px;line-height:1.8;}#sidebarBackgroundFocus input{display:block;width:100%;accent-color:var(--accent);}
+#sidebarBackgroundFocus[hidden]{display:none;}#sidebarBackgroundStatus{margin:0;font-size:12px;line-height:1.6;color:var(--text-sub);}
