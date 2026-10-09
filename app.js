@@ -7486,13 +7486,15 @@ window.saveUserVocabProgress = async function() {
     if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
     if (typeof myId === "undefined" || !myId) return;
     var bookKey = (typeof currentTextbook !== "undefined" && currentTextbook) ? currentTextbook : "default";
-    currentUserVocabProgress = window.extractUserProgressFromVocabList();
-    var nowMs = Date.now();
+    window.saveVocabProgressLocally(null, true);
+    currentUserVocabProgress = JSON.parse(localStorage.getItem(window.getVocabProgressStorageKey(bookKey)) || "{}");
+    var nowMs = Number(localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + "__ts")) || Date.now();
     var nowIso = new Date(nowMs).toISOString();
     try {
         localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
         localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + "__ts", String(nowMs));
     } catch (e) {}
+    if (window.AppStorage) await window.AppStorage.flush();
     if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
         try {
             var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
