@@ -42,7 +42,7 @@
     function bookKeys(owner, id) {
         return ['core_v4_custom_words_' + owner + '_' + id, 'core_v4_cache_' + id, 'core_v4_user_vocab_book_' + owner + '_' + id,
             'core_v4_vocab_draft_' + owner + '_' + encodeURIComponent(id), 'core_v4_user_vocab_progress_' + owner + '_' + id,
-            'core_v4_user_vocab_progress_' + owner + '_' + id + '__ts'];
+            'core_v4_user_vocab_progress_' + owner + '_' + id + '__ts','aiglish_learning_recovery_'+owner+'_'+id];
     }
     function mergeCatalog(left,right,owner=currentUser()) {
         left=left||{books:[],hidden:[]};right=right||{books:[],hidden:[]};

@@ -6,6 +6,7 @@
     function changed(event){if(owner!==id()){owner=id();revision=0;saved=0;}revision++;window.localStorage?.setItem('core_v4_autosave_pending_'+owner,'1');}
     async function save(){
         timer=null;if(pending||revision===saved||!owner||owner==='GUEST-000'||!window.__backgroundSaveAll)return;
+        if(window.LearningData&&!window.LearningData.canSave(typeof currentTextbook==='string'?currentTextbook:'default'))return;
         const account=owner,version=revision;pending=true;
         try{const result=await window.__backgroundSaveAll();if(id()===account&&result.cloudSaved){saved=version;if(revision===version)window.localStorage?.removeItem('core_v4_autosave_pending_'+account);}}
         catch(error){console.warn('自動保存は次回に再試行します',error);}finally{pending=false;}

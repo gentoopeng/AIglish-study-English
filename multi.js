@@ -4512,6 +4512,7 @@ window.__vocabSavedAtMs = function(value){
 // 下書きだけを復元すると最後の操作が巻き戻ってしまう。
 window.__mergeNewestLocalVocabProgress = function(bookKey,draft){
   if(!draft||typeof draft!=='object')return draft;
+  if(window.LearningData){draft=JSON.parse(JSON.stringify(draft));draft.progress=window.LearningData.restore(bookKey,draft.progress||{});return draft;}
   try{
     var progressKey=window.getVocabProgressStorageKey(bookKey);
     var progressMs=parseInt(localStorage.getItem(progressKey+'__ts')||'0')||0;
@@ -4550,6 +4551,7 @@ window.__captureManualVocabDraft = function() {
   try {
     var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
     if(!currentTextbook&&vocabList.length===0)return;
+    if(window.LearningData&&!window.LearningData.canSave(bookKey))return;
     if(window.LibraryState&&window.LibraryState.isDeleted('book',bookKey))return;
     var master=(typeof window.stripVocabProgressFromWords==='function')
       ? window.stripVocabProgressFromWords(vocabList)
@@ -4583,6 +4585,7 @@ window.__captureManualVocabDraft = function() {
 // 保存完了メタデータは全パーツ送信後に更新するため、途中送信を復元しない。
 window.flushManualVocabDraft = async function(bookKey){
   var owner=myId;
+  if(window.LearningData&&!window.LearningData.canSave(bookKey))return false;
   var dirty=window.__dirtyManualVocabDrafts&&window.__dirtyManualVocabDrafts[bookKey];
   var draft=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
   if(!dirty||!draft)return false;
@@ -4602,7 +4605,7 @@ window.flushManualVocabDraft = async function(bookKey){
     await window.fbSetDoc(ref,meta,{merge:false});
     var verify=await window.fbGetDoc(ref);
     if(!verify||!verify.exists()||!verify.data()||verify.data().generation!==generation)throw new Error('単語帳保存の完了確認に失敗しました');
-    await window.fbSetDoc(window.fbDoc(window.db,'users',owner,'vocabProgress',bookKey),{wordsJson:JSON.stringify(draft.progress||{}),updatedAt:meta.updatedAt},{merge:false});
+    if(!window.LearningData||window.LearningData.hasAnswers(draft.progress))await window.fbSetDoc(window.fbDoc(window.db,'users',owner,'vocabProgress',bookKey),{wordsJson:JSON.stringify(draft.progress||{}),updatedAt:meta.updatedAt},{merge:false});
     if(myId!==owner)return false;
     if(window.__dirtyManualVocabDrafts[bookKey]===dirty)delete window.__dirtyManualVocabDrafts[bookKey];
     return true;
@@ -4694,6 +4697,7 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
         localStorage.setItem('core_v4_cache_'+bookKey,JSON.stringify(draft.master));
         localStorage.setItem('core_v4_custom_words_'+myId+'_'+bookKey,JSON.stringify(draft.master));
         if(draft.progress&&typeof window.getVocabProgressStorageKey==='function'){
+          if(window.LearningData)draft.progress=window.LearningData.restore(bookKey,draft.progress);
           localStorage.setItem(window.getVocabProgressStorageKey(bookKey),JSON.stringify(draft.progress));
           var draftMs=Date.parse(draft.savedAt||'')||0;
           if(draftMs)localStorage.setItem(window.getVocabProgressStorageKey(bookKey)+'__ts',String(draftMs));
@@ -4701,7 +4705,7 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
       }catch(e){}
     }
     var displayedSavedAt=draft&&draft.savedAt;
-    var hasLocalDraft=draft&&Array.isArray(draft.master)&&draft.progress;
+    var hasLocalDraft=draft&&Array.isArray(draft.master)&&draft.progress&&(!window.LearningData||window.LearningData.hasAnswers(draft.progress));
     var result=hasLocalDraft
       ?await __loadBookBeforeManualDraft.call(this,{localProgress:draft.progress})
       :await __loadBookBeforeManualDraft.apply(this,arguments);
@@ -4716,6 +4720,11 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
     return result;
   };
 }
+if(window.LearningData){
+ const load=window.loadCurrentTextbookData;
+ window.loadCurrentTextbookData=async function(){const token=window.LearningData.begin(currentTextbook||'default');try{const result=await load.apply(this,arguments);window.LearningData.finish(token);return result;}catch(error){throw error;}};
+}
+
 function collectAllData() {
   window.__captureManualVocabDraft();
   var lsData = {};
@@ -6257,6 +6266,7 @@ function saveAll() {if(pendingSave)return pendingSave;var task=window.LibrarySta
 window.__backgroundSaveAll=saveAll;
 async function saveAllContents() {
   var id=uid(); if(!id)throw new Error('先にログインしてください');
+  if(window.LearningData&&!window.LearningData.canSave(currentTextbook||'default'))throw new Error('読み込み中のため保存を保留しました');
   lastProgressPercent=0;lastRemainingSeconds=null;
   var started=Date.now(); progress(2,started,'データを準備中');
   // 手動セーブ自身がメモリと端末の最新値を収集するため、ここで旧個別保存の
@@ -6340,10 +6350,10 @@ async function saveAllContents() {
         var doc=await tx.get(progressRef),remote=doc.exists()?doc.data():{},remoteWords={};
         try{remoteWords=JSON.parse(remote.wordsJson||'{}');}catch(e){}
         var remoteAt=Number(remote.updatedAtMs)||Date.parse(remote.updatedAt||'')||0;
-        var merged=remoteAt>progressEditedAt?Object.assign({},savedProgress,remoteWords):Object.assign({},remoteWords,savedProgress);
+        var merged=window.LearningData?window.LearningData.merge(savedProgress,remoteWords):(remoteAt>progressEditedAt?Object.assign({},savedProgress,remoteWords):Object.assign({},remoteWords,savedProgress));
         tx.set(progressRef,{wordsJson:JSON.stringify(merged),updatedAt:new Date(Math.max(remoteAt,progressEditedAt)).toISOString(),updatedAtMs:Math.max(remoteAt,progressEditedAt)},{merge:true});
       });
-      else if(progressEditedAt)await window.fbSetDoc(progressRef,{wordsJson:JSON.stringify(savedProgress),updatedAt:new Date(progressEditedAt).toISOString()},{merge:true});
+      else if(progressEditedAt&&(!window.LearningData||window.LearningData.hasAnswers(savedProgress)))await window.fbSetDoc(progressRef,{wordsJson:JSON.stringify(savedProgress),updatedAt:new Date(progressEditedAt).toISOString()},{merge:true});
       progress(15,started,'理解度を保存中');
     }
     // 本文を先に保存し、最後にメタデータを更新する。途中で通信が切れても
@@ -6460,6 +6470,7 @@ async function autoLoadOnce() {
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
     for(var key in stored){
+      if(key.indexOf('aiglish_learning_recovery_')===0)continue;
       if(key==='aiglish_ranking_device')continue; // Device counters must keep this browser's identity.
       if(key==='core_v4_learning_ranking_'+id&&localStorage.getItem(key))continue;
       if(key==='core_v4_learning_ranking_v2_'+id&&window.LearningRankingModel){
@@ -6469,7 +6480,13 @@ async function autoLoadOnce() {
       if(window.LibraryState&&key===window.LibraryState.storageKey(id)){localStorage.setItem(key,JSON.stringify(window.LibraryState.merge(window.LibraryState.read(id),JSON.parse(stored[key]))));continue;}
       // 理解度は回答のたびに専用領域へ即時保存される。統合セーブはそれより古い
       // 場合があるため、ここで一括復元するとタスクキル後に回答が消えてしまう。
-      if(key.indexOf('core_v4_user_vocab_progress_')===0)continue;
+      if(key.indexOf('core_v4_user_vocab_progress_')===0){
+        var ownProgressPrefix='core_v4_user_vocab_progress_'+id+'_';
+        if(window.LearningData&&key.indexOf(ownProgressPrefix)===0&&!key.endsWith('__ts')){
+          try{window.LearningData.restore(key.slice(ownProgressPrefix.length),JSON.parse(stored[key]||'{}'));}catch(e){console.warn('[save] rating recovery stopped',e);}
+        }
+        continue;
+      }
       if(key.indexOf('aiglish_study_ledger_')===0){
         try{
           var localStudy=JSON.parse(localStorage.getItem(key)||'null');
@@ -6569,6 +6586,7 @@ window.onAppLoaded(function(){
         }
         if(chosen.progress&&typeof window.getVocabProgressStorageKey==='function'){
           var chosenMs=window.__vocabSavedAtMs(chosen.savedAt)||fullSaveMs;
+          if(window.LearningData)chosen.progress=window.LearningData.restore(savedBookKey,chosen.progress);
           localStorage.setItem(window.getVocabProgressStorageKey(savedBookKey),JSON.stringify(chosen.progress));
           if(chosenMs)localStorage.setItem(window.getVocabProgressStorageKey(savedBookKey)+'__ts',String(chosenMs));
           if(savedBookKey===bookKey)currentUserVocabProgress=JSON.parse(JSON.stringify(chosen.progress));
@@ -6595,7 +6613,7 @@ window.onAppLoaded(function(){
       var currentProgressKey=window.getVocabProgressStorageKey(bookKey);
       var currentLocalMs=parseInt(localStorage.getItem(currentProgressKey+'__ts')||'0')||0;
       if(currentLocalMs<=pendingMs){
-        currentUserVocabProgress=pending.data.vocabProgress;
+        currentUserVocabProgress=window.LearningData?window.LearningData.restore(bookKey,pending.data.vocabProgress):pending.data.vocabProgress;
       }else{
         try{currentUserVocabProgress=JSON.parse(localStorage.getItem(currentProgressKey)||'{}')||{};}catch(e){}
       }
@@ -6609,10 +6627,12 @@ window.onAppLoaded(function(){
       var restoredMs=window.__vocabSavedAtMs(pending.savedAt);
       // 古い統合セーブの日時で、新しい理解度の日時を戻さない。
       if(existingMs<=restoredMs){
+        if(window.LearningData)currentUserVocabProgress=window.LearningData.restore(bookKey,currentUserVocabProgress||{});
         localStorage.setItem(finalProgressKey,JSON.stringify(currentUserVocabProgress||{}));
         if(restoredMs)localStorage.setItem(finalProgressKey+'__ts',String(restoredMs));
       }
     }
+    if(window.LearningData&&bookKey&&(currentTextbook||'default')===bookKey){currentUserVocabProgress=window.LearningData.read(bookKey);if(typeof window.applyUserProgressToVocabList==='function')window.applyUserProgressToVocabList();}
   }catch(e){console.warn('[save] vocab progress restore failed',e);}
   try{if(typeof window.applyProfileToUi==='function')window.applyProfileToUi();}catch(e){}
   try{if(typeof window.renderVocabList==='function')window.renderVocabList();}catch(e){}

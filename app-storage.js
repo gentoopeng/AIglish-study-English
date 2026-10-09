@@ -7,7 +7,7 @@ let database=null,running=null,retry=null,scheduled=false,lastFailure=null,revis
 const nativeKeys=()=>Object.keys(native);
 const owned=key=>/^(core_v4_|aiglish_|save_studio_|vv4_|b3_|__ste_reset_gen_)/.test(key)||['wordMemory','textHistory','myBookshelf','myFolders'].includes(key);
 // Ratings keep a synchronous working copy; IndexedDB is also a durable mirror.
-const critical=key=>key.startsWith('core_v4_user_vocab_progress_');
+const critical=key=>key.startsWith('core_v4_user_vocab_progress_')||key.startsWith('aiglish_learning_recovery_');
 function keys(){if(keysRevision!==revision){const names=new Set(nativeKeys());for(const [key,value] of values){if(value===null)names.delete(key);else names.add(key);}keyCache=[...names];keysRevision=revision;}return keyCache;}
 function get(key){key=String(key);return values.has(key)?values.get(key):rawGet(key);}
 function failure(error){const changed=!lastFailure;lastFailure=error;if(changed){console.warn('端末の保存先を利用できません。保存データは消していません。',error);window.dispatchEvent(new CustomEvent('app-storage-error',{detail:'端末への保存を確認できません。空き容量・ブラウザー設定を確認してください。'}));}}
