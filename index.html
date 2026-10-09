@@ -10,16 +10,17 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="5.82">
+    <meta name="application-version" content="5.92">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
-    <script src="runtime-errors.js?v=5.82"></script>
-    <script src="rendering-safety.js?v=5.82"></script>
+    <script src="runtime-errors.js?v=5.92"></script>
+    <script src="app-storage.js?v=5.92"></script>
+    <script src="rendering-safety.js?v=5.92"></script>
     <script src="vendor/lucide/lucide.min.js?v=0.468.0"></script>
-    <link rel="stylesheet" href="style.css?v=5.82">
-    <link rel="stylesheet" href="gacha.css?v=5.82">
+    <link rel="stylesheet" href="style.css?v=5.92">
+    <link rel="stylesheet" href="gacha.css?v=5.92">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -29,6 +30,7 @@
     </style>
 </head>
 <body>
+    <p id="appStartupStatus" role="status">保存データを読み込んでいます…</p>
 
     <!-- 2コンボ以上発生時に画面全体の最外周を包み込んで明滅する金色ネオンオーバーレイ枠 -->
     <div id="combo-sparkle-border" class="combo-sparkle-overlay"></div>
@@ -739,24 +741,25 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <script src="library-state.js?v=5.82" defer></script>
-    <script src="app.js?v=5.82" defer></script>
-    <script src="game_core.js?v=5.82" defer></script>
-    <script src="vocab_ui.js?v=5.82" defer></script>
-    <script src="reader.js?v=5.82" defer></script>
-    <script src="view-work.js?v=5.82" defer></script>
-    <script src="fix.js?v=5.82" defer></script>
-    <script src="multi.js?v=5.82" defer></script>
-    <script src="gacha.js?v=5.82" defer></script>
-    <script src="addon.js?v=5.82" defer></script>
-    <script src="library.js?v=5.82" defer></script>
-    <script src="workbook.js?v=5.82" defer></script>
-    <script src="shared-notes.js?v=5.82" defer></script>
-    <script src="study-time.js?v=5.82" defer></script>
-    <script src="ranking.js?v=5.82" defer></script>
-    <script src="autosave.js?v=5.82" defer></script>
-    <script src="people.js?v=5.82" defer></script>
-    <script src="profile.js?v=5.82" defer></script>
-    <script src="loading-quiz.js?v=5.82" defer></script>
+    <link rel="preload" href="library-state.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=5.92"></script>
+    <link rel="preload" href="app.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=5.92"></script>
+    <link rel="preload" href="game_core.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=5.92"></script>
+    <link rel="preload" href="vocab_ui.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=5.92"></script>
+    <link rel="preload" href="reader.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=5.92"></script>
+    <link rel="preload" href="view-work.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=5.92"></script>
+    <link rel="preload" href="fix.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=5.92"></script>
+    <link rel="preload" href="multi.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="multi.js?v=5.92"></script>
+    <link rel="preload" href="gacha.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="gacha.js?v=5.92"></script>
+    <link rel="preload" href="addon.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="addon.js?v=5.92"></script>
+    <link rel="preload" href="library.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=5.92"></script>
+    <link rel="preload" href="workbook.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=5.92"></script>
+    <link rel="preload" href="shared-notes.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=5.92"></script>
+    <link rel="preload" href="study-time.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=5.92"></script>
+    <link rel="preload" href="ranking.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=5.92"></script>
+    <link rel="preload" href="autosave.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=5.92"></script>
+    <link rel="preload" href="people.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=5.92"></script>
+    <link rel="preload" href="profile.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=5.92"></script>
+    <link rel="preload" href="loading-quiz.js?v=5.92" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=5.92"></script>
+    <script src="app-loader.js?v=5.92" defer></script>
 </body>
 </html>

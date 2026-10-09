@@ -1918,7 +1918,7 @@ const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbAre
 // defer スクリプト実行中は readyState が interactive になるが、後続の
 // reader.js 等はまだ未実行である。complete になる前に起動すると
 // renderHistoryList / renderBookshelf が未定義のまま呼ばれるため、
-// DOMContentLoaded（全 defer スクリプト実行後）まで必ず待つ。
+// 保存データの復元と全スクリプトの読み込み完了を待ってから起動する。
 function bootApplicationAfterScripts() {
 Promise.resolve(window.loadLocalState()).catch(function(error) {
 console.error('アプリ初期化に失敗しました:', error);
@@ -1927,7 +1927,9 @@ window.initLucide();
 
 if(typeof window.renderActivityChart === 'function') window.renderActivityChart();
 }
-if (document.readyState !== "complete") {
+if(window.appScriptsReady){
+window.appScriptsReady.then(bootApplicationAfterScripts).catch(function(error){console.error("アプリを開始できませんでした",error);});
+} else if (document.readyState !== "complete") {
 document.addEventListener("DOMContentLoaded", bootApplicationAfterScripts, { once: true });
 } else {
 setTimeout(bootApplicationAfterScripts, 0);

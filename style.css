@@ -2219,3 +2219,5 @@ html body{background-image:none!important;}.container{position:relative;z-index:
 .sidebar-profile-form input[type=file]{font-size:12px;}
 #sidebarProfileStatus{font-size:12px;line-height:1.5;margin:0;color:var(--text-sub);}
 .loading-quiz-pin{display:inline-block;width:17px;height:17px;color:#d8c48e;margin-left:8px;vertical-align:middle;flex-shrink:0;}.word-row-container>.loading-quiz-pin{float:right;}.quiz-range{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;}
+
+#appStartupStatus{position:fixed;top:80px;left:16px;right:16px;z-index:100001;padding:14px;background:#10172b;color:#eee;font:14px system-ui;border-radius:10px;}#appStartupStatus[hidden]{display:none;}

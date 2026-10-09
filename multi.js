@@ -6277,7 +6277,7 @@ async function saveAllContents() {
   } catch(e) { console.warn('[save] vocab snapshot write failed',e); }
   var raw=JSON.stringify(save);
   var localSaved=false, cloudSaved=false, localError=null, cloudError=null;
-  try { localStorage.setItem(localKey(),raw); localSaved=true; }
+  try { localStorage.setItem(localKey(),raw);if(window.AppStorage)await window.AppStorage.flush();localSaved=true; }
   catch(e) { localError=e; console.warn('[save] local save failed',e); }
   if(localSaved){
     try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,source:'local'})); } catch(e) {}
