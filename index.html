@@ -10,17 +10,17 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="6.32">
+    <meta name="application-version" content="6.42">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
-    <script src="runtime-errors.js?v=6.32"></script>
-    <script src="app-storage.js?v=6.32"></script>
-    <script src="rendering-safety.js?v=6.32"></script>
+    <script src="runtime-errors.js?v=6.42"></script>
+    <script src="app-storage.js?v=6.42"></script>
+    <script src="rendering-safety.js?v=6.42"></script>
     <script src="vendor/lucide/lucide.min.js?v=0.468.0"></script>
-    <link rel="stylesheet" href="style.css?v=6.32">
-    <link rel="stylesheet" href="gacha.css?v=6.32">
+    <link rel="stylesheet" href="style.css?v=6.42">
+    <link rel="stylesheet" href="gacha.css?v=6.42">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -121,10 +121,18 @@
             <section id="sidebarBackground" class="sidebar-background" aria-labelledby="sidebarBackgroundTitle">
                 <h3 id="sidebarBackgroundTitle">背景</h3>
                 <div class="sidebar-background-choices"><button type="button" data-background="default" aria-pressed="true">いつもの背景</button><button type="button" data-background="photo" aria-pressed="false" disabled>選んだ写真</button></div>
-                <label class="sidebar-background-upload" for="sidebarBackgroundFile">写真を選ぶ<input id="sidebarBackgroundFile" type="file" accept="image/*"></label>
-                <label id="sidebarBackgroundFocus" for="sidebarBackgroundPosition" hidden>見せる位置<input id="sidebarBackgroundPosition" type="range" min="0" max="100" value="30" aria-label="背景の左右の表示位置"></label>
                 <p id="sidebarBackgroundStatus" role="status" aria-live="polite"></p>
             </section>
+            <button id="sidebarBackgroundAdmin" type="button" class="sidebar-item"><i data-lucide="settings" size="18"></i>管理者メニュー</button>
+            <template id="backgroundAdminTemplate"><dialog id="backgroundAdminDialog" class="background-admin-dialog">
+                <form id="backgroundAdminAuth"><h2>管理者メニュー</h2><label for="backgroundAdminPassword">管理者パスワード</label><input id="backgroundAdminPassword" type="password" autocomplete="off" inputmode="text"><p id="backgroundAdminAuthStatus" role="status"></p><button type="submit">開く</button></form>
+                <div id="backgroundAdminControls" hidden><h2>背景の追加</h2>
+                <label class="sidebar-background-upload" for="sidebarBackgroundFile">写真を選ぶ<input id="sidebarBackgroundFile" type="file" accept="image/*"></label>
+                <label id="sidebarBackgroundFocus" for="sidebarBackgroundPosition" hidden>見せる位置<input id="sidebarBackgroundPosition" type="range" min="0" max="100" value="30" aria-label="背景の左右の表示位置"></label>
+                    <p id="backgroundAdminSaveStatus" role="status" aria-live="polite"></p>
+                </div>
+                <button id="backgroundAdminClose" type="button">閉じる</button>
+            </dialog></template>
             <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
                 <div style="font-size: 11px; font-weight:700; color:var(--accent); margin-top:4px; margin-bottom:8px;">🤖 Gemini AI APIキー</div>
                 <input type="password" id="sidebarApiKeyInput" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px;" placeholder="AI用APIキーを入力...">
@@ -223,7 +231,7 @@
                     <div id="historyListContainer" style="font-size:13px;"></div>
                 </div>
 
-                <div class="card" style="border:1px solid rgba(0,240,255,0.3); background:linear-gradient(180deg, rgba(15,23,42,0.9) 0%, rgba(7,11,25,0.9) 100%) !important;">
+                <div class="card" style="border:1px solid rgba(0,240,255,0.3); ">
                     <h2><i data-lucide="book-open" size="14"></i> 本棚</h2>
                     <p style="font-size:11px; color:var(--text-sub); margin-bottom:16px;">保存した長文をフォルダごとに整理・閲覧できます。</p>
                     <div id="myBookshelfContainer"></div>
@@ -397,7 +405,7 @@
                         <small id="flashcardPartOfSpeech" class="flashcard-part-of-speech" hidden></small>
                     </div>
 
-                    <div class="card" style="padding:10px; margin-bottom:4px; text-align:center; background:rgba(15,23,42,0.8) !important;">
+                    <div class="card" style="padding:10px; margin-bottom:4px; text-align:center; ">
                         <div style="font-size:10px; color:#FFFFFF; font-weight:bold;" id="flashcardProgressText">今回の理解度: ◯ 0 / 回答 0（0%）</div>
                         <div id="fcHistoryContainer" class="fc-history-container"></div>
                     </div>
@@ -682,7 +690,7 @@
                 </div>
             </div>
 
-            <div class="card" style="margin-top:12px; cursor:pointer; text-align:center; padding:18px; background: linear-gradient(135deg, rgba(236,72,153,0.15) 0%, rgba(15,23,42,0.85) 100%) !important; border: 1px solid var(--admin-accent) !important;" onclick="alert('ガシャ画面は準備中です！')">
+            <div class="card" style="margin-top:12px; cursor:pointer; text-align:center; padding:18px;  border: 1px solid var(--admin-accent) !important;" onclick="alert('ガシャ画面は準備中です！')">
                 <i data-lucide="sparkles" style="color:var(--admin-accent); margin-bottom:6px;" size="24"></i>
                 <div style="font-size:14px; font-weight:900; color:white;">キャラクター＆武器ガシャ</div>
                 <div style="font-size:11px; color:var(--text-sub); margin-top:2px;">学習で溜めたEXPを使って新しい力を手に入れよう！</div>
@@ -749,27 +757,28 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <link rel="preload" href="library-state.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=6.32"></script>
-    <link rel="preload" href="learning-data.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=6.32"></script>
-    <link rel="preload" href="app.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=6.32"></script>
-    <link rel="preload" href="game_core.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=6.32"></script>
-    <link rel="preload" href="vocab_ui.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=6.32"></script>
-    <link rel="preload" href="reader.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=6.32"></script>
-    <link rel="preload" href="view-work.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=6.32"></script>
-    <link rel="preload" href="fix.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=6.32"></script>
-    <link rel="preload" href="multi.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="multi.js?v=6.32"></script>
-    <link rel="preload" href="gacha.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="gacha.js?v=6.32"></script>
-    <link rel="preload" href="addon.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="addon.js?v=6.32"></script>
-    <link rel="preload" href="library.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=6.32"></script>
-    <link rel="preload" href="workbook.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=6.32"></script>
-    <link rel="preload" href="shared-notes.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=6.32"></script>
-    <link rel="preload" href="study-time.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=6.32"></script>
-    <link rel="preload" href="ranking.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=6.32"></script>
-    <link rel="preload" href="autosave.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=6.32"></script>
-    <link rel="preload" href="people.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=6.32"></script>
-    <link rel="preload" href="profile.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=6.32"></script>
-    <link rel="preload" href="loading-quiz.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=6.32"></script>
-    <link rel="preload" href="app-background.js?v=6.32" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=6.32"></script>
-    <script src="app-loader.js?v=6.32" defer></script>
+    <link rel="preload" href="library-state.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=6.42"></script>
+    <link rel="preload" href="learning-data.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=6.42"></script>
+    <link rel="preload" href="app.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=6.42"></script>
+    <link rel="preload" href="game_core.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=6.42"></script>
+    <link rel="preload" href="vocab_ui.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=6.42"></script>
+    <link rel="preload" href="reader.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=6.42"></script>
+    <link rel="preload" href="view-work.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=6.42"></script>
+    <link rel="preload" href="fix.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=6.42"></script>
+    <link rel="preload" href="multi.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="multi.js?v=6.42"></script>
+    <link rel="preload" href="gacha.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="gacha.js?v=6.42"></script>
+    <link rel="preload" href="addon.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="addon.js?v=6.42"></script>
+    <link rel="preload" href="library.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=6.42"></script>
+    <link rel="preload" href="workbook.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=6.42"></script>
+    <link rel="preload" href="shared-notes.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=6.42"></script>
+    <link rel="preload" href="user-directory.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=6.42"></script>
+    <link rel="preload" href="study-time.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=6.42"></script>
+    <link rel="preload" href="ranking.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=6.42"></script>
+    <link rel="preload" href="autosave.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=6.42"></script>
+    <link rel="preload" href="people.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=6.42"></script>
+    <link rel="preload" href="profile.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=6.42"></script>
+    <link rel="preload" href="loading-quiz.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=6.42"></script>
+    <link rel="preload" href="app-background.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=6.42"></script>
+    <script src="app-loader.js?v=6.42" defer></script>
 </body>
 </html>

@@ -155,7 +155,7 @@
             const paged=!!(window.fbQuery&&window.fbOrderBy&&window.fbDocumentId&&window.fbLimit&&window.fbStartAfter);
             do{
                 let ref=window.fbCollection(window.db,'users');
-                if(paged){const parts=[window.fbOrderBy(window.fbDocumentId()),window.fbLimit(50)];if(cursor)parts.push(window.fbStartAfter(cursor));ref=window.fbQuery(ref,...parts);}
+                if(paged){const parts=[window.fbOrderBy(window.fbDocumentId()),window.fbLimit(10)];if(cursor)parts.push(window.fbStartAfter(cursor));ref=window.fbQuery(ref,...parts);}
                 const snapshot=await window.fbGetDocs(ref);if(!active())return list;
                 const docs=snapshot.docs||[];if(!snapshot.docs)snapshot.forEach(doc=>docs.push(doc));
                 for(let i=0;i<docs.length;i++){
@@ -168,7 +168,7 @@
                     }catch(error){console.warn('ランキングの一部の記録を読み取れませんでした',error);}}
                     if(i%8===7)await yieldFrame();
                 }
-                cursor=docs[docs.length-1];if(!paged||docs.length<50)break;await yieldFrame();
+                cursor=docs[docs.length-1];if(!paged||docs.length<10)break;await yieldFrame();
             }while(active());return list;
         };
         const task=Promise.resolve().then(async()=>{try{

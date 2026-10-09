@@ -4732,7 +4732,7 @@ function collectAllData() {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
       if (!k) continue;
-      if (k.indexOf('save_studio_') === 0 || k === 'aiglish_profile_shop_catalog') continue;
+      if (k.indexOf('save_studio_') === 0 || k === 'aiglish_profile_shop_catalog' || k === '__aiglish_render_guard') continue;
       // 単語帳本体は memory.vocabBooks に正規化して保存する。同じ内容のキャッシュを
       // 何重にも含めるとセーブ容量と通信回数が数倍になるため、再生成可能な複製は除外する。
       if (k.indexOf('core_v4_cache_') === 0 ||

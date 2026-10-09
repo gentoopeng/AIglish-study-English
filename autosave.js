@@ -3,7 +3,7 @@
     let revision=0,saved=0,pending=false,timer=null;
     const id=()=>typeof myId==='string'?myId:'';
     let owner=id();
-    function changed(event){if(owner!==id()){owner=id();revision=0;saved=0;}revision++;window.localStorage?.setItem('core_v4_autosave_pending_'+owner,'1');}
+    function changed(event){if(event?.target?.type==='password'||event?.target?.closest?.('#backgroundAdminDialog'))return;if(owner!==id()){owner=id();revision=0;saved=0;}revision++;window.localStorage?.setItem('core_v4_autosave_pending_'+owner,'1');}
     async function save(){
         timer=null;if(pending||revision===saved||!owner||owner==='GUEST-000'||!window.__backgroundSaveAll)return;
         if(window.LearningData&&!window.LearningData.canSave(typeof currentTextbook==='string'?currentTextbook:'default'))return;
