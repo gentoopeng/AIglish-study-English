@@ -4,6 +4,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  page.on('pageerror',e=>errors.push(e.message));page.on('crash',()=>errors.push('renderer crashed'));await page.route('https://**/*',r=>r.abort());await page.addInitScript(()=>localStorage.setItem('b3_tutorial_done','1'));
  await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();
  await page.evaluate(()=>{const key=window.getVocabProgressStorageKey('retained-book');localStorage.setItem(key,JSON.stringify({7:{status:'ok',history:['bad','ok'],note:'保存済み'}}));localStorage.setItem(key+'__ts',String(Date.now()));localStorage.setItem('core_v4_profile_shop_owned_GUEST-000',JSON.stringify(['wood','retained-purchase']));window.__retainedRuntime={state:42};});
+ const admin=page.frameLocator('#productManagerDialog iframe');
  const originalUrl=page.url(),password=fs.readFileSync('admin-access.js','utf8').match(/value!=='([^']+)'/)[1];
  await page.getByRole('button',{name:'プロフィール商品管理'}).click();
  const auth=page.frameLocator('#productAccessDialog iframe');await auth.locator('#password').waitFor({state:'visible'});
@@ -14,11 +15,16 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.evaluate(()=>window.postMessage({type:'aiglish-admin-access',nonce:JSON.parse(sessionStorage.getItem('aiglish_admin_access_pending')).nonce,verified:true},location.origin));
  assert.equal(await page.locator('#productAccessDialog').count(),1,'another window cannot forge an auth completion');
  await auth.locator('#password').fill(password);await auth.getByRole('button',{name:'認証',exact:true}).click();
- await page.locator('#shopAdd').waitFor({state:'visible',timeout:10000});assert.equal(page.url(),originalUrl);assert.equal(await page.evaluate(()=>__retainedRuntime.state),42);
+ await admin.locator('#shopAdd').waitFor({state:'visible',timeout:10000});assert.equal(page.url(),originalUrl);assert.equal(await page.evaluate(()=>__retainedRuntime.state),42);
  assert.equal(await page.locator('#auth-gate-screen').isVisible(),false);assert.equal(await page.locator('#productAccessDialog').count(),0);
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(window.getVocabProgressStorageKey('retained-book')))[7].status),'ok');assert.ok(await page.evaluate(()=>window.ProfileShop.owned().includes('retained-purchase')));assert.equal(await page.evaluate(()=>sessionStorage.getItem('aiglish_admin_access_ticket')),null);
- await page.getByRole('button',{name:'ホームへ',exact:true}).click();await page.getByRole('button',{name:'プロフィール商品管理'}).click();await page.locator('#shopAdd').waitFor({state:'visible'});assert.equal(await page.locator('#productAccessDialog').count(),0,'valid administrator session avoids repeated password prompts');
- await page.getByRole('button',{name:'ホームへ',exact:true}).click();await page.evaluate(()=>window.isAdmin=false);await page.getByRole('button',{name:'プロフィール商品管理'}).click();await auth.locator('#password').waitFor({state:'visible'});await auth.getByRole('button',{name:'戻る',exact:true}).click();await page.locator('#productAccessDialog').waitFor({state:'detached'});
+ await admin.getByRole('button',{name:'ホームへ',exact:true}).click();await page.getByRole('button',{name:'プロフィール商品管理'}).click();await admin.locator('#shopAdd').waitFor({state:'visible'});assert.equal(await page.locator('#productAccessDialog').count(),0,'valid administrator session avoids repeated password prompts');
+ await admin.getByRole('button',{name:'ホームへ',exact:true}).click();
+ await page.route('**/product-admin.html?*',route=>route.fulfill({status:404,contentType:'text/html',body:'<!doctype html><p>Not found</p>'}));
+ await page.getByRole('button',{name:'プロフィール商品管理'}).click();await page.locator('#adminHub').getByText('商品管理を読み込めませんでした。',{exact:true}).waitFor({state:'visible'});
+ assert.equal(await page.locator('#productManagerDialog').count(),0);assert.equal(await page.evaluate(()=>document.body.classList.contains('password-prompt-open')),false);assert.equal(page.url(),originalUrl);
+ await page.unroute('**/product-admin.html?*');await page.evaluate(()=>window.switchTab('home'));await page.getByRole('button',{name:'プロフィール商品管理'}).click();await admin.locator('#shopAdd').waitFor({state:'visible'});
+ await admin.getByRole('button',{name:'ホームへ',exact:true}).click();await page.evaluate(()=>window.isAdmin=false);await page.getByRole('button',{name:'プロフィール商品管理'}).click();await auth.locator('#password').waitFor({state:'visible'});await auth.getByRole('button',{name:'戻る',exact:true}).click();await page.locator('#productAccessDialog').waitFor({state:'detached'});
  assert.equal(await page.locator('#productAccessDialog').count(),0);assert.equal(page.url(),originalUrl);assert.equal(await page.evaluate(()=>sessionStorage.getItem('aiglish_admin_access_pending')),null);assert.equal(await page.evaluate(()=>document.body.classList.contains('password-prompt-open')),false);assert.equal(await page.evaluate(()=>window.isAdmin),false);
  assert.deepEqual(errors,[]);console.log('PASS: native password field, wrong/cancel paths, source-checked iframe messages, no reload/login transition, retained runtime/learning/purchases and direct return to product manager');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

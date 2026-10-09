@@ -7547,7 +7547,7 @@ var bx=br.left+br.width/2, by=br.top+br.height/2;
 return Math.abs(cx-bx)<(br.width/2+90) && Math.abs(cy-by)<(br.height/2+90);
 }
 function killCenter(el){
-if(!el||el.nodeType!==1) return;
+if(!el||el.nodeType!==1||el.closest('.fc-vanish-burst,#flashcardDeckStage')) return;
 var cls=(typeof el.className==='string')?el.className:'';
 /* 元の円は無条件削除 */
 if(cls.indexOf('popup-hit-explosion')>=0){ if(el.parentNode)el.parentNode.removeChild(el); return; }
@@ -7563,6 +7563,7 @@ for(var i=0;i<inner.length;i++){ if(inner[i].parentNode)inner[i].parentNode.remo
 }
 }
 var mo=new MutationObserver(function(muts){
+var battle=document.getElementById('multi-battle-play-screen');if(!battle||!battle.getClientRects().length)return;
 if(document.hidden||!document.getElementById("view-party")?.classList.contains("active")&&!document.getElementById("view-game")?.classList.contains("active"))return;
 for(var i=0;i<muts.length;i++){
 var added=muts[i].addedNodes; if(!added)continue;
