@@ -5389,48 +5389,7 @@ window.__batch3Applied = true;
 /* ==================================================================
 【1】エラー可視化
 ================================================================== */
-(function initErrorVisualizer() {
-var style = document.createElement('style');
-style.id = 'b3ErrCss';
-style.textContent = [
-'.b3-err-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-10px);',
-'z-index:100000;max-width:90vw;padding:10px 16px;border-radius:10px;',
-'background:rgba(239,68,68,.92);color:#fff;font-size:12px;font-weight:700;',
-'box-shadow:0 4px 16px rgba(239,68,68,.4);opacity:0;transition:all .3s ease;',
-'pointer-events:none;font-family:"Noto Sans JP",sans-serif;}',
-'.b3-err-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}'
-].join('\n');
-(document.head || document.documentElement).appendChild(style);
-
-var toast = document.createElement('div');
-toast.className = 'b3-err-toast';
-toast.id = 'b3ErrToast';
-document.body.appendChild(toast);
-var timer = null;
-
-function showErr(msg) {
-toast.textContent = '⚠️ ' + msg;
-toast.classList.add('show');
-clearTimeout(timer);
-timer = setTimeout(function () { toast.classList.remove('show'); }, 4000);
-}
-
-window.addEventListener('error', function (e) {
-try {
-var msg = e.message || '不明なエラー';
-var src = (e.filename || '').split('/').pop();
-console.warn('[エラー]', msg, src + ':' + e.lineno);
-showErr(msg);
-} catch (ex) {}
-});
-
-window.addEventListener('unhandledrejection', function (e) {
-try {
-var msg = e.reason ? (e.reason.message || String(e.reason)) : '非同期エラー';
-console.warn('[非同期エラー]', msg);
-} catch (ex) {}
-});
-})();
+// Error diagnostics are installed before startup in runtime-errors.js.
 
 /* ==================================================================
 【2】初回チュートリアル（3ステップ）
