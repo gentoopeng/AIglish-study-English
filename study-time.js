@@ -71,7 +71,7 @@
     const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent,weekValues,readStats,rankingSeconds};
     window.StudyTimeModel=model;
     let user='',data=null,manual=false,paused=false,active=false,leader=false,lockPending=false,release=null,lastMono=performance.now(),lastWall=Date.now(),lastCloud=0;
-    let month=new Date();month.setDate(1);let selected=dateKey(Date.now()),rankRange='daily',ranking=[],rankingLoading=false;
+    let month=new Date();month.setDate(1);let selected=dateKey(Date.now()),rankRange='daily',ranking=[],rankingLoading=false,rankingLoadedAt=0,rankingDay='';
     let fallbackLease=false;
     let selectedWeek=weekStart(Date.now());
     const tabId=crypto.randomUUID();
@@ -82,7 +82,7 @@
     function persist() {if(!user||!data)return;data.updatedAt=Date.now();try{const previous=read(user);if(previous&&previous.epoch===RESET_EPOCH)localStorage.setItem(storageKey(user)+'_backup',JSON.stringify(mergeCurrent(previous,data)));localStorage.setItem(storageKey(user),JSON.stringify(data));}catch(e){const status=document.getElementById('studyTimerStatus');if(status)status.textContent='保存できません。ブラウザーの空き容量を確認してください。';console.error('勉強時間を保存できませんでした',e);}}
     function ensureUser() {
         const next=uid();if(next===user)return;
-        unlock();user=next;manual=false;paused=false;active=false;lastMono=performance.now();lastWall=Date.now();ranking=[];
+        unlock();user=next;manual=false;paused=false;active=false;lastMono=performance.now();lastWall=Date.now();ranking=[];rankingLoadedAt=0;rankingDay='';
         if(!user){data=null;return;}
         let stats={};try{stats=JSON.parse(localStorage.getItem('core_v4_user_stats_'+user)||'{}');}catch(e){}
         const saved=read(user);let backup=null;try{backup=JSON.parse(localStorage.getItem(storageKey(user)+'_backup')||'null');}catch(e){}data=mergeCurrent(saved,backup);
@@ -167,7 +167,7 @@
         document.getElementById('studyNextWeek').disabled=selectedWeek>=weekStart(Date.now());
     }
     function friendValue(entry) {
-        return rankingSeconds(entry.stats||{},'daily',Date.now());
+        return entry.date===dateKey(Date.now())?entry.seconds:0;
     }
     let podiumShape=null;
     function renderRanking() {
@@ -190,14 +190,23 @@
             const step=document.createElement('div');step.className='study-podium-step';step.textContent=String(place);if(window.RankingVisuals)column.append(window.RankingVisuals.avatar(record.avatar,record.name));column.append(name,time,step);podium.append(column);
         });container.append(podium);
     }
-    async function refreshRanking() {
-        ensureUser();if(rankingLoading||!user)return;
+    async function refreshRanking(force=false) {
+        ensureUser();if(rankingLoading||!user||currentActiveTabId!=='study'||document.visibilityState!=='visible')return;
+        if(!force&&rankingDay===dateKey(Date.now())&&Date.now()-rankingLoadedAt<60000){renderRanking();return;}
         const owner=user;rankingLoading=true;const button=document.getElementById('studyRefreshRanking'),message=document.getElementById('studyRankingMessage');button.disabled=true;button.textContent='更新中…';message.textContent='';
         try {
             if(!window.db||!window.fbGetDocs||!window.fbCollection)throw new Error('接続後に更新してください。');
-            const snapshot=await window.fbGetDocs(window.fbCollection(window.db,'users'));const records=[];
-            snapshot.forEach(doc=>{const remote=doc.data();if(remote.deleted)return;try{const stats=readStats(remote);records.push({id:doc.id,name:remote.playerName||remote.name||doc.id,avatar:remote.avatar||'',stats});}catch(e){}});
-            if(user===owner&&uid()===owner){ranking=records;renderRanking();}
+            const records=[],today=dateKey(Date.now());
+            await window.UserDirectory.scan((id,remote)=>{
+                if(remote.deleted||id===owner||id==='GUEST-000')return;
+                const stats=readStats(remote),seconds=rankingSeconds(stats,'daily',Date.now());
+                if(seconds<300)return;
+                // Keep only three podium candidates, never entire profile statistics/artwork.
+                const compact={study_calendar_v2:resetLedger(stats.study_calendar_v2),learning_ranking_v2_json:remote.learningRankingV2Json||stats.learning_ranking_v2_json,learning_ranking_owner:stats.learning_ranking_owner};
+                records.push({id,name:remote.playerName||remote.name||id,avatar:remote.avatar||'',date:today,seconds,stats:compact});
+                records.sort((a,b)=>b.seconds-a.seconds||a.id.localeCompare(b.id));records.splice(3);
+            },()=>user===owner&&uid()===owner&&currentActiveTabId==='study'&&document.visibilityState==='visible');
+            if(user===owner&&uid()===owner){ranking=records;rankingLoadedAt=Date.now();rankingDay=today;renderRanking();}
         }catch(e){if(uid()===owner)message.textContent='表彰台を取得できませんでした。'+e.message;}
         finally{rankingLoading=false;button.disabled=false;button.textContent='更新';}
     }
@@ -215,7 +224,7 @@
     document.getElementById('studyPreviousMonth').onclick=()=>{month.setMonth(month.getMonth()-1);renderCalendar();};document.getElementById('studyNextMonth').onclick=()=>{month.setMonth(month.getMonth()+1);renderCalendar();};
     document.getElementById('studyPreviousWeek').onclick=()=>{const day=new Date(dateAt(selectedWeek));day.setDate(day.getDate()-7);selectedWeek=dateKey(day);chart();};
     document.getElementById('studyNextWeek').onclick=()=>{const day=new Date(dateAt(selectedWeek));day.setDate(day.getDate()+7);selectedWeek=dateKey(day);chart();};
-    document.getElementById('studyEditDay').onclick=()=>editDate(selected);document.getElementById('studyRefreshRanking').onclick=refreshRanking;
+    document.getElementById('studyEditDay').onclick=()=>editDate(selected);document.getElementById('studyRefreshRanking').onclick=()=>refreshRanking(true);
     document.querySelectorAll('#studyRankRanges [data-range]').forEach(button=>button.onclick=()=>{rankRange=button.dataset.range;document.querySelectorAll('#studyRankRanges button').forEach(b=>b.classList.toggle('active',b===button));renderRanking();});
     document.addEventListener('visibilitychange',()=>{tick();if(document.visibilityState!=='visible'){active=false;unlock();}else{lastMono=performance.now();lastWall=Date.now();active=eligible();claim();}if(user&&user!=='GUEST-000'&&window.saveUserStats)window.saveUserStats();});
     window.addEventListener('pagehide',()=>{tick();active=false;unlock();persist();});window.addEventListener('storage',event=>{if(user&&event.key===storageKey(user)){data=mergeCurrent(data,read(user));sync();renderCalendar();}});
