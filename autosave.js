@@ -1,11 +1,16 @@
 // Batch edits while keeping catalogue mutations on an earlier save deadline.
 (function(){
-    let revision=0,saved=0,pending=false,timer=null;
+    let revision=0,saved=0,pending=false,timer=null,lastEditingAt=-Infinity;
+    const textInput='input,textarea,[contenteditable="true"]';
+    function editing(event){if((event?.target||document.activeElement)?.matches?.(textInput))lastEditingAt=Date.now();}
     const id=()=>typeof myId==='string'?myId:'';
     let owner=id();
-    function changed(event){if(event?.target?.type==='password'||event?.target?.closest?.('#backgroundAdminDialog'))return;if(owner!==id()){owner=id();revision=0;saved=0;}revision++;window.localStorage?.setItem('core_v4_autosave_pending_'+owner,'1');}
+    function changed(event){editing(event);if(event?.target?.type==='password'||event?.target?.closest?.('#backgroundAdminDialog'))return;if(owner!==id()){owner=id();revision=0;saved=0;}revision++;window.localStorage?.setItem('core_v4_autosave_pending_'+owner,'1');}
     async function save(){
         timer=null;if(pending||revision===saved||!owner||owner==='GUEST-000'||!window.__backgroundSaveAll)return;
+        // Canonical edits already persist locally. Avoid a full snapshot while Safari resizes
+        // for the keyboard, paints a native dialog, or suspends the installed app.
+        if(document.hidden||document.visibilityState==='hidden'||document.querySelector?.('dialog[open]')||(document.activeElement?.matches?.(textInput)&&Date.now()-lastEditingAt<5000))return;
         if(window.LearningData&&!window.LearningData.canSave(typeof currentTextbook==='string'?currentTextbook:'default'))return;
         const account=owner,version=revision;pending=true;
         try{const result=await window.__backgroundSaveAll();if(id()===account&&result.cloudSaved){saved=version;if(revision===version)window.localStorage?.removeItem('core_v4_autosave_pending_'+account);}}
@@ -22,5 +27,9 @@
     ['markVocabProgressDirty'].forEach(name=>{const original=window[name];if(typeof original==='function')window[name]=function(){changed();return original.apply(this,arguments);};});
     setInterval(()=>{if(owner!==id()){owner=id();revision=0;saved=0;}if(revision!==saved)idleSave();},60000);
     window.addEventListener('online',()=>{window.queueBackgroundSave();});
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&revision!==saved)save();});
+    function settled(){if(revision!==saved&&!timer)timer=setTimeout(idleSave,2000);}
+    document.addEventListener('focusin',editing,{passive:true});
+    document.addEventListener('focusout',settled,{passive:true});
+    document.addEventListener('close',settled,true);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='hidden')settled();});
 })();

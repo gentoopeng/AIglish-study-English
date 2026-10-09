@@ -13,6 +13,9 @@ function get(key){key=String(key);return values.has(key)?values.get(key):rawGet(
 function failure(error){const changed=!lastFailure;lastFailure=error;if(changed){console.warn('端末の保存先を利用できません。保存データは消していません。',error);window.dispatchEvent(new CustomEvent('app-storage-error',{detail:'端末への保存を確認できません。空き容量・ブラウザー設定を確認してください。'}));}}
 function transaction(rows){return new Promise((resolve,reject)=>{if(!database){reject(Error('端末の保存先を開けませんでした。'));return;}const tx=database.transaction('values','readwrite'),store=tx.objectStore('values');for(const [key,value] of rows){if(value===null)store.delete(key);else store.put(value,key);}tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||Error('端末への保存に失敗しました。'));tx.onerror=()=>{};});}
 async function flush(){
+ // Early rendering/diagnostic writes may overflow before IndexedDB has opened.
+ // Queue them until hydration succeeds; never report a missing database as a write failure.
+ if(!database)await ready;
  if(retry){clearTimeout(retry);retry=null;}
  if(running){await running;if(pending.size)return flush();return;}
  if(!pending.size)return;
@@ -21,7 +24,7 @@ async function flush(){
  catch(error){failure(error);throw error;}finally{running=null;}
  if(pending.size)return flush();
 }
-function schedule(){if(running||retry||scheduled)return;scheduled=true;queueMicrotask(()=>{scheduled=false;flush().catch(()=>{if(!retry)retry=setTimeout(()=>{retry=null;schedule();},10000);});});}
+function schedule(){if(!database||running||retry||scheduled)return;scheduled=true;queueMicrotask(()=>{scheduled=false;flush().catch(()=>{if(!retry)retry=setTimeout(()=>{retry=null;schedule();},10000);});});}
 function write(key,value){key=String(key);value=String(value);if(get(key)===value)return;
  const prior=rawGet(key);let synchronous=false;
  // A paired timestamp must not commit before its overflow snapshot.
@@ -51,7 +54,7 @@ const ready=(async()=>{
  if(window.BroadcastChannel){channel=new BroadcastChannel('aiglish-local-values');channel.onmessage=async event=>{if(!Array.isArray(event.data))return;const tx=database.transaction('values','readonly');for(const key of event.data){if(typeof key!=='string')continue;const request=tx.objectStore('values').get(key);request.onsuccess=()=>{if(pending.has(key))return;const oldValue=get(key),value=request.result===undefined?null:request.result;if(value===null){values.delete(key);rawRemove(key);}else{values.set(key,value);if(critical(key)){try{rawSet(key,value);}catch(error){rawRemove(key);}}else if(rawGet(key)!==null&&rawGet(key)!==value)rawRemove(key);}revision++;window.dispatchEvent(new StorageEvent('storage',{key,oldValue,newValue:value,storageArea:native,url:location.href}));};}};}
  await new Promise((resolve,reject)=>{const tx=database.transaction('values','readonly'),request=tx.objectStore('values').openCursor();request.onsuccess=()=>{const cursor=request.result;if(cursor){if(!pending.has(cursor.key))values.set(cursor.key,cursor.value);cursor.continue();}};tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});
  // Legacy large values move only after a successful transaction. No records are pruned.
- for(const key of nativeKeys()){const value=rawGet(key);if(!owned(key)||value===null)continue;
+ for(const key of nativeKeys()){const value=rawGet(key);if(!owned(key)||value===null||pending.has(key))continue;
   // A surviving native value may have been written by an older open app/tab.
   // Never hide it behind an older IndexedDB snapshot.
   if(values.has(key)||value.length>=large||critical(key)){

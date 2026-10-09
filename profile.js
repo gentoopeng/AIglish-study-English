@@ -22,7 +22,7 @@ let imageQueue=Promise.resolve();
 async function imageFile(file,size=800,format='image/jpeg',isCurrent=()=>true,quality=.65){
  if(!file||!file.type.startsWith('image/'))throw Error('写真を選んでください。');
  imageRequests++;const saveButton=document.querySelector('#sidebarProfileForm button[type=submit]');if(saveButton)saveButton.disabled=true;
- const work=async()=>{if(!isCurrent())throw Error('画像の読み込みを中止しました。');let bitmap=null,url='',canvas=null;try{
+ const work=async()=>{if(!isCurrent())throw Error('画像の読み込みを中止しました。');await window.ImageMetadata.inspect(file);if(!isCurrent())throw Error('画像の読み込みを中止しました。');let bitmap=null,url='',canvas=null;try{
    if(window.createImageBitmap){try{bitmap=await createImageBitmap(file,{resizeWidth:size,resizeQuality:'high',imageOrientation:'from-image'});}catch(error){}}
    if(!bitmap){url=URL.createObjectURL(file);bitmap=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('写真を開けませんでした。'));img.src=url;});}
    const scale=Math.min(1,size/Math.max(bitmap.width,bitmap.height));canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);return canvas.toDataURL(format,quality);

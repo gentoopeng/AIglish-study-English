@@ -2172,8 +2172,8 @@ box = document.createElement('span');
 box.id = 'hfStableBox';
 box.className = 'hf-stable';
 box.innerHTML =
-'<span class="hf-badge"><img src="gold.png" class="hf-img" alt=""><span id="hfGoldNum">0</span></span>' +
-'<span class="hf-badge"><img src="gachatike.png" class="hf-img" alt=""><span id="hfTickNum">0</span></span>';
+'<span class="hf-badge"><img src="assets/header-gold.webp" class="hf-img" alt=""><span id="hfGoldNum">0</span></span>' +
+'<span class="hf-badge"><img src="assets/header-ticket.webp" class="hf-img" alt=""><span id="hfTickNum">0</span></span>';
 if (slot) host.insertBefore(box, slot.nextSibling);
 else host.appendChild(box);
 }
