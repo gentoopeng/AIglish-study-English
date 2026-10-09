@@ -100,11 +100,12 @@
         return visible('flashcard-play-screen')||visible('multi-battle-play-screen')||!!(window.__loadQuiz&&window.__loadQuiz.active);
     }
     function unlock(){if(release){release();release=null;}if(fallbackLease&&user){try{const key='aiglish_study_lease_'+user,lease=JSON.parse(localStorage.getItem(key)||'null');if(lease&&lease.tab===tabId)localStorage.removeItem(key);}catch(e){}}leader=false;fallbackLease=false;}
+    function writeLease(key,value){if(window.AppStorage)return window.AppStorage.setCoordination(key,value);try{localStorage.setItem(key,value);return true;}catch(error){return false;}}
     function claim() {
         if(!user||leader||lockPending)return;
         const claimedUser=user;
         if(navigator.locks){lockPending=true;navigator.locks.request('aiglish-study-'+user,{ifAvailable:true},async lock=>{lockPending=false;if(!lock||user!==claimedUser||!eligible())return;leader=true;lastMono=performance.now();lastWall=Date.now();await new Promise(resolve=>release=resolve);}).catch(()=>{lockPending=false;});}
-        else {const key='aiglish_study_lease_'+user;let lease;try{lease=JSON.parse(localStorage.getItem(key)||'null');}catch(e){}if(!lease||lease.expires<Date.now()||lease.tab===tabId){localStorage.setItem(key,JSON.stringify({tab:tabId,expires:Date.now()+3000}));leader=true;fallbackLease=true;lastMono=performance.now();lastWall=Date.now();}}
+        else {const key='aiglish_study_lease_'+user;let lease;try{lease=JSON.parse(localStorage.getItem(key)||'null');}catch(e){}if(!lease||lease.expires<Date.now()||lease.tab===tabId){if(!writeLease(key,JSON.stringify({tab:tabId,expires:Date.now()+3000})))return;leader=true;fallbackLease=true;lastMono=performance.now();lastWall=Date.now();}}
     }
     function tick() {
         ensureUser();if(!data)return;
@@ -113,7 +114,7 @@
         // Hidden/suspended pages never accrue the time that elapsed before resuming.
         if(active&&leader&&elapsed>0&&elapsed<60000){data=mergeCurrent(data,read(user));accrue(data,device,lastWall,lastWall+elapsed);persist();}
         lastMono=mono;lastWall=wall;active=eligible();
-        if(!active)unlock();else if(!leader)claim();else if(fallbackLease)localStorage.setItem('aiglish_study_lease_'+user,JSON.stringify({tab:tabId,expires:wall+3000}));
+        if(!active)unlock();else if(!leader)claim();else if(fallbackLease&&!writeLease('aiglish_study_lease_'+user,JSON.stringify({tab:tabId,expires:wall+3000})))unlock();
         sync();renderDisplay();
         if(wall-lastCloud>30000){lastCloud=wall;if(user!=='GUEST-000'&&typeof window.saveUserStats==='function')window.saveUserStats();}
     }
@@ -127,7 +128,7 @@
         weeklyStudyMinutesLog=Array(7).fill(0);for(let ago=0;ago<7;ago++){const d=new Date(day);d.setDate(d.getDate()-ago);weeklyStudyMinutesLog[(d.getDay()+6)%7]=dayMilliseconds(data.days[dateKey(d)])/60000;}
         Object.assign(userStats,{study_today_secs:todayStudySeconds,study_today_date:today.replace(/-0/g,'-'),study_week_secs:Math.floor(rangeValue(data,'weekly',now)/1000),study_week_key:week.replace(/-0/g,'-'),study_total_secs:Math.floor(total(data)/1000),study_weekly_log:weeklyStudyMinutesLog.slice(),study_last_date:today.replace(/-0/g,'-'),study_calendar_v2:JSON.parse(JSON.stringify(data))});
         userStats.study_burst=Math.floor(Math.max(0,...Object.values(data.days).map(dayMilliseconds))/60000);
-        localStorage.setItem('core_v4_study_today_secs',String(todayStudySeconds));localStorage.setItem('core_v4_study_last_date',today);localStorage.setItem('core_v4_study_weekly_log',JSON.stringify(weeklyStudyMinutesLog));localStorage.setItem('core_v4_study_total_secs',String(userStats.study_total_secs));
+        try{localStorage.setItem('core_v4_study_today_secs',String(todayStudySeconds));localStorage.setItem('core_v4_study_last_date',today);localStorage.setItem('core_v4_study_weekly_log',JSON.stringify(weeklyStudyMinutesLog));localStorage.setItem('core_v4_study_total_secs',String(userStats.study_total_secs));}catch(error){console.warn('勉強時間の表示用データは後で保存します',error);}
     }
     function format(ms) {const seconds=Math.floor(positive(ms)/1000);return String(Math.floor(seconds/3600)).padStart(2,'0')+':'+String(Math.floor(seconds/60)%60).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');}
     function text(el,value){if(el&&el.textContent!==value)el.textContent=value;}
