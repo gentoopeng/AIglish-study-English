@@ -62,9 +62,9 @@
         let registry = read(owner);
         if (storage[storageKey(owner)]) {try {registry = merge(registry, JSON.parse(storage[storageKey(owner)]));} catch (e) {}}
         const ownedKey='core_v4_profile_shop_owned_'+owner;
-        if(storage[ownedKey]&&window.ProfileShopModel){try{storage[ownedKey]=JSON.stringify(window.ProfileShopModel.union(JSON.parse(localStorage.getItem(ownedKey)||'[]'),JSON.parse(storage[ownedKey])));}catch(e){}}
+        if(storage[ownedKey]){try{storage[ownedKey]=JSON.stringify(Array.from(new Set([...JSON.parse(localStorage.getItem(ownedKey)||'[]'),...JSON.parse(storage[ownedKey])])));}catch(e){}}
         const profileKey='core_v4_profile_customization_'+owner;
-        if(storage[profileKey]&&window.ProfileCustomizationModel)storage[profileKey]=JSON.stringify(window.ProfileCustomizationModel.merge(localStorage.getItem(profileKey),storage[profileKey]));
+        if(storage[profileKey]&&window.UserProfileModel)storage[profileKey]=JSON.stringify(window.UserProfileModel.merge(localStorage.getItem(profileKey),storage[profileKey]));
         const libraryKey='core_v4_personal_library_'+owner;
         if(storage[libraryKey])storage[libraryKey]=JSON.stringify(mergeCatalog(JSON.parse(storage[libraryKey]),JSON.parse(localStorage.getItem(libraryKey)||'null'),owner));
         Object.values(registry).forEach(item => {

@@ -110,54 +110,6 @@ if (storedStats) userStats = JSON.parse(storedStats);
 window.calculateLevelFromExp = function() {
     return {level:1,nextLevelRequiredExp:0,progressPercent:0};
 };
-// 🌟 アバター画像のCanvas圧縮登録処理（Firebaseへ即時同期）
-window.handleAvatarImageUpload = function(event) {
-const file = event.target.files[0];
-if (!file) return;
-if (!file.type.startsWith('image/')) {
-     alert("画像ファイルを選択してください。");
-     return;
- }
- const reader = new FileReader();
- reader.onload = function(e) {
-     const img = new Image();
-     img.onload = async function() {
-         const canvas = document.createElement('canvas');
-         const ctx = canvas.getContext('2d');
-         const maxDimension = 200;
-         let width = img.width;
-         let height = img.height;
-         if (width > height) {
-             if (width > maxDimension) {
-                 height = Math.round((height * maxDimension) / width);
-                 width = maxDimension;
-             }
-         } else {
-             if (height > maxDimension) {
-                 width = Math.round((width * maxDimension) / height);
-                 height = maxDimension;
-             }
-         }
-         canvas.width = width;
-         canvas.height = height;
-         ctx.drawImage(img, 0, 0, width, height);
-         const compressedBase64Data = canvas.toDataURL('image/jpeg', 0.7);
-         try {
-             localStorage.setItem('core_v4_user_avatar_' + myId, compressedBase64Data);
-             await window.saveUserStats();
-             window.applyProfileToUi();
-             window.renderLeaderboard();
-             window.sortAndRenderFriendList();
-             alert("アバター写真を安全に圧縮・登録し、クラウドに同期しました！");
-         } catch(error) {
-             console.error("Avatar save error:", error);
-             alert("画像の保存に失敗しました。お手数ですが別の画像でお試しください。");
-         }
-     };
-     img.src = e.target.result;
- };
- reader.readAsDataURL(file);
-};
 // アプリのコアライフサイクル読み込み
 window.__beforeAppLoadHandlers = window.__beforeAppLoadHandlers || [];
 window.__afterAppLoadHandlers = window.__afterAppLoadHandlers || [];
@@ -182,20 +134,6 @@ for (var beforeIndex = 0; beforeIndex < window.__beforeAppLoadHandlers.length; b
 geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
 const apiKeyInput = document.getElementById('sidebarApiKeyInput');
 if(apiKeyInput) apiKeyInput.value = geminiApiKey;
-const savedTitleText = localStorage.getItem('core_v4_dashboard_title') || "ダッシュボード";
- const headerTitleEl = document.getElementById('headerTitleText');
- if(headerTitleEl) headerTitleEl.innerText = savedTitleText;
- const savedNotice = localStorage.getItem('core_v4_admin_notice') || "";
- const noticeFrame = document.getElementById('adminNoticeDisplayFrame');
- const noticeBody = document.getElementById('adminNoticeTextContent');
- if (noticeFrame && noticeBody) {
-     if (savedNotice.trim() !== "") {
-         noticeBody.innerText = savedNotice;
-         noticeFrame.style.display = 'block';
-     } else {
-         noticeFrame.style.display = 'none';
-     }
- }
  if(savedId) {
      myId = savedId;
      const gateScreen = document.getElementById('auth-gate-screen');
@@ -308,7 +246,7 @@ let flickStartY = 0;
 let isFlicking = false;
 let currentFlickChoice = -1;
 let modeSwipeStartX = 0;
-let currentActiveTabId = "home";
+let currentActiveTabId = "vocab";
 let todayStudySeconds = parseInt(localStorage.getItem('core_v4_study_today_secs') || "0");
 let lastAccessDateStr = localStorage.getItem('core_v4_study_last_date') || "";
 let weeklyStudyMinutesLog = JSON.parse(localStorage.getItem('core_v4_study_weekly_log') || "[0, 0, 0, 0, 0, 0, 0]");
@@ -441,15 +379,6 @@ if(window.lucide) { window.lucide.createIcons(); }
 };
 window.scrollToTop = function() {
 window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-window.initHeroSlider = function() {
-const track = document.getElementById('heroSliderTrack');
-if (!track) return;
-let currentSlide = 0;
-setInterval(() => {
-currentSlide = (currentSlide + 1) % 5;
-track.style.transform = `translateX(-${currentSlide * 20}%)`;
-}, 4000);
 };
 // 🌟 全単語データ・教材の一括読み込み（爆速化キャッシュ）
 window.preloadAllTextbooksAndVocab = async function() {
@@ -851,7 +780,7 @@ const selectedBookId = adminSelect.value;
          window.updateFlashcardSourceSelectOptions();
          window.updateAdminEditBookSelectOptions();
          await window.loadCurrentTextbookData();
-         window.switchTab('home');
+         window.switchTab('vocab');
      } catch(e) {
          alert("Firebaseとの通信に失敗しました。");
      }
@@ -1125,37 +1054,13 @@ const pNameEl = document.getElementById('sideOptPlayerName');
 if(pNameEl) pNameEl.innerText = myName;
 const gNameEl = document.getElementById('sideOptGroupName');
 if(gNameEl) gNameEl.innerText = "ID: " + myId;
-const profNameEl = document.getElementById('profPlayerName');
-if(profNameEl) profNameEl.innerText = myName;
-const profTitleEl = document.getElementById('profTitleLabel');
- if(profTitleEl) profTitleEl.innerText = selectedTitle + " ⚡";
- const profTargetEl = document.getElementById('profTargetLabel');
- if(profTargetEl) profTargetEl.innerText = "目標: " + myTarget;
- let lvlData = window.calculateLevelFromExp(totalExp);
- const headerBarFillEl = document.getElementById('header-level-bar-fill');
- if(headerBarFillEl) {
-     headerBarFillEl.style.width = `${lvlData.progressPercent}%`;
- }
- const headerLevelTextEl = document.getElementById('headerLevelTextSlot');
- if(headerLevelTextEl) {
-     headerLevelTextEl.innerText = `Lv.${lvlData.level} [Next:${lvlData.nextLevelRequiredExp}]`;
- }
  const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
  const sideAvatarFrame = document.querySelector('.sidebar-header .avatar-glow');
  if(sideAvatarFrame) {
      if(mySavedAvatar) {
-         sideAvatarFrame.innerHTML = `<img src="${mySavedAvatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+         const image=document.createElement('img');image.src=mySavedAvatar;image.alt=myName+'のアイコン';image.style.cssText='width:100%;height:100%;border-radius:50%;object-fit:cover';sideAvatarFrame.replaceChildren(image);
      } else {
          sideAvatarFrame.innerText = "RANK";
-     }
- }
- const profAvatarFrame = document.getElementById('profAvatarText');
- if(profAvatarFrame) {
-     if(mySavedAvatar) {
-         profAvatarFrame.parentNode.innerHTML = `<img src="${mySavedAvatar}" id="profAvatarText" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
-         window.initLucide();
-     } else {
-         profAvatarFrame.innerText = (myName && myName.length > 0) ? myName.charAt(0).toUpperCase() : "U";
      }
  }
 };
@@ -1179,7 +1084,7 @@ if(nav) nav.classList.add('active');
 window.toggleSidebar(false);
 if(tabId !== 'reader' && typeof window.closeReader === 'function') window.closeReader();
 
-// The shop hub owns administration; retired book panels must not block navigation.
+// Retired book administration panels must not block navigation.
 if(tabId === 'titles') window.renderTitles(); 
 currentActiveTabId = tabId;
 if(tabId === 'community') window.sortAndRenderFriendList();
@@ -1466,36 +1371,6 @@ await window.saveUserStats();
 }
 };
 // 🌟 プロフィール保存処理（Firebaseへ即時リアルタイム反映）
-window.saveSidebarProfile = async function() {
-geminiApiKey = document.getElementById('sidebarApiKeyInput').value.trim(); localStorage.setItem('core_v4_geminiKey', geminiApiKey);
-myName = document.getElementById('sideInputName').value.trim() || myName; myTarget = document.getElementById('sideInputTarget').value.trim() || myTarget;
-selectedTitle = ''; // Titles are retired.
-localStorage.setItem('core_v4_userName', myName);
- localStorage.setItem('core_v4_userTarget', myTarget);
- localStorage.setItem('core_v4_userTitle', selectedTitle);
- const noticeInput = document.getElementById('adminNoticeInput');
- if (noticeInput) {
-     const noticeMsg = noticeInput.value.trim();
-     localStorage.setItem('core_v4_admin_notice', noticeMsg);
-     const noticeFrame = document.getElementById('adminNoticeDisplayFrame');
-     const noticeBody = document.getElementById('adminNoticeTextContent');
-     if (noticeFrame && noticeBody) {
-         if (noticeMsg !== "") {
-             noticeBody.innerText = noticeMsg;
-             noticeFrame.style.display = 'block';
-         } else {
-             noticeFrame.style.display = 'none';
-         }
-     }
- }
- userStats.goal_text = myTarget;
- await window.saveUserStats();
- window.applyProfileToUi(); 
- window.toggleSidebar(false);
- window.checkAndRewardTitleBonusXP();
- window.renderLeaderboard(); 
- alert("プロフィールを最新状態に同期・保存しました！");
-};
 window.renderTitles = function() {
 const listContainer = document.getElementById('titles-list');
 const selectEl = document.getElementById('sideSelectTitle');
@@ -1626,33 +1501,6 @@ localStorage.setItem('core_v4_userTitle', "称号なし");
 window.saveUserStats();
 window.applyProfileToUi();
 window.renderTitles();
-};
-window.enterAdminModeDirect = function() {
-if(document.getElementById('productAccessDialog')) return;
-const owner=myId||'GUEST-000',nonce=crypto.randomUUID();
-sessionStorage.removeItem('aiglish_admin_access_ticket');
-sessionStorage.setItem('aiglish_admin_access_pending',JSON.stringify({owner,nonce,createdAt:Date.now(),returnTo:location.href}));
-const dialog=document.createElement('dialog');dialog.id='productAccessDialog';dialog.className='product-access-dialog';dialog.setAttribute('aria-label','商品管理の認証');
-const frame=document.createElement('iframe');frame.title='管理者パスワード';const accessUrl=new URL('admin-access.html?embedded=1',location.href);accessUrl.searchParams.set('v',document.querySelector('meta[name=application-version]')?.content||'');frame.src=accessUrl.href;dialog.append(frame);
-let finished=false;
-function finish(verified){
-if(finished)return;finished=true;window.removeEventListener('message',receive);
-dialog.close();dialog.remove();document.body.classList.remove('password-prompt-open');
-if(!verified){sessionStorage.removeItem('aiglish_admin_access_pending');sessionStorage.removeItem('aiglish_admin_access_ticket');}
-else window.dispatchEvent(new Event('admin-access-complete'));
-if(window.resumeBackgroundSave)window.resumeBackgroundSave();
-}
-function receive(event){if(event.origin!==location.origin||event.source!==frame.contentWindow||event.data?.type!=='aiglish-admin-access'||event.data.nonce!==nonce)return;finish(event.data.verified===true);}
-window.addEventListener('message',receive);
-dialog.addEventListener('cancel',event=>{event.preventDefault();finish(false);});
-dialog.addEventListener('click',event=>{if(event.target===dialog)finish(false);});
-document.body.append(dialog);document.body.classList.add('password-prompt-open');dialog.showModal();window.fitNativeModal?.(dialog);
-};
-window.saveAdminDashboardTitle = function() {
-const input = document.getElementById('adminDashboardTitleInput'); if(!input) return;
-const txt = input.value.trim() || "ダッシュボード"; localStorage.setItem('core_v4_dashboard_title', txt);
-const headerTitleEl = document.getElementById('headerTitleText'); if(headerTitleEl) headerTitleEl.innerText = txt;
-alert("ダッシュボードのタイトルを更新しました！");
 };
 // ==========================================================================
 // 🎮 フラッシュカード（単語フラッシュ）制御モジュール
@@ -2064,25 +1912,6 @@ const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbAre
 }
 };
 
-window.saveAdminSystemSettings = function() {
-const noticeInput = document.getElementById('adminNoticeInput');
-if (noticeInput) {
-const noticeMsg = noticeInput.value.trim();
-localStorage.setItem('core_v4_admin_notice', noticeMsg);
-    const noticeFrame = document.getElementById('adminNoticeDisplayFrame');
-    const noticeBody = document.getElementById('adminNoticeTextContent');
-    if (noticeFrame && noticeBody) {
-        if (noticeMsg !== "") {
-            noticeBody.innerText = noticeMsg;
-            noticeFrame.style.display = 'block';
-        } else {
-            noticeFrame.style.display = 'none';
-        }
-    }
-    alert("システム配信アナウンスをリアルタイムに適用・同期しました！");
-}
-window.switchTab('home'); 
-};
 // ==========================================================================
 // 🚀 完全同期ライフサイクルブートストラップ初期化
 // ==========================================================================
@@ -2095,7 +1924,7 @@ Promise.resolve(window.loadLocalState()).catch(function(error) {
 console.error('アプリ初期化に失敗しました:', error);
 });
 window.initLucide();
-window.initHeroSlider();
+
 if(typeof window.renderActivityChart === 'function') window.renderActivityChart();
 }
 if (document.readyState !== "complete") {
@@ -2115,8 +1944,6 @@ window.applyProfileToUi = function() {
 if(typeof originalApplyProfileToUi === 'function') originalApplyProfileToUi();
 if(typeof window.calculateLevelFromExp === 'function') {
 let lvlData = window.calculateLevelFromExp(totalExp);
-const profTitleEl = document.getElementById('profTitleLabel');
-if(profTitleEl) profTitleEl.innerText = selectedTitle + " ⚡";
 const headerLevelTextEl = document.getElementById('headerLevelTextSlot');
 if(headerLevelTextEl) headerLevelTextEl.innerText = `Lv.${lvlData.level} [Next:${lvlData.nextLevelRequiredExp}]`;
 }
@@ -4272,7 +4099,6 @@ window.__wrapWithPenguin = function(fnName) {
   'handleAuthSubmit',             // ログイン処理
   'startFlashcardSession',        // フラッシュカード開始時
   'analyzeText',                  // 長文解析時
-    'saveSidebarProfile',           // プロフィール保存時
   'searchAndAddFriend'            // フレンド追加時
 ].forEach(function(fn){ window.__wrapWithPenguin(fn); });
 
@@ -7477,68 +7303,6 @@ console.log("🔄 同期修正パッチ②（レベル収束＋理解度リセ�
 // ------------------------------------------------------------------
 // 【A】全員共有設定（ダッシュボードタイトル／配信アナウンス）
 // ------------------------------------------------------------------
-window.__loadGlobalSettings = async function() {
-    if (!window.db || !window.fbGetDoc || !window.fbDoc) return;
-    try {
-        var ref = window.fbDoc(window.db, "shared", "app_settings");
-        var snap = await window.fbGetDoc(ref);
-        if (snap.exists() && snap.data()) {
-            var d = snap.data();
-            if (typeof d.dashboardTitle === "string" && d.dashboardTitle !== "") {
-                localStorage.setItem('core_v4_dashboard_title', d.dashboardTitle);
-                var el = document.getElementById('headerTitleText');
-                if (el) el.innerText = d.dashboardTitle;
-            }
-            if (typeof d.adminNotice === "string") {
-                localStorage.setItem('core_v4_admin_notice', d.adminNotice);
-                var frame = document.getElementById('adminNoticeDisplayFrame');
-                var body = document.getElementById('adminNoticeTextContent');
-                if (frame && body) {
-                    if (d.adminNotice.trim() !== "") { body.innerText = d.adminNotice; frame.style.display = 'block'; }
-                    else { frame.style.display = 'none'; }
-                }
-            }
-        }
-    } catch (e) {
-        console.error("global settings load error:", e);
-    }
-};
-
-window.__pushGlobalSettings = async function() {
-    if (!window.db || !window.fbSetDoc || !window.fbDoc) return;
-    try {
-        var title = localStorage.getItem('core_v4_dashboard_title') || "ダッシュボード";
-        var notice = localStorage.getItem('core_v4_admin_notice') || "";
-        var ref = window.fbDoc(window.db, "shared", "app_settings");
-        var payload = { dashboardTitle: title, adminNotice: notice, updatedAt: new Date().toISOString() };
-        var safe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(payload) : payload;
-        if (typeof window.fbSetDocWithRetry === "function") await window.fbSetDocWithRetry(ref, safe, { merge: true });
-        else await window.fbSetDoc(ref, safe, { merge: true });
-    } catch (e) {
-        console.error("global settings push error:", e);
-    }
-};
-
-// 管理者がタイトル／アナウンスを変えたら全員共有へ即反映
-var __prevSaveAdminDashboardTitleForSync3 = window.saveAdminDashboardTitle;
-window.saveAdminDashboardTitle = async function() {
-    var r = __prevSaveAdminDashboardTitleForSync3 ? __prevSaveAdminDashboardTitleForSync3.apply(this, arguments) : undefined;
-    try { await window.__pushGlobalSettings(); } catch (e) {}
-    return r;
-};
-var __prevSaveAdminSystemSettingsForSync3 = window.saveAdminSystemSettings;
-window.saveAdminSystemSettings = async function() {
-    var r = __prevSaveAdminSystemSettingsForSync3 ? __prevSaveAdminSystemSettingsForSync3.apply(this, arguments) : undefined;
-    try { await window.__pushGlobalSettings(); } catch (e) {}
-    return r;
-};
-var __prevSaveSidebarProfileForSync3 = window.saveSidebarProfile;
-window.saveSidebarProfile = async function() {
-    var r = __prevSaveSidebarProfileForSync3 ? await __prevSaveSidebarProfileForSync3.apply(this, arguments) : undefined;
-    try { await window.__pushGlobalSettings(); } catch (e) {}
-    return r;
-};
-
 // ------------------------------------------------------------------
 // 【B】個人ごとの設定まとまり（収集／マージ／適用／保存）
 // ------------------------------------------------------------------
@@ -7858,68 +7622,16 @@ window.sortAndRenderFriendList = function() {
 };
 
 // ------------------------------------------------------------------
-// 【G】ホームに「自分の総勉強時間」を表示
-// ------------------------------------------------------------------
-window.__formatTotalStudy3 = function(secs) {
-    var totalMin = Math.floor((secs || 0) / 60);
-    if (totalMin >= 60) {
-        var h = Math.floor(totalMin / 60);
-        var m = totalMin % 60;
-        return h + "時間" + (m > 0 ? m + "分" : "");
-    }
-    return totalMin + "分";
-};
-window.__updateTotalStudyDisplay = function() {
-    var el = document.getElementById('totalStudyTimeValue');
-    if (!el) return;
-    var secs = (typeof userStats !== "undefined" && userStats.study_total_secs) ? userStats.study_total_secs : (parseInt(localStorage.getItem('core_v4_study_total_secs') || "0"));
-    el.innerText = window.__formatTotalStudy3(secs);
-};
-window.__injectTotalStudyDisplay = function() {
-    if (document.getElementById('totalStudyTimeRow')) { window.__updateTotalStudyDisplay(); return; }
-    var anchor = document.getElementById('todayStudyTimeDisplay');
-    if (!anchor) return;
-    var row = document.createElement('div');
-    row.id = 'totalStudyTimeRow';
-    row.style.cssText = "margin-top:6px; font-size:12px; color:var(--text-sub); display:flex; align-items:center; gap:6px;";
-    row.innerHTML = '⏱️ 総勉強時間 (全期間): <strong id="totalStudyTimeValue" style="color:var(--cosmic-cyan); font-size:14px;">--</strong>';
-    var target = anchor.closest('div') || anchor.parentElement;
-    if (target && target.parentElement) target.parentElement.insertBefore(row, target.nextSibling);
-    else if (anchor.parentElement) anchor.parentElement.appendChild(row);
-    window.__updateTotalStudyDisplay();
-};
-window.__startTotalStudyDisplayLoop = function() {
-    if (window.__totalStudyLoopStarted) return;
-    window.__totalStudyLoopStarted = true;
-    setInterval(function() { window.__updateTotalStudyDisplay(); }, 1000);
-};
-
-// ------------------------------------------------------------------
 // 【H】loadLocalState につなげて全体を起動
 // ------------------------------------------------------------------
 window.onAppLoaded(async function() {
     try {
-        await window.__loadGlobalSettings();
         await window.__loadUserSettings();
         window.__startSettingsSyncLoop();
-        window.__injectTotalStudyDisplay();
-        window.__startTotalStudyDisplayLoop();
     } catch (e) {
         console.error("sync3 loadLocalState error:", e);
     }
 });
-
-// ------------------------------------------------------------------
-// 【I】起動時注入（loadLocalState の保険）
-// ------------------------------------------------------------------
-(function initSync3Patch() {
-    function boot() {
-        window.__injectTotalStudyDisplay();
-        window.__startTotalStudyDisplayLoop();
-    }
-    if (document.readyState !== "loading") { setTimeout(boot, 400); }
-    else { document.addEventListener("DOMContentLoaded", function() { setTimeout(boot, 400); }); }
-})();
 
 console.log("🔄 同期修正パッチ③（設定まるごと同期＋全員共有＋分単位ログイン履歴＋総勉強時間表示）適用完了");
 // ==========================================================================
@@ -8323,13 +8035,6 @@ window.__USAGE_GUIDE_STEPS = [
 ];
 
 window.__USAGE_GUIDE_SECTIONS = [
-    {
-        icon: 'home', title: '🏠 ホーム',
-        html: '<p>あなたの<strong>司令部</strong>。プロフィールカードに装備中の称号・学習目標が表示されます。</p>' +
-              '<ul><li><strong>本日の総勉強時間</strong>はリアルタイムでカウント（単語帳・リーダー・プレイ中に増えます）。</li>' +
-              '<li><strong>最近7日間のアクティビティ</strong>グラフで、勉強の習慣をひと目で確認。</li>' +
-              '<li>右上の <strong>💾 ボタン</strong>で、いつでもデータを明示保存できます。</li></ul>'
-    },
     {
         icon: 'book-open', title: '📔 単語帳',
         html: '<p>登録単語を一覧し、<em>理解度</em>を4段階で管理する中心画面です。</p>' +

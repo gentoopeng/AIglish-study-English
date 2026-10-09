@@ -6394,13 +6394,11 @@ async function saveAllContents() {
       meta.learningRankingV2Json=JSON.stringify(rankingRecord);
       await window.fbRunTransaction(window.db,async function(tx){var ref=window.fbDoc(window.db,'users',id),snap=await tx.get(ref);var merged=window.LearningRankingModel.merge(window.LearningRankingModel.fromProfile(snap.exists()?snap.data():{}),rankingRecord);tx.set(ref,{learningRankingV2Json:JSON.stringify(merged)},{merge:true});});
     }
-    if(window.ProfileShopModel&&window.ProfileCustomizationModel&&window.fbRunTransaction){
+    if(window.UserProfileModel&&window.fbRunTransaction){
       await window.fbRunTransaction(window.db,async function(tx){
         var ref=window.fbDoc(window.db,'users',id),snap=await tx.get(ref),current=snap.exists()?snap.data():{};
-        function array(value){try{return JSON.parse(value||'[]');}catch(e){return [];}}
-        var storage=data.localStorage||{},owned=window.ProfileShopModel.union(array(current.profileShopOwnedJson),array(storage['core_v4_profile_shop_owned_'+id]));
-        var appearance=window.ProfileCustomizationModel.merge(current.profileCustomizationJson,storage['core_v4_profile_customization_'+id]);
-        tx.set(ref,{profileShopOwnedJson:JSON.stringify(owned),profileCustomizationJson:JSON.stringify(appearance)},{merge:true});
+        var profile=window.UserProfileModel.merge(current.profileCustomizationJson,(data.localStorage||{})['core_v4_profile_customization_'+id]);
+        tx.set(ref,{profileCustomizationJson:JSON.stringify(profile)},{merge:true});
       });
     }
     await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});

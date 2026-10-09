@@ -10,15 +10,15 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="5.62">
+    <meta name="application-version" content="5.72">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
-    <script src="rendering-safety.js?v=5.62"></script>
+    <script src="rendering-safety.js?v=5.72"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="style.css?v=5.62">
-    <link rel="stylesheet" href="gacha.css?v=5.62">
+    <link rel="stylesheet" href="style.css?v=5.72">
+    <link rel="stylesheet" href="gacha.css?v=5.72">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -53,14 +53,14 @@
             <div class="auth-logo"><i data-lucide="shield-check" size="32"></i></div>
             <div style="font-size: 18px; font-weight: 800; color: white; margin-bottom: 4px;">CORE SYSTEM GATE</div>
             <div style="font-size: 11px; color: var(--text-sub); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">ユーザー認証管理</div>
-            
+
             <div class="auth-tabs">
                 <button class="auth-tab-btn active" id="authTabLogin" onclick="switchAuthMode('login')">ログイン</button>
                 <button class="auth-tab-btn" id="authTabRegister" onclick="switchAuthMode('register')">新規作成</button>
             </div>
 
             <div class="auth-error" id="authErrorMsg"></div>
-            
+
             <div id="authLoginFields">
                 <input type="text" id="loginIdInput" class="search-input" style="text-align: center; height: 44px; font-weight: 700; letter-spacing: 1px; margin-bottom: 10px;" placeholder="ユーザーID">
                 <input type="password" id="loginPinInput" class="search-input" style="text-align: center; height: 44px; font-weight: 700; letter-spacing: 4px; margin-bottom: 14px;" placeholder="4桁の暗証番号" maxlength="4">
@@ -89,7 +89,7 @@
     <div class="app-header">
         <button class="menu-trigger" onclick="toggleSidebar(true)"><i data-lucide="menu" size="20"></i></button>
         <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-            <span id="headerTitleText">ダッシュボード</span>
+
             <span id="headerStudyTime" class="header-study-time" aria-label="今日の勉強時間">00:00:00</span>
         </div>
 
@@ -104,13 +104,21 @@
                 <div style="font-size:11px; color:var(--text-sub);" id="sideOptGroupName">ID: 未設定</div>
             </div>
         </div>
-        
+
         <button type="button" class="study-tower-link" onclick="window.switchTab('game')"><i data-lucide="castle" size="16"></i> 単語の迷宮</button>
         <div style="padding: 16px; flex:1; overflow-y: auto; display:flex; flex-direction:column; gap:16px;">
+            <form id="sidebarProfileForm" class="sidebar-profile-form">
+                <label for="sideInputName">名前</label>
+                <input id="sideInputName" maxlength="40" required autocomplete="nickname">
+                <label for="sidebarAvatarFile">アイコンの写真</label>
+                <input id="sidebarAvatarFile" type="file" accept="image/png,image/jpeg,image/webp">
+                <p id="sidebarProfileStatus" role="status" aria-live="polite"></p>
+                <button type="submit" class="modern-btn">プロフィールを保存</button>
+            </form>
             <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
                 <div style="font-size: 11px; font-weight:700; color:var(--accent); margin-top:4px; margin-bottom:8px;">🤖 Gemini AI APIキー</div>
                 <input type="password" id="sidebarApiKeyInput" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px;" placeholder="AI用APIキーを入力...">
-                
+
                 <div style="display: flex; gap: 8px;">
                     <button class="modern-btn" style="height:32px; font-size:12px;" onclick="window.saveSidebarApiKey()">
                         設定を保存して適用
@@ -123,32 +131,15 @@
                 <button class="sidebar-item" style="color:var(--accent); font-weight: 700; padding:10px 0;" onclick="logoutToGate()">
                     <i data-lucide="log-out" size="16"></i> ログアウトする
                 </button>
-                <button class="sidebar-item" style="color:var(--admin-accent); font-weight: 800; padding:10px 0;" onclick="enterAdminModeDirect()">
-                    <i data-lucide="shield-alert" size="16"></i> 🛠️ 管理者メニュー
-                </button>
             </div>
             <div id="appVersionDisplay" class="sidebar-version" aria-label="アプリのバージョン"></div>
         </div>
-        <div id="appVersionDisplay" class="sidebar-version" aria-label="アプリのバージョン">Version 1.00</div>
     </div>
 
     <div class="container">
 
-        <div id="view-home" class="tab-view active">
-            <!-- シアン色のコズミックアナウンス（お知らせ）表示枠 -->
-            <div id="adminNoticeDisplayFrame" class="card cosmic-notice-board-card" style="display: none;">
-                <div class="notice-board-header">
-                    <i data-lucide="megaphone" size="14"></i>
-                    <span>📢 システム配信アナウンス</span>
-                </div>
-                <div id="adminNoticeTextContent" class="notice-board-body-text">現在、管理者からのお知らせはありません。</div>
-            </div>
 
-            <section id="homeProfile" class="home-profile"></section>
-            <section id="homeShop" class="home-shop"></section>
-        </div>
-
-        <div id="view-vocab" class="tab-view">
+        <div id="view-vocab" class="tab-view active">
             <section id="vocabLibrarySelection" class="vocab-library-selection">
                 <header class="vocab-library-header">
                     <span class="vocab-library-kicker">VOCABULARY</span>
@@ -200,7 +191,7 @@
             <div id="text-input-view">
                 <div class="card">
                     <h2><i data-lucide="plus-circle" size="14"></i> 新規テキスト構文解析</h2>
-                    
+
                     <div style="margin-bottom: 14px;">
                         <label for="customTextTitle" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">文書タイトル（未入力時は自動日時割り当て）</label>
                         <input type="text" id="customTextTitle" class="search-input" style="margin-bottom: 0;" placeholder="タイトルを識別用に設定...">
@@ -208,7 +199,7 @@
 
                     <label for="englishTextarea" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">解析用英文データ入力</label>
                     <textarea id="englishTextarea" class="modern-textarea" style="height: 120px;" placeholder="ここに英語 of ドキュメントを直接ペーストまたは手入力してください。改行は無視され、AIがピリオド基準で自動分割します。"></textarea>
-                    
+
                     <label for="customJapanesetextarea" style="font-size: 11px; color: var(--text-sub); font-weight: 700; display: block; margin-bottom: 6px;">手動和訳入力（任意：空欄ならAIが高精度な和訳を自動生成します）</label>
                     <textarea id="customJapanesetextarea" class="modern-textarea" style="height: 90px;" placeholder="手動で和訳を割り当てたい場合は、英文の行数に合わせて改行しながら入力してください。"></textarea>
 
@@ -240,7 +231,7 @@
                             <button id="toggle-bottom" class="pill-btn" style="padding:4px 10px; border:none; border-radius:6px;" onclick="setTranslationMode('bottom')">下部固定</button>
                         </div>
                     </div>
-                    
+
                     <div id="readerCurrentTitle" style="text-align:center; font-size:14px; font-weight:700; color:var(--text-sub); width:100%;">
                     </div>
                 </div>
@@ -260,7 +251,7 @@
         </div>
 
         <div id="view-community" class="tab-view" style="position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: hidden; z-index: 10; padding: 0 !important;">
-            
+
             <div style="flex: 0 0 100vw; width: 100vw; height: 100%; scroll-snap-align: center; box-sizing: border-box; padding: 20px 16px; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid var(--cosmic-cyan); padding-bottom: 6px;">
                     <h2 style="margin-bottom: 0; font-size: 15px; color: var(--cosmic-cyan) !important;"><i data-lucide="users"></i> フレンドリスト</h2>
@@ -307,9 +298,9 @@
         </div>
         <div id="view-game" class="tab-view">
             <div id="cosmic-game-wrapper" class="cosmic-game-bg">
-                
+
                 <div id="game-start-screen" class="game-swipe-container" style="display:flex; position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: hidden; z-index: 10;">
-                    
+
 
 
 
@@ -327,7 +318,7 @@
                 <div id="flashcard-setup-screen" style="display:none; margin-top: 14px;">
                     <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-purple-light);">
                         <h2 style="color:white; justify-content:center; margin-bottom:16px;"><i data-lucide="settings"></i> カード学習設定</h2>
-                        
+
                         <div style="text-align:left; margin-bottom:16px;">
                             <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">教材指定</div>
                             <select id="flashcardSourceSelect" class="search-input" style="background:var(--input-bg); color:white; font-weight:600; border-radius:10px; height:40px; padding:0 12px;">
@@ -447,10 +438,10 @@
                         <h2 style="color:var(--admin-accent); text-align:center; margin-bottom:20px; font-size:18px;">
                             <i data-lucide="swords"></i> バトル設定
                         </h2>
-                        
+
                         <div style="text-align:left; margin-bottom:16px;">
                             <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">① モード選択</div>
-                            
+
                             <div id="multiModeSwipeArea" class="multi-flick-area" style="position:relative; margin-bottom:12px;">
                                 <div id="multiCoopActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--cosmic-cyan); color:var(--cosmic-cyan); background:rgba(0,240,255,0.15); z-index:20; font-weight:900;">選択中 🤝 協力戦</div>
                                 <div id="multiPvpActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--admin-accent); color:var(--admin-accent); background:rgba(236,72,153,0.15); z-index:20; font-weight:900; display:none;">選択中 ⚔️ 対人戦</div>
@@ -515,7 +506,7 @@
 
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 0 4px; z-index: 10;">
                         <button class="game-finish-inline-btn" id="multiEscapeOrSurrenderBtn" style="width: 60px; height: 20px; padding: 0; font-size: 10px; justify-content: center; background: rgba(0,0,0,0.6);" onclick="cancelMultiBattlePlay()">逃げる</button>
-                        
+
                         <div style="flex: 1;">
                             <div class="multi-boss-full-bar" id="multiBossHpBarContainer" style="height: 20px;">
                                 <div class="multi-boss-hp-fill" id="multiBossHpFill" style="width:100%;"></div>
@@ -537,10 +528,10 @@
 
                     <div style="flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: space-between;">
                         <div id="multiEnemyTimerDisplay" style="position: absolute; top: 10px; font-size: 16px; font-weight: 900; color: #EF4444; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 0 10px #EF4444; z-index: 15; letter-spacing: 1px;">行動: --秒</div>
-                        
+
                         <div style="flex:1; display:flex; align-items:center; justify-content:center; width: 100%; position:relative;">
                             <img src="boss1.png" alt="Boss" class="multi-boss-image" id="multiBossImage" style="max-width: 100%; max-height: 180px; object-fit: contain;">
-                            
+
                             <div id="multiPvpOpponentVisualContainer" style="display:none; width:100%; display:flex; justify-content:center; gap:16px; align-items:center; z-index:10;">
                                 <img id="multiPvpOpponentCharImg1" src="tangon.png" alt="Rival 1" style="max-width:45%; max-height:160px; object-fit:contain; filter:drop-shadow(0 0 10px rgba(236,72,153,0.5));">
                                 <img id="multiPvpOpponentCharImg2" src="tangon.png" alt="Rival 2" style="max-width:45%; max-height:160px; object-fit:contain; filter:drop-shadow(0 0 10px rgba(236,72,153,0.5)); display:none;">
@@ -552,7 +543,7 @@
                     </div>
 
                     <div class="multi-party-status-area" style="padding: 6px 10px; margin-bottom: 8px; flex-shrink: 0; z-index: 10;">
-                        
+
                         <div class="multi-player-own-hp-frame" style="margin-bottom: 4px; display: none;" id="multiPlayerOwnHpFrame">
                             <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; position: relative;">
                                 <div class="multi-party-hp-fill" id="multiPlayerOwnHpFill" style="width: 100%;"></div>
@@ -593,7 +584,7 @@
                                 <div class="flick-choice" id="multiChoice-1">---</div>
                                 <div class="flick-choice" id="multiChoice-2">---</div>
                                 <div class="flick-choice" id="multiChoice-3">---</div>
-                                <div class="flick-choice-center-blank"></div> 
+                                <div class="flick-choice-center-blank"></div>
                                 <div class="flick-choice" id="multiChoice-4">---</div>
                                 <div class="flick-choice" id="multiChoice-5">---</div>
                                 <div class="flick-choice" id="multiChoice-6">---</div>
@@ -603,13 +594,13 @@
                     </div>
                 </div>
 
-                        
-                        
 
-                        
-                        
 
-                        
+
+
+
+
+
 
             </div>
         </div>
@@ -617,7 +608,7 @@
         <div id="view-party" class="tab-view">
             <div class="card" style="padding: 16px; margin-bottom: 12px; border: 1px solid var(--cosmic-cyan);">
                 <div style="font-size: 11px; color: var(--cosmic-cyan); font-weight: 800; text-transform: uppercase; margin-bottom: 10px; text-align: center;">⚔️ 現在の装備ステータス ⚔️</div>
-                
+
                 <div class="party-status-upper-grid">
                     <div class="equip-slot-box" onclick="switchPartySubCategory('character')">
                         <div class="slot-lbl">CHARACTER</div>
@@ -688,15 +679,10 @@
             </div>
         </div>
 
-        <div id="view-admin" class="tab-view">
-            <section id="adminHub" class="admin-hub"></section>
-        </div>
-
     </div>
 
     <div class="nav-bar" id="appMainBottomNavBar">
-        <button class="nav-item active" id="nav-home" onclick="window.switchTab('home')"><i data-lucide="layout-dashboard" size="18"></i> ホーム</button>
-        <button class="nav-item" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
+        <button class="nav-item active" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
         <button class="nav-item" id="nav-reader" onclick="window.switchTab('reader')"><i data-lucide="file-text" size="18"></i> リーダー</button>
         <button class="nav-item" id="nav-community" onclick="window.switchTab('community')"><i data-lucide="users" size="18"></i> フレンド</button>
         <button class="nav-item" id="nav-study" onclick="window.switchTab('study')"><i data-lucide="clock" size="18"></i> 勉強時間</button>
@@ -752,24 +738,24 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <script src="library-state.js?v=5.62" defer></script>
-    <script src="app.js?v=5.62" defer></script>
-    <script src="game_core.js?v=5.62" defer></script>
-    <script src="vocab_ui.js?v=5.62" defer></script>
-    <script src="reader.js?v=5.62" defer></script>
-    <script src="view-work.js?v=5.62" defer></script>
-    <script src="fix.js?v=5.62" defer></script>
-    <script src="multi.js?v=5.62" defer></script>
-    <script src="gacha.js?v=5.62" defer></script>
-    <script src="addon.js?v=5.62" defer></script>
-    <script src="library.js?v=5.62" defer></script>
-    <script src="workbook.js?v=5.62" defer></script>
-    <script src="shared-notes.js?v=5.62" defer></script>
-    <script src="study-time.js?v=5.62" defer></script>
-    <script src="ranking.js?v=5.62" defer></script>
-    <script src="autosave.js?v=5.62" defer></script>
-    <script src="people.js?v=5.62" defer></script>
-    <script src="profile-shop.js?v=5.62" defer></script>
-    <script src="profile-customization.js?v=5.62" defer></script>
+    <script src="library-state.js?v=5.72" defer></script>
+    <script src="app.js?v=5.72" defer></script>
+    <script src="game_core.js?v=5.72" defer></script>
+    <script src="vocab_ui.js?v=5.72" defer></script>
+    <script src="reader.js?v=5.72" defer></script>
+    <script src="view-work.js?v=5.72" defer></script>
+    <script src="fix.js?v=5.72" defer></script>
+    <script src="multi.js?v=5.72" defer></script>
+    <script src="gacha.js?v=5.72" defer></script>
+    <script src="addon.js?v=5.72" defer></script>
+    <script src="library.js?v=5.72" defer></script>
+    <script src="workbook.js?v=5.72" defer></script>
+    <script src="shared-notes.js?v=5.72" defer></script>
+    <script src="study-time.js?v=5.72" defer></script>
+    <script src="ranking.js?v=5.72" defer></script>
+    <script src="autosave.js?v=5.72" defer></script>
+    <script src="people.js?v=5.72" defer></script>
+    <script src="profile.js?v=5.72" defer></script>
+    <script src="loading-quiz.js?v=5.72" defer></script>
 </body>
 </html>
