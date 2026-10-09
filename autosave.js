@@ -12,10 +12,10 @@
     }
     function idleSave(){if(window.requestIdleCallback)window.requestIdleCallback(save,{timeout:3000});else setTimeout(save,0);}
     window.resumeBackgroundSave=function(){if(revision!==saved)idleSave();};
-    window.queueBackgroundSave=function(){changed();if(!timer)timer=setTimeout(idleSave,3000);};
+    window.queueBackgroundSave=function(){changed();if(!timer)timer=setTimeout(idleSave,15000);};
     if(window.onAppLoaded)window.onAppLoaded(()=>{if(window.localStorage?.getItem('core_v4_autosave_pending_'+id()))window.queueBackgroundSave();});
     let flashOwner='',flashSwipes=0;
-    window.noteFlashSwipe=function(){if(flashOwner!==id()){flashOwner=id();flashSwipes=0;}flashSwipes++;changed();if(flashSwipes%5===0)window.queueBackgroundSave();};
+    window.noteFlashSwipe=function(){if(flashOwner!==id()){flashOwner=id();flashSwipes=0;}flashSwipes++;changed();if(flashSwipes%5===0){if(window.AppStorage)window.AppStorage.flush().catch(error=>console.warn('理解度の端末保存を再試行します',error));window.queueBackgroundSave();}};
     window.flushFlashAutosave=function(){if(flashSwipes)window.queueBackgroundSave();};
     document.addEventListener('input',changed,{passive:true});document.addEventListener('change',changed,{passive:true});
     ['markVocabProgressDirty'].forEach(name=>{const original=window[name];if(typeof original==='function')window[name]=function(){changed();return original.apply(this,arguments);};});

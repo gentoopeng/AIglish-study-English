@@ -4557,6 +4557,10 @@ window.__captureManualVocabDraft = function() {
     var progress=(typeof window.extractUserProgressFromVocabList==='function')
       ? window.extractUserProgressFromVocabList()
       : {};
+    // The displayed list can lag behind a completed rating or cloud response.
+    // Capture the canonical ratings, retaining words not currently rendered.
+    var canonical=JSON.parse(localStorage.getItem(window.getVocabProgressStorageKey(bookKey))||'{}');
+    progress=Object.assign({},progress,canonical);
     var savedAt=new Date().toISOString();
     var draft={
       master:master,
@@ -4739,7 +4743,8 @@ function collectAllData() {
   try { memData.todayStudySeconds = (typeof todayStudySeconds !== 'undefined') ? todayStudySeconds : 0; } catch (e) {}
   try { memData.weeklyStudyMinutesLog = (typeof weeklyStudyMinutesLog !== 'undefined') ? weeklyStudyMinutesLog : [0,0,0,0,0,0,0]; } catch (e) {}
   try { memData.lastAccessDateStr = (typeof lastAccessDateStr !== 'undefined') ? lastAccessDateStr : ''; } catch (e) {}
-  try { memData.vocabList = (typeof vocabList !== 'undefined') ? vocabList : []; } catch (e) {}
+  // vocabMaster + vocabProgress already preserve the entire displayed list.
+  // Avoid serializing its meaning/history objects a second time per autosave.
   // 理解度は単語マスターとは別の専用スナップショットとしても保持する。
   // 起動中に通常の教材ロードが走って vocabList が置き換わっても、これを最後に適用できる。
   try {
