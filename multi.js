@@ -617,12 +617,6 @@ setTimeout(function () { cleanBossDecor(); ensurePartyInLeft(); ensureArenaHidde
 };
 
 window.playIntroVideoBeforeBattle = function () {
-try {
-var ov = document.getElementById('video-overlay');
-if (ov) ov.style.display = 'none';
-var v = document.getElementById('introVideo');
-if (v) { try { v.pause(); } catch (e) {} }
-} catch (e) {}
 try { window.startMultiBattlePlay(); } catch (e) {}
 };
 
@@ -1613,6 +1607,7 @@ var __restoreWatcher = null;
 
 /* ---------- 1. フォント確保（AAAパッチ未適用でも動くよう自己完結） ---------- */
 (function ensureFonts() {
+if(document.documentElement.classList.contains('ios-stable-rendering'))return;
 if (document.getElementById('mduFontLink') || document.getElementById('aaaFontLink')) return;
 var l = document.createElement('link');
 l.id = 'mduFontLink'; l.rel = 'stylesheet';
@@ -2967,6 +2962,7 @@ window.__partyDungeonApplied = true;
 
 /* ---------- 0. フォント確保（パッチ1未適用でも動くよう自己完結） ---------- */
 (function ensurePtyFonts() {
+if(document.documentElement.classList.contains('ios-stable-rendering'))return;
 if (document.getElementById('ptyFontLink') || document.getElementById('mduFontLink') || document.getElementById('aaaFontLink')) return;
 var l = document.createElement('link');
 l.id = 'ptyFontLink'; l.rel = 'stylesheet';
@@ -5388,7 +5384,6 @@ console.log('🎴 第2回：3×アイコングリッド＋モーダル＋並び�
 // ==========================================================================
 // 🔧 第3回パッチ（末尾追記・本体不変更）
 //    ① エラー可視化（グローバルエラー捕捉＋コンソール警告）
-//    ② 初回チュートリアル（3ステップ・初回ログイン時のみ表示）
 //    ③ 控えめ音・振動（Web Audio API・勉強を邪魔しない音量）
 //    ④ オフラインバナー（ネット断線時に上部に警告表示）
 //    ⑤ ガチャ履歴（localStorage保存＋モーダル表示）
@@ -5404,100 +5399,6 @@ window.__batch3Applied = true;
 【1】エラー可視化
 ================================================================== */
 // Error diagnostics are installed before startup in runtime-errors.js.
-
-/* ==================================================================
-【2】初回チュートリアル（3ステップ）
-================================================================== */
-(function initTutorial() {
-if (localStorage.getItem('b3_tutorial_done')) return;
-
-var style = document.createElement('style');
-style.id = 'b3TutCss';
-style.textContent = [
-'.b3-tut-overlay{position:fixed;inset:0;z-index:99990;background:rgba(5,3,12,.88);',
-'backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px;}',
-'.b3-tut-card{width:min(92vw,360px);border-radius:20px;padding:28px 24px;',
-'background:linear-gradient(168deg,#2a2138,#171022);border:1px solid rgba(155,107,255,.4);',
-'box-shadow:0 24px 64px rgba(0,0,0,.6);text-align:center;position:relative;}',
-'.b3-tut-step{font-family:"Cinzel",serif;font-size:10px;font-weight:700;letter-spacing:.3em;color:#c8902a;margin-bottom:10px;}',
-'.b3-tut-title{font-family:"Noto Serif JP",serif;font-size:22px;font-weight:900;color:#f3e5c0;margin-bottom:14px;}',
-'.b3-tut-desc{font-family:"Noto Sans JP",sans-serif;font-size:13px;font-weight:600;color:#b6a98f;line-height:1.8;margin-bottom:20px;}',
-'.b3-tut-icon{font-size:48px;margin-bottom:16px;}',
-'.b3-tut-dots{display:flex;justify-content:center;gap:8px;margin-bottom:18px;}',
-'.b3-tut-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.2);transition:all .3s;}',
-'.b3-tut-dot.on{background:#f5c451;box-shadow:0 0 8px rgba(245,196,81,.6);}',
-'.b3-tut-btn{width:100%;padding:13px;border-radius:12px;border:1.5px solid rgba(245,196,81,.6);',
-'background:linear-gradient(180deg,#4a3b24,#2e2415);color:#fde68a;',
-'font-family:"Noto Serif JP",serif;font-size:15px;font-weight:900;cursor:pointer;',
-'letter-spacing:.1em;transition:transform .13s;}',
-'.b3-tut-btn:active{transform:scale(.97);}',
-'.b3-tut-skip{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:8px;',
-'border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#a89880;',
-'font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;}'
-].join('\n');
-(document.head || document.documentElement).appendChild(style);
-
-var steps = [
-{ icon: '📚', title: '単語を覚える', desc: '「単語帳」タブで単語をタップし、⚪︎△✕で理解度を記録しよう。理解度を記録して復習しよう！' },
-{ icon: '⚔️', title: 'バトルに挑む', desc: '「ゲーム」タブでバトル！単語を答えて敵にダメージ。コンボをつなげて大ダメージを与えよう。' },
-{ icon: '🎰', title: 'ガチャで仲間を増やす', desc: 'バトルで手に入れたゴールドでガチャ！新しいキャラや武器を手に入れてパーティを強化しよう。' }
-];
-var cur = 0;
-
-function buildCard() {
-var s = steps[cur];
-return '<div class="b3-tut-card">' +
-'<button class="b3-tut-skip" id="b3TutSkip">✕</button>' +
-'<div class="b3-tut-icon">' + s.icon + '</div>' +
-'<div class="b3-tut-step">STEP ' + (cur + 1) + ' / ' + steps.length + '</div>' +
-'<div class="b3-tut-title">' + s.title + '</div>' +
-'<div class="b3-tut-desc">' + s.desc + '</div>' +
-'<div class="b3-tut-dots">' + steps.map(function (_, i) {
-return '<span class="b3-tut-dot' + (i === cur ? ' on' : '') + '"></span>';
-}).join('') + '</div>' +
-'<button class="b3-tut-btn" id="b3TutBtn">' + (cur < steps.length - 1 ? '次へ' : 'はじめる！') + '</button>' +
-'</div>';
-}
-
-function show() {
-var ov = document.getElementById('b3TutOverlay');
-if (ov) ov.remove();
-ov = document.createElement('div');
-ov.className = 'b3-tut-overlay';
-ov.id = 'b3TutOverlay';
-ov.innerHTML = buildCard();
-document.body.appendChild(ov);
-ov.querySelector('#b3TutBtn').addEventListener('click', function () {
-cur++;
-if (cur >= steps.length) { done(); return; }
-ov.innerHTML = buildCard();
-bind();
-});
-ov.querySelector('#b3TutSkip').addEventListener('click', done);
-}
-
-function bind() {
-var ov = document.getElementById('b3TutOverlay');
-if (!ov) return;
-var btn = ov.querySelector('#b3TutBtn');
-var skip = ov.querySelector('#b3TutSkip');
-if (btn) btn.addEventListener('click', function () {
-cur++;
-if (cur >= steps.length) { done(); return; }
-ov.innerHTML = buildCard();
-bind();
-});
-if (skip) skip.addEventListener('click', done);
-}
-
-function done() {
-var ov = document.getElementById('b3TutOverlay');
-if (ov) ov.remove();
-localStorage.setItem('b3_tutorial_done', '1');
-}
-
-setTimeout(show, 1500);
-})();
 
 /* ==================================================================
 【3】控えめ音・振動（Web Audio API）
@@ -6118,104 +6019,7 @@ ringTarget = null;
 
 })();
 
-/* ==================================================================
-【3】チュートリアル初回限定（ログアウトしても再表示しない）
-    完了フラグは IndexedDB にも保存し、端末内で維持する
-================================================================== */
-(function fixTutorialOnce() {
-
-var TUTORIAL_KEY = 'b3_tutorial_done';
-
-/* 別の永続化方式：IndexedDB にチュートリアル完了フラグを保存 */
-function saveTutorialFlagDB(callback) {
-try {
-if (!window.indexedDB) { if (callback) callback(false); return; }
-var request = window.indexedDB.open('aiglish_flags', 1);
-request.onupgradeneeded = function(e) {
-var db = e.target.result;
-if (!db.objectStoreNames.contains('flags')) {
-db.createObjectStore('flags', { keyPath: 'key' });
-}
-};
-request.onsuccess = function(e) {
-var db = e.target.result;
-var tx = db.transaction('flags', 'readwrite');
-var store = tx.objectStore('flags');
-store.put({ key: TUTORIAL_KEY, value: '1' });
-tx.oncomplete = function() { db.close(); if (callback) callback(true); };
-tx.onerror = function() { db.close(); if (callback) callback(false); };
-};
-request.onerror = function() { if (callback) callback(false); };
-} catch (e) { if (callback) callback(false); }
-}
-
-function loadTutorialFlagDB(callback) {
-try {
-if (!window.indexedDB) { if (callback) callback(false); return; }
-var request = window.indexedDB.open('aiglish_flags', 1);
-request.onupgradeneeded = function(e) {
-var db = e.target.result;
-if (!db.objectStoreNames.contains('flags')) {
-db.createObjectStore('flags', { keyPath: 'key' });
-}
-};
-request.onsuccess = function(e) {
-var db = e.target.result;
-var tx = db.transaction('flags', 'readonly');
-var store = tx.objectStore('flags');
-var getReq = store.get(TUTORIAL_KEY);
-getReq.onsuccess = function() {
-var val = getReq.result ? getReq.result.value : null;
-db.close();
-if (callback) callback(val === '1');
-};
-getReq.onerror = function() { db.close(); if (callback) callback(false); };
-};
-request.onerror = function() { if (callback) callback(false); };
-} catch (e) { if (callback) callback(false); }
-}
-
-/* チュートリアル完了時に IndexedDB にも保存する */
-/* 既存のチュートリアル done() 関数をフック */
-var checkInterval = setInterval(function() {
-/* b3_tutorial_done が localStorage に書かれたら IndexedDB にも同期 */
-try {
-if (localStorage.getItem(TUTORIAL_KEY) === '1') {
-saveTutorialFlagDB(null);
-clearInterval(checkInterval);
-}
-} catch (e) {}
-}, 1000);
-
-/* ページ読み込み時に IndexedDB のフラグを localStorage に復元 */
-/* 再ログインしたときにも完了フラグを復元する */
-(function restoreTutorialFlag() {
-loadTutorialFlagDB(function(done) {
-if (done) {
-try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
-}
-});
-/* 起動後少し待ってから（loadLocalState完了後） */
-setTimeout(function() {
-loadTutorialFlagDB(function(done) {
-if (done) {
-try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
-}
-});
-}, 2000);
-})();
-
-/* 読み込み完了後に IndexedDB からチュートリアルフラグを復元 */
-window.onAppLoaded(function() {
-loadTutorialFlagDB(function(done) {
-if (done) {
-try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
-}
-});
-});
-})();
-
-console.log('🔧 修正パッチ③（セーブ根治＋長押しリング＋チュートリアル初回限定）適用完了');
+console.log('🔧 修正パッチ③（セーブ根治＋長押しリング）適用完了');
 })();
 // ==========================================================================
 // ☁️ セーブFirebase一本化パッチ（末尾追記・既存コードは不変更）
@@ -6551,6 +6355,7 @@ window.onAppLoaded(function(){
   if(!pending)return;
   if(window.LibraryState)window.LibraryState.sanitizeSave({memory:pending.data},pending.id);
   applySavedMemory(pending.data,pending.id);
+  var restoredSuccessfully=true;
   try{
     var bookKey=pending.data.vocabBookKey||((typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default');
     if(pending.data.vocabBookDeleted)bookKey=null;
@@ -6634,12 +6439,13 @@ window.onAppLoaded(function(){
       }
     }
     if(window.LearningData&&bookKey&&(currentTextbook||'default')===bookKey){currentUserVocabProgress=window.LearningData.read(bookKey);if(typeof window.applyUserProgressToVocabList==='function')window.applyUserProgressToVocabList();}
-  }catch(e){console.warn('[save] vocab progress restore failed',e);}
+  }catch(e){restoredSuccessfully=false;console.warn('[save] vocab progress restore failed',e);}
   try{if(typeof window.applyProfileToUi==='function')window.applyProfileToUi();}catch(e){}
   try{if(typeof window.renderVocabList==='function')window.renderVocabList();}catch(e){}
   try{if(typeof window.renderLeaderboard==='function')window.renderLeaderboard();}catch(e){}
   try{if(typeof window.renderBookshelf==='function')window.renderBookshelf();}catch(e){}
   try{if(typeof window.updatePartySlotsUi==='function')window.updatePartySlotsUi();}catch(e){}
+  if(restoredSuccessfully&&window.__pendingGameSaveMemory===pending)window.__pendingGameSaveMemory=null;
 });
 if(document.readyState!=='loading')setTimeout(ensureBtn,400);else document.addEventListener('DOMContentLoaded',function(){setTimeout(ensureBtn,400);});
 console.log('☁️ 単一セーブ＋ログイン時自動ロード適用完了');
@@ -6647,7 +6453,6 @@ console.log('☁️ 単一セーブ＋ログイン時自動ロード適用完了
 // ==========================================================================
 // 🛠️ 最終修正パッチ（gacha.js末尾追記・既存コード不変更）
 //    ① セーブ：保存後にヘッダーゲージを即再描画
-//    ② ログインボーナス：初回ログイン時に即発火（60秒待ちを解消）
 //    ③ 攻撃表示：倍率→実数値（強化Lv連動）
 //    ④ キャラ強化ボタン復旧
 //    ⑤ 進捗ゲージ：実際の値に同期
@@ -6659,8 +6464,6 @@ window.__finalFixApplied = true;
 
 /* ===== 共通ヘルパー ===== */
 function _st() { return (typeof userStats !== 'undefined' && userStats && typeof userStats === 'object') ? userStats : null; }
-function _dateKey() { var d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
-function _loggedIn() { return (typeof myId !== 'undefined') && myId && myId !== 'GUEST-000'; }
 
 /* ===== 強化Lv・実数値計算 ===== */
 var CHAR_BASE_ATK = 300;
@@ -6675,64 +6478,6 @@ window.saveUserStats = async function () {
     try { if (typeof window.applyProfileToUi === 'function') window.applyProfileToUi(); } catch (e) {}
     return r;
 };
-
-/* ===== ② ログインボーナス即時発火 ===== */
-var _lbChecked = false;
-function _triggerLoginBonus() {
-    if (_lbChecked) return;
-    if (!_loggedIn()) return;
-    var s = _st();
-    if (!s) return;
-    if (s.gacha_login_date === _dateKey()) return;
-    if (window.__gcLoginShown) return;
-    window.__gcLoginShown = true;
-    _lbChecked = true;
-
-    var today = _dateKey();
-    var yest = (function () { var d = new Date(Date.now() - 86400000); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); })();
-    var last = s.gacha_login_date || '';
-    var streak = (last === yest) ? (parseInt(s.gacha_login_streak) || 0) + 1 : 1;
-    var dow = new Date().getDay();
-    var rw = { gold: 0, tChar: 0, tItem: 0 };
-    if (dow === 6) { rw.tChar += 1; rw.tItem += 1; } else { rw.gold += 50; }
-    if (streak > 0 && streak % 7 === 0) { rw.tChar += 1; rw.tItem += 1; }
-
-    var dots = ''; var pos = ((streak - 1) % 7) + 1;
-    for (var i = 1; i <= 7; i++) dots += '<span class="gcLoginDot' + (i <= pos ? ' on' : '') + '"></span>';
-    var rows = '';
-    if (rw.gold > 0) rows += '<div class="gcRewardRow">🪙 ゴールド <b>+' + rw.gold + '</b></div>';
-    if (rw.tChar > 0) rows += '<div class="gcRewardRow">🎟️ キャラチケット <b>+' + rw.tChar + '</b></div>';
-    if (rw.tItem > 0) rows += '<div class="gcRewardRow">🎟️ アイテムチケット <b>+' + rw.tItem + '</b></div>';
-    if (streak % 7 === 0) rows += '<div class="gcRewardRow">🎉 連続 ' + streak + ' 日ボーナス込み！</div>';
-
-    var old = document.querySelector('.gcModal');
-    if (old && old.parentNode) old.parentNode.removeChild(old);
-    var m = document.createElement('div');
-    m.className = 'gcModal';
-    m.innerHTML = '<div class="gcModalCard"><div class="gcModalTitle">📅 ログインボーナス</div><div class="gcModalSub">連続 ' + streak + ' 日目' + (dow === 6 ? '（土曜特典）' : '') + '</div><div class="gcLoginDots">' + dots + '</div>' + rows + '<button type="button" class="gcBtnGold" id="gcLoginClaim">受け取る</button></div>';
-    document.body.appendChild(m);
-    m.querySelector('#gcLoginClaim').addEventListener('click', function () {
-        var s2 = _st();
-        if (s2 && s2.gacha_login_date !== today) {
-            s2.gold = (parseInt(s2.gold) || 0) + rw.gold;
-            s2.gacha_ticket_char = (parseInt(s2.gacha_ticket_char) || 0) + rw.tChar;
-            s2.gacha_ticket_item = (parseInt(s2.gacha_ticket_item) || 0) + rw.tItem;
-            s2.gacha_login_date = today;
-            s2.gacha_login_streak = streak;
-            try { if (typeof window.saveUserStats === 'function') window.saveUserStats(); } catch (e) {}
-        }
-        if (m.parentNode) m.parentNode.removeChild(m);
-        try { if (typeof window.showToast === 'function') window.showToast('📅 ログインボーナスを受け取りました！', 'ok'); } catch (e) {}
-    });
-}
-(function _lbWatch() {
-    var n = 0;
-    var iv = setInterval(function () {
-        n++;
-        if (_loggedIn()) { clearInterval(iv); setTimeout(_triggerLoginBonus, 400); }
-        else if (n > 90) clearInterval(iv);
-    }, 1000);
-})();
 
 /* ===== ③ 攻撃実数値＋④ 強化ボタン＋⑤ 進捗同期 ===== */
 function _fixPartyCards() {
@@ -6818,13 +6563,12 @@ window.onTabChange(function (tabId) {
     _syncPity();
 }, 700, ['party','game']);
 
-console.log('🛠️ 最終修正パッチ（セーブ即時反映＋ログインボーナス即発火＋攻撃実数値＋強化復旧＋進捗同期）適用完了');
+console.log('🛠️ 最終修正パッチ（セーブ即時反映＋攻撃実数値＋強化復旧＋進捗同期）適用完了');
 })();
 // ==========================================================================
 // 🔧 最終修正パッチ v2（末尾追記・既存コード不変更）
 //    ① Firestore書き込みスロットリング（resource-exhausted対策）
 //    ② 保存後にヘッダーLvゲージ即時更新
-//    ③ ログインボーナス即時発火（500msポーリング）
 //    ④ 攻撃倍率→実数値表示
 //    ⑤ キャラ強化ボタン復旧
 //    ⑥ 進捗ゲージ（pity）同期
@@ -6860,72 +6604,6 @@ window.saveUserStats = function() {
     try { if (typeof window.applyProfileToUi === 'function') window.applyProfileToUi(); } catch(e){}
     return r;
 };
-
-/* ===== ③ ログインボーナス即時発火 ===== */
-function triggerLoginBonusNow() {
-    try {
-        if (typeof myId === 'undefined' || !myId || myId === 'GUEST-000') return;
-        if (typeof userStats === 'undefined' || !userStats) return;
-        var today = new Date();
-        var dk = today.getFullYear() + '-' + (today.getMonth()+1) + '-' + today.getDate();
-        if (userStats.gacha_login_date === dk) return;
-        if (window.__gcLoginShown) return;
-        window.__gcLoginShown = true;
-        var yesterday = new Date(Date.now() - 86400000);
-        var yk = yesterday.getFullYear() + '-' + (yesterday.getMonth()+1) + '-' + yesterday.getDate();
-        var last = userStats.gacha_login_date || '';
-        var streak = (last === yk) ? (parseInt(userStats.gacha_login_streak) || 0) + 1 : 1;
-        var dow = today.getDay();
-        var gold = 0, tChar = 0, tItem = 0;
-        if (dow === 6) { tChar += 1; tItem += 1; } else { gold += 50; }
-        if (streak > 0 && streak % 7 === 0) { tChar += 1; tItem += 1; }
-        var old = document.querySelector('.gcModal');
-        if (old && old.parentNode) old.parentNode.removeChild(old);
-        var m = document.createElement('div');
-        m.className = 'gcModal';
-        var dots = '';
-        var pos = ((streak - 1) % 7) + 1;
-        for (var i = 1; i <= 7; i++) dots += '<span class="gcLoginDot' + (i <= pos ? ' on' : '') + '"></span>';
-        var rows = '';
-        if (gold > 0) rows += '<div class="gcRewardRow">🪙 ゴールド <b>+' + gold + '</b></div>';
-        if (tChar > 0) rows += '<div class="gcRewardRow">🎟️ キャラチケット <b>+' + tChar + '</b></div>';
-        if (tItem > 0) rows += '<div class="gcRewardRow">🎟️ アイテムチケット <b>+' + tItem + '</b></div>';
-        if (streak % 7 === 0) rows += '<div class="gcRewardRow">🎉 連続 ' + streak + ' 日ボーナス込み！</div>';
-        m.innerHTML = '<div class="gcModalCard"><div class="gcModalTitle">📅 ログインボーナス</div><div class="gcModalSub">連続 ' + streak + ' 日目' + (dow === 6 ? '（土曜特典）' : '') + '</div><div class="gcLoginDots">' + dots + '</div>' + rows + '<button type="button" class="gcBtnGold" id="gcLoginClaim2">受け取る</button></div>';
-        document.body.appendChild(m);
-        m.querySelector('#gcLoginClaim2').addEventListener('click', function() {
-            if (userStats.gacha_login_date === dk) { if (m.parentNode) m.parentNode.removeChild(m); return; }
-            userStats.gold = (parseInt(userStats.gold) || 0) + gold;
-            userStats.gacha_ticket_char = (parseInt(userStats.gacha_ticket_char) || 0) + tChar;
-            userStats.gacha_ticket_item = (parseInt(userStats.gacha_ticket_item) || 0) + tItem;
-            userStats.gacha_login_date = dk;
-            userStats.gacha_login_streak = streak;
-            try { if (typeof window.saveUserStats === 'function') window.saveUserStats(); } catch(e){}
-            if (m.parentNode) m.parentNode.removeChild(m);
-            try { if (typeof window.showToast === 'function') window.showToast('📅 ログインボーナスを受け取りました！', 'ok'); } catch(e){}
-        });
-    } catch(e){}
-}
-(function loginBonusWatch() {
-    var fired = false;
-    var tries = 0;
-    var iv = setInterval(function() {
-        tries++;
-        if (tries > 120) { clearInterval(iv); return; }
-        if (fired) return;
-        try {
-            if (typeof myId === 'undefined' || !myId || myId === 'GUEST-000') return;
-            if (typeof userStats === 'undefined' || !userStats) return;
-            var today = new Date();
-            var dk = today.getFullYear() + '-' + (today.getMonth()+1) + '-' + today.getDate();
-            if (userStats.gacha_login_date === dk) return;
-            if (window.__gcLoginShown) return;
-            fired = true;
-            clearInterval(iv);
-            setTimeout(triggerLoginBonusNow, 300);
-        } catch(e){}
-    }, 500);
-})();
 
 /* ===== ④ 攻撃倍率→実数値 + ⑤ 強化ボタン復旧 ===== */
 function fixPartyCards() {
@@ -7017,7 +6695,7 @@ window.onTabChange(function(tabId) {
     syncPityGauge();
 }, 800, ['party','game']);
 
-console.log('🔧 最終修正パッチv2（セーブ/ログインボーナス/攻撃実数値/強化復旧/進捗同期/Firestore負荷軽減）適用完了');
+console.log('🔧 最終修正パッチv2（セーブ/攻撃実数値/強化復旧/進捗同期/Firestore負荷軽減）適用完了');
 })();
 // =====================================================================
 // 💀 マルチプレイ 死亡/魂/蘇生/敗北 パッチ＋近日公開解除（multi.js末尾追記）

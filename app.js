@@ -143,7 +143,7 @@ if(apiKeyInput) apiKeyInput.value = geminiApiKey;
      activeWeapon = localStorage.getItem('core_v4_active_weapon') || ""; 
      activeArmor = localStorage.getItem('core_v4_active_armor') || ""; 
      currentTextbook = localStorage.getItem('core_v4_current_textbook_id') || "";
-     // 全教材のFirebase取得は画面表示を止めずバックグラウンドで行う。
+     // 教材一覧の同期は画面表示を止めずバックグラウンドで行う。
      // 現在の教材はこの後、端末キャッシュから先に読み込まれる。
      Promise.resolve(window.preloadAllTextbooksAndVocab()).then(function() {
          if(typeof window.updateAdminEditBookSelectOptions === 'function') window.updateAdminEditBookSelectOptions();
@@ -378,22 +378,9 @@ if(window.lucide) { window.lucide.createIcons(); }
 window.scrollToTop = function() {
 window.scrollTo({ top: 0, behavior: 'smooth' });
 };
-// 🌟 全単語データ・教材の一括読み込み（爆速化キャッシュ）
+// 教材一覧だけ同期する。本体は開いた教材のローダーに任せる。
 window.preloadAllTextbooksAndVocab = async function() {
 await window.syncTextbooksIndexFromFirestore();
-if (window.db && window.fbGetDoc && window.fbDoc) {
-    for (const book of textbooksPool) {
-        try {
-            const docName = `vocab_${book.id}`;
-            const sharedRef = window.fbDoc(window.db, "shared", docName);
-            const sharedSnap = await window.fbGetDoc(sharedRef);
-            if (sharedSnap.exists() && sharedSnap.data().custom_words) {
-                textbooksCacheMap[book.id] = sharedSnap.data().custom_words;
-                localStorage.setItem(`core_v4_cache_${book.id}`, JSON.stringify(sharedSnap.data().custom_words));
-            }
-        } catch(e) {}
-    }
-}
 };
 // 🌟 単語帳データをFirebase (Firestore) と同期・保存処理
 window.saveVocabToStorage = async function() {
@@ -1722,20 +1709,9 @@ mockCountSelect.value = "1";
 mockCountSelect.value = "2";
 }
 };
-window.playIntroVideoBeforeBattle = function() {
-if (currentMultiMode === 'pvp') {
-window.startMultiBattlePlay();
-return;
-}
-document.getElementById('multi-battle-matching-screen').style.display = 'none'; 
-const overlay = document.getElementById('video-overlay'), video = document.getElementById('introVideo');
-if (overlay && video) { overlay.style.display = 'flex'; video.currentTime = 0; video.play().catch(e => { window.skipIntroVideo(); }); video.onended = window.skipIntroVideo; } 
-else { window.startMultiBattlePlay(); }
-};
-window.skipIntroVideo = function() {
-const overlay = document.getElementById('video-overlay'), video = document.getElementById('introVideo');
-if(video) video.pause(); if(overlay) overlay.style.display = 'none'; window.startMultiBattlePlay();
-};
+// Battle intros are already skipped by the game runtime; keep compatibility calls lightweight.
+window.playIntroVideoBeforeBattle = function(){window.startMultiBattlePlay();};
+window.skipIntroVideo = function(){window.startMultiBattlePlay();};
 window.startMultiBattlePlay = function() {
 const matchingScreen = document.getElementById('multi-battle-matching-screen');
 if(matchingScreen) matchingScreen.style.display = 'none';
@@ -2396,22 +2372,9 @@ window.saveVocabToStorage = async function() {
   if (window.isAdmin) await window.saveVocabMasterToStorage();
 };
 
+// Startup needs book metadata, not every book's master word list.
 window.preloadAllTextbooksAndVocab = async function() {
   await window.syncTextbooksIndexFromFirestore();
-  if (window.db && window.fbGetDoc && window.fbDoc) {
-    for (const book of textbooksPool) {
-      try {
-        const docName = "vocab_" + book.id;
-        const sharedRef = window.fbDoc(window.db, "shared", docName);
-        const sharedSnap = await window.fbGetDoc(sharedRef);
-        if (sharedSnap.exists() && sharedSnap.data().custom_words) {
-          const masterWords = window.stripVocabProgressFromWords(sharedSnap.data().custom_words);
-          textbooksCacheMap[book.id] = masterWords;
-          localStorage.setItem("core_v4_cache_" + book.id, JSON.stringify(masterWords));
-        }
-      } catch (e) {}
-    }
-  }
 };
 
 window.loadCurrentTextbookData = async function(options) {
