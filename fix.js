@@ -989,6 +989,7 @@ var FONT_BODY    = "'Noto Sans JP',system-ui,sans-serif";
 // 【0】フォント読込（1回だけ）
 // ------------------------------------------------------------------
 (function loadAAAFonts() {
+if(document.documentElement.classList.contains('ios-stable-rendering'))return;
 if (document.getElementById('aaaFontLink')) return;
 var l = document.createElement('link');
 l.id = 'aaaFontLink'; l.rel = 'stylesheet';

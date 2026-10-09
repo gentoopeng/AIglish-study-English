@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&display=swap');
+/* Desktop fonts are loaded once by the existing font loader. iOS uses device fonts. */
 
 :root {
     --bg-color: #0F172A;

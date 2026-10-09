@@ -10,17 +10,17 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="6.42">
+    <meta name="application-version" content="6.52">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
-    <script src="runtime-errors.js?v=6.42"></script>
-    <script src="app-storage.js?v=6.42"></script>
-    <script src="rendering-safety.js?v=6.42"></script>
+    <script src="runtime-errors.js?v=6.52"></script>
+    <script src="app-storage.js?v=6.52"></script>
+    <script src="rendering-safety.js?v=6.52"></script>
     <script src="vendor/lucide/lucide.min.js?v=0.468.0"></script>
-    <link rel="stylesheet" href="style.css?v=6.42">
-    <link rel="stylesheet" href="gacha.css?v=6.42">
+    <link rel="stylesheet" href="style.css?v=6.52">
+    <link rel="stylesheet" href="gacha.css?v=6.52">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -39,15 +39,7 @@
         <i data-lucide="arrow-up" size="22"></i>
     </button>
 
-    <div id="video-overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:9999; flex-direction:column; justify-content:center; align-items:center;">
-        <video id="introVideo" style="width:100%; max-height:100%; object-fit:contain;" playsinline>
-            <source src="intro.mp4" type="video/mp4">
-            お使いのブラウザは動画をサポートしていません。
-        </video>
-        <button class="modern-btn" style="position:absolute; top:20px; right:20px; width:auto; height:32px; padding:0 16px; font-size:11px; z-index:10000; background:rgba(0,0,0,0.6) !important; border:1px solid rgba(255,255,255,0.3) !important;" onclick="skipIntroVideo()">
-            SKIP <i data-lucide="skip-forward" size="12"></i>
-        </button>
-    </div>
+
 
 
 
@@ -757,28 +749,28 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <link rel="preload" href="library-state.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=6.42"></script>
-    <link rel="preload" href="learning-data.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=6.42"></script>
-    <link rel="preload" href="app.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=6.42"></script>
-    <link rel="preload" href="game_core.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=6.42"></script>
-    <link rel="preload" href="vocab_ui.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=6.42"></script>
-    <link rel="preload" href="reader.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=6.42"></script>
-    <link rel="preload" href="view-work.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=6.42"></script>
-    <link rel="preload" href="fix.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=6.42"></script>
-    <link rel="preload" href="multi.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="multi.js?v=6.42"></script>
-    <link rel="preload" href="gacha.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="gacha.js?v=6.42"></script>
-    <link rel="preload" href="addon.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="addon.js?v=6.42"></script>
-    <link rel="preload" href="library.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=6.42"></script>
-    <link rel="preload" href="workbook.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=6.42"></script>
-    <link rel="preload" href="shared-notes.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=6.42"></script>
-    <link rel="preload" href="user-directory.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=6.42"></script>
-    <link rel="preload" href="study-time.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=6.42"></script>
-    <link rel="preload" href="ranking.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=6.42"></script>
-    <link rel="preload" href="autosave.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=6.42"></script>
-    <link rel="preload" href="people.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=6.42"></script>
-    <link rel="preload" href="profile.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=6.42"></script>
-    <link rel="preload" href="loading-quiz.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=6.42"></script>
-    <link rel="preload" href="app-background.js?v=6.42" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=6.42"></script>
-    <script src="app-loader.js?v=6.42" defer></script>
+    <link rel="preload" href="library-state.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=6.52"></script>
+    <link rel="preload" href="learning-data.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=6.52"></script>
+    <link rel="preload" href="app.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=6.52"></script>
+    <link rel="preload" href="game_core.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=6.52"></script>
+    <link rel="preload" href="vocab_ui.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=6.52"></script>
+    <link rel="preload" href="reader.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=6.52"></script>
+    <link rel="preload" href="view-work.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=6.52"></script>
+    <link rel="preload" href="fix.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=6.52"></script>
+    <link rel="preload" href="multi.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="multi.js?v=6.52"></script>
+    <link rel="preload" href="gacha.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="gacha.js?v=6.52"></script>
+    <link rel="preload" href="addon.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="addon.js?v=6.52"></script>
+    <link rel="preload" href="library.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=6.52"></script>
+    <link rel="preload" href="workbook.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=6.52"></script>
+    <link rel="preload" href="shared-notes.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=6.52"></script>
+    <link rel="preload" href="user-directory.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=6.52"></script>
+    <link rel="preload" href="study-time.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=6.52"></script>
+    <link rel="preload" href="ranking.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=6.52"></script>
+    <link rel="preload" href="autosave.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=6.52"></script>
+    <link rel="preload" href="people.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=6.52"></script>
+    <link rel="preload" href="profile.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=6.52"></script>
+    <link rel="preload" href="loading-quiz.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=6.52"></script>
+    <link rel="preload" href="app-background.js?v=6.52" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=6.52"></script>
+    <script src="app-loader.js?v=6.52" defer></script>
 </body>
 </html>

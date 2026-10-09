@@ -21,10 +21,6 @@ var CONFIG = {
   shardDupe: { C: 1, UC: 3, R: 10, SR: 50 },
   enhanceCostBase: 1,
   enhanceStatPerLevel: 1,
-  loginGold: 50,
-  loginSaturdayTickets: 1,
-  streakDay: 7,
-  streakTickets: 1,
   teaseRate: 0.3
 };
 
@@ -69,7 +65,6 @@ function gget(k, d) { var s = gs(); if (!s) return d; var v = s[k]; return (v ==
 function gset(k, v) { var s = gs(); if (!s) return; s[k] = v; }
 function saveAll() { try { if (window.saveUserStats) window.saveUserStats(); } catch (e) {} }
 function loggedIn() { return (typeof myId !== 'undefined') && myId && myId !== 'GUEST-000'; }
-function dateKey(d) { d = d || new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 function toast(msg) { try { if (window.showToast) { window.showToast(msg, 'ok'); return; } } catch (e) {} }
 function goldOf() { return parseInt(gget('gold', 0)) || 0; }
 function tCharOf() { return parseInt(gget('gacha_ticket_char', 0)) || 0; }
@@ -291,9 +286,6 @@ function iconHtml(item) {
     '.gcPickItem.sel{border-color:rgba(245,196,81,.85);box-shadow:0 0 14px rgba(245,196,81,.3);}',
     '.gcBtnGold{width:100%;margin-top:14px;padding:13px;border-radius:12px;border:1.5px solid rgba(245,196,81,.6);background:linear-gradient(180deg,#4a3b24,#2e2415);color:#fde68a;font-size:15px;font-weight:900;cursor:pointer;}',
     '.gcBtnGhost{width:100%;margin-top:8px;padding:11px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.3);color:#a89880;font-size:12px;cursor:pointer;}',
-    '.gcLoginDots{display:flex;justify-content:center;gap:7px;margin:12px 0;}',
-    '.gcLoginDot{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);}',
-    '.gcLoginDot.on{background:linear-gradient(135deg,#9af6f1,#34e7e4);border-color:transparent;}',
     '.gcRewardRow{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-top:8px;border-radius:11px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.1);font-size:13px;font-weight:800;color:#efe9dc;}',
     '.gcRewardRow b{margin-left:auto;color:#fde68a;}',
     /* 管理者 */
@@ -329,6 +321,7 @@ function injectHeaderGold() {
 ===================================================================== */
 window.__gcBanner = window.__gcBanner || 'char';
 function buildGashaPage() {
+  if(typeof currentActiveTabId!=='undefined'&&currentActiveTabId!=='party')return;
   var page = document.getElementById('pgPageGasha');
   if (!page) return;
   if (page.querySelector('.gcRoot')) return;
@@ -343,16 +336,17 @@ function buildGashaPage() {
     '<div class="gcPoolToggle" id="gcPoolToggle">▾ アイテム一覧と確率</div>' +
     '<div id="gcPoolBox" style="display:none"><div class="gcPoolList" id="gcPoolList"></div><div id="gcRatesTable"></div></div></div>' +
     '</div>';
-  page.addEventListener('click', function (e) {
+  if(!page.__gcClickBound){page.__gcClickBound=true;page.addEventListener('click', function (e) {
     var t = e.target; if (!t || !t.closest) return;
     var tab = t.closest('[data-banner]'); if (tab) { window.__gcBanner = tab.getAttribute('data-banner'); refreshGashaPage(); return; }
     var draw = t.closest('[data-draw]'); if (draw) { var p = draw.getAttribute('data-draw').split('_'); doDraw(p[0], p[1], parseInt(p[2], 10)); return; }
     var pb = t.closest('[data-pity]'); if (pb) { var q = pb.getAttribute('data-pity').split('_'); openPityModal(q[0], q[1]); return; }
-    if (t.closest('#gcPoolToggle')) { var box = document.getElementById('gcPoolBox'); if (box) box.style.display = (box.style.display === 'none') ? 'block' : 'none'; return; }
-  });
+    if (t.closest('#gcPoolToggle')) { var box = document.getElementById('gcPoolBox'); if(box){box.style.display=(box.style.display==='none')?'block':'none';if(box.style.display==='block')refreshGashaPage();else document.getElementById('gcPoolList').replaceChildren();}return; }
+  });}
   refreshGashaPage();
 }
 function refreshGashaPage() {
+  if(typeof currentActiveTabId!=='undefined'&&currentActiveTabId!=='party')return;
   var page = document.getElementById('pgPageGasha'); if (!page) return;
   var root = page.querySelector('.gcRoot'); if (!root) { buildGashaPage(); return; }
   var ok = loggedIn();
@@ -372,7 +366,7 @@ function refreshGashaPage() {
   document.getElementById('gcBannerDesc').textContent = b === 'char' ? '共に戦う仲間を召喚する門' : '武器と防具を得る門';
   document.getElementById('gcPityArea').innerHTML = pityRow(b, 'gold', 'ゴールド天井') + pityRow(b, 'ticket', 'チケット天井');
   document.getElementById('gcDrawBtns').innerHTML = drawBtnsHtml(b);
-  document.getElementById('gcPoolList').innerHTML = poolHtml(b);
+  if(document.getElementById('gcPoolBox').style.display!=='none')document.getElementById('gcPoolList').innerHTML = poolHtml(b);
   document.getElementById('gcRatesTable').innerHTML = ratesHtml();
 }
 function pityRow(banner, lane, label) {
@@ -656,43 +650,6 @@ function ceremonyReward(item, res, banner) {
 }
 
 /* =====================================================================
-10. ログインボーナス
-===================================================================== */
-function checkLoginBonus() {
-  if (!loggedIn()) return;
-  if (gget('gacha_login_date', '') === dateKey()) return;
-  if (window.__gcLoginShown) return;
-  window.__gcLoginShown = true;
-  setTimeout(showLoginBonusModal, 700);
-}
-function showLoginBonusModal() {
-  if (gget('gacha_login_date', '') === dateKey()) return;
-  var today = dateKey(); var yest = dateKey(new Date(Date.now() - 86400000));
-  var last = gget('gacha_login_date', '');
-  var streak = (last === yest) ? (parseInt(gget('gacha_login_streak', 0)) || 0) + 1 : 1;
-  var dow = new Date().getDay();
-  var rw = { gold: 0, tChar: 0, tItem: 0 };
-  if (dow === 6) { rw.tChar += CONFIG.loginSaturdayTickets; rw.tItem += CONFIG.loginSaturdayTickets; } else rw.gold += CONFIG.loginGold;
-  if (streak > 0 && streak % CONFIG.streakDay === 0) { rw.tChar += CONFIG.streakTickets; rw.tItem += CONFIG.streakTickets; }
-  var dots = ''; var pos = ((streak - 1) % CONFIG.streakDay) + 1;
-  for (var i = 1; i <= CONFIG.streakDay; i++) dots += '<span class="gcLoginDot' + (i <= pos ? ' on' : '') + '"></span>';
-  var rows = '';
-  if (rw.gold > 0) rows += '<div class="gcRewardRow">' + goldSvg(16) + ' ゴールド <b>+' + rw.gold + '</b></div>';
-  if (rw.tChar > 0) rows += '<div class="gcRewardRow">🎟️ キャラチケット <b>+' + rw.tChar + '</b></div>';
-  if (rw.tItem > 0) rows += '<div class="gcRewardRow">🎟️ アイテムチケット <b>+' + rw.tItem + '</b></div>';
-  if (streak % CONFIG.streakDay === 0) rows += '<div class="gcRewardRow">🎉 連続 ' + streak + ' 日ボーナス込み！</div>';
-  var m = makeModal();
-  m.innerHTML = '<div class="gcModalCard"><div class="gcModalTitle">📅 ログインボーナス</div><div class="gcModalSub">連続 ' + streak + ' 日目' + (dow === 6 ? '（土曜特典）' : '') + '</div><div class="gcLoginDots">' + dots + '</div>' + rows + '<button type="button" class="gcBtnGold" id="gcLoginClaim">受け取る</button></div>';
-  m.querySelector('#gcLoginClaim').addEventListener('click', function () {
-    if (gget('gacha_login_date', '') === today) { closeModal(); return; }
-    gset('gold', goldOf() + rw.gold); gset('gacha_ticket_char', tCharOf() + rw.tChar); gset('gacha_ticket_item', tItemOf() + rw.tItem);
-    gset('gacha_login_date', today); gset('gacha_login_streak', streak);
-    saveAll(); closeModal(); refreshGashaPage();
-    toast('📅 ログインボーナスを受け取りました！');
-  });
-}
-
-/* =====================================================================
 11. 強化・装備（編成側・図鑑内からも呼べる公開API）
 ===================================================================== */
 window.gachaEnhance = function (charId) {
@@ -795,8 +752,9 @@ function injectAdmin() { return; // The retired administration panel is no longe
 14. 起動・フック
 ===================================================================== */
 function gachaTick() { injectHeaderGold(); buildGashaPage(); injectAdmin(); }
-function gachaAfterLogin() { injectHeaderGold(); buildGashaPage(); refreshGashaPage(); checkLoginBonus(); injectAdmin(); }
+function gachaAfterLogin() { injectHeaderGold(); buildGashaPage(); refreshGashaPage(); injectAdmin(); }
 window.onAppLoaded(function () { gachaAfterLogin(); });
+window.onTabChange(function(tab){if(tab==='party')gachaAfterLogin();else{var box=document.getElementById('gcPoolBox'),list=document.getElementById('gcPoolList');if(box)box.style.display='none';if(list)list.replaceChildren();}});
 (function attachWatchers() {
   var obs = null;
   function observe() {
@@ -809,7 +767,7 @@ window.onAppLoaded(function () { gachaAfterLogin(); });
     });
     obs.observe(view, { childList: true, subtree: true });
   }
-  function boot() { observe(); gachaTick(); (window.ViewWork?.interval || setInterval)(gachaTick, 900, ['party']); setInterval(function () { if (loggedIn()) checkLoginBonus(); }, 60000); }
+  function boot() { observe(); gachaTick(); (window.ViewWork?.interval || setInterval)(gachaTick, 900, ['party']); }
   if (document.readyState !== 'loading') setTimeout(boot, 450);
   else document.addEventListener('DOMContentLoaded', function () { setTimeout(boot, 450); });
 })();
