@@ -723,7 +723,7 @@ function isAdmin() {
   } catch (e) {}
   return false;
 }
-function injectAdmin() { return; // Management is centralized in the shop hub.
+function injectAdmin() { return; // The retired administration panel is no longer mounted.
   if (!isAdmin()) return;
   if (document.getElementById('gcAdminCard')) return;
   var host = document.getElementById('admList') || document.querySelector('.admin-panel') || document.querySelector('[class*="admin"]');
@@ -836,7 +836,6 @@ s.id = 'gcFixCss';
 s.textContent = [
 /* 旧・浮いていたゴールドピルとヘッダー文字を消す */
 '#gcHeaderGold{display:none !important;}',
-'#headerTitleText{display:none !important;}',
 /* XP(Lvバッジ)と同一スタイルの通貨バッジ */
 '.gch-badges{display:inline-flex;gap:4px;align-items:center;margin-left:6px;flex-wrap:nowrap;}',
 '.gch-badge{font-size:11px !important;font-weight:900 !important;font-family:monospace !important;',

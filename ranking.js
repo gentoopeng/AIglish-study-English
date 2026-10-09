@@ -85,16 +85,16 @@
         const result=await oldLoad.apply(this,arguments);
         if(owner()===id){record=merge(record,userStats.learning_ranking_v2_json||userStats.learning_ranking);persist();render();}return result;
     };
-    function name(element,value,appearance){if(window.ProfileCustomizationModel)element.style.color=window.ProfileCustomizationModel.normalize(appearance).nicknameColor;element.replaceChildren();String(value||'ユーザー').trim().split(/\s+/u).forEach((part,index)=>{if(index)element.append(document.createElement('br'));element.append(document.createTextNode(part));});}
+    function name(element,value,appearance){element.replaceChildren();String(value||'ユーザー').trim().split(/\s+/u).forEach((part,index)=>{if(index)element.append(document.createElement('br'));element.append(document.createTextNode(part));});}
     const avatarPreviews=new Map();
     function preview(img,source){
         img.decoding='async';img.referrerPolicy='no-referrer';
-        if(!source.startsWith('data:image/')||!window.ProfileCustomization){img.src=source;return;}
+        if(!source.startsWith('data:image/')||!window.ProfileImages){img.src=source;return;}
         let task=avatarPreviews.get(source);
-        if(!task){task=fetch(source).then(response=>response.blob()).then(blob=>window.ProfileCustomization.imageFile(blob,64,'image/png'));avatarPreviews.set(source,task);if(avatarPreviews.size>12)avatarPreviews.delete(avatarPreviews.keys().next().value);task.catch(()=>avatarPreviews.delete(source));}
+        if(!task){task=fetch(source).then(response=>response.blob()).then(blob=>window.ProfileImages.imageFile(blob,64,'image/png'));avatarPreviews.set(source,task);if(avatarPreviews.size>12)avatarPreviews.delete(avatarPreviews.keys().next().value);task.catch(()=>avatarPreviews.delete(source));}
         task.then(value=>{if(img.isConnected)img.src=value;}).catch(()=>{if(img.isConnected)img.dispatchEvent(new Event('error'));});
     }
-    function avatar(value,label,appearance){const frame=document.createElement('span');frame.className='podium-avatar';let appearanceData=appearance||{};if(typeof appearanceData==='string'){try{appearanceData=JSON.parse(appearanceData);}catch(e){appearanceData={};}}const chosenFrame=window.ProfileShop&&window.ProfileShop.lookup(appearanceData.frame||'wood');if(window.ProfileCustomizationModel&&(!chosenFrame||!chosenFrame.image))frame.classList.add('profile-frame-wood');const safe=typeof value==='string'&&(/^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(value));if(safe){const img=document.createElement('img');preview(img,value);img.alt=String(label||'ユーザー')+'のアイコン';img.referrerPolicy='no-referrer';img.onerror=()=>{frame.textContent=String(label||'人').trim().slice(0,1);};frame.append(img);}else{frame.textContent=String(label||'人').trim().slice(0,1);}if(chosenFrame&&chosenFrame.image){frame.classList.add('appearance-framed');const art=document.createElement('img');art.className='appearance-frame-art';preview(art,chosenFrame.image);art.alt='';art.setAttribute('aria-hidden','true');frame.append(art);}return frame;}
+    function avatar(value,label,appearance){const frame=document.createElement('span');frame.className='podium-avatar';const safe=typeof value==='string'&&(/^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(value));if(safe){const img=document.createElement('img');preview(img,value);img.alt=String(label||'ユーザー')+'のアイコン';img.referrerPolicy='no-referrer';img.onerror=()=>{frame.textContent=String(label||'人').trim().slice(0,1);};frame.append(img);}else{frame.textContent=String(label||'人').trim().slice(0,1);}return frame;}
     window.RankingVisuals={name,avatar};
     const labels={time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
