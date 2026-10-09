@@ -6471,6 +6471,7 @@ async function autoLoadOnce() {
     var stored=save.data.localStorage;
     for(var key in stored){
       if(key.indexOf('aiglish_learning_recovery_')===0)continue;
+      if(key.indexOf('aiglish_app_background_')===0){try{var currentBackground=JSON.parse(localStorage.getItem(key)||'null'),savedBackground=JSON.parse(stored[key]||'null');if(currentBackground&&(Number(currentBackground.updatedAt)||0)>=(Number(savedBackground&&savedBackground.updatedAt)||0))continue;}catch(e){if(localStorage.getItem(key))continue;}}
       if(key==='aiglish_ranking_device')continue; // Device counters must keep this browser's identity.
       if(key==='core_v4_learning_ranking_'+id&&localStorage.getItem(key))continue;
       if(key==='core_v4_learning_ranking_v2_'+id&&window.LearningRankingModel){
