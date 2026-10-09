@@ -5987,6 +5987,7 @@ window.__setLoadQuizBookLabel = function(ov, name, show) {
 // ------------------------------------------------------------------
 window.__initLoadQuiz = function(ov) {
   var q = window.__loadQuiz;
+  q.owner=(typeof myId!=='undefined'&&myId)||'GUEST-000';
   q.answers = []; q.ok = 0; q.bad = 0; q.so = 0; q.index = 0; q.words = []; q.active = false; q.bookId = null;
   window.__lqCurrent = null;
   var wrapEl = ov.querySelector('#lqCardWrap');
@@ -5998,6 +5999,7 @@ window.__initLoadQuiz = function(ov) {
     window.__setLoadQuizBookLabel(ov, '', false);
   };
   var setup = function(words, bookId, name) {
+    if(!ov.isConnected||window.__pgLoad.overlay!==ov)return;
     if (!words || words.length === 0) { hideAll(); return; }
     if(window.filterLoadingQuizWords)words=window.filterLoadingQuizWords(words,bookId);
     if(!words.length){hideAll();return;}
@@ -6225,6 +6227,7 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
 window.__finalizeLoadQuiz = function() {
   var q = window.__loadQuiz;
   if (!q) return;
+  if(q.owner&&q.owner!==((typeof myId!=='undefined'&&myId)||'GUEST-000')){q.answers=[];q.active=false;return;}
   var answers = (q.answers || []).slice();
   q.answers = [];
   q.active = false;
@@ -6250,7 +6253,7 @@ window.__finalizeLoadQuiz = function() {
       });
       if (applied > 0) {
         // ロード画面を閉じる前に、回答を端末の正規理解度と手動セーブ用下書きへ確定する。
-        if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(null, true);
+        if (typeof window.saveVocabProgressLocally === 'function') answers.forEach(function(answer){window.saveVocabProgressLocally(answer.num,true);});
         if (typeof window.markVocabProgressDirty === 'function') {
           answers.forEach(function(answer) { window.markVocabProgressDirty(bookId, answer.num); });
         }
