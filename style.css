@@ -2210,7 +2210,7 @@ html.ios-stable-rendering body .flashcard-post-ripple{animation:fcFireworkSparkl
 
 
 /* A single static surface, without home/profile/shop renderers. */
-html body::after{z-index:0!important;background:linear-gradient(#08112288,#08112288),var(--app-background-image,url('tango.png')) var(--app-background-position,center)/cover no-repeat!important;animation:none!important;}
+html body::after{z-index:0!important;background:linear-gradient(#08112288,#08112288),var(--app-background-image,url('assets/background-night.webp')) var(--app-background-position,center)/cover no-repeat!important;animation:none!important;}
 html body .tab-view::before{display:none!important;background-image:none!important;}
 html body{background-image:none!important;}.container{position:relative;z-index:1;}
 .sidebar-profile-form{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:#10172b;}
@@ -2244,7 +2244,7 @@ html.pwa-recovery-rendering body::after{background-image:none!important;backgrou
 /* One lightweight picker for every tab. Native horizontal scrolling; no backdrop blur. */
 html body .app-header { box-sizing:border-box; padding:0 54px; gap:3px; }
 .header-clock-group { display:flex; align-items:center; gap:3px; min-width:0; }
-#headerBackgroundButton { flex:none; display:flex; align-items:center; justify-content:center; width:30px; height:36px; padding:0; border:0; border-radius:8px; background:transparent; color:#d6caaa; cursor:pointer; }
+#headerBackgroundButton { flex:none; display:flex; align-items:center; justify-content:center; width:34px; height:38px; padding:0; border:0; border-radius:8px; background:transparent; color:#d6caaa; cursor:pointer; }
 #headerBackgroundButton:focus-visible { outline:2px solid #d6caaa; outline-offset:1px; }
 html body .app-header .header-study-time { padding:6px; font-size:12px; }
 html body .app-header .hf-stable { gap:5px; margin-left:0; }
@@ -2268,6 +2268,13 @@ html body .app-header .hf-badge { gap:2px; }
  html body .app-header .hf-stable { gap:3px; }
  html body .app-header .hf-badge span { font-size:10px; }
  html body .app-header .hf-img { width:18px; height:18px; }
- #headerBackgroundButton { width:26px; }
+ #headerBackgroundButton { width:30px; }
  html body .app-header .header-study-time { padding:6px 4px; font-size:11px; }
 }
+
+.background-preview { position:relative; background:#1a2537; }
+.background-preview[aria-pressed="true"]::after { content:"✓"; position:absolute; top:12px; right:12px; width:24px; height:24px; border-radius:50%; background:#0f172a; color:#e4d394; font:16px/24px system-ui; text-align:center; }
+.background-preview img:not([src]) { visibility:hidden; }
+#backgroundAdminRegister { background:#d6c18a; color:#10192b; font-weight:700; }
+#backgroundAdminRegister:disabled { opacity:.4; }
+#backgroundAdminSaveStatus { min-height:36px; }
