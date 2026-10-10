@@ -1114,6 +1114,7 @@ async function autoLoadOnce() {
         var savedWorkMs=Number(stored[workStampKey])||Date.parse(save.savedAt||'')||0;
         if(localWorkMs>savedWorkMs)continue;
       }
+      if(key.indexOf('core_v4_word_duel_pending_')===0&&localStorage.getItem(key)!==null)continue;
       if(key.indexOf('core_v4_vocab_note_sharing_')===0){
         try{
           var localSharing=JSON.parse(localStorage.getItem(key)||'null');
