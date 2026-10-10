@@ -3,9 +3,10 @@
 'use strict';
 const names=['木','石','銅','銀','金','ダイヤ','プラチナ','ブラックダイヤ'];
 const ids=['wood','stone','copper','silver','gold','diamond','platinum','black-diamond'];
+const photoSizes=[91,77,78,81,76,64,66,68];
 const catalog=ids.map((id,index)=>Object.freeze({id,name:names[index],price:window.LearningRewardsModel.price(index)}));
 window.IconFrameCatalog=Object.freeze(catalog);
-function decorate(element,id){element.querySelector(':scope > .icon-frame-art')?.remove();element.classList.remove('icon-framed');if(!ids.includes(id))return;const art=document.createElement('span');art.className='icon-frame-art frame-'+id;art.setAttribute('aria-hidden','true');element.classList.add('icon-framed');element.append(art);}
+function decorate(element,id){element.querySelector(':scope > .icon-frame-art')?.remove();element.classList.remove('icon-framed');element.style.removeProperty('--frame-photo-size');if(!ids.includes(id))return;element.style.setProperty('--frame-photo-size',photoSizes[ids.indexOf(id)]+'%');const art=document.createElement('span');art.className='icon-frame-art frame-'+id;art.setAttribute('aria-hidden','true');element.classList.add('icon-framed');element.append(art);}
 function fromAppearance(appearance){try{const profile=typeof appearance==='string'?JSON.parse(appearance):appearance;return profile?.frame||'';}catch{return '';}}
 let preview='';
 const host=document.getElementById('profileFrameSelector'),status=document.getElementById('profileFrameStatus');
