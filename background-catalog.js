@@ -16,7 +16,7 @@ function checksum(raw){let result=2166136261;for(let i=0;i<raw.length;i++){resul
 function ref(...path){return window.fbDoc(window.db,'shared','backgrounds',...path);}
 function available(){return window.db&&window.fbDoc&&window.fbGetDoc;}
 function deadline(task){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('共有背景の通信が完了しませんでした。接続後に再試行してください。')),12000);Promise.resolve(task).then(value=>{clearTimeout(timer);resolve(value);},error=>{clearTimeout(timer);reject(error);});});}
-async function get(reference){try{return await deadline((window.fbGetDocFromServer||window.fbGetDoc)(reference));}catch(error){if(String(error.code||'').includes('resource-exhausted'))throw Error('共有先の利用上限に達しています。上限の回復後に再試行してください。');throw error;}}
+async function get(reference){try{return await deadline((window.fbGetDocFromServer||window.fbGetDoc)(reference));}catch(error){if(String(error.code||'').includes('resource-exhausted')){const failure=Error('共有先（Firestore）の利用上限に達しているため、ほかのユーザーに背景を配信できません。Firebaseの利用状況を確認し、上限の回復後に再試行してください。');failure.code='resource-exhausted';throw failure;}throw error;}}
 async function fetchCatalog(){
  const snap=await get(ref());if(!snap.exists())return null;const meta=snap.data();
  if(typeof meta.generation!=='string'||!Number.isInteger(meta.partCount)||meta.partCount<1||meta.partCount>16||meta.rawLength>4500000)throw Error('共有背景の保存情報が不正です。');
@@ -27,7 +27,7 @@ async function fetchCatalog(){
 }
 async function install(value){localStorage.setItem(cacheKey,JSON.stringify(value));if(window.AppStorage)await AppStorage.flush();window.dispatchEvent(new Event('background-catalog-changed'));return value;}
 function refresh(force=false){
- if(inFlight)return inFlight;if(Date.now()<retryAfter)return Promise.reject(lastError);if(!available())return Promise.resolve(readCache());if(!force&&Date.now()-lastRead<60000)return Promise.resolve(readCache());
+ if(inFlight)return inFlight;if(!force&&Date.now()<retryAfter)return Promise.reject(lastError);if(!available())return Promise.reject(Error('共有先にまだ接続できていません。接続後に再試行してください。'));if(!force&&Date.now()-lastRead<60000)return Promise.resolve(readCache());
  inFlight=(async()=>{const value=await fetchCatalog();if(value&&value.generation!==readCache()?.generation)await install(value);lastRead=Date.now();retryAfter=0;lastError=null;return value||readCache();})().catch(error=>{lastError=error;retryAfter=Date.now()+30000;throw error;}).finally(()=>inFlight=null);return inFlight;
 }
 async function publish({upserts=[],remove=[]}={}){

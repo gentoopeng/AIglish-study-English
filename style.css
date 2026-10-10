@@ -2295,3 +2295,6 @@ html body .flashcard-face-front,html body .flashcard-face-back{outline:2px solid
 }
 /* Safari's native select must keep its white label on a dark control surface. */
 #flashcardSourceSelect{color-scheme:dark; background:#172033!important; color:#fff!important;}
+
+#backgroundPickerRetry{display:block;margin:8px auto 16px;padding:8px 16px;border:1px solid rgba(214,202,170,.4);border-radius:18px;color:var(--text-main);background:rgba(15,23,42,.6);font:12px system-ui;}
+#backgroundPickerRetry[hidden],#backgroundAdminRetry[hidden]{display:none;}
