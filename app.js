@@ -1026,12 +1026,12 @@ if(pNameEl) pNameEl.innerText = myName;
 const gNameEl = document.getElementById('sideOptGroupName');
 if(gNameEl) gNameEl.innerText = "ID: " + myId;
  const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
- const sideAvatarFrame = document.querySelector('.sidebar-header .avatar-glow');
+ const sideAvatarFrame = document.getElementById('profileAvatarPreview');
  if(sideAvatarFrame) {
      if(mySavedAvatar) {
          const image=document.createElement('img');image.src=mySavedAvatar;image.alt=myName+'のアイコン';image.style.cssText='width:100%;height:100%;border-radius:50%;object-fit:cover';sideAvatarFrame.replaceChildren(image);
      } else {
-         sideAvatarFrame.innerText = "RANK";
+         sideAvatarFrame.innerText = myName.trim().slice(0,1);
      }
  }
 };
@@ -7504,7 +7504,7 @@ console.log('🔤 第12回パッチ（フラッシュ単語テキスト横拡張
 window.__USAGE_GUIDE_STEPS = [
     { icon: 'user-check', head: 'アカウントを作る／ログインする', desc: '初めての方は「新規作成」でプレイヤー名・本名・年齢・4桁の暗証番号を登録。発行されたIDはログインに必要なので必ずメモして。2回目以降はID＋暗証番号でログイン。' },
     { icon: 'book-marked', head: '単語帳で単語を覚える', desc: '単語をタップして意味を確認し、右の4つのボタンで理解度をマーク。⚪︎＝定着／△＝曖昧／✕＝不可／ー＝リセット。理解度と復習の記録が保存されます。' },
-    { icon: 'zap', head: 'フラッシュ＆ゲームで定着させる', desc: '単語帳一覧の「›」からフラッシュ単語を開始できます。ゲームタブの「単語の迷宮」でバトルにも挑戦できます。' }
+    { icon: 'zap', head: 'フラッシュ単語で定着させる', desc: '単語帳一覧の「›」からフラッシュ単語を開始できます。' }
 ];
 
 window.__USAGE_GUIDE_SECTIONS = [

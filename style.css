@@ -653,41 +653,6 @@ body.in-game-active .app-header { display: none !important; }
 body.in-game-active .nav-bar { display: none !important; }
 body.in-game-active .container { padding-top: 16px !important; padding-bottom: 16px !important; }
 
-.game-swipe-container::-webkit-scrollbar {
-    display: none;
-}
-.game-swipe-container {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-
-.tower-title-container {
-    position: absolute;
-    top: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
-    width: 100%;
-    pointer-events: none;
-}
-.tower-title-text {
-    font-family: 'Times New Roman', serif;
-    font-size: 32px;
-    font-weight: 900;
-    color: #DC2626;
-    letter-spacing: 12px;
-    text-shadow: 0 4px 15px rgba(0, 0, 0, 0.9), 0 1px 3px rgba(0, 0, 0, 0.8);
-    margin-left: 12px; 
-}
-.tower-title-line {
-    margin: 10px auto 0 auto;
-    width: 60%;
-    max-width: 240px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent 0%, #DC2626 50%, transparent 100%);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.8);
-}
-
 #game-mode-select-screen .modern-btn,
 #game-difficulty-select-screen .modern-btn {
     height: 90px !important; 
@@ -1767,8 +1732,6 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 .study-rank-row span { min-width:0; overflow-wrap:anywhere; }
 .study-rank-row strong { flex:none; font-family:ui-monospace,monospace; }
 .study-rank-row.is-self { color:var(--cosmic-cyan); }
-.study-tower-link { margin:16px 16px 0; padding:12px; border:1px solid rgba(213,201,172,.25); border-radius:10px; background:transparent; color:#eee8da; font-size:12px; cursor:pointer; }
-.study-tower-link svg { vertical-align:middle; margin-right:6px; }
 #activityBarChart .bar-wrap { flex:1; min-width:0; height:160px; display:flex; flex-direction:column; align-items:center; gap:6px; font-size:10px; color:var(--text-sub); cursor:pointer; }
 #activityBarChart .bar-track { width:70%; flex:1; min-height:0; display:flex; align-items:flex-end; border-radius:5px; background:rgba(255,255,255,.04); }
 #activityBarChart .bar-fill { width:100%; background:linear-gradient(0deg,var(--cosmic-cyan),var(--cosmic-purple-light)); border-radius:5px; }
@@ -2008,3 +1971,26 @@ html body .flashcard-face-front,html body .flashcard-face-back{outline:2px solid
 
 :root .music-track-label{font-size:12px;color:var(--text-sub);}
 :root .music-track-select{min-width:0;width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:#172033;color:var(--text-main);color-scheme:dark;font-size:13px;}
+
+/* Compact menu and native centered dialogs; no blur or perpetual animation. */
+.sidebar-menu-list{padding:22px 8px;display:grid;gap:6px;}
+.sidebar-menu-list .sidebar-item{margin:0;width:100%;padding:17px 18px;gap:14px;border-radius:12px;font-size:14px;}
+.sidebar-menu-list .sidebar-item span{flex:1;text-align:left;}
+.sidebar-menu-list .sidebar-item:hover{background:rgba(255,255,255,.06);}
+.sidebar-menu-list .sidebar-item:active{transform:scale(.98);}
+.sidebar .sidebar-version{margin-top:auto;padding:20px 26px;}
+.menu-dialog{box-sizing:border-box;width:min(390px,calc(100vw - 32px));max-height:calc(100dvh - 48px);margin:auto;padding:22px;border:1px solid rgba(148,163,184,.3);border-radius:22px;background:#131d30;color:var(--text-main);overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.35);}
+.menu-dialog[open]{animation:menu-dialog-enter .18s ease-out;}
+.menu-dialog::backdrop{background:rgba(4,9,18,.65);}
+.menu-dialog-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.menu-dialog-heading h2{margin:0;font-size:18px;letter-spacing:.08em;}
+.menu-dialog-heading button{border:0;background:rgba(255,255,255,.06);color:var(--text-main);border-radius:50%;width:34px;height:34px;font-size:24px;cursor:pointer;}
+.menu-dialog .sidebar-sounds{margin-bottom:14px;}
+.profile-identity-preview{display:flex;align-items:center;gap:14px;margin-bottom:20px;}
+#profileAvatarPreview{width:56px;height:56px;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:none;}
+#sideOptPlayerName{overflow-wrap:anywhere;font-size:16px;}
+#sideInputNameColor{width:100%;height:36px;padding:3px;cursor:pointer;}
+.profile-frame-placeholder{padding:10px;border:1px dashed var(--border);background:transparent;color:var(--text-sub);border-radius:8px;font-size:12px;}
+#settingsSaveStatus{font-size:12px;color:var(--text-sub);margin-bottom:0;}
+@keyframes menu-dialog-enter{from{opacity:0;transform:translateY(8px) scale(.98);}to{opacity:1;transform:none;}}
+@media(prefers-reduced-motion:reduce){.menu-dialog[open]{animation:none;}.sidebar-menu-list .sidebar-item:active{transform:none;}}

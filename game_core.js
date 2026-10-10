@@ -1,5 +1,5 @@
 // ================================================================
-// game_core.js —— ゲーム（フラッシュカード＋ソロバトル）関連ロジック
+// game_core.js —— フラッシュカード関連ロジック
 // 読み込み順: app.js → game_core.js
 // ================================================================
 (function() {
@@ -58,8 +58,6 @@
     };
 
     window.showFlashcardSetupScreen = function() {
-        var startScreen = document.getElementById('game-start-screen');
-        if (startScreen) startScreen.style.display = 'none';
         var lbArea = document.getElementById('gameLeaderboardArea');
         if (lbArea) lbArea.style.display = 'none';
         document.getElementById('flashcard-setup-screen').style.display = 'block';
@@ -193,8 +191,6 @@
     window.backToGameMenuFromCardSetup = function() {
         if (bookSettingsDialog) { closeBookSettings(); return; }
         document.getElementById('flashcard-setup-screen').style.display = 'none';
-        var startScreen = document.getElementById('game-start-screen');
-        if (startScreen) startScreen.style.display = 'flex';
         var lbArea = document.getElementById('gameLeaderboardArea');
         if (lbArea) lbArea.style.display = 'flex';
     };
@@ -679,8 +675,6 @@
         window.closeFlashcardWordDetails();
         document.body.classList.remove('in-game-active');
         document.getElementById('flashcard-play-screen').style.display = 'none';
-        var startScreen = document.getElementById('game-start-screen');
-        if (startScreen) startScreen.style.display = 'flex';
         var lbArea = document.getElementById('gameLeaderboardArea');
         if (lbArea) lbArea.style.display = 'flex';
         ['fcEdgeRippleRight', 'fcEdgeRippleLeft', 'fcEdgeRippleTop'].forEach(function(id) {
@@ -699,8 +693,6 @@
         if (playScreen) playScreen.style.display = 'none';
         var resultScreen = document.getElementById('game-result-screen');
         if (resultScreen) resultScreen.style.display = 'none';
-        var startScreen = document.getElementById('game-start-screen');
-        if (startScreen) startScreen.style.display = 'flex';
         var lbArea = document.getElementById('gameLeaderboardArea');
         if (lbArea) lbArea.style.display = 'flex';
         ['fcEdgeRippleRight', 'fcEdgeRippleLeft', 'fcEdgeRippleTop'].forEach(function(id) {

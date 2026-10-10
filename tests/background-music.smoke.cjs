@@ -21,7 +21,7 @@ const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict
   await page.goto('http://127.0.0.1:8000');await page.waitForFunction(()=>window.AppSounds);
   assert.equal(requests.length,0);assert.equal(await page.evaluate(()=>__players.length+__contexts.length),0,'no startup audio allocation');
   await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();await page.waitForFunction(()=>window.__learningBootReady===true);
-  await page.locator('.menu-trigger').click();await page.waitForFunction(()=>__started.some(src=>src.endsWith('/menu.mp3')));
+  await page.locator('.menu-trigger').click();await page.locator('#settingsMenuButton').click();await page.waitForFunction(()=>__started.some(src=>src.endsWith('/menu.mp3')));
   assert.equal(await page.locator('#musicEnabled').isChecked(),false);assert.equal(requests.filter(url=>url.includes('/music/')).length,0);
   await page.locator('#musicEnabled').check();await page.waitForFunction(()=>__started.some(src=>src.endsWith('/hitohira.mp3')));
   assert.equal(await page.evaluate(()=>__players.length),2);assert.equal(await page.evaluate(()=>__contexts.length),1);assert.equal(await page.evaluate(()=>__players.find(p=>p.loop).paused),false);
@@ -39,7 +39,7 @@ const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict
   assert.equal(await page.evaluate(()=>__players.every(p=>p.paused&&!p.hasAttribute('src'))),true);await page.waitForFunction(()=>__contexts[0].state==='suspended');
   await page.reload();await page.waitForFunction(()=>window.__learningBootReady===true);
   assert.equal(await page.evaluate(()=>__players.length),0,'saved enabled BGM cannot autoplay or allocate on reload');
-  await page.locator('.menu-trigger').click();await page.waitForFunction(()=>__started.some(src=>src.endsWith('/haru-fast.mp3')));
+  await page.locator('.menu-trigger').click();await page.locator('#settingsMenuButton').click();await page.waitForFunction(()=>__started.some(src=>src.endsWith('/haru-fast.mp3')));
   assert.equal(await page.locator('#musicEnabled').isChecked(),true);assert.equal(await page.locator('#musicTrack').inputValue(),'haru-fast');assert.equal(await page.locator('#musicVolume').inputValue(),'35');
   await page.locator('#musicEnabled').uncheck();await page.waitForFunction(()=>__contexts[0].state==='suspended');
   assert.equal(await page.evaluate(()=>__players.find(p=>p.loop).paused),true);

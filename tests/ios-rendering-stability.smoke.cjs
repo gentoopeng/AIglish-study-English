@@ -21,7 +21,7 @@ const appleUA='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKi
   const metrics=async()=>Object.fromEntries((await session.send('Performance.getMetrics')).metrics.map(m=>[m.name,m.value]));const before=await metrics();
   for(let round=0;round<6;round++){
    for(let i=0;i<8;i++)await page.evaluate(()=>{switchTab('study');switchTab('vocab');switchTab('reader');});
-   await page.locator('.menu-trigger').click();await page.locator('#sideInputName').fill('保存テスト '+round);await page.getByRole('button',{name:'プロフィールを保存',exact:true}).click();await page.locator('#sidebarOverlay').click({position:{x:370,y:400}});
+   await page.locator('.menu-trigger').click();await page.locator('#profileMenuButton').click();await page.locator('#sideInputName').fill('保存テスト '+round);await page.getByRole('button',{name:'プロフィールを保存',exact:true}).click();await page.getByRole('button',{name:'プロフィールを閉じる',exact:true}).click();
    await page.waitForTimeout(5000);await session.send('HeapProfiler.collectGarbage');
    assert.ok((await metrics()).JSHeapUsedSize-before.JSHeapUsedSize<12*1024*1024,'PWA heap grows without bound');
   }
