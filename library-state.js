@@ -61,12 +61,6 @@
         // Always merge the immutable deletion history before restoring any contents.
         let registry = read(owner);
         if (storage[storageKey(owner)]) {try {registry = merge(registry, JSON.parse(storage[storageKey(owner)]));} catch (e) {}}
-        if(window.LearningRewardsModel){
-            const walletKey='core_v4_learning_wallet_v1_'+owner;
-            for(const suffix of ['','_backup'])if(storage[walletKey+suffix])storage[walletKey+suffix]=JSON.stringify(window.LearningRewardsModel.mergeWallet(storage[walletKey+suffix],window.LearningRewardsModel.mergeWallet(localStorage.getItem(walletKey),localStorage.getItem(walletKey+'_backup'))));
-            const activityKey='core_v4_learning_activity_v1_'+owner;
-            for(const suffix of ['','_backup'])if(storage[activityKey+suffix])storage[activityKey+suffix]=JSON.stringify(window.LearningRewardsModel.mergeActivity(storage[activityKey+suffix],window.LearningRewardsModel.mergeActivity(localStorage.getItem(activityKey),localStorage.getItem(activityKey+'_backup'))));
-        }
         const ownedKey='core_v4_profile_shop_owned_'+owner;
         if(storage[ownedKey]){try{storage[ownedKey]=JSON.stringify(Array.from(new Set([...JSON.parse(localStorage.getItem(ownedKey)||'[]'),...JSON.parse(storage[ownedKey])])));}catch(e){}}
         const profileKey='core_v4_profile_customization_'+owner;
