@@ -39,7 +39,7 @@ form.onsubmit=async event=>{event.preventDefault();const id=owner(),name=form.el
 const oldUi=window.applyProfileToUi;window.applyProfileToUi=function(){restore();const result=oldUi.apply(this,arguments);const name=document.getElementById('sideOptPlayerName'),color=read().nameColor;if(name)name.style.color=/^#[0-9a-f]{6}$/i.test(color||'')?color:'';return result;};
 const profileDialog=document.getElementById('profileDialog'),settingsDialog=document.getElementById('settingsDialog');
 function openDialog(dialog){if(profileDialog.open)profileDialog.close();if(settingsDialog.open)settingsDialog.close();window.toggleSidebar(false);dialog.showModal();}
-window.openProfileDialog=function(){populate();window.applyProfileToUi();window.LearningWallet?.render();openDialog(profileDialog);};
+window.openProfileDialog=function(){populate();window.applyProfileToUi();openDialog(profileDialog);};
 window.openSettingsDialog=function(){document.getElementById('sidebarApiKeyInput').value=geminiApiKey;document.getElementById('settingsSaveStatus').textContent='';openDialog(settingsDialog);};
 [profileDialog,settingsDialog].forEach(dialog=>{
  dialog.querySelector('[data-menu-dialog-close]').onclick=()=>dialog.close();
@@ -47,6 +47,6 @@ window.openSettingsDialog=function(){document.getElementById('sidebarApiKeyInput
  dialog.addEventListener('close',()=>document.querySelector('.menu-trigger')?.focus());
 });
 window.saveSidebarApiKey=async function(){const status=document.getElementById('settingsSaveStatus');try{geminiApiKey=document.getElementById('sidebarApiKeyInput').value.trim();localStorage.setItem('core_v4_geminiKey',geminiApiKey);window.queueBackgroundSave?.();if(window.AppStorage)await AppStorage.flush();status.textContent='APIキーを保存しました。';}catch(error){status.textContent='保存できませんでした。もう一度お試しください。';}};
-window.onAppLoaded(async()=>{const id=owner();restore();window.applyProfileToUi();try{if(id!=='GUEST-000'&&window.db&&window.fbGetDoc){const snap=await window.fbGetDoc(window.fbDoc(window.db,'users',id));if(owner()!==id)return;if(snap.exists()){localStorage.setItem(key(id),JSON.stringify(merge(read(),snap.data().profileCustomizationJson)));window.LearningWallet?.mergeCloud(snap.data().learningWalletV1Json,id);}restore();window.applyProfileToUi();pending.add(id);sync();}}catch(error){pending.add(id);console.warn('プロフィールは端末の保存を使います',error);}});
+window.onAppLoaded(async()=>{const id=owner();restore();window.applyProfileToUi();try{if(id!=='GUEST-000'&&window.db&&window.fbGetDoc){const snap=await window.fbGetDoc(window.fbDoc(window.db,'users',id));if(owner()!==id)return;if(snap.exists()){localStorage.setItem(key(id),JSON.stringify(merge(read(),snap.data().profileCustomizationJson)));}restore();window.applyProfileToUi();pending.add(id);sync();}}catch(error){pending.add(id);console.warn('プロフィールは端末の保存を使います',error);}});
 window.addEventListener('storage',event=>{if(event.key===key(owner()))window.applyProfileToUi();});window.addEventListener('online',sync);setInterval(sync,30000);
 })();
