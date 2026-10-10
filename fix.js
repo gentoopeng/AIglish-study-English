@@ -928,20 +928,8 @@
     setInterval(function () {
     var id = myId(); if (id !== lastSeenId) { lastSeenId = id; if (!isOther()) loadMyData(); }
     injectAdminDataButton(); killResidueBanner();
-    // 世代トークン定期ポーリング（60秒）
-    if (!window.__fixGenPollLock) {
-    window.__fixGenPollLock = true;
-    netReadShared('app_settings').then(function (cfg) {
-    var gen = (cfg && cfg.resetGeneration) ? parseInt(cfg.resetGeneration) || 0 : 0;
-    window.__fixLastGen = gen;
-    var me = gMyIdSelf();
-    if (me && me !== 'GUEST-000' && gen > 0) {
-    var local = 0; try { local = parseInt(localStorage.getItem('__ste_reset_gen_' + me)) || 0; } catch (e) {}
-    if (gen > local) { wipeLocalDerived(); try { localStorage.setItem('__ste_reset_gen_' + me, String(gen)); } catch (e) {} try { if (window.saveUserStats) window.saveUserStats(); } catch (e) {} refreshDisplay(); toast('🧹 データが管理者によりリセットされました'); }
-    }
-    }).catch(function () {}).then(function () { window.__fixGenPollLock = false; });
-    }
-    }, 900);
+    // Retired administrator reset controls do not poll Firestore.
+    }, 30000);
     
     function boot() {
     if (typeof window.saveUserStats === 'function' && typeof window.loadLocalState === 'function') {
