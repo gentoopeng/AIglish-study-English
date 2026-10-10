@@ -10,17 +10,16 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="10.10.14.39">
+    <meta name="application-version" content="10.10.16.02">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
-    <script src="runtime-errors.js?v=10.10.14.39"></script>
-    <script src="app-storage.js?v=10.10.14.39"></script>
-    <script src="rendering-safety.js?v=10.10.14.39"></script>
+    <script src="runtime-errors.js?v=10.10.16.02"></script>
+    <script src="app-storage.js?v=10.10.16.02"></script>
+    <script src="rendering-safety.js?v=10.10.16.02"></script>
     <script src="vendor/lucide/lucide.min.js?v=0.468.0"></script>
-    <link rel="stylesheet" href="style.css?v=10.10.14.39">
-    <link rel="stylesheet" href="gacha.css?v=10.10.14.39">
+    <link rel="stylesheet" href="style.css?v=10.10.16.02">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -38,8 +37,6 @@
     <button id="scrollToTopBtn" class="scroll-to-top-btn" onclick="scrollToTop()">
         <i data-lucide="arrow-up" size="22"></i>
     </button>
-
-
 
 
 
@@ -303,14 +300,11 @@
 
 
 
-
-
                     <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('tawa.png'); background-size: cover; background-position: top center; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding-bottom: 80px; box-sizing: border-box;">
                         <div class="tower-title-container">
                             <div class="tower-title-text">単語の迷宮</div>
                             <div class="tower-title-line"></div>
                         </div>
-                        <button class="multi-start-btn" onclick="showMultiBattleChoice()">START</button>
                     </div>
 
                 </div>
@@ -394,205 +388,6 @@
                     <button id="flashcardInfoButton" class="flashcard-info-button" type="button" onclick="window.openFlashcardWordDetails()" aria-label="この単語の詳細を見る"><i data-lucide="info" size="20" aria-hidden="true"></i></button>
                 </div>
 
-                <div id="multi-battle-choice-screen" style="display:none; height:100%;">
-                    <div class="card game-mode-card game-cosmic-glow-box" style="padding: 20px 16px;">
-                        <h2 style="color:var(--cosmic-cyan); justify-content:center; margin-bottom:20px; font-size:18px;">
-                            <i data-lucide="users"></i> パーティ選択
-                        </h2>
-                        <div style="display:flex; flex-direction:column; gap:12px;">
-                            <button class="modern-btn" onclick="showMultiSetup()">チームを結成する</button>
-                            <button class="modern-btn" onclick="showMultiTeamList()">チームに参加する</button>
-                        </div>
-                        <button class="game-finish-inline-btn" style="margin: 24px auto 0 auto; background:none; border:none; box-shadow:none;" onclick="cancelMultiBattleChoice()">
-                            <i data-lucide="arrow-left" size="12"></i> 戻る
-                        </button>
-                    </div>
-                </div>
-
-                <div id="multi-battle-team-list-screen" style="display:none; height:100%;">
-                    <div class="card game-mode-card game-cosmic-glow-box" style="padding: 20px 16px;">
-                        <h2 style="color:var(--cosmic-cyan); justify-content:center; margin-bottom:12px; font-size:18px;">
-                            <i data-lucide="list"></i> 募集中チーム一覧
-                        </h2>
-                        <button class="list-action-link" style="margin-bottom:16px; width:100%; text-align:center; height:32px;" onclick="alert('ルーム情報を更新しました！')">
-                            <i data-lucide="refresh-cw" size="12" style="vertical-align: middle;"></i> 部屋情報を更新する
-                        </button>
-                        <div style="display:flex; flex-direction:column; gap:10px; width:100%; max-height:220px; overflow-y:auto; padding-right:4px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
-                                <span style="font-size:13px; font-weight:bold; color:white;">チーム・タンゴン (2/4人)</span>
-                                <button class="list-action-link" style="background:var(--cosmic-cyan); color:black; border:none; font-weight:bold;" onclick="joinMultiTeam('チーム・タンゴン')">参加</button>
-                            </div>
-                            <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
-                                <span style="font-size:13px; font-weight:bold; color:white;">コズミック部屋 (1/2人)</span>
-                                <button class="list-action-link" style="background:var(--cosmic-cyan); color:black; border:none; font-weight:bold;" onclick="joinMultiTeam('コズミック部屋')">参加</button>
-                            </div>
-                        </div>
-                        <button class="game-finish-inline-btn" style="margin: 24px auto 0 auto; background:none; border:none; box-shadow:none;" onclick="backToMultiChoiceFromList()">
-                            <i data-lucide="arrow-left" size="12"></i> 戻る
-                        </button>
-                    </div>
-                </div>
-
-                <div id="multi-battle-setup-screen" style="display:none; height:100%;">
-                    <div class="card game-mode-card game-cosmic-glow-box" style="padding: 20px 16px;">
-                        <h2 style="color:var(--admin-accent); text-align:center; margin-bottom:20px; font-size:18px;">
-                            <i data-lucide="swords"></i> バトル設定
-                        </h2>
-
-                        <div style="text-align:left; margin-bottom:16px;">
-                            <div style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; margin-bottom:6px;">① モード選択</div>
-
-                            <div id="multiModeSwipeArea" class="multi-flick-area" style="position:relative; margin-bottom:12px;">
-                                <div id="multiCoopActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--cosmic-cyan); color:var(--cosmic-cyan); background:rgba(0,240,255,0.15); z-index:20; font-weight:900;">選択中 🤝 協力戦</div>
-                                <div id="multiPvpActiveBadge" class="frame-badge" style="position:absolute; top:8px; left:12px; border-color:var(--admin-accent); color:var(--admin-accent); background:rgba(236,72,153,0.15); z-index:20; font-weight:900; display:none;">選択中 ⚔️ 対人戦</div>
-                                <img id="multiModeDisplayImage" src="kyouryoku.png" alt="協力戦" style="width:100%; height:180px; object-fit:contain;">
-                            </div>
-
-                            <div style="display:flex; justify-content:center; gap:8px; margin-bottom:14px;">
-                                <button class="pill-btn active" id="btnMultiCoop" onclick="window.selectMultiMode('coop')">🤝 協力戦へ</button>
-                                <button class="pill-btn" id="btnMultiPvp" onclick="window.selectMultiMode('pvp')">⚔️ 対人戦へ</button>
-                            </div>
-
-                            <div id="multiPvpTypeSelectionFrame" style="display:none; margin-bottom:14px;">
-                                <div style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; margin-bottom:6px;">対人戦形式 of 選択</div>
-                                <select id="multiPvpTypeSelect" class="search-input" style="background:var(--input-bg); color:white;" onchange="window.handlePvpFormatChange(this.value)">
-                                    <option value="1v1" selected>1v1 (シングルスバトル)</option>
-                                    <option value="2v2">2v2 (タッグチームバトル)</option>
-                                </select>
-                            </div>
-
-                            <div id="multiPlayerCountSelectionFrame">
-                                <div style="font-size:11px; color:var(--text-sub); font-weight:700; margin-bottom:6px;">パーティ人数</div>
-                                <select id="multiPlayerCount" class="search-input">
-                                    <option value="2">2人パーティ</option><option value="3">3人パーティ</option><option value="4" selected>4人パーティ</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div style="text-align:left; margin-bottom:24px;">
-                            <div style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; margin-bottom:6px;">② 出題範囲</div>
-                            <select id="multiCategorySelect" class="search-input" style="margin-bottom:8px;">
-                                <option value="english_mybook">英語：マイ単語帳</option>
-                                <option value="english_all">英語：全範囲ランダム</option>
-                            </select>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <input type="number" id="multiRangeStart" class="search-input" placeholder="1" style="margin:0;">
-                                <span style="color:var(--text-sub);">〜</span>
-                                <input type="number" id="multiRangeEnd" class="search-input" placeholder="100" style="margin:0;">
-                            </div>
-                        </div>
-
-                        <button class="modern-btn" style="height:48px; font-size:16px; border-color:var(--admin-accent) !important; color:var(--admin-accent) !important; text-shadow:0 0 5px rgba(236,72,153,0.5);" onclick="startMultiBattleMatching()">
-                            チームを結成する <i data-lucide="radio-receiver" size="16"></i>
-                        </button>
-                        <button class="game-finish-inline-btn" style="margin: 16px auto 0 auto; background:none; border:none; box-shadow:none;" onclick="backToMultiChoiceFromSetup()">
-                            <i data-lucide="arrow-left" size="12"></i> 戻る
-                        </button>
-                    </div>
-                </div>
-
-                <div id="multi-battle-matching-screen" style="display:none; height:100%; flex-direction:column; align-items:center; justify-content:center;">
-                    <div style="text-align:center;">
-                        <i data-lucide="loader" class="animate-spin" size="48" style="color:var(--cosmic-cyan); margin-bottom:16px;"></i>
-                        <div id="waitingRoomText" style="font-size:18px; font-weight:800; color:white; margin-bottom:8px;">他のプレイヤーの参加を待っています</div>
-                        <div style="font-size:12px; color:var(--text-sub);">サーバーとの通信を待機しています</div>
-                    </div>
-                    <button class="game-finish-inline-btn" style="margin-top:32px;" onclick="cancelMultiBattleMatching()">キャンセル</button>
-                </div>
-
-                <div id="multi-battle-play-screen" class="multi-play-screen-arena-context" style="display:none; height:100%; flex-direction:column; position:relative; overflow:hidden; padding-top:4px;">
-                    <div id="multiPvpArenaContainer" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:-1;"></div>
-                    <div id="battle-effects-layer" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:200;"></div>
-
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 0 4px; z-index: 10;">
-                        <button class="game-finish-inline-btn" id="multiEscapeOrSurrenderBtn" style="width: 60px; height: 20px; padding: 0; font-size: 10px; justify-content: center; background: rgba(0,0,0,0.6);" onclick="cancelMultiBattlePlay()">逃げる</button>
-
-                        <div style="flex: 1;">
-                            <div class="multi-boss-full-bar" id="multiBossHpBarContainer" style="height: 20px;">
-                                <div class="multi-boss-hp-fill" id="multiBossHpFill" style="width:100%;"></div>
-                                <div class="multi-boss-hp-text-layer">
-                                    <span style="font-size: 11px; letter-spacing: 1px;"></span>
-                                    <span id="multiEnemyHpText" style="font-size: 12px; font-family: monospace;">100000</span>
-                                </div>
-                            </div>
-
-                            <div class="multi-boss-full-bar" id="multiPvpOpponentHpFrame" style="display:none; height:20px; border-color:var(--admin-accent); box-shadow:0 0 10px rgba(236,72,153,0.4);">
-                                <div class="multi-boss-hp-fill" id="multiPvpOpponentHpFill" style="width:100%; background:linear-gradient(90deg, #701a75, var(--admin-accent));"></div>
-                                <div class="multi-boss-hp-text-layer">
-                                    <span style="font-size:9px; color:var(--admin-accent);" id="multiPvpOpponentName">ライバル修行者</span>
-                                    <span id="multiPvpOpponentHpText" style="font-size:12px; font-family:monospace;">3500 / 3500</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style="flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: space-between;">
-                        <div id="multiEnemyTimerDisplay" style="position: absolute; top: 10px; font-size: 16px; font-weight: 900; color: #EF4444; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 0 10px #EF4444; z-index: 15; letter-spacing: 1px;">行動: --秒</div>
-
-                        <div style="flex:1; display:flex; align-items:center; justify-content:center; width: 100%; position:relative;">
-                            <img src="boss1.png" alt="Boss" class="multi-boss-image" id="multiBossImage" style="max-width: 100%; max-height: 180px; object-fit: contain;">
-
-                            <div id="multiPvpOpponentVisualContainer" style="display:none; width:100%; display:flex; justify-content:center; gap:16px; align-items:center; z-index:10;">
-                                <img id="multiPvpOpponentCharImg1" src="tangon.png" alt="Rival 1" style="max-width:45%; max-height:160px; object-fit:contain; filter:drop-shadow(0 0 10px rgba(236,72,153,0.5));">
-                                <img id="multiPvpOpponentCharImg2" src="tangon.png" alt="Rival 2" style="max-width:45%; max-height:160px; object-fit:contain; filter:drop-shadow(0 0 10px rgba(236,72,153,0.5)); display:none;">
-                            </div>
-                        </div>
-
-                        <div id="multiPartyContainer" class="multi-party-grid-horizontal" style="width: 100%; padding: 0 10px; margin-bottom: 4px; z-index: 20;">
-                        </div>
-                    </div>
-
-                    <div class="multi-party-status-area" style="padding: 6px 10px; margin-bottom: 8px; flex-shrink: 0; z-index: 10;">
-
-                        <div class="multi-player-own-hp-frame" style="margin-bottom: 4px; display: none;" id="multiPlayerOwnHpFrame">
-                            <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; position: relative;">
-                                <div class="multi-party-hp-fill" id="multiPlayerOwnHpFill" style="width: 100%;"></div>
-                                <div class="hp-bar-inner-text-layer" id="multiPlayerOwnHpText">3500 / 3500</div>
-                            </div>
-                        </div>
-
-                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 4px;">
-                            <div id="multiBattleLog" style="flex: 1; margin-right: 10px; font-size: 12px; line-height: 1.2; text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 5px rgba(0,0,0,1);">
-                            </div>
-                            <div style="font-size: 11px; font-family: monospace; font-weight: bold; color: white; flex-shrink: 0;" id="multiLimitGaugeText">0%</div>
-                        </div>
-                        <div class="multi-hp-bar inner-text-hp-bar" style="height: 14px; margin-bottom: 6px; border-color: #F59E0B; box-shadow: 0 0 8px rgba(245, 158, 11, 0.455); division-edge: transform;">
-                            <div class="multi-hp-fill multi-limit-fill" id="multiLimitGaugeFill" style="width:0%;"></div>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-                            <div style="display: flex; gap: 6px;">
-                                <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipCharIcon">👤</div>
-                                <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipWeaponIcon">🗡️</div>
-                                <div class="multi-equip-icon" style="width: 22px; height: 22px; font-size: 12px;" id="multiEquipArmorIcon">🛡️</div>
-                            </div>
-                            <div style="text-align: right;">
-                                <div id="multiDamagePopupText" style="font-size: 10px; color: #EF4444; font-weight: 900; height: 12px; margin-bottom: 2px;"></div>
-                                <div style="font-size: 12px; font-weight: 900; color: #FBBF24; text-shadow: 0 0 5px #F59E0B;">COMBO <span id="multiComboCountText" style="font-size: 14px;">0</span></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="multi-flick-area" style="margin-top: auto; height: 250px; flex-shrink: 0;">
-                        <div class="multi-question-header-panel">
-                            <span class="multi-quest-lbl">TARGET WORD</span><br>
-                            <div class="flick-center-word" id="flickTargetWord">Word</div>
-                        </div>
-                        <div class="flick-pad-container" id="flickPadArea">
-                            <div id="flickWeaponIcon" class="flick-weapon-icon">🔥</div>
-                            <div class="multi-grid-3x3">
-                                <div class="flick-choice" id="multiChoice-0">---</div>
-                                <div class="flick-choice" id="multiChoice-1">---</div>
-                                <div class="flick-choice" id="multiChoice-2">---</div>
-                                <div class="flick-choice" id="multiChoice-3">---</div>
-                                <div class="flick-choice-center-blank"></div>
-                                <div class="flick-choice" id="multiChoice-4">---</div>
-                                <div class="flick-choice" id="multiChoice-5">---</div>
-                                <div class="flick-choice" id="multiChoice-6">---</div>
-                                <div class="flick-choice" id="multiChoice-7">---</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
 
 
@@ -601,81 +396,6 @@
 
 
 
-
-            </div>
-        </div>
-
-        <div id="view-party" class="tab-view">
-            <div class="card" style="padding: 16px; margin-bottom: 12px; border: 1px solid var(--cosmic-cyan);">
-                <div style="font-size: 11px; color: var(--cosmic-cyan); font-weight: 800; text-transform: uppercase; margin-bottom: 10px; text-align: center;">⚔️ 現在の装備ステータス ⚔️</div>
-
-                <div class="party-status-upper-grid">
-                    <div class="equip-slot-box" onclick="switchPartySubCategory('character')">
-                        <div class="slot-lbl">CHARACTER</div>
-                        <div id="slotCharImgContainer" class="slot-img-frame">🫙</div>
-                        <div id="slotCharName" class="slot-item-name">未編成</div>
-                    </div>
-                    <div class="equip-slot-box" onclick="switchPartySubCategory('weapon')">
-                        <div class="slot-lbl">WEAPON</div>
-                        <div id="slotWeaponImgContainer" class="slot-img-frame">🗡️</div>
-                        <div id="slotWeaponName" class="slot-item-name">素手</div>
-                    </div>
-                    <div class="equip-slot-box" onclick="switchPartySubCategory('armor')">
-                        <div class="slot-lbl">ARMOR</div>
-                        <div id="slotArmorImgContainer" class="slot-img-frame">🛡️</div>
-                        <div id="slotArmorName" class="slot-item-name">布の服</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="auth-tabs" style="margin-bottom: 12px; padding: 2px;">
-                <button class="auth-tab-btn active" id="partyTabChar" onclick="switchPartySubCategory('character')">キャラ一覧</button>
-                <button class="auth-tab-btn" id="partyTabWeapon" onclick="switchPartySubCategory('weapon')">武器一覧</button>
-                <button class="auth-tab-btn" id="partyTabArmor" onclick="switchPartySubCategory('armor')">防具一覧</button>
-            </div>
-
-            <div class="card" style="padding: 14px; min-height: 220px; max-height: 340px; overflow-y: auto;">
-                <div id="partyBoxCharacter" class="party-list-grid-view">
-                    <div class="char-select-card" onclick="selectCharacter('tangon')">
-                        <img src="tangon.png" alt="タンゴン" style="width:100%; height:80px; object-fit:contain; border-radius:8px; background:rgba(0,0,0,0.3); margin-bottom:4px;">
-                        <div style="font-size:12px; font-weight:bold; color:white;">タンゴン</div>
-                        <div style="font-size:9px; color:var(--text-sub);">味方HP上限増加</div>
-                    </div>
-                    <div class="char-select-card" onclick="selectCharacter('')">
-                        <div style="width:100%; height:70px; border-radius:6px; background:rgba(0,0,0,0.3); margin-bottom:4px; display:flex; align-items:center; justify-content:center; color:var(--text-sub);"><i data-lucide="user-minus" size="20"></i></div>
-                        <div style="font-size:12px; font-weight:bold; color:white;">外す</div>
-                    </div>
-                </div>
-
-                <div id="partyBoxWeapon" class="party-list-grid-view" style="display:none;">
-                    <div class="char-select-card" onclick="selectWeapon('fire_sword')">
-                        <div style="width:100%; height:70px; border-radius:6px; background:rgba(0,0,0,0.3); margin-bottom:4px; display:flex; align-items:center; justify-content:center; font-size:24px;">🔥🗡️</div>
-                        <div style="font-size:12px; font-weight:bold; color:white;">業火の大剣</div>
-                        <div style="font-size:9px; color:var(--word-bad);">攻撃力 +150</div>
-                    </div>
-                    <div class="char-select-card" onclick="selectWeapon('')">
-                        <div style="width:100%; height:70px; border-radius:6px; background:rgba(0,0,0,0.3); margin-bottom:4px; display:flex; align-items:center; justify-content:center; color:var(--text-sub);"><i data-lucide="minus-circle" size="20"></i></div>
-                        <div style="font-size:12px; font-weight:bold; color:white;">外す</div>
-                    </div>
-                </div>
-
-                <div id="partyBoxArmor" class="party-list-grid-view" style="display:none;">
-                    <div class="char-select-card" onclick="selectArmor('cosmic_shield')">
-                        <div style="width:100%; height:70px; border-radius:6px; background:rgba(0,0,0,0.3); margin-bottom:4px; display:flex; align-items:center; justify-content:center; font-size:24px;">🔮🛡️</div>
-                        <div style="font-size:12px; font-weight:bold; color:white;">星屑の盾</div>
-                        <div style="font-size:9px; color:var(--cosmic-cyan);">防御力 +80</div>
-                    </div>
-                    <div class="char-select-card" onclick="selectArmor('')">
-                        <div style="width:100%; height:70px; border-radius:6px; background:rgba(0,0,0,0.3); margin-bottom:4px; display:flex; align-items:center; justify-content:center; color:var(--text-sub);"><i data-lucide="minus-circle" size="20"></i></div>
-                        <div style="font-size:12px; font-weight:bold; color:white;">外す</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card" style="margin-top:12px; cursor:pointer; text-align:center; padding:18px;  border: 1px solid var(--admin-accent) !important;" onclick="alert('ガシャ画面は準備中です！')">
-                <i data-lucide="sparkles" style="color:var(--admin-accent); margin-bottom:6px;" size="24"></i>
-                <div style="font-size:14px; font-weight:900; color:white;">キャラクター＆武器ガシャ</div>
-                <div style="font-size:11px; color:var(--text-sub); margin-top:2px;">学習で溜めたEXPを使って新しい力を手に入れよう！</div>
             </div>
         </div>
 
@@ -687,7 +407,6 @@
         <button class="nav-item" id="nav-community" onclick="window.switchTab('community')"><i data-lucide="users" size="18"></i> フレンド</button>
         <button class="nav-item" id="nav-study" onclick="window.switchTab('study')"><i data-lucide="clock" size="18"></i> 勉強時間</button>
         <button class="nav-item" id="nav-titles" onclick="window.switchTab('titles')"><i data-lucide="medal" size="18"></i> ランキング</button>
-        <button class="nav-item" id="nav-party" hidden onclick="window.switchTab('party')"><i data-lucide="swords" size="18"></i> 編成</button>
     </div>
 
     <div id="textbookSelectPopupFrame" class="popover textbook-select-popup">
@@ -710,8 +429,6 @@
             <button class="pop-btn" style="background:var(--border); color:var(--text-main); max-width: 64px; display: inline-block;" id="popDetailsLink" onclick="window.closeWordPopover()">閉じる</button>
         </div>
     </div>
-
-    <div id="multi-battle-play-bg"></div>
 
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -739,31 +456,31 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <link rel="preload" href="library-state.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=10.10.14.39"></script>
-    <link rel="preload" href="learning-data.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=10.10.14.39"></script>
-    <script type="application/x-aiglish-script" data-app-src="vocab-master.js?v=10.10.14.39"></script>
-    <link rel="preload" href="app.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=10.10.14.39"></script>
-    <link rel="preload" href="game_core.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=10.10.14.39"></script>
-    <link rel="preload" href="vocab_ui.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=10.10.14.39"></script>
-    <link rel="preload" href="reader.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=10.10.14.39"></script>
-    <link rel="preload" href="view-work.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=10.10.14.39"></script>
-    <link rel="preload" href="fix.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=10.10.14.39"></script>
-    <link rel="preload" href="multi.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="multi.js?v=10.10.14.39"></script>
-    <link rel="preload" href="gacha.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="gacha.js?v=10.10.14.39"></script>
-    <link rel="preload" href="addon.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="addon.js?v=10.10.14.39"></script>
-    <link rel="preload" href="library.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=10.10.14.39"></script>
-    <link rel="preload" href="workbook.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=10.10.14.39"></script>
-    <link rel="preload" href="shared-notes.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=10.10.14.39"></script>
-    <link rel="preload" href="user-directory.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=10.10.14.39"></script>
-    <link rel="preload" href="study-time.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=10.10.14.39"></script>
-    <link rel="preload" href="ranking.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=10.10.14.39"></script>
-    <link rel="preload" href="autosave.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=10.10.14.39"></script>
-    <link rel="preload" href="people.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=10.10.14.39"></script>
-    <link rel="preload" href="image-metadata.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="image-metadata.js?v=10.10.14.39"></script>
-    <link rel="preload" href="profile.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=10.10.14.39"></script>
-    <link rel="preload" href="loading-quiz.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=10.10.14.39"></script>
-    <link rel="preload" href="background-catalog.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="background-catalog.js?v=10.10.14.39"></script>
-    <link rel="preload" href="app-background.js?v=10.10.14.39" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=10.10.14.39"></script>
-    <script src="app-loader.js?v=10.10.14.39" defer></script>
+    <link rel="preload" href="library-state.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=10.10.16.02"></script>
+    <link rel="preload" href="learning-data.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=10.10.16.02"></script>
+    <script type="application/x-aiglish-script" data-app-src="vocab-master.js?v=10.10.16.02"></script>
+    <link rel="preload" href="app.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=10.10.16.02"></script>
+    <link rel="preload" href="game_core.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=10.10.16.02"></script>
+    <link rel="preload" href="vocab_ui.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=10.10.16.02"></script>
+    <link rel="preload" href="reader.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=10.10.16.02"></script>
+    <link rel="preload" href="view-work.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=10.10.16.02"></script>
+    <link rel="preload" href="fix.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=10.10.16.02"></script>
+    <link rel="preload" href="save-system.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="save-system.js?v=10.10.16.02"></script>
+    <link rel="preload" href="save-coordinator.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="save-coordinator.js?v=10.10.16.02"></script>
+    <script type="application/x-aiglish-script" data-app-src="learning-feedback.js?v=10.10.16.02"></script>
+    <link rel="preload" href="library.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=10.10.16.02"></script>
+    <link rel="preload" href="workbook.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=10.10.16.02"></script>
+    <link rel="preload" href="shared-notes.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=10.10.16.02"></script>
+    <link rel="preload" href="user-directory.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=10.10.16.02"></script>
+    <link rel="preload" href="study-time.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=10.10.16.02"></script>
+    <link rel="preload" href="ranking.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=10.10.16.02"></script>
+    <link rel="preload" href="autosave.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=10.10.16.02"></script>
+    <link rel="preload" href="people.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=10.10.16.02"></script>
+    <link rel="preload" href="image-metadata.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="image-metadata.js?v=10.10.16.02"></script>
+    <link rel="preload" href="profile.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=10.10.16.02"></script>
+    <link rel="preload" href="loading-quiz.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=10.10.16.02"></script>
+    <link rel="preload" href="background-catalog.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="background-catalog.js?v=10.10.16.02"></script>
+    <link rel="preload" href="app-background.js?v=10.10.16.02" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=10.10.16.02"></script>
+    <script src="app-loader.js?v=10.10.16.02" defer></script>
 </body>
 </html>

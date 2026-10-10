@@ -97,7 +97,7 @@
         if(manual)return true;
         if(currentActiveTabId==='vocab')return visible('vocabBookContents')||visible('workbookContents');
         if(currentActiveTabId==='reader')return visible('text-reader-view');
-        return visible('flashcard-play-screen')||visible('multi-battle-play-screen')||!!(window.__loadQuiz&&window.__loadQuiz.active);
+        return visible('flashcard-play-screen')||!!(window.__loadQuiz&&window.__loadQuiz.active);
     }
     function unlock(){if(release){release();release=null;}if(fallbackLease&&user){try{const key='aiglish_study_lease_'+user,lease=JSON.parse(localStorage.getItem(key)||'null');if(lease&&lease.tab===tabId)localStorage.removeItem(key);}catch(e){}}leader=false;fallbackLease=false;}
     function writeLease(key,value){if(window.AppStorage)return window.AppStorage.setCoordination(key,value);try{localStorage.setItem(key,value);return true;}catch(error){return false;}}
