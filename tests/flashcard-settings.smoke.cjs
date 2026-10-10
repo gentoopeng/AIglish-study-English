@@ -15,7 +15,7 @@ for(const status of ['so','bad','none'])await page.locator('dialog [data-status=
 await page.locator('#btnCardJa2en').click();await page.getByRole('button',{name:'カードを開始する'}).click();
 await page.waitForFunction(()=>flashcardOriginQueue.length>0&&currentTextbook==='test-book');
 const result=await page.evaluate(()=>({queue:flashcardOriginQueue,mode:flashcardDirectionMode,version:document.getElementById('appVersionDisplay').textContent}));
-assert.equal(await page.locator('#flashcardPartOfSpeech').textContent(),'動');assert.equal(await page.locator('#flashcardPartOfSpeech').isVisible(),true);assert.equal(result.queue.length,1);assert.equal(result.queue[0].num,2);assert.equal(result.mode,'ja2en');assert.equal(result.version,'Version 10.10.19.53');assert.equal(await page.locator('dialog[open]').count(),0);
+assert.equal(await page.locator('#flashcardPartOfSpeech').textContent(),'動');assert.equal(await page.locator('#flashcardPartOfSpeech').isVisible(),true);assert.equal(result.queue.length,1);assert.equal(result.queue[0].num,2);assert.equal(result.mode,'ja2en');assert.equal(result.version,'Version 10.10.20.14');assert.equal(await page.locator('dialog[open]').count(),0);
 const beforeSwipe=await page.evaluate(()=>userStats.flash_count);await page.evaluate(()=>window.swipeFlashcard('right',100,0));assert.equal(await page.evaluate(()=>userStats.flash_count),beforeSwipe+1);assert.ok(await page.evaluate(()=>userStats.vocab_rated_count)>=1);await page.evaluate(()=>window.finishFlashcardSession());assert.equal(await page.locator('#view-vocab').evaluate(el=>el.classList.contains('active')),true);assert.equal(await page.locator('#nav-vocab').evaluate(el=>el.classList.contains('active')),true);await page.evaluate(()=>window.switchTab('game'));
 assert.equal(await page.locator('#game-start-screen,.tower-title-text,.study-tower-link').count(),0);
 assert.equal(await page.locator('#game-mode-select-screen, #game-difficulty-select-screen, #game-play-screen, #game-result-screen, #gameLeaderboardArea').count(),0);
@@ -23,5 +23,5 @@ assert.equal(await page.evaluate(()=>typeof window.startActualGame),'undefined')
 assert.equal(await page.locator('#game-start-screen button, [id^=multi-battle-], #view-party').count(),0);
 assert.equal(await page.evaluate(()=>typeof window.startMultiBattlePlay),'undefined');
 assert.deepEqual(errors,[]);
-console.log('PASS: retired labyrinth and mobile flashcard popup, Escape, selected book, range, understanding filter, reverse side and version 10.10.19.53');await browser.close();
+console.log('PASS: retired labyrinth and mobile flashcard popup, Escape, selected book, range, understanding filter, reverse side and version 10.10.20.14');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

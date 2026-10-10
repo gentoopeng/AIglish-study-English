@@ -172,11 +172,11 @@
     let podiumShape=null;
     function renderRanking() {
         const container=document.getElementById('studyFriendRanking');if(!container||!data)return;
-        const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false,id:f.id,avatar:f.avatar||'',getStats:()=>f.stats}));
-        if(user!=='GUEST-000')rows.push({name:(myName||'あなた'),seconds:Math.floor(rangeValue(data,'daily',Date.now())/1000),self:true,id:user,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',getStats:()=>userStats});
+        const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false,id:f.id,avatar:f.avatar||'',appearance:f.appearance,getStats:()=>f.stats}));
+        if(user!=='GUEST-000')rows.push({name:(myName||'あなた'),seconds:Math.floor(rangeValue(data,'daily',Date.now())/1000),self:true,id:user,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',appearance:localStorage.getItem('core_v4_profile_customization_'+user),getStats:()=>userStats});
         const top=rows.filter(r=>r.seconds>=300).sort((a,b)=>b.seconds-a.seconds||a.id.localeCompare(b.id)).slice(0,3);
         const signature=JSON.stringify(top.map(row=>[row.id,row.seconds]));
-        const shape=[[user],...top.map(record=>[record.id,record.name,record.avatar])];
+        const shape=[[user],...top.map(record=>[record.id,record.name,record.avatar,record.appearance])];
         const same=podiumShape&&podiumShape.length===shape.length&&podiumShape.every((row,i)=>row.length===shape[i].length&&row.every((value,j)=>value===shape[i][j]));
         if(same&&container.dataset.signature===signature)return;container.dataset.signature=signature;
         if(same){top.forEach((record,index)=>{const column=container.querySelector('.place-'+(index+1));if(column){column.querySelector('strong').textContent=format(record.seconds*1000);column.onclick=()=>{if(window.RankingVisuals)window.RankingVisuals.detailStudy(record,index+1);};}});return;}
@@ -185,9 +185,9 @@
         const podium=document.createElement('div');podium.className='study-podium';
         [1,0,2].forEach(index=>{const record=top[index],place=index+1;const column=document.createElement(record?'button':'div');column.className='study-podium-place place-'+place+(record&&record.self?' is-self':'')+(mounted?' podium-mounted':'');if(!record){column.classList.add('is-empty');column.setAttribute('aria-hidden','true');podium.append(column);return;}
             column.type='button';column.setAttribute('aria-label',place+'位 '+record.name+'の今日の学習記録');column.onclick=()=>{if(window.RankingVisuals)window.RankingVisuals.detailStudy(record,place);};
-            const name=document.createElement('span');name.className='study-podium-name';if(window.RankingVisuals)window.RankingVisuals.name(name,record.name);else name.textContent=record.name;
+            const name=document.createElement('span');name.className='study-podium-name';if(window.RankingVisuals)window.RankingVisuals.name(name,record.name,record.appearance);else name.textContent=record.name;
             const time=document.createElement('strong');time.textContent=format(record.seconds*1000);
-            const step=document.createElement('div');step.className='study-podium-step';step.textContent=String(place);if(window.RankingVisuals)column.append(window.RankingVisuals.avatar(record.avatar,record.name));column.append(name,time,step);podium.append(column);
+            const step=document.createElement('div');step.className='study-podium-step';step.textContent=String(place);if(window.RankingVisuals)column.append(window.RankingVisuals.avatar(record.avatar,record.name,record.appearance));column.append(name,time,step);podium.append(column);
         });container.append(podium);
     }
     async function refreshRanking(force=false) {
@@ -203,7 +203,7 @@
                 if(seconds<300)return;
                 // Keep only three podium candidates, never entire profile statistics/artwork.
                 const compact={study_calendar_v2:resetLedger(stats.study_calendar_v2),learning_ranking_v2_json:remote.learningRankingV2Json||stats.learning_ranking_v2_json,learning_ranking_owner:stats.learning_ranking_owner};
-                records.push({id,name:remote.playerName||remote.name||id,avatar:remote.avatar||'',date:today,seconds,stats:compact});
+                records.push({id,name:remote.playerName||remote.name||id,avatar:remote.avatar||'',appearance:window.RankingVisuals?.appearanceOf(remote),date:today,seconds,stats:compact});
                 records.sort((a,b)=>b.seconds-a.seconds||a.id.localeCompare(b.id));records.splice(3);
             },()=>user===owner&&uid()===owner&&currentActiveTabId==='study'&&document.visibilityState==='visible');
             if(user===owner&&uid()===owner){ranking=records;rankingLoadedAt=Date.now();rankingDay=today;renderRanking();}
