@@ -8,6 +8,8 @@ const file=admin.querySelector('#sidebarBackgroundFile'),position=admin.querySel
 const auth=admin.querySelector('#backgroundAdminAuth'),controls=admin.querySelector('#backgroundAdminControls');
 const selection=admin.querySelector('#backgroundAdminSelection'),register=admin.querySelector('#backgroundAdminRegister');
 const slides=picker.querySelector('#backgroundPickerSlides');
+// Static assets are available to every account without a Firestore image read.
+const bundled=[Object.freeze({id:'bundled-classroom',image:'assets/background-classroom.webp',preview:'assets/background-classroom-preview.webp',position:30,bundled:true})];
 const empty=()=>({mode:'default',selected:'',backgrounds:[],updatedAt:0});
 const validImage=value=>typeof value==='string'&&value.length<=1000000&&/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(value);
 const focus=value=>Math.max(0,Math.min(100,Number.isFinite(Number(value))?Number(value):30));
@@ -34,10 +36,12 @@ function read(id){
   if(!backgrounds.length&&validImage(value.image))backgrounds.push({id:'legacy-photo-'+encodeURIComponent(id),name:'選んだ写真',image:value.image,preview:'',position:focus(value.position)});
   const shared=window.BackgroundCatalog?.readCache();
   if(shared){const privateItems=backgrounds.filter(item=>!shared.knownIds.includes(item.id));backgrounds.splice(0,backgrounds.length,...shared.backgrounds,...privateItems);}
+  const dynamic=backgrounds.filter(item=>!bundled.some(asset=>asset.id===item.id));
+  backgrounds.splice(0,backgrounds.length,...bundled,...dynamic);
   const wanted=value.selected==='legacy-photo'?'legacy-photo-'+encodeURIComponent(id):value.selected;
-  const chosen=backgrounds.find(item=>item.id===wanted)||(!wanted?backgrounds[0]:null);
+  const chosen=backgrounds.find(item=>item.id===wanted)||(!wanted?dynamic[0]:null);
   return {mode:value.mode==='photo'&&chosen?'photo':'default',selected:chosen?.id||value.selected||'',backgrounds,updatedAt:Number(value.updatedAt)||0};
- }catch(error){message('背景設定を読み取れませんでした。');return empty();}
+ }catch(error){message('背景設定を読み取れませんでした。');return {...empty(),backgrounds:[...bundled]};}
 }
 // Revocable URLs release obsolete photo resources on switches and suspension.
 function photoUrl(data){const binary=atob(data.slice(data.indexOf(',')+1)),bytes=new Uint8Array(binary.length);for(let index=0;index<binary.length;index++)bytes[index]=binary.charCodeAt(index);return URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'}));}
@@ -46,8 +50,8 @@ function renderBackground(item){
  if(document.hidden||document.documentElement.classList.contains('pwa-recovery-rendering')){releaseBackground();return;}
  const source=item?item.image:'default';if(source===backgroundSource)return;
  const previous=backgroundUrl;
- backgroundUrl=item?photoUrl(item.image):'';backgroundSource=source;
- document.documentElement.style.setProperty('--app-background-image',item?'url("'+backgroundUrl+'")':'url("assets/background-night.webp")');
+ backgroundUrl=item&&!item.bundled?photoUrl(item.image):'';backgroundSource=source;
+ document.documentElement.style.setProperty('--app-background-image',item?'url("'+(item.bundled?item.image:backgroundUrl)+'")':'url("assets/background-night.webp")');
  if(previous)URL.revokeObjectURL(previous);
 }
 function apply(){
@@ -70,12 +74,12 @@ async function save(next,success='背景を保存しました。'){
   if(next.backgrounds!==settings.backgrounds){
    if(!isAdmin())throw Error('管理者の認証が必要です。');
    const previous=settings.backgrounds;
-   const upserts=next.backgrounds.filter(item=>previous.find(old=>old.id===item.id)!==item);
-   const remove=previous.filter(item=>!next.backgrounds.some(now=>now.id===item.id)).map(item=>item.id);
+   const upserts=next.backgrounds.filter(item=>!item.bundled&&previous.find(old=>old.id===item.id)!==item);
+   const remove=previous.filter(item=>!item.bundled&&!next.backgrounds.some(now=>now.id===item.id)).map(item=>item.id);
    const shared=await window.BackgroundCatalog.publish({upserts,remove});
    if(owner()!==id||token!==saveRevision)return false;
-   next={...next,backgrounds:shared.backgrounds};
-  }else if(!window.BackgroundCatalog.readCache()&&!localStorage.getItem(catalogKey(id)))localStorage.setItem(catalogKey(id),JSON.stringify({backgrounds:next.backgrounds,mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));
+   next={...next,backgrounds:[...bundled,...shared.backgrounds]};
+  }else if(!window.BackgroundCatalog.readCache()&&!localStorage.getItem(catalogKey(id)))localStorage.setItem(catalogKey(id),JSON.stringify({backgrounds:next.backgrounds.filter(item=>!item.bundled),mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));
   localStorage.setItem(key(id),JSON.stringify({mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));settings=next;loadedPreferences=localStorage.getItem(key(id));loadedCatalog=localStorage.getItem(catalogKey(id));apply();
   if(window.AppStorage)await window.AppStorage.flush();
   if(owner()!==id||token!==saveRevision)return false;
@@ -83,10 +87,11 @@ async function save(next,success='背景を保存しました。'){
  }catch(error){if(owner()===id&&token===saveRevision)message('保存できませんでした。'+error.message);console.warn('背景設定の保存に失敗しました',error);return false;}
 }
 function adminList(id=settings.selected){
- selection.replaceChildren(...settings.backgrounds.map(item=>{const option=document.createElement('option');option.value=item.id;option.textContent=label(item);return option;}));
+ const editable=settings.backgrounds.filter(item=>!item.bundled);
+ selection.replaceChildren(...editable.map(item=>{const option=document.createElement('option');option.value=item.id;option.textContent=label(item);return option;}));
  selection.value=id;position.value=String(settings.backgrounds.find(item=>item.id===selection.value)?.position??30);
- selection.disabled=!settings.backgrounds.length;admin.querySelector('#backgroundAdminDelete').disabled=!settings.backgrounds.length;
- admin.querySelector('#sidebarBackgroundFocus').hidden=!settings.backgrounds.length;
+ selection.disabled=!editable.length;admin.querySelector('#backgroundAdminDelete').disabled=!editable.length;
+ admin.querySelector('#sidebarBackgroundFocus').hidden=!editable.length;
 }
 function releasePreview(button){
  const resource=previews.get(button);if(!resource)return;
@@ -102,6 +107,7 @@ async function showPreview(button){
  const current=()=>picker.open&&previews.get(button)===resource;
  try{
   const item=button._backgroundItem;let source=item.preview;
+  if(item.bundled){if(current())button.querySelector('img').src=item.preview;return;}
   if(item.id==='default'){if(current())button.querySelector('img').src='assets/background-night-preview.webp';return;}
   if(!source){
    source=previewCache.get(item.image);
@@ -127,7 +133,7 @@ document.getElementById('headerBackgroundButton').onclick=()=>{
  load();releasePreviews();slides.replaceChildren(card({id:'default',position:50}),...settings.backgrounds.map(card));
  // Portrait previews match the current phone viewport rather than stretching landscape photos.
  picker.style.setProperty('--preview-ratio',innerWidth+'/'+innerHeight);document.body.append(picker);picker.showModal();apply();
- refreshShared(true);
+ refreshShared();
  const current=slides.querySelector('[aria-pressed="true"]');if(current)slides.scrollLeft+=current.getBoundingClientRect().left-slides.getBoundingClientRect().left-(slides.clientWidth-current.offsetWidth)/2;visiblePreviews();
 };
 slides.onclick=event=>{
@@ -147,7 +153,7 @@ register.onclick=async()=>{
  const id=account,token=++revision,source=stagedFile;
  file.disabled=true;register.disabled=true;register.textContent='登録中…';message('写真を準備しています…');
  try{
-  if(settings.backgrounds.length>=12&&!stagedItem)throw Error('背景は12枚まで登録できます。使わない背景を削除してください。');
+  if(settings.backgrounds.filter(item=>!item.bundled).length>=12&&!stagedItem)throw Error('背景は12枚まで登録できます。使わない背景を削除してください。');
   if(source.size>12*1024*1024)throw Error('12MB以下の写真を選んでください。');
   const current=()=>isAdmin()&&owner()===id&&revision===token;
   if(!stagedItem){
@@ -155,11 +161,11 @@ register.onclick=async()=>{
    // Decode only the compressed image for a smaller slider thumbnail, never the source twice.
    const blob=await (await fetch(image)).blob();
    const preview=await window.ProfileImages.imageFile(blob,320,'image/jpeg',current,.5);if(!current())return;
-   if(image.length>1000000||settings.backgrounds.reduce((size,item)=>size+item.image.length+item.preview.length,0)+image.length+preview.length>4000000)throw Error('画像の容量が大きいため、使わない背景を削除してから追加してください。');
+   if(image.length>1000000||settings.backgrounds.filter(item=>!item.bundled).reduce((size,item)=>size+item.image.length+item.preview.length,0)+image.length+preview.length>4000000)throw Error('画像の容量が大きいため、使わない背景を削除してから追加してください。');
    stagedItem={id:'photo-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),image,preview,position:30};
   }
   const item=stagedItem,backgrounds=settings.backgrounds.some(existing=>existing.id===item.id)?settings.backgrounds:[...settings.backgrounds,item];
-  if(await save({...settings,backgrounds,selected:settings.selected||item.id},'写真を登録しました（合計'+backgrounds.length+'枚）。')&&current()){stagedFile=null;stagedItem=null;file.value='';adminList(item.id);}
+  if(await save({...settings,backgrounds,selected:settings.selected||item.id},'写真を登録しました（合計'+backgrounds.filter(item=>!item.bundled).length+'枚）。')&&current()){stagedFile=null;stagedItem=null;file.value='';adminList(item.id);}
  }catch(error){if(owner()===id&&revision===token)message(error.message);}finally{if(revision===token){file.disabled=false;register.disabled=!isAdmin()||!stagedFile;register.textContent='登録する';}}
 };
 selection.onchange=()=>{if(isAdmin())position.value=String(settings.backgrounds.find(item=>item.id===selection.value)?.position??30);};
@@ -189,7 +195,7 @@ async function migrateLegacy(){
  file.disabled=true;register.disabled=true;selection.disabled=true;position.disabled=true;admin.querySelector('#backgroundAdminDelete').disabled=true;
  try{
   await window.BackgroundCatalog.refresh(true);if(!current())return;load();
-  const shared=window.BackgroundCatalog.readCache(),legacy=settings.backgrounds.filter(item=>!shared?.knownIds.includes(item.id));
+  const shared=window.BackgroundCatalog.readCache(),legacy=settings.backgrounds.filter(item=>!item.bundled&&!shared?.knownIds.includes(item.id));
   if(legacy.length)await window.BackgroundCatalog.publish({upserts:legacy});
   if(current()){redraw();message(legacy.length?'以前の背景も全ユーザーに共有しました。':'背景は全ユーザー共通です。');}
  }catch(error){if(current())message('共有できませんでした。'+error.message);}

@@ -28,7 +28,7 @@ const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict
   const heap=async()=>session?Object.fromEntries((await session.send('Performance.getMetrics')).metrics.map(m=>[m.name,m.value])).JSHeapUsedSize:0;
   const beforeHeap=await heap();let maximumSources=0;
   for(let round=0;round<12;round++){
-   await page.locator('#headerBackgroundButton').click();assert.equal(await page.locator('.background-preview').count(),13);assert.equal(await page.locator('.background-preview span').count(),0);
+   await page.locator('#headerBackgroundButton').click();assert.equal(await page.locator('.background-preview').count(),14);assert.equal(await page.locator('.background-preview span').count(),0);
    for(const index of [0,6,11]){
     const button=page.locator('[data-background="budget-'+index+'"]');await button.scrollIntoViewIfNeeded();await button.click();await page.locator('#backgroundPickerStatus').filter({hasText:'背景を保存しました'}).waitFor();await page.waitForTimeout(40);
     const sources=await page.locator('.background-preview img[src]').count();maximumSources=Math.max(maximumSources,sources);assert.ok(sources<=3);assert.ok(await page.evaluate(()=>__livePhotoUrls.size)<=4);
