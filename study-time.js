@@ -70,6 +70,7 @@
     function mergeCurrent(left,right) {return merge(resetLedger(left),resetLedger(right));}
     const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent,weekValues,readStats,rankingSeconds};
     window.StudyTimeModel=model;
+    let sleepState=null,activitySlices=[];
     let user='',data=null,manual=false,paused=false,active=false,leader=false,lockPending=false,release=null,lastMono=performance.now(),lastWall=Date.now(),lastCloud=0;
     let month=new Date();month.setDate(1);let selected=dateKey(Date.now()),rankRange='daily',ranking=[],rankingLoading=false,rankingLoadedAt=0,rankingDay='';
     let fallbackLease=false;
@@ -82,7 +83,7 @@
     function persist() {if(!user||!data)return;data.updatedAt=Date.now();try{const previous=read(user);if(previous&&previous.epoch===RESET_EPOCH)localStorage.setItem(storageKey(user)+'_backup',JSON.stringify(mergeCurrent(previous,data)));localStorage.setItem(storageKey(user),JSON.stringify(data));}catch(e){const status=document.getElementById('studyTimerStatus');if(status)status.textContent='保存できません。ブラウザーの空き容量を確認してください。';console.error('勉強時間を保存できませんでした',e);}}
     function ensureUser() {
         const next=uid();if(next===user)return;
-        unlock();user=next;manual=false;paused=false;active=false;lastMono=performance.now();lastWall=Date.now();ranking=[];rankingLoadedAt=0;rankingDay='';
+        unlock();sleepState=null;activitySlices=[];user=next;manual=false;paused=false;active=false;lastMono=performance.now();lastWall=Date.now();ranking=[];rankingLoadedAt=0;rankingDay='';
         if(!user){data=null;return;}
         let stats={};try{stats=JSON.parse(localStorage.getItem('core_v4_user_stats_'+user)||'{}');}catch(e){}
         const saved=read(user);let backup=null;try{backup=JSON.parse(localStorage.getItem(storageKey(user)+'_backup')||'null');}catch(e){}data=mergeCurrent(saved,backup);
@@ -91,7 +92,7 @@
     }
     function visible(id) {const el=document.getElementById(id);return !!(el&&getComputedStyle(el).display!=='none'&&el.getClientRects().length);}
     function eligible() {
-        if(!user||document.visibilityState!=='visible'||paused)return false;
+        if(!user||document.visibilityState!=='visible'||paused||sleepState)return false;
         if(!navigator.locks&&!document.hasFocus())return false;
         const gate=document.getElementById('auth-gate-screen');if(gate&&getComputedStyle(gate).display!=='none')return false;
         if(manual)return true;
@@ -110,9 +111,10 @@
     function tick() {
         ensureUser();if(!data)return;
         const mono=performance.now(),wall=Date.now(),elapsed=mono-lastMono;
+        if(sleepState){lastMono=mono;lastWall=wall;return;}
         if(fallbackLease){let lease;try{lease=JSON.parse(localStorage.getItem('aiglish_study_lease_'+user)||'null');}catch(e){}if(!lease||lease.tab!==tabId){leader=false;fallbackLease=false;}}
         // Hidden/suspended pages never accrue the time that elapsed before resuming.
-        if(active&&leader&&elapsed>0&&elapsed<60000){data=mergeCurrent(data,read(user));accrue(data,device,lastWall,lastWall+elapsed);persist();}
+        if(active&&leader&&elapsed>0&&elapsed<60000){data=mergeCurrent(data,read(user));accrue(data,device,lastWall,lastWall+elapsed);activitySlices.push([lastWall,lastWall+elapsed]);activitySlices=activitySlices.filter(slice=>slice[1]>wall-360000);persist();}
         lastMono=mono;lastWall=wall;active=eligible();
         if(!active)unlock();else if(!leader)claim();else if(fallbackLease&&!writeLease('aiglish_study_lease_'+user,JSON.stringify({tab:tabId,expires:wall+3000})))unlock();
         sync();renderDisplay();
@@ -211,7 +213,14 @@
         finally{rankingLoading=false;button.disabled=false;button.textContent='更新';}
     }
     function init(){ensureUser();if(data&&userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);tick();chart();renderCalendar();}
-    window.StudyTime={init,sync,tick,snapshot:()=>{ensureUser();return data?JSON.parse(JSON.stringify(data)):null;},mergeCloud:calendar=>{ensureUser();if(data){data=mergeCurrent(data,calendar);persist();sync();renderCalendar();chart();}}};
+    function sleep(since){
+        if(sleepState)return 0;tick();sleepState={manual,paused};paused=true;active=false;unlock();
+        const remove={days:{},offset:0},end=Math.min(Date.now(),since+300000);for(const [start,finish] of activitySlices){const left=Math.max(start,since),right=Math.min(finish,end);if(right>left)accrue(remove,device,left,right);}
+        let deducted=0;for(const [day,value] of Object.entries(remove.days)){const ms=Math.min(dayMilliseconds(data.days[day]),dayMilliseconds(value));if(ms){editDay(data,day,dayMilliseconds(data.days[day])-ms,Math.max(Date.now(),Number(data.days[day]?.edit?.at||0)+1));deducted+=ms;}}
+        activitySlices=[];persist();sync();renderDisplay();renderCalendar();return deducted;
+    }
+    function wake(){if(!sleepState)return;manual=sleepState.manual;paused=sleepState.paused;sleepState=null;lastMono=performance.now();lastWall=Date.now();active=eligible();if(active)claim();renderDisplay();}
+    window.StudyTime={sleep,wake,init,sync,tick,snapshot:()=>{ensureUser();return data?JSON.parse(JSON.stringify(data)):null;},mergeCloud:calendar=>{ensureUser();if(data){data=mergeCurrent(data,calendar);persist();sync();renderCalendar();chart();}}};
     window.initStudyTimerAndDataRotation=init;
     window.__updateStudyTimeDisplay=()=>{sync();renderDisplay();};window.renderActivityChart=chart;window.__steSanitizeStudyData=()=>false;
     window.__openStudyTimeEditor=day=>{const d=new Date();d.setDate(d.getDate()-(((d.getDay()+6)%7-day+7)%7));editDate(dateKey(d));};
