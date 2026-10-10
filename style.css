@@ -1911,10 +1911,10 @@ div[id*="multiParty"], div[class*="multi-party"], div[class*="m2-ally"] {
 .vocab-library-list .textbook-list-item:active,
 .textbook-select-popup .textbook-list-item:active { background:rgba(255,255,255,.1); }
 .vocab-library-list .textbook-list-item { opacity:1; transform:none; animation:none; }
-.book-flashcard-dialog { width:min(420px,calc(100vw - 32px)); max-height:85dvh; overflow:auto; box-sizing:border-box; padding:20px; border:1px solid var(--cosmic-purple-light); border-radius:20px; background:var(--card-bg,#161c2d); color:var(--text-main,#fff); }
+.book-flashcard-dialog { width:min(420px,calc(100vw - 32px)); max-height:85dvh; overflow:auto; box-sizing:border-box; padding:20px; border:1px solid var(--cosmic-purple-light); border-radius:20px; background:rgba(15,23,42,.72); color:var(--text-main,#fff); }
 .book-flashcard-dialog::backdrop { background:rgba(0,0,0,.72); backdrop-filter:blur(5px); }
 .book-flashcard-dialog > h2 { margin:0 0 12px; font-size:18px; text-align:center; }
-.book-flashcard-dialog #flashcard-setup-screen { margin-top:0 !important; }
+.book-flashcard-dialog #flashcard-setup-screen { position:static!important; width:100%!important; height:auto!important; padding-top:0!important; margin-top:0!important; }
 .book-flashcard-dialog #flashcard-setup-screen > .card { margin:0; }
 
 .library-toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
@@ -2287,3 +2287,12 @@ html body .app-header .hf-badge { gap:2px; }
 
 /* Let the photograph show through the large analysis fields as well as the shared cards. */
 #view-reader .modern-textarea,#view-reader .search-input{background:rgba(15,23,42,.35)!important;}
+
+/* Keep settings inside their translucent dialog, and distinguish both card faces from photos. */
+@layer rendering-safety {
+html body .book-flashcard-dialog #flashcard-setup-screen > .card{background:transparent!important;}
+html body .flashcard-face-front,html body .flashcard-face-back{outline:2px solid var(--cosmic-cyan)!important;outline-offset:1px;}
+html body .flashcard-face-back{outline-color:var(--cosmic-purple-light)!important;}
+}
+/* Safari's native select must keep its white label on a dark control surface. */
+#flashcardSourceSelect{color-scheme:dark; background:#172033!important; color:#fff!important;}
