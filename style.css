@@ -2017,3 +2017,8 @@ html body .flashcard-face-front,html body .flashcard-face-back{outline:2px solid
 .profile-frame-action{padding:11px;border:1px solid #d5b96b66;border-radius:9px;background:#d5b96b11;color:#e4d291;font-size:11px;cursor:pointer;}
 .profile-frame-action:disabled{opacity:.45;cursor:default;}
 #profileFrameStatus{font-size:11px;color:var(--text-sub);margin:0;}
+
+.sidebar-identity{display:flex;align-items:center;gap:20px;padding:24px 24px 20px;border-bottom:1px solid var(--border);margin-bottom:12px;}
+.sidebar-identity .podium-avatar{width:48px;height:48px;box-shadow:none;animation:none;}
+#sidebarIdentityName{font-size:15px;line-height:1.6;overflow-wrap:anywhere;min-width:0;}
+.frame-example.podium-avatar{width:40px;height:40px;font-size:15px;box-shadow:none;animation:none;border:0;}
