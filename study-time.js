@@ -95,7 +95,7 @@
         if(!user||document.visibilityState!=='visible'||paused||sleepState)return false;
         if(!navigator.locks&&!document.hasFocus())return false;
         const gate=document.getElementById('auth-gate-screen');if(gate&&getComputedStyle(gate).display!=='none')return false;
-        if(manual)return true;
+        if(manual||window.WordDuel?.isPlaying())return true;
         if(currentActiveTabId==='vocab')return visible('vocabBookContents')||visible('workbookContents');
         if(currentActiveTabId==='reader')return visible('text-reader-view');
         return visible('flashcard-play-screen')||!!(window.__loadQuiz&&window.__loadQuiz.active);

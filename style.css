@@ -2039,3 +2039,18 @@ input,textarea{-webkit-text-stroke:0;}
 #idleSleepWarning{margin:0;}
 #idleSleepOverlay{margin:0;border:0;width:100vw;height:100dvh;max-width:none;max-height:none;box-sizing:border-box;}
 #idleSleepOverlay::backdrop{background:rgba(0,0,0,.94);}
+
+#headerDuelRating{font-size:10px;white-space:nowrap;color:#d5bf86;margin-left:5px;font-variant-numeric:tabular-nums;}
+.duel-entry{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;margin:0 0 14px;border:1px solid #d5bf8644;border-radius:14px;background:#14213799;color:#ece5d1;text-align:left;cursor:pointer;}
+.duel-entry>span:last-child{margin-left:auto;font-size:22px;}.duel-entry small{display:block;margin-top:4px;font-size:10px;color:var(--text-sub);}
+.word-duel-dialog{width:min(94vw,480px);max-height:94dvh;padding:20px;box-sizing:border-box;}
+.word-duel-dialog button{cursor:pointer;color:var(--text-main);border:1px solid #d5bf8650;background:#172237;border-radius:10px;padding:10px;font-size:12px;}
+.word-duel-dialog button:disabled{opacity:.45;cursor:default;}.word-duel-dialog button:active:not(:disabled){transform:scale(.97);background:#2d3850;}
+.duel-intro,.duel-rules,.duel-status{font-size:11px;line-height:1.7;color:var(--text-sub);}.duel-book-label{display:grid;gap:8px;font-size:12px;}.duel-book-label select,.duel-join input{min-width:0;width:100%;box-sizing:border-box;background:#101b2d;color:#eee;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:16px;}
+.duel-lobby-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0;}.duel-join{display:flex;gap:8px;}.duel-join button{flex-shrink:0;}
+.duel-wait{text-align:center;padding:25px;}.duel-wait strong{display:block;font:32px monospace;letter-spacing:6px;color:#e5cf91;}.duel-scoreboard{display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center;gap:8px;align-items:center;}.duel-scoreboard small{font-size:10px;display:block;overflow-wrap:anywhere;}.duel-scoreboard strong{font:26px 'Noto Serif JP',serif;}.duel-clock{font-size:28px;color:#e5cf91;font-variant-numeric:tabular-nums;}
+.duel-combo{height:24px;text-align:center;margin-top:10px;font-size:12px;color:#e5cf91;}.duel-combo.is-miss{color:#ff9a9a;}.duel-prompt{text-align:center;font-size:24px;line-height:1.5;overflow-wrap:anywhere;margin:8px 0 16px;}.duel-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}.duel-options button{min-height:52px;overflow-wrap:anywhere;line-height:1.45;padding:7px;font-size:11px;}.duel-options .duel-none{grid-column:1/-1;min-height:38px;}.duel-leave{width:100%;margin-top:6px;}.duel-result{font:28px 'Noto Serif JP',serif;text-align:center;color:#e5cf91;letter-spacing:3px;}
+.duel-rank-switch{display:flex;gap:6px;margin-right:auto;}.duel-rank-switch button{background:transparent;border:1px solid var(--border);border-radius:999px;color:var(--text-sub);font-size:11px;padding:6px 12px;}.duel-rank-switch button[aria-pressed=true]{color:#e5cf91;border-color:#e5cf9166;}.ranking-podium-grid.is-rating-mode{grid-template-rows:1fr;}.is-rating-mode .podium-avatar{width:64px!important;height:64px!important;}.is-rating-mode .learning-podium{align-items:center;}.is-rating-mode .podium-step{height:70px;}.is-rating-mode .place-1 .podium-step{height:100px;}
+@media(max-width:340px){#headerDuelRating{font-size:9px;margin-left:3px;}.duel-options button{font-size:10px;}.word-duel-dialog{padding:14px;}}
+
+.duel-clock.is-urgent{color:#ff9a9a;animation:duel-pulse 1s ease-in-out infinite;}.duel-result{animation:duel-reveal .3s ease-out;}@keyframes duel-pulse{50%{opacity:.55;}}@keyframes duel-reveal{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}@media(prefers-reduced-motion:reduce){.duel-clock.is-urgent,.duel-result{animation:none;}}
