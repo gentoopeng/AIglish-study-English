@@ -206,6 +206,7 @@
     window.setWordStatusFromReader = function(status) {
         if (currentTargetWordToken && !currentTargetVocabNum) {
             wordMemory[currentTargetWordToken] = status;
+            if(status!=='none')window.LearningActivity?.note('ratings');
             localStorage.setItem('wordMemory', JSON.stringify(wordMemory));
 
             window.saveUserStats();
