@@ -10,16 +10,16 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="10.10.17.18">
+    <meta name="application-version" content="10.10.18.04">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
-    <script src="runtime-errors.js?v=10.10.17.18"></script>
-    <script src="app-storage.js?v=10.10.17.18"></script>
-    <script src="rendering-safety.js?v=10.10.17.18"></script>
+    <script src="runtime-errors.js?v=10.10.18.04"></script>
+    <script src="app-storage.js?v=10.10.18.04"></script>
+    <script src="rendering-safety.js?v=10.10.18.04"></script>
     <script src="vendor/lucide/lucide.min.js?v=0.468.0"></script>
-    <link rel="stylesheet" href="style.css?v=10.10.17.18">
+    <link rel="stylesheet" href="style.css?v=10.10.18.04">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -89,28 +89,33 @@
 
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar(false)"></div>
     <div class="sidebar" id="sidebarMenu">
-        <div class="sidebar-header">
-            <div class="avatar-glow" style="width:38px; height:38px; font-size:12px; box-shadow:none; overflow:hidden; display:flex; align-items:center; justify-content:center;">RANK</div>
-            <div>
-                <div style="font-weight:700; font-size:15px;" id="sideOptPlayerName">プレイヤー1</div>
-                <div style="font-size:11px; color:var(--text-sub);" id="sideOptGroupName">ID: 未設定</div>
-            </div>
-        </div>
+        <nav class="sidebar-menu-list" aria-label="メニュー">
+            <button type="button" id="profileMenuButton" class="sidebar-item" onclick="window.openProfileDialog()" aria-haspopup="dialog"><i data-lucide="circle-user-round" size="22"></i><span>プロフィール</span><i data-lucide="chevron-right" size="16"></i></button>
+            <button type="button" id="settingsMenuButton" class="sidebar-item" onclick="window.openSettingsDialog()" aria-haspopup="dialog"><i data-lucide="settings" size="22"></i><span>設定</span><i data-lucide="chevron-right" size="16"></i></button>
+            <button type="button" id="usageGuideEntryBtn" class="sidebar-item" onclick="window.openUsageGuide()"><i data-lucide="book-open-check" size="22"></i><span>使い方ガイド</span></button>
+            <button type="button" class="sidebar-item" onclick="logoutToGate()"><i data-lucide="log-out" size="22"></i><span>ログアウト</span></button>
+        </nav>
+        <div id="appVersionDisplay" class="sidebar-version" aria-label="アプリのバージョン"></div>
+    </div>
 
-        <button type="button" class="study-tower-link" onclick="window.switchTab('game')"><i data-lucide="castle" size="16"></i> 単語の迷宮</button>
-        <div style="padding: 16px; flex:1; overflow-y: auto; display:flex; flex-direction:column; gap:16px;">
+    <dialog id="profileDialog" class="menu-dialog" aria-labelledby="profileDialogTitle">
+        <header class="menu-dialog-heading"><h2 id="profileDialogTitle">プロフィール</h2><button type="button" data-menu-dialog-close aria-label="プロフィールを閉じる">×</button></header>
+        <div class="profile-identity-preview"><div id="profileAvatarPreview" class="avatar-glow"></div><span id="sideOptPlayerName"></span></div>
             <form id="sidebarProfileForm" class="sidebar-profile-form">
-                <label for="sideInputName">名前</label>
-                <input id="sideInputName" maxlength="40" required autocomplete="nickname">
                 <label for="sidebarAvatarFile">アイコンの写真</label>
                 <input id="sidebarAvatarFile" type="file" accept="image/png,image/jpeg,image/webp">
+                <label for="sideInputName">名前</label>
+                <input id="sideInputName" maxlength="40" required autocomplete="nickname">
+                <label for="sideInputNameColor">名前の文字色</label>
+                <input id="sideInputNameColor" type="color" value="#f8fafc">
+                <label for="profileFramePlaceholder">フレーム</label>
+                <button id="profileFramePlaceholder" class="profile-frame-placeholder" type="button" disabled>準備中</button>
                 <p id="sidebarProfileStatus" role="status" aria-live="polite"></p>
                 <button type="submit" class="modern-btn">プロフィールを保存</button>
             </form>
-            <section class="sidebar-sounds" aria-labelledby="soundSettingsTitle">
-                <label class="sound-toggle" for="soundEnabled"><span id="soundSettingsTitle"><i data-lucide="volume-2" size="18" aria-hidden="true"></i>効果音</span><input id="soundEnabled" type="checkbox" checked></label>
-                <div class="sound-volume"><label for="soundVolume">音量</label><input id="soundVolume" type="range" min="0" max="100" step="5" value="30"><output id="soundVolumeValue" for="soundVolume">30%</output></div>
-            </section>
+    </dialog>
+    <dialog id="settingsDialog" class="menu-dialog" aria-labelledby="settingsDialogTitle">
+        <header class="menu-dialog-heading"><h2 id="settingsDialogTitle">設定</h2><button type="button" data-menu-dialog-close aria-label="設定を閉じる">×</button></header>
             <section class="sidebar-sounds" aria-labelledby="musicSettingsTitle">
                 <label class="sound-toggle" for="musicEnabled"><span id="musicSettingsTitle"><i data-lucide="music-2" size="18" aria-hidden="true"></i>BGM</span><input id="musicEnabled" type="checkbox"></label>
                 <div class="sound-volume"><label for="musicVolume">音量</label><input id="musicVolume" type="range" min="0" max="100" step="5" value="20"><output id="musicVolumeValue" for="musicVolume">20%</output></div>
@@ -125,31 +130,27 @@
                     <option value="haru-fast">Haru Ha Utatane — Fast</option>
                 </select>
             </section>
+            <section class="sidebar-sounds" aria-labelledby="soundSettingsTitle">
+                <label class="sound-toggle" for="soundEnabled"><span id="soundSettingsTitle"><i data-lucide="volume-2" size="18" aria-hidden="true"></i>効果音</span><input id="soundEnabled" type="checkbox" checked></label>
+                <div class="sound-volume"><label for="soundVolume">音量</label><input id="soundVolume" type="range" min="0" max="100" step="5" value="30"><output id="soundVolumeValue" for="soundVolume">30%</output></div>
+            </section>
+            <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
+                <div style="font-size: 11px; font-weight:700; color:var(--accent); margin-top:4px; margin-bottom:8px;">Gemini APIキー</div>
+                <input type="password" id="sidebarApiKeyInput" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px;" placeholder="AI用APIキーを入力...">
+
+                <div style="display: flex; gap: 8px;">
+                    <button class="modern-btn" style="height:32px; font-size:12px;" onclick="window.saveSidebarApiKey()">
+                        APIキーを保存
+                    </button>
+                </div>
+                <p id="settingsSaveStatus" role="status" aria-live="polite"></p>
+            </div>
+    </dialog>
             <template id="backgroundPickerTemplate"><dialog id="backgroundPickerDialog" class="background-picker-dialog" aria-labelledby="backgroundPickerTitle">
                 <div class="background-picker-heading"><h2 id="backgroundPickerTitle">背景</h2><button id="backgroundPickerClose" type="button" aria-label="背景選択を閉じる">×</button></div>
                 <div id="backgroundPickerSlides" class="background-picker-slides" aria-label="背景の一覧"></div>
                 <p id="backgroundPickerStatus" role="status" aria-live="polite"></p>
             </dialog></template>
-            <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 10px; border: 1px solid var(--border);">
-                <div style="font-size: 11px; font-weight:700; color:var(--accent); margin-top:4px; margin-bottom:8px;">🤖 Gemini AI APIキー</div>
-                <input type="password" id="sidebarApiKeyInput" class="search-input" style="height:34px; margin-bottom:12px; font-size:12px;" placeholder="AI用APIキーを入力...">
-
-                <div style="display: flex; gap: 8px;">
-                    <button class="modern-btn" style="height:32px; font-size:12px;" onclick="window.saveSidebarApiKey()">
-                        設定を保存して適用
-                    </button>
-                </div>
-            </div>
-
-            <div>
-                <hr style="border:none; border-top:1px solid var(--border); margin:10px 0;">
-                <button class="sidebar-item" style="color:var(--accent); font-weight: 700; padding:10px 0;" onclick="logoutToGate()">
-                    <i data-lucide="log-out" size="16"></i> ログアウトする
-                </button>
-            </div>
-            <div id="appVersionDisplay" class="sidebar-version" aria-label="アプリのバージョン"></div>
-        </div>
-    </div>
 
     <div class="container">
 
@@ -314,19 +315,6 @@
         <div id="view-game" class="tab-view">
             <div id="cosmic-game-wrapper" class="cosmic-game-bg">
 
-                <div id="game-start-screen" class="game-swipe-container" style="display:flex; position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: hidden; z-index: 10;">
-
-
-
-                    <div style="flex: 0 0 100vw; scroll-snap-align: center; position: relative; background-image: url('tawa.png'); background-size: cover; background-position: top center; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; padding-bottom: 80px; box-sizing: border-box;">
-                        <div class="tower-title-container">
-                            <div class="tower-title-text">単語の迷宮</div>
-                            <div class="tower-title-line"></div>
-                        </div>
-                    </div>
-
-                </div>
-
                 <div id="flashcard-setup-screen" style="display:none; margin-top: 14px;">
                     <div style="background: rgba(7, 11, 25, 0.9); padding: 16px; border-radius: 10px; border: 1px solid var(--cosmic-purple-light);">
                         <h2 style="color:white; justify-content:center; margin-bottom:16px;"><i data-lucide="settings"></i> カード学習設定</h2>
@@ -474,32 +462,32 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <link rel="preload" href="library-state.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=10.10.17.18"></script>
-    <link rel="preload" href="learning-data.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=10.10.17.18"></script>
-    <script type="application/x-aiglish-script" data-app-src="vocab-master.js?v=10.10.17.18"></script>
-    <link rel="preload" href="app.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=10.10.17.18"></script>
-    <link rel="preload" href="game_core.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=10.10.17.18"></script>
-    <link rel="preload" href="vocab_ui.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=10.10.17.18"></script>
-    <link rel="preload" href="reader.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=10.10.17.18"></script>
-    <link rel="preload" href="view-work.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=10.10.17.18"></script>
-    <link rel="preload" href="fix.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=10.10.17.18"></script>
-    <link rel="preload" href="save-system.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="save-system.js?v=10.10.17.18"></script>
-    <link rel="preload" href="save-coordinator.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="save-coordinator.js?v=10.10.17.18"></script>
-    <script type="application/x-aiglish-script" data-app-src="sound-effects.js?v=10.10.17.18"></script>
-    <script type="application/x-aiglish-script" data-app-src="learning-feedback.js?v=10.10.17.18"></script>
-    <link rel="preload" href="library.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=10.10.17.18"></script>
-    <link rel="preload" href="workbook.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=10.10.17.18"></script>
-    <link rel="preload" href="shared-notes.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=10.10.17.18"></script>
-    <link rel="preload" href="user-directory.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=10.10.17.18"></script>
-    <link rel="preload" href="study-time.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=10.10.17.18"></script>
-    <link rel="preload" href="ranking.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=10.10.17.18"></script>
-    <link rel="preload" href="autosave.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=10.10.17.18"></script>
-    <link rel="preload" href="people.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=10.10.17.18"></script>
-    <link rel="preload" href="image-metadata.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="image-metadata.js?v=10.10.17.18"></script>
-    <link rel="preload" href="profile.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=10.10.17.18"></script>
-    <link rel="preload" href="loading-quiz.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=10.10.17.18"></script>
-    <link rel="preload" href="background-catalog.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="background-catalog.js?v=10.10.17.18"></script>
-    <link rel="preload" href="app-background.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=10.10.17.18"></script>
-    <script src="app-loader.js?v=10.10.17.18" defer></script>
+    <link rel="preload" href="library-state.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=10.10.18.04"></script>
+    <link rel="preload" href="learning-data.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=10.10.18.04"></script>
+    <script type="application/x-aiglish-script" data-app-src="vocab-master.js?v=10.10.18.04"></script>
+    <link rel="preload" href="app.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=10.10.18.04"></script>
+    <link rel="preload" href="game_core.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=10.10.18.04"></script>
+    <link rel="preload" href="vocab_ui.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=10.10.18.04"></script>
+    <link rel="preload" href="reader.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=10.10.18.04"></script>
+    <link rel="preload" href="view-work.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=10.10.18.04"></script>
+    <link rel="preload" href="fix.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=10.10.18.04"></script>
+    <link rel="preload" href="save-system.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="save-system.js?v=10.10.18.04"></script>
+    <link rel="preload" href="save-coordinator.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="save-coordinator.js?v=10.10.18.04"></script>
+    <script type="application/x-aiglish-script" data-app-src="sound-effects.js?v=10.10.18.04"></script>
+    <script type="application/x-aiglish-script" data-app-src="learning-feedback.js?v=10.10.18.04"></script>
+    <link rel="preload" href="library.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=10.10.18.04"></script>
+    <link rel="preload" href="workbook.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=10.10.18.04"></script>
+    <link rel="preload" href="shared-notes.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=10.10.18.04"></script>
+    <link rel="preload" href="user-directory.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=10.10.18.04"></script>
+    <link rel="preload" href="study-time.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=10.10.18.04"></script>
+    <link rel="preload" href="ranking.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=10.10.18.04"></script>
+    <link rel="preload" href="autosave.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=10.10.18.04"></script>
+    <link rel="preload" href="people.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=10.10.18.04"></script>
+    <link rel="preload" href="image-metadata.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="image-metadata.js?v=10.10.18.04"></script>
+    <link rel="preload" href="profile.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=10.10.18.04"></script>
+    <link rel="preload" href="loading-quiz.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=10.10.18.04"></script>
+    <link rel="preload" href="background-catalog.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="background-catalog.js?v=10.10.18.04"></script>
+    <link rel="preload" href="app-background.js?v=10.10.18.04" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=10.10.18.04"></script>
+    <script src="app-loader.js?v=10.10.18.04" defer></script>
 </body>
 </html>

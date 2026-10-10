@@ -85,7 +85,7 @@
         const result=await oldLoad.apply(this,arguments);
         if(owner()===id){record=merge(record,userStats.learning_ranking_v2_json||userStats.learning_ranking);persist();render();}return result;
     };
-    function name(element,value,appearance){element.replaceChildren();String(value||'ユーザー').trim().split(/\s+/u).forEach((part,index)=>{if(index)element.append(document.createElement('br'));element.append(document.createTextNode(part));});}
+    function name(element,value,appearance){let profile=appearance;if(typeof profile==='string'){try{profile=JSON.parse(profile);}catch{profile=null;}}element.style.color=/^#[0-9a-f]{6}$/i.test(profile?.nameColor||'')?profile.nameColor:'';element.replaceChildren();String(value||'ユーザー').trim().split(/\s+/u).forEach((part,index)=>{if(index)element.append(document.createElement('br'));element.append(document.createTextNode(part));});}
     const avatarPreviews=new Map();
     function preview(img,source){
         img.decoding='async';img.referrerPolicy='no-referrer';
