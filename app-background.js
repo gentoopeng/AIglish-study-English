@@ -9,7 +9,12 @@ const auth=admin.querySelector('#backgroundAdminAuth'),controls=admin.querySelec
 const selection=admin.querySelector('#backgroundAdminSelection'),register=admin.querySelector('#backgroundAdminRegister');
 const slides=picker.querySelector('#backgroundPickerSlides');
 // Static assets are available to every account without a Firestore image read.
-const bundled=[Object.freeze({id:'bundled-classroom',image:'assets/background-classroom.webp',preview:'assets/background-classroom-preview.webp',position:30,bundled:true})];
+const bundled=[
+ {id:'bundled-classroom',image:'assets/background-classroom.webp',preview:'assets/background-classroom-preview.webp',position:30,bundled:true},
+ {id:'bundled-mountain-lake',image:'assets/background-mountain-lake.webp',preview:'assets/background-mountain-lake-preview.webp',position:50,bundled:true},
+ {id:'bundled-winter-terrace',image:'assets/background-winter-terrace.webp',preview:'assets/background-winter-terrace-preview.webp',position:60,bundled:true},
+ {id:'bundled-night-cafe',image:'assets/background-night-cafe.webp',preview:'assets/background-night-cafe-preview.webp',position:40,bundled:true}
+].map(Object.freeze);
 const empty=()=>({mode:'default',selected:'',backgrounds:[],updatedAt:0});
 const validImage=value=>typeof value==='string'&&value.length<=1000000&&/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(value);
 const focus=value=>Math.max(0,Math.min(100,Number.isFinite(Number(value))?Number(value):30));
