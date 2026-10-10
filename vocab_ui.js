@@ -262,6 +262,7 @@
         if (text[0] === '[' && !confirm("バックアップデータで完全に上書きしますか？")) return;
         try { vocabList = window.parseVocabImport(text, vocabList); }
         catch (error) { alert(error.message); return; }
+        if(!vocabList.length)window.VocabMaster.confirmEmpty(currentTextbook||"default");
         userStats.vocab_reg = vocabList.length;
         window.saveUserStats();
         // 管理者の教材登録は通常の「手動セーブ待ち」に入れず、教材本体を
@@ -304,6 +305,7 @@
         document.getElementById('cancelBulkDelBtn').onclick = function() { document.body.removeChild(overlay); };
         document.getElementById('confirmBulkDelBtn').onclick = function() {
             vocabList = vocabList.filter(function(w) { return !numsToDelete.includes(String(w.num)); });
+            if(!vocabList.length)window.VocabMaster.confirmEmpty(currentTextbook||"default");
             userStats.delete_count += numsToDelete.length;
             userStats.vocab_reg = vocabList.length;
             window.saveUserStats();
@@ -382,6 +384,7 @@
         document.getElementById('cancelDelBtn').onclick = function() { document.body.removeChild(overlay); };
         document.getElementById('confirmDelBtn').onclick = function() {
             vocabList = vocabList.filter(function(w) { return String(w.num) !== String(numStr); });
+            if(!vocabList.length)window.VocabMaster.confirmEmpty(currentTextbook||"default");
             userStats.delete_count++;
             userStats.vocab_reg = vocabList.length;
             window.saveUserStats();
@@ -431,22 +434,23 @@
     };
 
     window.getFlashcardStyleByHistory = function(wordData) {
-        var cleanKey = wordData.en.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g, "");
-        var vocabMatch = vocabList.find(function(v) { return v.word.toLowerCase() === cleanKey; });
+        var cleanKey = String(wordData.en||'').toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g, "");
+        var vocabMatch = vocabList.find(function(v) { return wordData.num!=null?String(v.num)===String(wordData.num):v.word.toLowerCase()===cleanKey; });
+        var targetMeaning=vocabMatch&&wordData.meaningId!=null&&(vocabMatch.meanings||[]).find(function(m){return String(m.id)===String(wordData.meaningId);});
         var allHistory = [];
-        if (vocabMatch) {
-            if (vocabMatch.history && vocabMatch.history.length > 0) allHistory = allHistory.concat(vocabMatch.history);
-            if (vocabMatch.meanings) {
-                vocabMatch.meanings.forEach(function(m) {
-                    if (m.history && m.history.length > 0) allHistory = allHistory.concat(m.history);
-                });
-            }
+        if(targetMeaning)allHistory=targetMeaning.history||[];
+        else if (vocabMatch) {
+            if (vocabMatch.history) allHistory = allHistory.concat(vocabMatch.history);
+            (vocabMatch.meanings||[]).forEach(function(m){allHistory=allHistory.concat(m.history||[]);});
         } else {
             var memStatus = wordMemory[cleanKey];
             if (memStatus && memStatus !== 'none') allHistory.push(memStatus);
         }
+        allHistory=allHistory.filter(function(h){return h==='ok'||h==='so'||h==='bad';});
         if (allHistory.length === 0) {
-            return "background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0%, #130a24 75%, #090514 100%) !important; border: none !important; box-shadow: none !important;";
+            var status=targetMeaning?targetMeaning.status:(vocabMatch&&vocabMatch.status);
+            var rim={ok:'#10b981',so:'#f59e0b',bad:'#ef4444'}[status]||'#94a3b8';
+            return "--flashcard-rim-color:"+rim+";background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0%, #130a24 75%, #090514 100%) !important; border: none !important; box-shadow: none !important;";
         }
         var totalScore = 0;
         allHistory.forEach(function(h) {
@@ -470,7 +474,7 @@
             g = Math.round(yellow[1] + (red[1] - yellow[1]) * ratio2);
             b = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio2);
         }
-        return 'background: radial-gradient(circle at center, rgba(' + r + ', ' + g + ', ' + b + ', 0.22) 0%, rgba(' + r + ', ' + g + ', ' + b + ', 0.12) 50%, rgba(' + r + ', ' + g + ', ' + b + ', 0) 100%);';
+        return '--flashcard-rim-color:rgb('+r+','+g+','+b+');background: radial-gradient(circle at center, rgba(' + r + ', ' + g + ', ' + b + ', 0.22) 0%, rgba(' + r + ', ' + g + ', ' + b + ', 0.12) 50%, rgba(' + r + ', ' + g + ', ' + b + ', 0) 100%);';
     };
 
     // ================================================================

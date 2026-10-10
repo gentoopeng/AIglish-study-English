@@ -138,7 +138,7 @@
             var selectedBook = document.getElementById('flashcardSourceSelect').value;
             startingBookSettings = true;
             try {
-                await window.selectVocabLibraryBook(selectedBook);
+                if(await window.selectVocabLibraryBook(selectedBook)===false)return;
             } finally {
                 startingBookSettings = false;
             }

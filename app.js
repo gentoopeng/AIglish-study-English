@@ -623,7 +623,13 @@ window.selectVocabLibraryBook = async function(bookId) {
   var contents = document.getElementById('vocabBookContents');
   if (selection) selection.hidden = true;
   if (contents) contents.hidden = false;
-  await window.loadCurrentTextbookData();
+  try{await window.loadCurrentTextbookData();}
+  catch(error){
+    if(currentTextbook===bookId){if(selection)selection.hidden=false;if(contents)contents.hidden=true;}
+    if(window.showToast)window.showToast("単語を読み込めませんでした。接続後にもう一度開いてください。保存データは変更していません。","err");
+    console.warn("[vocab] book load failed",error);
+    return false;
+  }
 };
 // 教材選択画面のゲージは、その教材自身の保存済み理解度から計算する。
 // 現在開いている vocabList や全教材共通の統計を流用しない。
@@ -739,6 +745,7 @@ const selectedBookId = adminSelect.value;
      textbooksPool.push({ id: createdBookId, name: title, cover: finalCover, coverType: finalType });
      currentTextbook = createdBookId;
      vocabList = [];
+     window.VocabMaster.confirmEmpty(createdBookId);
      currentUserVocabProgress = {};
      textbooksCacheMap[createdBookId] = [];
      localStorage.setItem('core_v4_current_textbook_id', createdBookId);
@@ -754,7 +761,7 @@ const selectedBookId = adminSelect.value;
          await window.fbSetDoc(indexRef, { textbooks: textbooksPool.filter(function(book) { return !book.personal; }) }, { merge: true });
          if (createdBookId) {
              const vocabRef = window.fbDoc(window.db, "shared", "vocab_" + createdBookId);
-             await window.fbSetDoc(vocabRef, { custom_words: [], updatedAt: new Date().toISOString() }, { merge: false });
+             await window.fbSetDoc(vocabRef, { custom_words: [], emptyConfirmed:true, updatedAt: new Date().toISOString() }, { merge: false });
          }
          alert(`🎉 教材リストデータ『${title}』を配信・適用完了しました！`);
          titleInput.value = "";
@@ -2097,6 +2104,7 @@ window.saveVocabMasterToStorage = async function() {
   if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
   const bookKey = currentTextbook || "default";
   const uid = (typeof myId !== "undefined" && myId) ? myId : "GUEST-000";
+  if(window.VocabMaster&&!window.VocabMaster.canCapture(bookKey,vocabList))return false;
   const masterWords = window.stripVocabProgressFromWords(vocabList);
   textbooksCacheMap[bookKey] = masterWords;
   try {
@@ -2107,7 +2115,7 @@ window.saveVocabMasterToStorage = async function() {
     try {
       const docName = currentTextbook ? "vocab_" + currentTextbook : "vocab";
       const sharedRef = window.fbDoc(window.db, "shared", docName);
-      await window.fbSetDoc(sharedRef, { custom_words: masterWords, updatedAt: new Date().toISOString() }, { merge: true });
+      await window.fbSetDoc(sharedRef, { custom_words: masterWords, emptyConfirmed:masterWords.length===0, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (e) {}
   }
 };
@@ -2384,12 +2392,19 @@ window.loadCurrentTextbookData = async function(options) {
   const uid = (typeof myId !== "undefined" && myId) ? myId : "GUEST-000";
   if(window.LibraryState&&window.LibraryState.isDeleted('book',bookKey,uid))return;
   const currentLocalKey = "core_v4_custom_words_" + uid + "_" + bookKey;
-  if (textbooksCacheMap[bookKey]) {
-    storedWords = textbooksCacheMap[bookKey];
-  } else {
-    const localCache = localStorage.getItem("core_v4_cache_" + bookKey);
-    if (localCache) storedWords = JSON.parse(localCache);
-    else storedWords = JSON.parse(localStorage.getItem(currentLocalKey) || "[]");
+  const localDraft=window.VocabMaster.resolve(bookKey);
+  if(localDraft)storedWords=localDraft.master;
+  else if(currentTextbook){
+    // Fetch only the book being opened. Index-only startup does not contain its words.
+    if(!window.db||!window.fbGetDoc||!window.fbDoc)throw new Error("単語データを取得できません。接続後に開き直してください（保存内容は変更していません）。");
+    const snap=await window.fbGetDoc(window.fbDoc(window.db,"shared","vocab_"+bookKey));
+    if(myId!==uid||(currentTextbook||"default")!==bookKey||window.__vocabMasterLoadSequence!==request)return;
+    const data=snap&&snap.exists()&&snap.data();
+    if(!data||!Array.isArray(data.custom_words)||(!data.custom_words.length&&data.emptyConfirmed!==true))throw new Error("単語データを確認できません。接続後に開き直してください（保存内容は変更していません）。");
+    storedWords=data.custom_words;
+    if(!storedWords.length)window.VocabMaster.confirmEmpty(bookKey);
+    textbooksCacheMap[bookKey]=window.stripVocabProgressFromWords(storedWords);
+    try{localStorage.setItem("core_v4_cache_"+bookKey,JSON.stringify(textbooksCacheMap[bookKey]));}catch(e){}
   }
   storedWords = window.stripVocabProgressFromWords(storedWords);
   const loadedWords = window.migrateVocabData(storedWords);
@@ -8390,8 +8405,11 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
             if (memStatus && memStatus !== 'none') allHistory.push(memStatus);
         }
 
+        allHistory=allHistory.filter(function(h){return h==='ok'||h==='so'||h==='bad';});
         if (allHistory.length === 0) {
-            return "background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0%, #130a24 75%, #090514 100%) !important; border: none !important; box-shadow: none !important;";
+            var status=targetMeaning?targetMeaning.status:(vocabMatch&&vocabMatch.status);
+            var rim={ok:'#10b981',so:'#f59e0b',bad:'#ef4444'}[status]||'#94a3b8';
+            return "--flashcard-rim-color:"+rim+";background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0%, #130a24 75%, #090514 100%) !important; border: none !important; box-shadow: none !important;";
         }
 
         var totalScore = 0;
@@ -8414,7 +8432,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
             g = Math.round(yellow[1] + (red[1] - yellow[1]) * ratio2);
             b = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio2);
         }
-        return "background: radial-gradient(circle at center, rgba(" + r + ", " + g + ", " + b + ", 0.22) 0%, rgba(" + r + ", " + g + ", " + b + ", 0.12) 50%, rgba(" + r + ", " + g + ", " + b + ", 0) 100%);";
+        return "--flashcard-rim-color:rgb("+r+","+g+","+b+");background: radial-gradient(circle at center, rgba(" + r + ", " + g + ", " + b + ", 0.22) 0%, rgba(" + r + ", " + g + ", " + b + ", 0.12) 50%, rgba(" + r + ", " + g + ", " + b + ", 0) 100%);";
     };
 
     // ------------------------------------------------------------------
