@@ -407,6 +407,7 @@
             if (isCardFlicking) return;
             if (cardWrap.__ignoreClickUntil && Date.now() < cardWrap.__ignoreClickUntil) return;
             cardWrap.classList.toggle('flipped');
+            window.AppSounds?.play('back');
         };
 
         // Pointer Eventsに統一し、指・ペン・マウスの位置へカード本体を追尾させる。
@@ -481,6 +482,7 @@
                 cardWrap.style.removeProperty('transform');
                 // スマホはclickの発火を待たず、指を離した瞬間にめくる。
                 cardWrap.classList.toggle('flipped');
+            window.AppSounds?.play('back');
                 cardWrap.__ignoreClickUntil = Date.now() + 500;
                 var rightEdge2 = document.getElementById('fcEdgeRippleRight');
                 var leftEdge2 = document.getElementById('fcEdgeRippleLeft');
@@ -517,6 +519,7 @@
         if (!card) return;
         var currentWord = flashcardOriginQueue[flashcardCurrentIndex];
         if (!currentWord) return;
+        window.AppSounds?.play(direction === 'right' ? 'swipe-right' : direction === 'left' ? 'swipe-left' : 'navigate');
         var cleanKey = String(currentWord.en || '').toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g, "");
         var status = 'none';
         var vocabIndex = -1;
