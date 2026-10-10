@@ -2082,3 +2082,23 @@ input,textarea{-webkit-text-stroke:0;}
 .is-battle-mode .place-3 .podium-step{height:clamp(25px,4dvh,40px);}
 .word-duel-screen .duel-options button.is-selected{box-shadow:0 0 0 2px #f5f9ff inset;transform:scale(.96);}
 .word-duel-screen .duel-question-label{letter-spacing:0;color:var(--text-sub);}
+
+/* Rate podium with an optional, independently scrollable remainder. */
+.ranking-podium-grid.is-battle-mode{grid-template-rows:minmax(0,1fr);}
+.is-battle-mode .ranking-mini-panel{display:flex;flex-direction:column;}
+.is-battle-mode .learning-podium{flex:1;min-height:180px;}
+.rating-roster{flex-shrink:0;border-top:1px solid var(--border);margin-top:12px;}
+.rating-roster summary{cursor:pointer;padding:12px 0;font-size:13px;color:var(--text-sub);}
+.rating-roster ol{list-style:none;margin:0;padding:0;max-height:30dvh;overflow:auto;overscroll-behavior:contain;}
+.rating-roster button{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:10px;width:100%;padding:10px 0;color:var(--text-main);background:transparent;border:0;border-bottom:1px solid var(--border);text-align:left;cursor:pointer;}
+.rating-roster button.is-self{color:#e5cf91;}.rating-roster button>span:nth-child(2){overflow-wrap:anywhere;}.rating-roster strong{font-variant-numeric:tabular-nums;}
+.duel-settings{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0;}.duel-settings label{display:grid;gap:6px;font-size:13px;}.duel-settings select{width:100%;box-sizing:border-box;color:#eee;background:#101b2d;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:16px;}
+.word-duel-screen .duel-scoreboard{grid-template-columns:repeat(var(--duel-players,2),minmax(0,1fr));gap:8px;}
+.duel-clock-row{display:flex;justify-content:center;align-items:baseline;gap:5px;}.duel-clock-row small{font-size:12px;}
+.duel-player.is-abandoned{opacity:.45;}.duel-player small{overflow-wrap:anywhere;}
+.duel-results{list-style:none;margin:20px 0;padding:0;}.duel-results li{display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;padding:14px;border:1px solid var(--border);border-radius:14px;background:#142137b0;}.duel-results small{grid-column:1/-1;color:var(--text-sub);}
+@media(max-width:340px){.duel-player .podium-avatar{width:42px;height:42px;}.word-duel-screen .duel-scoreboard strong{font-size:20px;}.rating-roster ol{max-height:25dvh;}}
+.is-battle-mode.ranking-podium-grid{display:block;overflow:auto;}
+.is-battle-mode .ranking-mini-panel{height:auto;max-height:none;}
+.is-battle-mode .learning-podium{flex:none;height:clamp(185px,32dvh,270px);min-height:0;}
+.rating-roster ol{max-height:min(30dvh,max(60px,calc(100dvh - 500px)));}

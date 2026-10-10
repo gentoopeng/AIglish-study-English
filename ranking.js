@@ -99,15 +99,15 @@
     function avatar(value,label,appearance){const frame=document.createElement('span');frame.className='podium-avatar';const safe=typeof value==='string'&&(/^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(value));if(safe){const img=document.createElement('img');preview(img,value);img.alt=String(label||'ユーザー')+'のアイコン';img.referrerPolicy='no-referrer';img.onerror=()=>{img.remove();frame.prepend(document.createTextNode(String(label||'人').trim().slice(0,1)));};frame.append(img);}else{frame.textContent=String(label||'人').trim().slice(0,1);}return frame;}
     window.RankingVisuals={name,avatar,appearanceOf:doc=>appearanceOf(doc)};
     let rankMode='learning';
-    const labels={rating:'対戦レート',solo:'シングルプレイのベストスコア',time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
-    const hasRecord=(entry,key)=>key==='rating'||(key==='solo'?entry.solo!==null:entry[key]>0);
+    const labels={rating:'対戦レート',time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
+    const hasRecord=(entry,key)=>key==='rating'||entry[key]>0;
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
-    const value=(row,key)=>row[key]===undefined||row[key]===null&&key!=='solo'?'未取得':key==='rating'?String(row.rating??1500):key==='solo'?(row.solo===null?'未プレイ':row.solo.toLocaleString('ja-JP')+'点'):key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
+    const value=(row,key)=>row[key]===undefined||row[key]===null?'未取得':key==='rating'?String(row.rating??1500):key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
     function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
     function appearanceOf(doc){let profile;try{profile=JSON.parse(doc.profileCustomizationJson||'{}');}catch{profile={};}const value={nameColor:/^#[0-9a-f]{6}$/i.test(profile.nameColor||'')?profile.nameColor:'',frame:typeof profile.frame==='string'?profile.frame:''};return value.nameColor||value.frame?JSON.stringify(value):null;}
-    function row(id,doc,group){const brief=window.RankingQuery.summary(doc),learning=group!=='battle',stats=learning&&!brief?statsOf(doc):{},combined=learning&&!brief?fromProfile(doc):null;return {id,name:doc.playerName||doc.name||id,avatar:typeof doc.avatar==='string'&&doc.avatar.length<=48000?doc.avatar:'',appearance:appearanceOf(doc),rating:group==='learning'?null:window.WordDuelModel?.rating(doc.wordDuelRating)??1500,solo:group==='learning'?undefined:window.WordDuelModel?.bestScore(doc.wordDuelSoloBest)??null,time:brief?.time??(learning?window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()):null),words:learning?(brief?.words??wordCount(combined)):null,flash:learning?(brief?.flash??flashCount(combined)):null};}
+    function row(id,doc,group){const brief=window.RankingQuery.summary(doc),learning=group!=='battle',stats=learning&&!brief?statsOf(doc):{},combined=learning&&!brief?fromProfile(doc):null;return {id,name:doc.playerName||doc.name||id,avatar:typeof doc.avatar==='string'&&doc.avatar.length<=48000?doc.avatar:'',appearance:appearanceOf(doc),rating:group==='learning'?null:window.WordDuelModel?.rating(doc.wordDuelRating)??1500,time:brief?.time??(learning?window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()):null),words:learning?(brief?.words??wordCount(combined)):null,flash:learning?(brief?.flash??flashCount(combined)):null};}
 
-    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record),wordDuelRating:window.WordDuel?.localRating(),wordDuelSoloBest:window.WordDuelSolo?.best()});}
+    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record),wordDuelRating:window.WordDuel?.localRating()});}
     function deadline(promise,ms=15000){let timer;return Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('通信が完了しませんでした')),ms))]).finally(()=>clearTimeout(timer));}
     async function detail(entry,rank,context){
         const account=owner(),dialog=showDetail(entry,rank,context);
@@ -126,7 +126,7 @@
     function sameShape(left,right){return !!left&&left.length===right.length&&left.every((row,i)=>row.length===right[i].length&&row.every((value,j)=>value===right[i][j]));}
     function render(){
         const host=document.getElementById('rankingPodium');if(!host)return;ensure();const local=self(),rows=cache.filter(entry=>entry.id!==user);if(user!=='GUEST-000')rows.push(local);
-        const metrics=rankMode==='learning'?['time','words','flash']:['rating','solo'];
+        const metrics=rankMode==='learning'?['time','words','flash']:['rating'];
         host.querySelectorAll('[data-podium-metric]').forEach(section=>{if(!metrics.includes(section.dataset.podiumMetric))section.remove();});
         host.classList.toggle('is-battle-mode',rankMode==='battle');
         metrics.forEach(key=>{
@@ -144,6 +144,14 @@
             top.forEach((entry,index)=>{const column=podium.querySelector('[data-place="'+(index+1)+'"]'),amount=column.querySelector('strong'),text=value(entry,key);if(amount.textContent!==text)amount.textContent=text;column.setAttribute('aria-label',labels[key]+' '+(index+1)+'位 '+entry.name+'の詳細');column.onclick=()=>detail(entry,index+1,labels[key]);});
             const ownRank=cacheReady?measured.findIndex(entry=>entry.id===user)+1:0,own=section.querySelector('.ranking-mini-self'),text=(user==='GUEST-000'?'あなた（ゲスト）':'あなた · '+(ownRank?ownRank+'位':hasRecord(local,key)?'順位未取得':'未計測'))+'　'+value(local,key);if(own.textContent!==text)own.textContent=text;own.onclick=()=>detail(local,ownRank,labels[key]);
         });
+        renderRatingList(host,rows);
+    }
+    function renderRatingList(host,rows){
+        let list=host.querySelector('.rating-roster');const ranked=rows.slice().sort((a,b)=>b.rating-a.rating||a.id.localeCompare(b.id)),rest=cacheReady&&rankMode==='battle'?ranked.slice(3):[];
+        if(!rest.length){list?.remove();return;}
+        if(!list){list=document.createElement('details');list.className='rating-roster';const summary=document.createElement('summary');summary.textContent='4位以下のレート';list.append(summary,document.createElement('ol'));host.querySelector('.ranking-mini-panel').append(list);}
+        const shape=JSON.stringify(rest.map(entry=>[entry.id,entry.name,entry.rating,entry.appearance]));if(list.dataset.shape===shape)return;list.dataset.shape=shape;const ol=list.querySelector('ol');ol.replaceChildren();
+        rest.forEach((entry,index)=>{const li=document.createElement('li'),button=document.createElement('button'),place=document.createElement('span'),nickname=document.createElement('span'),rate=document.createElement('strong');button.type='button';button.className=entry.id===user?'is-self':'';place.textContent=(index+4)+'位';name(nickname,entry.name,entry.appearance);rate.textContent=String(entry.rating);button.append(place,nickname,rate);button.onclick=()=>detail(entry,index+4,labels.rating);li.append(button);ol.append(li);});
     }
     function selectCache(){const saved=groupCaches.get(rankMode);cache=saved?.rows||[];cacheAt=saved?.at||0;cacheReady=!!saved;}
     async function refresh(force,foreground=false){
@@ -162,7 +170,7 @@
         const task=Promise.resolve().then(async()=>{try{
             const docs=await window.RankingQuery.fetch(group,{signal:controller.signal});
             const list=docs.filter(doc=>doc.id!==id).map(doc=>row(doc.id,doc.data,group));
-            const metrics=group==='learning'?['time','words','flash']:['rating','solo'],retained=new Set(metrics.flatMap(key=>list.filter(entry=>hasRecord(entry,key)).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)).slice(0,3)));for(const entry of list)if(!retained.has(entry))entry.avatar='';
+            const metrics=group==='learning'?['time','words','flash']:['rating'],retained=new Set(metrics.flatMap(key=>list.filter(entry=>hasRecord(entry,key)).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)).slice(0,3)));for(const entry of list)if(!retained.has(entry))entry.avatar='';
             if(active()){groupCaches.set(group,{rows:list,at:Date.now()});selectCache();message.textContent='';render();}
         }catch(error){if(owner()===id&&generation===token&&rankMode===group&&currentActiveTabId==='titles'){message.textContent=controller.signal.reason==='timeout'?'通信に時間がかかっています。更新で再試行できます。':controller.signal.aborted?'':'記録を取得できませんでした。更新で再試行できます。';render();}}
         finally{clearTimeout(timeout);endLoading();const index=window.__tabChangeHandlers?.indexOf(leave);if(index>=0)window.__tabChangeHandlers.splice(index,1);if(generation===token)button.disabled=false;if(inflight?.token===token)inflight=null;}});
