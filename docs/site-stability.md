@@ -269,3 +269,9 @@ Validation: Chromium/WebKit phone-sized manual probes select a saved photo, open
 Shared card opacity decreases from 0.68 to 0.42, keeping the existing uniform surface treatment across tabs and the independent understanding colors. Large reader analysis inputs use a 0.35 dark surface rather than solid navy, allowing the photograph to show through the form. Text colors, photo overlay/crop, storage and animations are unchanged.
 
 Validation: Chromium/WebKit PWA directory/shared-surface/understanding-color regressions pass. WebKit phone screenshots of reader input and study cards were inspected, and typed input remains visible. Chromium flashcard/settings/version check and git diff --check pass.
+
+### 10.10.10.54: readable flashcard settings and colored rims
+
+Flashcard settings stay inside their centered dialog rather than inheriting the fullscreen play geometry. The dialog uses a 0.72 dark surface and its inner card remains transparent, avoiding stacked card opacity. Safari's native textbook select explicitly uses a dark color scheme so its white label remains visible. Both card faces receive a 2px colored outline (cyan front, lilac back); using an outline preserves history-driven backgrounds and works even when an unanswered card's inline style removes its border. No storage or animation logic changes.
+
+Validation: Chromium/WebKit phone probes confirm contained settings geometry, translucent dialog color, both face outline colors/widths, shared selected photo and retained selection after swipe/return. WebKit screenshots of settings and play were inspected. Chromium flashcard settings/version and animation/reduced-motion checks pass; git diff --check passes.
