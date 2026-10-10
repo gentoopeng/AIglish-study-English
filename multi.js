@@ -4728,7 +4728,7 @@ function collectAllData() {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
       if (!k) continue;
-      if (k.indexOf('save_studio_') === 0 || k === 'aiglish_profile_shop_catalog' || k === '__aiglish_render_guard') continue;
+      if (k.indexOf('save_studio_') === 0 || k === 'aiglish_shared_background_catalog' || k === 'aiglish_profile_shop_catalog' || k === '__aiglish_render_guard') continue;
       // 単語帳本体は memory.vocabBooks に正規化して保存する。同じ内容のキャッシュを
       // 何重にも含めるとセーブ容量と通信回数が数倍になるため、再生成可能な複製は除外する。
       if (k.indexOf('core_v4_cache_') === 0 ||
@@ -4872,6 +4872,7 @@ function applyLoad(save) {
   var lsData = save.data.localStorage || {};
   var memData = save.data.memory || {};
   for (var k in lsData) {
+    if(k==='aiglish_shared_background_catalog')continue;
     try { localStorage.setItem(k, lsData[k]); } catch (e) {}
   }
   if (window.db && window.fbSetDoc && window.fbDoc) {
@@ -5653,6 +5654,7 @@ window.__fixPatch3Applied = true;
 
 /* 収集時に除外する巨大キャッシュキーのプレフィックス */
 var EXCLUDE_PREFIXES = [
+'aiglish_shared_background_catalog', // Shared photographs are fetched independently of personal backups.
 'aiglish_profile_shop_catalog', // Global artwork is fetched separately, never duplicated in personal backups.
 'save_studio_',      // セーブデータ本体（自分自身を含めない）
 'core_v4_cache_',    // 単語帳キャッシュ（巨大）
@@ -6274,6 +6276,7 @@ async function autoLoadOnce() {
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
     for(var key in stored){
+      if(key==='aiglish_shared_background_catalog')continue;
       if(key.indexOf('aiglish_learning_recovery_')===0)continue;
       if(key.indexOf('aiglish_app_background_')===0){try{var currentBackground=JSON.parse(localStorage.getItem(key)||'null'),savedBackground=JSON.parse(stored[key]||'null');if(currentBackground&&(Number(currentBackground.updatedAt)||0)>=(Number(savedBackground&&savedBackground.updatedAt)||0))continue;}catch(e){if(localStorage.getItem(key))continue;}}
       if(key==='aiglish_ranking_device')continue; // Device counters must keep this browser's identity.

@@ -9,7 +9,7 @@ const owned=key=>/^(core_v4_|aiglish_|save_studio_|vv4_|b3_|__ste_reset_gen_)/.t
 // Ratings keep a synchronous working copy; IndexedDB is also a durable mirror.
 const critical=key=>key.startsWith('core_v4_user_vocab_progress_')||key.startsWith('aiglish_learning_recovery_')||(key.startsWith('aiglish_app_background_')&&!key.startsWith('aiglish_app_background_catalog_'));
 // Mirror small catalogues too, without pushing large photographs into native storage.
-const mirrored=key=>critical(key)||key.startsWith('aiglish_app_background_catalog_');
+const mirrored=key=>critical(key)||key.startsWith('aiglish_app_background_catalog_')||key==='aiglish_shared_background_catalog';
 function keys(){if(keysRevision!==revision){const names=new Set(nativeKeys());for(const [key,value] of values){if(value===null)names.delete(key);else names.add(key);}keyCache=[...names];keysRevision=revision;}return keyCache;}
 function get(key){key=String(key);return values.has(key)?values.get(key):rawGet(key);}
 function failure(error){const changed=!lastFailure;lastFailure=error;if(changed){console.warn('端末の保存先を利用できません。保存データは消していません。',error);window.dispatchEvent(new CustomEvent('app-storage-error',{detail:'端末への保存を確認できません。空き容量・ブラウザー設定を確認してください。'}));}}
@@ -62,7 +62,7 @@ const ready=(async()=>{
   if(values.has(key)||value.length>=large||mirrored(key)){
    // Background metadata can survive in native storage with an older timestamp.
    // Prefer the confirmed IndexedDB copy when it is newer.
-   if(key.startsWith('aiglish_app_background_')&&values.has(key)){try{if((JSON.parse(values.get(key)).updatedAt||0)>(JSON.parse(value).updatedAt||0)){try{if(!critical(key)&&values.get(key).length>=large)rawRemove(key);else rawSet(key,values.get(key));}catch(error){rawRemove(key);}continue;}}catch(error){}}
+   if((key.startsWith('aiglish_app_background_')||key==='aiglish_shared_background_catalog')&&values.has(key)){try{if((JSON.parse(values.get(key)).updatedAt||0)>(JSON.parse(value).updatedAt||0)){try{if(!critical(key)&&values.get(key).length>=large)rawRemove(key);else rawSet(key,values.get(key));}catch(error){rawRemove(key);}continue;}}catch(error){}}
    const differs=values.get(key)!==value;values.set(key,value);
    if(differs){originals.set(key,value);pending.set(key,value);}
    if(critical(key))nativeWrites.set(key,value);

@@ -1,4 +1,4 @@
-// Static backgrounds: a bounded, per-account gallery; dialogs and previews are mounted on demand.
+// Static backgrounds: a bounded, shared gallery; dialogs and previews are mounted on demand.
 (function(){
 'use strict';
 const owner=()=>typeof myId==='string'&&myId?myId:'GUEST-000',key=id=>'aiglish_app_background_'+id,catalogKey=id=>'aiglish_app_background_catalog_'+id;
@@ -11,7 +11,7 @@ const slides=picker.querySelector('#backgroundPickerSlides');
 const empty=()=>({mode:'default',selected:'',backgrounds:[],updatedAt:0});
 const validImage=value=>typeof value==='string'&&value.length<=1000000&&/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(value);
 const focus=value=>Math.max(0,Math.min(100,Number.isFinite(Number(value))?Number(value):30));
-let account='',settings=empty(),adminOwner=null,revision=0,saveRevision=0,loadedPreferences,loadedCatalog,stagedFile=null,stagedItem=null;
+let account='',settings=empty(),adminOwner=null,revision=0,saveRevision=0,loadedPreferences,loadedCatalog,loadedShared,stagedFile=null,stagedItem=null;
 let backgroundUrl='',backgroundSource='',previewFrame=0;
 const previews=new Map(),previewCache=new Map();
 const label=item=>item.id==='default'?'いつもの背景':'背景 '+(settings.backgrounds.indexOf(item)+1);
@@ -28,12 +28,15 @@ function read(id){
   const backgrounds=[],ids=new Set();
   for(const item of Array.isArray(entries)?entries.slice(0,12):[]){
    if(!item||typeof item.id!=='string'||ids.has(item.id)||!validImage(item.image))continue;
-   ids.add(item.id);backgrounds.push({id:item.id,name:String(item.name||'背景').slice(0,24),image:item.image,preview:validImage(item.preview)?item.preview:'',position:focus(item.position)});
+   ids.add(item.id);backgrounds.push({id:item.id==='legacy-photo'?'legacy-photo-'+encodeURIComponent(id):item.id,name:String(item.name||'背景').slice(0,24),image:item.image,preview:validImage(item.preview)?item.preview:'',position:focus(item.position)});
   }
   // Keep the previously registered photo without writing or resetting anything during startup.
-  if(!backgrounds.length&&validImage(value.image))backgrounds.push({id:'legacy-photo',name:'選んだ写真',image:value.image,preview:'',position:focus(value.position)});
-  const chosen=backgrounds.find(item=>item.id===value.selected)||backgrounds[0];
-  return {mode:value.mode==='photo'&&chosen?'photo':'default',selected:chosen?.id||'',backgrounds,updatedAt:Number(value.updatedAt)||0};
+  if(!backgrounds.length&&validImage(value.image))backgrounds.push({id:'legacy-photo-'+encodeURIComponent(id),name:'選んだ写真',image:value.image,preview:'',position:focus(value.position)});
+  const shared=window.BackgroundCatalog?.readCache();
+  if(shared){const privateItems=backgrounds.filter(item=>!shared.knownIds.includes(item.id));backgrounds.splice(0,backgrounds.length,...shared.backgrounds,...privateItems);}
+  const wanted=value.selected==='legacy-photo'?'legacy-photo-'+encodeURIComponent(id):value.selected;
+  const chosen=backgrounds.find(item=>item.id===wanted)||(!wanted?backgrounds[0]:null);
+  return {mode:value.mode==='photo'&&chosen?'photo':'default',selected:chosen?.id||value.selected||'',backgrounds,updatedAt:Number(value.updatedAt)||0};
  }catch(error){message('背景設定を読み取れませんでした。');return empty();}
 }
 // Revocable URLs release obsolete photo resources on switches and suspension.
@@ -54,21 +57,30 @@ function apply(){
  document.getElementById('headerBackgroundButton').setAttribute('aria-label','背景を選ぶ：'+(item?label(item):'いつもの背景'));
 }
 function load(){
- const next=owner();if(account!==next){account=next;adminOwner=null;revision++;saveRevision++;if(picker.open)picker.close();if(admin.open)admin.close();loadedPreferences=undefined;loadedCatalog=undefined;previewCache.clear();message('');}
+ const next=owner();if(account!==next){account=next;adminOwner=null;revision++;saveRevision++;if(picker.open)picker.close();if(admin.open)admin.close();loadedPreferences=undefined;loadedCatalog=undefined;loadedShared=undefined;previewCache.clear();message('');}
  const preferences=localStorage.getItem(key(account)),catalog=localStorage.getItem(catalogKey(account));
- if(preferences!==loadedPreferences||catalog!==loadedCatalog){settings=read(account);loadedPreferences=preferences;loadedCatalog=catalog;}apply();
+ const shared=localStorage.getItem(window.BackgroundCatalog.cacheKey);
+ if(preferences!==loadedPreferences||catalog!==loadedCatalog||shared!==loadedShared){if(shared!==loadedShared)previewCache.clear();settings=read(account);loadedPreferences=preferences;loadedCatalog=catalog;loadedShared=shared;}apply();
  if(document.documentElement.classList.contains('pwa-recovery-rendering'))message('前回の終了を確認できなかったため、背景を一時停止しています。選び直すと再表示します。');
 }
 async function save(next,success='背景を保存しました。'){
  const id=account,token=++saveRevision;next.updatedAt=Math.max(Date.now(),settings.updatedAt+1);message('保存しています…');
  try{
   // Selecting a photo writes only small preferences, not the entire image gallery.
-  if(next.backgrounds!==settings.backgrounds||!localStorage.getItem(catalogKey(id)))localStorage.setItem(catalogKey(id),JSON.stringify({backgrounds:next.backgrounds,mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));
+  if(next.backgrounds!==settings.backgrounds){
+   if(!isAdmin())throw Error('管理者の認証が必要です。');
+   const previous=settings.backgrounds;
+   const upserts=next.backgrounds.filter(item=>previous.find(old=>old.id===item.id)!==item);
+   const remove=previous.filter(item=>!next.backgrounds.some(now=>now.id===item.id)).map(item=>item.id);
+   const shared=await window.BackgroundCatalog.publish({upserts,remove});
+   if(owner()!==id||token!==saveRevision)return false;
+   next={...next,backgrounds:shared.backgrounds};
+  }else if(!window.BackgroundCatalog.readCache()&&!localStorage.getItem(catalogKey(id)))localStorage.setItem(catalogKey(id),JSON.stringify({backgrounds:next.backgrounds,mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));
   localStorage.setItem(key(id),JSON.stringify({mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));settings=next;loadedPreferences=localStorage.getItem(key(id));loadedCatalog=localStorage.getItem(catalogKey(id));apply();
   if(window.AppStorage)await window.AppStorage.flush();
   if(owner()!==id||token!==saveRevision)return false;
   message(success);window.queueBackgroundSave?.();return true;
- }catch(error){if(owner()===id&&token===saveRevision)message('保存できませんでした。もう一度お試しください。');console.warn('背景設定の保存に失敗しました',error);return false;}
+ }catch(error){if(owner()===id&&token===saveRevision)message('保存できませんでした。'+error.message);console.warn('背景設定の保存に失敗しました',error);return false;}
 }
 function adminList(id=settings.selected){
  selection.replaceChildren(...settings.backgrounds.map(item=>{const option=document.createElement('option');option.value=item.id;option.textContent=label(item);return option;}));
@@ -115,6 +127,7 @@ document.getElementById('headerBackgroundButton').onclick=()=>{
  load();releasePreviews();slides.replaceChildren(card({id:'default',position:50}),...settings.backgrounds.map(card));
  // Portrait previews match the current phone viewport rather than stretching landscape photos.
  picker.style.setProperty('--preview-ratio',innerWidth+'/'+innerHeight);document.body.append(picker);picker.showModal();apply();
+ refreshShared(true);
  const current=slides.querySelector('[aria-pressed="true"]');if(current)slides.scrollLeft+=current.getBoundingClientRect().left-slides.getBoundingClientRect().left-(slides.clientWidth-current.offsetWidth)/2;visiblePreviews();
 };
 slides.onclick=event=>{
@@ -165,13 +178,27 @@ document.getElementById('sidebarBackgroundAdmin').onclick=()=>{
 auth.onsubmit=event=>{
  event.preventDefault();const password=auth.elements.backgroundAdminPassword.value.trim();auth.reset();
  if(password!=='tukinokopanda'&&password!=='tutinokopanda'){admin.querySelector('#backgroundAdminAuthStatus').textContent='パスワードが違います。';return;}
- adminOwner=owner();auth.hidden=true;controls.hidden=false;message('');adminList();
+ adminOwner=owner();auth.hidden=true;controls.hidden=false;message('共有背景を確認しています…');adminList();migrateLegacy();
 };
 admin.querySelector('#backgroundAdminClose').onclick=()=>admin.close();
 admin.addEventListener('close',()=>{adminOwner=null;revision++;file.value='';file.disabled=false;stagedFile=null;stagedItem=null;register.disabled=true;register.textContent='登録する';auth.reset();auth.hidden=false;controls.hidden=true;admin.remove();});
-window.onAppLoaded(load);const toggle=window.toggleSidebar;window.toggleSidebar=function(open){if(open)load();return toggle.apply(this,arguments);};
+function redraw(){load();if(picker.open){releasePreviews();slides.replaceChildren(card({id:'default',position:50}),...settings.backgrounds.map(card));apply();visiblePreviews();}if(isAdmin())adminList();}
+async function refreshShared(force=false){try{await window.BackgroundCatalog.refresh(force);}catch(error){message('共有背景を更新できませんでした。保存済みの背景を表示しています。');}}
+async function migrateLegacy(){
+ const id=owner(),token=++revision,current=()=>isAdmin()&&owner()===id&&revision===token;
+ file.disabled=true;register.disabled=true;selection.disabled=true;position.disabled=true;admin.querySelector('#backgroundAdminDelete').disabled=true;
+ try{
+  await window.BackgroundCatalog.refresh(true);if(!current())return;load();
+  const shared=window.BackgroundCatalog.readCache(),legacy=settings.backgrounds.filter(item=>!shared?.knownIds.includes(item.id));
+  if(legacy.length)await window.BackgroundCatalog.publish({upserts:legacy});
+  if(current()){redraw();message(legacy.length?'以前の背景も全ユーザーに共有しました。':'背景は全ユーザー共通です。');}
+ }catch(error){if(current())message('共有できませんでした。'+error.message);}
+ finally{if(current()){file.disabled=false;position.disabled=false;register.disabled=!stagedFile;adminList();}}
+}
+window.addEventListener('background-catalog-changed',redraw);
+window.onAppLoaded(()=>{load();refreshShared();});const toggle=window.toggleSidebar;window.toggleSidebar=function(open){if(open)load();return toggle.apply(this,arguments);};
 window.addEventListener('pagehide',()=>{releasePreviews();releaseBackground();});
 window.addEventListener('pageshow',()=>{apply();visiblePreviews();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){releasePreviews();releaseBackground();}else{apply();visiblePreviews();}});
-window.addEventListener('storage',event=>{if(event.key===key(owner())||event.key===catalogKey(owner()))load();});load();
+document.addEventListener('visibilitychange',()=>{if(document.hidden){releasePreviews();releaseBackground();}else{apply();visiblePreviews();refreshShared();}});
+window.addEventListener('storage',event=>{if(event.key===key(owner())||event.key===catalogKey(owner())||event.key===window.BackgroundCatalog.cacheKey)redraw();});load();
 })();
