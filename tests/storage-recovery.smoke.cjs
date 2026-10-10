@@ -17,5 +17,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  // At quota, the timestamp and its data must both wait for the same IDB transaction.
  await page.evaluate(async key=>{window.forceQuota=true;const ts=nativeStorage.getItem(key+'__ts');localStorage.setItem(key,JSON.stringify({5:{status:'ok'}}));localStorage.setItem(key+'__ts','5000');assertTimestamp=nativeStorage.getItem(key+'__ts')===ts;await AppStorage.flush();window.forceQuota=false;},key);assert.equal(await page.evaluate(()=>assertTimestamp),true);
  await page.reload();await page.evaluate(()=>AppStorage.ready);assert.equal(await page.evaluate(key=>JSON.parse(localStorage.getItem(key))[5].status,key),'ok');assert.equal(await page.evaluate(key=>localStorage.getItem(key+'__ts'),key),'5000');
- console.log('PASS: newer native recovery, interrupted writes, explicit reset, peer reload and quota data/timestamp consistency');
+ // A pending single-player best has an IDB mirror even while native storage is available.
+ await page.evaluate(async()=>{const key='core_v4_word_duel_solo_a';localStorage.setItem(key,JSON.stringify({score:380,book:'test',at:123,pending:true}));await AppStorage.flush();nativeStorage.removeItem(key);});
+ await page.reload();await page.evaluate(()=>AppStorage.ready);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('core_v4_word_duel_solo_a')).score),380);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('core_v4_word_duel_solo_a')).pending),true);
+ console.log('PASS: newer native recovery, interrupted writes, explicit reset, peer reload, quota data/timestamp consistency and personal-best retry mirror');
  }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

@@ -98,13 +98,14 @@
     function avatar(value,label,appearance){const frame=document.createElement('span');frame.className='podium-avatar';const safe=typeof value==='string'&&(/^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(value));if(safe){const img=document.createElement('img');preview(img,value);img.alt=String(label||'ユーザー')+'のアイコン';img.referrerPolicy='no-referrer';img.onerror=()=>{img.remove();frame.prepend(document.createTextNode(String(label||'人').trim().slice(0,1)));};frame.append(img);}else{frame.textContent=String(label||'人').trim().slice(0,1);}return frame;}
     window.RankingVisuals={name,avatar,appearanceOf:doc=>appearanceOf(doc)};
     let rankMode='learning';
-    const labels={rating:'対戦レート',time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
+    const labels={rating:'対戦レート',solo:'シングルプレイのベストスコア',time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
+    const hasRecord=(entry,key)=>key==='rating'||(key==='solo'?entry.solo!==null:entry[key]>0);
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
-    const value=(row,key)=>key==='rating'?String(row.rating??1500):key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
+    const value=(row,key)=>key==='rating'?String(row.rating??1500):key==='solo'?(row.solo===null?'未プレイ':row.solo.toLocaleString('ja-JP')+'点'):key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
     function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
     function appearanceOf(doc){let profile;try{profile=JSON.parse(doc.profileCustomizationJson||'{}');}catch{profile={};}const value={nameColor:/^#[0-9a-f]{6}$/i.test(profile.nameColor||'')?profile.nameColor:'',frame:typeof profile.frame==='string'?profile.frame:''};return value.nameColor||value.frame?JSON.stringify(value):null;}
-    function row(id,doc){const stats=statsOf(doc),combined=fromProfile(doc),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',appearance:appearanceOf(doc),rating:window.WordDuelModel?.rating(doc.wordDuelRating)??1500,time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:flashCount(combined)};}
-    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record),wordDuelRating:window.WordDuel?.localRating()});}
+    function row(id,doc){const stats=statsOf(doc),combined=fromProfile(doc),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',appearance:appearanceOf(doc),rating:window.WordDuelModel?.rating(doc.wordDuelRating)??1500,solo:window.WordDuelModel?.bestScore(doc.wordDuelSoloBest)??null,time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:flashCount(combined)};}
+    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record),wordDuelRating:window.WordDuel?.localRating(),wordDuelSoloBest:window.WordDuelSolo?.best()});}
     function deadline(promise,ms=15000){let timer;return Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('通信が完了しませんでした')),ms))]).finally(()=>clearTimeout(timer));}
     async function detail(entry,rank,context){
         const account=owner(),dialog=showDetail(entry,rank,context);
@@ -115,7 +116,7 @@
         const detailKey=Object.keys(labels).find(key=>labels[key]===context)||'time';
         const dialog=existing||window.openLibraryDialog('学習記録','<div class="ranking-detail"><div class="ranking-detail-person"></div><p class="ranking-detail-place"></p><dl></dl></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
         dialog.querySelector('.library-editor-eyebrow').textContent='LEARNING RECORDS';
-        const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');person.replaceChildren();dialog.querySelector('dl').replaceChildren();name(heading,entry.name,entry.appearance);person.append(window.RankingVisuals.avatar(entry.avatar,entry.name,entry.appearance),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[detailKey])+' · '+(rank?rank+'位':entry[detailKey]>0?'順位未取得':'未計測');
+        const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');person.replaceChildren();dialog.querySelector('dl').replaceChildren();name(heading,entry.name,entry.appearance);person.append(window.RankingVisuals.avatar(entry.avatar,entry.name,entry.appearance),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[detailKey])+' · '+(rank?rank+'位':hasRecord(entry,detailKey)?'順位未取得':'未計測');
         Object.keys(labels).forEach(key=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=labels[key];dd.textContent=value(entry,key);dialog.querySelector('dl').append(dt,dd);});return dialog;
     }
     window.RankingVisuals.detailStudy=function(entry,rank){const known=row(entry.id,{playerName:entry.name,avatar:entry.avatar,userStats:entry.getStats?entry.getStats():{},profileCustomizationJson:entry.appearance});showDetail(known,rank,'今日の勉強時間');const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent='今日の勉強時間';dd.textContent=duration(entry.seconds);const dl=document.querySelector('.ranking-detail dl');dl.prepend(dt,dd);};
@@ -123,12 +124,13 @@
     function sameShape(left,right){return !!left&&left.length===right.length&&left.every((row,i)=>row.length===right[i].length&&row.every((value,j)=>value===right[i][j]));}
     function render(){
         const host=document.getElementById('rankingPodium');if(!host)return;ensure();const local=self(),rows=cache.filter(entry=>entry.id!==user);if(user!=='GUEST-000')rows.push(local);
-        host.querySelectorAll('[data-podium-metric]').forEach(section=>{if((section.dataset.podiumMetric==='rating')!==(rankMode==='rating'))section.remove();});
-        host.classList.toggle('is-rating-mode',rankMode==='rating');
-        (rankMode==='rating'?['rating']:['time','words','flash']).forEach(key=>{
+        const metrics=rankMode==='learning'?['time','words','flash']:[rankMode];
+        host.querySelectorAll('[data-podium-metric]').forEach(section=>{if(!metrics.includes(section.dataset.podiumMetric))section.remove();});
+        host.classList.toggle('is-rating-mode',rankMode!=='learning');
+        metrics.forEach(key=>{
             let section=host.querySelector('[data-podium-metric="'+key+'"]');
             if(!section){section=document.createElement('section');section.className='ranking-mini-panel';section.dataset.podiumMetric=key;const heading=document.createElement('h3');heading.textContent=labels[key];const podium=document.createElement('div');podium.className='learning-podium';const own=document.createElement('button');own.type='button';own.className='ranking-mini-self';section.append(heading,podium,own);host.append(section);}
-            const measured=rows.filter(entry=>key==='rating'||entry[key]>0).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)),top=cacheReady?measured.slice(0,3):[],podium=section.querySelector('.learning-podium');
+            const measured=rows.filter(entry=>hasRecord(entry,key)).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)),top=cacheReady?measured.slice(0,3):[],podium=section.querySelector('.learning-podium');
             const shape=[[user],...top.map(entry=>[entry.id,entry.name,entry.avatar,entry.appearance])];
             if(!sameShape(podiumShapes.get(section),shape)){
                 const mounted=podiumShapes.has(section);podiumShapes.set(section,shape);podium.replaceChildren();
@@ -138,7 +140,7 @@
                 });
             }
             top.forEach((entry,index)=>{const column=podium.querySelector('[data-place="'+(index+1)+'"]'),amount=column.querySelector('strong'),text=value(entry,key);if(amount.textContent!==text)amount.textContent=text;column.setAttribute('aria-label',labels[key]+' '+(index+1)+'位 '+entry.name+'の詳細');column.onclick=()=>detail(entry,index+1,labels[key]);});
-            const ownRank=cacheReady?measured.findIndex(entry=>entry.id===user)+1:0,own=section.querySelector('.ranking-mini-self'),text=(user==='GUEST-000'?'あなた（ゲスト）':'あなた · '+(ownRank?ownRank+'位':local[key]>0?'順位未取得':'未計測'))+'　'+value(local,key);if(own.textContent!==text)own.textContent=text;own.onclick=()=>detail(local,ownRank,labels[key]);
+            const ownRank=cacheReady?measured.findIndex(entry=>entry.id===user)+1:0,own=section.querySelector('.ranking-mini-self'),text=(user==='GUEST-000'?'あなた（ゲスト）':'あなた · '+(ownRank?ownRank+'位':hasRecord(local,key)?'順位未取得':'未計測'))+'　'+value(local,key);if(own.textContent!==text)own.textContent=text;own.onclick=()=>detail(local,ownRank,labels[key]);
         });
     }
     const yieldFrame=()=>new Promise(resolve=>setTimeout(resolve,0));
@@ -156,7 +158,7 @@
         // Synchronization must not gate the independent leaderboard read.
         syncCloud().catch(error=>console.warn('ランキング同期は再試行します',error));
         const collect=async()=>{
-            const list=[],tops={time:[],words:[],flash:[],rating:[]};let cursor=null;
+            const list=[],tops={time:[],words:[],flash:[],rating:[],solo:[]};let cursor=null;
             const paged=!!(window.fbQuery&&window.fbOrderBy&&window.fbDocumentId&&window.fbLimit&&window.fbStartAfter);
             do{
                 let ref=window.fbCollection(window.db,'users');
@@ -168,7 +170,7 @@
                     const doc=docs[i],source=doc.data();
                     if(!source.deleted&&doc.id!=='GUEST-000'&&doc.id!==id){try{
                         const entry=row(doc.id,source),previous=new Set(Object.values(tops).flat());list.push(entry);
-                        Object.keys(tops).forEach(key=>{if(key==='rating'||entry[key]>0){tops[key].push(entry);tops[key].sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id));tops[key]=tops[key].slice(0,3);}});
+                        Object.keys(tops).forEach(key=>{if(hasRecord(entry,key)){tops[key].push(entry);tops[key].sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id));tops[key]=tops[key].slice(0,3);}});
                         const retained=new Set(Object.values(tops).flat());if(!retained.has(entry))entry.avatar='';for(const old of previous)if(!retained.has(old))old.avatar='';
                     }catch(error){console.warn('ランキングの一部の記録を読み取れませんでした',error);}}
                     if(i%8===7)await yieldFrame();
