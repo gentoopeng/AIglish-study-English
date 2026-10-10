@@ -263,3 +263,9 @@ Validation: 85 model tests; Chromium/WebKit gallery checks confirm IDB copies fo
 Flashcard play uses the same selected photo URL, dark overlay, cover crop and horizontal focus as the application background. Its fixed fullscreen surface masks unrelated game content behind it. Settings no longer load the separate `sinkai.png` artwork and inherit their existing dialog surface. The iOS recovery rule suppresses photos on both application and flashcard surfaces. No storage writes, new image URL, polling or animation is introduced; existing swipe/flip feedback is retained.
 
 Validation: Chromium/WebKit phone-sized manual probes select a saved photo, open settings/start flashcards, compare the background URL/overlay/position with the app, verify no `sinkai.png` request, swipe and return with the selection intact. WebKit screenshots were inspected. Chromium flashcard animation and settings/version smoke checks pass; git diff --check passes. External services are blocked for these checks.
+
+### 10.10.10.44: lighter analysis and study surfaces
+
+Shared card opacity decreases from 0.68 to 0.42, keeping the existing uniform surface treatment across tabs and the independent understanding colors. Large reader analysis inputs use a 0.35 dark surface rather than solid navy, allowing the photograph to show through the form. Text colors, photo overlay/crop, storage and animations are unchanged.
+
+Validation: Chromium/WebKit PWA directory/shared-surface/understanding-color regressions pass. WebKit phone screenshots of reader input and study cards were inspected, and typed input remains visible. Chromium flashcard/settings/version check and git diff --check pass.

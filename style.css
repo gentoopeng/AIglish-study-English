@@ -2230,7 +2230,7 @@ html body{background-image:none!important;}.container{position:relative;z-index:
 #sidebarBackgroundFocus[hidden]{display:none;}#sidebarBackgroundStatus{margin:0;font-size:12px;line-height:1.6;color:var(--text-sub);}
 
 /* Consistent readable surfaces; understanding colors on word rows remain separate. */
-@layer rendering-safety {html body .card,html body .ranking-mini-panel,html body .auth-tabs,html body .library-book-settings {background:rgba(15,23,42,.68)!important;background-image:none!important;}}
+@layer rendering-safety {html body .card,html body .ranking-mini-panel,html body .auth-tabs,html body .library-book-settings {background:rgba(15,23,42,.42)!important;background-image:none!important;}}
 html body .app-header,html body .nav-bar,html body .sidebar{background:rgba(15,23,42,.97)!important;}
 .background-admin-dialog{box-sizing:border-box;width:min(360px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid var(--border);border-radius:14px;background:#10172b;color:var(--text-main);padding:20px;}
 .background-admin-dialog::backdrop{background:#080e18b3;backdrop-filter:none;}
@@ -2284,3 +2284,6 @@ html body .app-header .hf-badge { gap:2px; }
 .vocab-library-header > .library-toolbar button { flex:1 1 auto; min-width:0; white-space:nowrap; padding:9px clamp(4px,1.6vw,10px); font-size:clamp(9px,2.6vw,12px); }
 /* Retain party content and inventory; only remove its navigation entry. */
 #nav-party[hidden] { display:none!important; }
+
+/* Let the photograph show through the large analysis fields as well as the shared cards. */
+#view-reader .modern-textarea,#view-reader .search-input{background:rgba(15,23,42,.35)!important;}
