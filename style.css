@@ -1998,3 +1998,10 @@ html body .flashcard-face-front,html body .flashcard-face-back{outline:2px solid
 }
 /* Safari's native select must keep its white label on a dark control surface. */
 #flashcardSourceSelect{color-scheme:dark; background:#172033!important; color:#fff!important;}
+:root .sidebar-sounds{display:grid;gap:12px;padding:14px;border:1px solid var(--border);border-radius:12px;background:rgba(15,23,42,.35);}
+:root .sound-toggle{display:flex;align-items:center;justify-content:space-between;font-size:13px;cursor:pointer;}
+:root .sound-toggle span{display:flex;align-items:center;gap:8px;}
+:root .sound-toggle input{width:18px;height:18px;accent-color:var(--accent);}
+:root .sound-volume{display:grid;grid-template-columns:auto minmax(0,1fr) 38px;align-items:center;gap:10px;font-size:12px;color:var(--text-sub);}
+:root .sound-volume input{width:100%;margin:0;accent-color:var(--accent);}
+:root .sound-volume output{text-align:right;font-variant-numeric:tabular-nums;}

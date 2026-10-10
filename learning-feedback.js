@@ -9,38 +9,10 @@ window.__batch3Applied = true;
 ================================================================== */
 // Error diagnostics are installed before startup in runtime-errors.js.
 
-/* ==================================================================
-【3】控えめ音・振動（Web Audio API）
-================================================================== */
-(function initSubtleSound() {
-if (localStorage.getItem('b3_sound_off') === '1') return;
-var ctx = null;
-function getCtx() {
-if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
-return ctx;
-}
-function play(freq, dur, vol) {
-var c = getCtx(); if (!c) return;
-try {
-var o = c.createOscillator();
-var g = c.createGain();
-o.connect(g); g.connect(c.destination);
-o.frequency.value = freq;
-o.type = 'sine';
-g.gain.value = vol || 0.03;
-g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
-o.start(c.currentTime);
-o.stop(c.currentTime + dur);
-} catch (e) {}
-}
-// 正解：やさしい高音ピン
-window.__b3SoundOk = function () { play(880, 0.12, 0.025); };
-// 不正解：低めのやわらかい音
-window.__b3SoundBad = function () { play(220, 0.15, 0.025); };
-// タップ：ごく控えめ
-window.__b3SoundTap = function () { play(660, 0.06, 0.015); };
-
-})();
+// Keep legacy callers on the same bounded, configurable sound player.
+window.__b3SoundOk=()=>window.AppSounds?.play('swipe-right');
+window.__b3SoundBad=()=>window.AppSounds?.play('swipe-left');
+window.__b3SoundTap=()=>window.AppSounds?.play('tap');
 
 /* ==================================================================
 【4】オフラインバナー
