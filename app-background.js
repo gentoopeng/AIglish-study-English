@@ -2,11 +2,7 @@
 (function(){
 'use strict';
 const owner=()=>typeof myId==='string'&&myId?myId:'GUEST-000',key=id=>'aiglish_app_background_'+id,catalogKey=id=>'aiglish_app_background_catalog_'+id;
-const admin=document.getElementById('backgroundAdminTemplate').content.firstElementChild;
 const picker=document.getElementById('backgroundPickerTemplate').content.firstElementChild;
-const file=admin.querySelector('#sidebarBackgroundFile'),position=admin.querySelector('#sidebarBackgroundPosition');
-const auth=admin.querySelector('#backgroundAdminAuth'),controls=admin.querySelector('#backgroundAdminControls');
-const selection=admin.querySelector('#backgroundAdminSelection'),register=admin.querySelector('#backgroundAdminRegister');
 const slides=picker.querySelector('#backgroundPickerSlides');
 // Static assets are available to every account without a Firestore image read.
 const bundled=[
@@ -18,13 +14,12 @@ const bundled=[
 const empty=()=>({mode:'default',selected:'',backgrounds:[],updatedAt:0});
 const validImage=value=>typeof value==='string'&&value.length<=1000000&&/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(value);
 const focus=value=>Math.max(0,Math.min(100,Number.isFinite(Number(value))?Number(value):30));
-let account='',settings=empty(),adminOwner=null,revision=0,saveRevision=0,loadedPreferences,loadedCatalog,loadedShared,stagedFile=null,stagedItem=null;
+let account='',settings=empty(),saveRevision=0,loadedPreferences,loadedCatalog,loadedShared;
 let backgroundUrl='',backgroundSource='',previewFrame=0;
 const previews=new Map(),previewCache=new Map();
 const label=item=>item.id==='default'?'いつもの背景':'背景 '+(settings.backgrounds.indexOf(item)+1);
-const isAdmin=()=>adminOwner===owner()&&admin.open;
 const selected=()=>settings.backgrounds.find(item=>item.id===settings.selected);
-function message(text){picker.querySelector('#backgroundPickerStatus').textContent=text;admin.querySelector('#backgroundAdminSaveStatus').textContent=text;}
+function message(text){picker.querySelector('#backgroundPickerStatus').textContent=text;}
 function read(id){
  try{
   const preferences=JSON.parse(localStorage.getItem(key(id))||'null');
@@ -66,7 +61,7 @@ function apply(){
  document.getElementById('headerBackgroundButton').setAttribute('aria-label','背景を選ぶ：'+(item?label(item):'いつもの背景'));
 }
 function load(){
- const next=owner();if(account!==next){account=next;adminOwner=null;revision++;saveRevision++;if(picker.open)picker.close();if(admin.open)admin.close();loadedPreferences=undefined;loadedCatalog=undefined;loadedShared=undefined;previewCache.clear();message('');}
+ const next=owner();if(account!==next){account=next;saveRevision++;if(picker.open)picker.close();loadedPreferences=undefined;loadedCatalog=undefined;loadedShared=undefined;previewCache.clear();message('');}
  const preferences=localStorage.getItem(key(account)),catalog=localStorage.getItem(catalogKey(account));
  const shared=localStorage.getItem(window.BackgroundCatalog.cacheKey);
  if(preferences!==loadedPreferences||catalog!==loadedCatalog||shared!==loadedShared){if(shared!==loadedShared)previewCache.clear();settings=read(account);loadedPreferences=preferences;loadedCatalog=catalog;loadedShared=shared;}apply();
@@ -76,27 +71,12 @@ async function save(next,success='背景を保存しました。'){
  const id=account,token=++saveRevision;next.updatedAt=Math.max(Date.now(),settings.updatedAt+1);message('保存しています…');
  try{
   // Selecting a photo writes only small preferences, not the entire image gallery.
-  if(next.backgrounds!==settings.backgrounds){
-   if(!isAdmin())throw Error('管理者の認証が必要です。');
-   const previous=settings.backgrounds;
-   const upserts=next.backgrounds.filter(item=>!item.bundled&&previous.find(old=>old.id===item.id)!==item);
-   const remove=previous.filter(item=>!item.bundled&&!next.backgrounds.some(now=>now.id===item.id)).map(item=>item.id);
-   const shared=await window.BackgroundCatalog.publish({upserts,remove});
-   if(owner()!==id||token!==saveRevision)return false;
-   next={...next,backgrounds:[...bundled,...shared.backgrounds]};
-  }else if(!window.BackgroundCatalog.readCache()&&!localStorage.getItem(catalogKey(id)))localStorage.setItem(catalogKey(id),JSON.stringify({backgrounds:next.backgrounds.filter(item=>!item.bundled),mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));
+  if(!window.BackgroundCatalog.readCache()&&!localStorage.getItem(catalogKey(id)))localStorage.setItem(catalogKey(id),JSON.stringify({backgrounds:next.backgrounds.filter(item=>!item.bundled),mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));
   localStorage.setItem(key(id),JSON.stringify({mode:next.mode,selected:next.selected,updatedAt:next.updatedAt}));settings=next;loadedPreferences=localStorage.getItem(key(id));loadedCatalog=localStorage.getItem(catalogKey(id));apply();
   if(window.AppStorage)await window.AppStorage.flush();
   if(owner()!==id||token!==saveRevision)return false;
   message(success);window.queueBackgroundSave?.();return true;
  }catch(error){if(owner()===id&&token===saveRevision)message('保存できませんでした。'+error.message);console.warn('背景設定の保存に失敗しました',error);return false;}
-}
-function adminList(id=settings.selected){
- const editable=settings.backgrounds.filter(item=>!item.bundled);
- selection.replaceChildren(...editable.map(item=>{const option=document.createElement('option');option.value=item.id;option.textContent=label(item);return option;}));
- selection.value=id;position.value=String(settings.backgrounds.find(item=>item.id===selection.value)?.position??30);
- selection.disabled=!editable.length;admin.querySelector('#backgroundAdminDelete').disabled=!editable.length;
- admin.querySelector('#sidebarBackgroundFocus').hidden=!editable.length;
 }
 function releasePreview(button){
  const resource=previews.get(button);if(!resource)return;
@@ -149,63 +129,8 @@ slides.onclick=event=>{
 };
 picker.querySelector('#backgroundPickerClose').onclick=()=>picker.close();
 picker.addEventListener('close',()=>{releasePreviews();slides.replaceChildren();picker.remove();});
-file.onchange=()=>{
- stagedFile=isAdmin()?file.files[0]||null:null;stagedItem=null;register.disabled=!stagedFile;
- if(stagedFile)message('写真を選択しました。「登録する」で保存します。');
-};
-register.onclick=async()=>{
- if(!isAdmin()||!stagedFile)return;
- const id=account,token=++revision,source=stagedFile;
- file.disabled=true;register.disabled=true;register.textContent='登録中…';message('写真を準備しています…');
- try{
-  if(settings.backgrounds.filter(item=>!item.bundled).length>=12&&!stagedItem)throw Error('背景は12枚まで登録できます。使わない背景を削除してください。');
-  if(source.size>12*1024*1024)throw Error('12MB以下の写真を選んでください。');
-  const current=()=>isAdmin()&&owner()===id&&revision===token;
-  if(!stagedItem){
-   const image=await window.ProfileImages.imageFile(source,960,'image/jpeg',current,.6);if(!current())return;
-   // Decode only the compressed image for a smaller slider thumbnail, never the source twice.
-   const blob=await (await fetch(image)).blob();
-   const preview=await window.ProfileImages.imageFile(blob,320,'image/jpeg',current,.5);if(!current())return;
-   if(image.length>1000000||settings.backgrounds.filter(item=>!item.bundled).reduce((size,item)=>size+item.image.length+item.preview.length,0)+image.length+preview.length>4000000)throw Error('画像の容量が大きいため、使わない背景を削除してから追加してください。');
-   stagedItem={id:'photo-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),image,preview,position:30};
-  }
-  const item=stagedItem,backgrounds=settings.backgrounds.some(existing=>existing.id===item.id)?settings.backgrounds:[...settings.backgrounds,item];
-  if(await save({...settings,backgrounds,selected:settings.selected||item.id},'写真を登録しました（合計'+backgrounds.filter(item=>!item.bundled).length+'枚）。')&&current()){stagedFile=null;stagedItem=null;file.value='';adminList(item.id);}
- }catch(error){if(owner()===id&&revision===token)message(error.message);}finally{if(revision===token){file.disabled=false;register.disabled=!isAdmin()||!stagedFile;register.textContent='登録する';}}
-};
-selection.onchange=()=>{if(isAdmin())position.value=String(settings.backgrounds.find(item=>item.id===selection.value)?.position??30);};
-position.onchange=async()=>{if(isAdmin())await save({...settings,backgrounds:settings.backgrounds.map(item=>item.id===selection.value?{...item,position:Number(position.value)}:item)});};
-admin.querySelector('#backgroundAdminDelete').onclick=async()=>{
- if(!isAdmin())return;const backgrounds=settings.backgrounds.filter(item=>item.id!==selection.value);
- const removedCurrent=settings.selected===selection.value;
- const next={...settings,backgrounds,selected:removedCurrent?(backgrounds[0]?.id||''):settings.selected,mode:removedCurrent?'default':settings.mode};
- if(await save(next)){previewCache.clear();adminList();}
-};
-document.getElementById('sidebarBackgroundAdmin').onclick=()=>{
- load();adminOwner=null;auth.hidden=false;controls.hidden=true;auth.reset();admin.querySelector('#backgroundAdminAuthStatus').textContent='';
- window.toggleSidebar(false);document.body.append(admin);admin.showModal();
-};
-// Existing application's password gate; server authorization is separate.
-auth.onsubmit=event=>{
- event.preventDefault();const password=auth.elements.backgroundAdminPassword.value.trim();auth.reset();
- if(password!=='tukinokopanda'&&password!=='tutinokopanda'){admin.querySelector('#backgroundAdminAuthStatus').textContent='パスワードが違います。';return;}
- adminOwner=owner();auth.hidden=true;controls.hidden=false;message('共有背景を確認しています…');adminList();migrateLegacy();
-};
-admin.querySelector('#backgroundAdminClose').onclick=()=>admin.close();
-admin.addEventListener('close',()=>{adminOwner=null;revision++;file.value='';file.disabled=false;stagedFile=null;stagedItem=null;register.disabled=true;register.textContent='登録する';auth.reset();auth.hidden=false;controls.hidden=true;admin.remove();});
-function redraw(){load();if(picker.open){releasePreviews();slides.replaceChildren(card({id:'default',position:50}),...settings.backgrounds.map(card));apply();visiblePreviews();}if(isAdmin())adminList();}
+function redraw(){load();if(picker.open){releasePreviews();slides.replaceChildren(card({id:'default',position:50}),...settings.backgrounds.map(card));apply();visiblePreviews();}}
 async function refreshShared(force=false){try{await window.BackgroundCatalog.refresh(force);}catch(error){message('共有背景を更新できませんでした。保存済みの背景を表示しています。');}}
-async function migrateLegacy(){
- const id=owner(),token=++revision,current=()=>isAdmin()&&owner()===id&&revision===token;
- file.disabled=true;register.disabled=true;selection.disabled=true;position.disabled=true;admin.querySelector('#backgroundAdminDelete').disabled=true;
- try{
-  await window.BackgroundCatalog.refresh(true);if(!current())return;load();
-  const shared=window.BackgroundCatalog.readCache(),legacy=settings.backgrounds.filter(item=>!item.bundled&&!shared?.knownIds.includes(item.id));
-  if(legacy.length)await window.BackgroundCatalog.publish({upserts:legacy});
-  if(current()){redraw();message(legacy.length?'以前の背景も全ユーザーに共有しました。':'背景は全ユーザー共通です。');}
- }catch(error){if(current())message('共有できませんでした。'+error.message);}
- finally{if(current()){file.disabled=false;position.disabled=false;register.disabled=!stagedFile;adminList();}}
-}
 window.addEventListener('background-catalog-changed',redraw);
 window.onAppLoaded(()=>{load();refreshShared();});const toggle=window.toggleSidebar;window.toggleSidebar=function(open){if(open)load();return toggle.apply(this,arguments);};
 window.addEventListener('pagehide',()=>{releasePreviews();releaseBackground();});

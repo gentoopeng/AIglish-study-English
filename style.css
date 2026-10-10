@@ -2222,23 +2222,10 @@ html body{background-image:none!important;}.container{position:relative;z-index:
 
 #appStartupStatus{position:fixed;top:80px;left:16px;right:16px;z-index:100001;padding:14px;background:#10172b;color:#eee;font:14px system-ui;border-radius:10px;}#appStartupStatus[hidden]{display:none;}
 
-.sidebar-background{padding:12px;border:1px solid var(--border);border-radius:10px;background:#10172b;display:grid;gap:12px;}
-.sidebar-background h3{margin:0;font-size:13px;color:var(--text-main);}
-.sidebar-background-choices{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.sidebar-background-upload{display:grid;gap:8px;}.sidebar-background-upload input{max-width:100%;min-width:0;font:12px system-ui;}
-#sidebarBackgroundFocus{font-size:12px;line-height:1.8;}#sidebarBackgroundFocus input{display:block;width:100%;accent-color:var(--accent);}
-#sidebarBackgroundFocus[hidden]{display:none;}#sidebarBackgroundStatus{margin:0;font-size:12px;line-height:1.6;color:var(--text-sub);}
 
 /* Consistent readable surfaces; understanding colors on word rows remain separate. */
 @layer rendering-safety {html body .card,html body .ranking-mini-panel,html body .auth-tabs,html body .library-book-settings {background:rgba(15,23,42,.42)!important;background-image:none!important;}}
 html body .app-header,html body .nav-bar,html body .sidebar{background:rgba(15,23,42,.97)!important;}
-.background-admin-dialog{box-sizing:border-box;width:min(360px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid var(--border);border-radius:14px;background:#10172b;color:var(--text-main);padding:20px;}
-.background-admin-dialog::backdrop{background:#080e18b3;backdrop-filter:none;}
-.background-admin-dialog h2{font-size:17px;margin:0 0 18px;}.background-admin-dialog form,.background-admin-dialog #backgroundAdminControls{display:grid;gap:12px;}
-.background-admin-dialog input[type=password]{box-sizing:border-box;width:100%;font:16px system-ui;background:#172033;color:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;}
-.background-admin-dialog button{font:inherit;padding:10px;border:1px solid var(--border);border-radius:8px;background:#172033;color:#fff;cursor:pointer;}
-.background-admin-dialog [hidden],#backgroundAdminControls[hidden],#backgroundAdminAuth[hidden]{display:none!important;}
-#backgroundAdminClose{width:100%;margin-top:16px;}#backgroundAdminSaveStatus,#backgroundAdminAuthStatus{font-size:12px;margin:0;line-height:1.5;}
 html.pwa-recovery-rendering body::after,html.pwa-recovery-rendering body #flashcard-play-screen{background-image:none!important;background-color:#0f172a!important;}
 
 /* One lightweight picker for every tab. Native horizontal scrolling; no backdrop blur. */
@@ -2260,7 +2247,6 @@ html body .app-header .hf-badge { gap:2px; }
 .background-preview span { display:block; padding:10px 3px 6px; font:12px/1.4 system-ui; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .background-preview[aria-pressed="true"] { border:2px solid #ddc984; padding:3px; color:#f0dfac; }
 #backgroundPickerStatus { min-height:18px; margin:8px 20px 0; font:12px/1.5 system-ui; color:#b8bdc9; }
-.background-admin-dialog input[type="text"],.background-admin-dialog select { box-sizing:border-box; width:100%; padding:10px; margin-top:6px; border:1px solid #ffffff33; border-radius:8px; background:#172033; color:#fff; font:16px system-ui; }
 @media(max-width:360px) {
  html body .app-header { padding:0 44px; gap:1px; }
  html body .app-header .menu-trigger { left:8px; width:30px; }
@@ -2275,9 +2261,6 @@ html body .app-header .hf-badge { gap:2px; }
 .background-preview { position:relative; background:#1a2537; }
 .background-preview[aria-pressed="true"]::after { content:"✓"; position:absolute; top:12px; right:12px; width:24px; height:24px; border-radius:50%; background:#0f172a; color:#e4d394; font:16px/24px system-ui; text-align:center; }
 .background-preview img:not([src]) { visibility:hidden; }
-#backgroundAdminRegister { background:#d6c18a; color:#10192b; font-weight:700; }
-#backgroundAdminRegister:disabled { opacity:.4; }
-#backgroundAdminSaveStatus { min-height:36px; }
 
 /* Keep the book actions in one row, including the hidden-books action on small phones. */
 .vocab-library-header > .library-toolbar { flex-wrap:nowrap; gap:6px; }
