@@ -1289,9 +1289,8 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 
 #flashcard-setup-screen,
 #flashcard-play-screen {
-    background-image: url('sinkai.png') !important;
-    background-size: cover !important;
-    background-position: center !important;
+    /* Settings inherit the dialog surface; play uses the shared app photo below. */
+    background: transparent !important;
     box-sizing: border-box;
 }
 
@@ -2210,7 +2209,8 @@ html.ios-stable-rendering body .flashcard-post-ripple{animation:fcFireworkSparkl
 
 
 /* A single static surface, without home/profile/shop renderers. */
-html body::after{z-index:0!important;background:linear-gradient(#08112288,#08112288),var(--app-background-image,url('assets/background-night.webp')) var(--app-background-position,center)/cover no-repeat!important;animation:none!important;}
+html body::after{z-index:0!important;}
+html body::after,html body #flashcard-play-screen{background:linear-gradient(#08112288,#08112288),var(--app-background-image,url('assets/background-night.webp')) var(--app-background-position,center)/cover no-repeat!important;animation:none!important;}
 html body .tab-view::before{display:none!important;background-image:none!important;}
 html body{background-image:none!important;}.container{position:relative;z-index:1;}
 .sidebar-profile-form{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:#10172b;}
@@ -2239,7 +2239,7 @@ html body .app-header,html body .nav-bar,html body .sidebar{background:rgba(15,2
 .background-admin-dialog button{font:inherit;padding:10px;border:1px solid var(--border);border-radius:8px;background:#172033;color:#fff;cursor:pointer;}
 .background-admin-dialog [hidden],#backgroundAdminControls[hidden],#backgroundAdminAuth[hidden]{display:none!important;}
 #backgroundAdminClose{width:100%;margin-top:16px;}#backgroundAdminSaveStatus,#backgroundAdminAuthStatus{font-size:12px;margin:0;line-height:1.5;}
-html.pwa-recovery-rendering body::after{background-image:none!important;background-color:#0f172a!important;}
+html.pwa-recovery-rendering body::after,html.pwa-recovery-rendering body #flashcard-play-screen{background-image:none!important;background-color:#0f172a!important;}
 
 /* One lightweight picker for every tab. Native horizontal scrolling; no backdrop blur. */
 html body .app-header { box-sizing:border-box; padding:0 54px; gap:3px; }
