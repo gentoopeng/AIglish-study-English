@@ -40,13 +40,14 @@
     window.syncRankingMetrics=function(){ensure();record=merge(record,read(user));if(!userStats.learning_ranking_owner||userStats.learning_ranking_owner===user)record=merge(record,userStats.learning_ranking_v2_json||userStats.learning_ranking);readSwipeJournals();scanCurrent();persist();};
     window.recordRankedWord=function(book,num){if(!book)return;ensure();record=merge(record,read(user));record.words[wordKey(book,num)]=1;persist();scheduleSync();};
     window.recordRankedSwipe=function(){ensure();record=merge(record,read(user));record.flash.sources[sourceId]=nonnegative(record.flash.sources[sourceId])+1;store('core_v4_ranking_swipes_v2_'+user+'_'+sourceId,String(record.flash.sources[sourceId]));persist();scheduleSync();};
-    let syncTimer=null;
+    let syncTimer=null;const syncedStates=new Map();
     function scheduleSync(){if(!syncTimer)syncTimer=setTimeout(()=>{syncTimer=null;syncCloud();},2000);}
     async function syncCloud(){
         window.syncRankingMetrics();const id=user;
         if(id==='GUEST-000'||!window.fbRunTransaction||!window.db)return false;
         if(queues.has(id))return queues.get(id);
         const local=JSON.parse(JSON.stringify(record)),time=window.StudyTime.snapshot();
+        const fingerprint=JSON.stringify([local,time?{epoch:time.epoch,days:time.days,offset:time.offset}:null]);if(syncedStates.get(id)===fingerprint)return true;
         const task=(async()=>{try{
             const combined=await window.fbRunTransaction(window.db,async transaction=>{
                 const ref=window.fbDoc(window.db,'users',id),snap=await transaction.get(ref);
@@ -54,7 +55,7 @@
                 const study=window.StudyTimeModel.mergeCurrent(window.StudyTimeModel.readStats(snap.exists()?snap.data():{}).study_calendar_v2,time);
                 transaction.set(ref,{learningRankingV2Json:JSON.stringify(merged),studyLedgerJson:JSON.stringify(study)},{merge:true});return merged;
             });
-            if(owner()===id&&user===id){record=merge(record,combined);persist();if(JSON.stringify(merge(record,local))!==JSON.stringify(merge(combined,local)))scheduleSync();}
+            if(owner()===id&&user===id){record=merge(record,combined);persist();syncedStates.set(id,JSON.stringify([combined,time?{epoch:time.epoch,days:time.days,offset:time.offset}:null]));if(JSON.stringify(merge(record,local))!==JSON.stringify(merge(combined,local)))scheduleSync();}
             return true;
         }catch(error){console.warn('ランキング記録の同期を次回に再試行します',error);return false;}finally{queues.delete(id);}})();
         queues.set(id,task);return task;
@@ -140,7 +141,7 @@
     const yieldFrame=()=>new Promise(resolve=>setTimeout(resolve,0));
     async function refresh(force,foreground=false){
         ensure();if(user==='GUEST-000'){render();document.getElementById('rankingMessage').textContent='ログインすると全ユーザーの表彰台に参加できます。';return;}
-        if(!force&&cacheReady&&Date.now()-cacheAt<60000){render();return;}
+        if(!force&&cacheReady&&Date.now()-cacheAt<300000){render();return;}
         if(inflight&&inflight.id===user)return inflight.promise;
         const id=user,token=++generation,button=document.getElementById('rankingRefresh'),message=document.getElementById('rankingMessage');button.disabled=true;message.textContent='記録を取得中…';
         let cancelled=false,loading=false;
@@ -188,7 +189,7 @@
     window.onTabChange(tab=>{if(tab==='titles'){render();refresh(false);}else if(tab==='vocab'){ensure();scanCurrent();persist();}});
     window.onAppLoaded(()=>{ensure();window.syncRankingMetrics();render();});
     window.addEventListener('storage',event=>{if(event.key===storageKey(owner())){ensure();record=merge(record,read(user));persist();render();}});
-    setInterval(()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(true);},30000);
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(true);});
+    setInterval(()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles'&&!window.IdleSleep?.isSleeping())refresh(false);},300000);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(false);});
     window.LearningRanking={render,refresh,sync:syncCloud,snapshot:()=>{window.syncRankingMetrics();return JSON.parse(JSON.stringify(record));}};
 })();
