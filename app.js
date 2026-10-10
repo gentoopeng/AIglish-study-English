@@ -139,9 +139,9 @@ if(apiKeyInput) apiKeyInput.value = geminiApiKey;
      myTarget = localStorage.getItem('core_v4_userTarget') || "未設定";
      selectedTitle = localStorage.getItem('core_v4_userTitle') || "称号なし";
      totalExp = parseInt(localStorage.getItem('core_v4_totalExp') || "0");
-     activeCharacter = localStorage.getItem('core_v4_active_char') || ""; 
-     activeWeapon = localStorage.getItem('core_v4_active_weapon') || ""; 
-     activeArmor = localStorage.getItem('core_v4_active_armor') || ""; 
+
+
+
      currentTextbook = localStorage.getItem('core_v4_current_textbook_id') || "";
      // 教材一覧の同期は画面表示を止めずバックグラウンドで行う。
      // 現在の教材はこの後、端末キャッシュから先に読み込まれる。
@@ -156,7 +156,7 @@ if(apiKeyInput) apiKeyInput.value = geminiApiKey;
      userStats.friends_count = myFriendList.length; 
      await window.loadCurrentTextbookData();
      window.applyProfileToUi();
-     if(typeof window.updatePartySlotsUi === 'function') window.updatePartySlotsUi(); 
+
      window.renderLeaderboard();
      if(typeof window.renderHistoryList === 'function') window.renderHistoryList();
      if(typeof window.renderBookshelf === 'function') window.renderBookshelf();
@@ -202,10 +202,6 @@ let textbooksPool = [];
 let textbooksCacheMap = {}; // 単語データキャッシュ用のマップオブジェクト
 let adminUploadedBookCoverBase64 = "";
 let isLevelRankExpanded = false;
-let gameComboCount = 0;
-let activeCharacter = "";
-let activeWeapon = "";
-let activeArmor = "";
 let flashcardDataSourceMode = '';
 let flashcardDirectionMode = 'en2ja';
 let flashcardOriginQueue = [];
@@ -228,22 +224,6 @@ let currentActiveTitle = "";
 let currentTargetWordToken = null;
 let currentActiveTitleVocabNum = null;
 let currentActiveAiAnalysisCache = null;
-let gameTimerInterval = null;
-let gameCurrentWordsQueue = [];
-let gameCurrentIndex = 0;
-let currentMultiMode = 'coop';
-let multiBossMaxHp = 100000;
-let multiBossHp = 100000;
-let multiPartyMembers = [];
-let multiEnemyTimeLeft = 10;
-let currentMultiCorrectIndex = -1;
-let multiLimitAmount = 0;
-const multiLimitMax = 100;
-let flickStartX = 0;
-let flickStartY = 0;
-let isFlicking = false;
-let currentFlickChoice = -1;
-let modeSwipeStartX = 0;
 let currentActiveTabId = "vocab";
 let todayStudySeconds = parseInt(localStorage.getItem('core_v4_study_today_secs') || "0");
 let lastAccessDateStr = localStorage.getItem('core_v4_study_last_date') || "";
@@ -252,7 +232,6 @@ let myFriendList = JSON.parse(localStorage.getItem('core_v4_friend_list') || "[]
 let userStats = {
 test_count: 0,
 combo_max: 0,
-multi_win: 0,
 high_score: 0,
 mistake_count: 0,
 vocab_reg: 0,
@@ -1496,403 +1475,6 @@ window.renderTitles();
 };
 // ==========================================================================
 // 🎮 フラッシュカード（単語フラッシュ）制御モジュール
-// ==========================================================================
-// ⚔️ パーティ・マルチプレイ関連
-// ==========================================================================
-window.switchPartySubCategory = function(category) {
-document.getElementById('partyTabChar').classList.toggle('active', category === 'character');
-document.getElementById('partyTabWeapon').classList.toggle('active', category === 'weapon');
-document.getElementById('partyTabArmor').classList.toggle('active', category === 'armor');
-document.getElementById('partyBoxCharacter').style.display = category === 'character' ? 'grid' : 'none';
-document.getElementById('partyBoxWeapon').style.display = category === 'weapon' ? 'grid' : 'none';
-document.getElementById('partyBoxArmor').style.display = category === 'armor' ? 'grid' : 'none';
-};
-window.selectCharacter = function(charId) { activeCharacter = charId; localStorage.setItem('core_v4_active_char', charId); window.updatePartySlotsUi(); alert(charId ? 'キャラクターをセットしたよ！' : 'キャラクターの編成を外したよ。'); };
-window.selectWeapon = function(weaponId) { activeWeapon = weaponId; localStorage.setItem('core_v4_active_weapon', weaponId); window.updatePartySlotsUi(); alert(weaponId ? '武器を装備したよ！' : '武器を外したよ。'); };
-window.selectArmor = function(armorId) { activeArmor = armorId; localStorage.setItem('core_v4_active_armor', armorId); window.updatePartySlotsUi(); alert(armorId ? '防具を装備したよ！' : '防具を外したよ。'); };
-window.updatePartySlotsUi = function() {
-const charImgFrame = document.getElementById('slotCharImgContainer'), charNameLbl = document.getElementById('slotCharName');
-if (activeCharacter === 'tangon') { charImgFrame.innerHTML = `<img src="tangon.png" alt="tangon" style="width:100%;height:100%;object-fit:cover;">`; charNameLbl.innerText = "タンゴン"; } else { charImgFrame.innerHTML = "🫙"; charNameLbl.innerText = "未編成"; }
-const weaponImgFrame = document.getElementById('slotWeaponImgContainer'), weaponNameLbl = document.getElementById('slotWeaponName');
-if (activeWeapon === 'fire_sword') { weaponImgFrame.innerHTML = "🔥🗡️"; weaponNameLbl.innerText = "業火の大剣"; } else { weaponImgFrame.innerHTML = "🗡️"; weaponNameLbl.innerText = "素手"; }
-const armorImgFrame = document.getElementById('slotArmorImgContainer'), armorNameLbl = document.getElementById('slotArmorName');
-if (activeArmor === 'cosmic_shield') { armorImgFrame.innerHTML = "🔮🛡️"; armorNameLbl.innerText = "星屑の盾"; } else { armorImgFrame.innerHTML = "🛡️"; armorNameLbl.innerText = "布の服"; }
-const bChar = document.getElementById('multiEquipCharIcon'); if(bChar) bChar.style.display = 'none';
-const bWep = document.getElementById('multiEquipWeaponIcon'); if(bWep) bWep.style.display = 'none';
-const bArm = document.getElementById('multiEquipArmorIcon'); if(bArm) bArm.style.display = 'none';
-};
-window.initMultiParty = function(playerCount) {
-multiPartyMembers = [];
-const borderColors = ['var(--cosmic-purple-light)', 'var(--cosmic-cyan)', 'var(--cosmic-cyan)', 'var(--cosmic-cyan)'];
-const shadows = ['rgba(192, 132, 252, 0.5)', 'rgba(0, 240, 255, 0.5)', 'rgba(0, 240, 255, 0.5)', 'rgba(0, 240, 255, 0.5)'];
-const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
-for(let i = 0; i < playerCount; i++) {
-    let isMe = (i === 0);
-    multiPartyMembers.push({ 
-        id: i, 
-        name: isMe ? myName : `ALLY ${i}`, 
-        char: isMe ? activeCharacter : '', 
-        customAvatar: isMe ? mySavedAvatar : "", 
-        maxHp: 3500, 
-        hp: 3500, 
-        isMe: isMe, 
-        borderColor: borderColors[i], 
-        shadowColor: shadows[i] 
-    });
-}
-};
-window.renderMultiParty = function() {
-const container = document.getElementById('multiPartyContainer'); if(!container) return; container.innerHTML = "";
-multiPartyMembers.forEach(m => {
-let charImg = m.char === 'tangon' ? `<img src="tangon.png" alt="tangon" style="width:100%; height:100%; object-fit:cover;">` : `👤`;
-if (m.isMe && m.customAvatar) {
-charImg = `<img src="${m.customAvatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
-}
-    let hpPercent = Math.max(0, (m.hp / m.maxHp) * 100);
-     let color = m.isMe ? "var(--cosmic-purple-light)" : "var(--cosmic-cyan)";
-     let comboText = (m.isMe && gameComboCount >= 2) ? `${gameComboCount} COMBO!` : "";
-     let html = `
-         <div class="multi-party-member" id="partyMember-${m.id}" style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-             <div class="multi-party-combo" id="multiPartyCombo-${m.id}" style="font-size: 9px; font-weight: 900; color: #FBBF24; text-shadow: 0 0 4px #F59E0B; min-height: 12px; text-align: center;">
-                 ${comboText}
-             </div>
-             <div class="multi-party-icon" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: none !important; border: none !important; box-shadow: none !important;">${charImg}</div>
-             <div class="multi-party-equip-display" style="display: flex; gap: 2px; font-size: 10px; background: rgba(0,0,0,0.4); padding: 1px 4px; border-radius: 4px;">
-                 <span title="Weapon">${m.isMe && activeWeapon === 'fire_sword' ? '🔥' : '🗡️'}</span>
-                 <span title="Armor">${m.isMe && activeArmor === 'cosmic_shield' ? '🔮' : '🛡️'}</span>
-             </div>
-             <div style="font-size:8px; color:${color}; font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:64px; text-align:center;">${m.name}</div>
-             <div class="multi-party-hp-bar" style="width: 100%; height: 5px; background: rgba(0,0,0,0.8); border: 1px solid ${m.borderColor}; box-shadow: 0 0 5px ${m.shadowColor}; border-radius: 4px; overflow: hidden; display: flex; justify-content: flex-start;">
-                 <div class="multi-party-hp-fill" id="partyMemberHpFill-${m.id}" style="width:${hpPercent}%; height: 100%; background: linear-gradient(90deg, #10B981, #34D399); transform-origin:left !important;"></div>
-             </div>
-         </div>`;
-     container.innerHTML += html;
- });
-};
-window.showCharacterPopup = function(memberId, amount, type) {
-const memberEl = document.getElementById('partyMember-' + memberId); if(!memberEl) return;
-if(type === 'attack') {
-const flyingBubble = document.createElement('div'); flyingBubble.className = 'popup-bubble-flying-atk'; flyingBubble.innerText = amount;
-const charRect = memberEl.getBoundingClientRect();
-    let targetEl = document.getElementById('multiBossImage');
-     if (currentMultiMode === 'pvp') {
-         targetEl = document.getElementById('multiPvpOpponentVisualContainer');
-     }
-     const bossRect = targetEl ? targetEl.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight / 3, width: 0, height: 0 };
-     const startX = charRect.left + charRect.width / 2, startY = charRect.top;
-     const targetX = bossRect.left + bossRect.width / 2, targetY = bossRect.top + bossRect.height / 2;
-     const matchMember = multiPartyMembers.find(m => m.id === memberId);
-     if(matchMember) { flyingBubble.style.borderColor = matchMember.borderColor; flyingBubble.style.boxShadow = `0 4px 12px ${matchMember.shadowColor}`; }
-     flyingBubble.style.setProperty('--start-x', `${startX}px`); flyingBubble.style.setProperty('--start-y', `${startY}px`);
-     flyingBubble.style.setProperty('--target-x', `${targetX}px`); flyingBubble.style.setProperty('--target-y', `${targetY}px`);
-     document.body.appendChild(flyingBubble);
-     setTimeout(() => {
-         if(flyingBubble.parentNode) flyingBubble.remove();
-         const explosion = document.createElement('div'); explosion.className = 'popup-hit-explosion'; explosion.style.left = `${targetX}px`; explosion.style.top = `${targetY}px`; document.body.appendChild(explosion);
-         setTimeout(() => { if(explosion.parentNode) explosion.remove(); }, 400);
-     }, 600);
- } else if(type === 'damage') {
-     const popup = document.createElement('div'); popup.className = 'popup-v-dmg'; popup.innerHTML = `<div class="v-mark"></div><div class="v-dmg-text">${amount}</div>`; memberEl.appendChild(popup);
-     setTimeout(() => { if(popup.parentNode) popup.remove(); }, 1500);
- }
-};
-window.showMultiBattleChoice = function() {
-if (vocabList.length === 0) {
-alert("⚠️ 学習用単語がまだ配信されていません。管理者の単語追加をお待ちください。");
-return;
-}
-const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'none';
-const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'none';
-document.getElementById('multi-battle-choice-screen').style.display = 'block';
-document.getElementById('multi-battle-team-list-screen').style.display = 'none';
-document.getElementById('multi-battle-setup-screen').style.display = 'none';
-document.getElementById('multi-battle-matching-screen').style.display = 'none';
-document.getElementById('multi-battle-play-screen').style.display = 'none';
-window.initMultiModeSwipe(); 
-};
-window.cancelMultiBattleChoice = function() {
-document.getElementById('multi-battle-choice-screen').style.display = 'none';
-const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'flex';
-const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'flex';
-};
-window.showMultiTeamList = function() {
-document.getElementById('multi-battle-choice-screen').style.display = 'none';
-document.getElementById('multi-battle-team-list-screen').style.display = 'block';
-};
-window.backToMultiChoiceFromList = function() {
-document.getElementById('multi-battle-team-list-screen').style.display = 'none';
-document.getElementById('multi-battle-choice-screen').style.display = 'block';
-};
-window.showMultiSetup = function() {
-document.getElementById('multi-battle-choice-screen').style.display = 'none';
-document.getElementById('multi-battle-setup-screen').style.display = 'block';
-window.selectMultiMode('coop');
-window.applyVocabMaxRange();
-};
-window.backToMultiChoiceFromSetup = function() {
-document.getElementById('multi-battle-setup-screen').style.display = 'none';
-document.getElementById('multi-battle-choice-screen').style.display = 'block';
-};
-window.joinMultiTeam = function(teamName) {
-document.getElementById('multi-battle-team-list-screen').style.display = 'none';
-document.getElementById('multi-battle-matching-screen').style.display = 'flex';
-document.getElementById('waitingRoomText').innerText = `${teamName} に参加中...`;
-setTimeout(() => { if (document.getElementById('multi-battle-matching-screen').style.display === 'flex') { window.playIntroVideoBeforeBattle(); } }, 2000);
-};
-window.startMultiBattleMatching = function() {
-document.getElementById('multi-battle-setup-screen').style.display = 'none';
-document.getElementById('multi-battle-matching-screen').style.display = 'flex';
-document.getElementById('waitingRoomText').innerText = `他のプレイヤーの参加を待っています`;
-setTimeout(() => { if (document.getElementById('multi-battle-matching-screen').style.display === 'flex') { window.playIntroVideoBeforeBattle(); } }, 2000);
-};
-window.cancelMultiBattleMatching = function() {
-document.getElementById('multi-battle-matching-screen').style.display = 'none';
-document.getElementById('multi-battle-choice-screen').style.display = 'block';
-};
-window.initMultiModeSwipe = function() {
-const area = document.getElementById('multiModeSwipeArea');
-if(!area || area.dataset.eventsBound) return;
-area.dataset.eventsBound = "true";
-area.addEventListener('touchstart', function(e) {
-    modeSwipeStartX = e.touches[0].clientX;
-}, {passive: true});
-area.addEventListener('touchend', function(e) {
-    let endX = e.changedTouches[0].clientX;
-    let diff = modeSwipeStartX - endX;
-    if (diff > 30) {
-        window.selectMultiMode('pvp');
-    } else if (diff < -30) {
-        window.selectMultiMode('coop');
-    }
-});
-};
-window.selectMultiMode = function(mode) {
-currentMultiMode = mode;
-const imgEl = document.getElementById('multiModeDisplayImage');
-const swipeArea = document.getElementById('multiModeSwipeArea');
-const coopBadge = document.getElementById('multiCoopActiveBadge');
-const pvpBadge = document.getElementById('multiPvpActiveBadge');
-const btnCoop = document.getElementById('btnMultiCoop');
-const btnPvp = document.getElementById('btnMultiPvp');
-const pvpTypeFrame = document.getElementById('multiPvpTypeSelectionFrame');
-const normalCountFrame = document.getElementById('multiPlayerCountSelectionFrame');
-if(!imgEl || !swipeArea) return;
- if(btnCoop) btnCoop.classList.remove('active');
- if(btnPvp) btnPvp.classList.remove('active');
- if (mode === 'coop') { 
-     imgEl.src = 'kyouryoku.png';
-     imgEl.alt = '協力戦';
-     swipeArea.style.borderColor = 'var(--cosmic-cyan)'; 
-     swipeArea.style.boxShadow = '0 0 15px rgba(0, 240, 255, 0.5)'; 
-     if(btnCoop) btnCoop.classList.add('active');
-     if(coopBadge) coopBadge.style.display = 'block';
-     if(pvpBadge) pvpBadge.style.display = 'none';
-     if(pvpTypeFrame) pvpTypeFrame.style.display = 'none';
-     if(normalCountFrame) normalCountFrame.style.display = 'block';
-     const selectCount = document.getElementById('multiPlayerCount');
-     if(selectCount && (selectCount.value === "1" || selectCount.value === "2")) {
-         selectCount.value = "4";
-     }
- } else { 
-     imgEl.src = 'taizin.png';
-     imgEl.alt = '対人戦';
-     swipeArea.style.borderColor = 'var(--admin-accent)'; 
-     swipeArea.style.boxShadow = '0 0 15px rgba(236, 72, 153, 0.5)'; 
-     if(btnPvp) btnPvp.classList.add('active');
-     if(pvpBadge) pvpBadge.style.display = 'block';
-     if(coopBadge) coopBadge.style.display = 'none';
-     if(pvpTypeFrame) pvpTypeFrame.style.display = 'block';
-     if(normalCountFrame) normalCountFrame.style.display = 'none';
-     const pvpTypeSelect = document.getElementById('multiPvpTypeSelect');
-     if(pvpTypeSelect) window.handlePvpFormatChange(pvpTypeSelect.value);
- }
-};
-window.handlePvpFormatChange = function(format) {
-const mockCountSelect = document.getElementById('multiPlayerCount');
-if(!mockCountSelect) return;
-if (format === '1v1') {
-mockCountSelect.value = "1";
-} else {
-mockCountSelect.value = "2";
-}
-};
-// Battle intros are already skipped by the game runtime; keep compatibility calls lightweight.
-window.playIntroVideoBeforeBattle = function(){window.startMultiBattlePlay();};
-window.skipIntroVideo = function(){window.startMultiBattlePlay();};
-window.startMultiBattlePlay = function() {
-const matchingScreen = document.getElementById('multi-battle-matching-screen');
-if(matchingScreen) matchingScreen.style.display = 'none';
-document.body.classList.add('in-game-active'); document.getElementById('multi-battle-play-screen').style.display = 'flex'; gameComboCount = 0; multiLimitAmount = 0; 
- document.getElementById('multiComboCountText').innerText = "0"; document.getElementById('multiDamagePopupText').innerText = "";
- const multiComboParent = document.getElementById('multiComboCountText') ? document.getElementById('multiComboCountText').parentElement : null;
- if(multiComboParent) document.getElementById('multiComboCountText').parentElement.style.display = 'none';
- const sparkleBorder = document.getElementById('combo-sparkle-border'); if(sparkleBorder) sparkleBorder.classList.remove('active');
- const ownHpFrame = document.getElementById('multiPlayerOwnHpFrame'); if(ownHpFrame) ownHpFrame.style.display = 'block';
- const logContainer = document.getElementById('multiDamagePopupText') ? document.getElementById('multiBattleLog') : null; if(logContainer) logContainer.innerHTML = "";
- window.updatePartySlotsUi(); 
- const pvpFormat = document.getElementById('multiPvpTypeSelect') ? document.getElementById('multiPvpTypeSelect').value : '1v1';
- const normalCount = parseInt(document.getElementById('multiPlayerCount').value) || 2;
- const bossBar = document.getElementById('multiBossHpBarContainer');
- const pvpOpponentBar = document.getElementById('multiPvpOpponentHpFrame');
- const bossImg = document.getElementById('multiBossImage');
- const pvpVisualContainer = document.getElementById('multiPvpOpponentVisualContainer');
- const rImg1 = document.getElementById('multiPvpOpponentCharImg1');
- const rImg2 = document.getElementById('multiPvpOpponentCharImg2');
- const opponentNameLabel = document.getElementById('multiPvpOpponentName');
- const escapeBtn = document.getElementById('multiEscapeOrSurrenderBtn');
- const globalPlayBgLayer = document.getElementById('multi-battle-play-bg');
- if (currentMultiMode === 'coop') {
-     if(bossBar) bossBar.style.display = 'block';
-     if(pvpOpponentBar) pvpOpponentBar.style.display = 'none';
-     if(bossImg) bossImg.style.display = 'block';
-     if(pvpVisualContainer) pvpVisualContainer.style.display = 'none';
-     if(escapeBtn) escapeBtn.innerText = "逃げる";
-     if(globalPlayBgLayer) {
-         globalPlayBgLayer.style.backgroundImage = "url('sentou.png')";
-     }
-     window.initMultiParty(normalCount);
-     multiBossMaxHp = 100000 * normalCount;
- } else {
-     if(bossBar) bossBar.style.display = 'none';
-     if(pvpOpponentBar) pvpOpponentBar.style.display = 'block';
-     if(bossImg) bossImg.style.display = 'none';
-     if(pvpVisualContainer) pvpVisualContainer.style.display = 'flex';
-     if(escapeBtn) escapeBtn.innerText = "降参";
-     if(globalPlayBgLayer) {
-         globalPlayBgLayer.style.backgroundImage = "url('dojo.png')";
-     }
-     if (pvpFormat === '1v1') {
-         window.initMultiParty(1);
-         multiBossMaxHp = 3500;
-         if(rImg1) rImg1.style.display = 'block';
-         if(rImg2) rImg2.style.display = 'none';
-         if(opponentNameLabel) opponentNameLabel.innerText = "ライバル修行者";
-     } else {
-         window.initMultiParty(2);
-         multiBossMaxHp = 7000;
-         if(rImg1) rImg1.style.display = 'block';
-         if(rImg2) rImg2.style.display = 'block'; 
-         if(opponentNameLabel) opponentNameLabel.innerText = "修行者タッグチーム";
-     }
- }
- multiBossHp = multiBossMaxHp; 
- multiEnemyTimeLeft = 10; 
- window.updateMultiHpBars();
- gameCurrentWordsQueue = []; vocabList.forEach(w => { if(w.meanings && w.meanings.length > 0) gameCurrentWordsQueue.push({ wordNum: w.num, word: w.word, meaning: window.formatWordForDisplay(w.meanings[0].text) }); });
- gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0;
- clearInterval(gameTimerInterval); 
- gameTimerInterval = setInterval(window.handleMultiBattleTimer, 100); 
- window.showNextMultiWord(); 
- window.initMultiPartyEvents();
-};
-window.updateMultiHpBars = function() {
-const boss = document.getElementById('multiBossHpFill'); if(boss) boss.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
-const bossTxt = document.getElementById('multiEnemyHpText'); if(bossTxt) { bossTxt.innerText = `${Math.max(0, Math.floor(multiBossHp))}`; }
-const pvpOpponentHpFill = document.getElementById('multiPvpOpponentHpFill');
- const pvpOpponentHpText = document.getElementById('multiPvpOpponentHpText');
- if(pvpOpponentHpFill) pvpOpponentHpFill.style.width = Math.max(0, (multiBossHp / multiBossMaxHp) * 100) + "%";
- if(pvpOpponentHpText) pvpOpponentHpText.innerText = `${Math.max(0, Math.floor(multiBossHp))} / ${multiBossMaxHp}`;
- multiPartyMembers.forEach(m => {
-     let fill = document.getElementById(`partyMemberHpFill-${m.id}`); 
-     if (fill) {
-         fill.style.width = Math.max(0, (m.hp / m.maxHp) * 100) + "%";
-     }
- });
- let me = multiPartyMembers.find(m => m.isMe);
- if (me) {
-     const ownHpFill = document.getElementById('multiPlayerOwnHpFill'), ownHpText = document.getElementById('multiPlayerOwnHpText');
-     if (ownHpFill) {
-         ownHpFill.style.width = Math.max(0, (me.hp / me.maxHp) * 100) + "%"; 
-         ownHpFill.parentElement.style.justifyContent = 'flex-start'; 
-     }
-     if (ownHpText) ownHpText.innerText = `${Math.max(0, Math.floor(me.hp))} / ${me.maxHp}`;
- }
- const limitFill = document.getElementById('multiLimitGaugeFill'), limitText = document.getElementById('multiLimitGaugeText'), limitPercentNum = Math.floor(Math.max(0, (multiLimitAmount / multiLimitMax) * 100));
- if (limitFill) { 
-     limitFill.style.width = limitPercentNum + "%"; 
-     if (multiLimitAmount >= multiLimitMax) limitFill.classList.add('max'); else limitFill.classList.remove('max'); 
-     limitFill.parentElement.style.justifyContent = 'flex-start'; 
- }
- if (limitText) { limitText.innerText = ""; }
- const multiComboParent = document.getElementById('multiComboCountText') ? document.getElementById('multiComboCountText').parentElement : null;
- if(multiComboParent) document.getElementById('multiComboCountText').parentElement.style.display = 'none';
- const sparkleBorder = document.getElementById('combo-sparkle-border');
- if(sparkleBorder) { if(gameComboCount >= 2) sparkleBorder.classList.add('active'); else sparkleBorder.classList.remove('active'); } 
-};
-window.handleMultiBattleTimer = function() {
-if (currentMultiMode === 'pvp') return;
-multiEnemyTimeLeft -= 0.1;
-if(multiEnemyTimeLeft <= 0) {
-    multiEnemyTimeLeft = 10; let baseDamage = 400; 
-    multiPartyMembers.forEach(m => { if (m.hp > 0) { m.hp -= baseDamage; if (m.hp < 0) m.hp = 0; window.showCharacterPopup(m.id, baseDamage, 'damage'); } });
-    document.body.classList.add('boss-damage-shake'); setTimeout(() => document.body.classList.remove('boss-damage-shake'), 300);
-    if(multiPartyMembers.every(m => m.hp <= 0)) { clearInterval(gameTimerInterval); setTimeout(() => { alert("全滅しました..."); window.cancelMultiBattlePlay(true); }, 500); return; }
-}
-const timerDisplay = document.getElementById('multiEnemyTimerDisplay'); if(timerDisplay) timerDisplay.innerText = `行動: ${Math.max(0, multiEnemyTimeLeft).toFixed(1)}秒`;
-window.updateMultiHpBars();
-};
-// 中央マスを9個目の選択肢に変換（1回だけ）
-window.__getCenterChoiceCell = function() {
-    let el = document.getElementById('multiChoice-8');
-    if (el) return el;
-    const grid = document.querySelector('.multi-grid-3x3');
-    if (!grid) return null;
-    let center = null;
-    for (let i = 0; i < grid.children.length; i++) {
-        const k = grid.children[i];
-        if (!k.classList.contains('flick-choice')) { center = k; break; }
-    }
-    if (!center) return null;
-    center.classList.add('flick-choice', 'flick-center-spark');
-    center.id = 'multiChoice-8';
-    return center;
-};
-
-window.showNextMultiWord = function() {
-    if(gameCurrentWordsQueue.length === 0) return;
-    if(gameCurrentIndex >= gameCurrentWordsQueue.length) { gameCurrentWordsQueue.sort(() => Math.random() - 0.5); gameCurrentIndex = 0; }
-    const target = gameCurrentWordsQueue[gameCurrentIndex];
-    const tEl = document.getElementById('flickTargetWord');
-    if(tEl) tEl.innerText = target.word;
-
-    const center = window.__getCenterChoiceCell();
-
-    // ダミー8個（足りなければ --- で埋める＝空欄を出さない）
-    let dummies = [...gameCurrentWordsQueue].filter(w => w.word !== target.word).map(w => w.meaning);
-    dummies.sort(() => Math.random() - 0.5);
-    while(dummies.length < 8) dummies.push('---');
-
-    // 正解は 0〜8 のどこか（中央=8）＝確率1/9
-    const correctPos = Math.floor(Math.random() * 9);
-    currentMultiCorrectIndex = correctPos;
-
-    let d = 0;
-    for(let i = 0; i < 9; i++){
-        const isHere = (i === correctPos);
-        const text = isHere ? target.meaning : dummies[d++];
-        const el = (i === 8) ? center : document.getElementById('multiChoice-' + i);
-        if(!el) continue;
-        el.classList.remove('highlight');
-        if(i === 8){
-            if(isHere){ el.innerHTML = ''; el.classList.add('center-blank'); }
-            else { el.innerHTML = '<span class="center-choice-text">' + String(text) + '</span>'; el.classList.remove('center-blank'); }
-        } else {
-            el.innerText = text;
-        }
-    }
-    const icon = document.getElementById('flickWeaponIcon');
-    if(icon) icon.style.display = 'none';
-};
-
-window.cancelMultiBattlePlay = function(force = false) {
-if(force || confirm("バトルから逃走しますか？")) {
-document.body.classList.remove('in-game-active'); const sparkleBorder = document.getElementById('combo-sparkle-border'); if(sparkleBorder) sparkleBorder.classList.remove('active');
-clearInterval(gameTimerInterval); document.getElementById('multi-battle-play-screen').style.display = 'none';
-const startScreen = document.getElementById('game-start-screen'); if (startScreen) startScreen.style.display = 'flex';
-const lbArea = document.getElementById('gameLeaderboardArea'); if (lbArea) lbArea.style.display = 'flex';
-}
-};
-
 // ==========================================================================
 // 🚀 完全同期ライフサイクルブートストラップ初期化
 // ==========================================================================
@@ -4226,106 +3808,6 @@ window.__renderPenguinOverlay = function(message) {
 };
 console.log("🐧 リアルペンギン差し替えパッチ 適用完了");
 // ==========================================================================
-// 🎩 タンゴン差し替えパッチ：本物のタンゴンがタンゴを踊るローディング
-//    ※このファイルの末尾にそのまま貼り付けてください。
-//    ※第2回パッチ／リアル差し替えパッチの __renderPenguinOverlay を自動上書き。
-//    ※表示の安定ロジック（カウンター・チラつき防止・280ms/450ms閾値）は
-//      そのまま流用するので、__wrapWithPenguin 等の適用範囲は不変。
-// ==========================================================================
-
-// ------------------------------------------------------------------
-// ヘルパー：アプリ内で実際に読めている tangon.png のパスをDOMから検出
-//   見つからなければ既定候補を返し、さらに img.onerror で連鎖フォールバック
-// ------------------------------------------------------------------
-window.__tangonSrcCache = null;
-window.__detectTangonSrc = function() {
-  if (window.__tangonSrcCache) return window.__tangonSrcCache;
-  try {
-    var imgs = document.querySelectorAll('img');
-    for (var i = 0; i < imgs.length; i++) {
-      var s = (imgs[i].getAttribute('src') || imgs[i].src || '');
-      if (/tangon/i.test(s)) { window.__tangonSrcCache = s; return s; }
-    }
-  } catch (e) {}
-  window.__tangonSrcCache = 'tangon.png';
-  return 'tangon.png';
-};
-
-// ------------------------------------------------------------------
-// メイン：ローディングオーバーレイを「踊るタンゴン」に差し替え
-// ------------------------------------------------------------------
-window.__renderPenguinOverlay = function(message) {
-  if (window.__pgLoad.overlay) return;
-  var ov = document.createElement('div');
-  ov.id = 'penguinLoadingOverlay';
-
-  // 画像パス候補（重複除去）。DOM検出値を先頭に。
-  var base = window.__detectTangonSrc();
-  var raw = [base, 'tangon.png', './tangon.png', 'assets/tangon.png', '../tangon.png', 'img/tangon.png'];
-  var seen = {}, chain = [];
-  raw.forEach(function(p) { if (p && !seen[p]) { seen[p] = 1; chain.push(p); } });
-
-  // 舞うバラの花びら（タンゴンのくわえたバラに呼应）
-  var petals = '';
-  for (var p = 0; p < 8; p++) {
-    var left = Math.round(Math.random() * 100);
-    var delay = (Math.random() * 4).toFixed(2);
-    var dur = (4 + Math.random() * 4).toFixed(2);
-    var size = (7 + Math.round(Math.random() * 9));
-    var hue = Math.random() < 0.5 ? 'rgba(225,29,72,0.85)' : 'rgba(244,114,182,0.78)';
-    petals += '<span class="tangon-petal" style="left:' + left + '%; width:' + size + 'px; height:' + size + 'px; background:' + hue + '; animation-delay:' + delay + 's; animation-duration:' + dur + 's;"></span>';
-  }
-  // 上昇するネオンの光の粒
-  var sparks = '';
-  for (var s2 = 0; s2 < 12; s2++) {
-    var l2 = Math.round(Math.random() * 100);
-    var d2 = (Math.random() * 5).toFixed(2);
-    var du2 = (2.5 + Math.random() * 3.5).toFixed(2);
-    var c2 = Math.random() < 0.5 ? 'rgba(0,240,255,0.9)' : 'rgba(192,132,252,0.9)';
-    sparks += '<span class="tangon-spark" style="left:' + l2 + '%; background:' + c2 + '; animation-delay:' + d2 + 's; animation-duration:' + du2 + 's;"></span>';
-  }
-
-  ov.innerHTML =
-    '<div class="tangon-stage">' +
-      '<div class="tangon-spotlight"></div>' +
-      '<div class="tangon-spotlight tangon-spotlight-2"></div>' +
-      '<div class="tangon-petals">' + petals + '</div>' +
-      '<div class="tangon-sparks">' + sparks + '</div>' +
-      '<div class="tangon-dancer">' +
-        '<img class="tangon-img" alt="タンゴン" />' +
-        '<div class="tangon-shadow"></div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
-      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
-
-  document.body.appendChild(ov);
-
-  // 画像に src と onerror 連鎖をセット（全部失敗したら画像だけ隠す）
-  var img = ov.querySelector('.tangon-img');
-  var idx = 0;
-  function tryNext() {
-    if (idx >= chain.length) { img.style.display = 'none'; return; }
-    img.src = chain[idx++];
-  }
-  img.onerror = function() { tryNext(); };
-  tryNext();
-
-  window.__pgLoad.overlay = ov;
-  requestAnimationFrame(function() { ov.classList.add('penguin-visible'); });
-};
-// ※ __updatePenguinText は .penguin-loading-text を探すのでそのまま互換（再定義不要）
-
-console.log("🎩 タンゴン差し替えパッチ（踊るタンゴンローディング）適用完了");
-// ==========================================================================
-// 🎯 第3回パッチ：別教材フラッシュカードの理解度反映 ＋ ランキング非消失
-//                ＋ ヘッダー保存ボタン ＋ 画面上部トースト
-//    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
-// ==========================================================================
-
-// ------------------------------------------------------------------
-// A. 画面上部トースト通知（保存結果などのフィードバック）
-// ------------------------------------------------------------------
 window.showToast = function(msg, type) {
   var host = document.getElementById('toastHost');
   if (!host) {
@@ -7005,7 +6487,7 @@ console.log("📚 本棚タブパッチ（スワイプ切替＋教材本棚シ�
 // 共通：ユーザー統計の「数値カウンタ」キー一覧（マージ対象）
 // ------------------------------------------------------------------
 window.__STATS_COUNTER_KEYS = [
-    'test_count', 'combo_max', 'multi_win', 'high_score', 'mistake_count',
+    'test_count', 'combo_max', 'high_score', 'mistake_count',
     'vocab_reg', 'vocab_fixed', 'delete_count', 'reader_open',
     'flash_count', 'friends_count', 'user_level', 'gold_spent'
 ];
@@ -7286,7 +6768,7 @@ window.saveUserVocabProgress = async function() {
 console.log("🔄 同期修正パッチ②（レベル収束＋理解度リセット防止＋書き戻し）適用完了");
 // ==========================================================================
 // 🔄 同期修正パッチ③：設定まるごと同期 ＋ 表示強化
-//    【個人ごと同期】APIキー／ロード時単語帳／パーティ編成／選択中教材／
+//    【個人ごと同期】APIキー／ロード時単語帳／選択中教材／
 //                    称号解除進捗（XP二重付与根絶）／リーダー単語メモリ
 //    【全員で共有】  ダッシュボードタイトル／配信アナウンス
 //    【表示強化】    フレンドログイン履歴を分単位まで／自分の総勉強時間
@@ -7312,9 +6794,6 @@ window.__collectLocalSettings = function() {
     return {
         geminiKey: localStorage.getItem('core_v4_geminiKey') || "",
         loadQuizBook: localStorage.getItem('core_v4_loadquiz_book') || "auto",
-        activeChar: localStorage.getItem('core_v4_active_char') || "",
-        activeWeapon: localStorage.getItem('core_v4_active_weapon') || "",
-        activeArmor: localStorage.getItem('core_v4_active_armor') || "",
         currentTextbook: localStorage.getItem('core_v4_current_textbook_id') || "",
         wordMemory: wm,
         titlesCache: tc
@@ -7323,7 +6802,7 @@ window.__collectLocalSettings = function() {
 
 window.__mergeSettings = function(local, cloud, localIsNewer) {
     var merged = {};
-    var scalarKeys = ['geminiKey', 'loadQuizBook', 'activeChar', 'activeWeapon', 'activeArmor', 'currentTextbook'];
+    var scalarKeys = ['geminiKey', 'loadQuizBook', 'currentTextbook'];
     var src = localIsNewer ? local : cloud;   // 新しい方のスナップショットを優先
     var alt = localIsNewer ? cloud : local;   // 空欄はもう一方で補完
     scalarKeys.forEach(function(k) {
@@ -7365,9 +6844,9 @@ window.__applySettingsToLocal = function(s) {
             if (aki) aki.value = s.geminiKey;
         }
         if (typeof s.loadQuizBook === "string") localStorage.setItem('core_v4_loadquiz_book', s.loadQuizBook || "auto");
-        if (typeof s.activeChar === "string") { localStorage.setItem('core_v4_active_char', s.activeChar); activeCharacter = s.activeChar; }
-        if (typeof s.activeWeapon === "string") { localStorage.setItem('core_v4_active_weapon', s.activeWeapon); activeWeapon = s.activeWeapon; }
-        if (typeof s.activeArmor === "string") { localStorage.setItem('core_v4_active_armor', s.activeArmor); activeArmor = s.activeArmor; }
+
+
+
         if (typeof s.currentTextbook === "string" && s.currentTextbook !== "") {
             if (currentTextbook !== s.currentTextbook) changedTextbook = true;
             localStorage.setItem('core_v4_current_textbook_id', s.currentTextbook);
@@ -7382,7 +6861,7 @@ window.__applySettingsToLocal = function(s) {
             rewardedTitlesStepsCache = s.titlesCache;
             try { localStorage.setItem('core_v4_rewarded_titles_cache', JSON.stringify(rewardedTitlesStepsCache)); } catch (e) {}
         }
-        if (typeof window.updatePartySlotsUi === "function") { try { window.updatePartySlotsUi(); } catch (e) {} }
+
     } catch (e) {
         console.error("applySettingsToLocal error:", e);
     }
@@ -8011,11 +7490,6 @@ console.log('🔤 第12回パッチ（フラッシュ単語テキスト横拡張
         '.ug-tip-ico{flex-shrink:0;color:#FBBF24;margin-top:1px;filter:drop-shadow(0 0 5px rgba(245,158,11,0.5));}',
         '.ug-tip-text{font-size:11.5px;color:rgba(254,243,199,0.92);line-height:1.65;font-weight:600;}',
         /* ---- 近日公開 ---- */
-        '.ug-soon{margin-top:6px;padding:13px 15px;border-radius:13px;text-align:center;',
-        'background:rgba(236,72,153,0.06);border:1px dashed rgba(236,72,153,0.35);}',
-        '.ug-soon-title{font-size:12px;font-weight:900;color:var(--admin-accent);letter-spacing:1px;margin-bottom:5px;',
-        'text-shadow:0 0 8px rgba(236,72,153,0.4);}',
-        '.ug-soon-desc{font-size:11px;color:rgba(255,255,255,0.55);line-height:1.6;font-weight:500;}',
         /* ---- 入口ボタン（サイドバー内） ---- */
         '#usageGuideEntryBtn{color:var(--cosmic-cyan) !important;}',
         '#usageGuideEntryBtn i{color:var(--cosmic-cyan);filter:drop-shadow(0 0 5px rgba(0,240,255,0.5));}',
@@ -8151,11 +7625,6 @@ window.__buildUsageGuideOverlay = function() {
         '<div class="ug-acc-list">' + accHtml + '</div>' +
         '<div class="ug-section-title"><i data-lucide="sparkles" size="16" style="color:#FBBF24;"></i>知っておくと得する Tips</div>' +
         '<div class="ug-tips">' + tipsHtml + '</div>' +
-        '<div class="ug-section-title"><i data-lucide="telescope" size="16" style="color:var(--admin-accent);"></i>近日公開</div>' +
-        '<div class="ug-soon">' +
-        '<div class="ug-soon-title">⚔️ マルチバトル ／ 🛡️ パーティ編成</div>' +
-        '<div class="ug-soon-desc">仲間と協力してボスを討伐するマルチプレイと、キャラクター・武器・防具の編成機能はただいま準備中。公開までもうしばらくお待ちください。</div>' +
-        '</div>' +
         '</div>';
 
     document.body.appendChild(ov);
@@ -10862,7 +10331,7 @@ console.log('🧹 第10回パッチ（データ浄化＋不整合修正＋管理
 //          先に0へ落としてから本来の読み込みへ進む＝0 vs 0 で復活不能。
 //    保持：理解度(core_v4_user_vocab_progress_*)・wordMemory・単語/長文/本棚/
 //          フレンド/目標 は一切触らない（＝理解度は残る）。
-//    ※ fix.js / multi.js / style.css / index.html は不変更
+//    ※ fix.js / save-system.js / style.css / index.html は不変更
 // ==========================================================================
 (function applyResetResurrectionFix() {
 "use strict";
@@ -10883,7 +10352,7 @@ return Promise.resolve(window.fbGetDoc(window.fbDoc(window.db, 'shared', 'app_se
 function rrResetDerived(stats) {
 stats = stats || {};
 return {
-test_count: 0, combo_max: 0, multi_win: 0, high_score: 0, mistake_count: 0,
+test_count: 0, combo_max: 0, high_score: 0, mistake_count: 0,
 vocab_reg: 0, vocab_fixed: 0, delete_count: 0, study_burst: 0, reader_open: 0,
 flash_count: 0, user_level: 1, gold_spent: 0,
 goal_text: stats.goal_text || '',

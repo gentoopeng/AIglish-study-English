@@ -11,6 +11,6 @@ test('closing a stale displayed list cannot overwrite completed ratings or advan
 });
 test('a full draft captures canonical ratings instead of a stale display',()=>{
  const {ctx,values}=setup();values.set('progress',JSON.stringify({1:{status:'ok'},2:{status:'bad'}}));ctx.vocabList=[{num:1}];ctx.rendered={1:{status:'none'}};ctx.__manualVocabDrafts={};ctx.__manualVocabLocalKey=()=> 'draft';ctx.stripVocabProgressFromWords=words=>words;
- const multi=fs.readFileSync('multi.js','utf8'),start=multi.indexOf('window.__captureManualVocabDraft = function()');vm.runInNewContext(multi.slice(start,multi.indexOf('// 単語帳を閉じる時だけ',start)),ctx);
+ const multi=fs.readFileSync('save-system.js','utf8'),start=multi.indexOf('window.__captureManualVocabDraft = function()');vm.runInNewContext(multi.slice(start,multi.indexOf('// 単語帳を閉じる時だけ',start)),ctx);
  const draft=ctx.__captureManualVocabDraft();assert.deepEqual(JSON.parse(JSON.stringify(draft.progress)),{1:{status:'ok'},2:{status:'bad'}});
 });
