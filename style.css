@@ -1994,3 +1994,42 @@ html body .flashcard-face-front,html body .flashcard-face-back{outline:2px solid
 #settingsSaveStatus{font-size:12px;color:var(--text-sub);margin-bottom:0;}
 @keyframes menu-dialog-enter{from{opacity:0;transform:translateY(8px) scale(.98);}to{opacity:1;transform:none;}}
 @media(prefers-reduced-motion:reduce){.menu-dialog[open]{animation:none;}.sidebar-menu-list .sidebar-item:active{transform:none;}}
+
+.ranking-period-switch{display:flex;gap:4px;padding:3px;border:1px solid var(--border);border-radius:999px;margin-right:auto;}
+.ranking-period-switch button{border:0;background:transparent;color:var(--text-sub);border-radius:999px;padding:7px 16px;font-size:12px;cursor:pointer;}
+.ranking-period-switch button.active{background:rgba(207,171,85,.14);color:#e4d291;}
+.ranking-period-caption{font-size:10px;color:var(--text-sub);text-align:center;margin:0 0 5px;min-height:12px;}
+.ranking-stage{touch-action:pan-y;}
+
+.profile-wallet-balance,.mailbox-balance{display:flex;align-items:center;gap:8px;color:#e4d291;font-size:13px;margin:0 0 16px;}
+.mailbox-letters{display:grid;gap:12px;}
+.mailbox-letter{padding:14px;border:1px solid var(--border);border-radius:12px;background:rgba(19,29,48,.75);}
+.mailbox-letter h3{font-size:13px;margin:0 0 8px;}
+.mailbox-letter p,.mailbox-status{font-size:11px;color:var(--text-sub);}
+.mailbox-letter button{width:100%;padding:10px;border:1px solid #d5b96b55;background:#d5b96b12;color:#e4d291;border-radius:8px;font-size:12px;cursor:pointer;}
+.mailbox-letter button:disabled{opacity:.5;cursor:default;}
+
+.header-wallet{display:flex;align-items:center;gap:4px;color:#e4d291;font-size:11px;white-space:nowrap;margin-left:8px;font-variant-numeric:tabular-nums;}
+.icon-framed{position:relative!important;overflow:visible!important;border-color:transparent!important;background:transparent!important;}
+.icon-framed>img{border-radius:50%;}
+.icon-frame-art{pointer-events:none;position:absolute;inset:-12%;border-radius:50%;background:var(--frame-material);mask:radial-gradient(circle,transparent 57%,#000 58%,#000 70%,transparent 71%);-webkit-mask:radial-gradient(circle,transparent 57%,#000 58%,#000 70%,transparent 71%);}
+.frame-wood{--frame-material:repeating-conic-gradient(#694123 0deg 8deg,#b27b40 9deg 17deg,#e0aa69 18deg 20deg,#76502d 21deg 30deg);}
+.frame-stone{--frame-material:repeating-conic-gradient(#545e69 0deg 20deg,#a3adb8 21deg 40deg,#6a7580 41deg 60deg);}
+.frame-copper{--frame-material:conic-gradient(#5d2917,#f4bb83,#a15330,#fbd4a1,#a85732,#562616,#e6a06b,#5d2917);}
+.frame-silver{--frame-material:conic-gradient(#66717f,#eef5ff,#9caebe,#fff,#75879c,#d2e0ee,#66717f);}
+.frame-gold{--frame-material:conic-gradient(#76500b,#ffe29a,#c18b21,#fff2b8,#a27010,#f4cb63,#76500b);}
+.frame-diamond{--frame-material:repeating-conic-gradient(#93c5fd 0deg 12deg,#efffff 13deg 24deg,#2563a4 25deg 36deg,#bfedff 37deg 48deg);}
+.frame-platinum{--frame-material:conic-gradient(#6f7278,#fff,#dadde7,#fff,#939ba8,#f5f7ff,#6f7278);}
+.frame-black-diamond{--frame-material:repeating-conic-gradient(#0a0f1d 0deg 12deg,#6a83b0 13deg 18deg,#d8e5f6 19deg 21deg,#141e35 22deg 36deg);}
+.profile-frame-label{font-size:12px;color:var(--text-sub);}
+.profile-frame-slider{display:flex;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:10px 4px;min-width:0;}
+.frame-option{flex:0 0 82px;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px 4px 8px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:12px;color:var(--text-main);font-size:10px;cursor:pointer;}
+.frame-option.selected{border-color:#d5b96b;background:rgba(213,185,107,.09);}
+.frame-option small{font-size:9px;color:var(--text-sub);}
+.frame-example{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:#26334b!important;color:#eee;font-size:15px;margin:4px;}
+.profile-frame-action{padding:11px;border:1px solid #d5b96b66;border-radius:9px;background:#d5b96b11;color:#e4d291;font-size:11px;cursor:pointer;}
+.profile-frame-action:disabled{opacity:.45;cursor:default;}
+#profileFrameStatus{font-size:11px;color:var(--text-sub);margin:0;}
+
+.mailbox-pages{display:flex;justify-content:space-between;gap:12px;}
+.mailbox-pages button{padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-sub);}
