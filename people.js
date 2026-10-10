@@ -14,7 +14,7 @@
     window.People={render,refresh,preview:id=>owner===uid()&&Date.now()-loadedAt<60000?users.find(person=>person.id===id):undefined};
     window.onTabChange(tab=>{if(tab==='community'){render();refresh(false);}});
     let heartbeatOwner='',heartbeatAt=0;
-    async function heartbeat(){const account=uid(),gate=document.getElementById('auth-gate-screen');if(account==='GUEST-000'||!account||document.visibilityState!=='visible'||gate&&getComputedStyle(gate).display!=='none'||!window.db||!window.fbSetDoc)return;if(heartbeatOwner===account&&Date.now()-heartbeatAt<300000)return;try{await window.fbSetDoc(window.fbDoc(window.db,'users',account),{lastActiveAt:new Date().toISOString()},{merge:true});if(uid()===account){heartbeatOwner=account;heartbeatAt=Date.now();}}catch(error){console.warn('アクティブ日時は次回に同期します',error);}}
+    async function heartbeat(){const account=uid(),gate=document.getElementById('auth-gate-screen');if(account==='GUEST-000'||!account||document.visibilityState!=='visible'||gate&&getComputedStyle(gate).display!=='none'||!window.db||!window.fbSetDoc)return;if(heartbeatOwner===account&&Date.now()-heartbeatAt<300000)return;try{await window.fbSetDoc(window.fbDoc(window.db,'users',account),{lastActiveAt:new Date().toISOString(),...(heartbeatOwner!==account?{lastLoginAt:new Date().toISOString()}:{})},{merge:true});if(uid()===account){heartbeatOwner=account;heartbeatAt=Date.now();}}catch(error){console.warn('アクティブ日時は次回に同期します',error);}}
     window.onAppLoaded(()=>{render();heartbeat();});setInterval(heartbeat,300000);
 
     const oldRefresh=window.refreshFriendListFromFirebase;if(typeof oldRefresh==='function')window.refreshFriendListFromFirebase=async function(force){await oldRefresh.apply(this,arguments);return refresh(!!force);};

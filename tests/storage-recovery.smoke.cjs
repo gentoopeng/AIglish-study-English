@@ -20,5 +20,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  // A pending single-player best has an IDB mirror even while native storage is available.
  await page.evaluate(async()=>{const key='core_v4_word_duel_solo_a';localStorage.setItem(key,JSON.stringify({score:380,book:'test',at:123,pending:true}));await AppStorage.flush();nativeStorage.removeItem(key);});
  await page.reload();await page.evaluate(()=>AppStorage.ready);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('core_v4_word_duel_solo_a')).score),380);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('core_v4_word_duel_solo_a')).pending),true);
+ await page.evaluate(async()=>{const key='core_v4_word_duel_pending_a';localStorage.setItem(key,JSON.stringify({book:{1:{revision:2,mids:['1-0'],count:1}}}));await AppStorage.flush();nativeStorage.removeItem(key);});
+ await page.reload();await page.evaluate(()=>AppStorage.ready);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('core_v4_word_duel_pending_a')).book[1].revision),2);
  console.log('PASS: newer native recovery, interrupted writes, explicit reset, peer reload, quota data/timestamp consistency and personal-best retry mirror');
  }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});

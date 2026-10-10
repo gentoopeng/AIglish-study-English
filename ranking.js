@@ -24,13 +24,14 @@
     let device=localStorage.getItem('aiglish_ranking_device');if(!device){device=crypto.randomUUID();localStorage.setItem('aiglish_ranking_device',device);}
     const sourceId=device+'.'+crypto.randomUUID();
     let user='',record=empty(),cache=[],cacheAt=0,cacheReady=false,inflight=null,generation=0;
+    const groupCaches=new Map();
     const queues=new Map();
     function read(id){try{return JSON.parse(localStorage.getItem(storageKey(id))||'null');}catch(e){return null;}}
     function store(key,value){try{if(localStorage.getItem(key)!==value)localStorage.setItem(key,value);}catch(error){console.warn('ランキング記録を端末へ保存できませんでした',error);}}
     function persist(){if(owner()!==user)return;store(storageKey(user),JSON.stringify(record));userStats.learning_ranking_v2_json=JSON.stringify(record);delete userStats.learning_ranking;userStats.learning_ranking_owner=user;userStats.vocab_rated_count=wordCount(record);userStats.flash_count=flashCount(record);}
     function ensure(){
         const id=owner();if(user===id)return;
-        user=id;cache=[];cacheAt=0;cacheReady=false;generation++;
+        inflight?.controller.abort();groupCaches.clear();user=id;cache=[];cacheAt=0;cacheReady=false;generation++;
         const saved=read(id),remote=userStats.learning_ranking_owner&&userStats.learning_ranking_owner!==id?null:(userStats.learning_ranking_v2_json||userStats.learning_ranking);
         record=merge(saved,remote);
         readSwipeJournals();persist();
@@ -53,7 +54,7 @@
                 const ref=window.fbDoc(window.db,'users',id),snap=await transaction.get(ref);
                 const merged=merge(fromProfile(snap.exists()?snap.data():{}),local);
                 const study=window.StudyTimeModel.mergeCurrent(window.StudyTimeModel.readStats(snap.exists()?snap.data():{}).study_calendar_v2,time);
-                transaction.set(ref,{learningRankingV2Json:JSON.stringify(merged),studyLedgerJson:JSON.stringify(study)},{merge:true});return merged;
+                transaction.set(ref,{rankingLearningSummaryV1:{epoch:merged.epoch,studyEpoch:study.epoch,time:Math.floor(window.StudyTimeModel.total(study)/1000),words:wordCount(merged),flash:flashCount(merged)},learningRankingV2Json:JSON.stringify(merged),studyLedgerJson:JSON.stringify(study)},{merge:true});return merged;
             });
             if(owner()===id&&user===id){record=merge(record,combined);persist();syncedStates.set(id,JSON.stringify([combined,time?{epoch:time.epoch,days:time.days,offset:time.offset}:null]));if(JSON.stringify(merge(record,local))!==JSON.stringify(merge(combined,local)))scheduleSync();}
             return true;
@@ -101,10 +102,11 @@
     const labels={rating:'対戦レート',solo:'シングルプレイのベストスコア',time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
     const hasRecord=(entry,key)=>key==='rating'||(key==='solo'?entry.solo!==null:entry[key]>0);
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
-    const value=(row,key)=>key==='rating'?String(row.rating??1500):key==='solo'?(row.solo===null?'未プレイ':row.solo.toLocaleString('ja-JP')+'点'):key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
+    const value=(row,key)=>row[key]===undefined||row[key]===null&&key!=='solo'?'未取得':key==='rating'?String(row.rating??1500):key==='solo'?(row.solo===null?'未プレイ':row.solo.toLocaleString('ja-JP')+'点'):key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
     function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
     function appearanceOf(doc){let profile;try{profile=JSON.parse(doc.profileCustomizationJson||'{}');}catch{profile={};}const value={nameColor:/^#[0-9a-f]{6}$/i.test(profile.nameColor||'')?profile.nameColor:'',frame:typeof profile.frame==='string'?profile.frame:''};return value.nameColor||value.frame?JSON.stringify(value):null;}
-    function row(id,doc){const stats=statsOf(doc),combined=fromProfile(doc),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',appearance:appearanceOf(doc),rating:window.WordDuelModel?.rating(doc.wordDuelRating)??1500,solo:window.WordDuelModel?.bestScore(doc.wordDuelSoloBest)??null,time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:flashCount(combined)};}
+    function row(id,doc,group){const brief=window.RankingQuery.summary(doc),learning=group!=='battle',stats=learning&&!brief?statsOf(doc):{},combined=learning&&!brief?fromProfile(doc):null;return {id,name:doc.playerName||doc.name||id,avatar:typeof doc.avatar==='string'&&doc.avatar.length<=48000?doc.avatar:'',appearance:appearanceOf(doc),rating:group==='learning'?null:window.WordDuelModel?.rating(doc.wordDuelRating)??1500,solo:group==='learning'?undefined:window.WordDuelModel?.bestScore(doc.wordDuelSoloBest)??null,time:brief?.time??(learning?window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()):null),words:learning?(brief?.words??wordCount(combined)):null,flash:learning?(brief?.flash??flashCount(combined)):null};}
+
     function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record),wordDuelRating:window.WordDuel?.localRating(),wordDuelSoloBest:window.WordDuelSolo?.best()});}
     function deadline(promise,ms=15000){let timer;return Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('通信が完了しませんでした')),ms))]).finally(()=>clearTimeout(timer));}
     async function detail(entry,rank,context){
@@ -124,9 +126,9 @@
     function sameShape(left,right){return !!left&&left.length===right.length&&left.every((row,i)=>row.length===right[i].length&&row.every((value,j)=>value===right[i][j]));}
     function render(){
         const host=document.getElementById('rankingPodium');if(!host)return;ensure();const local=self(),rows=cache.filter(entry=>entry.id!==user);if(user!=='GUEST-000')rows.push(local);
-        const metrics=rankMode==='learning'?['time','words','flash']:[rankMode];
+        const metrics=rankMode==='learning'?['time','words','flash']:['rating','solo'];
         host.querySelectorAll('[data-podium-metric]').forEach(section=>{if(!metrics.includes(section.dataset.podiumMetric))section.remove();});
-        host.classList.toggle('is-rating-mode',rankMode!=='learning');
+        host.classList.toggle('is-battle-mode',rankMode==='battle');
         metrics.forEach(key=>{
             let section=host.querySelector('[data-podium-metric="'+key+'"]');
             if(!section){section=document.createElement('section');section.className='ranking-mini-panel';section.dataset.podiumMetric=key;const heading=document.createElement('h3');heading.textContent=labels[key];const podium=document.createElement('div');podium.className='learning-podium';const own=document.createElement('button');own.type='button';own.className='ranking-mini-self';section.append(heading,podium,own);host.append(section);}
@@ -143,54 +145,35 @@
             const ownRank=cacheReady?measured.findIndex(entry=>entry.id===user)+1:0,own=section.querySelector('.ranking-mini-self'),text=(user==='GUEST-000'?'あなた（ゲスト）':'あなた · '+(ownRank?ownRank+'位':hasRecord(local,key)?'順位未取得':'未計測'))+'　'+value(local,key);if(own.textContent!==text)own.textContent=text;own.onclick=()=>detail(local,ownRank,labels[key]);
         });
     }
-    const yieldFrame=()=>new Promise(resolve=>setTimeout(resolve,0));
+    function selectCache(){const saved=groupCaches.get(rankMode);cache=saved?.rows||[];cacheAt=saved?.at||0;cacheReady=!!saved;}
     async function refresh(force,foreground=false){
-        ensure();if(user==='GUEST-000'){render();document.getElementById('rankingMessage').textContent='ログインすると全ユーザーの表彰台に参加できます。';return;}
-        if(!force&&cacheReady&&Date.now()-cacheAt<300000){render();return;}
-        if(inflight&&inflight.id===user)return inflight.promise;
-        const id=user,token=++generation,button=document.getElementById('rankingRefresh'),message=document.getElementById('rankingMessage');button.disabled=true;message.textContent='記録を取得中…';
-        let cancelled=false,loading=false;
-        const endLoading=()=>{if(loading){loading=false;window.hidePenguinLoading?.();}};
-        const active=()=>!cancelled&&owner()===id&&generation===token;
-        const leave=()=>{if(currentActiveTabId!=='titles')endLoading();};
+        ensure();selectCache();const message=document.getElementById('rankingMessage');
+        if(user==='GUEST-000'){render();message.textContent='ログインすると表彰台に参加できます。';return;}
+        if(!force&&cacheReady&&Date.now()-cacheAt<300000){message.textContent='';render();return;}
+        if(inflight&&inflight.id===user&&inflight.group===rankMode&&!inflight.controller.signal.aborted)return inflight.promise;
+        inflight?.controller.abort();
+        const id=user,group=rankMode,token=++generation,controller=new AbortController(),button=document.getElementById('rankingRefresh');button.disabled=true;message.textContent='記録を取得中…';
+        let loading=false;const endLoading=()=>{if(loading){loading=false;window.hidePenguinLoading?.();}};
+        const active=()=>!controller.signal.aborted&&owner()===id&&generation===token&&rankMode===group;
+        const leave=()=>{if(currentActiveTabId!=='titles'){controller.abort();endLoading();}};
         if((!cacheReady||foreground)&&currentActiveTabId==='titles'&&window.showPenguinLoading){loading=true;window.showPenguinLoading('ランキングを読み込んでいます');}
         window.onTabChange(leave);
-        // Synchronization must not gate the independent leaderboard read.
-        syncCloud().catch(error=>console.warn('ランキング同期は再試行します',error));
-        const collect=async()=>{
-            const list=[],tops={time:[],words:[],flash:[],rating:[],solo:[]};let cursor=null;
-            const paged=!!(window.fbQuery&&window.fbOrderBy&&window.fbDocumentId&&window.fbLimit&&window.fbStartAfter);
-            do{
-                let ref=window.fbCollection(window.db,'users');
-                if(paged){const parts=[window.fbOrderBy(window.fbDocumentId()),window.fbLimit(10)];if(cursor)parts.push(window.fbStartAfter(cursor));ref=window.fbQuery(ref,...parts);}
-                const snapshot=await window.fbGetDocs(ref);if(!active())return list;
-                const docs=snapshot.docs||[];if(!snapshot.docs)snapshot.forEach(doc=>docs.push(doc));
-                for(let i=0;i<docs.length;i++){
-                    if(!active())return list;
-                    const doc=docs[i],source=doc.data();
-                    if(!source.deleted&&doc.id!=='GUEST-000'&&doc.id!==id){try{
-                        const entry=row(doc.id,source),previous=new Set(Object.values(tops).flat());list.push(entry);
-                        Object.keys(tops).forEach(key=>{if(hasRecord(entry,key)){tops[key].push(entry);tops[key].sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id));tops[key]=tops[key].slice(0,3);}});
-                        const retained=new Set(Object.values(tops).flat());if(!retained.has(entry))entry.avatar='';for(const old of previous)if(!retained.has(old))old.avatar='';
-                    }catch(error){console.warn('ランキングの一部の記録を読み取れませんでした',error);}}
-                    if(i%8===7)await yieldFrame();
-                }
-                cursor=docs[docs.length-1];if(!paged||docs.length<10)break;await yieldFrame();
-            }while(active());return list;
-        };
+        const timeout=setTimeout(()=>controller.abort('timeout'),15000);
         const task=Promise.resolve().then(async()=>{try{
-            if(!window.db||!window.fbGetDocs)throw Error('接続待ち');
-            const list=await deadline(collect());if(active()){cache=list;cacheReady=true;cacheAt=Date.now();message.textContent='';render();}
-        }catch(error){if(active()){message.textContent='記録を取得できませんでした。更新で再試行できます。';render();}}
-        finally{cancelled=true;endLoading();const index=window.__tabChangeHandlers?.indexOf(leave);if(index>=0)window.__tabChangeHandlers.splice(index,1);if(generation===token)button.disabled=false;if(inflight?.token===token)inflight=null;}});
-        inflight={id,token,promise:task};return task;
+            const docs=await window.RankingQuery.fetch(group,{signal:controller.signal});
+            const list=docs.filter(doc=>doc.id!==id).map(doc=>row(doc.id,doc.data,group));
+            const metrics=group==='learning'?['time','words','flash']:['rating','solo'],retained=new Set(metrics.flatMap(key=>list.filter(entry=>hasRecord(entry,key)).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)).slice(0,3)));for(const entry of list)if(!retained.has(entry))entry.avatar='';
+            if(active()){groupCaches.set(group,{rows:list,at:Date.now()});selectCache();message.textContent='';render();}
+        }catch(error){if(owner()===id&&generation===token&&rankMode===group&&currentActiveTabId==='titles'){message.textContent=controller.signal.reason==='timeout'?'通信に時間がかかっています。更新で再試行できます。':controller.signal.aborted?'':'記録を取得できませんでした。更新で再試行できます。';render();}}
+        finally{clearTimeout(timeout);endLoading();const index=window.__tabChangeHandlers?.indexOf(leave);if(index>=0)window.__tabChangeHandlers.splice(index,1);if(generation===token)button.disabled=false;if(inflight?.token===token)inflight=null;}});
+        inflight={id,group,token,controller,promise:task};return task;
     }
     // Compatibility names keep old save files readable; title behavior is retired.
     ['renderTitles','renderSeasonTitles','equipTitle','unequipTitle','checkAndRewardTitleBonusXP','updateTitleProgressUI'].forEach(key=>{window[key]=function(){};});
     window.showTitlesPage=function(){window.switchTab('titles');};
     window.injectCommunityRankingUI=function(){};window.renderCommunityRankPills=function(){};window.renderCommunityRankSubPills=function(){};
     window.renderLeaderboard=function(force){render();if(typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')return refresh(!!force);};
-    document.querySelectorAll('[data-rank-mode]').forEach(button=>button.onclick=()=>{rankMode=button.dataset.rankMode;document.querySelectorAll('[data-rank-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.rankMode===rankMode)));render();refresh(false);});
+    document.querySelectorAll('[data-rank-mode]').forEach(button=>button.onclick=()=>{inflight?.controller.abort();rankMode=button.dataset.rankMode;selectCache();document.querySelectorAll('[data-rank-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.rankMode===rankMode)));render();refresh(false);});
     document.getElementById('rankingRefresh').onclick=()=>refresh(true,true);
     window.onTabChange(tab=>{if(tab==='titles'){render();refresh(false);}else if(tab==='vocab'){ensure();scanCurrent();persist();}});
     window.onAppLoaded(()=>{ensure();window.syncRankingMetrics();render();});

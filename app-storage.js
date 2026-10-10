@@ -9,7 +9,7 @@ const owned=key=>/^(core_v4_|aiglish_|save_studio_|vv4_|b3_|__ste_reset_gen_)/.t
 // Ratings keep a synchronous working copy; IndexedDB is also a durable mirror.
 const critical=key=>key.startsWith('core_v4_user_vocab_progress_')||key.startsWith('aiglish_learning_recovery_')||(key.startsWith('aiglish_app_background_')&&!key.startsWith('aiglish_app_background_catalog_'));
 // Mirror small catalogues too, without pushing large photographs into native storage.
-const mirrored=key=>critical(key)||key.startsWith('aiglish_app_background_catalog_')||key==='aiglish_shared_background_catalog'||key.startsWith('core_v4_word_duel_solo_');
+const mirrored=key=>critical(key)||key.startsWith('aiglish_app_background_catalog_')||key==='aiglish_shared_background_catalog'||key.startsWith('core_v4_word_duel_solo_')||key.startsWith('core_v4_word_duel_pending_');
 function keys(){if(keysRevision!==revision){const names=new Set(nativeKeys());for(const [key,value] of values){if(value===null)names.delete(key);else names.add(key);}keyCache=[...names];keysRevision=revision;}return keyCache;}
 function get(key){key=String(key);return values.has(key)?values.get(key):rawGet(key);}
 function failure(error){const changed=!lastFailure;lastFailure=error;if(changed){console.warn('端末の保存先を利用できません。保存データは消していません。',error);window.dispatchEvent(new CustomEvent('app-storage-error',{detail:'端末への保存を確認できません。空き容量・ブラウザー設定を確認してください。'}));}}
