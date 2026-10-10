@@ -40,6 +40,8 @@
     window.syncRankingMetrics=function(){ensure();record=merge(record,read(user));if(!userStats.learning_ranking_owner||userStats.learning_ranking_owner===user)record=merge(record,userStats.learning_ranking_v2_json||userStats.learning_ranking);readSwipeJournals();scanCurrent();persist();};
     window.recordRankedWord=function(book,num){if(!book)return;ensure();record=merge(record,read(user));record.words[wordKey(book,num)]=1;persist();scheduleSync();};
     window.recordRankedSwipe=function(){ensure();record=merge(record,read(user));record.flash.sources[sourceId]=nonnegative(record.flash.sources[sourceId])+1;store('core_v4_ranking_swipes_v2_'+user+'_'+sourceId,String(record.flash.sources[sourceId]));persist();scheduleSync();};
+    const acknowledged=new Map();
+    const syncSignature=(metrics,time)=>JSON.stringify({metrics,time:time?{...time,updatedAt:0}:null});
     let syncTimer=null;
     function scheduleSync(){if(!syncTimer)syncTimer=setTimeout(()=>{syncTimer=null;syncCloud();},2000);}
     async function syncCloud(){
@@ -47,6 +49,8 @@
         if(id==='GUEST-000'||!window.fbRunTransaction||!window.db)return false;
         if(queues.has(id))return queues.get(id);
         const local=JSON.parse(JSON.stringify(record)),time=window.StudyTime.snapshot();
+        const last=acknowledged.get(id);
+        if(last&&Date.now()-last.at<300000&&last.signature===syncSignature(local,time))return true;
         const task=(async()=>{try{
             const combined=await window.fbRunTransaction(window.db,async transaction=>{
                 const ref=window.fbDoc(window.db,'users',id),snap=await transaction.get(ref);
@@ -54,6 +58,7 @@
                 const study=window.StudyTimeModel.mergeCurrent(window.StudyTimeModel.readStats(snap.exists()?snap.data():{}).study_calendar_v2,time);
                 transaction.set(ref,{learningRankingV2Json:JSON.stringify(merged),studyLedgerJson:JSON.stringify(study)},{merge:true});return merged;
             });
+            acknowledged.set(id,{at:Date.now(),signature:syncSignature(combined,time)});
             if(owner()===id&&user===id){record=merge(record,combined);persist();if(JSON.stringify(merge(record,local))!==JSON.stringify(merge(combined,local)))scheduleSync();}
             return true;
         }catch(error){console.warn('ランキング記録の同期を次回に再試行します',error);return false;}finally{queues.delete(id);}})();
@@ -100,12 +105,12 @@
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
     const value=(row,key)=>key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
     function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
-    function row(id,doc){const stats=statsOf(doc),combined=fromProfile(doc),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',appearance:null,time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:flashCount(combined)};}
+    function row(id,doc){if(doc.__directorySummary){const summary=doc.__directorySummary;return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',appearance:null,time:summary.totalSeconds,words:summary.words,flash:summary.flash};}const stats=statsOf(doc),combined=fromProfile(doc),ledger=window.StudyTimeModel.resetLedger(stats.study_calendar_v2);return {id,name:doc.playerName||doc.name||id,avatar:doc.avatar||'',appearance:null,time:window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()),words:wordCount(combined),flash:flashCount(combined)};}
     function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record)});}
     function deadline(promise,ms=15000){let timer;return Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('通信が完了しませんでした')),ms))]).finally(()=>clearTimeout(timer));}
     async function detail(entry,rank,context){
         const account=owner(),dialog=showDetail(entry,rank,context);
-        try{if(window.db&&window.fbGetDoc){const snap=await deadline(window.fbGetDoc(window.fbDoc(window.db,'users',entry.id)),5000);if(owner()!==account||!dialog.isConnected)return;if(snap.exists()){const latest=row(entry.id,snap.data());showDetail(entry.id===account?self():latest,rank,context,dialog);}}}catch(error){console.warn('詳細は取得済みの記録を表示しています',error);}
+        try{const cached=window.UserDirectory.get(entry.id);if(cached&&entry.id!==account){showDetail(row(entry.id,cached),rank,context,dialog);return;}if(window.db&&window.fbGetDoc){const snap=await deadline(window.fbGetDoc(window.fbDoc(window.db,'users',entry.id)),5000);if(owner()!==account||!dialog.isConnected)return;if(snap.exists()){const latest=row(entry.id,snap.data());showDetail(entry.id===account?self():latest,rank,context,dialog);}}}catch(error){console.warn('詳細は取得済みの記録を表示しています',error);}
         return dialog;
     }
     function showDetail(entry,rank,context,existing){
@@ -115,7 +120,7 @@
         const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');person.replaceChildren();dialog.querySelector('dl').replaceChildren();name(heading,entry.name,entry.appearance);person.append(avatar(entry.avatar,entry.name,entry.appearance),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[detailKey])+' · '+(rank?rank+'位':entry[detailKey]>0?'順位未取得':'未計測');
         Object.keys(labels).forEach(key=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=labels[key];dd.textContent=value(entry,key);dialog.querySelector('dl').append(dt,dd);});return dialog;
     }
-    window.RankingVisuals.detailStudy=function(entry,rank){const known=row(entry.id,{playerName:entry.name,avatar:entry.avatar,userStats:entry.getStats?entry.getStats():{}});showDetail(known,rank,'今日の勉強時間');const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent='今日の勉強時間';dd.textContent=duration(entry.seconds);const dl=document.querySelector('.ranking-detail dl');dl.prepend(dt,dd);};
+    window.RankingVisuals.detailStudy=function(entry,rank){const known=row(entry.id,{playerName:entry.name,avatar:entry.avatar,__directorySummary:entry.getSummary?.(),userStats:entry.getStats?entry.getStats():{}});showDetail(known,rank,'今日の勉強時間');const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent='今日の勉強時間';dd.textContent=duration(entry.seconds);const dl=document.querySelector('.ranking-detail dl');dl.prepend(dt,dd);};
     const podiumShapes=new WeakMap();
     function sameShape(left,right){return !!left&&left.length===right.length&&left.every((row,i)=>row.length===right[i].length&&row.every((value,j)=>value===right[i][j]));}
     function render(){
@@ -136,10 +141,9 @@
             const ownRank=cacheReady?measured.findIndex(entry=>entry.id===user)+1:0,own=section.querySelector('.ranking-mini-self'),text=(user==='GUEST-000'?'あなた（ゲスト）':'あなた · '+(ownRank?ownRank+'位':local[key]>0?'順位未取得':'未計測'))+'　'+value(local,key);if(own.textContent!==text)own.textContent=text;own.onclick=()=>detail(local,ownRank,labels[key]);
         });
     }
-    const yieldFrame=()=>new Promise(resolve=>setTimeout(resolve,0));
     async function refresh(force,foreground=false){
         ensure();if(user==='GUEST-000'){render();document.getElementById('rankingMessage').textContent='ログインすると全ユーザーの表彰台に参加できます。';return;}
-        if(!force&&cacheReady&&Date.now()-cacheAt<60000){render();return;}
+        if(!force&&cacheReady&&Date.now()-cacheAt<300000){render();return;}
         if(inflight&&inflight.id===user)return inflight.promise;
         const id=user,token=++generation,button=document.getElementById('rankingRefresh'),message=document.getElementById('rankingMessage');button.disabled=true;message.textContent='記録を取得中…';
         let cancelled=false,loading=false;
@@ -151,25 +155,13 @@
         // Synchronization must not gate the independent leaderboard read.
         syncCloud().catch(error=>console.warn('ランキング同期は再試行します',error));
         const collect=async()=>{
-            const list=[],tops={time:[],words:[],flash:[]};let cursor=null;
-            const paged=!!(window.fbQuery&&window.fbOrderBy&&window.fbDocumentId&&window.fbLimit&&window.fbStartAfter);
-            do{
-                let ref=window.fbCollection(window.db,'users');
-                if(paged){const parts=[window.fbOrderBy(window.fbDocumentId()),window.fbLimit(10)];if(cursor)parts.push(window.fbStartAfter(cursor));ref=window.fbQuery(ref,...parts);}
-                const snapshot=await window.fbGetDocs(ref);if(!active())return list;
-                const docs=snapshot.docs||[];if(!snapshot.docs)snapshot.forEach(doc=>docs.push(doc));
-                for(let i=0;i<docs.length;i++){
-                    if(!active())return list;
-                    const doc=docs[i],source=doc.data();
-                    if(!source.deleted&&doc.id!=='GUEST-000'&&doc.id!==id){try{
-                        const entry=row(doc.id,source),previous=new Set(Object.values(tops).flat());list.push(entry);
-                        Object.keys(tops).forEach(key=>{if(entry[key]>0){tops[key].push(entry);tops[key].sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id));tops[key]=tops[key].slice(0,3);}});
-                        const retained=new Set(Object.values(tops).flat());if(!retained.has(entry))entry.avatar='';for(const old of previous)if(!retained.has(old))old.avatar='';
-                    }catch(error){console.warn('ランキングの一部の記録を読み取れませんでした',error);}}
-                    if(i%8===7)await yieldFrame();
+            const list=[],tops={time:[],words:[],flash:[]};await window.UserDirectory.scan((docId,source)=>{
+                if(!source.deleted&&docId!=='GUEST-000'&&docId!==id){
+                    const entry=row(docId,source),previous=new Set(Object.values(tops).flat());list.push(entry);
+                    Object.keys(tops).forEach(key=>{if(entry[key]>0){tops[key].push(entry);tops[key].sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id));tops[key]=tops[key].slice(0,3);}});
+                    const retained=new Set(Object.values(tops).flat());if(!retained.has(entry))entry.avatar='';for(const old of previous)if(!retained.has(old))old.avatar='';
                 }
-                cursor=docs[docs.length-1];if(!paged||docs.length<10)break;await yieldFrame();
-            }while(active());return list;
+            },active,{force:!!force});return list;
         };
         const task=Promise.resolve().then(async()=>{try{
             if(!window.db||!window.fbGetDocs)throw Error('接続待ち');
@@ -187,7 +179,7 @@
     window.onTabChange(tab=>{if(tab==='titles'){render();refresh(false);}else if(tab==='vocab'){ensure();scanCurrent();persist();}});
     window.onAppLoaded(()=>{ensure();window.syncRankingMetrics();render();});
     window.addEventListener('storage',event=>{if(event.key===storageKey(owner())){ensure();record=merge(record,read(user));persist();render();}});
-    setInterval(()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(true);},30000);
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(true);});
+    setInterval(()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(false);},300000);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(false);});
     window.LearningRanking={render,refresh,sync:syncCloud,snapshot:()=>{window.syncRankingMetrics();return JSON.parse(JSON.stringify(record));}};
 })();

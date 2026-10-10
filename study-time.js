@@ -172,7 +172,7 @@
     let podiumShape=null;
     function renderRanking() {
         const container=document.getElementById('studyFriendRanking');if(!container||!data)return;
-        const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false,id:f.id,avatar:f.avatar||'',getStats:()=>f.stats}));
+        const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false,id:f.id,avatar:f.avatar||'',getStats:()=>f.stats,getSummary:()=>f.summary}));
         if(user!=='GUEST-000')rows.push({name:(myName||'あなた'),seconds:Math.floor(rangeValue(data,'daily',Date.now())/1000),self:true,id:user,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',getStats:()=>userStats});
         const top=rows.filter(r=>r.seconds>=300).sort((a,b)=>b.seconds-a.seconds||a.id.localeCompare(b.id)).slice(0,3);
         const signature=JSON.stringify(top.map(row=>[row.id,row.seconds]));
@@ -192,20 +192,20 @@
     }
     async function refreshRanking(force=false) {
         ensureUser();if(rankingLoading||!user||currentActiveTabId!=='study'||document.visibilityState!=='visible')return;
-        if(!force&&rankingDay===dateKey(Date.now())&&Date.now()-rankingLoadedAt<60000){renderRanking();return;}
+        if(!force&&rankingDay===dateKey(Date.now())&&Date.now()-rankingLoadedAt<300000){renderRanking();return;}
         const owner=user;rankingLoading=true;const button=document.getElementById('studyRefreshRanking'),message=document.getElementById('studyRankingMessage');button.disabled=true;button.textContent='更新中…';message.textContent='';
         try {
             if(!window.db||!window.fbGetDocs||!window.fbCollection)throw new Error('接続後に更新してください。');
             const records=[],today=dateKey(Date.now());
             await window.UserDirectory.scan((id,remote)=>{
                 if(remote.deleted||id===owner||id==='GUEST-000')return;
-                const stats=readStats(remote),seconds=rankingSeconds(stats,'daily',Date.now());
+                const stats=readStats(remote),seconds=remote.__directorySummary?remote.__directorySummary.dailySeconds:rankingSeconds(stats,'daily',Date.now());
                 if(seconds<300)return;
                 // Keep only three podium candidates, never entire profile statistics/artwork.
                 const compact={study_calendar_v2:resetLedger(stats.study_calendar_v2),learning_ranking_v2_json:remote.learningRankingV2Json||stats.learning_ranking_v2_json,learning_ranking_owner:stats.learning_ranking_owner};
-                records.push({id,name:remote.playerName||remote.name||id,avatar:remote.avatar||'',date:today,seconds,stats:compact});
+                records.push({id,name:remote.playerName||remote.name||id,avatar:remote.avatar||'',date:today,seconds,summary:remote.__directorySummary,stats:compact});
                 records.sort((a,b)=>b.seconds-a.seconds||a.id.localeCompare(b.id));records.splice(3);
-            },()=>user===owner&&uid()===owner&&currentActiveTabId==='study'&&document.visibilityState==='visible');
+            },()=>user===owner&&uid()===owner&&currentActiveTabId==='study'&&document.visibilityState==='visible',{force});
             if(user===owner&&uid()===owner){ranking=records;rankingLoadedAt=Date.now();rankingDay=today;renderRanking();}
         }catch(e){if(uid()===owner)message.textContent='表彰台を取得できませんでした。'+e.message;}
         finally{rankingLoading=false;button.disabled=false;button.textContent='更新';}
