@@ -2291,8 +2291,7 @@ html body .app-header .hf-badge { gap:2px; }
 /* Keep settings inside their translucent dialog, and distinguish both card faces from photos. */
 @layer rendering-safety {
 html body .book-flashcard-dialog #flashcard-setup-screen > .card{background:transparent!important;}
-html body .flashcard-face-front,html body .flashcard-face-back{outline:2px solid var(--cosmic-cyan)!important;outline-offset:1px;}
-html body .flashcard-face-back{outline-color:var(--cosmic-purple-light)!important;}
+html body .flashcard-face-front,html body .flashcard-face-back{outline:2px solid var(--flashcard-rim-color,#94a3b8)!important;outline-offset:1px;}
 }
 /* Safari's native select must keep its white label on a dark control surface. */
 #flashcardSourceSelect{color-scheme:dark; background:#172033!important; color:#fff!important;}

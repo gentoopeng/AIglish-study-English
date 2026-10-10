@@ -54,6 +54,7 @@
     var originalMasterSave = window.saveVocabMasterToStorage;
     window.saveVocabMasterToStorage = async function() {
         if (!window.isPersonalTextbook(currentTextbook)) return originalMasterSave.apply(this, arguments);
+        if(!window.VocabMaster.canCapture(currentTextbook,vocabList))return false;
         var master = window.stripVocabProgressFromWords(vocabList);
         localStorage.setItem('core_v4_custom_words_' + userId() + '_' + currentTextbook, JSON.stringify(master));
         localStorage.setItem('core_v4_cache_' + currentTextbook, JSON.stringify(master));
@@ -153,8 +154,9 @@
                 var name = form.querySelector('#libraryBookName').value.trim();
                 if (!name) throw new Error('単語帳の名前を入力してください。');
                 var id = bookId || 'personal_' + crypto.randomUUID();
-                var master = book ? JSON.parse(localStorage.getItem('core_v4_custom_words_' + userId() + '_' + id) || localStorage.getItem('core_v4_cache_' + id) || '[]') : [];
+                var master = [];
                 var importText=form.querySelector('#libraryBookWords').value.trim();
+                if(book){var recovered=window.VocabMaster.resolve(id);if(recovered)master=recovered.master;else if(importText[0]!=='[')throw new Error('単語データを読み込んでから編集してください。');}
                 if(book&&importText[0]==='['&&!confirm('バックアップデータで完全に上書きしますか？'))return;
                 master=window.parseVocabImport(importText,master);
                 await coverReady;
@@ -171,7 +173,7 @@
                 // Keep progress and a complete draft together for restart and manual cloud saves.
                 var progress = JSON.parse(localStorage.getItem(window.getVocabProgressStorageKey(id)) || '{}');
                 if(importText[0]==='['){progress={};master.forEach(function(w){var meanings={};(w.meanings||[]).forEach(function(m){meanings[m.id]={status:m.status||'none',history:m.history||[]};});progress[String(w.num)]={sig:window.buildWordSignature(w),status:w.status||'none',history:w.history||[],note:w.note||'',meanings:meanings};});localStorage.setItem(window.getVocabProgressStorageKey(id),JSON.stringify(progress));localStorage.setItem(window.getVocabProgressStorageKey(id)+'__ts',String(Date.now()));}
-                var draft = { master: master, progress: progress, savedAt: new Date().toISOString() };
+                var draft = { master: master, emptyConfirmed:master.length===0, progress: progress, savedAt: new Date().toISOString() };
                 localStorage.setItem(window.__manualVocabLocalKey(id), JSON.stringify(draft));
                 window.__manualVocabDrafts[id] = draft;
                 window.__dirtyManualVocabDrafts = window.__dirtyManualVocabDrafts || {};

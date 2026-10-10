@@ -20,6 +20,7 @@ function setup(){
  };
  ctx.loadCurrentTextbookData=()=>new Promise(r=>{release=r});
  ctx.__applyManualVocabDraft=(k,d)=>{ctx.applied=d};
+ vm.runInNewContext(fs.readFileSync('vocab-master.js','utf8'),ctx);
  vm.runInNewContext(loader,ctx);
  return {ctx,values,release:()=>release()};
 }
@@ -62,7 +63,7 @@ test('a cached textbook displays saved progress without waiting for cloud access
  let reads=0,renders=0;
  const progress={1:{status:'ok'}};
  const ctx={currentTextbook:'book-a',myId:'user-a',textbooksCacheMap:{'book-a':[{num:1,word:'study'}]},textbooksPool:[],userStats:{},document:{getElementById:()=>null},localStorage:{getItem:()=>null},stripVocabProgressFromWords:words=>words,migrateVocabData:words=>words,loadUserVocabProgress:()=>{reads++;return new Promise(()=>{})},applyUserProgressToVocabList:()=>{},updateFlashcardSourceSelectOptions:()=>{},renderVocabList:()=>renders++};
- ctx.window=ctx;vm.runInNewContext(bookLoader,ctx);await ctx.loadCurrentTextbookData({localProgress:progress});
+ ctx.window=ctx;vm.runInNewContext(fs.readFileSync('vocab-master.js','utf8'),ctx);vm.runInNewContext(bookLoader,ctx);await ctx.loadCurrentTextbookData({localProgress:progress});
  assert.equal(reads,0);assert.equal(renders,1);assert.equal(ctx.currentUserVocabProgress,progress);
 });
 test('a cached draft is not applied and rendered twice when unchanged',async()=>{
