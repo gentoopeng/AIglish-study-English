@@ -10,6 +10,7 @@ The seven supplied MP3s are converted to mono 44.1 kHz / 96 kbps MP3 with seek/d
 | navigate.mp3 | 決定ボタンを押す40.mp3 | Tab/background change and upward flashcard skip |
 | swipe-right.mp3 | 決定ボタンを押す51.mp3 | Flashcard right swipe (learned) |
 | swipe-left.mp3 | 決定ボタンを押す34.mp3 | Flashcard left swipe (not learned) |
-| open.mp3 | 説明ウィンドウが開く.mp3 | Menu, background picker, flashcard settings/details and profile details |
+| menu.mp3 | Generated 150 ms decaying sine “pon” | Hamburger menu |
+| open.mp3 | 説明ウィンドウが開く.mp3 | background picker, flashcard settings/details and profile details |
 
-The runtime starts only on interaction, defaults to 30% gain and supports mute/volume in the sidebar. One reusable HTML media element and a single lazy AudioContext/GainNode serve all sounds; overlapping effects are interrupted and bursts are throttled. Only a selected sound is fetched. Hidden pages suspend playback. No BGM or looping audio is included.
+The runtime starts only on interaction, defaults to 30% gain and supports mute/volume in the sidebar. One reusable effect media element and a lazy AudioContext/GainNode serve all sounds; overlapping effects are interrupted and bursts are throttled. Only a selected sound is fetched. Hidden pages suspend playback. BGM uses a separate media element and gain in this same context; see ../music/README.md. Effect completion/muting does not suspend playing BGM.

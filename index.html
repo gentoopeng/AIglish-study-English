@@ -10,16 +10,16 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="10.10.16.41">
+    <meta name="application-version" content="10.10.17.18">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
-    <script src="runtime-errors.js?v=10.10.16.41"></script>
-    <script src="app-storage.js?v=10.10.16.41"></script>
-    <script src="rendering-safety.js?v=10.10.16.41"></script>
+    <script src="runtime-errors.js?v=10.10.17.18"></script>
+    <script src="app-storage.js?v=10.10.17.18"></script>
+    <script src="rendering-safety.js?v=10.10.17.18"></script>
     <script src="vendor/lucide/lucide.min.js?v=0.468.0"></script>
-    <link rel="stylesheet" href="style.css?v=10.10.16.41">
+    <link rel="stylesheet" href="style.css?v=10.10.17.18">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -110,6 +110,20 @@
             <section class="sidebar-sounds" aria-labelledby="soundSettingsTitle">
                 <label class="sound-toggle" for="soundEnabled"><span id="soundSettingsTitle"><i data-lucide="volume-2" size="18" aria-hidden="true"></i>効果音</span><input id="soundEnabled" type="checkbox" checked></label>
                 <div class="sound-volume"><label for="soundVolume">音量</label><input id="soundVolume" type="range" min="0" max="100" step="5" value="30"><output id="soundVolumeValue" for="soundVolume">30%</output></div>
+            </section>
+            <section class="sidebar-sounds" aria-labelledby="musicSettingsTitle">
+                <label class="sound-toggle" for="musicEnabled"><span id="musicSettingsTitle"><i data-lucide="music-2" size="18" aria-hidden="true"></i>BGM</span><input id="musicEnabled" type="checkbox"></label>
+                <div class="sound-volume"><label for="musicVolume">音量</label><input id="musicVolume" type="range" min="0" max="100" step="5" value="20"><output id="musicVolumeValue" for="musicVolume">20%</output></div>
+                <label class="music-track-label" for="musicTrack">曲</label>
+                <select id="musicTrack" class="music-track-select">
+                    <option value="hitohira">sokoniai wo hitohira</option>
+                    <option value="in-that-mood">In That Mood</option>
+                    <option value="in-that-mood-narr">In That Mood — Narr</option>
+                    <option value="let-it-happen">Let It Happen</option>
+                    <option value="let-it-happen-narr">Let It Happen — Narr</option>
+                    <option value="haru-slow">Haru Ha Utatane — Slow</option>
+                    <option value="haru-fast">Haru Ha Utatane — Fast</option>
+                </select>
             </section>
             <template id="backgroundPickerTemplate"><dialog id="backgroundPickerDialog" class="background-picker-dialog" aria-labelledby="backgroundPickerTitle">
                 <div class="background-picker-heading"><h2 id="backgroundPickerTitle">背景</h2><button id="backgroundPickerClose" type="button" aria-label="背景選択を閉じる">×</button></div>
@@ -460,32 +474,32 @@
       window.fbDeleteDoc = deleteDoc;
       window.fbRunTransaction = runTransaction;
     </script>
-    <link rel="preload" href="library-state.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=10.10.16.41"></script>
-    <link rel="preload" href="learning-data.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=10.10.16.41"></script>
-    <script type="application/x-aiglish-script" data-app-src="vocab-master.js?v=10.10.16.41"></script>
-    <link rel="preload" href="app.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=10.10.16.41"></script>
-    <link rel="preload" href="game_core.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=10.10.16.41"></script>
-    <link rel="preload" href="vocab_ui.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=10.10.16.41"></script>
-    <link rel="preload" href="reader.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=10.10.16.41"></script>
-    <link rel="preload" href="view-work.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=10.10.16.41"></script>
-    <link rel="preload" href="fix.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=10.10.16.41"></script>
-    <link rel="preload" href="save-system.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="save-system.js?v=10.10.16.41"></script>
-    <link rel="preload" href="save-coordinator.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="save-coordinator.js?v=10.10.16.41"></script>
-    <script type="application/x-aiglish-script" data-app-src="sound-effects.js?v=10.10.16.41"></script>
-    <script type="application/x-aiglish-script" data-app-src="learning-feedback.js?v=10.10.16.41"></script>
-    <link rel="preload" href="library.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=10.10.16.41"></script>
-    <link rel="preload" href="workbook.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=10.10.16.41"></script>
-    <link rel="preload" href="shared-notes.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=10.10.16.41"></script>
-    <link rel="preload" href="user-directory.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=10.10.16.41"></script>
-    <link rel="preload" href="study-time.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=10.10.16.41"></script>
-    <link rel="preload" href="ranking.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=10.10.16.41"></script>
-    <link rel="preload" href="autosave.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=10.10.16.41"></script>
-    <link rel="preload" href="people.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=10.10.16.41"></script>
-    <link rel="preload" href="image-metadata.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="image-metadata.js?v=10.10.16.41"></script>
-    <link rel="preload" href="profile.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=10.10.16.41"></script>
-    <link rel="preload" href="loading-quiz.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=10.10.16.41"></script>
-    <link rel="preload" href="background-catalog.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="background-catalog.js?v=10.10.16.41"></script>
-    <link rel="preload" href="app-background.js?v=10.10.16.41" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=10.10.16.41"></script>
-    <script src="app-loader.js?v=10.10.16.41" defer></script>
+    <link rel="preload" href="library-state.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=10.10.17.18"></script>
+    <link rel="preload" href="learning-data.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=10.10.17.18"></script>
+    <script type="application/x-aiglish-script" data-app-src="vocab-master.js?v=10.10.17.18"></script>
+    <link rel="preload" href="app.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=10.10.17.18"></script>
+    <link rel="preload" href="game_core.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=10.10.17.18"></script>
+    <link rel="preload" href="vocab_ui.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=10.10.17.18"></script>
+    <link rel="preload" href="reader.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=10.10.17.18"></script>
+    <link rel="preload" href="view-work.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=10.10.17.18"></script>
+    <link rel="preload" href="fix.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=10.10.17.18"></script>
+    <link rel="preload" href="save-system.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="save-system.js?v=10.10.17.18"></script>
+    <link rel="preload" href="save-coordinator.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="save-coordinator.js?v=10.10.17.18"></script>
+    <script type="application/x-aiglish-script" data-app-src="sound-effects.js?v=10.10.17.18"></script>
+    <script type="application/x-aiglish-script" data-app-src="learning-feedback.js?v=10.10.17.18"></script>
+    <link rel="preload" href="library.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=10.10.17.18"></script>
+    <link rel="preload" href="workbook.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=10.10.17.18"></script>
+    <link rel="preload" href="shared-notes.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=10.10.17.18"></script>
+    <link rel="preload" href="user-directory.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=10.10.17.18"></script>
+    <link rel="preload" href="study-time.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=10.10.17.18"></script>
+    <link rel="preload" href="ranking.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=10.10.17.18"></script>
+    <link rel="preload" href="autosave.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=10.10.17.18"></script>
+    <link rel="preload" href="people.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=10.10.17.18"></script>
+    <link rel="preload" href="image-metadata.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="image-metadata.js?v=10.10.17.18"></script>
+    <link rel="preload" href="profile.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=10.10.17.18"></script>
+    <link rel="preload" href="loading-quiz.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=10.10.17.18"></script>
+    <link rel="preload" href="background-catalog.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="background-catalog.js?v=10.10.17.18"></script>
+    <link rel="preload" href="app-background.js?v=10.10.17.18" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=10.10.17.18"></script>
+    <script src="app-loader.js?v=10.10.17.18" defer></script>
 </body>
 </html>
