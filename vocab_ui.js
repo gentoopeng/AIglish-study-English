@@ -930,7 +930,7 @@
         var cardBody = card.querySelector('#wordCardBody-' + w.num);
         var history = cardBody ? cardBody.querySelector('[data-vocab-history]') : null;
         if (cardBody) cardBody.insertBefore(window.createVocabNoteSection(w), history || null);
-        var pin=document.createElement('button');pin.type='button';pin.className='vocab-sticky-button';pin.setAttribute('aria-label','付箋を付ける');pin.setAttribute('aria-pressed',String(!!w.sticky));pin.innerHTML='<i data-lucide="sticky-note" size="16"></i>';
+        var pin=document.createElement('button');pin.type='button';pin.className='vocab-sticky-button';pin.setAttribute('aria-label','付箋を付ける');pin.setAttribute('aria-pressed',String(!!w.sticky));pin.innerHTML='<i data-lucide="sticky-note" size="13"></i>';
         pin.onclick=function(e){e.stopPropagation();if(window.LearningData&&!LearningData.canSave(currentTextbook))return;var actual=vocabList.find(function(word){return String(word.num)===String(w.num);});if(!actual)return;actual.sticky=!actual.sticky;window.saveVocabProgressLocally(actual.num);if(window.__captureManualVocabDraft)window.__captureManualVocabDraft();window.renderVocabList();};
         card.querySelector('.word-main-line').append(pin);
         return card;
