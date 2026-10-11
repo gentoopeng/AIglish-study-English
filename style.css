@@ -2125,3 +2125,5 @@ input,textarea{-webkit-text-stroke:0;}
 
 .vocab-word-markers{position:absolute;right:12px;top:9px;display:flex;align-items:center;gap:2px;height:32px;}.vocab-word-markers.with-admin{right:88px;}.vocab-word-markers .loading-quiz-pin{margin:0;width:17px;height:17px;}
 .word-row-container.has-sticky{border-color:#e4cc91!important;}
+
+.filter-scroller{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;overflow:visible;}.filter-scroller .pill-btn{min-width:0;width:100%;padding:7px 4px;font-size:12px;box-sizing:border-box;white-space:normal;}.shared-vocab-notes:has(.shared-vocab-notes-list:empty):has(.shared-vocab-notes-message:empty){display:none;}

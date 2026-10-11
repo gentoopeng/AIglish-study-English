@@ -14,6 +14,28 @@
         const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity(word)));
         return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
     }
+    const noteCache=new Map(),pending=new Map();let cacheOwner='',directory=null,directoryTask=null,directoryAt=0;
+    function accountCache(){if(cacheOwner!==owner()){cacheOwner=owner();noteCache.clear();pending.clear();directory=null;directoryTask=null;directoryAt=0;}}
+    function deadline(task){let timer;return Promise.race([task,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('共有メモの通信が完了しませんでした。')),15000))]).finally(()=>clearTimeout(timer));}
+    async function directoryRead(){
+        if(directory&&Date.now()-directoryAt<300000)return directory;if(directoryTask)return directoryTask;
+        const account=owner();const task=(async()=>{const result=new Map();let cursor;
+            for(let page=0;page<20;page++){
+                const parts=[window.fbOrderBy(window.fbDocumentId()),window.fbLimit(100)];if(cursor)parts.push(window.fbStartAfter(cursor));
+                const snap=await deadline(window.fbGetDocs(window.fbQuery(window.fbCollectionGroup(window.db,'notes'),...parts)));
+                const docs=snap.docs||[];for(const doc of docs){const path=doc.ref?.path||'',match=/^publicVocabNotes\/([^/]+)\/notes\/[^/]+$/.exec(path);if(!match)continue;const data=doc.data();if(typeof data?.note==='string'&&typeof data.ownerId==='string'&&data.note.trim()){if(!result.has(match[1]))result.set(match[1],[]);result.get(match[1]).push({...data,note:data.note.slice(0,500)});}}
+                if(docs.length<100){if(owner()===account){directory=result;directoryAt=Date.now();}return result;}cursor=docs.at(-1);
+            }throw Error('共有メモが多いため全件を確認できませんでした。');
+        })();directoryTask=task;try{return await task;}finally{if(directoryTask===task)directoryTask=null;}
+    }
+    async function recordsFor(word){accountCache();const key=identity(word),cached=noteCache.get(key);if(cached&&Date.now()-cached.at<300000)return cached.records;if(pending.has(key))return pending.get(key);
+        const account=owner(),task=(async()=>{let records=[];if(available()){
+            const topic=await topicKey(word);
+            if(window.fbCollectionGroup&&window.fbQuery&&window.fbOrderBy&&window.fbDocumentId&&window.fbLimit&&window.fbStartAfter)records=(await directoryRead()).get(topic)||[];
+            else {const snap=await deadline(window.fbGetDocs(window.fbCollection(window.db,'publicVocabNotes',topic,'notes')));snap.forEach(doc=>{const data=doc.data();if(typeof data?.note==='string'&&typeof data.ownerId==='string'&&data.note.trim())records.push({...data,note:data.note.slice(0,500)});});}
+        }if(owner()===account)noteCache.set(key,{at:Date.now(),records});return records;})();pending.set(key,task);try{return await task;}finally{if(pending.get(key)===task)pending.delete(key);}
+    }
+    window.SharedVocabNotes={invalidate:()=>{noteCache.clear();directory=null;directoryAt=0;},has:word=>{accountCache();return (noteCache.get(identity(word))?.records||[]).some(record=>record.ownerId!==owner());},ready:words=>{accountCache();return words.every(word=>{const item=noteCache.get(identity(word));return item&&Date.now()-item.at<300000;});},prepare:async words=>{let index=0;await Promise.all(Array.from({length:3},async()=>{while(index<words.length)await recordsFor(words[index++]);}));}};
     window.attachSharedVocabNotes = function (section, word) {
         if (section.dataset.sharedNotesAttached) return;
         section.dataset.sharedNotesAttached = 'true';
@@ -27,7 +49,7 @@
         const heading = document.createElement('div'); heading.className = 'shared-vocab-notes-heading'; heading.textContent = 'ほかの人の共有メモ';
         const list = document.createElement('div'); list.className = 'shared-vocab-notes-list'; list.setAttribute('aria-live', 'polite');
         const message = document.createElement('p'); message.className = 'shared-vocab-notes-message'; message.setAttribute('role', 'status');
-        area.append(heading, list, message); textarea.after(area);
+        area.append(heading, list, message); section.append(area);
         const preferenceKey = 'core_v4_vocab_note_sharing_' + openingOwner + '_' + encodeURIComponent(identity(original));
         function preference() { try { return JSON.parse(localStorage.getItem(preferenceKey) || 'null'); } catch (e) { return null; } }
         const savedPreference = preference();
@@ -60,13 +82,12 @@
             const request = ++generation; list.textContent = '読み込み中…'; message.textContent = '';
             try {
                 if (!available()) throw new Error('共有メモに接続できません。接続後にメモを開き直してください。');
-                const topic = await topicKey(original);
-                const snapshot = await window.fbGetDocs(window.fbCollection(window.db, 'publicVocabNotes', topic, 'notes'));
+                const shared = await recordsFor(original);
                 if (!current() || request !== generation) return;
                 const records = []; ownNote = false;
-                snapshot.forEach(doc => { const data = doc.data(); if (!data || typeof data.ownerId !== 'string' || typeof data.note !== 'string' || !data.note.trim()) return; if (data.ownerId === openingOwner) ownNote = true; else records.push({note: data.note.slice(0, 500), updatedAt: String(data.updatedAt || '')}); });
+                shared.forEach(data => {if(data.ownerId===openingOwner)ownNote=true;else records.push({note:data.note,updatedAt:String(data.updatedAt||'')});});
                 records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); list.replaceChildren(); records.forEach(record => list.append(noteRow(record)));
-                if (!records.length) list.textContent = '共有メモはまだありません。';
+                if (!records.length) list.textContent = '';
                 loaded = true; buttons();
             } catch (error) {if (current() && request === generation) {list.textContent = ''; message.textContent = error.message; loaded = false;}}
         }
@@ -95,12 +116,13 @@
                 if (remove) await window.fbDeleteDoc(ref);
                 else await window.fbSetDoc(ref, {ownerId: openingOwner, note, updatedAt: new Date().toISOString()}, {merge: false});
                 if (!current()) return;
-                ownNote = !remove; remember(enabled, ownNote); loaded = false;
+                ownNote = !remove; remember(enabled, ownNote); loaded = false;noteCache.delete(identity(original));directory=null;directoryAt=0;
                 editor.style.display = 'none';
             } catch (error) { if (section.isConnected) message.textContent = (localSaved && openingOwner !== 'GUEST-000' ? 'メモは端末に保存しました。' : '') + error.message; }
             finally {busy = false; buttons();}
         }
         save.onclick = write;
+        requestAnimationFrame(function(){if(current()&&available())load();});
 
     };
     // Initial textbook rendering can finish before this deferred script executes.

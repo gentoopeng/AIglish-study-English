@@ -363,11 +363,12 @@
     // 5. フィルタ・削除確認
     // ================================================================
 
+    var selectedUnderstanding=new Set(),selectedExtras=new Set();
     window.setVocabFilter = function(filter) {
-        vocabFilter = filter;
-        document.querySelectorAll('.filter-scroller .pill-btn').forEach(function(b) { b.classList.remove('active'); });
-        var fBtn = document.getElementById('filter-' + filter);
-        if (fBtn) fBtn.classList.add('active');
+        if(filter==='all'){selectedUnderstanding.clear();selectedExtras.clear();}
+        else {var group=['note','sticky'].includes(filter)?selectedExtras:selectedUnderstanding;if(group.has(filter))group.delete(filter);else group.add(filter);}
+        document.querySelectorAll('.filter-scroller .pill-btn').forEach(function(button){var active=selectedUnderstanding.has(button.id.slice(7))||selectedExtras.has(button.id.slice(7));button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
+        vocabFilter=JSON.stringify([[...selectedUnderstanding],[...selectedExtras]]);
         window.renderVocabList();
     };
 
@@ -949,10 +950,16 @@
         var startRange = parseInt(document.getElementById('vocabRangeStart').value) || 0;
         var endRange = parseInt(document.getElementById('vocabRangeEnd').value) || 99999;
         var searchKeyword = document.getElementById('vocabSearchInput').value.toLowerCase().trim();
+        if(selectedExtras.has('note')&&window.SharedVocabNotes&&!SharedVocabNotes.ready(vocabList)){
+            container.textContent='共有メモを確認しています…';var book=currentTextbook;
+            SharedVocabNotes.prepare(vocabList).then(function(){if(currentTextbook===book&&selectedExtras.has('note'))window.renderVocabList();}).catch(function(){if(currentTextbook===book){container.textContent='共有メモを読み込めませんでした。絞り込みを解除するか、接続後にもう一度お試しください。';}});return;
+        }
         var filtered = vocabList.filter(function(w) {
             var n = parseInt(w.num);
             if (!isNaN(n) && (n < startRange || n > endRange)) return false;
-            if (vocabFilter === 'note' ? !String(w.note||'').trim() : vocabFilter === 'sticky' ? !w.sticky : vocabFilter !== 'all' && !(w.meanings||[]).some(function(m) { return (m.status||'none') === vocabFilter; })) return false;
+            if(selectedUnderstanding.size && !(w.meanings||[]).some(function(m){return selectedUnderstanding.has(m.status||'none');}))return false;
+            if(selectedExtras.has('sticky')&&!w.sticky)return false;
+            if(selectedExtras.has('note')&&!String(w.note||'').trim()&&!window.SharedVocabNotes?.has(w))return false;
             if (searchKeyword && !(w.word.toLowerCase().includes(searchKeyword) || w.meaning.includes(searchKeyword) || String(w.note || '').toLowerCase().includes(searchKeyword))) return false;
             return true;
         });
