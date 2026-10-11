@@ -2127,3 +2127,5 @@ input,textarea{-webkit-text-stroke:0;}
 .word-row-container.has-sticky{border-color:#e4cc91!important;}
 
 .filter-scroller{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;overflow:visible;}.filter-scroller .pill-btn{min-width:0;width:100%;padding:7px 4px;font-size:12px;box-sizing:border-box;white-space:normal;}.shared-vocab-notes:has(.shared-vocab-notes-list:empty):has(.shared-vocab-notes-message:empty){display:none;}
+
+.vocab-note-author{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid #d8d2c155;color:#d8d2c1;font-size:10px;overflow:hidden;flex-shrink:0;}.vocab-note-author img{width:100%;height:100%;object-fit:cover;}.vocab-own-note-row{display:flex;align-items:center;gap:8px;}.vocab-own-note-row .vocab-note-text{flex:1;min-width:0;}.vocab-own-note-row:has(.vocab-note-text:empty){display:none;}.shared-vocab-note-row{align-items:center;gap:8px;}

@@ -36,6 +36,17 @@
         }if(owner()===account)noteCache.set(key,{at:Date.now(),records});return records;})();pending.set(key,task);try{return await task;}finally{if(pending.get(key)===task)pending.delete(key);}
     }
     window.SharedVocabNotes={invalidate:()=>{noteCache.clear();directory=null;directoryAt=0;},has:word=>{accountCache();return (noteCache.get(identity(word))?.records||[]).some(record=>record.ownerId!==owner());},ready:words=>{accountCache();return words.every(word=>{const item=noteCache.get(identity(word));return item&&Date.now()-item.at<300000;});},prepare:async words=>{let index=0;await Promise.all(Array.from({length:3},async()=>{while(index<words.length)await recordsFor(words[index++]);}));}};
+    const authors=new Map();
+    async function author(id){
+        if(id===owner())return {name:myName||id,avatar:localStorage.getItem('core_v4_user_avatar_'+id)||''};
+        const known=window.People?.preview?.(id);if(known)return {name:known.name||id,avatar:known.avatar||''};
+        const existing=authors.get(id);if(existing&&Date.now()-existing.at<300000)return existing.task;
+        const task=(async()=>{const project=window.db?.app?.options?.projectId;if(!project||window.FirestoreReadGuard?.paused())return {name:id,avatar:''};
+            try{const url='https://firestore.googleapis.com/v1/projects/'+encodeURIComponent(project)+'/databases/(default)/documents/users/'+encodeURIComponent(id)+'?mask.fieldPaths=avatar&mask.fieldPaths=playerName';const response=await deadline(fetch(url));if(!response.ok)throw Error('profile');const data=await response.json();return {name:data.fields?.playerName?.stringValue||id,avatar:data.fields?.avatar?.stringValue||''};}catch{return {name:id,avatar:''};}
+        })();authors.set(id,{at:Date.now(),task});if(authors.size>50)authors.delete(authors.keys().next().value);return task;
+    }
+    function authorIcon(id){const icon=document.createElement('span');icon.className='vocab-note-author';icon.title=id;icon.textContent=String(id||'人').slice(0,1);icon.setAttribute('aria-label','メモの投稿者 '+id);
+        author(id).then(profile=>{if(!icon.isConnected)return;icon.title=profile.name+' ('+id+')';icon.setAttribute('aria-label',profile.name+'のメモ');icon.textContent=String(profile.name).slice(0,1);if(typeof profile.avatar==='string'&&profile.avatar.length<=48000&&/^(https?:\/\/|data:image\/(png|jpeg|webp|gif);base64,)/i.test(profile.avatar)){const img=document.createElement('img');img.src=profile.avatar;img.alt=profile.name;img.referrerPolicy='no-referrer';img.onerror=()=>img.remove();icon.replaceChildren(img);}});return icon;}
     window.attachSharedVocabNotes = function (section, word) {
         if (section.dataset.sharedNotesAttached) return;
         section.dataset.sharedNotesAttached = 'true';
@@ -45,6 +56,7 @@
         const bookId = currentTextbook, openingOwner = owner();
         const original = vocabList.find(w => String(w.num) === String(word.num)) || word;
         const signature = window.buildWordSignature(original);
+        const ownText=section.querySelector('.vocab-note-text');if(ownText){const ownRow=document.createElement('div');ownRow.className='vocab-own-note-row';ownText.before(ownRow);ownRow.append(ownText,authorIcon(openingOwner));}
         const area = document.createElement('div'); area.className = 'shared-vocab-notes';
         const heading = document.createElement('div'); heading.className = 'shared-vocab-notes-heading'; heading.textContent = 'ほかの人の共有メモ';
         const list = document.createElement('div'); list.className = 'shared-vocab-notes-list'; list.setAttribute('aria-live', 'polite');
@@ -68,7 +80,7 @@
             const row = document.createElement('div'); row.className = 'shared-vocab-note-row';
             const text = document.createElement('span'); text.className = 'shared-vocab-note-preview'; text.textContent = record.note;
             const more = document.createElement('button'); more.type = 'button'; more.className = 'shared-vocab-note-more'; more.textContent = 'すべて表示'; more.hidden = true; more.setAttribute('aria-expanded', 'false');
-            row.append(text, more);
+            row.append(text,more,authorIcon(record.ownerId));
             more.onclick = event => {event.preventDefault(); event.stopPropagation(); const expanded = row.classList.toggle('is-expanded'); more.textContent = expanded ? '折りたたむ' : 'すべて表示'; more.setAttribute('aria-expanded', String(expanded)); if (!expanded) measure();};
             function measure() { if (row.isConnected && !row.classList.contains('is-expanded')) more.hidden = text.scrollWidth <= text.clientWidth; }
             if (typeof ResizeObserver !== 'undefined') {
@@ -85,7 +97,7 @@
                 const shared = await recordsFor(original);
                 if (!current() || request !== generation) return;
                 const records = []; ownNote = false;
-                shared.forEach(data => {if(data.ownerId===openingOwner)ownNote=true;else records.push({note:data.note,updatedAt:String(data.updatedAt||'')});});
+                shared.forEach(data => {if(data.ownerId===openingOwner)ownNote=true;else records.push({ownerId:data.ownerId,note:data.note,updatedAt:String(data.updatedAt||'')});});
                 records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); list.replaceChildren(); records.forEach(record => list.append(noteRow(record)));
                 if (!records.length) list.textContent = '';
                 loaded = true; buttons();

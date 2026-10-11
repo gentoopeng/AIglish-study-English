@@ -363,12 +363,14 @@
     // 5. フィルタ・削除確認
     // ================================================================
 
-    var selectedUnderstanding=new Set(),selectedExtras=new Set();
+    var selectedUnderstanding=new Set(),selectedExtras=new Set(),noteScope=0;
     window.setVocabFilter = function(filter) {
-        if(filter==='all'){selectedUnderstanding.clear();selectedExtras.clear();}
-        else {var group=['note','sticky'].includes(filter)?selectedExtras:selectedUnderstanding;if(group.has(filter))group.delete(filter);else group.add(filter);}
+        if(filter==='all'){selectedUnderstanding.clear();selectedExtras.clear();noteScope=0;}
+        else if(filter==='note'){noteScope=(noteScope+1)%3;if(noteScope)selectedExtras.add('note');else selectedExtras.delete('note');}
+        else {var group=['sticky'].includes(filter)?selectedExtras:selectedUnderstanding;if(group.has(filter))group.delete(filter);else group.add(filter);}
         document.querySelectorAll('.filter-scroller .pill-btn').forEach(function(button){var active=selectedUnderstanding.has(button.id.slice(7))||selectedExtras.has(button.id.slice(7));button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
-        vocabFilter=JSON.stringify([[...selectedUnderstanding],[...selectedExtras]]);
+        var noteButton=document.getElementById('filter-note');if(noteButton){noteButton.textContent=noteScope===1?'メモ · 自分':noteScope===2?'メモ · 全員':'メモ';noteButton.dataset.scope=String(noteScope);}
+        vocabFilter=JSON.stringify([[...selectedUnderstanding],[...selectedExtras],noteScope]);
         window.renderVocabList();
     };
 
@@ -950,7 +952,7 @@
         var startRange = parseInt(document.getElementById('vocabRangeStart').value) || 0;
         var endRange = parseInt(document.getElementById('vocabRangeEnd').value) || 99999;
         var searchKeyword = document.getElementById('vocabSearchInput').value.toLowerCase().trim();
-        if(selectedExtras.has('note')&&window.SharedVocabNotes&&!SharedVocabNotes.ready(vocabList)){
+        if(noteScope===2&&window.SharedVocabNotes&&!SharedVocabNotes.ready(vocabList)){
             container.textContent='共有メモを確認しています…';var book=currentTextbook;
             SharedVocabNotes.prepare(vocabList).then(function(){if(currentTextbook===book&&selectedExtras.has('note'))window.renderVocabList();}).catch(function(){if(currentTextbook===book){container.textContent='共有メモを読み込めませんでした。絞り込みを解除するか、接続後にもう一度お試しください。';}});return;
         }
@@ -959,7 +961,7 @@
             if (!isNaN(n) && (n < startRange || n > endRange)) return false;
             if(selectedUnderstanding.size && !(w.meanings||[]).some(function(m){return selectedUnderstanding.has(m.status||'none');}))return false;
             if(selectedExtras.has('sticky')&&!w.sticky)return false;
-            if(selectedExtras.has('note')&&!String(w.note||'').trim()&&!window.SharedVocabNotes?.has(w))return false;
+            if(selectedExtras.has('note')&&!String(w.note||'').trim()&&!(noteScope===2&&window.SharedVocabNotes?.has(w)))return false;
             if (searchKeyword && !(w.word.toLowerCase().includes(searchKeyword) || w.meaning.includes(searchKeyword) || String(w.note || '').toLowerCase().includes(searchKeyword))) return false;
             return true;
         });
