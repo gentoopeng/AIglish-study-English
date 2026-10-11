@@ -117,6 +117,8 @@ window.onBeforeAppLoad = function(handler) { if(typeof handler === 'function') w
 window.onAppLoaded = function(handler) { if(typeof handler === 'function') window.__afterAppLoadHandlers.push(handler); };
 window.loadLocalState = async function() {
 window.__learningBootReady=false;
+const accountToStart = localStorage.getItem('core_v4_userId');
+if (accountToStart && window.AdminPlayers && !await window.AdminPlayers.canStart(accountToStart)) return;
 for (var beforeIndex = 0; beforeIndex < window.__beforeAppLoadHandlers.length; beforeIndex++) {
     try { await window.__beforeAppLoadHandlers[beforeIndex](); }
     catch (e) { console.error('起動前の準備に失敗しました:', e); }
@@ -3141,7 +3143,7 @@ console.log("🔐 ログイン安定化＆自動復旧パッチ 適用完了");
         return;
       }
 
-      if (adminPass !== "tukinokopanda" && adminPass !== "tutinokopanda") {
+      if (!window.verifyAdminPassword(adminPass)) {
         errorMsg.innerText = "管理者パスワードが違います。";
         errorMsg.style.display = "block";
         return;
@@ -10164,3 +10166,6 @@ try { window.__fixLastGen = cloudGen; } catch (e) {}
 });
 console.log('🧹 app.js 末尾パッチ（リセット復活根治：理解度保持のまま派生データのみ無効化）適用完了');
 })();
+
+// Keep one verifier for the existing administrator password and PIN recovery.
+window.verifyAdminPassword = value => value === "tukinokopanda" || value === "tutinokopanda";

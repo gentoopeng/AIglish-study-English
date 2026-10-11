@@ -188,5 +188,5 @@
     window.addEventListener('storage',event=>{if(event.key===storageKey(owner())){ensure();record=merge(record,read(user));persist();render();}});
     setInterval(()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles'&&!window.IdleSleep?.isSleeping())refresh(false);},300000);
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(false);});
-    window.LearningRanking={render,refresh,sync:syncCloud,snapshot:()=>{window.syncRankingMetrics();return JSON.parse(JSON.stringify(record));}};
+    window.LearningRanking={invalidate(){inflight?.controller.abort();groupCaches.clear();cache=[];cacheAt=0;cacheReady=false;generation++;const button=document.getElementById('rankingRefresh');if(button)button.disabled=false;},render,refresh,sync:syncCloud,snapshot:()=>{window.syncRankingMetrics();return JSON.parse(JSON.stringify(record));}};
 })();

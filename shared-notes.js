@@ -82,11 +82,13 @@
             const more = document.createElement('button'); more.type = 'button'; more.className = 'shared-vocab-note-more'; more.textContent = 'すべて表示'; more.hidden = true; more.setAttribute('aria-expanded', 'false');
             row.append(text,more,authorIcon(record.ownerId));
             more.onclick = event => {event.preventDefault(); event.stopPropagation(); const expanded = row.classList.toggle('is-expanded'); more.textContent = expanded ? '折りたたむ' : 'すべて表示'; more.setAttribute('aria-expanded', String(expanded)); if (!expanded) measure();};
-            function measure() { if (row.isConnected && !row.classList.contains('is-expanded')) more.hidden = text.scrollWidth <= text.clientWidth; }
+            let frame = 0;
+            function measure() { if (row.isConnected && !row.classList.contains('is-expanded')) { const hidden = text.scrollWidth <= text.clientWidth; if (more.hidden !== hidden) more.hidden = hidden; } }
+            function scheduleMeasure() { if (!frame) frame = requestAnimationFrame(() => {frame = 0; measure();}); }
             if (typeof ResizeObserver !== 'undefined') {
-                const observer = new ResizeObserver(() => {if (!row.isConnected) {observer.disconnect(); return;} measure();}); observer.observe(text);
+                const observer = new ResizeObserver(() => {if (!row.isConnected) {observer.disconnect(); cancelAnimationFrame(frame); return;} scheduleMeasure();}); observer.observe(text);
             }
-            requestAnimationFrame(measure);
+            scheduleMeasure();
             return row;
         }
         async function load() {

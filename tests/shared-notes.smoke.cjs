@@ -1,7 +1,7 @@
-const {chromium}=require('playwright');
+const {chromium,webkit}=require('playwright');
 const assert=require('node:assert/strict');
 (async()=>{
- const browser=await chromium.launch({executablePath:'/usr/bin/chromium',args:['--no-sandbox']});
+ const type=process.env.BROWSER==='webkit'?webkit:chromium;const browser=await type.launch(type===chromium?{executablePath:'/usr/bin/chromium',args:['--no-sandbox']}:{executablePath:process.env.WEBKIT_EXECUTABLE_PATH});
  try{
   const page=await browser.newPage({viewport:{width:390,height:844}});page.setDefaultTimeout(10000);const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',route=>route.abort());await page.addInitScript(()=>localStorage.setItem('b3_tutorial_done','1'));
   await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.getSharedVocabNoteTopic);await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();
@@ -18,7 +18,11 @@ const assert=require('node:assert/strict');
   });
   const note=page.locator('#vocabListContainer .vocab-note-section').first();await note.locator('.vocab-note-toggle').click();await note.getByText('短いメモ',{exact:true}).waitFor();assert.equal(await note.locator('.vocab-note-input').inputValue(),'自分だけのメモ');assert.equal(await page.evaluate(()=>window.__noteWrites.length),0);
   assert.equal(await note.locator('.shared-vocab-note-row').count(),2);const short=note.locator('.shared-vocab-note-row').filter({hasText:'短いメモ'});assert.equal(await short.locator('.shared-vocab-note-more').isVisible(),false);
-  const long=note.locator('.shared-vocab-note-row').filter({hasText:'長いメモの全文です。'});await long.getByRole('button',{name:'すべて表示',exact:true}).waitFor();assert.equal(await long.locator('.shared-vocab-note-preview').evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');await long.getByRole('button',{name:'すべて表示',exact:true}).click();assert.equal(await long.locator('.shared-vocab-note-preview').textContent(),await page.evaluate(()=>window.__longNote));assert.equal(await long.locator('script').count(),0);await long.getByRole('button',{name:'折りたたむ',exact:true}).click();await page.screenshot({path:'/tmp/shared-vocab-notes.png'});
+  const long=note.locator('.shared-vocab-note-row').filter({hasText:'長いメモの全文です。'});await long.getByRole('button',{name:'すべて表示',exact:true}).waitFor();assert.equal(await long.locator('.shared-vocab-note-preview').evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');await long.getByRole('button',{name:'すべて表示',exact:true}).click();assert.equal(await long.locator('.shared-vocab-note-preview').textContent(),await page.evaluate(()=>window.__longNote));assert.equal(await long.locator('script').count(),0);await long.getByRole('button',{name:'折りたたむ',exact:true}).click();// Repeat width changes and memo-filter toggles around short/overflowing shared notes.
+  for(let i=0;i<12;i++){await page.setViewportSize({width:i%2?320:390,height:740});await page.evaluate(()=>{setVocabFilter('note');setVocabFilter('note');setVocabFilter('note');});await page.waitForTimeout(40);}
+  await note.locator('.vocab-note-toggle').click();
+  assert.equal((await page.evaluate(()=>AppErrors.snapshot())).filter(error=>/ResizeObserver/.test(error.message)).length,0);
+  await page.screenshot({path:'/tmp/shared-vocab-notes.png'});
   assert.equal(await note.getByRole('checkbox',{name:'共有する',exact:true}).isChecked(),true);
   await note.locator('.vocab-note-input').fill('チェック付きで共有したメモ');await note.getByRole('button',{name:'メモを保存',exact:true}).click();await note.locator('.vocab-note-editor').waitFor({state:'hidden'});const payload=await page.evaluate(()=>window.__noteWrites[0][1]);assert.equal(payload.note,'チェック付きで共有したメモ');assert.equal(payload.ownerId,'note-user');assert.equal(payload.history,undefined);assert.equal(payload.status,undefined);
   await note.locator('.vocab-note-toggle').click();await note.getByRole('checkbox',{name:'共有する',exact:true}).uncheck();await note.locator('.vocab-note-input').fill('自分専用にしたメモ');await note.getByRole('button',{name:'メモを保存',exact:true}).click();await note.locator('.vocab-note-editor').waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>vocabList[0].note),'自分専用にしたメモ');assert.equal(await page.evaluate(()=>window.__noteWrites[1][0]),'delete');
