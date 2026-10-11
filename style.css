@@ -2109,3 +2109,6 @@ input,textarea{-webkit-text-stroke:0;}
 .word-duel-screen .duel-clock-row .duel-leave{position:absolute;left:0;top:0;width:auto;margin:0;padding:10px 12px;font-size:13px;}
 .word-duel-screen .duel-options button{font-size:16px;line-height:1.5;}
 @media(max-height:740px){.word-duel-screen .duel-options button{font-size:15px;}}
+/* Keep reverse-side text from bleeding through the expanded 3D card on WebKit. */
+#activeFlashcard:not(.flipped) .flashcard-face-back > div,
+#activeFlashcard.flipped .flashcard-face-front > div{visibility:hidden;}
