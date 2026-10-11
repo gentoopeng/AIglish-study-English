@@ -507,6 +507,16 @@
         var customStyle = (typeof window.getFlashcardStyleByHistory === 'function') ? window.getFlashcardStyleByHistory(wordData) : "";
         cardWrap.innerHTML += '<div class="flashcard-inner-rotator" style="z-index:2;"><div class="flashcard-face-front" style="' + customStyle + '"><span style="font-size:11px; color:var(--text-sub); position:absolute; top:24px; font-weight:800;">#' + wordData.num + '</span><div style="font-size:24px; font-weight:900; font-family:\'Times New Roman\', serif; word-break:break-word; text-align:center; padding:0 15px; color:#FFFFFF;">' + frontText + '</div></div><div class="flashcard-face-back" style="' + customStyle + '"><div style="font-size:16px; font-weight:700; word-break:break-word; text-align:center; color:#FFFFFF; padding:0 15px; line-height:1.5;">' + backText + '</div></div></div>';
         stage.appendChild(cardWrap);
+        // Measure both faces once per card; grow the bubble before allowing inner scrolling.
+        var texts=Array.from(cardWrap.querySelectorAll('.flashcard-face-front > div,.flashcard-face-back > div'));
+        var diameter=240,maxDiameter=Math.max(240,Math.min(420,window.innerWidth-32));
+        while(diameter<maxDiameter && texts.some(function(text){return text.scrollHeight>diameter*.62;})) {
+            diameter=Math.min(maxDiameter,diameter+16);cardWrap.style.width=cardWrap.style.height=diameter+'px';
+        }
+        texts.forEach(function(text){text.style.maxHeight=(diameter*.62)+'px';text.style.overflowY='auto';text.style.overscrollBehavior='contain';if(text.scrollHeight>text.clientHeight){text.style.touchAction='pan-y';text.addEventListener('pointerdown',function(e){e.stopPropagation();});}});
+        stage.style.height=Math.max(320,diameter+40)+'px';
+        if(posLabel)posLabel.style.top='calc(50% + '+(diameter/2+12)+'px)';
+
         if (typeof window.initLucide === 'function') window.initLucide();
     };
 
