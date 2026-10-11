@@ -2102,3 +2102,10 @@ input,textarea{-webkit-text-stroke:0;}
 .is-battle-mode .ranking-mini-panel{height:auto;max-height:none;}
 .is-battle-mode .learning-podium{flex:none;height:clamp(185px,32dvh,270px);min-height:0;}
 .rating-roster ol{max-height:min(30dvh,max(60px,calc(100dvh - 500px)));}
+
+/* Keep exit away from answers and make meanings legible on small screens. */
+.duel-settings input{width:100%;box-sizing:border-box;color:#eee;background:#101b2d;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:16px;}
+.word-duel-screen .duel-clock-row{position:relative;min-height:44px;}
+.word-duel-screen .duel-clock-row .duel-leave{position:absolute;left:0;top:0;width:auto;margin:0;padding:10px 12px;font-size:13px;}
+.word-duel-screen .duel-options button{font-size:16px;line-height:1.5;}
+@media(max-height:740px){.word-duel-screen .duel-options button{font-size:15px;}}
