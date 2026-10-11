@@ -387,6 +387,19 @@
         }
 
         var wordData = flashcardOriginQueue[flashcardCurrentIndex];
+        var oldNote=document.getElementById('flashcardNotePreview');if(oldNote)oldNote.remove();
+        var original=vocabList.find(function(w){return String(w.num)===String(wordData.num);});
+        var note=String(original&&original.note||'');
+        if(!note&&window.LearningData){var saved=LearningData.read(currentTextbook)[String(wordData.num)];note=String(saved&&saved.note||'');}
+        if(note.trim()){
+            var panel=document.createElement('div');panel.id='flashcardNotePreview';panel.className='flashcard-note-preview';
+            var reveal=document.createElement('button');reveal.type='button';reveal.className='flashcard-note-reveal';reveal.setAttribute('aria-label','メモを表示');reveal.textContent='メモを表示';
+            var content=document.createElement('div');content.className='flashcard-note-content';content.textContent=note;content.setAttribute('aria-hidden','true');
+            reveal.onclick=function(){panel.classList.add('revealed');content.removeAttribute('aria-hidden');reveal.remove();more.hidden=content.scrollHeight<=content.clientHeight+1;};
+            var more=document.createElement('button');more.type='button';more.className='flashcard-note-more';more.textContent='すべて表示';more.onclick=function(){content.classList.toggle('expanded');more.textContent=content.classList.contains('expanded')?'折りたたむ':'すべて表示';};
+            panel.append(reveal,content,more);stage.parentElement.parentElement.insertBefore(panel,stage.parentElement);
+        }
+
         var posLabel=document.getElementById('flashcardPartOfSpeech');
         if(posLabel){posLabel.hidden=!wordData.partOfSpeech;posLabel.textContent=wordData.partOfSpeech?wordData.partOfSpeech.short:'';posLabel.title=wordData.partOfSpeech?wordData.partOfSpeech.name:'';posLabel.setAttribute('aria-label',wordData.partOfSpeech?wordData.partOfSpeech.name:'');}
         window.renderFlashcardHistoryBubbles(wordData);

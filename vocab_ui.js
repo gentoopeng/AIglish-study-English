@@ -795,7 +795,7 @@
             text.textContent = word.note;
             text.style.display = word.note ? 'block' : 'none';
         }
-        if (button) button.classList.toggle('has-note', !!word.note);
+        if (button) button.classList.toggle('has-note', !!word.note);if(section){var more=section.querySelector('.vocab-note-expand');if(more)requestAnimationFrame(function(){more.hidden=text.scrollHeight<=text.clientHeight+1;});}
         if (editor) editor.style.display = 'none';
         if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(word.num);
         if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
@@ -843,6 +843,7 @@
         editor.appendChild(actions);
         section.appendChild(button);
         section.appendChild(noteText);
+        var expand=document.createElement('button');expand.type='button';expand.className='vocab-note-expand';expand.textContent='すべて表示';expand.onclick=function(e){e.stopPropagation();noteText.classList.toggle('expanded');expand.textContent=noteText.classList.contains('expanded')?'折りたたむ':'すべて表示';};section.appendChild(expand);requestAnimationFrame(function(){if(section.isConnected)expand.hidden=noteText.scrollHeight<=noteText.clientHeight+1;});
         section.appendChild(editor);
         if (handlers) {
             // Workbooks use this exact note UI with their own storage callback.
@@ -929,6 +930,9 @@
         var cardBody = card.querySelector('#wordCardBody-' + w.num);
         var history = cardBody ? cardBody.querySelector('[data-vocab-history]') : null;
         if (cardBody) cardBody.insertBefore(window.createVocabNoteSection(w), history || null);
+        var pin=document.createElement('button');pin.type='button';pin.className='vocab-sticky-button';pin.setAttribute('aria-label','付箋を付ける');pin.setAttribute('aria-pressed',String(!!w.sticky));pin.innerHTML='<i data-lucide="sticky-note" size="16"></i>';
+        pin.onclick=function(e){e.stopPropagation();if(window.LearningData&&!LearningData.canSave(currentTextbook))return;var actual=vocabList.find(function(word){return String(word.num)===String(w.num);});if(!actual)return;actual.sticky=!actual.sticky;window.saveVocabProgressLocally(actual.num);if(window.__captureManualVocabDraft)window.__captureManualVocabDraft();window.renderVocabList();};
+        card.querySelector('.word-main-line').append(pin);
         return card;
     };
 
@@ -948,7 +952,7 @@
         var filtered = vocabList.filter(function(w) {
             var n = parseInt(w.num);
             if (!isNaN(n) && (n < startRange || n > endRange)) return false;
-            if (vocabFilter !== 'all' && !w.meanings.some(function(m) { return m.status === vocabFilter; })) return false;
+            if (vocabFilter === 'note' ? !String(w.note||'').trim() : vocabFilter === 'sticky' ? !w.sticky : vocabFilter !== 'all' && !(w.meanings||[]).some(function(m) { return (m.status||'none') === vocabFilter; })) return false;
             if (searchKeyword && !(w.word.toLowerCase().includes(searchKeyword) || w.meaning.includes(searchKeyword) || String(w.note || '').toLowerCase().includes(searchKeyword))) return false;
             return true;
         });
