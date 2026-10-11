@@ -646,13 +646,10 @@ window.getTextbookMasteryStats = function(bookId) {
       var savedMeaning = savedMeanings[meaning.id];
       return (savedMeaning ? savedMeaning.status : meaning.status) || 'none';
     });
-    var status = 'none';
-    if (statuses.length && statuses.every(function(value) { return value === 'ok'; })) status = 'ok';
-    else if (statuses.some(function(value) { return value === 'bad'; })) status = 'bad';
-    else if (statuses.some(function(value) { return value === 'so' || value === 'ok'; })) status = 'so';
-    counts[status]++;
+    if (!statuses.length) statuses = [(saved ? saved.status : word.status) || 'none'];
+    statuses.forEach(function(status) { counts[Object.prototype.hasOwnProperty.call(counts,status) ? status : 'none']++; });
   });
-  var total = words.length;
+  var total = counts.ok + counts.so + counts.bad + counts.none;
   return {
     total: total,
     mastered: counts.ok,

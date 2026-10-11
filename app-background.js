@@ -10,6 +10,12 @@ const bundled=[
  {id:'bundled-mountain-lake',image:'assets/background-mountain-lake.webp',preview:'assets/background-mountain-lake-preview.webp',position:50,bundled:true},
  {id:'bundled-winter-terrace',image:'assets/background-winter-terrace.webp',preview:'assets/background-winter-terrace-preview.webp',position:60,bundled:true},
  {id:'bundled-night-cafe',image:'assets/background-night-cafe.webp',preview:'assets/background-night-cafe-preview.webp',position:40,bundled:true}
+,
+ {id:'bundled-added-1',image:'assets/background-added-1.webp',preview:'assets/background-added-1-preview.webp',position:50,bundled:true},
+ {id:'bundled-added-2',image:'assets/background-added-2.webp',preview:'assets/background-added-2-preview.webp',position:50,bundled:true},
+ {id:'bundled-added-3',image:'assets/background-added-3.webp',preview:'assets/background-added-3-preview.webp',position:50,bundled:true},
+ {id:'bundled-added-4',image:'assets/background-added-4.webp',preview:'assets/background-added-4-preview.webp',position:50,bundled:true},
+ {id:'bundled-added-5',image:'assets/background-added-5.webp',preview:'assets/background-added-5-preview.webp',position:50,bundled:true}
 ].map(Object.freeze);
 const empty=()=>({mode:'default',selected:'',backgrounds:[],updatedAt:0});
 const validImage=value=>typeof value==='string'&&value.length<=1000000&&/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(value);
