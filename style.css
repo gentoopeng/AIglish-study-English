@@ -2112,3 +2112,8 @@ input,textarea{-webkit-text-stroke:0;}
 /* Keep reverse-side text from bleeding through the expanded 3D card on WebKit. */
 #activeFlashcard:not(.flipped) .flashcard-face-back > div,
 #activeFlashcard.flipped .flashcard-face-front > div{visibility:hidden;}
+
+.vocab-sticky-button{border:1px solid #cdb78066;border-radius:7px;padding:7px;color:#cdb780;background:transparent;flex-shrink:0;}.vocab-sticky-button[aria-pressed="true"]{background:#cdb78033;}
+.vocab-note-text{display:block;max-height:3.1em;overflow:hidden;}.vocab-note-text.expanded{max-height:none;}.vocab-note-expand,.flashcard-note-more{border:0;background:transparent;color:var(--text-sub);font-size:11px;padding:5px;}.vocab-note-text:empty+.vocab-note-expand{display:none;}
+.flashcard-note-preview{position:relative;width:calc(100% - 32px);box-sizing:border-box;margin:8px auto;padding:10px 14px;background:#101827b8;border:1px solid #cdb78044;border-radius:10px;flex-shrink:0;}.flashcard-note-content{font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:3em;overflow:hidden;filter:blur(5px);}.flashcard-note-preview.revealed .flashcard-note-content{filter:none;}.flashcard-note-content.expanded{max-height:20vh;overflow:auto;}.flashcard-note-reveal{position:absolute;inset:0;z-index:1;background:transparent;border:0;color:#ddd;font-size:12px;}.flashcard-note-more{display:none;}.flashcard-note-preview.revealed .flashcard-note-more{display:block;}
+.vocab-note-expand[hidden],.flashcard-note-more[hidden]{display:none!important;}
