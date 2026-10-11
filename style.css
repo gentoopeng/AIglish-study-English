@@ -2114,7 +2114,7 @@ input,textarea{-webkit-text-stroke:0;}
 #activeFlashcard.flipped .flashcard-face-front > div{visibility:hidden;}
 
 .word-main-line .vocab-sticky-button{display:inline-grid;place-items:center;width:32px;height:32px;min-height:32px;padding:0;margin:0;border:0;border-radius:50%;background:transparent;box-shadow:none;color:#d8d2c180;flex-shrink:0;transition:color .16s ease;}
-.word-main-line .vocab-sticky-button svg{width:13px;height:13px;stroke-width:1.5;}
+.word-main-line .vocab-sticky-button svg{width:13px;height:13px;stroke-width:1.7;}
 .word-main-line .vocab-sticky-button[aria-pressed="true"]{color:#e4cc91;background:transparent;}
 .word-main-line .vocab-sticky-button[aria-pressed="true"] svg{fill:#e4cc911a;}
 .word-main-line .vocab-sticky-button:focus-visible{outline:1px solid #e4cc91;outline-offset:1px;}
@@ -2122,3 +2122,6 @@ input,textarea{-webkit-text-stroke:0;}
 .vocab-note-text{display:block;max-height:3.1em;overflow:hidden;}.vocab-note-text.expanded{max-height:none;}.vocab-note-expand,.flashcard-note-more{border:0;background:transparent;color:var(--text-sub);font-size:11px;padding:5px;}.vocab-note-text:empty+.vocab-note-expand{display:none;}
 .flashcard-note-preview{position:relative;width:calc(100% - 32px);box-sizing:border-box;margin:8px auto;padding:10px 14px;background:#101827b8;border:1px solid #cdb78044;border-radius:10px;flex-shrink:0;}.flashcard-note-content{font-size:13px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:3em;overflow:hidden;filter:blur(5px);}.flashcard-note-preview.revealed .flashcard-note-content{filter:none;}.flashcard-note-content.expanded{max-height:20vh;overflow:auto;}.flashcard-note-reveal{position:absolute;inset:0;z-index:1;background:transparent;border:0;color:#ddd;font-size:12px;}.flashcard-note-more{display:none;}.flashcard-note-preview.revealed .flashcard-note-more{display:block;}
 .vocab-note-expand[hidden],.flashcard-note-more[hidden]{display:none!important;}
+
+.vocab-word-markers{position:absolute;right:12px;top:9px;display:flex;align-items:center;gap:2px;height:32px;}.vocab-word-markers.with-admin{right:88px;}.vocab-word-markers .loading-quiz-pin{margin:0;width:17px;height:17px;}
+.word-row-container.has-sticky{border-color:#e4cc91!important;}
