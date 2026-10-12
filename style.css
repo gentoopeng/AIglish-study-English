@@ -2184,3 +2184,10 @@ input,textarea{-webkit-text-stroke:0;}
 html.ios-stable-rendering body .flashcard-note-preview:not(.revealed) .flashcard-note-content { filter:blur(12px)!important; }
 html.ios-stable-rendering body .flashcard-note-preview.revealed .flashcard-note-content { filter:none!important; }
 }
+
+/* Workbook details use bounded header controls instead of two extra rows. */
+.workbook-unit-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.workbook-detail-toggle{min-width:38px;height:32px;padding:0 7px;border:1px solid rgba(198,183,144,.32);border-radius:6px;background:rgba(255,255,255,.045);color:var(--text-sub);font:inherit;font-size:11px;cursor:pointer;touch-action:manipulation;}
+.workbook-detail-toggle[aria-expanded="true"]{background:rgba(198,183,144,.16);border-color:rgba(198,183,144,.7);color:#eee8da;}
+.workbook-unit-card .workbook-detail-panel[hidden],.workbook-unit-footer[hidden]{display:none!important;}
+.workbook-unit-card .workbook-inline-error:empty{display:none;}

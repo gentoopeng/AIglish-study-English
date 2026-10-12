@@ -213,7 +213,7 @@
             '<label for="workbookUnit">管理する単位</label><select id="workbookUnit"><option value="page">ページ</option><option value="problem">問題番号</option></select>' +
             '<label id="workbookRangeLabel" for="workbookFrom">ページ範囲</label><div class="workbook-range-fields"><input id="workbookFrom" type="number" min="1" max="100000" required value="1" aria-label="範囲の開始"><span>〜</span><input id="workbookTo" type="number" min="1" max="100000" required value="20" aria-label="範囲の終了"></div>' +
             ruleFields('workbookReview', settings) +
-            '<details><summary class="library-editor-hint">問題のインポート・テスト日（任意）</summary><label for="workbookImport">問題を登録</label><textarea id="workbookImport" rows="4" placeholder="2:共通の問題文::\n2(1):小問1の問題文:答え:補足\n2(2):小問2の問題文:答え:補足"></textarea>' +
+            '<details><summary class="library-editor-hint">問題のインポート・テスト日（任意）</summary><label for="workbookImport">問題を登録</label><textarea id="workbookImport" rows="4" placeholder="2(1):小問1の問題文と必要な条件:答え:補足\n2(2):小問2の問題文:答え:補足"></textarea>' +
             '<p class="library-editor-hint">1行に「番号:問題文:答え:補足」。小問は「2(2):問題文:答え:補足」（問2の小問2）。「2の(2)」も使えます。小問ごとに理解度・メモ・復習を記録します。同じ番号・小問は内容を更新し、学習記録は保持します。問題文・答えは空欄でも使えます。JSONバックアップにも対応。<button type="button" id="workbookCopyPrompt" class="library-prompt-copy">写真から抽出するAI用プロンプトをコピー</button>公開されるのは教材の内容だけです。</p>' +
             '<label for="workbookTestDate">テスト日</label><input id="workbookTestDate" type="date"><p class="library-editor-hint">自動の復習予定をテスト前に収まるよう調整します。</p></details>' + actions(previous ? '変更を保存' : 'ワークを作る') + '</form>');
         const form = modal.querySelector('form');
@@ -236,7 +236,7 @@
         }
         form.querySelector('#workbookUnit').onchange(); bindRule(form, 'workbookReview', settings);
         form.querySelector('#workbookCopyPrompt').onclick = async function () {
-            const prompt = '添付写真のワークを読み取り、1行に1件、番号:問題文:答え:補足の形式だけで出力してください。' + (form.querySelector('#workbookUnit').value === 'page' ? '番号はページ番号を使います。ページを一件で管理する場合はページごとにまとめ、小問を個別に管理する場合は12(1)、12(2)のようにページ番号と小問番号で分けます。' : '番号は元の大問番号を保持し、小問は2(1)、2(2)のように大問番号(小問番号)で指定します。') + '小問はそれぞれ別の行にし、別の大問番号へ振り直したり、一つの答え欄にまとめたりしないでください。共通の問題文・条件は大問の行に入れ、小問にも解くために必要な条件を短く残してください。小問がない問題は通常の番号で出力します。同じ番号・小問を重複させないでください。答えが写っていなければ空欄にし、解答を勝手に作らず、読めない内容を推測しないでください。数式はプレーンテキストで表現し、項目内のコロンは全角に置き換え、改行しないでください。見出し・コードブロック・説明は不要です。問題番号の形式例：2:次の方程式を解け::／2(1):2x+1=5:x=2:移項して解く／2(2):3x=9:x=3:両辺を3で割る。実際の出力では例の各項目を別々の行にしてください。';
+            const prompt = '添付写真のワークを読み取り、1行に1件、番号:問題文:答え:補足の形式だけで出力してください。' + (form.querySelector('#workbookUnit').value === 'page' ? '番号はページ番号を使います。ページを一件で管理する場合はページごとにまとめ、小問を個別に管理する場合は12(1)、12(2)のようにページ番号と小問番号で分けます。' : '番号は元の大問番号を保持し、小問は2(1)、2(2)のように大問番号(小問番号)で指定します。') + '小問はそれぞれ別の行にし、別の大問番号へ振り直したり、一つの答え欄にまとめたりしないでください。各小問の問題文には、元の設問・式・数値・条件を省略せず、共通の条件も必要な分を含めて、その行だけで何を解くか分かる内容を入れてください。「次の問いに答えよ」などの一般的な指示だけの大問行や、問題文・答え・補足がすべて空の行、未掲載の番号の穴埋め行を作らないでください。大問自体に独立した設問がある場合だけ大問の行も作ります。図・表が必要な場合は、読み取れる条件を問題文へ記述し、読めない内容は作らず、必要な図・表の参照先を補足に明記してください。小問がない問題は通常の番号で出力します。同じ番号・小問を重複させないでください。問題文の内容を読み取れない項目は出力しないでください。答えだけが写っていない場合は答え欄を空欄にし、解答を勝手に作らず、読めない内容を推測しないでください。数式はプレーンテキストで表現し、項目内のコロンは全角に置き換え、改行しないでください。見出し・コードブロック・説明は不要です。形式例：2(1):2x+1=5を解け:x=2:移項して解く／2(2):3x=9を解け:x=3:両辺を3で割る。実際の出力では例の各項目を別々の行にしてください。';
             try { await navigator.clipboard.writeText(prompt); this.textContent = 'コピーしました'; }
             catch (e) { let field = form.querySelector('.library-prompt-fallback'); if (!field) {field = document.createElement('textarea'); field.className = 'library-prompt-fallback'; field.readOnly = true; this.after(field);} field.value = prompt; field.select(); }
         };
@@ -250,7 +250,8 @@
                 if (previous && /^[\s]*[\[{]/.test(importText) && !confirm('JSONバックアップで問題と学習記録を置き換えますか？')) return;
                 if (previous && (from > previous.from || to < previous.to) && !confirm('範囲外の記録は保持しますが、このワークの一覧・復習対象から外れます。変更しますか？')) return;
                 let units = importUnits(importText, previous ? previous.units : []);
-                for (let n = from; n <= to; n++) if (!units.some(u => u.num === n && !u.subNumber && !u.id.startsWith('extra:'))) units.push(cleanUnit({num: n}, n));
+                // Imported rows define the contents; do not fabricate blank parents or gaps.
+                if (!importText.trim()) for (let n = from; n <= to; n++) if (!units.some(u => u.num === n && !u.id.startsWith('extra:'))) units.push(cleanUnit({num: n}, n));
                 await photoReady;
                 const work = Object.assign({}, previous || {}, {
                     id: id || 'work_' + crypto.randomUUID(), name: form.querySelector('#workbookName').value.trim(), photo,
@@ -270,7 +271,10 @@
             finally { submit.disabled = false; }
         };
     };
-    function visibleUnits(work) { return work.units.filter(u => u.num >= work.from && u.num <= work.to); }
+    function visibleUnits(work) {
+        const groups=new Set(work.units.filter(u=>u.subNumber&&!u.id.startsWith('extra:')).map(u=>u.num));
+        return work.units.filter(u=>u.num>=work.from&&u.num<=work.to&&!(groups.has(u.num)&&!u.subNumber&&!u.id.startsWith('extra:')&&![u.q,u.ans,u.memo,u.note,u.label].some(value=>String(value||'').trim())&&(!u.status||u.status==='none')&&!(u.history||[]).length&&!u.lastReview&&!u.nextReview&&!u.review));
+    }
     function stats(work) {
         const result = {ok: 0, so: 0, bad: 0, none: 0}; visibleUnits(work).forEach(u => result[u.status || 'none']++); return result;
     }
@@ -341,17 +345,20 @@
         const card = document.createElement('div'); card.className = 'word-row-container workbook-unit-card'; card.dataset.unitId = unit.id;
         card.setAttribute('style', window.getCardStyleByHistory({history: unit.history, meanings: [{history: unit.history}]}));
         const dueText = unit.nextReview ? (isDue(unit) ? '復習期限 ' : '次回 ') + dateString(unit.nextReview) : '復習予定なし';
-        card.innerHTML = '<div class="word-main-line workbook-unit-heading"><span class="word-num-badge">' + esc(label(work, unit)) + '</span><button type="button" class="vocab-library-manage-button" aria-label="' + esc(label(work, unit)) + 'の復習設定">⋯</button></div>' +
+        card.innerHTML = '<div class="word-main-line workbook-unit-heading"><span class="word-num-badge">' + esc(label(work, unit)) + '</span><div class="workbook-unit-actions"><button type="button" class="workbook-detail-toggle" data-toggle-field="ans" aria-expanded="false" aria-label="' + esc(label(work,unit)) + 'の答えを表示">答え</button><button type="button" class="workbook-detail-toggle" data-toggle-field="memo" aria-expanded="false" aria-label="' + esc(label(work,unit)) + 'の補足を表示">補足</button><button type="button" class="vocab-library-manage-button" aria-label="' + esc(label(work, unit)) + 'の復習設定">⋯</button></div></div>' +
             '<textarea class="workbook-inline-input workbook-question" data-field="q" rows="1" aria-label="' + esc(label(work, unit)) + 'の問題文" placeholder="問題文を入力（任意）">' + esc(unit.q) + '</textarea>' +
             '<div class="workbook-status-line"><span class="workbook-next-review' + (isDue(unit) ? ' is-due' : '') + '">' + dueText + '</span><div class="workbook-status-buttons">' + Object.entries(STATUS).map(([status, symbol]) => '<button type="button" data-status="' + status + '" class="workbook-status-button status-' + status + '" aria-label="' + esc(label(work, unit)) + 'の理解度 ' + symbol + '" aria-pressed="' + (unit.status === status) + '">' + symbol + '</button>').join('') + '</div></div>' +
             '<button type="button" class="workbook-ai-help library-prompt-copy">AIで解説を見る</button>' +
-            '<details class="word-static-info"><summary>答えを表示・編集</summary><textarea class="workbook-inline-input sub-info-block" data-field="ans" rows="1" aria-label="' + esc(label(work, unit)) + 'の答え" placeholder="答えを入力（任意）">' + esc(unit.ans) + '</textarea></details>' +
-            '<details class="word-static-info"><summary>補足を表示・編集</summary><textarea class="workbook-inline-input sub-info-block" data-field="memo" rows="1" aria-label="' + esc(label(work, unit)) + 'の補足" placeholder="補足を入力（公開対象）">' + esc(unit.memo) + '</textarea></details>' +
-            '<div class="workbook-unit-footer"><button type="button" class="list-action-link workbook-postpone">今回だけ延期</button><div class="workbook-history">' + (unit.history || []).slice(-5).map(s => '<span class="status-' + s + '">' + STATUS[s] + '</span>').join('') + '</div></div>';
+            '<div class="word-static-info workbook-detail-panel" data-panel-field="ans" hidden><textarea class="workbook-inline-input sub-info-block" data-field="ans" rows="1" aria-label="' + esc(label(work, unit)) + 'の答え" placeholder="答えを入力（任意）">' + esc(unit.ans) + '</textarea></div>' +
+            '<div class="word-static-info workbook-detail-panel" data-panel-field="memo" hidden><textarea class="workbook-inline-input sub-info-block" data-field="memo" rows="1" aria-label="' + esc(label(work, unit)) + 'の補足" placeholder="補足を入力（公開対象）">' + esc(unit.memo) + '</textarea></div>' +
+            '<div class="workbook-unit-footer"' + ((unit.history||[]).length?'':' hidden') + '><div class="workbook-history">' + (unit.history || []).slice(-5).map(s => '<span class="status-' + s + '">' + STATUS[s] + '</span>').join('') + '</div></div>';
         card.querySelector('.vocab-library-manage-button').onclick = () => openUnitEditor(work.id, unit.id);
         const help = card.querySelector('.workbook-ai-help'); if (help) { help.hidden = !unit.q.trim(); help.onclick = () => { const fresh = load().find(w => w.id === work.id); const target = fresh && fresh.units.find(u => u.id === unit.id); if (target) openExplanation(target); }; }
-        if (!unit.subNumber && !unit.id.startsWith('extra:')) { const add=document.createElement('button');add.type='button';add.className='list-action-link workbook-add-subquestion';add.textContent='小問を追加';add.setAttribute('aria-label',label(work,unit)+'に小問を追加');add.onclick=()=>openSubquestionEditor(work.id,unit.num);card.querySelector('.workbook-unit-footer').prepend(add); }
-        card.querySelector('.workbook-postpone').onclick = () => openPostpone(work.id, [unit.id]);
+        card.querySelectorAll('[data-toggle-field]').forEach(button=>{
+            const field=button.dataset.toggleField,panel=card.querySelector('[data-panel-field="'+field+'"]');
+            panel.id='workbook-detail-'+encodeURIComponent(work.id)+'-'+encodeURIComponent(unit.id)+'-'+field;button.setAttribute('aria-controls',panel.id);
+            button.onclick=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden){const input=panel.querySelector('textarea');input.style.height='auto';input.style.height=Math.max(32,input.scrollHeight)+'px';}};
+        });
         const editorOwner = uid();
         function saveField(field, value) {
             try {
@@ -403,7 +410,7 @@
         modal.querySelector('form').onsubmit=event=>{event.preventDefault();try{
             if(owner!==uid())throw Error('ユーザーが切り替わりました。開き直してください。');
             const fresh=load().find(w=>w.id===workId), subNumber=Number(modal.querySelector('input').value);
-            if(!fresh||!fresh.units.some(u=>u.num===num&&!u.subNumber))throw Error('元の問題が見つかりません。');
+            if(!fresh||!fresh.units.some(u=>u.num===num&&!u.id.startsWith('extra:')))throw Error('元の問題が見つかりません。');
             if(!Number.isInteger(subNumber)||subNumber<1||subNumber>100000)throw Error('小問番号は1〜100000の整数にしてください。');
             if(fresh.units.some(u=>u.num===num&&u.subNumber===subNumber))throw Error('その小問はすでに登録されています。');
             fresh.units.push(cleanUnit({num,subNumber},num));put(fresh);close();repaint();
@@ -413,6 +420,9 @@
         const owner = uid(), work = load().find(w => w.id === workId), unit = work && work.units.find(u => u.id === unitId); if (!unit) return;
         const modal = dialog(label(work, unit) + 'の復習設定', '<form><label for="workbookUseDefault"><input type="checkbox" id="workbookUseDefault" class="workbook-checkbox">ワーク全体の復習設定を使う</label><div id="workbookUnitRule">' + ruleFields('workbookUnitReview', unit.review || work.review) + '</div>' + actions('変更を保存') + '</form>');
         const form = modal.querySelector('form');
+        const extras=document.createElement('div');extras.className='library-editor-actions';
+        if(!unit.id.startsWith('extra:')){const add=document.createElement('button');add.type='button';add.className='workbook-add-subquestion';add.textContent='小問を追加';add.setAttribute('aria-label',label(work,unit)+'に小問を追加');add.onclick=()=>openSubquestionEditor(workId,unit.num);extras.append(add);}
+        const postpone=document.createElement('button');postpone.type='button';postpone.className='workbook-postpone';postpone.textContent='今回だけ延期';postpone.onclick=()=>openPostpone(workId,[unitId]);extras.append(postpone);form.append(extras);
         const useDefault = form.querySelector('#workbookUseDefault'); useDefault.checked = !unit.review;
         useDefault.onchange = () => {const box = form.querySelector('#workbookUnitRule'); box.hidden = useDefault.checked; box.querySelectorAll('input,select').forEach(el => el.disabled = useDefault.checked);};
         bindRule(form, 'workbookUnitReview', unit.review || work.review); useDefault.onchange();
@@ -537,7 +547,7 @@
         } catch (error) { list.textContent = error.message; }
     }
     // Exposed pure operations support storage/review validation without Firebase writes.
-    window.WorkbookModel = {policy, dateTime, addDays, cleanUnit, migrate, mark, schedule, isDue, importUnits, publicContent};
+    window.WorkbookModel = {policy, dateTime, addDays, cleanUnit, migrate, mark, schedule, isDue, importUnits, publicContent, visibleUnits};
     ensureScreen(); window.renderVocabLibrarySelection();
     window.addEventListener('storage',event=>{if(window.LibraryState&&event.key===window.LibraryState.storageKey(uid())){if(activeId&&window.LibraryState.isDeleted('work',activeId))window.showVocabLibrarySelection();repaint();}});
 })();

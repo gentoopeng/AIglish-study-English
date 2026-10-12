@@ -55,3 +55,5 @@ test('parenthesized subquestions import separately and preserve each existing le
 test('invalid or repeated subquestion references reject the entire import without altering records',()=>{
  const existing=[model.cleanUnit({num:2,subNumber:2,q:'残す'},2)];for(const input of ['2(0):x::','2(-1):x::','2(1.5):x::','2(1)(2):x::','2(2):x::\n2の(2):y::'])assert.throws(()=>model.importUnits(input,existing));assert.equal(existing[0].q,'残す');
 });
+
+test('empty legacy group headers are hidden without deleting records or hiding real parent work',()=>{const blank=model.cleanUnit({num:2},2),child=model.cleanUnit({num:2,subNumber:1,q:'解く問題'},2),work={from:1,to:3,units:[blank,child,model.cleanUnit({num:3},3)]};assert.equal(model.visibleUnits(work).length,2);assert.equal(work.units.length,3);for(const fields of [{q:'共通条件'},{ans:'答え'},{note:'自分のメモ'},{status:'ok'},{nextReview:now},{review:{mode:'none'}}]){Object.assign(blank,model.cleanUnit({num:2,...fields},2));assert.equal(model.visibleUnits(work).length,3);}});
