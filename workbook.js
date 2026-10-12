@@ -125,13 +125,17 @@
             if (new Set(result.map(u => u.id)).size !== result.length) throw new Error('JSON内の番号・小問が重複しています。');
             return result;
         }
-        const result = JSON.parse(JSON.stringify(existing));
+        const result = JSON.parse(JSON.stringify(existing)), seen = new Set();
         text.split('\n').forEach((line, i) => {
             if (!line.trim()) return;
             const parts = line.split(':');
             if (parts.length < 3) throw new Error((i + 1) + '行目を「番号:問題文:答え:補足」で入力してください。');
-            const unit = cleanUnit({num: parts[0].trim(), q: parts[1].trim(), ans: parts[2].trim(), memo: parts.slice(3).join(':').trim()}, parts[0]);
-            const index = result.findIndex(u => u.id === unit.id);
+            const reference = parts[0].normalize('NFKC').replace(/\s+/g, '').match(/^(\d+)(?:の?\((\d+)\))?$/);
+            if (!reference || (reference[2] !== undefined && Number(reference[2]) < 1)) throw new Error((i + 1) + '行目の番号を「2」または小問の「2(2)」で入力してください。');
+            const unit = cleanUnit({num: Number(reference[1]), subNumber: Number(reference[2] || 0), q: parts[1].trim(), ans: parts[2].trim(), memo: parts.slice(3).join(':').trim()}, reference[1]);
+            if (seen.has(unit.id)) throw new Error((i + 1) + '行目の番号・小問が重複しています。');
+            seen.add(unit.id);
+            const index = result.findIndex(u => u.id === unit.id || (u.num === unit.num && (u.subNumber || 0) === unit.subNumber && !u.id.startsWith('extra:')));
             if (index >= 0) Object.assign(result[index], {q: unit.q, ans: unit.ans, memo: unit.memo}); else result.push(unit);
         });
         return result.sort((a, b) => a.num - b.num || a.subNumber - b.subNumber);
@@ -209,8 +213,8 @@
             '<label for="workbookUnit">管理する単位</label><select id="workbookUnit"><option value="page">ページ</option><option value="problem">問題番号</option></select>' +
             '<label id="workbookRangeLabel" for="workbookFrom">ページ範囲</label><div class="workbook-range-fields"><input id="workbookFrom" type="number" min="1" max="100000" required value="1" aria-label="範囲の開始"><span>〜</span><input id="workbookTo" type="number" min="1" max="100000" required value="20" aria-label="範囲の終了"></div>' +
             ruleFields('workbookReview', settings) +
-            '<details><summary class="library-editor-hint">問題のインポート・テスト日（任意）</summary><label for="workbookImport">問題を登録</label><textarea id="workbookImport" rows="4" placeholder="12:一次方程式:解答:例題の補足\n13:::"></textarea>' +
-            '<p class="library-editor-hint">1行に「番号:問題文:答え:補足」。問題文・答えは空欄でも使えます。JSONバックアップにも対応。<button type="button" id="workbookCopyPrompt" class="library-prompt-copy">写真から抽出するAI用プロンプトをコピー</button>公開されるのは教材の内容だけです。</p>' +
+            '<details><summary class="library-editor-hint">問題のインポート・テスト日（任意）</summary><label for="workbookImport">問題を登録</label><textarea id="workbookImport" rows="4" placeholder="2:共通の問題文::\n2(1):小問1の問題文:答え:補足\n2(2):小問2の問題文:答え:補足"></textarea>' +
+            '<p class="library-editor-hint">1行に「番号:問題文:答え:補足」。小問は「2(2):問題文:答え:補足」（問2の小問2）。「2の(2)」も使えます。小問ごとに理解度・メモ・復習を記録します。同じ番号・小問は内容を更新し、学習記録は保持します。問題文・答えは空欄でも使えます。JSONバックアップにも対応。<button type="button" id="workbookCopyPrompt" class="library-prompt-copy">写真から抽出するAI用プロンプトをコピー</button>公開されるのは教材の内容だけです。</p>' +
             '<label for="workbookTestDate">テスト日</label><input id="workbookTestDate" type="date"><p class="library-editor-hint">自動の復習予定をテスト前に収まるよう調整します。</p></details>' + actions(previous ? '変更を保存' : 'ワークを作る') + '</form>');
         const form = modal.querySelector('form');
         let photo = previous ? previous.photo || '' : '', photoReady = Promise.resolve();
@@ -232,7 +236,7 @@
         }
         form.querySelector('#workbookUnit').onchange(); bindRule(form, 'workbookReview', settings);
         form.querySelector('#workbookCopyPrompt').onclick = async function () {
-            const prompt = '添付写真のワークを読み取り、1行に1件、番号:問題文:答え:補足の形式だけで出力してください。' + (form.querySelector('#workbookUnit').value === 'page' ? '番号はページ番号を使い、ページごとに内容をまとめてください。' : '番号は問題番号を使ってください。') + '答えが写っていなければ空欄にし、読めない内容を推測しないでください。数式はプレーンテキストで表現し、項目内のコロンは使わないでください。見出し・コードブロック・説明は不要です。例：12:2x+1=5:x=2:方程式';
+            const prompt = '添付写真のワークを読み取り、1行に1件、番号:問題文:答え:補足の形式だけで出力してください。' + (form.querySelector('#workbookUnit').value === 'page' ? '番号はページ番号を使います。ページを一件で管理する場合はページごとにまとめ、小問を個別に管理する場合は12(1)、12(2)のようにページ番号と小問番号で分けます。' : '番号は元の大問番号を保持し、小問は2(1)、2(2)のように大問番号(小問番号)で指定します。') + '小問はそれぞれ別の行にし、別の大問番号へ振り直したり、一つの答え欄にまとめたりしないでください。共通の問題文・条件は大問の行に入れ、小問にも解くために必要な条件を短く残してください。小問がない問題は通常の番号で出力します。同じ番号・小問を重複させないでください。答えが写っていなければ空欄にし、解答を勝手に作らず、読めない内容を推測しないでください。数式はプレーンテキストで表現し、項目内のコロンは全角に置き換え、改行しないでください。見出し・コードブロック・説明は不要です。問題番号の形式例：2:次の方程式を解け::／2(1):2x+1=5:x=2:移項して解く／2(2):3x=9:x=3:両辺を3で割る。実際の出力では例の各項目を別々の行にしてください。';
             try { await navigator.clipboard.writeText(prompt); this.textContent = 'コピーしました'; }
             catch (e) { let field = form.querySelector('.library-prompt-fallback'); if (!field) {field = document.createElement('textarea'); field.className = 'library-prompt-fallback'; field.readOnly = true; this.after(field);} field.value = prompt; field.select(); }
         };
@@ -346,6 +350,7 @@
             '<div class="workbook-unit-footer"><button type="button" class="list-action-link workbook-postpone">今回だけ延期</button><div class="workbook-history">' + (unit.history || []).slice(-5).map(s => '<span class="status-' + s + '">' + STATUS[s] + '</span>').join('') + '</div></div>';
         card.querySelector('.vocab-library-manage-button').onclick = () => openUnitEditor(work.id, unit.id);
         const help = card.querySelector('.workbook-ai-help'); if (help) { help.hidden = !unit.q.trim(); help.onclick = () => { const fresh = load().find(w => w.id === work.id); const target = fresh && fresh.units.find(u => u.id === unit.id); if (target) openExplanation(target); }; }
+        if (!unit.subNumber && !unit.id.startsWith('extra:')) { const add=document.createElement('button');add.type='button';add.className='list-action-link workbook-add-subquestion';add.textContent='小問を追加';add.setAttribute('aria-label',label(work,unit)+'に小問を追加');add.onclick=()=>openSubquestionEditor(work.id,unit.num);card.querySelector('.workbook-unit-footer').prepend(add); }
         card.querySelector('.workbook-postpone').onclick = () => openPostpone(work.id, [unit.id]);
         const editorOwner = uid();
         function saveField(field, value) {
@@ -390,6 +395,19 @@
             if (!response.ok) throw new Error('解説を取得できませんでした。接続とAPIキーを確認してください。');
             const data = await response.json(); body.textContent = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('\n') || '解説を取得できませんでした。';
         } catch (error) { body.textContent = error.message; }
+    }
+    function openSubquestionEditor(workId, num) {
+        const owner=uid(), work=load().find(w=>w.id===workId);if(!work)return;
+        const used=new Set(work.units.filter(u=>u.num===num).map(u=>u.subNumber));let suggested=1;while(used.has(suggested))suggested++;
+        const modal=dialog((work.unitKind==='page'?'p.':'問')+num+'に小問を追加','<form><label for="workbookSubNumber">小問番号</label><input id="workbookSubNumber" type="number" min="1" max="100000" value="'+suggested+'" required><p class="library-editor-hint">問題文・答えは追加後のカードに直接入力できます。理解度と復習は小問ごとに記録します。</p>'+actions('小問を追加')+'</form>');
+        modal.querySelector('form').onsubmit=event=>{event.preventDefault();try{
+            if(owner!==uid())throw Error('ユーザーが切り替わりました。開き直してください。');
+            const fresh=load().find(w=>w.id===workId), subNumber=Number(modal.querySelector('input').value);
+            if(!fresh||!fresh.units.some(u=>u.num===num&&!u.subNumber))throw Error('元の問題が見つかりません。');
+            if(!Number.isInteger(subNumber)||subNumber<1||subNumber>100000)throw Error('小問番号は1〜100000の整数にしてください。');
+            if(fresh.units.some(u=>u.num===num&&u.subNumber===subNumber))throw Error('その小問はすでに登録されています。');
+            fresh.units.push(cleanUnit({num,subNumber},num));put(fresh);close();repaint();
+        }catch(error){modal.querySelector('.library-editor-error').textContent=error.message;}};
     }
     function openUnitEditor(workId, unitId) {
         const owner = uid(), work = load().find(w => w.id === workId), unit = work && work.units.find(u => u.id === unitId); if (!unit) return;

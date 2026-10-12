@@ -46,3 +46,12 @@ test('test-date planning ends before the test and does not repeatedly schedule a
  model.mark(work,u,'ok',now);assert.equal(u.nextReview,model.dateTime('2026-10-07'));
  model.mark(work,u,'ok',new Date('2026-10-07T12:00:00').getTime());assert.equal(u.nextReview,0);
 });
+test('parenthesized subquestions import separately and preserve each existing learning record',()=>{
+ const existing=[model.cleanUnit({num:2,status:'so',note:'親'},2),model.cleanUnit({num:2,subNumber:2,status:'bad',note:'小問メモ',history:['bad'],lastReview:now,nextReview:now+86400000},2)];
+ const result=model.importUnits('2:共通条件::\n2(1):一問目:A:補足\n2の（2）:二問目:B:',existing);
+ assert.equal(result.length,3);assert.equal(result[0].status,'so');assert.equal(result[1].id,'2:s1');assert.equal(result[2].id,'2:s2');assert.equal(result[2].status,'bad');assert.equal(result[2].note,'小問メモ');assert.equal(result[2].nextReview,now+86400000);assert.equal(existing[1].q,'');
+ const published=model.publicContent({units:result});assert.equal(published.units[2].subNumber,2);assert.equal(published.units[2].note,undefined);
+});
+test('invalid or repeated subquestion references reject the entire import without altering records',()=>{
+ const existing=[model.cleanUnit({num:2,subNumber:2,q:'残す'},2)];for(const input of ['2(0):x::','2(-1):x::','2(1.5):x::','2(1)(2):x::','2(2):x::\n2の(2):y::'])assert.throws(()=>model.importUnits(input,existing));assert.equal(existing[0].q,'残す');
+});
