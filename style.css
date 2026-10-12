@@ -2204,3 +2204,13 @@ html.ios-stable-rendering body .flashcard-note-preview.revealed .flashcard-note-
 .workbook-math-preview .katex-display{display:inline-block;vertical-align:middle;}
 
 .workbook-math-preview math{display:inline-block;vertical-align:middle;}
+
+#workbookExplanation{white-space:normal;line-height:1.85;font-size:14px;color:var(--text-main);font-weight:400;}
+#workbookExplanation h3{font-size:15px;line-height:1.5;margin:18px 0 8px;color:#ddd1ad;}
+#workbookExplanation p{margin:8px 0 14px;}
+#workbookExplanation ul,#workbookExplanation ol{padding-left:24px;margin:10px 0 16px;}
+#workbookExplanation li{margin:7px 0;}
+#workbookExplanation strong{font-weight:700;color:#eee8da;}
+#workbookExplanation .workbook-explanation-equation{max-width:100%;overflow-x:auto;margin:14px 0;padding:10px 8px;box-sizing:border-box;border-radius:6px;background:rgba(0,0,0,.18);}
+#workbookExplanation math,#workbookExplanation .katex-display{display:inline-block;vertical-align:middle;}
+#workbookExplanation code,#workbookExplanation pre{white-space:pre-wrap;overflow-wrap:anywhere;}
