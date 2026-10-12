@@ -597,20 +597,36 @@ window.showVocabLibrarySelection = function() {
   window.renderVocabLibrarySelection();
 };
 
-window.selectVocabLibraryBook = async function(bookId) {
+window.selectVocabLibraryBook = function(bookId) {
+  var owner=myId;
+  var pending=window.__vocabSelectionRequest;
+  if(pending&&pending.bookId===bookId&&pending.owner===owner&&currentTextbook===bookId)return pending.task;
+  var request={bookId:bookId,owner:owner};window.__vocabSelectionRequest=request;
+  request.task=(async function(){
   currentTextbook = bookId;
+  if(window.LearningData)window.LearningData.begin(bookId);
   localStorage.setItem('core_v4_current_textbook_id', bookId);
   var selection = document.getElementById('vocabLibrarySelection');
   var contents = document.getElementById('vocabBookContents');
   if (selection) selection.hidden = true;
   if (contents) contents.hidden = false;
+  var container=document.getElementById('vocabListContainer');
+  if(container){container.replaceChildren();container.textContent='単語を読み込んでいます…';}
+  // Release the previous page and paint feedback before parsing the next book.
+  await new Promise(function(resolve){setTimeout(resolve,0);});
+  if(window.__vocabSelectionRequest!==request||myId!==owner)return false;
   try{await window.loadCurrentTextbookData();}
   catch(error){
-    if(currentTextbook===bookId){if(selection)selection.hidden=false;if(contents)contents.hidden=true;}
-    if(window.showToast)window.showToast("単語を読み込めませんでした。接続後にもう一度開いてください。保存データは変更していません。","err");
+    if(window.__vocabSelectionRequest===request&&myId===owner&&currentTextbook===bookId){
+      if(selection)selection.hidden=false;if(contents)contents.hidden=true;
+      if(window.showToast)window.showToast("単語を読み込めませんでした。接続後にもう一度開いてください。保存データは変更していません。","err");
+    }
     console.warn("[vocab] book load failed",error);
     return false;
   }
+  return true;
+  })().finally(function(){if(window.__vocabSelectionRequest===request)window.__vocabSelectionRequest=null;});
+  return request.task;
 };
 // 教材選択画面のゲージは、その教材自身の保存済み理解度から計算する。
 // 現在開いている vocabList や全教材共通の統計を流用しない。

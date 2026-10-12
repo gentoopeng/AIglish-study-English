@@ -13,8 +13,9 @@ function resolve(book,preferred){
  const drafts=[window.__manualVocabDrafts&&window.__manualVocabDrafts[book],read(key)].filter(valid);
  drafts.sort((a,b)=>(Date.parse(b.savedAt)||0)-(Date.parse(a.savedAt)||0));
  if(drafts.length)return drafts[0];
- const masters=[read('core_v4_custom_words_'+owner()+'_'+book),typeof textbooksCacheMap!=='undefined'&&textbooksCacheMap[book],read('core_v4_cache_'+book)];
- for(const master of masters)if(Array.isArray(master)&&master.length)return {...(preferred||{}),master,emptyConfirmed:false};
+ // Resolve lazily: do not parse every large backup when the first copy works.
+ const masters=[()=>read('core_v4_custom_words_'+owner()+'_'+book),()=>typeof textbooksCacheMap!=='undefined'&&textbooksCacheMap[book],()=>read('core_v4_cache_'+book)];
+ for(const getMaster of masters){const master=getMaster();if(Array.isArray(master)&&master.length)return {...(preferred||{}),master,emptyConfirmed:false};}
  if(permittedEmpty.has(identity(book)))return {...(preferred||{}),master:[],emptyConfirmed:true};
  // Only parse the larger full-save snapshot when all per-book copies are missing.
  const save=read('save_studio_'+owner()+'_main'),memory=save&&save.data&&save.data.memory;
