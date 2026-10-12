@@ -236,7 +236,7 @@
         }
         form.querySelector('#workbookUnit').onchange(); bindRule(form, 'workbookReview', settings);
         form.querySelector('#workbookCopyPrompt').onclick = async function () {
-            const prompt = '添付写真のワークを読み取り、1行に1件、番号:問題文:答え:補足の形式だけで出力してください。' + (form.querySelector('#workbookUnit').value === 'page' ? '番号はページ番号を使います。ページを一件で管理する場合はページごとにまとめ、小問を個別に管理する場合は12(1)、12(2)のようにページ番号と小問番号で分けます。' : '番号は元の大問番号を保持し、小問は2(1)、2(2)のように大問番号(小問番号)で指定します。') + '小問はそれぞれ別の行にし、別の大問番号へ振り直したり、一つの答え欄にまとめたりしないでください。各小問の問題文には、元の設問・式・数値・条件を省略せず、共通の条件も必要な分を含めて、その行だけで何を解くか分かる内容を入れてください。「次の問いに答えよ」などの一般的な指示だけの大問行や、問題文・答え・補足がすべて空の行、未掲載の番号の穴埋め行を作らないでください。大問自体に独立した設問がある場合だけ大問の行も作ります。図・表が必要な場合は、読み取れる条件を問題文へ記述し、読めない内容は作らず、必要な図・表の参照先を補足に明記してください。小問がない問題は通常の番号で出力します。同じ番号・小問を重複させないでください。問題文の内容を読み取れない項目は出力しないでください。答えだけが写っていない場合は答え欄を空欄にし、解答を勝手に作らず、読めない内容を推測しないでください。数式はプレーンテキストで表現し、項目内のコロンは全角に置き換え、改行しないでください。見出し・コードブロック・説明は不要です。形式例：2(1):2x+1=5を解け:x=2:移項して解く／2(2):3x=9を解け:x=3:両辺を3で割る。実際の出力では例の各項目を別々の行にしてください。';
+            const prompt = '添付写真のワークを読み取り、1行に1件、番号:問題文:答え:補足の形式だけで出力してください。' + (form.querySelector('#workbookUnit').value === 'page' ? '番号はページ番号を使います。ページを一件で管理する場合はページごとにまとめ、小問を個別に管理する場合は12(1)、12(2)のようにページ番号と小問番号で分けます。' : '番号は元の大問番号を保持し、小問は2(1)、2(2)のように大問番号(小問番号)で指定します。') + '小問はそれぞれ別の行にし、別の大問番号へ振り直したり、一つの答え欄にまとめたりしないでください。各小問の問題文には、元の設問・式・数値・条件を省略せず、共通の条件も必要な分を含めて、その行だけで何を解くか分かる内容を入れてください。「次の問いに答えよ」などの一般的な指示だけの大問行や、問題文・答え・補足がすべて空の行、未掲載の番号の穴埋め行を作らないでください。大問自体に独立した設問がある場合だけ大問の行も作ります。図・表が必要な場合は、読み取れる条件を問題文へ記述し、読めない内容は作らず、必要な図・表の参照先を補足に明記してください。小問がない問題は通常の番号で出力します。同じ番号・小問を重複させないでください。問題文の内容を読み取れない項目は出力しないでください。答えだけが写っていない場合は答え欄を空欄にし、解答を勝手に作らず、読めない内容を推測しないでください。数式はx^2、(a+b)/(c+d)、\\frac{a+b}{c+d}のように括弧で範囲を明示してください。指数と分数はアプリで数式表示されます。項目内のコロンは全角に置き換え、改行しないでください。見出し・コードブロック・説明は不要です。形式例：2(1):2x+1=5を解け:x=2:移項して解く／2(2):3x=9を解け:x=3:両辺を3で割る。実際の出力では例の各項目を別々の行にしてください。';
             try { await navigator.clipboard.writeText(prompt); this.textContent = 'コピーしました'; }
             catch (e) { let field = form.querySelector('.library-prompt-fallback'); if (!field) {field = document.createElement('textarea'); field.className = 'library-prompt-fallback'; field.readOnly = true; this.after(field);} field.value = prompt; field.select(); }
         };
@@ -323,13 +323,13 @@
         screen.innerHTML = '<header class="workbook-content-header"><button type="button" class="workbook-back"><span class="workbook-small-cover">' + (work.photo ? '<img src="' + esc(work.photo) + '" alt="">' : '📔') + '</span><span><strong>' + esc(work.name) + '</strong><small>単語帳一覧に戻る</small></span></button><button type="button" class="vocab-library-manage-button" id="workbookManage" aria-label="ワークを管理">⋯</button></header>' +
             '<div class="range-box"><label for="workbookRangeStart">' + (work.unitKind === 'page' ? 'ページ範囲:' : '問題番号範囲:') + '</label><input id="workbookRangeStart" class="range-input" type="number" min="' + work.from + '" value="' + from + '"><span>〜</span><input id="workbookRangeEnd" class="range-input" type="number" max="' + work.to + '" value="' + to + '" aria-label="範囲の終了"></div>' +
             '<div class="search-box"><input id="workbookSearch" class="search-input" placeholder="問題・答え・補足で検索…" value="' + esc(query) + '"></div>' +
-            '<div class="filter-scroller" id="workbookFilters">' + [['all', 'すべて'], ['ok', '⚪︎ 定着'], ['so', '△ 曖昧'], ['bad', '✕ 不可']].map(([value, text]) => '<button type="button" class="pill-btn' + (filter === value ? ' active' : '') + '" data-filter="' + value + '">' + text + '</button>').join('') + '</div>' +
+            '<div class="filter-scroller" id="workbookFilters">' + [['ok', '⚪︎ 定着'], ['so', '△ 曖昧'], ['bad', '✕ 不可']].map(([value, text]) => '<button type="button" class="pill-btn' + (filter === value ? ' active' : '') + '" aria-pressed="' + (filter===value) + '" data-filter="' + value + '">' + text + '</button>').join('') + '</div>' +
             '<div class="library-toolbar workbook-study-toolbar"><button type="button" id="workbookDueOnly" aria-pressed="' + dueOnly + '">' + (dueOnly ? 'すべて表示' : '復習する ' + visibleUnits(work).filter(u => isDue(u)).length + '件') + '</button><button type="button" id="workbookBatch">まとめて記録・復習設定</button></div><div id="workbookUnitList"></div>';
         screen.querySelector('.workbook-back').onclick = () => window.showVocabLibrarySelection();
         screen.querySelector('#workbookManage').onclick = () => openActions(work.id);
         screen.querySelector('#workbookDueOnly').onclick = () => { dueOnly = !dueOnly; renderContents(); };
         screen.querySelector('#workbookBatch').onclick = () => openBatch(work.id);
-        screen.querySelectorAll('[data-filter]').forEach(b => b.onclick = () => {filter = b.dataset.filter; renderContents();});
+        screen.querySelectorAll('[data-filter]').forEach(b => b.onclick = () => {filter = filter===b.dataset.filter?'all':b.dataset.filter; renderContents();});
         const renderList = () => {
             const text = screen.querySelector('#workbookSearch').value.toLowerCase();
             const start = Number(screen.querySelector('#workbookRangeStart').value) || work.from, end = Number(screen.querySelector('#workbookRangeEnd').value) || work.to;
@@ -345,10 +345,9 @@
         const card = document.createElement('div'); card.className = 'word-row-container workbook-unit-card'; card.dataset.unitId = unit.id;
         card.setAttribute('style', window.getCardStyleByHistory({history: unit.history, meanings: [{history: unit.history}]}));
         const dueText = unit.nextReview ? (isDue(unit) ? '復習期限 ' : '次回 ') + dateString(unit.nextReview) : '復習予定なし';
-        card.innerHTML = '<div class="word-main-line workbook-unit-heading"><span class="word-num-badge">' + esc(label(work, unit)) + '</span><div class="workbook-unit-actions"><button type="button" class="workbook-detail-toggle" data-toggle-field="ans" aria-expanded="false" aria-label="' + esc(label(work,unit)) + 'の答えを表示">答え</button><button type="button" class="workbook-detail-toggle" data-toggle-field="memo" aria-expanded="false" aria-label="' + esc(label(work,unit)) + 'の補足を表示">補足</button><button type="button" class="vocab-library-manage-button" aria-label="' + esc(label(work, unit)) + 'の復習設定">⋯</button></div></div>' +
+        card.innerHTML = '<div class="word-main-line workbook-unit-heading"><span class="word-num-badge">' + esc(label(work, unit)) + '</span><div class="workbook-unit-actions"><button type="button" class="workbook-detail-toggle" data-toggle-field="ans" aria-expanded="false" aria-label="' + esc(label(work,unit)) + 'の答えを表示">答え</button><button type="button" class="workbook-detail-toggle workbook-ai-help" aria-label="AIで解説を見る">AI</button><button type="button" class="workbook-detail-toggle" data-toggle-field="memo" aria-expanded="false" aria-label="' + esc(label(work,unit)) + 'の補足を表示">補足</button><button type="button" class="vocab-library-manage-button" aria-label="' + esc(label(work, unit)) + 'の復習設定">⋯</button></div></div>' +
             '<textarea class="workbook-inline-input workbook-question" data-field="q" rows="1" aria-label="' + esc(label(work, unit)) + 'の問題文" placeholder="問題文を入力（任意）">' + esc(unit.q) + '</textarea>' +
             '<div class="workbook-status-line"><span class="workbook-next-review' + (isDue(unit) ? ' is-due' : '') + '">' + dueText + '</span><div class="workbook-status-buttons">' + Object.entries(STATUS).map(([status, symbol]) => '<button type="button" data-status="' + status + '" class="workbook-status-button status-' + status + '" aria-label="' + esc(label(work, unit)) + 'の理解度 ' + symbol + '" aria-pressed="' + (unit.status === status) + '">' + symbol + '</button>').join('') + '</div></div>' +
-            '<button type="button" class="workbook-ai-help library-prompt-copy">AIで解説を見る</button>' +
             '<div class="word-static-info workbook-detail-panel" data-panel-field="ans" hidden><textarea class="workbook-inline-input sub-info-block" data-field="ans" rows="1" aria-label="' + esc(label(work, unit)) + 'の答え" placeholder="答えを入力（任意）">' + esc(unit.ans) + '</textarea></div>' +
             '<div class="word-static-info workbook-detail-panel" data-panel-field="memo" hidden><textarea class="workbook-inline-input sub-info-block" data-field="memo" rows="1" aria-label="' + esc(label(work, unit)) + 'の補足" placeholder="補足を入力（公開対象）">' + esc(unit.memo) + '</textarea></div>' +
             '<div class="workbook-unit-footer"' + ((unit.history||[]).length?'':' hidden') + '><div class="workbook-history">' + (unit.history || []).slice(-5).map(s => '<span class="status-' + s + '">' + STATUS[s] + '</span>').join('') + '</div></div>';
@@ -376,7 +375,12 @@
             function resize() { input.style.height = 'auto'; input.style.height = Math.max(32, input.scrollHeight) + 'px'; }
             input.oninput = () => { saveField(input.dataset.field, input.value); if (input.dataset.field === 'q' && help) help.hidden = !input.value.trim(); resize(); };
             input.onfocus = resize;
-            requestAnimationFrame(() => { if (input.isConnected) resize(); });
+            if(window.WorkbookMath){
+                const preview=document.createElement('button');preview.type='button';preview.className='workbook-math-preview'+(input.dataset.field==='q'?' workbook-question':'');input.after(preview);
+                function showFormatted(){const result=WorkbookMath.format(input.value);preview.replaceChildren(result.fragment);preview.hidden=!result.formatted;input.hidden=result.formatted;preview.setAttribute('aria-label',input.getAttribute('aria-label')+'を編集：'+input.value);}
+                preview.onclick=()=>{preview.hidden=true;input.hidden=false;resize();input.focus();};input.onblur=showFormatted;showFormatted();
+            }
+            requestAnimationFrame(() => { if (input.isConnected&&!input.hidden) resize(); });
         });
         const notes = window.createVocabNoteSection(unit, {save: value => saveField('note', value)});
         card.querySelector('.workbook-unit-footer').before(notes);

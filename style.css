@@ -2191,3 +2191,12 @@ html.ios-stable-rendering body .flashcard-note-preview.revealed .flashcard-note-
 .workbook-detail-toggle[aria-expanded="true"]{background:rgba(198,183,144,.16);border-color:rgba(198,183,144,.7);color:#eee8da;}
 .workbook-unit-card .workbook-detail-panel[hidden],.workbook-unit-footer[hidden]{display:none!important;}
 .workbook-unit-card .workbook-inline-error:empty{display:none;}
+
+.workbook-unit-actions .workbook-ai-help{margin:0;color:#c7d2fe;}
+.workbook-math-preview{display:block;width:100%;box-sizing:border-box;border:0;background:transparent;color:inherit;text-align:left;padding:6px 0;border-radius:6px;cursor:text;white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:auto;font:inherit;line-height:1.65;}
+.workbook-math-preview math{font-size:1.08em;}
+.workbook-unit-card .workbook-math-preview.workbook-question{font-size:16px;font-weight:700;color:#fff;}
+.workbook-unit-card .workbook-inline-input[hidden],.workbook-math-preview[hidden]{display:none!important;}
+.workbook-math-preview:focus-visible{outline:1px solid rgba(198,183,144,.65);}
+
+.workbook-detail-panel .workbook-math-preview{font-size:14px;padding:8px 10px;background:rgba(0,0,0,.25);}

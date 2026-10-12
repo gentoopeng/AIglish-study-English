@@ -1,0 +1,4 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),{parse}=require('../workbook-math.js');
+test('powers and fractions retain operator precedence and grouped terms',()=>{const power=parse('(2x-y+z)^2');assert.equal(power.type,'power');assert.equal(power.children[1].text,'2');const fraction=parse('(a+b)/(c+d)');assert.equal(fraction.type,'frac');assert.equal(parse('x^2/3').children[0].type,'power');assert.equal(parse('x^2^3').children[1].type,'power');});
+test('explicit fractions and braced exponents support compound numerators',()=>{assert.equal(parse('\\frac{x+1}{2x-3}').type,'frac');assert.equal(parse('x^{n+1}').type,'power');assert.equal(parse('-x^2').children[1].type,'power');});
+test('unsupported, malformed and excessive notation remains plain text',()=>{for(const value of ['x^','1/','\\unknown{x}','<img>','a'.repeat(513),'('.repeat(40)+'x'+')'.repeat(40)])assert.equal(parse(value),null);});
