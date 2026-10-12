@@ -2200,3 +2200,7 @@ html.ios-stable-rendering body .flashcard-note-preview.revealed .flashcard-note-
 .workbook-math-preview:focus-visible{outline:1px solid rgba(198,183,144,.65);}
 
 .workbook-detail-panel .workbook-math-preview{font-size:14px;padding:8px 10px;background:rgba(0,0,0,.25);}
+
+.workbook-math-preview .katex-display{display:inline-block;vertical-align:middle;}
+
+.workbook-math-preview math{display:inline-block;vertical-align:middle;}
