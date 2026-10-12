@@ -82,7 +82,7 @@
     function read(id) {try{return JSON.parse(localStorage.getItem(storageKey(id))||'null');}catch(e){return null;}}
     function persist() {if(!user||!data)return;data.updatedAt=Date.now();try{const previous=read(user);if(previous&&previous.epoch===RESET_EPOCH)localStorage.setItem(storageKey(user)+'_backup',JSON.stringify(mergeCurrent(previous,data)));localStorage.setItem(storageKey(user),JSON.stringify(data));}catch(e){const status=document.getElementById('studyTimerStatus');if(status)status.textContent='保存できません。ブラウザーの空き容量を確認してください。';console.error('勉強時間を保存できませんでした',e);}}
     function ensureUser() {
-        const next=uid();if(next===user)return;
+        const next=uid();if(next===user)return;cancelRanking();
         unlock();sleepState=null;activitySlices=[];user=next;manual=false;paused=false;active=false;lastMono=performance.now();lastWall=Date.now();ranking=[];rankingLoadedAt=0;rankingDay='';
         if(!user){data=null;return;}
         let stats={};try{stats=JSON.parse(localStorage.getItem('core_v4_user_stats_'+user)||'{}');}catch(e){}
@@ -171,7 +171,8 @@
     function friendValue(entry) {
         return entry.date===dateKey(Date.now())?entry.seconds:0;
     }
-    let podiumShape=null;
+    let podiumShape=null,rankingRequest=null;
+    function cancelRanking(){rankingRequest?.controller.abort();rankingRequest=null;rankingLoading=false;const button=document.getElementById('studyRefreshRanking');if(button){button.disabled=false;button.textContent='更新';}}
     function renderRanking() {
         const container=document.getElementById('studyFriendRanking');if(!container||!data)return;
         const rows=ranking.filter(f=>f.id!==user).map(f=>({name:f.name||f.id,seconds:friendValue(f),self:false,id:f.id,avatar:f.avatar||'',appearance:f.appearance,getStats:()=>f.stats}));
@@ -194,12 +195,12 @@
     }
     async function refreshRanking(force=false) {
         ensureUser();if(rankingLoading||!user||currentActiveTabId!=='study'||document.visibilityState!=='visible')return;
-        if(!force&&rankingDay===dateKey(Date.now())&&Date.now()-rankingLoadedAt<60000){renderRanking();return;}
-        const owner=user;rankingLoading=true;const button=document.getElementById('studyRefreshRanking'),message=document.getElementById('studyRankingMessage');button.disabled=true;button.textContent='更新中…';message.textContent='';
+        if(!force&&rankingDay===dateKey(Date.now())&&Date.now()-rankingLoadedAt<300000){renderRanking();return;}
+        const owner=user,controller=new AbortController(),request={owner,controller};rankingRequest=request;rankingLoading=true;const button=document.getElementById('studyRefreshRanking'),message=document.getElementById('studyRankingMessage');button.disabled=true;button.textContent='更新中…';message.textContent='';const timeout=setTimeout(()=>controller.abort('timeout'),15000);
         try {
-            if(!window.db||!window.fbGetDocs||!window.fbCollection)throw new Error('接続後に更新してください。');
+            if(!window.db)throw new Error('接続後に更新してください。');
             const records=[],today=dateKey(Date.now());
-            await window.UserDirectory.scan((id,remote)=>{
+            const visit=(id,remote)=>{
                 if(remote.deleted||id===owner||id==='GUEST-000')return;
                 const stats=readStats(remote),seconds=rankingSeconds(stats,'daily',Date.now());
                 if(seconds<300)return;
@@ -207,10 +208,13 @@
                 const compact={study_calendar_v2:resetLedger(stats.study_calendar_v2),learning_ranking_v2_json:remote.learningRankingV2Json||stats.learning_ranking_v2_json,learning_ranking_owner:stats.learning_ranking_owner};
                 records.push({id,name:remote.playerName||remote.name||id,avatar:remote.avatar||'',appearance:window.RankingVisuals?.appearanceOf(remote),date:today,seconds,stats:compact});
                 records.sort((a,b)=>b.seconds-a.seconds||a.id.localeCompare(b.id));records.splice(3);
-            },()=>user===owner&&uid()===owner&&currentActiveTabId==='study'&&document.visibilityState==='visible');
-            if(user===owner&&uid()===owner){ranking=records;rankingLoadedAt=Date.now();rankingDay=today;renderRanking();}
-        }catch(e){if(uid()===owner)message.textContent='表彰台を取得できませんでした。'+e.message;}
-        finally{rankingLoading=false;button.disabled=false;button.textContent='更新';}
+            };
+            const projected=!!window.db?.app?.options?.projectId;
+            if(projected){const rows=await window.RankingQuery.fetch('daily',{signal:controller.signal});for(const row of rows){if(controller.signal.aborted)break;visit(row.id,row.data);await new Promise(resolve=>setTimeout(resolve,0));}}
+            else await window.UserDirectory.scan(visit,()=>!controller.signal.aborted&&user===owner&&uid()===owner&&currentActiveTabId==='study'&&document.visibilityState==='visible');
+            if(rankingRequest===request&&!controller.signal.aborted&&user===owner&&uid()===owner&&today===dateKey(Date.now())&&currentActiveTabId==='study'){ranking=records;rankingLoadedAt=Date.now();rankingDay=today;renderRanking();}
+        }catch(e){if(rankingRequest===request&&uid()===owner&&currentActiveTabId==='study'){if(controller.signal.reason==='timeout')message.textContent='通信に時間がかかっています。更新で再試行できます。';else if(!controller.signal.aborted)message.textContent='表彰台を取得できませんでした。'+(e.code==='resource-exhausted'?'クラウドの利用上限に達しています。前回の表示を保持して、後で再試行してください。':e.message);}}
+        finally{clearTimeout(timeout);if(rankingRequest===request){rankingRequest=null;rankingLoading=false;button.disabled=false;button.textContent='更新';}}
     }
     function init(){ensureUser();if(data&&userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);tick();chart();renderCalendar();}
     function sleep(since){
@@ -227,7 +231,7 @@
     const oldLoad=window.loadUserStats;
     window.loadUserStats=async function(){const owner=uid(),result=await oldLoad.apply(this,arguments);if(uid()===owner){ensureUser();if(userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);persist();sync();renderCalendar();chart();}return result;};
     const oldSave=window.saveUserStats;window.saveUserStats=function(){if(data&&uid()===user&&userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);sync();return oldSave.apply(this,arguments);};
-    const oldSwitch=window.switchTab;window.switchTab=function(tab){tick();const result=oldSwitch.apply(this,arguments);active=eligible();lastMono=performance.now();lastWall=Date.now();if(!active)unlock();else claim();if(tab==='study'){renderCalendar();refreshRanking();}return result;};
+    const oldSwitch=window.switchTab;window.switchTab=function(tab){if(tab!=='study')cancelRanking();tick();const result=oldSwitch.apply(this,arguments);active=eligible();lastMono=performance.now();lastWall=Date.now();if(!active)unlock();else claim();if(tab==='study'){renderCalendar();refreshRanking();}return result;};
     const oldLogout=window.logoutToGate;window.logoutToGate=async function(){tick();active=false;unlock();return oldLogout.apply(this,arguments);};
     document.getElementById('studyTimerToggle').onclick=()=>{tick();manual=!manual;paused=!manual;active=eligible();if(active)claim();else unlock();renderDisplay();};
     document.getElementById('studyPreviousMonth').onclick=()=>{month.setMonth(month.getMonth()-1);renderCalendar();};document.getElementById('studyNextMonth').onclick=()=>{month.setMonth(month.getMonth()+1);renderCalendar();};
@@ -235,7 +239,7 @@
     document.getElementById('studyNextWeek').onclick=()=>{const day=new Date(dateAt(selectedWeek));day.setDate(day.getDate()+7);selectedWeek=dateKey(day);chart();};
     document.getElementById('studyEditDay').onclick=()=>editDate(selected);document.getElementById('studyRefreshRanking').onclick=()=>refreshRanking(true);
     document.querySelectorAll('#studyRankRanges [data-range]').forEach(button=>button.onclick=()=>{rankRange=button.dataset.range;document.querySelectorAll('#studyRankRanges button').forEach(b=>b.classList.toggle('active',b===button));renderRanking();});
-    document.addEventListener('visibilitychange',()=>{tick();if(document.visibilityState!=='visible'){active=false;unlock();}else{lastMono=performance.now();lastWall=Date.now();active=eligible();claim();}if(user&&user!=='GUEST-000'&&window.saveUserStats)window.saveUserStats();});
-    window.addEventListener('pagehide',()=>{tick();active=false;unlock();persist();});window.addEventListener('storage',event=>{if(user&&event.key===storageKey(user)){data=mergeCurrent(data,read(user));sync();renderCalendar();}});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')cancelRanking();tick();if(document.visibilityState!=='visible'){active=false;unlock();}else{lastMono=performance.now();lastWall=Date.now();active=eligible();claim();if(currentActiveTabId==='study')refreshRanking();}if(user&&user!=='GUEST-000'&&window.saveUserStats)window.saveUserStats();});
+    window.addEventListener('pagehide',()=>{cancelRanking();tick();active=false;unlock();persist();});window.addEventListener('storage',event=>{if(user&&event.key===storageKey(user)){data=mergeCurrent(data,read(user));sync();renderCalendar();}});
     setInterval(tick,500);(window.ViewWork?.interval || setInterval)(chart,10000,['study']);window.onAppLoaded(init);init();
 })();
