@@ -48,7 +48,8 @@ window.__vocabSavedAtMs = function(value){
 // 下書きだけを復元すると最後の操作が巻き戻ってしまう。
 window.__mergeNewestLocalVocabProgress = function(bookKey,draft){
   if(!draft||typeof draft!=='object')return draft;
-  if(window.LearningData){draft=JSON.parse(JSON.stringify(draft));draft.progress=window.LearningData.restore(bookKey,draft.progress||{});return draft;}
+  // Masters are read-only here; merging ratings must not serialize the whole book.
+  if(window.LearningData){draft=Object.assign({},draft);draft.progress=window.LearningData.restore(bookKey,draft.progress||{});return draft;}
   try{
     var progressKey=window.getVocabProgressStorageKey(bookKey);
     var progressMs=parseInt(localStorage.getItem(progressKey+'__ts')||'0')||0;
@@ -57,7 +58,7 @@ window.__mergeNewestLocalVocabProgress = function(bookKey,draft){
     if(raw&&progressMs>=draftMs){
       var progress=JSON.parse(raw);
       if(progress&&typeof progress==='object'){
-        draft=JSON.parse(JSON.stringify(draft));
+        draft=Object.assign({},draft);
         draft.progress=progress;
         draft.savedAt=new Date(progressMs||Date.now()).toISOString();
       }
@@ -74,12 +75,12 @@ window.__gameSaveChecksum = window.__gameSaveChecksum || function(text){
 };
 window.__applyManualVocabDraft = function(bookKey,draft){
   if(!draft||!Array.isArray(draft.master)||(!draft.master.length&&draft.emptyConfirmed!==true))return false;
-  vocabList=(typeof window.migrateVocabData==='function')?window.migrateVocabData(draft.master):JSON.parse(JSON.stringify(draft.master));
+  vocabList=(typeof window.migrateVocabData==='function')?window.migrateVocabData(draft.master.map(function(word){return Object.assign({},word);})):JSON.parse(JSON.stringify(draft.master));
   if(draft.progress){
     currentUserVocabProgress=JSON.parse(JSON.stringify(draft.progress));
     if(typeof window.applyUserProgressToVocabList==='function')window.applyUserProgressToVocabList();
   }
-  window.__manualVocabDrafts[bookKey]=JSON.parse(JSON.stringify(draft));
+  window.__manualVocabDrafts[bookKey]=Object.assign({},draft);
   if(typeof window.renderVocabList==='function')window.renderVocabList();
   return true;
 };
@@ -165,9 +166,10 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
   window.loadCurrentTextbookData=async function(){
     var bookKey=(typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default';
     var requestUserId=myId;
+    var requestSequence=window.__manualDraftLoadSequence=(window.__manualDraftLoadSequence||0)+1;
     if(window.LibraryState&&window.LibraryState.isDeleted('book',bookKey,requestUserId))return;
     function isCurrentRequest(){
-      return myId===requestUserId&&(currentTextbook||'default')===bookKey&&!(window.LibraryState&&window.LibraryState.isDeleted('book',bookKey,requestUserId));
+      return window.__manualDraftLoadSequence===requestSequence&&myId===requestUserId&&(currentTextbook||'default')===bookKey&&!(window.LibraryState&&window.LibraryState.isDeleted('book',bookKey,requestUserId));
     }
     function latestDraft(fallback){
       var latest=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
@@ -182,11 +184,11 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
     var draft=window.__manualVocabDrafts&&window.__manualVocabDrafts[bookKey];
     if(!draft){
       try{draft=JSON.parse(localStorage.getItem(window.__manualVocabLocalKey(bookKey))||'null');}catch(e){draft=null;}
-      if(draft&&Array.isArray(draft.master))window.__manualVocabDrafts[bookKey]=JSON.parse(JSON.stringify(draft));
+      if(draft&&Array.isArray(draft.master))window.__manualVocabDrafts[bookKey]=Object.assign({},draft);
     }
     draft=window.VocabMaster.resolve(bookKey,draft);
     draft=window.__mergeNewestLocalVocabProgress(bookKey,draft);
-    if(draft&&Array.isArray(draft.master))window.__manualVocabDrafts[bookKey]=JSON.parse(JSON.stringify(draft));
+    if(draft&&Array.isArray(draft.master))window.__manualVocabDrafts[bookKey]=Object.assign({},draft);
     // 同じ端末では、手動セーブ時に確定済みのローカル教材を最優先する。
     // Firebaseを待たずに初回画面を表示できる。
     if(!draft){
@@ -207,6 +209,7 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
     if(!draft&&window.db&&window.fbGetDoc&&window.fbDoc&&typeof myId!=='undefined'&&myId&&myId!=='GUEST-000'){
       try{
         var snap=await window.fbGetDoc(window.fbDoc(window.db,'users',myId,'vocabBooks',window.__manualVocabCloudId(bookKey)));
+        if(!isCurrentRequest())return;
         if(snap&&snap.exists()&&snap.data()){
           var cloud=snap.data();
           if(cloud.partCount){
@@ -214,6 +217,7 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
             for(var pi=0;pi<cloud.partCount;pi++){
               var draftPartId=cloud.generation?cloud.generation+'_p'+pi:'p'+pi;
               var part=await window.fbGetDoc(window.fbDoc(window.db,'users',myId,'vocabBooks',window.__manualVocabCloudId(bookKey),'parts',draftPartId));
+              if(!isCurrentRequest())return;
               if(!part||!part.exists())throw new Error('単語帳データの一部が見つかりません');
               draftRaw+=(part.data()&&part.data().d)||'';
             }
@@ -234,7 +238,7 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
     // 表示される瞬間や、後続処理が旧データを参照する競合が発生していた。
     if(draft&&Array.isArray(draft.master)){
       try{
-        if(typeof textbooksCacheMap!=='undefined')textbooksCacheMap[bookKey]=JSON.parse(JSON.stringify(draft.master));
+        if(typeof textbooksCacheMap!=='undefined')textbooksCacheMap[bookKey]=draft.master;
         localStorage.setItem('core_v4_cache_'+bookKey,JSON.stringify(draft.master));
         localStorage.setItem('core_v4_custom_words_'+myId+'_'+bookKey,JSON.stringify(draft.master));
         if(draft.progress&&typeof window.getVocabProgressStorageKey==='function'){
@@ -255,8 +259,8 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
     draft=latestDraft(draft);
     if(draft&&Array.isArray(draft.master)){
       // 通常ローダーが同じ下書きを描画済みなら、カード一覧を作り直さない。
-      if(!hasLocalDraft||draft.savedAt!==displayedSavedAt)window.__applyManualVocabDraft(bookKey,draft);
-      else window.__manualVocabDrafts[bookKey]=JSON.parse(JSON.stringify(draft));
+      if(draft.savedAt!==displayedSavedAt)window.__applyManualVocabDraft(bookKey,draft);
+      else window.__manualVocabDrafts[bookKey]=Object.assign({},draft);
     }
     return result;
   };
