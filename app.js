@@ -1280,6 +1280,8 @@ if (!targetCode) {
              timestamp: now.getTime() 
          };
          myFriendList.push(newFriend);
+         localStorage.setItem('core_v4_friend_list',JSON.stringify(myFriendList));
+         window.queueBackgroundSave?.();
          userStats.friends_count = myFriendList.length;
          await window.saveUserStats();
          window.checkAndRewardTitleBonusXP();
@@ -1349,6 +1351,8 @@ window.removeFriendDirect = async function(code, event) {
 if(event) event.stopPropagation();
 if (confirm("このフレンドをリストから削除しますか？")) {
 myFriendList = myFriendList.filter(f => f.code !== code);
+localStorage.setItem('core_v4_friend_list',JSON.stringify(myFriendList));
+window.queueBackgroundSave?.();
 userStats.friends_count = myFriendList.length;
 await window.saveUserStats();
     window.checkAndRewardTitleBonusXP();

@@ -881,6 +881,7 @@ function collectAll() {
   if(typeof window.__collectGameSaveData==='function') return window.__collectGameSaveData();
   var ls={}; for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k)ls[k]=localStorage.getItem(k);} return {localStorage:ls,memory:{}};
 }
+async function markCloudPending(id){try{localStorage.setItem('core_v4_autosave_pending_'+id,'1');if(window.AppStorage)await window.AppStorage.flush();}catch(error){console.warn('同期待ちの端末記録を保存できませんでした',error);}}
 var pendingSave=null;
 function saveAll() {if(pendingSave)return pendingSave;var task=window.LibraryState?window.LibraryState.track(uid(),saveAllContents):saveAllContents();pendingSave=Promise.resolve(task).finally(function(){pendingSave=null;});return pendingSave;}
 window.__backgroundSaveAll=saveAll;
@@ -917,8 +918,8 @@ async function saveAllContents() {
   if(localSaved){
     try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,source:'local'})); } catch(e) {}
   }
-  if(!fbOk()) {
-    if(localSaved){progress(100,started,'端末へ保存完了');return {localSaved:true,cloudSaved:false};}
+  if(!fbOk()||window.FirestoreReadGuard?.paused()) {
+    if(localSaved){await markCloudPending(id);progress(100,started,window.FirestoreReadGuard?.paused()?'端末へ保存完了（利用上限でクラウド同期待ち）':'端末へ保存完了');return {localSaved:true,cloudSaved:false};}
     throw localError||new Error('保存先に接続できません');
   }
   var chunks=[]; for(var i=0;i<raw.length;i+=CHUNK)chunks.push(raw.slice(i,i+CHUNK)); if(!chunks.length)chunks=[''];
@@ -1001,7 +1002,7 @@ async function saveAllContents() {
     if(!localSaved){try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,source:'cloud'})); } catch(e) {}}
     progress(100,started,'保存完了');return {localSaved:localSaved,cloudSaved:true};
   }
-  if(localSaved){progress(100,started,'端末へ保存完了（クラウド未接続）');return {localSaved:true,cloudSaved:false};}
+  if(localSaved){await markCloudPending(id);progress(100,started,window.FirestoreReadGuard?.paused()?'端末へ保存完了（利用上限でクラウド同期待ち）':'端末へ保存完了（クラウド未接続）');return {localSaved:true,cloudSaved:false};}
   throw cloudError||localError||new Error('保存に失敗しました');
 }
 async function fetchCloudSave(id) {
@@ -1155,9 +1156,9 @@ function openPanel() {
   if(!uid())return;
   var m=document.createElement('div');m.id='fbsvModal';m.className='fbsv-modal';
   var last='未セーブ';try{var oldMeta=JSON.parse(localStorage.getItem(localMetaKey())||'null');if(oldMeta)last=oldMeta.savedAtDisplay||last;else{var old=JSON.parse(localStorage.getItem(localKey())||'null');if(old)last=old.savedAtDisplay||last;}}catch(e){}
-  m.innerHTML='<div class="fbsv-card"><div class="fbsv-head"><div class="fbsv-title">💾 セーブ</div><button class="fbsv-close" id="fbsvClose">✕</button></div><div class="fbsv-row"><div><div class="fbsv-name">セーブデータ</div><div class="fbsv-date">最終保存: '+last+'</div></div><button class="fbsv-btn" id="fbsvSave">セーブする</button></div><div id="fbsvProgress" style="display:none;margin-top:12px"><div id="fbsvProgressText" style="font-size:11px;color:#fde68a;margin-bottom:6px">準備中 0%</div><div style="height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden"><div id="fbsvProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .2s"></div></div></div><div class="fbsv-note">すべてのデータを端末とクラウドへ保存します。ロード操作は不要で、ログイン時に自動で読み込まれます。</div></div>';
+  m.innerHTML='<div class="fbsv-card"><div class="fbsv-head"><div class="fbsv-title">💾 セーブ</div><button class="fbsv-close" id="fbsvClose">✕</button></div><div class="fbsv-row"><div><div class="fbsv-name">セーブデータ</div><div class="fbsv-date">最終保存: '+last+'</div></div><button class="fbsv-btn" id="fbsvSave">セーブする</button></div><div id="fbsvProgress" style="display:none;margin-top:12px"><div id="fbsvProgressText" style="font-size:11px;color:#fde68a;margin-bottom:6px">準備中 0%</div><div style="height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden"><div id="fbsvProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .2s"></div></div></div><div class="fbsv-note">端末へ保存した後にクラウドへ同期します。利用上限・切断時は端末の記録と同期待ちを残します。クラウド未同期の間はサイトデータを削除せず、同じ端末で使ってください。</div></div>';
   document.body.appendChild(m);m.querySelector('#fbsvClose').onclick=closePanel;m.onclick=function(e){if(e.target===m)closePanel();};
-  m.querySelector('#fbsvSave').onclick=async function(){var b=this;b.disabled=true;try{var result=await saveAll();b.textContent=result.cloudSaved?'保存完了':'端末に保存完了';}catch(e){progress(0,Date.now(),'保存失敗');b.textContent='もう一度試す';console.error(e);}finally{b.disabled=false;}};
+  m.querySelector('#fbsvSave').onclick=async function(){var b=this;b.disabled=true;try{var result=await saveAll();b.textContent=result.cloudSaved?'保存完了':'端末に保存完了・クラウド同期待ち';if(!result.cloudSaved)window.queueBackgroundSave?.();}catch(e){progress(0,Date.now(),'保存失敗');b.textContent='もう一度試す';console.error(e);}finally{b.disabled=false;}};
 }
 function ensureBtn(){var b=document.getElementById('headerSaveBtn'),h=document.querySelector('.app-header');if(!b&&h){b=document.createElement('button');b.id='headerSaveBtn';b.type='button';b.innerHTML='💾';b.style.cssText='position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';h.appendChild(b);}return b;}
 document.addEventListener('click',function(e){var t=e.target;if(t&&t.closest&&t.closest('#headerSaveBtn')){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openPanel();}},true);
