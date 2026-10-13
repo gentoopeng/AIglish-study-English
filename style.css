@@ -2221,3 +2221,5 @@ html.ios-stable-rendering body .flashcard-note-preview.revealed .flashcard-note-
 .shared-vocab-note-open:hover,.shared-vocab-note-open:focus-visible{background:rgba(199,210,254,.08);border-color:rgba(199,210,254,.6);}
 .shared-vocab-note-open[hidden],.shared-vocab-notes-list[hidden],.shared-vocab-notes-heading[hidden]{display:none!important;}
 .shared-vocab-notes:has(.shared-vocab-note-open:not([hidden])){display:block!important;}
+
+.vocab-pages{scroll-margin-top:90px;}
