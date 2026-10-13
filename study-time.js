@@ -195,7 +195,7 @@
     }
     async function refreshRanking(force=false) {
         ensureUser();if(rankingLoading||!user||currentActiveTabId!=='study'||document.visibilityState!=='visible')return;
-        if(!force&&rankingDay===dateKey(Date.now())&&Date.now()-rankingLoadedAt<300000){renderRanking();return;}
+        if(!force&&rankingDay===dateKey(Date.now())&&Date.now()-rankingLoadedAt<900000){renderRanking();return;}
         const owner=user,controller=new AbortController(),request={owner,controller};rankingRequest=request;rankingLoading=true;const button=document.getElementById('studyRefreshRanking'),message=document.getElementById('studyRankingMessage');button.disabled=true;button.textContent='更新中…';message.textContent='';const timeout=setTimeout(()=>controller.abort('timeout'),15000);
         try {
             if(!window.db)throw new Error('接続後に更新してください。');

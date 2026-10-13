@@ -11,6 +11,7 @@
         // Canonical edits already persist locally. Avoid a full snapshot while Safari resizes
         // for the keyboard, paints a native dialog, or suspends the installed app.
         if(document.hidden||document.visibilityState==='hidden'||document.querySelector?.('dialog[open]')||(document.activeElement?.matches?.(textInput)&&Date.now()-lastEditingAt<5000))return;
+        if(window.FirestoreReadGuard?.paused())return;
         if(window.LearningData&&!window.LearningData.canSave(typeof currentTextbook==='string'?currentTextbook:'default'))return;
         const account=owner,version=revision;pending=true;
         try{const result=await window.__backgroundSaveAll();if(result.cloudSaved&&id()===account&&window.flushWorkbookPublications)await window.flushWorkbookPublications();if(id()===account&&result.cloudSaved){saved=version;if(revision===version)window.localStorage?.removeItem('core_v4_autosave_pending_'+account);}}
