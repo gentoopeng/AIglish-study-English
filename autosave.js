@@ -13,7 +13,7 @@
         if(document.hidden||document.visibilityState==='hidden'||document.querySelector?.('dialog[open]')||(document.activeElement?.matches?.(textInput)&&Date.now()-lastEditingAt<5000))return;
         if(window.LearningData&&!window.LearningData.canSave(typeof currentTextbook==='string'?currentTextbook:'default'))return;
         const account=owner,version=revision;pending=true;
-        try{const result=await window.__backgroundSaveAll();if(id()===account&&result.cloudSaved){saved=version;if(revision===version)window.localStorage?.removeItem('core_v4_autosave_pending_'+account);}}
+        try{const result=await window.__backgroundSaveAll();if(result.cloudSaved&&id()===account&&window.flushWorkbookPublications)await window.flushWorkbookPublications();if(id()===account&&result.cloudSaved){saved=version;if(revision===version)window.localStorage?.removeItem('core_v4_autosave_pending_'+account);}}
         catch(error){console.warn('自動保存は次回に再試行します',error);}finally{pending=false;}
     }
     function idleSave(){if(window.requestIdleCallback)window.requestIdleCallback(save,{timeout:3000});else setTimeout(save,0);}

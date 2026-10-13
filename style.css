@@ -2214,3 +2214,5 @@ html.ios-stable-rendering body .flashcard-note-preview.revealed .flashcard-note-
 #workbookExplanation .workbook-explanation-equation{max-width:100%;overflow-x:auto;margin:14px 0;padding:10px 8px;box-sizing:border-box;border-radius:6px;background:rgba(0,0,0,.18);}
 #workbookExplanation math,#workbookExplanation .katex-display{display:inline-block;vertical-align:middle;}
 #workbookExplanation code,#workbookExplanation pre{white-space:pre-wrap;overflow-wrap:anywhere;}
+
+.workbook-sync-status{font-size:11px;line-height:1.5;color:#d9c394;margin:8px 0;}
