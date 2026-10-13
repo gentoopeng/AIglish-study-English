@@ -559,8 +559,8 @@
                     if (card) card.setAttribute('style', window.getCardStyleByHistory(vocabList[wIdx]));
                 }
                 // 履歴部分も対象カードだけ即時更新し、一覧全体を作り直さない。
-                var historyRow = document.querySelector('[data-vocab-history="' + String(wordNum) + '"]');
-                if (historyRow) {
+                var historyRows = document.querySelectorAll('[data-vocab-history="' + CSS.escape(String(wordNum)) + '"]');
+                if (historyRows.length) {
                     var historyHtml = '';
                     vocabList[wIdx].meanings.forEach(function(meaning, meaningIndex) {
                         var marks = '';
@@ -574,7 +574,7 @@
                         historyHtml += '<div style="display:flex;gap:2px;align-items:center;">' + marks + '</div>';
                         if (meaningIndex < vocabList[wIdx].meanings.length - 1) historyHtml += '<span style="color:rgba(255,255,255,0.2);font-size:12px;font-weight:bold;">/</span>';
                     });
-                    historyRow.innerHTML = historyHtml;
+                    historyRows.forEach(function(row){row.innerHTML=historyHtml;});
                 }
                 if (typeof window.updateVocabCardUi === 'function') window.updateVocabCardUi(wordNum);
                 // 原因だった全単語の集計・端末保存・一覧再描画は、描画後に1回へまとめる。
@@ -972,14 +972,17 @@
         filtered.slice(vocabPage*vocabPageSize,(vocabPage+1)*vocabPageSize).forEach(function(w) {
             fragment.appendChild(window.createVocabCard(w));
         });
-        container.appendChild(fragment);
-        if(filtered.length>vocabPageSize){
-            const nav=document.createElement('nav');nav.className='vocab-pages';nav.setAttribute('aria-label','単語一覧のページ');
+        function pageNavigation(position){
+            const nav=document.createElement('nav');nav.className='vocab-pages';nav.setAttribute('aria-label','単語一覧のページ（'+position+'）');
             const previous=document.createElement('button'),next=document.createElement('button'),label=document.createElement('span');
             previous.type=next.type='button';previous.textContent='前へ';next.textContent='次へ';previous.disabled=vocabPage===0;next.disabled=(vocabPage+1)*vocabPageSize>=filtered.length;
             label.textContent=(vocabPage*vocabPageSize+1)+'–'+Math.min((vocabPage+1)*vocabPageSize,filtered.length)+' / '+filtered.length;
-            previous.onclick=()=>{vocabPage--;window.renderVocabList();};next.onclick=()=>{vocabPage++;window.renderVocabList();};nav.append(previous,label,next);container.append(nav);
+            function change(delta){vocabPage+=delta;window.renderVocabList();container.querySelector('.vocab-pages')?.scrollIntoView({block:'start'});}
+            previous.onclick=()=>change(-1);next.onclick=()=>change(1);nav.append(previous,label,next);return nav;
         }
+        if(filtered.length>vocabPageSize)container.append(pageNavigation('上部'));
+        container.appendChild(fragment);
+        if(filtered.length>vocabPageSize)container.append(pageNavigation('下部'));
         window.initLucide();
     };
 

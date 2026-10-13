@@ -1927,45 +1927,48 @@ window.buildVocabDotsHtml = function(w) {
 window.updateVocabCardUi = function(wordNum) {
   var w = vocabList.find(function(item) { return String(item.num) === String(wordNum); });
   if (!w) return;
-  var body = document.getElementById("wordCardBody-" + wordNum);
-  if (!body) {
+  var bodies = document.querySelectorAll('[id="wordCardBody-' + CSS.escape(String(wordNum)) + '"]');
+  if (!bodies.length) {
     if (window.vocabCardMatchesFilter(w)) window.scheduleVocabListRender(600);
     return;
   }
-  var card = body.closest(".word-row-container");
-  if (!card) return;
-  if (!window.vocabCardMatchesFilter(w)) {
-    card.style.transition = "opacity 0.35s ease, transform 0.35s ease";
-    card.style.opacity = "0";
-    card.style.transform = "scale(0.97)";
-    setTimeout(function() { if (!window.vocabCardMatchesFilter(w)) card.remove(); }, 350);
-    return;
-  }
-  card.setAttribute("style", window.getCardStyleByHistory(w));
-  card.style.opacity = "";
-  card.style.transform = "";
-  var meaningsContainer = body.children[1];
-  if (meaningsContainer && meaningsContainer.children) {
-    var rows = meaningsContainer.children;
-    (w.meanings || []).forEach(function(m, idx) {
-      var row = rows[idx];
-      if (!row) return;
-      var btns = row.querySelectorAll("button");
-      if (!btns || btns.length < 4) return;
-      btns[0].style.background = m.status === "ok" ? "var(--word-ok)" : "rgba(0,0,0,0.5)";
-      btns[0].style.color = m.status === "ok" ? "#000" : "white";
-      btns[1].style.background = m.status === "so" ? "var(--word-so)" : "rgba(0,0,0,0.5)";
-      btns[1].style.color = m.status === "so" ? "#000" : "white";
-      btns[2].style.background = m.status === "bad" ? "var(--word-bad)" : "rgba(0,0,0,0.5)";
-      btns[2].style.color = m.status === "bad" ? "#FFF" : "white";
-      btns[3].style.background = m.status === "none" ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.5)";
-      btns[3].style.color = "white";
-    });
-  }
-  var lastChild = body.lastElementChild;
-  if (lastChild && lastChild.style && lastChild.style.justifyContent === "flex-end") {
-    lastChild.outerHTML = window.buildVocabDotsHtml(w);
-  }
+  bodies.forEach(function(body) {
+    var card = body.closest(".word-row-container");
+    if (!card) return;
+    // List filters never dismiss the independent flashcard detail card.
+    if (card.closest("#vocabListContainer") && !window.vocabCardMatchesFilter(w)) {
+      card.style.transition = "opacity 0.35s ease, transform 0.35s ease";
+      card.style.opacity = "0";
+      card.style.transform = "scale(0.97)";
+      setTimeout(function() { if (!window.vocabCardMatchesFilter(w)) card.remove(); }, 350);
+      return;
+    }
+    card.setAttribute("style", window.getCardStyleByHistory(w));
+    card.style.opacity = "";
+    card.style.transform = "";
+    var meaningsContainer = body.children[1];
+    if (meaningsContainer && meaningsContainer.children) {
+      var rows = meaningsContainer.children;
+      (w.meanings || []).forEach(function(m, idx) {
+        var row = rows[idx];
+        if (!row) return;
+        var btns = row.querySelectorAll("button");
+        if (!btns || btns.length < 4) return;
+        btns[0].style.background = m.status === "ok" ? "var(--word-ok)" : "rgba(0,0,0,0.5)";
+        btns[0].style.color = m.status === "ok" ? "#000" : "white";
+        btns[1].style.background = m.status === "so" ? "var(--word-so)" : "rgba(0,0,0,0.5)";
+        btns[1].style.color = m.status === "so" ? "#000" : "white";
+        btns[2].style.background = m.status === "bad" ? "var(--word-bad)" : "rgba(0,0,0,0.5)";
+        btns[2].style.color = m.status === "bad" ? "#FFF" : "white";
+        btns[3].style.background = m.status === "none" ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.5)";
+        btns[3].style.color = "white";
+      });
+    }
+    var lastChild = body.lastElementChild;
+    if (lastChild && lastChild.style && lastChild.style.justifyContent === "flex-end") {
+      lastChild.outerHTML = window.buildVocabDotsHtml(w);
+    }
+  });
 };
 
 // ------------------------------------------------------------------
