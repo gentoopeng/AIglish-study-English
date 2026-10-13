@@ -120,6 +120,13 @@ window.__captureManualVocabDraft = function() {
   } catch(e) { console.warn('[save] vocab draft capture failed',e); }
 };
 
+// Commit small groups of immutable generation parts, sharing account checks.
+// Metadata is still published only after every part has committed.
+window.__writeSaveParts=async function(entries) {
+  if(window.fbSetDocsProtected)return window.fbSetDocsProtected(entries);
+  for(var entry of entries)await window.fbSetDoc(entry[0],entry[1],entry[2]);
+};
+
 // 単語帳を閉じる時だけ、変更された教材をクラウドへ確定する。
 // 保存完了メタデータは全パーツ送信後に更新するため、途中送信を復元しない。
 window.flushManualVocabDraft = async function(bookKey){
@@ -137,9 +144,7 @@ window.flushManualVocabDraft = async function(bookKey){
   if(!parts.length)parts=[''];
   try{
     var cloudId=window.__manualVocabCloudId(bookKey);
-    for(var pi=0;pi<parts.length;pi++){
-      await window.fbSetDoc(window.fbDoc(window.db,'users',owner,'vocabBooks',cloudId,'parts',generation+'_p'+pi),{d:parts[pi]},{merge:false});
-    }
+    await window.__writeSaveParts(parts.map(function(part,pi){return [window.fbDoc(window.db,'users',owner,'vocabBooks',cloudId,'parts',generation+'_p'+pi),{d:part},{merge:false}];}));
     var meta={bookKey:bookKey,partCount:parts.length,generation:generation,rawLength:raw.length,checksum:window.__gameSaveChecksum(raw),updatedAt:draft.savedAt||new Date().toISOString()};
     var ref=window.fbDoc(window.db,'users',owner,'vocabBooks',cloudId);
     await window.fbSetDoc(ref,meta,{merge:false});
@@ -934,13 +939,7 @@ async function saveAllContents() {
       var bookParts=[];
       for(var bp=0;bp<bookRaw.length;bp+=window.__manualVocabChunkSize)bookParts.push(bookRaw.slice(bp,bp+window.__manualVocabChunkSize));
       if(!bookParts.length)bookParts=[''];
-      for(var bpi=0;bpi<bookParts.length;bpi++){
-        await window.fbSetDoc(
-          window.fbDoc(window.db,'users',id,'vocabBooks',window.__manualVocabCloudId(savedBookKey),'parts',bookGeneration+'_p'+bpi),
-          {d:bookParts[bpi]},
-          {merge:false}
-        );
-      }
+      await window.__writeSaveParts(bookParts.map(function(part,bpi){return [window.fbDoc(window.db,'users',id,'vocabBooks',window.__manualVocabCloudId(savedBookKey),'parts',bookGeneration+'_p'+bpi),{d:part},{merge:false}];}));
       await window.fbSetDoc(
         window.fbDoc(window.db,'users',id,'vocabBooks',window.__manualVocabCloudId(savedBookKey)),
         {
@@ -973,9 +972,9 @@ async function saveAllContents() {
     }
     // 本文を先に保存し、最後にメタデータを更新する。途中で通信が切れても
     // ローダーが未完成の新規セーブを「保存完了」として選ばない。
-    for(var n=0;n<chunks.length;n++){
-      await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',generation+'_p'+n),{d:chunks[n]},{merge:false});
-      progress(15+((n+1)/chunks.length)*80,started,'クラウドへ保存中');
+    for(var n=0;n<chunks.length;n+=4){
+      await window.__writeSaveParts(chunks.slice(n,n+4).map(function(part,offset){return [window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',generation+'_p'+(n+offset)),{d:part},{merge:false}];}));
+      progress(15+(Math.min(n+4,chunks.length)/chunks.length)*80,started,'クラウドへ保存中');
     }
     // Full backups and public ranking must commit the same captured learning record.
     if(window.LearningRankingModel&&window.fbRunTransaction){
