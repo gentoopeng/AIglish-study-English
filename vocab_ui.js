@@ -780,7 +780,7 @@
             textarea.value = String(word.note || '');
             requestAnimationFrame(function() { textarea.focus(); });
             if (section) section.dispatchEvent(new Event('vocab-note-open'));
-        }
+        } else if(section) section.dispatchEvent(new Event('vocab-note-close'));
     };
 
     window.saveVocabNote = function(event, wordNum) {

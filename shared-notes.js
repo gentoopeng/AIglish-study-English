@@ -14,28 +14,18 @@
         const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity(word)));
         return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
     }
-    const noteCache=new Map(),pending=new Map();let cacheOwner='',directory=null,directoryTask=null,directoryAt=0,cacheVersion=0;
-    function accountCache(){if(cacheOwner!==owner()){cacheOwner=owner();cacheVersion++;noteCache.clear();pending.clear();directory=null;directoryTask=null;directoryAt=0;}}
+    const noteCache=new Map(),pending=new Map(),presence=new Map(),presenceJobs=new Map();let cacheOwner='',cacheVersion=0;
+    function accountCache(){if(cacheOwner!==owner()){cacheOwner=owner();cacheVersion++;noteCache.clear();pending.clear();presence.clear();presenceJobs.clear();}}
     function deadline(task){let timer;return Promise.race([task,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('共有メモの通信が完了しませんでした。')),15000))]).finally(()=>clearTimeout(timer));}
-    async function directoryRead(){
-        if(directory&&Date.now()-directoryAt<300000)return directory;if(directoryTask)return directoryTask;
-        const account=owner(),version=cacheVersion;const task=(async()=>{const result=new Map();let cursor;
-            for(let page=0;page<20;page++){
-                const parts=[window.fbOrderBy(window.fbDocumentId()),window.fbLimit(100)];if(cursor)parts.push(window.fbStartAfter(cursor));
-                const snap=await deadline(window.fbGetDocs(window.fbQuery(window.fbCollectionGroup(window.db,'notes'),...parts)));
-                const docs=snap.docs||[];for(const doc of docs){const path=doc.ref?.path||'',match=/^publicVocabNotes\/([^/]+)\/notes\/[^/]+$/.exec(path);if(!match)continue;const data=doc.data();if(typeof data?.note==='string'&&typeof data.ownerId==='string'&&data.note.trim()){if(!result.has(match[1]))result.set(match[1],[]);result.get(match[1]).push({...data,note:data.note.slice(0,500)});}}
-                if(docs.length<100){if(owner()===account&&version===cacheVersion){directory=result;directoryAt=Date.now();}return result;}cursor=docs.at(-1);
-            }throw Error('共有メモが多いため全件を確認できませんでした。');
-        })();directoryTask=task;try{return await task;}finally{if(directoryTask===task)directoryTask=null;}
+    async function presenceFor(word){accountCache();const key=identity(word),cached=presence.get(key);if(cached&&Date.now()-cached.at<300000)return cached.owners;if(presenceJobs.has(key))return presenceJobs.get(key);
+        const account=owner(),version=cacheVersion,task=(async()=>{const owners=await window.SharedNoteIndex.owners(await topicKey(word));if(owner()===account&&version===cacheVersion)presence.set(key,{at:Date.now(),owners});return owners;})();presenceJobs.set(key,task);try{return await task;}finally{if(presenceJobs.get(key)===task)presenceJobs.delete(key);}
     }
     async function recordsFor(word){accountCache();const key=identity(word),cached=noteCache.get(key);if(cached&&Date.now()-cached.at<300000)return cached.records;if(pending.has(key))return pending.get(key);
-        const account=owner(),version=cacheVersion,task=(async()=>{let records=[];if(available()){
-            const topic=await topicKey(word);
-            if(window.fbCollectionGroup&&window.fbQuery&&window.fbOrderBy&&window.fbDocumentId&&window.fbLimit&&window.fbStartAfter)records=(await directoryRead()).get(topic)||[];
-            else {const snap=await deadline(window.fbGetDocs(window.fbCollection(window.db,'publicVocabNotes',topic,'notes')));snap.forEach(doc=>{const data=doc.data();if(typeof data?.note==='string'&&typeof data.ownerId==='string'&&data.note.trim())records.push({...data,note:data.note.slice(0,500)});});}
-        }if(owner()===account&&version===cacheVersion)noteCache.set(key,{at:Date.now(),records});return records;})();pending.set(key,task);try{return await task;}finally{if(pending.get(key)===task)pending.delete(key);}
+        const account=owner(),version=cacheVersion,task=(async()=>{if(!available())throw Error('共有メモに接続できません。');const topic=await topicKey(word),snap=await deadline(window.fbGetDocs(window.fbCollection(window.db,'publicVocabNotes',topic,'notes'))),records=[];
+            const append=doc=>{const data=doc.data();if(typeof data?.note==='string'&&typeof data.ownerId==='string'&&data.note.trim())records.push({...data,note:data.note.slice(0,500)});};if(snap.docs)snap.docs.forEach(append);else snap.forEach(append);
+            if(owner()===account&&version===cacheVersion)noteCache.set(key,{at:Date.now(),records});return records;})();pending.set(key,task);try{return await task;}finally{if(pending.get(key)===task)pending.delete(key);}
     }
-    window.SharedVocabNotes={invalidate:()=>{cacheVersion++;noteCache.clear();pending.clear();directory=null;directoryTask=null;directoryAt=0;},has:word=>{accountCache();return (noteCache.get(identity(word))?.records||[]).some(record=>record.ownerId!==owner());},ready:words=>{accountCache();return words.every(word=>{const item=noteCache.get(identity(word));return item&&Date.now()-item.at<300000;});},prepare:async words=>{let index=0;await Promise.all(Array.from({length:3},async()=>{while(index<words.length)await recordsFor(words[index++]);}));}};
+    window.SharedVocabNotes={invalidate:()=>{cacheVersion++;noteCache.clear();pending.clear();presence.clear();presenceJobs.clear();window.SharedNoteIndex?.invalidate();},has:word=>{accountCache();return (presence.get(identity(word))?.owners||[]).some(id=>id!==owner());},ready:words=>{accountCache();return words.every(word=>{const item=presence.get(identity(word));return item&&Date.now()-item.at<300000;});},prepare:async words=>{let index=0;await Promise.all(Array.from({length:3},async()=>{while(index<words.length)await presenceFor(words[index++]);}));}};
     const authors=new Map();
     async function author(id){
         if(id===owner())return {name:myName||id,avatar:localStorage.getItem('core_v4_user_avatar_'+id)||''};
@@ -62,7 +52,7 @@
         const heading = document.createElement('div'); heading.className = 'shared-vocab-notes-heading'; heading.textContent = 'ほかの人の共有メモ';
         const list = document.createElement('div'); list.className = 'shared-vocab-notes-list'; list.setAttribute('aria-live', 'polite');
         const message = document.createElement('p'); message.className = 'shared-vocab-notes-message'; message.setAttribute('role', 'status');
-        area.append(heading, list, message); section.append(area);
+        const show=document.createElement('button');show.type='button';show.className='shared-vocab-note-open';show.textContent='共有メモあり';show.hidden=true;show.setAttribute('aria-expanded','false');heading.hidden=true;list.hidden=true;area.append(show,heading,list,message); section.append(area);
         const preferenceKey = 'core_v4_vocab_note_sharing_' + openingOwner + '_' + encodeURIComponent(identity(original));
         function preference() { try { return JSON.parse(localStorage.getItem(preferenceKey) || 'null'); } catch (e) { return null; } }
         const savedPreference = preference();
@@ -94,19 +84,22 @@
         }
         async function load() {
             if (!current() || busy) return;
-            const request = ++generation; list.textContent = '読み込み中…'; message.textContent = '';
+            const request = ++generation; heading.hidden=false;list.hidden=false;show.setAttribute('aria-expanded','true');list.textContent = '読み込み中…'; message.textContent = '';
             try {
                 if (!available()) throw new Error('共有メモに接続できません。接続後にメモを開き直してください。');
-                const shared = await recordsFor(original);
+                const known=presence.get(identity(original));
+                const shared=known&&Date.now()-known.at<300000&&!known.owners.some(id=>id!==openingOwner)?[]:await recordsFor(original);
                 if (!current() || request !== generation) return;
-                const records = []; ownNote = false;
+                const records = []; ownNote = !!known?.owners.includes(openingOwner);
                 shared.forEach(data => {if(data.ownerId===openingOwner)ownNote=true;else records.push({ownerId:data.ownerId,note:data.note,updatedAt:String(data.updatedAt||'')});});
                 records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); list.replaceChildren(); records.forEach(record => list.append(noteRow(record)));
                 if (!records.length) list.textContent = '';
                 loaded = true; buttons();
             } catch (error) {if (current() && request === generation) {list.textContent = ''; message.textContent = error.message; loaded = false;}}
         }
-        section.addEventListener('vocab-note-open', () => { const latest = preference(); if (!busy) checkbox.checked = !latest || latest.enabled !== false; if (!loaded) load(); else requestAnimationFrame(() => list.querySelectorAll('.shared-vocab-note-preview').forEach(text => {const row = text.parentElement; if (!row.classList.contains('is-expanded')) row.querySelector('button').hidden = text.scrollWidth <= text.clientWidth;})); });
+        show.onclick=event=>{event.preventDefault();event.stopPropagation();if(loaded&&show.getAttribute('aria-expanded')==='true'){window.toggleVocabNoteEditor({preventDefault(){},stopPropagation(){},currentTarget:show},word.num,true);return;}if(editor.style.display==='none'){window.toggleVocabNoteEditor({preventDefault(){},stopPropagation(){},currentTarget:show},word.num,false);}else if(!loaded)load();else{heading.hidden=false;list.hidden=false;show.setAttribute('aria-expanded','true');}};
+        section.addEventListener('vocab-note-close',()=>{heading.hidden=true;list.hidden=true;show.setAttribute('aria-expanded','false');});
+        section.addEventListener('vocab-note-open', () => { const latest = preference(); if (!busy) checkbox.checked = !latest || latest.enabled !== false; if (!loaded||Date.now()-(noteCache.get(identity(original))?.at||0)>=300000) load(); else {heading.hidden=false;list.hidden=false;show.setAttribute('aria-expanded','true');requestAnimationFrame(() => list.querySelectorAll('.shared-vocab-note-preview').forEach(text => {const row = text.parentElement; if (!row.classList.contains('is-expanded')) row.querySelector('button').hidden = text.scrollWidth <= text.clientWidth;}));} });
         async function write(event) {
             event.preventDefault(); event.stopPropagation(); if (busy) return;
             busy = true; ++generation; buttons(); message.textContent = '';
@@ -124,26 +117,23 @@
                     if (enabled && note) throw new Error('共有にはログインが必要です。メモはこの端末に保存しました。');
                     editor.style.display = 'none'; return;
                 }
-                if (!available() || (remove && !window.fbDeleteDoc)) throw new Error(remove ? '共有の取り消しを確認できません。接続後にもう一度保存してください。' : '共有先に接続できません。接続後にもう一度保存してください。');
+                if (!available() || !window.SharedNoteIndex) throw new Error(remove ? '共有の取り消しを確認できません。接続後にもう一度保存してください。' : '共有先に接続できません。接続後にもう一度保存してください。');
                 const topic = await topicKey(original);
                 if (!current()) throw new Error('単語帳またはユーザーが切り替わりました。');
-                const ref = window.fbDoc(window.db, 'publicVocabNotes', topic, 'notes', encodeURIComponent(openingOwner));
                 const published={ownerId:openingOwner,note,updatedAt:new Date().toISOString()};
-                if (remove) await window.fbDeleteDoc(ref);
-                else await window.fbSetDoc(ref, published, {merge: false});
+                const indexed=await window.SharedNoteIndex.publish(topic,openingOwner,remove?'':note);
                 if (!current()) return;
                 ownNote = !remove; remember(enabled, ownNote); loaded = false;cacheVersion++;
-                // Patch this topic after a successful write, retaining all other topics
-                // and their original expiry. Never invalidate the whole directory.
-                const key=identity(original),cached=noteCache.get(key),known=cached?.records||directory?.get(topic);
-                if(known){const next=known.filter(record=>record.ownerId!==openingOwner);if(!remove)next.push(published);noteCache.set(key,{at:cached?.at||directoryAt,records:next});if(directory)directory.set(topic,next);}
-                else noteCache.delete(key);
+                const key=identity(original),cached=noteCache.get(key);
+                if(cached){const next=cached.records.filter(record=>record.ownerId!==openingOwner);if(!remove)next.push(published);noteCache.set(key,{at:cached.at,records:next});}
+                presence.set(key,{at:Date.now(),owners:Object.entries(indexed.entries[topic]||{}).filter(([,stamp])=>stamp>0).map(([id])=>id)});
+                show.hidden=!window.SharedVocabNotes.has(original);heading.hidden=true;list.hidden=true;show.setAttribute('aria-expanded','false');
                 editor.style.display = 'none';
             } catch (error) { if (section.isConnected) message.textContent = (localSaved && openingOwner !== 'GUEST-000' ? 'メモは端末に保存しました。' : '') + error.message; }
             finally {busy = false; buttons();}
         }
         save.onclick = write;
-        requestAnimationFrame(function(){if(current()&&available())load();});
+        requestAnimationFrame(async function(){if(!current()||!available())return;try{const ids=await presenceFor(original);if(!current())return;ownNote=ids.includes(openingOwner);show.hidden=!ids.some(id=>id!==openingOwner);}catch(error){if(current()){show.hidden=false;show.textContent='共有メモを確認';show.title=error.message;}}});
 
     };
     // Initial textbook rendering can finish before this deferred script executes.

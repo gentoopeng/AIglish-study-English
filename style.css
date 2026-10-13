@@ -2216,3 +2216,8 @@ html.ios-stable-rendering body .flashcard-note-preview.revealed .flashcard-note-
 #workbookExplanation code,#workbookExplanation pre{white-space:pre-wrap;overflow-wrap:anywhere;}
 
 .workbook-sync-status{font-size:11px;line-height:1.5;color:#d9c394;margin:8px 0;}
+
+.shared-vocab-note-open{background:transparent;border:1px solid rgba(199,210,254,.25);border-radius:999px;padding:4px 10px;color:#C7D2FE;font-size:11px;cursor:pointer;transition:background .15s,border-color .15s;}
+.shared-vocab-note-open:hover,.shared-vocab-note-open:focus-visible{background:rgba(199,210,254,.08);border-color:rgba(199,210,254,.6);}
+.shared-vocab-note-open[hidden],.shared-vocab-notes-list[hidden],.shared-vocab-notes-heading[hidden]{display:none!important;}
+.shared-vocab-notes:has(.shared-vocab-note-open:not([hidden])){display:block!important;}
