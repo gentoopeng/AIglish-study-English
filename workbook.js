@@ -148,6 +148,20 @@
         };
     }
     function cloud() { return !!(window.db && window.fbDoc && window.fbSetDoc && window.fbGetDocs && window.fbCollection); }
+    let catalogCache=null,catalogTask=null;
+    async function catalogRecords(){
+        if(catalogCache&&Date.now()-catalogCache.at<300000)return catalogCache.records;
+        if(catalogTask)return catalogTask;
+        catalogTask=(async()=>{
+            const snapshot = await window.fbGetDocs(window.fbCollection(window.db, 'publicWorkbooks')); const records = [];
+            snapshot.forEach(doc => {const data = doc.data(); try {const work = JSON.parse(data.masterJson); if (work && typeof work.name === 'string' && Array.isArray(work.units)) records.push(work);} catch (e) { /* Skip malformed public records. */ }});
+            // Read old published workbooks too; new writes use one document per owner/book.
+            if (window.fbGetDoc) {
+                try { const legacy = await window.fbGetDoc(window.fbDoc(window.db, 'public_works', 'all')); if (legacy && legacy.exists()) {const old = JSON.parse(legacy.data().worksJson || '[]'); if (Array.isArray(old)) old.forEach(w => {try {records.push(migrate(w));} catch (e) {}});} } catch (e) { /* New catalogue remains usable without legacy access. */ }
+            }
+            catalogCache={at:Date.now(),records};return records;
+        })().finally(()=>{catalogTask=null;});return catalogTask;
+    }
     async function publish(work, previous, owner) {
         if(window.LibraryState&&window.LibraryState.isDeleted('work',work.id,owner))throw new Error('このワークは削除済みです。');
         if (work.visibility === 'public') {
@@ -155,17 +169,39 @@
             if (!cloud()) throw new Error('公開先に接続できません。「自分だけ」で保存するか、接続後にお試しください。');
             await window.fbSetDoc(window.fbDoc(window.db, 'publicWorkbooks', work.id), {
                 ownerId: owner, name: work.name, masterJson: JSON.stringify(publicContent(work)), updatedAt: new Date().toISOString()
-            }, {merge: false});
+            }, {merge: false});catalogCache=null;
         } else if (previous && previous.visibility === 'public') {
             if (!cloud() || !window.fbDeleteDoc) throw new Error('公開の取り消しにはクラウド接続が必要です。');
-            await window.fbDeleteDoc(window.fbDoc(window.db, 'publicWorkbooks', work.id));
+            await window.fbDeleteDoc(window.fbDoc(window.db, 'publicWorkbooks', work.id));catalogCache=null;
         }
     }
+    const publicationKey=owner=>'core_v4_workbook_public_pending_'+owner;
+    let publicationTask=null;
+    function publicationQueue(owner=uid()){const value=JSON.parse(localStorage.getItem(publicationKey(owner))||'{}');if(!value||typeof value!=='object'||Array.isArray(value))throw Error('公開同期の保存記録を読み取れません。');return value;}
+    function queuePublication(work){const queue=publicationQueue();queue[work.id]={revision:crypto.randomUUID(),visibility:work.visibility};localStorage.setItem(publicationKey(uid()),JSON.stringify(queue));}
+    window.flushWorkbookPublications=function(){
+        if(publicationTask)return publicationTask;
+        const owner=uid();
+        if(owner==='GUEST-000'||window.__learningBootReady===false||window.FirestoreReadGuard?.paused()||!cloud())return Promise.resolve(false);
+        if(!Object.keys(publicationQueue(owner)).length)return Promise.resolve(true);
+        publicationTask=(async()=>{let successful=true;const queue=publicationQueue(owner);
+            for(const [id,entry] of Object.entries(queue)){
+                if(owner!==uid())return false;
+                const work=load().find(w=>w.id===id),deleted=window.LibraryState?.isDeleted('work',id,owner);
+                if(work&&!deleted){try{const write=()=>publish(work,entry.visibility==='private'?{visibility:'public'}:null,owner);await (window.LibraryState?window.LibraryState.track(owner,write):write());}catch(error){successful=false;console.warn('ワークの公開同期は保留中です',error);break;}}
+                if(owner!==uid())return false;
+                const latest=publicationQueue(owner);if(latest[id]?.revision===entry.revision){delete latest[id];localStorage.setItem(publicationKey(owner),JSON.stringify(latest));}
+            }return successful&&!Object.keys(publicationQueue(owner)).length;
+        })().finally(()=>{publicationTask=null;repaint();});return publicationTask;
+    };
+    if(window.addEventListener)window.addEventListener('online',()=>window.flushWorkbookPublications().catch(()=>{}));
+    if(window.onAppLoaded)window.onAppLoaded(()=>window.flushWorkbookPublications().catch(()=>{}));
     function put(work) {
         if(window.LibraryState&&window.LibraryState.isDeleted('work',work.id))throw new Error('このワークは削除済みです。');
-        const works = load(), index = works.findIndex(w => w.id === work.id);
+        const works = load(), index = works.findIndex(w => w.id === work.id), previous=index>=0?works[index]:null;
         if (index >= 0) works[index] = work; else works.push(work);
         save(works);
+        if((work.visibility==='public'&&(!previous||previous.visibility!=='public'||JSON.stringify(publicContent(previous))!==JSON.stringify(publicContent(work))))||(previous?.visibility==='public'&&work.visibility==='private'))queuePublication(work);
     }
     function repaint() {
         window.renderVocabLibrarySelection();
@@ -263,10 +299,11 @@
                 // Reschedule only when the policy changes, preserving deliberate postponements.
                 const changed = !previous || JSON.stringify(previous.review) !== JSON.stringify(work.review) || previous.testDate !== work.testDate;
                 if (changed) work.units.forEach(u => schedule(work, u, Date.now(), false));
-                await publish(work, previous, owner);
+                if(work.visibility==='public'&&owner==='GUEST-000')throw Error('みんなに公開するにはログインしてください。');
                 if (owner !== uid()) throw new Error('ユーザーが切り替わりました。開き直してください。');
-                if(window.LibraryState&&window.LibraryState.isDeleted('work',work.id,owner)){if(work.visibility==='public'&&window.fbDeleteDoc)await window.fbDeleteDoc(window.fbDoc(window.db,'publicWorkbooks',work.id));throw new Error('このワークは削除済みです。');}
                 put(work); close(); repaint();
+                const synced=await window.flushWorkbookPublications();
+                if(owner===uid()&&window.showToast)window.showToast(window.FirestoreReadGuard?.paused()||(!synced&&Object.keys(publicationQueue()).length)?'端末に保存しました。クラウドへの同期は保留中です。':'端末に保存しました。','ok');
             } catch (error) { form.querySelector('.library-editor-error').textContent = error.message; }
             finally { submit.disabled = false; }
         };
@@ -325,6 +362,7 @@
             '<div class="search-box"><input id="workbookSearch" class="search-input" placeholder="問題・答え・補足で検索…" value="' + esc(query) + '"></div>' +
             '<div class="filter-scroller" id="workbookFilters">' + [['ok', '⚪︎ 定着'], ['so', '△ 曖昧'], ['bad', '✕ 不可']].map(([value, text]) => '<button type="button" class="pill-btn' + (filter === value ? ' active' : '') + '" aria-pressed="' + (filter===value) + '" data-filter="' + value + '">' + text + '</button>').join('') + '</div>' +
             '<div class="library-toolbar workbook-study-toolbar"><button type="button" id="workbookDueOnly" aria-pressed="' + dueOnly + '">' + (dueOnly ? 'すべて表示' : '復習する ' + visibleUnits(work).filter(u => isDue(u)).length + '件') + '</button><button type="button" id="workbookBatch">まとめて記録・復習設定</button></div><div id="workbookUnitList"></div>';
+        if(publicationQueue()[work.id]){const status=document.createElement('p');status.className='workbook-sync-status';status.setAttribute('role','status');status.textContent='端末に保存済み・公開同期待ち';screen.querySelector('.workbook-study-toolbar').after(status);}
         screen.querySelector('.workbook-back').onclick = () => window.showVocabLibrarySelection();
         screen.querySelector('#workbookManage').onclick = () => openActions(work.id);
         screen.querySelector('#workbookDueOnly').onclick = () => { dueOnly = !dueOnly; renderContents(); };
@@ -503,6 +541,7 @@
     function openActions(id) {
         const work = load().find(w => w.id === id); if (!work) return;
         const modal = dialog(work.name, '<div class="library-editor-actions library-editor-actions-stack"><button id="workbookEdit" type="button">名前・表紙・復習設定 / 問題を追加</button><button id="workbookBackup" type="button">JSONバックアップを保存</button><button id="workbookDelete" type="button" class="library-editor-danger">ワークを完全削除</button><button type="button" data-library-close>閉じる</button></div>');
+        if(publicationQueue()[id]){const retry=document.createElement('button');retry.type='button';retry.textContent='公開同期を再試行';retry.onclick=async()=>{retry.disabled=true;const result=await window.flushWorkbookPublications();if(retry.isConnected){retry.disabled=false;retry.textContent=result?'公開同期が完了しました':'端末に保存済み・公開同期は保留中';}};modal.querySelector('.library-editor-actions').prepend(retry);}
         modal.querySelector('#workbookEdit').onclick = () => window.openWorkbookEditor(id);
         modal.querySelector('#workbookBackup').onclick = () => {
             const blob = new Blob([JSON.stringify(work.units, null, 2)], {type: 'application/json'}), url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'workbook-backup.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -513,7 +552,7 @@
                 if (this.disabled) return; this.disabled = true;
                 try {
                     if (owner !== uid()) throw new Error('ユーザーが切り替わりました。開き直してください。');
-                    await window.eraseLibraryItem(id,work,'work');
+                    await window.eraseLibraryItem(id,work,'work');catalogCache=null;
                     if (owner !== uid()) throw new Error('ユーザーが切り替わりました。開き直してください。');
                     save(load().filter(w => w.id !== id)); close(); window.showVocabLibrarySelection();
                 } catch (error) {confirmDialog.querySelector('.library-editor-error').textContent = error.message; if(window.LibraryState&&window.LibraryState.isDeleted('work',id))window.showVocabLibrarySelection(); this.disabled = false;}
@@ -525,12 +564,7 @@
         const list = modal.querySelector('#workbookCatalog');
         try {
             if (!cloud()) throw new Error('一覧に接続できません。接続後にお試しください。');
-            const snapshot = await window.fbGetDocs(window.fbCollection(window.db, 'publicWorkbooks')); const records = [];
-            snapshot.forEach(doc => {const data = doc.data(); try {const work = JSON.parse(data.masterJson); if (work && typeof work.name === 'string' && Array.isArray(work.units)) records.push(work);} catch (e) { /* Skip malformed public records. */ }});
-            // Read old published workbooks too; new writes use one document per owner/book.
-            if (window.fbGetDoc) {
-                try { const legacy = await window.fbGetDoc(window.fbDoc(window.db, 'public_works', 'all')); if (legacy && legacy.exists()) {const old = JSON.parse(legacy.data().worksJson || '[]'); if (Array.isArray(old)) old.forEach(w => {try {records.push(migrate(w));} catch (e) {}});} } catch (e) { /* New catalogue remains usable without legacy access. */ }
-            }
+            const records=await catalogRecords();
             if (!modal.isConnected) return; list.replaceChildren();
             const seen = new Set();
             records.forEach(record => {
