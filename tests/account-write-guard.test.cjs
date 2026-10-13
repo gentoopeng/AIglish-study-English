@@ -52,3 +52,17 @@ test('unified verifier accepts the existing administrator passwords and rejects 
  const source=fs.readFileSync(require.resolve('../app.js'),'utf8'),line=source.split('\n').find(line=>line.startsWith('window.verifyAdminPassword ='));
  const window={};vm.runInNewContext(line,{window});const accepted=[...line.matchAll(/(['"])(.*?)\1/g)].map(match=>match[2]);assert.equal(accepted.length,2);for(const value of accepted)assert.equal(window.verifyAdminPassword(value),true);assert.equal(window.verifyAdminPassword('not-the-admin-password'),false);assert.equal(window.verifyAdminPassword(''),false);
 });
+test('generation parts share one account read per four writes without dropping any part',async()=>{
+ const {window,docs,ref,trace}=setup();docs.set('users/self',{});
+ const entries=Array.from({length:12},(_,i)=>[ref('users/self/saves/slot/parts/g_p'+i),{d:'part '+i},{merge:false}]);
+ await window.fbSetDocsProtected(entries);
+ assert.equal(trace.filter(([kind,path])=>kind==='get'&&path==='users/self').length,3);
+ for(let i=0;i<12;i++)assert.equal(docs.get(entries[i][0].path).d,'part '+i);
+});
+test('deletion between part groups rejects remaining parts and never publishes metadata',async()=>{
+ const {window,docs,ref}=setup();docs.set('users/self',{});const transaction=window.fbRunTransaction;let groups=0;
+ window.fbRunTransaction=async(...args)=>{const result=await transaction(...args);if(++groups===1)docs.set('users/self',{deleted:true});return result;};
+ const entries=Array.from({length:8},(_,i)=>[ref('users/self/saves/slot/parts/g_p'+i),{d:'part '+i}]);entries.push([ref('users/self/saves/slot'),{generation:'g'}]);
+ await assert.rejects(window.fbSetDocsProtected(entries),/削除済み/);
+ assert.equal(docs.has('users/self/saves/slot/parts/g_p3'),true);assert.equal(docs.has('users/self/saves/slot/parts/g_p4'),false);assert.equal(docs.has('users/self/saves/slot'),false);
+});

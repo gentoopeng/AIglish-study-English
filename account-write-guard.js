@@ -28,6 +28,16 @@ function install(){
   return result;
  },...options);}
  window.fbRunTransaction=guarded;wrapped.add(guarded);
+ // Bounded groups share one tombstone read. Each group remains atomic and
+ // later groups check the account again; never cache deletion permission.
+ window.fbSetDocsProtected=async function(entries){
+  for(let offset=0;offset<entries.length;offset+=4){
+   const group=entries.slice(offset,offset+4);
+   await window.fbRunTransaction(window.db,tx=>{
+    for(const [ref,payload,options]of group)tx.set(ref,window.__sanitizeForFirestore?window.__sanitizeForFirestore(payload):payload,options);
+   });
+  }
+ };
  window.fbSetDoc=function(ref,payload,options){if(root(ref)||ref.path==='shared/all_users'||/^public(?:Textbooks|Workbooks)\//.test(ref.path||'')||(ref.path||'').startsWith('wordDuelRooms/'))return guarded(window.db,tx=>tx.set(ref,window.__sanitizeForFirestore?window.__sanitizeForFirestore(payload):payload,options));return set(ref,payload,options);};
 }
 window.AccountWriteGuard={install};install();window.onAppLoaded?.(install);

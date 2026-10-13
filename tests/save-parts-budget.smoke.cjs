@@ -1,0 +1,17 @@
+const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict');
+(async()=>{const type=process.env.BROWSER==='webkit'?webkit:chromium,browser=await type.launch(type===chromium?{executablePath:'/usr/bin/chromium',args:['--no-sandbox']}:{executablePath:process.env.WEBKIT_EXECUTABLE_PATH});try{
+ const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>r.abort());await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();await page.waitForFunction(()=>window.__learningBootReady);
+ const result=await page.evaluate(async()=>{
+  myId='parts-budget';window.db={};currentTextbook='budget-book';window.LearningData.canSave=()=>true;
+  const docs=new Map([['users/parts-budget',{}]]),groups=[];let fail=false;
+  window.fbDoc=(_, ...parts)=>({path:parts.join('/')});window.fbSetDoc=async(ref,data)=>docs.set(ref.path,data);window.fbGetDoc=async ref=>({exists:()=>docs.has(ref.path),data:()=>docs.get(ref.path)});
+  window.fbRunTransaction=async(_,fn)=>{const reads=[],writes=[];const result=await fn({get:async ref=>{reads.push(ref.path);return {exists:()=>docs.has(ref.path),data:()=>docs.get(ref.path)};},set:(ref,data,options)=>writes.push([ref.path,data,options])});if(fail&&writes.some(([path])=>path.includes('/parts/')))throw Error('offline');for(const [path,data,options]of writes)docs.set(path,options?.merge?{...docs.get(path),...data}:data);groups.push({reads,writes:writes.map(([path])=>path)});return result;};AccountWriteGuard.install();
+  const progress={1:{status:'ok',history:['ok'],updatedAt:1000}},master=[{num:1,word:'save',meaning:'保存する'}];
+  localStorage.setItem(getVocabProgressStorageKey(currentTextbook),JSON.stringify(progress));localStorage.setItem(getVocabProgressStorageKey(currentTextbook)+'__ts','1000');
+  window.__collectGameSaveData=()=>({localStorage:{large:'a'.repeat(1600000)},memory:{vocabBookKey:currentTextbook,vocabMaster:master,vocabProgress:progress,vocabBooks:{'budget-book':{master,progress}}}});
+  const saved=await __backgroundSaveAll();const manifest=[...docs].find(([path])=>/^users\/parts-budget\/saves\/[^/]+$/.test(path)),meta=manifest[1];let raw='';for(let i=0;i<meta.partCount;i++)raw+=docs.get(manifest[0]+'/parts/'+meta.generation+'_p'+i).d;const restored=JSON.parse(raw);
+  const partGroups=groups.filter(group=>group.writes.some(path=>path.includes('/parts/'))),partCount=partGroups.reduce((sum,group)=>sum+group.writes.length,0);
+  fail=true;const interrupted=await __backgroundSaveAll();return {saved,interrupted,partCount,partGroups:partGroups.length,rootReads:partGroups.map(group=>group.reads.filter(path=>path==='users/parts-budget').length),restored:restored.data.memory.vocabProgress[1].status,previousGenerationPreserved:docs.get(manifest[0]).generation===meta.generation,local:LearningData.read(currentTextbook)[1].status};
+ });
+ assert.equal(result.saved.cloudSaved,true);assert.ok(result.partCount>=6,JSON.stringify(result));assert.ok(result.partGroups<result.partCount);assert.ok(result.rootReads.every(value=>value===1));assert.equal(result.restored,'ok');assert.equal(result.local,'ok');assert.equal(result.interrupted.localSaved,true);assert.equal(result.interrupted.cloudSaved,false);assert.equal(result.previousGenerationPreserved,true);assert.deepEqual(errors,[]);console.log('PASS',type.name(),JSON.stringify(result));
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
