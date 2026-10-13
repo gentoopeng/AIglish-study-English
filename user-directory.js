@@ -16,7 +16,7 @@ function scan(visit,isCurrent=()=>true){
    let timer;const snapshot=await Promise.race([window.fbGetDocs(ref),new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('通信が完了しませんでした。')),Math.max(1,expires-Date.now())))]).finally(()=>clearTimeout(timer));
    if(!active())throw Error('読み込みを中止しました。');
    const docs=snapshot.docs||[];if(!snapshot.docs)snapshot.forEach(doc=>docs.push(doc));
-   for(const doc of docs){if(!active())throw Error('読み込みを中止しました。');await visit(doc.id,doc.data());await new Promise(resolve=>setTimeout(resolve,0));}
+   for(const doc of docs){if(!active())throw Error('読み込みを中止しました。');const data=doc.data();window.ProfileIdentityCache?.remember(doc.id,data);await visit(doc.id,data);await new Promise(resolve=>setTimeout(resolve,0));}
    cursor=docs[docs.length-1];if(!paged||docs.length<10)break;
   }while(active());
   if(!active())throw Error('通信が完了しませんでした。');

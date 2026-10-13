@@ -1,7 +1,7 @@
 // Project only visible ranking fields. A page is bounded; leaving the view aborts the read.
 (function(root){
 'use strict';
-const identity=['playerName','name','avatar','profileCustomizationJson','deleted','lastActiveAt','lastLoginAt'];
+const identity=['playerName','name','avatar','avatarUpdatedAt','profileCustomizationJson','deleted','lastActiveAt','lastLoginAt'];
 const legacy=['learningRankingV2Json','studyLedgerJson','userStatsJson','statistics','user_stats','stats','userStats'];
 function monthAgo(now){const shifted=new Date(now+9*3600000),day=shifted.getUTCDate();shifted.setUTCDate(1);shifted.setUTCMonth(shifted.getUTCMonth()-1);const end=new Date(shifted);end.setUTCMonth(end.getUTCMonth()+1);end.setUTCDate(0);shifted.setUTCDate(Math.min(day,end.getUTCDate()));return shifted.getTime()-9*3600000;}
 function timestamp(value){return typeof value==='number'?value:Date.parse(value||'');}
@@ -24,6 +24,7 @@ async function load(group,{signal,now=Date.now()}={}){
    const missing=recent.filter(item=>!summary(item.data));
    if(missing.length){const extras=await read(':batchGet',{documents:missing.map(item=>item.document.name),mask:{fieldPaths:legacy}});const byName=new Map(extras.filter(item=>item.found).map(item=>[item.found.name,fields(item.found.fields)]));for(const item of missing)Object.assign(item.data,byName.get(item.document.name)||{});}
   }
+  recent.forEach(item=>root.ProfileIdentityCache?.remember(item.id,item.data));
   result.push(...recent.map(({id,data})=>({id,data})));cursor=page[page.length-1];
   if(page.length<20)break;
   await new Promise(resolve=>setTimeout(resolve,0));

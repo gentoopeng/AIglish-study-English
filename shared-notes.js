@@ -39,6 +39,7 @@
     const authors=new Map();
     async function author(id){
         if(id===owner())return {name:myName||id,avatar:localStorage.getItem('core_v4_user_avatar_'+id)||''};
+        if(window.ProfileIdentityCache)return ProfileIdentityCache.get(id);
         const known=window.People?.preview?.(id);if(known)return {name:known.name||id,avatar:known.avatar||''};
         const existing=authors.get(id);if(existing&&Date.now()-existing.at<300000)return existing.task;
         const task=(async()=>{const project=window.db?.app?.options?.projectId;if(!project||window.FirestoreReadGuard?.paused())return {name:id,avatar:''};
