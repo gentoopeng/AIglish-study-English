@@ -283,6 +283,7 @@ function collectAllData() {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
       if (!k) continue;
+      if (/^core_v4_(?:flash_queue|flash_cursor|group_synced)_/.test(k)) continue;
       if (k.indexOf('save_studio_') === 0 || k === 'aiglish_shared_background_catalog' || k === 'aiglish_profile_shop_catalog' || k === '__aiglish_render_guard') continue;
       // 単語帳本体は memory.vocabBooks に正規化して保存する。同じ内容のキャッシュを
       // 何重にも含めるとセーブ容量と通信回数が数倍になるため、再生成可能な複製は除外する。
@@ -428,6 +429,7 @@ function applyLoad(save) {
   var lsData = save.data.localStorage || {};
   var memData = save.data.memory || {};
   for (var k in lsData) {
+    if(window.LearningSessionsStorage?.restore(k,lsData[k]))continue;
     if(k==='aiglish_shared_background_catalog')continue;
     if(window.VocabMaster&&!window.VocabMaster.canRestoreStorage(k,lsData[k],memData,uid()))continue;
     try { localStorage.setItem(k, lsData[k]); } catch (e) {}
@@ -648,6 +650,9 @@ window.__fixPatch3Applied = true;
 var EXCLUDE_PREFIXES = [
 'aiglish_shared_background_catalog', // Shared photographs are fetched independently of personal backups.
 'aiglish_profile_shop_catalog', // Global artwork is fetched separately, never duplicated in personal backups.
+'core_v4_flash_queue_', // Device-only resume position is saved once, not uploaded with every backup.
+'core_v4_flash_cursor_',
+'core_v4_group_synced_',
 'save_studio_',      // セーブデータ本体（自分自身を含めない）
 'core_v4_cache_',    // 単語帳キャッシュ（巨大）
 'core_v4_user_avatar_' // アバター画像base64（巨大）
@@ -1085,6 +1090,7 @@ async function autoLoadOnce() {
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
     for(var key in stored){
+      if(window.LearningSessionsStorage?.restore(key,stored[key]))continue;
       if(key==='aiglish_shared_background_catalog')continue;
       if(window.VocabMaster&&!window.VocabMaster.canRestoreStorage(key,stored[key],save.data.memory,id))continue;
       if(key.indexOf('aiglish_learning_recovery_')===0)continue;

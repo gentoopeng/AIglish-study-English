@@ -85,3 +85,15 @@ Firestore RESTのrunQueryを利用し、20件ごとに必要なフィールド�
 これは日次無料枠を増やす／回復させる変更ではない。実際に日次読取枠を使い切った場合、枠が回復するまでクラウド保存に必要な照合も失敗し得る。無料枠のリセットは米国太平洋時間の午前0時ごろ（10月は日本時間16時ごろ）。クラウド同期完了までサイトデータを削除すると、端末だけに残る変更を失う可能性がある。端末保存をクラウド保存成功として扱わない。
 
 検証: 同時取得2→1、完了後の新規取得、書込後の確認の鮮度、上限中の自動構築省略と保留マーカー保持・回復後の送信、フレンド情報の受動更新では予約0回／解除では予約1回を確認。Chromium／WebKitで上限時の手動保存画面、端末記録と旧完成済みクラウド世代の保持、ランキングの再利用・手動再試行、上限バックオフをモックで確認する。実プロジェクトの枠・設定・データは操作しない。
+
+### Study groups and learning sessions (10.16)
+
+- Memberships: query only `users/{self}/studyGroups`, capped at 20 documents. Reuse the list for one minute; the list has an explicit refresh action. There is no scan of all groups or users. The hidden friends pane does not refresh the user directory when revisiting the group tab.
+- An open group listens to one bounded group document (12 members, latest 40 achievement entries). The listener is detached on close, tab changes, backgrounding, account loading, and quota backoff. A foregrounded open group reattaches. Creating/inviting a group reads only selected user profiles and atomically writes the group and their membership entries.
+- Progress is shared at most once per five minutes while visible, only if word/time totals changed; opening a group or tapping its refresh can publish sooner. Each changed group uses two transaction reads (group + current account tombstone) and one write. Goal changes and reaction toggles use the same bounded transaction. Existing unique-word ranking totals and the study ledger supply the counts; there is no per-word cloud activity feed. Time corrections follow the ledger timestamp, so sleep/manual deductions can reopen a time goal and retract an invalid milestone without accepting an older device’s value.
+- Group battle matchmaking reads a group's active room pointer and joins or creates a room transactionally. During play, the existing single-room listener, answer batching and settlement protocol apply. It never searches all battle rooms.
+- Flash queues/positions and group sync fingerprints stay on the device and are excluded from cloud backups. Small position updates do not serialize the whole queue again on every swipe. Older backups cannot rewind a device's position.
+- Understanding history stores one meaning-count snapshot per recorded day per book (maximum 366 days; last 30 shown), merges by each day's timestamp during restoration, and uses the existing backup. No new Firestore history query.
+- Login warm-up selects up to ten random words from an already cached/current book and the configured loading-quiz range. Answers use the existing durable learning journal, flushing every five answers and on closing; no scan/download of other books.
+
+The new social features necessarily add reads when used. They do not remove existing study saves or change the quota limit; validate actual daily usage in Firebase after deployment.
