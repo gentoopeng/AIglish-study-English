@@ -36,7 +36,7 @@ test('a delayed book load does not replace the selected book',async()=>{
 test('a delayed book load does not apply another user’s draft',async()=>{
  const {ctx,release}=setup();const pending=ctx.loadCurrentTextbookData();ctx.myId='user-b';release();await pending;assert.equal(ctx.applied,undefined);
 });
-const autoLoader=source.slice(source.indexOf('async function autoLoadOnce()'),source.indexOf('\nfunction openPanel()',source.indexOf('async function autoLoadOnce()')));
+const autoLoader=source.slice(source.indexOf('function restoreSaveStorage(save,id)'),source.indexOf('\nfunction openPanel()',source.indexOf('function restoreSaveStorage(save,id)')));
 test('restart preserves a newer local textbook draft than the integrated save',async()=>{
  const values=new Map();
  const recent={master:[{num:1,word:'new word'}],progress:{},savedAt:new Date(3000).toISOString()};

@@ -356,9 +356,12 @@ const { chromium, webkit } = require("playwright"),
       .getByRole("heading", { name: "まずは10単語", exact: true })
       .waitFor();
     assert.equal(await a.locator(".warmup-count").textContent(), "1 / 10");
-    const prompt = await a.locator(".warmup-card").textContent();
-    await a.locator(".warmup-card").click();
-    await a.locator("[data-warmup=so]").click();
+    await a.screenshot({ path: "/tmp/flash-warmup-ui.png" });
+    const prompt = await a
+      .locator(".warmup-card .flashcard-face-front>div")
+      .textContent();
+    await a.locator(".warmup-card").click({ force: true });
+    await a.locator("[data-warmup=so]").evaluate((b) => b.onclick());
     assert.equal(await a.locator(".warmup-count").textContent(), "2 / 10");
     const status = await a.evaluate((prompt) => {
       const w = vocabList.find((w) => w.word === prompt);
@@ -367,9 +370,22 @@ const { chromium, webkit } = require("playwright"),
       ].status;
     }, prompt);
     assert.equal(status, "so");
-    for (let i = 1; i < 10; i++) {
-      await a.locator(".warmup-card").click();
-      await a.locator("[data-warmup=ok]").click();
+    const bounds = await a.locator(".warmup-card").boundingBox();
+    await a.mouse.move(
+      bounds.x + bounds.width / 2,
+      bounds.y + bounds.height / 2,
+    );
+    await a.mouse.down();
+    await a.mouse.move(
+      bounds.x + bounds.width / 2 + 100,
+      bounds.y + bounds.height / 2,
+      { steps: 5 },
+    );
+    await a.mouse.up();
+    assert.equal(await a.locator(".warmup-count").textContent(), "3 / 10");
+    for (let i = 2; i < 10; i++) {
+      await a.locator(".warmup-card").click({ force: true });
+      await a.locator("[data-warmup=ok]").evaluate((b) => b.onclick());
     }
     assert.equal(await a.locator(".warmup-card").isDisabled(), true);
     // A queued final double-tap cannot answer an eleventh, nonexistent card.
@@ -385,7 +401,30 @@ const { chromium, webkit } = require("playwright"),
       document.querySelector("#vocabBookContents").hidden = false;
       renderVocabList();
     });
-    await a.getByRole("button", { name: "理解度の推移", exact: true }).click();
+    assert.equal(await a.locator("[data-meaning-history]").count(), 0);
+    await a.evaluate(() => {
+      const key =
+          "core_v4_meaning_history_" +
+          myId +
+          "_" +
+          encodeURIComponent(currentTextbook),
+        history = JSON.parse(localStorage.getItem(key) || "{}");
+      for (let ago = 1; ago <= 2; ago++) {
+        const d = new Date();
+        d.setDate(d.getDate() - ago);
+        history[StudyTimeModel.dateKey(d)] = {
+          ok: 8 - ago * 3,
+          so: ago + 2,
+          bad: ago,
+          none: 10 + ago,
+          at: d.getTime(),
+        };
+      }
+      localStorage.setItem(key, JSON.stringify(history));
+      showVocabStatsPopup();
+    });
+    await a.getByRole("button", { name: "推移", exact: true }).click();
+    await a.screenshot({ path: "/tmp/meaning-history-ui.png" });
     assert.equal(
       await a.getByRole("img", { name: "意味ごとの理解度の推移" }).count(),
       1,

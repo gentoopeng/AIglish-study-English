@@ -372,6 +372,33 @@
         setTimeout(function() { burst.remove(); }, 650);
     };
 
+    // Shared card surface and sizing for ordinary flashcards and the login warm-up.
+    window.fillFlashcardFaces=function(cardWrap,front,back,num,style){
+        var rotator=document.createElement('div');rotator.className='flashcard-inner-rotator';
+        ['front','back'].forEach(function(side){var face=document.createElement('div');face.className='flashcard-face-'+side;face.style.cssText=style||'';if(side==='front'){var badge=document.createElement('span');badge.className='flashcard-number';badge.textContent='#'+num;face.append(badge);}var text=document.createElement('div');text.style.cssText='font-size:'+(side==='front'?24:16)+'px;font-weight:'+(side==='front'?900:700)+';text-align:center;color:white;word-break:break-word;overflow-wrap:anywhere';if(side==='front')text.style.fontFamily='Times New Roman, serif';text.textContent=side==='front'?front:back;face.append(text);rotator.append(face);});cardWrap.append(rotator);
+    };
+    window.sizeFlashcardFaces=function(cardWrap,stage,posLabel){
+        var texts=Array.from(cardWrap.querySelectorAll('.flashcard-face-front > div,.flashcard-face-back > div'));
+        var diameter=240,maxDiameter=Math.max(240,Math.min(420,window.innerWidth-32));
+        function sizeTextArea(){
+            cardWrap.style.width=cardWrap.style.height=diameter+'px';
+            texts.forEach(function(text){text.style.width=(diameter*.74)+'px';text.style.padding='0';text.style.boxSizing='border-box';text.style.flexShrink='0';text.style.whiteSpace='normal';text.style.lineHeight='1.5';text.style.maxHeight='none';});
+        }
+        sizeTextArea();
+        while(diameter<maxDiameter && texts.some(function(text){return text.scrollHeight>diameter*.62;})) {
+            diameter=Math.min(maxDiameter,diameter+16);sizeTextArea();
+        }
+        texts.forEach(function(text){
+            var font=parseFloat(text.style.fontSize),minimum=14;
+            while(font>minimum && text.scrollHeight>diameter*.62){font--;text.style.fontSize=font+'px';}
+            text.style.maxHeight=(diameter*.62)+'px';text.style.overflowY='auto';text.style.overscrollBehavior='contain';
+            if(text.scrollHeight>text.clientHeight){text.style.touchAction='pan-y';text.addEventListener('pointerdown',function(e){e.stopPropagation();});}
+        });
+        stage.style.height=Math.max(320,diameter+40)+'px';
+        if(posLabel)posLabel.style.top='calc(50% + '+(diameter/2+12)+'px)';
+
+    };
+
     window.renderFlashcardDeck = function() {
         var stage = document.getElementById('flashcardDeckStage');
         if (!stage) return;
@@ -521,27 +548,10 @@
         frontText = window.escapeVocabText(frontText);
         backText = window.escapeVocabText(backText);
         var customStyle = (typeof window.getFlashcardStyleByHistory === 'function') ? window.getFlashcardStyleByHistory(wordData) : "";
-        cardWrap.innerHTML += '<div class="flashcard-inner-rotator" style="z-index:2;"><div class="flashcard-face-front" style="' + customStyle + '"><span style="font-size:11px; color:var(--text-sub); position:absolute; top:24px; font-weight:800;">#' + wordData.num + '</span><div style="font-size:24px; font-weight:900; font-family:\'Times New Roman\', serif; word-break:break-word; text-align:center; padding:0 15px; color:#FFFFFF;">' + frontText + '</div></div><div class="flashcard-face-back" style="' + customStyle + '"><div style="font-size:16px; font-weight:700; word-break:break-word; text-align:center; color:#FFFFFF; padding:0 15px; line-height:1.5;">' + backText + '</div></div></div>';
+        window.fillFlashcardFaces(cardWrap,flashcardDirectionMode === 'en2ja'?wordData.en:wordData.ja,flashcardDirectionMode === 'en2ja'?wordData.ja:wordData.en,wordData.num,customStyle);
         stage.appendChild(cardWrap);
         // The text box must grow with the circle; flex shrinking otherwise hides extra lines.
-        var texts=Array.from(cardWrap.querySelectorAll('.flashcard-face-front > div,.flashcard-face-back > div'));
-        var diameter=240,maxDiameter=Math.max(240,Math.min(420,window.innerWidth-32));
-        function sizeTextArea(){
-            cardWrap.style.width=cardWrap.style.height=diameter+'px';
-            texts.forEach(function(text){text.style.width=(diameter*.74)+'px';text.style.padding='0';text.style.boxSizing='border-box';text.style.flexShrink='0';text.style.whiteSpace='normal';text.style.lineHeight='1.5';text.style.maxHeight='none';});
-        }
-        sizeTextArea();
-        while(diameter<maxDiameter && texts.some(function(text){return text.scrollHeight>diameter*.62;})) {
-            diameter=Math.min(maxDiameter,diameter+16);sizeTextArea();
-        }
-        texts.forEach(function(text){
-            var font=parseFloat(text.style.fontSize),minimum=14;
-            while(font>minimum && text.scrollHeight>diameter*.62){font--;text.style.fontSize=font+'px';}
-            text.style.maxHeight=(diameter*.62)+'px';text.style.overflowY='auto';text.style.overscrollBehavior='contain';
-            if(text.scrollHeight>text.clientHeight){text.style.touchAction='pan-y';text.addEventListener('pointerdown',function(e){e.stopPropagation();});}
-        });
-        stage.style.height=Math.max(320,diameter+40)+'px';
-        if(posLabel)posLabel.style.top='calc(50% + '+(diameter/2+12)+'px)';
+        window.sizeFlashcardFaces(cardWrap,stage,posLabel);
 
         if (typeof window.initLucide === 'function') window.initLucide();
     };

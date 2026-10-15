@@ -1062,31 +1062,7 @@ function applySavedMemory(memory,id) {
     if(memory.myFriendList)localStorage.setItem('core_v4_friend_list',JSON.stringify(memory.myFriendList));
   }catch(e){}
 }
-async function autoLoadOnce() {
-  var id=loginUid(); if(!id)return;
-  if(window.__gameSaveLoadedFor===id)return;
-  window.__gameSaveLoadedFor=id;
-  if(window.LibraryState){try{await window.LibraryState.loadCloud(id);if(loginUid()!==id)return;window.LibraryState.cleanLocal(id);}catch(e){console.warn('[save] deletion history sync deferred',e);}}
-  var cloudSave=null,localSave=null,save=null,cloudMarker=null;
-  try{localSave=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}
-  try{cloudMarker=JSON.parse(localStorage.getItem(cloudMetaKey(id))||'null');}catch(e){}
-  if(!cloudMarker){
-    try{
-      var fallbackMeta=JSON.parse(localStorage.getItem(localMetaKey(id))||'null');
-      if(fallbackMeta&&fallbackMeta.source==='cloud')cloudMarker=fallbackMeta;
-    }catch(e){}
-  }
-  var localTime=Date.parse(localSave&&localSave.savedAt||'')||0;
-  var markedCloudTime=Date.parse(cloudMarker&&cloudMarker.savedAt||'')||0;
-  // 端末保存に失敗してクラウドだけ成功した場合、古い端末セーブを優先しない。
-  if(!localSave||markedCloudTime>localTime){
-    try{cloudSave=await fetchCloudSave(id);}catch(e){console.warn('[save] cloud load failed',e);}
-    save=cloudSave||localSave;
-  }else{
-    save=localSave;
-  }
-  if(loginUid()!==id)return;
-  if(save&&window.LibraryState)window.LibraryState.sanitizeSave(save,id);
+function restoreSaveStorage(save,id){
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
     for(var key in stored){
@@ -1152,6 +1128,33 @@ async function autoLoadOnce() {
       try{localStorage.setItem(key,stored[key]);}catch(e){}
     }
   }
+}
+async function autoLoadOnce() {
+  var id=loginUid(); if(!id)return;
+  if(window.__gameSaveLoadedFor===id)return;
+  window.__gameSaveLoadedFor=id;
+  if(window.LibraryState){try{await window.LibraryState.loadCloud(id);if(loginUid()!==id)return;window.LibraryState.cleanLocal(id);}catch(e){console.warn('[save] deletion history sync deferred',e);}}
+  var cloudSave=null,localSave=null,save=null,cloudMarker=null;
+  try{localSave=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}
+  try{cloudMarker=JSON.parse(localStorage.getItem(cloudMetaKey(id))||'null');}catch(e){}
+  if(!cloudMarker){
+    try{
+      var fallbackMeta=JSON.parse(localStorage.getItem(localMetaKey(id))||'null');
+      if(fallbackMeta&&fallbackMeta.source==='cloud')cloudMarker=fallbackMeta;
+    }catch(e){}
+  }
+  var localTime=Date.parse(localSave&&localSave.savedAt||'')||0;
+  var markedCloudTime=Date.parse(cloudMarker&&cloudMarker.savedAt||'')||0;
+  // 端末保存に失敗してクラウドだけ成功した場合、古い端末セーブを優先しない。
+  if(!localSave||markedCloudTime>localTime){
+    try{cloudSave=await fetchCloudSave(id);}catch(e){console.warn('[save] cloud load failed',e);}
+    save=cloudSave||localSave;
+  }else{
+    save=localSave;
+  }
+  if(loginUid()!==id)return;
+  if(save&&window.LibraryState)window.LibraryState.sanitizeSave(save,id);
+  restoreSaveStorage(save,id);
   if(save&&save.data&&save.data.memory){
     window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt||'',data:save.data.memory};
     applySavedMemory(save.data.memory,id);
@@ -1163,13 +1166,13 @@ function openPanel() {
   var m=document.createElement('div');m.id='fbsvModal';m.className='fbsv-modal';
   var last='未セーブ';try{var oldMeta=JSON.parse(localStorage.getItem(localMetaKey())||'null');if(oldMeta)last=oldMeta.savedAtDisplay||last;else{var old=JSON.parse(localStorage.getItem(localKey())||'null');if(old)last=old.savedAtDisplay||last;}}catch(e){}
   m.innerHTML='<div class="fbsv-card"><div class="fbsv-head"><div class="fbsv-title">💾 セーブ</div><button class="fbsv-close" id="fbsvClose">✕</button></div><div class="fbsv-row"><div><div class="fbsv-name">セーブデータ</div><div class="fbsv-date">最終保存: '+last+'</div></div><button class="fbsv-btn" id="fbsvSave">セーブする</button></div><div id="fbsvProgress" style="display:none;margin-top:12px"><div id="fbsvProgressText" style="font-size:11px;color:#fde68a;margin-bottom:6px">準備中 0%</div><div style="height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden"><div id="fbsvProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .2s"></div></div></div><div class="fbsv-note">端末へ保存した後にクラウドへ同期します。利用上限・切断時は端末の記録と同期待ちを残します。クラウド未同期の間はサイトデータを削除せず、同じ端末で使ってください。</div></div>';
-  document.body.appendChild(m);m.querySelector('#fbsvClose').onclick=closePanel;m.onclick=function(e){if(e.target===m)closePanel();};
+  document.body.appendChild(m);window.FileBackups?.attach(m);m.querySelector('#fbsvClose').onclick=closePanel;m.onclick=function(e){if(e.target===m)closePanel();};
   m.querySelector('#fbsvSave').onclick=async function(){var b=this;b.disabled=true;try{var result=await saveAll();b.textContent=result.cloudSaved?'保存完了':'端末に保存完了・クラウド同期待ち';if(!result.cloudSaved)window.queueBackgroundSave?.();}catch(e){progress(0,Date.now(),'保存失敗');b.textContent='もう一度試す';console.error(e);}finally{b.disabled=false;}};
 }
 function ensureBtn(){var b=document.getElementById('headerSaveBtn'),h=document.querySelector('.app-header');if(!b&&h){b=document.createElement('button');b.id='headerSaveBtn';b.type='button';b.innerHTML='💾';b.style.cssText='position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';h.appendChild(b);}return b;}
 document.addEventListener('click',function(e){var t=e.target;if(t&&t.closest&&t.closest('#headerSaveBtn')){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openPanel();}},true);
 window.onBeforeAppLoad(autoLoadOnce);
-window.onAppLoaded(function(){
+function restorePendingSaveMemory(){
   ensureBtn();
   var pending=window.__pendingGameSaveMemory;
   if(!pending)return;
@@ -1269,7 +1272,24 @@ window.onAppLoaded(function(){
   try{if(typeof window.renderLeaderboard==='function')window.renderLeaderboard();}catch(e){}
   try{if(typeof window.renderBookshelf==='function')window.renderBookshelf();}catch(e){}
   if(restoredSuccessfully&&window.__pendingGameSaveMemory===pending)window.__pendingGameSaveMemory=null;
-});
+}
+window.onAppLoaded(restorePendingSaveMemory);
+
+// File restoration shares the same timestamp-aware learning recovery path and performs no cloud fetch.
+window.__restoreLearningFile=async function(save,id){
+ if((myId||'GUEST-000')!==id||(localStorage.getItem('core_v4_userId')&&localStorage.getItem('core_v4_userId')!==id)||window.__learningBootReady!==true||!window.LearningData.canSave(currentTextbook))throw Error('読み込みが終わってから同じアカウントで復元してください。');
+ window.__captureManualVocabDraft();
+ if(window.LibraryState)window.LibraryState.sanitizeSave(save,id);
+ var memory=save.data.memory||{};
+ if(memory.userStats){var ledger=window.StudyTimeModel.mergeCurrent(window.StudyTime.snapshot(),memory.userStats.study_calendar_v2);memory.userStats={...userStats,...memory.userStats,study_calendar_v2:ledger};}
+ if(Array.isArray(memory.textbooksPool))memory.textbooksPool=Array.from(new Map([...memory.textbooksPool,...textbooksPool].map(book=>[book.id,book])).values());
+ restoreSaveStorage(save,id);
+ window.switchTab('vocab');window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt,data:memory};restorePendingSaveMemory();
+ if(window.__pendingGameSaveMemory)throw Error('復元の一部が完了していません。元のファイルを保管して再試行してください。');
+ window.StudyTime.init();window.syncRankingMetrics();window.showVocabLibrarySelection();
+ var restored={slot:SLOT,savedAt:new Date().toISOString(),savedAtDisplay:nowDisplay(),data:collectAll()};localStorage.setItem(localKey(id),JSON.stringify(restored));localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:restored.savedAt,savedAtDisplay:restored.savedAtDisplay,source:'local'}));await markCloudPending(id);
+ await window.AppStorage?.flush();window.queueBackgroundSave?.();return true;
+};
 if(document.readyState!=='loading')setTimeout(ensureBtn,400);else document.addEventListener('DOMContentLoaded',function(){setTimeout(ensureBtn,400);});
 console.log('☁️ 単一セーブ＋ログイン時自動ロード適用完了');
 })();

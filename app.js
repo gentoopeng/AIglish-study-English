@@ -7565,6 +7565,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     function findVocabForCard(wordData) {
         if (!wordData) return null;
+        if (wordData.sourceWord) return wordData.sourceWord;
         var match = null;
         if (wordData.num !== undefined && wordData.num !== null) {
             match = vocabList.find(function(v) { return String(v.num) === String(wordData.num); });
