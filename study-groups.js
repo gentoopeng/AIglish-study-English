@@ -661,6 +661,7 @@
       nav.append(b);
     }
     root.append(nav, friends, groups, battle);
+    document.querySelector('#createStudyGroup').innerHTML='<span class="group-create-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M19 7v8m-4-4h8"/></svg></span><span>グループを作る</span>';
     document.querySelector("#createStudyGroup").onclick = () =>
       edit().catch(error);
     document.querySelector("#refreshStudyGroups").onclick = () =>

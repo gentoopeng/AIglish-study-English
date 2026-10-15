@@ -214,91 +214,168 @@
     later();
     return result;
   };
-  window.openMeaningHistory = function () {
+  function drawMeaningHistory(host, legend) {
     record();
     const history = read("meaning_history", currentTextbook) || {},
       dates = Object.keys(history).sort().slice(-30),
-      d = window.openLibraryDialog(
-        "理解度の推移",
-        '<p class="library-editor-hint">直近30記録日の意味の数です。記録開始前のデータは含みません。</p><div class="meaning-chart"></div><div class="meaning-chart-legend"></div><button type="button" data-library-close>閉じる</button>',
-      ),
-      host = d.querySelector(".meaning-chart"),
       colors = {
-        ok: "#34d399",
-        so: "#fbbf24",
-        bad: "#fb7185",
-        none: "#94a3b8",
+        ok: "#6ed5b0",
+        so: "#dec384",
+        bad: "#db99a6",
+        none: "#a5b4ca",
       };
+    const ns = "http://www.w3.org/2000/svg",
+      svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 340 200");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "意味ごとの理解度の推移");
     const max = Math.max(
       1,
-      ...dates.map((date) =>
-        ["ok", "so", "bad", "none"].reduce((n, k) => n + history[date][k], 0),
+      ...dates.flatMap((date) =>
+        ["ok", "so", "bad", "none"].map((k) => Number(history[date][k]) || 0),
       ),
     );
-    const chart = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    chart.setAttribute("viewBox", "0 0 340 200");
-    chart.setAttribute("role", "img");
-    chart.setAttribute("aria-label", "意味ごとの理解度の推移");
-    const width = 300 / Math.max(1, dates.length);
-    dates.forEach((date, i) => {
-      let y = 170;
-      for (const k of ["ok", "so", "bad", "none"]) {
-        const height = (history[date][k] / max) * 145;
-        const rect = document.createElementNS(chart.namespaceURI, "rect");
-        rect.setAttribute("x", String(30 + i * width));
-        rect.setAttribute("y", String(y - height));
-        rect.setAttribute("width", String(Math.max(1, width - 2)));
-        rect.setAttribute("height", String(height));
-        rect.setAttribute("fill", colors[k]);
-        const title = document.createElementNS(chart.namespaceURI, "title");
-        title.textContent = date + " " + k + " " + history[date][k];
-        rect.append(title);
-        chart.append(rect);
-        y -= height;
-      }
-      if (i === 0 || i === dates.length - 1) {
-        const text = document.createElementNS(chart.namespaceURI, "text");
-        text.setAttribute(
-          "x",
-          String(i === dates.length - 1 && i > 0 ? 330 : 30),
-        );
-        text.setAttribute(
-          "text-anchor",
-          i === dates.length - 1 && i > 0 ? "end" : "start",
-        );
-        text.setAttribute("y", "193");
-        text.setAttribute("fill", "currentColor");
-        text.setAttribute("font-size", "11");
-        text.textContent = date.slice(5);
-        chart.append(text);
-      }
-    });
-    host.append(chart);
+    function node(tag, attrs, text) {
+      const el = document.createElementNS(ns, tag);
+      Object.entries(attrs).forEach(([key, value]) =>
+        el.setAttribute(key, String(value)),
+      );
+      if (text !== undefined) el.textContent = text;
+      svg.append(el);
+      return el;
+    }
+    for (let i = 0; i < 3; i++) {
+      const y = 164 - i * 72;
+      node("line", {
+        x1: 36,
+        x2: 322,
+        y1: y,
+        y2: y,
+        stroke: "currentColor",
+        "stroke-opacity": 0.1,
+      });
+      node(
+        "text",
+        {
+          x: 30,
+          y: y + 4,
+          "text-anchor": "end",
+          fill: "currentColor",
+          "font-size": 10,
+          opacity: 0.65,
+        },
+        Math.round((max * i) / 2),
+      );
+    }
     for (const [k, label] of [
       ["ok", "○"],
       ["so", "△"],
       ["bad", "×"],
       ["none", "未履修"],
     ]) {
+      const points = dates.map((date, i) => [
+        dates.length === 1 ? 179 : 36 + (i * 286) / (dates.length - 1),
+        164 - ((Number(history[date][k]) || 0) / max) * 144,
+      ]);
+      if (points.length) {
+        const path = points
+          .map(([x, y], i) => (i ? "L" : "M") + x + "," + y)
+          .join(" ");
+        if (points.length > 1)
+          node("path", {
+            d: path + " L322,164 L36,164 Z",
+            fill: colors[k],
+            "fill-opacity": 0.045,
+          });
+        node("path", {
+          d: path,
+          fill: "none",
+          stroke: colors[k],
+          "stroke-width": 1.7,
+          "stroke-linejoin": "round",
+        });
+        for (const [x, y] of points)
+          node("circle", { cx: x, cy: y, r: 2.2, fill: colors[k] });
+      }
       const span = document.createElement("span");
       span.style.color = colors[k];
       span.textContent = label + " " + (history[dates.at(-1)]?.[k] || 0);
-      d.querySelector(".meaning-chart-legend").append(span);
+      legend.append(span);
     }
+    for (const [i, anchor] of dates.length === 1
+      ? [[0, "middle"]]
+      : [
+          [0, "start"],
+          [dates.length - 1, "end"],
+        ])
+      if (dates[i] && (dates.length > 1 || i === 0))
+        node(
+          "text",
+          {
+            x: anchor === "middle" ? 179 : anchor === "end" ? 322 : 36,
+            y: 190,
+            "text-anchor": anchor,
+            fill: "currentColor",
+            "font-size": 11,
+            opacity: 0.7,
+          },
+          dates[i].slice(5),
+        );
+    host.append(svg);
+  }
+  const showStats = window.showVocabStatsPopup;
+  window.showVocabStatsPopup = function () {
+    showStats.apply(this, arguments);
+    const overlay = document.getElementById("vocabStatsOverlay"),
+      box = overlay?.firstElementChild;
+    if (!box) return;
+    box.classList.add("vocab-statistics-card");
+    const header = box.firstElementChild,
+      pie = document.createElement("div");
+    pie.dataset.vocabChart = "current";
+    while (header.nextSibling) pie.append(header.nextSibling);
+    const history = document.createElement("div");
+    history.dataset.vocabChart = "history";
+    history.hidden = true;
+    history.innerHTML =
+      '<div class="meaning-chart"></div><div class="meaning-chart-legend"></div><p class="library-editor-hint">直近30記録日の意味の数。記録開始日から表示します。</p>';
+    const nav = document.createElement("div");
+    nav.className = "statistics-switch";
+    nav.setAttribute("aria-label", "理解度グラフの表示");
+    for (const [mode, label] of [
+      ["current", "現在の理解度"],
+      ["history", "推移"],
+    ]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.dataset.chartMode = mode;
+      b.setAttribute("aria-pressed", String(mode === "current"));
+      b.onclick = () => {
+        pie.hidden = mode !== "current";
+        history.hidden = mode !== "history";
+        nav
+          .querySelectorAll("button")
+          .forEach((button) =>
+            button.setAttribute("aria-pressed", String(button === b)),
+          );
+        if (mode === "history" && !history.querySelector("svg"))
+          drawMeaningHistory(
+            history.querySelector(".meaning-chart"),
+            history.querySelector(".meaning-chart-legend"),
+          );
+      };
+      nav.append(b);
+    }
+    box.append(nav, pie, history);
+  };
+  window.openMeaningHistory = function () {
+    window.showVocabStatsPopup();
+    document.querySelector("[data-chart-mode=history]")?.click();
   };
   const renderList = window.renderVocabList;
   window.renderVocabList = function () {
-    const result = renderList.apply(this, arguments),
-      host = document.querySelector("#vocabListContainer");
-    if (host && !document.querySelector("[data-meaning-history]")) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "meaning-history-button";
-      b.dataset.meaningHistory = "";
-      b.textContent = "理解度の推移";
-      b.onclick = window.openMeaningHistory;
-      host.before(b);
-    }
+    const result = renderList.apply(this, arguments);
     later();
     return result;
   };
@@ -394,12 +471,15 @@
       revealed = false;
     const d = window.openLibraryDialog(
       "まずは" + queue.length + "単語",
-      '<p class="warmup-count"></p><button type="button" class="warmup-card" aria-label="答えを表示"></button><div class="warmup-ratings"><button type="button" data-warmup="bad">×</button><button type="button" data-warmup="so">△</button><button type="button" data-warmup="ok">○</button></div><p data-warmup-status role="status"></p><button type="button" data-library-close>あとで</button>',
+      '<p class="warmup-count"></p><div class="warmup-directions"><span>× 覚えていない</span><span>△ 上へスワイプ</span><span>○ 覚えた</span></div><div class="warmup-stage"><button type="button" class="warmup-card flashcard-wrapper-3d" aria-label="答えを表示"></button></div><div class="warmup-ratings"><button type="button" data-warmup="bad">×</button><button type="button" data-warmup="so">△</button><button type="button" data-warmup="ok">○</button></div><p data-warmup-status role="status"></p><button type="button" data-library-close>あとで</button>',
     );
+    d.classList.add("flash-warmup-dialog");
+    document.body.classList.add("flash-warmup-open");
     welcomeModal = d;
     d.addEventListener(
       "close",
       () => {
+        document.body.classList.remove("flash-warmup-open");
         welcomePending = false;
         welcomeModal = null;
         if (index > 0) window.queueBackgroundSave?.();
@@ -422,14 +502,46 @@
       revealed = false;
       if (index === queue.length) {
         d.querySelector(".warmup-count").textContent = "準備完了！";
-        card.textContent = queue.length + "単語、おつかれさま";
+        card.replaceChildren();
+        window.fillFlashcardFaces(
+          card,
+          queue.length + "単語、おつかれさま",
+          "",
+          "✓",
+          "",
+        );
         card.disabled = true;
         ratings.hidden = true;
         d.querySelector("[data-library-close]").textContent = "学習をはじめる";
         return;
       }
       revealed = false;
-      card.textContent = queue[index].word;
+      card.replaceChildren();
+      card.classList.remove("flipped");
+      const w = queue[index],
+        meaning = w.meanings?.[0];
+      const saved = window.LearningData.read(book)[String(w.num)],
+        sourceWord = {
+          ...w,
+          meanings: w.meanings.map((m) => ({
+            ...m,
+            ...saved?.meanings?.[String(m.id)],
+          })),
+        };
+      window.fillFlashcardFaces(
+        card,
+        w.word,
+        meaning?.text || w.meaning,
+        w.num,
+        window.getFlashcardStyleByHistory?.({
+          num: w.num,
+          en: w.word,
+          meaningId: meaning?.id,
+          meaningIndex: 0,
+          sourceWord,
+        }) || "",
+      );
+      window.sizeFlashcardFaces(card, d.querySelector(".warmup-stage"));
       card.setAttribute("aria-label", "答えを表示");
       ratings.querySelectorAll("button").forEach((b) => (b.disabled = true));
       d.querySelector(".warmup-count").textContent =
@@ -438,9 +550,8 @@
     card.onclick = () => {
       if (index >= queue.length) return;
       revealed = !revealed;
-      card.textContent = revealed
-        ? queue[index].meanings?.[0]?.text || queue[index].meaning
-        : queue[index].word;
+      card.classList.toggle("flipped", revealed);
+      window.AppSounds?.play("back");
       ratings
         .querySelectorAll("button")
         .forEach((b) => (b.disabled = !revealed));
@@ -448,15 +559,31 @@
     let pointer = null,
       dragged = false;
     card.addEventListener("pointerdown", (e) => {
+      if (!e.isPrimary) return;
+      card.setPointerCapture(e.pointerId);
       pointer = { x: e.clientX, y: e.clientY };
       dragged = false;
     });
+    card.addEventListener("pointermove", (e) => {
+      if (!pointer) return;
+      card.classList.add("is-dragging");
+      card.style.transform =
+        "translate(" +
+        (e.clientX - pointer.x) +
+        "px," +
+        (e.clientY - pointer.y) +
+        "px) rotate(" +
+        (e.clientX - pointer.x) * 0.06 +
+        "deg)";
+    });
     card.addEventListener("pointerup", (e) => {
-      if (!pointer || !revealed) return;
+      card.classList.remove("is-dragging");
+      card.style.removeProperty("transform");
+      if (!pointer) return;
       const dx = e.clientX - pointer.x,
         dy = e.clientY - pointer.y;
       pointer = null;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < 50) return;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 65) return;
       dragged = true;
       const status =
         Math.abs(dy) > Math.abs(dx) && dy < 0
@@ -466,10 +593,23 @@
               ? "ok"
               : "bad"
             : null;
+      if (status) {
+        revealed = true;
+        ratings.querySelectorAll("button").forEach((b) => (b.disabled = false));
+        window.AppSounds?.play(
+          status === "ok"
+            ? "swipe-right"
+            : status === "bad"
+              ? "swipe-left"
+              : "navigate",
+        );
+      }
       if (status) ratings.querySelector("[data-warmup=" + status + "]").click();
     });
     card.addEventListener("pointercancel", () => {
       pointer = null;
+      card.classList.remove("is-dragging");
+      card.style.removeProperty("transform");
     });
     const flip = card.onclick;
     card.onclick = (e) => {

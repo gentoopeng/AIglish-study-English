@@ -151,18 +151,8 @@
     window.showVocabStatsPopup = function() {
         var old = document.getElementById('vocabStatsOverlay');
         if (old) old.remove();
-        var total = vocabList.length;
-        var ok = 0,
-            so = 0,
-            bad = 0,
-            none = 0;
-        vocabList.forEach(function(w) {
-            var s = window.wordOverallStatus(w);
-            if (s === 'ok') ok++;
-            else if (s === 'so') so++;
-            else if (s === 'bad') bad++;
-            else none++;
-        });
+        var meanings=vocabList.flatMap(function(w){return w.meanings&&w.meanings.length?w.meanings:[w];});
+        var total=meanings.length,ok=0,so=0,bad=0,none=0;meanings.forEach(function(m){if(m.status==='ok')ok++;else if(m.status==='so')so++;else if(m.status==='bad')bad++;else none++;});
         var denom = total || 1;
         var pct = function(v) { return total ? Math.round(v / denom * 100) : 0; };
         var segs = [
@@ -184,7 +174,7 @@
         if (total === 0) circles = '<circle r="' + r + '" cx="60" cy="60" fill="none" stroke="#334155" stroke-width="14"/>';
         var listHtml = '';
         segs.forEach(function(seg) {
-            listHtml += '<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08); font-size:13px;"><span style="display:flex; align-items:center; gap:8px;"><span style="width:12px; height:12px; border-radius:3px; background:' + seg.color + '; display:inline-block;"></span>' + seg.label + '</span><span style="font-weight:800;">' + seg.value + '語 <span style="color:var(--text-sub); font-weight:600;">(' + pct(seg.value) + '%)</span></span></div>';
+            listHtml += '<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08); font-size:13px;"><span style="display:flex; align-items:center; gap:8px;"><span style="width:12px; height:12px; border-radius:3px; background:' + seg.color + '; display:inline-block;"></span>' + seg.label + '</span><span style="font-weight:800;">' + seg.value + '件 <span style="color:var(--text-sub); font-weight:600;">(' + pct(seg.value) + '%)</span></span></div>';
         });
         var ov = document.createElement('div');
         ov.id = 'vocabStatsOverlay';
@@ -192,8 +182,8 @@
         var box = document.createElement('div');
         box.style.cssText = "background:var(--card-bg); border:1px solid var(--cosmic-cyan); border-radius:16px; padding:20px; width:88%; max-width:340px; color:#fff; box-shadow:0 10px 30px rgba(0,0,0,0.6);";
         var currentBook = (typeof textbooksPool !== 'undefined' && Array.isArray(textbooksPool)) ? textbooksPool.find(function(b) { return b.id === currentTextbook; }) : null;
-        var bookName = currentBook ? currentBook.name : '共通単語帳';
-        box.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;"><div style="font-size:16px; font-weight:900;">📊 単語帳の詳細</div><button id="vocabStatsClose" style="background:none; border:none; color:var(--text-sub); font-size:20px; cursor:pointer; line-height:1;">×</button></div><div style="text-align:center; font-size:12px; color:var(--cosmic-purple-light); font-weight:800; margin-bottom:8px;">📔 ' + bookName + '</div><div style="text-align:center; font-size:13px; margin-bottom:12px;">登録単語数: <strong style="color:var(--cosmic-cyan); font-size:18px;">' + total + '</strong> 語</div><div style="display:flex; justify-content:center; margin-bottom:14px;"><svg width="120" height="120" viewBox="0 0 120 120">' + circles + '<text x="60" y="64" text-anchor="middle" fill="#fff" font-size="16" font-weight="900">' + total + '</text></svg></div>' + listHtml;
+        var bookName = window.escapeVocabText(currentBook ? currentBook.name : '共通単語帳');
+        box.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;"><div style="font-size:16px; font-weight:900;">📊 単語帳の詳細</div><button id="vocabStatsClose" style="background:none; border:none; color:var(--text-sub); font-size:20px; cursor:pointer; line-height:1;">×</button></div><div style="text-align:center; font-size:12px; color:var(--cosmic-purple-light); font-weight:800; margin-bottom:8px;">📔 ' + bookName + '</div><div style="text-align:center; font-size:13px; margin-bottom:12px;">登録された意味: <strong style="color:var(--cosmic-cyan); font-size:18px;">' + total + '</strong> 件</div><div style="display:flex; justify-content:center; margin-bottom:14px;"><svg width="120" height="120" viewBox="0 0 120 120">' + circles + '<text x="60" y="64" text-anchor="middle" fill="#fff" font-size="16" font-weight="900">' + total + '</text></svg></div>' + listHtml;
         ov.appendChild(box);
         document.body.appendChild(ov);
         ov.querySelector('#vocabStatsClose').onclick = function() { ov.remove(); };
