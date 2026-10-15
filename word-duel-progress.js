@@ -4,12 +4,14 @@
 const owner=()=>myId||'GUEST-000',pendingKey=id=>'core_v4_word_duel_pending_'+id,queues=new Map();
 function pending(id){return JSON.parse(localStorage.getItem(pendingKey(id))||'{}');}
 function overall(meanings,count){const statuses=Object.values(meanings).map(item=>item.status||'none');while(statuses.length<count)statuses.push('none');return statuses.includes('bad')?'bad':statuses.length&&statuses.every(value=>value==='ok')?'ok':statuses.includes('so')||statuses.includes('ok')?'so':'none';}
-function apply(book,ref,right,id){
+function apply(book,ref,answer,id){
  if(id!==owner()||window.__learningBootReady===false)throw Error('理解度の読み込みが完了していません。');
  if(!book||!ref||typeof ref.num!=='string'||typeof ref.mid!=='string'||!ref.sig)throw Error('単語の保存先を確認できません。');
  const before=window.LearningData.read(book)[ref.num]||{};
  if(before.sig&&before.sig!==ref.sig)throw Error('単語帳が変更されているため、この回答の理解度は上書きしません。');
- const status=right?'ok':'bad',previous=before.meanings?.[ref.mid]||{},meanings={...before.meanings,[ref.mid]:{...previous,status,history:[...(previous.history||[]),status].slice(-20)}},word={...before,sig:ref.sig,note:before.note||'',meanings,status:overall(meanings,ref.count),history:[...(before.history||[]),status].slice(-20)};
+ const status=typeof answer==='boolean'?(answer?'ok':'bad'):answer;
+ if(!['ok','so','bad'].includes(status))throw Error('理解度の指定を確認してください。');
+ const previous=before.meanings?.[ref.mid]||{},meanings={...before.meanings,[ref.mid]:{...previous,status,history:[...(previous.history||[]),status].slice(-20)}},word={...before,sig:ref.sig,note:before.note||'',meanings,status:overall(meanings,ref.count),history:[...(before.history||[]),status].slice(-20)};
  // Write the retry intent first; interruption at any point keeps a recoverable record.
  const jobs=pending(id),job=jobs[book]||(jobs[book]={});job[ref.num]={revision:(job[ref.num]?.revision||0)+1,mids:[...new Set([...(job[ref.num]?.mids||[]),ref.mid])],count:ref.count};localStorage.setItem(pendingKey(id),JSON.stringify(jobs));
  const words=window.LearningData.commit(book,{[ref.num]:word},ref.num,true);

@@ -119,6 +119,8 @@
         if (settingsOpener && settingsOpener.isConnected) settingsOpener.focus();
     }
 
+    window.closeBookFlashcardSettings = closeBookSettings;
+
     window.startFlashcardFromSettings = async function() {
         if (startingBookSettings) return;
         var start = Number(document.getElementById('flashcardRangeStart').value);
@@ -231,6 +233,7 @@
         flashcardCurrentIndex = 0;
         flashcardLearnedCount = 0;
         flashcardSessionHistory = [];
+        window.FlashCheckpoint?.begin();
 
         document.getElementById('flashcard-setup-screen').style.display = 'none';
         document.getElementById('flashcard-play-screen').style.display = 'flex';
@@ -664,6 +667,7 @@
         // 次のカードを最初に表示する。単語帳全体の再描画やランキング更新を
         // スワイプと同じ処理内で行うと、端末によって操作後に引っ掛かる。
         flashcardCurrentIndex++;
+        window.FlashCheckpoint?.save();
         window.renderFlashcardDeck();
         setTimeout(function() {
             if (typeof window.saveUserStats === 'function') window.saveUserStats();
@@ -699,6 +703,7 @@
             if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(vocabList[previous.vocabIndex].num);
             if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         }
+        window.FlashCheckpoint?.save();
         window.renderFlashcardDeck();
     };
 
@@ -716,7 +721,8 @@
         });
     };
 
-    window.finishFlashcardSession = function() {
+    window.finishFlashcardSession = function(keepCheckpoint) {
+        window.FlashCheckpoint?.finish(keepCheckpoint===true);
         if(window.flushFlashAutosave)window.flushFlashAutosave();
         if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         if (typeof window.flushChangedVocabData === 'function') window.flushChangedVocabData();
