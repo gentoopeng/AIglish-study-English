@@ -419,6 +419,7 @@
         d.close();
         return;
       }
+      revealed = false;
       if (index === queue.length) {
         d.querySelector(".warmup-count").textContent = "準備完了！";
         card.textContent = queue.length + "単語、おつかれさま";
@@ -481,7 +482,7 @@
     ratings.querySelectorAll("button").forEach(
       (b) =>
         (b.onclick = () => {
-          if (!revealed || uid() !== account) return;
+          if (!revealed || uid() !== account || index >= queue.length) return;
           const w = queue[index],
             meaning = w.meanings?.[0];
           if (!meaning) {

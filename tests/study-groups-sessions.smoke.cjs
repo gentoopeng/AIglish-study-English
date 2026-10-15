@@ -367,7 +367,19 @@ const { chromium, webkit } = require("playwright"),
       ].status;
     }, prompt);
     assert.equal(status, "so");
-    await a.getByRole("button", { name: "あとで", exact: true }).click();
+    for (let i = 1; i < 10; i++) {
+      await a.locator(".warmup-card").click();
+      await a.locator("[data-warmup=ok]").click();
+    }
+    assert.equal(await a.locator(".warmup-card").isDisabled(), true);
+    // A queued final double-tap cannot answer an eleventh, nonexistent card.
+    await a.evaluate(() =>
+      document.querySelector("[data-warmup=ok]").onclick(),
+    );
+    assert.equal(await a.locator(".warmup-count").textContent(), "準備完了！");
+    await a
+      .getByRole("button", { name: "学習をはじめる", exact: true })
+      .click();
     await a.evaluate(() => {
       document.querySelector("#vocabLibrarySelection").hidden = true;
       document.querySelector("#vocabBookContents").hidden = false;
