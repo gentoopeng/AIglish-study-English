@@ -125,7 +125,15 @@
     data.memory.vocabBooks = data.memory.vocabBooks || {};
     for (const book of textbooksPool || []) {
       if (window.LibraryState.isDeleted("book", book.id, owner)) continue;
-      const draft = window.VocabMaster.resolve(book.id);
+      let draft = window.VocabMaster.resolve(book.id);
+      if (!draft && window.TextbookFiles)
+        draft = await window.TextbookFiles.restoreBook(book.id, owner, true);
+      if (
+        draft?.masterRef &&
+        !Array.isArray(draft.master) &&
+        window.TextbookFiles
+      )
+        draft = await window.TextbookFiles.hydrate(book.id, draft, owner, true);
       if (draft)
         data.memory.vocabBooks[book.id] = {
           ...safe(draft),
@@ -133,6 +141,17 @@
         };
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (uid() !== owner) throw Error("アカウントが変わりました。");
+    }
+    // A downloaded cloud save may contain unopened books as references. A manual
+    // backup must be self-contained; never silently export missing textbook bodies.
+    if (window.TextbookFiles) {
+      for (const [book, draft] of Object.entries(data.memory.vocabBooks)) {
+        if (draft.masterRef && !Array.isArray(draft.master)) {
+          data.memory.vocabBooks[book] = safe(
+            await window.TextbookFiles.hydrate(book, draft, owner, true),
+          );
+        }
+      }
     }
     const result = {
       schema: "aiglish-learning-backup",
@@ -216,8 +235,12 @@
     const section = document.createElement("section");
     section.className = "file-backup-actions";
     section.innerHTML =
-      '<h3>ファイルにバックアップ</h3><p>「ファイル」やiCloud Driveへ書き出して、サイトの外にも保管できます。クラウドの利用制限中でも使えます。</p><div><button type="button" data-backup-export>書き出す</button><button type="button" data-backup-import>ファイルから復元</button></div><input type="file" accept=".json,application/json" hidden><p data-backup-status role="status"></p><div data-backup-preview hidden></div>';
-    host.append(section);
+      '<h3>ファイルにバックアップ</h3><p>教材の自動保存とは別の予備コピーです。「ファイル」やiCloud Driveへ保管できます。</p><div><button type="button" data-backup-export>書き出す</button><button type="button" data-backup-import>ファイルから復元</button></div><input type="file" accept=".json,application/json" hidden><p data-backup-status role="status"></p><div data-backup-preview hidden></div>';
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = "ファイルにバックアップ・復元（任意）";
+    details.append(summary, section);
+    host.append(details);
     const message = section.querySelector("[data-backup-status]"),
       input = section.querySelector("input");
     section.querySelector("[data-backup-export]").onclick = async (e) => {

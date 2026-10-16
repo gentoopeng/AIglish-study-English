@@ -69,6 +69,7 @@ await window.fbRunTransaction(window.db,async tx=>{const ref=window.fbDoc(window
 // Remove the deleted player's answers/identity from retained match history.
 await scan(window.fbCollection(window.db,'wordDuelRooms'),async doc=>{if(!doc.data().players?.[id])return;await window.fbRunTransaction(window.db,async tx=>{const snap=await tx.get(doc.ref);if(!snap.exists()||!snap.data().players?.[id])return;const room=snap.data();room.players[id]={name:'削除済み',answers:[],done:true,abandoned:true};if(room.result)for(const [field,value]of [['ratings',1500],['scores',0],['deltas',0]])if(room.result[field]&&typeof room.result[field]==='object'&&!Array.isArray(room.result[field]))room.result[field][id]=value;tx.set(doc.ref,room);});});
 await window.fbSetDoc(window.fbDoc(window.db,'users',id),{deleted:true,deletedAt:now,deletionState:'complete'});
+await window.TextbookFiles?.remove(id);
 const cache=cachedUsers();localStorage.setItem('core_v4_users',JSON.stringify(cache.filter(user=>user.id!==id)));window.SharedVocabNotes?.invalidate();window.LearningRanking?.invalidate();window.People?.invalidate();
 if(id===myId){purgeLocal(id);localStorage.setItem('core_v4_account_deleted_'+id,'1');localStorage.removeItem('core_v4_userId');await window.AppStorage?.flush();location.reload();return;}
 await refresh();message('学習記録・バックアップ・共有メモを完全削除しました。');
@@ -86,7 +87,7 @@ if(id==='GUEST-000')return true;
 const key='core_v4_account_deleted_'+id;let blocked=localStorage.getItem(key)==='1';
 if(window.db&&window.fbGetDoc){let timeout;try{const snap=await Promise.race([(window.fbGetDocFromServer||window.fbGetDoc)(window.fbDoc(window.db,'users',id)),new Promise((_,reject)=>timeout=setTimeout(()=>reject(Error('アカウント確認のタイムアウト')),4000))]);if(snap.exists()){blocked=!!snap.data().deleted;if(blocked)localStorage.setItem(key,'1');else localStorage.removeItem(key);}}catch(error){/* Retain local learning when disconnected; never infer deletion from a failed read. */}finally{clearTimeout(timeout);}}
 if(!blocked)return true;
- const wasActive=window.__learningBootReady&&myId===id;purgeLocal(id);
+ const wasActive=window.__learningBootReady&&myId===id;await window.TextbookFiles?.remove(id);purgeLocal(id);
 localStorage.removeItem('core_v4_userId');window.__learningBootReady=false;myId='GUEST-000';myName='ゲスト';window.isAdmin=false;await window.AppStorage?.flush();if(wasActive){location.reload();return false;}const gate=document.getElementById('auth-gate-screen');if(gate)gate.style.display='flex';const error=document.getElementById('authErrorMsg');if(error){error.textContent='このアカウントは管理者により削除されています。';error.style.display='block';}return false;
 }
 window.AdminPlayers={canStart,open(){mount();if(dialog.open)return;window.toggleSidebar(false);authorized=false;window.isAdmin=false;dialog.querySelector('[data-body]').innerHTML='<form data-auth><label>管理者パスワード<input type="password" name="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required></label><button type="submit">管理者ツールを開く</button></form>';message('');dialog.showModal();dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const input=event.currentTarget.elements.password;if(!window.verifyAdminPassword(input.value.trim())){message('管理者パスワードが違います。');return;}input.value='';authorized=true;window.isAdmin=true;await refreshList();};}};
