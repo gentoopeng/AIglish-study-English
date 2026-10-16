@@ -52,6 +52,8 @@ const { chromium, webkit } = require("playwright"),
     async function pageFor(id) {
       const p = await browser.newPage({
         viewport: { width: 390, height: 844 },
+        reducedMotion:
+          process.env.REDUCED_MOTION === "1" ? "reduce" : "no-preference",
       });
       p.setDefaultTimeout(12000);
       p.on("pageerror", (e) => errors.push(e.message));
@@ -498,21 +500,36 @@ const { chromium, webkit } = require("playwright"),
       await a.locator(".warmup-card").click({ force: true });
       await a.locator("[data-warmup=ok]").evaluate((b) => b.onclick());
     }
-    assert.equal(await a.locator(".warmup-card").isDisabled(), true);
+    assert.equal(await a.locator(".warmup-card").isDisabled(), false);
     // A queued final double-tap cannot answer an eleventh, nonexistent card.
     await a.evaluate(() =>
       document.querySelector("[data-warmup=ok]").onclick(),
     );
     assert.equal(await a.locator(".warmup-count").textContent(), "準備完了！");
-    const finishWarmup = a.getByRole("button", {
-      name: "学習をはじめる",
-      exact: true,
-    });
-    assert.equal(
-      await finishWarmup.evaluate((el) => getComputedStyle(el).backgroundImage),
-      "none",
+    const finishWarmup = a.getByRole("button", { name: "START", exact: true });
+    await finishWarmup.waitFor();
+    await a.screenshot({ path: "/tmp/warmup-start-card.png" });
+    await a.evaluate(() =>
+      document.documentElement.classList.add("ios-stable-rendering"),
     );
     await finishWarmup.click();
+    if (process.env.REDUCED_MOTION !== "1") {
+      assert.equal(await a.locator(".warmup-start-exiting").count(), 1);
+      assert.equal(
+        await finishWarmup.evaluate((el) => getComputedStyle(el).animationName),
+        "warmupStartOpen",
+      );
+      assert.equal(
+        await a
+          .locator(".warmup-start-exiting")
+          .evaluate((el) => getComputedStyle(el, "::before").animationName),
+        "warmupCurtainLeft",
+      );
+      await a.clock.runFor(400);
+      await a.screenshot({ path: "/tmp/warmup-start-opening.png" });
+      assert.equal(await a.locator("#nav-vocab").isVisible(), true);
+    }
+    await a.clock.runFor(1200);
     await a
       .locator("dialog.flash-warmup-dialog")
       .waitFor({ state: "detached" });
