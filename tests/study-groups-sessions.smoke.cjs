@@ -273,6 +273,7 @@ const { chromium, webkit } = require("playwright"),
       index: flashcardCurrentIndex,
       count: userStats.flash_count,
     }));
+    assert.equal(await a.getByRole("button",{name:"中断",exact:true}).evaluate(el=>getComputedStyle(el).backgroundImage),"none");
     await a.getByRole("button", { name: "中断", exact: true }).click();
     assert.equal(
       await a
@@ -399,9 +400,15 @@ const { chromium, webkit } = require("playwright"),
       document.querySelector("[data-warmup=ok]").onclick(),
     );
     assert.equal(await a.locator(".warmup-count").textContent(), "準備完了！");
-    await a
-      .getByRole("button", { name: "学習をはじめる", exact: true })
-      .click();
+    const finishWarmup=a.getByRole("button", { name: "学習をはじめる", exact: true });
+    assert.equal(await finishWarmup.evaluate(el=>getComputedStyle(el).backgroundImage),"none");
+    await finishWarmup.click();
+    await a.locator("dialog.flash-warmup-dialog").waitFor({state:"detached"});
+    await a.waitForFunction(()=>!document.body.classList.contains("flash-warmup-open"));
+    assert.equal(await a.locator("#nav-vocab").isVisible(),true);
+    await a.locator("#nav-community").click();
+    assert.equal(await a.locator("#view-community").isVisible(),true);
+    await a.locator("#nav-vocab").click();
     await a.evaluate(() => {
       document.querySelector("#vocabLibrarySelection").hidden = true;
       document.querySelector("#vocabBookContents").hidden = false;

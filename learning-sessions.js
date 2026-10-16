@@ -501,7 +501,7 @@
     const close = layout.querySelector(".game-finish-inline-btn");
     close.textContent = "あとで";
     close.dataset.libraryClose = "";
-    close.onclick = () => d.close();
+    close.onclick = () => window.closeLibraryDialog();
     d.querySelector("[data-library-close]").remove();
     d.querySelector(".warmup-count").remove();
     d.querySelector(".warmup-directions").remove();
