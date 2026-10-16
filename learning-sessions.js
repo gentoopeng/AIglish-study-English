@@ -512,6 +512,25 @@
       history = roles.get("fcHistoryContainer"),
       info = roles.get("flashcardInfoButton");
     const answers = [];
+    let starting = false,
+      startTimer;
+    function startApp() {
+      if (starting || index !== queue.length || uid() !== account) return;
+      starting = true;
+      card.disabled = true;
+      close.disabled = true;
+      previous.disabled = true;
+      document.body.classList.remove("flash-warmup-open");
+      d.classList.add("warmup-start-exiting");
+      const finish = () => {
+        if (welcomeModal === d) window.closeLibraryDialog();
+      };
+      startTimer = setTimeout(
+        finish,
+        matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 1100,
+      );
+    }
+
     info.onclick = () => {
       const word = queue[index];
       if (!word) return;
@@ -546,6 +565,7 @@
     d.addEventListener(
       "close",
       () => {
+        clearTimeout(startTimer);
         document.body.classList.remove("flash-warmup-open");
         welcomePending = false;
         welcomeModal = null;
@@ -579,16 +599,25 @@
         d.querySelector(".warmup-count").textContent = "準備完了！";
         card.replaceChildren();
         card.classList.remove("flipped");
-        window.fillFlashcardFaces(
-          card,
-          queue.length + "単語、おつかれさま",
-          "",
-          "✓",
-          "",
-        );
-        card.disabled = true;
+        d.classList.add("warmup-start-ready");
+        d.querySelectorAll(
+          "#flashcardGhost,.flashcard-post-ripple,.fc-vanish-burst",
+        ).forEach((effect) => effect.remove());
+        stage.parentElement.classList.add("warmup-start-stage");
+        card.classList.add("warmup-start-card");
+        const label = document.createElement("span");
+        label.className = "warmup-start-label";
+        label.textContent = "START";
+        card.append(label);
+        card.setAttribute("aria-label", "START");
+        card.disabled = false;
         ratings.hidden = true;
-        d.querySelector("[data-library-close]").textContent = "学習をはじめる";
+        close.hidden = true;
+        previous.hidden = true;
+        info.hidden = true;
+        roles.get("flashcardPartOfSpeech").hidden = true;
+        history.parentElement.hidden = true;
+        card.style.width = card.style.height = "240px";
         return;
       }
       revealed = false;
@@ -644,7 +673,11 @@
         index + 1 + " / " + queue.length;
     }
     card.onclick = () => {
-      if (index >= queue.length) return;
+      if (index === queue.length) {
+        startApp();
+        return;
+      }
+      if (index > queue.length) return;
       revealed = !revealed;
       card.classList.toggle("flipped", revealed);
       window.AppSounds?.play("back");
@@ -655,6 +688,7 @@
     let pointer = null,
       dragged = false;
     card.addEventListener("pointerdown", (e) => {
+      if (index >= queue.length) return;
       if (!e.isPrimary) return;
       card.setPointerCapture(e.pointerId);
       pointer = { x: e.clientX, y: e.clientY };
