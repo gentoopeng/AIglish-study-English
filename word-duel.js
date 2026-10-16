@@ -18,7 +18,7 @@ function cleanup(){stop();session=null;dialog=null;finishing=false;}
 function closeScreen(){
  if(!dialog)return;
  if(session&&!session.solo&&!session.finished){const old=session;old.answers=old.answers.slice();publish(old,true,true).then(()=>old.start&&settle(old.code)).catch(()=>{});}
- window.WordDuelProgress.flush(session?.id).catch(()=>{});
+ window.WordDuelProgress.flush(session?.id).catch(()=>{});window.saveAfterStudy?.("battle-end");
  const el=dialog;cleanup();el.remove();document.body.classList.remove('duel-screen-open');
  inertElements.forEach(([node,value])=>{if(node.isConnected)node.inert=value;});inertElements=[];
  if(opener?.isConnected)opener.focus();opener=null;
@@ -105,7 +105,7 @@ function answer(choice){
  window.AppSounds?.play(right?'swipe-right':'swipe-left');
  const buttons=dialog.querySelectorAll('.duel-options button');buttons.forEach(button=>button.disabled=true);buttons[choice].classList.add('is-selected');buttons[choice].setAttribute('aria-pressed','true');
  try{window.WordDuelProgress.apply(target.book,q.ref,right,target.id);}catch(error){status('理解度の保存を確認できません。'+error.message);}
- if(target.answers.length%5===0)window.WordDuelProgress.flush(target.id).catch(()=>{});
+ if(target.answers.length%5===0)window.WordDuelProgress.schedule(target.id);
  if(right){target.answering=true;buttons[choice].classList.add('is-correct');answerTimer=setTimeout(()=>{answerTimer=null;if(session===target&&!target.finished)question();},180);}else{
   target.reviewing=true;target.penaltyUntil=Date.now()+3000;buttons[choice].classList.add('is-wrong');buttons[q.correct].classList.add('is-correct');
   const correction=dialog.querySelector('.duel-correction');correction.querySelector('strong').textContent=q.meaning;correction.hidden=false;correction.querySelector('button').disabled=true;correction.querySelector('button').textContent='あと3秒';
@@ -121,7 +121,7 @@ async function publish(target,done=false,abandoned=false){
 }
 async function finish(abandoned=false){
  dialog?.classList.remove('is-playing');
- if(!session||finishing||session.finished)return;finishing=true;clearInterval(timer);const target=session;target.finished=true;clearTimeout(answerTimer);window.WordDuelProgress.flush(target.id).catch(()=>{});dialog.querySelectorAll('.duel-options button,[data-duel-next]').forEach(button=>button.disabled=true);if(target.solo){
+ if(!session||finishing||session.finished)return;finishing=true;clearInterval(timer);const target=session;target.finished=true;window.saveAfterStudy?.("battle-end");clearTimeout(answerTimer);window.WordDuelProgress.flush(target.id).catch(()=>{});dialog.querySelectorAll('.duel-options button,[data-duel-next]').forEach(button=>button.disabled=true);if(target.solo){
   const value=m.finalScore(target.pool,target.seed,target.answers,target.duration,target.missPenalty),summary=document.createElement('div');summary.className='duel-solo-result';summary.innerHTML='<small></small><strong></strong>';summary.querySelector('small').textContent=(abandoned?'途中終了 · ':'終了 · ')+value.answered+'問 ×10点 = +'+value.bonus+'点';summary.querySelector('strong').textContent=value.total+'点';dialog.querySelector('.duel-content').prepend(summary);
   dialog.querySelector('.duel-question-card').hidden=true;dialog.querySelector('.duel-options').hidden=true;dialog.querySelector('.duel-correction').hidden=true;status('一人プレイはレート変更なし');const close=dialog.querySelector('.duel-leave');close.textContent='閉じる';close.onclick=closeScreen;finishing=false;return;
  }

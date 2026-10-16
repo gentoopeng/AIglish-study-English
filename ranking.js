@@ -42,8 +42,9 @@
     window.recordRankedWord=function(book,num){if(!book)return;ensure();record=merge(record,read(user));record.words[wordKey(book,num)]=1;persist();scheduleSync();};
     window.recordRankedSwipe=function(){ensure();record=merge(record,read(user));record.flash.sources[sourceId]=nonnegative(record.flash.sources[sourceId])+1;store('core_v4_ranking_swipes_v2_'+user+'_'+sourceId,String(record.flash.sources[sourceId]));persist();scheduleSync();};
     let syncTimer=null;const syncedStates=new Map();
-    function scheduleSync(){if(!syncTimer)syncTimer=setTimeout(()=>{syncTimer=null;syncCloud();},15000);}
-    async function syncCloud(){
+    function scheduleSync(){if(window.endOnlyCloudSaves){window.queueBackgroundSave?.();return;}if(!syncTimer)syncTimer=setTimeout(()=>{syncTimer=null;syncCloud();},15000);}
+    async function syncCloud(force=false){
+        if(window.endOnlyCloudSaves&&!force)return false;
         window.syncRankingMetrics();const id=user;
         if(id==='GUEST-000'||!window.fbRunTransaction||!window.db)return false;
         if(queues.has(id))return queues.get(id);
@@ -188,5 +189,5 @@
     window.addEventListener('storage',event=>{if(event.key===storageKey(owner())){ensure();record=merge(record,read(user));persist();render();}});
     setInterval(()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles'&&!window.IdleSleep?.isSleeping())refresh(false);},900000);
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(false);});
-    window.LearningRanking={invalidate(){inflight?.controller.abort();groupCaches.clear();cache=[];cacheAt=0;cacheReady=false;generation++;const button=document.getElementById('rankingRefresh');if(button)button.disabled=false;},render,refresh,sync:syncCloud,snapshot:()=>{window.syncRankingMetrics();return JSON.parse(JSON.stringify(record));}};
+    window.LearningRanking={invalidate(){inflight?.controller.abort();groupCaches.clear();cache=[];cacheAt=0;cacheReady=false;generation++;const button=document.getElementById('rankingRefresh');if(button)button.disabled=false;},render,refresh,sync:()=>syncCloud(true),snapshot:()=>{window.syncRankingMetrics();return JSON.parse(JSON.stringify(record));}};
 })();

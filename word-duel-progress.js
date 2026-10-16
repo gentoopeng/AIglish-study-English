@@ -24,7 +24,7 @@ function apply(book,ref,answer,id){
  window.recordRankedWord?.(book,ref.num);return words[ref.num];
 }
 async function flush(id=owner()){
- if(id!==owner()||id==='GUEST-000'||!window.db||!window.fbRunTransaction)return false;
+ if(id!==owner()||id==='GUEST-000'||!window.db||!window.fbRunTransaction||window.FirestoreReadGuard?.paused())return false;
  if(queues.has(id))return queues.get(id);
  const execute=async()=>{let saved=true;const jobs=pending(id);for(const [book,changes]of Object.entries(jobs)){
   if(id!==owner())return false;
@@ -47,13 +47,16 @@ async function flush(id=owner()){
    if(id!==owner())return false;
    if(!merged||window.LibraryState?.isDeleted('book',book,id))continue;
    window.LearningData.restore(book,merged);
+   window.__vocabCloudAcknowledged=window.__vocabCloudAcknowledged||{};
+   window.__vocabCloudAcknowledged[id+"\n"+book]=JSON.stringify(merged);
    for(const num of Object.keys(changes)){const current=window.LearningData.read(book)[num];if(current&&merged[num]&&JSON.stringify(current)===JSON.stringify(local[num])&&JSON.stringify(current)!==JSON.stringify(merged[num]))window.LearningData.commit(book,{[num]:merged[num]},num,true);}
    const latest=pending(id);if(JSON.stringify(latest[book])===version){delete latest[book];localStorage.setItem(pendingKey(id),JSON.stringify(latest));}
   }catch(error){saved=false;console.warn('バトルの理解度は端末に保持し、接続後に再同期します',error);}
  }return saved;};
  const task=(window.LibraryState?.track?window.LibraryState.track(id,execute):execute()).finally(()=>queues.delete(id));queues.set(id,task);return task;
 }
-window.WordDuelProgress={apply,flush};
-window.onAppLoaded(()=>flush().catch(()=>{}));window.addEventListener('online',()=>flush().catch(()=>{}));
-setInterval(()=>{if(document.visibilityState==='visible')flush().catch(()=>{});},60000);
+function schedule(id=owner()){
+ if(id===owner())window.queueBackgroundSave?.();
+}
+window.WordDuelProgress={apply,flush,schedule};
 })();

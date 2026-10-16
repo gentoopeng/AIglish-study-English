@@ -1,3 +1,4 @@
+window.endOnlyCloudSaves = true;
 //==========================================================================
 // 🌟 1. 関数のマウント定義・グローバル状態
 // ==========================================================================
@@ -1808,10 +1809,13 @@ window.flushAllDirtyVocabBooks = function() {
 };
 
 window.flushChangedVocabData = function() {
-  // 新しい教材下書き保存は単語本体と理解度を一度に保存するため、旧理解度保存を
-  // 同時実行しない。二重通信を避け、変更された教材だけを確定する。
-  if (typeof window.flushAllManualVocabDrafts === "function") return window.flushAllManualVocabDrafts();
-  return window.flushAllDirtyVocabBooks();
+  // Tab changes and suspension may fire together. Keep a durable local draft,
+  // then let the shared background queue perform a single cloud backup.
+  if(Object.keys(window.__dirtyVocabProgress||{}).length||Object.keys(window.__dirtyManualVocabDrafts||{}).length){
+    if((window.__dirtyVocabProgress?.[currentTextbook]||window.__dirtyManualVocabDrafts?.[currentTextbook])&&window.__captureManualVocabDraft)window.__captureManualVocabDraft();
+    window.queueBackgroundSave?.();
+  }
+  return window.AppStorage?window.AppStorage.flush():Promise.resolve();
 };
 
 window.onTabChange(function(tabId) {
@@ -4393,6 +4397,9 @@ window.logoutToGate = async function() {
         window.__saveFlush(),
         new Promise(function(resolve) { setTimeout(resolve, 3000); })
       ]);
+    }
+    if(myId&&myId!=='GUEST-000'&&localStorage.getItem('core_v4_autosave_pending_'+myId)&&window.__backgroundSaveAll){
+      await Promise.race([window.__backgroundSaveAll(),new Promise(resolve=>setTimeout(resolve,3000))]);
     }
   } catch (e) {
     console.error('ログアウト前の保存に失敗しました:', e);
@@ -6989,17 +6996,8 @@ window.saveUserVocabProgress = async function() {
         localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + "__ts", String(nowMs));
     } catch (e) {}
     if (window.AppStorage) await window.AppStorage.flush();
-    if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
-        try {
-            var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-            var payload = { wordsJson: JSON.stringify(currentUserVocabProgress), updatedAt: nowIso };
-            var safe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(payload) : payload;
-            if (typeof window.fbSetDocWithRetry === "function") await window.fbSetDocWithRetry(ref, safe);
-            else await window.fbSetDoc(ref, safe);
-        } catch (e) {
-            console.error("saveUserVocabProgress error:", e);
-        }
-    }
+    // Rating events persist locally immediately; one background backup owns cloud sync.
+    if(window.__dirtyVocabProgress?.[bookKey]||window.__dirtyManualVocabDrafts?.[bookKey])window.queueBackgroundSave?.();
     userStats.vocab_fixed = vocabList.filter(function(w) {
         return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
     }).length;
@@ -7022,11 +7020,16 @@ window.loadUserVocabProgress = async function(bookKey) {
     if(window.LearningData)localProgress=window.LearningData.read(bookKey);
     if ((currentTextbook || "default") === bookKey) currentUserVocabProgress = localProgress;
     if (myId === "GUEST-000" || !window.db || !window.fbGetDoc || !window.fbDoc) return;
+    window.__vocabProgressCloudChecks=window.__vocabProgressCloudChecks||{};
+    var checkKey=requestUserId+'\n'+bookKey;
+    if(Object.hasOwn(window.__vocabProgressCloudChecks,checkKey)&&Date.now()-window.__vocabProgressCloudChecks[checkKey]<300000)return;
+    if(window.FirestoreReadGuard?.paused())return;
     try {
         var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
         var snap = await window.fbGetDoc(ref);
         // ログアウト・別ユーザーへのログイン後に旧ユーザーの応答を保存しない。
         if (myId !== requestUserId || (window.LibraryState&&window.LibraryState.isDeleted('book',bookKey,requestUserId))) return;
+        window.__vocabProgressCloudChecks[checkKey]=Date.now();
         // 通信待ちの間に理解度が変更された可能性があるため、必ず最新の端末値を再取得する。
         var latestLocalProgress = localProgress;
         var latestLocalTs = localTs;
