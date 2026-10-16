@@ -239,12 +239,22 @@ const { chromium, webkit } = require("playwright"),
     );
     await a.evaluate(() => (FirestoreReadGuard.paused = __chatPaused));
 
-    await a.getByRole("button", { name: "学習・目標", exact: true }).click();
-    await a.locator(".group-content h3").waitFor();
+    await a.getByRole("button", { name: "メンバー", exact: true }).click();
+    await a.locator(".group-member-list").waitFor();
     const groupPath = [...docs.keys()].find((k) => /^studyGroups\//.test(k)),
       groupId = groupPath.split("/")[1];
     assert.equal(Object.keys(docs.get(groupPath).members).length, 2);
     assert.ok(docs.has("users/group-b/studyGroups/" + groupId));
+    assert.equal(
+      await a
+        .getByRole("combobox", { name: "協力目標の達成方式" })
+        .inputValue(),
+      "individual",
+    );
+    assert.equal(await a.locator(".group-member-list .people-row").count(), 2);
+    await a
+      .getByRole("combobox", { name: "協力目標の達成方式" })
+      .selectOption("sum");
     await a.getByRole("button", { name: "目標を設定" }).click();
     await a.waitForFunction(() =>
       document.querySelector(".group-goal progress"),
@@ -287,6 +297,7 @@ const { chromium, webkit } = require("playwright"),
       "unchanged totals must not perform transactions",
     );
     await a.getByLabel("協力目標の種類").selectOption("time");
+    await a.getByLabel("協力目標の達成方式").selectOption("sum");
     await a.getByRole("button", { name: "目標を設定" }).click();
     await a.evaluate(() => {
       StudyTime.mergeCloud({
@@ -303,6 +314,38 @@ const { chromium, webkit } = require("playwright"),
     assert.equal(docs.get(groupPath).goal.type, "time");
     assert.equal(docs.get(groupPath).goal.done, true);
     assert.ok(docs.get(groupPath).events.some((e) => e.text === "30分勉強"));
+    await a.getByLabel("協力目標の種類").selectOption("attempts");
+    await a.getByLabel("協力目標の数").fill("7");
+    assert.equal(
+      await a.getByLabel("協力目標の達成方式").inputValue(),
+      "individual",
+    );
+    await a.getByRole("button", { name: "目標を設定", exact: true }).click();
+    await a.evaluate(async () => {
+      for (let i = 0; i < 7; i++) recordRankedWord("same-word", 1);
+      await StudyGroups.publish(true);
+    });
+    assert.equal(
+      docs.get(groupPath).goal.done,
+      false,
+      "one member cannot complete an individual goal for everyone",
+    );
+    assert.equal(await a.locator(".group-race-lane.is-complete").count(), 1);
+    assert.equal(await a.locator(".group-race-track").count(), 2);
+    await a.evaluate(
+      () => (document.querySelector("dialog.group-chat-dialog").scrollTop = 0),
+    );
+    await a.clock.runFor(1000);
+    await a.waitForTimeout(900);
+    assert.equal(
+      await a
+        .locator(".group-race-runner")
+        .first()
+        .evaluate((el) => el.style.getPropertyValue("--race-progress")),
+      "100%",
+    );
+    await a.screenshot({ path: "/tmp/group-member-race.png" });
+
     await b.getByRole("button", { name: "グループ", exact: true }).click();
     await b.screenshot({ path: "/tmp/group-list-ui.png" });
     await b.getByRole("button", { name: "放課後の学習", exact: true }).click();
@@ -312,7 +355,17 @@ const { chromium, webkit } = require("playwright"),
     await b.locator(".group-chat-compose textarea").fill("返信です");
     await b.getByRole("button", { name: "送信", exact: true }).click();
     await b.getByText("返信です", { exact: true }).waitFor();
-    await b.getByRole("button", { name: "学習・目標", exact: true }).click();
+    await b.getByRole("button", { name: "メンバー", exact: true }).click();
+    await b.evaluate(async () => {
+      for (let i = 0; i < 7; i++) recordRankedWord("same-word", 1);
+      await StudyGroups.publish(true);
+    });
+    await b.waitForFunction(
+      () =>
+        document.querySelectorAll(".group-race-lane.is-complete").length === 2,
+    );
+    assert.equal(docs.get(groupPath).goal.done, true);
+
     await b.getByRole("button", { name: "いいね 1", exact: true }).waitFor();
     assert.equal(
       await b
@@ -341,6 +394,17 @@ const { chromium, webkit } = require("playwright"),
     // No group listeners remain when the group dialog or battle closes.
     assert.equal(await a.evaluate(() => Object.keys(__listeners).length), 0);
     assert.equal(await b.evaluate(() => Object.keys(__listeners).length), 0);
+    await b.getByRole("button", { name: "放課後の学習", exact: true }).click();
+    await b.getByRole("button", { name: "メンバー", exact: true }).click();
+    await b
+      .locator(".group-member-list .people-profile-button")
+      .first()
+      .click();
+    await b
+      .getByRole("heading", { name: "プロフィール", exact: true })
+      .waitFor();
+    await b.getByRole("button", { name: "閉じる", exact: true }).click();
+    await b.waitForFunction(() => Object.keys(__listeners).length === 0);
     // Mid-deck durable checkpoint survives a real reload without replaying a swipe.
     await a.evaluate(() => {
       window.db = null;

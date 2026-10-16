@@ -5,6 +5,7 @@
     ref = (id) => window.fbDoc(window.db, "studyGroups", id),
     registry = (id) =>
       window.fbCollection(window.db, "users", id, "studyGroups");
+  const racePositions = new Map();
   let owner = "",
     list = [],
     loaded = 0,
@@ -18,6 +19,9 @@
   const total = () => {
     const ledger = window.StudyTime.snapshot();
     return {
+      attempts: window.LearningRankingModel.attemptCount(
+        window.LearningRanking.snapshot(),
+      ),
       words: window.LearningRankingModel.wordCount(
         window.LearningRanking.snapshot(),
       ),
@@ -28,6 +32,9 @@
   const fromProfile = (data) => {
     const stats = window.StudyTimeModel.readStats(data);
     return {
+      attempts: window.LearningRankingModel.attemptCount(
+        window.LearningRankingModel.fromProfile(data),
+      ),
       words: window.LearningRankingModel.wordCount(
         window.LearningRankingModel.fromProfile(data),
       ),
@@ -44,6 +51,23 @@
       (sum, id) =>
         sum + value(group.progress?.[id], group.goal?.baseline?.[id], type),
       Number(group.goal?.departed || 0),
+    );
+  }
+  function goalReached(group) {
+    if (!group.goal) return false;
+    if (group.goal.mode !== "individual")
+      return progress(group, group.goal.type) >= group.goal.target;
+    const ids = Object.keys(group.members || {});
+    return (
+      ids.length > 0 &&
+      ids.every(
+        (id) =>
+          value(
+            group.progress?.[id],
+            group.goal.baseline?.[id],
+            group.goal.type,
+          ) >= group.goal.target,
+      )
     );
   }
   function compact(group) {
@@ -63,6 +87,10 @@
     const before = group.progress[id] ||
       group.baseline[id] || { words: 0, time: 0 };
     group.progress[id] = {
+      attempts: Math.max(
+        Number(before.attempts) || 0,
+        Number(now.attempts) || 0,
+      ),
       words: Math.max(before.words, now.words),
       time:
         Number(now.timeAt || 0) >= Number(before.timeAt || 0)
@@ -107,20 +135,17 @@
           Number(item.id.slice(prefix.length)) <= ceiling,
       );
     }
-    if (
-      group.goal?.done &&
-      progress(group, group.goal.type) < group.goal.target
-    ) {
+    reconcileGoal(group, at);
+    return group;
+  }
+  function reconcileGoal(group, at) {
+    if (group.goal?.done && !goalReached(group)) {
       group.goal.done = false;
       group.events = group.events.filter(
         (item) => item.id !== "goal:" + group.goal.id,
       );
     }
-    if (
-      group.goal &&
-      !group.goal.done &&
-      progress(group, group.goal.type) >= group.goal.target
-    ) {
+    if (group.goal && !group.goal.done && goalReached(group)) {
       group.goal.done = true;
       event(group, {
         id: "goal:" + group.goal.id,
@@ -128,12 +153,15 @@
         text:
           "みんなで目標達成！ " +
           group.goal.target +
-          (group.goal.type === "time" ? "分" : "語"),
+          (group.goal.type === "time"
+            ? "分"
+            : group.goal.type === "attempts"
+              ? "回"
+              : "語"),
         at,
         reactions: {},
       });
     }
-    return group;
   }
   function leave(group, account) {
     if (group.goal) {
@@ -154,9 +182,10 @@
     });
     if (group.owner === account)
       group.owner = Object.keys(group.members)[0] || "";
+    reconcileGoal(group, Date.now());
     return group;
   }
-  window.StudyGroupsModel = { progress, advance, leave };
+  window.StudyGroupsModel = { progress, advance, leave, goalReached };
   function connected() {
     if (window.FirestoreReadGuard?.paused())
       throw Error("クラウドの利用上限に達しています。後で再試行してください。");
@@ -164,6 +193,7 @@
       throw Error("グループはログイン後に使えます。");
   }
   function stop() {
+    racePositions.clear();
     window.GroupChat?.stop();
     unsubscribe?.();
     unsubscribe = null;
@@ -374,6 +404,7 @@
               { name: g.name, joinedAt: Date.now() },
             );
           }
+          reconcileGoal(g, Date.now());
           tx.set(ref(id), compact(g));
         });
         if (uid() !== account) return;
@@ -448,48 +479,171 @@
       error,
     );
   }
+  function memberAvatar(id, name) {
+    const known = window.People?.preview?.(id),
+      photo =
+        id === uid()
+          ? localStorage.getItem("core_v4_user_avatar_" + id) || ""
+          : known?.avatar || "";
+    const avatar = window.RankingVisuals.avatar(photo, name);
+    avatar.dataset.memberAvatar = id;
+    if (!photo && id !== uid())
+      window.ProfileIdentityCache?.get(id)
+        .then((profile) => {
+          if (!avatar.isConnected || !profile.avatar) return;
+          const updated = window.RankingVisuals.avatar(
+            profile.avatar,
+            profile.name || name,
+          );
+          avatar.replaceChildren(...updated.childNodes);
+        })
+        .catch(() => {});
+    return avatar;
+  }
   function draw(g, d) {
     const host = d.querySelector(".group-content");
     host.replaceChildren();
-    const title = document.createElement("h3");
-    title.textContent = g.name;
-    const members = document.createElement("p");
-    members.className = "group-members";
-    members.textContent = Object.values(g.members)
-      .map((m) => m.name)
-      .join(" ・ ");
-    host.append(title, members);
+    const memberList = document.createElement("section");
+    memberList.className = "group-member-list";
+    memberList.setAttribute("aria-label", "メンバー");
+    for (const [id, member] of Object.entries(g.members || {})) {
+      const row = document.createElement("div"),
+        button = document.createElement("button"),
+        copy = document.createElement("span"),
+        name = document.createElement("span"),
+        meta = document.createElement("small");
+      row.className = "people-row";
+      button.type = "button";
+      button.className = "people-profile-button";
+      name.className = "people-name";
+      name.textContent = member.name || id;
+      meta.textContent =
+        id === uid()
+          ? "あなた"
+          : g.owner === id
+            ? "グループ作成者"
+            : "メンバー";
+      copy.append(name, meta);
+      button.append(memberAvatar(id, member.name), copy);
+      button.onclick = () => window.People.open(id);
+      row.append(button);
+      memberList.append(row);
+    }
+    host.append(memberList);
     const battle = button("グループで単語バトル", () => {
       window.closeLibraryDialog();
       stop();
       window.openWordDuel(g.id);
     });
     battle.className = "group-battle";
-    host.append(battle);
     const goal = document.createElement("section");
     goal.className = "group-goal";
     const heading = document.createElement("h4");
     heading.textContent = "みんなで協力";
     goal.append(heading);
+    const note = document.createElement("p");
+    note.className = "people-hint";
+    note.textContent =
+      "目標設定後の記録を集計します。学習終了・保存・更新時に反映。";
+    goal.append(note);
     if (g.goal) {
-      const n = progress(g, g.goal.type),
-        text = document.createElement("p"),
-        meter = document.createElement("progress");
-      text.textContent =
+      const unit =
+          g.goal.type === "time"
+            ? "分"
+            : g.goal.type === "attempts"
+              ? "回"
+              : "語",
+        individual = g.goal.mode === "individual",
+        ids = Object.keys(g.members),
+        complete = ids.filter(
+          (id) =>
+            value(g.progress?.[id], g.goal.baseline?.[id], g.goal.type) >=
+            g.goal.target,
+        ).length;
+      const summary = document.createElement("p");
+      summary.className = "group-race-summary";
+      summary.textContent =
         (g.goal.done ? "達成！ " : "") +
-        n +
-        " / " +
-        g.goal.target +
-        (g.goal.type === "time" ? "分" : "語");
-      meter.max = g.goal.target;
-      meter.value = n;
-      goal.append(text, meter);
+        (individual
+          ? "1人 " +
+            g.goal.target +
+            unit +
+            " ・ " +
+            complete +
+            " / " +
+            ids.length +
+            "人達成"
+          : "全員で " +
+            progress(g, g.goal.type) +
+            " / " +
+            g.goal.target +
+            unit);
+      const meter = document.createElement("progress");
+      meter.max = individual ? ids.length * g.goal.target : g.goal.target;
+      meter.value = individual
+        ? ids.reduce(
+            (sum, id) =>
+              sum +
+              Math.min(
+                g.goal.target,
+                value(g.progress?.[id], g.goal.baseline?.[id], g.goal.type),
+              ),
+            0,
+          )
+        : progress(g, g.goal.type);
+      meter.setAttribute("aria-label", "グループ全体の達成度");
+      goal.append(summary, meter);
+      for (const id of ids) {
+        const member = g.members[id],
+          n = value(g.progress?.[id], g.goal.baseline?.[id], g.goal.type),
+          lane = document.createElement("div"),
+          caption = document.createElement("div"),
+          name = document.createElement("span"),
+          count = document.createElement("strong"),
+          track = document.createElement("div"),
+          runner = memberAvatar(id, member.name),
+          ends = document.createElement("div");
+        lane.className =
+          "group-race-lane" + (n >= g.goal.target ? " is-complete" : "");
+        caption.className = "group-race-caption";
+        name.textContent = member.name || id;
+        count.textContent = n + " / " + g.goal.target + unit;
+        caption.append(name, count);
+        track.className = "group-race-track";
+        track.setAttribute("role", "progressbar");
+        track.setAttribute("aria-label", (member.name || id) + "の達成度");
+        track.setAttribute("aria-valuemin", "0");
+        track.setAttribute("aria-valuemax", String(g.goal.target));
+        track.setAttribute("aria-valuetext", n + " / " + g.goal.target + unit);
+        track.setAttribute("aria-valuenow", String(Math.min(n, g.goal.target)));
+        runner.classList.add("group-race-runner");
+        const raceKey = g.id + "_" + g.goal.id + "_" + id,
+          pct = Math.min(100, (n / g.goal.target) * 100) + "%",
+          previous = racePositions.get(raceKey) || pct;
+        runner.style.setProperty("--race-progress", previous);
+        racePositions.set(raceKey, pct);
+        if (previous !== pct)
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              if (runner.isConnected)
+                runner.style.setProperty("--race-progress", pct);
+            }),
+          );
+        track.append(runner);
+        ends.className = "group-race-ends";
+        ends.textContent = "スタート";
+        const finish = document.createElement("span");
+        finish.textContent = n >= g.goal.target ? "達成 ✓" : "ゴール";
+        ends.append(finish);
+        lane.append(caption, track, ends);
+        goal.append(lane);
+      }
     }
     if (!g.goal || g.goal.done) {
       const type = document.createElement("select");
       type.setAttribute("aria-label", "協力目標の種類");
       for (const [v, t] of [
-        ["words", "理解度を記録した単語"],
+        ["attempts", "理解度を付けた回数"],
         ["time", "勉強時間（分）"],
       ]) {
         const o = document.createElement("option");
@@ -497,9 +651,21 @@
         o.textContent = t;
         type.append(o);
       }
+      const mode = document.createElement("select");
+      mode.setAttribute("aria-label", "協力目標の達成方式");
+      for (const [value, label] of [
+        ["individual", "全員がそれぞれ達成"],
+        ["sum", "全員の合計で達成"],
+      ]) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        mode.append(option);
+      }
       const target = document.createElement("input");
       target.type = "number";
       target.min = "1";
+      target.step = "1";
       target.max = "100000";
       target.value = "100";
       target.setAttribute("aria-label", "協力目標の数");
@@ -507,6 +673,7 @@
         (target.value = type.value === "time" ? "30" : "100");
       goal.append(
         type,
+        mode,
         target,
         button("目標を設定", async () => {
           const n = Number(target.value);
@@ -515,9 +682,11 @@
           await mutate(g.id, (state) => {
             if (state.goal && !state.goal.done)
               throw Error("すでに進行中の目標があります。");
+            advance(state, uid(), total(), Date.now());
             state.goal = {
               id: crypto.randomUUID(),
               type: type.value,
+              mode: mode.value,
               target: n,
               baseline: structuredClone(state.progress),
               done: false,
@@ -595,7 +764,7 @@
         await load(true);
       }),
     );
-    host.append(actions);
+    host.append(battle, actions);
   }
   async function publish(force = false, only) {
     if (window.endOnlyCloudSaves && !force) return;
@@ -625,6 +794,7 @@
         if (
           previous &&
           previous.words === now.words &&
+          Number(previous.attempts || 0) === now.attempts &&
           previous.time === now.time
         )
           continue;

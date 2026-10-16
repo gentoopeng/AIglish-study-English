@@ -49,7 +49,7 @@
       learn = document.createElement("button");
     talk.type = learn.type = "button";
     talk.textContent = "トーク";
-    learn.textContent = "学習・目標";
+    learn.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></svg><span>メンバー</span>';
     nav.append(talk, learn);
     const section = document.createElement("section");
     section.className = "group-chat";
