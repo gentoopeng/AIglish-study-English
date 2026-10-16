@@ -10,18 +10,18 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="10.17.02.27">
+    <meta name="application-version" content="10.17.02.53">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
-    <script src="cloud-usage.js?v=10.17.02.27"></script>
-    <script src="firestore-read-guard.js?v=10.17.02.27"></script>
-    <script src="runtime-errors.js?v=10.17.02.27"></script>
-    <script src="app-storage.js?v=10.17.02.27"></script>
-    <script src="rendering-safety.js?v=10.17.02.27"></script>
+    <script src="cloud-usage.js?v=10.17.02.53"></script>
+    <script src="firestore-read-guard.js?v=10.17.02.53"></script>
+    <script src="runtime-errors.js?v=10.17.02.53"></script>
+    <script src="app-storage.js?v=10.17.02.53"></script>
+    <script src="rendering-safety.js?v=10.17.02.53"></script>
     <script src="vendor/lucide/lucide.min.js?v=0.468.0"></script>
-    <link rel="stylesheet" href="style.css?v=10.17.02.27">
+    <link rel="stylesheet" href="style.css?v=10.17.02.53">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -278,34 +278,15 @@
         <div id="view-community" class="tab-view" style="position: fixed; top: 56px; bottom: 60px; left: 0; width: 100vw; overflow-x: hidden; z-index: 10; padding: 0 !important;">
 
             <div style="flex: 0 0 100vw; width: 100vw; height: 100%; scroll-snap-align: center; box-sizing: border-box; padding: 20px 16px; overflow-y: auto;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid var(--cosmic-cyan); padding-bottom: 6px;">
-                    <h2 style="margin-bottom: 0; font-size: 15px; color: var(--cosmic-cyan) !important;"><i data-lucide="users"></i> フレンドリスト</h2>
-                </div>
-
-                <button type="button" class="duel-entry" onclick="window.openWordDuel()"><i data-lucide="swords" aria-hidden="true"></i><span>単語バトル<small>2〜4人の10択バトル</small></span><span>›</span></button>
-                <div class="card" style="border: 1px dashed var(--cosmic-cyan); margin-bottom: 14px; padding: 12px;">
-                    <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 6px;">
-                        <span style="color: var(--text-sub);">あなたのフレンドコード:</span>
-                        <span id="myFriendCodeDisplay" style="color: var(--cosmic-cyan); font-family: monospace; font-weight: 900; letter-spacing: 1px;">--------</span>
-                    </div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="text" id="friendSearchInput" class="search-input" style="margin-bottom: 0; height: 38px; font-size: 12px; letter-spacing: 1px; font-weight: bold; text-align: center; font-family: monospace;" placeholder="フレンドのIDコードを入力...">
-                        <button class="modern-btn" style="width: auto; height: 38px; padding: 0 14px; font-size: 12px; border-image: linear-gradient(135deg, var(--cosmic-cyan), var(--cosmic-blue)) 1 !important; box-shadow: 0 0 8px rgba(0,240,255,0.3) !important;" onclick="window.searchAndAddFriend()">探す・追加</button>
-                    </div>
-                </div>
-
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);">
-                    <span style="font-size: 11px; font-weight: bold; color: var(--text-sub);"><i data-lucide="arrow-down-up" size="12" style="vertical-align:middle; margin-right:2px;"></i> 表示並び替え</span>
-                    <select id="friendSortSelect" class="search-input" style="width: 140px; height: 28px; font-size: 11px; font-weight: bold; padding: 0 6px; margin-bottom: 0; background: var(--input-bg); color: white;" onchange="window.sortAndRenderFriendList()">
-                        <option value="login" selected>最終ログイン順</option>
-                    </select>
-                </div>
-
+                <div class="users-toolbar"><button id="usersRefreshButton" type="button" aria-label="ユーザーを更新" onclick="window.refreshUsersFromButton(this)"><i data-lucide="refresh-cw" size="17" aria-hidden="true"></i></button></div>
+                <p id="usersStatus" role="status"></p>
                 <div id="friendListContainer" style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 40px;">
                 </div>
             </div>
 
         </div>
+
+        <div id="view-battle" class="tab-view" aria-label="単語バトル"></div>
 
         <div id="view-titles" class="tab-view">
             <section class="ranking-stage" aria-label="全ユーザーのランキング">
@@ -420,7 +401,8 @@
     <div class="nav-bar" id="appMainBottomNavBar">
         <button class="nav-item active" id="nav-vocab" onclick="window.switchTab('vocab')"><i data-lucide="layers" size="18"></i> 単語帳</button>
         <button class="nav-item" id="nav-reader" onclick="window.switchTab('reader')"><i data-lucide="file-text" size="18"></i> リーダー</button>
-        <button class="nav-item" id="nav-community" onclick="window.switchTab('community')"><i data-lucide="users" size="18"></i> フレンド</button>
+        <button class="nav-item" id="nav-community" onclick="window.switchTab('community')"><i data-lucide="users" size="18"></i> ユーザー</button>
+        <button class="nav-item" id="nav-battle" onclick="window.switchTab('battle')"><i data-lucide="swords" size="18"></i> 単語バトル</button>
         <button class="nav-item" id="nav-study" onclick="window.switchTab('study')"><i data-lucide="clock" size="18"></i> 勉強時間</button>
         <button class="nav-item" id="nav-titles" onclick="window.switchTab('titles')"><i data-lucide="medal" size="18"></i> ランキング</button>
     </div>
@@ -478,51 +460,51 @@
       const activeAccount=localStorage.getItem('core_v4_userId');
       if(activeAccount)window.AdminPlayers?.canStart(activeAccount);
     </script>
-    <link rel="preload" href="library-state.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=10.17.02.27"></script>
-    <link rel="preload" href="learning-data.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="vocab-master.js?v=10.17.02.27"></script>
-    <link rel="preload" href="app.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=10.17.02.27"></script>
-    <link rel="preload" href="game_core.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=10.17.02.27"></script>
-    <link rel="preload" href="vocab_ui.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=10.17.02.27"></script>
-    <link rel="preload" href="reader.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=10.17.02.27"></script>
-    <link rel="preload" href="view-work.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=10.17.02.27"></script>
-    <link rel="preload" href="fix.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="textbook-files.js?v=10.17.02.27"></script>
-    <link rel="preload" href="save-system.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="save-system.js?v=10.17.02.27"></script>
-    <link rel="preload" href="save-coordinator.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="save-coordinator.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="sound-effects.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="learning-feedback.js?v=10.17.02.27"></script>
-    <link rel="preload" href="library.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="workbook-math.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="workbook-explanation.js?v=10.17.02.27"></script>
-    <link rel="preload" href="workbook.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="profile-identity-cache.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="shared-note-index.js?v=10.17.02.27"></script>
-    <link rel="preload" href="shared-notes.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=10.17.02.27"></script>
-    <link rel="preload" href="user-directory.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=10.17.02.27"></script>
-    <link rel="preload" href="study-time.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="ranking-query.js?v=10.17.02.27"></script>
-    <link rel="preload" href="ranking.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=10.17.02.27"></script>
-    <link rel="preload" href="autosave.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=10.17.02.27"></script>
-    <link rel="preload" href="people.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=10.17.02.27"></script>
-    <link rel="preload" href="image-metadata.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="image-metadata.js?v=10.17.02.27"></script>
-    <link rel="preload" href="profile.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="icon-frames.js?v=10.17.02.27"></script>
-    <link rel="preload" href="loading-quiz.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=10.17.02.27"></script>
-    <link rel="preload" href="background-catalog.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="background-catalog.js?v=10.17.02.27"></script>
-    <link rel="preload" href="app-background.js?v=10.17.02.27" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="word-duel-model.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="word-duel-progress.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="word-duel.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="study-groups.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="learning-sessions.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="file-backups.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="idle-sleep.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="usage-guide-content.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="account-write-guard.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="admin-players.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="cloud-usage-ui.js?v=10.17.02.27"></script>
-    <script type="application/x-aiglish-script" data-app-src="group-chat.js?v=10.17.02.27"></script>
-    <script src="app-loader.js?v=10.17.02.27" defer></script>
+    <link rel="preload" href="library-state.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=10.17.02.53"></script>
+    <link rel="preload" href="learning-data.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="vocab-master.js?v=10.17.02.53"></script>
+    <link rel="preload" href="app.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=10.17.02.53"></script>
+    <link rel="preload" href="game_core.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=10.17.02.53"></script>
+    <link rel="preload" href="vocab_ui.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=10.17.02.53"></script>
+    <link rel="preload" href="reader.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=10.17.02.53"></script>
+    <link rel="preload" href="view-work.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=10.17.02.53"></script>
+    <link rel="preload" href="fix.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="textbook-files.js?v=10.17.02.53"></script>
+    <link rel="preload" href="save-system.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="save-system.js?v=10.17.02.53"></script>
+    <link rel="preload" href="save-coordinator.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="save-coordinator.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="sound-effects.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="learning-feedback.js?v=10.17.02.53"></script>
+    <link rel="preload" href="library.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="workbook-math.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="workbook-explanation.js?v=10.17.02.53"></script>
+    <link rel="preload" href="workbook.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="profile-identity-cache.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="shared-note-index.js?v=10.17.02.53"></script>
+    <link rel="preload" href="shared-notes.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=10.17.02.53"></script>
+    <link rel="preload" href="user-directory.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=10.17.02.53"></script>
+    <link rel="preload" href="study-time.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="ranking-query.js?v=10.17.02.53"></script>
+    <link rel="preload" href="ranking.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=10.17.02.53"></script>
+    <link rel="preload" href="autosave.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=10.17.02.53"></script>
+    <link rel="preload" href="people.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=10.17.02.53"></script>
+    <link rel="preload" href="image-metadata.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="image-metadata.js?v=10.17.02.53"></script>
+    <link rel="preload" href="profile.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="icon-frames.js?v=10.17.02.53"></script>
+    <link rel="preload" href="loading-quiz.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=10.17.02.53"></script>
+    <link rel="preload" href="background-catalog.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="background-catalog.js?v=10.17.02.53"></script>
+    <link rel="preload" href="app-background.js?v=10.17.02.53" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="word-duel-model.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="word-duel-progress.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="word-duel.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="study-groups.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="learning-sessions.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="file-backups.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="idle-sleep.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="usage-guide-content.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="account-write-guard.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="admin-players.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="cloud-usage-ui.js?v=10.17.02.53"></script>
+    <script type="application/x-aiglish-script" data-app-src="group-chat.js?v=10.17.02.53"></script>
+    <script src="app-loader.js?v=10.17.02.53" defer></script>
 </body>
 </html>

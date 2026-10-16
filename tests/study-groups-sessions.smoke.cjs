@@ -116,9 +116,7 @@ const { chromium, webkit } = require("playwright"),
       await p.evaluate((id) => {
         myId = id;
         myName = id;
-        myFriendList = [
-          { code: id === "group-a" ? "group-b" : "group-a", name: "友だち" },
-        ];
+        myFriendList = []; // Group membership is selected from the user directory.
         currentTextbook = "groups-book";
         textbooksPool = [{ id: currentTextbook, name: "グループ教材" }];
         vocabList = migrateVocabData(

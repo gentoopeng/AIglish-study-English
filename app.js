@@ -2341,20 +2341,7 @@ window.formatFriendLastLogin = function(iso) {
   return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 };
 
-window.injectFriendRefreshButton = function() {
-  if (window.__friendRefreshButtonInjected) return;
-  const container = document.getElementById("friendListContainer");
-  if (!container || !container.parentNode) return;
-  if (document.getElementById("friendRefreshButton")) { window.__friendRefreshButtonInjected = true; return; }
-  const btn = document.createElement("button");
-  btn.id = "friendRefreshButton";
-  btn.type = "button";
-  btn.textContent = "🔄 最新情報に更新";
-  btn.style.cssText = "width:100%; height:38px; margin:8px 0 12px 0; background:rgba(0,240,255,0.12); color:var(--cosmic-cyan); border:1px solid var(--cosmic-cyan); border-radius:10px; font-weight:800; font-size:12px; cursor:pointer;";
-  btn.onclick = function() { window.manualRefreshFriendList(); };
-  container.parentNode.insertBefore(btn, container);
-  window.__friendRefreshButtonInjected = true;
-};
+window.injectFriendRefreshButton = function() {}; // Replaced by the compact users toolbar.
 
 window.refreshFriendListFromFirebase = async function(force) {
   if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;

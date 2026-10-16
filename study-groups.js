@@ -305,8 +305,7 @@
     if (!list.length) {
       const hint = document.createElement("p");
       hint.className = "people-hint";
-      hint.textContent =
-        "フレンドとグループを作り、学習記録や目標を共有しましょう。";
+      hint.textContent = "ユーザーを選んでグループを作れます。";
       host.append(hint);
     }
   }
@@ -320,23 +319,32 @@
     );
     modal = d;
     const account = uid();
-    d.querySelector(".library-editor-eyebrow").textContent = "友だちと学習";
+    d.querySelector(".library-editor-eyebrow").textContent = "グループ";
     d.querySelector("[data-group-name]").value = existing?.name || "";
     d.querySelector("[data-group-name]").readOnly = !!existing;
-    const choices = (myFriendList || []).filter(
-      (f) => f.code !== account && !existing?.members[f.code],
-    );
+    d.querySelector("[data-group-status]").textContent =
+      "ユーザーを読み込み中…";
+    await window.People.refresh(false);
+    if (uid() !== account || !d.open) return;
+    d.querySelector("[data-group-status]").textContent = "";
+    const choices = window.People.list()
+      .map((person) => ({ code: person.id, name: person.name }))
+      .filter((f) => f.code !== account && !existing?.members[f.code]);
     for (const friend of choices) {
       const label = document.createElement("label"),
         check = document.createElement("input");
       check.type = "checkbox";
       check.value = friend.code;
-      label.append(check, document.createTextNode(friend.name || friend.code));
+      label.append(
+        check,
+        memberAvatar(friend.code, friend.name),
+        document.createTextNode(friend.name || friend.code),
+      );
       d.querySelector(".group-friend-picker").append(label);
     }
     if (!choices.length)
       d.querySelector("[data-group-status]").textContent =
-        "追加できるフレンドはいません。";
+        "追加できるユーザーはいません。";
     d.querySelector("[data-group-create]").textContent = existing
       ? "追加する"
       : "作成する";
@@ -349,7 +357,7 @@
             ...d.querySelectorAll("input[type=checkbox]:checked"),
           ].map((c) => c.value);
         if (!name || !selected.length)
-          throw Error("名前を入力し、フレンドを選んでください。");
+          throw Error("名前を入力し、ユーザーを選んでください。");
         if (
           selected.length +
             Object.keys(existing?.members || { [account]: 1 }).length >
@@ -380,7 +388,7 @@
               : [account, ...selected],
             profiles = [];
           if (!ids.length)
-            throw Error("選んだフレンドはすでに参加しています。");
+            throw Error("選んだユーザーはすでに参加しています。");
           if (Object.keys(g.members).length + ids.length > 12)
             throw Error("グループは12人までです。");
           for (const member of [...new Set([account, ...ids])]) {
@@ -449,7 +457,7 @@
       );
     modal = d;
     current = id;
-    d.querySelector(".library-editor-eyebrow").textContent = "友だちと学習";
+    d.querySelector(".library-editor-eyebrow").textContent = "グループ";
     d.addEventListener(
       "close",
       () => {
@@ -832,7 +840,7 @@
     for (const node of [...root.children])
       if (node !== battle) friends.append(node);
     for (const [name, el] of [
-      ["友だち", friends],
+      ["ユーザー", friends],
       ["グループ", groups],
     ]) {
       const b = button(name, async () => {
@@ -850,7 +858,8 @@
       b.setAttribute("aria-pressed", String(el === friends));
       nav.append(b);
     }
-    root.append(nav, friends, groups, battle);
+    root.append(nav, friends, groups);
+    if (battle) battle.remove();
     document.querySelector("#createStudyGroup").innerHTML =
       '<span class="group-create-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M19 7v8m-4-4h8"/></svg></span><span>グループを作る</span>';
     document.querySelector("#createStudyGroup").onclick = () =>
