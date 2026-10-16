@@ -299,6 +299,7 @@ const { chromium, webkit } = require("playwright"),
     await a.getByLabel("協力目標の種類").selectOption("time");
     await a.getByLabel("協力目標の達成方式").selectOption("sum");
     await a.getByRole("button", { name: "目標を設定" }).click();
+    await a.waitForFunction(()=>document.querySelector('.group-race-summary').textContent.includes('0 / 30分'));
     await a.evaluate(() => {
       StudyTime.mergeCloud({
         version: 1,
@@ -321,6 +322,7 @@ const { chromium, webkit } = require("playwright"),
       "individual",
     );
     await a.getByRole("button", { name: "目標を設定", exact: true }).click();
+    await a.waitForFunction(()=>document.querySelector('.group-race-summary').textContent.includes('1人 7回'));
     await a.evaluate(async () => {
       for (let i = 0; i < 7; i++) recordRankedWord("same-word", 1);
       await StudyGroups.publish(true);
