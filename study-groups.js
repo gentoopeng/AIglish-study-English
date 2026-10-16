@@ -249,10 +249,26 @@
     for (const group of list) {
       const b = button(group.name || "グループ", () => open(group.id));
       b.className = "group-list-row";
+      b.setAttribute("aria-label", group.name || "グループ");
       const icon = document.createElement("span");
-      icon.textContent = "◉";
+      icon.className = "group-list-avatar";
+      icon.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m3 10v-3a6 6 0 0 0-3-5"/></svg>';
       icon.setAttribute("aria-hidden", "true");
-      b.prepend(icon);
+      const copy = document.createElement("span"),
+        name = document.createElement("span"),
+        meta = document.createElement("span"),
+        chevron = document.createElement("span");
+      copy.className = "group-list-copy";
+      name.className = "group-list-name";
+      name.textContent = group.name || "グループ";
+      meta.className = "group-list-meta";
+      meta.textContent = "学習記録・協力目標";
+      chevron.className = "group-list-chevron";
+      chevron.textContent = "›";
+      chevron.setAttribute("aria-hidden", "true");
+      copy.append(name, meta);
+      b.replaceChildren(icon, copy, chevron);
       host.append(b);
     }
     if (!list.length) {
@@ -579,7 +595,7 @@
     host.append(actions);
   }
   async function publish(force = false, only) {
-    if(window.endOnlyCloudSaves&&!force)return;
+    if (window.endOnlyCloudSaves && !force) return;
     if (
       publishing ||
       uid() === "GUEST-000" ||
@@ -662,7 +678,8 @@
       nav.append(b);
     }
     root.append(nav, friends, groups, battle);
-    document.querySelector('#createStudyGroup').innerHTML='<span class="group-create-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M19 7v8m-4-4h8"/></svg></span><span>グループを作る</span>';
+    document.querySelector("#createStudyGroup").innerHTML =
+      '<span class="group-create-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M19 7v8m-4-4h8"/></svg></span><span>グループを作る</span>';
     document.querySelector("#createStudyGroup").onclick = () =>
       edit().catch(error);
     document.querySelector("#refreshStudyGroups").onclick = () =>

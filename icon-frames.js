@@ -3,14 +3,13 @@
 'use strict';
 const names=['木','石','銅','銀','金','ダイヤ','プラチナ','ブラックダイヤ'];
 const ids=['wood','stone','copper','silver','gold','diamond','platinum','black-diamond'];
-const photoSizes=[91,77,78,81,76,64,66,68];
 const minutes=[10,60,300,1200,3000,6000,15000,30000];
 const catalog=ids.map((id,index)=>Object.freeze({id,name:names[index],seconds:minutes[index]*60,label:index===0?'10分':minutes[index]/60+'時間'}));
 function totalSeconds(){const stats=typeof userStats==='object'?userStats:{};const snapshot=window.StudyTime.snapshot();return window.StudyTimeModel.rankingSeconds({...stats,study_calendar_v2:snapshot||stats.study_calendar_v2},'total',Date.now());}
 function unlocked(id,seconds=totalSeconds()){const frame=catalog.find(frame=>frame.id===id);return !!frame&&seconds>=frame.seconds;}
 function equipped(){const id=window.UserProfile.read().frame;return unlocked(id)?id:'';}
 window.IconFrameCatalog=Object.freeze(catalog);
-function decorate(element,id){element.querySelector(':scope > .icon-frame-art')?.remove();element.classList.remove('icon-framed');element.style.removeProperty('--frame-photo-size');if(!ids.includes(id))return;element.style.setProperty('--frame-photo-size',photoSizes[ids.indexOf(id)]+'%');const art=document.createElement('span');art.className='icon-frame-art frame-'+id;art.setAttribute('aria-hidden','true');element.classList.add('icon-framed');element.append(art);}
+function decorate(element,id){element.querySelector(':scope > .icon-frame-art')?.remove();element.classList.remove('icon-framed');element.style.removeProperty('--frame-aperture');if(!ids.includes(id))return;element.style.setProperty('--frame-aperture','url("assets/frames/'+id+'-aperture.png")');const art=document.createElement('span');art.className='icon-frame-art frame-'+id;art.setAttribute('aria-hidden','true');element.classList.add('icon-framed');element.append(art);}
 function fromAppearance(appearance){try{const profile=typeof appearance==='string'?JSON.parse(appearance):appearance;return profile?.frame||'';}catch{return '';}}
 let preview='';
 function photo(){return localStorage.getItem('core_v4_user_avatar_'+myId)||'';}

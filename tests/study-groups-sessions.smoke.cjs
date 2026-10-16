@@ -227,6 +227,7 @@ const { chromium, webkit } = require("playwright"),
     assert.equal(docs.get(groupPath).goal.done, true);
     assert.ok(docs.get(groupPath).events.some((e) => e.text === "30分勉強"));
     await b.getByRole("button", { name: "グループ", exact: true }).click();
+    await b.screenshot({path:"/tmp/group-list-ui.png"});
     await b.getByRole("button", { name: "放課後の学習", exact: true }).click();
     await b.getByRole("button", { name: "いいね 1", exact: true }).waitFor();
     assert.equal(
@@ -354,8 +355,13 @@ const { chromium, webkit } = require("playwright"),
     await a.clock.fastForward(1300);
     await a
       .getByRole("heading", { name: "まずは10単語", exact: true })
-      .waitFor();
+      .waitFor({state:"attached"});
     assert.equal(await a.locator(".warmup-count").textContent(), "1 / 10");
+    const sharedLayout=await a.evaluate(()=>{
+      const normal=document.getElementById("flashcard-play-screen"),warm=document.querySelector("dialog.flash-warmup-dialog>.flashcard-session-screen");
+      return {children:normal.children.length===warm.children.length,stage:!!warm.querySelector(".flashcard-deck-stage"),history:warm.querySelectorAll(".fc-history-bubble").length,duplicateIds:warm.querySelectorAll("[id]").length,info:!!warm.querySelector(".flashcard-info-button"),back:!!warm.querySelector(".flashcard-previous-button")};
+    });
+    assert.deepEqual(sharedLayout,{children:true,stage:true,history:5,duplicateIds:0,info:true,back:true});
     await a.screenshot({ path: "/tmp/flash-warmup-ui.png" });
     const prompt = await a
       .locator(".warmup-card .flashcard-face-front>div")
