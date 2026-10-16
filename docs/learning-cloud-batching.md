@@ -1,15 +1,29 @@
-# Learning cloud traffic budget
+# End-only learning cloud saves
 
-Canonical answers and recovery records are written to the device synchronously. Word-card buttons now use `LearningData.commit` too: their previous path wrote no per-word edit timestamp, allowing recovery reads to prefer an old answer. Explicit edit timestamps are strictly increasing, including two answers within the same millisecond. Notes and sticky markers remain attached to the word.
+Canonical answers and recovery records are written to the device synchronously. Word-card buttons use `LearningData.commit`: their previous path wrote no per-word edit timestamp, allowing recovery reads to prefer an old answer. Explicit edit timestamps increase even for two answers in the same millisecond. Notes and sticky markers remain attached to the word.
 
-Normal full-backup scheduling, retry checks, and dialog/keyboard/foreground settling use a two-minute interval instead of 15-second backups/2-second settling/60-second retry checks. Five-swipe checkpoints still flush IndexedDB; they do not immediately upload a full backup. Search/filter-only input does not dirty the learning save. Boot/hydration completion no longer bypasses an existing batch timer.
+## When cloud backups run
 
-`saveUserVocabProgress` now confirms the local record and queues background sync. Tab changes, visibility changes and pagehide capture dirty local drafts and flush local storage; they no longer independently upload textbook parts. A full save merges every captured dirty book's progress into its canonical cloud document, not just the currently displayed book. Successful cloud commits acknowledge only the captured revisions, so new edits during a save stay dirty.
+- Flashcard completion, quit and pause.
+- Battle completion/abandonment, login-quiz completion/close.
+- Returning from a word book or workbook to its selection screen, closing a reader, or leaving a study tab with pending changes.
+- Entering sleep mode (even during a paused or unfinished study session).
+- Explicit manual save and logout.
 
-Successful background progress payloads are remembered for the session. An identical payload skips another read/transaction/write of that progress document; the integrated backup, study records and public metrics still save normally. Manual save bypasses this progress-payload suppression. Successful progress reads are cached for five minutes per account/book, applying the latest local canonical record before a cache hit returns. Failed/quota-blocked reads are not cached as empty data.
+`queueBackgroundSave`, rating changes and swipe checkpoints now only record a durable pending marker. There are no timed backup retries, cloud saves every five answers, automatic resume/online saves, or focus/dialog-close backup deadlines. A failed save stays on the device until the next completion or explicit save. Sleep still deducts idle time and saves once through the existing sleep handler. Closing an app can interrupt networking; local canonical records and flash checkpoints remain important.
 
-Battle and login-quiz answers retain their immediate per-answer local journal. The five-answer checkpoints schedule a batched cloud flush. Match/quiz completion and close still request a flush; in-flight flushes coalesce, and empty journals do not query. Quota pause prevents these transactions while retaining pending answers. Explicit logout attempts a backup before clearing the login state, with the existing bounded wait behavior; unavailable cloud data stays on the device.
+The end-save coordinator coalesces overlapping finish/close/tab events, refuses a normal completion backup while active play continues, flushes local storage, merges any pending battle answers, and invokes the complete backup. An answer added during a save retains its pending state. Guest records remain local. The manual save UI is unchanged.
 
-No ranking, shared-note, battle-room or group functionality is removed. Live match score publication is unchanged. Other-device understanding changes can take up to the read cache interval to appear; background saves also wait while hidden, typing, loading or displaying native dialogs. A successful local write is not a claim of successful cloud sync. Existing pending markers/retry queues and optional external file backups remain available.
+## Other cloud writers
 
-Validation uses mocked Firestore: 100 word-card updates and repeated tab-boundary flushes produce zero immediate cloud operations, retain the last answer/note/sticky state through reload, skip an unchanged background progress transaction, sync a changed answer, and make one progress read across repeated loads. Chromium and WebKit exercise the actual application; unit coverage includes batching deadlines, quota pause, recovery and same-millisecond answers. Actual Firebase console usage and iPhone hardware behavior require production observation after deployment; the change does not reset exhausted quotas.
+Periodic ranking/study-statistic publication, group milestone publication, profile retry publication and a legacy statistics writer are held back under this policy. Completed saves publish the latest ranking/profile/group state. Explicit profile save and group refresh still work. Real-time battle-room communication and shared-content publication required by explicit user actions are unchanged; these are not periodic learning backups.
+
+Cloud progress payloads are acknowledged per session so an identical background payload skips a redundant progress transaction. Manual save bypasses this suppression. Successful understanding reads are cached for five minutes per account/book; latest local canonical values are applied before returning a cache hit. Failed/quota-blocked reads are never cached as empty records.
+
+A full save merges every captured dirty book, not just the displayed book. Only captured revisions are acknowledged, so concurrent edits remain pending. Existing complete local snapshots and immutable textbook files are retained. The feature does not reset exhausted Firebase quotas, and other-device learning/ranking updates now generally appear after a completion save.
+
+## Validation
+
+Unit coverage exercises no timer registration or cloud calls during repeated changes/swipes, one coalesced completion save, failed-save retention, account switches, quota/loading guards, active-play protection, sleep override, next-completion retries, canonical recovery and same-millisecond answers.
+
+`tests/end-only-save.smoke.cjs` uses the actual application and a virtual clock: 100 ratings plus three minutes of play have zero cloud writes (including legacy statistics/ranking/profile paths), completion performs one backup, no periodic backup follows, and sleep performs one save containing the newest answer. Firestore is mocked. Chromium/WebKit verification is distinct from actual iPhone and production usage observation.

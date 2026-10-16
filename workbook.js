@@ -363,7 +363,7 @@
             '<div class="filter-scroller" id="workbookFilters">' + [['ok', '⚪︎ 定着'], ['so', '△ 曖昧'], ['bad', '✕ 不可']].map(([value, text]) => '<button type="button" class="pill-btn' + (filter === value ? ' active' : '') + '" aria-pressed="' + (filter===value) + '" data-filter="' + value + '">' + text + '</button>').join('') + '</div>' +
             '<div class="library-toolbar workbook-study-toolbar"><button type="button" id="workbookDueOnly" aria-pressed="' + dueOnly + '">' + (dueOnly ? 'すべて表示' : '復習する ' + visibleUnits(work).filter(u => isDue(u)).length + '件') + '</button><button type="button" id="workbookBatch">まとめて記録・復習設定</button></div><div id="workbookUnitList"></div>';
         if(publicationQueue()[work.id]){const status=document.createElement('p');status.className='workbook-sync-status';status.setAttribute('role','status');status.textContent='端末に保存済み・公開同期待ち';screen.querySelector('.workbook-study-toolbar').after(status);}
-        screen.querySelector('.workbook-back').onclick = () => window.showVocabLibrarySelection();
+        screen.querySelector('.workbook-back').onclick = () => {window.showVocabLibrarySelection();window.saveAfterStudy?.('workbook-end');};
         screen.querySelector('#workbookManage').onclick = () => openActions(work.id);
         screen.querySelector('#workbookDueOnly').onclick = () => { dueOnly = !dueOnly; renderContents(); };
         screen.querySelector('#workbookBatch').onclick = () => openBatch(work.id);

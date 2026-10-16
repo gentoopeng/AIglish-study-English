@@ -1032,6 +1032,7 @@ async function saveAllContents(force) {
     cloudError=e; console.warn('[save] cloud save failed',e);
   }
   if(cloudSaved){
+    if(window.endOnlyCloudSaves&&uid()===id){await window.LearningRanking?.sync();await window.UserProfile?.sync();await window.StudyGroups?.publish(true); }
     try { localStorage.setItem(cloudMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,generation:generation})); } catch(e) {}
     if(!localSaved){try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,source:'cloud'})); } catch(e) {}}
     progress(100,started,'保存完了');return {localSaved:localSaved,cloudSaved:true};

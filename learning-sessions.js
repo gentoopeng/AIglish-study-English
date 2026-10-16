@@ -482,7 +482,7 @@
         document.body.classList.remove("flash-warmup-open");
         welcomePending = false;
         welcomeModal = null;
-        if (index > 0) window.queueBackgroundSave?.();
+        if (index > 0) window.saveAfterStudy?.("warmup-end");
       },
       { once: true },
     );

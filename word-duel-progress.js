@@ -1,7 +1,7 @@
 // Explicit answers use the canonical recovery journal; cloud writes are batched by book.
 (function(){
 'use strict';
-const owner=()=>myId||'GUEST-000',pendingKey=id=>'core_v4_word_duel_pending_'+id,queues=new Map(),scheduled=new Map();
+const owner=()=>myId||'GUEST-000',pendingKey=id=>'core_v4_word_duel_pending_'+id,queues=new Map();
 function pending(id){return JSON.parse(localStorage.getItem(pendingKey(id))||'{}');}
 function overall(meanings,count){const statuses=Object.values(meanings).map(item=>item.status||'none');while(statuses.length<count)statuses.push('none');return statuses.includes('bad')?'bad':statuses.length&&statuses.every(value=>value==='ok')?'ok':statuses.includes('so')||statuses.includes('ok')?'so':'none';}
 function apply(book,ref,answer,id){
@@ -24,7 +24,6 @@ function apply(book,ref,answer,id){
  window.recordRankedWord?.(book,ref.num);return words[ref.num];
 }
 async function flush(id=owner()){
- if(scheduled.has(id)){clearTimeout(scheduled.get(id));scheduled.delete(id);}
  if(id!==owner()||id==='GUEST-000'||!window.db||!window.fbRunTransaction||window.FirestoreReadGuard?.paused())return false;
  if(queues.has(id))return queues.get(id);
  const execute=async()=>{let saved=true;const jobs=pending(id);for(const [book,changes]of Object.entries(jobs)){
@@ -57,12 +56,7 @@ async function flush(id=owner()){
  const task=(window.LibraryState?.track?window.LibraryState.track(id,execute):execute()).finally(()=>queues.delete(id));queues.set(id,task);return task;
 }
 function schedule(id=owner()){
- if(id!==owner()||id==='GUEST-000')return;
- window.AppStorage?.flush().catch(()=>{});
- if(scheduled.has(id))return;
- scheduled.set(id,setTimeout(()=>{scheduled.delete(id);flush(id).catch(()=>{});},120000));
+ if(id===owner())window.queueBackgroundSave?.();
 }
 window.WordDuelProgress={apply,flush,schedule};
-window.onAppLoaded(()=>flush().catch(()=>{}));window.addEventListener('online',()=>flush().catch(()=>{}));
-setInterval(()=>{if(document.visibilityState==='visible')flush().catch(()=>{});},120000);
 })();

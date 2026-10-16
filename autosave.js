@@ -1,37 +1,117 @@
-// Batch edits while keeping catalogue mutations on an earlier save deadline.
-(function(){
-    const CLOUD_BATCH_MS=120000;
-    let revision=0,saved=0,pending=false,timer=null,lastEditingAt=-Infinity;
-    const textInput='input,textarea,[contenteditable="true"]';
-    function editing(event){if((event?.target||document.activeElement)?.matches?.(textInput))lastEditingAt=Date.now();}
-    const id=()=>typeof myId==='string'?myId:'';
-    let owner=id();
-    function changed(event){editing(event);if(event?.target?.type==='password'||event?.target?.type==='search'||/search|filter/i.test(event?.target?.id||'')||event?.target?.closest?.('#backgroundAdminDialog,.admin-players-dialog'))return;if(owner!==id()){owner=id();revision=0;saved=0;}revision++;window.localStorage?.setItem('core_v4_autosave_pending_'+owner,'1');}
-    async function save(){
-        timer=null;if(pending||revision===saved||!owner||owner==='GUEST-000'||!window.__backgroundSaveAll)return;
-        // Canonical edits already persist locally. Avoid a full snapshot while Safari resizes
-        // for the keyboard, paints a native dialog, or suspends the installed app.
-        if(document.hidden||document.visibilityState==='hidden'||document.querySelector?.('dialog[open]')||(document.activeElement?.matches?.(textInput)&&Date.now()-lastEditingAt<5000))return;
-        if(window.FirestoreReadGuard?.paused())return;
-        if(window.LearningData&&!window.LearningData.canSave(typeof currentTextbook==='string'?currentTextbook:'default'))return;
-        const account=owner,version=revision;pending=true;
-        try{const result=await window.__backgroundSaveAll();if(result.cloudSaved&&id()===account&&window.flushWorkbookPublications)await window.flushWorkbookPublications();if(id()===account&&result.cloudSaved){saved=version;if(revision===version)window.localStorage?.removeItem('core_v4_autosave_pending_'+account);}}
-        catch(error){console.warn('自動保存は次回に再試行します',error);}finally{pending=false;}
+// Record local pending work continuously; cloud backups run only at explicit boundaries.
+(function () {
+  "use strict";
+  window.endOnlyCloudSaves = true;
+  const id = () => (typeof myId === "string" ? myId : "");
+  let owner = id(),
+    revision = 0,
+    saved = 0,
+    running = null;
+  function changed(event) {
+    const target = event?.target;
+    if (
+      target?.type === "password" ||
+      target?.type === "search" ||
+      /search|filter/i.test(target?.id || "") ||
+      target?.closest?.("#backgroundAdminDialog,.admin-players-dialog")
+    )
+      return;
+    if (owner !== id()) {
+      owner = id();
+      revision = 0;
+      saved = 0;
     }
-    function idleSave(){if(window.requestIdleCallback)window.requestIdleCallback(save,{timeout:3000});else setTimeout(save,0);}
-    window.resumeBackgroundSave=function(){settled();};
-    window.queueBackgroundSave=function(){changed();if(!timer)timer=setTimeout(idleSave,CLOUD_BATCH_MS);};
-    if(window.onAppLoaded)window.onAppLoaded(()=>{if(window.localStorage?.getItem('core_v4_autosave_pending_'+id()))window.queueBackgroundSave();});
-    let flashOwner='',flashSwipes=0;
-    window.noteFlashSwipe=function(){if(flashOwner!==id()){flashOwner=id();flashSwipes=0;}flashSwipes++;changed();if(flashSwipes%5===0){if(window.AppStorage)window.AppStorage.flush().catch(error=>console.warn('理解度の端末保存を再試行します',error));window.queueBackgroundSave();}};
-    window.flushFlashAutosave=function(){if(flashSwipes)window.queueBackgroundSave();};
-    document.addEventListener('input',changed,{passive:true});document.addEventListener('change',changed,{passive:true});
-    ['markVocabProgressDirty'].forEach(name=>{const original=window[name];if(typeof original==='function')window[name]=function(){changed();return original.apply(this,arguments);};});
-    setInterval(()=>{if(owner!==id()){owner=id();revision=0;saved=0;}if(revision!==saved)idleSave();},CLOUD_BATCH_MS);
-    window.addEventListener('online',()=>{window.queueBackgroundSave();});
-    function settled(){if(revision!==saved&&!timer)timer=setTimeout(idleSave,CLOUD_BATCH_MS);}
-    document.addEventListener('focusin',editing,{passive:true});
-    document.addEventListener('focusout',settled,{passive:true});
-    document.addEventListener('close',settled,true);
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='hidden')settled();});
+    revision++;
+    if (owner && owner !== "GUEST-000")
+      window.localStorage?.setItem("core_v4_autosave_pending_" + owner, "1");
+  }
+  window.queueBackgroundSave = changed;
+  window.resumeBackgroundSave = function () {};
+  window.noteFlashSwipe = changed;
+  window.saveAfterStudy = function (reason = "end") {
+    if (running) return running;
+    changed();
+    const account = id();
+    // Defer one microtask so the synchronous close/finish handler can leave play mode.
+    const task = Promise.resolve().then(async () => {
+      if (id() !== account) return { cloudSaved: false };
+      if (
+        reason !== "sleep" &&
+        (document.body?.classList.contains("in-game-active") ||
+          window.WordDuel?.isPlaying?.())
+      )
+        return { cloudSaved: false, deferred: true };
+      await window.AppStorage?.flush();
+      if (!account || account === "GUEST-000")
+        return { localSaved: true, cloudSaved: false };
+      if (
+        window.FirestoreReadGuard?.paused() ||
+        (window.LearningData &&
+          !window.LearningData.canSave(
+            typeof currentTextbook === "string" ? currentTextbook : "default",
+          ))
+      )
+        return { localSaved: true, cloudSaved: false };
+      if (id() !== account) return { cloudSaved: false };
+      const version = revision;
+      try {
+        await window.WordDuelProgress?.flush(account);
+        if (id() !== account) return { cloudSaved: false };
+        const result = await window.__backgroundSaveAll();
+        if (id() === account && result.cloudSaved) {
+          await window.flushWorkbookPublications?.();
+          saved = version;
+          if (revision === version)
+            window.localStorage?.removeItem(
+              "core_v4_autosave_pending_" + account,
+            );
+        }
+        return result;
+      } catch (error) {
+        console.warn(
+          "端末の記録を保持しています。次の学習終了時または手動セーブで再試行してください。",
+          error,
+        );
+        return { localSaved: true, cloudSaved: false };
+      }
+    });
+    running = task.finally(() => {
+      running = null;
+    });
+    return running;
+  };
+  window.flushFlashAutosave = () => window.saveAfterStudy("flash-end");
+  document.addEventListener("input", changed, { passive: true });
+  document.addEventListener("change", changed, { passive: true });
+  const mark = window.markVocabProgressDirty;
+  if (typeof mark === "function")
+    window.markVocabProgressDirty = function () {
+      changed();
+      return mark.apply(this, arguments);
+    };
+  const closeReader = window.closeReader;
+  if (typeof closeReader === "function")
+    window.closeReader = function () {
+      const was =
+        typeof currentActiveTabId === "string" &&
+        currentActiveTabId === "reader" &&
+        document.getElementById("text-reader-view")?.style.display !== "none";
+      const result = closeReader.apply(this, arguments);
+      if (was) window.saveAfterStudy("reader-end");
+      return result;
+    };
+  let previous =
+    typeof currentActiveTabId === "string" ? currentActiveTabId : "";
+  window.onTabChange?.((tab) => {
+    const old = previous;
+    previous = tab;
+    if (
+      old !== tab &&
+      ["vocab", "reader", "study", "community"].includes(old) &&
+      (revision !== saved ||
+        old === "study" ||
+        window.localStorage?.getItem("core_v4_autosave_pending_" + id()))
+    )
+      window.saveAfterStudy("leave-study");
+  });
 })();

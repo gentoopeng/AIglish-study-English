@@ -579,6 +579,7 @@
     host.append(actions);
   }
   async function publish(force = false, only) {
+    if(window.endOnlyCloudSaves&&!force)return;
     if (
       publishing ||
       uid() === "GUEST-000" ||
