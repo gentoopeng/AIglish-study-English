@@ -2,23 +2,25 @@
 (function () {
     'use strict';
     const nonnegative = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
-    const empty = () => ({version:2, epoch:'learning-reset-3.52', words:{}, flash:{baseline:0,sources:{}}});
+    const empty = () => ({version:2, epoch:'learning-reset-3.52', words:{}, attempts:{sources:{}}, flash:{baseline:0,sources:{}}});
     function merge(left,right) {
         const result=empty();
         [left,right].forEach(record=>{
             if(typeof record==='string'){try{record=JSON.parse(record);}catch(e){return;}}
             if(!record||record.version!==2||record.epoch!=='learning-reset-3.52')return;
+            Object.entries(record.attempts?.sources||{}).forEach(([id,value])=>{result.attempts.sources[id]=Math.max(result.attempts.sources[id]||0,nonnegative(value));});
             Object.keys(record.words||{}).forEach(key=>{result.words[key]=1;});
             result.flash.baseline=Math.max(result.flash.baseline,nonnegative(record.flash&&record.flash.baseline));
             Object.entries(record.flash&&record.flash.sources||{}).forEach(([id,value])=>{result.flash.sources[id]=Math.max(result.flash.sources[id]||0,nonnegative(value));});
         });return result;
     }
     const wordCount = record => Object.keys(record&&record.words||{}).length;
+    const attemptCount=record=>Object.values(record?.attempts?.sources||{}).reduce((sum,n)=>sum+nonnegative(n),0);
     const flashCount = record => nonnegative(record&&record.flash&&record.flash.baseline)+Object.values(record&&record.flash&&record.flash.sources||{}).reduce((sum,value)=>sum+nonnegative(value),0);
     const wordKey=(book,num)=>JSON.stringify([String(book),String(num)]);
     const rated=word=>['ok','so','bad'].includes(word&&word.status)||Object.values(word&&word.meanings||{}).some(meaning=>['ok','so','bad'].includes(meaning.status));
     function fromProfile(doc){let result=empty();[doc.userStatsJson,doc.statistics,doc.user_stats,doc.stats,doc.userStats].forEach(stats=>{if(typeof stats==='string'){try{stats=JSON.parse(stats);}catch(e){return;}}if(stats)result=merge(result,stats.learning_ranking_v2_json);});return merge(result,doc.learningRankingV2Json);}
-    window.LearningRankingModel={empty,merge,wordCount,flashCount,wordKey,rated,fromProfile};
+    window.LearningRankingModel={empty,merge,wordCount,attemptCount,flashCount,wordKey,rated,fromProfile};
     const owner=()=>typeof myId==='string'?myId:'GUEST-000';
     const storageKey=id=>'core_v4_learning_ranking_v2_'+id;
     let device=localStorage.getItem('aiglish_ranking_device');if(!device){device=crypto.randomUUID();localStorage.setItem('aiglish_ranking_device',device);}
@@ -39,7 +41,7 @@
     function scanCurrent(){} // Only explicit rating actions count in this generation.
     function readSwipeJournals(){const prefix='core_v4_ranking_swipes_v2_'+user+'_';for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key.startsWith(prefix)){const id=key.slice(prefix.length);record.flash.sources[id]=Math.max(record.flash.sources[id]||0,nonnegative(localStorage.getItem(key)));}}}
     window.syncRankingMetrics=function(){ensure();record=merge(record,read(user));if(!userStats.learning_ranking_owner||userStats.learning_ranking_owner===user)record=merge(record,userStats.learning_ranking_v2_json||userStats.learning_ranking);readSwipeJournals();scanCurrent();persist();};
-    window.recordRankedWord=function(book,num){if(!book)return;ensure();record=merge(record,read(user));record.words[wordKey(book,num)]=1;persist();scheduleSync();};
+    window.recordRankedWord=function(book,num){if(!book)return;ensure();record=merge(record,read(user));record.words[wordKey(book,num)]=1;record.attempts.sources[sourceId]=nonnegative(record.attempts.sources[sourceId])+1;persist();scheduleSync();};
     window.recordRankedSwipe=function(){ensure();record=merge(record,read(user));record.flash.sources[sourceId]=nonnegative(record.flash.sources[sourceId])+1;store('core_v4_ranking_swipes_v2_'+user+'_'+sourceId,String(record.flash.sources[sourceId]));persist();scheduleSync();};
     let syncTimer=null;const syncedStates=new Map();
     function scheduleSync(){if(window.endOnlyCloudSaves){window.queueBackgroundSave?.();return;}if(!syncTimer)syncTimer=setTimeout(()=>{syncTimer=null;syncCloud();},15000);}

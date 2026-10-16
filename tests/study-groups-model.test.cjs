@@ -151,3 +151,71 @@ test("a newer sleep/manual correction rolls back time milestones and reopens the
   m.advance(g, "a", { words: 200, time: 80, timeAt: 2 }, 4);
   assert.equal(g.progress.a.time, 75);
 });
+
+test("individual goals cannot be completed by one member carrying the others", () => {
+  const g = group();
+  g.goal = {
+    id: "individual",
+    mode: "individual",
+    type: "attempts",
+    target: 10,
+    baseline: { a: { attempts: 5 }, b: { attempts: 2 } },
+  };
+  m.advance(g, "a", { words: 200, time: 50, attempts: 105 }, 1);
+  assert.equal(m.goalReached(g), false);
+  m.advance(g, "b", { words: 100, time: 20, attempts: 12 }, 2);
+  assert.equal(m.goalReached(g), true);
+  assert.equal(g.goal.done, true);
+  assert.equal(g.events.filter((e) => e.id === "goal:individual").length, 1);
+});
+test("sum mode and old goals retain combined progress", () => {
+  const g = group();
+  g.goal = {
+    id: "sum",
+    mode: "sum",
+    type: "attempts",
+    target: 10,
+    baseline: { a: { attempts: 0 }, b: { attempts: 0 } },
+  };
+  m.advance(g, "a", { words: 200, time: 50, attempts: 10 }, 1);
+  assert.equal(g.goal.done, true);
+  assert.equal(m.goalReached(g), true);
+});
+test("individual time goals are reopened after a newer correction", () => {
+  const g = group();
+  g.goal = {
+    id: "time",
+    mode: "individual",
+    type: "time",
+    target: 10,
+    baseline: structuredClone(g.progress),
+  };
+  m.advance(g, "a", { words: 200, time: 60, timeAt: 2 }, 2);
+  m.advance(g, "b", { words: 100, time: 30, timeAt: 2 }, 2);
+  assert.equal(g.goal.done, true);
+  m.advance(g, "a", { words: 200, time: 55, timeAt: 3 }, 3);
+  assert.equal(g.goal.done, false);
+  assert.equal(
+    g.events.some((e) => e.id === "goal:time"),
+    false,
+  );
+});
+
+test("individual completion is recalculated after leaving and an empty group cannot win", () => {
+  const g = group();
+  g.owner = "a";
+  g.goal = {
+    id: "leaving",
+    mode: "individual",
+    type: "time",
+    target: 10,
+    baseline: structuredClone(g.progress),
+  };
+  m.advance(g, "a", { words: 200, time: 60, timeAt: 1 }, 1);
+  assert.equal(m.goalReached(g), false);
+  m.leave(g, "b");
+  assert.equal(g.goal.done, true);
+  m.leave(g, "a");
+  assert.equal(g.goal.done, false);
+  assert.equal(m.goalReached(g), false);
+});
