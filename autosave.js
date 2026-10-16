@@ -13,7 +13,7 @@
       target?.type === "password" ||
       target?.type === "search" ||
       /search|filter/i.test(target?.id || "") ||
-      target?.closest?.("#backgroundAdminDialog,.admin-players-dialog")
+      target?.closest?.("#backgroundAdminDialog,.admin-players-dialog,.group-chat-compose")
     )
       return;
     if (owner !== id()) {

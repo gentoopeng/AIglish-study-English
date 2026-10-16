@@ -10,23 +10,40 @@ function mount(){
  if(dialog)return;
  dialog=element('dialog');dialog.className='menu-dialog admin-players-dialog';dialog.setAttribute('aria-label','管理者ツール');
  dialog.innerHTML='<header class="menu-dialog-heading"><h2>管理者ツール</h2><button type="button" data-close aria-label="管理者ツールを閉じる">×</button></header><div data-body></div><p role="status" aria-live="polite"></p>';
- document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>{authorized=false;window.isAdmin=false;dialog.close();};
- dialog.addEventListener('close',()=>{authorized=false;generation++;window.isAdmin=false;dialog.querySelector('[data-body]').replaceChildren();if(window.__learningBootReady){if(currentActiveTabId==='titles')window.renderLeaderboard();else if(currentActiveTabId==='community')window.People.refresh(false);}});
+ document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>{generation++;busy=false;authorized=false;window.isAdmin=false;dialog.close();};
+ dialog.addEventListener('close',()=>{if(dialog.open)return;authorized=false;generation++;busy=false;window.isAdmin=false;dialog.querySelector('[data-body]').replaceChildren();if(window.__learningBootReady){if(currentActiveTabId==='titles')window.renderLeaderboard();else if(currentActiveTabId==='community')window.People.refresh(false);}});
  dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});
 }
-function lock(value){busy=value;dialog.querySelectorAll('button,input').forEach(node=>node.disabled=value);}
+function lock(value){busy=value;dialog.querySelectorAll('button:not([data-close]),input').forEach(node=>node.disabled=value);}
+async function adminRequest(url,options){
+ const task=async()=>{const response=await deadline(fetch(url,options)),data=await deadline(response.json());if(!response.ok){const error=Error(data.error?.message||'情報を取得できませんでした。');error.code=response.status===429?'resource-exhausted':data.error?.status;throw error;}return data;};
+ return (window.FirestoreReadGuard?.wrap(task)||task)();
+}
+async function playerList(visit,isCurrent){
+ const project=window.db?.app?.options?.projectId;
+ if(!project)return deadline(window.UserDirectory.scan(visit,isCurrent));
+ let cursor;const base='https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents';
+ do{if(!isCurrent())return;const query={from:[{collectionId:'users'}],select:{fields:['playerName','deleted'].map(fieldPath=>({fieldPath}))},orderBy:[{field:{fieldPath:'__name__'},direction:'ASCENDING'}],limit:25};if(cursor)query.startAt={values:[{referenceValue:cursor}],before:false};
+ const rows=await adminRequest(base+':runQuery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({structuredQuery:query})});if(!Array.isArray(rows))throw Error('一覧を取得できませんでした。');const docs=rows.filter(row=>row.document).map(row=>row.document);for(const doc of docs){if(!isCurrent())return;visit(doc.name.split('/').pop(),window.RankingQuery.fields(doc.fields));}if(docs.length<25)return;cursor=docs.at(-1).name;
+ }while(isCurrent());
+}
 async function refresh(){
  const request=++generation,body=dialog.querySelector('[data-body]');body.replaceChildren();const refresh=element('button','一覧を更新');refresh.type='button';refresh.disabled=busy;refresh.onclick=()=>refreshList();body.append(refresh);message('プレイヤーを読み込み中…');
- try{guard();const players=[];await window.UserDirectory.scan((id,data)=>{if(id!=='GUEST-000')players.push({id,name:data.playerName||id,deleted:!!data.deleted});},()=>authorized&&dialog.open&&generation===request);
+ try{guard();const players=[];await deadline(playerList((id,data)=>{if(id!=='GUEST-000')players.push({id,name:data.playerName||id,deleted:!!data.deleted});},()=>authorized&&dialog.open&&generation===request));
  if(request!==generation||!authorized)return;
  for(const player of players){const row=element('button');row.type='button';row.className='admin-player-row';row.append(element('strong',player.name),element('small',player.id+(player.deleted?' · 削除済み':'')));row.onclick=()=>edit(player.id);body.append(row);}
  message(players.length?'プレイヤーを選んで編集してください。':'プレイヤーがいません。');
- }catch(error){if(request===generation)message(error.message);}
+ }catch(error){if(request===generation){generation++;message(error.message);}}
 }
 async function refreshList(){if(busy)return;lock(true);try{await refresh();}finally{lock(false);}}
+async function playerInfo(id){
+ const project=window.db?.app?.options?.projectId;if(!project)return deadline(window.fbGetDoc(window.fbDoc(window.db,'users',id)));
+ const fields=['playerName','realName','age','wordDuelRating','deleted'],url='https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents/users/'+encodeURIComponent(id)+'?'+fields.map(name=>'mask.fieldPaths='+name).join('&');
+ const data=await adminRequest(url);return {exists:()=>true,data:()=>window.RankingQuery.fields(data.fields)};
+}
 async function edit(id){
- if(busy)return;lock(true);message('情報を確認中…');
- try{guard();const snap=await deadline(window.fbGetDoc(window.fbDoc(window.db,'users',id)));guard();if(!snap.exists())throw Error('プレイヤーが見つかりません。');
+ if(busy)return;const request=++generation;lock(true);message('情報を確認中…');
+ try{guard();const snap=await deadline(playerInfo(id));if(request!==generation||!dialog.open)return;guard();if(!snap.exists())throw Error('プレイヤーが見つかりません。');
  const data=snap.data(),body=dialog.querySelector('[data-body]'),form=element('form');body.replaceChildren();form.className='admin-player-form';form.append(element('h3',data.playerName||id),element('p','ID: '+id));
  function field(label,name,value,type='text'){const wrap=element('label',label),input=element('input');input.name=name;input.type=type;input.value=value??'';input.maxLength=40;if(type==='number'){input.min='0';input.max=name==='age'?'150':'100000';input.step='1';}wrap.append(input);form.append(wrap);return input;}
  field('ニックネーム','playerName',data.playerName);field('登録名','realName',data.realName);field('年齢','age',data.age,'number');const rating=field('対戦レート','rating',window.WordDuelModel.rating(data.wordDuelRating),'number');
@@ -59,6 +76,7 @@ if(busy)return;lock(true);message('完全削除中…');
 try{guard();const now=Date.now();await window.fbRunTransaction(window.db,async tx=>{guard();const ref=window.fbDoc(window.db,'users',id),allRef=window.fbDoc(window.db,'shared','all_users'),all=await tx.get(allRef);tx.set(ref,{deleted:true,deletedAt:now,deletionState:'pending'});const current=all.exists()?all.data():{};tx.set(allRef,{users:(Array.isArray(current.users)?current.users:[]).filter(user=>user&&user.id!==id),deletedIds:[...new Set([...(current.deletedIds||[]),id])]},{merge:true});});
 // Include orphaned parts from interrupted backups, not just parts with existing metadata.
 await scan(window.fbCollectionGroup(window.db,'parts'),async doc=>{if(doc.ref.path.startsWith('users/'+id+'/'))await window.fbDeleteDoc(doc.ref);},id);
+await scan(window.fbQuery(window.fbCollectionGroup(window.db,'messages'),window.fbWhere('ownerId','==',id)),async doc=>{if(/^studyGroups\/[^/]+\/messages\//.test(doc.ref.path))await window.fbDeleteDoc(doc.ref);});
 // Include former memberships: retained event owners are indexed without scanning unrelated groups.
 let groupQuery=window.fbCollection(window.db,'studyGroups');if(window.fbWhere&&window.fbQuery)groupQuery=window.fbQuery(groupQuery,window.fbWhere('retainedMemberIds','array-contains',id));
 await scan(groupQuery,async doc=>{const data=doc.data();if(!data.members?.[id]&&!(data.events||[]).some(event=>event.owner===id||event.reactions?.[id]))return;await window.fbRunTransaction(window.db,async tx=>{const snap=await tx.get(doc.ref);if(!snap.exists())return;const g=snap.data();delete g.members?.[id];delete g.baseline?.[id];delete g.progress?.[id];if(g.goal?.baseline)delete g.goal.baseline[id];g.events=(g.events||[]).filter(event=>event.owner!==id).map(event=>{delete event.reactions?.[id];return event;});if(g.owner===id)g.owner=Object.keys(g.members||{})[0]||'';g.retainedMemberIds=[...new Set([...Object.keys(g.members||{}),...g.events.map(event=>event.owner).filter(Boolean)])];if(!Object.keys(g.members||{}).length)tx.delete(doc.ref);else tx.set(doc.ref,g);});});
@@ -78,7 +96,7 @@ await refresh();message('学習記録・バックアップ・共有メモを完�
 function cachedUsers(){try{const users=JSON.parse(localStorage.getItem('core_v4_users')||'[]');return Array.isArray(users)?users:[];}catch(error){return [];}}
 function purgeLocal(id){
 const cached=cachedUsers();localStorage.setItem('core_v4_users',JSON.stringify(cached.filter(user=>user.id!==id)));
- const prefixes=['core_v4_groups_','core_v4_group_synced_','core_v4_flash_queue_','core_v4_flash_cursor_','core_v4_meaning_history_','aiglish_app_background_','aiglish_app_background_catalog_','aiglish_learning_recovery_','aiglish_study_lease_','aiglish_study_ledger_','core_v4_autosave_pending_','core_v4_custom_words_','core_v4_learning_ranking_','core_v4_learning_ranking_v2_','core_v4_library_deletions_','core_v4_personal_library_','core_v4_profile_customization_','core_v4_profile_shop_owned_','core_v4_ranking_swipes_v2_','core_v4_sync_settings_ts_','core_v4_user_avatar_','core_v4_user_stats_','core_v4_user_vocab_book_','core_v4_user_vocab_progress_','core_v4_vocab_draft_','core_v4_vocab_note_sharing_','core_v4_word_duel_pending_','core_v4_word_duel_rating_','save_studio_'];
+ const prefixes=['core_v4_group_chat_draft_','core_v4_groups_','core_v4_group_synced_','core_v4_flash_queue_','core_v4_flash_cursor_','core_v4_meaning_history_','aiglish_app_background_','aiglish_app_background_catalog_','aiglish_learning_recovery_','aiglish_study_lease_','aiglish_study_ledger_','core_v4_autosave_pending_','core_v4_custom_words_','core_v4_learning_ranking_','core_v4_learning_ranking_v2_','core_v4_library_deletions_','core_v4_personal_library_','core_v4_profile_customization_','core_v4_profile_shop_owned_','core_v4_ranking_swipes_v2_','core_v4_sync_settings_ts_','core_v4_user_avatar_','core_v4_user_stats_','core_v4_user_vocab_book_','core_v4_user_vocab_progress_','core_v4_vocab_draft_','core_v4_vocab_note_sharing_','core_v4_word_duel_pending_','core_v4_word_duel_rating_','save_studio_'];
 const keys=Array.from({length:localStorage.length},(_,index)=>localStorage.key(index)).filter(Boolean);for(const key of keys)if(prefixes.some(prefix=>key===prefix+id||key.startsWith(prefix+id+'_')))localStorage.removeItem(key);
 if(localStorage.getItem('core_v4_userId')===id){for(const key of ['core_v4_userName','core_v4_userTarget','core_v4_current_textbook_id','core_v4_friend_list','wordMemory','textHistory','myBookshelf','myFolders'])localStorage.removeItem(key);for(const key of keys)if(key.startsWith('core_v4_cache_'))localStorage.removeItem(key);}
 }
@@ -90,5 +108,5 @@ if(!blocked)return true;
  const wasActive=window.__learningBootReady&&myId===id;await window.TextbookFiles?.remove(id);purgeLocal(id);
 localStorage.removeItem('core_v4_userId');window.__learningBootReady=false;myId='GUEST-000';myName='ゲスト';window.isAdmin=false;await window.AppStorage?.flush();if(wasActive){location.reload();return false;}const gate=document.getElementById('auth-gate-screen');if(gate)gate.style.display='flex';const error=document.getElementById('authErrorMsg');if(error){error.textContent='このアカウントは管理者により削除されています。';error.style.display='block';}return false;
 }
-window.AdminPlayers={canStart,open(){mount();if(dialog.open)return;window.toggleSidebar(false);authorized=false;window.isAdmin=false;dialog.querySelector('[data-body]').innerHTML='<form data-auth><label>管理者パスワード<input type="password" name="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required></label><button type="submit">管理者ツールを開く</button></form>';message('');dialog.showModal();dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const input=event.currentTarget.elements.password;if(!window.verifyAdminPassword(input.value.trim())){message('管理者パスワードが違います。');return;}input.value='';authorized=true;window.isAdmin=true;await refreshList();};}};
+window.AdminPlayers={canStart,open(){mount();if(dialog.open)return;window.toggleSidebar(false);busy=false;authorized=false;window.isAdmin=false;dialog.querySelector('[data-body]').innerHTML='<form data-auth><label>管理者パスワード<input type="password" name="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required></label><button type="submit">管理者ツールを開く</button></form>';message('');dialog.showModal();dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const input=event.currentTarget.elements.password;if(!window.verifyAdminPassword(input.value.trim())){message('管理者パスワードが違います。');return;}input.value='';authorized=true;window.isAdmin=true;await refreshList();};}};
 })();
