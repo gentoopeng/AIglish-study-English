@@ -40,7 +40,7 @@
         localStorage.setItem(storageKey(owner), JSON.stringify(merge(read(owner), remote)));
     }
     function bookKeys(owner, id) {
-        return ['core_v4_custom_words_' + owner + '_' + id, 'core_v4_cache_' + id, 'core_v4_user_vocab_book_' + owner + '_' + id,
+        return ['core_v4_textbook_file_' + encodeURIComponent(owner) + '_' + encodeURIComponent(id), 'core_v4_custom_words_' + owner + '_' + id, 'core_v4_cache_' + id, 'core_v4_user_vocab_book_' + owner + '_' + id,
             'core_v4_vocab_draft_' + owner + '_' + encodeURIComponent(id), 'core_v4_user_vocab_progress_' + owner + '_' + id,
             'core_v4_user_vocab_progress_' + owner + '_' + id + '__ts','aiglish_learning_recovery_'+owner+'_'+id,'core_v4_flash_queue_'+owner+'_'+encodeURIComponent(id),'core_v4_flash_cursor_'+owner+'_'+encodeURIComponent(id),'core_v4_meaning_history_'+owner+'_'+encodeURIComponent(id)];
     }
@@ -80,7 +80,7 @@
             if (storage[key]) {const library = JSON.parse(storage[key]);library.books = library.books.filter(book => book.id !== id);library.hidden = Array.from(new Set((library.hidden || []).concat(id)));storage[key] = JSON.stringify(library);}
             if (memory.vocabBooks) delete memory.vocabBooks[id];
             if (Array.isArray(memory.textbooksPool)) memory.textbooksPool = memory.textbooksPool.filter(book => book.id !== id);
-            if (memory.vocabBookKey === id || memory.currentTextbook === id) {memory.vocabBookKey = '';memory.currentTextbook = '';memory.vocabList = [];delete memory.vocabMaster;delete memory.vocabProgress;memory.vocabBookDeleted = true;}
+            if (memory.vocabBookKey === id || memory.currentTextbook === id) {memory.vocabBookKey = '';memory.currentTextbook = '';memory.vocabList = [];delete memory.vocabMaster;delete memory.vocabMasterRef;delete memory.vocabProgress;memory.vocabBookDeleted = true;}
             if (storage.core_v4_current_textbook_id === id) storage.core_v4_current_textbook_id = '';
         });
         if (Object.keys(registry).length) storage[storageKey(owner)] = JSON.stringify(registry);

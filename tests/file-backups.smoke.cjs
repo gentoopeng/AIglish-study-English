@@ -118,6 +118,7 @@ const { chromium, webkit } = require("playwright"),
     await p.locator(".flash-warmup-dialog [data-library-close]").click();
     await p.evaluate(() => injectHeaderSaveButton());
     await p.locator("#headerSaveBtn").click();
+    await p.locator("#fbsvModal summary").click();
     await p.getByRole("button", { name: "書き出す", exact: true }).waitFor();
     const downloaded = p.waitForEvent("download", { timeout: 15000 });
     downloaded.catch(() => {});

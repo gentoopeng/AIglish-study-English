@@ -205,6 +205,7 @@
         kind=kind||'book';
         var uid=userId();
         if(window.LibraryState){await window.LibraryState.mark(kind,id,book,uid);window.LibraryState.cleanLocal(uid);await window.LibraryState.waitForWrites(uid);}
+        if(window.TextbookFiles)await window.TextbookFiles.remove(uid,kind==='work'?window.TextbookFiles.workKey(id):id);
 
         var localSaves=[];
         for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k.startsWith('save_studio_'+uid+'_'))localSaves.push([k,JSON.stringify(scrubSave(JSON.parse(localStorage.getItem(k)),id,kind,uid))]);}
@@ -225,6 +226,12 @@
                     await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),Object.assign({},meta,{generation:generation,partCount:chunks.length,rawLength:clean.length,checksum:window.__gameSaveChecksum(clean)}),{merge:false});
                     for(var old of parts)await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id,'parts',old.id));
                 }else if(meta.data){await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),scrubSave(meta,id,kind,uid),{merge:false});}
+            }
+            if(kind==='work'&&window.TextbookFiles){
+                var workFileId=encodeURIComponent(window.TextbookFiles.workKey(id));
+                var workFileParts=await window.fbGetDocs(window.fbCollection(window.db,'users',uid,'vocabBooks',workFileId,'parts'));
+                var workFileRefs=[];workFileParts.forEach(function(part){workFileRefs.push(window.fbDoc(window.db,'users',uid,'vocabBooks',workFileId,'parts',part.id));});
+                for(var workFileRef of workFileRefs)await window.fbDeleteDoc(workFileRef);
             }
             if(kind==='book'){
             var cloudId=window.__manualVocabCloudId(id);

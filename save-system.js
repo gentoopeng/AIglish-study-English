@@ -137,12 +137,13 @@ window.flushManualVocabDraft = async function(bookKey){
   if(!dirty||!draft)return false;
   if(!Array.isArray(draft.master)||(!draft.master.length&&draft.emptyConfirmed!==true))return false;
   if(typeof myId==='undefined'||!myId||myId==='GUEST-000'||!window.db||!window.fbSetDoc||!window.fbGetDoc||!window.fbDoc)return false;
-  var raw=JSON.stringify({master:draft.master||[],emptyConfirmed:draft.emptyConfirmed===true,progress:draft.progress||{},savedAt:draft.savedAt||new Date().toISOString()});
+  try {
+  var cloudDraft=window.TextbookFiles?await window.TextbookFiles.packDraft(bookKey,draft,owner):draft;
+  var raw=JSON.stringify(cloudDraft);
   var generation=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
   var parts=[];
   for(var i=0;i<raw.length;i+=window.__manualVocabChunkSize)parts.push(raw.slice(i,i+window.__manualVocabChunkSize));
   if(!parts.length)parts=[''];
-  try{
     var cloudId=window.__manualVocabCloudId(bookKey);
     await window.__writeSaveParts(parts.map(function(part,pi){return [window.fbDoc(window.db,'users',owner,'vocabBooks',cloudId,'parts',generation+'_p'+pi),{d:part},{merge:false}];}));
     var meta={bookKey:bookKey,partCount:parts.length,generation:generation,rawLength:raw.length,checksum:window.__gameSaveChecksum(raw),updatedAt:draft.savedAt||new Date().toISOString()};
@@ -191,6 +192,11 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
       try{draft=JSON.parse(localStorage.getItem(window.__manualVocabLocalKey(bookKey))||'null');}catch(e){draft=null;}
       if(draft&&Array.isArray(draft.master))window.__manualVocabDrafts[bookKey]=Object.assign({},draft);
     }
+    if(window.TextbookFiles){
+      if(!draft)draft=await window.TextbookFiles.restoreBook(bookKey,requestUserId);
+      else if(draft.masterRef&&!Array.isArray(draft.master))draft=await window.TextbookFiles.hydrate(bookKey,draft,requestUserId);
+      if(!isCurrentRequest())return;
+    }
     draft=window.VocabMaster.resolve(bookKey,draft);
     draft=window.__mergeNewestLocalVocabProgress(bookKey,draft);
     if(draft&&Array.isArray(draft.master))window.__manualVocabDrafts[bookKey]=Object.assign({},draft);
@@ -229,6 +235,7 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
             if(cloud.rawLength!=null&&draftRaw.length!==cloud.rawLength)throw new Error('単語帳データの長さが一致しません');
             if(cloud.checksum&&window.__gameSaveChecksum(draftRaw)!==cloud.checksum)throw new Error('単語帳データの検証に失敗しました');
             draft=JSON.parse(draftRaw);
+            if(window.TextbookFiles)draft=await window.TextbookFiles.hydrate(bookKey,draft,requestUserId);
             draft.savedAt=cloud.updatedAt||'';
           }else{
             draft={master:JSON.parse(cloud.masterJson||'[]'),progress:JSON.parse(cloud.progressJson||'{}'),emptyConfirmed:cloud.emptyConfirmed===true,savedAt:cloud.updatedAt||''};
@@ -267,6 +274,10 @@ if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData
       if(draft.savedAt!==displayedSavedAt)window.__applyManualVocabDraft(bookKey,draft);
       else window.__manualVocabDrafts[bookKey]=Object.assign({},draft);
     }
+    if(window.TextbookFiles&&isCurrentRequest()){
+      var downloaded=window.VocabMaster.resolve(bookKey);
+      if(downloaded)try{await window.TextbookFiles.cache(bookKey,downloaded,requestUserId);}catch(error){console.warn('[textbook] local file pending; legacy copy retained',error);}
+    }
     return result;
   };
 }
@@ -284,6 +295,7 @@ function collectAllData() {
       var k = localStorage.key(i);
       if (!k) continue;
       if (/^core_v4_(?:flash_queue|flash_cursor|group_synced)_/.test(k)) continue;
+      if (k.indexOf('core_v4_textbook_file_') === 0) continue;
       if (k.indexOf('save_studio_') === 0 || k === 'aiglish_shared_background_catalog' || k === 'aiglish_profile_shop_catalog' || k === '__aiglish_render_guard') continue;
       // 単語帳本体は memory.vocabBooks に正規化して保存する。同じ内容のキャッシュを
       // 何重にも含めるとセーブ容量と通信回数が数倍になるため、再生成可能な複製は除外する。
@@ -902,6 +914,7 @@ async function saveAllContents() {
   progress(8,started,'全データを整理中');
   if(window.syncRankingMetrics)window.syncRankingMetrics();
   var data=collectAll();
+  var dirtyBooks=Object.assign({},window.__dirtyManualVocabDrafts||{});
   var save={slot:SLOT,savedAt:new Date().toISOString(),savedAtDisplay:nowDisplay(),data:data};
   if(window.LibraryState)window.LibraryState.sanitizeSave(save,id);
   var generation=saveGeneration(save.savedAt);
@@ -933,14 +946,18 @@ async function saveAllContents() {
     // 編集した全教材をユーザー専用ドキュメントへ個別保存する。
     // ページ再起動後の教材切替はこの確定データを直接読むため、巨大な統合セーブや
     // 共有教材キャッシュの状態に左右されない。
-    var savedBooks=(data.memory&&data.memory.vocabBooks)||{};
-    var dirtyBooks=Object.assign({},window.__dirtyManualVocabDrafts||{});
+    var cloudSave=window.TextbookFiles?await window.TextbookFiles.packSave(save,id):save;
+    if(window.TextbookFiles)meta.v=5;
+    var cloudRaw=JSON.stringify(cloudSave);
+    chunks=[];for(var ci=0;ci<cloudRaw.length;ci+=CHUNK)chunks.push(cloudRaw.slice(ci,ci+CHUNK));if(!chunks.length)chunks=[''];
+    meta.partCount=chunks.length;meta.rawLength=cloudRaw.length;meta.checksum=saveChecksum(cloudRaw);
+    var savedBooks=(cloudSave.data.memory&&cloudSave.data.memory.vocabBooks)||{};
     var savedBookKeys=Object.keys(savedBooks).filter(function(key){return !!dirtyBooks[key]||key===savedBook;});
     for(var bi=0;bi<savedBookKeys.length;bi++){
       var savedBookKey=savedBookKeys[bi];
       if(window.LibraryState&&window.LibraryState.isDeleted('book',savedBookKey,id))continue;
       var bookDraft=savedBooks[savedBookKey]||{};
-      var bookRaw=JSON.stringify({master:bookDraft.master||[],progress:bookDraft.progress||{}});
+      var bookRaw=JSON.stringify(bookDraft);
       var bookGeneration=saveGeneration(save.savedAt+'_'+savedBookKey);
       var bookParts=[];
       for(var bp=0;bp<bookRaw.length;bp+=window.__manualVocabChunkSize)bookParts.push(bookRaw.slice(bp,bp+window.__manualVocabChunkSize));
@@ -1154,6 +1171,8 @@ async function autoLoadOnce() {
   }
   if(loginUid()!==id)return;
   if(save&&window.LibraryState)window.LibraryState.sanitizeSave(save,id);
+  if(save&&window.TextbookFiles)await window.TextbookFiles.prepareRestore(save,id);
+  if(loginUid()!==id)return;
   restoreSaveStorage(save,id);
   if(save&&save.data&&save.data.memory){
     window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt||'',data:save.data.memory};
@@ -1165,7 +1184,7 @@ function openPanel() {
   if(!uid())return;
   var m=document.createElement('div');m.id='fbsvModal';m.className='fbsv-modal';
   var last='未セーブ';try{var oldMeta=JSON.parse(localStorage.getItem(localMetaKey())||'null');if(oldMeta)last=oldMeta.savedAtDisplay||last;else{var old=JSON.parse(localStorage.getItem(localKey())||'null');if(old)last=old.savedAtDisplay||last;}}catch(e){}
-  m.innerHTML='<div class="fbsv-card"><div class="fbsv-head"><div class="fbsv-title">💾 セーブ</div><button class="fbsv-close" id="fbsvClose">✕</button></div><div class="fbsv-row"><div><div class="fbsv-name">セーブデータ</div><div class="fbsv-date">最終保存: '+last+'</div></div><button class="fbsv-btn" id="fbsvSave">セーブする</button></div><div id="fbsvProgress" style="display:none;margin-top:12px"><div id="fbsvProgressText" style="font-size:11px;color:#fde68a;margin-bottom:6px">準備中 0%</div><div style="height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden"><div id="fbsvProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .2s"></div></div></div><div class="fbsv-note">端末へ保存した後にクラウドへ同期します。利用上限・切断時は端末の記録と同期待ちを残します。クラウド未同期の間はサイトデータを削除せず、同じ端末で使ってください。</div></div>';
+  m.innerHTML='<div class="fbsv-card"><div class="fbsv-head"><div class="fbsv-title">💾 セーブ</div><button class="fbsv-close" id="fbsvClose">✕</button></div><div class="fbsv-row"><div><div class="fbsv-name">セーブデータ</div><div class="fbsv-date">最終保存: '+last+'</div></div><button class="fbsv-btn" id="fbsvSave">セーブする</button></div><div id="fbsvProgress" style="display:none;margin-top:12px"><div id="fbsvProgressText" style="font-size:11px;color:#fde68a;margin-bottom:6px">準備中 0%</div><div style="height:8px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden"><div id="fbsvProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .2s"></div></div></div><div class="fbsv-note">教材は自動で端末に保存し、本文は変更時だけクラウドへ送ります。理解度・メモなどは端末へ保存した後にクラウドへ同期します。利用上限・切断時は端末の記録と同期待ちを残します。クラウド未同期の間はサイトデータを削除せず、同じ端末で使ってください。</div></div>';
   document.body.appendChild(m);window.FileBackups?.attach(m);m.querySelector('#fbsvClose').onclick=closePanel;m.onclick=function(e){if(e.target===m)closePanel();};
   m.querySelector('#fbsvSave').onclick=async function(){var b=this;b.disabled=true;try{var result=await saveAll();b.textContent=result.cloudSaved?'保存完了':'端末に保存完了・クラウド同期待ち';if(!result.cloudSaved)window.queueBackgroundSave?.();}catch(e){progress(0,Date.now(),'保存失敗');b.textContent='もう一度試す';console.error(e);}finally{b.disabled=false;}};
 }
@@ -1194,7 +1213,7 @@ function restorePendingSaveMemory(){
         localDraft=window.__mergeNewestLocalVocabProgress(savedBookKey,localDraft);
         var localMs=window.__vocabSavedAtMs(localDraft&&localDraft.savedAt);
         var chosen=(localDraft&&localMs>fullSaveMs)?localDraft:savedBook;
-        chosen=window.VocabMaster.resolve(savedBookKey,chosen)||{progress:chosen.progress,savedAt:chosen.savedAt};
+        chosen=chosen.masterRef&&!Array.isArray(chosen.master)?chosen:(window.VocabMaster.resolve(savedBookKey,chosen)||{progress:chosen.progress,savedAt:chosen.savedAt});
         // 下書き作成の直前にアプリが終了しても、先に同期保存された理解度本体は残る。
         // 下書きの有無にかかわらず、この専用スナップショットを最後に比較する。
         try{
