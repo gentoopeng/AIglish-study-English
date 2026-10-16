@@ -294,6 +294,7 @@ function collectAllData() {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
       if (!k) continue;
+      if(k==='aiglish_cloud_usage_v1'||k.indexOf('core_v4_group_chat_draft_')===0)continue;
       if (/^core_v4_(?:flash_queue|flash_cursor|group_synced)_/.test(k)) continue;
       if (k.indexOf('core_v4_textbook_file_') === 0) continue;
       if (k.indexOf('save_studio_') === 0 || k === 'aiglish_shared_background_catalog' || k === 'aiglish_profile_shop_catalog' || k === '__aiglish_render_guard') continue;
@@ -660,6 +661,8 @@ window.__fixPatch3Applied = true;
 
 /* 収集時に除外する巨大キャッシュキーのプレフィックス */
 var EXCLUDE_PREFIXES = [
+'aiglish_cloud_usage_v1',
+'core_v4_group_chat_draft_',
 'aiglish_shared_background_catalog', // Shared photographs are fetched independently of personal backups.
 'aiglish_profile_shop_catalog', // Global artwork is fetched separately, never duplicated in personal backups.
 'core_v4_flash_queue_', // Device-only resume position is saved once, not uploaded with every backup.
@@ -896,7 +899,7 @@ function progress(percent, startedAt, text) {
 }
 function collectAll() {
   if(typeof window.__collectGameSaveData==='function') return window.__collectGameSaveData();
-  var ls={}; for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k)ls[k]=localStorage.getItem(k);} return {localStorage:ls,memory:{}};
+  var ls={}; for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k!=='aiglish_cloud_usage_v1'&&k.indexOf('core_v4_group_chat_draft_')!==0)ls[k]=localStorage.getItem(k);} return {localStorage:ls,memory:{}};
 }
 async function markCloudPending(id){try{localStorage.setItem('core_v4_autosave_pending_'+id,'1');if(window.AppStorage)await window.AppStorage.flush();}catch(error){console.warn('同期待ちの端末記録を保存できませんでした',error);}}
 var pendingSave=null;

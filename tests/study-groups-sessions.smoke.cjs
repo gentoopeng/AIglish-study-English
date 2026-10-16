@@ -27,8 +27,26 @@ const { chromium, webkit } = require("playwright"),
               window.__listeners[path]?.({
                 exists: () => !!value,
                 data: () => structuredClone(value),
+                ...(Array.isArray(value)
+                  ? {
+                      docs: value.map((item) => ({
+                        id: item.id,
+                        data: () => item.value,
+                      })),
+                    }
+                  : {}),
               }),
-            { path, value: docs.get(path) },
+            {
+              path,
+              value: path.endsWith("/messages")
+                ? [...docs]
+                    .filter(([key]) => key.startsWith(path + "/"))
+                    .map(([key, value]) => ({
+                      id: key.split("/").at(-1),
+                      value,
+                    }))
+                : docs.get(path),
+            },
           );
     }
     async function pageFor(id) {
@@ -71,13 +89,21 @@ const { chromium, webkit } = require("playwright"),
             );
           versions.set(w.path, (versions.get(w.path) || 0) + 1);
         }
-        for (const w of writes) await notify(w.path);
+        for (const w of writes) {
+          await notify(w.path);
+          if (/\/messages\/[^/]+$/.test(w.path))
+            await notify(w.path.split("/").slice(0, -1).join("/"));
+        }
         return true;
       });
       await p.exposeFunction("__subscribe", (path) => {
         if (!listeners.has(p)) listeners.set(p, new Set());
         listeners.get(p).add(path);
-        return docs.get(path) || null;
+        return path.endsWith("/messages")
+          ? [...docs]
+              .filter(([key]) => key.startsWith(path + "/"))
+              .map(([key, value]) => ({ id: key.split("/").at(-1), value }))
+          : docs.get(path) || null;
       });
       await p.exposeFunction("__unsubscribe", (path) =>
         listeners.get(p)?.delete(path),
@@ -116,11 +142,21 @@ const { chromium, webkit } = require("playwright"),
           snapshot = (value) => ({
             exists: () => !!value,
             data: () => structuredClone(value),
+            ...(Array.isArray(value)
+              ? {
+                  docs: value.map((item) => ({
+                    id: item.id,
+                    data: () => item.value,
+                  })),
+                }
+              : {}),
           });
         window.fbDoc = (_, ...parts) => ({ path: parts.join("/") });
         window.fbCollection = (_, ...parts) => ({ path: parts.join("/") });
         window.fbQuery = (r, ...rest) => r;
         window.fbLimit = (n) => n;
+        window.fbOrderBy = () => "";
+        window.fbStartAfter = () => "";
         window.fbGetDoc = async (r) => snapshot((await __read(path(r))).value);
         window.fbGetDocs = async (r) => ({
           docs: (await __list(path(r))).map((d) => ({
@@ -176,6 +212,32 @@ const { chromium, webkit } = require("playwright"),
     await a.locator("[data-group-name]").fill("放課後の学習");
     await a.locator(".group-friend-picker input").check();
     await a.getByRole("button", { name: "作成する", exact: true }).click();
+    await a.locator(".group-chat-compose textarea").waitFor();
+    await a
+      .locator(".group-chat-compose textarea")
+      .fill("こんにちは <script>安全な文字</script>");
+    await a.getByRole("button", { name: "送信", exact: true }).click();
+    await a
+      .getByText("こんにちは <script>安全な文字</script>", { exact: true })
+      .waitFor();
+    assert.equal(await a.locator(".group-chat-message script").count(), 0);
+    await a.screenshot({ path: "/tmp/group-chat-ui.png" });
+    await a.locator(".group-chat-compose textarea").fill("送信失敗でも残す");
+    await a.evaluate(() => {
+      window.__chatPaused = FirestoreReadGuard.paused;
+      FirestoreReadGuard.paused = () => true;
+      window.__chatComposer = document.querySelector(
+        ".group-chat-compose textarea",
+      );
+    });
+    await a.getByRole("button", { name: "送信", exact: true }).click();
+    assert.equal(
+      await a.locator(".group-chat-compose textarea").inputValue(),
+      "送信失敗でも残す",
+    );
+    await a.evaluate(() => (FirestoreReadGuard.paused = __chatPaused));
+
+    await a.getByRole("button", { name: "学習・目標", exact: true }).click();
     await a.locator(".group-content h3").waitFor();
     const groupPath = [...docs.keys()].find((k) => /^studyGroups\//.test(k)),
       groupId = groupPath.split("/")[1];
@@ -193,6 +255,19 @@ const { chromium, webkit } = require("playwright"),
       document.querySelector(".group-goal").textContent.includes("達成！"),
     );
     assert.equal(docs.get(groupPath).goal.done, true);
+    assert.equal(
+      await a.evaluate(
+        () =>
+          __chatComposer ===
+          document.querySelector(".group-chat-compose textarea"),
+      ),
+      true,
+    );
+    assert.equal(
+      await a.locator(".group-chat-compose textarea").inputValue(),
+      "送信失敗でも残す",
+    );
+
     assert.equal(
       docs.get(groupPath).events.filter((e) => e.owner === "group-a").length,
       1,
@@ -227,8 +302,15 @@ const { chromium, webkit } = require("playwright"),
     assert.equal(docs.get(groupPath).goal.done, true);
     assert.ok(docs.get(groupPath).events.some((e) => e.text === "30分勉強"));
     await b.getByRole("button", { name: "グループ", exact: true }).click();
-    await b.screenshot({path:"/tmp/group-list-ui.png"});
+    await b.screenshot({ path: "/tmp/group-list-ui.png" });
     await b.getByRole("button", { name: "放課後の学習", exact: true }).click();
+    await b
+      .getByText("こんにちは <script>安全な文字</script>", { exact: true })
+      .waitFor();
+    await b.locator(".group-chat-compose textarea").fill("返信です");
+    await b.getByRole("button", { name: "送信", exact: true }).click();
+    await b.getByText("返信です", { exact: true }).waitFor();
+    await b.getByRole("button", { name: "学習・目標", exact: true }).click();
     await b.getByRole("button", { name: "いいね 1", exact: true }).waitFor();
     assert.equal(
       await b
@@ -273,7 +355,12 @@ const { chromium, webkit } = require("playwright"),
       index: flashcardCurrentIndex,
       count: userStats.flash_count,
     }));
-    assert.equal(await a.getByRole("button",{name:"中断",exact:true}).evaluate(el=>getComputedStyle(el).backgroundImage),"none");
+    assert.equal(
+      await a
+        .getByRole("button", { name: "中断", exact: true })
+        .evaluate((el) => getComputedStyle(el).backgroundImage),
+      "none",
+    );
     await a.getByRole("button", { name: "中断", exact: true }).click();
     assert.equal(
       await a
@@ -356,13 +443,30 @@ const { chromium, webkit } = require("playwright"),
     await a.clock.fastForward(1300);
     await a
       .getByRole("heading", { name: "まずは10単語", exact: true })
-      .waitFor({state:"attached"});
+      .waitFor({ state: "attached" });
     assert.equal(await a.locator(".warmup-count").textContent(), "1 / 10");
-    const sharedLayout=await a.evaluate(()=>{
-      const normal=document.getElementById("flashcard-play-screen"),warm=document.querySelector("dialog.flash-warmup-dialog>.flashcard-session-screen");
-      return {children:normal.children.length===warm.children.length,stage:!!warm.querySelector(".flashcard-deck-stage"),history:warm.querySelectorAll(".fc-history-bubble").length,duplicateIds:warm.querySelectorAll("[id]").length,info:!!warm.querySelector(".flashcard-info-button"),back:!!warm.querySelector(".flashcard-previous-button")};
+    const sharedLayout = await a.evaluate(() => {
+      const normal = document.getElementById("flashcard-play-screen"),
+        warm = document.querySelector(
+          "dialog.flash-warmup-dialog>.flashcard-session-screen",
+        );
+      return {
+        children: normal.children.length === warm.children.length,
+        stage: !!warm.querySelector(".flashcard-deck-stage"),
+        history: warm.querySelectorAll(".fc-history-bubble").length,
+        duplicateIds: warm.querySelectorAll("[id]").length,
+        info: !!warm.querySelector(".flashcard-info-button"),
+        back: !!warm.querySelector(".flashcard-previous-button"),
+      };
     });
-    assert.deepEqual(sharedLayout,{children:true,stage:true,history:5,duplicateIds:0,info:true,back:true});
+    assert.deepEqual(sharedLayout, {
+      children: true,
+      stage: true,
+      history: 5,
+      duplicateIds: 0,
+      info: true,
+      back: true,
+    });
     await a.screenshot({ path: "/tmp/flash-warmup-ui.png" });
     const prompt = await a
       .locator(".warmup-card .flashcard-face-front>div")
@@ -400,14 +504,24 @@ const { chromium, webkit } = require("playwright"),
       document.querySelector("[data-warmup=ok]").onclick(),
     );
     assert.equal(await a.locator(".warmup-count").textContent(), "準備完了！");
-    const finishWarmup=a.getByRole("button", { name: "学習をはじめる", exact: true });
-    assert.equal(await finishWarmup.evaluate(el=>getComputedStyle(el).backgroundImage),"none");
+    const finishWarmup = a.getByRole("button", {
+      name: "学習をはじめる",
+      exact: true,
+    });
+    assert.equal(
+      await finishWarmup.evaluate((el) => getComputedStyle(el).backgroundImage),
+      "none",
+    );
     await finishWarmup.click();
-    await a.locator("dialog.flash-warmup-dialog").waitFor({state:"detached"});
-    await a.waitForFunction(()=>!document.body.classList.contains("flash-warmup-open"));
-    assert.equal(await a.locator("#nav-vocab").isVisible(),true);
+    await a
+      .locator("dialog.flash-warmup-dialog")
+      .waitFor({ state: "detached" });
+    await a.waitForFunction(
+      () => !document.body.classList.contains("flash-warmup-open"),
+    );
+    assert.equal(await a.locator("#nav-vocab").isVisible(), true);
     await a.locator("#nav-community").click();
-    assert.equal(await a.locator("#view-community").isVisible(),true);
+    assert.equal(await a.locator("#view-community").isVisible(), true);
     await a.locator("#nav-vocab").click();
     await a.evaluate(() => {
       document.querySelector("#vocabLibrarySelection").hidden = true;

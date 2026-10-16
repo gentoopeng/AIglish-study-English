@@ -62,6 +62,12 @@ const { chromium, webkit } = require("playwright"),
       }
       IdleSleep.activity();
     });
+    const cloudExcluded=await page.evaluate(()=>{
+      localStorage.setItem('aiglish_cloud_usage_v1',JSON.stringify({version:1,days:{}}));
+      localStorage.setItem('core_v4_group_chat_draft_end-save_group','端末限定の下書き');
+      const data=__collectGameSaveData();return !('aiglish_cloud_usage_v1' in data.localStorage)&&!('core_v4_group_chat_draft_end-save_group' in data.localStorage);
+    });
+    assert.equal(cloudExcluded,true,'diagnostics and chat drafts must never enter cloud backups');
     await page.clock.runFor(180000);
     assert.equal(
       await page.evaluate(() => __endWrites.length),

@@ -164,6 +164,7 @@
       throw Error("グループはログイン後に使えます。");
   }
   function stop() {
+    window.GroupChat?.stop();
     unsubscribe?.();
     unsubscribe = null;
     current = "";
@@ -440,7 +441,9 @@
           return;
         }
         d.querySelector("[data-group-status]").textContent = "";
-        draw({ id, ...snap.data() }, d);
+        const group = { id, ...snap.data() };
+        draw(group, d);
+        window.GroupChat?.mount(d, group);
       },
       error,
     );
