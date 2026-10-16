@@ -340,7 +340,7 @@
 
     // スワイプ確定時だけ表示する軽量な消滅演出。
     // 指への追尾はせず、8個の粒と1本の輪をCSSだけで短時間描画する。
-    window.showFlashcardVanishBurst = function(x, y, direction) {
+    window.showFlashcardVanishBurst = function(x, y, direction, host) {
         var burst = document.createElement('div');
         burst.className = 'fc-vanish-burst fc-vanish-' + direction;
         burst.style.left = x + 'px';
@@ -368,7 +368,7 @@
             particle.style.color = colors[i % colors.length];
             burst.appendChild(particle);
         }
-        document.body.appendChild(burst);
+        (host||document.body).appendChild(burst);
         setTimeout(function() { burst.remove(); }, 650);
     };
 
@@ -399,6 +399,15 @@
 
     };
 
+    window.createFlashcardNotePreview=function(note){
+            var panel=document.createElement('div');panel.className='flashcard-note-preview';
+            var reveal=document.createElement('button');reveal.type='button';reveal.className='flashcard-note-reveal';reveal.setAttribute('aria-label','メモを表示');reveal.textContent='メモを表示';
+            var content=document.createElement('div');content.className='flashcard-note-content';content.textContent=note;content.setAttribute('aria-hidden','true');
+            reveal.onclick=function(){panel.classList.add('revealed');content.removeAttribute('aria-hidden');reveal.remove();more.hidden=content.scrollHeight<=content.clientHeight+1;};
+            var more=document.createElement('button');more.type='button';more.className='flashcard-note-more';more.textContent='すべて表示';more.onclick=function(){content.classList.toggle('expanded');more.textContent=content.classList.contains('expanded')?'折りたたむ':'すべて表示';};
+            panel.append(reveal,content,more);return panel;
+    };
+
     window.renderFlashcardDeck = function() {
         var stage = document.getElementById('flashcardDeckStage');
         if (!stage) return;
@@ -421,14 +430,7 @@
         var original=vocabList.find(function(w){return String(w.num)===String(wordData.num);});
         var note=String(original&&original.note||'');
         if(!note&&window.LearningData){var saved=LearningData.read(currentTextbook)[String(wordData.num)];note=String(saved&&saved.note||'');}
-        if(note.trim()){
-            var panel=document.createElement('div');panel.id='flashcardNotePreview';panel.className='flashcard-note-preview';
-            var reveal=document.createElement('button');reveal.type='button';reveal.className='flashcard-note-reveal';reveal.setAttribute('aria-label','メモを表示');reveal.textContent='メモを表示';
-            var content=document.createElement('div');content.className='flashcard-note-content';content.textContent=note;content.setAttribute('aria-hidden','true');
-            reveal.onclick=function(){panel.classList.add('revealed');content.removeAttribute('aria-hidden');reveal.remove();more.hidden=content.scrollHeight<=content.clientHeight+1;};
-            var more=document.createElement('button');more.type='button';more.className='flashcard-note-more';more.textContent='すべて表示';more.onclick=function(){content.classList.toggle('expanded');more.textContent=content.classList.contains('expanded')?'折りたたむ':'すべて表示';};
-            panel.append(reveal,content,more);stage.parentElement.parentElement.insertBefore(panel,stage.parentElement);
-        }
+        if(note.trim()){var panel=window.createFlashcardNotePreview(note);panel.id='flashcardNotePreview';stage.parentElement.parentElement.insertBefore(panel,stage.parentElement);}
 
         var posLabel=document.getElementById('flashcardPartOfSpeech');
         if(posLabel){posLabel.hidden=!wordData.partOfSpeech;posLabel.textContent=wordData.partOfSpeech?wordData.partOfSpeech.short:'';posLabel.title=wordData.partOfSpeech?wordData.partOfSpeech.name:'';posLabel.setAttribute('aria-label',wordData.partOfSpeech?wordData.partOfSpeech.name:'');}
@@ -556,6 +558,65 @@
         if (typeof window.initLucide === 'function') window.initLucide();
     };
 
+    window.animateFlashcardSwipe=function(card,direction,finalDx,finalDy,removeCard){
+        var effectHost=card.closest('dialog')||document.body;
+        var rect = card.getBoundingClientRect();
+        var releaseX = rect.left + rect.width / 2;
+        var releaseY = rect.top + rect.height / 2;
+
+        document.querySelectorAll('#flashcardGhost,.flashcard-post-ripple,.fc-vanish-burst').forEach(function(effect){effect.remove();});
+        // iOS must not clone a nested 3D/scrolling subtree for the outgoing effect.
+        var ghost;
+        if(document.documentElement.classList.contains('ios-stable-rendering')){
+            ghost=document.createElement('div');ghost.className='flashcard-wrapper-3d fc-flat-ghost';
+            var surface=card.querySelector(card.classList.contains('flipped')?'.flashcard-face-back':'.flashcard-face-front');
+            var rotator=document.createElement('div');rotator.className='flashcard-inner-rotator';
+            if(surface){var face=surface.cloneNode(true);face.className='flashcard-face-front';face.querySelectorAll('div').forEach(function(text){text.style.overflow='hidden';});rotator.append(face);}
+            ghost.append(rotator);
+        }else ghost=card.cloneNode(true);
+        ghost.classList.remove('warmup-card');
+        ghost.classList.add('flashcard-ghost');
+        ghost.setAttribute('aria-hidden','true');ghost.tabIndex=-1;
+        if(ghost.tagName==='BUTTON')ghost.disabled=true;
+        ghost.id = "flashcardGhost";
+        ghost.style.position = "fixed";
+        ghost.style.left = (rect.left) + "px";
+        ghost.style.top = (rect.top) + "px";
+        ghost.style.width = rect.width + "px";
+        ghost.style.height = rect.height + "px";
+        ghost.style.margin = "0";
+        ghost.style.zIndex = "5000";
+        ghost.style.pointerEvents = "none";
+        ghost.style.animation = "none";
+        ghost.style.transform = "translate3d(" + (finalDx || 0) + "px, " + (finalDy || 0) + "px, 0) rotate(" + ((finalDx || 0) * 0.05) + "deg)";
+        ghost.style.opacity = "1";
+        effectHost.appendChild(ghost);
+        requestAnimationFrame(function() {
+            ghost.style.transition = "transform 0.8s cubic-bezier(0.1, 0.8, 0.25, 1), opacity 0.8s ease";
+            ghost.style.transform = "translate3d(" + (finalDx || 0) + "px, " + (finalDy || 0) + "px, 0) scale(0) rotate(" + ((finalDx || 0) * 0.05) + "deg)";
+            ghost.style.opacity = "0";
+        });
+        setTimeout(function() { ghost.remove(); }, 850);
+
+        // リップル
+        var ripple = document.createElement('div');
+        ripple.className = "flashcard-post-ripple firework-余韻-" + direction;
+        ripple.style.position = "fixed";
+        ripple.style.left = (releaseX - 120) + "px";
+        ripple.style.top = (releaseY - 120) + "px";
+        ripple.style.width = "240px";
+        ripple.style.height = "240px";
+        ripple.style.transform = "none";
+        ripple.style.zIndex = "4999";
+        ripple.style.animationDuration = "0.8s";
+        effectHost.appendChild(ripple);
+        setTimeout(function() { ripple.remove(); }, 800);
+        if (typeof window.showFlashcardVanishBurst === 'function') {
+            window.showFlashcardVanishBurst(releaseX, releaseY, direction, effectHost);
+        }
+        if(removeCard!==false)card.remove();
+    };
+
     window.swipeFlashcard = function(direction, finalDx, finalDy) {
         var card = document.getElementById('activeFlashcard');
         if (!card) return;
@@ -581,58 +642,7 @@
             flashCount: typeof userStats !== 'undefined' ? (userStats.flash_count || 0) : null
         });
 
-        var stage = document.getElementById('flashcardDeckStage');
-        var rect = card.getBoundingClientRect();
-        var releaseX = rect.left + rect.width / 2;
-        var releaseY = rect.top + rect.height / 2;
-
-        document.querySelectorAll('#flashcardGhost,.flashcard-post-ripple,.fc-vanish-burst').forEach(function(effect){effect.remove();});
-        // iOS must not clone a nested 3D/scrolling subtree for the outgoing effect.
-        var ghost;
-        if(document.documentElement.classList.contains('ios-stable-rendering')){
-            ghost=document.createElement('div');ghost.className='flashcard-wrapper-3d fc-flat-ghost';
-            var surface=card.querySelector(card.classList.contains('flipped')?'.flashcard-face-back':'.flashcard-face-front');
-            var rotator=document.createElement('div');rotator.className='flashcard-inner-rotator';
-            if(surface){var face=surface.cloneNode(true);face.className='flashcard-face-front';face.querySelectorAll('div').forEach(function(text){text.style.overflow='hidden';});rotator.append(face);}
-            ghost.append(rotator);
-        }else ghost=card.cloneNode(true);
-        ghost.id = "flashcardGhost";
-        ghost.style.position = "fixed";
-        ghost.style.left = (rect.left) + "px";
-        ghost.style.top = (rect.top) + "px";
-        ghost.style.width = rect.width + "px";
-        ghost.style.height = rect.height + "px";
-        ghost.style.margin = "0";
-        ghost.style.zIndex = "5000";
-        ghost.style.pointerEvents = "none";
-        ghost.style.animation = "none";
-        ghost.style.transform = "translate3d(" + (finalDx || 0) + "px, " + (finalDy || 0) + "px, 0) rotate(" + ((finalDx || 0) * 0.05) + "deg)";
-        ghost.style.opacity = "1";
-        document.body.appendChild(ghost);
-        requestAnimationFrame(function() {
-            ghost.style.transition = "transform 0.8s cubic-bezier(0.1, 0.8, 0.25, 1), opacity 0.8s ease";
-            ghost.style.transform = "translate3d(" + (finalDx || 0) + "px, " + (finalDy || 0) + "px, 0) scale(0) rotate(" + ((finalDx || 0) * 0.05) + "deg)";
-            ghost.style.opacity = "0";
-        });
-        setTimeout(function() { ghost.remove(); }, 850);
-
-        // リップル
-        var ripple = document.createElement('div');
-        ripple.className = "flashcard-post-ripple firework-余韻-" + direction;
-        ripple.style.position = "fixed";
-        ripple.style.left = (releaseX - 120) + "px";
-        ripple.style.top = (releaseY - 120) + "px";
-        ripple.style.width = "240px";
-        ripple.style.height = "240px";
-        ripple.style.transform = "none";
-        ripple.style.zIndex = "4999";
-        ripple.style.animationDuration = "0.8s";
-        document.body.appendChild(ripple);
-        setTimeout(function() { ripple.remove(); }, 800);
-        if (typeof window.showFlashcardVanishBurst === 'function') {
-            window.showFlashcardVanishBurst(releaseX, releaseY, direction);
-        }
-        card.remove();
+        window.animateFlashcardSwipe(card,direction,finalDx,finalDy);
 
         if (direction === 'right') { status = 'ok'; flashcardLearnedCount++; }
         else if (direction === 'left') { status = 'bad'; }

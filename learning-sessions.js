@@ -473,7 +473,74 @@
       "まずは" + queue.length + "単語",
       '<p class="warmup-count"></p><div class="warmup-directions"><span>× 覚えていない</span><span>△ 上へスワイプ</span><span>○ 覚えた</span></div><div class="warmup-stage"><button type="button" class="warmup-card flashcard-wrapper-3d" aria-label="答えを表示"></button></div><div class="warmup-ratings"><button type="button" data-warmup="bad">×</button><button type="button" data-warmup="so">△</button><button type="button" data-warmup="ok">○</button></div><p data-warmup-status role="status"></p><button type="button" data-library-close>あとで</button>',
     );
-    d.classList.add("flash-warmup-dialog");
+    d.classList.add("flash-warmup-dialog", "flashcard-session-screen");
+    // Mount the normal flashcard chrome rather than maintaining a second layout.
+    // Strip IDs and inline actions so a warm-up cannot control the hidden session.
+    const layout = document
+      .getElementById("flashcard-play-screen")
+      .cloneNode(true);
+    const roles = new Map();
+    for (const node of [layout, ...layout.querySelectorAll("*")]) {
+      if (node.id) {
+        roles.set(node.id, node);
+        node.removeAttribute("id");
+      }
+      for (const attr of [...node.attributes])
+        if (attr.name.startsWith("on")) node.removeAttribute(attr.name);
+    }
+    layout.style.display = "flex";
+    roles.get("flashcardNotePreview")?.remove();
+    const stage = roles.get("flashcardDeckStage"),
+      warmCard = d.querySelector(".warmup-card"),
+      ratingControls = d.querySelector(".warmup-ratings"),
+      statusMessage = d.querySelector("[data-warmup-status]");
+    stage.classList.add("warmup-stage");
+    stage.replaceChildren(warmCard);
+    roles.get("flashcardRemainingBadge").classList.add("warmup-count");
+    roles.get("flashcardPartOfSpeech").hidden = true;
+    const close = layout.querySelector(".game-finish-inline-btn");
+    close.textContent = "あとで";
+    close.dataset.libraryClose = "";
+    close.onclick = () => d.close();
+    d.querySelector("[data-library-close]").remove();
+    d.querySelector(".warmup-count").remove();
+    d.querySelector(".warmup-directions").remove();
+    d.querySelector(".warmup-stage").remove();
+    d.append(layout, ratingControls, statusMessage);
+    const previous = roles.get("flashcardPreviousButton"),
+      progress = roles.get("flashcardProgressText"),
+      history = roles.get("fcHistoryContainer"),
+      info = roles.get("flashcardInfoButton");
+    const answers = [];
+    info.onclick = () => {
+      const word = queue[index];
+      if (!word) return;
+      const details = document.createElement("dialog");
+      details.className = "menu-dialog warmup-word-details";
+      const title = document.createElement("h2"),
+        body = document.createElement("p"),
+        back = document.createElement("button");
+      title.textContent = word.word;
+      body.textContent =
+        word.subInfo || word.sub_info || word.note || "補足情報はありません。";
+      back.type = "button";
+      back.textContent = "閉じる";
+      back.onclick = () => details.close();
+      details.append(title, body, back);
+      document.body.append(details);
+      details.addEventListener("close", () => details.remove(), { once: true });
+      details.showModal();
+    };
+    previous.onclick = () => {
+      const last = answers.pop();
+      if (!last || uid() !== account) return;
+      index--;
+      card.disabled = false;
+      ratings.hidden = false;
+      close.textContent = "あとで";
+      draw();
+    };
+    window.initLucide?.();
     document.body.classList.add("flash-warmup-open");
     welcomeModal = d;
     d.addEventListener(
@@ -500,6 +567,14 @@
         return;
       }
       revealed = false;
+      layout.querySelector(".flashcard-note-preview")?.remove();
+      previous.disabled = answers.length === 0;
+      info.disabled = index === queue.length;
+      const learned = answers.filter((answer) => answer.result === "ok").length;
+      progress.textContent =
+        "表示中の覚えた単語: " +
+        Math.round((learned / queue.length) * 100) +
+        "%";
       if (index === queue.length) {
         d.querySelector(".warmup-count").textContent = "準備完了！";
         card.replaceChildren();
@@ -529,6 +604,9 @@
             ...saved?.meanings?.[String(m.id)],
           })),
         };
+      const note = String(saved?.note || w.note || "");
+      if (note.trim())
+        stage.parentElement.before(window.createFlashcardNotePreview(note));
       window.fillFlashcardFaces(
         card,
         w.word,
@@ -542,7 +620,24 @@
           sourceWord,
         }) || "",
       );
-      window.sizeFlashcardFaces(card, d.querySelector(".warmup-stage"));
+      window.sizeFlashcardFaces(
+        card,
+        stage,
+        roles.get("flashcardPartOfSpeech"),
+      );
+      const part = window.getFlashcardPartOfSpeech?.(w, meaning),
+        pos = roles.get("flashcardPartOfSpeech");
+      pos.hidden = !part;
+      pos.textContent = part?.short || "";
+      history.replaceChildren();
+      const recent = [...(sourceWord.meanings[0]?.history || [])].slice(-5);
+      while (recent.length < 5) recent.unshift("none");
+      recent.forEach((status) => {
+        const bubble = document.createElement("div");
+        bubble.className =
+          "fc-history-bubble" + (status !== "none" ? " " + status : "");
+        history.append(bubble);
+      });
       card.setAttribute("aria-label", "答えを表示");
       ratings.querySelectorAll("button").forEach((b) => (b.disabled = true));
       d.querySelector(".warmup-count").textContent =
@@ -595,6 +690,13 @@
               : "bad"
             : null;
       if (status) {
+        window.animateFlashcardSwipe?.(
+          card,
+          status === "ok" ? "right" : status === "bad" ? "left" : "up",
+          dx,
+          dy,
+          false,
+        );
         revealed = true;
         ratings.querySelectorAll("button").forEach((b) => (b.disabled = false));
         window.AppSounds?.play(
@@ -643,11 +745,13 @@
               b.dataset.warmup,
               account,
             );
+            answers.push({ result: b.dataset.warmup });
             // The same journal as battle answers preserves ratings before any cloud write.
 
             if (book === currentTextbook) later();
             index++;
-            if (index === queue.length) window.WordDuelProgress.flush(account).catch(() => {});
+            if (index === queue.length)
+              window.WordDuelProgress.flush(account).catch(() => {});
             else if (index % 5 === 0) window.WordDuelProgress.schedule(account);
             draw();
           } catch (e) {
