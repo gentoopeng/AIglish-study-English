@@ -503,6 +503,7 @@
       if (index === queue.length) {
         d.querySelector(".warmup-count").textContent = "準備完了！";
         card.replaceChildren();
+        card.classList.remove("flipped");
         window.fillFlashcardFaces(
           card,
           queue.length + "単語、おつかれさま",

@@ -2260,3 +2260,21 @@ html body dialog.flash-warmup-dialog{inset:0;margin:0;padding:calc(20px + env(sa
 .file-backup-actions{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}.file-backup-actions h3{font-size:14px;margin:0 0 8px}.file-backup-actions p{font-size:12px;line-height:1.7;color:var(--text-sub);overflow-wrap:anywhere}.file-backup-actions>div{display:flex;gap:10px;flex-wrap:wrap}.file-backup-actions button{border:1px solid var(--border);border-radius:12px;background:transparent;padding:10px 12px;color:var(--text-main,#fff);font:inherit;font-size:12px}.file-backup-actions [hidden]{display:none!important}.fbsv-card{max-height:calc(100dvh - 48px);overflow-y:auto;box-sizing:border-box}
 
 .fbsv-card>details{margin-top:16px;border-top:1px solid var(--border);padding-top:12px}.fbsv-card>details>summary{font-size:12px;color:var(--text-sub);cursor:pointer}.fbsv-card>details .file-backup-actions{border:0;margin-top:10px;padding-top:0}
+
+/* iOS: reveal one flat face instead of rotating two scrolling surfaces in 3D.
+   Keep tap/drag feedback and understanding rims without preserve-3d/backface layers. */
+@layer rendering-safety {
+html.ios-stable-rendering body .flashcard-wrapper-3d{perspective:none!important;-webkit-perspective:none!important;}
+html.ios-stable-rendering body .flashcard-inner-rotator{transform:none!important;transform-style:flat!important;-webkit-transform-style:flat!important;transition:none!important;}
+html.ios-stable-rendering body .flashcard-face-front,
+html.ios-stable-rendering body .flashcard-face-back{transform:none!important;backface-visibility:visible!important;-webkit-backface-visibility:visible!important;visibility:hidden!important;pointer-events:none!important;animation:none!important;box-shadow:inset 0 2px 8px #ffffff22,0 3px 10px #0005!important;}
+html.ios-stable-rendering body .flashcard-wrapper-3d:not(.flipped) .flashcard-face-front,
+html.ios-stable-rendering body .flashcard-wrapper-3d.flipped .flashcard-face-back{visibility:visible!important;pointer-events:auto!important;}
+html.ios-stable-rendering body #flashcardLiveRippleLayer{mix-blend-mode:normal!important;}
+@media(prefers-reduced-motion:no-preference){
+html.ios-stable-rendering body .flashcard-wrapper-3d:not(.flipped) .flashcard-face-front,
+html.ios-stable-rendering body .flashcard-wrapper-3d.flipped .flashcard-face-back{animation:fcFlatReveal .18s ease-out!important;}
+}
+html.ios-stable-rendering body .fc-flat-ghost .flashcard-face-front{animation:none!important;}
+}
+@keyframes fcFlatReveal{from{opacity:.35;}to{opacity:1;}}

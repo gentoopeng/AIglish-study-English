@@ -391,8 +391,8 @@
         texts.forEach(function(text){
             var font=parseFloat(text.style.fontSize),minimum=14;
             while(font>minimum && text.scrollHeight>diameter*.62){font--;text.style.fontSize=font+'px';}
-            text.style.maxHeight=(diameter*.62)+'px';text.style.overflowY='auto';text.style.overscrollBehavior='contain';
-            if(text.scrollHeight>text.clientHeight){text.style.touchAction='pan-y';text.addEventListener('pointerdown',function(e){e.stopPropagation();});}
+            text.style.maxHeight=(diameter*.62)+'px';text.style.overflowY='hidden';text.style.overscrollBehavior='contain';
+            if(text.scrollHeight>text.clientHeight){text.style.overflowY='auto';text.style.touchAction='pan-y';text.addEventListener('pointerdown',function(e){e.stopPropagation();});}
         });
         stage.style.height=Math.max(320,diameter+40)+'px';
         if(posLabel)posLabel.style.top='calc(50% + '+(diameter/2+12)+'px)';
@@ -586,8 +586,16 @@
         var releaseX = rect.left + rect.width / 2;
         var releaseY = rect.top + rect.height / 2;
 
-        // ゴーストカード
-        var ghost = card.cloneNode(true);
+        document.querySelectorAll('#flashcardGhost,.flashcard-post-ripple,.fc-vanish-burst').forEach(function(effect){effect.remove();});
+        // iOS must not clone a nested 3D/scrolling subtree for the outgoing effect.
+        var ghost;
+        if(document.documentElement.classList.contains('ios-stable-rendering')){
+            ghost=document.createElement('div');ghost.className='flashcard-wrapper-3d fc-flat-ghost';
+            var surface=card.querySelector(card.classList.contains('flipped')?'.flashcard-face-back':'.flashcard-face-front');
+            var rotator=document.createElement('div');rotator.className='flashcard-inner-rotator';
+            if(surface){var face=surface.cloneNode(true);face.className='flashcard-face-front';face.querySelectorAll('div').forEach(function(text){text.style.overflow='hidden';});rotator.append(face);}
+            ghost.append(rotator);
+        }else ghost=card.cloneNode(true);
         ghost.id = "flashcardGhost";
         ghost.style.position = "fixed";
         ghost.style.left = (rect.left) + "px";
@@ -662,7 +670,6 @@
             }
             // 回答と同じ処理内で端末へ確定する。終了処理やタイマーまで待たない。
             if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(vocabMatch.num);
-            if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         } else if (typeof wordMemory !== 'undefined') {
             wordMemory[cleanKey] = status;
             try { localStorage.setItem('wordMemory', JSON.stringify(wordMemory)); } catch (e) {}
@@ -680,12 +687,12 @@
         window.FlashCheckpoint?.save();
         window.renderFlashcardDeck();
         setTimeout(function() {
-            if (typeof window.saveUserStats === 'function') window.saveUserStats();
-            if (typeof window.checkAndRewardTitleBonusXP === 'function') window.checkAndRewardTitleBonusXP();
-            if (typeof window.applyProfileToUi === 'function') window.applyProfileToUi();
-            if (typeof window.updateReaderWordColors === 'function') window.updateReaderWordColors();
-            if (vocabMatch && typeof window.updateVocabCardUi === 'function') window.updateVocabCardUi(vocabMatch.num);
-            if (typeof window.renderLeaderboard === 'function') window.renderLeaderboard();
+            // Update hidden library/ranking/profile views only after leaving the session.
+            if(!document.body.classList.contains('in-game-active')){
+                if (typeof window.applyProfileToUi === 'function') window.applyProfileToUi();
+                if (typeof window.updateReaderWordColors === 'function') window.updateReaderWordColors();
+                if (vocabMatch && typeof window.updateVocabCardUi === 'function') window.updateVocabCardUi(vocabMatch.num);
+            }
             var rightEdge3 = document.getElementById('fcEdgeRippleRight');
             var leftEdge3 = document.getElementById('fcEdgeRippleLeft');
             var topEdge3 = document.getElementById('fcEdgeRippleTop');
@@ -711,7 +718,6 @@
         if (previous.vocabIndex >= 0 && previous.vocabSnapshot && typeof vocabList !== 'undefined') {
             vocabList[previous.vocabIndex] = JSON.parse(JSON.stringify(previous.vocabSnapshot));
             if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(vocabList[previous.vocabIndex].num);
-            if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
         }
         window.FlashCheckpoint?.save();
         window.renderFlashcardDeck();
