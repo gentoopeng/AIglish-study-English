@@ -155,7 +155,7 @@ const { chromium, webkit } = require("playwright"),
     assert.equal(await page.locator("#view-battle").isVisible(), true);
     assert.equal(
       await page.locator("#view-battle").evaluate((el) => el.childElementCount),
-      0,
+      1,
     );
     assert.equal(await page.locator("#wordDuelScreen").count(), 0);
     await page.setViewportSize({ width: 320, height: 720 });
@@ -169,7 +169,7 @@ const { chromium, webkit } = require("playwright"),
     await page.screenshot({ path: "/tmp/users-directory-ui.png" });
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: user-only directory, legacy inactive contacts retained, profile cache, compact refresh, no friend controls, empty adjacent battle tab and 320px layout",
+      "PASS: user-only directory, legacy inactive contacts retained, profile cache, compact refresh, no friend controls, adjacent battle mode tab and 320px layout",
     );
   } finally {
     await browser.close();
