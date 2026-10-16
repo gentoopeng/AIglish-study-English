@@ -2,14 +2,32 @@
 (function () {
   "use strict";
   const m = window.WordDuelModel,
-    labels = {
-      double: "獲得スコアが2倍",
-      triple: "獲得スコアが3倍",
-      half: "獲得スコアが半分",
-      reset: "ミスで自分のスコアがリセット",
-      attack: "正解で相手全員を減点",
-      gift: "ミスで相手全員に加点",
-    };
+    labels = Object.fromEntries(
+      m.eventCatalog.map((event) => [event.id, event.name]),
+    );
+  function entryHtml() {
+    return '<div class="battle-entry"><p>遊び方を選ぶ</p><button type="button" data-battle-route="create"><span class="battle-route-symbol">＋</span><span>部屋を作る<small>教材とルールを決める</small></span><span>›</span></button><button type="button" data-battle-route="join"><span class="battle-route-symbol">＃</span><span>部屋に入る<small>4桁の部屋番号で参加</small></span><span>›</span></button><button type="button" data-battle-route="solo" class="battle-solo-link">一人プレイ</button></div>';
+  }
+  function joinHtml() {
+    return '<div class="battle-join-card"><p>部屋に入る</p><div class="duel-join"><label>部屋番号<input aria-label="部屋番号" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="0000"></label><button type="button" data-duel-join>参加</button></div><small>教材・ルールは部屋の設定が適用されます。</small></div>';
+  }
+  function eventHtml() {
+    const groups = ["得点", "順位", "コンボ", "チャレンジ", "特殊"];
+    return `<section data-config-panel="events" class="battle-config-panel" hidden><label class="battle-event-toggle">イベントを発生させる<input type="checkbox" data-events checked></label><div class="battle-event-presets"><button type="button" data-event-preset="recommended">おすすめ</button><button type="button" data-event-preset="all">全部</button><button type="button" data-event-preset="none">選択解除</button><span data-event-count></span></div><nav class="battle-event-categories" aria-label="イベントの種類">${groups.map((group, i) => `<button type="button" data-event-category="${group}" aria-pressed="${i === 0}">${group}</button>`).join("")}</nav><div class="battle-event-list">${groups
+      .map(
+        (group, i) =>
+          `<div class="battle-event-group" data-event-group="${group}" ${i ? "hidden" : ""}>${m.eventCatalog
+            .filter((event) => event.group === group)
+            .map(
+              (event) =>
+                `<label><input type="checkbox" data-event-type value="${event.id}" ${event.recommended ? "checked" : ""}><span><strong>${event.name}</strong><small>${event.description}</small></span></label>`,
+            )
+            .join("")}</div>`,
+      )
+      .join(
+        "",
+      )}</div><div class="battle-rule-grid"><label>継続する秒数<input type="number" data-event-seconds aria-label="イベント継続秒数" min="3" max="15" value="8"></label><label>イベント点<input type="number" data-event-points aria-label="イベント加減点" min="0" max="10000" value="100"></label></div><p class="battle-config-hint">15秒ごとに1種類。3秒前に予告。順位は開始時に固定。</p></section>`;
+  }
   function mount() {
     const host = document.getElementById("view-battle");
     if (!host || host.childElementCount) return;
@@ -40,8 +58,8 @@
         "",
       )}</div><p class="battle-config-hint" data-selection-hint>複数の単語帳をまとめて選べます。</p></section>
 <section data-config-panel="rules" class="battle-config-panel" hidden><div class="battle-time"><span>制限時間</span><div class="battle-time-wheels"><label><select aria-label="制限時間の分" data-time-minutes>${Array.from({ length: 11 }, (_, i) => `<option value="${i}" ${i === 1 ? "selected" : ""}>${String(i).padStart(2, "0")}</option>`).join("")}</select>分</label><b>:</b><label><select aria-label="制限時間の秒" data-time-seconds>${Array.from({ length: 12 }, (_, i) => `<option value="${i * 5}">${String(i * 5).padStart(2, "0")}</option>`).join("")}</select>秒</label></div></div><div class="battle-rule-grid"><label>正解の得点<input type="number" data-points aria-label="正解の得点" min="1" max="10000" step="1" value="100"></label><label>ミスの失点<input type="number" data-duel-penalty aria-label="ミス時の減点" min="0" max="1000" step="1" value="100"></label><label>コンボ倍率<input type="number" data-combo aria-label="コンボ倍率" min="1" max="3" step=".01" value="1.1"></label><label>回答数 × 点<input type="number" data-answer-bonus aria-label="問題数ボーナス" min="0" max="1000" step="1" value="10"></label></div><label class="battle-field">対戦人数<select data-duel-capacity aria-label="対戦人数"><option value="2">2人</option><option value="3">3人</option><option value="4">4人</option></select></label><p class="battle-config-hint">1.1倍：100 → 110 → 120点…<br>終了時に回答数×設定点を加算。ミス後は3秒休み。</p></section>
-<section data-config-panel="events" class="battle-config-panel" hidden><label class="battle-event-toggle">イベントを発生させる<input type="checkbox" data-events></label><div class="battle-event-list">${m.eventTypes.map((type) => `<label><input type="checkbox" data-event-type value="${type}" checked><span>${labels[type]}</span></label>`).join("")}</div><div class="battle-rule-grid"><label>継続する秒数<input type="number" data-event-seconds aria-label="イベント継続秒数" min="3" max="15" value="8"></label><label>相手の加減点<input type="number" data-event-points aria-label="イベント加減点" min="0" max="10000" value="100"></label></div><p class="battle-config-hint">15秒ごとに選択したイベントから抽選。全員同じタイミングで発生します。</p></section>
-<footer class="battle-config-footer"><p class="duel-status" role="status"></p><div class="duel-lobby-actions"><button type="button" data-duel-solo>一人プレイ</button><button type="button" data-duel-create>部屋を作る</button></div><div class="duel-join"><input aria-label="部屋番号" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="4桁の部屋番号"><button type="button" data-duel-join>参加</button></div></footer>`;
+${eventHtml()}
+<footer class="battle-config-footer"><p class="duel-status" role="status"></p><div class="duel-lobby-actions"><button type="button" data-duel-solo>一人プレイ</button><button type="button" data-duel-create>部屋を作る</button></div></footer>`;
   }
   function timeWheel(select) {
     const wheel = document.createElement("div");
@@ -199,10 +217,50 @@
         .forEach((input) => (input.disabled = !toggle.checked));
     };
     toggle.onchange();
-    const code = screen.querySelector(".duel-join input");
-    code.oninput = () => {
-      code.value = code.value.replace(/[^0-9]/g, "").slice(0, 4);
+    const count = () => {
+      screen.querySelector("[data-event-count]").textContent =
+        screen.querySelectorAll("[data-event-type]:checked").length + "/30";
     };
+    screen
+      .querySelector(".battle-event-list")
+      .addEventListener("change", count);
+    screen.querySelectorAll("[data-event-preset]").forEach(
+      (button) =>
+        (button.onclick = () => {
+          const preset = button.dataset.eventPreset;
+          screen
+            .querySelectorAll("[data-event-type]")
+            .forEach(
+              (input) =>
+                (input.checked =
+                  preset === "all" ||
+                  (preset === "recommended" &&
+                    m.recommendedEvents.includes(input.value))),
+            );
+          toggle.checked = true;
+          toggle.onchange();
+          count();
+        }),
+    );
+    screen.querySelectorAll("[data-event-category]").forEach(
+      (button) =>
+        (button.onclick = () => {
+          screen
+            .querySelectorAll("[data-event-category]")
+            .forEach((other) =>
+              other.setAttribute("aria-pressed", String(other === button)),
+            );
+          screen
+            .querySelectorAll("[data-event-group]")
+            .forEach(
+              (group) =>
+                (group.hidden =
+                  group.dataset.eventGroup !== button.dataset.eventCategory),
+            );
+          screen.querySelector(".battle-event-list").scrollTop = 0;
+        }),
+    );
+    count();
     update();
   }
   function read(screen) {
@@ -212,9 +270,11 @@
         combo: val("[data-combo]"),
         answerBonus: val("[data-answer-bonus]"),
         events: screen.querySelector("[data-events]").checked,
-        eventTypes: [
-          ...screen.querySelectorAll("[data-event-type]:checked"),
-        ].map((el) => el.value),
+        eventTypes: m.eventTypes.filter(
+          (type) =>
+            screen.querySelector('[data-event-type][value="' + type + '"]')
+              .checked,
+        ),
         eventSeconds: val("[data-event-seconds]"),
         eventPoints: val("[data-event-points]"),
       },
@@ -320,6 +380,6 @@
       throw Error("条件に合う異なる意味の単語を10個以上選んでください。");
     return { pool, book: ids[0], books: ids };
   }
-  window.BattleLobby = { html, init, read, words, labels };
+  window.BattleLobby = { html, init, read, words, labels, entryHtml, joinHtml };
   window.onAppLoaded(mount);
 })();

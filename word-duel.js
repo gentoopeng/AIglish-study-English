@@ -94,8 +94,10 @@
         .then(() => old.start && settle(old.code))
         .catch(() => {});
     }
-    window.WordDuelProgress.flush(session?.id).catch(() => {});
-    window.saveAfterStudy?.("battle-end");
+    if (session) {
+      window.WordDuelProgress.flush(session.id).catch(() => {});
+      window.saveAfterStudy?.("battle-end");
+    }
     const el = dialog;
     cleanup();
     el.remove();
@@ -146,7 +148,11 @@
             answers: target.answers,
           },
         };
-    return m.roomScores({ ...target, players });
+    return m.roomScores(
+      { ...target, players },
+      false,
+      Math.max(0, Date.now() - target.start),
+    );
   }
   function points(target, answers) {
     return m.finalScore(
@@ -156,6 +162,7 @@
       target.duration,
       target.missPenalty,
       target.rules || m.defaultRules,
+      Math.max(0, Math.min(target.duration, Date.now() - target.start)),
     );
   }
   function player() {
@@ -229,15 +236,50 @@
   function setup() {
     return window.BattleLobby.read(dialog);
   }
-  window.openWordDuel = function (groupId) {
+  window.openWordDuel = function (
+    groupId,
+    intent = typeof groupId === "string" ? "create" : "menu",
+  ) {
     if (dialog) return;
+    const goBack = () => {
+      closeScreen();
+      window.openWordDuel(groupId);
+    };
+    if (intent === "menu") {
+      view("カジュアル", window.BattleLobby.entryHtml());
+      dialog.classList.add("battle-entry-screen");
+      dialog.querySelector(".duel-screen-badge").hidden = true;
+      dialog.querySelectorAll("[data-battle-route]").forEach(
+        (button) =>
+          (button.onclick = () => {
+            const next = button.dataset.battleRoute;
+            closeScreen();
+            window.openWordDuel(groupId, next);
+          }),
+      );
+      return;
+    }
+    if (intent === "join") {
+      view("部屋に入る", window.BattleLobby.joinHtml());
+      dialog.classList.add("battle-entry-screen");
+      dialog.querySelector(".duel-screen-badge").hidden = true;
+      dialog.querySelector("[data-duel-back]").onclick = goBack;
+      const input = dialog.querySelector(".duel-join input");
+      input.oninput = () =>
+        (input.value = input.value.replace(/[^0-9]/g, "").slice(0, 4));
+      wireJoin();
+      return;
+    }
     view("カジュアル", window.BattleLobby.html());
     window.BattleLobby.init(dialog);
+    dialog.querySelector("[data-duel-back]").onclick = goBack;
+    dialog.querySelector("[data-duel-solo]").hidden = intent !== "solo";
+    dialog.querySelector("[data-duel-create]").hidden = intent === "solo";
     dialog.querySelector(".duel-content > .duel-status")?.remove();
     if (typeof groupId === "string") {
       dialog.querySelector("#duelScreenTitle").textContent =
         "グループでカジュアル";
-      dialog.querySelector(".duel-join").hidden = true;
+
       dialog.querySelector("[data-duel-solo]").hidden = true;
       const groupButton = dialog.querySelector("[data-duel-create]");
       groupButton.textContent = "グループで開始・参加";
@@ -294,7 +336,7 @@
             collision = await tx.get(roomRef);
           if (collision.exists()) throw Error("もう一度参加してください。");
           const room = {
-            version: 8,
+            version: 9,
             ...settings,
             book,
             books,
@@ -352,7 +394,7 @@
         if (dialog !== screen || uid() !== account) return;
         let code;
         const room = {
-          version: 8,
+          version: 9,
           ...settings,
           book,
           books,
@@ -389,6 +431,8 @@
         session = { id: account, code, answers: [], finished: false };
         wait(code);
       });
+  };
+  function wireJoin() {
     dialog.querySelector("[data-duel-join]").onclick = locked(async () => {
       connected();
       const code = dialog.querySelector(".duel-join input").value.trim(),
@@ -436,15 +480,18 @@
       session = { id: account, code, answers: [], finished: false };
       wait(code);
     });
-  };
+  }
   function wait(code) {
+    dialog.querySelector("[data-duel-back]").onclick = closeScreen;
+    dialog.querySelector(".duel-screen-badge").hidden = false;
+    dialog.querySelector(".duel-screen-badge").textContent = "参加待ち";
     dialog.classList.remove("is-configuring");
     dialog.querySelector(".duel-content").innerHTML =
       '<div class="duel-wait"><small>' +
       (session?.groupId ? "グループの対戦" : "部屋番号") +
       "</small><strong>" +
       (session?.groupId ? "参加待ち" : code) +
-      '</strong><p data-wait-count></p><p data-wait-names></p></div><p class="duel-status" role="status"></p><button type="button" data-duel-cancel>退出</button>';
+      '</strong><p data-wait-count></p><p data-wait-names></p><p data-wait-settings></p></div><p class="duel-status" role="status"></p><button type="button" data-duel-cancel>退出</button>';
     dialog.querySelector("[data-duel-cancel]").onclick = closeScreen;
     listen(code);
     waitingTimer = setTimeout(() => {
@@ -506,6 +553,23 @@
             .map((person) => person.name)
             .join("、");
         }
+        const summary = dialog.querySelector("[data-wait-settings]");
+        if (summary) {
+          const rules = room.rules || m.defaultRules;
+          summary.textContent =
+            "教材 " +
+            (room.books?.length || 1) +
+            "冊 · 正解 " +
+            rules.points +
+            "点 · ミス −" +
+            room.missPenalty +
+            "点 · コンボ " +
+            rules.combo +
+            "倍 · 回答数 ×" +
+            rules.answerBonus +
+            "点 · イベント " +
+            (rules.events ? rules.eventTypes.length + "種類" : "なし");
+        }
         const start = ms(room.startsAt);
         if (room.status === "playing" && start && !session.start) {
           clearTimeout(waitingTimer);
@@ -531,6 +595,8 @@
   }
 
   function play() {
+    dialog.querySelector("[data-duel-back]").onclick = closeScreen;
+    dialog.querySelector(".duel-screen-badge").hidden = false;
     dialog.classList.remove("is-configuring");
     dialog.classList.add("is-playing");
     revision = 0;
@@ -578,6 +644,7 @@
       Date.now() < (session.penaltyUntil || 0)
     )
       return;
+    session.questionShownAt = Math.max(0, Date.now() - session.start);
     session.reviewing = false;
     session.answering = false;
     const q = m.question(session.pool, session.seed, session.answers.length),
@@ -611,31 +678,35 @@
     const target = session,
       q = m.question(target.pool, target.seed, target.answers.length),
       right = choice === q.correct;
-    target.answers.push({ choice, at: Date.now() - target.start });
+    const before = liveScores(target)[target.id].total;
+    target.answers.push({
+      choice,
+      at: Date.now() - target.start,
+      shownAt: target.questionShownAt,
+    });
     revision++;
-    const value = liveScores(target)[target.id];
-    dialog.querySelector("[data-duel-score]").textContent = value.total;
-    const rules = target.rules || m.defaultRules,
-      event = m.eventAt(target.seed, target.answers.at(-1).at, rules)?.type,
-      factor =
-        event === "double"
-          ? 2
-          : event === "triple"
-            ? 3
-            : event === "half"
-              ? 0.5
-              : 1,
-      earned = Math.round(
-        rules.points * (1 + (value.combo - 1) * (rules.combo - 1)) * factor,
-      );
+    const scores = liveScores(target),
+      value = scores[target.id],
+      delta = value.total - before;
+    opponent(scores);
+    const event = m.eventAt(
+      target.seed,
+      target.answers.at(-1).at,
+      target.rules,
+    )?.type;
     const combo = dialog.querySelector(".duel-combo");
     combo.textContent = right
-      ? value.combo > 1
-        ? value.combo + "連続正解 · +" + earned
-        : "+" + earned
-      : event === "reset"
-        ? "スコアリセット"
-        : "不正解 " + (target.missPenalty ? "−" + target.missPenalty : "±0");
+      ? value.combo +
+        "連続正解 · " +
+        (event === "bank"
+          ? "貯金中"
+          : delta < 0
+            ? "−" + Math.abs(delta)
+            : delta === 0
+              ? "±0"
+              : "+" + delta)
+      : "ミス · " +
+        (delta < 0 ? "−" + Math.abs(delta) : delta === 0 ? "±0" : "+" + delta);
     combo.classList.toggle("is-miss", !right);
     if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
       combo.animate?.(
@@ -688,18 +759,18 @@
       }, 250);
     if (target.answers.length === m.maxAnswers) finish();
   }
-  function opponent() {
-    if (!session?.room || !dialog?.querySelector(".duel-scoreboard")) return;
-    const scores = liveScores(session);
-    for (const [id, person] of Object.entries(session.room.players)) {
+  function opponent(scores) {
+    if (!session?.start || !dialog?.querySelector(".duel-scoreboard")) return;
+    scores = scores || liveScores(session);
+    const players = session.solo ? { [session.id]: {} } : session.room.players;
+    for (const [id, person] of Object.entries(players)) {
       const column = dialog.querySelector(
         '[data-player-id="' + CSS.escape(id) + '"]',
       );
       if (!column) continue;
-      const score = scores[id].total,
-        columnScore = column.querySelector("strong");
-      if (columnScore.textContent !== String(score))
-        columnScore.textContent = score;
+      const text = String(scores[id].total),
+        node = column.querySelector("strong");
+      if (node.textContent !== text) node.textContent = text;
       column.classList.toggle("is-abandoned", !!person.abandoned);
     }
   }
@@ -734,24 +805,43 @@
           (button.disabled =
             remain > 0 || session.reviewing || session.answering),
       );
-    const banner = dialog.querySelector(".duel-event-banner"),
-      active = m.eventAt(
+    const elapsed = Math.max(0, Date.now() - session.start),
+      banner = dialog.querySelector(".duel-event-banner"),
+      active = m.eventAt(session.seed, elapsed, session.rules),
+      preview = m.eventPreview(
         session.seed,
-        Math.max(0, Date.now() - session.start),
+        elapsed,
         session.rules,
-      );
+        session.duration,
+      ),
+      shown = active || preview;
     if (banner) {
-      banner.hidden = !active;
-      if (active) {
-        const text =
-          window.BattleLobby.labels[active.type] +
+      banner.hidden = !shown;
+      if (shown) {
+        const seconds = Math.max(
+          0,
+          Math.ceil(((active ? active.until : preview.start) - elapsed) / 1000),
+        );
+        let text =
+          (active ? "" : "まもなく ") +
+          window.BattleLobby.labels[shown.type] +
           " · " +
-          Math.max(
-            0,
-            Math.ceil((active.until - (Date.now() - session.start)) / 1000),
-          ) +
+          seconds +
           "秒";
+        if (active && preview)
+          text += " / 次は" + window.BattleLobby.labels[preview.type];
         if (banner.textContent !== text) banner.textContent = text;
+        banner.dataset.phase = active ? "active" : "preview";
+      }
+    }
+    if (session.rules?.events) {
+      const stage =
+        Math.floor(elapsed / 15000) +
+        ":" +
+        (elapsed % 15000 < session.rules.eventSeconds * 1000);
+      if (session.eventStage !== stage) {
+        session.eventStage = stage;
+        opponent();
       }
     }
     const next = dialog.querySelector("[data-duel-next]");

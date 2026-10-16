@@ -69,12 +69,35 @@ const { chromium, webkit } = require("playwright"),
     await page.locator(".mode-serious").click();
     await page.getByRole("button", { name: "閉じる", exact: true }).click();
     await page.locator(".mode-casual").click();
+    await page.screenshot({
+      path: "/tmp/battle-entry-" + type.name() + ".png",
+    });
+    assert.equal(await page.locator(".battle-book-picker").count(), 0);
+    await page.locator("[data-battle-route=create]").click();
+    assert.equal(await page.locator(".battle-book-picker").count(), 1);
+    assert.equal(await page.locator(".duel-join").count(), 0);
+    assert.equal(await page.locator("[data-duel-solo]").isVisible(), false);
+    await page.getByRole("button", { name: "戻る", exact: true }).click();
+    await page.locator("[data-battle-route=join]").click();
+    await page.screenshot({ path: "/tmp/battle-join-" + type.name() + ".png" });
+    assert.equal(await page.locator("[data-config-tab]").count(), 0);
+    await page.getByLabel("部屋番号").fill("12ab");
+    assert.equal(await page.getByLabel("部屋番号").inputValue(), "12");
+    await page.getByRole("button", { name: "戻る", exact: true }).click();
+    await page.locator("[data-battle-route=solo]").click();
+    assert.equal(await page.evaluate(() => __battleReads.length), 0);
     const defaults = await page.evaluate(() =>
       BattleLobby.read(document.querySelector("#wordDuelScreen")),
     );
     assert.equal(defaults.missPenalty, 100);
     assert.equal(defaults.rules.points, 100);
     assert.equal(defaults.rules.combo, 1.1);
+    assert.equal(defaults.rules.events, true);
+    assert.deepEqual(
+      defaults.rules.eventTypes,
+      await page.evaluate(() => WordDuelModel.recommendedEvents),
+    );
+    assert.equal(await page.locator("[data-event-type]").count(), 30);
     await page.getByLabel("最初の単語番号").fill("5");
     await page.getByLabel("最後の単語番号").fill("20");
     let data = await page.evaluate(() =>
@@ -150,6 +173,18 @@ const { chromium, webkit } = require("playwright"),
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator("[data-events]").check();
+    await page.locator("[data-event-preset=all]").click();
+    assert.equal(await page.locator("[data-event-type]:checked").count(), 30);
+    await page.locator("[data-event-preset=none]").click();
+    assert.equal(await page.locator("[data-event-type]:checked").count(), 0);
+    await page.locator("[data-event-preset=recommended]").click();
+    for (const group of ["得点", "順位", "コンボ", "チャレンジ", "特殊"]) {
+      await page.locator('[data-event-category="' + group + '"]').click();
+      assert.equal(
+        await page.locator('[data-event-group="' + group + '"]').isVisible(),
+        true,
+      );
+    }
     await page.getByLabel("イベント継続秒数").fill("10");
     await page.screenshot({
       path: "/tmp/battle-events-" + type.name() + ".png",
