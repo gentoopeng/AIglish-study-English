@@ -157,8 +157,8 @@
     function selectCache(){const saved=groupCaches.get(rankMode);cache=saved?.rows||[];cacheAt=saved?.at||0;cacheReady=!!saved;}
     async function refresh(force,foreground=false){
         ensure();selectCache();const message=document.getElementById('rankingMessage');
+        if(!force){render();message.textContent=cacheReady?'':'更新ボタンでランキングを取得します。';return;}
         if(user==='GUEST-000'){render();message.textContent='ログインすると表彰台に参加できます。';return;}
-        if(!force&&cacheReady&&Date.now()-cacheAt<900000){message.textContent='';render();return;}
         if(inflight&&inflight.id===user&&inflight.group===rankMode&&!inflight.controller.signal.aborted)return inflight.promise;
         inflight?.controller.abort();
         const id=user,group=rankMode,token=++generation,controller=new AbortController(),button=document.getElementById('rankingRefresh');button.disabled=true;message.textContent='記録を取得中…';
@@ -187,7 +187,5 @@
     window.onTabChange(tab=>{if(tab==='titles'){render();refresh(false);}else if(tab==='vocab'){ensure();scanCurrent();persist();}});
     window.onAppLoaded(()=>{ensure();window.syncRankingMetrics();render();});
     window.addEventListener('storage',event=>{if(event.key===storageKey(owner())){ensure();record=merge(record,read(user));persist();render();}});
-    setInterval(()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles'&&!window.IdleSleep?.isSleeping())refresh(false);},900000);
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')refresh(false);});
     window.LearningRanking={invalidate(){inflight?.controller.abort();groupCaches.clear();cache=[];cacheAt=0;cacheReady=false;generation++;const button=document.getElementById('rankingRefresh');if(button)button.disabled=false;},render,refresh,sync:()=>syncCloud(true),snapshot:()=>{window.syncRankingMetrics();return JSON.parse(JSON.stringify(record));}};
 })();

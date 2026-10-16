@@ -1,7 +1,7 @@
 // Presence metadata contains no note text or avatars. Bodies stay in their existing paths.
 (function(root){
 'use strict';
-const SHARDS=16,TTL=300000,REPAIR=86400000;
+const SHARDS=16,TTL=900000,REPAIR=86400000;
 const owner=()=>typeof myId==='string'?myId:'GUEST-000';
 let account='',cached=null,loadedAt=0,job=null,version=0;
 const shard=topic=>/^[0-9a-f]/i.test(topic)?parseInt(topic[0],16):0;

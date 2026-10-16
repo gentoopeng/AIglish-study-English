@@ -11,8 +11,8 @@ test('legacy notes migrate once into text-free presence; repeat checks query no 
  for(const [path,data]of docs)if(path.startsWith('shared/'))assert.equal(JSON.stringify(data).includes('過去のメモ'),false);
  assert.equal(docs.get('publicVocabNotes/a123/notes/other').note,'過去のメモ');
 });
-test('five-minute checks read metadata only; daily repair discovers older-client edits',async()=>{
- const {ctx,docs,reads,queries,advance}=setup();await ctx.SharedNoteIndex.load();advance(300001);await ctx.SharedNoteIndex.load();assert.equal(reads.length,2);assert.equal(queries.length,1);
+test('fifteen-minute checks read metadata only; daily repair discovers older-client edits',async()=>{
+ const {ctx,docs,reads,queries,advance}=setup();await ctx.SharedNoteIndex.load();advance(300001);await ctx.SharedNoteIndex.load();assert.equal(reads.length,1);advance(600001);await ctx.SharedNoteIndex.load();assert.equal(reads.length,2);assert.equal(queries.length,1);
  docs.set('publicVocabNotes/a123/notes/old-client',{ownerId:'old-client',note:'追加',updatedAt:'2026-10-13'});advance(86400001);assert.deepEqual(Array.from(await ctx.SharedNoteIndex.owners('a123')),['old-client']);assert.equal(queries.length,2);
  docs.delete('publicVocabNotes/a123/notes/old-client');advance(86400001);assert.deepEqual(Array.from(await ctx.SharedNoteIndex.owners('a123')),[]);
 });
