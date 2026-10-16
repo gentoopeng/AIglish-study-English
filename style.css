@@ -2310,3 +2310,15 @@ html body dialog.flash-warmup-dialog{padding:4px 0 0!important;justify-content:f
 #view-community .duel-entry{margin-top:24px;border-top:1px solid #ffffff20;padding-top:20px;}
 
 button.flashcard-ghost{padding:0;border:0;background:transparent;font:inherit;}
+
+/* Closed warm-ups must not remain visible because of their flex layout. */
+html body dialog.flash-warmup-dialog:not([open]){display:none!important;}
+/* Session exits share the surrounding outlined controls rather than stone art. */
+html body .game-finish-inline-btn{
+ background-image:none!important;background-color:rgba(15,23,42,.55)!important;
+ border:1px solid var(--border,#ffffff40)!important;border-radius:12px!important;
+ color:var(--text-main,#fff)!important;text-shadow:none!important;box-shadow:none!important;
+ justify-content:center;transition:background-color .15s,border-color .15s,transform .15s;
+}
+html body .game-finish-inline-btn:hover{background-color:rgba(255,255,255,.09)!important;}
+html body .game-finish-inline-btn:focus-visible{outline:2px solid var(--cosmic-cyan,#00dceb);outline-offset:3px;}
