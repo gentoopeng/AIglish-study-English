@@ -646,8 +646,8 @@
 
             if (book === currentTextbook) later();
             index++;
-            if (index % 5 === 0 || index === queue.length)
-              window.WordDuelProgress.flush(account).catch(() => {});
+            if (index === queue.length) window.WordDuelProgress.flush(account).catch(() => {});
+            else if (index % 5 === 0) window.WordDuelProgress.schedule(account);
             draw();
           } catch (e) {
             d.querySelector("[data-warmup-status]").textContent = e.message;

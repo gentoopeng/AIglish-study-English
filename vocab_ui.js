@@ -475,6 +475,7 @@
     // ================================================================
 
     window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
+        if(window.LearningData&&!window.LearningData.canSave(currentTextbook||'default'))return;
         if (event) { event.preventDefault(); event.stopPropagation(); }
         var wIdx = vocabList.findIndex(function(w) { return String(w.num) === String(wordNum); });
         if (wIdx >= 0) {
@@ -511,6 +512,7 @@
                         status: changedWord.status || 'none',
                         history: Array.isArray(changedWord.history) ? changedWord.history.slice(-20) : [],
                         note: String(changedWord.note || ''),
+                        sticky: !!changedWord.sticky,
                         meanings: {}
                     };
                     (changedWord.meanings || []).forEach(function(meaning) {
@@ -522,6 +524,11 @@
                     progress[String(changedWord.num)] = wordProgress;
                     currentUserVocabProgress = progress;
                     var changedAt = Date.now();
+                    if(window.LearningData){
+                        progress=window.LearningData.commit(bookKey,{[String(changedWord.num)]:wordProgress},changedWord.num);
+                        changedAt=progress[String(changedWord.num)].editedAt;
+                        currentUserVocabProgress=progress;
+                    }
                     localStorage.setItem(progressKey, JSON.stringify(progress));
                     localStorage.setItem(progressKey + '__ts', String(changedAt));
                     window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};

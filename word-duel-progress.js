@@ -1,7 +1,7 @@
 // Explicit answers use the canonical recovery journal; cloud writes are batched by book.
 (function(){
 'use strict';
-const owner=()=>myId||'GUEST-000',pendingKey=id=>'core_v4_word_duel_pending_'+id,queues=new Map();
+const owner=()=>myId||'GUEST-000',pendingKey=id=>'core_v4_word_duel_pending_'+id,queues=new Map(),scheduled=new Map();
 function pending(id){return JSON.parse(localStorage.getItem(pendingKey(id))||'{}');}
 function overall(meanings,count){const statuses=Object.values(meanings).map(item=>item.status||'none');while(statuses.length<count)statuses.push('none');return statuses.includes('bad')?'bad':statuses.length&&statuses.every(value=>value==='ok')?'ok':statuses.includes('so')||statuses.includes('ok')?'so':'none';}
 function apply(book,ref,answer,id){
@@ -24,7 +24,8 @@ function apply(book,ref,answer,id){
  window.recordRankedWord?.(book,ref.num);return words[ref.num];
 }
 async function flush(id=owner()){
- if(id!==owner()||id==='GUEST-000'||!window.db||!window.fbRunTransaction)return false;
+ if(scheduled.has(id)){clearTimeout(scheduled.get(id));scheduled.delete(id);}
+ if(id!==owner()||id==='GUEST-000'||!window.db||!window.fbRunTransaction||window.FirestoreReadGuard?.paused())return false;
  if(queues.has(id))return queues.get(id);
  const execute=async()=>{let saved=true;const jobs=pending(id);for(const [book,changes]of Object.entries(jobs)){
   if(id!==owner())return false;
@@ -47,13 +48,21 @@ async function flush(id=owner()){
    if(id!==owner())return false;
    if(!merged||window.LibraryState?.isDeleted('book',book,id))continue;
    window.LearningData.restore(book,merged);
+   window.__vocabCloudAcknowledged=window.__vocabCloudAcknowledged||{};
+   window.__vocabCloudAcknowledged[id+"\n"+book]=JSON.stringify(merged);
    for(const num of Object.keys(changes)){const current=window.LearningData.read(book)[num];if(current&&merged[num]&&JSON.stringify(current)===JSON.stringify(local[num])&&JSON.stringify(current)!==JSON.stringify(merged[num]))window.LearningData.commit(book,{[num]:merged[num]},num,true);}
    const latest=pending(id);if(JSON.stringify(latest[book])===version){delete latest[book];localStorage.setItem(pendingKey(id),JSON.stringify(latest));}
   }catch(error){saved=false;console.warn('バトルの理解度は端末に保持し、接続後に再同期します',error);}
  }return saved;};
  const task=(window.LibraryState?.track?window.LibraryState.track(id,execute):execute()).finally(()=>queues.delete(id));queues.set(id,task);return task;
 }
-window.WordDuelProgress={apply,flush};
+function schedule(id=owner()){
+ if(id!==owner()||id==='GUEST-000')return;
+ window.AppStorage?.flush().catch(()=>{});
+ if(scheduled.has(id))return;
+ scheduled.set(id,setTimeout(()=>{scheduled.delete(id);flush(id).catch(()=>{});},120000));
+}
+window.WordDuelProgress={apply,flush,schedule};
 window.onAppLoaded(()=>flush().catch(()=>{}));window.addEventListener('online',()=>flush().catch(()=>{}));
-setInterval(()=>{if(document.visibilityState==='visible')flush().catch(()=>{});},60000);
+setInterval(()=>{if(document.visibilityState==='visible')flush().catch(()=>{});},120000);
 })();

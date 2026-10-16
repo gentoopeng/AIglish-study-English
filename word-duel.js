@@ -105,7 +105,7 @@ function answer(choice){
  window.AppSounds?.play(right?'swipe-right':'swipe-left');
  const buttons=dialog.querySelectorAll('.duel-options button');buttons.forEach(button=>button.disabled=true);buttons[choice].classList.add('is-selected');buttons[choice].setAttribute('aria-pressed','true');
  try{window.WordDuelProgress.apply(target.book,q.ref,right,target.id);}catch(error){status('理解度の保存を確認できません。'+error.message);}
- if(target.answers.length%5===0)window.WordDuelProgress.flush(target.id).catch(()=>{});
+ if(target.answers.length%5===0)window.WordDuelProgress.schedule(target.id);
  if(right){target.answering=true;buttons[choice].classList.add('is-correct');answerTimer=setTimeout(()=>{answerTimer=null;if(session===target&&!target.finished)question();},180);}else{
   target.reviewing=true;target.penaltyUntil=Date.now()+3000;buttons[choice].classList.add('is-wrong');buttons[q.correct].classList.add('is-correct');
   const correction=dialog.querySelector('.duel-correction');correction.querySelector('strong').textContent=q.meaning;correction.hidden=false;correction.querySelector('button').disabled=true;correction.querySelector('button').textContent='あと3秒';

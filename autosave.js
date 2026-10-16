@@ -1,11 +1,12 @@
 // Batch edits while keeping catalogue mutations on an earlier save deadline.
 (function(){
+    const CLOUD_BATCH_MS=120000;
     let revision=0,saved=0,pending=false,timer=null,lastEditingAt=-Infinity;
     const textInput='input,textarea,[contenteditable="true"]';
     function editing(event){if((event?.target||document.activeElement)?.matches?.(textInput))lastEditingAt=Date.now();}
     const id=()=>typeof myId==='string'?myId:'';
     let owner=id();
-    function changed(event){editing(event);if(event?.target?.type==='password'||event?.target?.closest?.('#backgroundAdminDialog,.admin-players-dialog'))return;if(owner!==id()){owner=id();revision=0;saved=0;}revision++;window.localStorage?.setItem('core_v4_autosave_pending_'+owner,'1');}
+    function changed(event){editing(event);if(event?.target?.type==='password'||event?.target?.type==='search'||/search|filter/i.test(event?.target?.id||'')||event?.target?.closest?.('#backgroundAdminDialog,.admin-players-dialog'))return;if(owner!==id()){owner=id();revision=0;saved=0;}revision++;window.localStorage?.setItem('core_v4_autosave_pending_'+owner,'1');}
     async function save(){
         timer=null;if(pending||revision===saved||!owner||owner==='GUEST-000'||!window.__backgroundSaveAll)return;
         // Canonical edits already persist locally. Avoid a full snapshot while Safari resizes
@@ -18,17 +19,17 @@
         catch(error){console.warn('自動保存は次回に再試行します',error);}finally{pending=false;}
     }
     function idleSave(){if(window.requestIdleCallback)window.requestIdleCallback(save,{timeout:3000});else setTimeout(save,0);}
-    window.resumeBackgroundSave=function(){if(revision!==saved)idleSave();};
-    window.queueBackgroundSave=function(){changed();if(!timer)timer=setTimeout(idleSave,15000);};
+    window.resumeBackgroundSave=function(){settled();};
+    window.queueBackgroundSave=function(){changed();if(!timer)timer=setTimeout(idleSave,CLOUD_BATCH_MS);};
     if(window.onAppLoaded)window.onAppLoaded(()=>{if(window.localStorage?.getItem('core_v4_autosave_pending_'+id()))window.queueBackgroundSave();});
     let flashOwner='',flashSwipes=0;
     window.noteFlashSwipe=function(){if(flashOwner!==id()){flashOwner=id();flashSwipes=0;}flashSwipes++;changed();if(flashSwipes%5===0){if(window.AppStorage)window.AppStorage.flush().catch(error=>console.warn('理解度の端末保存を再試行します',error));window.queueBackgroundSave();}};
     window.flushFlashAutosave=function(){if(flashSwipes)window.queueBackgroundSave();};
     document.addEventListener('input',changed,{passive:true});document.addEventListener('change',changed,{passive:true});
     ['markVocabProgressDirty'].forEach(name=>{const original=window[name];if(typeof original==='function')window[name]=function(){changed();return original.apply(this,arguments);};});
-    setInterval(()=>{if(owner!==id()){owner=id();revision=0;saved=0;}if(revision!==saved)idleSave();},60000);
+    setInterval(()=>{if(owner!==id()){owner=id();revision=0;saved=0;}if(revision!==saved)idleSave();},CLOUD_BATCH_MS);
     window.addEventListener('online',()=>{window.queueBackgroundSave();});
-    function settled(){if(revision!==saved&&!timer)timer=setTimeout(idleSave,2000);}
+    function settled(){if(revision!==saved&&!timer)timer=setTimeout(idleSave,CLOUD_BATCH_MS);}
     document.addEventListener('focusin',editing,{passive:true});
     document.addEventListener('focusout',settled,{passive:true});
     document.addEventListener('close',settled,true);

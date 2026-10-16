@@ -900,9 +900,9 @@ function collectAll() {
 }
 async function markCloudPending(id){try{localStorage.setItem('core_v4_autosave_pending_'+id,'1');if(window.AppStorage)await window.AppStorage.flush();}catch(error){console.warn('同期待ちの端末記録を保存できませんでした',error);}}
 var pendingSave=null;
-function saveAll() {if(pendingSave)return pendingSave;var task=window.LibraryState?window.LibraryState.track(uid(),saveAllContents):saveAllContents();pendingSave=Promise.resolve(task).finally(function(){pendingSave=null;});return pendingSave;}
-window.__backgroundSaveAll=saveAll;
-async function saveAllContents() {
+function saveAll(force) {if(pendingSave)return pendingSave;var task=window.LibraryState?window.LibraryState.track(uid(),()=>saveAllContents(force)):saveAllContents(force);pendingSave=Promise.resolve(task).finally(function(){pendingSave=null;});return pendingSave;}
+window.__backgroundSaveAll=()=>saveAll(false);
+async function saveAllContents(force) {
   var id=uid(); if(!id)throw new Error('先にログインしてください');
   if(window.LearningData&&!window.LearningData.canSave(currentTextbook||'default'))throw new Error('読み込み中のため保存を保留しました');
   lastProgressPercent=0;lastRemainingSeconds=null;
@@ -915,6 +915,7 @@ async function saveAllContents() {
   if(window.syncRankingMetrics)window.syncRankingMetrics();
   var data=collectAll();
   var dirtyBooks=Object.assign({},window.__dirtyManualVocabDrafts||{});
+  var dirtyProgress=Object.fromEntries(Object.entries(window.__dirtyVocabProgress||{}).map(([book,entry])=>[book,entry.revision]));
   var save={slot:SLOT,savedAt:new Date().toISOString(),savedAtDisplay:nowDisplay(),data:data};
   if(window.LibraryState)window.LibraryState.sanitizeSave(save,id);
   var generation=saveGeneration(save.savedAt);
@@ -980,18 +981,26 @@ async function saveAllContents() {
     }
     // アプリ本体が起動時に読む正規の理解度ドキュメントも同じ操作内で更新する。
     // フルセーブだけを更新すると、その後の教材ロードが古い理解度で上書きしてしまう。
-    if(savedProgress&&!(window.LibraryState&&window.LibraryState.isDeleted('book',savedBook,id))){
-      var progressRef=window.fbDoc(window.db,'users',id,'vocabProgress',savedBook);
-      var progressEditedAt=Number(data.localStorage&&data.localStorage[window.getVocabProgressStorageKey(savedBook)+'__ts'])||0;
+    window.__vocabCloudAcknowledged=window.__vocabCloudAcknowledged||{};
+    var progressBooks=Array.from(new Set([savedBook,...Object.keys(dirtyProgress),...Object.keys(dirtyBooks)]));
+    for(const progressBook of progressBooks){
+    const bookProgress=progressBook===savedBook?savedProgress:savedBooks[progressBook]?.progress;
+    var progressAckKey=id+'\n'+progressBook,progressRaw=JSON.stringify(bookProgress||{});
+    if(bookProgress&&(force!==false||window.__vocabCloudAcknowledged[progressAckKey]!==progressRaw)&&!(window.LibraryState&&window.LibraryState.isDeleted('book',progressBook,id))){
+      var progressRef=window.fbDoc(window.db,'users',id,'vocabProgress',progressBook);
+      var progressEditedAt=Number(data.localStorage&&data.localStorage[window.getVocabProgressStorageKey(progressBook)+'__ts'])||0;
       if(window.fbRunTransaction)await window.fbRunTransaction(window.db,async function(tx){
         var doc=await tx.get(progressRef),remote=doc.exists()?doc.data():{},remoteWords={};
-        try{remoteWords=JSON.parse(remote.wordsJson||'{}');}catch(e){}
+        remoteWords=remote.wordsJson?JSON.parse(remote.wordsJson):(remote.words||{});
+        if(!remoteWords||typeof remoteWords!=='object'||Array.isArray(remoteWords))throw Error('クラウドの理解度を確認できません。端末の記録を保持しています。');
         var remoteAt=Number(remote.updatedAtMs)||Date.parse(remote.updatedAt||'')||0;
-        var merged=window.LearningData?window.LearningData.merge(savedProgress,remoteWords):(remoteAt>progressEditedAt?Object.assign({},savedProgress,remoteWords):Object.assign({},remoteWords,savedProgress));
+        var merged=window.LearningData?window.LearningData.merge(bookProgress,remoteWords):(remoteAt>progressEditedAt?Object.assign({},bookProgress,remoteWords):Object.assign({},remoteWords,bookProgress));
         tx.set(progressRef,{wordsJson:JSON.stringify(merged),updatedAt:new Date(Math.max(remoteAt,progressEditedAt)).toISOString(),updatedAtMs:Math.max(remoteAt,progressEditedAt)},{merge:true});
       });
-      else if(progressEditedAt&&(!window.LearningData||window.LearningData.hasAnswers(savedProgress)))await window.fbSetDoc(progressRef,{wordsJson:JSON.stringify(savedProgress),updatedAt:new Date(progressEditedAt).toISOString()},{merge:true});
+      else if(progressEditedAt&&(!window.LearningData||window.LearningData.hasAnswers(bookProgress)))await window.fbSetDoc(progressRef,{wordsJson:JSON.stringify(bookProgress),updatedAt:new Date(progressEditedAt).toISOString()},{merge:true});
+      window.__vocabCloudAcknowledged[progressAckKey]=progressRaw;
       progress(15,started,'理解度を保存中');
+    }
     }
     // 本文を先に保存し、最後にメタデータを更新する。途中で通信が切れても
     // ローダーが未完成の新規セーブを「保存完了」として選ばない。
@@ -1016,6 +1025,9 @@ async function saveAllContents() {
     var verify=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
     if(!verify||!verify.exists()||!verify.data()||verify.data().generation!==generation)throw new Error('クラウド保存の完了確認に失敗しました');
     cloudSaved=true;
+    Object.keys(dirtyProgress).forEach(function(book){
+      if((savedBooks[book]||book===savedBook)&&window.__dirtyVocabProgress?.[book]?.revision===dirtyProgress[book])delete window.__dirtyVocabProgress[book];
+    });
   } catch(e) {
     cloudError=e; console.warn('[save] cloud save failed',e);
   }
