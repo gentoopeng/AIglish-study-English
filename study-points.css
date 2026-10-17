@@ -1,0 +1,150 @@
+#headerStudyPoints {
+  font:
+    700 11px system-ui,
+    sans-serif;
+  white-space: nowrap;
+  color: #d5bf86;
+  margin-left: 5px;
+  padding: 7px 4px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.study-points-dialog {
+  width: min(440px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  padding: 22px;
+  border: 1px solid #d5bf864d;
+  border-radius: 22px;
+  background: #111c2cf7;
+  color: #f4eddf;
+  box-sizing: border-box;
+  font:
+    14px/1.6 system-ui,
+    sans-serif;
+  overflow: auto;
+}
+.study-points-dialog::backdrop {
+  background: #070d1ab8;
+}
+.study-points-dialog [hidden] {
+  display: none !important;
+}
+.study-points-dialog header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.study-points-dialog h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.study-points-dialog button {
+  font: inherit;
+  color: inherit;
+  min-height: 44px;
+  border: 1px solid #d5bf8645;
+  border-radius: 10px;
+  background: #ffffff08;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.study-points-dialog header button {
+  font-size: 24px;
+  line-height: 1;
+  min-width: 44px;
+}
+.study-points-dialog button:focus-visible {
+  outline: 2px solid #e3cc8c;
+  outline-offset: 2px;
+}
+.study-points-dialog .points-total {
+  font-size: 36px;
+  font-weight: 750;
+  margin: 14px 0 0;
+  color: #e6d29a;
+  font-variant-numeric: tabular-nums;
+}
+.points-pending {
+  font-size: 12px;
+  margin: 0 0 14px;
+  color: #d2c4aa;
+}
+.points-pending:empty {
+  display: none;
+}
+.points-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 18px 0;
+}
+.points-tabs button {
+  flex: 1;
+}
+.points-tabs [aria-pressed="true"] {
+  border-color: #d5bf86;
+  background: #d5bf861c;
+}
+.study-points-dialog h3 {
+  font-size: 13px;
+  color: #cfc8ba;
+  margin: 14px 0;
+}
+.points-history {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 40dvh;
+  overflow: auto;
+}
+.points-history li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 13px 0;
+  border-bottom: 1px solid #ffffff14;
+  gap: 16px;
+}
+.points-history li > div {
+  min-width: 0;
+}
+.points-history strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+.points-history small,
+.points-history time {
+  display: block;
+  font-size: 11px;
+  color: #c1c6ce;
+  overflow-wrap: anywhere;
+}
+.points-history li > span {
+  white-space: nowrap;
+  color: #e6d29a;
+  font-size: 17px;
+  font-weight: 700;
+}
+.points-empty,
+.points-methods p {
+  font-size: 13px;
+  color: #d2d5dd;
+}
+.points-methods .points-method-value {
+  font-size: 18px;
+  color: #e6d29a;
+  font-weight: 700;
+}
+.study-points-dialog footer {
+  margin-top: 18px;
+}
+.study-points-dialog footer button {
+  width: 100%;
+}
+.study-points-dialog footer p {
+  font-size: 11px;
+  margin: 8px 0 0;
+  color: #c1c6ce;
+}

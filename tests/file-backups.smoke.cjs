@@ -23,6 +23,7 @@ const { chromium, webkit } = require("playwright"),
       myId = "file-user";
       localStorage.setItem("core_v4_userId", "file-user");
       myName = "ファイル確認";
+      StudyPoints.restore({ balance: 50, revision: 5 });
       currentTextbook = "file-book";
       textbooksPool = [
         { id: "file-book", name: "ファイル教材" },
@@ -127,6 +128,11 @@ const { chromium, webkit } = require("playwright"),
       raw = fs.readFileSync(await download.path(), "utf8"),
       backup = JSON.parse(raw);
     assert.equal(backup.owner, "file-user");
+    assert.equal(
+      JSON.parse(backup.data.localStorage["core_v4_study_points_file-user"])
+        .balance,
+      50,
+    );
     assert.ok(backup.data.memory.vocabBooks["other-book"]);
     assert.equal(
       JSON.parse(

@@ -10,18 +10,18 @@
     <meta name="apple-mobile-web-app-title" content="Core V4">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0F172A">
-    <meta name="application-version" content="10.18.01.12">
+    <meta name="application-version" content="10.18.01.59">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="aiglish.png">
 
-    <script src="cloud-usage.js?v=10.18.01.12"></script>
-    <script src="firestore-read-guard.js?v=10.18.01.12"></script>
-    <script src="runtime-errors.js?v=10.18.01.12"></script>
-    <script src="app-storage.js?v=10.18.01.12"></script>
-    <script src="rendering-safety.js?v=10.18.01.12"></script>
+    <script src="cloud-usage.js?v=10.18.01.59"></script>
+    <script src="firestore-read-guard.js?v=10.18.01.59"></script>
+    <script src="runtime-errors.js?v=10.18.01.59"></script>
+    <script src="app-storage.js?v=10.18.01.59"></script>
+    <script src="rendering-safety.js?v=10.18.01.59"></script>
     <script src="vendor/lucide/lucide.min.js?v=0.468.0"></script>
-    <link rel="stylesheet" href="style.css?v=10.18.01.12">
+    <link rel="stylesheet" href="style.css?v=10.18.01.59">
     <!-- インラインの競合によるフレンド欄の常時最前面居座りバグを、既存の.active制御と完全結託させて100%解決するピンポイントCSS補正 -->
     <style>
         #view-community.active {
@@ -29,7 +29,8 @@
             flex-wrap: nowrap !important;
         }
     </style>
-    <link rel="stylesheet" href="weak-review.css?v=10.18.01.12">
+    <link rel="stylesheet" href="study-points.css?v=10.18.01.59">
+    <link rel="stylesheet" href="weak-review.css?v=10.18.01.59">
 </head>
 <body>
     <p id="appStartupStatus" role="status">保存データを読み込んでいます…</p>
@@ -86,7 +87,7 @@
         <div class="header-clock-group">
             <button id="headerBackgroundButton" data-sound="open" type="button" aria-label="背景を選ぶ" aria-haspopup="dialog"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 6-6 5 5 3-3 4 4"/></svg></button>
             <span id="headerStudyTime" class="header-study-time" aria-label="今日の勉強時間">00:00:00</span>
-            <span id="headerDuelRating" aria-label="対戦レート">R 1500</span>
+            <button type="button" id="headerStudyPoints" aria-label="ポイントの詳細" aria-haspopup="dialog" onclick="window.openStudyPoints()">0pt</button>
         </div>
     </div>
 
@@ -95,6 +96,7 @@
         <div class="sidebar-identity"><div id="sidebarIdentityAvatar" class="podium-avatar"></div><span id="sidebarIdentityName"></span></div>
         <nav class="sidebar-menu-list" aria-label="メニュー">
             <button type="button" id="profileMenuButton" class="sidebar-item" onclick="window.openProfileDialog()" aria-haspopup="dialog"><i data-lucide="circle-user-round" size="22"></i><span>プロフィール</span><i data-lucide="chevron-right" size="16"></i></button>
+            <button type="button" id="studyPointsMenuButton" class="sidebar-item" onclick="window.openStudyPoints()" aria-haspopup="dialog"><i data-lucide="sparkles" size="22"></i><span>ポイント</span><i data-lucide="chevron-right" size="16"></i></button>
             <button type="button" id="settingsMenuButton" class="sidebar-item" onclick="window.openSettingsDialog()" aria-haspopup="dialog"><i data-lucide="settings" size="22"></i><span>設定</span><i data-lucide="chevron-right" size="16"></i></button>
             <button type="button" class="sidebar-item" onclick="window.openCloudUsage()"><i data-lucide="activity" size="22"></i><span>通信量と保存先</span></button>
             <button type="button" id="usageGuideEntryBtn" class="sidebar-item" onclick="window.openUsageGuide()"><i data-lucide="book-open-check" size="22"></i><span>使い方ガイド</span></button>
@@ -291,7 +293,7 @@
 
         <div id="view-titles" class="tab-view">
             <section class="ranking-stage" aria-label="全ユーザーのランキング">
-                <header class="ranking-header"><div class="duel-rank-switch"><button type="button" data-rank-mode="learning" aria-pressed="true">学習</button><button type="button" data-rank-mode="battle" aria-pressed="false">対戦レート</button></div><button id="rankingRefresh" type="button" aria-label="ランキングを更新">↻</button></header>
+                <header class="ranking-header"><div class="duel-rank-switch"><button type="button" data-rank-mode="learning" aria-pressed="true">学習</button><button type="button" data-rank-mode="points" aria-pressed="false">ポイント</button></div><button id="rankingRefresh" type="button" aria-label="ランキングを更新">↻</button></header>
                 <div id="rankingPodium" class="ranking-podium-host ranking-podium-grid" aria-live="polite"></div>
                 <p id="rankingMessage" class="ranking-message" role="status"></p>
                 <small class="ranking-hint">表彰台をタップして詳細を見る</small>
@@ -461,55 +463,56 @@
       const activeAccount=localStorage.getItem('core_v4_userId');
       if(activeAccount)window.AdminPlayers?.canStart(activeAccount);
     </script>
-    <link rel="preload" href="library-state.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="weak-review-model.js?v=10.18.01.12"></script>
-    <link rel="preload" href="learning-data.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="vocab-master.js?v=10.18.01.12"></script>
-    <link rel="preload" href="app.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=10.18.01.12"></script>
-    <link rel="preload" href="game_core.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=10.18.01.12"></script>
-    <link rel="preload" href="vocab_ui.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=10.18.01.12"></script>
-    <link rel="preload" href="reader.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=10.18.01.12"></script>
-    <link rel="preload" href="view-work.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=10.18.01.12"></script>
-    <link rel="preload" href="fix.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="textbook-files.js?v=10.18.01.12"></script>
-    <link rel="preload" href="save-system.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="save-system.js?v=10.18.01.12"></script>
-    <link rel="preload" href="save-coordinator.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="save-coordinator.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="sound-effects.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="learning-feedback.js?v=10.18.01.12"></script>
-    <link rel="preload" href="library.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="workbook-math.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="workbook-explanation.js?v=10.18.01.12"></script>
-    <link rel="preload" href="workbook.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="profile-identity-cache.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="shared-note-index.js?v=10.18.01.12"></script>
-    <link rel="preload" href="shared-notes.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=10.18.01.12"></script>
-    <link rel="preload" href="user-directory.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=10.18.01.12"></script>
-    <link rel="preload" href="study-time.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="ranking-query.js?v=10.18.01.12"></script>
-    <link rel="preload" href="ranking.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=10.18.01.12"></script>
-    <link rel="preload" href="autosave.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=10.18.01.12"></script>
-    <link rel="preload" href="people.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=10.18.01.12"></script>
-    <link rel="preload" href="image-metadata.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="image-metadata.js?v=10.18.01.12"></script>
-    <link rel="preload" href="profile.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="icon-frames.js?v=10.18.01.12"></script>
-    <link rel="preload" href="loading-quiz.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=10.18.01.12"></script>
-    <link rel="preload" href="background-catalog.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="background-catalog.js?v=10.18.01.12"></script>
-    <link rel="preload" href="app-background.js?v=10.18.01.12" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="word-duel-model.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="word-duel-progress.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="duel-lobby.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="word-duel.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="study-groups.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="learning-sessions.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="study-points.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="weak-review.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="file-backups.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="idle-sleep.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="usage-guide-content.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="account-write-guard.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="admin-players.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="cloud-usage-ui.js?v=10.18.01.12"></script>
-    <script type="application/x-aiglish-script" data-app-src="group-chat.js?v=10.18.01.12"></script>
-    <script src="app-loader.js?v=10.18.01.12" defer></script>
+    <link rel="preload" href="library-state.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="library-state.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="weak-review-model.js?v=10.18.01.59"></script>
+    <link rel="preload" href="learning-data.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="learning-data.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="vocab-master.js?v=10.18.01.59"></script>
+    <link rel="preload" href="app.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="app.js?v=10.18.01.59"></script>
+    <link rel="preload" href="game_core.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="game_core.js?v=10.18.01.59"></script>
+    <link rel="preload" href="vocab_ui.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="vocab_ui.js?v=10.18.01.59"></script>
+    <link rel="preload" href="reader.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="reader.js?v=10.18.01.59"></script>
+    <link rel="preload" href="view-work.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="view-work.js?v=10.18.01.59"></script>
+    <link rel="preload" href="fix.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="fix.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="textbook-files.js?v=10.18.01.59"></script>
+    <link rel="preload" href="save-system.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="save-system.js?v=10.18.01.59"></script>
+    <link rel="preload" href="save-coordinator.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="save-coordinator.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="sound-effects.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="learning-feedback.js?v=10.18.01.59"></script>
+    <link rel="preload" href="library.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="library.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="workbook-math.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="workbook-explanation.js?v=10.18.01.59"></script>
+    <link rel="preload" href="workbook.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="workbook.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="profile-identity-cache.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="shared-note-index.js?v=10.18.01.59"></script>
+    <link rel="preload" href="shared-notes.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="shared-notes.js?v=10.18.01.59"></script>
+    <link rel="preload" href="user-directory.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="user-directory.js?v=10.18.01.59"></script>
+    <link rel="preload" href="study-time.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="study-time.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="ranking-query.js?v=10.18.01.59"></script>
+    <link rel="preload" href="ranking.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="ranking.js?v=10.18.01.59"></script>
+    <link rel="preload" href="autosave.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="autosave.js?v=10.18.01.59"></script>
+    <link rel="preload" href="people.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="people.js?v=10.18.01.59"></script>
+    <link rel="preload" href="image-metadata.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="image-metadata.js?v=10.18.01.59"></script>
+    <link rel="preload" href="profile.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="profile.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="icon-frames.js?v=10.18.01.59"></script>
+    <link rel="preload" href="loading-quiz.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="loading-quiz.js?v=10.18.01.59"></script>
+    <link rel="preload" href="background-catalog.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="background-catalog.js?v=10.18.01.59"></script>
+    <link rel="preload" href="app-background.js?v=10.18.01.59" as="script"><script type="application/x-aiglish-script" data-app-src="app-background.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="word-duel-model.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="word-duel-progress.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="duel-lobby.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="word-duel.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="study-groups.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="learning-sessions.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="study-points.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="study-points-ui.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="weak-review.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="file-backups.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="idle-sleep.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="usage-guide-content.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="account-write-guard.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="admin-players.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="cloud-usage-ui.js?v=10.18.01.59"></script>
+    <script type="application/x-aiglish-script" data-app-src="group-chat.js?v=10.18.01.59"></script>
+    <script src="app-loader.js?v=10.18.01.59" defer></script>
 </body>
 </html>

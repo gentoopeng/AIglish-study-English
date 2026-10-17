@@ -294,6 +294,7 @@ function collectAllData() {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
       if (!k) continue;
+      if(k.indexOf('core_v4_word_duel_rating_')===0)continue;
       if(k.indexOf('core_v4_study_points_')===0&&k!=='core_v4_study_points_'+myId)continue;
       if(k==='aiglish_cloud_usage_v1'||k.indexOf('core_v4_group_chat_draft_')===0)continue;
       if (/^core_v4_(?:flash_queue|flash_cursor|group_synced)_/.test(k)) continue;
@@ -1101,7 +1102,8 @@ function restoreSaveStorage(save,id){
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
     for(var key in stored){
-      if(key.indexOf('core_v4_study_points_')===0){if(key==='core_v4_study_points_'+id&&window.StudyPoints){try{localStorage.setItem(key,JSON.stringify(window.StudyPoints.merge(window.StudyPoints.read(id),JSON.parse(stored[key]||'{}'))));}catch(error){console.warn('ポイントの復元を保留しました。端末の記録を保持します。',error);}}continue;}
+      if(key.indexOf("core_v4_word_duel_rating_")===0)continue;
+      if(key.indexOf('core_v4_study_points_')===0){if(key==='core_v4_study_points_'+id&&window.StudyPoints){try{window.StudyPoints.restore(JSON.parse(stored[key]||'{}'),id);}catch(error){console.warn('ポイントの復元を保留しました。端末の記録を保持します。',error);}}continue;}
       if(window.LearningSessionsStorage?.restore(key,stored[key]))continue;
       if(key==='aiglish_shared_background_catalog')continue;
       if(window.VocabMaster&&!window.VocabMaster.canRestoreStorage(key,stored[key],save.data.memory,id))continue;

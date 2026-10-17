@@ -28,7 +28,7 @@
     "core_v4_vocab_note_sharing_",
     "core_v4_meaning_history_",
     "core_v4_word_duel_pending_",
-    "core_v4_word_duel_rating_",
+    "core_v4_study_points_",
     "aiglish_study_ledger_",
     "aiglish_learning_recovery_",
     "vv4_works_",

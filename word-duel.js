@@ -3,7 +3,6 @@
   "use strict";
   const m = window.WordDuelModel,
     uid = () => myId || "GUEST-000";
-  const ratings = new Map();
   let dialog = null,
     session = null,
     unsubscribe = null,
@@ -17,32 +16,6 @@
     inertElements = [],
     answerTimer = null;
   const portraits = new Map();
-  const rateKey = () => "core_v4_word_duel_rating_" + uid();
-  function localRating() {
-    if (ratings.has(uid())) return ratings.get(uid());
-    try {
-      return m.rating(Number(localStorage.getItem(rateKey()) || 1500));
-    } catch {
-      return 1500;
-    }
-  }
-  function mergeRating(doc) {
-    if (Number.isFinite(doc?.wordDuelRating)) {
-      const value = m.rating(doc.wordDuelRating);
-      ratings.set(uid(), value);
-      try {
-        if (localStorage.getItem(rateKey()) !== String(value))
-          localStorage.setItem(rateKey(), String(value));
-      } catch (error) {
-        console.warn("対戦レートはクラウドの確定値を表示します", error);
-      }
-    }
-    renderRating();
-  }
-  function renderRating() {
-    const el = document.getElementById("headerDuelRating");
-    if (el) el.textContent = "R " + localRating();
-  }
   function ms(value) {
     return value?.toMillis
       ? value.toMillis()
@@ -521,7 +494,7 @@
         }
         session.room = room;
         if (room.status === "cancelled") {
-          status("対戦は中止されました。レートは変わりません。");
+          status("対戦は中止されました。");
           stop();
           return;
         }
@@ -541,7 +514,7 @@
             " / " +
             room.capacity +
             "人 · " +
-            (room.matchType === "ranked" ? "ランク" : "カジュアル") +
+            "カジュアル" +
             " · " +
             room.duration / 1000 +
             "秒 · ミス " +
@@ -939,7 +912,7 @@
       dialog.querySelector(".duel-question-card").hidden = true;
       dialog.querySelector(".duel-options").hidden = true;
       dialog.querySelector(".duel-correction").hidden = true;
-      status("一人プレイはレート変更なし");
+      status("一人プレイ");
       const close = dialog.querySelector(".duel-leave");
       close.textContent = "閉じる";
       close.onclick = closeScreen;
@@ -1054,37 +1027,12 @@
         patch(tx, roomRef, { status: "cancelled" });
         return;
       }
-      const accounts = places.map((entry) => ({
-        entry,
-        ...profiles.get(entry.id),
-      }));
-      const result = { ratings: {}, scores: {}, places: {}, deltas: {} };
-      for (const { entry, reference, data } of accounts) {
-        if (data.deleted) {
-          result.ratings[entry.id] = 1500;
-          result.scores[entry.id] = 0;
-          result.places[entry.id] = entry.place;
-          result.deltas[entry.id] = 0;
-          continue;
-        }
-        const before = m.rating(data.wordDuelRating),
-          after =
-            room.matchType === "ranked"
-              ? Math.max(0, before + entry.delta)
-              : before;
-        result.ratings[entry.id] = after;
-        result.scores[entry.id] = entry.score;
+      const result = { scores: {}, places: {} };
+      for (const entry of places) {
+        result.scores[entry.id] = profiles.get(entry.id).data.deleted
+          ? 0
+          : entry.score;
         result.places[entry.id] = entry.place;
-        result.deltas[entry.id] = after - before;
-        if (room.matchType === "ranked")
-          tx.set(
-            reference,
-            {
-              wordDuelRating: after,
-              wordDuelGames: Number(data.wordDuelGames || 0) + 1,
-            },
-            { merge: true },
-          );
       }
       patch(tx, roomRef, { status: "finished", result });
     });
@@ -1095,7 +1043,6 @@
     session.finished = true;
     stop();
     const mine = session.id;
-    mergeRating({ wordDuelRating: room.result.ratings[mine] });
     const body = dialog.querySelector(".duel-content");
     body.replaceChildren();
     const heading = document.createElement("h3");
@@ -1116,21 +1063,9 @@
           rate = document.createElement("small");
         name.textContent = room.result.places[id] + "位 " + person.name;
         score.textContent = room.result.scores[id] + "点";
-        const delta = room.result.deltas[id];
         const points = m.roomScores(room, true)[id];
         rate.textContent =
-          points.answered +
-          "問 · 回答ボーナス +" +
-          points.bonus +
-          "点 · " +
-          (room.matchType === "ranked"
-            ? "レート " +
-              room.result.ratings[id] +
-              "（" +
-              (delta > 0 ? "+" : "") +
-              delta +
-              "）"
-            : "カジュアル");
+          points.answered + "問 · 回答ボーナス +" + points.bonus + "点";
         li.append(name, score, rate);
         board.append(li);
       });
@@ -1176,10 +1111,7 @@
     }
   });
   window.WordDuel = {
-    localRating,
-    mergeRating,
     isPlaying: () => !!session?.start && !session.finished,
     settle,
   };
-  window.onAppLoaded(renderRating);
 })();
