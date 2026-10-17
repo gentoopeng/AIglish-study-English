@@ -269,7 +269,12 @@
               (book) => book.id === s.book,
             )?.name || s.book,
         });
-      window.WordDuelProgress.apply(s.book, target.ref, correct, s.id, {
+      const status = window.WeakReviewModel.nextStatus(
+        saved?.meanings?.[target.ref.mid]?.status || saved?.status || "none",
+        correct,
+      );
+      window.WordDuelProgress.apply(s.book, target.ref, status, s.id, {
+        reviewCorrect: correct,
         reviewDay: s.day,
       });
       window.WordDuelProgress.schedule(s.id);

@@ -208,6 +208,7 @@ const { chromium, webkit } = require("playwright"),
       ),
       "bad",
     );
+    assert.equal(await page.evaluate(() => LearningData.read("review-book")["1"].meanings["1-0"].status), "so");
     await page.getByRole("button", { name: "続けて復習" }).click();
     await page.locator(".review-choices").waitFor();
     assert.match(await page.locator(".review-progress").innerText(), /1 \/ 1/);

@@ -13,7 +13,7 @@ function apply(book,ref,answer,id,options={}){
  if(!['ok','so','bad'].includes(status))throw Error('理解度の指定を確認してください。');
  const previous=before.meanings?.[ref.mid]||{},meanings={...before.meanings,[ref.mid]:{...previous,status,history:[...(previous.history||[]),status].slice(-20)}},word={...before,sig:ref.sig,note:before.note||'',meanings,status:overall(meanings,ref.count),history:[...(before.history||[]),status].slice(-20)};
  if(window.WeakReviewModel)meanings[ref.mid].review={...previous.review,at:Date.now()};
- if(status==='ok'&&options.reviewDay&&window.WeakReviewModel?.day()===options.reviewDay)meanings[ref.mid].review={...meanings[ref.mid].review,passed:options.reviewDay};
+ if((status==='ok'||options.reviewCorrect===true)&&options.reviewDay&&window.WeakReviewModel?.day()===options.reviewDay)meanings[ref.mid].review={...meanings[ref.mid].review,passed:options.reviewDay};
  // Write the retry intent first; interruption at any point keeps a recoverable record.
  const jobs=pending(id),job=jobs[book]||(jobs[book]={});job[ref.num]={revision:(job[ref.num]?.revision||0)+1,mids:[...new Set([...(job[ref.num]?.mids||[]),ref.mid])],count:ref.count};localStorage.setItem(pendingKey(id),JSON.stringify(jobs));
  const words=window.LearningData.commit(book,{[ref.num]:word},ref.num,true);
