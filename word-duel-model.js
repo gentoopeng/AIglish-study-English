@@ -415,7 +415,7 @@
     const next = eventAt(seed, start, rules);
     return next ? { ...next, start } : null;
   }
-  function replay(room, elapsed, cashOutBank = false) {
+  function replay(room, elapsed, cashOutBank = false, inspect) {
     room = { duration, missPenalty: 50, ...room };
     const rules = room.rules || defaultRules;
     if (
@@ -574,6 +574,7 @@
         if (type === "first" && !active.first) {
           gain += rules.eventPoints;
           active.first = true;
+          active.firstWinner = id;
         }
         if (type === "last" && active.end - entry.at <= 3000)
           gain += rules.eventPoints;
@@ -648,6 +649,7 @@
     }
     if (cashOutBank && active?.type === "bank")
       for (const id of ids) values[id].total += active.bank[id] || 0;
+    inspect?.({ active, shields, counters });
     return values;
   }
   function score(
@@ -700,8 +702,13 @@
       total: base.total + bonus,
     };
   }
-  function roomScores(room, final = false, elapsed) {
-    const values = replay(room, final ? room.duration : elapsed);
+  function roomScores(room, final = false, elapsed, inspect) {
+    const values = replay(
+      room,
+      final ? room.duration : elapsed,
+      false,
+      inspect,
+    );
     if (final)
       for (const [id, value] of Object.entries(values)) {
         value.bonus =

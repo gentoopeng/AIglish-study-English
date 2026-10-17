@@ -524,14 +524,71 @@ const { chromium, webkit } = require("playwright"),
       );
       await page.clock.fastForward(4000);
       assert.equal(await page.locator(".duel-event-banner").isVisible(), true);
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
     }
     await answer(a);
     await a.clock.fastForward(400);
-    await b.waitForFunction(
-      () => document.querySelector("[data-duel-score]")?.textContent === "-80",
-    );
+    await b.clock.fastForward(1000);
+    await b.locator("[data-duel-score]").filter({ hasText: /^-80$/ }).waitFor();
+    await a.setViewportSize({ width: 320, height: 568 });
+    await b.setViewportSize({ width: 320, height: 568 });
     await answer(b, false);
+    assert.equal(
+      await b.locator("[data-event-explanation]").textContent(),
+      "正解で相手全員から80点を減点。",
+    );
+    assert.equal(await b.locator(".duel-event-notice").isVisible(), true);
+    assert.equal((await b.locator(".duel-score-change").count()) <= 2, true);
+    await b.evaluate(() => {
+      const board = document.querySelector(".duel-scoreboard");
+      board.style.setProperty("--duel-players", "4");
+      window.__extraColumns = [...board.children].map((node, i) => {
+        const clone = node.cloneNode(true);
+        clone.dataset.playerId = "extra-" + i;
+        clone.querySelector("small").textContent = "長い名前のプレイヤー";
+        board.append(clone);
+        return clone;
+      });
+    });
+    assert.equal(
+      await b.locator(".duel-event-banner").getAttribute("data-phase"),
+      "active",
+    );
+    assert.equal(
+      await b.locator(".duel-event-notice small").textContent(),
+      "イベント発生",
+    );
+    await b.screenshot({
+      path: "/tmp/event-feedback-" + type.name() + ".png",
+      animations: "disabled",
+    });
+    const layout = await b.evaluate(() => {
+      const s = document.querySelector("#wordDuelScreen");
+      return {
+        scroll: s.scrollHeight > s.clientHeight + 1,
+        answers: s.querySelector(".duel-options").getBoundingClientRect()
+          .bottom,
+        correction: s.querySelector("[data-duel-next]").getBoundingClientRect()
+          .bottom,
+        height: innerHeight,
+      };
+    });
+    assert.equal(layout.scroll, false, JSON.stringify(layout));
+    assert.ok(
+      layout.answers <= layout.height && layout.correction <= layout.height,
+      JSON.stringify(layout),
+    );
+    await b.evaluate(() => {
+      __extraColumns.forEach((node) => node.remove());
+      document
+        .querySelector(".duel-scoreboard")
+        .style.setProperty("--duel-players", "2");
+    });
+    await a.setViewportSize({ width: 393, height: 852 });
+    await b.setViewportSize({ width: 393, height: 852 });
     await b.clock.fastForward(400);
+    await b.clock.resume();
+    await a.clock.fastForward(1000);await a.clock.resume();
     await a.waitForFunction(() =>
       [...document.querySelectorAll(".duel-player strong")].some(
         (n) => n.textContent === "-180",
@@ -545,6 +602,10 @@ const { chromium, webkit } = require("playwright"),
     );
     for (const page of [a, b])
       await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    assert.equal(
+      await a.locator(".duel-event-notice,.duel-score-change").count(),
+      0,
+    );
     // Banked scores release at the end of the event even when nobody submits another answer.
     for (const page of [a, b]) await page.clock.setSystemTime(Date.now());
     await lobby(a);
