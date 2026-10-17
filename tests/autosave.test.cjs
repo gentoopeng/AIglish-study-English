@@ -152,3 +152,16 @@ test("a previous pending marker waits through boot/online and is retried at the 
   assert.equal(values.size, 0);
   assert.equal(calls.filter((c) => c === "cloud").length, 1);
 });
+test("weak review defers cloud sync during play and retains pending work if point settlement fails", async () => {
+  const { ctx, values, calls } = setup();
+  ctx.WeakReview = { isPlaying: () => true };
+  ctx.StudyPoints = { flush: async () => false };
+  assert.equal((await ctx.saveAfterStudy()).deferred, true);
+  assert.deepEqual(calls, []);
+  ctx.WeakReview.isPlaying = () => false;
+  assert.equal((await ctx.saveAfterStudy("review-end")).cloudSaved, false);
+  assert.equal(values.get("core_v4_autosave_pending_a"), "1");
+  ctx.StudyPoints.flush = async () => true;
+  assert.equal((await ctx.saveAfterStudy("review-end")).cloudSaved, true);
+  assert.equal(values.size, 0);
+});

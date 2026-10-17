@@ -572,9 +572,9 @@ window.renderVocabLibrarySelection = function() {
     flash.type = 'button';
     flash.className = 'vocab-library-flash-button';
     flash.textContent = '›';
-    flash.setAttribute('aria-label', book.name + 'のフラッシュ単語設定');
-    flash.title = 'フラッシュ単語';
-    flash.onclick = function() { window.openBookFlashcardSettings(book.id); };
+    flash.setAttribute('aria-label', book.name + 'の学習方法を選ぶ');
+    flash.title = '単語カード・苦手復習';
+    flash.onclick = function() { window.openBookStudyMenu(book.id); };
     var manage = document.createElement('button');
     manage.type = 'button';
     manage.className = 'vocab-library-manage-button';
