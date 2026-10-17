@@ -13,7 +13,9 @@
       target?.type === "password" ||
       target?.type === "search" ||
       /search|filter/i.test(target?.id || "") ||
-      target?.closest?.("#backgroundAdminDialog,.admin-players-dialog,.group-chat-compose")
+      target?.closest?.(
+        "#backgroundAdminDialog,.admin-players-dialog,.group-chat-compose",
+      )
     )
       return;
     if (owner !== id()) {
@@ -38,7 +40,8 @@
       if (
         reason !== "sleep" &&
         (document.body?.classList.contains("in-game-active") ||
-          window.WordDuel?.isPlaying?.())
+          window.WordDuel?.isPlaying?.() ||
+          window.WeakReview?.isPlaying?.())
       )
         return { cloudSaved: false, deferred: true };
       await window.AppStorage?.flush();
@@ -56,17 +59,20 @@
       const version = revision;
       try {
         await window.WordDuelProgress?.flush(account);
+        const pointsSaved = await window.StudyPoints?.flush(account);
         if (id() !== account) return { cloudSaved: false };
         const result = await window.__backgroundSaveAll();
         if (id() === account && result.cloudSaved) {
           await window.flushWorkbookPublications?.();
           saved = version;
-          if (revision === version)
+          if (revision === version && pointsSaved !== false)
             window.localStorage?.removeItem(
               "core_v4_autosave_pending_" + account,
             );
         }
-        return result;
+        return pointsSaved === false
+          ? { ...result, cloudSaved: false }
+          : result;
       } catch (error) {
         console.warn(
           "端末の記録を保持しています。次の学習終了時または手動セーブで再試行してください。",
