@@ -910,7 +910,7 @@ window.__backgroundSaveAll=()=>saveAll(false);
 async function saveAllContents(force) {
   var id=uid(); if(!id)throw new Error('先にログインしてください');
   if(window.LearningData&&!window.LearningData.canSave(currentTextbook||'default'))throw new Error('読み込み中のため保存を保留しました');
-  if(force){await window.StudyPoints?.flush(id);if(id!==uid())throw Error("アカウントが変更されたため保存を中止しました");}
+  if(force){await window.StudyPoints?.flush(id);await window.VocabWordEntry?.flushPublications(id);if(id!==uid())throw Error("アカウントが変更されたため保存を中止しました");}
   lastProgressPercent=0;lastRemainingSeconds=null;
   var started=Date.now(); progress(2,started,'データを準備中');
   // 手動セーブ自身がメモリと端末の最新値を収集するため、ここで旧個別保存の
@@ -1107,6 +1107,7 @@ function restoreSaveStorage(save,id){
       if(window.LearningSessionsStorage?.restore(key,stored[key]))continue;
       if(key==='aiglish_shared_background_catalog')continue;
       if(window.VocabMaster&&!window.VocabMaster.canRestoreStorage(key,stored[key],save.data.memory,id))continue;
+      if(key==='core_v4_vocab_entry_publications_'+id&&window.VocabWordEntry){try{window.VocabWordEntry.restorePublications(JSON.parse(stored[key]),id);}catch(error){console.warn('公開更新の記録は端末の最新値を保持します',error);}continue;}
       if(key.indexOf('aiglish_learning_recovery_')===0)continue;
       if(key.indexOf('aiglish_app_background_')===0){try{var currentBackground=JSON.parse(localStorage.getItem(key)||'null'),savedBackground=JSON.parse(stored[key]||'null');if(currentBackground&&(Number(currentBackground.updatedAt)||0)>=(Number(savedBackground&&savedBackground.updatedAt)||0))continue;}catch(e){if(localStorage.getItem(key))continue;}}
       if(key==='aiglish_ranking_device')continue; // Device counters must keep this browser's identity.

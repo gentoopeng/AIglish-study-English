@@ -93,6 +93,15 @@
             await window.fbDeleteDoc(publicRef(record.id));
         }
     }
+    window.publishVocabEntryMaster = async function(bookId, master, owner) {
+        if(userId()!==owner)throw new Error('ユーザーが切り替わりました。');
+        if(window.LibraryState?.isDeleted('book',bookId,owner))throw new Error('この単語帳は削除済みです。');
+        var book=readLibrary().books.find(function(b){return b.id===bookId;});
+        if(book){await publish(book,master,book);return;}
+        if(!window.isAdmin)throw new Error('教材の編集権限を確認してください。');
+        if(!cloudAvailable()||owner==='GUEST-000')throw new Error('配信先に接続できません。次の保存時に再試行します。');
+        await window.fbSetDoc(window.fbDoc(window.db,'shared','vocab_'+bookId),{custom_words:window.stripVocabProgressFromWords(master),emptyConfirmed:false,updatedAt:new Date().toISOString()},{merge:true});
+    };
     function close() {
         if (!dialog) return;
         dialog.close(); dialog.remove(); dialog = null;

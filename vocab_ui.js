@@ -943,7 +943,7 @@
         if (!container) return;
         container.innerHTML = "";
         if (vocabList.length === 0) {
-            container.innerHTML = "<div style='text-align:center; padding:40px 20px; color:var(--text-sub); font-size:13px;'>現在、この単語帳には単語が登録されていません。<br>管理者からの単語の配信をお待ちください。</div>";
+            container.innerHTML = "<div style='text-align:center; padding:40px 20px; color:var(--text-sub); font-size:13px;'>現在、この単語帳には単語が登録されていません。<br>" + (window.canEditCurrentTextbook?.() ? '上の「＋ 追加」から登録できます。' : '管理者からの単語の配信をお待ちください。') + "</div>";
             return;
         }
         var startRange = parseInt(document.getElementById('vocabRangeStart').value) || 0;

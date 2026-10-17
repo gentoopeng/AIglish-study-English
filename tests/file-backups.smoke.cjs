@@ -88,6 +88,10 @@ const { chromium, webkit } = require("playwright"),
       );
       localStorage.setItem("vv4_works_file-user__ts", String(Date.now()));
       localStorage.setItem(
+        "core_v4_vocab_entry_publications_file-user",
+        JSON.stringify({ "other-book": "2026-10-18T00:00:00Z" }),
+      );
+      localStorage.setItem(
         "core_v4_vocab_note_sharing_file-user_private",
         JSON.stringify({ shared: false, savedAt: new Date().toISOString() }),
       );
@@ -134,6 +138,12 @@ const { chromium, webkit } = require("playwright"),
       50,
     );
     assert.ok(backup.data.memory.vocabBooks["other-book"]);
+    assert.equal(
+      JSON.parse(
+        backup.data.localStorage["core_v4_vocab_entry_publications_file-user"],
+      )["other-book"],
+      "2026-10-18T00:00:00Z",
+    );
     assert.equal(
       JSON.parse(
         backup.data.localStorage[
