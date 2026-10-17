@@ -119,13 +119,246 @@
       correct: absent ? 9 : options.indexOf(word.meaning),
     };
   }
-  const eventTypes = ["double", "triple", "half", "reset", "attack", "gift"];
+  const correctness = new WeakMap();
+  function correctChoice(words, seed, index) {
+    let seeds = correctness.get(words);
+    if (!seeds) {
+      seeds = new Map();
+      correctness.set(words, seeds);
+    }
+    let choices = seeds.get(seed);
+    if (!choices) {
+      choices = new Map();
+      seeds.set(seed, choices);
+      if (seeds.size > 2) seeds.delete(seeds.keys().next().value);
+    }
+    if (!choices.has(index))
+      choices.set(index, question(words, seed, index).correct);
+    return choices.get(index);
+  }
+  const eventCatalog = [
+    {
+      id: "double",
+      name: "ダブル",
+      group: "得点",
+      description: "正解の獲得点が2倍。",
+      recommended: true,
+    },
+    {
+      id: "triple",
+      name: "トリプル",
+      group: "得点",
+      description: "正解の獲得点が3倍。",
+      recommended: false,
+    },
+    {
+      id: "half",
+      name: "ハーフ",
+      group: "得点",
+      description: "正解の獲得点が半分。",
+      recommended: false,
+    },
+    {
+      id: "reset",
+      name: "リセット注意",
+      group: "特殊",
+      description: "ミスすると自分の累積スコアが0。",
+      recommended: false,
+    },
+    {
+      id: "attack",
+      name: "全員に攻撃",
+      group: "特殊",
+      description: "正解で相手全員からイベント点を減点。",
+      recommended: false,
+    },
+    {
+      id: "gift",
+      name: "相手にプレゼント",
+      group: "特殊",
+      description: "ミスで相手全員にイベント点を加点。",
+      recommended: false,
+    },
+    {
+      id: "steal",
+      name: "横取り",
+      group: "順位",
+      description: "開始時の首位からイベント点を奪う。同点首位は全員対象。",
+      recommended: false,
+    },
+    {
+      id: "chase",
+      name: "首位を追え",
+      group: "順位",
+      description: "開始時に首位でなかった人の正解点が2倍。",
+      recommended: false,
+    },
+    {
+      id: "pressure",
+      name: "首位の重圧",
+      group: "順位",
+      description: "開始時の首位はミスの失点が2倍。",
+      recommended: false,
+    },
+    {
+      id: "comeback",
+      name: "最下位の逆襲",
+      group: "順位",
+      description: "開始時の最下位は正解点が3倍。",
+      recommended: false,
+    },
+    {
+      id: "hunt",
+      name: "僅差の勝負",
+      group: "順位",
+      description: "正解で開始時の一つ上の順位の相手全員を減点。",
+      recommended: false,
+    },
+    {
+      id: "lead",
+      name: "独走ボーナス",
+      group: "順位",
+      description: "開始時の首位は正解にイベント点を追加。",
+      recommended: false,
+    },
+    {
+      id: "comboBoost",
+      name: "コンボ加速",
+      group: "コンボ",
+      description: "正解1回でコンボが2段階進む。",
+      recommended: true,
+    },
+    {
+      id: "comboGuard",
+      name: "コンボ保護",
+      group: "コンボ",
+      description: "ミスしてもコンボが切れない。失点と3秒待ちは残る。",
+      recommended: true,
+    },
+    {
+      id: "comboCashout",
+      name: "コンボ清算",
+      group: "コンボ",
+      description: "開始時にコンボ数×イベント点を加点してコンボを0に。",
+      recommended: false,
+    },
+    {
+      id: "streak",
+      name: "連続正解チャレンジ",
+      group: "チャレンジ",
+      description: "期間中に3連続正解で一度だけイベント点を追加。",
+      recommended: true,
+    },
+    {
+      id: "perfect",
+      name: "全問正解チャレンジ",
+      group: "チャレンジ",
+      description: "期間中3問以上、全問正解なら終了時にイベント点を追加。",
+      recommended: true,
+    },
+    {
+      id: "first",
+      name: "初速勝負",
+      group: "チャレンジ",
+      description: "期間中、最初に正解した1人にイベント点を追加。",
+      recommended: true,
+    },
+    {
+      id: "last",
+      name: "ラストチャンス",
+      group: "チャレンジ",
+      description: "終了までの最後の3秒間、正解にイベント点を追加。",
+      recommended: true,
+    },
+    {
+      id: "speed",
+      name: "スピード勝負",
+      group: "チャレンジ",
+      description: "問題が出て3秒以内の正解にイベント点を追加。",
+      recommended: true,
+    },
+    {
+      id: "careful",
+      name: "慎重に回答",
+      group: "得点",
+      description: "正解にイベント点を追加。ミスの失点は3倍。",
+      recommended: false,
+    },
+    {
+      id: "safe",
+      name: "ノーペナルティ",
+      group: "得点",
+      description: "ミスの失点が0。コンボ解除と3秒待ちは残る。",
+      recommended: true,
+    },
+    {
+      id: "fixed",
+      name: "得点固定",
+      group: "得点",
+      description: "コンボに関係なく正解は設定した基本得点。",
+      recommended: true,
+    },
+    {
+      id: "risk",
+      name: "一発勝負",
+      group: "チャレンジ",
+      description: "期間中の最初の回答だけ得点・失点が3倍。",
+      recommended: false,
+    },
+    {
+      id: "shield",
+      name: "盾",
+      group: "特殊",
+      description: "次の失点を1回防ぐ。終了後も持ち越し、重複はしない。",
+      recommended: true,
+    },
+    {
+      id: "counter",
+      name: "カウンター",
+      group: "特殊",
+      description:
+        "次に受けた攻撃の半分を返す。終了後も持ち越し、重複はしない。",
+      recommended: false,
+    },
+    {
+      id: "share",
+      name: "おすそ分け",
+      group: "特殊",
+      description: "正解で自分に通常点、相手全員にイベント点の半分を加点。",
+      recommended: true,
+    },
+    {
+      id: "cooperate",
+      name: "全員で達成",
+      group: "チャレンジ",
+      description: "期間中の合計正解が人数×3問で全員にイベント点。",
+      recommended: true,
+    },
+    {
+      id: "collective",
+      name: "連帯責任",
+      group: "特殊",
+      description: "ミスの通常失点に加えて全員からイベント点を減点。",
+      recommended: false,
+    },
+    {
+      id: "bank",
+      name: "得点を貯金",
+      group: "特殊",
+      description: "期間中の正解点をため、終了時にまとめて加点。",
+      recommended: true,
+    },
+  ];
+  const eventTypes = eventCatalog.map((event) => event.id),
+    recommendedEvents = eventCatalog
+      .filter((event) => event.recommended)
+      .map((event) => event.id);
   const defaultRules = {
     points: 100,
     combo: 1.1,
     answerBonus: 10,
     events: false,
-    eventTypes: [...eventTypes],
+    eventTypes: eventTypes.slice(0, 6),
     eventSeconds: 8,
     eventPoints: 100,
   };
@@ -143,7 +376,7 @@
       r.answerBonus <= 1000 &&
       typeof r.events === "boolean" &&
       Array.isArray(r.eventTypes) &&
-      r.eventTypes.length <= 6 &&
+      r.eventTypes.length <= 30 &&
       new Set(r.eventTypes).size === r.eventTypes.length &&
       r.eventTypes.every((t) => eventTypes.includes(t)) &&
       (!r.events || r.eventTypes.length > 0) &&
@@ -175,7 +408,14 @@
       ];
     return { type, until: slot * 15000 + rules.eventSeconds * 1000 };
   }
-  function replay(room) {
+  function eventPreview(seed, at, rules, limit = 600000) {
+    if (!rules?.events) return null;
+    const start = (Math.floor(at / 15000) + 1) * 15000;
+    if (start >= limit || start - at > 3000) return null;
+    const next = eventAt(seed, start, rules);
+    return next ? { ...next, start } : null;
+  }
+  function replay(room, elapsed, cashOutBank = false) {
     room = { duration, missPenalty: 50, ...room };
     const rules = room.rules || defaultRules;
     if (
@@ -186,15 +426,20 @@
       room.missPenalty > 1000
     )
       throw Error("対戦の設定を確認できません。");
-    const values = {},
-      timeline = [];
-    for (const [id, player] of Object.entries(room.players)) {
-      const answers = player.answers;
+    elapsed = Math.max(0, Math.min(room.duration, elapsed ?? room.duration));
+    const ids = Object.keys(room.players).sort(),
+      values = {},
+      timeline = [],
+      shields = {},
+      counters = {};
+    for (const id of ids) {
+      const answers = room.players[id].answers;
       if (!Array.isArray(answers) || answers.length > maxAnswers)
         throw Error("回答記録を確認できません。");
       values[id] = { total: 0, combo: 0 };
       let last = -1,
-        unlockAt = 0;
+        unlockAt = 0,
+        previousRight = true;
       answers.forEach((answer, index) => {
         if (
           !Number.isFinite(answer.at) ||
@@ -204,46 +449,205 @@
           answer.at < unlockAt ||
           !Number.isInteger(answer.choice) ||
           answer.choice < 0 ||
-          answer.choice > 9
+          answer.choice > 9 ||
+          (answer.shownAt !== undefined &&
+            (!Number.isFinite(answer.shownAt) ||
+              answer.shownAt < Math.max(0, last) ||
+              answer.shownAt > answer.at))
         )
           throw Error("回答記録を確認できません。");
+        const shownAt =
+          answer.shownAt ?? Math.max(0, last + (previousRight ? 180 : 3000));
         last = answer.at;
         const right =
-          question(room.pool, room.seed, index).correct === answer.choice;
+          correctChoice(room.pool, room.seed, index) === answer.choice;
         if (!right) unlockAt = answer.at + 3000;
-        timeline.push({ id, index, at: answer.at, right });
+        previousRight = right;
+        if (answer.at <= elapsed)
+          timeline.push({
+            kind: "answer",
+            order: 2,
+            id,
+            index,
+            at: answer.at,
+            right,
+            shownAt,
+          });
       });
     }
-    timeline.sort(
-      (a, b) => a.at - b.at || a.id.localeCompare(b.id) || a.index - b.index,
-    );
-    for (const answer of timeline) {
-      const v = values[answer.id],
-        event = eventAt(room.seed, answer.at, rules)?.type;
-      if (answer.right) {
-        const factor =
-          event === "double"
-            ? 2
-            : event === "triple"
-              ? 3
-              : event === "half"
-                ? 0.5
-                : 1;
-        v.total += Math.round(
-          rules.points * (1 + v.combo * (rules.combo - 1)) * factor,
-        );
-        v.combo++;
-        if (event === "attack")
-          for (const [id, other] of Object.entries(values))
-            if (id !== answer.id) other.total -= rules.eventPoints;
-      } else {
-        v.total = event === "reset" ? 0 : v.total - room.missPenalty;
-        v.combo = 0;
-        if (event === "gift")
-          for (const [id, other] of Object.entries(values))
-            if (id !== answer.id) other.total += rules.eventPoints;
+    if (rules.events)
+      for (
+        let start = 15000;
+        start < room.duration && start <= elapsed;
+        start += 15000
+      ) {
+        const event = eventAt(room.seed, start, rules),
+          end = Math.min(event.until, room.duration);
+        timeline.push({
+          kind: "start",
+          order: 1,
+          at: start,
+          type: event.type,
+          end,
+        });
+        if (end <= elapsed) timeline.push({ kind: "end", order: 0, at: end });
       }
+    timeline.sort(
+      (a, b) =>
+        a.at - b.at ||
+        a.order - b.order ||
+        (a.id || "").localeCompare(b.id || "") ||
+        (a.index || 0) - (b.index || 0),
+    );
+    let active = null;
+    function loss(id, amount, source) {
+      if (amount <= 0) return 0;
+      if (shields[id]) {
+        shields[id] = false;
+        return 0;
+      }
+      values[id].total -= amount;
+      if (source && source !== id && counters[id]) {
+        counters[id] = false;
+        loss(source, Math.round(amount / 2));
+      }
+      return amount;
     }
+    for (const entry of timeline) {
+      if (entry.kind === "start") {
+        const levels = [...new Set(ids.map((id) => values[id].total))].sort(
+            (a, b) => b - a,
+          ),
+          ranks = Object.fromEntries(
+            ids.map((id) => [id, levels.indexOf(values[id].total)]),
+          );
+        active = {
+          ...entry,
+          ranks,
+          lastRank: levels.length - 1,
+          correct: Object.fromEntries(ids.map((id) => [id, 0])),
+          misses: {},
+          streaks: {},
+          awarded: {},
+          used: {},
+          bank: {},
+          first: false,
+          cooperated: false,
+        };
+        if (entry.type === "comboCashout")
+          for (const id of ids) {
+            values[id].total += values[id].combo * rules.eventPoints;
+            values[id].combo = 0;
+          }
+        if (entry.type === "shield") for (const id of ids) shields[id] = true;
+        if (entry.type === "counter") for (const id of ids) counters[id] = true;
+        continue;
+      }
+      if (entry.kind === "end") {
+        if (active?.type === "perfect")
+          for (const id of ids)
+            if (active.correct[id] >= 3 && !active.misses[id])
+              values[id].total += rules.eventPoints;
+        if (active?.type === "bank")
+          for (const id of ids) values[id].total += active.bank[id] || 0;
+        active = null;
+        continue;
+      }
+      const { id, right } = entry,
+        v = values[id],
+        type = active?.type;
+      if (right) {
+        let gain = rules.points * (1 + v.combo * (rules.combo - 1));
+        if (type === "fixed") gain = rules.points;
+        if (type === "double" || (type === "chase" && active.ranks[id] > 0))
+          gain *= 2;
+        if (
+          type === "triple" ||
+          (type === "comeback" && active.ranks[id] === active.lastRank)
+        )
+          gain *= 3;
+        if (type === "half") gain *= 0.5;
+        if (type === "risk" && !active.used[id]) gain *= 3;
+        gain = Math.round(gain);
+        if (type === "careful" || (type === "lead" && active.ranks[id] === 0))
+          gain += rules.eventPoints;
+        if (type === "first" && !active.first) {
+          gain += rules.eventPoints;
+          active.first = true;
+        }
+        if (type === "last" && active.end - entry.at <= 3000)
+          gain += rules.eventPoints;
+        if (type === "speed" && entry.at - entry.shownAt <= 3000)
+          gain += rules.eventPoints;
+        if (active) {
+          active.correct[id]++;
+          active.streaks[id] = (active.streaks[id] || 0) + 1;
+          if (
+            type === "streak" &&
+            active.streaks[id] >= 3 &&
+            !active.awarded[id]
+          ) {
+            gain += rules.eventPoints;
+            active.awarded[id] = true;
+          }
+        }
+        if (type === "bank") active.bank[id] = (active.bank[id] || 0) + gain;
+        else v.total += gain;
+        v.combo += type === "comboBoost" ? 2 : 1;
+        if (["attack", "hunt", "steal"].includes(type))
+          for (const other of ids) {
+            if (other === id) continue;
+            if (type === "hunt" && active.ranks[other] !== active.ranks[id] - 1)
+              continue;
+            if (type === "steal" && active.ranks[other] !== 0) continue;
+            const amount =
+              type === "steal"
+                ? Math.min(rules.eventPoints, Math.max(0, values[other].total))
+                : rules.eventPoints;
+            const taken = loss(other, amount, id);
+            if (type === "steal") v.total += taken;
+          }
+        if (type === "share")
+          for (const other of ids)
+            if (other !== id)
+              values[other].total += Math.round(rules.eventPoints / 2);
+        if (
+          type === "cooperate" &&
+          !active.cooperated &&
+          Object.values(active.correct).reduce(
+            (sum, count) => sum + count,
+            0,
+          ) >=
+            ids.length * 3
+        ) {
+          for (const other of ids) values[other].total += rules.eventPoints;
+          active.cooperated = true;
+        }
+      } else {
+        let penalty = room.missPenalty;
+        if (type === "safe") penalty = 0;
+        if (type === "careful" || (type === "risk" && !active.used[id]))
+          penalty *= 3;
+        if (type === "pressure" && active.ranks[id] === 0) penalty *= 2;
+        if (type === "reset") {
+          if (shields[id]) shields[id] = false;
+          else v.total = 0;
+        } else loss(id, penalty);
+        if (type !== "comboGuard") v.combo = 0;
+        if (active) {
+          active.misses[id] = true;
+          active.streaks[id] = 0;
+        }
+        if (type === "gift")
+          for (const other of ids)
+            if (other !== id) values[other].total += rules.eventPoints;
+        if (type === "collective")
+          for (const other of ids) loss(other, rules.eventPoints, id);
+      }
+      if (active) active.used[id] = true;
+    }
+    if (cashOutBank && active?.type === "bank")
+      for (const id of ids) values[id].total += active.bank[id] || 0;
     return values;
   }
   function score(
@@ -253,15 +657,19 @@
     limit = duration,
     missPenalty = 50,
     rules = defaultRules,
+    elapsed,
   ) {
-    return replay({
-      pool: words,
-      seed,
-      players: { self: { answers } },
-      duration: limit,
-      missPenalty,
-      rules,
-    }).self;
+    return replay(
+      {
+        pool: words,
+        seed,
+        players: { self: { answers } },
+        duration: limit,
+        missPenalty,
+        rules,
+      },
+      elapsed,
+    ).self;
   }
   function finalScore(
     words,
@@ -270,8 +678,20 @@
     limit = duration,
     missPenalty = 50,
     rules = defaultRules,
+    elapsed,
   ) {
-    const base = score(words, seed, answers, limit, missPenalty, rules),
+    const base = replay(
+        {
+          pool: words,
+          seed,
+          players: { self: { answers } },
+          duration: limit,
+          missPenalty,
+          rules,
+        },
+        elapsed,
+        true,
+      ).self,
       bonus = answers.length * rules.answerBonus;
     return {
       base: base.total,
@@ -280,8 +700,8 @@
       total: base.total + bonus,
     };
   }
-  function roomScores(room, final = false) {
-    const values = replay(room);
+  function roomScores(room, final = false, elapsed) {
+    const values = replay(room, final ? room.duration : elapsed);
     if (final)
       for (const [id, value] of Object.entries(values)) {
         value.bonus =
@@ -397,8 +817,8 @@
     try {
       if (
         !(
-          [7, 8].includes(room?.version) &&
-          (room.version !== 8 ||
+          [7, 8, 9].includes(room?.version) &&
+          (room.version < 8 ||
             (room.matchType === "casual" &&
               validRules(room.rules) &&
               Array.isArray(room.books) &&
@@ -486,6 +906,9 @@
   }
   const model = {
     defaultRules,
+    eventCatalog,
+    recommendedEvents,
+    eventPreview,
     eventTypes,
     validRules,
     validDuration,

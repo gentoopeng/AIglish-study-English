@@ -192,9 +192,16 @@ const { chromium, webkit } = require("playwright"),
           JSON.stringify({ frame: i ? "stone" : "wood" }),
         );
       }, i);
-    async function lobby(page) {
+    async function lobby(page, intent = "create") {
       await page.locator("#nav-battle").click();
       await page.locator(".mode-casual").click();
+      assert.equal(await page.locator("[data-config-tab]").count(), 0);
+      await page.locator("[data-battle-route=" + intent + "]").click();
+      if (intent !== "join") {
+        await page.locator("[data-config-tab=events]").click();
+        await page.locator("[data-events]").uncheck();
+        await page.locator("[data-config-tab=books]").click();
+      }
     }
     async function answer(page, correct = true) {
       const prompt = await page.locator(".duel-prompt").textContent(),
@@ -218,12 +225,13 @@ const { chromium, webkit } = require("playwright"),
       }
     }
     async function join(page, code) {
-      await lobby(page);
+      await lobby(page, "join");
+      assert.equal(await page.locator(".battle-book-picker").count(), 0);
       assert.match(code, /^\d{4}$/);
       await page.getByRole("textbox", { name: "部屋番号" }).fill(code);
       await page.getByRole("button", { name: "参加", exact: true }).click();
     }
-    await lobby(a);
+    await lobby(a, "solo");
     await a.locator("[data-config-tab=rules]").click();
     await a.getByLabel("制限時間の分").selectOption("2");
     assert.equal(await a.getByLabel("ミス時の減点").inputValue(), "100");
@@ -495,8 +503,9 @@ const { chromium, webkit } = require("playwright"),
     await lobby(a);
     await a.locator("[data-config-tab=events]").click();
     await a.locator("[data-events]").check();
-    for (const type of ["double", "triple", "half", "reset", "gift"])
-      await a.locator("[data-event-type][value=" + type + "]").uncheck();
+    await a.locator("[data-event-preset=none]").click();
+    await a.locator('[data-event-category="特殊"]').click();
+    await a.locator("[data-event-type][value=attack]").check();
     await a.getByLabel("イベント加減点").fill("80");
     await a.getByRole("button", { name: "部屋を作る", exact: true }).click();
     await a.locator(".duel-wait strong").waitFor();
@@ -504,7 +513,16 @@ const { chromium, webkit } = require("playwright"),
     await join(b, eventCode);
     for (const page of [a, b]) {
       await page.locator(".duel-options").waitFor();
-      await page.clock.fastForward(19000);
+      await page.clock.fastForward(15000);
+      assert.equal(
+        await page.locator(".duel-event-banner").getAttribute("data-phase"),
+        "preview",
+      );
+      assert.match(
+        await page.locator(".duel-event-banner").textContent(),
+        /まもなく/,
+      );
+      await page.clock.fastForward(4000);
       assert.equal(await page.locator(".duel-event-banner").isVisible(), true);
     }
     await answer(a);
@@ -524,6 +542,40 @@ const { chromium, webkit } = require("playwright"),
     assert.deepEqual(
       Object.values(docs.get("wordDuelRooms/" + eventCode).result.scores),
       [110, -170],
+    );
+    for (const page of [a, b])
+      await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    // Banked scores release at the end of the event even when nobody submits another answer.
+    for (const page of [a, b]) await page.clock.setSystemTime(Date.now());
+    await lobby(a);
+    await a.locator("[data-config-tab=events]").click();
+    await a.locator("[data-event-preset=none]").click();
+    await a.locator('[data-event-category="特殊"]').click();
+    await a.locator("[data-event-type][value=bank]").check();
+    await a.getByRole("button", { name: "部屋を作る", exact: true }).click();
+    await a.locator(".duel-wait strong").waitFor();
+    const bankCode = await a.locator(".duel-wait strong").textContent();
+    await join(b, bankCode);
+    for (const page of [a, b]) {
+      await page.locator(".duel-options").waitFor();
+      await page.clock.fastForward(19000);
+    }
+    await answer(a);
+    assert.equal(await a.locator("[data-duel-score]").textContent(), "0");
+    await a.clock.fastForward(400);
+    await a.clock.fastForward(7000);
+    await b.clock.fastForward(7600);
+    assert.equal(await a.locator("[data-duel-score]").textContent(), "100");
+    await b.waitForFunction(
+      () =>
+        document.querySelector('[data-player-id="duel-a"] strong')
+          .textContent === "100",
+    );
+    for (const page of [a, b]) await page.clock.fastForward(61000);
+    for (const page of [a, b]) await page.locator(".duel-results").waitFor();
+    assert.deepEqual(
+      Object.values(docs.get("wordDuelRooms/" + bankCode).result.scores),
+      [110, 0],
     );
     for (const page of [a, b])
       await page.getByRole("button", { name: "閉じる", exact: true }).click();
