@@ -38,7 +38,7 @@ async function refresh(){
 async function refreshList(){if(busy)return;lock(true);try{await refresh();}finally{lock(false);}}
 async function playerInfo(id){
  const project=window.db?.app?.options?.projectId;if(!project)return deadline(window.fbGetDoc(window.fbDoc(window.db,'users',id)));
- const fields=['playerName','realName','age','wordDuelRating','deleted'],url='https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents/users/'+encodeURIComponent(id)+'?'+fields.map(name=>'mask.fieldPaths='+name).join('&');
+ const fields=['playerName','realName','age','deleted'],url='https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents/users/'+encodeURIComponent(id)+'?'+fields.map(name=>'mask.fieldPaths='+name).join('&');
  const data=await adminRequest(url);return {exists:()=>true,data:()=>window.RankingQuery.fields(data.fields)};
 }
 async function edit(id){
@@ -46,13 +46,12 @@ async function edit(id){
  try{guard();const snap=await deadline(playerInfo(id));if(request!==generation||!dialog.open)return;guard();if(!snap.exists())throw Error('プレイヤーが見つかりません。');
  const data=snap.data(),body=dialog.querySelector('[data-body]'),form=element('form');body.replaceChildren();form.className='admin-player-form';form.append(element('h3',data.playerName||id),element('p','ID: '+id));
  function field(label,name,value,type='text'){const wrap=element('label',label),input=element('input');input.name=name;input.type=type;input.value=value??'';input.maxLength=40;if(type==='number'){input.min='0';input.max=name==='age'?'150':'100000';input.step='1';}wrap.append(input);form.append(wrap);return input;}
- field('ニックネーム','playerName',data.playerName);field('登録名','realName',data.realName);field('年齢','age',data.age,'number');const rating=field('対戦レート','rating',window.WordDuelModel.rating(data.wordDuelRating),'number');
- const reset=element('button','レートを1500に戻す');reset.type='button';reset.onclick=()=>{rating.value='1500';message('「変更を保存」でリセットを確定します。');};
+ field('ニックネーム','playerName',data.playerName);field('登録名','realName',data.realName);field('年齢','age',data.age,'number');
  const save=element('button','変更を保存');save.type='submit';const back=element('button','一覧に戻る');back.type='button';back.onclick=refreshList;
  const remove=element('button',data.deleted?'完全削除を再確認':'プレイヤーを完全削除');remove.type='button';remove.className='admin-player-delete';
- form.append(reset,save,back,remove);if(data.deleted){form.querySelectorAll('label').forEach(node=>node.hidden=true);reset.hidden=true;save.hidden=true;}body.append(form);message(data.deleted?'削除済みです。未完了の完全削除を再実行できます。':'学習記録を保持したまま情報を編集します。');
- form.onsubmit=async event=>{event.preventDefault();if(busy)return;const name=form.elements.playerName.value.trim(),age=Number(form.elements.age.value),value=Number(rating.value);if(!name||!Number.isInteger(age)||age<0||age>150||!Number.isInteger(value)||value<0||value>100000){message('名前・年齢・レートを確認してください。');return;}
- await mutate(id,current=>{if(current.deleted)throw Error('削除済みのプレイヤーは編集できません。');const now=Date.now(),profile=window.UserProfileModel.decode(current.profileCustomizationJson);return {playerName:name,realName:form.elements.realName.value.trim(),age:String(age),wordDuelRating:value,wordDuelRatingUpdatedAt:now,profileCustomizationJson:JSON.stringify({...profile,nickname:name,updatedAt:Math.max(now,Number(profile.updatedAt||0)+1)})};});};
+ form.append(save,back,remove);if(data.deleted){form.querySelectorAll('label').forEach(node=>node.hidden=true);save.hidden=true;}body.append(form);message(data.deleted?'削除済みです。未完了の完全削除を再実行できます。':'学習記録を保持したまま情報を編集します。');
+ form.onsubmit=async event=>{event.preventDefault();if(busy)return;const name=form.elements.playerName.value.trim(),age=Number(form.elements.age.value);if(!name||!Number.isInteger(age)||age<0||age>150){message('名前・年齢を確認してください。');return;}
+ await mutate(id,current=>{if(current.deleted)throw Error('削除済みのプレイヤーは編集できません。');const now=Date.now(),profile=window.UserProfileModel.decode(current.profileCustomizationJson);return {playerName:name,realName:form.elements.realName.value.trim(),age:String(age),profileCustomizationJson:JSON.stringify({...profile,nickname:name,updatedAt:Math.max(now,Number(profile.updatedAt||0)+1)})};});};
  remove.onclick=()=>{if(busy)return;const confirmation=element('div');confirmation.className='admin-player-confirm';confirmation.append(element('p',(data.playerName||id)+'（'+id+'）を完全削除します。学習記録・バックアップ・共有メモ・本人の公開教材も削除され、元に戻せません。'));
  const cancel=element('button','キャンセル');cancel.type='button';cancel.onclick=()=>confirmation.remove();const confirm=element('button','このプレイヤーを削除');confirm.type='button';confirm.onclick=()=>purge(id);confirmation.append(cancel,confirm);remove.after(confirmation);remove.disabled=true;cancel.onclick=()=>{confirmation.remove();remove.disabled=false;};};
  }catch(error){message(error.message);}finally{lock(false);}
@@ -62,7 +61,7 @@ async function mutate(id,patch){
  let expected;
 try{guard();await window.fbRunTransaction(window.db,async tx=>{guard();const ref=window.fbDoc(window.db,'users',id),snap=await tx.get(ref);if(!snap.exists())throw Error('プレイヤーが見つかりません。');const change=patch(snap.data());expected=change;tx.set(ref,change,{merge:true});});
  const check=await deadline((window.fbGetDocFromServer||window.fbGetDoc)(window.fbDoc(window.db,'users',id)));if(!check.exists()||Object.entries(expected).some(([key,value])=>JSON.stringify(check.data()[key])!==JSON.stringify(value)))throw Error('保存内容を確認できませんでした。一覧を更新してください。');
- if(id===myId){const data=check.data();window.WordDuel?.mergeRating(data);if(!data.deleted){localStorage.setItem('core_v4_profile_customization_'+id,data.profileCustomizationJson);myName=data.playerName;localStorage.setItem('core_v4_userName',myName);window.applyProfileToUi();}}
+ if(id===myId){const data=check.data();if(!data.deleted){localStorage.setItem('core_v4_profile_customization_'+id,data.profileCustomizationJson);myName=data.playerName;localStorage.setItem('core_v4_userName',myName);window.applyProfileToUi();}}
  window.LearningRanking?.invalidate();window.People?.invalidate();await refresh();message('保存しました。');
  }catch(error){message('保存できませんでした。'+error.message);}finally{lock(false);}
 }
@@ -96,7 +95,7 @@ await refresh();message('学習記録・バックアップ・共有メモを完�
 function cachedUsers(){try{const users=JSON.parse(localStorage.getItem('core_v4_users')||'[]');return Array.isArray(users)?users:[];}catch(error){return [];}}
 function purgeLocal(id){
 const cached=cachedUsers();localStorage.setItem('core_v4_users',JSON.stringify(cached.filter(user=>user.id!==id)));
- const prefixes=['core_v4_group_chat_draft_','core_v4_groups_','core_v4_group_synced_','core_v4_flash_queue_','core_v4_flash_cursor_','core_v4_meaning_history_','aiglish_app_background_','aiglish_app_background_catalog_','aiglish_learning_recovery_','aiglish_study_lease_','aiglish_study_ledger_','core_v4_autosave_pending_','core_v4_custom_words_','core_v4_learning_ranking_','core_v4_learning_ranking_v2_','core_v4_library_deletions_','core_v4_personal_library_','core_v4_profile_customization_','core_v4_profile_shop_owned_','core_v4_ranking_swipes_v2_','core_v4_sync_settings_ts_','core_v4_user_avatar_','core_v4_user_stats_','core_v4_user_vocab_book_','core_v4_user_vocab_progress_','core_v4_vocab_draft_','core_v4_vocab_note_sharing_','core_v4_word_duel_pending_','core_v4_word_duel_rating_','save_studio_'];
+ const prefixes=['core_v4_group_chat_draft_','core_v4_groups_','core_v4_group_synced_','core_v4_flash_queue_','core_v4_flash_cursor_','core_v4_meaning_history_','aiglish_app_background_','aiglish_app_background_catalog_','aiglish_learning_recovery_','aiglish_study_lease_','aiglish_study_ledger_','core_v4_autosave_pending_','core_v4_custom_words_','core_v4_learning_ranking_','core_v4_learning_ranking_v2_','core_v4_library_deletions_','core_v4_personal_library_','core_v4_profile_customization_','core_v4_profile_shop_owned_','core_v4_ranking_swipes_v2_','core_v4_sync_settings_ts_','core_v4_user_avatar_','core_v4_user_stats_','core_v4_user_vocab_book_','core_v4_user_vocab_progress_','core_v4_vocab_draft_','core_v4_vocab_note_sharing_','core_v4_word_duel_pending_','core_v4_study_points_','core_v4_word_duel_rating_','save_studio_'];
 const keys=Array.from({length:localStorage.length},(_,index)=>localStorage.key(index)).filter(Boolean);for(const key of keys)if(prefixes.some(prefix=>key===prefix+id||key.startsWith(prefix+id+'_')))localStorage.removeItem(key);
 if(localStorage.getItem('core_v4_userId')===id){for(const key of ['core_v4_userName','core_v4_userTarget','core_v4_current_textbook_id','core_v4_friend_list','wordMemory','textHistory','myBookshelf','myFolders'])localStorage.removeItem(key);for(const key of keys)if(key.startsWith('core_v4_cache_'))localStorage.removeItem(key);}
 }

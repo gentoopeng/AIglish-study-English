@@ -153,7 +153,7 @@ ${eventHtml()}
   }
   function init(screen) {
     screen.classList.add("is-configuring");
-    screen.querySelector(".duel-screen-badge").textContent = "レート変動なし";
+    screen.querySelector(".duel-screen-badge").textContent = "カジュアル";
     const wheelSync = [
       ...screen.querySelectorAll("[data-time-minutes],[data-time-seconds]"),
     ].map(timeWheel);

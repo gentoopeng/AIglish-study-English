@@ -103,7 +103,7 @@
       person.id === account ? window.LearningRanking.snapshot() : null,
     );
     [
-      ["対戦レート", window.WordDuelModel?.rating(doc.wordDuelRating) ?? 1500],
+      ["ポイント", (person.id === account ? window.StudyPoints?.balance() || 0 : Number(doc.studyPoints) || 0).toLocaleString("ja-JP") + "pt"],
       ["ID", person.id],
       ["目標", doc.userTarget || doc.target || "未設定"],
       [

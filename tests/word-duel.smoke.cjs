@@ -18,6 +18,7 @@ const { chromium, webkit } = require("playwright"),
         playerName: id,
         avatar: "http://127.0.0.1:8000/aiglish.png",
         wordDuelRating: 1500,
+        studyPoints: 100,
         lastActiveAt: Date.now(),
         protected: "learning-preserved",
         wordDuelSoloBest: 777,
@@ -89,6 +90,7 @@ const { chromium, webkit } = require("playwright"),
       await page.evaluate((id) => {
         myId = id;
         myName = id;
+        localStorage.setItem("core_v4_study_points_"+id,JSON.stringify({balance:100,revision:1,publishedRevision:1}));
         textbooksPool = [{ id: "duel-book", name: "対戦テスト" }];
         currentTextbook = "duel-book";
         localStorage.setItem(
@@ -415,7 +417,8 @@ const { chromium, webkit } = require("playwright"),
     for (const page of clients) await page.clock.fastForward(181000);
     for (const page of clients) await page.locator(".duel-results").waitFor();
     const result = docs.get("wordDuelRooms/" + code).result;
-    assert.deepEqual(Object.values(result.deltas), [0, 0, 0, 0]);
+    assert.equal(result.deltas, undefined);
+    assert.equal(result.ratings, undefined);
     assert.deepEqual(Object.values(result.scores), [360, 230, 110, -190]);
     for (const [i, id] of ["duel-a", "duel-b", "duel-c", "duel-d"].entries()) {
       assert.equal(result.places[id], i + 1);
@@ -464,12 +467,12 @@ const { chromium, webkit } = require("playwright"),
     for (const page of [a, b, c]) await page.clock.fastForward(181000);
     for (const page of [a, b, c]) await page.locator(".duel-results").waitFor();
     assert.deepEqual(
-      Object.values(docs.get("wordDuelRooms/" + triple).result.deltas),
-      [0, 0, 0],
+      docs.get("wordDuelRooms/" + triple).result.deltas,
+      undefined,
     );
     for (const page of [a, b, c])
       await page.getByRole("button", { name: "閉じる", exact: true }).click();
-    // Two players: scoreless draw is zero; an abandoned player loses 30 after finish.
+    // Two players: scores and places settle without modifying profiles.
     for (const page of [a, b]) await page.clock.setSystemTime(Date.now());
     await lobby(a);
     await a.locator("[data-config-tab=rules]").click();
@@ -492,8 +495,8 @@ const { chromium, webkit } = require("playwright"),
     await a.clock.fastForward(181000);
     await a.locator(".duel-results").waitFor();
     await b.locator(".duel-results").waitFor();
-    assert.equal(docs.get("wordDuelRooms/" + pair).result.deltas["duel-a"], 0);
-    assert.equal(docs.get("wordDuelRooms/" + pair).result.deltas["duel-b"], 0);
+    assert.equal(docs.get("wordDuelRooms/" + pair).result.deltas, undefined);
+    assert.equal(docs.get("wordDuelRooms/" + pair).result.ratings, undefined);
     for (const id of ["duel-a", "duel-b"])
       assert.equal(docs.get("users/" + id).wordDuelRating, ratingsBefore[id]);
     for (const page of [a, b])
@@ -595,7 +598,7 @@ const { chromium, webkit } = require("playwright"),
     const erasedResult = docs.get("wordDuelRooms/" + erasedCode).result;
     assert.equal(erasedResult.places["duel-b"], 4);
     assert.equal(erasedResult.scores["duel-b"], 0);
-    assert.equal(erasedResult.deltas["duel-b"], 0);
+    assert.equal(erasedResult.deltas, undefined);
     assert.deepEqual(docs.get("users/duel-b"), {
       deleted: true,
       deletionState: "pending",
@@ -604,19 +607,19 @@ const { chromium, webkit } = require("playwright"),
     docs.set("users/duel-b", retainedProfile);
     versions.set("users/duel-b", (versions.get("users/duel-b") || 0) + 1);
     await a.locator("#nav-titles").click();
-    await a.getByRole("button", { name: "対戦レート", exact: true }).click();
+    await a.locator("[data-rank-mode=points]").click();
     await a.locator("#rankingRefresh").click();
-    await a.locator("[data-podium-metric=rating] .place-1 strong").waitFor();
+    await a.locator("[data-podium-metric=points] .place-1 strong").waitFor();
     assert.equal(await a.locator("[data-podium-metric=solo]").count(), 0);
     assert.equal(await a.locator(".ranking-mini-panel").count(), 1);
-    await a.locator(".rating-roster summary").click();
-    assert.equal(await a.locator(".rating-roster li").count(), 1);
+    await a.locator(".points-roster summary").click();
+    assert.equal(await a.locator(".points-roster li").count(), 1);
     await a.screenshot({ path: "/tmp/rate-expanded-" + type.name() + ".png" });
     assert.deepEqual(errors, []);
     console.log(
       "PASS " +
         type.name() +
-        ": timed solo without best writes, 4-player casual live scores and places, 3-player tie/overfill rejection without rating changes, 2-player forfeit, waiting exit/rejoin, atomic idempotent settlement, understanding preservation and expandable rate list",
+        ": timed solo without best writes, 4-player casual live scores and places, 3-player tie/overfill rejection without profile mutations, 2-player forfeit, waiting exit/rejoin, atomic idempotent settlement, understanding preservation and expandable points list",
     );
   } finally {
     await browser.close();

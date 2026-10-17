@@ -3,9 +3,6 @@
   const duration = 60000,
     durations = [30000, 60000, 120000, 180000],
     maxAnswers = 1200;
-  function rating(value) {
-    return Number.isFinite(value) && value >= 0 ? Math.round(value) : 1500;
-  }
   function pool(words, seed = 0) {
     const seen = new Set(),
       prompts = new Set(),
@@ -788,12 +785,6 @@
         a.id.localeCompare(b.id),
     );
     if (entries.every((entry) => entry.abandoned)) return null;
-    const weights =
-      entries.length === 2
-        ? [30, -30]
-        : entries.length === 3
-          ? [30, 0, -30]
-          : [30, 15, -15, -30];
     for (let i = 0; i < entries.length; ) {
       let end = i + 1;
       while (
@@ -802,12 +793,8 @@
         (entries[i].abandoned || entries[end].score === entries[i].score)
       )
         end++;
-      const average =
-          weights.slice(i, end).reduce((a, b) => a + b, 0) / (end - i),
-        delta = Math.sign(average) * Math.round(Math.abs(average));
       for (let j = i; j < end; j++) {
         entries[j].place = i + 1;
-        entries[j].delta = delta;
       }
       i = end;
     }
@@ -835,9 +822,7 @@
               room.pool?.every((word) =>
                 room.books.includes(word.ref?.book),
               ))) &&
-          ["casual", "ranked"].includes(room.matchType) &&
-          (room.matchType !== "ranked" ||
-            (room.duration === 180000 && room.missPenalty === 200)) &&
+          room.matchType === "casual" &&
           Number.isInteger(room.missPenalty) &&
           room.missPenalty >= 0 &&
           room.missPenalty <= 1000 &&
@@ -890,12 +875,10 @@
         (!room.result ||
           !Object.keys(room.players).every(
             (id) =>
-              Number.isFinite(room.result.ratings?.[id]) &&
               Number.isFinite(room.result.scores?.[id]) &&
               Number.isInteger(room.result.places?.[id]) &&
               room.result.places[id] >= 1 &&
-              room.result.places[id] <= room.capacity &&
-              Number.isFinite(room.result.deltas?.[id]),
+              room.result.places[id] <= room.capacity,
           ))
       )
         return false;
@@ -919,7 +902,6 @@
     duration,
     durations,
     maxAnswers,
-    rating,
     pool,
     question,
     score,

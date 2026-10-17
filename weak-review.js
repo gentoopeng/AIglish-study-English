@@ -254,7 +254,13 @@
         throw Error("教材が変更されています。終了して開き直してください。");
       let points = 0;
       if (correct)
-        points = window.StudyPoints.award(s.book, target.ref.num, s.day, s.id);
+        points = window.StudyPoints.award(s.book, target.ref.num, s.day, s.id, {
+          word: target.prompt,
+          bookName:
+            (typeof textbooksPool !== "undefined" ? textbooksPool : []).find(
+              (book) => book.id === s.book,
+            )?.name || s.book,
+        });
       window.WordDuelProgress.apply(s.book, target.ref, correct, s.id, {
         reviewDay: s.day,
       });

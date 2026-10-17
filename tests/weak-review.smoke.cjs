@@ -215,6 +215,30 @@ const { chromium, webkit } = require("playwright"),
       .getByRole("button", { name: "単語帳に戻る", exact: true })
       .click();
     assert.equal(await page.locator(".weak-review-screen").count(), 0);
+    assert.equal(await page.locator("#headerDuelRating").count(), 0);
+    assert.equal(await page.locator("#headerStudyPoints").innerText(), "10pt");
+    await page.locator("#headerStudyPoints").click();
+    await page.getByRole("dialog", { name: "ポイント", exact: true }).waitFor();
+    assert.equal(await page.locator(".points-history li").count(), 1);
+    assert.match(await page.locator(".points-history").innerText(), /word1/);
+    assert.match(
+      await page.locator(".points-history").innerText(),
+      /復習テスト/,
+    );
+    if (process.env.SCREENSHOT)
+      await page.screenshot({
+        path: process.env.SCREENSHOT.replace(/\.png$/, "-points.png"),
+      });
+    await page.getByRole("button", { name: "獲得方法", exact: true }).click();
+    assert.match(
+      await page.locator(".points-methods").innerText(),
+      /正解5pt.*後日復習5pt/,
+    );
+    await page.getByRole("button", { name: "ポイントを閉じる" }).click();
+    await page.locator(".menu-trigger").click();
+    await page.locator("#studyPointsMenuButton").click();
+    assert.equal(await page.locator("[data-points-total]").innerText(), "10pt");
+    await page.getByRole("button", { name: "ポイントを閉じる" }).click();
     assert.deepEqual(errors, []);
     console.log(
       "PASS " +
