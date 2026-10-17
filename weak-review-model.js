@@ -126,7 +126,11 @@
     }
     return result;
   }
-  const api = { day, stampWord, eligible, frozen, question, reviewPlan };
+  function nextStatus(status, correct) {
+    if (!correct) return "bad";
+    return status === "so" || status === "ok" ? "ok" : "so";
+  }
+  const api = { day, stampWord, eligible, frozen, question, reviewPlan, nextStatus };
   root.WeakReviewModel = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window === "undefined" ? globalThis : window);

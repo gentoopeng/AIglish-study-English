@@ -90,9 +90,9 @@ test("canonical recovery preserves review completion when a renderer omits revie
   ctx.WordDuelProgress.apply(
     "book",
     { num: "1", mid: "a", sig: "same", count: 1 },
-    true,
+    "so",
     "a",
-    { reviewDay: ctx.WeakReviewModel.day() },
+    { reviewDay: ctx.WeakReviewModel.day(), reviewCorrect: true },
   );
   const saved = ctx.LearningData.read("book")["1"];
   assert.equal(saved.meanings.a.review.passed, ctx.WeakReviewModel.day());
@@ -102,7 +102,7 @@ test("canonical recovery preserves review completion when a renderer omits revie
   ctx.LearningData.commit("book", { 1: rendered }, "1");
   values.delete(key);
   const restored = ctx.LearningData.read("book")["1"];
-  assert.equal(restored.meanings.a.status, "ok");
+  assert.equal(restored.meanings.a.status, "so");
   assert.equal(restored.meanings.a.review.passed, ctx.WeakReviewModel.day());
   assert.equal(restored.note, "new memo");
 });
@@ -145,4 +145,13 @@ test("planning avoids an unnecessary early finish when the oldest word is the mi
     plan.map((item) => item.prompt.toLowerCase()),
     ["a", "b", "a"],
   );
+});
+
+test("review correct answers advance one step; mistakes return to bad", () => {
+  assert.equal(m.nextStatus("bad", true), "so");
+  assert.equal(m.nextStatus("so", true), "ok");
+  assert.equal(m.nextStatus("ok", true), "ok");
+  assert.equal(m.nextStatus("none", true), "so");
+  for (const status of ["bad", "so", "ok", "none"])
+    assert.equal(m.nextStatus(status, false), "bad");
 });
