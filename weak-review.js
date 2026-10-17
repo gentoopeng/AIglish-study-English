@@ -114,7 +114,7 @@
       const progress = window.LearningData.read(book),
         now = Date.now(),
         sampler = window.WordDuelModel.poolSampler(now),
-        targets = [];
+        groups = new Map();
       let count = 0;
       for (const word of window.migrateVocabData(
         window.stripVocabProgressFromWords(source),
@@ -146,16 +146,24 @@
             },
             at: Number(prior.review?.at) || Number(saved?.editedAt) || 0,
           };
-          targets.push(target);
-          targets.sort(
-            (a, b) =>
-              a.at - b.at ||
-              a.ref.num.localeCompare(b.ref.num, undefined, { numeric: true }),
-          );
-          if (targets.length > 20) targets.pop();
+          const key = String(word.num),
+            bucket = groups.get(key) || [];
+          bucket.push(target);
+          bucket.sort((a, b) => a.at - b.at);
+          if (bucket.length > 20) bucket.pop();
+          groups.set(key, bucket);
+          if (groups.size > 20) {
+            const oldest = [...groups.entries()].sort(
+              (a, b) => a[1][0].at - b[1][0].at,
+            );
+            groups.delete(oldest.at(-1)[0]);
+          }
         }
       }
-      const pool = sampler.result();
+      const pool = sampler.result(),
+        targets = window.WeakReviewModel.reviewPlan(
+          [...groups.values()].flat(),
+        );
       if (!count) {
         message(
           "今日の苦手復習はありません",

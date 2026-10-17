@@ -1,10 +1,12 @@
-// Subscribe to only the latest 30 messages while this group's dialog is open.
+// Subscribe to only the latest 10 messages, no older than seven days while this group's dialog is open.
 (function (root) {
   "use strict";
   let current = null;
+  const policy = root.GroupChatPolicy;
   const uid = () => (typeof myId === "string" ? myId : "GUEST-000");
   function stop() {
     if (!current) return;
+    clearTimeout(current.expiryTimer);
     current.unsubscribe?.();
     current.flushDraft?.();
     current = null;
@@ -36,8 +38,9 @@
         group,
         rows: new Map(),
         unsubscribe: null,
-        oldest: null,
-        older: false,
+        cleaned: false,
+        deleting: new Set(),
+        expiryTimer: null,
         sending: false,
       };
     current = state;
@@ -49,12 +52,13 @@
       learn = document.createElement("button");
     talk.type = learn.type = "button";
     talk.textContent = "トーク";
-    learn.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></svg><span>メンバー</span>';
+    learn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></svg><span>メンバー</span>';
     nav.append(talk, learn);
     const section = document.createElement("section");
     section.className = "group-chat";
     section.innerHTML =
-      '<button type="button" data-chat-older>以前のメッセージ</button><div class="group-chat-messages" role="log" aria-label="グループチャット" aria-live="polite"></div><p data-chat-status role="status"></p><button type="button" data-chat-reconnect hidden>再接続</button><form class="group-chat-compose"><textarea maxlength="1000" rows="2" aria-label="メッセージ" placeholder="メッセージを入力"></textarea><button type="submit">送信</button></form>';
+      '<div class="group-chat-messages" role="log" aria-label="グループチャット" aria-live="polite"></div><p data-chat-status role="status"></p><button type="button" data-chat-reconnect hidden>再接続</button><form class="group-chat-compose"><textarea maxlength="1000" rows="2" aria-label="メッセージ" placeholder="メッセージを入力"></textarea><button type="submit">送信</button></form>';
     const content = dialog.querySelector(".group-content");
     content.before(nav, section);
     const select = (chat) => {
@@ -68,7 +72,6 @@
     select(true);
     const list = section.querySelector("[role=log]"),
       status = section.querySelector("[data-chat-status]"),
-      older = section.querySelector("[data-chat-older]"),
       form = section.querySelector("form"),
       text = form.querySelector("textarea"),
       send = form.querySelector("button");
@@ -91,12 +94,12 @@
     const active = () => current === state && dialog.open && uid() === account;
     const ref = () =>
       root.fbCollection(root.db, "studyGroups", group.id, "messages");
-    const query = (cursor) =>
+    const query = (cursor, count = policy.maxMessages) =>
       root.fbQuery(
         ref(),
         root.fbOrderBy("createdAt", "desc"),
         ...(cursor ? [root.fbStartAfter(cursor)] : []),
-        root.fbLimit(30),
+        root.fbLimit(count),
       );
     function render() {
       const atBottom =
@@ -119,40 +122,123 @@
         author.textContent = name;
         body.textContent = item.text;
         time.textContent = new Date(item.sentAt).toLocaleTimeString("ja-JP", {
+          timeZone: "Asia/Tokyo",
           hour: "2-digit",
           minute: "2-digit",
         });
         time.dateTime = new Date(item.sentAt).toISOString();
         copy.append(author, body, time);
-        const known = root.People?.preview?.(item.ownerId);
-        row.append(root.RankingVisuals.avatar(known?.avatar || "", name), copy);
+        row.append(root.StudyGroups.memberAvatar(item.ownerId, name), copy);
         fragment.append(row);
       }
       list.replaceChildren(fragment);
       if (atBottom) list.scrollTop = list.scrollHeight;
     }
-    function receive(snap, past = false) {
-      if (!active()) return;
-      const docs = snap.docs || [];
-      if (!past && typeof snap.docChanges === "function")
-        for (const change of snap.docChanges())
-          if (change.type === "removed") state.rows.delete(change.doc.id);
-      for (const doc of docs) {
-        const data = doc.data();
-        if (typeof data.text !== "string" || !data.ownerId) continue;
-        state.rows.set(doc.id, {
-          ...data,
-          id: doc.id,
-          text: data.text.slice(0, 1000),
-          sentAt:
-            Number(data.sentAt) || data.createdAt?.toMillis?.() || Date.now(),
-        });
+    async function removeDocs(docs) {
+      const pending = docs.filter((doc) => !state.deleting.has(doc.id));
+      if (!pending.length || !active() || root.FirestoreReadGuard?.paused())
+        return;
+      pending.forEach((doc) => state.deleting.add(doc.id));
+      try {
+        await deadline(
+          root.fbRunTransaction(root.db, async (tx) => {
+            const g = await tx.get(
+                root.fbDoc(root.db, "studyGroups", group.id),
+              ),
+              user = await tx.get(root.fbDoc(root.db, "users", account));
+            if (
+              !active() ||
+              !g.exists() ||
+              !g.data().members?.[account] ||
+              !user.exists() ||
+              user.data().deleted
+            )
+              return;
+            for (const doc of pending)
+              tx.delete(
+                doc.ref ||
+                  root.fbDoc(
+                    root.db,
+                    "studyGroups",
+                    group.id,
+                    "messages",
+                    doc.id,
+                  ),
+              );
+          }),
+        );
+      } catch {
+        if (active())
+          status.textContent =
+            "古いトークの削除は、次にグループを開いた時に再試行します。";
+      } finally {
+        pending.forEach((doc) => state.deleting.delete(doc.id));
       }
-      if (!state.oldest || past) state.oldest = docs.at(-1) || state.oldest;
-      if (past || !state.older) older.hidden = docs.length < 30;
+    }
+    function expire() {
+      clearTimeout(state.expiryTimer);
+      if (!active()) return;
+      const before = [...state.rows.values()],
+        kept = policy.retained(before),
+        ids = new Set(kept.map((item) => item.id));
+      state.rows = new Map(kept.map((item) => [item.id, item]));
       render();
+      removeDocs(before.filter((item) => !ids.has(item.id))).catch(() => {});
+      if (kept.length)
+        state.expiryTimer = setTimeout(
+          expire,
+          Math.max(
+            1,
+            Math.min(
+              ...kept.map((item) => policy.time(item) + policy.lifetime),
+            ) -
+              Date.now() +
+              1,
+          ),
+        );
+    }
+    async function cleanOlder(docs) {
+      if (docs.length < policy.maxMessages) return;
+      let cursor = docs.at(-1);
+      while (active() && !root.FirestoreReadGuard?.paused()) {
+        const older = await deadline(root.fbGetDocs(query(cursor, 50)));
+        if (!active()) return;
+        if (!older.docs?.length) return;
+        await removeDocs(older.docs);
+        if (older.docs.length < 50) return;
+        cursor = older.docs.at(-1);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+    function receive(snap) {
+      if (!active()) return;
+      const docs = snap.docs || [],
+        all = docs.map((doc) => ({ ...doc.data(), id: doc.id, ref: doc.ref })),
+        kept = policy.retained(all),
+        ids = new Set(kept.map((item) => item.id));
+      state.rows = new Map(
+        kept
+          .filter((item) => typeof item.text === "string" && item.ownerId)
+          .map((item) => [
+            item.id,
+            {
+              ...item,
+              text: item.text.slice(0, 1000),
+              sentAt: policy.time(item),
+            },
+          ]),
+      );
       status.textContent = "";
       section.querySelector("[data-chat-reconnect]").hidden = true;
+      expire();
+      removeDocs(docs.filter((doc) => !ids.has(doc.id))).catch(() => {});
+      if (!state.cleaned) {
+        state.cleaned = true;
+        cleanOlder(docs).catch(() => {
+          if (active())
+            status.textContent = "古いトークの削除は次回に再試行します。";
+        });
+      }
     }
     function listen() {
       state.unsubscribe?.();
@@ -168,23 +254,6 @@
         },
       );
     }
-    older.onclick = async () => {
-      if (!state.oldest || older.disabled) return;
-      older.disabled = true;
-      const top = list.scrollTop,
-        height = list.scrollHeight;
-      try {
-        const snap = await deadline(root.fbGetDocs(query(state.oldest)));
-        if (!active()) return;
-        state.older = true;
-        receive(snap, true);
-        list.scrollTop = top + list.scrollHeight - height;
-      } catch (e) {
-        if (active()) status.textContent = e.message;
-      } finally {
-        older.disabled = false;
-      }
-    };
     state.resume = listen;
     section.querySelector("[data-chat-reconnect]").onclick = () => {
       if (!root.FirestoreReadGuard?.paused()) listen();
@@ -218,7 +287,16 @@
             const g = await tx.get(
                 root.fbDoc(root.db, "studyGroups", group.id),
               ),
-              user = await tx.get(root.fbDoc(root.db, "users", account));
+              user = await tx.get(root.fbDoc(root.db, "users", account)),
+              existing = await tx.get(
+                root.fbDoc(
+                  root.db,
+                  "studyGroups",
+                  group.id,
+                  "messages",
+                  messageId,
+                ),
+              );
             if (
               expired ||
               !active() ||
@@ -228,6 +306,44 @@
               user.data().deleted
             )
               throw Error("グループの参加状態を確認してください。");
+            if (existing.exists()) return;
+            const previous = Array.isArray(g.data().chatRecent)
+              ? g.data().chatRecent
+              : [...state.rows.values()].map((item) => ({
+                  id: item.id,
+                  at: policy.time(item),
+                }));
+            const now =
+              Math.max(
+                Date.now(),
+                ...previous.map((item) => Number(item.at) || 0),
+              ) + 1;
+            const recent = [
+                ...previous.filter(
+                  (item) =>
+                    item.id !== messageId && item.at > now - policy.lifetime,
+                ),
+                { id: messageId, at: now },
+              ]
+                .sort((a, b) => b.at - a.at || b.id.localeCompare(a.id))
+                .slice(0, policy.maxMessages),
+              ids = new Set(recent.map((item) => item.id));
+            for (const item of previous)
+              if (!ids.has(item.id))
+                tx.delete(
+                  root.fbDoc(
+                    root.db,
+                    "studyGroups",
+                    group.id,
+                    "messages",
+                    item.id,
+                  ),
+                );
+            tx.set(
+              root.fbDoc(root.db, "studyGroups", group.id),
+              { chatRecent: recent },
+              { merge: true },
+            );
             tx.set(
               root.fbDoc(
                 root.db,
@@ -240,7 +356,8 @@
                 ownerId: account,
                 name: g.data().members[account].name || account,
                 text: value,
-                sentAt: Date.now(),
+                sentAt: now,
+                expiresAt: new Date(now + policy.lifetime),
                 createdAt: root.fbServerTimestamp(),
               },
             );

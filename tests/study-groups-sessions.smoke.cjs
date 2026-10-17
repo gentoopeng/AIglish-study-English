@@ -16,7 +16,7 @@ const { chromium, webkit } = require("playwright"),
     for (const id of ["group-a", "group-b"])
       docs.set("users/" + id, {
         playerName: id,
-        wordDuelRating: 1500,
+        avatar: "http://127.0.0.1:8000/aiglish.png",
         lastActiveAt: Date.now(),
       });
     async function notify(path) {
@@ -116,6 +116,7 @@ const { chromium, webkit } = require("playwright"),
       await p.evaluate((id) => {
         myId = id;
         myName = id;
+        localStorage.setItem("core_v4_user_avatar_"+id,"http://127.0.0.1:8000/aiglish.png");
         myFriendList = []; // Group membership is selected from the user directory.
         currentTextbook = "groups-book";
         textbooksPool = [{ id: currentTextbook, name: "グループ教材" }];
@@ -213,6 +214,10 @@ const { chromium, webkit } = require("playwright"),
     await a.locator(".group-friend-picker input").check();
     await a.getByRole("button", { name: "作成する", exact: true }).click();
     await a.locator(".group-chat-compose textarea").waitFor();
+    await a.getByRole('button',{name:'グループ一覧に戻る'}).click();
+    assert.equal(await a.locator('.group-chat-dialog').count(),0);
+    await a.getByRole('button',{name:'放課後の学習',exact:true}).click();
+    await a.locator('.group-chat-compose textarea').waitFor();
     await a
       .locator(".group-chat-compose textarea")
       .fill("こんにちは <script>安全な文字</script>");
@@ -221,6 +226,7 @@ const { chromium, webkit } = require("playwright"),
       .getByText("こんにちは <script>安全な文字</script>", { exact: true })
       .waitFor();
     assert.equal(await a.locator(".group-chat-message script").count(), 0);
+    assert.equal(await a.locator(".group-chat-message.is-self .podium-avatar img").count(),1);
     await a.screenshot({ path: "/tmp/group-chat-ui.png" });
     await a.locator(".group-chat-compose textarea").fill("送信失敗でも残す");
     await a.evaluate(() => {
@@ -265,6 +271,7 @@ const { chromium, webkit } = require("playwright"),
       document.querySelector(".group-goal").textContent.includes("達成！"),
     );
     assert.equal(docs.get(groupPath).goal.done, true);
+    assert.match(docs.get("users/group-a/studyGroups/"+groupId).goalSummary,/達成/);
     assert.equal(
       await a.evaluate(
         () =>

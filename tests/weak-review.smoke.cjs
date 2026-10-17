@@ -159,15 +159,8 @@ const { chromium, webkit } = require("playwright"),
         path: process.env.SCREENSHOT.replace(/\.png$/, "-answered.png"),
       });
     await next.click();
-    // Same word, different meaning: correct again but no second word/day award.
-    await page
-      .getByRole("button", { name: "もう一つの意味", exact: true })
-      .click();
-    assert.match(
-      await page.locator(".review-feedback").innerText(),
-      /本日支給済み/,
-    );
-    await page.getByRole("button", { name: "次へ", exact: true }).click();
+    // Another word separates the two meanings of word1.
+    assert.equal(await page.locator(".review-prompt").innerText(), "word2");
     const labels = await page
       .locator(".review-choices button")
       .allTextContents();
@@ -180,6 +173,15 @@ const { chromium, webkit } = require("playwright"),
     assert.match(
       await page.locator(".review-feedback").innerText(),
       /正解：意味2/,
+    );
+    await page.getByRole("button", { name: "次へ", exact: true }).click();
+    assert.equal(await page.locator(".review-prompt").innerText(), "word1");
+    await page
+      .getByRole("button", { name: "もう一つの意味", exact: true })
+      .click();
+    assert.match(
+      await page.locator(".review-feedback").innerText(),
+      /本日支給済み/,
     );
     await page.getByRole("button", { name: "結果を見る" }).click();
     assert.match(await page.locator(".review-result").innerText(), /2 \/ 3/);

@@ -94,7 +94,39 @@
       correct: absent ? options.length : position,
     };
   }
-  const api = { day, stampWord, eligible, frozen, question };
+  function reviewPlan(candidates, limit = 20) {
+    const groups = new Map(),
+      key = (item) => String(item.prompt).trim().toLowerCase();
+    for (const item of candidates
+      .slice()
+      .sort(
+        (a, b) =>
+          (a.at || 0) - (b.at || 0) ||
+          String(a.ref.num).localeCompare(String(b.ref.num), undefined, {
+            numeric: true,
+          }),
+      )) {
+      const list = groups.get(key(item)) || [];
+      list.push(item);
+      groups.set(key(item), list);
+    }
+    const result = [];
+    let previous = null;
+    while (result.length < limit) {
+      const choices = [...groups.entries()]
+        .filter(([word, list]) => word !== previous && list.length)
+        .sort(
+          (a, b) =>
+            b[1].length - a[1].length || (a[1][0].at || 0) - (b[1][0].at || 0),
+        );
+      if (!choices.length) break;
+      const [word, list] = choices[0];
+      result.push(list.shift());
+      previous = word;
+    }
+    return result;
+  }
+  const api = { day, stampWord, eligible, frozen, question, reviewPlan };
   root.WeakReviewModel = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window === "undefined" ? globalThis : window);
