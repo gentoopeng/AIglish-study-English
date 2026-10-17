@@ -106,3 +106,43 @@ test("canonical recovery preserves review completion when a renderer omits revie
   assert.equal(restored.meanings.a.review.passed, ctx.WeakReviewModel.day());
   assert.equal(restored.note, "new memo");
 });
+test("review order separates meanings of the same word, preserving their original refs and priority", () => {
+  const make = (prompt, mid, at) => ({ prompt, at, ref: { num: prompt, mid } }),
+    input = [
+      make("a", "1", 1),
+      make("a", "2", 1),
+      make("b", "1", 2),
+      make("c", "1", 3),
+    ];
+  const plan = m.reviewPlan(input);
+  assert.deepEqual(
+    plan.map((item) => item.prompt),
+    ["a", "b", "a", "c"],
+  );
+  assert.equal(plan[2].ref.mid, "2");
+  assert.equal(input[1].prompt, "a");
+});
+test("a dominant remaining word waits for a new round rather than appearing consecutively", () => {
+  const input = Array.from({ length: 8 }, (_, i) => ({
+    prompt: "a",
+    at: i,
+    ref: { num: "a", mid: String(i) },
+  }));
+  input.push({ prompt: "b", at: 9, ref: { num: "b", mid: "1" } });
+  assert.deepEqual(
+    m.reviewPlan(input).map((item) => item.prompt),
+    ["a", "b", "a"],
+  );
+  assert.equal(m.reviewPlan(input.slice(0, 8)).length, 1);
+});
+test("planning avoids an unnecessary early finish when the oldest word is the minority", () => {
+  const plan = m.reviewPlan([
+    { prompt: "b", at: 1, ref: { num: "b" } },
+    { prompt: "a", at: 2, ref: { num: "a" } },
+    { prompt: "A", at: 3, ref: { num: "a" } },
+  ]);
+  assert.deepEqual(
+    plan.map((item) => item.prompt.toLowerCase()),
+    ["a", "b", "a"],
+  );
+});

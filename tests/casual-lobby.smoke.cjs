@@ -62,6 +62,20 @@ const { chromium, webkit } = require("playwright"),
       }
     });
     await page.locator("#nav-battle").click();
+    assert.equal(
+      await page
+        .locator(".mode-casual")
+        .evaluate((el) => getComputedStyle(el).animationName),
+      "battle-choice-enter",
+    );
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    assert.equal(
+      await page
+        .locator(".mode-casual")
+        .evaluate((el) => getComputedStyle(el).animationName),
+      "none",
+    );
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     assert.equal(await page.locator(".battle-mode-card").count(), 2);
     await page.screenshot({
       path: "/tmp/battle-modes-" + type.name() + ".png",

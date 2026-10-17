@@ -185,7 +185,41 @@
     reconcileGoal(group, Date.now());
     return group;
   }
-  window.StudyGroupsModel = { progress, advance, leave, goalReached };
+  function goalSummary(g) {
+    if (!g.goal) return "協力目標は未設定";
+    const unit =
+        g.goal.type === "time"
+          ? "分"
+          : g.goal.type === "attempts"
+            ? "回"
+            : "語",
+      ids = Object.keys(g.members || {});
+    const done = ids.filter(
+      (id) =>
+        value(g.progress?.[id], g.goal.baseline?.[id], g.goal.type) >=
+        g.goal.target,
+    ).length;
+    return (
+      (g.goal.done ? "達成！ " : "") +
+      (g.goal.mode === "individual"
+        ? "1人 " +
+          g.goal.target +
+          unit +
+          " · " +
+          done +
+          "/" +
+          ids.length +
+          "人達成"
+        : "全員で " + progress(g, g.goal.type) + " / " + g.goal.target + unit)
+    );
+  }
+  window.StudyGroupsModel = {
+    progress,
+    advance,
+    leave,
+    goalReached,
+    goalSummary,
+  };
   function connected() {
     if (window.FirestoreReadGuard?.paused())
       throw Error("クラウドの利用上限に達しています。後で再試行してください。");
@@ -262,6 +296,27 @@
         );
         if (uid() !== account || version !== loadVersion) return;
         list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        for (const entry of list.filter(
+          (item) => typeof item.goalSummary !== "string",
+        )) {
+          if (uid() !== account || version !== loadVersion) return;
+          const group = await window.fbGetDoc(ref(entry.id));
+          if (uid() !== account || version !== loadVersion) return;
+          if (group.exists() && group.data().members?.[account]) {
+            entry.goalSummary = goalSummary(group.data());
+            await window.fbSetDoc(
+              window.fbDoc(
+                window.db,
+                "users",
+                account,
+                "studyGroups",
+                entry.id,
+              ),
+              { goalSummary: entry.goalSummary },
+              { merge: true },
+            );
+          }
+        }
         loaded = Date.now();
         remember();
         render();
@@ -294,7 +349,7 @@
       name.className = "group-list-name";
       name.textContent = group.name || "グループ";
       meta.className = "group-list-meta";
-      meta.textContent = "学習記録・協力目標";
+      meta.textContent = group.goalSummary || "協力目標はグループで確認";
       chevron.className = "group-list-chevron";
       chevron.textContent = "›";
       chevron.setAttribute("aria-hidden", "true");
@@ -409,10 +464,23 @@
             if (g.goal) g.goal.baseline[member] = { ...g.baseline[member] };
             tx.set(
               window.fbDoc(window.db, "users", member, "studyGroups", id),
-              { name: g.name, joinedAt: Date.now() },
+              {
+                name: g.name,
+                joinedAt: Date.now(),
+                goalSummary: goalSummary(g),
+              },
             );
           }
           reconcileGoal(g, Date.now());
+          const summary = goalSummary(g);
+          if (g.goalSummary !== summary)
+            for (const member of Object.keys(g.members))
+              tx.set(
+                window.fbDoc(window.db, "users", member, "studyGroups", id),
+                { goalSummary: summary },
+                { merge: true },
+              );
+          g.goalSummary = summary;
           tx.set(ref(id), compact(g));
         });
         if (uid() !== account) return;
@@ -441,10 +509,20 @@
         !snap.data().members?.[account]
       )
         throw Error("グループへの参加状態を確認してください。");
-      const g = snap.data();
+      const g = snap.data(),
+        before = g.goalSummary;
       fn(g, tx, account);
-      if (Object.keys(g.members).length) tx.set(ref(id), compact(g));
-      else tx.delete(ref(id));
+      if (Object.keys(g.members).length) {
+        g.goalSummary = goalSummary(g);
+        if (before !== g.goalSummary)
+          for (const member of Object.keys(g.members))
+            tx.set(
+              window.fbDoc(window.db, "users", member, "studyGroups", id),
+              { name: g.name, goalSummary: g.goalSummary },
+              { merge: true },
+            );
+        tx.set(ref(id), compact(g));
+      } else tx.delete(ref(id));
     });
   }
   async function open(id) {
@@ -456,6 +534,18 @@
         '<div class="group-content"></div><p data-group-status role="status">読み込み中…</p><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>',
       );
     modal = d;
+    d.classList.add("study-group-dialog");
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "group-back-button";
+    back.setAttribute("aria-label", "グループ一覧に戻る");
+    back.innerHTML =
+      '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg>';
+    back.onclick = () => window.closeLibraryDialog();
+    d.prepend(back);
+    d.querySelector(
+      ".library-editor-actions [data-library-close]",
+    )?.parentElement.remove();
     current = id;
     d.querySelector(".library-editor-eyebrow").textContent = "グループ";
     d.addEventListener(
@@ -481,7 +571,17 @@
         }
         d.querySelector("[data-group-status]").textContent = "";
         const group = { id, ...snap.data() };
-        draw(group, d);
+        const cached = list.find((item) => item.id === id);
+        if (cached && cached.goalSummary !== goalSummary(group)) {
+          cached.goalSummary = goalSummary(group);
+          remember();
+          render();
+        }
+        const shape = JSON.stringify({ ...group, chatRecent: undefined });
+        if (d.__studyGroupShape !== shape) {
+          d.__studyGroupShape = shape;
+          draw(group, d);
+        }
         window.GroupChat?.mount(d, group);
       },
       error,
@@ -495,7 +595,7 @@
           : known?.avatar || "";
     const avatar = window.RankingVisuals.avatar(photo, name);
     avatar.dataset.memberAvatar = id;
-    if (!photo && id !== uid())
+    if (id !== uid())
       window.ProfileIdentityCache?.get(id)
         .then((profile) => {
           if (!avatar.isConnected || !profile.avatar) return;
@@ -868,7 +968,7 @@
       load(true).catch(error);
     render();
   }
-  window.StudyGroups = { load, open, publish, stop };
+  window.StudyGroups = { load, open, publish, stop, memberAvatar };
   window.onAppLoaded(() => {
     init();
     load()

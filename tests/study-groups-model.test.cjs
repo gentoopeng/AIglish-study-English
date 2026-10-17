@@ -219,3 +219,19 @@ test("individual completion is recalculated after leaving and an empty group can
   assert.equal(g.goal.done, false);
   assert.equal(m.goalReached(g), false);
 });
+test("group list summaries describe individual and combined goals without loading profiles", () => {
+  const g = group();
+  g.goal = {
+    type: "time",
+    mode: "individual",
+    target: 30,
+    baseline: { a: { time: 0 }, b: { time: 0 } },
+  };
+  g.progress = { a: { time: 30 }, b: { time: 5 } };
+  assert.match(m.goalSummary(g), /1人 30分/);
+  assert.match(m.goalSummary(g), /1\/2人達成/);
+  g.goal.mode = "sum";
+  assert.match(m.goalSummary(g), /35 \/ 30分/);
+  g.goal = null;
+  assert.equal(m.goalSummary(g), "協力目標は未設定");
+});
