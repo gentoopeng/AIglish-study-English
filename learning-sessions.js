@@ -779,6 +779,10 @@
               b.dataset.warmup,
               account,
             );
+            window.StudyPoints?.reward("card", book, w.num, account, {
+              word: w.word,
+              bookName: (textbooksPool.find((b) => b.id === book) || {}).name,
+            });
             answers.push({ result: b.dataset.warmup });
             // The same journal as battle answers preserves ratings before any cloud write.
 

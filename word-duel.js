@@ -702,8 +702,22 @@
         right,
         target.id,
       );
+      if (right)
+        window.StudyPoints?.reward(
+          "quiz",
+          q.ref.book || target.book,
+          q.ref.num,
+          target.id,
+          {
+            word: q.prompt || q.word || "",
+            bookName: (
+              textbooksPool.find((b) => b.id === (q.ref.book || target.book)) ||
+              {}
+            ).name,
+          },
+        );
     } catch (error) {
-      status("理解度の保存を確認できません。" + error.message);
+      status("理解度・ポイントの保存を確認できません。" + error.message);
     }
     if (target.answers.length % 5 === 0)
       window.WordDuelProgress.schedule(target.id);

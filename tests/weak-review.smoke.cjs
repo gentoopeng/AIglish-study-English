@@ -66,6 +66,10 @@ const { chromium, webkit } = require("playwright"),
       };
       switchTab("vocab");
       showVocabLibrarySelection();
+      StudyPoints.reward("card", "review-book", "1", "GUEST-000", {
+        word: "word1",
+        bookName: "復習テスト",
+      });
     });
     await page
       .getByRole("button", { name: "復習テストの学習方法を選ぶ" })
@@ -141,7 +145,7 @@ const { chromium, webkit } = require("playwright"),
       .click();
     assert.match(
       await page.locator(".review-feedback").innerText(),
-      /正解.*10pt/,
+      /正解.*9pt/,
     );
     assert.equal(await page.evaluate(() => __reviewSaves), 0);
     assert.match(await page.locator(".review-progress").innerText(), /正解 1/);
@@ -208,7 +212,12 @@ const { chromium, webkit } = require("playwright"),
       ),
       "bad",
     );
-    assert.equal(await page.evaluate(() => LearningData.read("review-book")["1"].meanings["1-0"].status), "so");
+    assert.equal(
+      await page.evaluate(
+        () => LearningData.read("review-book")["1"].meanings["1-0"].status,
+      ),
+      "so",
+    );
     await page.getByRole("button", { name: "続けて復習" }).click();
     await page.locator(".review-choices").waitFor();
     assert.match(await page.locator(".review-progress").innerText(), /1 \/ 1/);
@@ -235,7 +244,7 @@ const { chromium, webkit } = require("playwright"),
     await page.getByRole("button", { name: "獲得方法", exact: true }).click();
     assert.match(
       await page.locator(".points-methods").innerText(),
-      /正解5pt.*後日復習5pt/,
+      /合計10pt／単語・日/,
     );
     await page.getByRole("button", { name: "ポイントを閉じる" }).click();
     await page.locator(".menu-trigger").click();

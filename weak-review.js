@@ -296,7 +296,7 @@
           "p",
           "",
           correct
-            ? `正解${points ? "　+10pt" : "　この単語は本日支給済み"}`
+            ? `正解${points ? `　+${points}pt` : "　この単語は本日支給済み"}`
             : `正解：${target.meaning}`,
         ),
       );

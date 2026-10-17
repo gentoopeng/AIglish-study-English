@@ -680,6 +680,10 @@
             }
             // 回答と同じ処理内で端末へ確定する。終了処理やタイマーまで待たない。
             if (typeof window.saveVocabProgressLocally === 'function') window.saveVocabProgressLocally(vocabMatch.num);
+            if (status !== 'none') {
+                try { window.StudyPoints?.reward('card', currentTextbook, vocabMatch.num, myId || 'GUEST-000', {word:vocabMatch.word,bookName:(textbooksPool.find(b=>b.id===currentTextbook)||{}).name}); }
+                catch (error) { console.warn('単語カードのポイント記録を確認してください',error); window.showToast?.('ポイントを記録できませんでした。端末の空き容量を確認してください。','err'); }
+            }
         } else if (typeof wordMemory !== 'undefined') {
             wordMemory[cleanKey] = status;
             try { localStorage.setItem('wordMemory', JSON.stringify(wordMemory)); } catch (e) {}

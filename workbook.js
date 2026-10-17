@@ -429,7 +429,21 @@
         });
         // Keyboard activation produces a click without pointerdown.
         card.querySelectorAll('[data-status]').forEach(button => button.onclick = event => {if (event.detail === 0) updateMark(button.dataset.status);});
-        function updateMark(status) { const fresh = load().find(w => w.id === work.id); const target = fresh && fresh.units.find(u => u.id === unit.id); if (!target) return; mark(fresh, target, status); put(fresh); repaint(); }
+        function updateMark(status) {
+            const fresh = load().find(w => w.id === work.id);
+            const target = fresh && fresh.units.find(u => u.id === unit.id);
+            if (!target) return;
+            mark(fresh, target, status); put(fresh);
+            if (status !== 'none') {
+                try {
+                    const number = String(target.num) + (target.subNumber ? ':s' + target.subNumber : '');
+                    window.StudyPoints?.reward('work', fresh.id, number, uid(), {word: label(fresh, target), bookName: fresh.name});
+                } catch (error) {
+                    window.showToast?.('ポイントを記録できませんでした。端末の空き容量を確認してください。', 'err');
+                }
+            }
+            repaint();
+        }
         return card;
     }
     async function openExplanation(unit) {

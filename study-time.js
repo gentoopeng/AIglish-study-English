@@ -19,6 +19,7 @@
             if(normalizeDate(key)!==key||!day||typeof day!=='object')return;
             const target=result.days[key]||(result.days[key]={sources:{}});target.sources=target.sources||{};
             Object.entries(day.sources||{}).forEach(([source,value])=>{target.sources[source]=Math.min(DAY,Math.max(positive(target.sources[source]),positive(value)));});
+            if(window.StudyPointPolicy&&(day.pointTime||target.pointTime))target.pointTime=window.StudyPointPolicy.mergeTime(target.pointTime,day.pointTime);
             if(day.edit&&(!target.edit||positive(day.edit.at)>positive(target.edit.at)))target.edit={at:positive(day.edit.at),ms:Math.min(DAY,positive(day.edit.ms)),baseline:Object.assign({},day.edit.baseline||{})};
         });
         result.updatedAt=Math.max(positive(result.updatedAt),positive(right.updatedAt));return result;
@@ -95,7 +96,7 @@
         if(!user||document.visibilityState!=='visible'||paused||sleepState)return false;
         if(!navigator.locks&&!document.hasFocus())return false;
         const gate=document.getElementById('auth-gate-screen');if(gate&&getComputedStyle(gate).display!=='none')return false;
-        if(manual||window.WordDuel?.isPlaying())return true;
+        if(manual||window.WordDuel?.isPlaying()||window.WeakReview?.isPlaying()||document.querySelector(".flash-warmup-dialog[open]:not(.warmup-start-ready)"))return true;
         if(currentActiveTabId==='vocab')return visible('vocabBookContents')||visible('workbookContents');
         if(currentActiveTabId==='reader')return visible('text-reader-view');
         return visible('flashcard-play-screen')||!!(window.__loadQuiz&&window.__loadQuiz.active);
@@ -114,7 +115,7 @@
         if(sleepState){lastMono=mono;lastWall=wall;return;}
         if(fallbackLease){let lease;try{lease=JSON.parse(localStorage.getItem('aiglish_study_lease_'+user)||'null');}catch(e){}if(!lease||lease.tab!==tabId){leader=false;fallbackLease=false;}}
         // Hidden/suspended pages never accrue the time that elapsed before resuming.
-        if(active&&leader&&elapsed>0&&elapsed<60000){data=mergeCurrent(data,read(user));accrue(data,device,lastWall,lastWall+elapsed);activitySlices.push([lastWall,lastWall+elapsed]);activitySlices=activitySlices.filter(slice=>slice[1]>wall-360000);persist();}
+        if(active&&leader&&elapsed>0&&elapsed<60000){data=mergeCurrent(data,read(user));accrue(data,device,lastWall,lastWall+elapsed);if(Math.abs(wall-lastWall-elapsed)<2000)window.StudyPointPolicy?.accrueTime(data.days,device,lastWall,lastWall+elapsed);activitySlices.push([lastWall,lastWall+elapsed]);activitySlices=activitySlices.filter(slice=>slice[1]>wall-360000);persist();}
         lastMono=mono;lastWall=wall;active=eligible();
         if(!active)unlock();else if(!leader)claim();else if(fallbackLease&&!writeLease('aiglish_study_lease_'+user,JSON.stringify({tab:tabId,expires:wall+3000})))unlock();
         sync();renderDisplay();
@@ -218,7 +219,7 @@
     function init(){ensureUser();if(data&&userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);tick();chart();renderCalendar();}
     function sleep(since){
         if(sleepState)return 0;tick();sleepState={manual,paused};paused=true;active=false;unlock();
-        const remove={days:{},offset:0},end=Math.min(Date.now(),since+300000);for(const [start,finish] of activitySlices){const left=Math.max(start,since),right=Math.min(finish,end);if(right>left)accrue(remove,device,left,right);}
+        const remove={days:{},offset:0},end=Math.min(Date.now(),since+300000);for(const [start,finish] of activitySlices){const left=Math.max(start,since),right=Math.min(finish,end);if(right>left){accrue(remove,device,left,right);window.StudyPointPolicy?.accrueTime(data.days,device,left,right,true);}}
         let deducted=0;for(const [day,value] of Object.entries(remove.days)){const ms=Math.min(dayMilliseconds(data.days[day]),dayMilliseconds(value));if(ms){editDay(data,day,dayMilliseconds(data.days[day])-ms,Math.max(Date.now(),Number(data.days[day]?.edit?.at||0)+1));deducted+=ms;}}
         activitySlices=[];persist();sync();renderDisplay();renderCalendar();return deducted;
     }
