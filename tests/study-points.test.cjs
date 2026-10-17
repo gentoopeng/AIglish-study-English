@@ -33,7 +33,11 @@ function setup(remote = new Map()) {
       },
     };
   c.window = c;
-  for (const file of ["weak-review-model.js", "study-points.js"])
+  for (const file of [
+    "weak-review-model.js",
+    "study-point-policy.js",
+    "study-points.js",
+  ])
     vm.runInNewContext(fs.readFileSync(file, "utf8"), c);
   return { c, values, points: c.StudyPoints, remote };
 }
@@ -227,4 +231,322 @@ test("a bounded history never drops pending awards or resets the accumulated bal
   assert.equal(a.points.balance(), 1050);
   assert.equal(a.remote.get("users/a").studyPoints, 1050);
   assert.equal(Object.keys(a.points.read().pending).length, 0);
+});
+test("daily content tiers replace each other rather than stack; resets, meanings and sessions do not multiply rewards", async () => {
+  const a = setup();
+  assert.equal(a.points.reward("card", "book", "1"), 1);
+  assert.equal(a.points.reward("card", "book", "1"), 0);
+  assert.equal(a.points.reward("quiz", "book", "1"), 2);
+  assert.equal(a.points.balance(), 3);
+  await a.points.flush();
+  assert.equal(a.points.reward("review", "book", "1"), 7);
+  assert.equal(a.points.reward("quiz", "book", "1"), 0);
+  assert.equal(a.points.balance(), 10);
+  await a.points.flush();
+  assert.equal(a.points.balance(), 10);
+  assert.equal(Object.values(a.points.read().history)[0].amount, 10);
+  assert.equal(a.points.reward("work", "workbook", "2(1)"), 1);
+  assert.equal(a.points.reward("work", "workbook", "2(2)"), 1);
+  await a.points.flush();
+  assert.equal(a.points.balance(), 12);
+});
+test("mixed-source offline awards, backup restore and remote higher tiers settle only their differences", async () => {
+  const a = setup();
+  a.points.reward("card", "book", "1");
+  await a.points.flush();
+  const before = a.points.read();
+  a.points.reward("quiz", "book", "1");
+  const backup = a.points.read();
+  assert.equal(a.points.pendingAmount(backup), 2);
+  const b = setup(a.remote);
+  b.points.reward("review", "book", "1");
+  await b.points.flush();
+  a.points.restore(before);
+  a.points.restore(backup);
+  await a.points.flush();
+  assert.equal(a.points.balance(), 10);
+  assert.equal(a.remote.get("users/a/learningPoints/main").balance, 10);
+  assert.equal(Object.values(a.points.read().history)[0].source, "review");
+});
+test("legacy boolean claims and numeric receipt values stay worth ten when lower tiers arrive", async () => {
+  const a = setup(),
+    day = a.c.WeakReviewModel.day();
+  a.points.award("book", "1", day);
+  await a.points.flush();
+  const shard = [...a.remote.keys()].find((k) =>
+    k.includes("reviewPointDays/"),
+  );
+  a.remote.get(shard).claims["1"] = 10;
+  const b = setup(a.remote);
+  b.points.reward("card", "book", "1");
+  await b.points.flush();
+  assert.equal(b.points.balance(), 10);
+  assert.equal(Object.values(b.points.read().history)[0].amount, 10);
+  assert.equal(Object.values(b.points.read().history)[0].source, "review");
+});
+test("an upgrade earned while a lower-tier transaction is in flight remains pending and is settled", async () => {
+  const a = setup(),
+    run = a.c.fbRunTransaction;
+  a.points.reward("card", "book", "1");
+  let once = false;
+  a.c.fbRunTransaction = async (...args) => {
+    const result = await run(...args);
+    if (!once) {
+      once = true;
+      a.points.reward("quiz", "book", "1");
+    }
+    return result;
+  };
+  await a.points.flush();
+  assert.equal(a.points.balance(), 3);
+  assert.equal(a.remote.get("users/a/learningPoints/main").balance, 3);
+  assert.equal(Object.keys(a.points.read().pending).length, 0);
+});
+test("measured time waits until after midnight rollback, ignores old/manual totals, and merges simultaneous devices conservatively", async () => {
+  const a = setup(),
+    p = a.c.StudyPointPolicy,
+    day = p.day(Date.now() - 2 * 86400000),
+    start = p.dayStart(day),
+    days = {};
+  for (let i = 0; i < 600; i++)
+    p.accrueTime(days, "phone", start + i * 1000, start + (i + 1) * 1000);
+  // Sleep removes the last five measured minutes, even if a manual edit says ten hours.
+  for (let i = 300; i < 600; i++)
+    p.accrueTime(days, "phone", start + i * 1000, start + (i + 1) * 1000, true);
+  days[day].edit = { ms: 36000000, at: Date.now() };
+  a.c.StudyTime = {
+    snapshot: () => ({
+      days: {
+        ...days,
+        "2001-01-01": { sources: { legacy: 999999 }, edit: { ms: 999999 } },
+      },
+    }),
+  };
+  await a.points.collectTime();
+  assert.equal(a.points.balance(), 5);
+  await a.points.flush();
+  assert.equal(a.points.balance(), 5);
+  const b = setup(a.remote),
+    other = {};
+  for (let i = 0; i < 300; i++)
+    b.c.StudyPointPolicy.accrueTime(
+      other,
+      "tablet",
+      start + i * 1000,
+      start + (i + 1) * 1000,
+    );
+  b.c.StudyTime = { snapshot: () => ({ days: other }) };
+  await b.points.flush();
+  assert.equal(
+    b.points.balance(),
+    5,
+    "parallel time in the same slot is not added twice",
+  );
+  for (let i = 600; i < 720; i++)
+    b.c.StudyPointPolicy.accrueTime(
+      other,
+      "tablet",
+      start + i * 1000,
+      start + (i + 1) * 1000,
+    );
+  await b.points.flush();
+  assert.equal(
+    b.points.balance(),
+    7,
+    "later non-overlapping slots still earn points",
+  );
+  assert.equal(
+    Object.values(b.remote.get("users/a/learningPoints/main").history).some(
+      (entry) => Object.hasOwn(entry, "time"),
+    ),
+    false,
+    "wallet history does not duplicate raw device measurements",
+  );
+  const today = p.day(),
+    live = {};
+  for (let i = 0; i < 120; i++)
+    p.accrueTime(
+      live,
+      "phone",
+      p.dayStart(today) + i * 1000,
+      p.dayStart(today) + (i + 1) * 1000,
+    );
+  a.c.StudyTime = { snapshot: () => ({ days: live }) };
+  await a.points.collectTime();
+  assert.equal(
+    a.points.balance(),
+    5,
+    "today is never paid before sleep corrections",
+  );
+});
+test("a missing confirmed wallet never resets an existing balance during a new activity settlement", async () => {
+  const a = setup();
+  a.points.restore({ balance: 100, revision: 3, publishedRevision: 3 });
+  a.points.reward("quiz", "book", "1");
+  assert.equal(await a.points.flush(), false);
+  assert.equal(a.points.balance(), 103);
+  assert.equal(Object.keys(a.points.read().pending).length, 1);
+  assert.equal(a.remote.has("users/a/learningPoints/main"), false);
+});
+test("a lost response during a tier upgrade can be retried without duplicate credit", async () => {
+  const a = setup(),
+    run = a.c.fbRunTransaction;
+  a.points.reward("card", "book", "1");
+  await a.points.flush();
+  a.points.reward("review", "book", "1");
+  a.c.fbRunTransaction = async (...args) => {
+    await run(...args);
+    throw Error("lost ack");
+  };
+  assert.equal(await a.points.flush(), false);
+  assert.equal(a.points.balance(), 10);
+  a.c.fbRunTransaction = run;
+  await a.points.flush();
+  assert.equal(a.points.balance(), 10);
+  assert.equal(a.remote.get("users/a/learningPoints/main").balance, 10);
+});
+test("time data is retained through a failed save and backup restoration, without reissuing settled points", async () => {
+  const a = setup(),
+    p = a.c.StudyPointPolicy,
+    day = p.day(Date.now() - 2 * 86400000),
+    days = {},
+    start = p.dayStart(day);
+  for (let i = 0; i < 125; i++)
+    p.accrueTime(days, "phone", start + i * 1000, start + (i + 1) * 1000);
+  a.c.StudyTime = { snapshot: () => ({ days }) };
+  await a.points.collectTime();
+  const backup = a.points.read(),
+    run = a.c.fbRunTransaction;
+  a.c.fbRunTransaction = async () => {
+    throw Error("quota");
+  };
+  assert.equal(await a.points.flush(), false);
+  assert.equal(a.points.balance(), 2);
+  a.c.fbRunTransaction = run;
+  await a.points.flush();
+  a.points.restore(backup);
+  await a.points.flush();
+  assert.equal(a.points.balance(), 2);
+  assert.equal(Object.keys(a.points.read().pending).length, 0);
+});
+test("a smaller local time total still contributes new slots after a larger remote total was acknowledged", async () => {
+  const a = setup(),
+    p = a.c.StudyPointPolicy,
+    day = p.day(Date.now() - 2 * 86400000),
+    days = {},
+    start = p.dayStart(day);
+  for (let i = 0; i < 600; i++)
+    p.accrueTime(days, "phone", start + i * 1000, start + (i + 1) * 1000);
+  a.c.StudyTime = { snapshot: () => ({ days }) };
+  await a.points.flush();
+  const b = setup(a.remote),
+    other = {};
+  b.c.fbGetDoc = async (ref) => ({
+    exists: () => a.remote.has(ref),
+    data: () => a.remote.get(ref),
+  });
+  await b.points.refresh();
+  assert.equal(b.points.balance(), 10);
+  for (let i = 600; i < 720; i++)
+    p.accrueTime(other, "tablet", start + i * 1000, start + (i + 1) * 1000);
+  b.c.StudyTime = { snapshot: () => ({ days: other }) };
+  await b.points.collectTime();
+  assert.equal(
+    Object.keys(b.points.read().pending).length,
+    1,
+    "time must be compared by measurements, not suppressed by its smaller displayed amount",
+  );
+  await b.points.flush();
+  assert.equal(b.points.balance(), 12);
+});
+test("a stale lower cloud wallet cannot erase confirmed local earnings or acknowledge a new unpaid reward", async () => {
+  const a = setup();
+  a.points.restore({ balance: 100, revision: 3, publishedRevision: 3 });
+  a.remote.set("users/a/learningPoints/main", { balance: 20, revision: 1 });
+  a.points.reward("card", "book", "1");
+  assert.equal(await a.points.flush(), false);
+  assert.equal(a.points.balance(), 101);
+  assert.equal(Object.keys(a.points.read().pending).length, 1);
+  assert.equal(a.remote.get("users/a/learningPoints/main").balance, 20);
+});
+test("loading or deleted material cannot earn activity rewards before learning data is ready", () => {
+  const a = setup();
+  a.c.__learningBootReady = false;
+  assert.throws(() => a.points.reward("card", "book", "1"));
+  a.c.__learningBootReady = true;
+  a.c.LearningData = { canSave: () => false };
+  assert.throws(() => a.points.reward("quiz", "book", "1"));
+  a.c.LearningData.canSave = () => true;
+  a.c.LibraryState = { isDeleted: () => true };
+  assert.throws(() => a.points.reward("review", "book", "1"));
+  assert.throws(() => a.points.reward("work", "workbook", "1"));
+  assert.equal(a.points.balance(), 0);
+});
+test("simultaneous devices retry conflicting tier settlements without losing or multiplying credit", async () => {
+  const remote = new Map(),
+    a = setup(remote),
+    b = setup(remote);
+  let conflicts = 0,
+    arrivals = 0,
+    release;
+  const bothReading = new Promise((resolve) => {
+    release = resolve;
+  });
+  const transaction = async (_, fn) => {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const reads = new Map(),
+        writes = [];
+      const result = await fn({
+        get: async (ref) => {
+          const value = remote.get(ref);
+          reads.set(ref, JSON.stringify(value));
+          if (attempt === 0 && ref.endsWith("/learningPoints/main")) {
+            if (++arrivals === 2) release();
+            await bothReading;
+          }
+          await Promise.resolve();
+          return { exists: () => value !== undefined, data: () => value };
+        },
+        set: (ref, value, options) =>
+          writes.push({
+            ref,
+            value: JSON.parse(JSON.stringify(value)),
+            options,
+          }),
+      });
+      if (
+        [...reads].some(
+          ([ref, value]) => JSON.stringify(remote.get(ref)) !== value,
+        )
+      ) {
+        conflicts++;
+        continue;
+      }
+      for (const { ref, value, options } of writes)
+        remote.set(
+          ref,
+          options?.merge ? { ...remote.get(ref), ...value } : value,
+        );
+      return result;
+    }
+    throw Error("retry limit");
+  };
+  a.c.fbRunTransaction = transaction;
+  b.c.fbRunTransaction = transaction;
+  a.points.reward("card", "book", "1");
+  b.points.reward("review", "book", "1");
+  await Promise.all([a.points.flush(), b.points.flush()]);
+  assert.equal(remote.get("users/a/learningPoints/main").balance, 10);
+  assert.ok(
+    conflicts > 0,
+    "the test must actually exercise a conflicting transaction",
+  );
+  for (const client of [a, b]) {
+    client.c.fbGetDoc = async (ref) => ({
+      exists: () => remote.has(ref),
+      data: () => remote.get(ref),
+    });
+    await client.points.refresh();
+    assert.equal(client.points.balance(), 10);
+  }
 });

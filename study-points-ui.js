@@ -37,9 +37,11 @@
     dialog.querySelector("[data-points-pending]").textContent = Object.keys(
       value.pending,
     ).length
-      ? "端末に記録済み・同期待ち " +
-        Object.keys(value.pending).length * 10 +
-        "pt"
+      ? window.StudyPoints.pendingAmount(value)
+        ? "端末に記録済み・同期待ち " +
+          window.StudyPoints.pendingAmount(value) +
+          "pt"
+        : "時間記録をクラウドと照合待ち"
       : "";
     const list = dialog.querySelector("[data-points-history]");
     list.replaceChildren();
@@ -52,7 +54,16 @@
         title = node("strong", entry.word || "単語 " + entry.num),
         detail = node(
           "small",
-          "苦手復習 · " + entry.bookName + " · #" + entry.num,
+          {
+            card: "単語カード",
+            quiz: "単語バトルの正解",
+            review: "苦手復習",
+            work: "ワークの学習記録",
+            time: "勉強時間",
+          }[entry.source || "review"] +
+            " · " +
+            entry.bookName +
+            (entry.source === "time" ? "" : " · #" + entry.num),
         ),
         date = node(
           "time",
@@ -68,7 +79,7 @@
         );
       date.dateTime = entry.at ? new Date(entry.at).toISOString() : entry.day;
       copy.append(title, detail, date);
-      const amount = node("span", "+10pt");
+      const amount = node("span", "+" + entry.amount + "pt");
       if (value.pending[token]) amount.append(node("small", "同期待ち"));
       row.append(copy, amount);
       list.append(row);
@@ -144,20 +155,53 @@
     const methods = node("section", undefined, "points-methods");
     methods.dataset.pointsMethods = "";
     methods.hidden = true;
+    methods.append(node("h3", "学習内容に合わせて支給"));
+    for (const [name, amount, detail] of [
+      [
+        "単語カード",
+        "1pt／単語・日",
+        "スワイプして理解度を記録。最初の10単語も同じ条件です。○・△・×で金額は変わりません。",
+      ],
+      [
+        "単語バトルの正解",
+        "合計3pt／単語・日",
+        "正解した単語が対象。シングル・対戦とも同じです。失点・コンボ・イベント・順位の設定では変わりません。",
+      ],
+      [
+        "翌日以降の苦手復習",
+        "合計10pt／単語・日",
+        "前日までに×・△を付けた意味に正解。正解は×→△→○と1段階ずつ上げます。",
+      ],
+      [
+        "ワークの個別記録",
+        "1pt／問題・日",
+        "問題やページの理解度を個別に記録。小問は別の問題として扱います。一括記録・インポート・リセットは対象外です。",
+      ],
+      [
+        "実測の勉強時間",
+        "1pt／1分",
+        "この更新後にアプリで計測した時間だけが対象。1日分を合算して1分未満は切り捨て。手入力・過去の時間は対象外です。寝落ちの取り消し後、翌日0:06以降の起動・学習終了・保存でポイントに反映します。複数端末の重複を防ぐため、同じ5分区間では実測が多い端末だけを採用します。",
+      ],
+    ]) {
+      methods.append(
+        node("h3", name),
+        node("p", amount, "points-method-value"),
+        node("p", detail),
+      );
+    }
     methods.append(
-      node("h3", "苦手復習で正解"),
-      node("p", "正解5pt ＋ 後日復習5pt", "points-method-value"),
+      node("h3", "重複して支給しません"),
       node(
         "p",
-        "前日までに×・△を付けた意味を苦手復習で正解すると、合計10ptを獲得します。同じ単語は意味が複数あっても、日本時間で1日1回です。",
+        "同じ単語帳の同じ単語は、複数の意味を含めて日本時間で1日1回分。単語カード1pt→バトル正解で差額2pt→苦手復習で差額7pt、合計10ptです。獲得履歴も単語・日ごとの合計を表示します。",
       ),
       node(
         "p",
-        "単語カードで理解度を変更するだけではポイントは増えません。単語バトルの得点と累計ポイントは別です。",
+        "獲得ポイントの総額・1日全体の上限はありません。ログインだけ・単語帳一覧の理解度ボタン・グループ目標の達成・対戦順位だけでは増えず、負けても獲得済みポイントは減りません。",
       ),
       node(
         "p",
-        "学習終了時・スリープ時・手動セーブ時に同期します。通信できない場合も端末に残し、次の保存時に再試行します。",
+        "学習終了時・スリープ時・手動セーブ時に同期します。通信できない場合も端末に残し、次の保存時に再試行します。同期待ちは、別端末での支給と照合して確定します。",
       ),
     );
     const footer = node("footer"),
@@ -193,6 +237,9 @@
   });
   window.onAppLoaded?.(() => {
     renderHeader();
+    window.StudyPoints.collectTime().catch((error) =>
+      console.warn("時間ポイントは次の保存時に再確認します", error),
+    );
     // One-time publication of already confirmed points, never upload pending answers at boot.
     window.StudyPoints.publish().catch((error) =>
       console.warn("ポイント合計は次の保存時に公開を再試行します", error),

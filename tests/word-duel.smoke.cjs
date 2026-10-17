@@ -23,6 +23,12 @@ const { chromium, webkit } = require("playwright"),
         protected: "learning-preserved",
         wordDuelSoloBest: 777,
       });
+    for (const id of ["duel-a", "duel-b", "duel-c", "duel-d"])
+      docs.set("users/" + id + "/learningPoints/main", {
+        balance: 100,
+        revision: 1,
+        history: {},
+      });
     async function notify(path) {
       for (const { page, key } of listeners.values())
         if (key === path)
@@ -90,7 +96,10 @@ const { chromium, webkit } = require("playwright"),
       await page.evaluate((id) => {
         myId = id;
         myName = id;
-        localStorage.setItem("core_v4_study_points_"+id,JSON.stringify({balance:100,revision:1,publishedRevision:1}));
+        localStorage.setItem(
+          "core_v4_study_points_" + id,
+          JSON.stringify({ balance: 100, revision: 1, publishedRevision: 1 }),
+        );
         textbooksPool = [{ id: "duel-book", name: "対戦テスト" }];
         currentTextbook = "duel-book";
         localStorage.setItem(
@@ -250,9 +259,20 @@ const { chromium, webkit } = require("playwright"),
       false,
     );
     await answer(a);
+    assert.equal(
+      await a.evaluate(() => StudyPoints.balance()),
+      103,
+      "a real quiz answer earns three regardless of solo score settings",
+    );
     await answer(a);
     await answer(a);
+    const beforeMiss = await a.evaluate(() => StudyPoints.balance());
     await answer(a, false);
+    assert.equal(
+      await a.evaluate(() => StudyPoints.balance()),
+      beforeMiss,
+      "a wrong quiz answer gives no points",
+    );
     assert.equal(await a.locator(".duel-correction").isVisible(), true);
     assert.equal(
       await a
