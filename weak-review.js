@@ -78,6 +78,7 @@
     return view.querySelector(".review-content");
   }
   function message(text, detail) {
+    view.dataset.state = "message";
     const body = content();
     body.replaceChildren(node("h3", "", text));
     if (detail) body.append(node("p", "review-description", detail));
@@ -188,6 +189,7 @@
     const s = session,
       target = s.targets[s.index],
       body = content();
+    view.dataset.state = "playing";
     s.answered = false;
     s.question = window.WeakReviewModel.question(
       target,
@@ -201,10 +203,20 @@
       node("span", "", `正解 ${s.correct}`),
     );
     const bar = node("progress");
+    bar.setAttribute("aria-label", "復習の進み具合");
     bar.max = s.targets.length;
     bar.value = s.index;
-    const prompt = node("h3", "review-prompt", target.prompt),
+    const question = node("section", "review-question"),
+      prompt = node("h3", "review-prompt", target.prompt),
       choices = node("div", "review-choices");
+    question.append(
+      node("small", "review-question-label", "意味を選んでください"),
+      prompt,
+    );
+    choices.style.setProperty(
+      "--review-answer-rows",
+      String(Math.ceil((s.question.options.length - 1) / 3)),
+    );
     s.question.options.forEach((text, index) =>
       choices.append(
         button(
@@ -216,7 +228,7 @@
     );
     const feedback = node("div", "review-feedback");
     feedback.setAttribute("aria-live", "polite");
-    body.replaceChildren(progress, bar, prompt, choices, feedback);
+    body.replaceChildren(progress, bar, question, choices, feedback);
   }
   function answer(index) {
     const s = session;
@@ -250,23 +262,28 @@
       s.points += points;
       s.answered = true;
       if (correct) s.correct++;
+      content().querySelector(".review-progress span:last-child").textContent =
+        `正解 ${s.correct}`;
+      content().querySelector("progress").value = s.index + 1;
       const buttons = [...content().querySelectorAll(".review-choices button")];
       buttons.forEach((el, i) => {
         el.disabled = true;
         if (i === s.question.correct) el.classList.add("is-correct");
         if (i === index) el.classList.add(correct ? "is-selected" : "is-wrong");
       });
-      feedback.append(
+      const response = node("div", "review-response");
+      response.append(
         node(
           "p",
           "",
           correct
-            ? `正解${points ? "　+10pt（正解5＋復習5）" : "　この単語は本日支給済み"}`
+            ? `正解${points ? "　+10pt" : "　この単語は本日支給済み"}`
             : `正解：${target.meaning}`,
         ),
       );
       if (!correct)
-        feedback.append(node("small", "", "この意味は苦手復習に残ります。"));
+        response.append(node("small", "", "この意味は苦手復習に残ります。"));
+      feedback.append(response);
       feedback.append(
         button(
           s.index + 1 < s.targets.length ? "次へ" : "結果を見る",
@@ -286,6 +303,7 @@
     const s = session;
     if (!s?.playing) return;
     s.playing = false;
+    view.dataset.state = "result";
     const answered =
         s.index + (s.answered && s.index < s.targets.length ? 1 : 0),
       body = content();

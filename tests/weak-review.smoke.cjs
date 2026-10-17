@@ -82,6 +82,56 @@ const { chromium, webkit } = require("playwright"),
     assert.equal(await page.locator(".review-choices button").count(), 10);
     if (process.env.SCREENSHOT)
       await page.screenshot({ path: process.env.SCREENSHOT });
+    // Every answer remains reachable without scrolling the page, including long text.
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 393, height: 852 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.evaluate(() => {
+        for (const el of document.querySelectorAll(
+          ".review-choices button,.review-prompt",
+        )) {
+          el.dataset.original = el.textContent;
+          el.textContent = "長い単語や意味の折り返しも確認します。".repeat(18);
+        }
+      });
+      const layout = await page.evaluate(() => {
+        const screen = document.querySelector(".weak-review-screen"),
+          buttons = [...screen.querySelectorAll(".review-choices button")],
+          r = buttons.map((el) => el.getBoundingClientRect());
+        return {
+          overflow: screen.scrollHeight - screen.clientHeight,
+          rows: [r[0].y, r[1].y, r[2].y, r[3].y],
+          buttons: r.map((rect) => ({
+            x: rect.x,
+            right: rect.right,
+            bottom: rect.bottom,
+            height: rect.height,
+          })),
+        };
+      });
+      assert.ok(layout.overflow <= 1, "no full-screen page scrolling");
+      assert.equal(layout.rows[0], layout.rows[1]);
+      assert.equal(layout.rows[1], layout.rows[2]);
+      assert.ok(layout.rows[3] > layout.rows[0], "3 by 3 answers");
+      for (const rect of layout.buttons) {
+        assert.ok(rect.height >= 44, "touch target height");
+        assert.ok(
+          rect.x >= 0 &&
+            rect.right <= viewport.width &&
+            rect.bottom <= viewport.height,
+          "all ten choices fit",
+        );
+      }
+      await page.evaluate(() => {
+        for (const el of document.querySelectorAll(
+          ".review-choices button,.review-prompt",
+        ))
+          el.textContent = el.dataset.original;
+      });
+    }
+    await page.setViewportSize({ width: 320, height: 568 });
     const expected = await page.locator(".review-prompt").innerText();
     await page
       .getByRole("button", {
@@ -94,11 +144,20 @@ const { chromium, webkit } = require("playwright"),
       /正解.*10pt/,
     );
     assert.equal(await page.evaluate(() => __reviewSaves), 0);
+    assert.match(await page.locator(".review-progress").innerText(), /正解 1/);
+    assert.equal(
+      await page.locator(".review-content progress").evaluate((el) => el.value),
+      1,
+    );
     const next = page.getByRole("button", { name: "次へ", exact: true });
     assert.ok(
       (await next.boundingBox()).y + (await next.boundingBox()).height <= 568,
       "next button visible at 320x568",
     );
+    if (process.env.SCREENSHOT)
+      await page.screenshot({
+        path: process.env.SCREENSHOT.replace(/\.png$/, "-answered.png"),
+      });
     await next.click();
     // Same word, different meaning: correct again but no second word/day award.
     await page
@@ -125,6 +184,17 @@ const { chromium, webkit } = require("playwright"),
     await page.getByRole("button", { name: "結果を見る" }).click();
     assert.match(await page.locator(".review-result").innerText(), /2 \/ 3/);
     await page.waitForFunction(() => __reviewSaves === 1);
+    const resultLayout = await page
+      .locator(".weak-review-screen")
+      .evaluate((el) => ({ height: el.clientHeight, scroll: el.scrollHeight }));
+    assert.ok(
+      resultLayout.scroll <= resultLayout.height + 1,
+      "results and return button fit the short viewport",
+    );
+    if (process.env.SCREENSHOT)
+      await page.screenshot({
+        path: process.env.SCREENSHOT.replace(/\.png$/, "-result.png"),
+      });
     assert.equal(await page.evaluate(() => StudyPoints.balance()), 10);
     assert.equal(
       await page.evaluate(() => LearningData.read("review-book")["1"].note),
