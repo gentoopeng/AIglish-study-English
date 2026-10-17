@@ -16,6 +16,7 @@
     opener = null,
     inertElements = [],
     answerTimer = null;
+  let eventVisuals = null;
   const portraits = new Map();
   const rateKey = () => "core_v4_word_duel_rating_" + uid();
   function localRating() {
@@ -70,6 +71,8 @@
     if (node) node.textContent = text;
   }
   function stop() {
+    eventVisuals?.dispose();
+    eventVisuals = null;
     unsubscribe?.();
     unsubscribe = null;
     clearInterval(timer);
@@ -152,6 +155,7 @@
       { ...target, players },
       false,
       Math.max(0, Date.now() - target.start),
+      (state) => (target.eventInfo = state),
     );
   }
   function points(target, answers) {
@@ -629,6 +633,7 @@
         );
       } else opponentPortrait(session, id, person);
     }
+    eventVisuals = window.DuelEventVisuals.create(dialog, session);
     dialog.querySelector(".duel-leave").onclick = () => finish(true);
     dialog.querySelector("[data-duel-next]").onclick = question;
     question();
@@ -678,7 +683,7 @@
     const target = session,
       q = m.question(target.pool, target.seed, target.answers.length),
       right = choice === q.correct;
-    const before = liveScores(target)[target.id].total;
+    const before = liveScores(target)[target.id];
     target.answers.push({
       choice,
       at: Date.now() - target.start,
@@ -687,7 +692,7 @@
     revision++;
     const scores = liveScores(target),
       value = scores[target.id],
-      delta = value.total - before;
+      delta = value.total - before.total;
     opponent(scores);
     const event = m.eventAt(
       target.seed,
@@ -707,6 +712,13 @@
               : "+" + delta)
       : "ミス · " +
         (delta < 0 ? "−" + Math.abs(delta) : delta === 0 ? "±0" : "+" + delta);
+    const rules = target.rules || m.defaultRules,
+      normal = right
+        ? Math.round(rules.points * (1 + before.combo * (rules.combo - 1)))
+        : -target.missPenalty;
+    if (event && event !== "bank" && delta !== normal)
+      combo.textContent +=
+        "（通常 " + window.DuelEventVisuals.signed(normal) + "）";
     combo.classList.toggle("is-miss", !right);
     if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
       combo.animate?.(
@@ -770,9 +782,25 @@
       if (!column) continue;
       const text = String(scores[id].total),
         node = column.querySelector("strong");
-      if (node.textContent !== text) node.textContent = text;
+      if (node.textContent !== text) {
+        eventVisuals?.score(
+          column,
+          scores[id].total - Number(node.textContent || 0),
+        );
+        node.textContent = text;
+      }
       column.classList.toggle("is-abandoned", !!person.abandoned);
     }
+    refreshEventVisuals();
+  }
+  function refreshEventVisuals() {
+    if (!session || !eventVisuals) return;
+    const elapsed = Math.max(0, Date.now() - session.start);
+    eventVisuals.refresh(
+      elapsed,
+      m.eventAt(session.seed, elapsed, session.rules),
+      m.eventPreview(session.seed, elapsed, session.rules, session.duration),
+    );
   }
   function tick() {
     if (!session || session.finished) return;
@@ -805,35 +833,7 @@
           (button.disabled =
             remain > 0 || session.reviewing || session.answering),
       );
-    const elapsed = Math.max(0, Date.now() - session.start),
-      banner = dialog.querySelector(".duel-event-banner"),
-      active = m.eventAt(session.seed, elapsed, session.rules),
-      preview = m.eventPreview(
-        session.seed,
-        elapsed,
-        session.rules,
-        session.duration,
-      ),
-      shown = active || preview;
-    if (banner) {
-      banner.hidden = !shown;
-      if (shown) {
-        const seconds = Math.max(
-          0,
-          Math.ceil(((active ? active.until : preview.start) - elapsed) / 1000),
-        );
-        let text =
-          (active ? "" : "まもなく ") +
-          window.BattleLobby.labels[shown.type] +
-          " · " +
-          seconds +
-          "秒";
-        if (active && preview)
-          text += " / 次は" + window.BattleLobby.labels[preview.type];
-        if (banner.textContent !== text) banner.textContent = text;
-        banner.dataset.phase = active ? "active" : "preview";
-      }
-    }
+    const elapsed = Math.max(0, Date.now() - session.start);
     if (session.rules?.events) {
       const stage =
         Math.floor(elapsed / 15000) +
@@ -844,6 +844,7 @@
         opponent();
       }
     }
+    refreshEventVisuals();
     const next = dialog.querySelector("[data-duel-next]");
     if (next && session.reviewing) {
       const wait = Math.max(
@@ -915,6 +916,8 @@
     if (banner) banner.hidden = true;
     const target = session;
     target.finished = true;
+    eventVisuals?.dispose();
+    eventVisuals = null;
     window.saveAfterStudy?.("battle-end");
     clearTimeout(answerTimer);
     window.WordDuelProgress.flush(target.id).catch(() => {});
