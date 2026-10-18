@@ -60,17 +60,23 @@
       try {
         await window.WordDuelProgress?.flush(account);
         const pointsSaved = await window.StudyPoints?.flush(account);
+        const publicationsSaved =
+          await window.VocabWordEntry?.flushPublications(account);
         if (id() !== account) return { cloudSaved: false };
         const result = await window.__backgroundSaveAll();
         if (id() === account && result.cloudSaved) {
           await window.flushWorkbookPublications?.();
           saved = version;
-          if (revision === version && pointsSaved !== false)
+          if (
+            revision === version &&
+            pointsSaved !== false &&
+            publicationsSaved !== false
+          )
             window.localStorage?.removeItem(
               "core_v4_autosave_pending_" + account,
             );
         }
-        return pointsSaved === false
+        return pointsSaved === false || publicationsSaved === false
           ? { ...result, cloudSaved: false }
           : result;
       } catch (error) {

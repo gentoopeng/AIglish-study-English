@@ -2440,3 +2440,34 @@ html body dialog.group-chat-dialog[open]{display:flex;flex-direction:column;over
 .group-chat-dialog .group-chat{height:auto;flex:1;min-height:0}
 .group-chat-dialog .group-content{flex:1;min-height:0;overflow:auto}
 .group-chat-dialog>[data-group-status]:empty{display:none}
+
+/* Structured word entry: compact controls, native keyboard, no persistent visual effects. */
+.vocab-book-heading { gap: 10px; }
+.vocab-book-heading > div { min-width: 0; flex: 1; }
+.vocab-add-word { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; min-height: 40px; padding: 8px 11px; color: #e2d4b2; border: 1px solid #d5c9ac55; border-radius: 12px; background: #c6b79012; font: 600 12px system-ui,sans-serif; cursor: pointer; }
+.vocab-add-word[hidden] { display: none; }
+.vocab-add-word:focus-visible { outline: 2px solid #d5c9ac; outline-offset: 3px; }
+.vocab-entry-dialog { padding: 20px; max-height: calc(100dvh - 24px); }
+.vocab-entry-dialog header { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; }
+.vocab-entry-dialog header h2 { margin: 0; font-size: 21px; }
+.vocab-entry-book { margin: 5px 0 0; color: #b4b0a6; font-size: 12px; overflow-wrap: anywhere; }
+.vocab-entry-dialog header button { flex: 0 0 auto; background: transparent; color: #ddd6c6; border: 0; font-size: 24px; width: 40px; height: 40px; cursor: pointer; }
+.vocab-entry-dialog input,.vocab-entry-dialog textarea,.vocab-entry-dialog select { font-size: 16px; }
+.vocab-entry-meaning-controls { display: grid; grid-template-columns: minmax(0,1fr) 100px 32px; gap: 6px; align-items: center; }
+.vocab-entry-meaning-controls select { padding: 10px 4px; font-size: 12px; }
+.vocab-entry-meaning-controls button { width: 32px; height: 40px; padding: 0; border: 0; background: transparent; color: #c5bda9; font-size: 20px; cursor: pointer; }
+.vocab-entry-meaning-controls button[hidden] { visibility: hidden; display: block; }
+.vocab-entry-add-meaning { margin: 9px 0 16px; padding: 8px 0; min-height: 40px; border: 0; background: transparent; color: #d5c9ac; font-size: 12px; cursor: pointer; }
+.vocab-entry-dialog details { border-top: 1px solid #d5c9ac25; padding-top: 12px; }
+.vocab-entry-dialog summary { color: #c2baaa; cursor: pointer; font-size: 12px; }
+.vocab-entry-dialog .vocab-entry-continue { display: flex; align-items: center; gap: 8px; }
+.vocab-entry-dialog #vocabEntryContinue { width: 17px; height: 17px; margin: 0; accent-color: #c6b790; }
+.vocab-entry-status { font-size: 12px; line-height: 1.6; color: #c6d8bd; overflow-wrap: anywhere; }
+.vocab-entry-status:empty,.vocab-entry-dialog .library-editor-error:empty { display: none; }
+.vocab-entry-dialog .library-editor-actions { position: sticky; bottom: -20px; background: #141d2a; padding: 12px 0 4px; margin-top: 12px; }
+@media(max-width:360px) { .vocab-entry-dialog { padding: 16px; } .vocab-entry-meaning-controls { grid-template-columns: minmax(0,1fr) 85px 28px; } .vocab-entry-meaning-controls button { width: 28px; } .vocab-entry-dialog .library-editor-actions { bottom: -16px; } }
+
+.vocab-book-heading > div > div:last-child { min-width: 0; flex: 1; }
+.vocab-book-heading h2 { min-width: 0; }
+.vocab-book-heading #vocabBookTitle { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vocab-book-heading #vocabCoverContainer { flex-shrink: 0; }

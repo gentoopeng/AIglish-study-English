@@ -1,0 +1,406 @@
+// Small, structured word entry; existing import and canonical learning records stay intact.
+(function (root) {
+  "use strict";
+  function nextNumber(master) {
+    const max = (master || []).reduce(
+      (n, w) =>
+        Number.isSafeInteger(Number(w.num)) ? Math.max(n, Number(w.num)) : n,
+      0,
+    );
+    if (max >= Number.MAX_SAFE_INTEGER)
+      throw Error("単語番号を指定してください。");
+    return max + 1;
+  }
+  function append(master, fields) {
+    if (!Array.isArray(master))
+      throw Error("単語データの読み込みを確認してください。");
+    const num = fields.num == null ? nextNumber(master) : Number(fields.num);
+    if (!Number.isSafeInteger(num) || num < 1)
+      throw Error("番号は1以上の整数で入力してください。");
+    if (master.some((w) => Number(w.num) === num))
+      throw Error("この番号は使用中です。別の番号にしてください。");
+    const word = String(fields.word || "").trim();
+    if (!word) throw Error("単語・用語・問題文を入力してください。");
+    if (!Array.isArray(fields.meanings) || !fields.meanings.length)
+      throw Error("意味・答えを入力してください。");
+    const meanings = fields.meanings.map((m, i) => {
+      const text = String(m.text || "").trim();
+      if (!text) throw Error("意味・答え " + (i + 1) + " を入力してください。");
+      return {
+        id: num + "-" + i,
+        text,
+        ...(m.partOfSpeech ? { partOfSpeech: String(m.partOfSpeech) } : {}),
+      };
+    });
+    const entry = {
+      num,
+      word,
+      meaning:
+        meanings.length === 1
+          ? meanings[0].text
+          : meanings
+              .map(
+                (m, i) =>
+                  (i < 20
+                    ? String.fromCharCode(0x2460 + i)
+                    : "(" + (i + 1) + ")") + m.text,
+              )
+              .join(""),
+      meanings,
+      sub: String(fields.sub || "").trim(),
+    };
+    return {
+      entry,
+      master: [...master, entry].sort((a, b) => Number(a.num) - Number(b.num)),
+    };
+  }
+  const model = { nextNumber, append };
+  root.VocabEntryModel = model;
+  if (typeof module !== "undefined") module.exports = model;
+  if (!root.document) return;
+
+  const owner = () => myId || "GUEST-000",
+    queueKey = (id) => "core_v4_vocab_entry_publications_" + id;
+  const flights = new Map();
+  let dialog = null;
+  function publicationQueue(id) {
+    return JSON.parse(localStorage.getItem(queueKey(id)) || "{}");
+  }
+  function ready(book, id) {
+    return (
+      owner() === id &&
+      currentTextbook === book &&
+      root.__learningBootReady !== false &&
+      root.canEditCurrentTextbook?.() &&
+      root.LearningData.canSave(book) &&
+      !root.LibraryState?.isDeleted("book", book, id)
+    );
+  }
+  function metadata(book) {
+    return textbooksPool.find((b) => b.id === book);
+  }
+  function save(fields, book, id) {
+    if (!ready(book, id))
+      throw Error(
+        "単語帳の読み込み・編集権限を確認してください。開き直すと再試行できます。",
+      );
+    const previous = root.VocabMaster.resolve(book);
+    if (!previous)
+      throw Error(
+        "単語を読み込んでから追加してください。既存データは変更していません。",
+      );
+    const result = append(
+      root.stripVocabProgressFromWords(previous.master),
+      fields,
+    );
+    const progress = root.LearningData.read(book),
+      savedAt = new Date(
+        Math.max(Date.now(), (Date.parse(previous.savedAt) || 0) + 1),
+      ).toISOString();
+    const draft = {
+      master: result.master,
+      emptyConfirmed: false,
+      progress,
+      savedAt,
+    };
+    // A single complete draft is the recovery source. Write it before changing live state.
+    const record = metadata(book),
+      publicChange =
+        !root.isPersonalTextbook(book) || record?.visibility === "public";
+    if (publicChange)
+      localStorage.setItem(
+        queueKey(id),
+        JSON.stringify({ ...publicationQueue(id), [book]: savedAt }),
+      );
+    localStorage.setItem(
+      root.__manualVocabLocalKey(book),
+      JSON.stringify(draft),
+    );
+    root.__manualVocabDrafts[book] = draft;
+    root.__manualVocabDraftRevisions ||= {};
+    root.__dirtyManualVocabDrafts ||= {};
+    root.__dirtyManualVocabDrafts[book] = root.__manualVocabDraftRevisions[
+      book
+    ] = (root.__manualVocabDraftRevisions[book] || 0) + 1;
+    textbooksCacheMap[book] = result.master;
+    // These are secondary copies; the complete recovery draft above already succeeded.
+    try {
+      localStorage.setItem(
+        "core_v4_custom_words_" + id + "_" + book,
+        JSON.stringify(result.master),
+      );
+      localStorage.setItem(
+        "core_v4_cache_" + book,
+        JSON.stringify(result.master),
+      );
+    } catch (error) {
+      console.warn("追加した単語は単語帳の下書きに保存済みです", error);
+    }
+    try {
+      vocabList = root.migrateVocabData(structuredClone(result.master));
+      currentUserVocabProgress = progress;
+      root.applyUserProgressToVocabList();
+      userStats.vocab_reg = vocabList.length;
+      root.queueBackgroundSave?.();
+      root.updateFlashcardSourceSelectOptions();
+      root.applyVocabMaxRange?.();
+      root.renderVocabList();
+      root.renderVocabLibrarySelection();
+    } catch (error) {
+      console.warn(
+        "単語は下書きに保存済みです。表示を開き直してください。",
+        error,
+      );
+    }
+    return result.entry;
+  }
+  function restorePublications(incoming, id = owner()) {
+    if (
+      id !== owner() ||
+      !incoming ||
+      typeof incoming !== "object" ||
+      Array.isArray(incoming)
+    )
+      throw Error("公開更新の記録を確認してください。");
+    const queue = publicationQueue(id);
+    for (const [book, stamp] of Object.entries(incoming)) {
+      if (root.LibraryState?.isDeleted("book", book, id)) continue;
+      if (
+        Number.isFinite(Date.parse(stamp)) &&
+        (!queue[book] || Date.parse(stamp) > Date.parse(queue[book]))
+      )
+        queue[book] = stamp;
+    }
+    localStorage.setItem(queueKey(id), JSON.stringify(queue));
+  }
+  async function flushPublications(id = owner()) {
+    if (id !== owner()) return false;
+    if (flights.has(id)) return flights.get(id);
+    if (root.FirestoreReadGuard?.paused())
+      return !Object.keys(publicationQueue(id)).length;
+    const task = (async () => {
+      let success = true;
+      for (const [book, stamp] of Object.entries(publicationQueue(id))) {
+        if (id !== owner()) return false;
+        if (root.LibraryState?.isDeleted("book", book, id)) {
+          const q = publicationQueue(id);
+          delete q[book];
+          localStorage.setItem(queueKey(id), JSON.stringify(q));
+          continue;
+        }
+        const draft = root.VocabMaster.resolve(book);
+        if (!draft) {
+          success = false;
+          continue;
+        }
+        try {
+          let timeout;
+          try {
+            await Promise.race([
+              root.publishVocabEntryMaster(book, draft.master, id),
+              new Promise((_, reject) => {
+                timeout = setTimeout(
+                  () => reject(Error("公開の更新は次の保存時に再試行します。")),
+                  8000,
+                );
+              }),
+            ]);
+          } finally {
+            clearTimeout(timeout);
+          }
+          if (id !== owner()) return false;
+          const q = publicationQueue(id);
+          if (
+            q[book] === stamp &&
+            root.VocabMaster.resolve(book)?.savedAt === draft.savedAt &&
+            JSON.stringify(root.VocabMaster.resolve(book)?.master) ===
+              JSON.stringify(draft.master)
+          ) {
+            delete q[book];
+            localStorage.setItem(queueKey(id), JSON.stringify(q));
+          }
+        } catch (error) {
+          success = false;
+          console.warn("公開用の単語は次の保存時に再同期します", error);
+          break;
+        }
+      }
+      return success;
+    })().finally(() => flights.delete(id));
+    flights.set(id, task);
+    return task;
+  }
+  function close() {
+    dialog?.close();
+    dialog?.remove();
+    dialog = null;
+    document.getElementById("vocabAddWord")?.focus();
+  }
+  function el(tag, text, cls) {
+    const e = document.createElement(tag);
+    if (text !== undefined) e.textContent = text;
+    if (cls) e.className = cls;
+    return e;
+  }
+  const positions = [
+    ["", "品詞なし"],
+    ["名", "名詞"],
+    ["動", "動詞"],
+    ["形", "形容詞"],
+    ["形動", "形容動詞"],
+    ["副", "副詞"],
+    ["代", "代名詞"],
+    ["前", "前置詞"],
+    ["接", "接続詞"],
+    ["助詞", "助詞"],
+    ["助", "助動詞"],
+    ["連", "連体詞"],
+    ["冠", "冠詞"],
+    ["間", "間投詞"],
+  ];
+  function openEntry() {
+    const id = owner(),
+      book = currentTextbook;
+    if (!ready(book, id)) return;
+    const original = root.VocabMaster.resolve(book);
+    if (!original) return;
+    close();
+    const d = (dialog = el(
+      "dialog",
+      undefined,
+      "library-editor-dialog vocab-entry-dialog",
+    ));
+    d.setAttribute("aria-labelledby", "vocabEntryTitle");
+    d.innerHTML =
+      '<header><div><h2 id="vocabEntryTitle">単語を追加</h2><p class="vocab-entry-book"></p></div><button type="button" data-entry-close aria-label="単語の追加を閉じる">×</button></header><form><label for="vocabEntryWord">単語・用語・問題文</label><input id="vocabEntryWord" required autocomplete="off" placeholder="例：follow ／ あはれなり"><div class="vocab-entry-meanings"></div><button type="button" class="vocab-entry-add-meaning">＋ 意味を追加</button><details><summary>サブ情報・番号を設定</summary><label for="vocabEntrySub">サブ情報</label><textarea id="vocabEntrySub" rows="3" placeholder="用法・例文・関連知識など（任意）"></textarea><label for="vocabEntryNumber">単語番号</label><input id="vocabEntryNumber" type="number" min="1" step="1"><p class="library-editor-hint">通常は末尾の次の番号を自動で使います。</p></details><p class="vocab-entry-status" role="status"></p><p class="library-editor-error" role="alert"></p><label class="vocab-entry-continue"><input type="checkbox" id="vocabEntryContinue">続けて追加する</label><div class="library-editor-actions"><button type="button" data-entry-close>キャンセル</button><button type="submit" class="library-editor-primary">追加する</button></div></form>';
+    d.querySelector(".vocab-entry-book").textContent =
+      metadata(book)?.name || "単語帳";
+    const form = d.querySelector("form"),
+      number = d.querySelector("#vocabEntryNumber"),
+      list = d.querySelector(".vocab-entry-meanings"),
+      error = d.querySelector(".library-editor-error"),
+      message = d.querySelector("[role=status]");
+    let manual = false;
+    number.value = nextNumber(original.master);
+    number.oninput = () => {
+      manual = number.value !== "";
+    };
+    function relabel() {
+      [...list.children].forEach((row, i) => {
+        row.querySelector("label").textContent = "意味・答え " + (i + 1);
+        row
+          .querySelector("input")
+          .setAttribute("aria-label", "意味・答え " + (i + 1));
+        row
+          .querySelector("select")
+          .setAttribute("aria-label", "意味 " + (i + 1) + " の品詞");
+        row
+          .querySelector("button")
+          .setAttribute("aria-label", "意味 " + (i + 1) + " を削除");
+        row.querySelector("button").hidden = list.children.length === 1;
+      });
+    }
+    function addMeaning(focus = true) {
+      const row = el("div", undefined, "vocab-entry-meaning"),
+        label = el("label"),
+        input = el("input"),
+        select = el("select"),
+        remove = el("button", "−"),
+        controls = el("div", undefined, "vocab-entry-meaning-controls");
+      const inputId = "entryMeaning-" + crypto.randomUUID();
+      input.id = inputId;
+      input.required = true;
+      input.placeholder = "例：〜に従う";
+      input.autocomplete = "off";
+      label.htmlFor = inputId;
+      for (const [value, text] of positions) {
+        const option = el("option", text);
+        option.value = value;
+        select.append(option);
+      }
+      remove.type = "button";
+      remove.onclick = () => {
+        row.remove();
+        relabel();
+        list.querySelector("input").focus();
+      };
+      controls.append(input, select, remove);
+      row.append(label, controls);
+      list.append(row);
+      relabel();
+      if (focus) input.focus();
+    }
+    addMeaning(false);
+    d.querySelector(".vocab-entry-add-meaning").onclick = () => addMeaning();
+    d.querySelectorAll("[data-entry-close]").forEach(
+      (b) => (b.onclick = close),
+    );
+    d.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      close();
+    });
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      error.textContent = "";
+      message.textContent = "";
+      const submit = form.querySelector("[type=submit]");
+      if (submit.disabled) return;
+      submit.disabled = true;
+      try {
+        const entry = save(
+          {
+            num: manual ? number.value : null,
+            word: form.querySelector("#vocabEntryWord").value,
+            sub: form.querySelector("#vocabEntrySub").value,
+            meanings: [...list.children].map((row) => ({
+              text: row.querySelector("input").value,
+              partOfSpeech: row.querySelector("select").value,
+            })),
+          },
+          book,
+          id,
+        );
+        root.showToast?.("「" + entry.word + "」を追加しました。", "ok");
+        if (form.querySelector("#vocabEntryContinue").checked) {
+          form.querySelector("#vocabEntryWord").value = "";
+          form.querySelector("#vocabEntrySub").value = "";
+          manual = false;
+          number.value = nextNumber(root.VocabMaster.resolve(book).master);
+          list.replaceChildren();
+          addMeaning(false);
+          message.textContent =
+            "#" + entry.num + " 「" + entry.word + "」を追加しました。";
+          form.querySelector("#vocabEntryWord").focus();
+        } else {
+          close();
+          // Show the newly created word even when the list was filtered or on a later page.
+          document.getElementById("vocabSearchInput").value = entry.word;
+          document.getElementById("vocabRangeStart").value = 1;
+          root.setVocabFilter("all");
+        }
+      } catch (e) {
+        error.textContent = e.message;
+      } finally {
+        submit.disabled = false;
+      }
+    };
+    document.body.append(d);
+    d.showModal();
+    d.querySelector("#vocabEntryWord").focus();
+  }
+  function updateButton() {
+    const button = document.getElementById("vocabAddWord");
+    if (!button) return;
+    button.hidden = !(currentTextbook && ready(currentTextbook, owner()));
+  }
+  const render = root.renderVocabList;
+  root.renderVocabList = function () {
+    updateButton();
+    return render.apply(this, arguments);
+  };
+  root.onBeforeAppLoad?.(close);
+  root.onAppLoaded?.(updateButton);
+  root.addEventListener("learning-data-ready", updateButton);
+  root.openVocabWordEntry = openEntry;
+  root.VocabWordEntry = { save, flushPublications, restorePublications };
+})(typeof window === "undefined" ? globalThis : window);
