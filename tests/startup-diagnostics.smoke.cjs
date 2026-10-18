@@ -54,6 +54,26 @@ const assert = require("node:assert/strict");
     assert.equal(state.previous.version, "previous-version");
     assert.ok(JSON.stringify(state).length < 1000);
     assert.equal(JSON.stringify(state).includes("status"), false);
+    await page.evaluate(() => {
+      StartupMonitor.progress(1234, 1234);
+      StartupMonitor.activity("card-swipe");
+    });
+    const after = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("__aiglish_startup_diagnostic")),
+    );
+    assert.equal(after.ready, true);
+    assert.equal(after.activity.kind, "card-swipe");
+    assert.deepEqual(after.progressChars, { primary: 1234, recovery: 1234 });
+    await page.reload();
+    await page.waitForFunction(() => window.__learningBootReady);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("__aiglish_startup_diagnostic"))
+            .previous.activity.kind,
+      ),
+      "card-swipe",
+    );
     console.log(
       "PASS: standalone startup diagnostics avoid application/storage hydration, retain learning and preserve interrupted phase across next successful startup",
     );

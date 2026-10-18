@@ -16,3 +16,36 @@ test('startup restores ratings archived in full-save localStorage before empty m
 test('two explicit answers in the same millisecond keep the latest answer through recovery',()=>{
  const {ctx,state,values}=setup();ctx.Date={now:()=>1000};state.commit('book',{1:{status:'bad'}},1);state.commit('book',{1:{status:'ok'}},1);assert.equal(state.read('book')[1].status,'ok');assert.equal(state.read('book')[1].editedAt,1001);values.delete('core_v4_user_vocab_progress_a_book');assert.equal(state.read('book')[1].status,'ok');
 });
+
+test('matching working and recovery records need one parse and no full-book comparison strings',()=>{
+ const {ctx,state,values}=setup();state.restore('book',saved);
+ let parses=0,strings=0,writes=0;
+ ctx.JSON={parse:(...args)=>{parses++;return JSON.parse(...args);},stringify:(...args)=>{strings++;return JSON.stringify(...args);}};
+ const set=ctx.localStorage.setItem;ctx.localStorage.setItem=(...args)=>{writes++;set(...args);};
+ const first=state.read('book');assert.equal(parses,1);assert.equal(strings,0);assert.equal(writes,0);
+ first[1].status='bad';first[1].history.push('bad');
+ assert.equal(state.read('book')[1].status,'ok');assert.equal(state.read('book')[1].history.length,2);
+ parses=strings=writes=0;
+ state.commit('book',{1:{status:'so'}},1);
+ assert.equal(parses,1);assert.equal(strings,1);assert.equal(writes,2);
+ assert.equal(values.get('core_v4_user_vocab_progress_a_book'),values.get('aiglish_learning_recovery_a_book'));
+});
+
+test('interruption after writing the recovery mirror repairs the working record on the next read',()=>{
+ const {ctx,state,values}=setup();state.restore('book',saved);
+ const set=ctx.localStorage.setItem;let writes=0;
+ ctx.localStorage.setItem=(...args)=>{if(++writes===2)throw Error('interrupted');set(...args);};
+ assert.throws(()=>state.commit('book',{1:{status:'none',history:[]}},1),/interrupted/);
+ ctx.localStorage.setItem=set;
+ const restored=state.read('book');assert.equal(restored[1].status,'none');assert.equal(restored[2].status,'bad');
+ assert.equal(JSON.parse(values.get('core_v4_user_vocab_progress_a_book'))[1].status,'none');
+});
+
+test('external changes and another account are always read from the current storage',()=>{
+ const {ctx,state,values}=setup();state.restore('book',saved);
+ const fresh=JSON.stringify({1:{status:'bad',editedAt:Date.now()+10000}});
+ values.set('core_v4_user_vocab_progress_a_book',fresh);
+ assert.equal(state.read('book')[1].status,'bad');assert.equal(state.read('book')[2].status,'bad');
+ ctx.myId='b';assert.equal(Object.keys(state.read('book')).length,0);
+ ctx.myId='a';assert.equal(state.read('book')[1].status,'bad');
+});
