@@ -44,6 +44,7 @@ const facade=new Proxy(native,{
 });
 Object.defineProperty(window,'localStorage',{configurable:true,value:facade});
 const ready=(async()=>{
+ window.StartupMonitor?.mark('storage-open');
  database=await new Promise((resolve,reject)=>{
   const request=indexedDB.open('aiglish-local-values',1);let settled=false;
   const timer=setTimeout(()=>fail(Error('保存データの読み込みが完了しませんでした。')),12000);
@@ -54,6 +55,7 @@ const ready=(async()=>{
  });
  database.onversionchange=()=>database.close();
  if(window.BroadcastChannel){channel=new BroadcastChannel('aiglish-local-values');channel.onmessage=async event=>{if(!Array.isArray(event.data))return;const tx=database.transaction('values','readonly');for(const key of event.data){if(typeof key!=='string')continue;const request=tx.objectStore('values').get(key);request.onsuccess=()=>{if(pending.has(key))return;const oldValue=get(key),value=request.result===undefined?null:request.result;if(value===null){values.delete(key);rawRemove(key);}else{values.set(key,value);if(critical(key)){try{rawSet(key,value);}catch(error){rawRemove(key);}}else if(rawGet(key)!==null&&rawGet(key)!==value)rawRemove(key);}revision++;window.dispatchEvent(new StorageEvent('storage',{key,oldValue,newValue:value,storageArea:native,url:location.href}));};}};}
+ window.StartupMonitor?.mark('storage-hydrate');
  await new Promise((resolve,reject)=>{const tx=database.transaction('values','readonly'),request=tx.objectStore('values').openCursor();request.onsuccess=()=>{const cursor=request.result;if(cursor){if(!pending.has(cursor.key))values.set(cursor.key,cursor.value);cursor.continue();}};tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});
  // Legacy large values move only after a successful transaction. No records are pruned.
  for(const key of nativeKeys()){const value=rawGet(key);if(!owned(key)||value===null||pending.has(key))continue;
@@ -68,6 +70,7 @@ const ready=(async()=>{
    if(critical(key))nativeWrites.set(key,value);
   }}
  revision++;await flush();
+ window.StartupMonitor?.mark('storage-ready');
 
 })();
 ready.catch(failure);

@@ -117,6 +117,7 @@ window.__afterAppLoadHandlers = window.__afterAppLoadHandlers || [];
 window.onBeforeAppLoad = function(handler) { if(typeof handler === 'function') window.__beforeAppLoadHandlers.push(handler); };
 window.onAppLoaded = function(handler) { if(typeof handler === 'function') window.__afterAppLoadHandlers.push(handler); };
 window.loadLocalState = async function() {
+window.StartupMonitor?.mark('account-restore');
 window.__learningBootReady=false;
 const accountToStart = localStorage.getItem('core_v4_userId');
 if (accountToStart && window.AdminPlayers && !await window.AdminPlayers.canStart(accountToStart)) return;
@@ -157,6 +158,7 @@ if(apiKeyInput) apiKeyInput.value = geminiApiKey;
      }).catch(function(e) { console.warn('ユーザー情報のバックグラウンド同期に失敗しました:', e); });
      userStats.goal_text = myTarget; 
      userStats.friends_count = myFriendList.length; 
+     window.StartupMonitor?.mark('active-book');
      await window.loadCurrentTextbookData();
      window.applyProfileToUi();
 
@@ -186,6 +188,7 @@ for (var afterIndex = 0; afterIndex < window.__afterAppLoadHandlers.length; afte
     catch (e) { console.error('起動後の追加読み込みに失敗しました:', e); }
 }
 window.__learningBootReady=true;
+window.StartupMonitor?.mark('ready');
 window.dispatchEvent(new Event('learning-data-ready'));
 if(window.resumeBackgroundSave)window.resumeBackgroundSave();
 };

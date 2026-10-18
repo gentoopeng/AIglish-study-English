@@ -34,8 +34,9 @@ const assert = require("node:assert/strict");
       showVocabLibrarySelection();
     });
     await page
-      .getByRole("button", { name: "連続操作確認のフラッシュ単語設定" })
+      .getByRole("button", { name: "連続操作確認の学習方法を選ぶ" })
       .click();
+    await page.getByRole("button", { name: "単語カード", exact: true }).click();
     await page.getByRole("button", { name: "カードを開始する" }).click();
     await page.locator("#activeFlashcard").waitFor({ state: "visible" });
     await page.evaluate(() => {

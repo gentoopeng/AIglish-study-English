@@ -1174,6 +1174,7 @@ async function autoLoadOnce() {
   window.__gameSaveLoadedFor=id;
   if(window.LibraryState){try{await window.LibraryState.loadCloud(id);if(loginUid()!==id)return;window.LibraryState.cleanLocal(id);}catch(e){console.warn('[save] deletion history sync deferred',e);}}
   var cloudSave=null,localSave=null,save=null,cloudMarker=null;
+  if(!window.__learningBootReady)window.StartupMonitor?.mark('full-save-parse');
   try{localSave=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}
   try{cloudMarker=JSON.parse(localStorage.getItem(cloudMetaKey(id))||'null');}catch(e){}
   if(!cloudMarker){
@@ -1193,8 +1194,10 @@ async function autoLoadOnce() {
   }
   if(loginUid()!==id)return;
   if(save&&window.LibraryState)window.LibraryState.sanitizeSave(save,id);
+  if(!window.__learningBootReady)window.StartupMonitor?.mark('textbook-restore');
   if(save&&window.TextbookFiles)await window.TextbookFiles.prepareRestore(save,id);
   if(loginUid()!==id)return;
+  if(!window.__learningBootReady)window.StartupMonitor?.mark('save-storage-restore');
   restoreSaveStorage(save,id);
   if(save&&save.data&&save.data.memory){
     window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt||'',data:save.data.memory};
@@ -1217,6 +1220,7 @@ function restorePendingSaveMemory(){
   ensureBtn();
   var pending=window.__pendingGameSaveMemory;
   if(!pending)return;
+  if(!window.__learningBootReady)window.StartupMonitor?.mark('saved-books-restore');
   if(window.LibraryState)window.LibraryState.sanitizeSave({memory:pending.data},pending.id);
   applySavedMemory(pending.data,pending.id);
   var restoredSuccessfully=true;
@@ -1249,18 +1253,26 @@ function restorePendingSaveMemory(){
             chosen.savedAt=new Date(directProgressMs).toISOString();
           }
         }catch(e){}
-        window.__manualVocabDrafts[savedBookKey]=JSON.parse(JSON.stringify(chosen));
-        if(Array.isArray(chosen.master)){
-          if(typeof textbooksCacheMap!=='undefined')textbooksCacheMap[savedBookKey]=chosen.master;
-          localStorage.setItem('core_v4_cache_'+savedBookKey,JSON.stringify(chosen.master));
-          localStorage.setItem('core_v4_custom_words_'+pending.id+'_'+savedBookKey,JSON.stringify(chosen.master));
-        }
         if(chosen.progress&&typeof window.getVocabProgressStorageKey==='function'){
           var chosenMs=window.__vocabSavedAtMs(chosen.savedAt)||fullSaveMs;
           if(window.LearningData)chosen.progress=window.LearningData.restore(savedBookKey,chosen.progress);
           localStorage.setItem(window.getVocabProgressStorageKey(savedBookKey),JSON.stringify(chosen.progress));
           if(chosenMs)localStorage.setItem(window.getVocabProgressStorageKey(savedBookKey)+'__ts',String(chosenMs));
           if(savedBookKey===bookKey)currentUserVocabProgress=JSON.parse(JSON.stringify(chosen.progress));
+        }
+        // Retain only the open book as objects. Older saves contain every book's
+        // full master: expanding these into three caches at login multiplies
+        // memory before Safari can paint. A durable per-book draft preserves
+        // unopened books and is resolved by the normal loader on demand.
+        if(savedBookKey===bookKey){
+          window.__manualVocabDrafts[savedBookKey]=JSON.parse(JSON.stringify(chosen));
+          if(Array.isArray(chosen.master)){
+            if(typeof textbooksCacheMap!=='undefined')textbooksCacheMap[savedBookKey]=chosen.master;
+            localStorage.setItem('core_v4_cache_'+savedBookKey,JSON.stringify(chosen.master));
+            localStorage.setItem('core_v4_custom_words_'+pending.id+'_'+savedBookKey,JSON.stringify(chosen.master));
+          }
+        }else{
+          localStorage.setItem(window.__manualVocabLocalKey(savedBookKey),JSON.stringify(chosen));
         }
       });
     }
