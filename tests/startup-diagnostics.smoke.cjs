@@ -27,6 +27,7 @@ const assert = require("node:assert/strict");
     const requests = [];
     page.on("request", (request) => requests.push(request.url()));
     await page.reload();
+    await page.waitForFunction(() => !document.getElementById("copy").disabled);
     assert.match(
       await page.locator("#report").textContent(),
       /storage-hydrate/,
