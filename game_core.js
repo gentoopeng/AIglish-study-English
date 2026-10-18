@@ -241,6 +241,7 @@
 
         // エッジリップル要素を確保
         ['fcEdgeRippleRight', 'fcEdgeRippleLeft', 'fcEdgeRippleTop'].forEach(function(id) {
+            if (document.documentElement.classList.contains('ios-stable-rendering')) return;
             if (!document.getElementById(id)) {
                 var el = document.createElement('div');
                 el.id = id;
@@ -341,6 +342,7 @@
     // スワイプ確定時だけ表示する軽量な消滅演出。
     // 指への追尾はせず、8個の粒と1本の輪をCSSだけで短時間描画する。
     window.showFlashcardVanishBurst = function(x, y, direction, host) {
+        if(document.documentElement.classList.contains('ios-stable-rendering'))return;
         var burst = document.createElement('div');
         burst.className = 'fc-vanish-burst fc-vanish-' + direction;
         burst.style.left = x + 'px';
@@ -442,11 +444,12 @@
         var liveRipple = document.createElement('div');
         liveRipple.id = "flashcardLiveRippleLayer";
         liveRipple.style.cssText = "position:absolute; top:0; left:0; width:100%; height:100%; border-radius:50%; pointer-events:none; opacity:0; z-index:30 !important; mix-blend-mode: screen; transition: opacity 0.1s ease;";
-        cardWrap.appendChild(liveRipple);
+        if(!document.documentElement.classList.contains('ios-stable-rendering'))cardWrap.appendChild(liveRipple);
 
         cardWrap.onclick = function(e) {
             if (isCardFlicking) return;
             if (cardWrap.__ignoreClickUntil && Date.now() < cardWrap.__ignoreClickUntil) return;
+            window.StartupMonitor?.activity('card-flip');
             cardWrap.classList.toggle('flipped');
             window.AppSounds?.play('back');
         };
@@ -471,7 +474,9 @@
             if (!isCardFlicking || e.pointerId !== activePointerId) return;
             var dx = e.clientX - cardTouchStartX;
             var dy = e.clientY - cardTouchStartY;
-            cardWrap.style.setProperty('transform', "translate3d(" + dx + "px, " + dy + "px, 0) rotate(" + (dx * 0.05) + "deg)", 'important');
+            var flat=document.documentElement.classList.contains('ios-stable-rendering');
+            cardWrap.style.setProperty('transform', (flat?'translate(':'translate3d(') + dx + "px, " + dy + (flat?'px)':'px, 0)') + " rotate(" + (dx * 0.05) + "deg)", 'important');
+            if(flat)return;
             var distance = Math.sqrt(dx * dx + dy * dy);
             var ratio = Math.min(distance / 130, 1);
             var fluidOpacity = Math.pow(ratio, 2.2) * 0.45;
@@ -522,6 +527,7 @@
                 cardWrap.style.animation = '';
                 cardWrap.style.removeProperty('transform');
                 // スマホはclickの発火を待たず、指を離した瞬間にめくる。
+                window.StartupMonitor?.activity('card-flip');
                 cardWrap.classList.toggle('flipped');
             window.AppSounds?.play('back');
                 cardWrap.__ignoreClickUntil = Date.now() + 500;
@@ -559,21 +565,23 @@
     };
 
     window.animateFlashcardSwipe=function(card,direction,finalDx,finalDy,removeCard){
+        window.StartupMonitor?.activity(card.closest('.flash-warmup-dialog')?'warmup-swipe':'card-swipe');
+        // On iOS, a flat face alone was insufficient: the swipe still created a
+        // fixed cloned card, a 3x expanding gradient, eight particles and a ring.
+        // Share this path with login warm-up; keep the drag, face reveal and rim,
+        // without allocating outgoing compositor surfaces on every answer.
+        if(document.documentElement.classList.contains('ios-stable-rendering')){
+            document.querySelectorAll('#flashcardGhost,.flashcard-post-ripple,.fc-vanish-burst,.flashcard-edge-ripple').forEach(function(effect){effect.remove();});
+            if(removeCard!==false)card.remove();
+            return;
+        }
         var effectHost=card.closest('dialog')||document.body;
         var rect = card.getBoundingClientRect();
         var releaseX = rect.left + rect.width / 2;
         var releaseY = rect.top + rect.height / 2;
 
         document.querySelectorAll('#flashcardGhost,.flashcard-post-ripple,.fc-vanish-burst').forEach(function(effect){effect.remove();});
-        // iOS must not clone a nested 3D/scrolling subtree for the outgoing effect.
-        var ghost;
-        if(document.documentElement.classList.contains('ios-stable-rendering')){
-            ghost=document.createElement('div');ghost.className='flashcard-wrapper-3d fc-flat-ghost';
-            var surface=card.querySelector(card.classList.contains('flipped')?'.flashcard-face-back':'.flashcard-face-front');
-            var rotator=document.createElement('div');rotator.className='flashcard-inner-rotator';
-            if(surface){var face=surface.cloneNode(true);face.className='flashcard-face-front';face.querySelectorAll('div').forEach(function(text){text.style.overflow='hidden';});rotator.append(face);}
-            ghost.append(rotator);
-        }else ghost=card.cloneNode(true);
+        var ghost=card.cloneNode(true);
         ghost.classList.remove('warmup-card');
         ghost.classList.add('flashcard-ghost');
         ghost.setAttribute('aria-hidden','true');ghost.tabIndex=-1;

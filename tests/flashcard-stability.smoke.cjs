@@ -60,14 +60,12 @@ const assert = require("node:assert/strict");
           );
           if (visible.length !== 1) throw Error("overlapping card faces");
           swipeFlashcard(i % 2 ? "left" : "right", 90, 0);
-          if (document.querySelectorAll("#flashcardGhost").length !== 1)
-            throw Error("outgoing cards accumulate");
           if (
             document.querySelectorAll(
-              "#flashcardGhost .flashcard-inner-rotator > *",
-            ).length !== 1
+              "#flashcardGhost,.fc-vanish-burst,.flashcard-post-ripple,.flashcard-edge-ripple,#flashcardLiveRippleLayer",
+            ).length !== 0
           )
-            throw Error("ghost clones both faces");
+            throw Error("iOS outgoing surfaces were allocated");
         }
         return {
           index: flashcardCurrentIndex,
@@ -106,7 +104,7 @@ const assert = require("node:assert/strict");
     assert.ok((await page.evaluate(() => window.__stressCaptures)) > 0);
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: 2,000-word book, 100 flips/swipes, bounded single-face effects, no whole-book capture during play, undo and end capture preserved (" +
+      "PASS: 2,000-word book, 100 flips/swipes, no outgoing iOS surfaces, no whole-book capture during play, undo and end capture preserved (" +
         (useWebkit ? "WebKit" : "Chromium") +
         ")",
     );

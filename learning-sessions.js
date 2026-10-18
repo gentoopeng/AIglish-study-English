@@ -678,6 +678,7 @@
         return;
       }
       if (index > queue.length) return;
+      window.StartupMonitor?.activity("warmup-flip");
       revealed = !revealed;
       card.classList.toggle("flipped", revealed);
       window.AppSounds?.play("back");
@@ -688,7 +689,9 @@
     let pointer = null,
       dragged = false;
     card.addEventListener("pointerdown", (e) => {
-      if (index >= queue.length) return;
+      // A drag need not synthesize a click on every browser. A fresh START tap
+      // must clear suppression left by the last answer's drag.
+      if (index >= queue.length) { dragged = false; return; }
       if (!e.isPrimary) return;
       card.setPointerCapture(e.pointerId);
       pointer = { x: e.clientX, y: e.clientY };

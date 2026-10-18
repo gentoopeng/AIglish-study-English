@@ -20,6 +20,7 @@
             startedAt: prior.startedAt,
             phase: prior.phase,
             ready: prior.ready,
+            activity: prior.activity,
           }
         : null,
     };
@@ -35,6 +36,19 @@
       /* Never block startup. */
     }
   }
-  window.StartupMonitor = { mark };
+  function activity(kind) {
+    // Fixed labels only: never retain a word, answer, account or input contents.
+    if (
+      !["card-flip", "card-swipe", "warmup-flip", "warmup-swipe"].includes(kind)
+    )
+      return;
+    state.activity = { kind, at: new Date().toISOString() };
+    try {
+      write(key, JSON.stringify(state));
+    } catch {
+      /* Diagnostic only. */
+    }
+  }
+  window.StartupMonitor = { mark, activity };
   mark("document");
 })();

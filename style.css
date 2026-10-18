@@ -1883,12 +1883,6 @@ will-change:auto!important;
 @layer rendering-safety {
 @media(prefers-reduced-motion:no-preference){
 html.ios-stable-rendering body .flashcard-inner-rotator{transition:transform .4s cubic-bezier(.25,1,.5,1)!important;}
-html.ios-stable-rendering body #flashcardGhost{transition:transform .8s cubic-bezier(.1,.8,.25,1),opacity .8s ease!important;}
-html.ios-stable-rendering body .flashcard-session-screen :is(#activeFlashcard,.warmup-card):not(.is-dragging){animation:bubbleFloatAnim 4s ease-in-out infinite!important;}
-html.ios-stable-rendering body .flashcard-session-screen :is(#activeFlashcard,.warmup-card).flipped:not(.is-dragging){animation-play-state:paused!important;}
-html.ios-stable-rendering body .fc-vanish-ring{animation:fcVanishRing .48s ease-out forwards!important;}
-html.ios-stable-rendering body .fc-vanish-particle{animation:fcVanishParticle .52s cubic-bezier(.16,.72,.3,1) var(--fc-burst-delay) forwards!important;}
-html.ios-stable-rendering body .flashcard-post-ripple{animation:fcFireworkSparkle .8s cubic-bezier(.1,.8,.25,1) forwards!important;}
 }
 }
 
@@ -2275,9 +2269,15 @@ html.ios-stable-rendering body #flashcardLiveRippleLayer{mix-blend-mode:normal!i
 html.ios-stable-rendering body .flashcard-wrapper-3d:not(.flipped) .flashcard-face-front,
 html.ios-stable-rendering body .flashcard-wrapper-3d.flipped .flashcard-face-back{animation:fcFlatReveal .18s ease-out!important;}
 }
-html.ios-stable-rendering body .fc-flat-ghost .flashcard-face-front{animation:none!important;}
 }
 @keyframes fcFlatReveal{from{opacity:.35;}to{opacity:1;}}
+
+/* Both ordinary cards and the login warm-up use one flat iOS surface.
+   The old 'flat ghost' still spawned animated fixed overlays on each answer. */
+@layer rendering-safety {
+html.ios-stable-rendering body .flashcard-session-screen :is(#activeFlashcard,.warmup-card){animation:none!important;transform-style:flat!important;-webkit-transform-style:flat!important;}
+html.ios-stable-rendering body :is(#flashcardGhost,.flashcard-post-ripple,.fc-vanish-burst,.flashcard-edge-ripple,#flashcardLiveRippleLayer){display:none!important;animation:none!important;transition:none!important;}
+}
 
 /* The login warm-up mounts the normal flashcard layout and its exact chrome. */
 html body dialog.flash-warmup-dialog{padding:4px 0 0!important;justify-content:flex-start;touch-action:none;overflow:hidden!important;}
