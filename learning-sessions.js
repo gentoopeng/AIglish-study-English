@@ -678,6 +678,7 @@
         return;
       }
       if (index > queue.length) return;
+      window.StartupMonitor?.activity("warmup-flip");
       revealed = !revealed;
       card.classList.toggle("flipped", revealed);
       window.AppSounds?.play("back");
