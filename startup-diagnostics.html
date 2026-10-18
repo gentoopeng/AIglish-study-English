@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>起動診断</title>
+    <style>
+      body {
+        margin: 24px auto;
+        padding: 0 20px;
+        max-width: 600px;
+        background: #0f172a;
+        color: #edf1f8;
+        font: 16px/1.7 system-ui;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        padding: 16px;
+        border: 1px solid #64748b;
+        border-radius: 12px;
+        font: 13px/1.6 monospace;
+      }
+      button,
+      a {
+        color: inherit;
+      }
+      button {
+        font: inherit;
+        padding: 10px 16px;
+        background: #26334a;
+        border: 1px solid #64748b;
+        border-radius: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>起動診断</h1>
+    <p>
+      通常のアプリを読み込まず、起動処理がどこまで進んだかを確認します。学習データは変更しません。
+    </p>
+    <pre id="report"></pre>
+    <button id="copy" type="button">診断情報をコピー</button>
+    <p><a href="index.html">アプリを開く</a></p>
+    <script>
+      "use strict";
+      const lines = [
+        "ブラウザー: " + navigator.userAgent,
+        "画面: " + screen.width + " × " + screen.height,
+        "ホーム画面アプリ: " + String(!!navigator.standalone),
+      ];
+      try {
+        const state = JSON.parse(
+          localStorage.getItem("__aiglish_startup_diagnostic") || "null",
+        );
+        if (state) {
+          for (const [label, value] of [
+            ["今回", state],
+            ["前回", state.previous],
+          ]) {
+            if (value)
+              lines.push(
+                label +
+                  ": " +
+                  JSON.stringify({
+                    version: value.version,
+                    startedAt: value.startedAt,
+                    phase: value.phase,
+                    ready: value.ready,
+                  }),
+              );
+          }
+        } else lines.push("起動記録なし（診断対応版を開いた後に記録されます）");
+      } catch {
+        lines.push("起動記録を読み取れませんでした");
+      }
+      document.getElementById("report").textContent = lines.join("\n");
+      document.getElementById("copy").onclick = async function () {
+        try {
+          await navigator.clipboard.writeText(lines.join("\n"));
+          this.textContent = "コピーしました";
+        } catch {
+          this.textContent = "上の診断情報を選択してコピーしてください";
+        }
+      };
+    </script>
+  </body>
+</html>
