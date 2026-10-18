@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>起動診断</title>
+    <meta name="diagnostic-version" content="10.19.08.38" />
     <style>
       body {
         margin: 24px auto;
@@ -42,6 +43,7 @@
     <pre id="report"></pre>
     <button id="copy" type="button">診断情報をコピー</button>
     <p><a href="index.html">アプリを開く</a></p>
+    <script src="startup-diagnostic-store.js?v=10.19.08.38"></script>
     <script>
       "use strict";
       const lines = [
@@ -49,15 +51,106 @@
         "画面: " + screen.width + " × " + screen.height,
         "ホーム画面アプリ: " + String(!!navigator.standalone),
       ];
-      try {
-        const state = JSON.parse(
-          localStorage.getItem("__aiglish_startup_diagnostic") || "null",
+      const button = document.getElementById("copy");
+      button.disabled = true;
+      document.getElementById("report").textContent = "保存先を確認しています…";
+      function bounded(promise) {
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(Error("diagnostic-timeout")),
+            4000,
+          );
+          Promise.resolve(promise).then(
+            (value) => {
+              clearTimeout(timer);
+              resolve(value);
+            },
+            (error) => {
+              clearTimeout(timer);
+              reject(error);
+            },
+          );
+        });
+      }
+      async function inspect() {
+        lines.push(
+          "診断ページ: " +
+            document.querySelector("meta[name=diagnostic-version]").content,
         );
+        let nativeRecord = null,
+          backupRecord = null;
+        try {
+          let count = 0;
+          for (let i = 0; i < localStorage.length; i++)
+            if (
+              /^(core_v4_|aiglish_|save_studio_)/.test(
+                localStorage.key(i) || "",
+              )
+            )
+              count++;
+          lines.push("この保存領域のアプリ関連キー数: " + count);
+          lines.push(
+            "ログイン記録: " +
+              (localStorage.getItem("core_v4_userId") ? "あり" : "なし"),
+          );
+          nativeRecord = JSON.parse(
+            localStorage.getItem("__aiglish_startup_diagnostic") || "null",
+          );
+        } catch (error) {
+          lines.push("localStorage読み取り: " + error.name);
+        }
+        const probe =
+          "__aiglish_diagnostic_probe_" + Date.now() + "_" + Math.random();
+        try {
+          localStorage.setItem(probe, "x".repeat(1024));
+          lines.push("localStorage 1KB書き込み: 可能");
+        } catch (error) {
+          lines.push("localStorage 1KB書き込み: " + error.name);
+        } finally {
+          try {
+            localStorage.removeItem(probe);
+          } catch {}
+        }
+        try {
+          backupRecord = await bounded(StartupDiagnosticStore.read());
+          lines.push("診断用IndexedDB: 読み取り可能");
+        } catch (error) {
+          lines.push("診断用IndexedDB: " + (error.message || error.name));
+        }
+        try {
+          if (window.indexedDB?.databases) {
+            const databases = await bounded(indexedDB.databases());
+            lines.push(
+              "アプリ保存用DB: " +
+                (databases.some((db) =>
+                  ["aiglish-local-values", "aiglish-textbook-files"].includes(
+                    db.name,
+                  ),
+                )
+                  ? "あり"
+                  : "なし"),
+            );
+          }
+        } catch {
+          lines.push("アプリ保存用DBの有無: 確認できませんでした");
+        }
+        const stamp = (value) =>
+          Number(value?.updatedAt) || Date.parse(value?.startedAt || "") || 0;
+        const state =
+          stamp(backupRecord) > stamp(nativeRecord)
+            ? backupRecord
+            : nativeRecord;
         if (state) {
+          lines.push(
+            "起動記録の保存先: " +
+              (state === backupRecord ? "IndexedDB" : "localStorage"),
+          );
+          if (state.nativeError)
+            lines.push("起動記録のlocalStorage保存: " + state.nativeError);
           for (const [label, value] of [
             ["今回", state],
             ["前回", state.previous],
-          ]) {
+          ])
             if (value)
               lines.push(
                 label +
@@ -71,12 +164,18 @@
                     progressChars: value.progressChars,
                   }),
               );
-          }
-        } else lines.push("起動記録なし（診断対応版を開いた後に記録されます）");
-      } catch {
-        lines.push("起動記録を読み取れませんでした");
+        } else
+          lines.push(
+            "この保存領域に起動記録を確認できません（更新未反映・別領域・保存失敗の切り分けが必要です）",
+          );
+        document.getElementById("report").textContent = lines.join("\n");
+        button.disabled = false;
       }
-      document.getElementById("report").textContent = lines.join("\n");
+      inspect().catch((error) => {
+        lines.push("診断処理: " + error.name);
+        document.getElementById("report").textContent = lines.join("\n");
+        button.disabled = false;
+      });
       document.getElementById("copy").onclick = async function () {
         try {
           await navigator.clipboard.writeText(lines.join("\n"));
