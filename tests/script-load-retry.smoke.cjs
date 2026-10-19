@@ -9,6 +9,8 @@ assert.equal(await page.locator('#appStartupStatus').isHidden(),true);await page
 page=await browser.newPage();await page.route('https://**/*',r=>r.abort());let loads=0;page.on('framenavigated',f=>{if(f===page.mainFrame())loads++;});
 await page.route(/workbook\.js/,r=>r.fulfill({status:404,body:''}));
 await page.goto('http://127.0.0.1:8000');await page.locator('#appStartupStatus button',{hasText:'再読み込み'}).waitFor({timeout:30000});await page.waitForTimeout(1500);
-assert.equal(loads,2);assert.match(page.url(),/[?]reload=/);assert.match(await page.locator('#appStartupStatus').textContent(),/workbook\.js/);
+assert.equal(loads,2);
+// Even when the failure arrives after a minute, no further automatic reload happens.
+await page.evaluate(()=>{const now=Date.now();Date.now=()=>now+120000;});await page.reload();await page.locator('#appStartupStatus button',{hasText:'再読み込み'}).waitFor({timeout:30000});await page.waitForTimeout(1500);assert.equal(loads,3);assert.match(page.url(),/[?]reload=/);assert.match(await page.locator('#appStartupStatus').textContent(),/workbook\.js/);
 console.log('PASS '+type.name()+': one failed script load recovers by a single automatic fresh reload; persistent failure shows a reload button without looping');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

@@ -7,8 +7,10 @@ window.appScriptsReady=window.AppStorage.ready.then(()=>{window.StartupMonitor?.
 // Home-screen apps have no reload control. Retry once automatically with a fresh
 // document URL (a stale cached file is the usual cause), then offer a button.
 function reload(){window.AppStorage.flush().catch(()=>{}).finally(()=>location.replace(location.pathname+'?reload='+Date.now()));}
-window.appScriptsReady.then(()=>{window.StartupMonitor?.mark?.('scripts-ready');status.hidden=true;buttons.forEach(button=>button.disabled=false);}).catch(error=>{console.error('起動を停止しました。保存データは保持されています。',error);
- let retried=true;try{const key='aiglish_loader_retry_at',last=Number(sessionStorage.getItem(key))||0;retried=Date.now()-last<60000;if(!retried)sessionStorage.setItem(key,String(Date.now()));}catch{}
+const retryKey='aiglish_loader_retried';
+window.appScriptsReady.then(()=>{try{sessionStorage.removeItem(retryKey);}catch{}window.StartupMonitor?.mark?.('scripts-ready');status.hidden=true;buttons.forEach(button=>button.disabled=false);}).catch(error=>{console.error('起動を停止しました。保存データは保持されています。',error);
+ // The marker survives failed startups however slowly they fail; only success clears it.
+ let retried=true;try{retried=sessionStorage.getItem(retryKey)==='1';if(!retried)sessionStorage.setItem(retryKey,'1');}catch{}
  if(!retried){status.textContent='最新のファイルを読み込み直しています…';reload();return;}
  status.textContent=error.message+' ';const button=document.createElement('button');button.type='button';button.textContent='再読み込み';button.onclick=reload;status.append(button);});
 })();
