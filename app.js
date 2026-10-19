@@ -7090,7 +7090,7 @@ window.loadUserVocabProgress = async function(bookKey) {
     window.__vocabProgressCloudChecks=window.__vocabProgressCloudChecks||{};
     var checkKey=requestUserId+'\n'+bookKey;
     if(Object.hasOwn(window.__vocabProgressCloudChecks,checkKey)&&Date.now()-window.__vocabProgressCloudChecks[checkKey]<300000)return;
-    if(window.FirestoreReadGuard?.paused())return;
+    if(window.FirestoreReadGuard?.paused?.())return;
     try {
         var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
         var snap = await window.fbGetDoc(ref);

@@ -221,7 +221,7 @@
     goalSummary,
   };
   function connected() {
-    if (window.FirestoreReadGuard?.paused())
+    if (window.FirestoreReadGuard?.paused?.())
       throw Error("クラウドの利用上限に達しています。後で再試行してください。");
     if (uid() === "GUEST-000" || !window.db)
       throw Error("グループはログイン後に使えます。");
@@ -880,7 +880,7 @@
       publishing ||
       uid() === "GUEST-000" ||
       !window.db ||
-      window.FirestoreReadGuard?.paused() ||
+      window.FirestoreReadGuard?.paused?.() ||
       window.__learningBootReady !== true ||
       document.hidden ||
       (!force && Date.now() - lastPublish < 300000)
@@ -987,7 +987,7 @@
       current &&
       modal?.isConnected &&
       owner === uid() &&
-      !window.FirestoreReadGuard?.paused()
+      !window.FirestoreReadGuard?.paused?.()
     )
       subscribe(current, modal, uid());
   });

@@ -136,7 +136,7 @@
     }
     async function removeDocs(docs) {
       const pending = docs.filter((doc) => !state.deleting.has(doc.id));
-      if (!pending.length || !active() || root.FirestoreReadGuard?.paused())
+      if (!pending.length || !active() || root.FirestoreReadGuard?.paused?.())
         return;
       pending.forEach((doc) => state.deleting.add(doc.id));
       try {
@@ -200,7 +200,7 @@
     async function cleanOlder(docs) {
       if (docs.length < policy.maxMessages) return;
       let cursor = docs.at(-1);
-      while (active() && !root.FirestoreReadGuard?.paused()) {
+      while (active() && !root.FirestoreReadGuard?.paused?.()) {
         const older = await deadline(root.fbGetDocs(query(cursor, 50)));
         if (!active()) return;
         if (!older.docs?.length) return;
@@ -256,7 +256,7 @@
     }
     state.resume = listen;
     section.querySelector("[data-chat-reconnect]").onclick = () => {
-      if (!root.FirestoreReadGuard?.paused()) listen();
+      if (!root.FirestoreReadGuard?.paused?.()) listen();
       else
         status.textContent =
           "クラウド利用制限中です。入力内容を残して、時間を置いて再接続してください。";
@@ -267,7 +267,7 @@
       e.preventDefault();
       const value = text.value.trim();
       if (!value || state.sending || !active()) return;
-      if (root.FirestoreReadGuard?.paused()) {
+      if (root.FirestoreReadGuard?.paused?.()) {
         status.textContent =
           "クラウドの利用制限中です。入力内容を残しています。";
         return;
@@ -410,7 +410,7 @@
     } else if (
       current &&
       !current.unsubscribe &&
-      !root.FirestoreReadGuard?.paused()
+      !root.FirestoreReadGuard?.paused?.()
     )
       current.resume();
   });

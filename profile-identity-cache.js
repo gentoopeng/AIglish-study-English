@@ -14,7 +14,7 @@ async function fetchFields(id,fields){const controller=new AbortController(),tim
 async function get(id){
  const key=scope()+id,accountScope=scope();if(jobs.has(key))return jobs.get(key);
  const task=(async()=>{let cached=entries.get(key)||await disk(key);if(scope()!==accountScope)return {id,name:id,avatar:''};if(cached){entries.set(key,cached);while(entries.size>MAX)entries.delete(entries.keys().next().value);if(Date.now()-cached.checkedAt>=0&&Date.now()-cached.checkedAt<TTL)return cached;}
-  if(!project()||root.FirestoreReadGuard?.paused())return cached||{id,name:id,avatar:''};
+  if(!project()||root.FirestoreReadGuard?.paused?.())return cached||{id,name:id,avatar:''};
   const read=root.FirestoreReadGuard?.wrap?.(fetchFields)||fetchFields;
   try{let data;
    if(cached){data=await read(id,['playerName','avatarUpdatedAt','deleted']);if(scope()!==accountScope)return {id,name:id,avatar:''};if(data.deleted)return remember(id,data);

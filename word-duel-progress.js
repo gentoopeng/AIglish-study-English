@@ -26,7 +26,7 @@ function apply(book,ref,answer,id,options={}){
  window.recordRankedWord?.(book,ref.num);return words[ref.num];
 }
 async function flush(id=owner()){
- if(id!==owner()||id==='GUEST-000'||!window.db||!window.fbRunTransaction||window.FirestoreReadGuard?.paused())return false;
+ if(id!==owner()||id==='GUEST-000'||!window.db||!window.fbRunTransaction||window.FirestoreReadGuard?.paused?.())return false;
  if(queues.has(id))return queues.get(id);
  const execute=async()=>{let saved=true;const jobs=pending(id);for(const [book,changes]of Object.entries(jobs)){
   if(id!==owner())return false;

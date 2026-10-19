@@ -945,8 +945,8 @@ async function saveAllContents(force) {
   if(localSaved){
     try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,source:'local'})); } catch(e) {}
   }
-  if(!fbOk()||window.FirestoreReadGuard?.paused()) {
-    if(localSaved){await markCloudPending(id);progress(100,started,window.FirestoreReadGuard?.paused()?'端末へ保存完了（利用上限でクラウド同期待ち）':'端末へ保存完了');return {localSaved:true,cloudSaved:false};}
+  if(!fbOk()||window.FirestoreReadGuard?.paused?.()) {
+    if(localSaved){await markCloudPending(id);progress(100,started,window.FirestoreReadGuard?.paused?.()?'端末へ保存完了（利用上限でクラウド同期待ち）':'端末へ保存完了');return {localSaved:true,cloudSaved:false};}
     throw localError||new Error('保存先に接続できません');
   }
   var chunks=[]; for(var i=0;i<raw.length;i+=CHUNK)chunks.push(raw.slice(i,i+CHUNK)); if(!chunks.length)chunks=[''];
@@ -1045,7 +1045,7 @@ async function saveAllContents(force) {
     if(!localSaved){try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,source:'cloud'})); } catch(e) {}}
     progress(100,started,'保存完了');return {localSaved:localSaved,cloudSaved:true};
   }
-  if(localSaved){await markCloudPending(id);progress(100,started,window.FirestoreReadGuard?.paused()?'端末へ保存完了（利用上限でクラウド同期待ち）':'端末へ保存完了（クラウド未接続）');return {localSaved:true,cloudSaved:false};}
+  if(localSaved){await markCloudPending(id);progress(100,started,window.FirestoreReadGuard?.paused?.()?'端末へ保存完了（利用上限でクラウド同期待ち）':'端末へ保存完了（クラウド未接続）');return {localSaved:true,cloudSaved:false};}
   throw cloudError||localError||new Error('保存に失敗しました');
 }
 async function fetchCloudSave(id) {

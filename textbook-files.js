@@ -216,7 +216,7 @@
         throw Error(
           "未ダウンロードの教材があります。一度教材を開いてから書き出してください。",
         );
-      if (!window.fbGetDoc || !window.db || window.FirestoreReadGuard?.paused())
+      if (!window.fbGetDoc || !window.db || window.FirestoreReadGuard?.paused?.())
         throw Error("教材のダウンロード待ちです。接続後に開き直してください。");
       raw = "";
       for (let i = 0; i < ref.partCount; i++) {
