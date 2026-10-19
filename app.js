@@ -2832,12 +2832,22 @@ window.findUserInFirebase = async function(userId, pin) {
 };
 
 // 他端末でのログインに必要なPINがusers/{id}に無い場合だけ補完する。
+// 確認と書き込みを同じトランザクションで行い、直前のPIN再設定を古いPINで戻さない。
+window.restoreCloudPinIfMissing = async function(userId, pin) {
+  if (!userId || !pin || !window.db || !window.fbRunTransaction || !window.fbDoc) return false;
+  const ref = window.fbDoc(window.db, "users", userId);
+  return window.fbRunTransaction(window.db, async function(tx) {
+    const snap = await tx.get(ref);
+    if (!snap.exists() || snap.data().deleted || window.LoginIdentity.storedPin(snap.data())) return false;
+    tx.set(ref, { pin: pin }, { merge: true });
+    return true;
+  });
+};
+
 window.repairCloudPin = async function(user) {
   const pin = window.LoginIdentity.storedPin(user);
-  if (!user || !user.id || !pin || !window.fbSetDoc) return;
-  const result = await window.lookupCloudAccount(user.id);
-  if (result.state !== "found" || result.data.deleted || window.LoginIdentity.storedPin(result.data)) return;
-  await window.fbSetDoc(window.fbDoc(window.db, "users", user.id), { pin: pin }, { merge: true });
+  if (!user || !user.id || !pin) return;
+  await window.restoreCloudPinIfMissing(user.id, pin);
 };
 
 // ------------------------------------------------------------------
@@ -3088,11 +3098,7 @@ window.onAppLoaded(async function() {
     const cached = JSON.parse(localStorage.getItem("core_v4_users") || "[]");
     const entry = (Array.isArray(cached) ? cached : []).find(function(u) { return u && u.id === savedId; });
     if (entry && window.LoginIdentity.storedPin(entry)) {
-      const result = await window.lookupCloudAccount(savedId);
-      if (result.state === "unavailable") return;
-      if (result.state === "found" && !result.data.deleted && !window.LoginIdentity.storedPin(result.data)) {
-        await window.fbSetDoc(window.fbDoc(window.db, "users", savedId), { pin: window.LoginIdentity.storedPin(entry) }, { merge: true });
-      }
+      await window.restoreCloudPinIfMissing(savedId, window.LoginIdentity.storedPin(entry));
     }
     localStorage.setItem(checkedKey, "1");
   } catch (e) {

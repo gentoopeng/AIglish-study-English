@@ -22,6 +22,8 @@ await reset({'users/ABCDEFG123':{pin:'1234',deleted:true}});await login('ABCDEFG
 // An account whose cloud document lost its PIN logs in via all_users and gets the PIN restored.
 await reset({'users/PINLESS001':{playerName:'旧'},'shared/all_users':{users:[{id:'PINLESS001',pin:'5678'}]}});await login('pinless001','5678');assert.equal(await page.locator('#loginOverlayLayer').count(),1);
 await page.evaluate(()=>window.repairCloudPin({id:'PINLESS001',pin:'5678'}));assert.equal(await page.evaluate(()=>__store.get('users/PINLESS001').pin),'5678');await page.evaluate(()=>document.getElementById('loginOverlayLayer').remove());
+// Repair never replaces a PIN that was reset after the account was read.
+await reset({'users/PINLESS001':{pin:'9999'}});assert.equal(await page.evaluate(()=>window.restoreCloudPinIfMissing('PINLESS001','5678')),false);assert.equal(await page.evaluate(()=>__store.get('users/PINLESS001').pin),'9999');
 // saveAllUsers merges one entry into the latest list instead of replacing it.
 await reset({'shared/all_users':{users:[{id:'A000000001',pin:'1111',playerName:'a'},{id:'B000000002',pin:'2222'}]}});await page.evaluate(()=>window.saveAllUsers([{id:'A000000001',playerName:'改名'}]));
 all=await page.evaluate(()=>__store.get('shared/all_users').users);assert.deepEqual(all,[{id:'A000000001',pin:'1111',playerName:'改名'},{id:'B000000002',pin:'2222'}]);
