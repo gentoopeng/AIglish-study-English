@@ -706,7 +706,12 @@
       if (index >= queue.length) return;
       if (!e.isPrimary) return;
       card.setPointerCapture(e.pointerId);
-      pointer = { x: e.clientX, y: e.clientY, t: e.timeStamp, samples: [] };
+      pointer = {
+        x: e.clientX,
+        y: e.clientY,
+        t: e.timeStamp,
+        samples: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }],
+      };
       dragged = false;
     });
     card.addEventListener("pointermove", (e) => {
@@ -730,7 +735,7 @@
       if (!pointer) return settle();
       const dx = e.clientX - pointer.x,
         dy = e.clientY - pointer.y,
-        first = pointer.samples[0] || pointer,
+        first = pointer.samples[0],
         elapsed = Math.max(1, e.timeStamp - first.t),
         direction = window.flashcardSwipeDirection
           ? window.flashcardSwipeDirection(
