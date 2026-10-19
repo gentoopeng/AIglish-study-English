@@ -17,7 +17,7 @@ function mount(){
 function lock(value){busy=value;dialog.querySelectorAll('button:not([data-close]),input').forEach(node=>node.disabled=value);}
 async function adminRequest(url,options){
  const task=async()=>{const response=await deadline(fetch(url,options)),data=await deadline(response.json());if(!response.ok){const error=Error(data.error?.message||'情報を取得できませんでした。');error.code=response.status===429?'resource-exhausted':data.error?.status;throw error;}return data;};
- return (window.FirestoreReadGuard?.wrap(task)||task)();
+ return (window.FirestoreReadGuard?.wrap?.(task)||task)();
 }
 async function playerList(visit,isCurrent){
  const project=window.db?.app?.options?.projectId;

@@ -32,7 +32,7 @@
         if(window.ProfileIdentityCache)return ProfileIdentityCache.get(id);
         const known=window.People?.preview?.(id);if(known)return {name:known.name||id,avatar:known.avatar||''};
         const existing=authors.get(id);if(existing&&Date.now()-existing.at<300000)return existing.task;
-        const task=(async()=>{const project=window.db?.app?.options?.projectId;if(!project||window.FirestoreReadGuard?.paused())return {name:id,avatar:''};
+        const task=(async()=>{const project=window.db?.app?.options?.projectId;if(!project||window.FirestoreReadGuard?.paused?.())return {name:id,avatar:''};
             try{const url='https://firestore.googleapis.com/v1/projects/'+encodeURIComponent(project)+'/databases/(default)/documents/users/'+encodeURIComponent(id)+'?mask.fieldPaths=avatar&mask.fieldPaths=playerName';const response=await deadline(fetch(url));if(!response.ok)throw Error('profile');const data=await response.json();return {name:data.fields?.playerName?.stringValue||id,avatar:data.fields?.avatar?.stringValue||''};}catch{return {name:id,avatar:''};}
         })();authors.set(id,{at:Date.now(),task});if(authors.size>50)authors.delete(authors.keys().next().value);return task;
     }

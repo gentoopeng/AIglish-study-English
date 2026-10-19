@@ -33,7 +33,7 @@
       );
     if (!window.db || !window.fbRunTransaction || !window.fbOnSnapshot)
       throw Error("対戦にはクラウドへの接続が必要です。");
-    if (window.FirestoreReadGuard?.paused())
+    if (window.FirestoreReadGuard?.paused?.())
       throw Error(
         "クラウドの利用上限に達しています。今は一人プレイを利用してください。",
       );

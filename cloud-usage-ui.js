@@ -89,7 +89,7 @@
       host,
     );
     const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10),
-      rows = window.CloudUsage?.snapshot().days[today] || {},
+      rows = window.CloudUsage?.snapshot?.().days[today] || {},
       table = add("table", undefined, host),
       head = add("tr", undefined, add("thead", undefined, table));
     for (const text of ["本日（日本時間）", "読取", "書込", "失敗"])
@@ -109,7 +109,7 @@
     );
     add(
       "p",
-      window.FirestoreReadGuard?.paused()
+      window.FirestoreReadGuard?.paused?.()
         ? "クラウド利用制限を検出しています。端末の記録を保持しています。"
         : "現在、クラウド利用制限は検出していません。",
       host,

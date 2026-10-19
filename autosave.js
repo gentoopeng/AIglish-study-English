@@ -48,7 +48,7 @@
       if (!account || account === "GUEST-000")
         return { localSaved: true, cloudSaved: false };
       if (
-        window.FirestoreReadGuard?.paused() ||
+        window.FirestoreReadGuard?.paused?.() ||
         (window.LearningData &&
           !window.LearningData.canSave(
             typeof currentTextbook === "string" ? currentTextbook : "default",

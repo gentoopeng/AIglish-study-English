@@ -14,7 +14,7 @@ async function load(group,{signal,now=Date.now()}={}){
  const project=root.db?.app?.options?.projectId;if(!/^[a-z0-9-]+$/.test(project||''))throw Error('ランキングの接続先を確認できません。');
  const base='https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents';
  const request=async(path,body)=>{const response=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});const data=await response.json();if(!response.ok||!Array.isArray(data)){const error=Error(data.error?.message||'記録を取得できませんでした。');error.code=response.status===429?'resource-exhausted':data.error?.status;throw error;}return data;};
- const read=root.FirestoreReadGuard?.wrap(request)||request;
+ const read=root.FirestoreReadGuard?.wrap?.(request)||request;
  const result=[];let cursor;
  do{
   const page=(await read(':runQuery',{structuredQuery:query(group,now,cursor)})).filter(item=>item.document).map(item=>item.document);

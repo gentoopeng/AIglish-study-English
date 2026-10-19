@@ -176,7 +176,7 @@
   async function flushPublications(id = owner()) {
     if (id !== owner()) return false;
     if (flights.has(id)) return flights.get(id);
-    if (root.FirestoreReadGuard?.paused())
+    if (root.FirestoreReadGuard?.paused?.())
       return !Object.keys(publicationQueue(id)).length;
     const task = (async () => {
       let success = true;

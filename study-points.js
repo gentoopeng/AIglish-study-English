@@ -318,7 +318,7 @@
     if (
       !window.db ||
       !window.fbRunTransaction ||
-      window.FirestoreReadGuard?.paused()
+      window.FirestoreReadGuard?.paused?.()
     )
       return false;
     const execute = async () => {
@@ -519,7 +519,7 @@
     if (
       !window.db ||
       !window.fbRunTransaction ||
-      window.FirestoreReadGuard?.paused()
+      window.FirestoreReadGuard?.paused?.()
     )
       return false;
     const remote = await window.fbRunTransaction(window.db, async (tx) => {
@@ -547,7 +547,7 @@
       id === "GUEST-000" ||
       !window.db ||
       !window.fbGetDoc ||
-      window.FirestoreReadGuard?.paused()
+      window.FirestoreReadGuard?.paused?.()
     )
       return false;
     const snap = await window.fbGetDoc(

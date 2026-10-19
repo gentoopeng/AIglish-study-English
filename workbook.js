@@ -182,7 +182,7 @@
     window.flushWorkbookPublications=function(){
         if(publicationTask)return publicationTask;
         const owner=uid();
-        if(owner==='GUEST-000'||window.__learningBootReady===false||window.FirestoreReadGuard?.paused()||!cloud())return Promise.resolve(false);
+        if(owner==='GUEST-000'||window.__learningBootReady===false||window.FirestoreReadGuard?.paused?.()||!cloud())return Promise.resolve(false);
         if(!Object.keys(publicationQueue(owner)).length)return Promise.resolve(true);
         publicationTask=(async()=>{let successful=true;const queue=publicationQueue(owner);
             for(const [id,entry] of Object.entries(queue)){
@@ -303,7 +303,7 @@
                 if (owner !== uid()) throw new Error('ユーザーが切り替わりました。開き直してください。');
                 put(work); close(); repaint();
                 const synced=await window.flushWorkbookPublications();
-                if(owner===uid()&&window.showToast)window.showToast(window.FirestoreReadGuard?.paused()||(!synced&&Object.keys(publicationQueue()).length)?'端末に保存しました。クラウドへの同期は保留中です。':'端末に保存しました。','ok');
+                if(owner===uid()&&window.showToast)window.showToast(window.FirestoreReadGuard?.paused?.()||(!synced&&Object.keys(publicationQueue()).length)?'端末に保存しました。クラウドへの同期は保留中です。':'端末に保存しました。','ok');
             } catch (error) { form.querySelector('.library-editor-error').textContent = error.message; }
             finally { submit.disabled = false; }
         };
