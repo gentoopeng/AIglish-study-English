@@ -121,16 +121,16 @@ window.onAppLoaded = function(handler) {
     const file=(document.currentScript?.src||'').split('/').pop().split('?')[0];
     const label='hook:'+window.__afterAppLoadHandlers.length+':'+file;
     window.__afterAppLoadHandlers.push(function(){
-        window.StartupMonitor?.event(label+':start');
+        window.StartupMonitor?.event?.(label+':start');
         try {
             const result=handler.apply(this,arguments);
-            if(result&&typeof result.then==='function')return Promise.resolve(result).then(function(value){window.StartupMonitor?.event(label+':done');return value;},function(error){window.StartupMonitor?.event(label+':error');throw error;});
-            window.StartupMonitor?.event(label+':done');return result;
-        } catch(error){window.StartupMonitor?.event(label+':error');throw error;}
+            if(result&&typeof result.then==='function')return Promise.resolve(result).then(function(value){window.StartupMonitor?.event?.(label+':done');return value;},function(error){window.StartupMonitor?.event?.(label+':error');throw error;});
+            window.StartupMonitor?.event?.(label+':done');return result;
+        } catch(error){window.StartupMonitor?.event?.(label+':error');throw error;}
     });
 };
 window.loadLocalState = async function() {
-window.StartupMonitor?.mark('account-restore');
+window.StartupMonitor?.mark?.('account-restore');
 window.__learningBootReady=false;
 const accountToStart = localStorage.getItem('core_v4_userId');
 if (accountToStart && window.AdminPlayers && !await window.AdminPlayers.canStart(accountToStart)) return;
@@ -162,20 +162,20 @@ if(apiKeyInput) apiKeyInput.value = geminiApiKey;
      currentTextbook = localStorage.getItem('core_v4_current_textbook_id') || "";
      // 教材一覧の同期は画面表示を止めずバックグラウンドで行う。
      // 現在の教材はこの後、端末キャッシュから先に読み込まれる。
-     window.StartupMonitor?.event('textbook-index:start');
+     window.StartupMonitor?.event?.('textbook-index:start');
      Promise.resolve(window.preloadAllTextbooksAndVocab()).then(function() {
-         window.StartupMonitor?.event('textbook-index:done');
+         window.StartupMonitor?.event?.('textbook-index:done');
          if(typeof window.updateAdminEditBookSelectOptions === 'function') window.updateAdminEditBookSelectOptions();
-     }).catch(function(e) { window.StartupMonitor?.event('textbook-index:error');console.warn('教材のバックグラウンド同期に失敗しました:', e); });
-     window.StartupMonitor?.event('user-stats:start');
+     }).catch(function(e) { window.StartupMonitor?.event?.('textbook-index:error');console.warn('教材のバックグラウンド同期に失敗しました:', e); });
+     window.StartupMonitor?.event?.('user-stats:start');
      Promise.resolve(window.loadUserStats()).then(function() {
-         window.StartupMonitor?.event('user-stats:done');
+         window.StartupMonitor?.event?.('user-stats:done');
          window.applyProfileToUi();
          window.renderLeaderboard();
-     }).catch(function(e) { window.StartupMonitor?.event('user-stats:error');console.warn('ユーザー情報のバックグラウンド同期に失敗しました:', e); });
+     }).catch(function(e) { window.StartupMonitor?.event?.('user-stats:error');console.warn('ユーザー情報のバックグラウンド同期に失敗しました:', e); });
      userStats.goal_text = myTarget; 
      userStats.friends_count = myFriendList.length; 
-     window.StartupMonitor?.mark('active-book');
+     window.StartupMonitor?.mark?.('active-book');
      await window.loadCurrentTextbookData();
      window.applyProfileToUi();
 
@@ -205,7 +205,7 @@ for (var afterIndex = 0; afterIndex < window.__afterAppLoadHandlers.length; afte
     catch (e) { console.error('起動後の追加読み込みに失敗しました:', e); }
 }
 window.__learningBootReady=true;
-window.StartupMonitor?.mark('ready');
+window.StartupMonitor?.mark?.('ready');
 window.dispatchEvent(new Event('learning-data-ready'));
 if(window.resumeBackgroundSave)window.resumeBackgroundSave();
 };

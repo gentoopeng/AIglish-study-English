@@ -1176,7 +1176,7 @@ async function autoLoadOnce() {
   window.__gameSaveLoadedFor=id;
   if(window.LibraryState){try{await window.LibraryState.loadCloud(id);if(loginUid()!==id)return;window.LibraryState.cleanLocal(id);}catch(e){console.warn('[save] deletion history sync deferred',e);}}
   var cloudSave=null,localSave=null,save=null,cloudMarker=null;
-  if(!window.__learningBootReady)window.StartupMonitor?.mark('full-save-parse');
+  if(!window.__learningBootReady)window.StartupMonitor?.mark?.('full-save-parse');
   try{localSave=JSON.parse(localStorage.getItem(localKey(id))||'null');}catch(e){}
   try{cloudMarker=JSON.parse(localStorage.getItem(cloudMetaKey(id))||'null');}catch(e){}
   if(!cloudMarker){
@@ -1196,10 +1196,10 @@ async function autoLoadOnce() {
   }
   if(loginUid()!==id)return;
   if(save&&window.LibraryState)window.LibraryState.sanitizeSave(save,id);
-  if(!window.__learningBootReady)window.StartupMonitor?.mark('textbook-restore');
+  if(!window.__learningBootReady)window.StartupMonitor?.mark?.('textbook-restore');
   if(save&&window.TextbookFiles)await window.TextbookFiles.prepareRestore(save,id);
   if(loginUid()!==id)return;
-  if(!window.__learningBootReady)window.StartupMonitor?.mark('save-storage-restore');
+  if(!window.__learningBootReady)window.StartupMonitor?.mark?.('save-storage-restore');
   restoreSaveStorage(save,id);
   if(save&&save.data&&save.data.memory){
     window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt||'',data:save.data.memory};
@@ -1222,7 +1222,7 @@ function restorePendingSaveMemory(){
   ensureBtn();
   var pending=window.__pendingGameSaveMemory;
   if(!pending)return;
-  if(!window.__learningBootReady)window.StartupMonitor?.mark('saved-books-restore');
+  if(!window.__learningBootReady)window.StartupMonitor?.mark?.('saved-books-restore');
   if(window.LibraryState)window.LibraryState.sanitizeSave({memory:pending.data},pending.id);
   applySavedMemory(pending.data,pending.id);
   var restoredSuccessfully=true;

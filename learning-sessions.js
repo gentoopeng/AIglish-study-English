@@ -464,7 +464,7 @@
     if (!source?.length) return;
     const sampled = sample(window.filterLoadingQuizWords(source, book));
     if (!sampled.length) return;
-    window.StartupMonitor?.event('warmup:start');
+    window.StartupMonitor?.event?.('warmup:start');
     const queue = window.migrateVocabData(structuredClone(sampled));
     welcomeOwner = account;
     welcomePending = true;
@@ -563,13 +563,13 @@
     window.initLucide?.();
     document.body.classList.add("flash-warmup-open");
     welcomeModal = d;
-    window.StartupMonitor?.event('warmup:shown');
+    window.StartupMonitor?.event?.('warmup:shown');
     d.addEventListener(
       "close",
       () => {
         clearTimeout(startTimer);
         document.body.classList.remove("flash-warmup-open");
-        window.StartupMonitor?.event('warmup:closed');
+        window.StartupMonitor?.event?.('warmup:closed');
         welcomePending = false;
         welcomeModal = null;
         if (index > 0) window.saveAfterStudy?.("warmup-end");
@@ -681,7 +681,7 @@
         return;
       }
       if (index > queue.length) return;
-      window.StartupMonitor?.activity("warmup-flip");
+      window.StartupMonitor?.activity?.("warmup-flip");
       revealed = !revealed;
       card.classList.toggle("flipped", revealed);
       window.AppSounds?.play("back");
