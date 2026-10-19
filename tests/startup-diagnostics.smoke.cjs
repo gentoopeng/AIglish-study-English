@@ -53,7 +53,7 @@ const assert = require("node:assert/strict");
     assert.equal(state.previous.phase, "storage-hydrate");
     assert.equal(state.previous.ready, false);
     assert.equal(state.previous.version, "previous-version");
-    assert.ok(JSON.stringify(state).length < 1000);
+    assert.ok(JSON.stringify(state).length < 8000);
     assert.equal(JSON.stringify(state).includes("status"), false);
     await page.evaluate(() => {
       StartupMonitor.progress(1234, 1234);

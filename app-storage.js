@@ -74,7 +74,7 @@ const ready=(async()=>{
 
 })();
 ready.catch(failure);
-window.AppStorage={ready,flush,get pending(){return pending.size;},get error(){return lastFailure;},setCoordination(key,value){try{rawSet(key,value);revision++;return true;}catch(error){return false;}}};
+window.AppStorage={ready,flush,diagnosticSize(){let chars=0,largest=0;for(const value of values.values()){if(typeof value==='string'){chars+=value.length;largest=Math.max(largest,value.length);}}return {entries:values.size,chars,largest,pending:pending.size};},get pending(){return pending.size;},get error(){return lastFailure;},setCoordination(key,value){try{rawSet(key,value);revision++;return true;}catch(error){return false;}}};
 window.addEventListener('storage',event=>{revision++;if(event.isTrusted&&event.storageArea===native&&event.newValue!==null&&values.has(event.key)&&!pending.has(event.key)){
  // Native removal also occurs after overflow migration; only IDB broadcasts
  // represent a confirmed logical deletion.

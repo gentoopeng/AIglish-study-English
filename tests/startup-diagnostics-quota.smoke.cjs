@@ -51,7 +51,7 @@ const assert = require("node:assert/strict");
     );
     await page.locator(".menu-trigger").click();
     await page.getByRole("button", { name: "起動診断", exact: true }).click();
-    await page.waitForFunction(() => !document.getElementById("copy").disabled);
+    await page.waitForFunction(() => document.getElementById("copy")?.disabled === false);
     const report = await page.locator("#report").textContent();
     assert.match(report, /ホーム画面アプリ: true/);
     assert.match(report, /起動記録の保存先: IndexedDB/);
@@ -98,7 +98,7 @@ const assert = require("node:assert/strict");
     const empty = await browser.newPage();
     await empty.goto("http://127.0.0.1:8000/startup-diagnostics.html");
     await empty.waitForFunction(
-      () => !document.getElementById("copy").disabled,
+      () => document.getElementById("copy")?.disabled === false,
     );
     assert.match(
       await empty.locator("#report").textContent(),
