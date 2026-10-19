@@ -447,7 +447,7 @@
         cardWrap.onclick = function(e) {
             if (isCardFlicking) return;
             if (cardWrap.__ignoreClickUntil && Date.now() < cardWrap.__ignoreClickUntil) return;
-            window.StartupMonitor?.activity('card-flip');
+            window.StartupMonitor?.activity?.('card-flip');
             cardWrap.classList.toggle('flipped');
             window.AppSounds?.play('back');
         };
@@ -523,7 +523,7 @@
                 cardWrap.style.animation = '';
                 cardWrap.style.removeProperty('transform');
                 // スマホはclickの発火を待たず、指を離した瞬間にめくる。
-                window.StartupMonitor?.activity('card-flip');
+                window.StartupMonitor?.activity?.('card-flip');
                 cardWrap.classList.toggle('flipped');
             window.AppSounds?.play('back');
                 cardWrap.__ignoreClickUntil = Date.now() + 500;
@@ -561,7 +561,7 @@
     };
 
     window.animateFlashcardSwipe=function(card,direction,finalDx,finalDy,removeCard){
-        window.StartupMonitor?.activity(card.closest('.flash-warmup-dialog')?'warmup-swipe':'card-swipe');
+        window.StartupMonitor?.activity?.(card.closest('.flash-warmup-dialog')?'warmup-swipe':'card-swipe');
         var effectHost=card.closest('dialog')||document.body;
         var rect = card.getBoundingClientRect();
         var releaseX = rect.left + rect.width / 2;
