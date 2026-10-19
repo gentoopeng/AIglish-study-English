@@ -392,7 +392,7 @@
             var font=parseFloat(text.style.fontSize),minimum=14;
             while(font>minimum && text.scrollHeight>diameter*.62){font--;text.style.fontSize=font+'px';}
             text.style.maxHeight=(diameter*.62)+'px';text.style.overflowY='hidden';text.style.overscrollBehavior='contain';
-            if(text.scrollHeight>text.clientHeight){text.style.overflowY='auto';text.style.touchAction='pan-y';text.addEventListener('pointerdown',function(e){e.stopPropagation();});}
+            if(text.scrollHeight>text.clientHeight){text.style.overflowY='auto';text.style.touchAction='pan-y';}
         });
         stage.style.height=Math.max(320,diameter+40)+'px';
         if(posLabel)posLabel.style.top='calc(50% + '+(diameter/2+12)+'px)';
@@ -406,6 +406,17 @@
             reveal.onclick=function(){panel.classList.add('revealed');content.removeAttribute('aria-hidden');reveal.remove();more.hidden=content.scrollHeight<=content.clientHeight+1;};
             var more=document.createElement('button');more.type='button';more.className='flashcard-note-more';more.textContent='すべて表示';more.onclick=function(){content.classList.toggle('expanded');more.textContent=content.classList.contains('expanded')?'折りたたむ':'すべて表示';};
             panel.append(reveal,content,more);return panel;
+    };
+
+    // 距離が足りなくても、素早く弾いた場合はスワイプとして扱う。
+    window.flashcardSwipeDirection = function(dx, dy, vx, vy) {
+        var fast = 0.45, flick = 28;
+        var horizontal = Math.abs(dx) >= Math.abs(dy);
+        if (horizontal && (Math.abs(dx) > 65 || (Math.abs(dx) > flick && Math.abs(vx) > fast && vx * dx > 0))) return dx > 0 ? 'right' : 'left';
+        if (!horizontal && dy < 0 && (dy < -65 || (dy < -flick && vy < -fast))) return 'up';
+        if (dx > 65) return 'right';
+        if (dx < -65) return 'left';
+        return null;
     };
 
     window.renderFlashcardDeck = function() {
@@ -455,30 +466,19 @@
         // Pointer Eventsに統一し、指・ペン・マウスの位置へカード本体を追尾させる。
         // touchとclickを別々に登録すると同じ操作が二重に処理されるため使用しない。
         cardWrap.style.touchAction = 'none';
-        var activePointerId = null;
-        cardWrap.addEventListener('pointerdown', function(e) {
-            if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
-            activePointerId = e.pointerId;
-            cardTouchStartX = e.clientX;
-            cardTouchStartY = e.clientY;
-            isCardFlicking = true;
-            cardWrap.setPointerCapture(e.pointerId);
-            cardWrap.classList.add('is-dragging');
-            cardWrap.style.transition = 'none';
-            cardWrap.style.animation = 'none';
-        });
-
-        cardWrap.addEventListener('pointermove', function(e) {
-            if (!isCardFlicking || e.pointerId !== activePointerId) return;
-            var dx = e.clientX - cardTouchStartX;
-            var dy = e.clientY - cardTouchStartY;
-            cardWrap.style.setProperty('transform', "translate3d(" + dx + "px, " + dy + "px, 0) rotate(" + (dx * 0.05) + "deg)", 'important');
+        var activePointerId = null, dragStarted = false, baseTransform = '', frame = 0, pendingMove = null, samples = [];
+        function edges() { return [document.getElementById('fcEdgeRippleRight'), document.getElementById('fcEdgeRippleLeft'), document.getElementById('fcEdgeRippleTop')]; }
+        function clearEdges() { edges().forEach(function(edge) { if (edge) edge.style.opacity = 0; }); }
+        function paint() {
+            frame = 0;
+            if (!pendingMove || !dragStarted) return;
+            var dx = pendingMove.dx, dy = pendingMove.dy;
+            // 掴んだ時点の浮遊アニメーションの姿勢に指の移動量を重ね、触れた瞬間に跳ねないようにする。
+            cardWrap.style.setProperty('transform', baseTransform + " translate3d(" + dx + "px, " + dy + "px, 0) rotate(" + (dx * 0.05) + "deg)", 'important');
             var distance = Math.sqrt(dx * dx + dy * dy);
             var ratio = Math.min(distance / 130, 1);
             var fluidOpacity = Math.pow(ratio, 2.2) * 0.45;
-            var rightEdge = document.getElementById('fcEdgeRippleRight');
-            var leftEdge = document.getElementById('fcEdgeRippleLeft');
-            var topEdge = document.getElementById('fcEdgeRippleTop');
+            var e3 = edges(), rightEdge = e3[0], leftEdge = e3[1], topEdge = e3[2];
             if (distance > 10) {
                 if (dy < -15 && Math.abs(dy) > Math.abs(dx)) {
                     liveRipple.style.background = "radial-gradient(circle, rgba(245, 158, 11, 0.4) 0%, rgba(245, 158, 11, 0) 75%)";
@@ -501,10 +501,52 @@
                 }
             } else {
                 liveRipple.style.opacity = 0;
-                if (rightEdge) rightEdge.style.opacity = 0;
-                if (leftEdge) leftEdge.style.opacity = 0;
-                if (topEdge) topEdge.style.opacity = 0;
+                clearEdges();
             }
+        }
+        // スワイプしきれなかった時は中央へ滑らかに戻してから浮遊アニメーションを再開する。
+        function settle() {
+            if (frame) { cancelAnimationFrame(frame); frame = 0; }
+            pendingMove = null;
+            liveRipple.style.opacity = 0;
+            clearEdges();
+            if (!dragStarted) { cardWrap.classList.remove('is-dragging'); return; }
+            dragStarted = false;
+            cardWrap.classList.add('is-settling');
+            cardWrap.classList.remove('is-dragging');
+            cardWrap.style.removeProperty('transform');
+            var done = function() { cardWrap.classList.remove('is-settling'); cardWrap.removeEventListener('transitionend', done); };
+            cardWrap.addEventListener('transitionend', done);
+            setTimeout(done, 260);
+        }
+        cardWrap.addEventListener('pointerdown', function(e) {
+            if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+            activePointerId = e.pointerId;
+            cardTouchStartX = e.clientX;
+            cardTouchStartY = e.clientY;
+            isCardFlicking = true;
+            dragStarted = false;
+            samples = [{ x: e.clientX, y: e.clientY, t: e.timeStamp }];
+            cardWrap.setPointerCapture(e.pointerId);
+        });
+
+        cardWrap.addEventListener('pointermove', function(e) {
+            if (!isCardFlicking || e.pointerId !== activePointerId) return;
+            var dx = e.clientX - cardTouchStartX;
+            var dy = e.clientY - cardTouchStartY;
+            samples.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+            while (samples.length > 2 && e.timeStamp - samples[0].t > 100) samples.shift();
+            // 指の小さな揺れではカードを動かさない（タップでのピクつき防止）。
+            if (!dragStarted) {
+                if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+                var current = getComputedStyle(cardWrap).transform;
+                baseTransform = current && current !== 'none' ? current : '';
+                dragStarted = true;
+                cardWrap.classList.remove('is-settling');
+                cardWrap.classList.add('is-dragging');
+            }
+            pendingMove = { dx: dx, dy: dy };
+            if (!frame) frame = requestAnimationFrame(paint);
         });
 
         cardWrap.addEventListener('pointerup', function(e) {
@@ -513,26 +555,24 @@
             activePointerId = null;
             var dx = e.clientX - cardTouchStartX;
             var dy = e.clientY - cardTouchStartY;
-            liveRipple.style.opacity = 0;
-            if (dx > 65) { window.swipeFlashcard('right', dx, dy); }
-            else if (dx < -65) { window.swipeFlashcard('left', dx, dy); }
-            else if (dy < -65) { window.swipeFlashcard('up', dx, dy); }
-            else {
-                cardWrap.classList.remove('is-dragging');
-                cardWrap.style.transition = '';
-                cardWrap.style.animation = '';
-                cardWrap.style.removeProperty('transform');
+            var first = samples[0], elapsed = first ? Math.max(1, e.timeStamp - first.t) : 1;
+            var direction = window.flashcardSwipeDirection(dx, dy, first ? (e.clientX - first.x) / elapsed : 0, first ? (e.clientY - first.y) / elapsed : 0);
+            if (direction) {
+                if (frame) { cancelAnimationFrame(frame); frame = 0; }
+                dragStarted = false;
+                liveRipple.style.opacity = 0;
+                window.swipeFlashcard(direction, dx, dy);
+            } else if (dragStarted) {
+                // 届かなかったスワイプはめくらずに戻す（直後のclickも無視する）。
+                cardWrap.__ignoreClickUntil = Date.now() + 500;
+                settle();
+            } else {
+                settle();
                 // スマホはclickの発火を待たず、指を離した瞬間にめくる。
                 window.StartupMonitor?.activity?.('card-flip');
                 cardWrap.classList.toggle('flipped');
-            window.AppSounds?.play('back');
+                window.AppSounds?.play('back');
                 cardWrap.__ignoreClickUntil = Date.now() + 500;
-                var rightEdge2 = document.getElementById('fcEdgeRippleRight');
-                var leftEdge2 = document.getElementById('fcEdgeRippleLeft');
-                var topEdge2 = document.getElementById('fcEdgeRippleTop');
-                if (rightEdge2) rightEdge2.style.opacity = 0;
-                if (leftEdge2) leftEdge2.style.opacity = 0;
-                if (topEdge2) topEdge2.style.opacity = 0;
             }
         });
 
@@ -540,11 +580,7 @@
             if (e.pointerId !== activePointerId) return;
             activePointerId = null;
             isCardFlicking = false;
-            cardWrap.classList.remove('is-dragging');
-            cardWrap.style.transition = '';
-            cardWrap.style.animation = '';
-            cardWrap.style.removeProperty('transform');
-            liveRipple.style.opacity = 0;
+            settle();
         });
 
         var frontText = flashcardDirectionMode === 'en2ja' ? wordData.en : wordData.ja;
