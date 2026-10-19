@@ -2728,68 +2728,74 @@ window.getAllUsers = async function() {
 // 2. saveAllUsers: ID単位マージで他のユーザーを消さない
 // ------------------------------------------------------------------
 window.saveAllUsers = async function(incomingUsers) {
-  let existingUsers = [];
+  const mergeInto = function(baseUsers) {
+    const userMap = new Map();
+    (baseUsers || []).forEach(function(u) { if (u && u.id) userMap.set(u.id, u); });
+    (incomingUsers || []).forEach(function(u) {
+      if (u && u.id) userMap.set(u.id, Object.assign({}, userMap.get(u.id) || {}, u));
+    });
+    return Array.from(userMap.values());
+  };
+  const rememberLocally = function(users) {
+    try { localStorage.setItem("core_v4_users", JSON.stringify(users)); } catch (e) {}
+  };
+  const cachedUsers = function() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("core_v4_users") || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) { return []; }
+  };
 
-  if (window.db && window.fbGetDoc && window.fbDoc) {
+  // 読み込みと書き込みを同じトランザクションで行い、同時登録・PIN再設定を古い一覧で上書きしない。
+  if (window.db && window.fbRunTransaction && window.fbDoc) {
     try {
       const ref = window.fbDoc(window.db, "shared", "all_users");
-      const snap = await window.fbGetDoc(ref);
-      if (snap.exists() && snap.data().users && Array.isArray(snap.data().users)) {
-        existingUsers = snap.data().users;
-      }
+      let mergedUsers = [];
+      await window.fbRunTransaction(window.db, async function(tx) {
+        const snap = await tx.get(ref);
+        mergedUsers = mergeInto(snap.exists() && Array.isArray(snap.data().users) ? snap.data().users : []);
+        tx.set(ref, { users: mergedUsers }, { merge: true });
+      });
+      rememberLocally(mergedUsers);
+      return mergedUsers;
     } catch (e) {
-      console.error("saveAllUsers merge fetch error:", e);
-    }
-  }
-
-  var userMap = new Map();
-  existingUsers.forEach(function(u) {
-    if (u && u.id) userMap.set(u.id, u);
-  });
-  (incomingUsers || []).forEach(function(u) {
-    if (u && u.id) userMap.set(u.id, u);
-  });
-
-  var mergedUsers = Array.from(userMap.values());
-
-  try {
-    localStorage.setItem("core_v4_users", JSON.stringify(mergedUsers));
-  } catch (e) {}
-
-  if (window.db && window.fbSetDoc && window.fbDoc) {
-    try {
-      const ref = window.fbDoc(window.db, "shared", "all_users");
-      await window.fbSetDoc(ref, { users: mergedUsers }, { merge: true });
-    } catch (e) {
+      // 最新の一覧を読めないまま書き戻すと他のユーザーを消すため、端末にだけ反映する。
       console.error("saveAllUsers Firebase error:", e);
+      const localUsers = mergeInto(cachedUsers());
+      rememberLocally(localUsers);
+      return localUsers;
     }
   }
 
-  return mergedUsers;
+  const localUsers = mergeInto(cachedUsers());
+  rememberLocally(localUsers);
+  return localUsers;
 };
 
 // ------------------------------------------------------------------
-// 3. ユーザーをall_usersに自動復旧
+// 3. ユーザーをall_usersに自動復旧（PINが空の登録も補完）
 // ------------------------------------------------------------------
 window.recoverUserToAllUsers = async function(userData) {
   if (!userData || !userData.id) return;
 
   try {
     const users = await window.getAllUsers();
-    const exists = users.some(function(u) {
+    const existing = users.find(function(u) {
       return u && u.id === userData.id;
     });
+    const pin = window.LoginIdentity.storedPin(userData);
 
-    if (!exists) {
-      users.push({
+    if (!existing) {
+      await window.saveAllUsers([{
         id: userData.id,
         playerName: userData.playerName || "修行者",
         realName: userData.realName || "一般",
         age: userData.age || "18",
-        pin: userData.pin || ""
-      });
-      await window.saveAllUsers(users);
+        pin: pin
+      }]);
       console.log("✅ ユーザー " + userData.id + " をall_usersに自動復旧");
+    } else if (pin && !window.LoginIdentity.storedPin(existing)) {
+      await window.saveAllUsers([Object.assign({}, existing, { pin: pin })]);
     }
   } catch (e) {
     console.error("ユーザー自動復旧エラー:", e);
@@ -2797,88 +2803,115 @@ window.recoverUserToAllUsers = async function(userData) {
 };
 
 // ------------------------------------------------------------------
-// 4. Firebaseからユーザーを直接検索
+// 4. Firebaseのusers/{id}を確認（通信不良と「見つからない」を区別する）
 // ------------------------------------------------------------------
-window.findUserInFirebase = async function(userId, pin) {
-  if (!window.db || !window.fbGetDoc || !window.fbDoc) return null;
-
+window.lookupCloudAccount = async function(userId) {
+  if (!window.db || !window.fbGetDoc || !window.fbDoc) return { state: "unavailable", reason: "network" };
+  let timer;
   try {
-    const userRef = window.fbDoc(window.db, "users", userId);
     const snap = await Promise.race([
-      window.fbGetDoc(userRef),
-      new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 4000); })
+      window.fbGetDoc(window.fbDoc(window.db, "users", userId)),
+      new Promise(function(resolve, reject) { timer = setTimeout(function() { reject(Error("login timeout")); }, 10000); })
     ]);
-
-    if (snap && snap.exists()) {
-      const data = snap.data();
-      if (data.deleted) return null;
-      if (data.pin === pin) {
-        return {
-          id: userId,
-          playerName: data.playerName || "修行者",
-          realName: data.realName || "一般",
-          age: data.age || "18",
-          pin: data.pin
-        };
-      }
-    }
+    if (!snap.exists()) return { state: "missing" };
+    return { state: "found", data: snap.data() };
   } catch (e) {
-    console.error("Firebase直接検索エラー:", e);
+    console.warn("ログイン時のアカウント確認に失敗しました:", e);
+    return { state: "unavailable", reason: window.LoginIdentity.unavailableReason(e) };
+  } finally {
+    clearTimeout(timer);
   }
+};
 
-  return null;
+window.findUserInFirebase = async function(userId, pin) {
+  const result = await window.lookupCloudAccount(userId);
+  if (result.state !== "found" || result.data.deleted) return null;
+  const user = Object.assign({ id: userId }, result.data);
+  if (!window.LoginIdentity.matches(user, [userId], pin)) return null;
+  return { id: userId, playerName: result.data.playerName || "修行者", realName: result.data.realName || "一般", age: result.data.age || "18", pin: String(result.data.pin) };
+};
+
+// 他端末でのログインに必要なPINがusers/{id}に無い場合だけ補完する。
+window.repairCloudPin = async function(user) {
+  const pin = window.LoginIdentity.storedPin(user);
+  if (!user || !user.id || !pin || !window.fbSetDoc) return;
+  const result = await window.lookupCloudAccount(user.id);
+  if (result.state !== "found" || result.data.deleted || window.LoginIdentity.storedPin(result.data)) return;
+  await window.fbSetDoc(window.fbDoc(window.db, "users", user.id), { pin: pin }, { merge: true });
 };
 
 // ------------------------------------------------------------------
 // 5. handleAuthSubmit: 3段階ログイン戦略＋自動復旧
 // ------------------------------------------------------------------
 window.handleAuthSubmit = async function() {
+  if (window.__authProcessing) return;
+  window.__authProcessing = true;
+  const submitBtn = document.getElementById("authSubmitBtn");
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    await window.__submitAuthForm();
+  } finally {
+    window.__authProcessing = false;
+    if (submitBtn) submitBtn.disabled = false;
+  }
+};
+
+window.__submitAuthForm = async function() {
   const authReg = document.getElementById("authTabRegister");
   const isRegister = authReg ? authReg.classList.contains("active") : false;
   const errorMsg = document.getElementById("authErrorMsg");
+  const showError = function(text) {
+    if (errorMsg) { errorMsg.innerText = text; errorMsg.style.display = "block"; }
+  };
   if (errorMsg) errorMsg.style.display = "none";
 
   if (isRegister) {
     const pName = document.getElementById("regPlayerName").value.trim();
     const rName = document.getElementById("regRealName").value.trim();
     const age = document.getElementById("regAge").value.trim();
-    const pin = document.getElementById("regPin").value.trim();
+    const pin = window.LoginIdentity.pin(document.getElementById("regPin").value);
 
     if (!pName || !rName || !age || !pin) {
-      if (errorMsg) { errorMsg.innerText = "すべての項目を入力してください！"; errorMsg.style.display = "block"; }
+      showError("すべての項目を入力してください！");
       return;
     }
     if (!/^\d{4}$/.test(pin)) {
-      if (errorMsg) { errorMsg.innerText = "暗証番号は4桁の数字で設定してください！"; errorMsg.style.display = "block"; }
+      showError("暗証番号は4桁の数字で設定してください！");
+      return;
+    }
+    if (!window.db || !window.fbSetDoc || !window.fbDoc) {
+      showError("サーバーに接続できないため登録できません。\n通信環境を確認して再度お試しください。");
       return;
     }
 
     const newId = window.generateUserId();
     const newUserObj = { id: newId, playerName: pName, realName: rName, age: age, pin: pin };
 
-    const users = await window.getAllUsers();
-    users.push(newUserObj);
-    await window.saveAllUsers(users);
-
-    if (window.db && window.fbSetDoc && window.fbDoc) {
-      try {
-        const userRef = window.fbDoc(window.db, "users", newId);
-        await window.fbSetDoc(userRef, {
-          id: newId,
-          playerName: pName,
-          realName: rName,
-          age: age,
-          pin: pin,
-          selectedTitle: "称号なし",
-          userTarget: "未設定",
-          totalExp: 0,
-          avatar: "",
-          userStats: { user_level: 1, study_burst: 0 }
-        }, { merge: true });
-      } catch (e) {
-        console.error("Firebase新規登録エラー:", e);
-      }
+    // users/{id} が無いと他の端末からログインできないため、保存できた場合だけ登録完了にする。
+    try {
+      const userRef = window.fbDoc(window.db, "users", newId);
+      await window.fbSetDoc(userRef, {
+        id: newId,
+        playerName: pName,
+        realName: rName,
+        age: age,
+        pin: pin,
+        selectedTitle: "称号なし",
+        userTarget: "未設定",
+        totalExp: 0,
+        avatar: "",
+        userStats: { user_level: 1, study_burst: 0 }
+      }, { merge: true });
+    } catch (e) {
+      console.error("Firebase新規登録エラー:", e);
+      const reason = window.LoginIdentity.unavailableReason(e);
+      showError(reason === "quota"
+        ? "サーバーの利用上限に達しているため登録できませんでした。\n時間をおいて再度お試しください。"
+        : "サーバーに保存できなかったため登録できませんでした。\n通信環境を確認して再度お試しください。");
+      return;
     }
+
+    try { await window.saveAllUsers([newUserObj]); } catch (e) { console.error("all_users登録エラー:", e); }
 
     alert("🎉 アカウント作成成功！\nあなたのログインIDは【 " + newId + " 】です。\nログインに必要なので必ずメモしてください！");
     localStorage.setItem("core_v4_userId", newId);
@@ -2888,45 +2921,43 @@ window.handleAuthSubmit = async function() {
     window.loadLocalState();
 
   } else {
-    const idInput = document.getElementById("loginIdInput").value.trim();
-    const pinInput = document.getElementById("loginPinInput").value.trim();
+    const ids = window.LoginIdentity.idCandidates(document.getElementById("loginIdInput").value);
+    const pinInput = window.LoginIdentity.pin(document.getElementById("loginPinInput").value);
 
-    if (!idInput || !pinInput) {
-      if (errorMsg) { errorMsg.innerText = "IDと暗証番号を入力してください！"; errorMsg.style.display = "block"; }
+    if (!ids.length || !pinInput) {
+      showError("IDと暗証番号を入力してください！");
       return;
     }
 
     let user = null;
     let loginMethod = "";
+    let unavailable = "";
+    let deleted = false;
 
     // 戦略1: all_users から検索
     try {
-      const users = await window.getAllUsers();
-      user = users.find(function(u) {
-        return u && u.id === idInput && u.pin === pinInput;
-      });
+      user = window.LoginIdentity.find(await window.getAllUsers(), ids, pinInput);
       if (user) loginMethod = "all_users";
     } catch (e) {
       console.error("戦略1 all_users検索エラー:", e);
     }
 
     // 戦略2: Firebase users/{id} から直接検索
-    if (!user) {
-      try {
-        user = await window.findUserInFirebase(idInput, pinInput);
-        if (user) loginMethod = "firebase_direct";
-      } catch (e) {
-        console.error("戦略2 Firebase直接検索エラー:", e);
+    for (let i = 0; !user && i < ids.length; i++) {
+      const result = await window.lookupCloudAccount(ids[i]);
+      if (result.state === "unavailable") { unavailable = unavailable || result.reason; continue; }
+      if (result.state !== "found") continue;
+      if (result.data.deleted) { deleted = true; continue; }
+      if (window.LoginIdentity.matches(Object.assign({}, result.data, { id: ids[i] }), ids, pinInput)) {
+        user = { id: ids[i], playerName: result.data.playerName || "修行者", realName: result.data.realName || "一般", age: result.data.age || "18", pin: String(result.data.pin) };
+        loginMethod = "firebase_direct";
       }
     }
 
     // 戦略3: ローカルキャッシュから検索
-    if (!user) {
+    if (!user && !deleted) {
       try {
-        const localUsers = JSON.parse(localStorage.getItem("core_v4_users") || "[]");
-        user = localUsers.find(function(u) {
-          return u && u.id === idInput && u.pin === pinInput;
-        });
+        user = window.LoginIdentity.find(JSON.parse(localStorage.getItem("core_v4_users") || "[]"), ids, pinInput);
         if (user) loginMethod = "local_cache";
       } catch (e) {}
     }
@@ -2941,11 +2972,14 @@ window.handleAuthSubmit = async function() {
         }
       }
       window.showLoginConfirmPopup(user);
+    } else if (deleted) {
+      showError("このアカウントは管理者により削除されています。");
+    } else if (unavailable === "quota") {
+      showError("サーバーの利用上限に達しているため、アカウントを確認できませんでした。\n時間をおいて再度お試しください。");
+    } else if (unavailable) {
+      showError("サーバーに接続できず、アカウントを確認できませんでした。\n通信環境を確認して再度お試しください。");
     } else {
-      if (errorMsg) {
-        errorMsg.innerText = "IDまたは暗証番号が違います。\nネットワーク接続も確認してください。";
-        errorMsg.style.display = "block";
-      }
+      showError("IDまたは暗証番号が違います。\nIDは発行された英字（大文字・小文字どちらでも可）と数字です。");
     }
   }
 };
@@ -3000,6 +3034,9 @@ window.showLoginConfirmPopup = function(user) {
     Promise.resolve(window.recoverUserToAllUsers(user)).catch(function(e) {
       console.error("ログイン確定時自動復旧エラー:", e);
     });
+    Promise.resolve(window.repairCloudPin(user)).catch(function(e) {
+      console.error("ログイン確定時PIN補完エラー:", e);
+    });
   };
 };
 
@@ -3043,6 +3080,24 @@ window.autoRecoverCurrentUser = async function() {
 // ------------------------------------------------------------------
 window.onAppLoaded(async function() {
   await window.autoRecoverCurrentUser();
+  // 登録時にPINがクラウドへ保存されなかったアカウントを、端末に残るPINで一度だけ補完する。
+  const savedId = localStorage.getItem("core_v4_userId");
+  const checkedKey = "core_v4_cloud_pin_checked_" + savedId;
+  if (!savedId || savedId === "GUEST-000" || localStorage.getItem(checkedKey)) return;
+  try {
+    const cached = JSON.parse(localStorage.getItem("core_v4_users") || "[]");
+    const entry = (Array.isArray(cached) ? cached : []).find(function(u) { return u && u.id === savedId; });
+    if (entry && window.LoginIdentity.storedPin(entry)) {
+      const result = await window.lookupCloudAccount(savedId);
+      if (result.state === "unavailable") return;
+      if (result.state === "found" && !result.data.deleted && !window.LoginIdentity.storedPin(result.data)) {
+        await window.fbSetDoc(window.fbDoc(window.db, "users", savedId), { pin: window.LoginIdentity.storedPin(entry) }, { merge: true });
+      }
+    }
+    localStorage.setItem(checkedKey, "1");
+  } catch (e) {
+    console.warn("PIN補完を確認できませんでした:", e);
+  }
 });
 
 // ------------------------------------------------------------------
@@ -3236,17 +3291,16 @@ console.log("🔐 ログイン安定化＆自動復旧パッチ 適用完了");
           let allUsers = await window.getAllUsers();
           const idx = allUsers.findIndex(function(u) { return u.id === userId; });
           if (idx !== -1) {
-            allUsers[idx].pin = newPin;
-            await window.saveAllUsers(allUsers);
+            // 他のユーザーの古い端末キャッシュを書き戻さないよう、対象者だけを更新する。
+            await window.saveAllUsers([Object.assign({}, allUsers[idx], { pin: newPin })]);
           } else {
-            allUsers.push({
+            await window.saveAllUsers([{
               id: userId,
               playerName: userData.playerName || "修行者",
               realName: userData.realName || "一般",
               age: userData.age || "18",
               pin: newPin
-            });
-            await window.saveAllUsers(allUsers);
+            }]);
           }
         } catch (e) {
           console.error("all_users更新エラー:", e);
@@ -3354,8 +3408,8 @@ window.syncMyEntryToAllUsers = async function(force) {
         const idx = users.findIndex(function(u) { return u && u.id === myId; });
         if (idx === -1) return; // 未登録の場合は既存の復旧パッチに任せる
         if (users[idx].playerName === myName) return; // 変更なしなら書かない
-        users[idx].playerName = myName;
-        await window.fbSetDocWithRetry(ref, { users: users }, { merge: true });
+        // 自分の項目だけを最新の一覧へ反映する（古い一覧で他人の登録を消さない）。
+        await window.saveAllUsers([{ id: myId, playerName: myName }]);
     } catch (e) {
         console.error("syncMyEntryToAllUsers エラー:", e);
     }
