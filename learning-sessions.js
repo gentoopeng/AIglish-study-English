@@ -690,67 +690,82 @@
         .forEach((b) => (b.disabled = !revealed));
     };
     let pointer = null,
-      dragged = false;
+      dragged = false,
+      moving = false;
+    // Return smoothly from a short drag; the float animation resumes afterwards.
+    const settle = () => {
+      if (moving) {
+        card.classList.add("is-settling");
+        setTimeout(() => card.classList.remove("is-settling"), 260);
+      }
+      moving = false;
+      card.classList.remove("is-dragging");
+      card.style.removeProperty("transform");
+    };
     card.addEventListener("pointerdown", (e) => {
       if (index >= queue.length) return;
       if (!e.isPrimary) return;
       card.setPointerCapture(e.pointerId);
-      pointer = { x: e.clientX, y: e.clientY };
+      pointer = { x: e.clientX, y: e.clientY, t: e.timeStamp, samples: [] };
       dragged = false;
     });
     card.addEventListener("pointermove", (e) => {
       if (!pointer) return;
-      card.classList.add("is-dragging");
-      card.style.transform =
-        "translate(" +
-        (e.clientX - pointer.x) +
-        "px," +
-        (e.clientY - pointer.y) +
-        "px) rotate(" +
-        (e.clientX - pointer.x) * 0.06 +
-        "deg)";
-    });
-    card.addEventListener("pointerup", (e) => {
-      card.classList.remove("is-dragging");
-      card.style.removeProperty("transform");
-      if (!pointer) return;
       const dx = e.clientX - pointer.x,
         dy = e.clientY - pointer.y;
+      pointer.samples.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+      while (pointer.samples.length > 2 && e.timeStamp - pointer.samples[0].t > 100)
+        pointer.samples.shift();
+      // Ignore finger tremor so a tap does not make the card twitch.
+      if (!moving) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        moving = true;
+        card.classList.remove("is-settling");
+        card.classList.add("is-dragging");
+      }
+      card.style.transform =
+        "translate(" + dx + "px," + dy + "px) rotate(" + dx * 0.06 + "deg)";
+    });
+    card.addEventListener("pointerup", (e) => {
+      if (!pointer) return settle();
+      const dx = e.clientX - pointer.x,
+        dy = e.clientY - pointer.y,
+        first = pointer.samples[0] || pointer,
+        elapsed = Math.max(1, e.timeStamp - first.t),
+        direction = window.flashcardSwipeDirection
+          ? window.flashcardSwipeDirection(
+              dx,
+              dy,
+              (e.clientX - first.x) / elapsed,
+              (e.clientY - first.y) / elapsed,
+            )
+          : null;
       pointer = null;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < 65) return;
+      if (!direction) {
+        if (moving) dragged = true;
+        return settle();
+      }
+      moving = false;
+      card.classList.remove("is-dragging");
+      card.style.removeProperty("transform");
       dragged = true;
       const status =
-        Math.abs(dy) > Math.abs(dx) && dy < 0
-          ? "so"
-          : Math.abs(dx) > Math.abs(dy)
-            ? dx > 0
-              ? "ok"
-              : "bad"
-            : null;
-      if (status) {
-        window.animateFlashcardSwipe?.(
-          card,
-          status === "ok" ? "right" : status === "bad" ? "left" : "up",
-          dx,
-          dy,
-          false,
-        );
-        revealed = true;
-        ratings.querySelectorAll("button").forEach((b) => (b.disabled = false));
-        window.AppSounds?.play(
-          status === "ok"
-            ? "swipe-right"
-            : status === "bad"
-              ? "swipe-left"
-              : "navigate",
-        );
-      }
-      if (status) ratings.querySelector("[data-warmup=" + status + "]").click();
+        direction === "up" ? "so" : direction === "right" ? "ok" : "bad";
+      window.animateFlashcardSwipe?.(card, direction, dx, dy, false);
+      revealed = true;
+      ratings.querySelectorAll("button").forEach((b) => (b.disabled = false));
+      window.AppSounds?.play(
+        status === "ok"
+          ? "swipe-right"
+          : status === "bad"
+            ? "swipe-left"
+            : "navigate",
+      );
+      ratings.querySelector("[data-warmup=" + status + "]").click();
     });
     card.addEventListener("pointercancel", () => {
       pointer = null;
-      card.classList.remove("is-dragging");
-      card.style.removeProperty("transform");
+      settle();
     });
     const flip = card.onclick;
     card.onclick = (e) => {

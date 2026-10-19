@@ -1140,6 +1140,10 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
 }
 
 .flashcard-wrapper-3d {
+    /* 文字の選択・長押しメニュー・選択文字のドラッグがスワイプを中断（pointercancel）させないようにする。 */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
     position: absolute;
     width: 240px;
     height: 240px;
@@ -1155,6 +1159,12 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     animation: none !important;
     transition: none !important;
     will-change: transform;
+}
+
+/* 離した後は指の位置から中央へ滑らかに戻し、戻り切ってから浮遊アニメーションを再開する。 */
+.flashcard-wrapper-3d.is-settling {
+    animation: none !important;
+    transition: transform .2s cubic-bezier(.25,1,.5,1) !important;
 }
 
 /* フラッシュ単語を離した地点で一度だけ広がる、軽量な泡・花火演出。 */
@@ -1884,8 +1894,8 @@ will-change:auto!important;
 @media(prefers-reduced-motion:no-preference){
 html.ios-stable-rendering body .flashcard-inner-rotator{transition:transform .4s cubic-bezier(.25,1,.5,1)!important;}
 html.ios-stable-rendering body #flashcardGhost{transition:transform .8s cubic-bezier(.1,.8,.25,1),opacity .8s ease!important;}
-html.ios-stable-rendering body .flashcard-session-screen :is(#activeFlashcard,.warmup-card):not(.is-dragging){animation:bubbleFloatAnim 4s ease-in-out infinite!important;}
-html.ios-stable-rendering body .flashcard-session-screen :is(#activeFlashcard,.warmup-card).flipped:not(.is-dragging){animation-play-state:paused!important;}
+html.ios-stable-rendering body .flashcard-session-screen :is(#activeFlashcard,.warmup-card):not(.is-dragging):not(.is-settling){animation:bubbleFloatAnim 4s ease-in-out infinite!important;}
+html.ios-stable-rendering body .flashcard-session-screen :is(#activeFlashcard,.warmup-card).flipped:not(.is-dragging):not(.is-settling){animation-play-state:paused!important;}
 html.ios-stable-rendering body .fc-vanish-ring{animation:fcVanishRing .48s ease-out forwards!important;}
 html.ios-stable-rendering body .fc-vanish-particle{animation:fcVanishParticle .52s cubic-bezier(.16,.72,.3,1) var(--fc-burst-delay) forwards!important;}
 html.ios-stable-rendering body .flashcard-post-ripple{animation:fcFireworkSparkle .8s cubic-bezier(.1,.8,.25,1) forwards!important;}
@@ -2236,7 +2246,7 @@ html.ios-stable-rendering body .flashcard-note-preview.revealed .flashcard-note-
 .group-goal{border:1px solid var(--border);border-radius:16px;padding:14px;margin:0 0 20px;background:rgba(18,27,44,.6)}.group-goal h4,.group-timeline h4{margin:0 0 12px}.group-goal progress{width:100%;accent-color:var(--cosmic-cyan)}.group-goal select,.group-goal input{max-width:100%;box-sizing:border-box;margin:6px 0}.group-goal input{width:90px;margin-right:8px}
 .group-timeline article{padding:12px 0;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr auto;gap:6px}.group-timeline article p{grid-column:1/-1;margin:0;overflow-wrap:anywhere}.group-timeline small{color:var(--text-sub);font-size:11px}.group-timeline button{padding:5px 12px;border:1px solid var(--border);border-radius:16px;background:transparent;color:var(--text-sub)}.group-timeline button[aria-pressed=true]{color:#fbbf24;border-color:currentColor}.group-actions{margin-top:20px;font-size:12px}.group-friend-picker{max-height:35dvh;overflow:auto;margin:12px 0}.group-friend-picker label{display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border)}.group-friend-picker input{width:auto}
 .flash-resume{width:100%;margin-bottom:16px;color:var(--cosmic-cyan)}.meaning-history-button{display:block;margin:0 0 12px auto;font-size:12px}.meaning-chart svg{display:block;width:100%;height:auto}.meaning-chart-legend{display:flex;justify-content:space-around;font-size:13px;margin:12px 0 20px}
-.warmup-count{text-align:center;color:var(--text-sub)}.warmup-card{display:flex;align-items:center;justify-content:center;min-height:220px;width:100%;padding:24px;box-sizing:border-box;overflow-wrap:anywhere;white-space:pre-wrap;font-size:clamp(22px,7vw,34px);line-height:1.55;border:1px solid var(--border);border-radius:26px;background:rgba(17,29,48,.8);color:var(--text-main,#fff);cursor:pointer}.warmup-ratings{display:flex;justify-content:center;gap:18px;margin:22px 0}.warmup-ratings button{width:56px;height:56px;border:1px solid currentColor;border-radius:50%;font-size:25px;background:rgba(15,23,42,.8);color:#94a3b8}.warmup-ratings button[data-warmup=ok]{color:#34d399}.warmup-ratings button[data-warmup=so]{color:#fbbf24}.warmup-ratings button[data-warmup=bad]{color:#fb7185}.warmup-ratings button:disabled{opacity:.35}
+.warmup-count{text-align:center;color:var(--text-sub)}.warmup-card{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;display:flex;align-items:center;justify-content:center;min-height:220px;width:100%;padding:24px;box-sizing:border-box;overflow-wrap:anywhere;white-space:pre-wrap;font-size:clamp(22px,7vw,34px);line-height:1.55;border:1px solid var(--border);border-radius:26px;background:rgba(17,29,48,.8);color:var(--text-main,#fff);cursor:pointer}.warmup-ratings{display:flex;justify-content:center;gap:18px;margin:22px 0}.warmup-ratings button{width:56px;height:56px;border:1px solid currentColor;border-radius:50%;font-size:25px;background:rgba(15,23,42,.8);color:#94a3b8}.warmup-ratings button[data-warmup=ok]{color:#34d399}.warmup-ratings button[data-warmup=so]{color:#fbbf24}.warmup-ratings button[data-warmup=bad]{color:#fb7185}.warmup-ratings button:disabled{opacity:.35}
 @media(prefers-reduced-motion:no-preference){.group-list-row,.group-timeline button,.community-segments button,.warmup-card{transition:background .15s,border-color .15s,transform .15s}.group-list-row:active,.warmup-card:active{transform:scale(.985)}}
 .warmup-card{touch-action:none}
 /* The community switch sits directly on the app wallpaper. */
