@@ -276,11 +276,15 @@
     }
 
     window.eraseLibraryItem=eraseBook;
-    var retrying=false;
-    async function retryPendingDeletions(){
-        if(retrying||!window.LibraryState)return;retrying=true;
-        try{var owner=userId();await window.LibraryState.loadCloud(owner);if(userId()!==owner)return;for(var item of Object.values(window.LibraryState.read(owner))){if(userId()!==owner)return;if(item.pending)await eraseBook(item.id,item.metadata,item.kind);}window.LibraryState.cleanLocal(owner);}
-        catch(e){console.warn('削除の同期は接続後に再試行します',e);}
+    var retrying=false,retryFailures=0,nextRetryAt=0;
+    // Each retry re-reads and rewrites every local and cloud save. A deletion that keeps
+    // failing must not repeat that every 30 seconds: back off 1, 2, 4 ... up to 60 minutes.
+    async function retryPendingDeletions(force){
+        if(retrying||!window.LibraryState)return;
+        if(force!==true&&Date.now()<nextRetryAt)return;
+        retrying=true;
+        try{var owner=userId();await window.LibraryState.loadCloud(owner);if(userId()!==owner)return;for(var item of Object.values(window.LibraryState.read(owner))){if(userId()!==owner)return;if(item.pending)await eraseBook(item.id,item.metadata,item.kind);}window.LibraryState.cleanLocal(owner);retryFailures=0;nextRetryAt=0;}
+        catch(e){retryFailures++;nextRetryAt=Date.now()+Math.min(3600000,60000*Math.pow(2,retryFailures-1));console.warn('削除の同期は接続後に再試行します',e);}
         finally{retrying=false;}
     }
     setInterval(function(){if(window.LibraryState&&Object.values(window.LibraryState.read()).some(function(item){return item.pending;}))retryPendingDeletions();},30000);
@@ -293,7 +297,7 @@
         refreshPool();window.renderVocabLibrarySelection();
     }
     window.addEventListener('storage',function(event){if(window.LibraryState&&event.key===window.LibraryState.storageKey(userId()))applyDeletionVisibility();});
-    window.addEventListener('online',retryPendingDeletions);
+    window.addEventListener('online',function(){retryPendingDeletions(true);});
     window.onAppLoaded(retryPendingDeletions);
     window.openLibraryBookActions = function(bookId) {
         var actionUserId = userId();
