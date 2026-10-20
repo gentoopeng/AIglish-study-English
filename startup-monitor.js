@@ -18,6 +18,7 @@
           events: value.events,
           runtime: value.runtime,
           pendingTasks: value.pendingTasks,
+          duelAnswers: value.duelAnswers,
         }
       : null;
   try {
@@ -88,9 +89,15 @@
   const events = [];
   const pendingTasks = new Set();
   const allowed =
-    /^(?:hook:\d+:[a-z-]+\.js|user-stats|textbook-index|warmup):(start|done|error|shown|closed)$/;
+    /^(?:hook:\d+:[a-z-]+\.js|user-stats|textbook-index|warmup|duel|save):(start|done|error|shown|closed|answer)$/;
   function event(label) {
     if (!allowed.test(label)) return;
+    // Battle answers are counted in memory only; the next checkpoint stores the count.
+    if (label === "duel:answer") {
+      state.duelAnswers = (state.duelAnswers || 0) + 1;
+      return;
+    }
+    if (label === "duel:start") state.duelAnswers = 0;
     events.push({ label, ms: Math.round(performance.now()) });
     if (events.length > 12) events.shift();
     state.events = events;
@@ -103,7 +110,9 @@
     state.pendingTasks = [...pendingTasks];
     // Synchronous hooks are recorded by the ordinary ready checkpoint. Avoid
     // adding dozens of storage transactions to startup itself.
-    if (label.startsWith("warmup:") || status === "error") persist();
+    // Battles and full saves happen long after startup: keep a size snapshot with them.
+    if (/^(?:duel|save):/.test(label)) snapshot();
+    else if (label.startsWith("warmup:") || status === "error") persist();
   }
   function snapshot() {
     // Inspect already-loaded DOM/numeric sizes only; never fetch or decode images.
