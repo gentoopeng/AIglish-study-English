@@ -431,6 +431,31 @@
     welcomeModal = null,
     welcomeRetries = 0,
     welcomeEligible = "";
+  // iOS can terminate the page while the automatic warm-up is on screen. If the
+  // previous run ended while it was showing, skip the automatic warm-up for 24 hours
+  // so a repeating renderer termination cannot lock the user out of the app.
+  const warmupGuardKey = "__aiglish_warmup_guard";
+  function readWarmupGuard() {
+    try {
+      return JSON.parse(localStorage.getItem(warmupGuardKey) || "null") || {};
+    } catch {
+      return {};
+    }
+  }
+  function writeWarmupGuard(value) {
+    try {
+      localStorage.setItem(warmupGuardKey, JSON.stringify(value));
+    } catch {}
+  }
+  function warmupSuppressed() {
+    const guard = readWarmupGuard(),
+      now = Date.now();
+    if (guard.shownAt) {
+      writeWarmupGuard({ suppressUntil: now + 86400000 });
+      return true;
+    }
+    return Number(guard.suppressUntil) > now;
+  }
   async function welcome(force = false) {
     if (!force && welcomeEligible !== uid()) return;
     if (
@@ -441,6 +466,7 @@
       document.hidden
     )
       return;
+    if (!force && warmupSuppressed()) return;
     if (
       document.querySelector("dialog[open],#wordDuelScreen") ||
       window.__pgLoad?.overlay?.isConnected
@@ -564,9 +590,24 @@
     document.body.classList.add("flash-warmup-open");
     welcomeModal = d;
     window.StartupMonitor?.event?.('warmup:shown');
+    // Cleared on close and while hidden; a terminated page leaves it set.
+    const markShowing = () =>
+      writeWarmupGuard(
+        document.hidden
+          ? { suppressUntil: readWarmupGuard().suppressUntil || 0 }
+          : { shownAt: Date.now() },
+      );
+    const clearShowing = () =>
+      writeWarmupGuard({ suppressUntil: readWarmupGuard().suppressUntil || 0 });
+    markShowing();
+    document.addEventListener("visibilitychange", markShowing);
+    window.addEventListener("pagehide", clearShowing);
     d.addEventListener(
       "close",
       () => {
+        document.removeEventListener("visibilitychange", markShowing);
+        window.removeEventListener("pagehide", clearShowing);
+        clearShowing();
         clearTimeout(startTimer);
         document.body.classList.remove("flash-warmup-open");
         window.StartupMonitor?.event?.('warmup:closed');
