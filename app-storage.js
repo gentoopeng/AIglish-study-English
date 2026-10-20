@@ -11,6 +11,8 @@ const critical=key=>key.startsWith('core_v4_user_vocab_progress_')||key.startsWi
 // Mirror small catalogues too, without pushing large photographs into native storage.
 const mirrored=key=>critical(key)||key.startsWith('aiglish_app_background_catalog_')||key==='aiglish_shared_background_catalog'||key.startsWith('core_v4_word_duel_pending_');
 function keys(){if(keysRevision!==revision){const names=new Set(nativeKeys());for(const [key,value] of values){if(value===null)names.delete(key);else names.add(key);}keyCache=[...names];keysRevision=revision;}return keyCache;}
+// Diagnostic categories by fixed key prefix; never exposes key names, IDs or contents.
+function storageKind(key){return key.startsWith('save_studio_')?'saves':key.startsWith('core_v4_user_vocab_progress_')||key.startsWith('aiglish_learning_recovery_')?'progress':/^core_v4_(?:cache|custom_words|textbook_file)_/.test(key)?'books':key.startsWith('aiglish_app_background_')||key==='aiglish_shared_background_catalog'?'backgrounds':'other';}
 function get(key){key=String(key);return values.has(key)?values.get(key):rawGet(key);}
 function failure(error){const changed=!lastFailure;lastFailure=error;if(changed){console.warn('端末の保存先を利用できません。保存データは消していません。',error);window.dispatchEvent(new CustomEvent('app-storage-error',{detail:'端末への保存を確認できません。空き容量・ブラウザー設定を確認してください。'}));}}
 function transaction(rows){return new Promise((resolve,reject)=>{if(!database){reject(Error('端末の保存先を開けませんでした。'));return;}const tx=database.transaction('values','readwrite'),store=tx.objectStore('values');for(const [key,value] of rows){if(value===null)store.delete(key);else store.put(value,key);}tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||Error('端末への保存に失敗しました。'));tx.onerror=()=>{};});}
@@ -74,7 +76,7 @@ const ready=(async()=>{
 
 })();
 ready.catch(failure);
-window.AppStorage={ready,flush,diagnosticSize(){let chars=0,largest=0;for(const value of values.values()){if(typeof value==='string'){chars+=value.length;largest=Math.max(largest,value.length);}}return {entries:values.size,chars,largest,pending:pending.size};},get pending(){return pending.size;},get error(){return lastFailure;},setCoordination(key,value){try{rawSet(key,value);revision++;return true;}catch(error){return false;}}};
+window.AppStorage={ready,flush,diagnosticSize(){let chars=0,largest=0,largestKind='';const kinds={};for(const [key,value] of values){if(typeof value==='string'){const kind=storageKind(key);chars+=value.length;kinds[kind]=(kinds[kind]||0)+value.length;if(value.length>largest){largest=value.length;largestKind=kind;}}}return {entries:values.size,chars,largest,largestKind,kinds,pending:pending.size};},get pending(){return pending.size;},get error(){return lastFailure;},setCoordination(key,value){try{rawSet(key,value);revision++;return true;}catch(error){return false;}}};
 window.addEventListener('storage',event=>{revision++;if(event.isTrusted&&event.storageArea===native&&event.newValue!==null&&values.has(event.key)&&!pending.has(event.key)){
  // Native removal also occurs after overflow migration; only IDB broadcasts
  // represent a confirmed logical deletion.
