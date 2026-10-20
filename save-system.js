@@ -892,6 +892,128 @@ function saveGeneration(savedAt) { return String(savedAt||Date.now()).replace(/[
 function saveChecksum(text) {
   return window.__gameSaveChecksum(text);
 }
+/* ---------- 差分セーブ（v6） ----------
+   全データを毎回1つの文字列にして送る代わりに、保存項目ごとに分けて送る。
+   前回と同じ内容の項目は前回の保存をそのまま参照し、変わった項目だけを送る。
+   各項目は世代ごとの別ドキュメントに書き、最後に目次（saves/main）を差し替える。
+   途中で通信が切れても、目次は前回の完全なセーブを指したまま残る。 */
+var ENTRY_LARGE=20000,ENTRY_COLLECTION='saveEntries';
+function entryRef(id,gen,index){return window.fbDoc(window.db,'users',id,ENTRY_COLLECTION,gen+'_'+index);}
+function entryGeneration(){return Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
+function entryTime(gen){var value=parseInt(String(gen||'').split('_')[0],36);return Number.isFinite(value)?value:0;}
+// Large values travel alone; small ones share one bundle so a restore stays a few reads.
+function saveEntries(cloudSave){
+  var stored=(cloudSave.data&&cloudSave.data.localStorage)||{},small={},entries=[];
+  Object.keys(stored).forEach(function(key){var value=stored[key];if(typeof value!=='string')return;if(value.length>=ENTRY_LARGE)entries.push({k:'ls:'+key,value:value});else small[key]=value;});
+  entries.push({k:'small',value:JSON.stringify(small)});
+  // Large memory fields (word list, its understanding, word book drafts) change independently.
+  var memory=(cloudSave.data&&cloudSave.data.memory)||{},rest={};
+  Object.keys(memory).forEach(function(field){
+    // Each word book is its own item: studying one book does not resend the others.
+    if(field==='vocabBooks'&&memory.vocabBooks&&typeof memory.vocabBooks==='object'&&!Array.isArray(memory.vocabBooks)){
+      rest.vocabBooks={};
+      Object.keys(memory.vocabBooks).forEach(function(book){var text=JSON.stringify(memory.vocabBooks[book]);if(text===undefined)return;if(text.length>=ENTRY_LARGE)entries.push({k:'book:'+book,value:text});else rest.vocabBooks[book]=memory.vocabBooks[book];});
+      return;
+    }
+    var text=JSON.stringify(memory[field]);if(text===undefined)return;if(text.length>=ENTRY_LARGE)entries.push({k:'mem:'+field,value:text});else rest[field]=memory[field];
+  });
+  entries.push({k:'memory',value:JSON.stringify(rest)});
+  return entries;
+}
+async function uploadSaveEntries(id,cloudSave,previous,started){
+  var reused={};((previous&&previous.v===6&&Array.isArray(previous.entries))?previous.entries:[]).forEach(function(entry){if(entry&&entry.k)reused[entry.k]=entry;});
+  var entries=saveEntries(cloudSave),manifest=[],sent=0;
+  for(var i=0;i<entries.length;i++){
+    var entry=entries[i],value=entry.value,sum=saveChecksum(value),old=reused[entry.k];
+    entry.value=null;
+    if(old&&old.sum===sum&&old.len===value.length&&old.g){manifest.push({k:entry.k,g:old.g,n:old.n,len:old.len,sum:old.sum});continue;}
+    var gen=entryGeneration(),count=Math.max(1,Math.ceil(value.length/CHUNK));
+    for(var n=0;n<count;n+=4){
+      var group=[];for(var g=n;g<Math.min(n+4,count);g++)group.push([entryRef(id,gen,g),{k:entry.k,g:gen,i:g,n:count,d:value.slice(g*CHUNK,(g+1)*CHUNK)},{merge:false}]);
+      await window.__writeSaveParts(group);group=null;sent+=Math.min(4,count-n);
+    }
+    manifest.push({k:entry.k,g:gen,n:count,len:value.length,sum:sum});
+    if(started)progress(15+((i+1)/entries.length)*80,started,'クラウドへ保存中');
+  }
+  return {entries:manifest,sent:sent};
+}
+async function readSaveEntries(id,meta){
+  var stored={},memory={},books={};
+  for(var e=0;e<meta.entries.length;e++){
+    var entry=meta.entries[e],raw='';
+    for(var i=0;i<entry.n;i++){
+      var part=await window.fbGetDoc(entryRef(id,entry.g,i));
+      if(!part||!part.exists()||!part.data()||part.data().g!==entry.g)throw new Error('セーブデータの一部が見つかりません');
+      raw+=part.data().d||'';
+    }
+    if(raw.length!==entry.len||saveChecksum(raw)!==entry.sum)throw new Error('セーブデータの検証に失敗しました');
+    if(entry.k==='small')Object.assign(stored,JSON.parse(raw||'{}'));
+    else if(entry.k==='memory')Object.assign(memory,JSON.parse(raw||'{}'));
+    else if(entry.k.indexOf('mem:')===0)memory[entry.k.slice(4)]=JSON.parse(raw);
+    else if(entry.k.indexOf('book:')===0)books[entry.k.slice(5)]=JSON.parse(raw);
+    else if(entry.k.indexOf('ls:')===0)stored[entry.k.slice(3)]=raw;
+  }
+  if(Object.keys(books).length)memory.vocabBooks=Object.assign({},memory.vocabBooks||{},books);
+  return {slot:SLOT,savedAt:meta.savedAt,savedAtDisplay:meta.savedAtDisplay,data:{localStorage:stored,memory:memory}};
+}
+function manifestRef(id){return window.fbDoc(window.db,'users',id,'saves',SLOT);}
+function saveConflict(){var error=new Error('別の端末の保存と重なったため保存をやり直します');error.saveConflict=true;return error;}
+// The manifest is replaced only if it is still the one this save planned its reuse against.
+// A save that read an older manifest cannot publish references to items retired since then.
+async function publishManifest(id,meta,expected){
+  var ref=manifestRef(id),want=(expected&&expected.generation)||null;
+  if(!window.fbRunTransaction){await window.fbSetDoc(ref,meta,{merge:false});return;}
+  await window.fbRunTransaction(window.db,async function(tx){
+    var snap=await tx.get(ref),current=snap&&snap.exists()?snap.data():null;
+    if(((current&&current.generation)||null)!==want)throw saveConflict();
+    tx.set(ref,meta,{merge:false});
+  });
+}
+async function currentManifest(id){
+  var read=window.fbGetDocFromServer||window.fbGetDoc,snap=await read(manifestRef(id));
+  var meta=snap&&snap.exists()?snap.data():null;
+  if(!meta||meta.v!==6||!Array.isArray(meta.entries))throw new Error('現在のセーブの目次を確認できません');
+  return meta;
+}
+// Items the previous manifest pointed to and the current one no longer does are removed
+// right away. Saves that planned against that older manifest can no longer publish, so
+// nothing can come to reference them again.
+async function retireEntries(id,previous){
+  if(!previous||previous.v!==6||!Array.isArray(previous.entries)||!window.fbDeleteDoc)return;
+  var keep={};(await currentManifest(id)).entries.forEach(function(entry){keep[entry.g]=true;});
+  for(var e=0;e<previous.entries.length;e++){
+    var entry=previous.entries[e];if(!entry||!entry.g||keep[entry.g])continue;
+    for(var i=0;i<(entry.n||1);i++){if(uid()!==id)return;await window.fbDeleteDoc(entryRef(id,entry.g,i));}
+  }
+}
+// Orphans of interrupted saves are swept at most once a day. They are checked against the
+// manifest on the server at sweep time, and only items older than an hour are removed, so a
+// save still being written by another device is never deleted underneath it.
+async function collectSaveEntries(id){
+  try{
+    var key='save_studio_entries_gc_'+id,last=Number(localStorage.getItem(key))||0;
+    if(Date.now()-last<86400000||!window.fbGetDocs||!window.fbCollection||!window.fbDeleteDoc)return;
+    localStorage.setItem(key,String(Date.now()));
+    var keep={};(await currentManifest(id)).entries.forEach(function(entry){keep[entry.g]=true;});
+    var snapshot=await window.fbGetDocs(window.fbCollection(window.db,'users',id,ENTRY_COLLECTION)),stale=[];
+    snapshot.forEach(function(doc){var gen=doc.data()&&doc.data().g;if(gen&&!keep[gen]&&Date.now()-entryTime(gen)>3600000)stale.push(doc.ref);});
+    for(var i=0;i<stale.length;i++){if(uid()!==id)return;await window.fbDeleteDoc(stale[i]);}
+  }catch(e){console.warn('[save] old backup entries kept for a later cleanup',e);}
+}
+// Permanent deletion rewrites the itemized cloud backup itself and removes the replaced
+// items, instead of relying on a later save. Resolves false when there is nothing to change.
+window.__rewriteCloudSave=async function(id,transform){
+  for(var attempt=0;;attempt++){
+    var snap=await window.fbGetDoc(manifestRef(id)),meta=snap&&snap.exists()?snap.data():null;
+    if(!meta||meta.v!==6||!Array.isArray(meta.entries))return false;
+    var next=transform(await readSaveEntries(id,meta));if(!next)return false;
+    var uploaded=await uploadSaveEntries(id,next,meta,null);
+    var out=Object.assign({},meta,{entries:uploaded.entries,sentParts:uploaded.sent,generation:'delete_'+entryGeneration()});
+    try{await publishManifest(id,out,meta);}catch(e){if(e&&e.saveConflict&&attempt<2)continue;throw e;}
+    await retireEntries(id,meta);
+    return true;
+  }
+};
 function closePanel() { var m=document.getElementById('fbsvModal'); if(m&&m.parentNode)m.parentNode.removeChild(m); }
 function progress(percent, startedAt, text) {
   var box=document.getElementById('fbsvProgress'),fill=document.getElementById('fbsvProgressFill'),label=document.getElementById('fbsvProgressText');
@@ -954,17 +1076,13 @@ async function saveAllContents(force) {
   // The local text is no longer needed; release it before the long cloud upload.
   raw=null;
   var meta={savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,partCount:0,generation:generation,rawLength:0,checksum:'',v:4};
-  var cloudRaw='',partCount=0;
   try {
     // 編集した全教材をユーザー専用ドキュメントへ個別保存する。
     // ページ再起動後の教材切替はこの確定データを直接読むため、巨大な統合セーブや
     // 共有教材キャッシュの状態に左右されない。
     var cloudSave=window.TextbookFiles?await window.TextbookFiles.packSave(save,id):save;
     if(window.TextbookFiles)meta.v=5;
-    cloudRaw=JSON.stringify(cloudSave);
-    // Parts are sliced while uploading; never hold a second full copy as an array.
-    partCount=Math.max(1,Math.ceil(cloudRaw.length/CHUNK));
-    meta.partCount=partCount;meta.rawLength=cloudRaw.length;meta.checksum=saveChecksum(cloudRaw);
+    meta.v=6;
     var savedBooks=(cloudSave.data.memory&&cloudSave.data.memory.vocabBooks)||{};
     var savedBookKeys=Object.keys(savedBooks).filter(function(key){return !!dirtyBooks[key]||key===savedBook;});
     for(var bi=0;bi<savedBookKeys.length;bi++){
@@ -1015,14 +1133,12 @@ async function saveAllContents(force) {
       progress(15,started,'理解度を保存中');
     }
     }
-    // 本文を先に保存し、最後にメタデータを更新する。途中で通信が切れても
-    // ローダーが未完成の新規セーブを「保存完了」として選ばない。
-    for(var n=0;n<partCount;n+=4){
-      var group=[];for(var g=n;g<Math.min(n+4,partCount);g++)group.push([window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',generation+'_p'+g),{d:cloudRaw.slice(g*CHUNK,(g+1)*CHUNK)},{merge:false}]);
-      await window.__writeSaveParts(group);group=null;
-      progress(15+(Math.min(n+4,partCount)/partCount)*80,started,'クラウドへ保存中');
-    }
-    cloudRaw='';
+    // 変わった項目だけを送り、最後に目次を差し替える。途中で通信が切れても
+    // ローダーは前回の完全な目次を読み続ける。
+    var previousSnap=await window.fbGetDoc(manifestRef(id));
+    var previousMeta=previousSnap&&previousSnap.exists()?previousSnap.data():null;
+    var uploaded=await uploadSaveEntries(id,cloudSave,previousMeta,started);
+    meta.entries=uploaded.entries;meta.sentParts=uploaded.sent;
     // Full backups and public ranking must commit the same captured learning record.
     if(window.LearningRankingModel&&window.fbRunTransaction){
       var rankingRecord=window.LearningRankingModel.merge(null,data.localStorage&&data.localStorage['core_v4_learning_ranking_v2_'+id]);
@@ -1036,10 +1152,24 @@ async function saveAllContents(force) {
         tx.set(ref,{profileCustomizationJson:JSON.stringify(profile)},{merge:true});
       });
     }
-    await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});
+    for(var attempt=0;;attempt++){
+      try{await publishManifest(id,meta,previousMeta);break;}
+      catch(e){
+        if(!e||!e.saveConflict||attempt>=2)throw e;
+        // Another device published meanwhile: plan reuse against its manifest and retry.
+        previousSnap=await window.fbGetDoc(manifestRef(id));previousMeta=previousSnap&&previousSnap.exists()?previousSnap.data():null;
+        uploaded=await uploadSaveEntries(id,cloudSave,previousMeta,started);meta.entries=uploaded.entries;meta.sentParts=uploaded.sent;
+      }
+    }
     var verify=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
     if(!verify||!verify.exists()||!verify.data()||verify.data().generation!==generation)throw new Error('クラウド保存の完了確認に失敗しました');
     cloudSaved=true;
+    // The previous whole-text backup is no longer referenced once the itemized one is committed.
+    if(previousMeta&&previousMeta.v!==6&&previousMeta.generation&&previousMeta.partCount&&window.fbDeleteDoc){
+      for(var op=0;op<previousMeta.partCount;op++){try{await window.fbDeleteDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',previousMeta.generation+'_p'+op));}catch(e){break;}}
+    }
+    try{await retireEntries(id,previousMeta);}catch(e){console.warn('[save] replaced backup entries kept for a later cleanup',e);}
+    await collectSaveEntries(id);
     Object.keys(dirtyProgress).forEach(function(book){
       if((savedBooks[book]||book===savedBook)&&window.__dirtyVocabProgress?.[book]?.revision===dirtyProgress[book])delete window.__dirtyVocabProgress[book];
     });
@@ -1055,11 +1185,13 @@ async function saveAllContents(force) {
   if(localSaved){await markCloudPending(id);progress(100,started,window.FirestoreReadGuard?.paused?.()?'端末へ保存完了（利用上限でクラウド同期待ち）':'端末へ保存完了（クラウド未接続）');return {localSaved:true,cloudSaved:false};}
   throw cloudError||localError||new Error('保存に失敗しました');
 }
+window.__fetchCloudSave=function(id){return fetchCloudSave(id);};
 async function fetchCloudSave(id) {
   id=id||loginUid(); if(!id||!fbOk())return null;
   var snap=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
   if(!snap||!snap.exists())return null;
   var meta=snap.data()||{}, raw='';
+  if(meta.v===6&&Array.isArray(meta.entries))return readSaveEntries(id,meta);
   for(var i=0;i<(meta.partCount||0);i++){
     var partId=meta.generation?meta.generation+'_p'+i:'p'+i;
     var part=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',partId));
