@@ -30,8 +30,39 @@
   window.queueBackgroundSave = changed;
   window.resumeBackgroundSave = function () {};
   window.noteFlashSwipe = changed;
-  window.saveAfterStudy = function (reason = "end") {
+  // A full backup re-serializes and uploads every saved record (tens of seconds on a
+  // large account). After a battle or warm-up, wait for a quiet period without a battle
+  // screen so it never overlaps the next match. Answers are already stored on the device.
+  const quietKinds = ["battle-end", "warmup-end"],
+    quietDelay = 20000;
+  let quietTimer = 0;
+  const busy = () =>
+    document.body?.classList.contains("duel-screen-open") ||
+    document.body?.classList.contains("in-game-active") ||
+    window.WordDuel?.isPlaying?.() ||
+    window.WeakReview?.isPlaying?.();
+  function afterQuiet(reason, account) {
+    if (quietTimer) clearTimeout(quietTimer);
+    quietTimer = setTimeout(() => {
+      quietTimer = 0;
+      if (id() !== account) return;
+      if (busy()) afterQuiet(reason, account);
+      else window.saveAfterStudy(reason, { quiet: true });
+    }, quietDelay);
+  }
+  window.saveAfterStudy = function (reason = "end", options = {}) {
+    if (quietKinds.includes(reason) && !options.quiet) {
+      changed();
+      window.WordDuelProgress?.flush(id()).catch(() => {});
+      afterQuiet(reason, id());
+      return Promise.resolve({ localSaved: true, cloudSaved: false, deferred: true });
+    }
     if (running) return running;
+    // This backup covers any quiet-period save still waiting.
+    if (quietTimer) {
+      clearTimeout(quietTimer);
+      quietTimer = 0;
+    }
     changed();
     const account = id();
     // Defer one microtask so the synchronous close/finish handler can leave play mode.
