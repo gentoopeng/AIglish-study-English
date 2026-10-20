@@ -60,6 +60,9 @@
   }
   function closeScreen() {
     if (!dialog) return;
+    // Back button / Escape bypass finish(); close the diagnostic once for an unfinished battle.
+    if (session?.diagnosticOpen && !session.finished)
+      window.StartupMonitor?.event?.("duel:closed");
     if (session && !session.solo && !session.finished) {
       const old = session;
       old.answers = old.answers.slice();
@@ -573,6 +576,7 @@
     dialog.classList.remove("is-configuring");
     dialog.classList.add("is-playing");
     window.StartupMonitor?.event?.("duel:start");
+    if (session) session.diagnosticOpen = true;
     revision = 0;
     published = -1;
     dialog.querySelector(".duel-screen-badge").textContent =
