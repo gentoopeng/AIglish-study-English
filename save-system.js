@@ -299,7 +299,7 @@ function collectAllData() {
       if(k==='aiglish_cloud_usage_v1'||k.indexOf('core_v4_group_chat_draft_')===0)continue;
       if (/^core_v4_(?:flash_queue|flash_cursor|group_synced)_/.test(k)) continue;
       if (k.indexOf('core_v4_textbook_file_') === 0) continue;
-      if (k.indexOf('save_studio_') === 0 || k === 'aiglish_shared_background_catalog' || k === 'aiglish_profile_shop_catalog' || k === '__aiglish_render_guard' || k === '__aiglish_startup_diagnostic') continue;
+      if (k.indexOf('save_studio_') === 0 || k === 'aiglish_shared_background_catalog' || k === 'aiglish_profile_shop_catalog' || k === '__aiglish_render_guard' || k === '__aiglish_warmup_guard' || k === '__aiglish_startup_diagnostic') continue;
       // 単語帳本体は memory.vocabBooks に正規化して保存する。同じ内容のキャッシュを
       // 何重にも含めるとセーブ容量と通信回数が数倍になるため、再生成可能な複製は除外する。
       if (k.indexOf('core_v4_cache_') === 0 ||
@@ -445,7 +445,7 @@ function applyLoad(save) {
   var memData = save.data.memory || {};
   for (var k in lsData) {
     if(window.LearningSessionsStorage?.restore(k,lsData[k]))continue;
-    if(k==='aiglish_shared_background_catalog'||k==='__aiglish_startup_diagnostic'||k==='__aiglish_render_guard')continue;
+    if(k==='aiglish_shared_background_catalog'||k==='__aiglish_startup_diagnostic'||k==='__aiglish_render_guard'||k==='__aiglish_warmup_guard')continue;
     if(window.VocabMaster&&!window.VocabMaster.canRestoreStorage(k,lsData[k],memData,uid()))continue;
     try { localStorage.setItem(k, lsData[k]); } catch (e) {}
   }
@@ -665,6 +665,7 @@ window.__fixPatch3Applied = true;
 var EXCLUDE_PREFIXES = [
 '__aiglish_startup_diagnostic',
 '__aiglish_render_guard',
+'__aiglish_warmup_guard',
 'aiglish_cloud_usage_v1',
 'core_v4_group_chat_draft_',
 'aiglish_shared_background_catalog', // Shared photographs are fetched independently of personal backups.
@@ -1107,7 +1108,7 @@ function restoreSaveStorage(save,id){
       if(key.indexOf("core_v4_word_duel_rating_")===0)continue;
       if(key.indexOf('core_v4_study_points_')===0){if(key==='core_v4_study_points_'+id&&window.StudyPoints){try{window.StudyPoints.restore(JSON.parse(stored[key]||'{}'),id);}catch(error){console.warn('ポイントの復元を保留しました。端末の記録を保持します。',error);}}continue;}
       if(window.LearningSessionsStorage?.restore(key,stored[key]))continue;
-      if(key==='aiglish_shared_background_catalog'||key==='__aiglish_startup_diagnostic'||key==='__aiglish_render_guard')continue;
+      if(key==='aiglish_shared_background_catalog'||key==='__aiglish_startup_diagnostic'||key==='__aiglish_render_guard'||key==='__aiglish_warmup_guard')continue;
       if(window.VocabMaster&&!window.VocabMaster.canRestoreStorage(key,stored[key],save.data.memory,id))continue;
       if(key==='core_v4_vocab_entry_publications_'+id&&window.VocabWordEntry){try{window.VocabWordEntry.restorePublications(JSON.parse(stored[key]),id);}catch(error){console.warn('公開更新の記録は端末の最新値を保持します',error);}continue;}
       if(key.indexOf('aiglish_learning_recovery_')===0)continue;
