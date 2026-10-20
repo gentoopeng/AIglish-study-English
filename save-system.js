@@ -933,7 +933,7 @@ async function uploadSaveEntries(id,cloudSave,previous,started){
       await window.__writeSaveParts(group);group=null;sent+=Math.min(4,count-n);
     }
     manifest.push({k:entry.k,g:gen,n:count,len:value.length,sum:sum});
-    progress(15+((i+1)/entries.length)*80,started,'クラウドへ保存中');
+    if(started)progress(15+((i+1)/entries.length)*80,started,'クラウドへ保存中');
   }
   return {entries:manifest,sent:sent};
 }
@@ -956,19 +956,64 @@ async function readSaveEntries(id,meta){
   if(Object.keys(books).length)memory.vocabBooks=Object.assign({},memory.vocabBooks||{},books);
   return {slot:SLOT,savedAt:meta.savedAt,savedAtDisplay:meta.savedAtDisplay,data:{localStorage:stored,memory:memory}};
 }
-// Unreferenced entry documents are removed at most once a day and only when older than
-// an hour, so a save still being written by another device is never deleted underneath it.
-async function collectSaveEntries(id,meta){
+function manifestRef(id){return window.fbDoc(window.db,'users',id,'saves',SLOT);}
+function saveConflict(){var error=new Error('別の端末の保存と重なったため保存をやり直します');error.saveConflict=true;return error;}
+// The manifest is replaced only if it is still the one this save planned its reuse against.
+// A save that read an older manifest cannot publish references to items retired since then.
+async function publishManifest(id,meta,expected){
+  var ref=manifestRef(id),want=(expected&&expected.generation)||null;
+  if(!window.fbRunTransaction){await window.fbSetDoc(ref,meta,{merge:false});return;}
+  await window.fbRunTransaction(window.db,async function(tx){
+    var snap=await tx.get(ref),current=snap&&snap.exists()?snap.data():null;
+    if(((current&&current.generation)||null)!==want)throw saveConflict();
+    tx.set(ref,meta,{merge:false});
+  });
+}
+async function currentManifest(id){
+  var read=window.fbGetDocFromServer||window.fbGetDoc,snap=await read(manifestRef(id));
+  var meta=snap&&snap.exists()?snap.data():null;
+  if(!meta||meta.v!==6||!Array.isArray(meta.entries))throw new Error('現在のセーブの目次を確認できません');
+  return meta;
+}
+// Items the previous manifest pointed to and the current one no longer does are removed
+// right away. Saves that planned against that older manifest can no longer publish, so
+// nothing can come to reference them again.
+async function retireEntries(id,previous){
+  if(!previous||previous.v!==6||!Array.isArray(previous.entries)||!window.fbDeleteDoc)return;
+  var keep={};(await currentManifest(id)).entries.forEach(function(entry){keep[entry.g]=true;});
+  for(var e=0;e<previous.entries.length;e++){
+    var entry=previous.entries[e];if(!entry||!entry.g||keep[entry.g])continue;
+    for(var i=0;i<(entry.n||1);i++){if(uid()!==id)return;await window.fbDeleteDoc(entryRef(id,entry.g,i));}
+  }
+}
+// Orphans of interrupted saves are swept at most once a day. They are checked against the
+// manifest on the server at sweep time, and only items older than an hour are removed, so a
+// save still being written by another device is never deleted underneath it.
+async function collectSaveEntries(id){
   try{
     var key='save_studio_entries_gc_'+id,last=Number(localStorage.getItem(key))||0;
     if(Date.now()-last<86400000||!window.fbGetDocs||!window.fbCollection||!window.fbDeleteDoc)return;
     localStorage.setItem(key,String(Date.now()));
-    var keep={};(meta.entries||[]).forEach(function(entry){keep[entry.g]=true;});
+    var keep={};(await currentManifest(id)).entries.forEach(function(entry){keep[entry.g]=true;});
     var snapshot=await window.fbGetDocs(window.fbCollection(window.db,'users',id,ENTRY_COLLECTION)),stale=[];
     snapshot.forEach(function(doc){var gen=doc.data()&&doc.data().g;if(gen&&!keep[gen]&&Date.now()-entryTime(gen)>3600000)stale.push(doc.ref);});
     for(var i=0;i<stale.length;i++){if(uid()!==id)return;await window.fbDeleteDoc(stale[i]);}
   }catch(e){console.warn('[save] old backup entries kept for a later cleanup',e);}
 }
+// Permanent deletion rewrites the itemized cloud backup itself and removes the replaced
+// items, instead of relying on a later save. Resolves false when there is nothing to change.
+window.__rewriteCloudSave=async function(id,transform){
+  for(var attempt=0;;attempt++){
+    var snap=await window.fbGetDoc(manifestRef(id)),meta=snap&&snap.exists()?snap.data():null;
+    if(!meta||meta.v!==6||!Array.isArray(meta.entries))return false;
+    var next=transform(await readSaveEntries(id,meta));if(!next)return false;
+    var uploaded=await uploadSaveEntries(id,next,meta,null);
+    var out=Object.assign({},meta,{entries:uploaded.entries,sentParts:uploaded.sent,generation:'delete_'+entryGeneration()});
+    try{await publishManifest(id,out,meta);}catch(e){if(e&&e.saveConflict&&attempt<2)continue;throw e;}
+    await retireEntries(id,meta);
+    return true;
+  }
+};
 function closePanel() { var m=document.getElementById('fbsvModal'); if(m&&m.parentNode)m.parentNode.removeChild(m); }
 function progress(percent, startedAt, text) {
   var box=document.getElementById('fbsvProgress'),fill=document.getElementById('fbsvProgressFill'),label=document.getElementById('fbsvProgressText');
@@ -1090,7 +1135,7 @@ async function saveAllContents(force) {
     }
     // 変わった項目だけを送り、最後に目次を差し替える。途中で通信が切れても
     // ローダーは前回の完全な目次を読み続ける。
-    var previousSnap=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
+    var previousSnap=await window.fbGetDoc(manifestRef(id));
     var previousMeta=previousSnap&&previousSnap.exists()?previousSnap.data():null;
     var uploaded=await uploadSaveEntries(id,cloudSave,previousMeta,started);
     meta.entries=uploaded.entries;meta.sentParts=uploaded.sent;
@@ -1107,7 +1152,15 @@ async function saveAllContents(force) {
         tx.set(ref,{profileCustomizationJson:JSON.stringify(profile)},{merge:true});
       });
     }
-    await window.fbSetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT),meta,{merge:false});
+    for(var attempt=0;;attempt++){
+      try{await publishManifest(id,meta,previousMeta);break;}
+      catch(e){
+        if(!e||!e.saveConflict||attempt>=2)throw e;
+        // Another device published meanwhile: plan reuse against its manifest and retry.
+        previousSnap=await window.fbGetDoc(manifestRef(id));previousMeta=previousSnap&&previousSnap.exists()?previousSnap.data():null;
+        uploaded=await uploadSaveEntries(id,cloudSave,previousMeta,started);meta.entries=uploaded.entries;meta.sentParts=uploaded.sent;
+      }
+    }
     var verify=await window.fbGetDoc(window.fbDoc(window.db,'users',id,'saves',SLOT));
     if(!verify||!verify.exists()||!verify.data()||verify.data().generation!==generation)throw new Error('クラウド保存の完了確認に失敗しました');
     cloudSaved=true;
@@ -1115,7 +1168,8 @@ async function saveAllContents(force) {
     if(previousMeta&&previousMeta.v!==6&&previousMeta.generation&&previousMeta.partCount&&window.fbDeleteDoc){
       for(var op=0;op<previousMeta.partCount;op++){try{await window.fbDeleteDoc(window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',previousMeta.generation+'_p'+op));}catch(e){break;}}
     }
-    await collectSaveEntries(id,meta);
+    try{await retireEntries(id,previousMeta);}catch(e){console.warn('[save] replaced backup entries kept for a later cleanup',e);}
+    await collectSaveEntries(id);
     Object.keys(dirtyProgress).forEach(function(book){
       if((savedBooks[book]||book===savedBook)&&window.__dirtyVocabProgress?.[book]?.revision===dirtyProgress[book])delete window.__dirtyVocabProgress[book];
     });

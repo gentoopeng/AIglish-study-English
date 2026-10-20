@@ -239,8 +239,10 @@
                     await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),Object.assign({},meta,{generation:generation,partCount:chunks.length,rawLength:clean.length,checksum:window.__gameSaveChecksum(clean)}),{merge:false});
                     for(var old of parts)await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id,'parts',old.id));
                 }else if(meta.v===6){
-                    // Itemized backups are rebuilt from the cleaned local data by the next save.
-                    if(window.queueBackgroundSave)window.queueBackgroundSave();
+                    // Itemized backup: rewrite only the items that mention it and remove the replaced ones
+                    // now, so the deletion stays pending (and is retried) until the cloud copy is clean.
+                    if(!window.__rewriteCloudSave)throw new Error('セーブを整理できません。削除を中止しました。');
+                    await window.__rewriteCloudSave(uid,function(save){return mentions(JSON.stringify(save),id)?scrubSave(save,id,kind,uid):null;});
                 }else if(meta.data&&mentions(JSON.stringify(meta),id)){await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),scrubSave(meta,id,kind,uid),{merge:false});}
             }
             if(kind==='work'&&window.TextbookFiles){

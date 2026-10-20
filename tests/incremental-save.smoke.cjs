@@ -7,9 +7,9 @@ const r=await page.evaluate(async()=>{
  const docs=new Map([['users/inc-user',{}]]),writes=[],deletes=[];let fail=false;
  const snap=path=>({exists:()=>docs.has(path),data:()=>docs.get(path),ref:{path}});
  window.fbDoc=(_, ...parts)=>({path:parts.join('/')});window.fbCollection=(_, ...parts)=>({path:parts.join('/')});
- window.fbSetDoc=async(ref,data,options)=>{writes.push(ref.path);docs.set(ref.path,options?.merge?{...docs.get(ref.path),...data}:data);};window.fbGetDoc=async ref=>snap(ref.path);window.fbDeleteDoc=async ref=>{deletes.push(ref.path);docs.delete(ref.path);};
+ window.fbSetDoc=async(ref,data,options)=>{writes.push(ref.path);docs.set(ref.path,options?.merge?{...docs.get(ref.path),...data}:data);};window.fbGetDoc=async ref=>snap(ref.path);window.fbGetDocFromServer=window.fbGetDoc;window.fbDeleteDoc=async ref=>{deletes.push(ref.path);docs.delete(ref.path);};
  window.fbGetDocs=async ref=>{const rows=[...docs.keys()].filter(path=>path.startsWith(ref.path+'/')&&!path.slice(ref.path.length+1).includes('/')).map(snap);return {docs:rows,forEach:f=>rows.forEach(f),size:rows.length,empty:!rows.length};};
- window.fbRunTransaction=async(_,fn)=>{const w=[];const out=await fn({get:async ref=>snap(ref.path),set:(ref,data,options)=>w.push([ref.path,data,options])});if(fail&&w.some(([path])=>path.includes('/saveEntries/')))throw Error('offline');for(const [path,data,options]of w){writes.push(path);docs.set(path,options?.merge?{...docs.get(path),...data}:data);}return out;};AccountWriteGuard.install();
+ window.fbRunTransaction=async(_,fn)=>{const w=[];const out=await fn({get:async ref=>snap(ref.path),set:(ref,data,options)=>w.push([ref.path,data,options])});if(window.__beforeTx&&w.some(([path])=>path.includes('/saveEntries/'))){const f=window.__beforeTx;window.__beforeTx=null;f();}if(w.some(([path])=>path.endsWith('/saves/main')))window.__publishes=(window.__publishes||0)+1;if(fail&&w.some(([path])=>path.includes('/saveEntries/')))throw Error('offline');for(const [path,data,options]of w){writes.push(path);docs.set(path,options?.merge?{...docs.get(path),...data}:data);}return out;};AccountWriteGuard.install();
  const master=[{num:1,word:'save',meaning:'保存する'}],progress={1:{status:'ok',history:['ok'],updatedAt:1000}};
  let state={big:'a'.repeat(700000),other:'o'.repeat(30000),tiny:'t'};
  const bigMaster=Array.from({length:3000},(_,i)=>({num:i+1,word:'w'+i,meaning:'意味'+i}));let memProgress={1:{status:'ok'}};const otherBook={master:bigMaster,progress:Object.fromEntries(bigMaster.map(w=>[w.num,{status:'ok',history:['ok','ok']}]))};
@@ -32,6 +32,19 @@ const r=await page.evaluate(async()=>{
  // Change only the large item: only it is resent (3 parts of 280k).
  writes.length=0;state={...state,big:'b'.repeat(700000)};await __backgroundSaveAll();const changedBig=entryWrites().filter(path=>docs.get(path)?.k==='ls:big').length,changedOther=entryWrites().filter(path=>docs.get(path)?.k==='ls:other').length;
  const afterChange=await __fetchCloudSave('inc-user');
+ // The replaced 700k item is removed right after the new manifest is published.
+ const oldBig=firstManifest.entries.find(e=>e.k==='ls:big'),oldBigRetired=!docs.has('users/inc-user/saveEntries/'+oldBig.g+'_0');
+ // Another device publishes while this save is uploading: the publish is refused, replanned
+ // against the newer manifest, and every item the final manifest points to still exists.
+ window.__beforeTx=()=>{const m=manifest();docs.set('users/inc-user/saves/main',{...m,generation:'device-b'});};
+ const bigBeforeRace=manifest().entries.find(e=>e.k==='ls:big');state={...state,big:'d'.repeat(700000)};window.__publishes=0;const raced=await __backgroundSaveAll();const racePublishes=window.__publishes;
+ const afterRace=manifest(),raceIntact=afterRace.generation!=='device-b'&&afterRace.entries.every(e=>Array.from({length:e.n},(_,i)=>docs.has('users/inc-user/saveEntries/'+e.g+'_'+i)).every(Boolean));
+ const raceRead=(await __fetchCloudSave('inc-user')).data.localStorage.big[0],raceRetired=!docs.has('users/inc-user/saveEntries/'+bigBeforeRace.g+'_0');
+ // Permanent deletion rewrites the backup now and removes the item holding the deleted book.
+ const bookEntry=manifest().entries.find(e=>e.k==='book:other-book');writes.length=0;
+ const untouched=await __rewriteCloudSave('inc-user',()=>null),untouchedWrites=writes.length;
+ const scrubbed=await __rewriteCloudSave('inc-user',save=>{delete save.data.memory.vocabBooks['other-book'];return save;});
+ const scrubbedGone=!manifest().entries.some(e=>e.k==='book:other-book')&&!docs.has('users/inc-user/saveEntries/'+bookEntry.g+'_0')&&!('other-book' in ((await __fetchCloudSave('inc-user')).data.memory.vocabBooks||{}));
  // An interrupted save keeps the previous manifest and its items readable.
  const before=manifest().generation;fail=true;state={...state,big:'c'.repeat(700000)};const interrupted=await __backgroundSaveAll();fail=false;const generationKept=manifest().generation===before;
  const stillReadable=(await __fetchCloudSave('inc-user')).data.localStorage.big[0];
@@ -40,13 +53,15 @@ const r=await page.evaluate(async()=>{
  docs.set('users/inc-user/saveEntries/'+oldGen+'_0',{k:'ls:big',g:oldGen,i:0,n:1,d:'x'});docs.set('users/inc-user/saveEntries/'+freshGen+'_0',{k:'ls:big',g:freshGen,i:0,n:1,d:'y'});
  localStorage.removeItem('save_studio_entries_gc_inc-user');state={...state,tiny:'t3'};await __backgroundSaveAll();
  const referenced=manifest().entries.every(e=>docs.has('users/inc-user/saveEntries/'+e.g+'_0'));
- return {masterResent,masterRestored,legacyRead,first,legacyRemoved,restoredBig:restored.data.localStorage.big.length,restoredTiny:restored.data.localStorage.tiny,restoredProgress:restored.data.memory.vocabProgress[1].status,second,unchangedLarge,bigGenSame,changedBig,changedOther,afterChange:afterChange.data.localStorage.big[0],interrupted,generationKept,stillReadable,staleRemoved:!docs.has('users/inc-user/saveEntries/'+oldGen+'_0'),freshKept:docs.has('users/inc-user/saveEntries/'+freshGen+'_0'),referenced,v:manifest().v};
+ return {masterResent,masterRestored,legacyRead,first,legacyRemoved,restoredBig:restored.data.localStorage.big.length,restoredTiny:restored.data.localStorage.tiny,restoredProgress:restored.data.memory.vocabProgress[1].status,second,unchangedLarge,bigGenSame,changedBig,changedOther,afterChange:afterChange.data.localStorage.big[0],oldBigRetired,raced:raced.cloudSaved,racePublishes,raceIntact,raceRead,raceRetired,untouched,untouchedWrites,scrubbed,scrubbedGone,interrupted,generationKept,stillReadable,staleRemoved:!docs.has('users/inc-user/saveEntries/'+oldGen+'_0'),freshKept:docs.has('users/inc-user/saveEntries/'+freshGen+'_0'),referenced,v:manifest().v};
 });
 assert.equal(r.masterResent,0,JSON.stringify(r));assert.equal(r.masterRestored,3000);assert.equal(r.legacyRead,'kept');assert.equal(r.legacyRemoved,true);assert.equal(r.v,6);
 assert.ok(r.first>=5,JSON.stringify(r));assert.equal(r.restoredBig,700000);assert.equal(r.restoredTiny,'t');assert.equal(r.restoredProgress,'ok');
 assert.equal(r.unchangedLarge,0);assert.equal(r.bigGenSame,true);assert.ok(r.second<r.first,JSON.stringify(r));
-assert.equal(r.changedBig,3);assert.equal(r.changedOther,0);assert.equal(r.afterChange,'b');
-assert.equal(r.interrupted.cloudSaved,false);assert.equal(r.generationKept,true);assert.equal(r.stillReadable,'b');
+assert.equal(r.changedBig,3);assert.equal(r.changedOther,0);assert.equal(r.afterChange,'b');assert.equal(r.oldBigRetired,true);
+assert.equal(r.raced,true);assert.equal(r.racePublishes,1);assert.equal(r.raceIntact,true,JSON.stringify(r));assert.equal(r.raceRead,'d');assert.equal(r.raceRetired,true);
+assert.equal(r.untouched,false);assert.equal(r.untouchedWrites,0);assert.equal(r.scrubbed,true);assert.equal(r.scrubbedGone,true);
+assert.equal(r.interrupted.cloudSaved,false);assert.equal(r.generationKept,true);assert.equal(r.stillReadable,'d');
 assert.equal(r.staleRemoved,true);assert.equal(r.freshKept,true);assert.equal(r.referenced,true);assert.deepEqual(errors,[]);
 console.log('PASS '+type.name()+': itemized backup '+JSON.stringify({first:r.first,second:r.second,changedBig:r.changedBig}));
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});
