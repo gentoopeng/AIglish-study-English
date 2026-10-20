@@ -458,6 +458,8 @@
     });
   }
   function wait(code) {
+    // Joined or created a room: separates a stop while waiting from one after the match starts.
+    window.StartupMonitor?.event?.("duel:shown");
     dialog.querySelector("[data-duel-back]").onclick = closeScreen;
     dialog.querySelector(".duel-screen-badge").hidden = false;
     dialog.querySelector(".duel-screen-badge").textContent = "参加待ち";
@@ -491,6 +493,7 @@
         }
         const room = snapshot.data();
         if (!m.validRoom(room)) {
+          window.StartupMonitor?.event?.("duel:error");
           status("部屋のデータを確認できません。");
           stop();
           return;
