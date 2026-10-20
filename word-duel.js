@@ -60,6 +60,9 @@
   }
   function closeScreen() {
     if (!dialog) return;
+    // Back button / Escape bypass finish(); close the diagnostic once for an unfinished battle.
+    if (session?.diagnosticOpen && !session.finished)
+      window.StartupMonitor?.event?.("duel:closed");
     if (session && !session.solo && !session.finished) {
       const old = session;
       old.answers = old.answers.slice();
@@ -572,6 +575,8 @@
     dialog.querySelector(".duel-screen-badge").hidden = false;
     dialog.classList.remove("is-configuring");
     dialog.classList.add("is-playing");
+    window.StartupMonitor?.event?.("duel:start");
+    if (session) session.diagnosticOpen = true;
     revision = 0;
     published = -1;
     dialog.querySelector(".duel-screen-badge").textContent =
@@ -695,6 +700,7 @@
     buttons.forEach((button) => (button.disabled = true));
     buttons[choice].classList.add("is-selected");
     buttons[choice].setAttribute("aria-pressed", "true");
+    window.StartupMonitor?.event?.("duel:answer");
     try {
       window.WordDuelProgress.apply(
         q.ref.book || target.book,
@@ -897,6 +903,7 @@
     dialog?.classList.remove("is-playing");
     if (!session || finishing || session.finished) return;
     finishing = true;
+    window.StartupMonitor?.event?.("duel:closed");
     clearInterval(timer);
     const banner = dialog?.querySelector(".duel-event-banner");
     if (banner) banner.hidden = true;

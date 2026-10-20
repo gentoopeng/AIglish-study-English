@@ -909,7 +909,7 @@ function collectAll() {
 }
 async function markCloudPending(id){try{localStorage.setItem('core_v4_autosave_pending_'+id,'1');if(window.AppStorage)await window.AppStorage.flush();}catch(error){console.warn('同期待ちの端末記録を保存できませんでした',error);}}
 var pendingSave=null;
-function saveAll(force) {if(pendingSave)return pendingSave;var task=window.LibraryState?window.LibraryState.track(uid(),()=>saveAllContents(force)):saveAllContents(force);pendingSave=Promise.resolve(task).finally(function(){pendingSave=null;});return pendingSave;}
+function saveAll(force) {if(pendingSave)return pendingSave;window.StartupMonitor?.event?.('save:start');var task=window.LibraryState?window.LibraryState.track(uid(),()=>saveAllContents(force)):saveAllContents(force);pendingSave=Promise.resolve(task).then(function(value){window.StartupMonitor?.event?.('save:done');return value;},function(error){window.StartupMonitor?.event?.('save:error');throw error;}).finally(function(){pendingSave=null;});return pendingSave;}
 window.__backgroundSaveAll=()=>saveAll(false);
 async function saveAllContents(force) {
   var id=uid(); if(!id)throw new Error('先にログインしてください');
