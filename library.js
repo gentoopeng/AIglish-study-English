@@ -280,7 +280,8 @@
     }
 
     window.eraseLibraryItem=eraseBook;
-    var retrying=false,retryFailures=0,nextRetryAt=Date.now()+60000;
+    // The startup delay is separate from failure back-off: reconnecting skips back-off, never the delay.
+    var retrying=false,retryFailures=0,nextRetryAt=0,startupUntil=Date.now()+60000;
     // If the page ended while pending deletions were being processed (an iOS termination
     // leaves no error), pause automatic processing for 24 hours. The deletions stay recorded.
     var deletionGuardKey='__aiglish_deletion_guard',suppressedUntil=0;
@@ -291,7 +292,7 @@
     // failing must not repeat that every 30 seconds: back off 1, 2, 4 ... up to 60 minutes.
     async function retryPendingDeletions(force){
         if(retrying||!window.LibraryState)return;
-        if(Date.now()<suppressedUntil||document.hidden)return;
+        if(Date.now()<suppressedUntil||Date.now()<startupUntil||document.hidden)return;
         if(force!==true&&Date.now()<nextRetryAt)return;
         retrying=true;var guarded=false;
         try{var owner=userId();await window.LibraryState.loadCloud(owner);if(userId()!==owner)return;for(var item of Object.values(window.LibraryState.read(owner))){if(userId()!==owner)return;if(item.pending){if(!guarded){guarded=true;writeDeletionGuard({startedAt:Date.now()});}await eraseBook(item.id,item.metadata,item.kind);}}window.LibraryState.cleanLocal(owner);retryFailures=0;nextRetryAt=0;}

@@ -18,8 +18,8 @@ async function open(guard,clock){const context=await browser.newContext(),page=a
  await page.route('**/library.js?*',async route=>{const res=await route.fetch();await route.fulfill({response:res,body:'('+backend+')();'+(await res.text())});});
  await page.addInitScript(seed,guard);await page.goto('http://127.0.0.1:8000');if(clock)await page.clock.runFor(3000);await page.waitForFunction(()=>window.__learningBootReady);await page.evaluate(()=>__seedCloud());return {context,page,errors};}
 // Pending deletions are not processed at launch; after the delay only the save that mentions the book is rewritten.
-let {context,page,errors}=await open(null,true);await page.clock.runFor(20000);
-assert.equal(await page.evaluate(()=>__writes.filter(p=>p.includes('/saves/')).length),0,'nothing rewritten at launch');
+let {context,page,errors}=await open(null,true);await page.evaluate(()=>window.dispatchEvent(new Event('online')));await page.clock.runFor(20000);
+assert.equal(await page.evaluate(()=>__writes.filter(p=>p.includes('/saves/')).length),0,'nothing rewritten at launch, even after reconnecting');
 await page.clock.runFor(60000);await page.waitForFunction(()=>JSON.parse(localStorage.getItem('core_v4_library_deletions_del-user'))['book:gone-book'].pending===false,null,{timeout:20000});
 const writes=await page.evaluate(()=>__writes.filter(p=>p.includes('/saves/')));
 assert.ok(writes.some(p=>p.startsWith('users/del-user/saves/slot2')),JSON.stringify(writes));assert.ok(!writes.some(p=>p.includes('/saves/main')),JSON.stringify(writes));
