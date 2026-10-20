@@ -11,7 +11,10 @@ const result=await page.evaluate(()=>window.saveAfterStudy('battle-end'));assert
 await page.evaluate(()=>document.body.classList.add('duel-screen-open'));await page.clock.runFor(65000);assert.equal(await saves(),0);
 // After the screen closes and 20 s pass quietly, exactly one backup runs.
 await page.evaluate(()=>document.body.classList.remove('duel-screen-open'));await page.clock.runFor(21000);assert.equal(await saves(),1);await page.clock.runFor(60000);assert.equal(await saves(),1);
+// A lobby opened and closed between checks restarts the quiet period.
+await page.evaluate(()=>window.saveAfterStudy('warmup-end'));await page.clock.runFor(1000);await page.evaluate(()=>document.body.classList.add('duel-screen-open'));await page.clock.runFor(18000);await page.evaluate(()=>document.body.classList.remove('duel-screen-open'));
+await page.clock.runFor(3000);assert.equal(await saves(),1,'not after one quiet second');await page.clock.runFor(16000);assert.equal(await saves(),1,'still within 20 s of the lobby');await page.clock.runFor(4000);assert.equal(await saves(),2);
 // A backup that runs for another reason (app hidden) replaces the waiting one.
-await page.evaluate(()=>window.saveAfterStudy('warmup-end'));await page.evaluate(()=>window.saveAfterStudy('sleep'));await page.clock.runFor(1000);assert.equal(await saves(),2);await page.clock.runFor(30000);assert.equal(await saves(),2);
+await page.evaluate(()=>window.saveAfterStudy('warmup-end'));await page.evaluate(()=>window.saveAfterStudy('sleep'));await page.clock.runFor(1000);assert.equal(await saves(),3);await page.clock.runFor(30000);assert.equal(await saves(),3);
 assert.deepEqual(errors,[]);console.log('PASS '+type.name()+': battle/warm-up backups wait for 20 s without a battle screen, run once, and are replaced by an immediate backup');
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

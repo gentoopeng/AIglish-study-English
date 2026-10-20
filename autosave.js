@@ -34,21 +34,28 @@
   // large account). After a battle or warm-up, wait for a quiet period without a battle
   // screen so it never overlaps the next match. Answers are already stored on the device.
   const quietKinds = ["battle-end", "warmup-end"],
-    quietDelay = 20000;
-  let quietTimer = 0;
+    quietDelay = 20000,
+    quietCheck = 2000;
+  let quietTimer = 0,
+    lastBusyAt = 0;
   const busy = () =>
     document.body?.classList.contains("duel-screen-open") ||
     document.body?.classList.contains("in-game-active") ||
     window.WordDuel?.isPlaying?.() ||
     window.WeakReview?.isPlaying?.();
-  function afterQuiet(reason, account) {
+  // Sample often while waiting so a lobby opened and closed in between restarts the
+  // quiet period; the backup starts only after a full 20 s without a battle screen.
+  function afterQuiet(reason, account, since = Date.now()) {
     if (quietTimer) clearTimeout(quietTimer);
-    quietTimer = setTimeout(() => {
+    lastBusyAt = Math.max(lastBusyAt, since);
+    quietTimer = setTimeout(function check() {
       quietTimer = 0;
       if (id() !== account) return;
-      if (busy()) afterQuiet(reason, account);
-      else window.saveAfterStudy(reason, { quiet: true });
-    }, quietDelay);
+      if (busy()) lastBusyAt = Date.now();
+      if (Date.now() - lastBusyAt >= quietDelay)
+        window.saveAfterStudy(reason, { quiet: true });
+      else quietTimer = setTimeout(check, quietCheck);
+    }, quietCheck);
   }
   window.saveAfterStudy = function (reason = "end", options = {}) {
     if (quietKinds.includes(reason) && !options.quiet) {
