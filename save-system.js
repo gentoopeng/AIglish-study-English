@@ -951,17 +951,20 @@ async function saveAllContents(force) {
     if(localSaved){await markCloudPending(id);progress(100,started,window.FirestoreReadGuard?.paused?.()?'端末へ保存完了（利用上限でクラウド同期待ち）':'端末へ保存完了');return {localSaved:true,cloudSaved:false};}
     throw localError||new Error('保存先に接続できません');
   }
-  var chunks=[]; for(var i=0;i<raw.length;i+=CHUNK)chunks.push(raw.slice(i,i+CHUNK)); if(!chunks.length)chunks=[''];
-  var meta={savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,partCount:chunks.length,generation:generation,rawLength:raw.length,checksum:saveChecksum(raw),v:4};
+  // The local text is no longer needed; release it before the long cloud upload.
+  raw=null;
+  var meta={savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,partCount:0,generation:generation,rawLength:0,checksum:'',v:4};
+  var cloudRaw='',partCount=0;
   try {
     // 編集した全教材をユーザー専用ドキュメントへ個別保存する。
     // ページ再起動後の教材切替はこの確定データを直接読むため、巨大な統合セーブや
     // 共有教材キャッシュの状態に左右されない。
     var cloudSave=window.TextbookFiles?await window.TextbookFiles.packSave(save,id):save;
     if(window.TextbookFiles)meta.v=5;
-    var cloudRaw=JSON.stringify(cloudSave);
-    chunks=[];for(var ci=0;ci<cloudRaw.length;ci+=CHUNK)chunks.push(cloudRaw.slice(ci,ci+CHUNK));if(!chunks.length)chunks=[''];
-    meta.partCount=chunks.length;meta.rawLength=cloudRaw.length;meta.checksum=saveChecksum(cloudRaw);
+    cloudRaw=JSON.stringify(cloudSave);
+    // Parts are sliced while uploading; never hold a second full copy as an array.
+    partCount=Math.max(1,Math.ceil(cloudRaw.length/CHUNK));
+    meta.partCount=partCount;meta.rawLength=cloudRaw.length;meta.checksum=saveChecksum(cloudRaw);
     var savedBooks=(cloudSave.data.memory&&cloudSave.data.memory.vocabBooks)||{};
     var savedBookKeys=Object.keys(savedBooks).filter(function(key){return !!dirtyBooks[key]||key===savedBook;});
     for(var bi=0;bi<savedBookKeys.length;bi++){
@@ -1014,10 +1017,12 @@ async function saveAllContents(force) {
     }
     // 本文を先に保存し、最後にメタデータを更新する。途中で通信が切れても
     // ローダーが未完成の新規セーブを「保存完了」として選ばない。
-    for(var n=0;n<chunks.length;n+=4){
-      await window.__writeSaveParts(chunks.slice(n,n+4).map(function(part,offset){return [window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',generation+'_p'+(n+offset)),{d:part},{merge:false}];}));
-      progress(15+(Math.min(n+4,chunks.length)/chunks.length)*80,started,'クラウドへ保存中');
+    for(var n=0;n<partCount;n+=4){
+      var group=[];for(var g=n;g<Math.min(n+4,partCount);g++)group.push([window.fbDoc(window.db,'users',id,'saves',SLOT,'parts',generation+'_p'+g),{d:cloudRaw.slice(g*CHUNK,(g+1)*CHUNK)},{merge:false}]);
+      await window.__writeSaveParts(group);group=null;
+      progress(15+(Math.min(n+4,partCount)/partCount)*80,started,'クラウドへ保存中');
     }
+    cloudRaw='';
     // Full backups and public ranking must commit the same captured learning record.
     if(window.LearningRankingModel&&window.fbRunTransaction){
       var rankingRecord=window.LearningRankingModel.merge(null,data.localStorage&&data.localStorage['core_v4_learning_ranking_v2_'+id]);
