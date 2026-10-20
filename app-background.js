@@ -51,14 +51,21 @@ function read(id){
 }
 // Revocable URLs release obsolete photo resources on switches and suspension.
 function photoUrl(data){const binary=atob(data.slice(data.indexOf(',')+1)),bytes=new Uint8Array(binary.length);for(let index=0;index<binary.length;index++)bytes[index]=binary.charCodeAt(index);return URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'}));}
-function releaseBackground(){document.documentElement.style.setProperty('--app-background-image','none');if(backgroundUrl)URL.revokeObjectURL(backgroundUrl);backgroundUrl='';backgroundSource='';}
+let renderToken=0;
+function releaseBackground(){renderToken++;document.documentElement.style.setProperty('--app-background-image','none');if(backgroundUrl)URL.revokeObjectURL(backgroundUrl);backgroundUrl='';backgroundSource='';}
+function showBackground(url,owned){
+ const previous=backgroundUrl;backgroundUrl=owned?url:'';
+ document.documentElement.style.setProperty('--app-background-image','url("'+url+'")');
+ if(previous&&previous!==url)URL.revokeObjectURL(previous);
+}
 function renderBackground(item){
  if(document.hidden||document.documentElement.classList.contains('pwa-recovery-rendering')){releaseBackground();return;}
  const source=item?item.image:'default';if(source===backgroundSource)return;
- const previous=backgroundUrl;
- backgroundUrl=item&&!item.bundled?photoUrl(item.image):'';backgroundSource=source;
- document.documentElement.style.setProperty('--app-background-image',item?'url("'+(item.bundled?item.image:backgroundUrl)+'")':'url("assets/background-night.webp")');
- if(previous)URL.revokeObjectURL(previous);
+ backgroundSource=source;const token=++renderToken;
+ if(!item||item.bundled){showBackground(item?item.image:'assets/background-night.webp',false);return;}
+ // Photos are shown from a screen-sized copy, never decoded at full resolution.
+ const ready=window.BackgroundRenderCache?window.BackgroundRenderCache.url(item.image):Promise.resolve(photoUrl(item.image));
+ ready.catch(()=>photoUrl(item.image)).then(url=>{if(token!==renderToken){URL.revokeObjectURL(url);return;}showBackground(url,true);});
 }
 function apply(){
  const item=settings.mode==='photo'?selected():null;renderBackground(item);
