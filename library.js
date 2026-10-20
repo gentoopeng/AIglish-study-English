@@ -238,6 +238,9 @@
                     for(var p=0;p<chunks.length;p++)await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id,'parts',generation+'_p'+p),{d:chunks[p]},{merge:false});
                     await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),Object.assign({},meta,{generation:generation,partCount:chunks.length,rawLength:clean.length,checksum:window.__gameSaveChecksum(clean)}),{merge:false});
                     for(var old of parts)await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id,'parts',old.id));
+                }else if(meta.v===6){
+                    // Itemized backups are rebuilt from the cleaned local data by the next save.
+                    if(window.queueBackgroundSave)window.queueBackgroundSave();
                 }else if(meta.data&&mentions(JSON.stringify(meta),id)){await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),scrubSave(meta,id,kind,uid),{merge:false});}
             }
             if(kind==='work'&&window.TextbookFiles){
