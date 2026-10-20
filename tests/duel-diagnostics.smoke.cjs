@@ -7,7 +7,7 @@ await page.goto('http://127.0.0.1:8000');await page.waitForFunction(()=>window._
 const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('__aiglish_startup_diagnostic')));
 await page.evaluate(()=>StartupMonitor.event('duel:shown'));assert.ok((await stored()).events.some(e=>e.label==='duel:shown'));
 await page.evaluate(()=>{StartupMonitor.event('duel:start');for(let i=0;i<7;i++)StartupMonitor.event('duel:answer');});
-let s=await stored();assert.ok(s.events.some(e=>e.label==='duel:start'));assert.ok(s.runtime&&s.runtime.storage);assert.equal(s.events.some(e=>e.label==='duel:answer'),false);
+let s=await stored();assert.ok(s.events.some(e=>e.label==='duel:start'));assert.ok(s.runtime&&s.runtime.storage);for(const kind of Object.keys(s.runtime.storage.kinds||{}))assert.ok(['saves','progress','books','backgrounds','other'].includes(kind),kind);assert.equal(typeof s.runtime.storage.largestKind,'string');assert.equal(s.events.some(e=>e.label==='duel:answer'),false);
 await page.evaluate(()=>StartupMonitor.event('duel:closed'));s=await stored();assert.equal(s.duelAnswers,7);assert.ok(s.events.some(e=>e.label==='duel:closed'));
 await page.evaluate(()=>window.__backgroundSaveAll().catch(()=>{}));await page.waitForFunction(()=>JSON.parse(localStorage.getItem('__aiglish_startup_diagnostic')).events.some(e=>/^save:(done|error)$/.test(e.label)));
 s=await stored();assert.ok(s.events.some(e=>e.label==='save:start'));
