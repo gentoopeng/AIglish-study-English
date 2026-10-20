@@ -210,6 +210,9 @@
         if(storage.core_v4_current_textbook_id===id)storage.core_v4_current_textbook_id='';
         return save;
     }
+    // A save that never mentions the item has nothing to remove: skip parsing and rewriting it.
+    // Any match (even an unrelated substring) falls back to the full scrub.
+    function mentions(raw,id){return typeof raw!=='string'||raw.indexOf(JSON.stringify(String(id)).slice(1,-1))!==-1;}
     async function eraseBook(id,book,kind) {
         kind=kind||'book';
         var uid=userId();
@@ -217,7 +220,7 @@
         if(window.TextbookFiles)await window.TextbookFiles.remove(uid,kind==='work'?window.TextbookFiles.workKey(id):id);
 
         var localSaves=[];
-        for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k.startsWith('save_studio_'+uid+'_'))localSaves.push([k,JSON.stringify(scrubSave(JSON.parse(localStorage.getItem(k)),id,kind,uid))]);}
+        for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k.startsWith('save_studio_'+uid+'_')){var localRaw=localStorage.getItem(k);if(mentions(localRaw,id))localSaves.push([k,JSON.stringify(scrubSave(JSON.parse(localRaw),id,kind,uid))]);}}
         if(uid!=='GUEST-000') {
             if(!cloudAvailable()||!window.fbDeleteDoc)throw new Error('完全削除にはクラウド接続が必要です。接続後に再度お試しください。');
             var saves=await window.fbGetDocs(window.fbCollection(window.db,'users',uid,'saves'));
@@ -229,12 +232,13 @@
                     snapshot.forEach(function(p){parts.push(p);});
                     for(var n=0;n<meta.partCount;n++){var part=parts.find(function(p){return p.id===(meta.generation?meta.generation+'_p'+n:'p'+n);});if(!part)throw new Error('古いセーブの読み込みに失敗しました。削除を中止しました。');raw+=part.data().d;}
                     if((meta.rawLength!=null&&meta.rawLength!==raw.length)||(meta.checksum&&meta.checksum!==window.__gameSaveChecksum(raw)))throw new Error('古いセーブを検証できません。削除を中止しました。');
+                    if(!mentions(raw,id)){raw='';parts=[];continue;}
                     var clean=JSON.stringify(scrubSave(JSON.parse(raw),id,kind,uid));var generation='delete_'+crypto.randomUUID(),chunks=[];
                     for(var offset=0;offset<clean.length;offset+=280000)chunks.push(clean.slice(offset,offset+280000));
                     for(var p=0;p<chunks.length;p++)await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id,'parts',generation+'_p'+p),{d:chunks[p]},{merge:false});
                     await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),Object.assign({},meta,{generation:generation,partCount:chunks.length,rawLength:clean.length,checksum:window.__gameSaveChecksum(clean)}),{merge:false});
                     for(var old of parts)await window.fbDeleteDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id,'parts',old.id));
-                }else if(meta.data){await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),scrubSave(meta,id,kind,uid),{merge:false});}
+                }else if(meta.data&&mentions(JSON.stringify(meta),id)){await window.fbSetDoc(window.fbDoc(window.db,'users',uid,'saves',doc.id),scrubSave(meta,id,kind,uid),{merge:false});}
             }
             if(kind==='work'&&window.TextbookFiles){
                 var workFileId=encodeURIComponent(window.TextbookFiles.workKey(id));
@@ -276,16 +280,24 @@
     }
 
     window.eraseLibraryItem=eraseBook;
-    var retrying=false,retryFailures=0,nextRetryAt=0;
+    // The startup delay is separate from failure back-off: reconnecting skips back-off, never the delay.
+    var retrying=false,retryFailures=0,nextRetryAt=0,startupUntil=Date.now()+60000;
+    // If the page ended while pending deletions were being processed (an iOS termination
+    // leaves no error), pause automatic processing for 24 hours. The deletions stay recorded.
+    var deletionGuardKey='__aiglish_deletion_guard',suppressedUntil=0;
+    function readDeletionGuard(){try{return JSON.parse(localStorage.getItem(deletionGuardKey)||'null')||{};}catch(e){return {};}}
+    function writeDeletionGuard(value){try{localStorage.setItem(deletionGuardKey,JSON.stringify(value));}catch(e){}}
+    (function(){var guard=readDeletionGuard();if(guard.startedAt){suppressedUntil=Date.now()+86400000;writeDeletionGuard({suppressUntil:suppressedUntil});}else suppressedUntil=Number(guard.suppressUntil)||0;})();
     // Each retry re-reads and rewrites every local and cloud save. A deletion that keeps
     // failing must not repeat that every 30 seconds: back off 1, 2, 4 ... up to 60 minutes.
     async function retryPendingDeletions(force){
         if(retrying||!window.LibraryState)return;
+        if(Date.now()<suppressedUntil||Date.now()<startupUntil||document.hidden)return;
         if(force!==true&&Date.now()<nextRetryAt)return;
-        retrying=true;
-        try{var owner=userId();await window.LibraryState.loadCloud(owner);if(userId()!==owner)return;for(var item of Object.values(window.LibraryState.read(owner))){if(userId()!==owner)return;if(item.pending)await eraseBook(item.id,item.metadata,item.kind);}window.LibraryState.cleanLocal(owner);retryFailures=0;nextRetryAt=0;}
+        retrying=true;var guarded=false;
+        try{var owner=userId();await window.LibraryState.loadCloud(owner);if(userId()!==owner)return;for(var item of Object.values(window.LibraryState.read(owner))){if(userId()!==owner)return;if(item.pending){if(!guarded){guarded=true;writeDeletionGuard({startedAt:Date.now()});}await eraseBook(item.id,item.metadata,item.kind);}}window.LibraryState.cleanLocal(owner);retryFailures=0;nextRetryAt=0;}
         catch(e){retryFailures++;nextRetryAt=Date.now()+Math.min(3600000,60000*Math.pow(2,retryFailures-1));console.warn('削除の同期は接続後に再試行します',e);}
-        finally{retrying=false;}
+        finally{retrying=false;if(guarded)writeDeletionGuard({});}
     }
     setInterval(function(){if(window.LibraryState&&Object.values(window.LibraryState.read()).some(function(item){return item.pending;}))retryPendingDeletions();},30000);
     function applyDeletionVisibility(){
@@ -298,7 +310,8 @@
     }
     window.addEventListener('storage',function(event){if(window.LibraryState&&event.key===window.LibraryState.storageKey(userId()))applyDeletionVisibility();});
     window.addEventListener('online',function(){retryPendingDeletions(true);});
-    window.onAppLoaded(retryPendingDeletions);
+    // Not at launch: startup already loads the active book, background and warm-up.
+    window.onAppLoaded(function(){setTimeout(retryPendingDeletions,60000);});
     window.openLibraryBookActions = function(bookId) {
         var actionUserId = userId();
         var book = textbooksPool.find(function(item) { return item.id === bookId; }) || readLibrary().books.find(function(item) { return item.id === bookId; });
