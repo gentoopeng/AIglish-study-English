@@ -2504,3 +2504,11 @@ html body dialog.group-chat-dialog[open]{display:flex;flex-direction:column;over
 .vocab-book-heading h2 { min-width: 0; }
 .vocab-book-heading #vocabBookTitle { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vocab-book-heading #vocabCoverContainer { flex-shrink: 0; }
+
+/* 「わからない」, the correct meaning in the middle of the screen after a miss, and rematch. */
+.word-duel-screen.is-playing .duel-options{grid-auto-rows:32px;}.word-duel-screen .duel-options .duel-pass{grid-column:1/-1;min-height:0;background:transparent;border-style:dashed;color:#c9d2e0;font-size:13px;}
+.word-duel-screen.is-playing .duel-correction{position:absolute;left:50%;top:50%;z-index:4;box-sizing:border-box;width:min(88%,420px);max-height:70dvh;padding:16px;grid-template-columns:1fr;gap:8px;text-align:center;border:2px solid #86f0b5;border-radius:18px;background:#123329f5;box-shadow:0 8px 30px #000a;transform:translate(-50%,-50%);}
+.word-duel-screen.is-playing .duel-correction small{display:block;font-size:11px;letter-spacing:2px;color:#a0ebc7;}.word-duel-screen.is-playing .duel-correction strong{grid-column:1;max-height:34dvh;overflow:auto;font:800 clamp(20px,6vw,28px)/1.4 system-ui,sans-serif;color:#effff8;}
+.word-duel-screen.is-playing .duel-correction button{grid-column:1;grid-row:auto;padding:11px;font-size:14px;}
+.duel-rematch{display:grid;gap:8px;margin:4px 0 10px;}.duel-rematch [data-rematch-invite]{margin:0;text-align:center;font:700 13px/1.5 system-ui,sans-serif;color:#ffe2a0;}.word-duel-screen .duel-rematch [data-rematch-join]{background:#1b6355;border-color:#82f0c7;}
+.duel-rematch-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;}.word-duel-screen .duel-rematch-actions button{padding:11px 6px;font-size:13px;}.duel-rematch .duel-status:empty{display:none;}.word-duel-screen .duel-again{width:100%;margin:6px 0;}

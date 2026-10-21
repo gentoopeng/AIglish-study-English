@@ -45,6 +45,9 @@
   function stop() {
     unsubscribe?.();
     unsubscribe = null;
+    stopTimers();
+  }
+  function stopTimers() {
     clearInterval(timer);
     clearTimeout(waitingTimer);
     clearTimeout(answerTimer);
@@ -54,6 +57,7 @@
   }
   function cleanup() {
     stop();
+    pendingRematch = null;
     session = null;
     dialog = null;
     finishing = false;
@@ -312,7 +316,7 @@
             collision = await tx.get(roomRef);
           if (collision.exists()) throw Error("もう一度参加してください。");
           const room = {
-            version: 9,
+            version: 10,
             ...settings,
             book,
             books,
@@ -332,6 +336,7 @@
           await publish({ id: account, code, answers: [] }, true, true);
           return;
         }
+        await announceRematch(code);
         session = { id: account, code, answers: [], finished: false, groupId };
         wait(code);
       });
@@ -370,7 +375,7 @@
         if (dialog !== screen || uid() !== account) return;
         let code;
         const room = {
-          version: 9,
+          version: 10,
           ...settings,
           book,
           books,
@@ -404,58 +409,177 @@
           await publish({ id: account, code, answers: [] }, true, true);
           return;
         }
+        await announceRematch(code);
         session = { id: account, code, answers: [], finished: false };
         wait(code);
       });
   };
   function wireJoin() {
-    dialog.querySelector("[data-duel-join]").onclick = locked(async () => {
-      connected();
-      const code = dialog.querySelector(".duel-join input").value.trim(),
-        account = uid(),
-        screen = dialog;
-      if (!/^\d{4}$/.test(code))
-        throw Error("4桁の部屋番号を入力してください。");
+    dialog.querySelector("[data-duel-join]").onclick = locked(() =>
+      joinRoom(dialog.querySelector(".duel-join input").value.trim()),
+    );
+  }
+  async function joinRoom(code) {
+    connected();
+    const account = uid(),
+      screen = dialog;
+    if (!/^\d{4}$/.test(code)) throw Error("4桁の部屋番号を入力してください。");
+    await window.fbRunTransaction(window.db, async (tx) => {
+      const snap = await tx.get(ref(code));
+      if (!snap.exists()) throw Error("部屋が見つかりません。");
+      const room = snap.data();
+      if (!m.validRoom(room))
+        throw Error(
+          "部屋のデータを確認できません。全員アプリを更新して部屋を作り直してください。",
+        );
+      if (room.groupId) {
+        const group = await tx.get(
+          window.fbDoc(window.db, "studyGroups", room.groupId),
+        );
+        if (!group.exists() || !group.data().members?.[account])
+          throw Error("このグループの参加者だけが対戦できます。");
+      }
+      if (
+        room.status !== "waiting" ||
+        room.players[account] ||
+        Object.keys(room.players).length >= room.capacity
+      )
+        throw Error("この部屋には参加できません。");
+      if (Date.now() - ms(room.createdAt) > 120000)
+        throw Error("この部屋の待機時間は終了しました。");
+      const players = { ...room.players, [account]: player() },
+        full = Object.keys(players).length === room.capacity;
+      patch(tx, ref(code), {
+        players,
+        ...(full
+          ? { status: "playing", startsAt: window.fbServerTimestamp() }
+          : {}),
+      });
+    });
+    if (dialog !== screen || uid() !== account) {
+      await publish({ id: account, code, answers: [] }, true, true);
+      await settle(code);
+      return;
+    }
+    session = { id: account, code, answers: [], finished: false };
+    wait(code);
+  }
+  // A rematch room made with "choose rules" is announced in the finished room once created.
+  let pendingRematch = null;
+  async function announceRematch(code) {
+    const from = pendingRematch;
+    pendingRematch = null;
+    if (!from || from.code === code) return;
+    try {
       await window.fbRunTransaction(window.db, async (tx) => {
-        const snap = await tx.get(ref(code));
-        if (!snap.exists()) throw Error("部屋が見つかりません。");
-        const room = snap.data();
-        if (!m.validRoom(room))
-          throw Error(
-            "部屋のデータを確認できません。全員アプリを更新して部屋を作り直してください。",
-          );
-        if (room.groupId) {
-          const group = await tx.get(
-            window.fbDoc(window.db, "studyGroups", room.groupId),
-          );
-          if (!group.exists() || !group.data().members?.[account])
-            throw Error("このグループの参加者だけが対戦できます。");
-        }
-        if (
-          room.status !== "waiting" ||
-          room.players[account] ||
-          Object.keys(room.players).length >= room.capacity
-        )
-          throw Error("この部屋には参加できません。");
-        if (Date.now() - ms(room.createdAt) > 120000)
-          throw Error("この部屋の待機時間は終了しました。");
-        const players = { ...room.players, [account]: player() },
-          full = Object.keys(players).length === room.capacity;
-        patch(tx, ref(code), {
-          players,
-          ...(full
-            ? { status: "playing", startsAt: window.fbServerTimestamp() }
-            : {}),
+        const snap = await tx.get(ref(from.code));
+        if (!snap.exists() || snap.data().status !== "finished") return;
+        patch(tx, ref(from.code), {
+          rematch: { code, by: uid(), keep: false, at: Date.now() },
         });
       });
-      if (dialog !== screen || uid() !== account) {
-        await publish({ id: account, code, answers: [] }, true, true);
-        await settle(code);
-        return;
-      }
-      session = { id: account, code, answers: [], finished: false };
-      wait(code);
-    });
+    } catch (error) {
+      status("再戦の案内を送れませんでした。部屋番号を伝えてください。");
+    }
+  }
+  function present(room) {
+    return Object.values(room.players).filter((person) => !person.abandoned)
+      .length;
+  }
+  async function rematch(keep) {
+    const old = session,
+      room = old?.room;
+    if (!room || old.solo || !dialog) return;
+    if (!keep) {
+      // Start from the previous rules on the usual settings screen.
+      const groupId = room.groupId;
+      closeScreen();
+      window.openWordDuel(groupId, "create");
+      if (!dialog) return;
+      window.BattleLobby.apply(dialog, { ...room, capacity: room.capacity });
+      pendingRematch = { code: old.code };
+      status("前回のルールを読み込みました。部屋を作ると、前回のメンバーに再戦の案内が届きます。");
+      return;
+    }
+    connected();
+    // Someone may already have made the rematch room: join it instead of making another.
+    if (room.rematch?.code && room.rematch.by !== old.id)
+      return joinRoom(room.rematch.code);
+    const account = uid(),
+      screen = dialog,
+      next = {
+        version: 10,
+        matchType: room.matchType,
+        duration: room.duration,
+        capacity: Math.max(2, Math.min(room.capacity, present(room))),
+        missPenalty: room.missPenalty,
+        rules: room.rules || m.defaultRules,
+        book: room.book,
+        books: room.books,
+        ...(room.groupId ? { groupId: room.groupId } : {}),
+        host: account,
+        status: "waiting",
+        // Same words, new seed: the questions come in a different order.
+        pool: room.pool,
+        seed: crypto.getRandomValues(new Uint32Array(1))[0],
+        players: { [account]: player() },
+      };
+    if (!m.validRoom(next)) throw Error("前回の部屋の設定を確認できません。");
+    let code = null,
+      other = null;
+    for (let attempt = 0; attempt < 5 && !code && !other; attempt++) {
+      const candidate = String(
+        1000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 9000),
+      );
+      const made = await window.fbRunTransaction(window.db, async (tx) => {
+        const previous = await tx.get(ref(old.code)),
+          taken = await tx.get(ref(candidate));
+        const existing = previous.exists() ? previous.data().rematch : null;
+        if (existing?.code && existing.by !== account)
+          return { other: existing.code };
+        if (taken.exists()) return null;
+        tx.set(ref(candidate), {
+          ...next,
+          createdAt: window.fbServerTimestamp(),
+        });
+        patch(tx, ref(old.code), {
+          rematch: { code: candidate, by: account, keep: true, at: Date.now() },
+        });
+        return { code: candidate };
+      });
+      code = made?.code || null;
+      other = made?.other || null;
+    }
+    if (other) return joinRoom(other);
+    if (!code) throw Error("部屋番号を作れませんでした。再試行してください。");
+    if (dialog !== screen || uid() !== account) {
+      await publish({ id: account, code, answers: [] }, true, true);
+      return;
+    }
+    session = {
+      id: account,
+      code,
+      answers: [],
+      finished: false,
+      ...(room.groupId ? { groupId: room.groupId } : {}),
+    };
+    wait(code);
+  }
+  function rematchInvite(room) {
+    const box = dialog?.querySelector(".duel-rematch"),
+      invite = room.rematch;
+    if (!box || !session) return;
+    const show =
+        !!invite && /^\d{4}$/.test(invite.code) && invite.by !== session.id,
+      text = box.querySelector("[data-rematch-invite]"),
+      join = box.querySelector("[data-rematch-join]");
+    text.hidden = join.hidden = !show;
+    if (!show) return;
+    text.textContent =
+      (room.players[invite.by]?.name || "相手") +
+      "さんが再戦の部屋を作りました" +
+      (invite.keep ? "（ルールそのまま）" : "（新しいルール）");
+    join.onclick = locked(() => joinRoom(invite.code));
   }
   function wait(code) {
     // Joined or created a room: separates a stop while waiting from one after the match starts.
@@ -1007,6 +1131,15 @@
       button.onclick = () => answer(index);
       host.append(button);
     });
+    // Older rooms are played by older apps that do not know this choice.
+    if (session.solo || (session.room?.version || 0) >= 10) {
+      const skip = document.createElement("button");
+      skip.type = "button";
+      skip.textContent = "わからない";
+      skip.className = "duel-pass";
+      skip.onclick = () => answer(m.pass);
+      host.append(skip);
+    }
   }
   function answer(choice) {
     if (
@@ -1022,7 +1155,8 @@
       return;
     const target = session,
       q = m.question(target.pool, target.seed, target.answers.length),
-      right = choice === q.correct;
+      right = choice === q.correct,
+      skipped = choice === m.pass;
     const previous = liveScores(target)[target.id],
       before = previous.total;
     target.answers.push({
@@ -1051,8 +1185,10 @@
             : delta === 0
               ? "±0"
               : "+" + delta)
-      : "ミス · " +
-        (delta < 0 ? "−" + Math.abs(delta) : delta === 0 ? "±0" : "+" + delta);
+      : skipped
+        ? "わからない · 減点なし"
+        : "ミス · " +
+          (delta < 0 ? "−" + Math.abs(delta) : delta === 0 ? "±0" : "+" + delta);
     combo.classList.toggle("is-miss", !right);
     combo.dataset.tier = !right
       ? ""
@@ -1079,7 +1215,7 @@
       ),
       delta,
     );
-    if (!right)
+    if (!right && !skipped)
       nudge(
         dialog.querySelector(".duel-question-card"),
         [
@@ -1163,7 +1299,7 @@
     } else {
       target.reviewing = true;
       target.penaltyUntil = Date.now() + 3000;
-      buttons[choice].classList.add("is-wrong");
+      if (!skipped) buttons[choice].classList.add("is-wrong");
       buttons[q.correct].classList.add("is-correct");
       const correction = dialog.querySelector(".duel-correction");
       correction.querySelector("strong").textContent = q.meaning;
@@ -1513,9 +1649,36 @@
       dialog.querySelector(".duel-options").hidden = true;
       dialog.querySelector(".duel-correction").hidden = true;
       status("一人プレイ");
-      const close = dialog.querySelector(".duel-leave");
+      const close = dialog.querySelector(".duel-leave"),
+        again = document.createElement("button");
       close.textContent = "閉じる";
       close.onclick = closeScreen;
+      again.type = "button";
+      again.className = "duel-again";
+      again.textContent = "もう一度（ルールそのまま）";
+      again.onclick = () => {
+        if (!dialog || session !== target) return;
+        session = {
+          ...target,
+          seed: crypto.getRandomValues(new Uint32Array(1))[0],
+          start: Date.now(),
+          answers: [],
+          finished: false,
+          penaltyUntil: 0,
+          reviewing: false,
+          answering: false,
+          rightCache: {},
+          seenAnswers: {},
+          countdown: undefined,
+          lastCall: false,
+          eventStage: undefined,
+          activeEvent: null,
+          leader: undefined,
+        };
+        dialog.querySelector(".duel-solo-result")?.remove();
+        play();
+      };
+      close.before(again);
       finishing = false;
       return;
     }
@@ -1544,10 +1707,14 @@
       bonus.total +
       "点";
     dialog.querySelector(".duel-content").prepend(summary);
-    status(abandoned ? "退出を保存しています…" : "回答を保存しています…");
+    // The room listener may already have drawn the results; do not write progress over them.
+    const note = (text) => {
+      if (dialog?.dataset.resultCode !== target.code) status(text);
+    };
+    note(abandoned ? "退出を保存しています…" : "回答を保存しています…");
     try {
       await publish(target, true, abandoned);
-      status("相手の終了を確認しています…");
+      note("相手の終了を確認しています…");
       await settle(target.code);
       if (dialog && session === target) {
         const snap = await window.fbGetDoc(ref(target.code));
@@ -1639,9 +1806,16 @@
   }
   function result(room) {
     if (!session || !dialog) return;
+    // The finished room keeps being watched for a rematch invitation; render the results once.
+    if (dialog.dataset.resultCode === session.code) {
+      rematchInvite(room);
+      return;
+    }
+    dialog.dataset.resultCode = session.code;
     dialog.classList.remove("is-playing");
     session.finished = true;
-    stop();
+    session.room = room;
+    stopTimers();
     const mine = session.id;
     const body = dialog.querySelector(".duel-content");
     body.replaceChildren();
@@ -1675,7 +1849,17 @@
     close.type = "button";
     close.textContent = "閉じる";
     close.onclick = closeScreen;
-    body.append(heading, board, close);
+    const again = document.createElement("div");
+    again.className = "duel-rematch";
+    again.innerHTML =
+      '<p data-rematch-invite hidden></p><button type="button" data-rematch-join hidden>参加する</button><div class="duel-rematch-actions"><button type="button" data-rematch="keep">再戦（ルールそのまま）</button><button type="button" data-rematch="choose">ルールを選んで再戦</button></div><p class="duel-status" role="status"></p>';
+    again.querySelector('[data-rematch="keep"]').onclick = locked(() =>
+      rematch(true),
+    );
+    again.querySelector('[data-rematch="choose"]').onclick = () =>
+      rematch(false);
+    body.append(heading, board, again, close);
+    rematchInvite(room);
     // Results come in from last place to first, then the player's own place and confetti.
     if (!calm() && board.animate) {
       const rows = [...board.children],

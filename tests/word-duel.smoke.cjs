@@ -249,7 +249,7 @@ const { chromium, webkit } = require("playwright"),
         );
         assert.equal(
           await page.locator(".duel-options button:disabled").count(),
-          10,
+          11,
         );
         await page.clock.fastForward(200);
       }
@@ -302,6 +302,24 @@ const { chromium, webkit } = require("playwright"),
     await a.clock.fastForward(3000);
     await a.getByRole("button", { name: "次の問題", exact: true }).click();
     await answer(a);
+    // 「わからない」: no penalty, the combo breaks, the meaning appears in the middle of the
+    // screen, and the word is marked × in the understanding record.
+    const bad = () =>
+      a.evaluate(
+        () =>
+          Object.values(LearningData.read("duel-book")).filter(
+            (word) => word.status === "bad",
+          ).length,
+      );
+    const scoreBeforePass = await a.locator("[data-duel-score]").textContent(),
+      badBeforePass = await bad();
+    await a.getByRole("button", { name: "わからない", exact: true }).click();
+    assert.equal(await a.locator(".duel-combo").textContent(), "わからない · 減点なし");
+    assert.equal(await a.locator("[data-duel-score]").textContent(), scoreBeforePass);
+    assert.equal(await a.locator(".duel-correction").isVisible(), true);
+    const card = await a.locator(".duel-correction").boundingBox();
+    assert.ok(Math.abs(card.y + card.height / 2 - 852 / 2) < 60, JSON.stringify(card));
+    assert.equal(await bad(), badBeforePass + 1);
     await a.clock.fastForward(61000);
     assert.equal(await a.locator(".duel-solo-result").count(), 0);
     await a.clock.fastForward(61000);
@@ -682,6 +700,53 @@ const { chromium, webkit } = require("playwright"),
     for (const page of [a, b]) await page.locator(".duel-results").waitFor();
     assert.equal(await a.locator(".duel-results li.is-first").count(), 1);
     assert.equal(await a.locator(".duel-result").getAttribute("data-place"), "1");
+    // Rematch with the same rules: same words with a new seed, and the other player is invited.
+    const finished = docs.get("wordDuelRooms/" + chaseCode);
+    await a.getByRole("button", { name: "再戦（ルールそのまま）", exact: true }).click();
+    await a.locator(".duel-wait strong").waitFor();
+    const againCode = await a.locator(".duel-wait strong").textContent(),
+      again = docs.get("wordDuelRooms/" + againCode);
+    assert.notEqual(againCode, chaseCode);
+    assert.equal(again.version, 10);
+    assert.deepEqual(again.rules, finished.rules);
+    assert.equal(again.duration, finished.duration);
+    assert.equal(again.missPenalty, finished.missPenalty);
+    assert.equal(again.capacity, 2);
+    assert.deepEqual(again.pool, finished.pool);
+    assert.notEqual(again.seed, finished.seed);
+    assert.equal(docs.get("wordDuelRooms/" + chaseCode).rematch.code, againCode);
+    await b.locator("[data-rematch-invite]:not([hidden])").waitFor();
+    assert.equal(
+      await b.locator("[data-rematch-invite]").textContent(),
+      "duel-aさんが再戦の部屋を作りました（ルールそのまま）",
+    );
+    await b.getByRole("button", { name: "参加する", exact: true }).click();
+    for (const page of [a, b]) await page.locator(".duel-options").waitFor();
+    for (const page of [a, b]) await page.clock.fastForward(64000);
+    for (const page of [a, b]) await page.locator(".duel-results").waitFor();
+    // Rematch with chosen rules: the form starts from the previous rules.
+    await b.getByRole("button", { name: "ルールを選んで再戦", exact: true }).click();
+    assert.equal(
+      await b.getByLabel("ミス時の減点").inputValue(),
+      String(finished.missPenalty),
+    );
+    assert.equal(await b.getByLabel("対戦人数").inputValue(), "2");
+    assert.equal(await b.locator("[data-events]").isChecked(), true);
+    assert.equal(await b.locator("[data-event-type][value=chase]").isChecked(), true);
+    assert.equal(await b.locator("[data-event-type][value=double]").isChecked(), false);
+    await b.getByRole("button", { name: "部屋を作る", exact: true }).click();
+    await b.locator(".duel-wait strong").waitFor();
+    const chosenCode = await b.locator(".duel-wait strong").textContent();
+    assert.equal(docs.get("wordDuelRooms/" + againCode).rematch.code, chosenCode);
+    await a.locator("[data-rematch-invite]:not([hidden])").waitFor();
+    assert.equal(
+      await a.locator("[data-rematch-invite]").textContent(),
+      "duel-bさんが再戦の部屋を作りました（新しいルール）",
+    );
+    await a.getByRole("button", { name: "参加する", exact: true }).click();
+    for (const page of [a, b]) await page.locator(".duel-options").waitFor();
+    for (const page of [a, b]) await page.clock.fastForward(64000);
+    for (const page of [a, b]) await page.locator(".duel-results").waitFor();
     for (const page of [a, b])
       await page.getByRole("button", { name: "閉じる", exact: true }).click();
     // Banked scores release at the end of the event even when nobody submits another answer.

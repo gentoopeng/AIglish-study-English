@@ -133,6 +133,7 @@
       choices.set(index, question(words, seed, index).correct);
     return choices.get(index);
   }
+  const pass = 10;
   const eventCatalog = [
     {
       id: "double",
@@ -454,6 +455,8 @@
     )
       throw Error("対戦の設定を確認できません。");
     elapsed = Math.max(0, Math.min(room.duration, elapsed ?? room.duration));
+    // 「わからない」 (choice 10) exists from version 10 rooms on, and in solo play (no version).
+    const lastChoice = room.version && room.version < 10 ? 9 : pass;
     const ids = Object.keys(room.players).sort(),
       values = {},
       timeline = [],
@@ -476,7 +479,7 @@
           answer.at < unlockAt ||
           !Number.isInteger(answer.choice) ||
           answer.choice < 0 ||
-          answer.choice > 9 ||
+          answer.choice > lastChoice ||
           (answer.shownAt !== undefined &&
             (!Number.isFinite(answer.shownAt) ||
               answer.shownAt < Math.max(0, last) ||
@@ -487,7 +490,8 @@
           answer.shownAt ?? Math.max(0, last + (previousRight ? 180 : 3000));
         last = answer.at;
         const correct = correctChoice(room.pool, room.seed, index),
-          right = correct === answer.choice;
+          right = correct === answer.choice,
+          skipped = answer.choice === pass;
         if (!right) unlockAt = answer.at + 3000;
         previousRight = right;
         if (answer.at <= elapsed)
@@ -500,6 +504,7 @@
             right,
             // Seeing that the meaning is missing from the choices is worth double.
             absent: right && correct === 9,
+            skipped,
             shownAt,
           });
       });
@@ -653,6 +658,13 @@
           for (const other of ids) values[other].total += rules.eventPoints;
           active.cooperated = true;
         }
+      } else if (entry.skipped) {
+        // 「わからない」: no penalty of any kind, but the combo breaks and it is not a correct answer.
+        v.combo = 0;
+        if (active) {
+          active.misses[id] = true;
+          active.streaks[id] = 0;
+        }
       } else {
         let penalty = room.missPenalty;
         if (type === "safe") penalty = 0;
@@ -722,22 +734,25 @@
         elapsed,
         true,
       ).self,
-      bonus = answers.length * rules.answerBonus;
+      answered = countAnswered(answers),
+      bonus = answered * rules.answerBonus;
     return {
       base: base.total,
       bonus,
-      answered: answers.length,
+      answered,
       total: base.total + bonus,
     };
+  }
+  // 「わからない」 earns no answer bonus, so passing cannot be repeated for points.
+  function countAnswered(answers) {
+    return answers.filter((answer) => answer.choice !== pass).length;
   }
   function roomScores(room, final = false, elapsed) {
     const values = replay(room, final ? room.duration : elapsed);
     if (final)
       for (const [id, value] of Object.entries(values)) {
-        value.bonus =
-          room.players[id].answers.length *
-          (room.rules || defaultRules).answerBonus;
-        value.answered = room.players[id].answers.length;
+        value.answered = countAnswered(room.players[id].answers);
+        value.bonus = value.answered * (room.rules || defaultRules).answerBonus;
         value.base = value.total;
         value.total += value.bonus;
       }
@@ -837,7 +852,7 @@
     try {
       if (
         !(
-          [7, 8, 9].includes(room?.version) &&
+          [7, 8, 9, 10].includes(room?.version) &&
           (room.version < 8 ||
             (room.matchType === "casual" &&
               validRules(room.rules) &&
@@ -930,6 +945,7 @@
     validDuration,
     eventAt,
     correctChoice,
+    pass,
     roomScores,
     poolSampler,
     selectPool,

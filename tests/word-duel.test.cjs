@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),m=require('../word-duel-model.js');
 const words=m.pool(Array.from({length:20},(_,i)=>({word:'word'+i,meaning:'意味'+i})));
 test('ten options are deterministic, unique and sometimes omit the answer',()=>{let absent=0;for(let i=0;i<100;i++){const q=m.question(words,123,i);assert.deepEqual(q,m.question(words,123,i));assert.equal(q.options.length,10);assert.equal(new Set(q.options).size,10);if(q.correct===9)absent++;}assert.ok(absent>0&&absent<100);});
-test('combo is additive 10 percent and resets after a minus-50 miss',()=>{const right=i=>m.question(words,1,i).correct;const log=[{choice:right(0),at:0},{choice:right(1),at:100},{choice:right(2),at:200},{choice:(right(3)+1)%10,at:300},{choice:right(4),at:3400}];assert.deepEqual(m.score(words,1,log),{total:380,combo:1});assert.throws(()=>m.score(words,1,[{choice:0,at:60000}]));assert.throws(()=>m.score(words,1,[{choice:10,at:0}]));});
+test('combo is additive 10 percent and resets after a minus-50 miss',()=>{const right=i=>m.question(words,1,i).correct;const log=[{choice:right(0),at:0},{choice:right(1),at:100},{choice:right(2),at:200},{choice:(right(3)+1)%10,at:300},{choice:right(4),at:3400}];assert.deepEqual(m.score(words,1,log),{total:380,combo:1});assert.throws(()=>m.score(words,1,[{choice:0,at:60000}]));assert.throws(()=>m.score(words,1,[{choice:11,at:0}]));});
 test('2, 3 and 4 players receive score-based places without rating deltas',()=>{for(const count of [2,3,4]){const players={};for(let i=0;i<count;i++)players['p'+i]={answers:Array.from({length:count-i},(_,j)=>({choice:m.question(words,1,j).correct,at:j*100})),abandoned:false};const result=m.placements({players,pool:words,seed:1,duration:60000});assert.equal(result.some(entry=>Object.hasOwn(entry,"delta")),false);assert.deepEqual(result.map(entry=>entry.place),Array.from({length:count},(_,i)=>i+1));}});
 test('ties share a place and abandonment always ranks below active players',()=>{const room={pool:words,seed:1,duration:60000,players:{a:{answers:[]},b:{answers:[]},c:{answers:[{choice:(m.question(words,1,0).correct+1)%10,at:0}]}}};assert.deepEqual(m.placements(room).map(entry=>entry.place),[1,1,3]);room.players.a.abandoned=true;assert.equal(m.placements(room).at(-1).id,'a');for(const player of Object.values(room.players))player.abandoned=true;assert.equal(m.placements(room),null);});
 test('all selectable durations bound answers at the chosen finish time',()=>{for(const limit of m.durations){assert.doesNotThrow(()=>m.score(words,1,[{choice:0,at:limit-1}],limit));assert.throws(()=>m.score(words,1,[{choice:0,at:limit}],limit));}assert.throws(()=>m.score(words,1,[],45001));assert.equal(m.rating,undefined);});
@@ -62,4 +62,18 @@ test('seeing that the meaning is missing from the choices scores double, before 
  assert.equal(m.score(words,seed,[{choice:9,at:0},{choice:right(1),at:100}]).total,200+110);
  const rules={...m.defaultRules,events:true,eventTypes:['double'],eventSeconds:8,eventPoints:80};
  assert.equal(m.score(words,seed,[{choice:9,at:15000}],60000,50,rules).total,400);
+});
+test('「わからない」 has no penalty, breaks the combo, keeps the wait, earns no answer bonus and needs a version 10 room',()=>{
+ const seed=1,right=i=>m.question(words,seed,i).correct,rules={...m.defaultRules};
+ const log=[{choice:right(0),at:0},{choice:right(1),at:100},{choice:m.pass,at:200},{choice:right(3),at:3200}];
+ // 100 + 110, pass (no penalty, combo back to 0), then 100 again (doubled if it was a none-of-the-above question).
+ const third=right(3)===9?200:100;
+ assert.deepEqual(m.score(words,seed,log,60000,500),{total:210+third,combo:1});
+ assert.throws(()=>m.score(words,seed,[{choice:m.pass,at:0},{choice:right(1),at:2999}]));
+ assert.deepEqual(m.finalScore(words,seed,log,60000,500,rules),{base:210+third,bonus:30,answered:3,total:240+third});
+ // No miss effects during events, even ones that punish mistakes.
+ for(const type of ['reset','gift','collective','pressure','careful']){const room={version:10,pool:words,seed,duration:60000,missPenalty:100,rules:{...m.defaultRules,events:true,eventTypes:[type]},players:{a:{answers:[{choice:right(0),at:1000},{choice:m.pass,at:16000}]},b:{answers:[]}}};const s=m.roomScores(room);assert.equal(s.a.total,right(0)===9?200:100,type);assert.equal(s.a.combo,0);assert.equal(s.b.total,0,type);}
+ // Older rooms are played by older apps that do not know the choice.
+ const room={version:9,pool:words,seed,duration:60000,missPenalty:50,players:{a:{answers:[{choice:m.pass,at:0}]}}};
+ assert.throws(()=>m.roomScores(room));assert.doesNotThrow(()=>m.roomScores({...room,version:10}));
 });
