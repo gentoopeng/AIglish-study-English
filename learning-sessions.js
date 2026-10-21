@@ -537,7 +537,8 @@
     const previous = roles.get("flashcardPreviousButton"),
       progress = roles.get("flashcardProgressText"),
       history = roles.get("fcHistoryContainer"),
-      info = roles.get("flashcardInfoButton");
+      info = roles.get("flashcardInfoButton"),
+      speaker = roles.get("flashcardSpeakButton");
     const answers = [];
     let starting = false,
       startTimer;
@@ -659,6 +660,7 @@
         close.hidden = true;
         previous.hidden = true;
         info.hidden = true;
+        if (speaker) speaker.hidden = true;
         roles.get("flashcardPartOfSpeech").hidden = true;
         history.parentElement.hidden = true;
         card.style.width = card.style.height = "240px";
@@ -698,6 +700,11 @@
         stage,
         roles.get("flashcardPartOfSpeech"),
       );
+      if (speaker) {
+        speaker.dataset.say = w.word || "";
+        speaker.disabled = !w.word;
+      }
+      window.Pronounce?.auto(w.word);
       const part = window.getFlashcardPartOfSpeech?.(w, meaning),
         pos = roles.get("flashcardPartOfSpeech");
       pos.hidden = !part;

@@ -312,7 +312,8 @@ const { chromium, webkit } = require("playwright"),
           ).length,
       );
     const scoreBeforePass = await a.locator("[data-duel-score]").textContent(),
-      badBeforePass = await bad();
+      badBeforePass = await bad(),
+      passedWord = await a.locator(".duel-prompt").textContent();
     await a.getByRole("button", { name: "わからない", exact: true }).click();
     assert.equal(await a.locator(".duel-combo").textContent(), "わからない · 減点なし");
     assert.equal(await a.locator("[data-duel-score]").textContent(), scoreBeforePass);
@@ -320,6 +321,9 @@ const { chromium, webkit } = require("playwright"),
     const card = await a.locator(".duel-correction").boundingBox();
     assert.ok(Math.abs(card.y + card.height / 2 - 852 / 2) < 60, JSON.stringify(card));
     assert.equal(await bad(), badBeforePass + 1);
+    // The card also shows the English word with a speaker button.
+    assert.equal(await a.locator(".duel-correction-say em").textContent(), passedWord);
+    assert.equal(await a.locator(".duel-speak").getAttribute("data-say"), passedWord);
     await a.clock.fastForward(61000);
     assert.equal(await a.locator(".duel-solo-result").count(), 0);
     await a.clock.fastForward(61000);
