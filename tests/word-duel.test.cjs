@@ -77,3 +77,17 @@ test('「わからない」 has no penalty, breaks the combo, keeps the wait, ea
  const room={version:9,pool:words,seed,duration:60000,missPenalty:50,players:{a:{answers:[{choice:m.pass,at:0}]}}};
  assert.throws(()=>m.roomScores(room));assert.doesNotThrow(()=>m.roomScores({...room,version:10}));
 });
+test('event interval: 30 seconds for new rooms, 15 for rooms without the setting, and version 11 when it differs',()=>{
+ const rules={...m.newRules,events:true,eventTypes:['double']};
+ assert.equal(m.newRules.eventEvery,30);assert.equal(m.validRules(rules),true);assert.equal(m.validRules({...rules,eventEvery:20}),false);
+ assert.equal(m.eventAt(1,15000,rules),null);assert.equal(m.eventAt(1,30000,rules).type,'double');assert.equal(m.eventAt(1,45000,rules),null);
+ assert.equal(m.eventAt(1,15000,{...rules,eventEvery:undefined}).type,'double');
+ assert.equal(m.eventPreview(1,27500,rules).start,30000);assert.equal(m.eventPreview(1,12500,rules),null);
+ assert.equal(m.versionFor(words,rules),11);assert.equal(m.versionFor(words,{...rules,eventEvery:15}),10);assert.equal(m.versionFor(words,m.defaultRules),10);
+ const room={version:10,matchType:'casual',duration:60000,missPenalty:100,rules,books:['b'],book:'b',host:'a',status:'waiting',seed:1,capacity:2,pool:words.map((word,i)=>({...word,ref:{book:'b',num:String(i),mid:i+'-0',sig:'sig'+i,count:1}})),players:{a:{answers:[]}}};
+ assert.equal(m.validRoom(room),false);assert.equal(m.validRoom({...room,version:11}),true);
+ // Scoring uses the interval: a right answer at 16 s is doubled only with 15-second events.
+ const right=m.question(words,1,0).correct,log=[{choice:right,at:31000}];
+ assert.equal(m.score(words,1,log,60000,50,rules).total,(right===9?2:1)*200);
+ assert.equal(m.score(words,1,[{choice:right,at:16000}],60000,50,rules).total,(right===9?2:1)*100);
+});

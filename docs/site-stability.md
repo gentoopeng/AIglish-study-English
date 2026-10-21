@@ -484,3 +484,19 @@ It is practice only and writes no understanding record. Events whose year questi
 ## Follow-up: flashcard corner buttons (10.21.33)
 
 On iOS, the icons of the hands-free and speaker buttons sat near the top of their circles. The icons in the bottom card buttons are now positioned absolutely at the circle's centre, so they no longer depend on the button's grid centring.
+
+## Follow-up: battle display and event interval (10.21.34)
+
+**Event interval.** Events now come every 30 seconds by default instead of every 15. The interval is a room setting (15, 30, 45 or 60 seconds). Rooms without the setting keep 15 seconds, so older rooms replay the same. A room with any other interval is version 11, because older apps would place the events every 15 seconds.
+
+**Event bar.** The bar shows one line with what the event does, plus a badge with the seconds left (「N秒後」 before it starts). A personal line (whether the player is targeted, challenge progress) appears only when there is one. The event name and the long description are gone from the bar; they remain on the rules screen. The start and end callouts no longer repeat the name.
+
+**Solo result.** The result is a single card with:
+- the score
+- correct answers
+- the answer bonus
+- 「もう一度」 and 「閉じる」
+
+The clock row, scoreboard, time bar, combo line and event bar are hidden, so the buttons no longer overlap the clock.
+
+**Correct answer card.** The card is opaque, so the question and combo line behind it no longer show through. Wide buttons (「選択肢の中にはない」 and 「わからない」) no longer shrink when chosen.

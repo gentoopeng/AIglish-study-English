@@ -316,7 +316,7 @@
             collision = await tx.get(roomRef);
           if (collision.exists()) throw Error("もう一度参加してください。");
           const room = {
-            version: m.versionFor(pool),
+            version: m.versionFor(pool, settings.rules),
             ...settings,
             book,
             books,
@@ -375,7 +375,7 @@
         if (dialog !== screen || uid() !== account) return;
         let code;
         const room = {
-          version: m.versionFor(pool),
+          version: m.versionFor(pool, settings.rules),
           ...settings,
           book,
           books,
@@ -508,7 +508,7 @@
     const account = uid(),
       screen = dialog,
       next = {
-        version: m.versionFor(room.pool),
+        version: m.versionFor(room.pool, room.rules),
         matchType: room.matchType,
         duration: room.duration,
         capacity: Math.max(2, Math.min(room.capacity, present(room))),
@@ -969,7 +969,7 @@
         "イベント中 " + (delta < 0 ? "−" + Math.abs(delta) : "+" + delta) + "点";
     announce(
       {
-        kicker: "イベント終了 · " + info.name,
+        kicker: "イベント終了",
         title: line ? line.text : gained,
         text: line ? gained : "",
         tone: info.tone,
@@ -1547,17 +1547,13 @@
               )
             : 0,
           line = active ? eventLine(session, active, elapsed) : null,
+          // One glance: what the event does and how long is left. A personal line (whether this
+          // player is targeted, challenge progress) only when there is one.
           parts = [
-            ["b", (active ? "" : "まもなく ") + info.name],
-            ["em", (active ? "残り" : "") + seconds + "秒"],
-            ["span", line ? line.text : info.hint],
-            [
-              "small",
-              info.detail +
-                (active && preview
-                  ? " / 次は" + window.BattleLobby.labels[preview.type]
-                  : ""),
-            ],
+            ["b", info.hint || info.name],
+            ["em", active ? seconds + "秒" : seconds + "秒後"],
+            ["span", line && line.text !== info.hint ? line.text : ""],
+            ["small", ""],
           ];
         banner.querySelector("span").dataset.kind = line?.kind || "";
         for (const [tag, text] of parts) {
@@ -1571,9 +1567,9 @@
     }
     if (session.rules?.events) {
       const stage =
-        Math.floor(elapsed / 15000) +
+        Math.floor(elapsed / m.eventEvery(session.rules)) +
         ":" +
-        (elapsed % 15000 < session.rules.eventSeconds * 1000);
+        (elapsed % m.eventEvery(session.rules) < session.rules.eventSeconds * 1000);
       if (session.eventStage !== stage) {
         const ended = session.activeEvent;
         session.eventStage = stage;
@@ -1594,12 +1590,7 @@
               : null;
           announce(
             {
-              kicker:
-                "イベント発生 · " +
-                info.name +
-                " · " +
-                session.rules.eventSeconds +
-                "秒間",
+              kicker: "イベント · " + session.rules.eventSeconds + "秒間",
               title: line?.kind ? line.text : info.hint,
               tone: info.tone,
               effect: true,
@@ -1698,32 +1689,33 @@
       .querySelectorAll(".duel-options button,[data-duel-next]")
       .forEach((button) => (button.disabled = true));
     if (target.solo) {
+      // One card: the score, how it was made, and what to do next. The play-time controls
+      // (clock, scoreboard, combo, event bar) are hidden so nothing overlaps.
       const value = points(target, target.answers),
+        rights = rightsOf(target, target.id, target.answers).filter(Boolean).length,
         summary = document.createElement("div");
       summary.className = "duel-solo-result";
-      summary.innerHTML = "<small></small><strong></strong>";
-      summary.querySelector("small").textContent =
-        (abandoned ? "途中終了 · " : "終了 · ") +
+      summary.innerHTML =
+        '<small></small><strong></strong><dl><div><dt>正解</dt><dd data-result-right></dd></div><div><dt>回答ボーナス</dt><dd data-result-bonus></dd></div></dl><div class="duel-solo-actions"><button type="button" class="duel-again">もう一度（ルールそのまま）</button><button type="button" data-solo-close>閉じる</button></div>';
+      summary.querySelector("small").textContent = abandoned ? "途中終了" : "終了";
+      summary.querySelector("strong").textContent = value.total + "点";
+      summary.querySelector("[data-result-right]").textContent =
+        rights + " / " + value.answered + "問";
+      summary.querySelector("[data-result-bonus]").textContent =
         value.answered +
-        "問 ×" +
+        "問 × " +
         (target.rules || m.defaultRules).answerBonus +
         "点 = +" +
         value.bonus +
         "点";
-      summary.querySelector("strong").textContent = value.total + "点";
       dialog.querySelector(".duel-content").prepend(summary);
+      dialog.classList.add("is-solo-result");
       dialog.querySelector(".duel-question-card").hidden = true;
       dialog.querySelector(".duel-options").hidden = true;
       dialog.querySelector(".duel-correction").hidden = true;
-      status("一人プレイ");
-      const close = dialog.querySelector(".duel-leave"),
-        again = document.createElement("button");
-      close.textContent = "閉じる";
-      close.onclick = closeScreen;
-      again.type = "button";
-      again.className = "duel-again";
-      again.textContent = "もう一度（ルールそのまま）";
-      again.onclick = () => {
+      status("");
+      summary.querySelector("[data-solo-close]").onclick = closeScreen;
+      summary.querySelector(".duel-again").onclick = () => {
         if (!dialog || session !== target) return;
         session = {
           ...target,
@@ -1742,10 +1734,10 @@
           activeEvent: null,
           leader: undefined,
         };
-        dialog.querySelector(".duel-solo-result")?.remove();
+        dialog.classList.remove("is-solo-result");
+        summary.remove();
         play();
       };
-      close.before(again);
       finishing = false;
       return;
     }

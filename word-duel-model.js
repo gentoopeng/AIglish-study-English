@@ -448,9 +448,17 @@
     eventSeconds: 8,
     eventPoints: 100,
   };
+  // New rooms: an event every 30 seconds.
+  const newRules = { ...defaultRules, eventEvery: 30 };
+  // Seconds between events. Rooms from before this setting have none and keep 15.
+  const eventIntervals = [15, 30, 45, 60];
+  function eventEvery(rules) {
+    return (rules?.eventEvery ?? 15) * 1000;
+  }
   function validRules(r) {
     return (
       !!r &&
+      (r.eventEvery === undefined || eventIntervals.includes(r.eventEvery)) &&
       Number.isInteger(r.points) &&
       r.points >= 1 &&
       r.points <= 10000 &&
@@ -483,20 +491,22 @@
     );
   }
   function eventAt(seed, at, rules) {
-    if (!rules?.events || !rules.eventTypes.length || at < 15000) return null;
-    const slot = Math.floor(at / 15000);
-    if (at % 15000 >= rules.eventSeconds * 1000) return null;
+    const every = eventEvery(rules);
+    if (!rules?.events || !rules.eventTypes.length || at < every) return null;
+    const slot = Math.floor(at / every);
+    if (at % every >= rules.eventSeconds * 1000) return null;
     const type =
       rules.eventTypes[
         Math.floor(
           rng(seed ^ Math.imul(slot, 374761393))() * rules.eventTypes.length,
         )
       ];
-    return { type, until: slot * 15000 + rules.eventSeconds * 1000 };
+    return { type, until: slot * every + rules.eventSeconds * 1000 };
   }
   function eventPreview(seed, at, rules, limit = 600000) {
     if (!rules?.events) return null;
-    const start = (Math.floor(at / 15000) + 1) * 15000;
+    const every = eventEvery(rules),
+      start = (Math.floor(at / every) + 1) * every;
     if (start >= limit || start - at > 3000) return null;
     const next = eventAt(seed, start, rules);
     return next ? { ...next, start } : null;
@@ -580,9 +590,9 @@
     }
     if (rules.events)
       for (
-        let start = 15000;
+        let start = eventEvery(rules);
         start < room.duration && start <= elapsed;
-        start += 15000
+        start += eventEvery(rules)
       ) {
         const event = eventAt(room.seed, start, rules),
           end = Math.min(event.until, room.duration);
@@ -914,8 +924,12 @@
     return entries;
   }
   // Rooms with term questions need version 11; others stay at 10 so older apps can still join.
-  function versionFor(pool) {
-    return (pool || []).some((word) => word.kind) ? 11 : 10;
+  // Older apps would place events every 15 seconds, so another interval also needs version 11.
+  function versionFor(pool, rules) {
+    return (pool || []).some((word) => word.kind) ||
+      (rules?.eventEvery !== undefined && rules.eventEvery !== 15)
+      ? 11
+      : 10;
   }
   function validRoom(room) {
     try {
@@ -925,6 +939,7 @@
           (room.version < 8 ||
             (room.matchType === "casual" &&
               validRules(room.rules) &&
+              (room.version >= 11 || [undefined, 15].includes(room.rules.eventEvery)) &&
               Array.isArray(room.books) &&
               room.books.length >= 1 &&
               room.books.length <= 10 &&
@@ -1014,6 +1029,9 @@
   }
   const model = {
     defaultRules,
+    newRules,
+    eventEvery,
+    eventIntervals,
     eventCatalog,
     recommendedEvents,
     eventPreview,

@@ -2580,3 +2580,25 @@ mark.term-mark.is-rated{background:linear-gradient(90deg,rgba(var(--mark),.32),r
 .term-order-score{text-align:center;font:800 32px/1.4 system-ui,sans-serif;color:#ffd98a;}
 /* Bottom card buttons: the icon is pinned to the circle's centre, so it cannot drift on iOS. */
 .flashcard-info-button svg{position:absolute;left:50%;top:50%;width:20px;height:20px;transform:translate(-50%,-50%);}
+/* Battle: one-line event bar — what the event does and the seconds left; a personal line only when there is one. */
+.word-duel-screen.is-playing .duel-event-banner{align-items:center;gap:4px 10px;padding:8px 12px 10px;}
+.duel-event-banner b{font:800 15px/1.35 system-ui,sans-serif;white-space:normal;overflow:visible;color:#fff6e4;}
+.duel-event-banner[data-phase=preview] b{color:#c9d2e0;}
+.duel-event-banner em{justify-self:end;padding:2px 9px;border-radius:999px;background:var(--tone,#ffdfa6);color:#0c1525;font-size:13px;}
+.duel-event-banner[data-phase=preview] em{background:transparent;color:var(--tone,#ffdfa6);border:1px dashed var(--tone,#ffdfa6);}
+.duel-event-banner span:empty,.duel-event-banner small{display:none;}
+/* The correct answer card hides what is behind it, and wide buttons do not shrink when chosen. */
+.word-duel-screen.is-playing .duel-correction{background:#123329;}
+.word-duel-screen .duel-correction .duel-speak{width:30px;height:30px;flex-shrink:0;}
+.word-duel-screen .duel-options button{margin:0;}
+.word-duel-screen .duel-options :is(.duel-none,.duel-pass).is-selected{transform:none;}
+/* Solo result: a single card; the play-time controls are hidden. */
+.word-duel-screen.is-solo-result :is(.duel-clock-row,.duel-scoreboard,.duel-time-track,.duel-combo,.duel-event-banner,.duel-announce,.duel-status){display:none!important;}
+.word-duel-screen.is-solo-result .duel-solo-result{margin:8dvh auto 0;width:min(100%,420px);box-sizing:border-box;padding:22px 18px;border:1px solid #ffd98a55;border-radius:22px;background:#0f1a2ce6;}
+.duel-solo-result small{font-size:14px!important;letter-spacing:4px!important;}
+.duel-solo-result strong{margin:6px 0 14px!important;font-size:60px!important;line-height:1.1;}
+.duel-solo-result dl{display:grid;gap:8px;margin:0 0 18px;}
+.duel-solo-result dl div{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border-radius:12px;background:#ffffff0d;}
+.duel-solo-result dt{color:#c3cbda;font:700 13px system-ui,sans-serif;}.duel-solo-result dd{margin:0;color:#fff;font:800 14px system-ui,sans-serif;font-variant-numeric:tabular-nums;}
+.duel-solo-actions{display:grid;gap:10px;}.word-duel-screen .duel-solo-actions button{width:100%;margin:0;padding:14px;font-size:15px;}
+.word-duel-screen .duel-solo-actions .duel-again{background:#1b6355;border-color:#82f0c7;}

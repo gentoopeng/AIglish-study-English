@@ -26,7 +26,7 @@
       )
       .join(
         "",
-      )}</div><div class="battle-rule-grid"><label>継続する秒数<input type="number" data-event-seconds aria-label="イベント継続秒数" min="3" max="15" value="8"></label><label>イベント点<input type="number" data-event-points aria-label="イベント加減点" min="0" max="10000" value="100"></label></div><p class="battle-config-hint">15秒ごとに1種類。3秒前に予告。順位は開始時に固定。</p></section>`;
+      )}</div><div class="battle-rule-grid"><label>イベントの間隔<select data-event-every aria-label="イベントの間隔">${m.eventIntervals.map((n) => `<option value="${n}"${n === 30 ? " selected" : ""}>${n}秒ごと</option>`).join("")}</select></label><label>継続する秒数<input type="number" data-event-seconds aria-label="イベント継続秒数" min="3" max="15" value="8"></label><label>イベント点<input type="number" data-event-points aria-label="イベント加減点" min="0" max="10000" value="100"></label></div><p class="battle-config-hint">決めた間隔ごとに1種類。3秒前に予告。順位は開始時に固定。</p></section>`;
   }
   function mount() {
     const host = document.getElementById("view-battle");
@@ -230,7 +230,7 @@ ${eventHtml()}
         .classList.toggle("is-disabled", !toggle.checked);
       screen
         .querySelectorAll(
-          "[data-event-type],[data-event-seconds],[data-event-points]",
+          "[data-event-type],[data-event-every],[data-event-seconds],[data-event-points]",
         )
         .forEach((input) => (input.disabled = !toggle.checked));
     };
@@ -293,6 +293,7 @@ ${eventHtml()}
             screen.querySelector('[data-event-type][value="' + type + '"]')
               .checked,
         ),
+        eventEvery: val("[data-event-every]"),
         eventSeconds: val("[data-event-seconds]"),
         eventPoints: val("[data-event-points]"),
       },
@@ -342,6 +343,7 @@ ${eventHtml()}
     set("[data-points]", rules.points);
     set("[data-combo]", rules.combo);
     set("[data-answer-bonus]", rules.answerBonus);
+    set("[data-event-every]", rules.eventEvery ?? 15);
     set("[data-event-seconds]", rules.eventSeconds);
     set("[data-event-points]", rules.eventPoints);
     const toggle = screen.querySelector("[data-events]");

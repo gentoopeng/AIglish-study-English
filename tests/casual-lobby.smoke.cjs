@@ -107,6 +107,8 @@ const { chromium, webkit } = require("playwright"),
     assert.equal(defaults.rules.points, 100);
     assert.equal(defaults.rules.combo, 1.1);
     assert.equal(defaults.rules.events, true);
+    // New rooms place an event every 30 seconds.
+    assert.equal(defaults.rules.eventEvery, 30);
     assert.deepEqual(
       defaults.rules.eventTypes,
       await page.evaluate(() => WordDuelModel.recommendedEvents),
@@ -293,6 +295,11 @@ const { chromium, webkit } = require("playwright"),
       await page.locator(".duel-solo-result strong").textContent(),
       points - penalty + 10 + "点",
     );
+    // The result is one card: play-time controls are hidden, so nothing overlaps.
+    assert.equal(await page.locator(".duel-clock-row").isVisible(), false);
+    assert.equal(await page.locator(".duel-scoreboard").isVisible(), false);
+    assert.match(await page.locator(".duel-solo-result").textContent(), /正解\s*\d+ \/ \d+問/);
+    assert.equal(await page.locator(".duel-solo-result .duel-again").isVisible(), true);
     await page.getByRole("button", { name: "閉じる", exact: true }).click();
     assert.deepEqual(errors, []);
     console.log(
