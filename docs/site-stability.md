@@ -480,3 +480,7 @@ Books in 用語・年号モード have a 「年代並べ替え」 entry in their
 It is practice only and writes no understanding record. Events whose year question was answered × (or △) come up more often.
 
 **Validation:** `tests/term-order.test.cjs` covers events, rounds, checking and weighting. `tests/term-order.smoke.cjs` checks the menu entry for term-mode books only, tapping and taking back, judging, and ten rounds with a score.
+
+## Follow-up: flashcard corner buttons (10.21.33)
+
+On iOS, the icons of the hands-free and speaker buttons sat near the top of their circles. The icons in the bottom card buttons are now positioned absolutely at the circle's centre, so they no longer depend on the button's grid centring.
