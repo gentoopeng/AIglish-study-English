@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),m=require('../word-duel-model.js');
 const words=m.pool(Array.from({length:20},(_,i)=>({word:'word'+i,meaning:'意味'+i})));
 test('ten options are deterministic, unique and sometimes omit the answer',()=>{let absent=0;for(let i=0;i<100;i++){const q=m.question(words,123,i);assert.deepEqual(q,m.question(words,123,i));assert.equal(q.options.length,10);assert.equal(new Set(q.options).size,10);if(q.correct===9)absent++;}assert.ok(absent>0&&absent<100);});
-test('combo is additive 10 percent and resets after a minus-50 miss',()=>{const right=i=>m.question(words,1,i).correct;const log=[{choice:right(0),at:0},{choice:right(1),at:100},{choice:right(2),at:200},{choice:(right(3)+1)%10,at:300},{choice:right(4),at:3400}];assert.deepEqual(m.score(words,1,log),{total:380,combo:1});assert.throws(()=>m.score(words,1,[{choice:0,at:60000}]));assert.throws(()=>m.score(words,1,[{choice:10,at:0}]));});
+test('combo is additive 10 percent and resets after a minus-50 miss',()=>{const right=i=>m.question(words,1,i).correct;const log=[{choice:right(0),at:0},{choice:right(1),at:100},{choice:right(2),at:200},{choice:(right(3)+1)%10,at:300},{choice:right(4),at:3400}];assert.deepEqual(m.score(words,1,log),{total:380,combo:1});assert.throws(()=>m.score(words,1,[{choice:0,at:60000}]));assert.throws(()=>m.score(words,1,[{choice:11,at:0}]));});
 test('2, 3 and 4 players receive score-based places without rating deltas',()=>{for(const count of [2,3,4]){const players={};for(let i=0;i<count;i++)players['p'+i]={answers:Array.from({length:count-i},(_,j)=>({choice:m.question(words,1,j).correct,at:j*100})),abandoned:false};const result=m.placements({players,pool:words,seed:1,duration:60000});assert.equal(result.some(entry=>Object.hasOwn(entry,"delta")),false);assert.deepEqual(result.map(entry=>entry.place),Array.from({length:count},(_,i)=>i+1));}});
 test('ties share a place and abandonment always ranks below active players',()=>{const room={pool:words,seed:1,duration:60000,players:{a:{answers:[]},b:{answers:[]},c:{answers:[{choice:(m.question(words,1,0).correct+1)%10,at:0}]}}};assert.deepEqual(m.placements(room).map(entry=>entry.place),[1,1,3]);room.players.a.abandoned=true;assert.equal(m.placements(room).at(-1).id,'a');for(const player of Object.values(room.players))player.abandoned=true;assert.equal(m.placements(room),null);});
 test('all selectable durations bound answers at the chosen finish time',()=>{for(const limit of m.durations){assert.doesNotThrow(()=>m.score(words,1,[{choice:0,at:limit-1}],limit));assert.throws(()=>m.score(words,1,[{choice:0,at:limit}],limit));}assert.throws(()=>m.score(words,1,[],45001));assert.equal(m.rating,undefined);});
@@ -26,7 +26,7 @@ test('retired ranked rooms are rejected and casual rooms retain custom rules',()
 
 test('casual rules configure points, additive combo increments, bonus and five-second duration steps',()=>{
  const rules={...m.defaultRules,points:200,combo:1.25,answerBonus:7},answers=[0,1].map(i=>({at:i*200,choice:m.question(words,44,i).correct}));
- assert.deepEqual(m.finalScore(words,44,answers,45000,100,rules),{base:450,bonus:14,answered:2,total:464});
+ assert.deepEqual(m.finalScore(words,44,answers,45000,100,rules),{base:650,bonus:14,answered:2,total:664});
  for(const time of [15000,45000,95000,600000])assert.equal(m.validDuration(time),true);
  for(const time of [0,10000,16000,605000,NaN])assert.equal(m.validDuration(time),false);
  assert.equal(m.validRules({...rules,combo:Infinity}),false);assert.equal(m.validRules({...rules,events:true,eventTypes:[]}),false);
@@ -35,7 +35,7 @@ test('all six events replay deterministically, including effects on every oppone
  for(const type of m.eventTypes.slice(0,6)){const rules={...m.defaultRules,events:true,eventTypes:[type],eventSeconds:8,eventPoints:80},seed=7,right=i=>m.question(words,seed,i).correct;
  const miss=['reset','gift'].includes(type),room={pool:words,seed,duration:60000,missPenalty:100,rules,players:{a:{answers:[{choice:right(0),at:1000},{choice:miss?(right(1)+1)%10:right(1),at:16000}]},b:{answers:[]},c:{answers:[]}}};
  const scores=m.roomScores(room);assert.deepEqual(scores,m.roomScores(structuredClone(room)));
- assert.equal(scores.a.total,{double:320,triple:430,half:155,reset:0,attack:210,gift:0}[type]);
+ assert.equal(scores.a.total,{double:420,triple:530,half:255,reset:0,attack:310,gift:100}[type]);
  assert.equal(scores.b.total,type==='attack'?-80:type==='gift'?80:0);assert.equal(scores.b.total,scores.c.total);
  assert.equal(m.eventAt(seed,14999,rules),null);assert.equal(m.eventAt(seed,15000,rules).type,type);assert.equal(m.eventAt(seed,23000,rules),null);
  assert.equal(m.roomScores(room,true).a.total,scores.a.total+20);
@@ -55,3 +55,25 @@ test('version eight rooms carry bounded books and rules and reject invalid cross
  assert.equal(m.validRoom(room),true);assert.equal(m.validRoom({...room,rules:{...room.rules,points:-1}}),false);assert.equal(m.validRoom({...room,books:['one']}),false);assert.equal(m.validRoom({...room,matchType:'ranked'}),false);
 });
 test('multi-book pools avoid several correct meanings of the same prompt in the choices',()=>{const candidates=[{word:'follow',meaning:'続く'},{word:'Follow',meaning:'従う'},...Array.from({length:12},(_,i)=>({word:'w'+i,meaning:'m'+i}))];for(const selected of [m.pool(candidates),m.selectPool(candidates,1),m.selectPool(candidates,1,true)])assert.equal(selected.filter(w=>w.prompt.toLowerCase()==='follow').length,1);});
+test('seeing that the meaning is missing from the choices scores double, before event multipliers',()=>{
+ const seed=7,right=i=>m.question(words,seed,i).correct;assert.equal(right(0),9);assert.notEqual(right(1),9);
+ assert.equal(m.score(words,seed,[{choice:9,at:0}]).total,200);
+ assert.equal(m.score(words,seed,[{choice:(right(0)+1)%10,at:0}]).total,-50);
+ assert.equal(m.score(words,seed,[{choice:9,at:0},{choice:right(1),at:100}]).total,200+110);
+ const rules={...m.defaultRules,events:true,eventTypes:['double'],eventSeconds:8,eventPoints:80};
+ assert.equal(m.score(words,seed,[{choice:9,at:15000}],60000,50,rules).total,400);
+});
+test('「わからない」 has no penalty, breaks the combo, keeps the wait, earns no answer bonus and needs a version 10 room',()=>{
+ const seed=1,right=i=>m.question(words,seed,i).correct,rules={...m.defaultRules};
+ const log=[{choice:right(0),at:0},{choice:right(1),at:100},{choice:m.pass,at:200},{choice:right(3),at:3200}];
+ // 100 + 110, pass (no penalty, combo back to 0), then 100 again (doubled if it was a none-of-the-above question).
+ const third=right(3)===9?200:100;
+ assert.deepEqual(m.score(words,seed,log,60000,500),{total:210+third,combo:1});
+ assert.throws(()=>m.score(words,seed,[{choice:m.pass,at:0},{choice:right(1),at:2999}]));
+ assert.deepEqual(m.finalScore(words,seed,log,60000,500,rules),{base:210+third,bonus:30,answered:3,total:240+third});
+ // No miss effects during events, even ones that punish mistakes.
+ for(const type of ['reset','gift','collective','pressure','careful']){const room={version:10,pool:words,seed,duration:60000,missPenalty:100,rules:{...m.defaultRules,events:true,eventTypes:[type]},players:{a:{answers:[{choice:right(0),at:1000},{choice:m.pass,at:16000}]},b:{answers:[]}}};const s=m.roomScores(room);assert.equal(s.a.total,right(0)===9?200:100,type);assert.equal(s.a.combo,0);assert.equal(s.b.total,0,type);}
+ // Older rooms are played by older apps that do not know the choice.
+ const room={version:9,pool:words,seed,duration:60000,missPenalty:50,players:{a:{answers:[{choice:m.pass,at:0}]}}};
+ assert.throws(()=>m.roomScores(room));assert.doesNotThrow(()=>m.roomScores({...room,version:10}));
+});

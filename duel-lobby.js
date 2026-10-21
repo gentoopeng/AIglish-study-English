@@ -308,6 +308,40 @@ ${eventHtml()}
       rules,
     };
   }
+  // Fill the form from a finished room so a rematch can start from its rules.
+  function apply(screen, room) {
+    const set = (key, value) => {
+      const node = screen.querySelector(key);
+      if (!node || value === undefined || value === null) return;
+      node.value = String(value);
+      node.dispatchEvent(new Event("change"));
+    };
+    const rules = room.rules || m.defaultRules;
+    set("[data-time-minutes]", Math.floor(room.duration / 60000));
+    set("[data-time-seconds]", (room.duration % 60000) / 1000);
+    set("[data-duel-capacity]", room.capacity);
+    set("[data-duel-penalty]", room.missPenalty);
+    set("[data-points]", rules.points);
+    set("[data-combo]", rules.combo);
+    set("[data-answer-bonus]", rules.answerBonus);
+    set("[data-event-seconds]", rules.eventSeconds);
+    set("[data-event-points]", rules.eventPoints);
+    const toggle = screen.querySelector("[data-events]");
+    toggle.checked = !!rules.events;
+    screen
+      .querySelectorAll("[data-event-type]")
+      .forEach((input) => (input.checked = rules.eventTypes.includes(input.value)));
+    toggle.onchange?.();
+    screen.querySelector(".battle-event-list").dispatchEvent(new Event("change"));
+    const books = room.books || [room.book],
+      picker = screen.querySelector(".battle-book-picker");
+    if (books.some((id) => picker.querySelector('input[value="' + CSS.escape(id) + '"]'))) {
+      picker
+        .querySelectorAll("input")
+        .forEach((input) => (input.checked = books.includes(input.value)));
+      picker.onchange?.();
+    }
+  }
   async function words(screen, seed) {
     const ids = [
       ...screen.querySelectorAll(".battle-book-picker input:checked"),
@@ -380,6 +414,15 @@ ${eventHtml()}
       throw Error("条件に合う異なる意味の単語を10個以上選んでください。");
     return { pool, book: ids[0], books: ids };
   }
-  window.BattleLobby = { html, init, read, words, labels, entryHtml, joinHtml };
+  window.BattleLobby = {
+    html,
+    init,
+    read,
+    apply,
+    words,
+    labels,
+    entryHtml,
+    joinHtml,
+  };
   window.onAppLoaded(mount);
 })();
