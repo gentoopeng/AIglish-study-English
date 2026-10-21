@@ -15,7 +15,8 @@ const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict
   const heap=async()=>session?Object.fromEntries((await session.send('Performance.getMetrics')).metrics.map(m=>[m.name,m.value])).JSHeapUsedSize:0;
   const beforeHeap=await heap();let maximumSources=0;
   for(let round=0;round<12;round++){
-   await page.locator('#headerBackgroundButton').click();assert.equal(await page.locator('.background-preview').count(),17);assert.equal(await page.locator('.background-preview span').count(),0);
+   await page.locator('#headerBackgroundButton').click();// 12 test photos plus the 10 bundled backgrounds (assets/background-*.webp).
+   assert.equal(await page.locator('.background-preview').count(),22);assert.equal(await page.locator('.background-preview span').count(),0);
    for(const index of [0,6,11]){
     const button=page.locator('[data-background="budget-'+index+'"]');await button.scrollIntoViewIfNeeded();await button.click();await page.locator('#backgroundPickerStatus').filter({hasText:'背景を保存しました'}).waitFor();await page.waitForTimeout(40);
     const sources=await page.locator('.background-preview img[src]').count();maximumSources=Math.max(maximumSources,sources);assert.ok(sources<=3);assert.ok(await page.evaluate(()=>__livePhotoUrls.size)<=4);
@@ -26,7 +27,9 @@ const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict
    await page.evaluate(()=>{for(const tab of ['vocab','reader','study','titles','vocab'])switchTab(tab);});
   }
   if(session)await session.send('HeapProfiler.collectGarbage');const growth=await heap()-beforeHeap;assert.ok(growth<8*1024*1024,'unbounded retained heap: '+growth);
-  const beforeHide=await page.evaluate(()=>localStorage.getItem('aiglish_app_background_'+myId));await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});assert.equal(await page.evaluate(()=>__livePhotoUrls.size),0);assert.equal(await page.evaluate(()=>localStorage.getItem('aiglish_app_background_'+myId)),beforeHide);await page.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));});assert.equal(await page.evaluate(()=>__livePhotoUrls.size),1);
+  const beforeHide=await page.evaluate(()=>localStorage.getItem('aiglish_app_background_'+myId));await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});assert.equal(await page.evaluate(()=>__livePhotoUrls.size),0);assert.equal(await page.evaluate(()=>localStorage.getItem('aiglish_app_background_'+myId)),beforeHide);await page.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));});
+  // The screen-sized copy comes back from the device cache asynchronously.
+  await page.waitForFunction(()=>__livePhotoUrls.size===1,null,{timeout:5000});assert.equal(await page.evaluate(()=>__livePhotoUrls.size),1);
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(getVocabProgressStorageKey('retained-background-test')))[1].status),'ok');// Recovery remains across a clean reload until an explicit photo choice, without erasing saved artwork.
   await page.addInitScript(()=>{if(localStorage.getItem('__force_photo_crash_once')){localStorage.setItem('__aiglish_render_guard',JSON.stringify({active:true,at:Date.now()}));localStorage.removeItem('__force_photo_crash_once');}});
   await page.evaluate(()=>localStorage.setItem('__force_photo_crash_once','1'));await page.reload();await page.waitForFunction(()=>window.__learningBootReady===true);assert.equal(await page.locator('html').evaluate(el=>el.classList.contains('pwa-recovery-rendering')),true);assert.equal(await page.evaluate(()=>__livePhotoUrls.size),0);
