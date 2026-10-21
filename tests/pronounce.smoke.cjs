@@ -33,7 +33,8 @@ assert.deepEqual((await spoken()).at(-1),{text:current,lang:'en-GB',rate:1.1,voi
 const before=(await spoken()).length;
 await page.evaluate(()=>{flashcardDirectionMode='ja2en';window.renderFlashcardDeck();});
 assert.equal((await spoken()).length,before);
-await page.locator('#activeFlashcard').click();await page.waitForFunction(()=>document.getElementById('activeFlashcard').classList.contains('flipped'));
+// The card floats continuously, so skip Playwright's wait for it to stop moving.
+await page.locator('#activeFlashcard').click({force:true});await page.waitForFunction(()=>document.getElementById('activeFlashcard').classList.contains('flipped'));
 await page.waitForFunction(n=>window.__spoken.length===n+1,before);
 assert.equal((await spoken()).at(-1).text,current);
 // Word list: each row has a speaker; apostrophes survive the HTML escaping.
