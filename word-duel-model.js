@@ -3,6 +3,21 @@
   const duration = 60000,
     durations = [30000, 60000, 120000, 180000],
     maxAnswers = 1200;
+  // 用語・年号モード questions carry a kind: "whole" (answer the headword), "blank" (answer the
+  // 「」 term) or "year" (type the year). Answers only need to be distinct within their kind.
+  const kinds = ["whole", "blank", "year"];
+  function entryOf(word) {
+    const kind = kinds.includes(word.kind) ? word.kind : "",
+      meaning = String(word.meanings?.[0]?.text || word.meaning || "")
+        .trim()
+        .slice(0, 240),
+      prompt = String(word.word || word.en || word.prompt || "")
+        .trim()
+        .slice(0, kind ? 400 : 160);
+    // Different events can share a year, so year questions are told apart by their prompt.
+    const key = kind === "year" ? "year\n" + prompt : kind + "\n" + meaning;
+    return { kind, meaning, prompt, key };
+  }
   function pool(words, seed = 0) {
     const seen = new Set(),
       prompts = new Set(),
@@ -10,25 +25,21 @@
       random = rng(seed);
     let count = 0;
     for (const word of words || []) {
-      const meaning = String(word.meanings?.[0]?.text || word.meaning || "")
-          .trim()
-          .slice(0, 240),
-        prompt = String(word.word || word.en || "")
-          .trim()
-          .slice(0, 160);
+      const { kind, meaning, prompt, key } = entryOf(word);
       if (
         !meaning ||
         !prompt ||
-        seen.has(meaning) ||
+        seen.has(key) ||
         prompts.has(prompt.toLowerCase())
       )
         continue;
-      seen.add(meaning);
+      seen.add(key);
       prompts.add(prompt.toLowerCase());
       count++;
       const item = {
         prompt,
         meaning,
+        ...(kind ? { kind } : {}),
         ...(word.duelRef ? { ref: word.duelRef } : {}),
       };
       if (result.length < 120) result.push(item);
@@ -98,23 +109,58 @@
     const random = rng((seed + Math.imul(index + 1, 2654435761)) >>> 0),
       cycle = Math.floor(index / words.length),
       { deck, choices } = layout(words, seed, cycle),
-      word = deck[index % words.length],
-      position = answerPosition(seed, index),
+      word = deck[index % words.length];
+    // A year is typed, so there are no choices to make.
+    if (word.kind === "year")
+      return {
+        prompt: word.prompt,
+        meaning: word.meaning,
+        kind: "year",
+        ...(word.ref ? { ref: word.ref } : {}),
+        typed: true,
+        options: [],
+        correct: null,
+      };
+    const position = answerPosition(seed, index),
       absent = position === 9,
-      others = [];
-    for (let i = 0; others.length < 9; i++) {
-      const item = choices[(index * 9 + i) % choices.length];
-      if (item.meaning !== word.meaning) others.push(item.meaning);
-    }
+      others = [],
+      taken = new Set([word.meaning]),
+      // Distractors of the same kind first (headwords for headwords, terms for terms), then any.
+      passes = word.kind
+        ? [
+            (item) => item.kind === word.kind,
+            (item) => item.kind !== "year",
+            () => true,
+          ]
+        : [() => true];
+    for (const fits of passes)
+      for (let i = 0; i < choices.length && others.length < 9; i++) {
+        const item = choices[(index * 9 + i) % choices.length];
+        if (fits(item) && !taken.has(item.meaning)) {
+          taken.add(item.meaning);
+          others.push(item.meaning);
+        }
+      }
+    if (others.length < 9)
+      throw Error("異なる意味を持つ単語が10個以上必要です。");
     const options = shuffle(absent ? others : others.slice(0, 8), random);
     if (!absent) options.splice(position, 0, word.meaning);
     return {
       prompt: word.prompt,
       meaning: word.meaning,
+      ...(word.kind ? { kind: word.kind } : {}),
       ...(word.ref ? { ref: word.ref } : {}),
       options: [...options, "選択肢の中にはない"],
       correct: absent ? 9 : options.indexOf(word.meaning),
     };
+  }
+  // Year answers: digits only; full-width digits are accepted and leading zeros ignored.
+  function yearOf(text) {
+    return String(text ?? "")
+      .replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0))
+      .replace(/[^0-9]/g, "")
+      .replace(/^0+(?=\d)/, "")
+      .slice(0, 4);
   }
   const correctness = new WeakMap();
   function correctChoice(words, seed, index) {
@@ -134,6 +180,18 @@
     return choices.get(index);
   }
   const pass = 10;
+  // Whether an answer record is right: a choice for choice questions, typed digits for years.
+  function isRight(words, seed, index, answer) {
+    if (answer?.choice === pass) return false;
+    const correct = correctChoice(words, seed, index);
+    if (correct === null)
+      return (
+        typeof answer?.typed === "string" &&
+        yearOf(answer.typed) !== "" &&
+        yearOf(answer.typed) === yearOf(question(words, seed, index).meaning)
+      );
+    return correct === answer?.choice;
+  }
   const eventCatalog = [
     {
       id: "double",
@@ -443,6 +501,19 @@
     const next = eventAt(seed, start, rules);
     return next ? { ...next, start } : null;
   }
+  // A year question takes typed digits (or 「わからない」); every other question takes a choice.
+  function validAnswer(room, index, answer, lastChoice) {
+    if (correctChoice(room.pool, room.seed, index) === null)
+      return answer.choice === undefined
+        ? typeof answer.typed === "string" && /^[0-9]{1,4}$/.test(answer.typed)
+        : answer.choice === pass && lastChoice === pass;
+    return (
+      answer.typed === undefined &&
+      Number.isInteger(answer.choice) &&
+      answer.choice >= 0 &&
+      answer.choice <= lastChoice
+    );
+  }
   function replay(room, elapsed, cashOutBank = false) {
     room = { duration, missPenalty: 50, ...room };
     const rules = room.rules || defaultRules;
@@ -477,9 +548,7 @@
           answer.at >= room.duration ||
           answer.at < last ||
           answer.at < unlockAt ||
-          !Number.isInteger(answer.choice) ||
-          answer.choice < 0 ||
-          answer.choice > lastChoice ||
+          !validAnswer(room, index, answer, lastChoice) ||
           (answer.shownAt !== undefined &&
             (!Number.isFinite(answer.shownAt) ||
               answer.shownAt < Math.max(0, last) ||
@@ -490,7 +559,7 @@
           answer.shownAt ?? Math.max(0, last + (previousRight ? 180 : 3000));
         last = answer.at;
         const correct = correctChoice(room.pool, room.seed, index),
-          right = correct === answer.choice,
+          right = isRight(room.pool, room.seed, index, answer),
           skipped = answer.choice === pass;
         if (!right) unlockAt = answer.at + 3000;
         previousRight = right;
@@ -766,20 +835,15 @@
       ranked = [];
     return {
       add(word) {
-        const meaning = String(word.meanings?.[0]?.text || word.meaning || "")
-            .trim()
-            .slice(0, 240),
-          prompt = String(word.word || word.en || "")
-            .trim()
-            .slice(0, 160);
+        const { kind, meaning, prompt, key: id } = entryOf(word);
         if (
           !meaning ||
           !prompt ||
-          seen.has(meaning) ||
+          seen.has(id) ||
           prompts.has(prompt.toLowerCase())
         )
           return;
-        seen.add(meaning);
+        seen.add(id);
         prompts.add(prompt.toLowerCase());
         const h = word.duelHistory || [],
           weight = weak
@@ -802,6 +866,7 @@
           word: {
             word: prompt,
             meaning,
+            ...(kind ? { kind } : {}),
             ...(word.duelRef ? { duelRef: word.duelRef } : {}),
           },
         });
@@ -848,11 +913,15 @@
     }
     return entries;
   }
+  // Rooms with term questions need version 11; others stay at 10 so older apps can still join.
+  function versionFor(pool) {
+    return (pool || []).some((word) => word.kind) ? 11 : 10;
+  }
   function validRoom(room) {
     try {
       if (
         !(
-          [7, 8, 9, 10].includes(room?.version) &&
+          [7, 8, 9, 10, 11].includes(room?.version) &&
           (room.version < 8 ||
             (room.matchType === "casual" &&
               validRules(room.rules) &&
@@ -887,7 +956,14 @@
             (word) =>
               typeof word.prompt === "string" &&
               typeof word.meaning === "string" &&
-              word.prompt.length <= 160 &&
+              // Term questions exist from version 11 on; a year is 1–4 digits.
+              (word.kind === undefined ||
+                (room.version >= 11 && kinds.includes(word.kind))) &&
+              (word.kind !== "year" || /^[0-9]{1,4}$/.test(word.meaning)) &&
+              word.prompt.length <= (word.kind ? 400 : 160) &&
+              (word.ref?.term === undefined ||
+                (typeof word.ref.term === "string" &&
+                  word.ref.term.length <= 200)) &&
               word.meaning.length <= 240 &&
               word.ref &&
               typeof word.ref.num === "string" &&
@@ -901,8 +977,9 @@
               word.ref.count > 0 &&
               word.ref.count <= 100,
           ) &&
-          new Set(room.pool.map((word) => word.meaning)).size ===
+          new Set(room.pool.map((word) => entryOf(word).key)).size ===
             room.pool.length &&
+          new Set(room.pool.map((word) => word.meaning)).size >= 10 &&
           room.players &&
           typeof room.host === "string" &&
           room.players[room.host] &&
@@ -945,6 +1022,9 @@
     validDuration,
     eventAt,
     correctChoice,
+    isRight,
+    yearOf,
+    versionFor,
     pass,
     roomScores,
     poolSampler,

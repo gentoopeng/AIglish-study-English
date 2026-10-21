@@ -316,7 +316,7 @@
             collision = await tx.get(roomRef);
           if (collision.exists()) throw Error("もう一度参加してください。");
           const room = {
-            version: 10,
+            version: m.versionFor(pool),
             ...settings,
             book,
             books,
@@ -375,7 +375,7 @@
         if (dialog !== screen || uid() !== account) return;
         let code;
         const room = {
-          version: 10,
+          version: m.versionFor(pool),
           ...settings,
           book,
           books,
@@ -508,7 +508,7 @@
     const account = uid(),
       screen = dialog,
       next = {
-        version: 10,
+        version: m.versionFor(room.pool),
         matchType: room.matchType,
         duration: room.duration,
         capacity: Math.max(2, Math.min(room.capacity, present(room))),
@@ -815,7 +815,7 @@
     if (entry.flags.length > answers.length) entry.flags = [];
     for (let i = entry.flags.length; i < answers.length; i++)
       entry.flags.push(
-        m.correctChoice(target.pool, target.seed, i) === answers[i].choice,
+        m.isRight(target.pool, target.seed, i, answers[i]),
       );
     return entry.flags;
   }
@@ -1118,11 +1118,49 @@
     session.answering = false;
     const q = m.question(session.pool, session.seed, session.answers.length),
       host = dialog.querySelector(".duel-options");
-    dialog.querySelector(".duel-prompt").textContent = q.prompt;
+    const promptNode = dialog.querySelector(".duel-prompt");
+    promptNode.textContent = q.prompt;
+    promptNode.classList.toggle("is-term", !!q.kind);
     dialog.querySelector(".duel-question-label").textContent =
       "第" + (session.answers.length + 1) + "問";
     dialog.querySelector(".duel-correction").hidden = true;
     host.replaceChildren();
+    host.classList.toggle("is-typed", !!q.typed);
+    if (q.typed) {
+      // A year is typed: digits only, checked when 答える is pressed.
+      const form = document.createElement("form"),
+        input = document.createElement("input"),
+        submit = document.createElement("button"),
+        skip = document.createElement("button");
+      form.className = "duel-typed";
+      input.type = "text";
+      input.inputMode = "numeric";
+      input.pattern = "[0-9]*";
+      input.maxLength = 4;
+      input.autocomplete = "off";
+      input.placeholder = "年号（数字）";
+      input.setAttribute("aria-label", "年号を入力");
+      input.oninput = () => (input.value = m.yearOf(input.value));
+      submit.type = "submit";
+      submit.textContent = "答える";
+      skip.type = "button";
+      skip.textContent = "わからない";
+      skip.className = "duel-pass";
+      skip.onclick = () => answer(m.pass);
+      form.onsubmit = (event) => {
+        event.preventDefault();
+        const typed = m.yearOf(input.value);
+        if (!typed) {
+          status("年号を数字で入力してください。");
+          return;
+        }
+        answer(null, typed);
+      };
+      form.append(input, submit);
+      host.append(form, skip);
+      input.focus({ preventScroll: true });
+      return;
+    }
     q.options.forEach((text, index) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -1141,7 +1179,7 @@
       host.append(skip);
     }
   }
-  function answer(choice) {
+  function answer(choice, typed) {
     if (
       !session ||
       session.finished ||
@@ -1155,15 +1193,17 @@
       return;
     const target = session,
       q = m.question(target.pool, target.seed, target.answers.length),
-      right = choice === q.correct,
+      record = {
+        ...(typed === undefined ? { choice } : { typed }),
+        at: Date.now() - target.start,
+        shownAt: target.questionShownAt,
+      },
+      right = m.isRight(target.pool, target.seed, target.answers.length, record),
       skipped = choice === m.pass;
+    if (!!q.typed !== (typed !== undefined) && !skipped) return;
     const previous = liveScores(target)[target.id],
       before = previous.total;
-    target.answers.push({
-      choice,
-      at: Date.now() - target.start,
-      shownAt: target.questionShownAt,
-    });
+    target.answers.push(record);
     revision++;
     const scores = liveScores(target),
       value = scores[target.id],
@@ -1248,12 +1288,22 @@
       );
       window.AppSounds?.play("confirm");
     }
-    const buttons = dialog.querySelectorAll(".duel-options button");
+    const buttons = dialog.querySelectorAll(".duel-options button"),
+      typedInput = dialog.querySelector(".duel-typed input"),
+      chosen = q.typed
+        ? skipped
+          ? dialog.querySelector(".duel-options .duel-pass")
+          : dialog.querySelector(".duel-typed button")
+        : buttons[choice];
     buttons.forEach((button) => (button.disabled = true));
-    buttons[choice].classList.add("is-selected");
+    if (typedInput) {
+      typedInput.disabled = true;
+      typedInput.classList.add(right ? "is-correct" : skipped ? "is-skipped" : "is-wrong");
+    }
+    chosen.classList.add("is-selected");
     if (right)
       nudge(
-        buttons[choice],
+        chosen,
         [
           { transform: "scale(.96)" },
           { transform: "scale(1.06)" },
@@ -1261,7 +1311,7 @@
         ],
         180,
       );
-    buttons[choice].setAttribute("aria-pressed", "true");
+    chosen.setAttribute("aria-pressed", "true");
     window.StartupMonitor?.event?.("duel:answer");
     try {
       // A battle only lowers a ○; 「わからない」 is the player's own "I don't know" and records ×.
@@ -1272,6 +1322,14 @@
         target.id,
         { onlyDowngrade: !skipped },
       );
+      if (q.ref.term)
+        window.TermProgress?.battle(
+          q.ref.book || target.book,
+          q.ref.num,
+          q.ref.term,
+          right,
+          skipped,
+        );
       if (right)
         window.StudyPoints?.reward(
           "quiz",
@@ -1279,7 +1337,7 @@
           q.ref.num,
           target.id,
           {
-            word: q.prompt || q.word || "",
+            word: (q.kind ? q.prompt.slice(0, 40) : q.prompt) || q.word || "",
             bookName: (
               textbooksPool.find((b) => b.id === (q.ref.book || target.book)) ||
               {}
@@ -1293,7 +1351,7 @@
       window.WordDuelProgress.schedule(target.id);
     if (right) {
       target.answering = true;
-      buttons[choice].classList.add("is-correct");
+      chosen.classList.add("is-correct");
       answerTimer = setTimeout(() => {
         answerTimer = null;
         if (session === target && !target.finished) question();
@@ -1301,13 +1359,16 @@
     } else {
       target.reviewing = true;
       target.penaltyUntil = Date.now() + 3000;
-      if (!skipped) buttons[choice].classList.add("is-wrong");
-      buttons[q.correct].classList.add("is-correct");
+      if (!skipped) chosen.classList.add("is-wrong");
+      if (!q.typed) buttons[q.correct].classList.add("is-correct");
       const correction = dialog.querySelector(".duel-correction");
-      correction.querySelector("strong").textContent = q.meaning;
+      correction.querySelector("strong").textContent = q.typed
+        ? q.meaning + "年"
+        : q.meaning;
       correction.querySelector(".duel-correction-say em").textContent = q.prompt;
       correction.querySelector(".duel-speak").dataset.say = q.prompt;
-      window.Pronounce?.auto(q.prompt);
+      // Term questions are long Japanese sentences; reading them out each miss would get in the way.
+      if (!q.kind) window.Pronounce?.auto(q.prompt);
       correction.hidden = false;
       const next = correction.querySelector("[data-duel-next]");
       next.disabled = true;

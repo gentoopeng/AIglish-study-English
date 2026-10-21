@@ -149,7 +149,14 @@
     const pool = typeof textbooksPool !== "undefined" ? textbooksPool : [];
     return (pool || []).some((b) => b && b.id === book && b.termMode === true);
   }
-  root.TermProgress = Object.freeze({ read, save, key, enabled });
+  // Battles only record a drop, as for whole words: a question rated ○ answered wrong becomes ×.
+  // 「わからない」 is the player's own "I don't know" and records ×.
+  function battle(book, num, questionKey, right, skipped) {
+    const previous = read(book)[String(num)]?.[questionKey]?.status;
+    if (skipped || (!right && previous === "ok")) return save(book, num, questionKey, "bad");
+    return read(book);
+  }
+  root.TermProgress = Object.freeze({ read, save, key, enabled, battle });
 
   // Flashcards: record each generated question's own result, and type the year for year questions.
   function current() {

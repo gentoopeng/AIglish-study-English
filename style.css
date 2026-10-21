@@ -2553,3 +2553,28 @@ mark.term-mark.is-rated{background:linear-gradient(90deg,rgba(var(--mark),.32),r
 .term-answer-panel p{margin:0;min-height:1.2em;font:700 13px system-ui,sans-serif;text-align:center;}.term-answer-panel[data-result=right] p{color:#86f0b5;}.term-answer-panel[data-result=wrong] p{color:#ff9a8a;}
 .library-term-mode{display:grid!important;grid-template-columns:auto 1fr;align-items:center;gap:4px 8px;margin:4px 0;font-weight:700;}.library-term-mode input{width:18px!important;height:18px;margin:0;}.library-term-mode small{grid-column:1/-1;font-weight:400;font-size:11px;color:var(--text-sub);line-height:1.5;}
 .vocab-entry-dialog.is-term-mode .vocab-entry-year{flex:0 0 70px;width:70px;text-align:center;}.vocab-entry-term-hint{margin:0 0 6px;}
+/* 用語・年号モードのバトル：長い説明文と年号の入力 */
+.word-duel-screen .duel-prompt.is-term{font:700 clamp(15px,4.2vw,20px)/1.6 system-ui,sans-serif;white-space:pre-line;text-align:left;max-height:30dvh;overflow:auto;}
+.word-duel-screen.is-playing .duel-options.is-typed{display:flex;flex-direction:column;justify-content:center;gap:10px;}
+.duel-typed{display:flex;gap:8px;}
+.duel-typed input{flex:1;min-width:0;font:800 28px/1.2 system-ui,sans-serif;text-align:center;letter-spacing:4px;padding:12px;border-radius:14px;border:2px solid #ffd98a80;background:#0d1729;color:#f5f9ff;}
+.duel-typed input.is-correct{border-color:#82f0c7;background:#1b6355;}
+.duel-typed input.is-wrong{border-color:#ff9b9b;background:#73383e;}
+.word-duel-screen .duel-options .duel-typed button{flex:0 0 auto;min-height:56px;padding:0 20px;font-size:16px;}
+.word-duel-screen .duel-options.is-typed .duel-pass{min-height:40px;}
+/* 年代並べ替え */
+.term-order-screen .review-content{display:flex;flex-direction:column;gap:12px;overflow:auto;}
+.term-order-screen h3{margin:0;font-size:18px;text-align:center;}
+.term-order-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+.term-order-item{box-sizing:border-box;position:relative;display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;padding:14px 14px 14px 56px;border-radius:16px;border:1px solid #ffffff2e;background:#142137c9;line-height:1.5;}
+.term-order-item b{font-size:15px;}.term-order-item span{font-size:14px;color:#d8e0ee;}
+.term-order-item::before{content:attr(data-place);position:absolute;left:14px;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:50%;border:2px dashed #ffffff55;display:grid;place-items:center;font:800 15px/1 system-ui,sans-serif;}
+.term-order-item[aria-pressed="true"]{border-color:#ffd98a;background:#2a2a3fd9;}
+.term-order-item[aria-pressed="true"]::before{border:2px solid #ffd98a;background:#ffd98a;color:#1a1a2a;}
+.is-judged .term-order-item{padding-left:84px;}
+.is-judged .term-order-item em{position:absolute;left:12px;top:50%;transform:translateY(-50%);font:800 15px/1 system-ui,sans-serif;font-style:normal;color:#ffd98a;}
+.is-judged .term-order-item.is-right{border-color:#82f0c7;background:#1b635580;}
+.is-judged .term-order-item.is-wrong{border-color:#ff9b9b;background:#73383e80;}
+.is-judged .term-order-item::before{content:none;}
+.term-order-verdict{font-size:22px!important;}
+.term-order-score{text-align:center;font:800 32px/1.4 system-ui,sans-serif;color:#ffd98a;}

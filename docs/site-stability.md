@@ -457,3 +457,26 @@ The year is stored as the start of the line text, so no save path changes. Per-q
 The word list shows a light gradient marker on each year and 「」 term, coloured on the same green → yellow → red scale as the card backgrounds; tapping one shows its history. The add form shows the digits-only year box only for books in this mode. Battle support follows separately.
 
 **Validation:** `tests/term-questions.test.cjs` and `tests/term-mode.smoke.cjs` (question generation, digits-only year box, typed years right and wrong, per-question results, line ratings, coloured markers).
+
+## Follow-up: 用語・年号モードのバトル (10.21.32)
+
+Books in 用語・年号モード now give their generated questions in battles:
+- **Whole description:** answer the headword. The choices are other headwords.
+- **Blank:** answer the 「」 term. The choices are other terms.
+- **Year:** typed. Digits only; full-width digits are accepted and leading zeros ignored. 「わからない」 is still available.
+
+Pool items carry a `kind`, and the answer only needs to be distinct within its kind. Year questions are told apart by their prompt, so two events in the same year are both kept. A room needs at least ten distinct answer texts, so distractors always exist; same-kind texts are used first.
+
+Rooms with term questions are version 11. Their answer records hold `typed` digits instead of a `choice` for year questions; validation refuses a choice on a year question and typed text on a choice question. Rooms without term questions stay at version 10, so older apps can still join them.
+
+Results follow the battle rule for words: only a ○ answered wrong drops to ×, and 「わからない」 records ×. This applies both to the question's own record and to the line it came from.
+
+**Validation:** `tests/term-battle.test.cjs` covers pools, same-kind choices, typed scoring and validation, and version 11. `tests/term-battle.smoke.cjs` plays a solo battle on a term-mode book.
+
+## Follow-up: 年代並べ替え (10.21.32)
+
+Books in 用語・年号モード have a 「年代並べ替え」 entry in their study menu. Each line with a year is an event. A round shows three or four events with different years, never already in order. The player taps them oldest first; tapping a numbered event again takes it back, along with every one after it. The result shows the correct order with years, marking each position right or wrong. A session is ten rounds, ending with a score.
+
+It is practice only and writes no understanding record. Events whose year question was answered × (or △) come up more often.
+
+**Validation:** `tests/term-order.test.cjs` covers events, rounds, checking and weighting. `tests/term-order.smoke.cjs` checks the menu entry for term-mode books only, tapping and taking back, judging, and ten rounds with a score.
