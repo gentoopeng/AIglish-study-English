@@ -120,14 +120,17 @@ window.onAppLoaded = function(handler) {
     // Fixed source file + registration index only; no account/input contents.
     const file=(document.currentScript?.src||'').split('/').pop().split('?')[0];
     const label='hook:'+window.__afterAppLoadHandlers.length+':'+file;
-    window.__afterAppLoadHandlers.push(function(){
+    const wrapped=function(){
         window.StartupMonitor?.event?.(label+':start');
         try {
             const result=handler.apply(this,arguments);
             if(result&&typeof result.then==='function')return Promise.resolve(result).then(function(value){window.StartupMonitor?.event?.(label+':done');return value;},function(error){window.StartupMonitor?.event?.(label+':error');throw error;});
             window.StartupMonitor?.event?.(label+':done');return result;
         } catch(error){window.StartupMonitor?.event?.(label+':error');throw error;}
-    });
+    };
+    // Keep the handler's own name so it can still be identified (diagnostics, tests).
+    try{Object.defineProperty(wrapped,'name',{value:handler.name});}catch(error){}
+    window.__afterAppLoadHandlers.push(wrapped);
 };
 window.loadLocalState = async function() {
 window.StartupMonitor?.mark?.('account-restore');

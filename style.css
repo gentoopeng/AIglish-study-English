@@ -1894,7 +1894,7 @@ will-change:auto!important;
 @media(prefers-reduced-motion:no-preference){
 html.ios-stable-rendering body .flashcard-inner-rotator{transition:transform .4s cubic-bezier(.25,1,.5,1)!important;}
 html.ios-stable-rendering body #flashcardGhost{transition:transform .8s cubic-bezier(.1,.8,.25,1),opacity .8s ease!important;}
-html.ios-stable-rendering body .flashcard-session-screen :is(#activeFlashcard,.warmup-card):not(.is-dragging):not(.is-settling){animation:bubbleFloatAnim 4s ease-in-out infinite!important;}
+html.ios-stable-rendering body .flashcard-session-screen :is(#activeFlashcard,.warmup-card):not(.is-dragging):not(.is-settling):not(.warmup-start-card){animation:bubbleFloatAnim 4s ease-in-out infinite!important;}
 html.ios-stable-rendering body .flashcard-session-screen :is(#activeFlashcard,.warmup-card).flipped:not(.is-dragging):not(.is-settling){animation-play-state:paused!important;}
 html.ios-stable-rendering body .fc-vanish-ring{animation:fcVanishRing .48s ease-out forwards!important;}
 html.ios-stable-rendering body .fc-vanish-particle{animation:fcVanishParticle .52s cubic-bezier(.16,.72,.3,1) var(--fc-burst-delay) forwards!important;}

@@ -90,16 +90,23 @@ const { chromium, webkit } = require("playwright"),
       });
       window.__collectGameSaveData = snapshot;
       const first = await __backgroundSaveAll();
-      const getCloud = () => {
-        const [path, meta] = [...docs].find(([p]) =>
-          /^users\/download-user\/saves\/[^/]+$/.test(p),
-        );
-        let raw = "";
-        for (let i = 0; i < meta.partCount; i++)
-          raw += docs.get(path + "/parts/" + meta.generation + "_p" + i).d;
-        return { path, meta, save: JSON.parse(raw), bytes: raw.length };
+      // Read the backup the way the app does (itemized v6 or older formats), without counting
+      // these test reads as the app's own.
+      const getCloud = async () => {
+        const record = window.fbGetDoc;
+        window.fbGetDoc = async (ref) => ({
+          exists: () => docs.has(ref.path),
+          data: () => docs.get(ref.path),
+        });
+        try {
+          const path = "users/download-user/saves/main",
+            save = await window.__fetchCloudSave("download-user");
+          return { path, meta: docs.get(path), save, bytes: JSON.stringify(save).length };
+        } finally {
+          window.fbGetDoc = record;
+        }
       };
-      const cloud1 = getCloud(),
+      const cloud1 = (await getCloud()),
         masterWrites = writes.filter((p) => p.includes("/parts/m_")).length;
       progress[1] = { status: "bad", history: ["ok", "bad"], updatedAt: 2000 };
       localStorage.setItem(
@@ -111,7 +118,7 @@ const { chromium, webkit } = require("playwright"),
         "2000",
       );
       const second = await __backgroundSaveAll(),
-        cloud2 = getCloud();
+        cloud2 = (await getCloud());
       const unchangedWrites =
         writes.filter((p) => p.includes("/parts/m_")).length - masterWrites;
       const local = JSON.parse(
@@ -163,7 +170,7 @@ const { chromium, webkit } = require("playwright"),
       // Editing a body changes only its immutable version. Learning-only edits did not.
       master[0].word = "new-term";
       const third = await __backgroundSaveAll(),
-        cloud3 = getCloud();
+        cloud3 = (await getCloud());
       const changedRef =
         cloud3.save.data.memory.vocabBooks["book-a"].masterRef.hash !==
         oldRef.hash;
@@ -171,7 +178,7 @@ const { chromium, webkit } = require("playwright"),
       fail = true;
       const interrupted = await __backgroundSaveAll();
       const sameGeneration =
-        getCloud().meta.generation === cloud3.meta.generation;
+        (await getCloud()).meta.generation === cloud3.meta.generation;
       fail = false;
       // Missing cloud parts must reject, preserving canonical ratings and old files.
       const invalid = {
