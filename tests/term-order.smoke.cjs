@@ -64,6 +64,28 @@ const { chromium } = require("playwright"),
     assert.equal(await page.locator(".term-order-score").textContent(), "9 / 10 問正解");
     await page.getByRole("button", { name: "閉じる", exact: true }).click();
     assert.equal(await page.locator(".term-order-screen").count(), 0);
+    // A load that finishes after its screen was closed does not touch the screen opened since.
+    const book = await page.evaluate(() => textbooksPool.find((b) => b.name === "年代テスト").id);
+    await page.evaluate((id) => {
+      const files = window.TextbookFiles,
+        original = files.getWords.bind(files);
+      window.__releaseStale = null;
+      files.getWords = (b) => {
+        if (window.__releaseStale === null)
+          return new Promise((resolve) => (window.__releaseStale = () => resolve(original(b))));
+        return original(b);
+      };
+      window.openTermOrder(id);
+    }, book);
+    await page.locator(".term-order-screen").getByRole("button", { name: "終了" }).click();
+    await page.evaluate((id) => window.openTermOrder(id), book);
+    await page.locator(".term-order-screen .term-order-item").first().waitFor();
+    await page.locator(".term-order-screen .term-order-list button").first().click();
+    await page.evaluate(() => window.__releaseStale());
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator(".term-order-screen").count(), 1);
+    assert.equal(await page.locator('.term-order-screen .term-order-list button[data-place="1"]').count(), 1);
+    await page.locator(".term-order-screen").getByRole("button", { name: "終了" }).click();
     // Other books do not show it.
     await page.getByRole("button", { name: "＋ 単語帳を作る", exact: true }).click();
     await page.locator("#libraryBookName").fill("英単語");
