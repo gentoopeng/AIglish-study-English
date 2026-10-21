@@ -89,6 +89,9 @@
     const now = Date.now();
     if (now - lastRate < 600) return false;
     lastRate = now;
+    // Earphone presses touch nothing on screen: count them as activity, and wake from idle sleep.
+    if (window.IdleSleep?.isSleeping?.()) window.IdleSleep.wake?.();
+    else window.IdleSleep?.activity?.();
     clearTimeout(timer);
     window.speechSynthesis?.cancel?.();
     window.swipeFlashcard?.(direction, 0, 0);

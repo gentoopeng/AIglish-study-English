@@ -31,7 +31,10 @@ assert.deepEqual(s.spoken[1],{text:order[0].ja,lang:'ja-JP'});assert.equal(s.fli
 assert.equal(await page.evaluate(()=>navigator.mediaSession.metadata.title),order[0].en);
 // One press ○, two presses ×, three presses △ (play/pause, next track, previous track).
 const rated=num=>page.evaluate(n=>{const r=LearningData.read('hf-book')[String(n)];return r?.meanings?.[n+'-0']?.status||r?.status||'';},num);
-await page.evaluate(()=>window.__media.pause());assert.equal((await state()).index,1);assert.equal(await rated(order[0].num),'ok');
+await page.evaluate(()=>{window.__activity=0;const original=IdleSleep.activity;IdleSleep.activity=()=>{window.__activity++;original();};});
+await page.evaluate(()=>window.__media.pause());assert.equal((await state()).index,1);
+// A rating from the earphones counts as activity, so idle sleep does not cut in during pocket use.
+assert.equal(await page.evaluate(()=>window.__activity),1);assert.equal(await rated(order[0].num),'ok');
 await page.waitForTimeout(650);await page.evaluate(()=>window.__media.nexttrack());assert.equal((await state()).index,2);assert.equal(await rated(order[1].num),'bad');
 // A second press within 0.6 s is ignored, so one gesture never rates two cards.
 await page.evaluate(()=>window.__media.nexttrack());assert.equal((await state()).index,2);
