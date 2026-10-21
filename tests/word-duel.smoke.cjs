@@ -345,6 +345,31 @@ const { chromium, webkit } = require("playwright"),
     );
     await a.getByRole("button", { name: "閉じる", exact: true }).click();
     for (const page of clients) await page.clock.setSystemTime(Date.now());
+    // Battles only lower a ○: d starts with every word rated ○, so d's miss must drop it to ×,
+    // while correct answers on words nobody rated leave no record.
+    await d.evaluate(() => {
+      const words = window.migrateVocabData(
+        JSON.parse(localStorage.getItem("core_v4_cache_duel-book")),
+      );
+      LearningData.restore(
+        "duel-book",
+        Object.fromEntries(
+          words.map((word) => [
+            String(word.num),
+            {
+              status: "ok",
+              history: ["ok"],
+              meanings: Object.fromEntries(
+                word.meanings.map((m) => [String(m.id), { status: "ok", history: ["ok"] }]),
+              ),
+            },
+          ]),
+        ),
+      );
+    });
+    const bRatedBefore = await b.evaluate(
+      () => Object.keys(LearningData.read("duel-book")).length,
+    );
     await lobby(a);
     await a.locator("[data-config-tab=rules]").click();
     await a.getByLabel("制限時間の分").selectOption("3");
@@ -504,6 +529,10 @@ const { chromium, webkit } = require("playwright"),
       Object.values(
         JSON.parse(docs.get("users/duel-d/vocabProgress/duel-book").wordsJson),
       ).some((word) => word.status === "bad"),
+    );
+    assert.equal(
+      await b.evaluate(() => Object.keys(LearningData.read("duel-book")).length),
+      bRatedBefore,
     );
     for (const page of clients)
       await page.getByRole("button", { name: "閉じる", exact: true }).click();

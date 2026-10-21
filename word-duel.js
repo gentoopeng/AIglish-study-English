@@ -1264,11 +1264,13 @@
     buttons[choice].setAttribute("aria-pressed", "true");
     window.StartupMonitor?.event?.("duel:answer");
     try {
+      // A battle only lowers a ○; 「わからない」 is the player's own "I don't know" and records ×.
       window.WordDuelProgress.apply(
         q.ref.book || target.book,
         q.ref,
         right,
         target.id,
+        { onlyDowngrade: !skipped },
       );
       if (right)
         window.StudyPoints?.reward(

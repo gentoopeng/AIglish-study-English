@@ -68,3 +68,28 @@ test("structured fields preserve colons, circled digits and markup literally ins
   );
   assert.throws(() => m.nextNumber([{ num: Number.MAX_SAFE_INTEGER }]));
 });
+test("words can be placed at a chosen number; a used number needs consent and shifts the following run", () => {
+  const o = require("../vocab-order.js");
+  const old = [1, 2, 3, 4].map((num) => ({ num, word: "w" + num, meanings: [{ id: num + "-0", text: "m" }] }));
+  const meanings = [{ text: "新しい意味" }];
+  // A free number is used as is; the identity number is still the next one.
+  const free = m.append(old, { word: "free", meanings, no: 10 });
+  assert.equal(free.entry.num, 5);
+  assert.equal(o.no(free.entry), 10);
+  // A used number is refused unless inserting was chosen.
+  assert.throws(() => m.append(old, { word: "x", meanings, no: 3 }), /差し込む/);
+  const inserted = m.append(old, { word: "between", meanings, no: 3, insert: true, unit: " 第1章 " });
+  assert.deepEqual(
+    o.sort(inserted.master).map((w) => [w.word, o.no(w)]),
+    [["w1", 1], ["w2", 2], ["between", 3], ["w3", 4], ["w4", 5]],
+  );
+  assert.equal(inserted.entry.num, 5);
+  assert.equal(inserted.entry.unit, "第1章");
+  // Identities and meaning ids of existing words never change.
+  assert.deepEqual(inserted.master.map((w) => w.num), [1, 2, 3, 4, 5]);
+  assert.equal(inserted.master.find((w) => w.num === 3).meanings[0].id, "3-0");
+  // The next word added at the end goes after the moved run.
+  const next = m.append(inserted.master, { word: "end", meanings });
+  assert.equal(o.no(next.entry), 6);
+  assert.equal(next.entry.num, 6);
+});

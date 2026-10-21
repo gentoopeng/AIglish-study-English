@@ -1,6 +1,9 @@
 // Small, structured word entry; existing import and canonical learning records stay intact.
 (function (root) {
   "use strict";
+  const order = () =>
+    root.VocabOrder ||
+    (typeof require === "function" ? require("./vocab-order.js") : null);
   function nextNumber(master) {
     const max = (master || []).reduce(
       (n, w) =>
@@ -49,10 +52,24 @@
       meanings,
       sub: String(fields.sub || "").trim(),
     };
-    return {
-      entry,
-      master: [...master, entry].sort((a, b) => Number(a.num) - Number(b.num)),
-    };
+    const unit = order().cleanUnit(fields.unit);
+    if (unit) entry.unit = unit;
+    // `num` is the permanent identity; the number shown (`no`) can be chosen, and a used one can
+    // be taken by inserting, which moves the following run of numbers down by one.
+    let words = [...master, entry];
+    if (fields.no != null && fields.no !== "") {
+      const wanted = Number(fields.no);
+      if (!Number.isSafeInteger(wanted) || wanted < 1)
+        throw Error("番号は1以上の整数で入力してください。");
+      if (!fields.insert && master.some((w) => order().no(w) === wanted))
+        throw Error(
+          "この番号は使用中です。差し込む場合は「差し込む」にチェックしてください。",
+        );
+      words = order().place(words, num, wanted);
+    } else if (fields.num == null && order().maxNo(master) >= num)
+      words = order().place(words, num, order().maxNo(master) + 1);
+    words.sort((a, b) => Number(a.num) - Number(b.num));
+    return { entry: words.find((w) => Number(w.num) === num), master: words };
   }
   const model = { nextNumber, append };
   root.VocabEntryModel = model;
@@ -272,7 +289,7 @@
     ));
     d.setAttribute("aria-labelledby", "vocabEntryTitle");
     d.innerHTML =
-      '<header><div><h2 id="vocabEntryTitle">単語を追加</h2><p class="vocab-entry-book"></p></div><button type="button" data-entry-close aria-label="単語の追加を閉じる">×</button></header><form><label for="vocabEntryWord">単語・用語・問題文</label><input id="vocabEntryWord" required autocomplete="off" placeholder="例：follow ／ あはれなり"><div class="vocab-entry-meanings"></div><button type="button" class="vocab-entry-add-meaning">＋ 意味を追加</button><details><summary>サブ情報・番号を設定</summary><label for="vocabEntrySub">サブ情報</label><textarea id="vocabEntrySub" rows="3" placeholder="用法・例文・関連知識など（任意）"></textarea><label for="vocabEntryNumber">単語番号</label><input id="vocabEntryNumber" type="number" min="1" step="1"><p class="library-editor-hint">通常は末尾の次の番号を自動で使います。</p></details><p class="vocab-entry-status" role="status"></p><p class="library-editor-error" role="alert"></p><label class="vocab-entry-continue"><input type="checkbox" id="vocabEntryContinue">続けて追加する</label><div class="library-editor-actions"><button type="button" data-entry-close>キャンセル</button><button type="submit" class="library-editor-primary">追加する</button></div></form>';
+      '<header><div><h2 id="vocabEntryTitle">単語を追加</h2><p class="vocab-entry-book"></p></div><button type="button" data-entry-close aria-label="単語の追加を閉じる">×</button></header><form><label for="vocabEntryWord">単語・用語・問題文</label><input id="vocabEntryWord" required autocomplete="off" placeholder="例：follow ／ あはれなり"><div class="vocab-entry-meanings"></div><button type="button" class="vocab-entry-add-meaning">＋ 意味を追加</button><details><summary>サブ情報・番号・単元を設定</summary><label for="vocabEntrySub">サブ情報</label><textarea id="vocabEntrySub" rows="3" placeholder="用法・例文・関連知識など（任意）"></textarea><label for="vocabEntryUnit">単元</label><input id="vocabEntryUnit" list="vocabEntryUnits" autocomplete="off" maxlength="60" placeholder="例：第1章 ／ 鎌倉時代（任意）"><datalist id="vocabEntryUnits"></datalist><label for="vocabEntryNumber">単語番号</label><input id="vocabEntryNumber" type="number" min="1" step="1"><label class="vocab-entry-insert"><input type="checkbox" id="vocabEntryInsert">使用中の番号なら差し込む（それ以降の番号を1つずつずらす）</label><p class="library-editor-hint">通常は末尾の次の番号を自動で使います。2と3の間に入れるなら「3」にして差し込みます。理解度などの記録は単語ごとに保たれます。</p></details><p class="vocab-entry-status" role="status"></p><p class="library-editor-error" role="alert"></p><label class="vocab-entry-continue"><input type="checkbox" id="vocabEntryContinue">続けて追加する</label><div class="library-editor-actions"><button type="button" data-entry-close>キャンセル</button><button type="submit" class="library-editor-primary">追加する</button></div></form>';
     d.querySelector(".vocab-entry-book").textContent =
       metadata(book)?.name || "単語帳";
     const form = d.querySelector("form"),
@@ -281,7 +298,14 @@
       error = d.querySelector(".library-editor-error"),
       message = d.querySelector("[role=status]");
     let manual = false;
-    number.value = nextNumber(original.master);
+    const unitInput = d.querySelector("#vocabEntryUnit"),
+      nextShown = (words) => root.VocabOrder.maxNo(words) + 1;
+    for (const unit of root.VocabOrder.units(original.master)) {
+      const option = el("option");
+      option.value = unit.name;
+      d.querySelector("#vocabEntryUnits").append(option);
+    }
+    number.value = nextShown(original.master);
     number.oninput = () => {
       manual = number.value !== "";
     };
@@ -349,7 +373,9 @@
       try {
         const entry = save(
           {
-            num: manual ? number.value : null,
+            no: manual ? number.value : null,
+            insert: form.querySelector("#vocabEntryInsert").checked,
+            unit: unitInput.value,
             word: form.querySelector("#vocabEntryWord").value,
             sub: form.querySelector("#vocabEntrySub").value,
             meanings: [...list.children].map((row) => ({
@@ -365,11 +391,12 @@
           form.querySelector("#vocabEntryWord").value = "";
           form.querySelector("#vocabEntrySub").value = "";
           manual = false;
-          number.value = nextNumber(root.VocabMaster.resolve(book).master);
+          number.value = nextShown(root.VocabMaster.resolve(book).master);
+          form.querySelector("#vocabEntryInsert").checked = false;
           list.replaceChildren();
           addMeaning(false);
           message.textContent =
-            "#" + entry.num + " 「" + entry.word + "」を追加しました。";
+            "#" + root.VocabOrder.no(entry) + " 「" + entry.word + "」を追加しました。";
           form.querySelector("#vocabEntryWord").focus();
         } else {
           close();

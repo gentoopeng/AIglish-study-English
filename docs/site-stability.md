@@ -414,3 +414,33 @@ Settings live in the settings dialog under 単語の発音: on/off, automatic re
 The fix for the ten stale smoke tests also found two app issues:
 - `onAppLoaded` wrappers now keep the handler's name.
 - On iOS, the warm-up START card had stopped playing its opening animation, because the floating-card rule gained specificity when `:not(.is-settling)` was added; the START card is now excluded from the floating rule.
+
+## Battle answers and understanding (10.21.23.00)
+
+A battle can be won by guessing among choices, so it is weaker evidence than a self-rated card. Battle answers now change the understanding record only when a meaning rated ○ is answered wrong: it drops to × (`WordDuelProgress.apply(..., {onlyDowngrade: true})`). Correct answers, and misses on meanings that are not ○, leave the record and its history as they are. The ranking's studied-word count still counts the answer. 「わからない」 is the player's own statement and still records ×. Warm-up and weak review keep recording every rating.
+
+## Word numbers, inserting and units (10.21.30.00)
+
+`num` remains each word's permanent identity. Understanding records, notes, signatures, battle references, study points and flash resume all use it, so it never changes. The number shown and used for ranges is a separate display number, `no`, which defaults to `num` (`vocab-order.js`). Placing a word at a number that is in use moves only the unbroken run of following numbers down by one. A free number absorbs the run, so books whose numbers follow a printed book, gaps included, keep their numbers.
+
+**Adding and moving words**
+- The add form's 単語番号 field uses a free number as is.
+- A used number is refused unless 「差し込む」 is ticked. Then the word takes that number (2と3の間 → 3) and the following run moves down.
+- Changing the number in a word's edit form moves it the same way, after a confirmation when the target number is in use.
+- `stripVocabProgressFromWords` keeps `no` (only when it differs from `num`) and `unit`, so both survive every save path. Copying a public book numbers words in display order and keeps their units.
+
+**Units**
+- A unit (単元, up to 60 characters) can be set when adding a word or in its edit form, or for a range of numbers from the word list.
+- The word list shows a table of contents: one chip per unit, with its number range, size and share of ○. Choosing a chip filters the list.
+- The flashcard settings and the battle lobby (with one book selected) can narrow questions to a unit.
+
+**Display numbers everywhere a number is shown or chosen:** the word list (order, badges, range), flashcard ranges and card badges, the battle range, the missing-number search and the bulk-delete list. The bulk-delete list now also escapes the word.
+
+**Validation:** `tests/vocab-order.test.cjs` and the new `tests/vocab-units-order.smoke.cjs` check:
+- inserting between #2 and #3, with consent needed for a used number
+- records staying with their word
+- units by range, and the filtering contents list
+- moving by number
+- that numbers and units survive a restart
+- the flashcard unit filter and display numbers
+- the battle unit choice

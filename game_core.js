@@ -99,7 +99,16 @@
         if (!words) {
             try { words = JSON.parse(localStorage.getItem('core_v4_cache_' + bookId) || '[]'); } catch (e) { words = []; }
         }
-        var nums = (words || []).map(function(word) { return Number(word.num); }).filter(Number.isFinite);
+        var nums = (words || []).map(function(word) { return window.VocabOrder ? window.VocabOrder.no(word) : Number(word.num); }).filter(Number.isFinite);
+        // Units of this book, if any, can narrow the cards to one unit.
+        var unitSelect = document.getElementById('flashcardUnitSelect'), unitField = document.getElementById('flashcardUnitField');
+        if (unitSelect && unitField && window.VocabOrder) {
+            var units = window.VocabOrder.units(words || []);
+            unitSelect.replaceChildren(new Option('すべての単元', ''));
+            units.forEach(function(unit) { unitSelect.append(new Option(unit.name + '（#' + unit.from + '–' + unit.to + '・' + unit.count + '語）', unit.name)); });
+            unitSelect.value = '';
+            unitField.hidden = !units.length;
+        }
         document.getElementById('flashcardRangeStart').value = nums.length ? Math.min.apply(null, nums) : 1;
         document.getElementById('flashcardRangeEnd').value = nums.length ? Math.max.apply(null, nums) : 100;
         settings.style.display = 'block';
@@ -204,16 +213,20 @@
         if (sourceSelector) flashcardDataSourceMode = sourceSelector.value;
 
         var pool = [];
+        var unitField = document.getElementById('flashcardUnitField'), unitSelect = document.getElementById('flashcardUnitSelect');
+        var unit = unitField && !unitField.hidden && unitSelect ? unitSelect.value : '';
         if (typeof vocabList !== 'undefined') {
             vocabList.forEach(function(w) {
-                var n = parseInt(w.num);
+                var n = window.VocabOrder ? window.VocabOrder.no(w) : parseInt(w.num);
                 if (n < startNum || n > endNum) return;
+                if (unit && !(w.unit && window.VocabOrder.cleanUnit(w.unit) === unit)) return;
                 var meanings = w.meanings && w.meanings.length ? w.meanings : [{ id: null, text: w.meaning, status: w.status || 'none', history: w.history || [] }];
                 meanings.forEach(function(meaning, meaningIndex) {
                     var meaningStatus = getFlashcardMeaningStatus(meaning, w);
                     if (!flashcardSelectedStatuses[meaningStatus]) return;
                     pool.push({
                         num: w.num,
+                        shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num,
                         en: w.word,
                         ja: meaning.text || w.meaning || '',
                         meaningId: meaning.id !== undefined && meaning.id !== null ? String(meaning.id) : null,
@@ -588,7 +601,7 @@
         frontText = window.escapeVocabText(frontText);
         backText = window.escapeVocabText(backText);
         var customStyle = (typeof window.getFlashcardStyleByHistory === 'function') ? window.getFlashcardStyleByHistory(wordData) : "";
-        window.fillFlashcardFaces(cardWrap,flashcardDirectionMode === 'en2ja'?wordData.en:wordData.ja,flashcardDirectionMode === 'en2ja'?wordData.ja:wordData.en,wordData.num,customStyle);
+        window.fillFlashcardFaces(cardWrap,flashcardDirectionMode === 'en2ja'?wordData.en:wordData.ja,flashcardDirectionMode === 'en2ja'?wordData.ja:wordData.en,wordData.shownNo||wordData.num,customStyle);
         stage.appendChild(cardWrap);
         // The text box must grow with the circle; flex shrinking otherwise hides extra lines.
         window.sizeFlashcardFaces(cardWrap,stage,posLabel);
