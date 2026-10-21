@@ -604,6 +604,8 @@ const { chromium, webkit } = require("playwright"),
     await a.locator("[data-config-tab=events]").click();
     await a.locator("[data-events]").check();
     await a.locator("[data-event-preset=none]").click();
+    // These checks time events with the 15-second interval.
+    await a.locator("[data-event-every]").selectOption("15");
     await a.locator('[data-event-category="特殊"]').click();
     await a.locator("[data-event-type][value=attack]").check();
     await a.getByLabel("イベント加減点").fill("80");
@@ -618,34 +620,30 @@ const { chromium, webkit } = require("playwright"),
         await page.locator(".duel-event-banner").getAttribute("data-phase"),
         "preview",
       );
-      assert.match(
-        await page.locator(".duel-event-banner").textContent(),
-        /まもなく/,
+      // The bar says what is coming and when, nothing more.
+      assert.equal(
+        await page.locator(".duel-event-banner b").textContent(),
+        "正解で相手全員の点を削れる！",
       );
+      assert.match(await page.locator(".duel-event-banner em").textContent(), /^\d秒後$/);
       await page.clock.fastForward(4000);
       assert.equal(await page.locator(".duel-event-banner").isVisible(), true);
       // The start is called out over the screen with what to do and the configured points,
       // and the callout never takes taps away from the answer buttons.
       const callout = page.locator(".duel-announce");
       assert.equal(await callout.isVisible(), true);
-      // The effect is the big line; the event name stays in the small label.
-      assert.match(await callout.locator("small").textContent(), /イベント発生 · 全員に攻撃/);
+      // The effect is the big line; the small label only says how long it lasts.
+      assert.match(await callout.locator("small").textContent(), /^イベント · 8秒間$/);
       assert.equal(
         await callout.locator("strong").textContent(),
         "正解で相手全員の点を削れる！",
-      );
-      assert.match(
-        await page.locator(".duel-event-banner small").textContent(),
-        /正解で相手全員から80点を減点/,
       );
       assert.equal(
         await callout.evaluate((node) => getComputedStyle(node).pointerEvents),
         "none",
       );
-      assert.equal(
-        await page.locator(".duel-event-banner span").textContent(),
-        "正解で相手全員の点を削れる！",
-      );
+      assert.equal(await page.locator(".duel-event-banner span").textContent(), "");
+      assert.match(await page.locator(".duel-event-banner em").textContent(), /^\d秒$/);
       assert.equal(
         await page.locator(".duel-event-banner").getAttribute("data-tone"),
         "special",
@@ -680,7 +678,6 @@ const { chromium, webkit } = require("playwright"),
       { timeout: 15000 },
     );
     assert.match(await a.locator(".duel-announce").textContent(), /イベント終了/);
-    assert.match(await a.locator(".duel-announce").textContent(), /全員に攻撃/);
     assert.match(await a.locator(".duel-announce").textContent(), /イベント中 [+−]\d+点/);
     assert.equal(await a.locator('[data-player-id="duel-a"] .duel-player-correct').textContent(), "✓1");
     assert.equal(await a.locator('[data-player-id="duel-b"] .duel-player-correct').textContent(), "✓0");
@@ -699,6 +696,8 @@ const { chromium, webkit } = require("playwright"),
     await a.locator("[data-config-tab=events]").click();
     await a.locator("[data-events]").check();
     await a.locator("[data-event-preset=none]").click();
+    // These checks time events with the 15-second interval.
+    await a.locator("[data-event-every]").selectOption("15");
     await a.locator('[data-event-category="順位"]').click();
     await a.locator("[data-event-type][value=chase]").check();
     await a.getByRole("button", { name: "部屋を作る", exact: true }).click();
@@ -729,9 +728,9 @@ const { chromium, webkit } = require("playwright"),
       await a.locator(".duel-event-banner span").textContent(),
       "あなたは首位なので対象外",
     );
-    assert.match(
-      await a.locator(".duel-event-banner small").textContent(),
-      /開始時に首位でなかった人の正解点が2倍/,
+    assert.equal(
+      await a.locator(".duel-event-banner b").textContent(),
+      "首位以外は正解で2倍！",
     );
     for (const page of [a, b]) await page.clock.fastForward(61000);
     for (const page of [a, b]) await page.locator(".duel-results").waitFor();
@@ -791,6 +790,8 @@ const { chromium, webkit } = require("playwright"),
     await lobby(a);
     await a.locator("[data-config-tab=events]").click();
     await a.locator("[data-event-preset=none]").click();
+    // These checks time events with the 15-second interval.
+    await a.locator("[data-event-every]").selectOption("15");
     await a.locator('[data-event-category="特殊"]').click();
     await a.locator("[data-event-type][value=bank]").check();
     await a.getByRole("button", { name: "部屋を作る", exact: true }).click();
