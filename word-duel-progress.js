@@ -11,7 +11,11 @@ function apply(book,ref,answer,id,options={}){
  if(before.sig&&before.sig!==ref.sig)throw Error('単語帳が変更されているため、この回答の理解度は上書きしません。');
  const status=typeof answer==='boolean'?(answer?'ok':'bad'):answer;
  if(!['ok','so','bad'].includes(status))throw Error('理解度の指定を確認してください。');
- const previous=before.meanings?.[ref.mid]||{},meanings={...before.meanings,[ref.mid]:{...previous,status,history:[...(previous.history||[]),status].slice(-20)}},word={...before,sig:ref.sig,note:before.note||'',meanings,status:overall(meanings,ref.count),history:[...(before.history||[]),status].slice(-20)};
+ const previous=before.meanings?.[ref.mid]||{};
+ // Battles are easier than self-rated cards (a lucky guess is possible), so they only record a
+ // drop: a meaning rated ○ that is answered wrong. Everything else leaves the record as it is.
+ if(options.onlyDowngrade&&!(status==='bad'&&previous.status==='ok')){window.recordRankedWord?.(book,ref.num);return before;}
+ const meanings={...before.meanings,[ref.mid]:{...previous,status,history:[...(previous.history||[]),status].slice(-20)}},word={...before,sig:ref.sig,note:before.note||'',meanings,status:overall(meanings,ref.count),history:[...(before.history||[]),status].slice(-20)};
  if(window.WeakReviewModel)meanings[ref.mid].review={...previous.review,at:Date.now()};
  if((status==='ok'||options.reviewCorrect===true)&&options.reviewDay&&window.WeakReviewModel?.day()===options.reviewDay)meanings[ref.mid].review={...meanings[ref.mid].review,passed:options.reviewDay};
  // Write the retry intent first; interruption at any point keeps a recoverable record.

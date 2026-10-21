@@ -14,3 +14,18 @@ test('answer checkpoints do not schedule cloud work; quota pause preserves answe
  for(let i=0;i<20;i++){progress.apply('book',ref,i%2===0,'a');progress.schedule();}
  assert.equal(reads,0);assert.deepEqual(timers,[]);assert.ok(JSON.parse(values.get('core_v4_word_duel_pending_a')).book);ctx.FirestoreReadGuard={paused:()=>true};assert.equal(await progress.flush(),false);assert.equal(reads,0);ctx.FirestoreReadGuard.paused=()=>false;await progress.flush();assert.equal(reads,1);assert.deepEqual(JSON.parse(values.get('core_v4_word_duel_pending_a')),{});
 });
+test('battles only record a ○ answered wrong; correct answers and other misses leave the record alone',()=>{
+ const {ctx,values,progress}=setup(),read=()=>ctx.LearningData.read('book')['1'];
+ // Nothing recorded yet: neither a correct nor a wrong battle answer writes anything.
+ progress.apply('book',ref,true,'a',{onlyDowngrade:true});progress.apply('book',ref,false,'a',{onlyDowngrade:true});
+ assert.equal(read(),undefined);
+ // △ answered wrong stays △; answered right does not become ○.
+ progress.apply('book',ref,'so','a');progress.apply('book',ref,false,'a',{onlyDowngrade:true});progress.apply('book',ref,true,'a',{onlyDowngrade:true});
+ assert.equal(read().meanings['1-0'].status,'so');assert.equal(JSON.stringify(read().meanings['1-0'].history),JSON.stringify(['so']));
+ // ○ answered right stays ○ without a new history entry; ○ answered wrong drops to ×.
+ progress.apply('book',ref,'ok','a');progress.apply('book',ref,true,'a',{onlyDowngrade:true});
+ assert.equal(JSON.stringify(read().meanings['1-0'].history),JSON.stringify(['so','ok']));
+ progress.apply('book',ref,false,'a',{onlyDowngrade:true});
+ assert.equal(read().meanings['1-0'].status,'bad');assert.equal(JSON.stringify(read().meanings['1-0'].history),JSON.stringify(['so','ok','bad']));
+ assert.ok(values.get('core_v4_word_duel_pending_a'));
+});

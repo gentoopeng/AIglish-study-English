@@ -221,6 +221,7 @@ const { chromium, webkit } = require("playwright"),
     await page.screenshot({
       path: "/tmp/battle-rules-" + type.name() + ".png",
     });
+    const penalty = Number(await page.getByLabel("ミス時の減点").inputValue());
     await page.getByRole("button", { name: "一人プレイ", exact: true }).click();
     await page.locator(".duel-options button").first().waitFor();
     assert.equal(await page.locator(".duel-clock").textContent(), "45");
@@ -228,21 +229,69 @@ const { chromium, webkit } = require("playwright"),
       b = prompt.startsWith("日本史") ? 1 : 0,
       n = prompt.replace(/[^0-9]/g, ""),
       options = await page.locator(".duel-options button").allTextContents(),
-      correct = options.indexOf("意味" + b + "-" + n);
+      correct = options.indexOf("意味" + b + "-" + n),
+      // Seeing that the meaning is missing from the choices scores double.
+      points = correct < 0 ? 400 : 200,
+      before = await page.evaluate(
+        ({ b, n }) => LearningData.read(b ? "casual-b" : "casual-a")[n] || null,
+        { b, n },
+      );
     await page
       .locator(".duel-options button")
       .nth(correct < 0 ? 9 : correct)
       .click();
-    assert.equal(await page.locator("[data-duel-score]").textContent(), "200");
+    assert.equal(
+      await page.locator("[data-duel-score]").textContent(),
+      String(points),
+    );
     const saved = await page.evaluate(
       ({ b, n }) => LearningData.read(b ? "casual-b" : "casual-a")[n],
       { b, n },
     );
-    assert.equal(saved.status, "ok");
+    // A correct battle answer does not raise the understanding record (only a ○ answered wrong drops).
+    assert.deepEqual(saved || null, before);
+    // The next word is rated ○ in its own book; answering it wrong drops it to × there only.
+    await page.waitForFunction(
+      (previous) => document.querySelector(".duel-prompt").textContent !== previous,
+      prompt,
+    );
+    const nextPrompt = await page.locator(".duel-prompt").textContent(),
+      b2 = nextPrompt.startsWith("日本史") ? 1 : 0,
+      n2 = nextPrompt.replace(/[^0-9]/g, ""),
+      book2 = b2 ? "casual-b" : "casual-a",
+      other2 = b2 ? "casual-a" : "casual-b";
+    const otherBefore = await page.evaluate(
+      ({ book, n, other }) => {
+        const word = __battleBooks[book].find((w) => String(w.num) === n);
+        LearningData.restore(book, {
+          [n]: {
+            sig: buildWordSignature(word),
+            meanings: { [word.meanings[0].id]: { status: "ok", history: ["ok"] } },
+          },
+        });
+        return JSON.stringify(LearningData.read(other)[n] || null);
+      },
+      { book: book2, n: n2, other: other2 },
+    );
+    const options2 = await page.locator(".duel-options button").allTextContents(),
+      right2 = options2.indexOf("意味" + b2 + "-" + n2);
+    await page
+      .locator(".duel-options button")
+      .nth(((right2 < 0 ? 9 : right2) + 1) % 10)
+      .click();
+    const after2 = await page.evaluate(
+      ({ book, n, other }) => ({
+        word: LearningData.read(book)[n],
+        other: JSON.stringify(LearningData.read(other)[n] || null),
+      }),
+      { book: book2, n: n2, other: other2 },
+    );
+    assert.equal(Object.values(after2.word.meanings)[0].status, "bad");
+    assert.equal(after2.other, otherBefore);
     await page.getByRole("button", { name: "終了する", exact: true }).click();
     assert.equal(
       await page.locator(".duel-solo-result strong").textContent(),
-      "205点",
+      points - penalty + 10 + "点",
     );
     await page.getByRole("button", { name: "閉じる", exact: true }).click();
     assert.deepEqual(errors, []);

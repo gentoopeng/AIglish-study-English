@@ -414,3 +414,7 @@ Settings live in the settings dialog under 単語の発音: on/off, automatic re
 The fix for the ten stale smoke tests also found two app issues:
 - `onAppLoaded` wrappers now keep the handler's name.
 - On iOS, the warm-up START card had stopped playing its opening animation, because the floating-card rule gained specificity when `:not(.is-settling)` was added; the START card is now excluded from the floating rule.
+
+## Battle answers and understanding (10.21.23.00)
+
+A battle can be won by guessing among choices, so it is weaker evidence than a self-rated card. Battle answers now change the understanding record only when a meaning rated ○ is answered wrong: it drops to × (`WordDuelProgress.apply(..., {onlyDowngrade: true})`). Correct answers, and misses on meanings that are not ○, leave the record and its history as they are. The ranking's studied-word count still counts the answer. 「わからない」 is the player's own statement and still records ×. Warm-up and weak review keep recording every rating.
