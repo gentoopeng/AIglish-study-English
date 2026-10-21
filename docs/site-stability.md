@@ -500,3 +500,7 @@ On iOS, the icons of the hands-free and speaker buttons sat near the top of thei
 The clock row, scoreboard, time bar, combo line and event bar are hidden, so the buttons no longer overlap the clock.
 
 **Correct answer card.** The card is opaque, so the question and combo line behind it no longer show through. Wide buttons (「選択肢の中にはない」 and 「わからない」) no longer shrink when chosen.
+
+## Follow-up: battle speaker button (10.21.36)
+
+In the correct-answer card, the generic card-button rule (11px padding) was more specific than the round speaker button's `padding:0`, so the icon sat off centre. The speaker button now has a more specific rule, and its icon is pinned to the centre.
