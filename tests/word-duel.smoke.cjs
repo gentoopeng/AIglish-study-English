@@ -324,6 +324,10 @@ const { chromium, webkit } = require("playwright"),
     // The card also shows the English word with a speaker button.
     assert.equal(await a.locator(".duel-correction-say em").textContent(), passedWord);
     assert.equal(await a.locator(".duel-speak").getAttribute("data-say"), passedWord);
+    // The speaker stays usable during the wait; only the next-question button counts down.
+    assert.equal(await a.locator(".duel-speak").isDisabled(), false);
+    assert.equal(await a.locator(".duel-speak svg").count(), 1);
+    assert.match(await a.locator("[data-duel-next]").textContent(), /^あと\d秒$/);
     await a.clock.fastForward(61000);
     assert.equal(await a.locator(".duel-solo-result").count(), 0);
     await a.clock.fastForward(61000);

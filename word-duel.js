@@ -1307,8 +1307,9 @@
       correction.querySelector(".duel-speak").dataset.say = q.prompt;
       window.Pronounce?.auto(q.prompt);
       correction.hidden = false;
-      correction.querySelector("button").disabled = true;
-      correction.querySelector("button").textContent = "あと3秒";
+      const next = correction.querySelector("[data-duel-next]");
+      next.disabled = true;
+      next.textContent = "あと3秒";
     }
     if (!target.solo && !sending)
       setTimeout(() => {
