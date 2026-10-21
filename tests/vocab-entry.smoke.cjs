@@ -75,7 +75,7 @@ const { chromium, webkit } = require("playwright"),
     await page
       .getByRole("textbox", { name: "意味・答え 2", exact: true })
       .fill("〜に続く");
-    await page.getByText("サブ情報・番号を設定", { exact: true }).click();
+    await page.getByText("サブ情報・番号・単元を設定", { exact: true }).click();
     await page
       .locator("#vocabEntrySub")
       .fill("例文: Follow the rules.\n規則に従いなさい。");
@@ -132,7 +132,7 @@ const { chromium, webkit } = require("playwright"),
     await page
       .getByRole("textbox", { name: "意味・答え 1", exact: true })
       .fill("答え");
-    await page.getByText("サブ情報・番号を設定", { exact: true }).click();
+    await page.getByText("サブ情報・番号・単元を設定", { exact: true }).click();
     await page.locator("#vocabEntryNumber").fill("1");
     await page.getByRole("button", { name: "追加する", exact: true }).click();
     assert.match(

@@ -77,7 +77,10 @@ function setup(values = new Map(), publicBook = false) {
         : { master: original, savedAt: "2026-10-01T00:00:00Z" };
     },
   };
-  vm.runInNewContext(fs.readFileSync("vocab-entry.js", "utf8"), c);
+  vm.createContext(c);
+  // The app loads the display-number model before the entry form.
+  vm.runInContext(fs.readFileSync("vocab-order.js", "utf8"), c);
+  vm.runInContext(fs.readFileSync("vocab-entry.js", "utf8"), c);
   return {
     c,
     values,

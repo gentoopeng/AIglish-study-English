@@ -2529,3 +2529,16 @@ html.pronounce-off .pronounce-button{display:none!important;}
 .handsfree-pocket{position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;background:#000;color:#4b4f57;text-align:center;touch-action:none;user-select:none;-webkit-user-select:none;}
 .handsfree-pocket p{margin:0;font:700 15px/1.6 system-ui,sans-serif;}.handsfree-pocket small{display:block;margin-top:6px;font-size:12px;font-weight:500;}.handsfree-pocket.is-holding .handsfree-pocket-exit{color:#9aa1ad;}
 .sidebar-pronounce .handsfree-delay label{white-space:nowrap;}
+
+/* Units (table of contents) and chosen word numbers. */
+.vocab-unit-contents{margin:0 0 12px;}.vocab-unit-chips{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin;}
+.vocab-unit-chip{flex-shrink:0;display:grid;gap:2px;max-width:220px;padding:8px 12px;border:1px solid var(--border);border-radius:12px;background:rgba(15,23,42,.55);color:var(--text-main);text-align:left;cursor:pointer;}
+.vocab-unit-chip strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.vocab-unit-chip small{font-size:10px;color:var(--text-sub);white-space:nowrap;}.vocab-unit-chip[aria-pressed=true]{border-color:var(--accent);background:rgba(99,102,241,.35);}
+.vocab-unit-assign{margin-top:4px;font-size:12px;color:var(--text-sub);}.vocab-unit-assign summary{cursor:pointer;padding:4px 0;}.vocab-unit-assign>div{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px;margin-top:6px;}
+.vocab-unit-assign label{display:grid;gap:3px;font-size:11px;}.vocab-unit-assign input{width:70px;box-sizing:border-box;padding:7px;border:1px solid var(--border);border-radius:8px;background:rgba(0,0,0,.25);color:var(--text-main);font-size:16px;}.vocab-unit-assign input[data-unit-name]{width:150px;}
+.vocab-unit-assign button{padding:8px 14px;border:1px solid var(--accent);border-radius:8px;background:rgba(99,102,241,.3);color:#fff;font-weight:700;}
+.inline-edit-place{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px;margin-bottom:12px;}.inline-edit-place label{display:grid;gap:4px;font-size:11px;font-weight:700;color:var(--cosmic-cyan);}.inline-edit-place input{margin:0;}
+.flashcard-unit-field{display:grid;gap:6px;margin:0 0 16px;text-align:left;font-size:12px;font-weight:700;color:var(--text-sub);}.flashcard-unit-field[hidden]{display:none;}.flashcard-unit-field select{width:100%;padding:9px;border:1px solid var(--border);border-radius:10px;background:rgba(0,0,0,.3);color:var(--text-main);font-size:16px;}
+.battle-unit{display:grid;gap:4px;flex-basis:100%;}.battle-unit[hidden]{display:none;}.battle-unit select{width:100%;box-sizing:border-box;color:#eee;background:#101b2d;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:16px;}
+.vocab-entry-insert{display:flex;align-items:flex-start;gap:8px;margin:6px 0 0;font-size:12px;line-height:1.5;}.vocab-entry-insert input{margin-top:3px;flex-shrink:0;}
+.vocab-entry-dialog .vocab-entry-insert{display:flex;flex-direction:row;align-items:flex-start;gap:8px;text-align:left;}.vocab-entry-dialog .vocab-entry-insert input{width:18px;height:18px;min-height:0;margin:2px 0 0;padding:0;flex:0 0 auto;}

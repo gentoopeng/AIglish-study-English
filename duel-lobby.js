@@ -44,7 +44,7 @@
   }
   function html() {
     return `<nav class="battle-config-tabs" aria-label="バトル設定"><button type="button" data-config-tab="books" aria-pressed="true">教材</button><button type="button" data-config-tab="rules" aria-pressed="false">ルール</button><button type="button" data-config-tab="events" aria-pressed="false">イベント</button></nav>
-<section data-config-panel="books" class="battle-config-panel"><div class="battle-book-heading">出題する単語帳 <span data-book-count></span></div><div class="battle-book-picker"></div><div class="battle-range"><label>単語番号<input type="number" aria-label="最初の単語番号" data-range-start min="1" placeholder="最初"></label><span>—</span><label>まで<input type="number" aria-label="最後の単語番号" data-range-end min="1" placeholder="最後"></label></div><label class="battle-field">出題内容<select data-question-mode aria-label="出題内容"><option value="random">全範囲ランダム</option><option value="status">理解度を選ぶ</option><option value="weak">苦手な傾向のある単語</option></select></label><div class="battle-status-picker" hidden>${[
+<section data-config-panel="books" class="battle-config-panel"><div class="battle-book-heading">出題する単語帳 <span data-book-count></span></div><div class="battle-book-picker"></div><div class="battle-range"><label>単語番号<input type="number" aria-label="最初の単語番号" data-range-start min="1" placeholder="最初"></label><span>—</span><label>まで<input type="number" aria-label="最後の単語番号" data-range-end min="1" placeholder="最後"></label><label class="battle-unit" hidden>単元<select aria-label="出題する単元" data-range-unit><option value="">すべて</option></select></label></div><label class="battle-field">出題内容<select data-question-mode aria-label="出題内容"><option value="random">全範囲ランダム</option><option value="status">理解度を選ぶ</option><option value="weak">苦手な傾向のある単語</option></select></label><div class="battle-status-picker" hidden>${[
       ["ok", "○"],
       ["so", "△"],
       ["bad", "×"],
@@ -175,6 +175,24 @@ ${eventHtml()}
       const count = picker.querySelectorAll("input:checked").length;
       screen.querySelector("[data-book-count]").textContent = count + "/10冊";
       screen.querySelector(".battle-range").hidden = count !== 1;
+      // One book: its units (from the local copy, no cloud read) can narrow the questions.
+      const unitSelect = screen.querySelector("[data-range-unit]"),
+        chosen = count === 1 ? picker.querySelector("input:checked")?.value : null;
+      if (unitSelect && unitSelect.dataset.book !== String(chosen)) {
+        unitSelect.dataset.book = String(chosen);
+        let words = [];
+        if (chosen)
+          try {
+            words =
+              (typeof textbooksCacheMap !== "undefined" && textbooksCacheMap[chosen]) ||
+              JSON.parse(localStorage.getItem("core_v4_cache_" + chosen) || "[]");
+          } catch {}
+        const units = window.VocabOrder ? window.VocabOrder.units(words) : [];
+        unitSelect.replaceChildren(new Option("すべて", ""));
+        for (const unit of units)
+          unitSelect.append(new Option(unit.name + "（" + unit.count + "語）", unit.name));
+        unitSelect.closest(".battle-unit").hidden = !units.length;
+      }
       const mode = screen.querySelector("[data-question-mode]").value;
       screen.querySelector(".battle-status-picker").hidden = mode !== "status";
       screen.querySelector("[data-selection-hint]").textContent =
@@ -353,7 +371,12 @@ ${eventHtml()}
         ...screen.querySelectorAll(".battle-status-picker input:checked"),
       ].map((el) => el.value),
       from = Number(screen.querySelector("[data-range-start]").value) || 0,
-      to = Number(screen.querySelector("[data-range-end]").value) || Infinity;
+      to = Number(screen.querySelector("[data-range-end]").value) || Infinity,
+      unitField = screen.querySelector(".battle-unit"),
+      unit =
+        ids.length === 1 && unitField && !unitField.hidden
+          ? screen.querySelector("[data-range-unit]").value
+          : "";
     if (ids.length === 1 && from > to)
       throw Error("単語番号の範囲を確認してください。");
     const sampler = m.poolSampler(seed, mode === "weak");
@@ -371,7 +394,9 @@ ${eventHtml()}
       for (const word of normalized) {
         if (
           ids.length === 1 &&
-          (Number(word.num) < from || Number(word.num) > to)
+          ((window.VocabOrder ? window.VocabOrder.no(word) : Number(word.num)) < from ||
+            (window.VocabOrder ? window.VocabOrder.no(word) : Number(word.num)) > to ||
+            (unit && window.VocabOrder.cleanUnit(word.unit) !== unit))
         )
           continue;
         const saved = progress[String(word.num)],

@@ -1607,6 +1607,9 @@ window.stripVocabProgressFromWords = function(words) {
   return (words || []).map(function(w) {
     var clean = { num: w.num, word: w.word, meaning: w.meaning || "", sub: w.sub || "" };
     if(w.partOfSpeech||w.pos)clean.partOfSpeech=String(w.partOfSpeech||w.pos);
+    // Display number (when it differs from the identity number) and unit belong to the book itself.
+    var shown=Number(w.no);if(Number.isSafeInteger(shown)&&shown>0&&shown!==Number(w.num))clean.no=shown;
+    if(w.unit&&String(w.unit).trim())clean.unit=String(w.unit).replace(/\s+/g,' ').trim().slice(0,60);
     if (Array.isArray(w.meanings) && w.meanings.length > 0) {
       clean.meanings = w.meanings.map(function(m, i) {
         var meaning={ id: m.id || (String(w.num) + "-" + i), text: m.text || "" };
@@ -2441,7 +2444,9 @@ window.runMissingNumberSearch = function() {
   const summary = document.getElementById("missingNumberResultSummary");
   const copyArea = document.getElementById("missingNumberCopyText");
   if (!summary || !copyArea) return;
-  const maxNum = (vocabList || []).reduce(function(max, w) { const n = parseInt(w.num); return isNaN(n) ? max : Math.max(max, n); }, 0);
+  // Gaps are looked for in the numbers people see (display numbers), not identity numbers.
+  const shown = function(w) { return window.VocabOrder ? window.VocabOrder.no(w) : parseInt(w.num); };
+  const maxNum = (vocabList || []).reduce(function(max, w) { const n = shown(w); return isNaN(n) ? max : Math.max(max, n); }, 0);
   const startEl = document.getElementById("missingRangeStart");
   const endEl = document.getElementById("missingRangeEnd");
   const startIsBlank = !startEl || startEl.value.trim() === "";
@@ -2453,7 +2458,7 @@ window.runMissingNumberSearch = function() {
   if (start > end) { const tmp = start; start = end; end = tmp; }
   if (end - start > 100000) { summary.innerText = "検索範囲が広すぎます。100000件以内にしてください。"; copyArea.value = ""; return; }
   const existingNums = new Set();
-  (vocabList || []).forEach(function(w) { const n = parseInt(w.num); if (!isNaN(n)) existingNums.add(n); });
+  (vocabList || []).forEach(function(w) { const n = shown(w); if (!isNaN(n)) existingNums.add(n); });
   const missing = [];
   for (let n = start; n <= end; n++) { if (!existingNums.has(n)) missing.push(n); }
   if (missing.length === 0) { summary.innerText = "欠番はありません（" + start + "〜" + end + "）"; copyArea.value = ""; return; }

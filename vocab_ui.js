@@ -122,7 +122,7 @@
     };
 
     window.applyVocabMaxRange = function() {
-        var maxNum = vocabList.reduce(function(m, w) {
+        var maxNum = window.VocabOrder ? window.VocabOrder.maxNo(vocabList) : vocabList.reduce(function(m, w) {
             var n = parseInt(w.num);
             return isNaN(n) ? m : Math.max(m, n);
         }, 0);
@@ -270,10 +270,10 @@
         var c = document.getElementById('bulkDeleteListContainer');
         if (!c) return;
         c.innerHTML = "";
-        vocabList.forEach(function(w) {
+        (window.VocabOrder ? window.VocabOrder.sort(vocabList) : vocabList).forEach(function(w) {
             var row = document.createElement('div');
             row.style.cssText = "display:flex; align-items:center; gap:8px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;";
-            row.innerHTML = '<input type="checkbox" class="bulk-delete-chk" value="' + w.num + '"><span style="color:var(--text-sub);">#' + w.num + '</span><strong>' + w.word + '</strong>';
+            row.innerHTML = '<input type="checkbox" class="bulk-delete-chk" value="' + w.num + '"><span style="color:var(--text-sub);">#' + (window.VocabOrder ? window.VocabOrder.no(w) : w.num) + '</span><strong>' + window.escapeVocabText(w.word) + '</strong>';
             c.appendChild(row);
         });
     };
@@ -353,7 +353,50 @@
     // 5. フィルタ・削除確認
     // ================================================================
 
-    var selectedUnderstanding=new Set(),selectedExtras=new Set(),noteScope=0;
+    var selectedUnderstanding=new Set(),selectedExtras=new Set(),noteScope=0,selectedUnit='';
+    // Table of contents: one chip per unit with its size and how much of it is ○; choosing one filters
+    // the list. Editors can give a range of numbers a unit from here.
+    function unitContents(list){
+        // Its own element just above the list, so the list itself still starts with its pages.
+        var container=document.getElementById('vocabUnitContents');
+        if(!container){container=document.createElement('div');container.id='vocabUnitContents';list.before(container);}
+        container.replaceChildren();
+        var units=window.VocabOrder?window.VocabOrder.units(vocabList):[];
+        var options=document.createElement('datalist');options.id='vocabUnitOptions';
+        units.forEach(function(unit){var option=document.createElement('option');option.value=unit.name;options.append(option);});
+        container.append(options);
+        if(selectedUnit&&!units.some(function(unit){return unit.name===selectedUnit;}))selectedUnit='';
+        var editable=window.canEditCurrentTextbook?window.canEditCurrentTextbook():window.isAdmin;
+        if(!units.length&&!editable)return;
+        var box=document.createElement('section');box.className='vocab-unit-contents';box.setAttribute('aria-label','単元の目次');
+        if(units.length){
+            var row=document.createElement('div');row.className='vocab-unit-chips';
+            var chip=function(name,label,detail){var button=document.createElement('button');button.type='button';button.className='vocab-unit-chip';button.setAttribute('aria-pressed',String(selectedUnit===name));button.dataset.unit=name;var title=document.createElement('strong');title.textContent=label;button.append(title);if(detail){var small=document.createElement('small');small.textContent=detail;button.append(small);}button.onclick=function(){selectedUnit=name;vocabPage=0;window.renderVocabList();};return button;};
+            row.append(chip('','すべて',vocabList.length+'語'));
+            units.forEach(function(unit){
+                var words=vocabList.filter(function(w){return w.unit&&window.VocabOrder.cleanUnit(w.unit)===unit.name;}),meanings=[].concat.apply([],words.map(function(w){return w.meanings||[];})),ok=meanings.filter(function(m){return m.status==='ok';}).length;
+                row.append(chip(unit.name,unit.name,'#'+unit.from+'–'+unit.to+' · '+unit.count+'語 · ○'+(meanings.length?Math.round(ok/meanings.length*100):0)+'%'));
+            });
+            box.append(row);
+        }
+        if(editable){
+            var details=document.createElement('details');details.className='vocab-unit-assign';
+            details.innerHTML='<summary>番号の範囲に単元を付ける</summary><div><label>番号<input type="number" min="1" step="1" data-unit-from aria-label="単元にする最初の番号"></label><span>〜</span><label><input type="number" min="1" step="1" data-unit-to aria-label="単元にする最後の番号"></label><label>単元<input type="text" maxlength="60" list="vocabUnitOptions" data-unit-name aria-label="単元の名前" placeholder="空欄で単元を外す"></label><button type="button" data-unit-apply>付ける</button></div>';
+            details.querySelector('[data-unit-apply]').onclick=function(){
+                try{
+                    var from=Number(details.querySelector('[data-unit-from]').value),to=Number(details.querySelector('[data-unit-to]').value),name=details.querySelector('[data-unit-name]').value;
+                    var result=window.VocabOrder.assignUnit(vocabList.map(function(w){return w.unit?{num:w.num,no:w.no,unit:w.unit}:{num:w.num,no:w.no};}),from,to,name);
+                    if(!result.changed){alert('その範囲に単語がありません。');return;}
+                    var units=new Map(result.words.map(function(w){return [String(w.num),w.unit];}));
+                    vocabList.forEach(function(w){var unit=units.get(String(w.num));if(unit)w.unit=unit;else delete w.unit;});
+                    window.saveVocabToStorage();if(window.__captureManualVocabDraft)window.__captureManualVocabDraft();
+                    window.showToast?.(result.changed+'語の単元を設定しました。','ok');window.renderVocabList();
+                }catch(error){alert(error.message);}
+            };
+            box.append(details);
+        }
+        container.append(box);
+    }
     window.setVocabFilter = function(filter) {
         if(filter==='all'){selectedUnderstanding.clear();selectedExtras.clear();noteScope=0;}
         else if(filter==='note'){noteScope=(noteScope+1)%3;if(noteScope)selectedExtras.add('note');else selectedExtras.delete('note');}
@@ -735,6 +778,24 @@
         var mInputs = document.querySelectorAll('.inline-m-input-' + wordNum);
         if (wordInput) vocabList[wIdx].word = wordInput.value.trim();
         if (subInput) vocabList[wIdx].sub = subInput.value.trim();
+        var unitInput = document.getElementById('inlineEditUnitInput-' + wordNum);
+        if (unitInput && window.VocabOrder) {
+            var unit = window.VocabOrder.cleanUnit(unitInput.value);
+            if (unit) vocabList[wIdx].unit = unit; else delete vocabList[wIdx].unit;
+        }
+        // Changing the number moves the word; the identity number and its records stay the same.
+        var noInput = document.getElementById('inlineEditNoInput-' + wordNum);
+        if (noInput && window.VocabOrder && noInput.value !== '') {
+            var wanted = Number(noInput.value), current = window.VocabOrder.no(vocabList[wIdx]);
+            if (!Number.isSafeInteger(wanted) || wanted < 1) { alert('番号は1以上の整数で入力してください。'); return; }
+            if (wanted !== current) {
+                var taken = vocabList.some(function(w) { return String(w.num) !== String(wordNum) && window.VocabOrder.no(w) === wanted; });
+                if (taken && !confirm(wanted + '番は使用中です。ここに移動して、それ以降の番号を1つずつずらしますか？')) return;
+                var placed = window.VocabOrder.place(vocabList.map(function(w) { return w.no === undefined ? { num: w.num } : { num: w.num, no: w.no }; }), vocabList[wIdx].num, wanted);
+                var shown = new Map(placed.map(function(w) { return [String(w.num), w]; }));
+                vocabList.forEach(function(w) { var p = shown.get(String(w.num)); if (p && p.no !== undefined) w.no = p.no; else delete w.no; });
+            }
+        }
         var updatedMeanings = [];
         mInputs.forEach(function(inp, idx) {
             var txt = inp.value.trim();
@@ -879,7 +940,9 @@
             word: window.escapeVocabText(w.word),
             meaning: window.escapeVocabText(w.meaning),
             sub: window.escapeVocabText(w.sub),
-            meanings: (w.meanings || []).map(function(m) { return Object.assign({}, m, {text:window.escapeVocabText(m.text)}); })
+            meanings: (w.meanings || []).map(function(m) { return Object.assign({}, m, {text:window.escapeVocabText(m.text)}); }),
+            unit: window.escapeVocabText(w.unit || ''),
+            shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num
         });
         var card = document.createElement('div');
         card.className = "word-row-container";
@@ -926,7 +989,7 @@
         if (window.canEditCurrentTextbook ? window.canEditCurrentTextbook() : window.isAdmin) {
             adminActionButtons = '<div style="position:absolute; right:8px; top:8px; display:flex; gap:2px; z-index:100;"><button class="card-edit-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')"><i data-lucide="edit-3" size="18"></i></button><button class="card-delete-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm(\'' + w.num + '\')"><i data-lucide="trash-2" size="18"></i></button></div>';
         }
-        card.innerHTML = adminActionButtons + '<div id="wordCardBody-' + w.num + '"><div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;"><div style="display:flex; align-items:center; gap:8px;"><span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#' + w.num + '</span><span style="font-size:18px; font-weight:800; color:white;">' + w.word + '</span><button type="button" class="pronounce-button word-speak-button" data-sound="none" data-say="' + w.word + '" aria-label="発音を聞く"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg></button></div></div>' + meaningsHtml + (w.sub ? '<div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;"><button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">サブ情報を展開 <i data-lucide="chevron-down" size="12"></i></button><div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;"><div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">' + w.sub + '</div></div></div>' : '') + '<div data-vocab-history="' + w.num + '" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">' + dotsHtml + '</div></div><div id="wordCardForm-' + w.num + '" style="display:none; padding-top:32px;"><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; display:block; margin-bottom:4px;">単語</label><input type="text" id="inlineEditWordInput-' + w.num + '" class="search-input" style="margin:0;" value="' + w.word + '"></div><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label><div id="inlineEditMeaningsList-' + w.num + '"></div><button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, \'' + w.num + '\')"><i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加</button></div><div style="margin-bottom:14px;"><label style="font-size:11px; color:var(--text-sub); font-weight:700; display:block; margin-bottom:4px;">サブ情報</label><textarea id="inlineEditSubInput-' + w.num + '" class="modern-textarea" style="height:60px; margin:0;">' + (w.sub || "") + '</textarea></div><div style="display:flex; gap:8px;"><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:rgba(255,255,255,0.05); border:1px solid var(--border);" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')">キャンセル</button><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:var(--accent); color:white; border:none;" onclick="window.saveInlineWordEdit(event, \'' + w.num + '\')">保存する</button></div></div>';
+        card.innerHTML = adminActionButtons + '<div id="wordCardBody-' + w.num + '"><div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;"><div style="display:flex; align-items:center; gap:8px;"><span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#' + w.shownNo + '</span><span style="font-size:18px; font-weight:800; color:white;">' + w.word + '</span><button type="button" class="pronounce-button word-speak-button" data-sound="none" data-say="' + w.word + '" aria-label="発音を聞く"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg></button></div></div>' + meaningsHtml + (w.sub ? '<div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;"><button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">サブ情報を展開 <i data-lucide="chevron-down" size="12"></i></button><div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;"><div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">' + w.sub + '</div></div></div>' : '') + '<div data-vocab-history="' + w.num + '" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">' + dotsHtml + '</div></div><div id="wordCardForm-' + w.num + '" style="display:none; padding-top:32px;"><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; display:block; margin-bottom:4px;">単語</label><input type="text" id="inlineEditWordInput-' + w.num + '" class="search-input" style="margin:0;" value="' + w.word + '"></div><div class="inline-edit-place"><label>番号<input type="number" min="1" step="1" id="inlineEditNoInput-' + w.num + '" class="search-input" value="' + w.shownNo + '"></label><label>単元<input type="text" maxlength="60" list="vocabUnitOptions" id="inlineEditUnitInput-' + w.num + '" class="search-input" value="' + w.unit + '" placeholder="なし"></label></div><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label><div id="inlineEditMeaningsList-' + w.num + '"></div><button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, \'' + w.num + '\')"><i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加</button></div><div style="margin-bottom:14px;"><label style="font-size:11px; color:var(--text-sub); font-weight:700; display:block; margin-bottom:4px;">サブ情報</label><textarea id="inlineEditSubInput-' + w.num + '" class="modern-textarea" style="height:60px; margin:0;">' + (w.sub || "") + '</textarea></div><div style="display:flex; gap:8px;"><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:rgba(255,255,255,0.05); border:1px solid var(--border);" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')">キャンセル</button><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:var(--accent); color:white; border:none;" onclick="window.saveInlineWordEdit(event, \'' + w.num + '\')">保存する</button></div></div>';
         var cardBody = card.querySelector('#wordCardBody-' + w.num);
         var history = cardBody ? cardBody.querySelector('[data-vocab-history]') : null;
         if (cardBody) cardBody.insertBefore(window.createVocabNoteSection(w), history || null);
@@ -942,6 +1005,7 @@
         var container = document.getElementById('vocabListContainer');
         if (!container) return;
         container.innerHTML = "";
+        document.getElementById('vocabUnitContents')?.replaceChildren();
         if (vocabList.length === 0) {
             container.innerHTML = "<div style='text-align:center; padding:40px 20px; color:var(--text-sub); font-size:13px;'>現在、この単語帳には単語が登録されていません。<br>" + (window.canEditCurrentTextbook?.() ? '上の「＋ 追加」から登録できます。' : '管理者からの単語の配信をお待ちください。') + "</div>";
             return;
@@ -953,8 +1017,10 @@
             container.textContent='共有メモを確認しています…';var book=currentTextbook;
             SharedVocabNotes.prepare(vocabList).then(function(){if(currentTextbook===book&&selectedExtras.has('note'))window.renderVocabList();}).catch(function(){if(currentTextbook===book){container.textContent='共有メモを読み込めませんでした。絞り込みを解除するか、接続後にもう一度お試しください。';}});return;
         }
-        var filtered = vocabList.filter(function(w) {
-            var n = parseInt(w.num);
+        unitContents(container);
+        var filtered = (window.VocabOrder ? window.VocabOrder.sort(vocabList) : vocabList).filter(function(w) {
+            var n = window.VocabOrder ? window.VocabOrder.no(w) : parseInt(w.num);
+            if (selectedUnit && !(w.unit && window.VocabOrder.cleanUnit(w.unit) === selectedUnit)) return false;
             if (!isNaN(n) && (n < startRange || n > endRange)) return false;
             if(selectedUnderstanding.size && !(w.meanings||[]).some(function(m){return selectedUnderstanding.has(m.status||'none');}))return false;
             if(selectedExtras.has('sticky')&&!w.sticky)return false;
@@ -962,7 +1028,7 @@
             if (searchKeyword && !(w.word.toLowerCase().includes(searchKeyword) || w.meaning.includes(searchKeyword) || String(w.note || '').toLowerCase().includes(searchKeyword))) return false;
             return true;
         });
-        var signature=JSON.stringify([currentTextbook,startRange,endRange,searchKeyword,vocabFilter]);
+        var signature=JSON.stringify([currentTextbook,startRange,endRange,searchKeyword,vocabFilter,selectedUnit]);
         if(signature!==vocabPageFilter){vocabPage=0;vocabPageFilter=signature;}
         vocabPage=Math.min(vocabPage,Math.max(0,Math.ceil(filtered.length/vocabPageSize)-1));
         var fragment=document.createDocumentFragment();
