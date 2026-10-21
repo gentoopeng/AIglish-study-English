@@ -371,3 +371,17 @@ The scoreboard is a podium: from the left, second, first, third and fourth place
 After a miss (or 「わからない」), the correct meaning appears as a card in the middle of the screen with the 3-second countdown and the next-question button, instead of under the choices. 「わからない」 sits below 「選択肢の中にはない」 and is recorded as choice 10 (`WordDuelModel.pass`). It has no penalty and none of the miss effects of events, but the combo breaks, it counts as not-correct for challenges, the 3-second wait applies, it earns no per-answer bonus (so it cannot be repeated for points), and the word is marked × in the understanding record. Older apps reject choice 10, so new rooms are version 10, and the button appears only in version 10 rooms and in solo play. Older apps refuse version 10 rooms with the existing "update the app" message.
 
 On the results screen, the finished room stays watched. `再戦（ルールそのまま）` creates a version 10 room with the same rules, the same words and a new seed (questions in a different order), sized to the players who stayed. It writes the new room code into the finished room as `rematch` in the same transaction, and joins an existing rematch room instead of making a second one. The other players see an invitation with a join button. `ルールを選んで再戦` opens the settings screen filled from the previous room (`BattleLobby.apply`) and sends the invitation once the room is created. Solo results offer `もう一度（ルールそのまま）`.
+
+## Word pronunciation (10.21.18.00)
+
+`pronounce.js` reads English words with the browser's built-in speech (Web Speech API). It needs no server or API key, and each utterance is a short `SpeechSynthesisUtterance`. A voice for the chosen accent that ships with the device is preferred (`localService`), with any English voice as a fallback. Speaker buttons are `.pronounce-button[data-say]`, handled by one delegated capture-phase listener that stops the event, so a tap never also flips, rates or opens what the button sits on. They appear in these places:
+- the flashcard and warm-up screens, beside the card opposite the info button (not on the card, so taps and swipes are untouched)
+- every word-list row (also used in the flashcard word details)
+- the battle's correct-answer card, which now also shows the English word
+
+Settings live in the settings dialog under 単語の発音: on/off, automatic reading (off by default), speed (0.6–1.2×) and American or British English, stored in `aiglish_pronounce_settings`. With automatic reading on, a card is read when it appears (English first) or when it is turned over (Japanese first), and the battle's correct-answer card is read when it appears. Browsers may require one tap before the first automatic reading (iOS). When the feature is off or unsupported, every speaker button is hidden. Validation: `tests/pronounce.smoke.cjs` stubs the speech engine and checks:
+- the flashcard speaker reads without flipping the card
+- accent and speed reach the utterance
+- automatic reading happens on show and on flip
+- the word-list speaker reads an escaped word correctly
+- turning the feature off hides the buttons

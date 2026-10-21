@@ -1073,7 +1073,7 @@
       session.duration / 1000 + "秒";
     const body = dialog.querySelector(".duel-content");
     body.innerHTML =
-      '<div class="duel-clock-row"><button type="button" class="duel-leave">終了する</button><div class="duel-clock" role="timer"></div><small>秒</small></div><div class="duel-scoreboard"></div><div class="duel-time-track"><span></span></div><div class="duel-event-banner" role="status" hidden><b></b><em></em><span></span><small></small><i></i></div><div class="duel-announce" aria-hidden="true" hidden></div><div class="duel-combo" aria-live="polite"></div><div class="duel-question-card"><small class="duel-question-label"></small><h3 class="duel-prompt"></h3></div><div class="duel-options"></div><div class="duel-correction" role="status" hidden><small>正しい意味</small><strong></strong><button type="button" data-duel-next>次の問題</button></div><p class="duel-status" role="status"></p>';
+      '<div class="duel-clock-row"><button type="button" class="duel-leave">終了する</button><div class="duel-clock" role="timer"></div><small>秒</small></div><div class="duel-scoreboard"></div><div class="duel-time-track"><span></span></div><div class="duel-event-banner" role="status" hidden><b></b><em></em><span></span><small></small><i></i></div><div class="duel-announce" aria-hidden="true" hidden></div><div class="duel-combo" aria-live="polite"></div><div class="duel-question-card"><small class="duel-question-label"></small><h3 class="duel-prompt"></h3></div><div class="duel-options"></div><div class="duel-correction" role="status" hidden><small>正しい意味</small><div class="duel-correction-say"><em></em><button type="button" class="pronounce-button duel-speak" data-sound="none" data-say="" aria-label="発音を聞く"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg></button></div><strong></strong><button type="button" data-duel-next>次の問題</button></div><p class="duel-status" role="status"></p>';
     const players = session.solo
         ? { [session.id]: player() }
         : session.room.players,
@@ -1303,9 +1303,13 @@
       buttons[q.correct].classList.add("is-correct");
       const correction = dialog.querySelector(".duel-correction");
       correction.querySelector("strong").textContent = q.meaning;
+      correction.querySelector(".duel-correction-say em").textContent = q.prompt;
+      correction.querySelector(".duel-speak").dataset.say = q.prompt;
+      window.Pronounce?.auto(q.prompt);
       correction.hidden = false;
-      correction.querySelector("button").disabled = true;
-      correction.querySelector("button").textContent = "あと3秒";
+      const next = correction.querySelector("[data-duel-next]");
+      next.disabled = true;
+      next.textContent = "あと3秒";
     }
     if (!target.solo && !sending)
       setTimeout(() => {
