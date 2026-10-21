@@ -14,7 +14,9 @@ function apply(book,ref,answer,id,options={}){
  const previous=before.meanings?.[ref.mid]||{};
  // Battles are easier than self-rated cards (a lucky guess is possible), so they only record a
  // drop: a meaning rated ○ that is answered wrong. Everything else leaves the record as it is.
- if(options.onlyDowngrade&&!(status==='bad'&&previous.status==='ok')){window.recordRankedWord?.(book,ref.num);return before;}
+ // Single-meaning words may keep their rating at word level only (the battle lobby reads them so too).
+ const rated=previous.status||(ref.count===1?before.status:undefined);
+ if(options.onlyDowngrade&&!(status==='bad'&&rated==='ok')){window.recordRankedWord?.(book,ref.num);return before;}
  const meanings={...before.meanings,[ref.mid]:{...previous,status,history:[...(previous.history||[]),status].slice(-20)}},word={...before,sig:ref.sig,note:before.note||'',meanings,status:overall(meanings,ref.count),history:[...(before.history||[]),status].slice(-20)};
  if(window.WeakReviewModel)meanings[ref.mid].review={...previous.review,at:Date.now()};
  if((status==='ok'||options.reviewCorrect===true)&&options.reviewDay&&window.WeakReviewModel?.day()===options.reviewDay)meanings[ref.mid].review={...meanings[ref.mid].review,passed:options.reviewDay};

@@ -29,3 +29,16 @@ test('battles only record a ○ answered wrong; correct answers and other misses
  assert.equal(read().meanings['1-0'].status,'bad');assert.equal(JSON.stringify(read().meanings['1-0'].history),JSON.stringify(['so','ok','bad']));
  assert.ok(values.get('core_v4_word_duel_pending_a'));
 });
+test('a single-meaning word rated ○ only at word level also drops to × in a battle',()=>{
+ const {ctx,values,progress}=setup(),single={num:'2',mid:'2-0',sig:'2::two::one',count:1},key2='core_v4_user_vocab_progress_a_book';
+ values.set(key2,JSON.stringify({2:{sig:single.sig,status:'ok',history:['ok']}}));
+ progress.apply('book',single,true,'a',{onlyDowngrade:true});
+ assert.equal(ctx.LearningData.read('book')['2'].status,'ok');
+ progress.apply('book',single,false,'a',{onlyDowngrade:true});
+ assert.equal(ctx.LearningData.read('book')['2'].meanings['2-0'].status,'bad');
+ assert.equal(ctx.LearningData.read('book')['2'].status,'bad');
+ // A word with several meanings needs the meaning itself to be ○.
+ values.set(key2,JSON.stringify({1:{sig:ref.sig,status:'ok',history:['ok']}}));
+ progress.apply('book',ref,false,'a',{onlyDowngrade:true});
+ assert.equal(ctx.LearningData.read('book')['1'].meanings,undefined);
+});
