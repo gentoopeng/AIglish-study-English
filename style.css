@@ -2602,3 +2602,6 @@ mark.term-mark.is-rated{background:linear-gradient(90deg,rgba(var(--mark),.32),r
 .duel-solo-result dt{color:#c3cbda;font:700 13px system-ui,sans-serif;}.duel-solo-result dd{margin:0;color:#fff;font:800 14px system-ui,sans-serif;font-variant-numeric:tabular-nums;}
 .duel-solo-actions{display:grid;gap:10px;}.word-duel-screen .duel-solo-actions button{width:100%;margin:0;padding:14px;font-size:15px;}
 .word-duel-screen .duel-solo-actions .duel-again{background:#1b6355;border-color:#82f0c7;}
+/* The correct-answer card's button rule (padding 11px) must not reach the round speaker button. */
+.word-duel-screen.is-playing .duel-correction button.duel-speak{position:relative;width:32px;height:32px;padding:0;flex-shrink:0;}
+.word-duel-screen .duel-correction .duel-speak svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);}
