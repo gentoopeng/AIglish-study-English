@@ -385,3 +385,32 @@ Settings live in the settings dialog under 単語の発音: on/off, automatic re
 - automatic reading happens on show and on flip
 - the word-list speaker reads an escaped word correctly
 - turning the feature off hides the buttons
+
+## Hands-free flashcards (10.21.22.00)
+
+`hands-free.js` adds a headphones button to the flashcard screen.
+
+**While it is on:**
+- **Media buttons:** earphone and lock-screen buttons rate the card through the same path as a swipe:
+  - one press (play/pause): ○
+  - two presses (next track): ×
+  - three presses (previous track): △
+  
+  A second action within 0.6 s is ignored, so one gesture never rates two cards.
+- **Reading:** the visible side is read. After the delay set under 単語の発音 → 「ハンズフリーで答えを読む」 (off, or 1–10 s; stored in `aiglish_handsfree_settings`), the card turns and the other side is read in its language (the Japanese meaning uses a ja-JP voice).
+- **Holding the media buttons:** browsers deliver media buttons only to a page that is playing audio, so the mode loops a 2-second 8 kHz silent WAV and re-asserts playback after effect sounds.
+- **Wake lock:** the screen wake lock is held when available.
+
+**Pocket mode** is a black, touch-proof cover over everything; a 2-second hold removes it.
+
+**Ending:** hands-free mode stops, releasing the buttons, the wake lock and the audio, when the deck ends or the session is paused. It is not shown on the warm-up screen.
+
+**Keyboards and presentation clickers** work on the card screen at any time: → or PageDown ○, ← or PageUp ×, ↑ △, Space or Enter turns the card.
+
+**Limitation:** iOS suspends web pages when the screen is locked, so reading and buttons are not guaranteed with the screen off. The supported use is the screen on, with pocket mode.
+
+**Validation:** `tests/hands-free.smoke.cjs` checks ○/×/△ from media actions, the double-press guard, the answer read after the delay, the wake lock held and released, keyboard shortcuts, and the pocket cover.
+
+The fix for the ten stale smoke tests also found two app issues:
+- `onAppLoaded` wrappers now keep the handler's name.
+- On iOS, the warm-up START card had stopped playing its opening animation, because the floating-card rule gained specificity when `:not(.is-settling)` was added; the START card is now excluded from the floating rule.

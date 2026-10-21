@@ -539,6 +539,11 @@
       history = roles.get("fcHistoryContainer"),
       info = roles.get("flashcardInfoButton"),
       speaker = roles.get("flashcardSpeakButton");
+    // Hands-free mode belongs to the regular card screen; the copied controls are not wired here.
+    for (const id of ["flashcardHandsFreeButton", "handsFreeBar"]) {
+      const node = roles.get(id);
+      if (node) node.hidden = true;
+    }
     const answers = [];
     let starting = false,
       startTimer;

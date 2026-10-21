@@ -23,6 +23,7 @@
       };
     } catch {}
     voice = null;
+    others.clear();
     render();
   }
   function save() {
@@ -32,32 +33,44 @@
     voice = null;
     render();
   }
-  // Prefer a voice for the chosen accent that ships with the device; fall back to any English one.
-  function pick() {
-    if (voice) return voice;
+  // Prefer a voice for the chosen accent that ships with the device; fall back to any voice
+  // of the same language. English uses the chosen accent; other languages (the Japanese
+  // meaning in hands-free mode) are cached separately.
+  const others = new Map();
+  function pick(language) {
+    const english = !language || language.toLowerCase().startsWith("en");
+    if (english && voice) return voice;
+    if (!english && others.has(language)) return others.get(language);
     const voices = synth.getVoices() || [],
       lang = (v) => String(v.lang || "").replace("_", "-").toLowerCase(),
-      wanted = settings.accent.toLowerCase(),
+      wanted = (english ? settings.accent : language).toLowerCase(),
+      base = wanted.split("-")[0],
       exact = voices.filter((v) => lang(v) === wanted),
-      english = voices.filter((v) => lang(v).startsWith("en"));
-    voice =
-      exact.find((v) => v.localService) ||
-      exact[0] ||
-      english.find((v) => v.localService) ||
-      english[0] ||
-      null;
-    return voice;
+      family = voices.filter((v) => lang(v).startsWith(base)),
+      chosen =
+        exact.find((v) => v.localService) ||
+        exact[0] ||
+        family.find((v) => v.localService) ||
+        family[0] ||
+        null;
+    if (english) voice = chosen;
+    else others.set(language, chosen);
+    return chosen;
   }
-  function speak(text) {
+  // options.lang: a BCP 47 language other than the English accent (e.g. "ja-JP").
+  // options.background: hands-free mode keeps reading while the page is not visible.
+  function speak(text, options = {}) {
     text = String(text || "").trim().slice(0, 200);
-    if (!supported || !settings.enabled || !text || document.hidden) return false;
+    if (!supported || !settings.enabled || !text) return false;
+    if (document.hidden && !options.background) return false;
     try {
       synth.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = settings.accent;
+      utterance.lang = options.lang || settings.accent;
       utterance.rate = settings.rate;
-      const chosen = pick();
+      const chosen = pick(options.lang);
       if (chosen) utterance.voice = chosen;
+      if (options.onend) utterance.onend = utterance.onerror = options.onend;
       synth.speak(utterance);
       return true;
     } catch {
@@ -137,9 +150,13 @@
     true,
   );
   if (supported) {
-    synth.addEventListener?.("voiceschanged", () => (voice = null));
+    synth.addEventListener?.("voiceschanged", () => {
+      voice = null;
+      others.clear();
+    });
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) synth.cancel();
+      // Hands-free mode keeps reading if the browser lets the page run while hidden.
+      if (document.hidden && !window.HandsFree?.active()) synth.cancel();
     });
     window.addEventListener("pagehide", () => synth.cancel());
   }
