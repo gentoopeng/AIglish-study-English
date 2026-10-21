@@ -388,6 +388,10 @@ ${eventHtml()}
         source = await window.__getBookMasterWords(book);
       if (!source?.length) throw Error("単語帳の読み込みを確認してください。");
       const progress = window.LearningData.read(book),
+        terms =
+          window.TermProgress?.enabled(book) && window.TermQuestions
+            ? window.TermProgress.read(book)
+            : null,
         normalized = window.migrateVocabData(
           window.stripVocabProgressFromWords(source),
         );
@@ -402,6 +406,30 @@ ${eventHtml()}
         const saved = progress[String(word.num)],
           sig = window.buildWordSignature(word),
           compatible = !saved?.sig || saved.sig === sig;
+        // 用語・年号モード: each generated question is its own battle question with its own record.
+        if (terms) {
+          for (const q of window.TermQuestions.questions(word)) {
+            const record = compatible ? terms[String(word.num)]?.[q.key] : null,
+              status = record?.status || "none";
+            if (mode === "status" && !statuses.includes(status)) continue;
+            sampler.add({
+              word: q.prompt,
+              meaning: q.answer,
+              kind: q.kind,
+              duelStatus: status,
+              duelHistory: record?.history || [],
+              duelRef: {
+                book,
+                num: String(word.num),
+                mid: String(q.mid),
+                sig,
+                count: word.meanings.length,
+                term: q.key,
+              },
+            });
+          }
+          continue;
+        }
         for (const meaning of word.meanings || []) {
           const prior = compatible
               ? saved?.meanings?.[String(meaning.id)]
@@ -435,7 +463,7 @@ ${eventHtml()}
       }
     }
     const pool = sampler.result();
-    if (pool.length < 10)
+    if (pool.length < 10 || new Set(pool.map((word) => word.meaning)).size < 10)
       throw Error("条件に合う異なる意味の単語を10個以上選んでください。");
     return { pool, book: ids[0], books: ids };
   }
