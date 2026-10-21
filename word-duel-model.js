@@ -926,6 +926,7 @@
     validRules,
     validDuration,
     eventAt,
+    correctChoice,
     roomScores,
     poolSampler,
     selectPool,

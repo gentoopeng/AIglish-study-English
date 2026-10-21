@@ -589,12 +589,66 @@ const { chromium, webkit } = require("playwright"),
         (n) => n.textContent === "-180",
       ),
     );
+    // When the event ends, a summary shows what it meant for this player.
+    await a.clock.fastForward(6500);
+    assert.match(await a.locator(".duel-announce").textContent(), /イベント終了/);
+    assert.match(await a.locator(".duel-announce").textContent(), /全員に攻撃/);
+    assert.match(await a.locator(".duel-announce").textContent(), /イベント中 [+−]\d+点/);
+    assert.equal(await a.locator('[data-player-id="duel-a"] .duel-player-correct').textContent(), "✓1");
+    assert.equal(await a.locator('[data-player-id="duel-b"] .duel-player-correct').textContent(), "✓0");
     for (const page of [a, b]) await page.clock.fastForward(61000);
     for (const page of [a, b]) await page.locator(".duel-results").waitFor();
     assert.deepEqual(
       Object.values(docs.get("wordDuelRooms/" + eventCode).result.scores),
       [110, -170],
     );
+    for (const page of [a, b])
+      await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    // Rank events say on the strip whether they apply to this player, using the standings
+    // at the start of the event.
+    for (const page of [a, b]) await page.clock.setSystemTime(Date.now());
+    await lobby(a);
+    await a.locator("[data-config-tab=events]").click();
+    await a.locator("[data-events]").check();
+    await a.locator("[data-event-preset=none]").click();
+    await a.locator('[data-event-category="順位"]').click();
+    await a.locator("[data-event-type][value=chase]").check();
+    await a.getByRole("button", { name: "部屋を作る", exact: true }).click();
+    await a.locator(".duel-wait strong").waitFor();
+    const chaseCode = await a.locator(".duel-wait strong").textContent();
+    await join(b, chaseCode);
+    for (const page of [a, b]) {
+      await page.locator(".duel-options").waitFor();
+      await page.clock.fastForward(3100);
+    }
+    await answer(a);
+    await a.clock.fastForward(300);
+    await b.waitForFunction(
+      () =>
+        document.querySelector('[data-player-id="duel-a"] .duel-player-correct')
+          ?.textContent === "✓1",
+    );
+    for (const page of [a, b]) await page.clock.fastForward(15500);
+    assert.equal(
+      await b.locator(".duel-event-banner span").textContent(),
+      "あなたは対象：正解すると2倍！",
+    );
+    assert.equal(
+      await b.locator(".duel-event-banner span").getAttribute("data-kind"),
+      "good",
+    );
+    assert.equal(
+      await a.locator(".duel-event-banner span").textContent(),
+      "あなたは首位なので対象外",
+    );
+    assert.match(
+      await a.locator(".duel-event-banner small").textContent(),
+      /開始時に首位でなかった人の正解点が2倍/,
+    );
+    for (const page of [a, b]) await page.clock.fastForward(61000);
+    for (const page of [a, b]) await page.locator(".duel-results").waitFor();
+    assert.equal(await a.locator(".duel-results li.is-first").count(), 1);
+    assert.equal(await a.locator(".duel-result").getAttribute("data-place"), "1");
     for (const page of [a, b])
       await page.getByRole("button", { name: "閉じる", exact: true }).click();
     // Banked scores release at the end of the event even when nobody submits another answer.

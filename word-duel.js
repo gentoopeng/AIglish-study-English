@@ -653,18 +653,237 @@
     node.textContent = (delta < 0 ? "−" : "+") + Math.abs(delta);
     column.append(node);
     const run = node.animate?.(
-      [
-        { opacity: 0, transform: "translate(-50%,6px)" },
-        { opacity: 1, transform: "translate(-50%,0)", offset: 0.2 },
-        { opacity: 0, transform: "translate(-50%,-26px)" },
-      ],
-      { duration: calm() ? 600 : 850, easing: "ease-out" },
+      calm()
+        ? [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 0 }]
+        : [
+            { opacity: 0, transform: "translate(-50%,6px)" },
+            { opacity: 1, transform: "translate(-50%,0)", offset: 0.2 },
+            { opacity: 0, transform: "translate(-50%,-26px)" },
+          ],
+      { duration: 850, easing: "ease-out" },
     );
     if (run) run.onfinish = () => node.remove();
     else setTimeout(() => node.remove(), 850);
   }
   function nudge(node, frames, duration) {
     if (node && !calm()) node.animate?.(frames, { duration, easing: "ease-out" });
+  }
+  function roster(target) {
+    return target.solo
+      ? { [target.id]: { name: myName, answers: target.answers } }
+      : {
+          ...target.room.players,
+          [target.id]: {
+            ...target.room.players[target.id],
+            answers: target.answers,
+          },
+        };
+  }
+  function scoresAt(target, at) {
+    return m.roomScores({ ...target, players: roster(target) }, false, at);
+  }
+  // Right/wrong per answer, extended as answers arrive instead of recomputed every tick.
+  function rightsOf(target, id, answers) {
+    const cache = (target.rightCache ||= {}),
+      entry = (cache[id] ||= { flags: [] });
+    if (entry.flags.length > answers.length) entry.flags = [];
+    for (let i = entry.flags.length; i < answers.length; i++)
+      entry.flags.push(
+        m.correctChoice(target.pool, target.seed, i) === answers[i].choice,
+      );
+    return entry.flags;
+  }
+  function namesOf(target, ids) {
+    const people = roster(target);
+    return ids
+      .map((id) => (id === target.id ? "あなた" : people[id]?.name || "相手"))
+      .join("・");
+  }
+  const rankEvents = ["chase", "pressure", "comeback", "lead", "steal", "hunt"];
+  // What the running event means for this player right now, so its effect is visible
+  // without opening the rules: whether the player is targeted, and challenge progress.
+  function eventLine(target, active, elapsed, final = false) {
+    const type = active.type,
+      me = target.id,
+      people = roster(target),
+      ids = Object.keys(people),
+      p = target.rules.eventPoints,
+      start = active.until - target.rules.eventSeconds * 1000,
+      inside = (id) => {
+        const answers = people[id].answers || [],
+          flags = rightsOf(target, id, answers);
+        return answers
+          .map((answer, i) => ({ at: answer.at, right: flags[i] }))
+          .filter(
+            (answer) =>
+              answer.at >= start &&
+              answer.at < active.until &&
+              answer.at <= elapsed,
+          );
+      };
+    if (rankEvents.includes(type)) {
+      if (ids.length < 2 && ["chase", "steal", "hunt"].includes(type))
+        return null;
+      // Same basis as the scoring: standings just before the event started.
+      const key =
+        start + ":" + ids.map((id) => (people[id].answers || []).length).join();
+      if (target.rankKey !== key) {
+        const totals = scoresAt(target, start - 1),
+          levels = [...new Set(ids.map((id) => totals[id].total))].sort(
+            (a, b) => b - a,
+          );
+        target.rankKey = key;
+        target.rankInfo = {
+          ranks: Object.fromEntries(
+            ids.map((id) => [id, levels.indexOf(totals[id].total)]),
+          ),
+          last: levels.length - 1,
+        };
+      }
+      const { ranks, last } = target.rankInfo,
+        r = ranks[me],
+        at = (rank) =>
+          namesOf(
+            target,
+            ids.filter((id) => id !== me && ranks[id] === rank),
+          );
+      if (type === "chase")
+        return r > 0
+          ? { text: "あなたは対象：正解すると2倍！", kind: "good" }
+          : { text: "あなたは首位なので対象外" };
+      if (type === "pressure")
+        return r === 0
+          ? { text: "あなたは首位：ミスの失点2倍！", kind: "bad" }
+          : { text: "首位の" + at(0) + "はミスの失点2倍" };
+      if (type === "comeback")
+        return r === last
+          ? { text: "あなたは最下位：正解すると3倍！", kind: "good" }
+          : { text: "最下位の" + at(last) + "は正解3倍" };
+      if (type === "lead")
+        return r === 0
+          ? { text: "あなたは首位：正解で+" + p + "点！", kind: "good" }
+          : { text: "首位の" + at(0) + "は正解で+" + p + "点" };
+      if (type === "steal")
+        return r === 0
+          ? { text: "あなたは首位：正解した相手に点を奪われる！", kind: "bad" }
+          : { text: "正解で首位の" + at(0) + "から" + p + "点奪える！", kind: "good" };
+      return r === 0
+        ? { text: "あなたは首位：一つ下の相手に狙われる！", kind: "bad" }
+        : { text: "正解で" + at(r - 1) + "を−" + p + "点！", kind: "good" };
+    }
+    const mine = inside(me);
+    if (type === "streak") {
+      let run = 0,
+        done = false;
+      for (const answer of mine) {
+        run = answer.right ? run + 1 : 0;
+        if (run >= 3) done = true;
+      }
+      return done
+        ? { text: "達成！ +" + p + "点", kind: "good" }
+        : { text: "連続正解 " + run + " / 3" + (final ? "（未達成）" : "") };
+    }
+    if (type === "perfect") {
+      const right = mine.filter((answer) => answer.right).length;
+      if (mine.some((answer) => !answer.right))
+        return { text: "ミスしたので今回は失敗", kind: "bad" };
+      if (final)
+        return right >= 3
+          ? { text: "達成！ +" + p + "点", kind: "good" }
+          : { text: "正解が3問に届かず" };
+      return {
+        text: "正解 " + right + " / 3 · ミスなし",
+        kind: right >= 3 ? "good" : "",
+      };
+    }
+    if (type === "first") {
+      let winner = null;
+      for (const id of ids)
+        for (const answer of inside(id))
+          if (answer.right && (!winner || answer.at < winner.at))
+            winner = { id, at: answer.at };
+      if (!winner)
+        return { text: final ? "誰も正解できなかった" : "まだ誰も正解していない！" };
+      return winner.id === me
+        ? { text: "あなたが一番乗り！ +" + p + "点", kind: "good" }
+        : { text: namesOf(target, [winner.id]) + "が一番乗り" };
+    }
+    if (type === "cooperate") {
+      const need = ids.length * 3,
+        total = ids.reduce(
+          (sum, id) => sum + inside(id).filter((answer) => answer.right).length,
+          0,
+        );
+      return total >= need
+        ? { text: "全員達成！ +" + p + "点", kind: "good" }
+        : { text: "全員の正解 " + total + " / " + need };
+    }
+    if (type === "risk") {
+      if (!mine.length)
+        return { text: "次の1問が勝負！（得点も失点も3倍）", kind: "bad" };
+      return mine[0].right
+        ? { text: "勝負に勝った！", kind: "good" }
+        : { text: "勝負に負けた…", kind: "bad" };
+    }
+    if (type === "last")
+      return active.until - elapsed <= 3000
+        ? { text: "今！ 正解で+" + p + "点", kind: "good" }
+        : { text: "残り3秒になったら正解で+" + p + "点" };
+    return null;
+  }
+  function showEventEnd(target, ended) {
+    const before = scoresAt(target, ended.start - 1)[target.id].total,
+      after = scoresAt(target, ended.until)[target.id].total,
+      delta = after - before,
+      line = rankEvents.includes(ended.type)
+        ? null
+        : eventLine(target, ended, ended.until, true),
+      info = eventText(ended.type);
+    announce(
+      {
+        kicker: "イベント終了",
+        title: info.name,
+        text:
+          (line ? line.text + " · " : "") +
+          "イベント中 " +
+          (delta < 0 ? "−" + Math.abs(delta) : "+" + delta) +
+          "点",
+        tone: info.tone,
+      },
+      3,
+      1900,
+    );
+  }
+  function confetti() {
+    if (calm() || !dialog || !document.body.animate) return;
+    const layer = document.createElement("div"),
+      colors = ["#ffd36b", "#7fd3ff", "#86f0b5", "#ff9d8a", "#cfa8ff", "#fff1c5"];
+    layer.className = "duel-confetti";
+    layer.setAttribute("aria-hidden", "true");
+    let longest = 0;
+    for (let i = 0; i < 28; i++) {
+      const piece = document.createElement("i"),
+        drift = Math.round((Math.random() - 0.5) * 120),
+        spin = Math.round((Math.random() - 0.5) * 900),
+        time = 1500 + Math.random() * 1100,
+        delay = Math.random() * 350;
+      piece.style.left = Math.random() * 100 + "%";
+      piece.style.background = colors[i % colors.length];
+      layer.append(piece);
+      piece.animate(
+        [
+          { transform: "translate(0,-20px) rotate(0deg)", opacity: 1 },
+          {
+            transform: "translate(" + drift + "px,105vh) rotate(" + spin + "deg)",
+            opacity: 0.9,
+          },
+        ],
+        { duration: time, delay, easing: "cubic-bezier(.25,.6,.4,1)", fill: "backwards" },
+      );
+      longest = Math.max(longest, time + delay);
+    }
+    dialog.append(layer);
+    setTimeout(() => layer.remove(), longest + 100);
   }
   function play() {
     dialog.querySelector("[data-duel-back]").onclick = closeScreen;
@@ -690,7 +909,7 @@
       column.className = "duel-player";
       column.dataset.playerId = id;
       column.innerHTML =
-        '<div class="duel-player-avatar"></div><small></small><strong>0</strong>';
+        '<div class="duel-player-avatar"></div><em class="duel-player-correct" title="正解数">✓0</em><small></small><strong>0</strong>';
       column.querySelector("small").textContent = person.name;
       host.append(column);
       if (id === session.id) {
@@ -783,6 +1002,15 @@
       : "ミス · " +
         (delta < 0 ? "−" + Math.abs(delta) : delta === 0 ? "±0" : "+" + delta);
     combo.classList.toggle("is-miss", !right);
+    combo.dataset.tier = !right
+      ? ""
+      : value.combo >= 20
+        ? "rainbow"
+        : value.combo >= 10
+          ? "gold"
+          : value.combo >= 5
+            ? "blue"
+            : "";
     if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
       combo.animate?.(
         [
@@ -815,7 +1043,15 @@
       value.combo >= 5 &&
       Math.floor(value.combo / 5) > Math.floor(previous.combo / 5)
     ) {
-      announce({ title: value.combo + "コンボ！", tone: "combo" }, 1, 1100);
+      announce(
+        {
+          title: value.combo + "コンボ！",
+          tone:
+            value.combo >= 20 ? "rainbow" : value.combo >= 10 ? "score" : "combo",
+        },
+        1,
+        1100,
+      );
       window.AppSounds?.play("confirm");
     }
     const buttons = dialog.querySelectorAll(".duel-options button");
@@ -908,6 +1144,66 @@
         "is-leading",
         ids.length > 1 && top > 0 && scores[id].total === top,
       );
+      const answers =
+          id === session.id ? session.answers : person.answers || [],
+        flags = rightsOf(session, id, answers),
+        badge = column.querySelector(".duel-player-correct"),
+        count = "✓" + flags.filter(Boolean).length,
+        seen = (session.seenAnswers ||= {});
+      if (badge && badge.textContent !== count) badge.textContent = count;
+      // Another player just answered correctly: their icon lights up.
+      if (
+        id !== session.id &&
+        seen[id] !== undefined &&
+        answers.length > seen[id] &&
+        flags[answers.length - 1]
+      )
+        nudge(
+          column.querySelector(".duel-player-avatar"),
+          [
+            { transform: "scale(1)", boxShadow: "0 0 0 0 #86f0b5cc" },
+            {
+              transform: "scale(1.16)",
+              boxShadow: "0 0 0 6px #86f0b566",
+              offset: 0.4,
+            },
+            { transform: "scale(1)", boxShadow: "0 0 0 12px #86f0b500" },
+          ],
+          600,
+        );
+      seen[id] = answers.length;
+    }
+    // A new sole leader replaces the previous one: call out the comeback.
+    const leaders = ids.filter((id) => scores[id].total === top);
+    if (ids.length > 1 && top > 0 && leaders.length === 1) {
+      const leader = leaders[0];
+      if (session.leader && session.leader !== leader) {
+        announce(
+          {
+            title: "逆転！",
+            text:
+              leader === session.id
+                ? "あなたが1位に！"
+                : namesOf(session, [leader]) + "が1位に！",
+            tone: "score",
+          },
+          2,
+          1500,
+        );
+        nudge(
+          dialog.querySelector(
+            '[data-player-id="' + CSS.escape(leader) + '"] strong',
+          ),
+          [
+            { transform: "scale(1)" },
+            { transform: "scale(1.4)", color: "#fff6c0" },
+            { transform: "scale(1)" },
+          ],
+          700,
+        );
+        window.AppSounds?.play("confirm");
+      }
+      session.leader = leader;
     }
   }
   function tick() {
@@ -988,17 +1284,20 @@
                 ),
               )
             : 0,
+          line = active ? eventLine(session, active, elapsed) : null,
           parts = [
             ["b", (active ? "" : "まもなく ") + info.name],
             ["em", (active ? "残り" : "") + seconds + "秒"],
-            ["span", info.hint],
+            ["span", line ? line.text : info.hint],
             [
               "small",
-              active && preview
-                ? "次は" + window.BattleLobby.labels[preview.type]
-                : "",
+              info.detail +
+                (active && preview
+                  ? " / 次は" + window.BattleLobby.labels[preview.type]
+                  : ""),
             ],
           ];
+        banner.querySelector("span").dataset.kind = line?.kind || "";
         for (const [tag, text] of parts) {
           const node = banner.querySelector(tag);
           if (node.textContent !== text) node.textContent = text;
@@ -1014,9 +1313,19 @@
         ":" +
         (elapsed % 15000 < session.rules.eventSeconds * 1000);
       if (session.eventStage !== stage) {
+        const ended = session.activeEvent;
         session.eventStage = stage;
         opponent();
+        if (ended && ended.until !== active?.until) {
+          session.activeEvent = null;
+          if (!active) showEventEnd(session, ended);
+        }
         if (active) {
+          session.activeEvent = {
+            type: active.type,
+            until: active.until,
+            start: active.until - session.rules.eventSeconds * 1000,
+          };
           const info = eventText(active.type);
           announce(
             {
@@ -1105,7 +1414,10 @@
     const banner = dialog?.querySelector(".duel-event-banner");
     if (banner) banner.hidden = true;
     const callout = dialog?.querySelector(".duel-announce");
-    if (callout) {
+    if (callout && !abandoned) {
+      announce({ title: "そこまで！", tone: "count" }, 4, 1500);
+      window.AppSounds?.play("confirm");
+    } else if (callout) {
       callout.getAnimations?.().forEach((run) => run.cancel());
       callout.hidden = true;
     }
@@ -1271,6 +1583,7 @@
     const heading = document.createElement("h3");
     heading.className = "duel-result";
     heading.textContent = room.result.places[mine] + "位";
+    heading.dataset.place = room.result.places[mine];
     const board = document.createElement("ol");
     board.className = "duel-results";
     Object.keys(room.players)
@@ -1290,6 +1603,7 @@
         rate.textContent =
           points.answered + "問 · 回答ボーナス +" + points.bonus + "点";
         li.append(name, score, rate);
+        if (room.result.places[id] === 1) li.classList.add("is-first");
         board.append(li);
       });
     const close = document.createElement("button");
@@ -1297,6 +1611,41 @@
     close.textContent = "閉じる";
     close.onclick = closeScreen;
     body.append(heading, board, close);
+    // Results come in from last place to first, then the player's own place and confetti.
+    if (!calm() && board.animate) {
+      const rows = [...board.children],
+        step = 420;
+      rows.forEach((row, i) =>
+        row.animate(
+          [
+            { opacity: 0, transform: "translateY(14px) scale(.96)" },
+            { opacity: 1, transform: "none" },
+          ],
+          {
+            duration: 380,
+            delay: (rows.length - 1 - i) * step,
+            easing: "ease-out",
+            fill: "backwards",
+          },
+        ),
+      );
+      heading.animate(
+        [
+          { opacity: 0, transform: "scale(1.8)" },
+          { opacity: 1, transform: "scale(.92)", offset: 0.6 },
+          { opacity: 1, transform: "scale(1)" },
+        ],
+        {
+          duration: 520,
+          delay: rows.length * step,
+          easing: "ease-out",
+          fill: "backwards",
+        },
+      );
+      setTimeout(() => {
+        if (board.isConnected) confetti();
+      }, rows.length * step + 200);
+    }
     window.renderLeaderboard?.(false);
   }
 
