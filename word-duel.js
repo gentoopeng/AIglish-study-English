@@ -573,6 +573,99 @@
     );
   }
 
+  // Callouts float over the screen without blocking taps. They use the Web Animations API,
+  // which keeps working where page-wide CSS animation is switched off for stability on iOS.
+  const eventInfo = Object.fromEntries(
+      m.eventCatalog.map((event) => [event.id, event]),
+    ),
+    tones = {
+      得点: "score",
+      順位: "rank",
+      コンボ: "combo",
+      チャレンジ: "challenge",
+      特殊: "special",
+    };
+  const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function eventText(type) {
+    const info = eventInfo[type] || {},
+      points = session?.rules?.eventPoints;
+    return {
+      name: info.name || type,
+      hint: info.hint || info.description || "",
+      detail: (info.description || "").replaceAll(
+        "イベント点",
+        points == null ? "イベント点" : points + "点",
+      ),
+      tone: tones[info.group] || "score",
+    };
+  }
+  function announce(card, priority = 1, duration = 1800) {
+    const host = dialog?.querySelector(".duel-announce");
+    if (!host) return;
+    const now = Date.now();
+    if (Number(host.dataset.until) > now && Number(host.dataset.priority) > priority)
+      return;
+    host.dataset.priority = priority;
+    host.dataset.until = now + duration;
+    host.dataset.tone = card.tone || "";
+    host.replaceChildren();
+    for (const [tag, text, name] of [
+      ["small", card.kicker],
+      ["strong", card.title],
+      ["p", card.text],
+      ["p", card.detail, "duel-announce-detail"],
+    ]) {
+      if (!text) continue;
+      const node = document.createElement(tag);
+      node.textContent = text;
+      if (name) node.className = name;
+      host.append(node);
+    }
+    host.getAnimations?.().forEach((run) => run.cancel());
+    host.hidden = false;
+    const run = host.animate?.(
+      calm()
+        ? [
+            { opacity: 0 },
+            { opacity: 1, offset: 0.1 },
+            { opacity: 1, offset: 0.85 },
+            { opacity: 0 },
+          ]
+        : [
+            { opacity: 0, transform: "translateX(-50%) scale(1.6)" },
+            { opacity: 1, transform: "translateX(-50%) scale(.94)", offset: 0.14 },
+            { opacity: 1, transform: "translateX(-50%) scale(1)", offset: 0.22 },
+            { opacity: 1, transform: "translateX(-50%) scale(1)", offset: 0.82 },
+            {
+              opacity: 0,
+              transform: "translateX(-50%) translateY(-18px) scale(.92)",
+            },
+          ],
+      { duration, easing: "ease-out", fill: "forwards" },
+    );
+    if (run) run.onfinish = () => (host.hidden = true);
+    else setTimeout(() => (host.hidden = true), duration);
+  }
+  function pop(column, delta) {
+    if (!column || !delta) return;
+    const node = document.createElement("span");
+    node.className = "duel-score-pop" + (delta < 0 ? " is-minus" : "");
+    node.textContent = (delta < 0 ? "−" : "+") + Math.abs(delta);
+    column.append(node);
+    const run = node.animate?.(
+      [
+        { opacity: 0, transform: "translate(-50%,6px)" },
+        { opacity: 1, transform: "translate(-50%,0)", offset: 0.2 },
+        { opacity: 0, transform: "translate(-50%,-26px)" },
+      ],
+      { duration: calm() ? 600 : 850, easing: "ease-out" },
+    );
+    if (run) run.onfinish = () => node.remove();
+    else setTimeout(() => node.remove(), 850);
+  }
+  function nudge(node, frames, duration) {
+    if (node && !calm()) node.animate?.(frames, { duration, easing: "ease-out" });
+  }
   function play() {
     dialog.querySelector("[data-duel-back]").onclick = closeScreen;
     dialog.querySelector(".duel-screen-badge").hidden = false;
@@ -586,7 +679,7 @@
       session.duration / 1000 + "秒";
     const body = dialog.querySelector(".duel-content");
     body.innerHTML =
-      '<div class="duel-clock-row"><button type="button" class="duel-leave">終了する</button><div class="duel-clock" role="timer"></div><small>秒</small></div><div class="duel-scoreboard"></div><div class="duel-time-track"><span></span></div><div class="duel-event-banner" role="status" hidden></div><div class="duel-combo" aria-live="polite"></div><div class="duel-question-card"><small class="duel-question-label"></small><h3 class="duel-prompt"></h3></div><div class="duel-options"></div><div class="duel-correction" role="status" hidden><small>正しい意味</small><strong></strong><button type="button" data-duel-next>次の問題</button></div><p class="duel-status" role="status"></p>';
+      '<div class="duel-clock-row"><button type="button" class="duel-leave">終了する</button><div class="duel-clock" role="timer"></div><small>秒</small></div><div class="duel-scoreboard"></div><div class="duel-time-track"><span></span></div><div class="duel-event-banner" role="status" hidden><b></b><em></em><span></span><small></small><i></i></div><div class="duel-announce" aria-hidden="true" hidden></div><div class="duel-combo" aria-live="polite"></div><div class="duel-question-card"><small class="duel-question-label"></small><h3 class="duel-prompt"></h3></div><div class="duel-options"></div><div class="duel-correction" role="status" hidden><small>正しい意味</small><strong></strong><button type="button" data-duel-next>次の問題</button></div><p class="duel-status" role="status"></p>';
     const players = session.solo
         ? { [session.id]: player() }
         : session.room.players,
@@ -659,7 +752,8 @@
     const target = session,
       q = m.question(target.pool, target.seed, target.answers.length),
       right = choice === q.correct;
-    const before = liveScores(target)[target.id].total;
+    const previous = liveScores(target)[target.id],
+      before = previous.total;
     target.answers.push({
       choice,
       at: Date.now() - target.start,
@@ -699,9 +793,44 @@
         { duration: 220 },
       );
     window.AppSounds?.play(right ? "swipe-right" : "swipe-left");
+    pop(
+      dialog.querySelector(
+        '[data-player-id="' + CSS.escape(target.id) + '"]',
+      ),
+      delta,
+    );
+    if (!right)
+      nudge(
+        dialog.querySelector(".duel-question-card"),
+        [
+          { transform: "translateX(0)" },
+          { transform: "translateX(-7px)" },
+          { transform: "translateX(6px)" },
+          { transform: "translateX(-4px)" },
+          { transform: "translateX(0)" },
+        ],
+        320,
+      );
+    else if (
+      value.combo >= 5 &&
+      Math.floor(value.combo / 5) > Math.floor(previous.combo / 5)
+    ) {
+      announce({ title: value.combo + "コンボ！", tone: "combo" }, 1, 1100);
+      window.AppSounds?.play("confirm");
+    }
     const buttons = dialog.querySelectorAll(".duel-options button");
     buttons.forEach((button) => (button.disabled = true));
     buttons[choice].classList.add("is-selected");
+    if (right)
+      nudge(
+        buttons[choice],
+        [
+          { transform: "scale(.96)" },
+          { transform: "scale(1.06)" },
+          { transform: "scale(1)" },
+        ],
+        180,
+      );
     buttons[choice].setAttribute("aria-pressed", "true");
     window.StartupMonitor?.event?.("duel:answer");
     try {
@@ -758,7 +887,9 @@
   function opponent(scores) {
     if (!session?.start || !dialog?.querySelector(".duel-scoreboard")) return;
     scores = scores || liveScores(session);
-    const players = session.solo ? { [session.id]: {} } : session.room.players;
+    const players = session.solo ? { [session.id]: {} } : session.room.players,
+      ids = Object.keys(players),
+      top = Math.max(...ids.map((id) => scores[id].total));
     for (const [id, person] of Object.entries(players)) {
       const column = dialog.querySelector(
         '[data-player-id="' + CSS.escape(id) + '"]',
@@ -766,8 +897,17 @@
       if (!column) continue;
       const text = String(scores[id].total),
         node = column.querySelector("strong");
-      if (node.textContent !== text) node.textContent = text;
+      if (node.textContent !== text) {
+        if (id !== session.id && node.dataset.shown)
+          pop(column, scores[id].total - Number(node.textContent));
+        node.textContent = text;
+        node.dataset.shown = "1";
+      }
       column.classList.toggle("is-abandoned", !!person.abandoned);
+      column.classList.toggle(
+        "is-leading",
+        ids.length > 1 && top > 0 && scores[id].total === top,
+      );
     }
   }
   function tick() {
@@ -789,6 +929,26 @@
         "scaleX(" +
         Math.max(0, Math.min(1, (duration + remain) / duration)) +
         ")";
+    }
+    if (remain > 0) {
+      const count = Math.ceil(remain / 1000);
+      if (count <= 3 && session.countdown !== count) {
+        session.countdown = count;
+        announce({ title: String(count), tone: "count" }, 2, 800);
+      }
+    } else if (session.countdown !== 0) {
+      session.countdown = 0;
+      if (-remain < 1500)
+        announce({ title: "スタート！", tone: "count" }, 2, 900);
+    }
+    if (
+      duration > 15000 &&
+      !session.lastCall &&
+      duration + remain <= 10000 &&
+      duration + remain > 0
+    ) {
+      session.lastCall = true;
+      announce({ title: "ラスト10秒！", tone: "urgent" }, 2, 1300);
     }
     clock.classList.toggle(
       "is-urgent",
@@ -815,19 +975,37 @@
       banner.hidden = !shown;
       if (shown) {
         const seconds = Math.max(
-          0,
-          Math.ceil(((active ? active.until : preview.start) - elapsed) / 1000),
-        );
-        let text =
-          (active ? "" : "まもなく ") +
-          window.BattleLobby.labels[shown.type] +
-          " · " +
-          seconds +
-          "秒";
-        if (active && preview)
-          text += " / 次は" + window.BattleLobby.labels[preview.type];
-        if (banner.textContent !== text) banner.textContent = text;
+            0,
+            Math.ceil(((active ? active.until : preview.start) - elapsed) / 1000),
+          ),
+          info = eventText(shown.type),
+          fill = active
+            ? Math.max(
+                0,
+                Math.min(
+                  1,
+                  (active.until - elapsed) / (session.rules.eventSeconds * 1000),
+                ),
+              )
+            : 0,
+          parts = [
+            ["b", (active ? "" : "まもなく ") + info.name],
+            ["em", (active ? "残り" : "") + seconds + "秒"],
+            ["span", info.hint],
+            [
+              "small",
+              active && preview
+                ? "次は" + window.BattleLobby.labels[preview.type]
+                : "",
+            ],
+          ];
+        for (const [tag, text] of parts) {
+          const node = banner.querySelector(tag);
+          if (node.textContent !== text) node.textContent = text;
+        }
+        banner.querySelector("i").style.transform = "scaleX(" + fill + ")";
         banner.dataset.phase = active ? "active" : "preview";
+        banner.dataset.tone = info.tone;
       }
     }
     if (session.rules?.events) {
@@ -838,6 +1016,22 @@
       if (session.eventStage !== stage) {
         session.eventStage = stage;
         opponent();
+        if (active) {
+          const info = eventText(active.type);
+          announce(
+            {
+              kicker:
+                "イベント発生！ " + session.rules.eventSeconds + "秒間",
+              title: info.name,
+              text: info.hint,
+              detail: info.detail,
+              tone: info.tone,
+            },
+            3,
+            2400,
+          );
+          window.AppSounds?.play("open");
+        }
       }
     }
     const next = dialog.querySelector("[data-duel-next]");
@@ -910,6 +1104,11 @@
     clearInterval(timer);
     const banner = dialog?.querySelector(".duel-event-banner");
     if (banner) banner.hidden = true;
+    const callout = dialog?.querySelector(".duel-announce");
+    if (callout) {
+      callout.getAnimations?.().forEach((run) => run.cancel());
+      callout.hidden = true;
+    }
     const target = session;
     target.finished = true;
     window.saveAfterStudy?.("battle-end");

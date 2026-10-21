@@ -547,11 +547,40 @@ const { chromium, webkit } = require("playwright"),
       );
       await page.clock.fastForward(4000);
       assert.equal(await page.locator(".duel-event-banner").isVisible(), true);
+      // The start is called out over the screen with what to do and the configured points,
+      // and the callout never takes taps away from the answer buttons.
+      const callout = page.locator(".duel-announce");
+      assert.equal(await callout.isVisible(), true);
+      assert.match(await callout.textContent(), /イベント発生！/);
+      assert.match(await callout.textContent(), /全員に攻撃/);
+      assert.match(await callout.textContent(), /正解で相手全員の点を削れる！/);
+      assert.match(await callout.textContent(), /80点/);
+      assert.equal(
+        await callout.evaluate((node) => getComputedStyle(node).pointerEvents),
+        "none",
+      );
+      assert.equal(
+        await page.locator(".duel-event-banner span").textContent(),
+        "正解で相手全員の点を削れる！",
+      );
+      assert.equal(
+        await page.locator(".duel-event-banner").getAttribute("data-tone"),
+        "special",
+      );
     }
     await answer(a);
     await a.clock.fastForward(400);
     await b.waitForFunction(
       () => document.querySelector("[data-duel-score]")?.textContent === "-80",
+    );
+    // The player ahead after the attack is marked as the leader on the other screen too.
+    assert.equal(
+      await b.locator('.duel-player.is-leading[data-player-id="duel-a"]').count(),
+      1,
+    );
+    assert.equal(
+      await b.locator('.duel-player.is-leading[data-player-id="duel-b"]').count(),
+      0,
     );
     await answer(b, false);
     await b.clock.fastForward(400);

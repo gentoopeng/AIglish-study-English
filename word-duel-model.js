@@ -137,6 +137,7 @@
     {
       id: "double",
       name: "ダブル",
+      hint: "正解すると得点2倍！",
       group: "得点",
       description: "正解の獲得点が2倍。",
       recommended: true,
@@ -144,6 +145,7 @@
     {
       id: "triple",
       name: "トリプル",
+      hint: "正解すると得点3倍！",
       group: "得点",
       description: "正解の獲得点が3倍。",
       recommended: false,
@@ -151,6 +153,7 @@
     {
       id: "half",
       name: "ハーフ",
+      hint: "正解の得点が半分に",
       group: "得点",
       description: "正解の獲得点が半分。",
       recommended: false,
@@ -158,6 +161,7 @@
     {
       id: "reset",
       name: "リセット注意",
+      hint: "ミスすると自分の点が0に！",
       group: "特殊",
       description: "ミスすると自分の累積スコアが0。",
       recommended: false,
@@ -165,6 +169,7 @@
     {
       id: "attack",
       name: "全員に攻撃",
+      hint: "正解で相手全員の点を削れる！",
       group: "特殊",
       description: "正解で相手全員からイベント点を減点。",
       recommended: false,
@@ -172,6 +177,7 @@
     {
       id: "gift",
       name: "相手にプレゼント",
+      hint: "ミスすると相手に点が入る",
       group: "特殊",
       description: "ミスで相手全員にイベント点を加点。",
       recommended: false,
@@ -179,6 +185,7 @@
     {
       id: "steal",
       name: "横取り",
+      hint: "首位から点を奪え！",
       group: "順位",
       description: "開始時の首位からイベント点を奪う。同点首位は全員対象。",
       recommended: false,
@@ -186,6 +193,7 @@
     {
       id: "chase",
       name: "首位を追え",
+      hint: "首位以外は正解で2倍！",
       group: "順位",
       description: "開始時に首位でなかった人の正解点が2倍。",
       recommended: false,
@@ -193,6 +201,7 @@
     {
       id: "pressure",
       name: "首位の重圧",
+      hint: "首位はミスの失点が2倍",
       group: "順位",
       description: "開始時の首位はミスの失点が2倍。",
       recommended: false,
@@ -200,6 +209,7 @@
     {
       id: "comeback",
       name: "最下位の逆襲",
+      hint: "最下位は正解で3倍！",
       group: "順位",
       description: "開始時の最下位は正解点が3倍。",
       recommended: false,
@@ -207,6 +217,7 @@
     {
       id: "hunt",
       name: "僅差の勝負",
+      hint: "正解で一つ上の相手を減点！",
       group: "順位",
       description: "正解で開始時の一つ上の順位の相手全員を減点。",
       recommended: false,
@@ -214,6 +225,7 @@
     {
       id: "lead",
       name: "独走ボーナス",
+      hint: "首位は正解でボーナス",
       group: "順位",
       description: "開始時の首位は正解にイベント点を追加。",
       recommended: false,
@@ -221,6 +233,7 @@
     {
       id: "comboBoost",
       name: "コンボ加速",
+      hint: "正解1回でコンボ2段階アップ！",
       group: "コンボ",
       description: "正解1回でコンボが2段階進む。",
       recommended: true,
@@ -228,6 +241,7 @@
     {
       id: "comboGuard",
       name: "コンボ保護",
+      hint: "ミスしてもコンボが切れない",
       group: "コンボ",
       description: "ミスしてもコンボが切れない。失点と3秒待ちは残る。",
       recommended: true,
@@ -235,6 +249,7 @@
     {
       id: "comboCashout",
       name: "コンボ清算",
+      hint: "コンボを得点に交換！",
       group: "コンボ",
       description: "開始時にコンボ数×イベント点を加点してコンボを0に。",
       recommended: false,
@@ -242,6 +257,7 @@
     {
       id: "streak",
       name: "連続正解チャレンジ",
+      hint: "3連続正解でボーナス！",
       group: "チャレンジ",
       description: "期間中に3連続正解で一度だけイベント点を追加。",
       recommended: true,
@@ -249,6 +265,7 @@
     {
       id: "perfect",
       name: "全問正解チャレンジ",
+      hint: "3問以上全問正解でボーナス！",
       group: "チャレンジ",
       description: "期間中3問以上、全問正解なら終了時にイベント点を追加。",
       recommended: true,
@@ -256,6 +273,7 @@
     {
       id: "first",
       name: "初速勝負",
+      hint: "最初に正解した人にボーナス！",
       group: "チャレンジ",
       description: "期間中、最初に正解した1人にイベント点を追加。",
       recommended: true,
@@ -263,6 +281,7 @@
     {
       id: "last",
       name: "ラストチャンス",
+      hint: "最後の3秒の正解にボーナス！",
       group: "チャレンジ",
       description: "終了までの最後の3秒間、正解にイベント点を追加。",
       recommended: true,
@@ -270,6 +289,7 @@
     {
       id: "speed",
       name: "スピード勝負",
+      hint: "3秒以内に答えるとボーナス！",
       group: "チャレンジ",
       description: "問題が出て3秒以内の正解にイベント点を追加。",
       recommended: true,
@@ -277,6 +297,7 @@
     {
       id: "careful",
       name: "慎重に回答",
+      hint: "正解でボーナス、ミスは失点3倍",
       group: "得点",
       description: "正解にイベント点を追加。ミスの失点は3倍。",
       recommended: false,
@@ -284,6 +305,7 @@
     {
       id: "safe",
       name: "ノーペナルティ",
+      hint: "ミスしても減点なし！",
       group: "得点",
       description: "ミスの失点が0。コンボ解除と3秒待ちは残る。",
       recommended: true,
@@ -291,6 +313,7 @@
     {
       id: "fixed",
       name: "得点固定",
+      hint: "正解の得点がコンボに関係なく一定",
       group: "得点",
       description: "コンボに関係なく正解は設定した基本得点。",
       recommended: true,
@@ -298,6 +321,7 @@
     {
       id: "risk",
       name: "一発勝負",
+      hint: "最初の1問だけ得点も失点も3倍！",
       group: "チャレンジ",
       description: "期間中の最初の回答だけ得点・失点が3倍。",
       recommended: false,
@@ -305,6 +329,7 @@
     {
       id: "shield",
       name: "盾",
+      hint: "次の失点を1回防ぐ盾をもらえる",
       group: "特殊",
       description: "次の失点を1回防ぐ。終了後も持ち越し、重複はしない。",
       recommended: true,
@@ -312,6 +337,7 @@
     {
       id: "counter",
       name: "カウンター",
+      hint: "次に受けた攻撃の半分を返す",
       group: "特殊",
       description:
         "次に受けた攻撃の半分を返す。終了後も持ち越し、重複はしない。",
@@ -320,6 +346,7 @@
     {
       id: "share",
       name: "おすそ分け",
+      hint: "正解で相手にも点をおすそ分け",
       group: "特殊",
       description: "正解で自分に通常点、相手全員にイベント点の半分を加点。",
       recommended: true,
@@ -327,6 +354,7 @@
     {
       id: "cooperate",
       name: "全員で達成",
+      hint: "全員で人数×3問正解すると全員に点！",
       group: "チャレンジ",
       description: "期間中の合計正解が人数×3問で全員にイベント点。",
       recommended: true,
@@ -334,6 +362,7 @@
     {
       id: "collective",
       name: "連帯責任",
+      hint: "ミスすると全員が減点",
       group: "特殊",
       description: "ミスの通常失点に加えて全員からイベント点を減点。",
       recommended: false,
@@ -341,6 +370,7 @@
     {
       id: "bank",
       name: "得点を貯金",
+      hint: "正解点を貯めて最後にまとめて加点",
       group: "特殊",
       description: "期間中の正解点をため、終了時にまとめて加点。",
       recommended: true,
