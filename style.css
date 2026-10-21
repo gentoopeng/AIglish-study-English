@@ -2578,3 +2578,5 @@ mark.term-mark.is-rated{background:linear-gradient(90deg,rgba(var(--mark),.32),r
 .is-judged .term-order-item::before{content:none;}
 .term-order-verdict{font-size:22px!important;}
 .term-order-score{text-align:center;font:800 32px/1.4 system-ui,sans-serif;color:#ffd98a;}
+/* Bottom card buttons: the icon is pinned to the circle's centre, so it cannot drift on iOS. */
+.flashcard-info-button svg{position:absolute;left:50%;top:50%;width:20px;height:20px;transform:translate(-50%,-50%);}
