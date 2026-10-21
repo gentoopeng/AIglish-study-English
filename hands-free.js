@@ -102,12 +102,14 @@
   function flip() {
     document.getElementById("activeFlashcard")?.classList.toggle("flipped");
   }
-  function metadata(word) {
+  // The lock screen's now-playing card shows the word, and its answer once it is read out.
+  function metadata(word, revealed = false) {
     if (!navigator.mediaSession || typeof MediaMetadata !== "function") return;
+    const [front, back] = englishFirst() ? [word.en, word.ja] : [word.ja, word.en];
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: (englishFirst() ? word.en : word.ja) || "単語カード",
-        artist: "AIglish 単語カード",
+        title: front || "単語カード",
+        artist: revealed && back ? back : "答えはこのあと",
         album: "1回 ○ ・ 2回 × ・ 3回 △",
       });
     } catch {}
@@ -128,6 +130,7 @@
         timer = setTimeout(() => {
           if (!active || current() !== word) return;
           document.getElementById("activeFlashcard")?.classList.add("flipped");
+          metadata(word, true);
           window.Pronounce?.speak(second.text, {
             lang: second.lang,
             background: true,

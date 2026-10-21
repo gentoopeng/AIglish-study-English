@@ -329,6 +329,8 @@
     return job;
   }
   function render() {
+    // The app icon badge follows the unread talks (app-badge.js).
+    document.dispatchEvent(new CustomEvent("study-groups-unread"));
     const host = document.querySelector("#studyGroupList");
     if (!host) return;
     host.replaceChildren();
@@ -990,7 +992,8 @@
       entry.chatBy !== uid()
     );
   }
-  window.StudyGroups = { load, open, publish, stop, memberAvatar, react, markSeen, unread };
+  const unreadCount = () => list.filter(unread).length;
+  window.StudyGroups = { load, open, publish, stop, memberAvatar, react, markSeen, unread, unreadCount };
   window.onAppLoaded(() => {
     init();
     load()
@@ -1002,6 +1005,7 @@
     stop();
   });
   document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && uid() !== "GUEST-000") load().catch(() => {});
     if (document.hidden) {
       unsubscribe?.();
       unsubscribe = null;

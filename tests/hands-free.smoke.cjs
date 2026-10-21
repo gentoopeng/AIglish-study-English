@@ -29,6 +29,8 @@ assert.deepEqual(s.spoken[0],{text:order[0].en,lang:'en-US'});
 await page.waitForFunction(()=>window.__spoken.length>=2,null,{timeout:4000});s=await state();
 assert.deepEqual(s.spoken[1],{text:order[0].ja,lang:'ja-JP'});assert.equal(s.flipped,true);
 assert.equal(await page.evaluate(()=>navigator.mediaSession.metadata.title),order[0].en);
+// Once the answer is read, the lock screen shows it under the word.
+assert.equal(await page.evaluate(()=>navigator.mediaSession.metadata.artist),order[0].ja);
 // One press ○, two presses ×, three presses △ (play/pause, next track, previous track).
 const rated=num=>page.evaluate(n=>{const r=LearningData.read('hf-book')[String(n)];return r?.meanings?.[n+'-0']?.status||r?.status||'';},num);
 await page.evaluate(()=>{window.__activity=0;const original=IdleSleep.activity;IdleSleep.activity=()=>{window.__activity++;original();};});

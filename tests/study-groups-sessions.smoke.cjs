@@ -378,11 +378,19 @@ const { chromium, webkit } = require("playwright"),
     await b.getByRole("button", { name: "グループ", exact: true }).click();
     await b.screenshot({ path: "/tmp/group-list-ui.png" });
     // a's message makes the group unread in b's list, with a dot, until b opens the talk.
-    await b.evaluate(() => StudyGroups.load(true));
+    await b.evaluate(() => {
+      // The app icon shows the number of unread talks once the setting is on.
+      localStorage.setItem("aiglish_app_badge", "1");
+      navigator.setAppBadge = (n) => ((window.__badge = n), Promise.resolve());
+      navigator.clearAppBadge = () => ((window.__badge = 0), Promise.resolve());
+      return StudyGroups.load(true);
+    });
+    await b.waitForFunction(() => window.__badge === 1);
     const unreadRow = b.getByRole("button", { name: "放課後の学習（新しいメッセージ）", exact: true });
     await unreadRow.waitFor();
     assert.equal(await b.locator(".group-list-row.has-unread .group-list-unread").count(), 1);
     await unreadRow.click();
+    await b.waitForFunction(() => window.__badge === 0);
     await b
       .getByText("こんにちは <script>安全な文字</script>", { exact: true })
       .waitFor();
