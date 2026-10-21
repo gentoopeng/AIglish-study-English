@@ -59,20 +59,46 @@
   }
   // options.lang: a BCP 47 language other than the English accent (e.g. "ja-JP").
   // options.background: hands-free mode keeps reading while the page is not visible.
+  // The same text asked for again while it is still being read (a card drawn twice, the auto
+  // reader and hands-free both starting) joins the reading in progress instead of cutting it
+  // off and starting over, which iOS turns into a half-read, doubled sentence.
+  let last = null;
   function speak(text, options = {}) {
     text = String(text || "").trim().slice(0, 200);
     if (!supported || !settings.enabled || !text) return false;
     if (document.hidden && !options.background) return false;
     try {
-      synth.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
       // Japanese text (term books, meanings) is read by a Japanese voice.
       if (!options.lang && /[\u3040-\u30ff\u3400-\u9fff]/.test(text)) options = { ...options, lang: "ja-JP" };
-      utterance.lang = options.lang || settings.accent;
+      const lang = options.lang || settings.accent;
+      if (
+        last &&
+        !last.done &&
+        (synth.speaking || synth.pending) &&
+        last.text === text &&
+        last.lang === lang &&
+        Date.now() - last.at < 1500
+      ) {
+        if (options.onend) last.after.push(options.onend);
+        return true;
+      }
+      if (last) last.cancelled = true;
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(text),
+        entry = { text, lang, at: Date.now(), done: false, cancelled: false, after: options.onend ? [options.onend] : [] };
+      last = entry;
+      utterance.lang = lang;
       utterance.rate = settings.rate;
       const chosen = pick(options.lang);
       if (chosen) utterance.voice = chosen;
-      if (options.onend) utterance.onend = utterance.onerror = options.onend;
+      const finish = (event) => {
+        if (entry.done) return;
+        entry.done = true;
+        // Cut off by a newer reading: whoever asked for this one has moved on.
+        if (entry.cancelled || ["interrupted", "canceled"].includes(event?.error)) return;
+        for (const fn of entry.after) fn();
+      };
+      utterance.onend = utterance.onerror = finish;
       synth.speak(utterance);
       return true;
     } catch {
@@ -191,7 +217,8 @@
       }
       watcher?.disconnect();
       watcher = null;
-      if (!word?.en || !card) return result;
+      // Hands-free mode reads the card itself.
+      if (!word?.en || !card || window.HandsFree?.active?.()) return result;
       const englishFirst =
         typeof flashcardDirectionMode === "undefined" ||
         flashcardDirectionMode === "en2ja";

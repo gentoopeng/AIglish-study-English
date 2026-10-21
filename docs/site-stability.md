@@ -522,3 +522,15 @@ In the correct-answer card, the generic card-button rule (11px padding) was more
 - **Achievements in the talk:** achievements (100語・30分ごと, group goals) are posted in the talk with a 👏 いいね button, instead of under the member list. Achievements from the last seven days are shown, matching the talk's retention.
 - **Online:** people active in the last 15 minutes get a small green dot on their avatar, in the users list and the member list.
 - **Layout:** the input is one line and as tall as the send button, growing with the text. The talk screen is opaque.
+
+## Follow-up: read-aloud once, icon badge, lock-screen answer (10.21.38)
+
+**Doubled reading.** Each flashcard was drawn twice, so auto-reading cancelled and restarted the same text at once. With hands-free on, it was read four times. On iOS this came out as a half-read, doubled sentence, most noticeable with long Japanese.
+- `Pronounce.speak` now lets a request for the same text, made while that text is still being read, join the reading in progress instead of restarting it.
+- A reading cut off by a newer one no longer runs the "finished" callback, which hands-free uses to read the answer.
+- Auto-reading leaves the card to hands-free mode while that mode is on.
+- `tests/pronounce-once.smoke.cjs` counts the readings; it fails on the old code.
+
+**App icon badge.** A new setting, 「アイコンに未読数」, shows the number of group talks with unread messages on the home-screen icon. It uses `navigator.setAppBadge`. Turning it on asks for notification permission, which iOS requires for badges. The number is updated whenever the group list is read and when the app goes to the background; the list is refreshed when the app comes back to the foreground, at most once a minute.
+
+**Lock screen.** In hands-free mode, the now-playing card shows the word, then its answer once the answer is read out.
