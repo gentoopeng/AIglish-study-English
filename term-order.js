@@ -105,9 +105,11 @@
     document.body.append(view);
     view.showModal();
     body().append(node("p", "", "教材を読み込んでいます…"));
+    // Closing (and maybe opening another book) while this one loads makes its result stale.
+    const screen = view;
     try {
       const list = events(await load(book), root.TermQuestions.parseLine);
-      if (!view) return;
+      if (view !== screen) return;
       if (distinctYears(list) < 3) {
         view.dataset.state = "message";
         body().replaceChildren(
@@ -126,7 +128,7 @@
       session = { book, list, weight, done: 0, right: 0 };
       next();
     } catch (error) {
-      if (!view) return;
+      if (view !== screen) return;
       view.dataset.state = "message";
       body().replaceChildren(node("h3", "", "開けませんでした"), node("p", "review-description", error.message), button("閉じる", close, "review-primary"));
     }
