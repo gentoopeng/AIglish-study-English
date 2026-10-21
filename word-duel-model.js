@@ -486,8 +486,8 @@
         const shownAt =
           answer.shownAt ?? Math.max(0, last + (previousRight ? 180 : 3000));
         last = answer.at;
-        const right =
-          correctChoice(room.pool, room.seed, index) === answer.choice;
+        const correct = correctChoice(room.pool, room.seed, index),
+          right = correct === answer.choice;
         if (!right) unlockAt = answer.at + 3000;
         previousRight = right;
         if (answer.at <= elapsed)
@@ -498,6 +498,8 @@
             index,
             at: answer.at,
             right,
+            // Seeing that the meaning is missing from the choices is worth double.
+            absent: right && correct === 9,
             shownAt,
           });
       });
@@ -586,6 +588,7 @@
       if (right) {
         let gain = rules.points * (1 + v.combo * (rules.combo - 1));
         if (type === "fixed") gain = rules.points;
+        if (entry.absent) gain *= 2;
         if (type === "double" || (type === "chase" && active.ranks[id] > 0))
           gain *= 2;
         if (

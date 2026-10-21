@@ -26,7 +26,7 @@ test('retired ranked rooms are rejected and casual rooms retain custom rules',()
 
 test('casual rules configure points, additive combo increments, bonus and five-second duration steps',()=>{
  const rules={...m.defaultRules,points:200,combo:1.25,answerBonus:7},answers=[0,1].map(i=>({at:i*200,choice:m.question(words,44,i).correct}));
- assert.deepEqual(m.finalScore(words,44,answers,45000,100,rules),{base:450,bonus:14,answered:2,total:464});
+ assert.deepEqual(m.finalScore(words,44,answers,45000,100,rules),{base:650,bonus:14,answered:2,total:664});
  for(const time of [15000,45000,95000,600000])assert.equal(m.validDuration(time),true);
  for(const time of [0,10000,16000,605000,NaN])assert.equal(m.validDuration(time),false);
  assert.equal(m.validRules({...rules,combo:Infinity}),false);assert.equal(m.validRules({...rules,events:true,eventTypes:[]}),false);
@@ -35,7 +35,7 @@ test('all six events replay deterministically, including effects on every oppone
  for(const type of m.eventTypes.slice(0,6)){const rules={...m.defaultRules,events:true,eventTypes:[type],eventSeconds:8,eventPoints:80},seed=7,right=i=>m.question(words,seed,i).correct;
  const miss=['reset','gift'].includes(type),room={pool:words,seed,duration:60000,missPenalty:100,rules,players:{a:{answers:[{choice:right(0),at:1000},{choice:miss?(right(1)+1)%10:right(1),at:16000}]},b:{answers:[]},c:{answers:[]}}};
  const scores=m.roomScores(room);assert.deepEqual(scores,m.roomScores(structuredClone(room)));
- assert.equal(scores.a.total,{double:320,triple:430,half:155,reset:0,attack:210,gift:0}[type]);
+ assert.equal(scores.a.total,{double:420,triple:530,half:255,reset:0,attack:310,gift:100}[type]);
  assert.equal(scores.b.total,type==='attack'?-80:type==='gift'?80:0);assert.equal(scores.b.total,scores.c.total);
  assert.equal(m.eventAt(seed,14999,rules),null);assert.equal(m.eventAt(seed,15000,rules).type,type);assert.equal(m.eventAt(seed,23000,rules),null);
  assert.equal(m.roomScores(room,true).a.total,scores.a.total+20);
@@ -55,3 +55,11 @@ test('version eight rooms carry bounded books and rules and reject invalid cross
  assert.equal(m.validRoom(room),true);assert.equal(m.validRoom({...room,rules:{...room.rules,points:-1}}),false);assert.equal(m.validRoom({...room,books:['one']}),false);assert.equal(m.validRoom({...room,matchType:'ranked'}),false);
 });
 test('multi-book pools avoid several correct meanings of the same prompt in the choices',()=>{const candidates=[{word:'follow',meaning:'続く'},{word:'Follow',meaning:'従う'},...Array.from({length:12},(_,i)=>({word:'w'+i,meaning:'m'+i}))];for(const selected of [m.pool(candidates),m.selectPool(candidates,1),m.selectPool(candidates,1,true)])assert.equal(selected.filter(w=>w.prompt.toLowerCase()==='follow').length,1);});
+test('seeing that the meaning is missing from the choices scores double, before event multipliers',()=>{
+ const seed=7,right=i=>m.question(words,seed,i).correct;assert.equal(right(0),9);assert.notEqual(right(1),9);
+ assert.equal(m.score(words,seed,[{choice:9,at:0}]).total,200);
+ assert.equal(m.score(words,seed,[{choice:(right(0)+1)%10,at:0}]).total,-50);
+ assert.equal(m.score(words,seed,[{choice:9,at:0},{choice:right(1),at:100}]).total,200+110);
+ const rules={...m.defaultRules,events:true,eventTypes:['double'],eventSeconds:8,eventPoints:80};
+ assert.equal(m.score(words,seed,[{choice:9,at:15000}],60000,50,rules).total,400);
+});

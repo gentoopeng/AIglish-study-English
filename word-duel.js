@@ -608,6 +608,7 @@
     host.dataset.priority = priority;
     host.dataset.until = now + duration;
     host.dataset.tone = card.tone || "";
+    host.classList.toggle("is-effect", !!card.effect);
     host.replaceChildren();
     for (const [tag, text, name] of [
       ["small", card.kicker],
@@ -648,6 +649,7 @@
   }
   function pop(column, delta) {
     if (!column || !delta) return;
+    column = column.querySelector(".duel-step") || column;
     const node = document.createElement("span");
     node.className = "duel-score-pop" + (delta < 0 ? " is-minus" : "");
     node.textContent = (delta < 0 ? "−" : "+") + Math.abs(delta);
@@ -838,21 +840,70 @@
       line = rankEvents.includes(ended.type)
         ? null
         : eventLine(target, ended, ended.until, true),
-      info = eventText(ended.type);
+      info = eventText(ended.type),
+      gained =
+        "イベント中 " + (delta < 0 ? "−" + Math.abs(delta) : "+" + delta) + "点";
     announce(
       {
-        kicker: "イベント終了",
-        title: info.name,
-        text:
-          (line ? line.text + " · " : "") +
-          "イベント中 " +
-          (delta < 0 ? "−" + Math.abs(delta) : "+" + delta) +
-          "点",
+        kicker: "イベント終了 · " + info.name,
+        title: line ? line.text : gained,
+        text: line ? gained : "",
         tone: info.tone,
+        effect: true,
       },
       3,
       1900,
     );
+  }
+  // Podium: 2nd, 1st, 3rd, 4th from the left, with steps by rank (ties share a step).
+  // When the order changes, each player slides from where they were to their new place.
+  function podium(host, ids, scores) {
+    const levels = [...new Set(ids.map((id) => scores[id].total))].sort(
+        (a, b) => b - a,
+      ),
+      sorted = ids
+        .map((id, index) => ({ id, index, rank: levels.indexOf(scores[id].total) }))
+        .sort((a, b) => a.rank - b.rank || a.index - b.index),
+      slots =
+        sorted.length < 2
+          ? sorted
+          : [sorted[1], sorted[0], ...sorted.slice(2)],
+      key = slots.map((entry) => entry.id + ":" + entry.rank).join();
+    if (host.dataset.podium === key) return;
+    const columns = slots.map((entry) => ({
+      ...entry,
+      node: host.querySelector('[data-player-id="' + CSS.escape(entry.id) + '"]'),
+    }));
+    if (columns.some((entry) => !entry.node)) return;
+    const before = columns.map((entry) => ({
+      left: entry.node.getBoundingClientRect().left,
+      step: entry.node.querySelector(".duel-step")?.offsetHeight || 0,
+    }));
+    const first = !host.dataset.podium;
+    host.dataset.podium = key;
+    columns.forEach((entry, order) => {
+      entry.node.style.order = order;
+      entry.node.dataset.rank = String(entry.rank + 1);
+    });
+    if (first || calm()) return;
+    columns.forEach((entry, i) => {
+      const dx = before[i].left - entry.node.getBoundingClientRect().left,
+        step = entry.node.querySelector(".duel-step");
+      if (Math.abs(dx) > 1)
+        entry.node.animate?.(
+          [
+            { transform: "translate(" + dx + "px,0)" },
+            { transform: "translate(" + dx / 2 + "px,-14px)", offset: 0.5 },
+            { transform: "translate(0,0)" },
+          ],
+          { duration: 520, easing: "ease-in-out" },
+        );
+      if (step && before[i].step && before[i].step !== step.offsetHeight)
+        step.animate?.(
+          [{ height: before[i].step + "px" }, { height: step.offsetHeight + "px" }],
+          { duration: 420, easing: "ease-out" },
+        );
+    });
   }
   function confetti() {
     if (calm() || !dialog || !document.body.animate) return;
@@ -908,8 +959,9 @@
       const column = document.createElement("div");
       column.className = "duel-player";
       column.dataset.playerId = id;
+      column.dataset.rank = "1";
       column.innerHTML =
-        '<div class="duel-player-avatar"></div><em class="duel-player-correct" title="正解数">✓0</em><small></small><strong>0</strong>';
+        '<div class="duel-player-avatar"></div><em class="duel-player-correct" title="正解数">✓0</em><small></small><div class="duel-step"><strong>0</strong></div>';
       column.querySelector("small").textContent = person.name;
       host.append(column);
       if (id === session.id) {
@@ -1038,6 +1090,12 @@
           { transform: "translateX(0)" },
         ],
         320,
+      );
+    else if (q.correct === 9)
+      announce(
+        { kicker: "選択肢になし", title: "見抜いた！ 得点2倍", tone: "challenge" },
+        1,
+        1100,
       );
     else if (
       value.combo >= 5 &&
@@ -1173,6 +1231,7 @@
         );
       seen[id] = answers.length;
     }
+    podium(dialog.querySelector(".duel-scoreboard"), ids, scores);
     // A new sole leader replaces the previous one: call out the comeback.
     const leaders = ids.filter((id) => scores[id].total === top);
     if (ids.length > 1 && top > 0 && leaders.length === 1) {
@@ -1326,15 +1385,21 @@
             until: active.until,
             start: active.until - session.rules.eventSeconds * 1000,
           };
-          const info = eventText(active.type);
+          const info = eventText(active.type),
+            line = rankEvents.includes(active.type)
+              ? eventLine(session, active, elapsed)
+              : null;
           announce(
             {
               kicker:
-                "イベント発生！ " + session.rules.eventSeconds + "秒間",
-              title: info.name,
-              text: info.hint,
-              detail: info.detail,
+                "イベント発生 · " +
+                info.name +
+                " · " +
+                session.rules.eventSeconds +
+                "秒間",
+              title: line?.kind ? line.text : info.hint,
               tone: info.tone,
+              effect: true,
             },
             3,
             2400,

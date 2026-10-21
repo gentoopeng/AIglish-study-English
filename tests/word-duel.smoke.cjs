@@ -203,7 +203,25 @@ const { chromium, webkit } = require("playwright"),
           JSON.stringify({ frame: i ? "stone" : "wood" }),
         );
       }, i);
+    // Each page's answers in the current room. Seeds are random, so whether a
+    // none-of-the-above question (worth double) comes up varies between runs.
+    const records = new Map();
+    function absentBonus(page, points = 100, combo = 1.1) {
+      let streak = 0,
+        extra = 0;
+      for (const entry of records.get(page) || []) {
+        if (!entry.right) {
+          streak = 0;
+          continue;
+        }
+        const gain = points * (1 + streak * (combo - 1));
+        if (entry.absent) extra += Math.round(gain * 2) - Math.round(gain);
+        streak++;
+      }
+      return extra;
+    }
     async function lobby(page, intent = "create") {
+      records.set(page, []);
       await page.locator("#nav-battle").click();
       await page.locator(".mode-casual").click();
       assert.equal(await page.locator("[data-config-tab]").count(), 0);
@@ -219,6 +237,7 @@ const { chromium, webkit } = require("playwright"),
         meaning = "意味" + prompt.slice(4),
         texts = await page.locator(".duel-options button").allTextContents(),
         right = texts.includes(meaning) ? texts.indexOf(meaning) : 9;
+      records.get(page)?.push({ right: correct, absent: correct && right === 9 });
       await page
         .locator(".duel-options button")
         .nth(correct ? right : (right + 1) % 10)
@@ -289,7 +308,7 @@ const { chromium, webkit } = require("playwright"),
     await a.locator(".duel-solo-result").waitFor();
     assert.equal(
       await a.locator(".duel-solo-result strong").textContent(),
-      "480点",
+      480 + absentBonus(a) + "点",
     );
     assert.equal(docs.get("users/duel-a").wordDuelSoloBest, 777);
     assert.equal(
@@ -439,7 +458,10 @@ const { chromium, webkit } = require("playwright"),
     const result = docs.get("wordDuelRooms/" + code).result;
     assert.equal(result.deltas, undefined);
     assert.equal(result.ratings, undefined);
-    assert.deepEqual(Object.values(result.scores), [360, 230, 110, -190]);
+    assert.deepEqual(
+      Object.values(result.scores),
+      [360, 230, 110, -190].map((value, i) => value + absentBonus(clients[i])),
+    );
     for (const [i, id] of ["duel-a", "duel-b", "duel-c", "duel-d"].entries()) {
       assert.equal(result.places[id], i + 1);
       assert.equal(
@@ -551,10 +573,16 @@ const { chromium, webkit } = require("playwright"),
       // and the callout never takes taps away from the answer buttons.
       const callout = page.locator(".duel-announce");
       assert.equal(await callout.isVisible(), true);
-      assert.match(await callout.textContent(), /イベント発生！/);
-      assert.match(await callout.textContent(), /全員に攻撃/);
-      assert.match(await callout.textContent(), /正解で相手全員の点を削れる！/);
-      assert.match(await callout.textContent(), /80点/);
+      // The effect is the big line; the event name stays in the small label.
+      assert.match(await callout.locator("small").textContent(), /イベント発生 · 全員に攻撃/);
+      assert.equal(
+        await callout.locator("strong").textContent(),
+        "正解で相手全員の点を削れる！",
+      );
+      assert.match(
+        await page.locator(".duel-event-banner small").textContent(),
+        /正解で相手全員から80点を減点/,
+      );
       assert.equal(
         await callout.evaluate((node) => getComputedStyle(node).pointerEvents),
         "none",
@@ -589,8 +617,13 @@ const { chromium, webkit } = require("playwright"),
         (n) => n.textContent === "-180",
       ),
     );
-    // When the event ends, a summary shows what it meant for this player.
-    await a.clock.fastForward(6500);
+    // When the event ends, a summary shows what it meant for this player. The page clock keeps
+    // running in real time, so wait for the end instead of jumping a fixed amount past it.
+    await a.waitForFunction(
+      () => /イベント終了/.test(document.querySelector(".duel-announce")?.textContent),
+      null,
+      { timeout: 15000 },
+    );
     assert.match(await a.locator(".duel-announce").textContent(), /イベント終了/);
     assert.match(await a.locator(".duel-announce").textContent(), /全員に攻撃/);
     assert.match(await a.locator(".duel-announce").textContent(), /イベント中 [+−]\d+点/);
@@ -600,7 +633,7 @@ const { chromium, webkit } = require("playwright"),
     for (const page of [a, b]) await page.locator(".duel-results").waitFor();
     assert.deepEqual(
       Object.values(docs.get("wordDuelRooms/" + eventCode).result.scores),
-      [110, -170],
+      [110 + absentBonus(a), -170],
     );
     for (const page of [a, b])
       await page.getByRole("button", { name: "閉じる", exact: true }).click();
@@ -671,17 +704,19 @@ const { chromium, webkit } = require("playwright"),
     await a.clock.fastForward(400);
     await a.clock.fastForward(7000);
     await b.clock.fastForward(7600);
-    assert.equal(await a.locator("[data-duel-score]").textContent(), "100");
+    const released = String(100 + absentBonus(a));
+    assert.equal(await a.locator("[data-duel-score]").textContent(), released);
     await b.waitForFunction(
-      () =>
+      (value) =>
         document.querySelector('[data-player-id="duel-a"] strong')
-          .textContent === "100",
+          .textContent === value,
+      released,
     );
     for (const page of [a, b]) await page.clock.fastForward(61000);
     for (const page of [a, b]) await page.locator(".duel-results").waitFor();
     assert.deepEqual(
       Object.values(docs.get("wordDuelRooms/" + bankCode).result.scores),
-      [110, 0],
+      [110 + absentBonus(a), 0],
     );
     for (const page of [a, b])
       await page.getByRole("button", { name: "閉じる", exact: true }).click();
