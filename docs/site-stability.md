@@ -444,3 +444,16 @@ A battle can be won by guessing among choices, so it is weaker evidence than a s
 - that numbers and units survive a restart
 - the flashcard unit filter and display numbers
 - the battle unit choice
+
+## Follow-up: 用語・年号モード (10.21.31)
+
+A book can now be switched to 用語・年号モード in the book editor. Each entry (headword plus description lines) then gives several questions:
+- the whole description → answer the headword
+- each line without its leading year → type the year (digits only; full-width digits and 年 are normalised)
+- each line with one 「」 term blanked → answer that term (one question per 「」)
+
+The year is stored as the start of the line text, so no save path changes. Per-question results live in their own store (`core_v4_term_progress_<owner>_<book>`), which is included in book deletion and the full backup, because whole-word saves replace a word's understanding record. Each question also rates the line it came from, so existing word-level understanding, dots and weak review keep working.
+
+The word list shows a light gradient marker on each year and 「」 term, coloured on the same green → yellow → red scale as the card backgrounds; tapping one shows its history. The add form shows the digits-only year box only for books in this mode. Battle support follows separately.
+
+**Validation:** `tests/term-questions.test.cjs` and `tests/term-mode.smoke.cjs` (question generation, digits-only year box, typed years right and wrong, per-question results, line ratings, coloured markers).
