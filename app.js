@@ -3935,6 +3935,10 @@ window.showToast = function(msg, type) {
 // B. ヘッダー右上の保存ボタン（ログイン中のみ表示）
 // ------------------------------------------------------------------
 window.injectHeaderSaveButton = function() {
+  // Saving is automatic (study end, going to the background); the header has no save button.
+  var stale = document.getElementById('headerSaveBtn');
+  if (stale) stale.remove();
+  return;
   var header = document.querySelector('.app-header');
   if (!header) return;
   var btn = document.getElementById('headerSaveBtn');

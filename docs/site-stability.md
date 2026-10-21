@@ -504,3 +504,21 @@ The clock row, scoreboard, time bar, combo line and event bar are hidden, so the
 ## Follow-up: battle speaker button (10.21.36)
 
 In the correct-answer card, the generic card-button rule (11px padding) was more specific than the round speaker button's `padding:0`, so the icon sat off centre. The speaker button now has a more specific rule, and its icon is pinned to the centre.
+
+## Follow-up: menu cleanup and group talk (10.21.37)
+
+**Menu and saving**
+- The sidebar no longer links to 起動診断. The page still exists at `startup-diagnostics.html`.
+- 「通信量と保存先」 is now 「データとバックアップ」, with:
+  - a note that saving is automatic, and the last cloud save
+  - the file backup, moved here from the save panel
+  - today's traffic estimate, folded away
+- The long storage table and notes are gone.
+- The header save button is removed. The full save already runs automatically when a study session ends and when the app goes to the background.
+
+**Group talk**
+- **Read marks:** the group document keeps `chatRead.{member}`, the newest message time each member has seen with the talk on screen. One merge write happens per new message from others, never for one's own messages. Own messages show 「既読」 (one other member) or 「既読 N」.
+- **Unread in the list:** sending stamps every member's group entry with `chatAt`/`chatBy`. The group list compares this with when this device last saw the talk, and shows a green dot and 「新しいメッセージ」 until the talk is opened.
+- **Achievements in the talk:** achievements (100語・30分ごと, group goals) are posted in the talk with a 👏 いいね button, instead of under the member list. Achievements from the last seven days are shown, matching the talk's retention.
+- **Online:** people active in the last 15 minutes get a small green dot on their avatar, in the users list and the member list.
+- **Layout:** the input is one line and as tall as the send button, growing with the text. The talk screen is opaque.

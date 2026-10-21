@@ -61,17 +61,16 @@ const { chromium, webkit } = require("playwright"),
     });
     await page.locator(".menu-trigger").click();
     await page
-      .getByRole("button", { name: "通信量と保存先", exact: true })
+      .getByRole("button", { name: "データとバックアップ", exact: true })
       .click();
     assert.equal(requests.length, 0);
+    // Short: automatic saving, the last cloud save, the file backup and a folded traffic estimate.
     assert.match(
       await page.locator(".cloud-usage-dialog").textContent(),
-      /全体の残り無料枠/,
+      /自動で保存されます[\s\S]*最終クラウド保存/,
     );
-    assert.match(
-      await page.locator(".cloud-usage-dialog").textContent(),
-      /理解度・メモ/,
-    );
+    assert.equal(await page.locator(".cloud-usage-dialog .file-backup-actions").count(), 1);
+    assert.equal(await page.locator(".cloud-usage-dialog details.data-usage").count(), 1);
     await page.getByRole("button", { name: "閉じる", exact: true }).click();
     await page.evaluate(() => AdminPlayers.open());
     await page.locator("[data-auth] input").fill("test");

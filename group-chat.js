@@ -27,7 +27,10 @@
   }
   function mount(dialog, group) {
     if (current?.dialog === dialog && current.id === group.id) {
+      // Read marks and achievements live on the group document: redraw the talk with them.
       current.group = group;
+      current.render?.();
+      current.markRead?.();
       return;
     }
     stop();
@@ -58,7 +61,7 @@
     const section = document.createElement("section");
     section.className = "group-chat";
     section.innerHTML =
-      '<div class="group-chat-messages" role="log" aria-label="グループチャット" aria-live="polite"></div><p data-chat-status role="status"></p><button type="button" data-chat-reconnect hidden>再接続</button><form class="group-chat-compose"><textarea maxlength="1000" rows="2" aria-label="メッセージ" placeholder="メッセージを入力"></textarea><button type="submit">送信</button></form>';
+      '<div class="group-chat-messages" role="log" aria-label="グループチャット" aria-live="polite"></div><p data-chat-status role="status"></p><button type="button" data-chat-reconnect hidden>再接続</button><form class="group-chat-compose"><textarea maxlength="1000" rows="1" aria-label="メッセージ" placeholder="メッセージを入力"></textarea><button type="submit">送信</button></form>';
     const content = dialog.querySelector(".group-content");
     content.before(nav, section);
     const select = (chat) => {
@@ -67,7 +70,10 @@
       talk.setAttribute("aria-pressed", String(chat));
       learn.setAttribute("aria-pressed", String(!chat));
     };
-    talk.onclick = () => select(true);
+    talk.onclick = () => {
+      select(true);
+      state.markRead?.();
+    };
     learn.onclick = () => select(false);
     select(true);
     const list = section.querySelector("[role=log]"),
@@ -87,10 +93,17 @@
         else localStorage.removeItem(draftKey);
       } catch {}
     };
+    // One line, as tall as the send button; grows with the text up to a few lines.
+    const fit = () => {
+      text.style.height = "auto";
+      text.style.height = Math.min(text.scrollHeight + 2, 132) + "px";
+    };
     text.addEventListener("input", () => {
       clearTimeout(draftTimer);
       draftTimer = setTimeout(state.flushDraft, 500);
+      fit();
     });
+    requestAnimationFrame(fit);
     const active = () => current === state && dialog.open && uid() === account;
     const ref = () =>
       root.fbCollection(root.db, "studyGroups", group.id, "messages");
@@ -101,13 +114,69 @@
         ...(cursor ? [root.fbStartAfter(cursor)] : []),
         root.fbLimit(count),
       );
+    function readers(item) {
+      // Other members whose read mark is at or after this message.
+      const marks = state.group.chatRead || {};
+      return Object.keys(state.group.members || {}).filter(
+        (id) => id !== item.ownerId && Number(marks[id]) >= item.sentAt,
+      ).length;
+    }
+    function clock(at) {
+      return new Date(at).toLocaleTimeString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+    // Achievements (100語・30分ごと, group goals) are posted in the talk with a いいね button.
+    function achievements() {
+      const since = Date.now() - policy.lifetime;
+      return (Array.isArray(state.group.events) ? state.group.events : [])
+        .filter((item) => item && item.id && Number(item.at) > since)
+        .map((item) => ({ ...item, kind: "event", sentAt: Number(item.at) }));
+    }
+    function eventRow(item) {
+      const row = document.createElement("article"),
+        text = document.createElement("p"),
+        time = document.createElement("time"),
+        likes = Object.keys(item.reactions || {}).length,
+        liked = !!item.reactions?.[account],
+        react = document.createElement("button"),
+        name = state.group.members?.[item.owner]?.name || item.name || "";
+      row.className = "group-chat-event";
+      text.textContent = "🎉 " + (name ? name + " · " : "") + item.text;
+      time.textContent = clock(item.sentAt);
+      time.dateTime = new Date(item.sentAt).toISOString();
+      react.type = "button";
+      react.textContent = "👏 " + (likes || "");
+      react.setAttribute("aria-label", "いいね " + likes);
+      react.setAttribute("aria-pressed", String(liked));
+      react.onclick = async () => {
+        react.disabled = true;
+        try {
+          await root.StudyGroups.react(group.id, item.id);
+        } catch (error) {
+          if (active()) status.textContent = error.message;
+        } finally {
+          react.disabled = false;
+        }
+      };
+      row.append(text, time, react);
+      return row;
+    }
     function render() {
+      if (current !== state) return;
       const atBottom =
           list.scrollHeight - list.scrollTop - list.clientHeight < 70,
-        fragment = document.createDocumentFragment();
-      for (const item of [...state.rows.values()].sort(
+        fragment = document.createDocumentFragment(),
+        others = Math.max(0, Object.keys(state.group.members || {}).length - 1);
+      for (const item of [...state.rows.values(), ...achievements()].sort(
         (a, b) => a.sentAt - b.sentAt || a.id.localeCompare(b.id),
       )) {
+        if (item.kind === "event") {
+          fragment.append(eventRow(item));
+          continue;
+        }
         const row = document.createElement("article");
         row.className =
           "group-chat-message" + (item.ownerId === account ? " is-self" : "");
@@ -118,22 +187,65 @@
           copy = document.createElement("div"),
           author = document.createElement("small"),
           body = document.createElement("p"),
+          meta = document.createElement("div"),
           time = document.createElement("time");
         author.textContent = name;
         body.textContent = item.text;
-        time.textContent = new Date(item.sentAt).toLocaleTimeString("ja-JP", {
-          timeZone: "Asia/Tokyo",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
+        time.textContent = clock(item.sentAt);
         time.dateTime = new Date(item.sentAt).toISOString();
-        copy.append(author, body, time);
+        meta.className = "group-chat-meta";
+        if (item.ownerId === account && others) {
+          const count = readers(item),
+            read = document.createElement("span");
+          if (count) {
+            read.className = "group-chat-read";
+            read.textContent = others === 1 ? "既読" : "既読 " + count;
+            meta.append(read);
+          }
+        }
+        meta.append(time);
+        copy.append(author, body, meta);
         row.append(root.StudyGroups.memberAvatar(item.ownerId, name), copy);
         fragment.append(row);
       }
       list.replaceChildren(fragment);
       if (atBottom) list.scrollTop = list.scrollHeight;
     }
+    state.render = render;
+    // While the talk is on screen, record that this member has read up to the newest message.
+    let reading = false;
+    state.markRead = () => {
+      if (!active() || section.hidden || document.hidden) return;
+      const latest = Math.max(
+        0,
+        ...[...state.rows.values()].map((item) => item.sentAt),
+        ...achievements().map((item) => item.sentAt),
+      );
+      if (!latest) return;
+      root.StudyGroups?.markSeen?.(group.id, latest);
+      const mine = Number(state.group.chatRead?.[account]) || 0,
+        fromOthers = [...state.rows.values()].some(
+          (item) => item.ownerId !== account && item.sentAt > mine,
+        );
+      if (
+        !fromOthers ||
+        reading ||
+        typeof root.fbSetDoc !== "function" ||
+        root.FirestoreReadGuard?.paused?.()
+      )
+        return;
+      reading = true;
+      Promise.resolve()
+        .then(() =>
+          root.fbSetDoc(
+          root.fbDoc(root.db, "studyGroups", group.id),
+          { chatRead: { [account]: latest } },
+          { merge: true },
+          ),
+        )
+        .catch(() => {})
+        .finally(() => (reading = false));
+    };
     async function removeDocs(docs) {
       const pending = docs.filter((doc) => !state.deleting.has(doc.id));
       if (!pending.length || !active() || root.FirestoreReadGuard?.paused?.())
@@ -231,6 +343,7 @@
       status.textContent = "";
       section.querySelector("[data-chat-reconnect]").hidden = true;
       expire();
+      state.markRead();
       removeDocs(docs.filter((doc) => !ids.has(doc.id))).catch(() => {});
       if (!state.cleaned) {
         state.cleaned = true;
@@ -323,7 +436,7 @@
                   (item) =>
                     item.id !== messageId && item.at > now - policy.lifetime,
                 ),
-                { id: messageId, at: now },
+                { id: messageId, at: now, by: account },
               ]
                 .sort((a, b) => b.at - a.at || b.id.localeCompare(a.id))
                 .slice(0, policy.maxMessages),
@@ -341,9 +454,16 @@
                 );
             tx.set(
               root.fbDoc(root.db, "studyGroups", group.id),
-              { chatRecent: recent },
+              { chatRecent: recent, chatRead: { [account]: now } },
               { merge: true },
             );
+            // Each member's group list shows the talk as unread until they open it.
+            for (const member of Object.keys(g.data().members))
+              tx.set(
+                root.fbDoc(root.db, "users", member, "studyGroups", group.id),
+                { chatAt: now, chatBy: account },
+                { merge: true },
+              );
             tx.set(
               root.fbDoc(
                 root.db,
@@ -367,6 +487,7 @@
         if (active()) {
           if (text.value.trim() === value) text.value = "";
           state.flushDraft();
+          fit();
           status.textContent = "送信しました。";
         }
       } catch (error) {

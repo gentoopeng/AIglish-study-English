@@ -298,11 +298,16 @@ const { chromium, webkit } = require("playwright"),
       docs.get(groupPath).events.filter((e) => e.owner === "group-a").length,
       1,
     );
+    // Achievements are posted in the talk, with a いいね button.
+    await a.getByRole("button", { name: "トーク", exact: true }).click();
+    assert.ok((await a.locator(".group-chat-event").count()) >= 1);
+    assert.equal(await a.locator(".group-timeline").count(), 0);
     await a
       .getByRole("button", { name: "いいね 0", exact: true })
       .first()
       .click();
     await a.getByRole("button", { name: "いいね 1", exact: true }).waitFor();
+    await a.getByRole("button", { name: "メンバー", exact: true }).click();
     const afterPublish = reads;
     await a.evaluate(() => StudyGroups.publish(true));
     assert.equal(
@@ -372,7 +377,12 @@ const { chromium, webkit } = require("playwright"),
 
     await b.getByRole("button", { name: "グループ", exact: true }).click();
     await b.screenshot({ path: "/tmp/group-list-ui.png" });
-    await b.getByRole("button", { name: "放課後の学習", exact: true }).click();
+    // a's message makes the group unread in b's list, with a dot, until b opens the talk.
+    await b.evaluate(() => StudyGroups.load(true));
+    const unreadRow = b.getByRole("button", { name: "放課後の学習（新しいメッセージ）", exact: true });
+    await unreadRow.waitFor();
+    assert.equal(await b.locator(".group-list-row.has-unread .group-list-unread").count(), 1);
+    await unreadRow.click();
     await b
       .getByText("こんにちは <script>安全な文字</script>", { exact: true })
       .waitFor();
@@ -390,6 +400,7 @@ const { chromium, webkit } = require("playwright"),
     );
     assert.equal(docs.get(groupPath).goal.done, true);
 
+    await b.getByRole("button", { name: "トーク", exact: true }).click();
     await b.getByRole("button", { name: "いいね 1", exact: true }).waitFor();
     assert.equal(
       await b
@@ -397,6 +408,12 @@ const { chromium, webkit } = require("playwright"),
         .getAttribute("aria-pressed"),
       "false",
     );
+    // a's message has been read by b.
+    await a.getByRole("button", { name: "トーク", exact: true }).click();
+    await a.locator(".group-chat-message.is-self .group-chat-read").first().waitFor();
+    await a.screenshot({ path: "/tmp/group-talk.png" });
+    await b.getByRole("button", { name: "メンバー", exact: true }).click();
+    await a.getByRole("button", { name: "メンバー", exact: true }).click();
     await a.screenshot({ path: "/tmp/study-group.png" });
     for (const p of [a, b]) {
       await p

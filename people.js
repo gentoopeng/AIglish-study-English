@@ -15,7 +15,24 @@
       );
     return time > 0 && time <= now && now - time <= WEEK;
   }
-  window.PeopleModel = { timestamp, active };
+  // Active within the last 15 minutes (the app checks in every 5 minutes while open).
+  const ONLINE = 15 * 60000;
+  function online(time, now = Date.now()) {
+    return time > 0 && time <= now + 60000 && now - time <= ONLINE;
+  }
+  // A small green dot on an avatar for someone online.
+  function onlineDot(avatar, time) {
+    avatar.querySelector(".online-dot")?.remove();
+    if (!online(time)) return avatar;
+    const dot = document.createElement("span");
+    dot.className = "online-dot";
+    dot.setAttribute("role", "img");
+    dot.setAttribute("aria-label", "オンライン");
+    avatar.classList.add("has-online-dot");
+    avatar.append(dot);
+    return avatar;
+  }
+  window.PeopleModel = { timestamp, active, online, onlineDot };
   let owner = "",
     users = [],
     loadedAt = 0,
@@ -141,10 +158,13 @@
       person.doc && person.doc.profileCustomizationJson,
     );
     button.append(
-      window.RankingVisuals.avatar(
-        person.avatar,
-        person.name,
-        person.doc && person.doc.profileCustomizationJson,
+      onlineDot(
+        window.RankingVisuals.avatar(
+          person.avatar,
+          person.name,
+          person.doc && person.doc.profileCustomizationJson,
+        ),
+        person.id === uid() ? 0 : person.timestamp,
       ),
       name,
     );

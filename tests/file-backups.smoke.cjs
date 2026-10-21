@@ -121,9 +121,11 @@ const { chromium, webkit } = require("playwright"),
     );
     await p.locator(".flash-warmup-dialog[open]").waitFor();
     await p.locator(".flash-warmup-dialog [data-library-close]").click();
+    // Saving is automatic: there is no header save button, and the backup is in データとバックアップ.
     await p.evaluate(() => injectHeaderSaveButton());
-    await p.locator("#headerSaveBtn").click();
-    await p.locator("#fbsvModal summary").click();
+    assert.equal(await p.locator("#headerSaveBtn").count(), 0);
+    await p.evaluate(() => window.openCloudUsage());
+    await p.locator(".cloud-usage-dialog summary", { hasText: "ファイルにバックアップ" }).click();
     await p.getByRole("button", { name: "書き出す", exact: true }).waitFor();
     const downloaded = p.waitForEvent("download", { timeout: 15000 });
     downloaded.catch(() => {});

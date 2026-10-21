@@ -49,8 +49,10 @@ const assert = require("node:assert/strict");
       ),
       null,
     );
+    // The menu no longer links the page; it is still reachable by its address.
     await page.locator(".menu-trigger").click();
-    await page.getByRole("button", { name: "起動診断", exact: true }).click();
+    assert.equal(await page.getByRole("button", { name: "起動診断", exact: true }).count(), 0);
+    await page.goto("http://127.0.0.1:8000/startup-diagnostics.html");
     await page.waitForFunction(() => document.getElementById("copy")?.disabled === false);
     const report = await page.locator("#report").textContent();
     assert.match(report, /ホーム画面アプリ: true/);
