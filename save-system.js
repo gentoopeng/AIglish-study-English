@@ -575,8 +575,11 @@ function renderSvBody() {
 
 /* ---------- 💾ボタン ---------- */
 function ensureSaveButton() {
-  var btn = document.getElementById('headerSaveBtn');
-  if (btn) return btn;
+  // Saving is automatic; the header has no save button.
+  var stale = document.getElementById('headerSaveBtn');
+  if (stale) stale.remove();
+  return null;
+  var btn = stale;
   var header = document.querySelector('.app-header');
   if (!header) return null;
   btn = document.createElement('button');
@@ -1354,7 +1357,8 @@ function openPanel() {
   document.body.appendChild(m);window.FileBackups?.attach(m);m.querySelector('#fbsvClose').onclick=closePanel;m.onclick=function(e){if(e.target===m)closePanel();};
   m.querySelector('#fbsvSave').onclick=async function(){var b=this;b.disabled=true;try{var result=await saveAll();b.textContent=result.cloudSaved?'保存完了':'端末に保存完了・クラウド同期待ち';if(!result.cloudSaved)window.queueBackgroundSave?.();}catch(e){progress(0,Date.now(),'保存失敗');b.textContent='もう一度試す';console.error(e);}finally{b.disabled=false;}};
 }
-function ensureBtn(){var b=document.getElementById('headerSaveBtn'),h=document.querySelector('.app-header');if(!b&&h){b=document.createElement('button');b.id='headerSaveBtn';b.type='button';b.innerHTML='💾';b.style.cssText='position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';h.appendChild(b);}return b;}
+// No header save button any more: saving is automatic and the file backup lives in データとバックアップ.
+function ensureBtn(){var b=document.getElementById('headerSaveBtn'),h=document.querySelector('.app-header');if(b)b.remove();return null;if(!b&&h){b=document.createElement('button');b.id='headerSaveBtn';b.type='button';b.innerHTML='💾';b.style.cssText='position:absolute;right:16px;top:50%;transform:translateY(-50%);width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(0,240,255,.4);color:#00F0FF;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1001;';h.appendChild(b);}return b;}
 document.addEventListener('click',function(e){var t=e.target;if(t&&t.closest&&t.closest('#headerSaveBtn')){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openPanel();}},true);
 window.onBeforeAppLoad(autoLoadOnce);
 function restorePendingSaveMemory(){

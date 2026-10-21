@@ -350,11 +350,24 @@
       name.textContent = group.name || "グループ";
       meta.className = "group-list-meta";
       meta.textContent = group.goalSummary || "協力目標はグループで確認";
+      if (unread(group)) {
+        b.classList.add("has-unread");
+        meta.textContent = "新しいメッセージ";
+        b.dataset.unread = "1";
+      }
       chevron.className = "group-list-chevron";
       chevron.textContent = "›";
       chevron.setAttribute("aria-hidden", "true");
       copy.append(name, meta);
       b.replaceChildren(icon, copy, chevron);
+      if (b.dataset.unread) {
+        const badge = document.createElement("span");
+        badge.className = "group-list-unread";
+        badge.setAttribute("role", "img");
+        badge.setAttribute("aria-label", "未読あり");
+        chevron.before(badge);
+        b.setAttribute("aria-label", (group.name || "グループ") + "（新しいメッセージ）");
+      }
       host.append(b);
     }
     if (!list.length) {
@@ -577,7 +590,12 @@
           remember();
           render();
         }
-        const shape = JSON.stringify({ ...group, chatRecent: undefined });
+        const shape = JSON.stringify({
+          ...group,
+          chatRecent: undefined,
+          chatRead: undefined,
+          events: undefined,
+        });
         if (d.__studyGroupShape !== shape) {
           d.__studyGroupShape = shape;
           draw(group, d);
@@ -632,7 +650,13 @@
             ? "グループ作成者"
             : "メンバー";
       copy.append(name, meta);
-      button.append(memberAvatar(id, member.name), copy);
+      button.append(
+        window.PeopleModel.onlineDot(
+          memberAvatar(id, member.name),
+          id === uid() ? 0 : window.People?.preview?.(id)?.timestamp || 0,
+        ),
+        copy,
+      );
       button.onclick = () => window.People.open(id);
       row.append(button);
       memberList.append(row);
@@ -804,47 +828,7 @@
       );
     }
     host.append(goal);
-    const timeline = document.createElement("div");
-    timeline.className = "group-timeline";
-    const h = document.createElement("h4");
-    h.textContent = "みんなの達成";
-    timeline.append(h);
-    if (!g.events.length) {
-      const p = document.createElement("p");
-      p.className = "people-hint";
-      p.textContent = "参加後、100語・30分ごとの達成がここに届きます。";
-      timeline.append(p);
-    }
-    for (const item of [...g.events].reverse()) {
-      const row = document.createElement("article"),
-        text = document.createElement("p"),
-        date = document.createElement("small");
-      text.textContent =
-        (g.members[item.owner]?.name || item.name
-          ? (g.members[item.owner]?.name || item.name) + " · "
-          : "") + item.text;
-      date.textContent = new Date(item.at).toLocaleString("ja-JP", {
-        month: "numeric",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      const react = button(
-        "いいね " + Object.keys(item.reactions || {}).length,
-        () =>
-          mutate(g.id, (state, tx, account) => {
-            const found = state.events.find((e) => e.id === item.id);
-            if (!found) throw Error("記録の表示を更新してください。");
-            found.reactions = found.reactions || {};
-            if (found.reactions[account]) delete found.reactions[account];
-            else found.reactions[account] = true;
-          }),
-      );
-      react.setAttribute("aria-pressed", String(!!item.reactions?.[uid()]));
-      row.append(text, date, react);
-      timeline.append(row);
-    }
-    host.append(timeline);
+    // Achievements are posted in the talk (GroupChat), next to the messages.
     const actions = document.createElement("div");
     actions.className = "group-actions";
     actions.append(
@@ -968,7 +952,45 @@
       load(true).catch(error);
     render();
   }
-  window.StudyGroups = { load, open, publish, stop, memberAvatar };
+  // いいね on an achievement posted in the talk.
+  function react(groupId, eventId) {
+    return mutate(groupId, (state, tx, account) => {
+      const found = state.events.find((e) => e.id === eventId);
+      if (!found) throw Error("記録の表示を更新してください。");
+      found.reactions = found.reactions || {};
+      if (found.reactions[account]) delete found.reactions[account];
+      else found.reactions[account] = true;
+    });
+  }
+  // Unread talk: the sender stamps every member's group entry with chatAt/chatBy; the list
+  // compares that with when this device last saw the talk.
+  const seenKey = () => "core_v4_group_chat_seen_" + uid();
+  function seenMap() {
+    try {
+      const value = JSON.parse(localStorage.getItem(seenKey()) || "{}");
+      return value && typeof value === "object" ? value : {};
+    } catch {
+      return {};
+    }
+  }
+  function markSeen(groupId, at) {
+    const seen = seenMap();
+    if ((seen[groupId] || 0) >= at) return;
+    seen[groupId] = at;
+    try {
+      localStorage.setItem(seenKey(), JSON.stringify(seen));
+    } catch {}
+    const entry = list.find((item) => item.id === groupId);
+    if (entry && (entry.chatAt || 0) < at) entry.chatAt = at;
+    render();
+  }
+  function unread(entry) {
+    return (
+      Number(entry.chatAt) > (seenMap()[entry.id] || 0) &&
+      entry.chatBy !== uid()
+    );
+  }
+  window.StudyGroups = { load, open, publish, stop, memberAvatar, react, markSeen, unread };
   window.onAppLoaded(() => {
     init();
     load()

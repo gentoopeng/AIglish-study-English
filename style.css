@@ -2605,3 +2605,31 @@ mark.term-mark.is-rated{background:linear-gradient(90deg,rgba(var(--mark),.32),r
 /* The correct-answer card's button rule (padding 11px) must not reach the round speaker button. */
 .word-duel-screen.is-playing .duel-correction button.duel-speak{position:relative;width:32px;height:32px;padding:0;flex-shrink:0;}
 .word-duel-screen .duel-correction .duel-speak svg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);}
+/* Group talk: an opaque screen, a one-line input as tall as the send button, read marks,
+   achievements posted in the talk, unread dots in the list, online dots on avatars. */
+html body dialog.group-chat-dialog{background:#0d1927;}
+.group-chat-compose{align-items:flex-end;}
+.group-chat-compose textarea{box-sizing:border-box;height:44px;min-height:44px;max-height:132px;padding:11px 14px;line-height:1.35;overflow-y:auto;}
+.group-chat-compose button{box-sizing:border-box;height:44px;padding:0 18px;flex-shrink:0;}
+.group-chat-meta{display:flex;align-items:flex-end;gap:6px;}
+.group-chat-message.is-self .group-chat-meta{justify-content:flex-end;}
+.group-chat-read{font-size:10px;color:#8de393;font-weight:700;}
+.group-chat-event{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 8px;margin:4px auto 18px;max-width:92%;padding:8px 12px;border:1px solid #ffd98a40;border-radius:14px;background:#ffd98a12;text-align:center;}
+.group-chat-event p{margin:0;flex-basis:100%;font-size:13px;line-height:1.5;color:#ffe9b8;overflow-wrap:anywhere;}
+.group-chat-event time{font-size:10px;color:#a7b5c6;}
+.group-chat-event button{padding:2px 10px;border:1px solid #ffffff30;border-radius:999px;background:transparent;color:#fff;font-size:12px;}
+.group-chat-event button[aria-pressed=true]{background:#ffd98a33;border-color:#ffd98a;}
+.group-list-unread{flex-shrink:0;width:10px;height:10px;margin-left:auto;border-radius:50%;background:#06c755;box-shadow:0 0 0 3px #06c75533;}
+.group-list-row.has-unread .group-list-meta{color:#5fe39a;font-weight:700;}
+.has-online-dot{position:relative;overflow:visible!important;}
+.online-dot{position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:50%;background:#22c55e;border:2px solid #0d1927;box-sizing:content-box;pointer-events:none;}
+/* データとバックアップ */
+.data-save-state{margin:0 0 14px;padding:12px 14px;border-radius:14px;background:#ffffff0d;}
+.data-save-state strong{display:block;font-size:15px;}.data-save-state p{margin:4px 0 0;font-size:12px;color:var(--text-sub);}
+.data-usage{margin-top:14px;}.data-usage summary{cursor:pointer;font-size:13px;color:var(--text-sub);}.data-usage table{width:100%;margin-top:8px;font-size:12px;}
+.has-online-dot img{border-radius:50%;}
+.cloud-usage-dialog .file-backup-actions h3{margin:10px 0 4px;font-size:14px;}
+.cloud-usage-dialog details>summary{cursor:pointer;padding:10px 0;font-size:13px;color:var(--text-main);}
+.cloud-usage-dialog .file-backup-actions div{display:flex;gap:8px;flex-wrap:wrap;}
+.cloud-usage-dialog .file-backup-actions button,.cloud-usage-dialog>button[data-library-close]{padding:10px 16px;border-radius:12px;border:1px solid var(--border);background:#ffffff10;color:var(--text-main);font:inherit;font-size:13px;}
+.cloud-usage-dialog>button[data-library-close]{width:100%;margin-top:14px;}

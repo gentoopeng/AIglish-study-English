@@ -231,7 +231,7 @@
     return true;
   }
   function attach(panel) {
-    const host = panel.querySelector(".fbsv-card");
+    const host = panel.querySelector(".fbsv-card, [data-backup-host]");
     if (!host || host.querySelector(".file-backup-actions")) return;
     const section = document.createElement("section");
     section.className = "file-backup-actions";
