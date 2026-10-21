@@ -131,6 +131,7 @@
             '<form id="libraryBookForm"><label for="libraryBookName">単語帳の名前</label><input id="libraryBookName" maxlength="80" required placeholder="例：英語・古文・日本史">' +
             '<label for="libraryBookCover">表紙の写真</label><input type="file" id="libraryBookCover" accept="image/*"><img id="libraryBookCoverPreview" class="library-cover-preview" alt="表紙プレビュー" hidden>' +
             '<label for="libraryBookVisibility">公開範囲</label><select id="libraryBookVisibility"><option value="private">自分だけ</option><option value="public">みんなに公開</option></select>' +
+            '<label class="library-term-mode"><input type="checkbox" id="libraryBookTermMode">用語・年号モード<small>「」で囲んだ言葉と、行の頭の年号から問題を作ります（日本史・用語集など）。</small></label>' +
             '<label for="libraryBookWords">' + (book ? '単語を追加' : '最初の単語（あとから追加できます）') + '</label><textarea id="libraryBookWords" rows="5" placeholder="1:follow:①〜に従う②〜に続く:as follows 次のように…\n2:read:読む:read a book"></textarea>' +
             '<p class="library-editor-hint">番号:単語:意味:サブ情報（任意）。①②で複数の意味を登録できます。同じ番号は更新されます。JSON配列は全項目の置き換えです。<button type="button" id="libraryCopyPhotoPrompt" class="library-prompt-copy">写真から抽出するAI用プロンプトをコピー</button>公開されるのは単語帳の内容だけです。</p><p class="library-editor-error" role="alert"></p>' +
             '<div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="submit" class="library-editor-primary">' + (book ? '変更を保存' : '単語帳を作る') + '</button></div></form>');
@@ -152,6 +153,7 @@
         if (book) {
             form.querySelector('#libraryBookName').value = book.name;
             form.querySelector('#libraryBookVisibility').value = book.visibility || 'private';
+            form.querySelector('#libraryBookTermMode').checked = book.termMode === true;
         }
         form.onsubmit = async function(event) {
             event.preventDefault();
@@ -170,6 +172,7 @@
                 master=window.parseVocabImport(importText,master);
                 await coverReady;
                 var record = { id: id, name: name, cover: cover || '📔', coverType: cover ? 'image' : 'text', personal: true, visibility: form.querySelector('#libraryBookVisibility').value };
+                if (form.querySelector('#libraryBookTermMode').checked) record.termMode = true;
                 await publish(record, master, book);
                 if (userId() !== editorUserId) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
                 if(window.LibraryState&&window.LibraryState.isDeleted('book',id)){if(record.visibility==='public'&&window.fbDeleteDoc)await window.fbDeleteDoc(publicRef(id));throw new Error('この単語帳は削除済みです。');}
@@ -197,7 +200,7 @@
     };
     function bookStorageKeys(id) {
         var progress=window.getVocabProgressStorageKey(id);
-        return ['core_v4_custom_words_'+userId()+'_'+id,'core_v4_cache_'+id,'core_v4_user_vocab_book_'+userId()+'_'+id,window.__manualVocabLocalKey(id),progress,progress+'__ts','aiglish_learning_recovery_'+userId()+'_'+id];
+        return ['core_v4_custom_words_'+userId()+'_'+id,'core_v4_cache_'+id,'core_v4_user_vocab_book_'+userId()+'_'+id,window.__manualVocabLocalKey(id),progress,progress+'__ts','aiglish_learning_recovery_'+userId()+'_'+id,'core_v4_term_progress_'+userId()+'_'+encodeURIComponent(id)];
     }
     function scrubSave(save,id,kind,owner) {
         if(window.LibraryState)return window.LibraryState.sanitizeSave(save,owner||userId());

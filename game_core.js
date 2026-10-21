@@ -215,11 +215,22 @@
         var pool = [];
         var unitField = document.getElementById('flashcardUnitField'), unitSelect = document.getElementById('flashcardUnitSelect');
         var unit = unitField && !unitField.hidden && unitSelect ? unitSelect.value : '';
+        // 用語・年号モード: one entry becomes several questions; each is filtered by its own result.
+        var termMode = !!(window.TermProgress && window.TermQuestions && window.TermProgress.enabled(currentTextbook));
+        var termStore = termMode ? window.TermProgress.read(currentTextbook) : null;
         if (typeof vocabList !== 'undefined') {
             vocabList.forEach(function(w) {
                 var n = window.VocabOrder ? window.VocabOrder.no(w) : parseInt(w.num);
                 if (n < startNum || n > endNum) return;
                 if (unit && !(w.unit && window.VocabOrder.cleanUnit(w.unit) === unit)) return;
+                if (termMode) {
+                    window.TermQuestions.questions(w).forEach(function(q) {
+                        var result = (termStore[String(w.num)] || {})[q.key];
+                        if (!flashcardSelectedStatuses[result ? result.status : 'none']) return;
+                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: q.prompt, ja: q.answer, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
+                    });
+                    return;
+                }
                 var meanings = w.meanings && w.meanings.length ? w.meanings : [{ id: null, text: w.meaning, status: w.status || 'none', history: w.history || [] }];
                 meanings.forEach(function(meaning, meaningIndex) {
                     var meaningStatus = getFlashcardMeaningStatus(meaning, w);
@@ -242,6 +253,8 @@
             return;
         }
 
+        // Term questions always show the question first and the answer on the back.
+        if (termMode) flashcardDirectionMode = 'en2ja';
         flashcardOriginQueue = pool.slice().sort(function() { return Math.random() - 0.5; });
         flashcardCurrentIndex = 0;
         flashcardLearnedCount = 0;

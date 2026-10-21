@@ -292,6 +292,18 @@
       '<header><div><h2 id="vocabEntryTitle">単語を追加</h2><p class="vocab-entry-book"></p></div><button type="button" data-entry-close aria-label="単語の追加を閉じる">×</button></header><form><label for="vocabEntryWord">単語・用語・問題文</label><input id="vocabEntryWord" required autocomplete="off" placeholder="例：follow ／ あはれなり"><div class="vocab-entry-meanings"></div><button type="button" class="vocab-entry-add-meaning">＋ 意味を追加</button><details><summary>サブ情報・番号・単元を設定</summary><label for="vocabEntrySub">サブ情報</label><textarea id="vocabEntrySub" rows="3" placeholder="用法・例文・関連知識など（任意）"></textarea><label for="vocabEntryUnit">単元</label><input id="vocabEntryUnit" list="vocabEntryUnits" autocomplete="off" maxlength="60" placeholder="例：第1章 ／ 鎌倉時代（任意）"><datalist id="vocabEntryUnits"></datalist><label for="vocabEntryNumber">単語番号</label><input id="vocabEntryNumber" type="number" min="1" step="1"><label class="vocab-entry-insert"><input type="checkbox" id="vocabEntryInsert">使用中の番号なら差し込む（それ以降の番号を1つずつずらす）</label><p class="library-editor-hint">通常は末尾の次の番号を自動で使います。2と3の間に入れるなら「3」にして差し込みます。理解度などの記録は単語ごとに保たれます。</p></details><p class="vocab-entry-status" role="status"></p><p class="library-editor-error" role="alert"></p><label class="vocab-entry-continue"><input type="checkbox" id="vocabEntryContinue">続けて追加する</label><div class="library-editor-actions"><button type="button" data-entry-close>キャンセル</button><button type="submit" class="library-editor-primary">追加する</button></div></form>';
     d.querySelector(".vocab-entry-book").textContent =
       metadata(book)?.name || "単語帳";
+    // 用語・年号モード: each line can start with a year (digits only) and mark terms with 「」.
+    const term = !!root.TermProgress?.enabled(book);
+    d.classList.toggle("is-term-mode", term);
+    if (term) {
+      const hint = el(
+        "p",
+        "「」で囲んだ言葉が空欄の問題に、年号を入れた行は年号の問題になります。",
+        "library-editor-hint vocab-entry-term-hint",
+      );
+      d.querySelector(".vocab-entry-meanings").before(hint);
+      d.querySelector(".vocab-entry-add-meaning").textContent = "＋ 説明の行を追加";
+    }
     const form = d.querySelector("form"),
       number = d.querySelector("#vocabEntryNumber"),
       list = d.querySelector(".vocab-entry-meanings"),
@@ -311,10 +323,14 @@
     };
     function relabel() {
       [...list.children].forEach((row, i) => {
-        row.querySelector("label").textContent = "意味・答え " + (i + 1);
+        row.querySelector("label").textContent =
+          (term ? "説明 " : "意味・答え ") + (i + 1);
         row
-          .querySelector("input")
-          .setAttribute("aria-label", "意味・答え " + (i + 1));
+          .querySelector(".vocab-entry-year")
+          ?.setAttribute("aria-label", "説明 " + (i + 1) + " の年号");
+        row
+          .querySelector("input:not(.vocab-entry-year)")
+          .setAttribute("aria-label", (term ? "説明 " : "意味・答え ") + (i + 1));
         row
           .querySelector("select")
           .setAttribute("aria-label", "意味 " + (i + 1) + " の品詞");
@@ -334,7 +350,7 @@
       const inputId = "entryMeaning-" + crypto.randomUUID();
       input.id = inputId;
       input.required = true;
-      input.placeholder = "例：〜に従う";
+      input.placeholder = term ? "例：「本能寺の変」で死亡したとされる人物" : "例：〜に従う";
       input.autocomplete = "off";
       label.htmlFor = inputId;
       for (const [value, text] of positions) {
@@ -346,8 +362,22 @@
       remove.onclick = () => {
         row.remove();
         relabel();
-        list.querySelector("input").focus();
+        list.querySelector("input:not(.vocab-entry-year)").focus();
       };
+      if (term) {
+        // Digits only: full-width digits are converted, everything else is dropped as typed.
+        const year = el("input", undefined, "vocab-entry-year");
+        year.type = "text";
+        year.inputMode = "numeric";
+        year.pattern = "[0-9]*";
+        year.maxLength = 4;
+        year.placeholder = "年号";
+        year.autocomplete = "off";
+        year.oninput = () =>
+          (year.value = root.TermQuestions.normalizeYear(year.value));
+        select.hidden = true;
+        controls.append(year);
+      }
       controls.append(input, select, remove);
       row.append(label, controls);
       list.append(row);
@@ -378,10 +408,14 @@
             unit: unitInput.value,
             word: form.querySelector("#vocabEntryWord").value,
             sub: form.querySelector("#vocabEntrySub").value,
-            meanings: [...list.children].map((row) => ({
-              text: row.querySelector("input").value,
-              partOfSpeech: row.querySelector("select").value,
-            })),
+            meanings: [...list.children].map((row) => {
+              const year = row.querySelector(".vocab-entry-year")?.value || "",
+                text = row.querySelector("input:not(.vocab-entry-year)").value;
+              return {
+                text: year && text.trim() ? year + " " + text.trim() : text,
+                partOfSpeech: row.querySelector("select").value,
+              };
+            }),
           },
           book,
           id,

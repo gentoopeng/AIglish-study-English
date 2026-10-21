@@ -66,6 +66,8 @@
     try {
       synth.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
+      // Japanese text (term books, meanings) is read by a Japanese voice.
+      if (!options.lang && /[\u3040-\u30ff\u3400-\u9fff]/.test(text)) options = { ...options, lang: "ja-JP" };
       utterance.lang = options.lang || settings.accent;
       utterance.rate = settings.rate;
       const chosen = pick(options.lang);

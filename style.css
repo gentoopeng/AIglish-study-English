@@ -2542,3 +2542,14 @@ html.pronounce-off .pronounce-button{display:none!important;}
 .battle-unit{display:grid;gap:4px;flex-basis:100%;}.battle-unit[hidden]{display:none;}.battle-unit select{width:100%;box-sizing:border-box;color:#eee;background:#101b2d;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:16px;}
 .vocab-entry-insert{display:flex;align-items:flex-start;gap:8px;margin:6px 0 0;font-size:12px;line-height:1.5;}.vocab-entry-insert input{margin-top:3px;flex-shrink:0;}
 .vocab-entry-dialog .vocab-entry-insert{display:flex;flex-direction:row;align-items:flex-start;gap:8px;text-align:left;}.vocab-entry-dialog .vocab-entry-insert input{width:18px;height:18px;min-height:0;margin:2px 0 0;padding:0;flex:0 0 auto;}
+
+/* 用語・年号モード: light markers coloured by each question's results, typed year answers. */
+mark.term-mark{background:none;color:inherit;padding:0 1px;border-radius:3px;}
+mark.term-mark.is-rated{background:linear-gradient(90deg,rgba(var(--mark),.32),rgba(var(--mark),.14)) left bottom/100% 52% no-repeat;cursor:pointer;}
+.term-answer-panel{position:absolute;left:50%;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 150px);z-index:121;width:min(86%,340px);box-sizing:border-box;display:grid;gap:6px;padding:10px 12px;border:1px solid #ffd36b80;border-radius:14px;background:rgba(12,21,37,.92);transform:translateX(-50%);}
+.term-answer-panel[hidden]{display:none;}.term-answer-panel label{font:700 12px system-ui,sans-serif;color:#ffd36b;}.term-answer-panel div{display:flex;gap:8px;}
+.term-answer-panel input{flex:1;min-width:0;box-sizing:border-box;padding:10px;border:1px solid var(--border);border-radius:10px;background:rgba(0,0,0,.35);color:#fff;font:700 20px/1.2 system-ui,sans-serif;letter-spacing:.08em;text-align:center;}
+.term-answer-panel button{flex-shrink:0;padding:10px 16px;border:1px solid #ffd36b;border-radius:10px;background:rgba(255,211,107,.2);color:#fff;font-weight:800;}
+.term-answer-panel p{margin:0;min-height:1.2em;font:700 13px system-ui,sans-serif;text-align:center;}.term-answer-panel[data-result=right] p{color:#86f0b5;}.term-answer-panel[data-result=wrong] p{color:#ff9a8a;}
+.library-term-mode{display:grid!important;grid-template-columns:auto 1fr;align-items:center;gap:4px 8px;margin:4px 0;font-weight:700;}.library-term-mode input{width:18px!important;height:18px;margin:0;}.library-term-mode small{grid-column:1/-1;font-weight:400;font-size:11px;color:var(--text-sub);line-height:1.5;}
+.vocab-entry-dialog.is-term-mode .vocab-entry-year{flex:0 0 70px;width:70px;text-align:center;}.vocab-entry-term-hint{margin:0 0 6px;}
