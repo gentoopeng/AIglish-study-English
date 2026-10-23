@@ -736,6 +736,8 @@
         listContainer.innerHTML = "";
         var wEl = vocabList.find(function(w) { return String(w.num) === String(wordNum); });
         if (!wEl || !wEl.meanings) return;
+        // 用語・年号モード: the year at the start of a line gets its own digits-only box.
+        var termMode = !!(window.TermProgress && window.TermQuestions && window.TermProgress.enabled(currentTextbook));
         wEl.meanings.forEach(function(m, index) {
             var itemRow = document.createElement('div');
             itemRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px;";
@@ -745,6 +747,19 @@
             [['','品詞未設定'],['名','名詞'],['動','動詞'],['形','形容詞'],['形動','形容動詞'],['助詞','助詞'],['連','連体詞'],['副','副詞'],['前','前置詞'],['接','接続詞'],['代','代名詞'],['冠','冠詞'],['助','助動詞'],['間','間投詞']].forEach(function(item){var option=document.createElement('option');option.value=item[0];option.textContent=item[1];posSelect.appendChild(option);});
             var registered=window.getFlashcardPartOfSpeech?window.getFlashcardPartOfSpeech(wEl,m):null;if(registered&&!Array.from(posSelect.options).some(function(option){return option.value===registered.short;})){var compound=document.createElement('option');compound.value=registered.short;compound.textContent=registered.name;posSelect.appendChild(compound);}posSelect.value=registered&&registered.short||'';
             itemRow.insertBefore(posSelect,itemRow.lastElementChild);
+            if (termMode) {
+                var parsed = window.TermQuestions.parseLine(m.text), textInput = itemRow.querySelector('input');
+                var year = document.createElement('input');
+                year.type = 'text'; year.inputMode = 'numeric'; year.pattern = '[0-9]*'; year.maxLength = 4;
+                year.className = 'search-input inline-year-input'; year.placeholder = '年号'; year.autocomplete = 'off';
+                year.setAttribute('aria-label', '説明' + (index + 1) + 'の年号');
+                year.value = parsed.year;
+                year.oninput = function() { year.value = window.TermQuestions.normalizeYear(year.value); };
+                if (parsed.year) textInput.value = parsed.body;
+                textInput.setAttribute('aria-label', '説明' + (index + 1));
+                posSelect.hidden = true;
+                itemRow.insertBefore(year, textInput);
+            }
             listContainer.appendChild(itemRow);
         });
         window.initLucide();
@@ -799,6 +814,10 @@
         var updatedMeanings = [];
         mInputs.forEach(function(inp, idx) {
             var txt = inp.value.trim();
+            // The year box goes back at the start of the line, as in the add form.
+            var yearBox = inp.parentElement.querySelector('.inline-year-input');
+            var yearValue = yearBox && window.TermQuestions ? window.TermQuestions.normalizeYear(yearBox.value) : '';
+            if (txt && yearValue) txt = yearValue + ' ' + txt;
             if (txt) {
                 var oldM = vocabList[wIdx].meanings[idx];
                 updatedMeanings.push({

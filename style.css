@@ -2695,3 +2695,11 @@ html body dialog.vocab-entry-dialog{width:min(560px,calc(100vw - 16px));max-heig
 .word-row-container .word-main-line>div:first-child{min-width:0;}
 .word-row-container .word-main-line>div:first-child>span:nth-child(2){min-width:0;overflow-wrap:anywhere;line-height:1.35;}
 .word-row-container .word-main-line .word-speak-button{flex-shrink:0;}
+/* The sticky-note button matches the edit and delete buttons beside it (44 × 47 px, 24 px icon). */
+.vocab-word-markers{top:8px;height:47px;}.vocab-word-markers.with-admin{right:98px;}
+.word-main-line .vocab-sticky-button{width:44px;height:47px;min-height:47px;border-radius:8px;color:var(--text-sub);}
+.word-main-line .vocab-sticky-button svg{width:24px;height:24px;stroke-width:2;}
+.word-row-container .word-main-line{padding-right:56px!important;}
+.word-row-container .word-main-line:has(.vocab-word-markers.with-admin){padding-right:148px!important;}
+/* The inline editor's year box in 用語・年号モード */
+.inline-year-input{flex:0 0 72px;width:72px!important;height:36px;margin:0 6px 0 0!important;text-align:center;}
