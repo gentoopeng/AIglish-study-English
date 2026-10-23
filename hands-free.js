@@ -13,6 +13,7 @@
     lock = null,
     timer = null,
     lastRate = 0,
+    listening = null,
     pocket = null;
 
   function read() {
@@ -93,6 +94,7 @@
     if (window.IdleSleep?.isSleeping?.()) window.IdleSleep.wake?.();
     else window.IdleSleep?.activity?.();
     clearTimeout(timer);
+    window.VoiceAnswer?.cancel();
     window.speechSynthesis?.cancel?.();
     window.swipeFlashcard?.(direction, 0, 0);
     // A short effect sound may take over the media session; reclaim it afterwards.
@@ -137,12 +139,43 @@
           });
         }, settings.answerDelay * 1000);
       };
+    // 声で答える: after the card is read, listen; the spoken answer rates the card. Nothing heard
+    // (or no speech recognition) falls back to reading the answer and waiting for a button.
+    const voice = () => {
+      const listener = window.VoiceAnswer;
+      if (!active || current() !== word) return;
+      // A card drawn twice asks twice; listen once per card.
+      if (listening === word) return;
+      listening = word;
+      if (!listener?.on()) return answer();
+      listener.listen(second.lang || "en-US").then((heard) => {
+        if (!active || current() !== word) return;
+        keepPlaying();
+        if (!heard) return answer();
+        const verdict = listener.judge(heard, second.text, !second.lang);
+        document.getElementById("activeFlashcard")?.classList.add("flipped");
+        metadata(word, true);
+        listener.show(heard[0], verdict === "ok" ? "ok" : "bad");
+        clearTimeout(timer);
+        if (verdict === "ok") {
+          window.AppSounds?.play("swipe-right");
+          timer = setTimeout(() => current() === word && rate("right"), 900);
+          return;
+        }
+        const next = () => {
+          clearTimeout(timer);
+          timer = setTimeout(() => current() === word && rate("left"), 700);
+        };
+        if (!window.Pronounce?.speak(second.text, { lang: second.lang, background: true, onend: next }))
+          setTimeout(next, 1200);
+      });
+    };
     const spoken = window.Pronounce?.speak(first.text, {
       lang: first.lang,
       background: true,
-      onend: answer,
+      onend: voice,
     });
-    if (!spoken) answer();
+    if (!spoken) voice();
   }
   function media(on) {
     const session = navigator.mediaSession;
@@ -194,7 +227,10 @@
   function stop() {
     if (!active) return;
     active = false;
+    listening = null;
     clearTimeout(timer);
+    window.VoiceAnswer?.cancel();
+    window.VoiceAnswer?.show("");
     audio?.pause();
     media(false);
     lock?.release?.().catch?.(() => {});
