@@ -363,6 +363,8 @@ ${eventHtml()}
     }
   }
   async function words(screen, seed) {
+    // A fixed word list (みんなの苦手) replaces the book choice.
+    if (typeof screen.__presetWords === "function") return screen.__presetWords(seed);
     const ids = [
       ...screen.querySelectorAll(".battle-book-picker input:checked"),
     ].map((el) => el.value);

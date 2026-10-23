@@ -7,9 +7,21 @@
   function stop() {
     if (!current) return;
     clearTimeout(current.expiryTimer);
+    clearInterval(current.clock);
     current.unsubscribe?.();
     current.flushDraft?.();
     current = null;
+  }
+  function validQuiz(quiz) {
+    return (
+      typeof quiz?.word === "string" &&
+      Array.isArray(quiz.options) &&
+      quiz.options.length === 4 &&
+      quiz.options.every((text) => typeof text === "string") &&
+      Number.isInteger(quiz.correct) &&
+      quiz.correct >= 0 &&
+      quiz.correct < 4
+    );
   }
   function deadline(task) {
     let timer;
@@ -61,7 +73,7 @@
     const section = document.createElement("section");
     section.className = "group-chat";
     section.innerHTML =
-      '<div class="group-chat-messages" role="log" aria-label="グループチャット" aria-live="polite"></div><p data-chat-status role="status"></p><button type="button" data-chat-reconnect hidden>再接続</button><form class="group-chat-compose"><textarea maxlength="1000" rows="1" aria-label="メッセージ" placeholder="メッセージを入力"></textarea><button type="submit">送信</button></form>';
+      '<div data-chat-studying></div><div class="group-chat-messages" role="log" aria-label="グループチャット" aria-live="polite"></div><p data-chat-status role="status"></p><button type="button" data-chat-reconnect hidden>再接続</button><form class="group-chat-compose"><button type="button" class="group-chat-tool" data-chat-quiz aria-label="単語クイズを出す">Q</button><textarea maxlength="1000" rows="1" aria-label="メッセージ" placeholder="メッセージを入力"></textarea><button type="submit">送信</button></form>';
     const content = dialog.querySelector(".group-content");
     content.before(nav, section);
     const select = (chat) => {
@@ -80,7 +92,11 @@
       status = section.querySelector("[data-chat-status]"),
       form = section.querySelector("form"),
       text = form.querySelector("textarea"),
-      send = form.querySelector("button");
+      send = form.querySelector("button[type=submit]");
+    form.querySelector("[data-chat-quiz]").onclick = () =>
+      root.TalkTools?.openQuizPicker((quiz) =>
+        state.post?.("単語クイズ：" + quiz.word, { quiz }),
+      );
     const draftKey = "core_v4_group_chat_draft_" + account + "_" + group.id;
     try {
       text.value = localStorage.getItem(draftKey) || "";
@@ -190,7 +206,12 @@
           meta = document.createElement("div"),
           time = document.createElement("time");
         author.textContent = name;
-        body.textContent = item.text;
+        // A word quiz shows its choices; other messages make English words tappable.
+        if (item.quiz && root.TalkTools) {
+          body.classList.add("has-quiz");
+          body.append(root.TalkTools.quizBubble(item, group.id, state.group.members));
+        } else if (root.TalkTools) body.append(root.TalkTools.wordify(item.text));
+        else body.textContent = item.text;
         time.textContent = clock(item.sentAt);
         time.dateTime = new Date(item.sentAt).toISOString();
         meta.className = "group-chat-meta";
@@ -210,8 +231,13 @@
       }
       list.replaceChildren(fragment);
       if (atBottom) list.scrollTop = list.scrollHeight;
+      // Who is studying right now, above the talk.
+      const banner = root.GroupStudy?.studyingBanner(state.group);
+      section.querySelector("[data-chat-studying]").replaceChildren(...(banner ? [banner] : []));
     }
     state.render = render;
+    // Keep the "studying for N minutes" line current while the talk is open.
+    state.clock = setInterval(() => active() && render(), 60000);
     // While the talk is on screen, record that this member has read up to the newest message.
     let reading = false;
     state.markRead = () => {
@@ -331,6 +357,7 @@
       state.rows = new Map(
         kept
           .filter((item) => typeof item.text === "string" && item.ownerId)
+          .map((item) => (item.quiz && !validQuiz(item.quiz) ? { ...item, quiz: undefined } : item))
           .map((item) => [
             item.id,
             {
@@ -376,10 +403,13 @@
     };
     let pendingId = null,
       pendingText = "";
-    form.onsubmit = async (e) => {
+    form.onsubmit = (e) => {
       e.preventDefault();
-      const value = text.value.trim();
-      if (!value || state.sending || !active()) return;
+      post(text.value.trim());
+    };
+    // Posts a message; `extra` carries a word quiz (talk-tools.js). Returns whether it was sent.
+    async function post(value, extra = null) {
+      if (!value || state.sending || !active()) return false;
       if (root.FirestoreReadGuard?.paused?.()) {
         status.textContent =
           "クラウドの利用制限中です。入力内容を残しています。";
@@ -388,9 +418,10 @@
       state.sending = true;
       send.disabled = true;
       status.textContent = "送信中…";
-      if (!pendingId || pendingText !== value) {
+      const key = value + (extra ? JSON.stringify(extra) : "");
+      if (!pendingId || pendingText !== key) {
         pendingId = crypto.randomUUID();
-        pendingText = value;
+        pendingText = key;
       }
       const messageId = pendingId;
       let expired = false;
@@ -476,6 +507,7 @@
                 ownerId: account,
                 name: g.data().members[account].name || account,
                 text: value,
+                ...(extra?.quiz ? { quiz: extra.quiz } : {}),
                 sentAt: now,
                 expiresAt: new Date(now + policy.lifetime),
                 createdAt: root.fbServerTimestamp(),
@@ -485,21 +517,24 @@
         );
         pendingId = null;
         if (active()) {
-          if (text.value.trim() === value) text.value = "";
+          if (!extra && text.value.trim() === value) text.value = "";
           state.flushDraft();
           fit();
           status.textContent = "送信しました。";
         }
+        return true;
       } catch (error) {
         if (active())
           status.textContent =
-            "送信できませんでした。入力内容を残しています。" + error.message;
+            "送信できませんでした。" + (extra ? "" : "入力内容を残しています。") + error.message;
+        return false;
       } finally {
         expired = true;
         state.sending = false;
         send.disabled = false;
       }
-    };
+    }
+    state.post = post;
     const update = dialog.querySelector("[data-group-status]");
     if (update)
       update.before(

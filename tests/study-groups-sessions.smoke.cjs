@@ -420,6 +420,93 @@ const { chromium, webkit } = require("playwright"),
     await a.getByRole("button", { name: "トーク", exact: true }).click();
     await a.locator(".group-chat-message.is-self .group-chat-read").first().waitFor();
     await a.screenshot({ path: "/tmp/group-talk.png" });
+    // Word quiz: a sends one from the shared book; b answers wrong and sees the right meaning.
+    await a.locator("[data-chat-quiz]").click();
+    await a.locator(".talk-quiz-preview strong").waitFor();
+    assert.equal(await a.locator(".talk-quiz-preview span").count(), 4);
+    const quizWord = await a.locator(".talk-quiz-preview strong").textContent();
+    await a.screenshot({ path: "/tmp/talk-quiz-picker.png" });
+    await a.getByRole("button", { name: "トークに送る", exact: true }).click();
+    await a.locator(".talk-sheet").waitFor({ state: "detached" });
+    const quizDoc = [...docs].find(([path, value]) => path.startsWith(groupPath + "/messages/") && value.quiz?.word === quizWord);
+    assert.ok(quizDoc, "quiz message stored");
+    assert.equal(quizDoc[1].quiz.ref.book, "groups-book");
+    await b.getByRole("button", { name: "トーク", exact: true }).click();
+    const bQuiz = b.locator(".talk-quiz").filter({ hasText: quizWord });
+    await bQuiz.waitFor();
+    assert.equal(await bQuiz.locator(".talk-quiz-result").textContent(), "タップして答える");
+    const wrong = (quizDoc[1].quiz.correct + 1) % 4;
+    await bQuiz.locator(".talk-quiz-options button").nth(wrong).click();
+    await b.waitForFunction(
+      (w) => [...document.querySelectorAll(".talk-quiz")].some((q) => q.textContent.includes(w) && /正解は「/.test(q.textContent)),
+      quizWord,
+    );
+    assert.equal(docs.get(quizDoc[0]).answers["group-b"].c, wrong);
+    const aQuiz = a.locator(".talk-quiz").filter({ hasText: quizWord });
+    await a.waitForFunction(
+      (w) => [...document.querySelectorAll(".talk-quiz")].some((q) => q.textContent.includes(w) && q.textContent.includes("1 / 1人が回答 · 0人正解")),
+      quizWord,
+    );
+    assert.equal(await aQuiz.locator(".talk-quiz-options button.is-right").count(), 1);
+    // English words in messages can be tapped: meaning from the word book, and a quick keep.
+    await b.locator(".group-chat-compose textarea").fill("see word3 now");
+    await b.getByRole("button", { name: "送信", exact: true }).click();
+    await a.locator(".talk-word", { hasText: "word3" }).first().waitFor();
+    await a.locator(".talk-word", { hasText: "word3" }).first().click();
+    await a.locator(".talk-word-sheet .talk-word-meaning").filter({ hasText: "意味3" }).waitFor();
+    await a.screenshot({ path: "/tmp/talk-word.png" });
+    await a.getByRole("button", { name: "閉じる", exact: true }).last().click();
+    await a.locator(".talk-word-sheet").waitFor({ state: "detached" });
+    // Studying now: b is on flashcards for 15 s or more, and a's talk says so.
+    await b.evaluate(() => document.body.classList.add("in-game-active"));
+    await b.clock.runFor(21000);
+    await a.locator(".group-studying", { hasText: "group-bさんが単語カード中" }).waitFor();
+    await b.evaluate(() => document.body.classList.remove("in-game-active"));
+    await b.clock.runFor(6000);
+    await a.locator(".group-studying").waitFor({ state: "detached" });
+    // Everyone's weak words: b's missed words reach the members tab and make a battle.
+    await b.evaluate(async () => {
+      for (const w of vocabList.slice(0, 11))
+        GroupStudy.miss(w.word, w.meanings[0].text, {
+          book: "groups-book",
+          num: String(w.num),
+          mid: String(w.meanings[0].id),
+          sig: buildWordSignature(w),
+          count: 1,
+        });
+      await StudyGroups.publish(true);
+    });
+    assert.equal(docs.get(groupPath).weak["group-b"].length, 8);
+    await a.getByRole("button", { name: "メンバー", exact: true }).click();
+    await a.locator(".group-weak-list li").nth(7).waitFor();
+    const weakBattle = a.getByRole("button", { name: "苦手単語でグループバトル", exact: true });
+    assert.equal(await weakBattle.isDisabled(), true);
+    // a misses three more words: ten different meanings make a battle.
+    await a.evaluate(async () => {
+      for (const w of vocabList.slice(12, 15))
+        GroupStudy.miss(w.word, w.meanings[0].text, {
+          book: "groups-book",
+          num: String(w.num),
+          mid: String(w.meanings[0].id),
+          sig: buildWordSignature(w),
+          count: 1,
+        });
+      await StudyGroups.publish(true);
+    });
+    await a.waitForFunction(
+      () => !document.querySelector(".group-weak-actions button")?.disabled,
+    );
+    assert.equal(await a.locator(".group-weak-list li").count(), 11);
+    await a.screenshot({ path: "/tmp/group-weak.png" });
+    await weakBattle.click();
+    await a.locator(".group-weak-preset", { hasText: "みんなの苦手単語（11語）" }).waitFor();
+    const preset = await a.evaluate(() => document.getElementById("wordDuelScreen").__presetWords(7));
+    assert.equal(preset.pool.length, 11);
+    assert.deepEqual(preset.books, ["groups-book"]);
+    await a.keyboard.press("Escape");
+    await a.locator("#wordDuelScreen").waitFor({ state: "detached" });
+    await a.getByRole("button", { name: "放課後の学習", exact: true }).click();
+    await a.getByRole("button", { name: "トーク", exact: true }).click();
     await b.getByRole("button", { name: "メンバー", exact: true }).click();
     await a.getByRole("button", { name: "メンバー", exact: true }).click();
     await a.screenshot({ path: "/tmp/study-group.png" });

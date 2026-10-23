@@ -534,3 +534,24 @@ In the correct-answer card, the generic card-button rule (11px padding) was more
 **App icon badge.** A new setting, 「アイコンに未読数」, shows the number of group talks with unread messages on the home-screen icon. It uses `navigator.setAppBadge`. Turning it on asks for notification permission, which iOS requires for badges. The number is updated whenever the group list is read and when the app goes to the background; the list is refreshed when the app comes back to the foreground, at most once a minute.
 
 **Lock screen.** In hands-free mode, the now-playing card shows the word, then its answer once the answer is read out.
+
+## Follow-up: study tools in the group talk (10.21.39)
+
+**Word quiz (`talk-tools.js`).** The Q button next to the input sends a quiz from one of the sender's word books.
+- The quiz is the word plus four meanings. Weak words (× or △) are picked more often.
+- The message keeps `quiz` (word, options, correct choice, and the book entry reference) and `answers.{member}`.
+- Members tap an answer and see right or wrong, plus how many answered correctly. The sender sees the tally.
+- A member who has the same book gets the answer recorded under the battle rule (only a ○ answered wrong drops). The signature check refuses a changed entry.
+
+**Tappable English words.** English words in messages are underlined. Tapping one opens a sheet that:
+- reads the word aloud
+- shows meanings from the word books already on the device (no download)
+- offers 「トークの単語」に追加, which opens the word book editor with the word filled in, for one tap to save
+
+**Studying now (`group-study.js`).** After 15 s of a flashcard round, a battle or a weak-word review, each of the member's groups gets `studying.{member} = { at, kind }`; it is cleared when the study ends or the page is hidden. The talk shows 「◯◯さんが単語カード中 · N分」 above the messages, for postings within the last 90 minutes. That is two writes per study session per group.
+
+**Everyone's weak words.**
+- Each device keeps a short list of words it recently missed, with their book references: flashcards rated × and wrong battle answers.
+- At the full save, each member shares their top 8 from the last 30 days as `weak.{member}`; the group publish compares it, so an unchanged list writes nothing.
+- The members tab lists the words with how many members miss each one.
+- 「苦手単語でグループバトル」 opens the group battle with these words as the pool instead of a book choice. It needs ten different meanings.

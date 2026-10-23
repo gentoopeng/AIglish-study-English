@@ -597,6 +597,7 @@
           chatRecent: undefined,
           chatRead: undefined,
           events: undefined,
+          studying: undefined,
         });
         if (d.__studyGroupShape !== shape) {
           d.__studyGroupShape = shape;
@@ -664,6 +665,7 @@
       memberList.append(row);
     }
     host.append(memberList);
+    window.GroupStudy?.weakSection(g, host);
     const battle = button("グループで単語バトル", () => {
       window.closeLibraryDialog();
       stop();
@@ -876,7 +878,10 @@
     if (owner !== account) return;
     publishing = true;
     try {
-      const now = total();
+      const now = total(),
+        // The few words this member keeps missing, shared as "みんなの苦手".
+        weak = window.GroupStudy?.top?.() || [],
+        weakSig = JSON.stringify(weak);
       for (const group of list) {
         if (only && group.id !== only) continue;
         if (uid() !== account) break;
@@ -889,18 +894,23 @@
           previous &&
           previous.words === now.words &&
           Number(previous.attempts || 0) === now.attempts &&
-          previous.time === now.time
+          previous.time === now.time &&
+          (previous.weak ?? "[]") === weakSig
         )
           continue;
         await mutate(group.id, (state) => {
           advance(state, account, now, Date.now());
+          state.weak = { ...(state.weak || {}), [account]: weak };
+          for (const id of Object.keys(state.weak))
+            if (!state.members[id]) delete state.weak[id];
           if (state.members[account])
             state.members[account].name = String(myName || account).slice(
               0,
               40,
             );
         });
-        if (uid() === account) localStorage.setItem(key, JSON.stringify(now));
+        if (uid() === account)
+          localStorage.setItem(key, JSON.stringify({ ...now, weak: weakSig }));
       }
       if (uid() === account) lastPublish = Date.now();
     } catch (e) {
@@ -993,7 +1003,18 @@
     );
   }
   const unreadCount = () => list.filter(unread).length;
-  window.StudyGroups = { load, open, publish, stop, memberAvatar, react, markSeen, unread, unreadCount };
+  window.StudyGroups = {
+    load,
+    open,
+    publish,
+    stop,
+    memberAvatar,
+    react,
+    markSeen,
+    unread,
+    unreadCount,
+    groups: () => (owner === uid() ? list.map((item) => item.id) : []),
+  };
   window.onAppLoaded(() => {
     init();
     load()
