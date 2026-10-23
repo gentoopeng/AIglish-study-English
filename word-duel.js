@@ -1347,6 +1347,9 @@
     } catch (error) {
       status("理解度・ポイントの保存を確認できません。" + error.message);
     }
+    // A wrong answer (not 「わからない」) goes to the missed-words list shared with groups.
+    if (!right && !skipped && !q.kind)
+      window.GroupStudy?.miss(q.prompt, q.meaning, q.ref);
     if (target.answers.length % 5 === 0)
       window.WordDuelProgress.schedule(target.id);
     if (right) {
