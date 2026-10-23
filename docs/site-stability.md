@@ -602,3 +602,10 @@ A word card's title row reserved 76 px on the right, but the sticky-note, edit a
 **Buttons.** The sticky-note button now matches the edit and delete buttons: 44 × 47 px, with a 24 px icon in the same colour. Before, it was a 32 px circle with a 13 px icon. The title row reserves room for the wider buttons.
 
 **Inline editor.** In 用語・年号モード, the pencil editor shows a digits-only year box before each line, filled from the year at the start of the line. The line's text is shown without the year. Saving puts the year back at the start of the line, as the add form does. `tests/term-mode.smoke.cjs` edits a year this way.
+
+## Follow-up: year answer panel styling (10.21.44)
+
+On the flashcard screen, the year answer panel's grid column took the input's intrinsic width (about 445 px). This pushed the 答える button off the right edge on phones. The panel now:
+- sizes its column with `minmax(0,1fr)`, and the input shrinks to fit
+- uses the same frosted dark glass as the card screen's round buttons
+- shows a 48 px number field and an indigo answer button in one row, under a small centred label

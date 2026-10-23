@@ -2703,3 +2703,16 @@ html body dialog.vocab-entry-dialog{width:min(560px,calc(100vw - 16px));max-heig
 .word-row-container .word-main-line:has(.vocab-word-markers.with-admin){padding-right:148px!important;}
 /* The inline editor's year box in 用語・年号モード */
 .inline-year-input{flex:0 0 72px;width:72px!important;height:36px;margin:0 6px 0 0!important;text-align:center;}
+/* Year answer panel: the same frosted dark glass as the card screen's round buttons, one row of
+   a number field and an answer button (the field no longer takes the whole width). */
+.term-answer-panel{width:min(88%,360px);gap:8px;padding:12px;border:1px solid rgba(255,255,255,.22);border-radius:22px;background:rgba(15,23,42,.72);box-shadow:0 8px 28px rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.term-answer-panel label{justify-self:center;font:700 11px/1 system-ui,sans-serif;letter-spacing:.12em;color:#c7d2fe;}
+.term-answer-panel div{display:flex;align-items:stretch;gap:8px;}
+.term-answer-panel input{flex:1 1 auto;width:auto!important;min-width:0!important;max-width:none;height:48px;margin:0!important;padding:0 12px;border:1px solid rgba(255,255,255,.14);border-radius:14px;background:rgba(255,255,255,.06);font:800 22px/1 system-ui,sans-serif;letter-spacing:.12em;font-variant-numeric:tabular-nums;}
+.term-answer-panel input::placeholder{color:rgba(255,255,255,.32);font-weight:700;letter-spacing:.06em;}
+.term-answer-panel input:focus{outline:none;border-color:#a5b4fc;box-shadow:0 0 0 3px rgba(129,140,248,.25);}
+.term-answer-panel button{flex:0 0 auto;width:auto!important;height:48px;margin:0!important;padding:0 18px;border:0;border-radius:14px;background:rgba(99,102,241,.88);color:#fff;font:800 15px system-ui,sans-serif;}
+.term-answer-panel button:active{transform:scale(.96);}
+.term-answer-panel p{font-size:14px;}.term-answer-panel p:empty{display:none;}
+.term-answer-panel[data-result=right]{border-color:rgba(134,240,181,.6);}.term-answer-panel[data-result=wrong]{border-color:rgba(255,154,138,.6);}
+.term-answer-panel{grid-template-columns:minmax(0,1fr);}.term-answer-panel div{min-width:0;}.term-answer-panel input{width:0!important;}
