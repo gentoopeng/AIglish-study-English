@@ -596,3 +596,9 @@ The meaning field takes the full width. The part of speech (or the year, in 用�
 ## Follow-up: long words in the word list (10.21.42)
 
 A word card's title row reserved 76 px on the right, but the sticky-note, edit and delete buttons take about 120 px. A long word such as 「港川人・山下町第一洞人」 wrapped under them, and its speaker button overlapped the sticky note. The row now reserves 128 px when the book is editable (48 px otherwise, for the sticky note alone). The word wraps within that space, and the speaker button stays beside it.
+
+## Follow-up: matching card buttons and years in the inline editor (10.21.43)
+
+**Buttons.** The sticky-note button now matches the edit and delete buttons: 44 × 47 px, with a 24 px icon in the same colour. Before, it was a 32 px circle with a 13 px icon. The title row reserves room for the wider buttons.
+
+**Inline editor.** In 用語・年号モード, the pencil editor shows a digits-only year box before each line, filled from the year at the start of the line. The line's text is shown without the year. Saving puts the year back at the start of the line, as the add form does. `tests/term-mode.smoke.cjs` edits a year this way.

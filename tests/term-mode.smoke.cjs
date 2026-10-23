@@ -108,6 +108,26 @@ const { chromium } = require("playwright"),
     assert.ok(marks.some(([text, rated, tone, history]) => text === "本能寺の変" && rated && tone === "16,185,129" && history === "○"), JSON.stringify(marks));
     assert.ok(marks.some(([text, rated, tone, history]) => text === wrongYear.answer && rated && tone === "239,68,68" && history === "×"), JSON.stringify(marks));
     await page.evaluate(() => document.querySelector("#vocabListContainer mark.term-mark.is-rated").click());
+    // The pencil editor has a digits-only year box per line, filled from the start of the line.
+    page.on("dialog", (d) => d.accept());
+    await page.locator("#vocabLibraryBooks .textbook-list-item").filter({ hasText: "日本史" }).click();
+    await page.evaluate(() => {
+      document.getElementById("vocabSearchInput").value = "";
+      window.renderVocabList();
+    });
+    await page.locator(`.word-row-container[data-word-num="${nobunaga}"] .card-edit-btn`).click();
+    const years = page.locator(`#inlineEditMeaningsList-${nobunaga} .inline-year-input`);
+    assert.deepEqual(await years.evaluateAll((list) => list.map((e) => e.value)), ["1582", "1575"]);
+    assert.equal(await page.locator(`.inline-m-input-${nobunaga}`).first().inputValue(), "「本能寺の変」で死亡したとされる人物");
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
+    await years.first().fill("");
+    await years.first().pressSequentially("１５a83");
+    assert.equal(await years.first().inputValue(), "1583");
+    await page.locator(`#wordCardForm-${nobunaga}`).getByRole("button", { name: "保存する", exact: true }).click();
+    assert.equal(
+      await page.evaluate((n) => vocabList.find((w) => String(w.num) === n).meanings[0].text, nobunaga),
+      "1583 「本能寺の変」で死亡したとされる人物",
+    );
     // Books without the mode are unaffected: cards are the plain word/meaning pairs.
     assert.equal(await page.evaluate(() => TermProgress.enabled("no-such-book")), false);
     assert.deepEqual(errors, []);
