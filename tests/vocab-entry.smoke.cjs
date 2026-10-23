@@ -56,11 +56,13 @@ const { chromium, webkit } = require("playwright"),
     );
     await page.locator("#vocabAddWord").click();
     assert.equal(await page.locator("#vocabEntryNumber").inputValue(), "6");
-    assert.equal(
-      await page
-        .locator("#vocabEntryWord")
-        .evaluate((e) => getComputedStyle(e).fontSize),
-      "16px",
+    // 16px or more, so iOS does not zoom in when the field is focused.
+    assert.ok(
+      parseFloat(
+        await page
+          .locator("#vocabEntryWord")
+          .evaluate((e) => getComputedStyle(e).fontSize),
+      ) >= 16,
     );
     await page.locator("#vocabEntryWord").fill("follow");
     await page
