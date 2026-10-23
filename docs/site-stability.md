@@ -592,3 +592,7 @@ The word entry sheet is now:
 - built from larger fields: 52 px tall, 17 px text
 
 The meaning field takes the full width. The part of speech (or the year, in 用語・年号モード) and the remove button sit on the line under it. Before, they squeezed the meaning to about 170 px, and in term mode the year sat in the wide column.
+
+## Follow-up: long words in the word list (10.21.42)
+
+A word card's title row reserved 76 px on the right, but the sticky-note, edit and delete buttons take about 120 px. A long word such as 「港川人・山下町第一洞人」 wrapped under them, and its speaker button overlapped the sticky note. The row now reserves 128 px when the book is editable (48 px otherwise, for the sticky note alone). The word wraps within that space, and the speaker button stays beside it.
