@@ -555,3 +555,31 @@ In the correct-answer card, the generic card-button rule (11px padding) was more
 - At the full save, each member shares their top 8 from the last 30 days as `weak.{member}`; the group publish compares it, so an unchanged list writes nothing.
 - The members tab lists the words with how many members miss each one.
 - 「苦手単語でグループバトル」 opens the group battle with these words as the pool instead of a book choice. It needs ten different meanings.
+
+## Follow-up: 声で答える (10.21.40)
+
+In hands-free flashcards, the 🎤 button in the hands-free bar turns on voice answers; the setting is remembered. After the card is read, the app listens once (up to 6 s) with the browser's speech recognition, in the answer's language.
+
+**Judging (`voice-answer.js`, tested in `tests/voice-answer.test.cjs`)**
+- A meaning such as 「①〜に従う②〜に続く」 is split into its parts. Notes in brackets, the 〜 placeholder and the particle after it are dropped.
+- The spoken text and the parts are compared after:
+  - NFKC
+  - katakana → hiragana
+  - removing spaces and punctuation
+- Any recognizer alternative may match, by:
+  - equality
+  - containment
+  - another inflected form of the same verb or adjective (従う → 従います, but not 食べる → 食器)
+  - close bigram similarity
+- English answers also accept a leading to/a/the and near spellings.
+- Saying 「わからない」 or 「パス」 counts as a wrong answer.
+
+**Rating**
+- **Right:** the card turns over, shows what was heard with ○, and is rated ○.
+- **Wrong:** the right answer is read out, then the card is rated ×.
+- **Nothing heard:** hands-free falls back to reading the answer after the set delay and waiting for an earphone button.
+- A card drawn twice listens once.
+
+**Devices without speech recognition.** The button reads 「🎤 非対応」 and explains on tap. Home-screen apps on iOS may lack speech recognition that Safari has.
+
+`tests/voice-answer.smoke.cjs` replaces speech and recognition with scripts to check right, wrong and silent answers.

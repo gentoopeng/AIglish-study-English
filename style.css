@@ -2668,3 +2668,8 @@ dialog.talk-sheet::backdrop{background:#0008;}
 .group-weak-list strong{font:700 15px 'Times New Roman',serif;}.group-weak-list span{font-size:13px;color:var(--text-sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.group-weak-list small{color:#ffb4a8;font-weight:700;}
 .group-weak-actions button{width:100%;padding:12px;border-radius:12px;border:1px solid #ffb4a8aa;background:#73383e66;color:#fff;font:inherit;font-weight:700;}.group-weak-actions button:disabled{opacity:.45;}
 .group-weak-preset{margin:0 0 10px;padding:12px;border-radius:12px;background:#73383e55;border:1px solid #ffb4a8;font-weight:700;text-align:center;}
+/* 声で答える: the mic toggle in the hands-free bar and what was heard */
+#handsFreeVoice.is-on{border-color:#86f0b5;background:#86f0b533;}
+#handsFreeVoice.is-listening{animation:none;border-color:#ffd98a;background:#ffd98a33;}
+.handsfree-heard{position:absolute;left:50%;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 156px);z-index:121;max-width:calc(100% - 48px);box-sizing:border-box;padding:6px 14px;border-radius:999px;background:rgba(10,30,26,.92);border:1px solid #86f0b580;color:#e7fff4;font:700 14px/1.3 system-ui,sans-serif;transform:translateX(-50%);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.handsfree-heard[hidden]{display:none;}.handsfree-heard[data-verdict=bad]{border-color:#ff9b9b;background:rgba(60,18,22,.92);}
