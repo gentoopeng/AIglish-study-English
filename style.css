@@ -2688,3 +2688,10 @@ html body dialog.vocab-entry-dialog{width:min(560px,calc(100vw - 16px));max-heig
 .vocab-entry-dialog.is-term-mode .vocab-entry-meaning-controls>.vocab-entry-year{width:110px;flex:none;min-height:44px;}
 .vocab-entry-add-meaning{font-size:14px;}
 .vocab-entry-dialog .library-editor-actions button{min-height:52px;font-size:16px;}
+/* Word cards: the title row leaves room for the buttons at the top right (sticky note, and edit /
+   delete when the book is editable), so a long word wraps before them instead of running under. */
+.word-row-container .word-main-line{padding-right:48px!important;}
+.word-row-container .word-main-line:has(.vocab-word-markers.with-admin){padding-right:128px!important;}
+.word-row-container .word-main-line>div:first-child{min-width:0;}
+.word-row-container .word-main-line>div:first-child>span:nth-child(2){min-width:0;overflow-wrap:anywhere;line-height:1.35;}
+.word-row-container .word-main-line .word-speak-button{flex-shrink:0;}
