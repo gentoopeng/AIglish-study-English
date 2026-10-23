@@ -583,3 +583,12 @@ In hands-free flashcards, the 🎤 button in the hands-free bar turns on voice a
 **Devices without speech recognition.** The button reads 「🎤 非対応」 and explains on tap. Home-screen apps on iOS may lack speech recognition that Safari has.
 
 `tests/voice-answer.smoke.cjs` replaces speech and recognition with scripts to check right, wrong and silent answers.
+
+## Follow-up: larger word entry form (10.21.41)
+
+The word entry sheet is now:
+- wider: up to 560 px, 8 px from the screen edges
+- solid, so nothing shows through it
+- built from larger fields: 52 px tall, 17 px text
+
+The meaning field takes the full width. The part of speech (or the year, in 用語・年号モード) and the remove button sit on the line under it. Before, they squeezed the meaning to about 170 px, and in term mode the year sat in the wide column.
