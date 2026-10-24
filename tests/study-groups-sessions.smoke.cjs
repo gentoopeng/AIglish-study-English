@@ -16,7 +16,7 @@ const { chromium, webkit } = require("playwright"),
     for (const id of ["group-a", "group-b"])
       docs.set("users/" + id, {
         playerName: id,
-        avatar: "http://127.0.0.1:8000/aiglish.png",
+        avatar: "http://127.0.0.1:8000/icon-192.png",
         lastActiveAt: Date.now(),
       });
     async function notify(path) {
@@ -118,7 +118,7 @@ const { chromium, webkit } = require("playwright"),
         myName = id;
         localStorage.setItem(
           "core_v4_user_avatar_" + id,
-          "http://127.0.0.1:8000/aiglish.png",
+          "http://127.0.0.1:8000/icon-192.png",
         );
         myFriendList = []; // Group membership is selected from the user directory.
         currentTextbook = "groups-book";

@@ -16,7 +16,7 @@ const { chromium, webkit } = require("playwright"),
     for (const id of ["duel-a", "duel-b", "duel-c", "duel-d"])
       docs.set("users/" + id, {
         playerName: id,
-        avatar: "http://127.0.0.1:8000/aiglish.png",
+        avatar: "http://127.0.0.1:8000/icon-192.png",
         wordDuelRating: 1500,
         studyPoints: 100,
         lastActiveAt: Date.now(),
@@ -196,7 +196,7 @@ const { chromium, webkit } = require("playwright"),
         });
         localStorage.setItem(
           "core_v4_user_avatar_" + myId,
-          "http://127.0.0.1:8000/aiglish.png",
+          "http://127.0.0.1:8000/icon-192.png",
         );
         localStorage.setItem(
           "core_v4_profile_customization_" + myId,

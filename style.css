@@ -60,17 +60,17 @@ body::after {
 }
 
 #view-vocab::before { 
-    background-image: url('tango.png'); 
+    background-image: url('tango.webp'); 
     background-size: auto 100vh;
     background-repeat: repeat-x;
     animation: vocabBgScroll 120s linear infinite;
 }
 
-#view-reader::before { background-image: url('friend.png'); } 
-#view-community::before { background-image: url('friend.png'); }
+#view-reader::before { background-image: url('friend.webp'); } 
+#view-community::before { background-image: url('friend.webp'); }
 
 #view-game::before { 
-    background-image: url('utyuusen.png'); 
+    background-image: url('utyuusen.webp'); 
     filter: blur(1px) brightness(0.65); 
     transform: scale(1.05); 
 }
@@ -422,7 +422,7 @@ h2 { font-size: 13px; font-weight: 700; color: #FFFFFF !important; margin: 0 0 1
     height: 38px; 
     padding: 0 16px; 
     font-family: 'Noto Serif JP', serif !important;
-    background-image: url('stone.png') !important;
+    background-image: url('stone.webp') !important;
     background-size: 100% 100% !important;
     background-position: center !important;
     background-color: transparent !important;
@@ -665,7 +665,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     color: #FFFFFF !important;
     letter-spacing: 2px !important;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.95), -1px -1px 1px rgba(0, 0, 0, 0.8) !important;
-    background-image: url('stone.png') !important;
+    background-image: url('stone.webp') !important;
     background-size: 100% 100% !important;
     background-position: center !important;
     background-color: transparent !important;
@@ -697,7 +697,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     content: "";
     position: fixed;
     top: 0; left: 0; width: 100vw; height: 100vh;
-    background-image: url('haikei.png');
+    background-image: url('haikei.webp');
     background-size: cover;
     background-position: center;
     filter: blur(1px) brightness(0.7);
@@ -709,7 +709,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     content: "";
     position: fixed;
     top: 0; left: 0; width: 100vw; height: 100vh;
-    background-image: url('kekka.png');
+    background-image: url('kekka.webp');
     background-size: cover;
     background-position: center;
     filter: blur(0.5px) brightness(0.7);
@@ -748,7 +748,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     margin-left: auto !important;
     margin-right: auto !important;
     font-family: 'Noto Serif JP', serif !important;
-    background-image: url('stone.png') !important;
+    background-image: url('stone.webp') !important;
     background-size: 100% 100% !important;
     background-position: center !important;
     background-color: transparent !important;
@@ -914,7 +914,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     box-sizing: border-box !important;
     padding: 20px 24px 75px 52px !important; 
     font-family: 'Noto Serif JP', serif !important;
-    background-image: url('stone.png') !important;
+    background-image: url('stone.webp') !important;
     background-size: 100% 100% !important;
     background-position: center !important;
     background-color: transparent !important;
@@ -946,7 +946,7 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     margin: 0 !important;
     height: 44px !important;
     font-family: 'Noto Serif JP', serif !important;
-    background-image: url('stone.png') !important;
+    background-image: url('stone.webp') !important;
     background-size: 100% 100% !important;
     background-position: center !important;
     background-color: transparent !important;

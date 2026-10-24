@@ -25,7 +25,7 @@ const { chromium, webkit } = require("playwright"),
       myName = "自分";
       window.db = {};
       const now = Date.now(),
-        photo = "http://127.0.0.1:8000/aiglish.png",
+        photo = "http://127.0.0.1:8000/icon-192.png",
         group = {
           name: "テストグループ",
           owner: "chat-a",
