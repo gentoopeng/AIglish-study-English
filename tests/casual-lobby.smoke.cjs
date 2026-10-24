@@ -80,8 +80,11 @@ const { chromium, webkit } = require("playwright"),
     await page.screenshot({
       path: "/tmp/battle-modes-" + type.name() + ".png",
     });
-    await page.locator(".mode-serious").click();
-    await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    // The lower card opens poker (it replaced ガチ).
+    await page.locator(".mode-poker").click();
+    await page.locator("dialog.poker-screen[open]").waitFor();
+    await page.getByRole("button", { name: "ポーカーを閉じる" }).click();
+    await page.locator("dialog.poker-screen").waitFor({ state: "detached" });
     await page.locator(".mode-casual").click();
     await page.screenshot({
       path: "/tmp/battle-entry-" + type.name() + ".png",

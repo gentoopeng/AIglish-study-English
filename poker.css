@@ -1,0 +1,69 @@
+/* Poker: a calm card table in the app's colours (navy glass, warm ivory accents). */
+html body dialog.poker-screen{position:fixed;inset:0;width:100%;max-width:none;height:100dvh;max-height:none;margin:0;padding:calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));box-sizing:border-box;border:0;background:radial-gradient(ellipse at 50% 30%,#18233a 0%,#0b111d 70%);color:#eee8da;overflow:auto;font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;}
+.poker-screen::backdrop{background:#05080f;}
+.poker-open{overflow:hidden;}
+.pk-close{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;z-index:5;width:36px;height:36px;border:1px solid rgba(213,201,172,.3);border-radius:50%;background:rgba(15,22,36,.7);color:#eee8da;font-size:18px;cursor:pointer;}
+/* Lobby */
+.pk-lobby{max-width:440px;margin:0 auto;padding-top:18px;}
+.pk-kicker{margin:0 0 4px;color:#999386;font:600 9px/1.2 system-ui,sans-serif;letter-spacing:.24em;}
+.pk-lobby h2{margin:0;color:#f0ece3;font:700 26px/1.25 Georgia,"Yu Mincho",serif;}
+.pk-balance{margin:6px 0 18px;color:#c6b790;font:700 13px system-ui,sans-serif;}
+.pk-panel{margin-bottom:14px;padding:16px;border:1px solid rgba(213,201,172,.22);border-radius:16px;background:linear-gradient(150deg,rgba(27,35,49,.85),rgba(15,22,36,.9));}
+.pk-panel h3{margin:0 0 12px;color:#f0ece3;font:700 15px/1.4 Georgia,"Yu Mincho",serif;}
+.pk-panel label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;color:#cfc8b8;font-size:13px;}
+.pk-panel select,.pk-panel input{min-width:0;height:38px;padding:0 10px;border:1px solid rgba(213,201,172,.3);border-radius:10px;background:rgba(8,12,20,.6);color:#f0ece3;font:600 14px system-ui,sans-serif;}
+.pk-field{display:flex;align-items:center;gap:6px;}.pk-field input{width:110px;text-align:right;}.pk-field em{font-style:normal;color:#999386;}
+.pk-join{display:flex;gap:10px;}.pk-join input{flex:1;text-align:center;letter-spacing:.4em;font-size:18px;}
+.pk-lobby button,.pk-actions button,.pk-quick button,.pk-leave{min-height:42px;padding:0 16px;border:1px solid rgba(213,201,172,.35);border-radius:12px;background:rgba(15,23,42,.5);color:#eee8da;font:700 13px system-ui,sans-serif;cursor:pointer;}
+.pk-lobby .pk-primary,.pk-actions .pk-primary{background:#c6b790;border-color:transparent;color:#18202d;}
+.pk-panel .pk-primary{width:100%;margin-top:6px;}
+.pk-note{margin:4px 2px 0;color:#8f8a7e;font-size:11px;line-height:1.7;}
+.pk-status{min-height:1.4em;margin:8px 0 0;color:#fca5a5;font-size:12px;text-align:center;}
+/* Table */
+.pk-table-view{display:flex;flex-direction:column;gap:12px;max-width:520px;min-height:100%;margin:0 auto;}
+.pk-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-right:44px;}
+.pk-bar strong{display:block;color:#f0ece3;font:700 15px Georgia,"Yu Mincho",serif;}.pk-bar small{color:#999386;font-size:11px;}
+.pk-leave{min-height:34px;padding:0 12px;font-size:12px;}
+.pk-felt{position:relative;width:100%;aspect-ratio:1/1.05;max-height:58dvh;margin:0 auto;}
+.pk-felt::before{content:"";position:absolute;inset:9% 6%;border-radius:46%;background:radial-gradient(ellipse at 50% 42%,#1f5a4b 0%,#143f37 55%,#0e2b28 100%);border:6px solid #2a2117;box-shadow:inset 0 0 0 2px rgba(198,183,144,.35),inset 0 18px 40px rgba(0,0,0,.35),0 14px 40px rgba(0,0,0,.5);}
+.pk-center{position:absolute;inset:30% 14%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;}
+.pk-board{display:flex;gap:4px;}
+.pk-pot{margin:0;color:#f3e9cf;font:700 13px system-ui,sans-serif;letter-spacing:.04em;}
+.pk-log{margin:0;min-height:1.3em;color:#cfe6dc;font-size:11px;opacity:.85;}
+.pk-seat{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;gap:3px;transform:translate(-50%,-50%);transition:opacity .2s;}
+.pk-plate{position:relative;min-width:72px;max-width:96px;padding:5px 9px;border:1px solid rgba(213,201,172,.35);border-radius:12px;background:rgba(10,16,28,.88);text-align:center;box-shadow:0 4px 12px rgba(0,0,0,.4);}
+.pk-plate strong{display:block;overflow:hidden;color:#f0ece3;font-size:11px;text-overflow:ellipsis;white-space:nowrap;}
+.pk-stack{color:#c6b790;font:700 12px system-ui,sans-serif;font-variant-numeric:tabular-nums;}
+.pk-dealer{position:absolute;top:-8px;right:-8px;width:20px;height:20px;border-radius:50%;background:#f3eee2;color:#18202d;font:800 10px/20px system-ui;font-style:normal;box-shadow:0 1px 4px rgba(0,0,0,.5);}
+.pk-seat.is-turn .pk-plate{border-color:#e9d9a6;box-shadow:0 0 0 2px rgba(233,217,166,.35),0 4px 14px rgba(0,0,0,.45);}
+.pk-seat.is-me .pk-plate{background:rgba(24,34,52,.95);}
+.pk-seat.is-folded,.pk-seat.is-out{opacity:.45;}
+.pk-bet{padding:2px 8px;border-radius:10px;background:rgba(0,0,0,.45);color:#f3e9cf;font:700 11px system-ui,sans-serif;}
+.pk-won{padding:3px 9px;border-radius:10px;background:#c6b790;color:#18202d;font:800 11px system-ui,sans-serif;white-space:nowrap;}
+.pk-clock{color:#e9d9a6;font:700 10px system-ui,sans-serif;}
+.pk-seat-cards{display:flex;gap:2px;}
+/* Cards */
+.pk-card{position:relative;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:38px;height:54px;border-radius:6px;background:linear-gradient(160deg,#fffdf7,#f1ead8);color:#1c1f26;box-shadow:0 2px 6px rgba(0,0,0,.45);font-family:Georgia,"Times New Roman",serif;line-height:1;}
+.pk-card b{font-size:17px;font-weight:700;}.pk-card i{font-style:normal;font-size:15px;margin-top:2px;}
+.pk-card.is-red{color:#b4232a;}
+.pk-card.is-small{width:24px;height:34px;border-radius:4px;}.pk-card.is-small b{font-size:11px;}.pk-card.is-small i{font-size:10px;}
+.pk-card.is-back{background:repeating-linear-gradient(45deg,#26324a 0 4px,#1d2740 4px 8px);border:1px solid rgba(198,183,144,.5);}
+.pk-card.is-slot{background:transparent;border:1px dashed rgba(243,233,207,.25);box-shadow:none;}
+@media(prefers-reduced-motion:no-preference){.pk-board .pk-card:not(.is-slot),.pk-hole .pk-card{animation:pkDeal .35s cubic-bezier(.2,.8,.2,1) both;}}
+@keyframes pkDeal{from{transform:translateY(-10px) scale(.9);opacity:0}to{transform:none;opacity:1}}
+/* My hand and actions */
+.pk-me{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:auto;}
+.pk-hole{display:flex;gap:8px;min-height:84px;}
+.pk-hole .pk-card{width:58px;height:82px;border-radius:8px;}.pk-hole .pk-card b{font-size:26px;}.pk-hole .pk-card i{font-size:22px;}
+.pk-hole.is-folded{opacity:.4;}
+.pk-hand-name{min-height:1.2em;margin:0;color:#c6b790;font:700 13px Georgia,"Yu Mincho",serif;}
+.pk-actions{width:100%;}
+.pk-buttons{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px;}
+.pk-actions .pk-fold{color:#cfc8b8;}
+.pk-wait{margin:6px 0;color:#cfc8b8;font-size:13px;text-align:center;}
+.pk-actions>.pk-primary{display:block;width:100%;margin-top:6px;}
+.pk-raise-panel{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid rgba(213,201,172,.25);border-radius:14px;background:rgba(15,22,36,.85);}
+.pk-raise-amount{text-align:center;color:#f0ece3;font:700 20px Georgia,serif;font-variant-numeric:tabular-nums;}
+.pk-raise-panel input[type=range]{width:100%;accent-color:#c6b790;}
+.pk-quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}.pk-quick button{min-height:34px;padding:0 4px;font-size:11px;}
+.pk-hand-name{align-self:center;text-align:center;}
