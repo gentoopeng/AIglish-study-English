@@ -320,16 +320,78 @@
     window.addEventListener('online',function(){retryPendingDeletions(true);});
     // Not at launch: startup already loads the active book, background and warm-up.
     window.onAppLoaded(function(){setTimeout(retryPendingDeletions,60000);});
+    // A shared word book copied into the user's own: same words, the understanding so far, and
+    // editable from then on. The original can leave the list at the same time.
+    async function copyBook(bookId, hideOriginal) {
+        var owner = userId();
+        var book = textbooksPool.find(function(item) { return item.id === bookId; });
+        if (!book) throw new Error('単語帳が見つかりません。');
+        var source = await window.__getBookMasterWords(bookId);
+        if (userId() !== owner) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
+        if (!Array.isArray(source) || !source.length) throw new Error('単語を読み込めませんでした。接続後にもう一度お試しください。');
+        var master = window.stripVocabProgressFromWords(source).map(function(w) { return Object.assign({}, w); });
+        var id = 'personal_' + crypto.randomUUID();
+        var record = { id: id, name: (book.name + '（自分用）').slice(0, 80), cover: book.cover || '📔', coverType: book.coverType === 'image' ? 'image' : 'text', personal: true, visibility: 'private' };
+        if (book.termMode) record.termMode = true;
+        await publish(record, master, null);
+        if (userId() !== owner) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
+        var progress = window.LearningData ? window.LearningData.read(bookId) : {};
+        var progressRaw = JSON.stringify(progress || {});
+        localStorage.setItem('core_v4_custom_words_' + owner + '_' + id, JSON.stringify(master));
+        localStorage.setItem('core_v4_cache_' + id, JSON.stringify(master));
+        localStorage.setItem(window.getVocabProgressStorageKey(id), progressRaw);
+        if (window.LearningData && window.LearningData.recoveryKey) localStorage.setItem(window.LearningData.recoveryKey(id), progressRaw);
+        textbooksCacheMap[id] = master;
+        var draft = { master: master, emptyConfirmed: false, progress: progress || {}, savedAt: new Date().toISOString() };
+        localStorage.setItem(window.__manualVocabLocalKey(id), JSON.stringify(draft));
+        window.__manualVocabDrafts[id] = draft;
+        window.__dirtyManualVocabDrafts = window.__dirtyManualVocabDrafts || {};
+        window.__manualVocabDraftRevisions = window.__manualVocabDraftRevisions || {};
+        window.__manualVocabDraftRevisions[id] = (window.__manualVocabDraftRevisions[id] || 0) + 1;
+        window.__dirtyManualVocabDrafts[id] = window.__manualVocabDraftRevisions[id];
+        var data = readLibrary();
+        data.books.push(record);
+        if (hideOriginal) setHidden(data, bookId, true);
+        persist(data);
+        return record;
+    }
+    function openCopyBook(bookId) {
+        var book = textbooksPool.find(function(item) { return item.id === bookId; });
+        if (!book) return;
+        var modal = open('自分用にコピーして編集', '<p class="library-editor-hint"></p>' +
+            '<label class="library-term-mode"><input type="checkbox" id="libraryCopyHide" checked>元の単語帳を一覧から外す<small>あとから「非表示の自分の単語帳」で戻せます。</small></label>' +
+            '<p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryCopyConfirm" class="library-editor-primary">コピーする</button></div>');
+        modal.querySelector('.library-editor-hint').textContent = '「' + book.name + '」の単語と、これまでの理解度を自分の単語帳にコピーします。コピーした単語帳は自由に編集できます（元の単語帳は変わりません）。';
+        var confirmButton = modal.querySelector('#libraryCopyConfirm');
+        confirmButton.onclick = async function() {
+            if (confirmButton.disabled) return;
+            confirmButton.disabled = true;
+            confirmButton.textContent = 'コピー中…';
+            try {
+                var record = await copyBook(bookId, modal.querySelector('#libraryCopyHide').checked);
+                close();
+                if (window.showToast) window.showToast('「' + record.name + '」を作りました。単語を自由に編集できます。', 'ok');
+                window.selectVocabLibraryBook(record.id);
+            } catch (error) {
+                modal.querySelector('.library-editor-error').textContent = error.message;
+                confirmButton.disabled = false;
+                confirmButton.textContent = 'コピーする';
+            }
+        };
+    }
+    window.openCopyLibraryBook = openCopyBook;
+
     window.openLibraryBookActions = function(bookId) {
         var actionUserId = userId();
         var book = textbooksPool.find(function(item) { return item.id === bookId; }) || readLibrary().books.find(function(item) { return item.id === bookId; });
         if (!book) return;
         var own = window.isPersonalTextbook(bookId);
         var modal = open(book.name, '<div class="library-editor-actions library-editor-actions-stack">' +
-            (own ? '<button type="button" id="libraryEditBook">名前・表紙を編集 / 単語を追加</button>' : '') +
+            (own ? '<button type="button" id="libraryEditBook">名前・表紙を編集 / 単語を追加</button>' : '<button type="button" id="libraryCopyBook">自分用にコピーして編集</button>') +
             (readLibrary().hidden.indexOf(bookId) >= 0 ? '<button type="button" id="libraryRestoreBook">一覧に戻す</button>' : '') +
             '<button type="button" id="libraryRemoveBook" class="library-editor-danger">' + '自分の一覧から外す' + '</button>' + '<button type="button" id="libraryEraseBook" class="library-editor-danger">' + (own ? '単語帳を完全削除' : '自分の単語帳データを完全削除') + '</button>' + '<button type="button" data-library-close>閉じる</button></div>');
         if (own) modal.querySelector('#libraryEditBook').onclick = function() { window.openLibraryBookEditor(bookId); };
+        else modal.querySelector('#libraryCopyBook').onclick = function() { openCopyBook(bookId); };
         var restore = modal.querySelector('#libraryRestoreBook');
         if (restore) restore.onclick = function() { var data = readLibrary(); setHidden(data,bookId,false); persist(data); close(); };
         function removeBook(permanent) {

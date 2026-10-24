@@ -2788,3 +2788,7 @@ html body .flash-warmup-dialog.warmup-intro-playing>.flashcard-session-screen{op
 @keyframes warmupIntroUp{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
 @keyframes warmupIntroOut{to{opacity:0;transform:scale(1.15)}}
 @media(prefers-reduced-motion:reduce){.flash-warmup-dialog .warmup-intro,.warmup-intro-ring,.warmup-intro-count,.warmup-intro-label,.warmup-intro-sub{animation:none!important}html body .flash-warmup-dialog>.flashcard-session-screen{transition:none}}
+/* Admin editing mode for shared word books. */
+.admin-book-editing{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;padding:8px 8px 8px 14px;border:1px solid rgba(245,158,11,.6);border-radius:14px;background:rgba(41,25,5,.92);color:#FDE68A;font:700 11px/1.4 system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.45);}
+.admin-book-editing button{flex:none;min-height:30px;padding:0 12px;border:1px solid rgba(253,230,138,.5);border-radius:10px;background:transparent;color:#FDE68A;font:700 11px system-ui,sans-serif;cursor:pointer;}
+.admin-players-dialog .admin-books-button{margin-left:8px;}

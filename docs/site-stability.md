@@ -788,3 +788,17 @@ The warm-up now opens with a short scene instead of a card appearing at once. It
 - After 1.5 seconds it fades, and the flashcard screen fades in.
 - A tap skips the scene.
 - With reduced motion, the scene has no animation and lasts 0.5 seconds.
+
+## Follow-up: editing shared word books (10.21.58)
+
+The words of shared (distributed) books could not be edited at all. Admin rights (`window.isAdmin`) were switched off whenever the admin tools dialog closed, and the edit controls need those rights.
+
+**For everyone: 「自分用にコピーして編集」**
+- This new item in a shared book's ⋯ menu copies the book into the user's own books as 「名前（自分用）」. The copy keeps the words and the understanding so far (progress and its recovery copy), and the copy opens editable.
+- 「元の単語帳を一覧から外す」 is ticked by default. The original comes back through 「非表示の自分の単語帳」.
+
+**For the administrator: 「配信中の単語帳を編集する」**
+- This button in the admin tools keeps admin rights on after the dialog closes. A banner at the top of the word book screen says so (「変更は全員に反映」), and 「終了」 ends it, as does a reload.
+- While the mode is on, a word edit to a shared book is published at once (`saveVocabMasterToStorage` → `shared/vocab_<id>`) instead of waiting for the next flush.
+
+`tests/shared-book-editing.smoke.cjs` covers both.
