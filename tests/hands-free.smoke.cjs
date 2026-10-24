@@ -45,6 +45,8 @@ await page.waitForTimeout(650);await page.evaluate(()=>window.__media.previoustr
 await page.waitForFunction(()=>!HandsFree.active());s=await state();assert.deepEqual(s.handlers,[]);assert.equal(s.wake,0);
 // Keyboards and presentation clickers: → ○, ← ×, ↑ △, Space turns the card.
 await page.waitForFunction(()=>!document.getElementById('activeFlashcard')||getComputedStyle(document.getElementById('flashcard-play-screen')).display==='none');
+// Finishing the deck may show a message in the app's dialog; close it as a user would.
+await page.evaluate(async()=>{for(let i=0;i<5&&document.querySelector('dialog.app-alert');i++){document.querySelector('dialog.app-alert button').click();await new Promise(r=>setTimeout(r,50));}});
 await page.evaluate(()=>{window.switchTab('vocab');window.showVocabLibrarySelection();});await open();
 await page.keyboard.press('Space');assert.equal((await state()).flipped,true);
 await page.waitForTimeout(650);await page.keyboard.press('ArrowLeft');assert.equal((await state()).index,1);

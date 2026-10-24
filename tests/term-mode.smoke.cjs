@@ -109,7 +109,15 @@ const { chromium } = require("playwright"),
     assert.ok(marks.some(([text, rated, tone, history]) => text === wrongYear.answer && rated && tone === "239,68,68" && history === "×"), JSON.stringify(marks));
     await page.evaluate(() => document.querySelector("#vocabListContainer mark.term-mark.is-rated").click());
     // The pencil editor has a digits-only year box per line, filled from the start of the line.
-    page.on("dialog", (d) => d.accept());
+    // Messages use the app's dialog: close any left from finishing the deck, and after saving.
+    const closeMessages = () =>
+      page.evaluate(async () => {
+        for (let i = 0; i < 5 && document.querySelector("dialog.app-alert"); i++) {
+          document.querySelector("dialog.app-alert button").click();
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      });
+    await closeMessages();
     await page.locator("#vocabLibraryBooks .textbook-list-item").filter({ hasText: "日本史" }).click();
     await page.evaluate(() => {
       document.getElementById("vocabSearchInput").value = "";
@@ -124,6 +132,8 @@ const { chromium } = require("playwright"),
     await years.first().pressSequentially("１５a83");
     assert.equal(await years.first().inputValue(), "1583");
     await page.locator(`#wordCardForm-${nobunaga}`).getByRole("button", { name: "保存する", exact: true }).click();
+    assert.equal(await page.locator("dialog.app-alert p").innerText(), "単語情報を更新しました！");
+    await closeMessages();
     assert.equal(
       await page.evaluate((n) => vocabList.find((w) => String(w.num) === n).meanings[0].text, nobunaga),
       "1583 「本能寺の変」で死亡したとされる人物",
