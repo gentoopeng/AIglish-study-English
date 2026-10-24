@@ -75,6 +75,11 @@ pending=true;
 if(name==='saveVocabToStorage'&&typeof window.__captureManualVocabDraft==='function'){
 try{ window.__captureManualVocabDraft(); }catch(error){ console.error('単語帳の下書き保持に失敗しました:',error); }
 }
+// An administrator editing a shared word book (admin editing mode) publishes the words at once,
+// so everyone gets them; the learning records still wait for the flush.
+if(name==='saveVocabToStorage'&&window.__adminBookEditing===true&&window.isAdmin===true&&typeof currentTextbook==='string'&&currentTextbook&&!(window.isPersonalTextbook&&window.isPersonalTextbook(currentTextbook))&&typeof window.saveVocabMasterToStorage==='function'){
+return Promise.resolve(window.saveVocabMasterToStorage()).catch(function(error){ console.error('配信中の単語帳を保存できませんでした:',error); });
+}
 // 通常操作では保存せず、手動保存・ログアウト時の flush だけで確定する。
 return Promise.resolve();
 }

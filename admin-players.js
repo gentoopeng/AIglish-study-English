@@ -2,6 +2,23 @@
 (function(){
 'use strict';
 let dialog, authorized=false, busy=false, generation=0;
+// Editing mode for the shared word books: after the password, admin rights stay on outside
+// this dialog until 終了 or a reload, and a banner says that changes reach everyone.
+const bookEditing=()=>window.__adminBookEditing===true;
+function setBookEditing(on){
+ window.__adminBookEditing=!!on;window.isAdmin=!!on;
+ let banner=document.getElementById('adminBookEditingBanner');
+ if(on&&!banner){banner=document.createElement('div');banner.id='adminBookEditingBanner';banner.className='admin-book-editing';banner.setAttribute('role','status');
+  const text=document.createElement('span');text.textContent='管理者モード：配信中の単語帳を編集できます（変更は全員に反映）';
+  const end=document.createElement('button');end.type='button';end.textContent='終了';end.onclick=()=>setBookEditing(false);
+  banner.append(text,end);
+  // In the word book screen's flow, so it never covers a button.
+  const host=document.getElementById('view-vocab');if(host)host.prepend(banner);else document.body.append(banner);}
+ if(!on&&banner)banner.remove();
+ document.body.classList.toggle('admin-book-editing-on',!!on);
+ if(window.__learningBootReady){window.renderVocabList?.();window.renderVocabLibrarySelection?.();}
+}
+window.AdminBookEditing=Object.freeze({on:bookEditing,stop:()=>setBookEditing(false)});
 function element(tag,text){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;return node;}
 function deadline(task){let timer;return Promise.race([task,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('通信に時間がかかっています。接続後に再実行してください。')),15000))]).finally(()=>clearTimeout(timer));}
 function message(text){dialog.querySelector('[role=status]').textContent=text;}
@@ -10,8 +27,8 @@ function mount(){
  if(dialog)return;
  dialog=element('dialog');dialog.className='menu-dialog admin-players-dialog';dialog.setAttribute('aria-label','管理者ツール');
  dialog.innerHTML='<header class="menu-dialog-heading"><h2>管理者ツール</h2><button type="button" data-close aria-label="管理者ツールを閉じる">×</button></header><div data-body></div><p role="status" aria-live="polite"></p>';
- document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>{generation++;busy=false;authorized=false;window.isAdmin=false;dialog.close();};
- dialog.addEventListener('close',()=>{if(dialog.open)return;authorized=false;generation++;busy=false;window.isAdmin=false;dialog.querySelector('[data-body]').replaceChildren();if(window.__learningBootReady){if(currentActiveTabId==='titles')window.renderLeaderboard();else if(currentActiveTabId==='community')window.People.refresh(false);}});
+ document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>{generation++;busy=false;authorized=false;window.isAdmin=bookEditing();dialog.close();};
+ dialog.addEventListener('close',()=>{if(dialog.open)return;authorized=false;generation++;busy=false;window.isAdmin=bookEditing();dialog.querySelector('[data-body]').replaceChildren();if(window.__learningBootReady){if(currentActiveTabId==='titles')window.renderLeaderboard();else if(currentActiveTabId==='community')window.People.refresh(false);}});
  dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});
 }
 function lock(value){busy=value;dialog.querySelectorAll('button:not([data-close]),input').forEach(node=>node.disabled=value);}
@@ -28,7 +45,9 @@ async function playerList(visit,isCurrent){
  }while(isCurrent());
 }
 async function refresh(){
- const request=++generation,body=dialog.querySelector('[data-body]');body.replaceChildren();const refresh=element('button','一覧を更新');refresh.type='button';refresh.disabled=busy;refresh.onclick=()=>refreshList();body.append(refresh);message('プレイヤーを読み込み中…');
+ const request=++generation,body=dialog.querySelector('[data-body]');body.replaceChildren();const refresh=element('button','一覧を更新');refresh.type='button';refresh.disabled=busy;refresh.onclick=()=>refreshList();
+ const books=element('button',bookEditing()?'単語帳の編集モードを終了':'配信中の単語帳を編集する');books.type='button';books.className='admin-books-button';books.onclick=()=>{if(bookEditing()){setBookEditing(false);books.textContent='配信中の単語帳を編集する';return;}setBookEditing(true);dialog.close();window.switchTab?.('vocab');window.showToast?.('管理者モードです。配信中の単語帳の単語を編集できます。','info');};
+ body.append(refresh,books);message('プレイヤーを読み込み中…');
  try{guard();const players=[];await deadline(playerList((id,data)=>{if(id!=='GUEST-000')players.push({id,name:data.playerName||id,deleted:!!data.deleted});},()=>authorized&&dialog.open&&generation===request));
  if(request!==generation||!authorized)return;
  for(const player of players){const row=element('button');row.type='button';row.className='admin-player-row';row.append(element('strong',player.name),element('small',player.id+(player.deleted?' · 削除済み':'')));row.onclick=()=>edit(player.id);body.append(row);}
@@ -105,7 +124,7 @@ const key='core_v4_account_deleted_'+id;let blocked=localStorage.getItem(key)===
 if(window.db&&window.fbGetDoc){let timeout;try{const snap=await Promise.race([(window.fbGetDocFromServer||window.fbGetDoc)(window.fbDoc(window.db,'users',id)),new Promise((_,reject)=>timeout=setTimeout(()=>reject(Error('アカウント確認のタイムアウト')),4000))]);if(snap.exists()){blocked=!!snap.data().deleted;if(blocked)localStorage.setItem(key,'1');else localStorage.removeItem(key);}}catch(error){/* Retain local learning when disconnected; never infer deletion from a failed read. */}finally{clearTimeout(timeout);}}
 if(!blocked)return true;
  const wasActive=window.__learningBootReady&&myId===id;await window.TextbookFiles?.remove(id);purgeLocal(id);
-localStorage.removeItem('core_v4_userId');window.__learningBootReady=false;myId='GUEST-000';myName='ゲスト';window.isAdmin=false;await window.AppStorage?.flush();if(wasActive){location.reload();return false;}const gate=document.getElementById('auth-gate-screen');if(gate)gate.style.display='flex';const error=document.getElementById('authErrorMsg');if(error){error.textContent='このアカウントは管理者により削除されています。';error.style.display='block';}return false;
+localStorage.removeItem('core_v4_userId');window.__learningBootReady=false;myId='GUEST-000';myName='ゲスト';window.__adminBookEditing=false;window.isAdmin=false;await window.AppStorage?.flush();if(wasActive){location.reload();return false;}const gate=document.getElementById('auth-gate-screen');if(gate)gate.style.display='flex';const error=document.getElementById('authErrorMsg');if(error){error.textContent='このアカウントは管理者により削除されています。';error.style.display='block';}return false;
 }
 window.AdminPlayers={canStart,open(){mount();if(dialog.open)return;window.toggleSidebar(false);busy=false;authorized=false;window.isAdmin=false;dialog.querySelector('[data-body]').innerHTML='<form data-auth><label>管理者パスワード<input type="password" name="password" autocomplete="current-password" autocapitalize="none" spellcheck="false" required></label><button type="submit">管理者ツールを開く</button></form>';message('');dialog.showModal();dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const input=event.currentTarget.elements.password;if(!window.verifyAdminPassword(input.value.trim())){message('管理者パスワードが違います。');return;}input.value='';authorized=true;window.isAdmin=true;await refreshList();};}};
 })();
