@@ -2716,3 +2716,8 @@ html body dialog.vocab-entry-dialog{width:min(560px,calc(100vw - 16px));max-heig
 .term-answer-panel p{font-size:14px;}.term-answer-panel p:empty{display:none;}
 .term-answer-panel[data-result=right]{border-color:rgba(134,240,181,.6);}.term-answer-panel[data-result=wrong]{border-color:rgba(255,154,138,.6);}
 .term-answer-panel{grid-template-columns:minmax(0,1fr);}.term-answer-panel div{min-width:0;}.term-answer-panel input{width:0!important;}
+/* App alert dialog (replaces the browser's alert) */
+dialog.app-alert{width:min(340px,calc(100vw - 48px));box-sizing:border-box;padding:22px 20px 16px;border:1px solid rgba(255,255,255,.18);border-radius:20px;background:#101a2b;color:#eef2f8;box-shadow:0 18px 50px rgba(0,0,0,.5);text-align:center;}
+dialog.app-alert::backdrop{background:rgba(4,8,16,.6);backdrop-filter:blur(3px);}
+dialog.app-alert p{margin:0 0 18px;font:600 15px/1.7 system-ui,sans-serif;white-space:pre-line;overflow-wrap:anywhere;}
+dialog.app-alert button{width:100%;min-height:46px;border:0;border-radius:14px;background:rgba(99,102,241,.9);color:#fff;font:800 15px system-ui,sans-serif;}

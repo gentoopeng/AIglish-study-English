@@ -618,3 +618,13 @@ See `docs/security.md`.
 - The Gemini key and the cached account list are left out of cloud saves.
 - The admin password is checked against digests instead of appearing in the source.
 - `tests/login-flow.smoke.cjs` covers digest logins, migration and sign-up. `tests/login-identity.test.cjs` covers the digest functions.
+
+## Follow-up: app-styled messages instead of alert() (10.21.46)
+
+`app-dialog.js`, loaded first, replaces `window.alert` with the app's own dialog:
+- dark card, indigo OK button
+- line breaks kept
+- several messages queue one after another
+- Escape closes it
+
+It no longer blocks the page, and it looks like the rest of the app instead of the phone's system popup. All 68 alert() calls get it with no change at their call sites. confirm() still uses the browser's dialog, because its callers wait for the answer. `tests/app-dialog.smoke.cjs` checks it.
