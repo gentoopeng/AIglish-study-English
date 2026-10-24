@@ -83,6 +83,8 @@ const { chromium, webkit } = require("playwright"),
     // The lower card opens poker (it replaced ガチ).
     await page.locator(".mode-poker").click();
     await page.locator("dialog.poker-screen[open]").waitFor();
+    // The first visit shows the how-to on top.
+    await page.locator("dialog.pk-tutorial[open]").getByRole("button", { name: "スキップ" }).click();
     await page.getByRole("button", { name: "ポーカーを閉じる" }).click();
     await page.locator("dialog.poker-screen").waitFor({ state: "detached" });
     await page.locator(".mode-casual").click();

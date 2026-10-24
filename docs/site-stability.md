@@ -832,3 +832,18 @@ The battle tab's lower card (ガチ, which had only shown 「準備中」) now o
 - As with the rest of the app, the checks run on the devices (see `docs/security.md`).
 
 `tests/poker.smoke.cjs` plays two hands between two devices; `tests/casual-lobby.smoke.cjs` opens poker from the battle tab.
+
+### Poker practice against the computer, and the how-to (10.21.60.00)
+
+**Practice** (`poker.js`, `poker-bot.js`)
+- 「コンピュータと練習」 in the poker lobby starts a table against 1–5 computer players (やさしい / ふつう / つよい). It uses 100 chips and blinds of 1/2.
+- No points are staked, so it also works for guests and offline. The table exists only on this device: moves go through the same model as online tables, but they are not written to Firestore and the cards are not sealed.
+- The game ends when the player, or every computer, runs out of chips. 「もう一度」 starts again with the same settings.
+- A computer acts after a short pause (0.7–1.6 s). It estimates its chance of winning by dealing out the unknown cards many times, then weighs that against the price of calling, with some noise, bluffing and, at つよい, reading a bet against it as strength. If its move fails, it checks or folds.
+- Levels were tuned against a simulated casual player heads-up: the player wins about 60% of games against やさしい, 40% against ふつう and 34% against つよい.
+
+**How-to** (`poker-tutorial.js`)
+- Seven short animated scenes: the two hole cards, the five board cards, the best five of seven, hand ranks, the four moves, blinds and the dealer, and how a hand is won. It honours reduced motion.
+- It opens by itself on the first visit to poker (`aiglish_poker_tutorial_seen`) and from 「遊び方を見る」 in the lobby. Its last button starts practice.
+
+`tests/poker-bot.test.cjs` checks the computer's moves; `tests/poker-practice.smoke.cjs` covers the how-to, a practice game to its end and 「もう一度」.

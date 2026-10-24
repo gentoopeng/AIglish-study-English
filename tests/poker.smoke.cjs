@@ -27,6 +27,7 @@ const { chromium } = require("playwright"),
       await page.addInitScript(() => {
         localStorage.setItem("aiglish_sound_settings", JSON.stringify({ enabled: false }));
         localStorage.setItem("b3_tutorial_done", "1");
+        localStorage.setItem("aiglish_poker_tutorial_seen", "1");
       });
       await page.exposeFunction("__pkRead", (path) => ({ value: docs.get(path) || null, version: versions.get(path) || 0 }));
       await page.exposeFunction("__pkCommit", async ({ reads, writes }) => {
