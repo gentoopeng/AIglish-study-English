@@ -1,7 +1,7 @@
 // Check account tombstones in the same transaction as every personal cloud write.
 (function(){
 'use strict';
-const wrapped=new WeakSet();
+const wrapped=new WeakSet(),retired=['realName','age','userTarget'];
 function install(){
  if(!window.fbRunTransaction||!window.fbSetDoc||wrapped.has(window.fbRunTransaction))return;
  const transaction=window.fbRunTransaction,set=window.fbSetDoc;
@@ -22,6 +22,14 @@ function install(){
    if(operation==='set'&&args[0].path==='shared/all_users'&&Array.isArray(args[1].users)){
     let snap=reads.get(args[0].path);if(!snap){snap=await tx.get(args[0]);reads.set(args[0].path,snap);}
     const deleted=new Set([...(snap.exists()?snap.data().deletedIds||[]:[]),...(args[1].deletedIds||[])]);args[1]={...args[1],deletedIds:[...deleted],users:args[1].users.filter(user=>!deleted.has(user.id))};
+   }
+  }
+  // 本名・年齢・目標 are no longer kept: never written to an account document, and removed where present.
+  for(const [operation,args]of writes){
+   if((operation==='set'||operation==='update')&&/^users\/[^/]+$/.test(args[0]?.path||'')&&args[1]&&typeof args[1]==='object'){
+    const payload={...args[1]};for(const key of retired)delete payload[key];
+    if((operation==='update'||args[2]?.merge)&&typeof window.fbDeleteField==='function')for(const key of retired)payload[key]=window.fbDeleteField();
+    args[1]=payload;
    }
   }
   for(const [operation,args]of writes)tx[operation](...args);

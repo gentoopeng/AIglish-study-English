@@ -34,7 +34,7 @@ all=await page.evaluate(()=>__store.get('shared/all_users').users);assert.deepEq
 // A failed transaction never writes a stale list.
 await reset({'shared/all_users':{users:[{id:'A000000001',pin:'1111'}]}},{failWrites:true});await page.evaluate(()=>window.saveAllUsers([{id:'C000000003',pin:'3333'}]));assert.deepEqual(await page.evaluate(()=>__store.get('shared/all_users').users.map(u=>u.id)),['A000000001']);
 // Registration is not reported as successful unless users/{id} was saved.
-await reset({'shared/all_users':{users:[]}},{failWrites:true});await page.evaluate(()=>window.switchAuthMode('register'));await page.fill('#regPlayerName','新人');await page.fill('#regRealName','山田');await page.fill('#regAge','15');await page.fill('#regPin','4321');await page.evaluate(()=>window.handleAuthSubmit());
+await reset({'shared/all_users':{users:[]}},{failWrites:true});await page.evaluate(()=>window.switchAuthMode('register'));await page.fill('#regPlayerName','新人');await page.fill('#regPin','4321');await page.evaluate(()=>window.handleAuthSubmit());
 assert.match(await error(),/登録できませんでした/);assert.equal(await page.evaluate(()=>localStorage.getItem('core_v4_userId')),null);
 // A digest-only account logs in; the old list (digits, real names) is migrated once by a reading device.
 await reset({'users/HASHED0001':{pin:await digest('HASHED0001','4321'),playerName:'新'},'shared/all_users':{users:[]}});await login('HASHED0001','4321');assert.equal(await error(),'');assert.equal(await page.locator('#loginOverlayLayer').count(),1);await page.evaluate(()=>document.getElementById('loginOverlayLayer').remove());
@@ -45,10 +45,12 @@ all=await page.evaluate(()=>__store.get('shared/all_users').users);assert.deepEq
 assert.equal(await page.evaluate(()=>__store.get('users/OLD0000001').pin),await digest('OLD0000001','1111'));
 // A document whose PIN was changed since (not the listed digits) is left alone.
 assert.equal(await page.evaluate(()=>__store.get('users/OLD0000002').pin),'9999');
-// A new account stores only the digest; the shared list gets no real name or age.
-await reset({'shared/all_users':{users:[]}});await page.evaluate(()=>{window.loadLocalState=()=>{};window.switchAuthMode('register');});await page.fill('#regPlayerName','新人');await page.fill('#regRealName','山田');await page.fill('#regAge','15');await page.fill('#regPin','4321');await page.evaluate(()=>window.handleAuthSubmit());
+// A new account stores only the digest.
+await reset({'shared/all_users':{users:[]}});await page.evaluate(()=>{window.loadLocalState=()=>{};window.switchAuthMode('register');});await page.fill('#regPlayerName','新人');await page.fill('#regPin','4321');await page.evaluate(()=>window.handleAuthSubmit());
 const newId=await page.evaluate(()=>localStorage.getItem('core_v4_userId'));assert.ok(newId);
-assert.equal(await page.evaluate((id)=>__store.get('users/'+id).pin,newId),await digest(newId,'4321'));assert.equal(await page.evaluate((id)=>__store.get('users/'+id).realName,newId),'山田');
+assert.equal(await page.evaluate((id)=>__store.get('users/'+id).pin,newId),await digest(newId,'4321'));
+// Real name, age and goal are no longer asked for or stored.
+assert.equal(await page.locator('#regRealName,#regAge').count(),0);assert.deepEqual(await page.evaluate((id)=>['realName','age','userTarget'].filter(k=>k in __store.get('users/'+id)),newId),[]);
 assert.deepEqual(await page.evaluate(()=>__store.get('shared/all_users').users.map(u=>Object.keys(u).sort())),[['id','pin','playerName']]);
 // The Gemini key never goes into the cloud save, and a save without one keeps the device's key.
 assert.equal(await page.evaluate(()=>{localStorage.setItem('core_v4_geminiKey','secret-key');return window.__collectLocalSettings().geminiKey;}),'');

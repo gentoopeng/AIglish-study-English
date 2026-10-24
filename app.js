@@ -911,10 +911,10 @@ const errorMsg = document.getElementById('authErrorMsg');
 if (errorMsg) errorMsg.style.display = 'none';
 if(isRegister) {
      const pName = document.getElementById('regPlayerName').value.trim();
-     const rName = document.getElementById('regRealName').value.trim();
-     const age = document.getElementById('regAge').value.trim();
+     const rName = '';
+     const age = '';
      const pin = document.getElementById('regPin').value.trim();
-     if(!pName || !rName || !age || !pin) {
+     if(!pName || !pin) {
          if(errorMsg) { errorMsg.innerText = "すべての項目を入力してください！"; errorMsg.style.display = 'block'; }
          return;
      }
@@ -1005,9 +1005,7 @@ const box = document.createElement('div');
      <div style="color:var(--text-sub); font-size:13px; margin-bottom:16px; line-height:1.6;">
          以下のプロファイルでログインしますか？<br>
          <div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; margin-top:8px; text-align:left;">
-             <strong>プレイヤー名:</strong> <span style="color:white;">${user.playerName}</span><br>
-             <strong>本名:</strong> <span style="color:white;">${user.realName}</span><br>
-             <strong>年齢:</strong> <span style="color:white;">${user.age}歳</span>
+             <strong>プレイヤー名:</strong> <span style="color:white;">${user.playerName}</span>
          </div>
      </div>
      <div style="display:flex; gap:12px;">
@@ -1049,7 +1047,7 @@ try {
          div.innerHTML = `
              <div style="flex:1;">
                  <div style="color:var(--cosmic-cyan); font-family:monospace; font-weight:bold; letter-spacing:1px;">ID: ${u.id}</div>
-                 <div style="color:white; font-weight:bold; margin-top:2px;">${u.playerName || '修行者'} <span style="color:var(--text-sub); font-weight:normal; font-size:10px;">(${u.realName || '-'} / ${u.age || '-'}歳)</span></div>
+                 <div style="color:white; font-weight:bold; margin-top:2px;">${u.playerName || '修行者'}</div>
              </div>
              <button class="list-action-link" style="background:rgba(239,68,68,0.2); color:#EF4444; border-color:#EF4444; height:28px; padding:0 8px; font-size:11px;" onclick="window.deleteUserByAdmin('${u.id}')">削除</button>
          `;
@@ -2943,11 +2941,9 @@ window.__submitAuthForm = async function() {
 
   if (isRegister) {
     const pName = document.getElementById("regPlayerName").value.trim();
-    const rName = document.getElementById("regRealName").value.trim();
-    const age = document.getElementById("regAge").value.trim();
     const pin = window.LoginIdentity.pin(document.getElementById("regPin").value);
 
-    if (!pName || !rName || !age || !pin) {
+    if (!pName || !pin) {
       showError("すべての項目を入力してください！");
       return;
     }
@@ -2971,11 +2967,8 @@ window.__submitAuthForm = async function() {
       await window.fbSetDoc(userRef, {
         id: newId,
         playerName: pName,
-        realName: rName,
-        age: age,
         pin: pinDigest,
         selectedTitle: "称号なし",
-        userTarget: "未設定",
         totalExp: 0,
         avatar: "",
         userStats: { user_level: 1, study_burst: 0 }

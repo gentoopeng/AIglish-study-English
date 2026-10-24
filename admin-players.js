@@ -38,7 +38,7 @@ async function refresh(){
 async function refreshList(){if(busy)return;lock(true);try{await refresh();}finally{lock(false);}}
 async function playerInfo(id){
  const project=window.db?.app?.options?.projectId;if(!project)return deadline(window.fbGetDoc(window.fbDoc(window.db,'users',id)));
- const fields=['playerName','realName','age','deleted'],url='https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents/users/'+encodeURIComponent(id)+'?'+fields.map(name=>'mask.fieldPaths='+name).join('&');
+ const fields=['playerName','deleted'],url='https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents/users/'+encodeURIComponent(id)+'?'+fields.map(name=>'mask.fieldPaths='+name).join('&');
  const data=await adminRequest(url);return {exists:()=>true,data:()=>window.RankingQuery.fields(data.fields)};
 }
 async function edit(id){
@@ -46,12 +46,12 @@ async function edit(id){
  try{guard();const snap=await deadline(playerInfo(id));if(request!==generation||!dialog.open)return;guard();if(!snap.exists())throw Error('プレイヤーが見つかりません。');
  const data=snap.data(),body=dialog.querySelector('[data-body]'),form=element('form');body.replaceChildren();form.className='admin-player-form';form.append(element('h3',data.playerName||id),element('p','ID: '+id));
  function field(label,name,value,type='text'){const wrap=element('label',label),input=element('input');input.name=name;input.type=type;input.value=value??'';input.maxLength=40;if(type==='number'){input.min='0';input.max=name==='age'?'150':'100000';input.step='1';}wrap.append(input);form.append(wrap);return input;}
- field('ニックネーム','playerName',data.playerName);field('登録名','realName',data.realName);field('年齢','age',data.age,'number');
+ field('ニックネーム','playerName',data.playerName);
  const save=element('button','変更を保存');save.type='submit';const back=element('button','一覧に戻る');back.type='button';back.onclick=refreshList;
  const remove=element('button',data.deleted?'完全削除を再確認':'プレイヤーを完全削除');remove.type='button';remove.className='admin-player-delete';
  form.append(save,back,remove);if(data.deleted){form.querySelectorAll('label').forEach(node=>node.hidden=true);save.hidden=true;}body.append(form);message(data.deleted?'削除済みです。未完了の完全削除を再実行できます。':'学習記録を保持したまま情報を編集します。');
- form.onsubmit=async event=>{event.preventDefault();if(busy)return;const name=form.elements.playerName.value.trim(),age=Number(form.elements.age.value);if(!name||!Number.isInteger(age)||age<0||age>150){message('名前・年齢を確認してください。');return;}
- await mutate(id,current=>{if(current.deleted)throw Error('削除済みのプレイヤーは編集できません。');const now=Date.now(),profile=window.UserProfileModel.decode(current.profileCustomizationJson);return {playerName:name,realName:form.elements.realName.value.trim(),age:String(age),profileCustomizationJson:JSON.stringify({...profile,nickname:name,updatedAt:Math.max(now,Number(profile.updatedAt||0)+1)})};});};
+ form.onsubmit=async event=>{event.preventDefault();if(busy)return;const name=form.elements.playerName.value.trim();if(!name){message('ニックネームを入力してください。');return;}
+ await mutate(id,current=>{if(current.deleted)throw Error('削除済みのプレイヤーは編集できません。');const now=Date.now(),profile=window.UserProfileModel.decode(current.profileCustomizationJson);return {playerName:name,profileCustomizationJson:JSON.stringify({...profile,nickname:name,updatedAt:Math.max(now,Number(profile.updatedAt||0)+1)})};});};
  remove.onclick=()=>{if(busy)return;const confirmation=element('div');confirmation.className='admin-player-confirm';confirmation.append(element('p',(data.playerName||id)+'（'+id+'）を完全削除します。学習記録・バックアップ・共有メモ・本人の公開教材も削除され、元に戻せません。'));
  const cancel=element('button','キャンセル');cancel.type='button';cancel.onclick=()=>confirmation.remove();const confirm=element('button','このプレイヤーを削除');confirm.type='button';confirm.onclick=()=>purge(id);confirmation.append(cancel,confirm);remove.after(confirmation);remove.disabled=true;cancel.onclick=()=>{confirmation.remove();remove.disabled=false;};};
  }catch(error){message(error.message);}finally{lock(false);}

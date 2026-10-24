@@ -122,7 +122,6 @@
     [
       ["ポイント", (person.id === account ? window.StudyPoints?.balance() || 0 : Number(doc.studyPoints) || 0).toLocaleString("ja-JP") + "pt"],
       ["ID", person.id],
-      ["目標", doc.userTarget || doc.target || "未設定"],
       [
         "最終アクティブ",
         time ? new Date(time).toLocaleString("ja-JP") : "記録なし",
@@ -245,7 +244,6 @@
               timestamp: time,
               doc: {
                 lastActiveAt: time,
-                userTarget: data.userTarget || data.target || "",
               },
             });
           },
