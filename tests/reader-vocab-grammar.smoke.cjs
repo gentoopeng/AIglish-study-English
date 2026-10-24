@@ -18,8 +18,8 @@ const { chromium } = require("playwright"),
       const text = JSON.stringify({
         fullSummaryAbstract: "りんごの話",
         sentences: [
-          { text: "I like apples.", translation: "私はりんごが好きです。", grammarHighlights: [{ phrase: "like ~", label: "動詞 like", meaning: "「好む」の意味。" }], vocab: [{ num: "2", meaning: 1 }] },
-          { text: "It must be ready now.", translation: "もう準備ができているはずだ。", grammarHighlights: [{ phrase: "must be ~", label: "助動詞 must（推量）", meaning: "「〜に違いない」と推量する。" }], vocab: [{ num: "3", meaning: 1 }] },
+          { text: "I like apples.", translation: "私はりんごが好きです。", grammarHighlights: [{ phrase: "like ~", label: "動詞 like", meaning: "「好む」の意味。" }], vocab: [{ num: "A2", meaning: 1 }] },
+          { text: "It must be ready now.", translation: "もう準備ができているはずだ。", grammarHighlights: [{ phrase: "must be ~", label: "助動詞 must（推量）", meaning: "「〜に違いない」と推量する。" }], vocab: [{ num: "A3", meaning: 1 }] },
         ],
       });
       r.fulfill({ status: 200, contentType: "text/event-stream", body: "data: " + JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }) + "\r\n\r\n" });
@@ -47,9 +47,9 @@ const { chromium } = require("playwright"),
     await page.locator(".sentence-ja", { hasText: "私はりんごが好きです。" }).waitFor();
     // The request lists the book's words in the text with their meanings, and fixes the shape.
     const prompt = request.contents[0].parts[0].text;
-    assert.match(prompt, /#1 like: ①〜のような/);
-    assert.match(prompt, /#2 apple: ①りんご/);
-    assert.match(prompt, /#3 ready: ①用意ができた/);
+    assert.match(prompt, /\[A1\] like: ①〜のような/);
+    assert.match(prompt, /\[A2\] apple: ①りんご/);
+    assert.match(prompt, /\[A3\] ready: ①用意ができた/);
     assert.ok(request.generationConfig.responseSchema.properties.sentences.items.properties.vocab);
     // like is used as 好む: plain. apples and ready are marked.
     const word = (text) => page.locator("#englishContainer .word-span", { hasText: new RegExp("^" + text + "\\b") });

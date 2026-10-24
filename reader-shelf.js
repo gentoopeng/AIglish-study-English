@@ -45,8 +45,10 @@
       .filter(Boolean)
       .join(" · ");
 
+  // While sorting, rows show ▲▼ instead of ⋯ (sorting ends when the view changes).
+  let sorting = false;
   // A row like a word book: the whole row opens it, ⋯ manages it.
-  function row({ cover, name, tag, sub, label, onOpen, onManage, compact, index }) {
+  function row({ cover, name, tag, sub, label, onOpen, onManage, move, compact, index }) {
     const entry = node("div", "vocab-library-book-entry shelf-entry" + (compact ? " is-compact" : "")),
       open = node("button", "textbook-list-item");
     open.type = "button";
@@ -71,7 +73,15 @@
     details.append(heading, node("span", "shelf-entry-sub", sub));
     open.append(details);
     entry.append(open);
-    if (onManage) {
+    if (sorting && move) {
+      const up = button("▲", () => move(-1), "vocab-library-manage-button shelf-move"),
+        down = button("▼", () => move(1), "vocab-library-manage-button shelf-move");
+      up.setAttribute("aria-label", name + "を上へ");
+      down.setAttribute("aria-label", name + "を下へ");
+      up.disabled = !move.canUp;
+      down.disabled = !move.canDown;
+      entry.append(up, down);
+    } else if (onManage) {
       const manage = button("⋯", onManage, "vocab-library-manage-button");
       manage.setAttribute("aria-label", name + "の管理");
       entry.append(manage);
@@ -95,6 +105,7 @@
     return modal;
   }
   const show = (view) => {
+    if (view !== currentShelfView) sorting = false;
     currentShelfView = view;
     window.renderBookshelf();
     window.scrollTo?.(0, 0);
@@ -205,16 +216,80 @@
       if (!input.hidden) input.focus();
     };
   }
+  // ---- Order ---------------------------------------------------------------------------------
+  const sortButton = () =>
+    button(sorting ? "完了" : "並べ替え", () => {
+      sorting = !sorting;
+      window.renderBookshelf();
+    }, sorting ? "shelf-sort is-on" : "shelf-sort");
+  // move(delta) for one of a list shown top to bottom; swap(a, b) swaps two shown items.
+  function mover(shown, at, swap) {
+    const move = (delta) => {
+      const other = at + delta;
+      if (other < 0 || other >= shown.length) return;
+      swap(shown[at], shown[other]);
+      persist();
+      window.renderBookshelf();
+    };
+    move.canUp = at > 0;
+    move.canDown = at < shown.length - 1;
+    return move;
+  }
+  function swapFolders(a, b) {
+    const order = folders(),
+      i = order.indexOf(a),
+      j = order.indexOf(b);
+    [order[i], order[j]] = [order[j], order[i]];
+    myFolders = order;
+  }
+  function swapTexts(a, b) {
+    const i = myBookshelf.indexOf(a),
+      j = myBookshelf.indexOf(b);
+    if (i < 0 || j < 0) return;
+    [myBookshelf[i], myBookshelf[j]] = [myBookshelf[j], myBookshelf[i]];
+  }
+
+  // Title and text can be changed; a changed text is analysed again when it is next opened.
+  function editText(item) {
+    const modal = dialog(
+      "名前・本文を編集",
+      '<form><label for="shelfTextTitle">名前</label><input id="shelfTextTitle" maxlength="80" required>' +
+        '<label for="shelfTextBody">本文</label><textarea id="shelfTextBody" rows="10" required></textarea>' +
+        '<p class="library-editor-hint">本文を変えると、次に開いたときにAIがもう一度解析します。</p><p class="library-editor-error" role="alert"></p>' +
+        '<div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="submit" class="library-editor-primary">保存</button></div></form>',
+    );
+    const title = modal.querySelector("#shelfTextTitle"),
+      body = modal.querySelector("#shelfTextBody");
+    title.value = item.title || "無題";
+    body.value = item.text || "";
+    modal.querySelector("form").onsubmit = (event) => {
+      event.preventDefault();
+      const nextTitle = title.value.trim().slice(0, 80),
+        nextText = body.value.trim();
+      if (!nextTitle || !nextText) return (modal.querySelector(".library-editor-error").textContent = "名前と本文を入れてください。");
+      if (nextText !== item.text) {
+        item.text = nextText;
+        item.aiAnalysisData = null;
+      }
+      item.title = nextTitle;
+      persist();
+      window.closeLibraryDialog();
+      window.showToast?.("保存しました。", "ok");
+      window.renderBookshelf();
+    };
+  }
+
   function manageText(item) {
     const modal = dialog(
       item.title || "無題",
-      '<div class="library-editor-actions library-editor-actions-stack"><button type="button" data-shelf="open">開く</button><button type="button" data-shelf="move">別のフォルダへ移動</button>' +
+      '<div class="library-editor-actions library-editor-actions-stack"><button type="button" data-shelf="open">開く</button><button type="button" data-shelf="edit">名前・本文を編集</button><button type="button" data-shelf="move">別のフォルダへ移動</button>' +
         '<button type="button" data-shelf="remove" class="library-editor-danger">本棚から削除</button><button type="button" data-library-close>閉じる</button></div>',
     );
     modal.querySelector('[data-shelf="open"]').onclick = () => {
       window.closeLibraryDialog();
       openText(item);
     };
+    modal.querySelector('[data-shelf="edit"]').onclick = () => editText(item);
     modal.querySelector('[data-shelf="move"]').onclick = () => {
       const move = dialog(
         "移動先を選ぶ",
@@ -304,6 +379,7 @@
         header("BOOKSHELF", "本棚", [
           button("＋ フォルダを作る", createFolder),
           button("英文を解析する", () => window.switchReaderSubTab("analysis", "left")),
+          ...(names.length > 1 ? [sortButton()] : []),
         ]),
       );
       const list = node("div", "vocab-library-list");
@@ -321,7 +397,7 @@
           }),
         );
       }
-      for (const name of names) {
+      names.forEach((name, at) => {
         const items = myBookshelf.filter((i) => folderOf(i) === name);
         list.append(
           row({
@@ -330,10 +406,11 @@
             sub: items.length ? items.length + "本の長文 · " + (items[items.length - 1].title || "無題") : "空のフォルダ",
             onOpen: () => show("folder:" + name),
             onManage: () => manageFolder(name),
+            move: mover(names, at, swapFolders),
             index: index++,
           }),
         );
-      }
+      });
       const loose = myBookshelf.filter((i) => folderOf(i) === "未分類");
       if (loose.length)
         list.append(
@@ -351,12 +428,11 @@
       );
     const tools = [button("‹ 本棚", () => show("list"), "shelf-back")];
     if (folderName) tools.push(button("フォルダの管理", () => manageFolder(folderName)));
+    if (items.length > 1) tools.push(sortButton());
     container.append(header(folderName ? "FOLDER" : book ? "SHELF" : "BOOKSHELF", title, tools));
     const list = node("div", "vocab-library-list");
-    items
-      .slice()
-      .reverse()
-      .forEach((item, index) =>
+    const shown = items.slice().reverse();
+    shown.forEach((item, index) =>
         list.append(
           row({
             cover: { text: "📖" },
@@ -365,6 +441,7 @@
             label: (item.title || "無題") + "を開く",
             onOpen: () => openText(item),
             onManage: () => manageText(item),
+            move: mover(shown, index, swapTexts),
             index,
           }),
         ),
