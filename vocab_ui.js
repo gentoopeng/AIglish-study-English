@@ -98,6 +98,8 @@
                 if (!p) return NodeFilter.FILTER_REJECT;
                 var tag = p.tagName;
                 if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'TEXTAREA' || tag === 'INPUT') return NodeFilter.FILTER_REJECT;
+                // The reader translates English, so 和訳 stays 和訳 there.
+                if (p.closest('#view-reader, #penguinLoadingOverlay')) return NodeFilter.FILTER_REJECT;
                 return NodeFilter.FILTER_ACCEPT;
             }
         });
