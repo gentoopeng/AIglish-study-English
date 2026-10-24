@@ -35,6 +35,20 @@ const { chromium } = require("playwright"),
     // Another account wrote the device keys: the backup is used.
     assert.deepEqual(await restart("someone-else"), { shelf: [], folders: ["未分類"], history: 0 });
 
+    // Broken entries saved by older versions are skipped instead of stopping the start.
+    await page.evaluate(() => {
+      localStorage.setItem("myBookshelf", JSON.stringify([null, 3, { id: 2, folder: "模試", title: "第2問", text: "Hi." }]));
+      localStorage.setItem("myFolders", JSON.stringify(["未分類", null, "模試"]));
+      localStorage.setItem("textHistory", JSON.stringify({}));
+      localStorage.setItem("aiglish_reader_local", JSON.stringify({ owner: "shelf-user", at: Date.now() }));
+    });
+    await page.reload();
+    await page.waitForFunction(() => window.__gameSaveLoadedFor === "shelf-user" && !window.__pendingGameSaveMemory, null, { timeout: 30000 });
+    await page.waitForTimeout(1000);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(await page.evaluate(() => ({ shelf: myBookshelf.map((i) => i.title), folders: myFolders, history: textHistory })), { shelf: ["第2問"], folders: ["未分類", "模試"], history: [] });
+    assert.equal(await page.locator("#b3ErrToast.show").count(), 0);
+
     // A bookshelf change starts a backup after a short pause.
     const saves = await page.evaluate(async () => {
       myId = "shelf-user";

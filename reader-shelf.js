@@ -15,11 +15,23 @@
     el.onclick = action;
     return el;
   };
-  const books = () => (Array.isArray(bookshelfBooks) ? bookshelfBooks : []);
+  const books = () => (Array.isArray(bookshelfBooks) ? bookshelfBooks.filter((b) => b && b.id) : []);
+  // Saved data from older versions or other devices may hold broken entries (null, a wrong
+  // type): keep only usable ones, so one bad entry cannot stop the shelf or the app's start.
+  const usableText = (item) => !!item && typeof item === "object" && typeof item.text === "string";
+  function tidy() {
+    if (!Array.isArray(myBookshelf)) myBookshelf = [];
+    else if (!myBookshelf.every(usableText)) myBookshelf = myBookshelf.filter(usableText);
+    if (!Array.isArray(textHistory)) textHistory = [];
+    else if (!textHistory.every(usableText)) textHistory = textHistory.filter(usableText);
+    if (!Array.isArray(myFolders)) myFolders = ["未分類"];
+    else if (!myFolders.every((f) => typeof f === "string" && f)) myFolders = myFolders.filter((f) => typeof f === "string" && f);
+  }
   const inBook = (item) => !!item.bookId && books().some((b) => b.id === item.bookId);
   const folderOf = (item) =>
     inBook(item) ? null : item.folder && item.folder !== "未分類" ? item.folder : "未分類";
   function folders() {
+    tidy();
     const names = [];
     for (const name of (Array.isArray(myFolders) ? myFolders : []).concat(myBookshelf.map(folderOf)))
       if (name && name !== "未分類" && !names.includes(name)) names.push(name);
@@ -345,6 +357,7 @@
 
   // Saving the text shown in the reader.
   window.showCustomSaveBookshelfPrompt = function (text, title, analysis) {
+    tidy();
     const data = analysis !== undefined ? analysis : currentActiveAiAnalysisCache;
     const modal = dialog(
       "本棚に保存",
@@ -380,6 +393,7 @@
   window.renderBookshelf = function () {
     const container = document.getElementById("myBookshelfContainer");
     if (!container) return;
+    tidy();
     container.replaceChildren();
     const names = folders(),
       view = String(currentShelfView),
@@ -470,6 +484,7 @@
   window.renderHistoryList = function () {
     const container = document.getElementById("historyListContainer");
     if (!container) return;
+    tidy();
     container.replaceChildren();
     const list = Array.isArray(textHistory) ? textHistory : [];
     if (!list.length) {
