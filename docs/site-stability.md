@@ -609,3 +609,12 @@ On the flashcard screen, the year answer panel's grid column took the input's in
 - sizes its column with `minmax(0,1fr)`, and the input shrinks to fit
 - uses the same frosted dark glass as the card screen's round buttons
 - shows a 48 px number field and an indigo answer button in one row, under a small centred label
+
+## Follow-up: protecting PINs, names and keys (10.21.45)
+
+See `docs/security.md`.
+- PINs are now stored as salted PBKDF2 digests, with a one-time migration of the old list and documents.
+- The shared account list carries no real names or ages, and the login confirmation no longer shows them.
+- The Gemini key and the cached account list are left out of cloud saves.
+- The admin password is checked against digests instead of appearing in the source.
+- `tests/login-flow.smoke.cjs` covers digest logins, migration and sign-up. `tests/login-identity.test.cjs` covers the digest functions.

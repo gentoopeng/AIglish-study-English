@@ -48,9 +48,15 @@ test('protected setDoc retains existing Firestore sanitization',async()=>{
  const {window,docs,ref}=setup();window.__sanitizeForFirestore=value=>({safe:value.unsafe});
  await window.fbSetDoc(ref('users/self'),{unsafe:42});assert.equal(docs.get('users/self').safe,42);assert.equal(docs.get('users/self').unsafe,undefined);
 });
-test('unified verifier accepts the existing administrator passwords and rejects unrelated input',()=>{
- const source=fs.readFileSync(require.resolve('../app.js'),'utf8'),line=source.split('\n').find(line=>line.startsWith('window.verifyAdminPassword ='));
- const window={};vm.runInNewContext(line,{window});const accepted=[...line.matchAll(/(['"])(.*?)\1/g)].map(match=>match[2]);assert.equal(accepted.length,2);for(const value of accepted)assert.equal(window.verifyAdminPassword(value),true);assert.equal(window.verifyAdminPassword('not-the-admin-password'),false);assert.equal(window.verifyAdminPassword(''),false);
+test('the administrator password is checked by digest: none in the source, a correct SHA-256, junk rejected',()=>{
+ const source=fs.readFileSync(require.resolve('../app.js'),'utf8'),start=source.indexOf('window.__sha256Hex = function'),end=source.indexOf('].includes(window.__sha256Hex(',start),block=source.slice(start,source.indexOf(';',end)+1);
+ const window={};vm.runInNewContext(block,{window,TextEncoder,Math,DataView,Uint8Array,Int32Array,String});
+ assert.equal(window.__sha256Hex('abc'),'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+ assert.equal(window.__sha256Hex(''),'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+ const digests=[...block.matchAll(/"([0-9a-f]{64})"/g)].map(m=>m[1]);assert.equal(digests.length,2);
+ assert.equal(window.verifyAdminPassword('not-the-admin-password'),false);assert.equal(window.verifyAdminPassword(''),false);
+ // The check is digest(salt + typed) against the list.
+ assert.equal(digests.includes(window.__sha256Hex('aiglish-admin:not-the-admin-password')),false);
 });
 test('generation parts share one account read per four writes without dropping any part',async()=>{
  const {window,docs,ref,trace}=setup();docs.set('users/self',{});
