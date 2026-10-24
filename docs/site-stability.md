@@ -628,3 +628,13 @@ See `docs/security.md`.
 - Escape closes it
 
 It no longer blocks the page, and it looks like the rest of the app instead of the phone's system popup. All 68 alert() calls get it with no change at their call sites. confirm() still uses the browser's dialog, because its callers wait for the answer. `tests/app-dialog.smoke.cjs` checks it.
+
+## Follow-up: lighter images and proper app icons (10.21.47)
+
+**Background pictures.** The tango, friend, utyuusen, haikei, kekka and stone pictures are now WebP, 0.1–0.2 MB each. As PNGs they were 0.1–3.7 MB each, about 11 MB in all. The images in the repository root went from 18 MB to about 0.8 MB.
+
+**Removed images.** Six root images that nothing used are gone: Header, dojo, gachatike, gold, tyoubun and sinkai.
+
+**App icons.** The icon (`aiglish.png`, 1536 × 1024 and 2.2 MB) was declared as square 192/512 icons. It is replaced by square icons on the app's dark blue: `icon-192.png`, `icon-512.png` and `apple-touch-icon.png`, 12–66 KB each.
+
+**App name.** The page title and home-screen name were 「Core System V4」 / 「Core V4」. They are now 「TangoLabo」, as in the logo and the backup file names.

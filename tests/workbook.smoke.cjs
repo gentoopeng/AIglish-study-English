@@ -11,7 +11,7 @@ const assert=require('node:assert/strict');
  await page.getByRole('button',{name:'以前の数学の復習 1件',exact:true}).click();assert.equal(await page.getByRole('textbox',{name:'問1の問題文',exact:true}).inputValue(),'昔の問題');assert.equal(await page.locator('#workbookUnitList .word-row-container').count(),1);await page.getByRole('button',{name:'以前の数学 単語帳一覧に戻る'}).click();
  await page.getByRole('button',{name:'＋ ワークを作る',exact:true}).click();assert.equal(await page.locator('dialog.library-editor-dialog').count(),1);
  await page.locator('#workbookName').fill('ページで復習');await page.locator('#workbookUnit').selectOption('page');await page.locator('#workbookFrom').fill('12');await page.locator('#workbookTo').fill('14');await page.locator('#workbookReviewMode').selectOption('interval');await page.locator('#workbookReviewDays').fill('5');
- await page.locator('#workbookCover').setInputFiles('Header.png');await page.waitForFunction(()=>document.querySelector('#workbookCoverPreview').src.startsWith('data:image/jpeg'));
+ await page.locator('#workbookCover').setInputFiles('icon-512.png');await page.waitForFunction(()=>document.querySelector('#workbookCoverPreview').src.startsWith('data:image/jpeg'));
  await page.locator('dialog summary').click();await page.locator('#workbookImport').fill('12:2x+1=5:x=2:一次方程式\n13:::\n14:::');
  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>window.__workbookPrompt=value}}));await page.locator('#workbookCopyPrompt').click();assert.match(await page.evaluate(()=>window.__workbookPrompt),/ページ番号/);
  await page.screenshot({path:'/tmp/workbook-editor.png'});
