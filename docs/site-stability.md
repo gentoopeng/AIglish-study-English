@@ -656,3 +656,15 @@ The look stays as it is. Only messages changed:
 - Messages that named Firebase now say 「サーバー」 or 「通信」.
 
 Exclamations that belong to the game stay: 「正解！」, 「スタート！」, 「ラスト10秒！」, 「準備完了！」.
+
+## Follow-up: layout guard at 320 px
+
+`tests/layout-overflow.smoke.cjs` opens the main screens on a 320 × 568 phone:
+- login and home
+- the word book editor, list and entry form
+- the study menu, flashcard settings and play
+- the reader and users tabs
+- the battle entry and settings
+- the menu
+
+It fails if any visible element sticks out past the screen's left or right edge. Elements clipped by a scrolling parent, and the closed sidebar, are not counted. All screens pass today.
