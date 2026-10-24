@@ -2721,3 +2721,6 @@ dialog.app-alert{width:min(340px,calc(100vw - 48px));box-sizing:border-box;paddi
 dialog.app-alert::backdrop{background:rgba(4,8,16,.6);backdrop-filter:blur(3px);}
 dialog.app-alert p{margin:0 0 18px;font:600 15px/1.7 system-ui,sans-serif;white-space:pre-line;overflow-wrap:anywhere;}
 dialog.app-alert button{width:100%;min-height:46px;border:0;border-radius:14px;background:rgba(99,102,241,.9);color:#fff;font:800 15px system-ui,sans-serif;}
+/* Reader: what to do when there is no API key */
+.reader-key-notice{display:grid;gap:6px;margin:0 0 14px;padding:12px 14px;border:1px solid rgba(192,132,252,.45);border-radius:14px;background:rgba(192,132,252,.1);font-size:12px;line-height:1.6;color:var(--text-sub);}
+.reader-key-notice strong{font-size:13px;color:#fff;}.reader-key-notice button{justify-self:start;padding:8px 14px;border:1px solid rgba(255,255,255,.25);border-radius:10px;background:rgba(255,255,255,.08);color:#fff;font:700 12px system-ui,sans-serif;}

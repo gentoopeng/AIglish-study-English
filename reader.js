@@ -34,9 +34,12 @@
             openButton.type = 'button';
             openButton.className = 'list-action-link';
             openButton.textContent = '開く';
+            // This button already opens the entry; the older rebinding patch in app.js must not add
+            // a second listener (which opened it twice and asked the AI again).
+            openButton.dataset.openRebound = '1';
             openButton.addEventListener('click', function(event) {
                 if (event) event.stopPropagation();
-                window.analyzeText(entry.text, entry.title || '無題');
+                window.analyzeText(entry.text, entry.title || '無題', entry.aiAnalysisData ? JSON.parse(JSON.stringify(entry.aiAnalysisData)) : null);
             });
             var deleteButton = document.createElement('button');
             deleteButton.type = 'button';
@@ -147,17 +150,22 @@
         var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 45000) : null;
         try {
-            var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(apiKey);
             var prompt = "以下の英文を解析し、指定したJSON形式だけを返してください。英文を省略しないでください。\n\n英文:\n" + text + "\n\nJSON形式:\n{\"fullSummaryAbstract\":\"英文全体の日本語要約（3文以内）\",\"sentences\":[{\"text\":\"元の英語の1文\",\"translation\":\"正確な日本語訳\",\"grammarHighlights\":[{\"phrase\":\"重要表現\",\"meaning\":\"日本語での文法説明\"}]}]}";
-            var response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { responseMimeType: "application/json", temperature: 0.2 }
-                }),
-                signal: controller ? controller.signal : undefined
-            });
+            // The newest Flash model first; a fixed model name that Google retires answers 404,
+            // so the older name is the fallback.
+            var models = ['gemini-flash-latest', 'gemini-2.5-flash'], response;
+            for (var m = 0; m < models.length; m++) {
+                response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + models[m] + ':generateContent?key=' + encodeURIComponent(apiKey), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { responseMimeType: "application/json", temperature: 0.2 }
+                    }),
+                    signal: controller ? controller.signal : undefined
+                });
+                if (response.status !== 404) break;
+            }
             if (!response.ok) {
                 var errorData = await response.text();
                 console.error("Gemini API Error details:", errorData);

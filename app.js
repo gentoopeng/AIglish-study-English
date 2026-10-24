@@ -1125,10 +1125,21 @@ textHistory = textHistory.filter(h => h.text !== rawText);
  if (abstractContainer) abstractContainer.innerText = "要約データを生成しています...";
  window.initLucide();
  let aiAnalysisResult = null;
+ // The key may have been saved after this page loaded.
+ if (!geminiApiKey) geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
  if (preParsedData) {
      aiAnalysisResult = preParsedData;
  } else {
      aiAnalysisResult = geminiApiKey ? await window.callGeminiAnalyzer(rawText) : null;
+ }
+ // Keep the analysis with the history entry, so opening it again does not ask the AI again.
+ if (aiAnalysisResult && !aiAnalysisResult.analysisError) {
+     const entry = textHistory.find(h => h.text === rawText);
+     if (entry) {
+         entry.aiAnalysisData = aiAnalysisResult;
+         textHistory = textHistory.slice(0, 30);
+         try { localStorage.setItem('textHistory', JSON.stringify(textHistory)); } catch (e) { entry.aiAnalysisData = null; }
+     }
  }
  if (geminiApiKey && !aiAnalysisResult) {
      window.closeReader();
@@ -1199,7 +1210,20 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      const jaSpan = document.createElement('span'); jaSpan.className = 'sentence-ja'; jaSpan.innerText = finalJaText; mainContent.appendChild(jaSpan);
      block.appendChild(mainContent); englishContainer.appendChild(block);
  });
- document.getElementById('summaryJaContainer').innerHTML = totalSummaryJa; window.setTranslationMode(currentTranslationMode); window.initLucide();
+ document.getElementById('summaryJaContainer').innerHTML = totalSummaryJa; window.setTranslationMode(currentTranslationMode);
+ // Without a key there is no translation or grammar: say so, instead of a silent 「和訳未取得」.
+ if (!aiAnalysisResult) {
+     const notice = document.createElement('div');
+     notice.className = 'reader-key-notice';
+     notice.innerHTML = '<strong>AIの和訳・文法解析にはGemini APIキーが必要です</strong><span>メニューの「設定」でAPIキーを入力して保存すると、和訳と文法の解説が付きます。</span>';
+     const open = document.createElement('button');
+     open.type = 'button';
+     open.textContent = '設定を開く';
+     open.onclick = () => { window.toggleSidebar?.(true); document.getElementById('sidebarApiKeyInput')?.scrollIntoView({ block: 'center' }); };
+     notice.appendChild(open);
+     englishContainer.prepend(notice);
+ }
+ window.initLucide();
 };
 window.showCustomSaveBookshelfPrompt = function(text, title) {
 if(document.getElementById('saveBookshelfOverlay')) return;
@@ -1208,7 +1232,10 @@ overlay.id = 'saveBookshelfOverlay';
 overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(5px);";
 const box = document.createElement('div');
 box.style.cssText = "background:var(--card-bg); border:1px solid var(--cosmic-cyan); border-radius:16px; padding:24px; width:85%; max-width:320px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.6);";
-let folderOptions = myFolders.map(f => `<option value="${f}">${f}</option>`).join('');
+// Where to keep it: a shelf book published by the admin, or one of this user's folders.
+const escapeOption = (t) => String(t).replace(/[&<>"']/g, (c) => "&#" + c.charCodeAt(0) + ";");
+let folderOptions = (Array.isArray(bookshelfBooks) ? bookshelfBooks : []).map(b => `<option value="book:${escapeOption(b.id)}">📚 ${escapeOption(b.name)}</option>`).join('') +
+    ['未分類', ...myFolders.filter(f => f && f !== '未分類')].map(f => `<option value="folder:${escapeOption(f)}">${f === '未分類' ? '未分類' : '📁 ' + escapeOption(f)}</option>`).join('');
 box.innerHTML = `<div style="color:white; font-size:18px; font-weight:800; margin-bottom:12px;">📁 本棚に保存</div> <select id="selectBookshelfFolder" class="search-input" style="width:100%; margin-bottom:12px;">${folderOptions}<option value="new_folder">➕ 新しいフォルダを作成</option></select> <input type="text" id="newFolderNameInput" class="search-input" placeholder="新しいフォルダ名を入力" style="display:none; width:100%; margin-bottom:16px;"> <div style="display:flex; gap:12px; margin-top: 12px;"> <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--input-bg); color:var(--text-main); font-weight:700; cursor:pointer;" id="cancelSaveBookshelfBtn">キャンセル</button> <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--cosmic-cyan); color:#000; font-weight:700; cursor:pointer;" id="confirmSaveBookshelfBtn">保存</button> </div>`;
 overlay.appendChild(box); document.body.appendChild(overlay);
 const selectEl = document.getElementById('selectBookshelfFolder');
@@ -1216,18 +1243,22 @@ const newFolderInput = document.getElementById('newFolderNameInput');
 selectEl.onchange = (e) => { if (e.target.value === 'new_folder') { newFolderInput.style.display = 'block'; newFolderInput.focus(); } else { newFolderInput.style.display = 'none'; } };
 document.getElementById('cancelSaveBookshelfBtn').onclick = () => { document.body.removeChild(overlay); };
 document.getElementById('confirmSaveBookshelfBtn').onclick = () => {
-let folder = selectEl.value;
-if (folder === 'new_folder') { folder = newFolderInput.value.trim(); if (!folder) folder = "未分類"; }
-if(!myFolders.includes(folder)) { myFolders.push(folder); localStorage.setItem('myFolders', JSON.stringify(myFolders)); }
-if(myBookshelf.some(item => item.text === text && item.folder === folder)) { alert("すでに保存されています。"); document.body.removeChild(overlay); return; }
+let choice = selectEl.value, folder = "未分類", bookId = "";
+if (choice === 'new_folder') { folder = newFolderInput.value.trim().slice(0, 40) || "未分類"; }
+else if (choice.startsWith('book:')) { bookId = choice.slice(5); folder = ""; }
+else if (choice.startsWith('folder:')) { folder = choice.slice(7) || "未分類"; }
+if(folder && !myFolders.includes(folder)) { myFolders.push(folder); localStorage.setItem('myFolders', JSON.stringify(myFolders)); }
+if(myBookshelf.some(item => item.text === text && (bookId ? item.bookId === bookId : (!item.bookId && (item.folder || "未分類") === folder)))) { alert("すでに保存されています。"); document.body.removeChild(overlay); return; }
     myBookshelf.push({ 
         id: Date.now(), 
         folder: folder, 
+        ...(bookId ? { bookId: bookId } : {}),
         title: title || "無題", 
         text: text,
         aiAnalysisData: currentActiveAiAnalysisCache ? JSON.parse(JSON.stringify(currentActiveAiAnalysisCache)) : null
     });
-    localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); alert(`保存しました。`); window.renderBookshelf(); document.body.removeChild(overlay);
+    window.queueBackgroundSave?.();
+    localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); alert(`「${bookId ? ((bookshelfBooks.find(b => b.id === bookId) || {}).name || '本棚') : folder}」に保存しました。`); window.renderBookshelf(); document.body.removeChild(overlay);
 };
 };
 window.closeWordPopover = function() { document.getElementById('wordPopover').classList.remove('show'); document.getElementById('wordPopover').style.display = 'none'; };
@@ -6327,19 +6358,29 @@ window.renderBookshelf = function() {
   var container = document.getElementById('myBookshelfContainer');
   if (!container) return;
   container.innerHTML = "";
-  // 旧フォルダデータ・削除済み教材のデータは「未分類」扱い
-  var isOrphan = function(item) {
-    return !item.bookId || !bookshelfBooks.some(function(b) { return b.id === item.bookId; });
+  // An item belongs to a published shelf book (bookId), else to its folder; no folder (or a
+  // deleted book) means 未分類.
+  var inBook = function(item) {
+    return !!item.bookId && bookshelfBooks.some(function(b) { return b.id === item.bookId; });
   };
+  var folderOf = function(item) {
+    return inBook(item) ? null : (item.folder && item.folder !== '未分類' ? item.folder : '未分類');
+  };
+  var isOrphan = function(item) { return folderOf(item) === '未分類'; };
+  var folders = [];
+  (Array.isArray(myFolders) ? myFolders : []).concat(myBookshelf.map(folderOf)).forEach(function(name) {
+    if (name && name !== '未分類' && folders.indexOf(name) < 0) folders.push(name);
+  });
   // 表示状態のガード
   if (currentShelfView !== 'list' && currentShelfView !== 'unclassified') {
-    if (!bookshelfBooks.some(function(b) { return b.id === currentShelfView; })) currentShelfView = 'list';
+    var isFolderView = String(currentShelfView).indexOf('folder:') === 0;
+    if (isFolderView ? folders.indexOf(currentShelfView.slice(7)) < 0 : !bookshelfBooks.some(function(b) { return b.id === currentShelfView; })) currentShelfView = 'list';
   }
 
   // ---------------- 1階層目：教材リスト ----------------
   if (currentShelfView === 'list') {
-    if (bookshelfBooks.length === 0 && myBookshelf.length === 0) {
-      container.innerHTML = '<div style="text-align:center;color:var(--text-sub);font-size:12px;padding:20px;">本棚は空です。<br>管理者が配信した教材がここに表示されます。</div>';
+    if (bookshelfBooks.length === 0 && myBookshelf.length === 0 && folders.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:var(--text-sub);font-size:12px;padding:20px;">本棚は空です。<br>解析した長文を「本棚に保存する」で保存すると、ここに並びます。</div>';
       return;
     }
     bookshelfBooks.forEach(function(book) {
@@ -6366,6 +6407,30 @@ window.renderBookshelf = function() {
       row.onclick = function() { currentShelfView = book.id; window.renderBookshelf(); };
       container.appendChild(row);
     });
+    // This user's folders
+    folders.forEach(function(name) {
+      var count = myBookshelf.filter(function(i) { return folderOf(i) === name; }).length;
+      var frow = document.createElement('div');
+      frow.className = 'shelf-book-row';
+      var icon = document.createElement('div');
+      icon.style.cssText = "width:42px;height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);font-size:22px;";
+      icon.textContent = '📁';
+      var copy = document.createElement('div');
+      copy.style.cssText = "flex:1;min-width:0;";
+      var nameEl = document.createElement('div');
+      nameEl.style.cssText = "font-size:14px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+      nameEl.textContent = name;
+      var countEl = document.createElement('div');
+      countEl.style.cssText = "font-size:10px;color:var(--text-sub);margin-top:2px;";
+      countEl.textContent = count + ' 本の長文を保存済み';
+      copy.append(nameEl, countEl);
+      var chevron = document.createElement('div');
+      chevron.style.cssText = "color:var(--cosmic-cyan);flex-shrink:0;";
+      chevron.innerHTML = '<i data-lucide="chevron-right" size="18"></i>';
+      frow.append(icon, copy, chevron);
+      frow.onclick = function() { currentShelfView = 'folder:' + name; window.renderBookshelf(); };
+      container.appendChild(frow);
+    });
     var uncount = myBookshelf.filter(isOrphan).length;
     if (uncount > 0) {
       var urow = document.createElement('div');
@@ -6384,9 +6449,10 @@ window.renderBookshelf = function() {
 
   // ---------------- 2階層目：長文タイトルリスト ----------------
   var isUnclassified = (currentShelfView === 'unclassified');
-  var book = isUnclassified ? null : bookshelfBooks.find(function(b) { return b.id === currentShelfView; });
+  var folderName = String(currentShelfView).indexOf('folder:') === 0 ? currentShelfView.slice(7) : null;
+  var book = isUnclassified || folderName ? null : bookshelfBooks.find(function(b) { return b.id === currentShelfView; });
   var items = myBookshelf.filter(function(i) {
-    return isUnclassified ? isOrphan(i) : (i.bookId === currentShelfView);
+    return isUnclassified ? isOrphan(i) : folderName ? folderOf(i) === folderName : (i.bookId === currentShelfView);
   });
   var header = document.createElement('div');
   header.style.cssText = "display:flex;align-items:center;gap:10px;margin-bottom:12px;";
@@ -6397,7 +6463,7 @@ window.renderBookshelf = function() {
   backBtn.onclick = function() { currentShelfView = 'list'; window.renderBookshelf(); };
   var titleEl = document.createElement('div');
   titleEl.style.cssText = "flex:1;min-width:0;font-size:15px;font-weight:900;color:var(--cosmic-cyan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-  titleEl.innerText = isUnclassified ? '🗂️ 未分類' : ('📖 ' + (book ? book.name : ''));
+  titleEl.innerText = isUnclassified ? '🗂️ 未分類' : folderName ? '📁 ' + folderName : ('📖 ' + (book ? book.name : ''));
   header.appendChild(backBtn);
   header.appendChild(titleEl);
   container.appendChild(header);
@@ -6406,6 +6472,21 @@ window.renderBookshelf = function() {
     empty.style.cssText = "text-align:center;color:var(--text-sub);font-size:12px;padding:20px;";
     empty.innerText = '保存された長文はありません。';
     container.appendChild(empty);
+    // An empty folder of this user's can be removed.
+    if (folderName) {
+      var removeFolder = document.createElement('button');
+      removeFolder.type = 'button';
+      removeFolder.className = 'list-action-link';
+      removeFolder.style.cssText = "display:block;margin:0 auto;";
+      removeFolder.textContent = 'このフォルダを削除';
+      removeFolder.onclick = function() {
+        myFolders = myFolders.filter(function(f) { return f !== folderName; });
+        localStorage.setItem('myFolders', JSON.stringify(myFolders));
+        currentShelfView = 'list';
+        window.renderBookshelf();
+      };
+      container.appendChild(removeFolder);
+    }
     window.initLucide();
     return;
   }
@@ -6431,6 +6512,7 @@ window.renderBookshelf = function() {
       e.stopPropagation();
       myBookshelf = myBookshelf.filter(function(b) { return b.id !== item.id; });
       localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf));
+      window.queueBackgroundSave?.();
       window.renderBookshelf();
     };
     row.appendChild(titleWrap);
@@ -6488,15 +6570,6 @@ window.initReaderSubTabStructure = function() {
   aSec.parentNode.insertBefore(bSec, aSec.nextSibling);
   if (shelfCard && shelfCard.parentNode) bSec.appendChild(shelfCard);
 
-  // 説明文の「フォルダ」→「教材」更新
-  try {
-    var walker = document.createTreeWalker(bSec, NodeFilter.SHOW_TEXT, null);
-    var n, targets = [];
-    while ((n = walker.nextNode())) {
-      if (n.nodeValue.indexOf('フォルダ') !== -1) targets.push(n);
-    }
-    targets.forEach(function(t) { t.nodeValue = t.nodeValue.split('フォルダ').join('教材'); });
-  } catch (e) {}
   window.initLucide();
 };
 
