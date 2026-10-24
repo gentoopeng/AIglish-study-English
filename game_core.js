@@ -328,12 +328,13 @@
         if (!sheet) return;
         sheet.classList.remove('is-open');
         sheet.setAttribute('aria-hidden', 'true');
+        // Ratings changed in the sheet show in the reader's word colours.
+        if (typeof window.updateReaderWordColors === 'function') window.updateReaderWordColors();
     };
 
-    window.openFlashcardWordDetails = function() {
-        var current = flashcardOriginQueue[flashcardCurrentIndex];
-        if (!current) return;
-        var word = findCurrentFlashcardVocab();
+    // The word's card, the same one as in the word book, in a sheet from the bottom. note (optional)
+    // is shown above it, e.g. which meaning a reader sentence uses.
+    window.openVocabDetailsSheet = function(word, note) {
         var sheet = document.getElementById('flashcardWordDetails');
         if (!sheet) {
             sheet = document.createElement('div');
@@ -348,6 +349,12 @@
 
         var content = sheet.querySelector('#flashcardDetailContent');
         content.replaceChildren();
+        if (note) {
+            var line = document.createElement('p');
+            line.className = 'flashcard-detail-note';
+            line.textContent = note;
+            content.appendChild(line);
+        }
         if (word && typeof window.createVocabCard === 'function') {
             // 単語帳と同じ生成関数を使う。似せた別UIではなく、完全に同じカードを表示する。
             content.appendChild(window.createVocabCard(word));
@@ -362,6 +369,12 @@
         sheet.setAttribute('aria-hidden', 'false');
         requestAnimationFrame(function() { sheet.classList.add('is-open'); });
         sheet.querySelector('.flashcard-detail-close').focus();
+    };
+
+    window.openFlashcardWordDetails = function() {
+        var current = flashcardOriginQueue[flashcardCurrentIndex];
+        if (!current) return;
+        window.openVocabDetailsSheet(findCurrentFlashcardVocab());
     };
 
     // スワイプ確定時だけ表示する軽量な消滅演出。

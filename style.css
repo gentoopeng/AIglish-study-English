@@ -2754,3 +2754,7 @@ dialog.app-alert button{width:100%;min-height:46px;border:0;border-radius:14px;b
 .reader-title-meta{display:block;margin-top:6px;color:var(--text-sub);font-size:10px;font-weight:600;}
 .lq-ratings button[data-lq=ok]{color:#34d399}.lq-ratings button[data-lq=so]{color:#fbbf24}.lq-ratings button[data-lq=bad]{color:#fb7185}
 @media (max-width:359px){.lq-side span{display:none}}
+/* Reader: grammar points get a purple underline (an older rule removed every underline). */
+#englishContainer .grammar-span{border-bottom:2px solid #C084FC !important;background:rgba(192,132,252,.14);border-radius:4px;padding:0 1px;margin-right:2px;}
+#englishContainer .grammar-span:active{background:rgba(192,132,252,.28);}
+.flashcard-detail-note{margin:0 44px 10px 2px;padding:8px 12px;border:1px solid rgba(16,185,129,.45);border-radius:10px;background:rgba(16,185,129,.12);color:#D1FAE5;font-size:13px;font-weight:700;line-height:1.5;}

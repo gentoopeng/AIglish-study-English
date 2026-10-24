@@ -177,6 +177,83 @@
         return out;
     }
 
+    // A reader token as the word book looks it up (lower case, no punctuation).
+    window.readerCleanToken = function(token) {
+        return String(token || '').toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]"'’‘“”]/g, '');
+    };
+    // The word book entries that appear in the text (inflected forms too), for the AI to check
+    // which are used in a registered meaning: [{ num, word, meanings: [text] }].
+    function vocabCandidates(text) {
+        if (typeof window.findVocabByToken !== 'function') return [];
+        var found = new Map();
+        String(text).split(/\s+/).forEach(function(token) {
+            var word = window.findVocabByToken(window.readerCleanToken(token));
+            if (!word || found.has(String(word.num)) || found.size >= 120) return;
+            var meanings = (word.meanings && word.meanings.length ? word.meanings.map(function(m) { return m.text; }) : [word.meaning || ''])
+                .map(function(t) { return String(t || '').replace(/\s+/g, ' ').trim().slice(0, 60); });
+            found.set(String(word.num), { num: String(word.num), word: String(word.word || ''), meanings: meanings });
+        });
+        return Array.from(found.values());
+    }
+    // Where a grammar phrase sits in its sentence: { start, end } or null. The AI's phrase may
+    // differ in quotes or spacing, or carry ~ / ... / S V placeholders: then the longest plain
+    // piece of it is used. Ranges already taken are skipped.
+    window.findGrammarPhrase = function(sentence, phrase, taken) {
+        var cleaned = String(phrase || '').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
+        var pieces = cleaned.split(/\s*(?:[~〜…()（）\[\]［］/／+＋]|\.\.\.|\b[SVOCAB]\b)\s*/)
+            .map(function(piece) { return piece.replace(/^[\s"',.;:!?]+|[\s"',.;:!?]+$/g, ''); })
+            .filter(function(piece) { return piece.length >= 2; })
+            .sort(function(a, b) { return b.length - a.length; });
+        var whole = cleaned.replace(/^[\s"',.;:!?]+|[\s"',.;:!?]+$/g, '');
+        if (whole.length >= 2) pieces.unshift(whole);
+        for (var i = 0; i < pieces.length; i++) {
+            var body = pieces[i].replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(/'/g, "['’]").replace(/"/g, '["“”]').replace(/\s+/g, '\\s+');
+            var pattern = new RegExp('(^|[^A-Za-z0-9])(' + body + ')(?![A-Za-z0-9])', 'gi'), match;
+            while ((match = pattern.exec(sentence))) {
+                var start = match.index + match[1].length, end = start + match[2].length;
+                var overlaps = (taken || []).some(function(r) { return start < r.end && end > r.start; });
+                if (!overlaps) return { start: start, end: end };
+                pattern.lastIndex = start + 1;
+            }
+        }
+        return null;
+    };
+    var CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩';
+    function analysisPrompt(text, candidates) {
+        var list = candidates.length ? candidates.map(function(c) {
+            return '#' + c.num + ' ' + c.word + ': ' + c.meanings.map(function(m, i) { return (CIRCLED[i] || '(' + (i + 1) + ')') + m; }).join(' ');
+        }).join('\n') : '（なし）';
+        return 'あなたは高校生に英語を教える先生です。次の英文を解析してください。英文は省略せず、すべての文を順番どおりに sentences に入れてください。\n\n' +
+            '各文について:\n' +
+            '- text: 元の英語の1文（そのまま）\n' +
+            '- translation: 自然で正確な日本語訳\n' +
+            '- grammarHighlights: その文で学ぶ価値のある文法・構文・熟語を1〜3個（関係詞、分詞・分詞構文、不定詞・動名詞の用法、助動詞の意味、時制、受動態、比較、仮定法、接続詞、熟語など）。本当に何もない短い文だけ空にしてよい。\n' +
+            '  - phrase: 英文からそのまま抜き出した連続する語句。英文と同じ綴り・記号で書き、「~」「...」「S V」「A」などの記号や言い換えは使わない\n' +
+            '  - label: 文法事項の短い名前（例：「助動詞 must（推量）」「分詞構文（付帯状況）」）\n' +
+            '  - meaning: 日本語での説明（1〜2文）\n' +
+            '- vocab: 下の「単語帳の単語」のうち、この文に出てくるもの（活用形を含む）で、登録された意味のどれかと同じ意味で使われているものだけ。num は番号、meaning は何番目の意味か（1から）。違う意味で使われているもの（例：単語帳の意味が「〜のような」なのに、文では「好む」の意味の like）は入れない。\n\n' +
+            'fullSummaryAbstract: 英文全体の日本語要約（3文以内）\n\n' +
+            '単語帳の単語:\n' + list + '\n\n英文:\n' + text;
+    }
+    var ANALYSIS_SCHEMA = {
+        type: 'OBJECT',
+        properties: {
+            fullSummaryAbstract: { type: 'STRING' },
+            sentences: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+                text: { type: 'STRING' },
+                translation: { type: 'STRING' },
+                grammarHighlights: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+                    phrase: { type: 'STRING' }, label: { type: 'STRING' }, meaning: { type: 'STRING' }
+                }, required: ['phrase', 'label', 'meaning'], propertyOrdering: ['phrase', 'label', 'meaning'] } },
+                vocab: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+                    num: { type: 'STRING' }, meaning: { type: 'INTEGER' }
+                }, required: ['num', 'meaning'], propertyOrdering: ['num', 'meaning'] } }
+            }, required: ['text', 'translation', 'grammarHighlights', 'vocab'], propertyOrdering: ['text', 'translation', 'grammarHighlights', 'vocab'] } }
+        },
+        required: ['fullSummaryAbstract', 'sentences'],
+        propertyOrdering: ['fullSummaryAbstract', 'sentences']
+    };
+
     // onProgress(percent, label): the analysis streams in, so the percent follows the sentences
     // translated so far; before the first one, it creeps up slowly while the AI reads.
     window.callGeminiAnalyzer = async function(text, onProgress) {
@@ -209,7 +286,20 @@
         }
         arm();
         try {
-            var prompt = "以下の英文を解析し、指定したJSON形式だけを返してください。英文を省略しないでください。\n\n英文:\n" + text + "\n\nJSON形式:\n{\"fullSummaryAbstract\":\"英文全体の日本語要約（3文以内）\",\"sentences\":[{\"text\":\"元の英語の1文\",\"translation\":\"正確な日本語訳\",\"grammarHighlights\":[{\"phrase\":\"重要表現\",\"meaning\":\"日本語での文法説明\"}]}]}";
+            var candidates = vocabCandidates(text);
+            var prompt = analysisPrompt(text, candidates);
+            // The schema fixes the shape; if a model refuses it (400), the request goes again without it.
+            var useSchema = true;
+            var send = function(model) {
+                var config = { responseMimeType: "application/json", temperature: 0.2 };
+                if (useSchema) config.responseSchema = ANALYSIS_SCHEMA;
+                return fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(apiKey), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: config }),
+                    signal: controller ? controller.signal : undefined
+                });
+            };
             // gemini-2.5-flash first (the newest model behind gemini-flash-latest is often busy).
             // A busy model (5xx) is asked once more after a short wait; a busy, used-up (429) or
             // retired (404) model hands over to the other one.
@@ -222,15 +312,11 @@
                     await new Promise(function(resolve) { setTimeout(resolve, 2000); });
                     arm();
                 }
-                response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + models[m] + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(apiKey), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { responseMimeType: "application/json", temperature: 0.2 }
-                    }),
-                    signal: controller ? controller.signal : undefined
-                });
+                response = await send(models[m]);
+                if (response.status === 400 && useSchema && /schema|Unknown name|Invalid JSON payload|propertyOrdering/i.test(await response.clone().text())) {
+                    useSchema = false;
+                    response = await send(models[m]);
+                }
                 if (!busy(response.status)) break;
               }
               if (response.ok || !(response.status === 404 || response.status === 429 || busy(response.status))) break;
@@ -262,6 +348,8 @@
             var result = null;
             try { result = JSON.parse(cleanJsonText); } catch (ignore) {}
             if (!result || !Array.isArray(result.sentences) || !result.sentences.length) return buildAnalysisFallback(text, describeGeminiError('unreadable'));
+            // Only words the AI judged to be used in a registered meaning are marked (see analyzeText).
+            result.vocabChecked = result.sentences.every(function(sentence) { return sentence && Array.isArray(sentence.vocab); });
             return result;
         } catch (e) {
             console.error("Gemini Analyzer Error:", e);
@@ -299,18 +387,28 @@
         window.closeWordPopover();
     };
 
-    window.openGrammarPopover = function(event, phrase, meaning) {
+    window.openGrammarPopover = function(event, phrase, meaning, label) {
         if (event) event.stopPropagation();
         currentTargetWordToken = null;
         currentTargetVocabNum = null;
         document.getElementById('popWord').innerText = phrase;
-        document.getElementById('popWordNum').innerText = "💡 文法";
+        document.getElementById('popWordNum').innerText = "💡 " + (label || "文法");
         document.getElementById('popMeaning').innerText = meaning;
         document.getElementById('popoverStatusBtns').style.display = "none";
         var pop = document.getElementById('wordPopover');
         pop.style.display = 'flex';
         pop.classList.add('show');
     };
+    // A word-book word tapped in the reader: the same card as the flashcard's ⓘ, with the meaning
+    // this sentence uses (when the AI said which).
+    window.openReaderVocabDetails = function(event, word, senseIndex) {
+        if (event) event.stopPropagation();
+        var fresh = (Array.isArray(vocabList) && vocabList.find(function(v) { return String(v.num) === String(word.num); })) || word;
+        if (typeof window.openVocabDetailsSheet !== 'function') return window.openWordPopoverFromVocab(event, fresh, fresh.word);
+        var sense = senseIndex > 0 && fresh.meanings ? fresh.meanings[senseIndex - 1] : null;
+        window.openVocabDetailsSheet(fresh, sense ? 'この文での意味：' + (CIRCLED[senseIndex - 1] || '') + sense.text : '');
+    };
+
     window.setTranslationMode = function(mode) {
         currentTranslationMode = mode;
         document.getElementById('toggle-inline').classList.toggle('active', mode === 'inline');
@@ -327,6 +425,7 @@
 
     window.updateReaderWordColors = function() {
         document.querySelectorAll('.word-span').forEach(function(span) {
+            if (span.dataset.vocabSkip) return;
             var text = span.innerText.trim();
             var cleanKey = text.toLowerCase().replace(/[.,/#!$%^&*;:{}=-_`~()[]"']/g, "");
             if (!cleanKey) return;

@@ -82,6 +82,20 @@
         if (m) return m;
         var sk = window.stemWord(cleanKey);
         if (sk && sk.length >= 4 && window._vocabStemIndex && window._vocabStemIndex[sk]) return window._vocabStemIndex[sk];
+        // Plain inflections the stem rules miss: apples, studies, chatted, making, tried.
+        var forms = [], w = cleanKey;
+        if (/s$/.test(w)) forms.push(w.slice(0, -1));
+        if (/ies$/.test(w)) forms.push(w.slice(0, -3) + 'y');
+        if (/ied$/.test(w)) forms.push(w.slice(0, -3) + 'y');
+        if (/ed$/.test(w)) forms.push(w.slice(0, -1), w.slice(0, -2));
+        if (/ing$/.test(w)) forms.push(w.slice(0, -3), w.slice(0, -3) + 'e');
+        if (/([bcdfgklmnprstvz])\1(ed|ing)$/.test(w)) forms.push(w.replace(/([bcdfgklmnprstvz])\1(ed|ing)$/, '$1'));
+        for (var i = 0; i < forms.length; i++) {
+            var form = forms[i];
+            if (form.length < 2) continue;
+            var hit = vocabList.find(function(v) { return String(v.word || '').toLowerCase() === form; });
+            if (hit) return hit;
+        }
         return null;
     };
 

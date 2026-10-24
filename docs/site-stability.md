@@ -722,3 +722,20 @@ Now:
 - **Workbook.** The 解説 button follows the same order and uses the same messages.
 
 `tests/reader-errors.smoke.cjs` covers these cases.
+
+## Follow-up: reader word marks, word details and grammar (10.21.53)
+
+- **Polysemous words.** The request now lists the word-book entries that appear in the text, with their registered meanings. Each sentence returns `vocab`: the entries used there in one of those meanings, and which meaning.
+  - Only those words are marked. "like" is plain when the book has only 〜のような and the text means 好む.
+  - Without that check (analyses saved earlier, or no key), every match is marked as before.
+  - `updateReaderWordColors` skips words left plain (`data-vocab-skip`).
+- **Word details.** A marked word opens the same card as the flashcard's ⓘ (`openVocabDetailsSheet`, shared with `openFlashcardWordDetails`). A line on top says which meaning this sentence uses (「この文での意味：①りんご」). Closing the sheet refreshes the reader's colours.
+- **Grammar points.** They were being returned but were invisible: an old rule set `.grammar-span { border-bottom: none !important }`, and nothing added the colour classes it expected.
+  - They now have a purple underline.
+  - A tap on any word inside one opens the explanation (before, word boxes swallowed the tap). The popup's heading shows the point's name (`label`).
+  - `findGrammarPhrase` finds the phrase even when the AI writes 〜, ..., S V or different quotes, matching whole words only.
+  - The request asks for exact phrases and uses a `responseSchema`. If a model rejects the schema (400), the request is sent again without it.
+- **Spacing.** Words were drawn with the space inside each inline-block box, where it was dropped, so the words ran together. The space now sits between the boxes.
+- **Inflected forms.** `findVocabByToken` also matches plain inflections the stem rules missed: apples, studies, chatted, making, tried.
+
+`tests/reader-vocab-grammar.smoke.cjs` covers these.
