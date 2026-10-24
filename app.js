@@ -1115,7 +1115,7 @@ const customJaEl = document.getElementById('customJapanesetextarea');
 const customJaLines = customJaEl ? customJaEl.value.trim().split('\n').filter(l => l.trim() !== '') : [];
 textHistory = textHistory.filter(h => h.text !== rawText); 
  textHistory.unshift({ id: Date.now(), title: currentActiveTitle, text: rawText });
- localStorage.setItem('textHistory', JSON.stringify(textHistory)); window.renderHistoryList();
+ localStorage.setItem('textHistory', JSON.stringify(textHistory)); window.markReaderDataChanged?.(); window.renderHistoryList();
  document.getElementById('text-input-view').style.display = 'none'; document.getElementById('text-reader-view').style.display = 'block';
  const englishContainer = document.getElementById('englishContainer'); 
  englishContainer.innerHTML = '<div class="reader-analyzing" role="status"><i data-lucide="loader" class="animate-spin" size="28"></i><span>英文を解析しています…</span></div>';
@@ -1149,12 +1149,13 @@ textHistory = textHistory.filter(h => h.text !== rawText);
          entry.aiAnalysisData = aiAnalysisResult;
          textHistory = textHistory.slice(0, 30);
          try { localStorage.setItem('textHistory', JSON.stringify(textHistory)); } catch (e) { entry.aiAnalysisData = null; }
+         window.markReaderDataChanged?.();
      }
      // A bookshelf text without an analysis (new, edited or failed before) keeps this one.
      if (!preParsedData && Array.isArray(myBookshelf)) {
          let kept = false;
          myBookshelf.forEach(item => { if (item.text === rawText && (!item.aiAnalysisData || item.aiAnalysisData.analysisError)) { item.aiAnalysisData = JSON.parse(JSON.stringify(aiAnalysisResult)); kept = true; } });
-         if (kept) { try { localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); } catch (e) {} window.queueBackgroundSave?.(); }
+         if (kept) { try { localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); } catch (e) {} window.markReaderDataChanged?.(); }
      }
  }
  if (geminiApiKey && !aiAnalysisResult) {
