@@ -677,3 +677,26 @@ It fails if any visible element sticks out past the screen's left or right edge.
 - **Model names.** The reader and the workbook explanation call `gemini-flash-latest`, and fall back to `gemini-2.5-flash` when a model returns 404.
 
 `tests/reader-bookshelf.smoke.cjs` covers these steps.
+
+## Follow-up: reader looks like the word book list (10.21.51)
+
+**Bookshelf** (`reader-shelf.js`)
+- It uses the word book list's parts: a BOOKSHELF heading with a toolbar (＋ フォルダを作る, 英文を解析する), then rows with a cover, the name and one line about the contents.
+- Each folder row shows how many texts it has and the newest title. Inside a folder, each text shows its sentence count, whether the analysis is saved, and the date.
+- The whole row opens it. ⋯ opens the actions: rename or delete a folder (its texts move to 未分類); open, move or delete a text. Deleting asks first.
+- Saving opens the same dialog style as the word book editor.
+
+**Analysis input**
+- Shorter labels, and a larger English box.
+- A count of sentences and words under the box, plus 貼り付け and クリア buttons.
+- The manual translation is folded away under 「和訳を自分で入れる（任意）」.
+- The 和訳 → 意味 relabelling no longer touches the reader.
+- History rows use the same list style, and ⋯ saves an entry to the bookshelf.
+
+**Result**
+- The summary comes first.
+- The title line shows the sentence count and how to open grammar notes. The save button no longer puts the text into an attribute.
+
+**Loading screen during analysis**
+- **Real progress.** The analysis streams (`streamGenerateContent?alt=sse`), and the bar follows the sentences translated so far (「和訳と文法を作っています（2 / 4文）」). Before the first one, it creeps up slowly. The timeout is now 45 seconds without any data, rather than 45 seconds in total.
+- **The quiz matches the flashcards.** It uses the flashcard's round card and its side labels (覚えていない / 覚えた, 上: あいまい), with the ×△○ buttons of the warm-up. A tap flips the card; a swipe or a button answers. A counter shows how many words were answered and the ○△× totals.

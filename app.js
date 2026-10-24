@@ -1118,7 +1118,7 @@ textHistory = textHistory.filter(h => h.text !== rawText);
  localStorage.setItem('textHistory', JSON.stringify(textHistory)); window.renderHistoryList();
  document.getElementById('text-input-view').style.display = 'none'; document.getElementById('text-reader-view').style.display = 'block';
  const englishContainer = document.getElementById('englishContainer'); 
- englishContainer.innerHTML = '<div style="text-align:center; padding: 60px 20px; color: var(--cosmic-cyan); font-weight: bold; font-size: 16px; display:flex; flex-direction:column; align-items:center;"><i data-lucide="loader" class="animate-spin" size="36" style="margin-bottom:16px;"></i><span>🌀 AI構文解析・全文要約取得中...</span></div>';
+ englishContainer.innerHTML = '<div class="reader-analyzing" role="status"><i data-lucide="loader" class="animate-spin" size="28"></i><span>英文を解析しています…</span></div>';
  const abstractCard = document.getElementById('summary-abstract-card');
  const abstractContainer = document.getElementById('summaryAbstractContainer');
  if (abstractCard) abstractCard.style.display = 'none';
@@ -1129,8 +1129,16 @@ textHistory = textHistory.filter(h => h.text !== rawText);
  if (!geminiApiKey) geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
  if (preParsedData) {
      aiAnalysisResult = preParsedData;
- } else {
-     aiAnalysisResult = geminiApiKey ? await window.callGeminiAnalyzer(rawText) : null;
+ } else if (geminiApiKey) {
+     // The loading screen shows how far the analysis has come.
+     const progress = typeof window.setLoadingProgress === 'function' ? window.setLoadingProgress : function() {};
+     progress(1, '英文を送っています');
+     try {
+         aiAnalysisResult = await window.callGeminiAnalyzer(rawText, progress);
+         progress(100, '表示しています');
+     } finally {
+         setTimeout(function() { progress(null); }, 600);
+     }
  }
  // Keep the analysis with the history entry, so opening it again does not ask the AI again.
  if (aiAnalysisResult && !aiAnalysisResult.analysisError) {
@@ -1146,16 +1154,21 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      return;
  }
  currentActiveAiAnalysisCache = aiAnalysisResult;
- const safeTextForBtn = rawText.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
- const safeTitleForBtn = currentActiveTitle ? currentActiveTitle.replace(/'/g, "\\'").replace(/"/g, "&quot;") : "無題";
- document.getElementById('readerCurrentTitle').innerHTML = `
-     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:100%;">
-         <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; max-width:260px;">📖 ${currentActiveTitle}</span>
-         <button style="padding:6px 12px; font-size:11px; font-weight:bold; border-radius:6px; background:rgba(255,255,255,0.1); color:#E2E8F0; border:1px solid rgba(255,255,255,0.3); cursor:pointer; white-space:nowrap; transition:all 0.2s;" onclick="window.showCustomSaveBookshelfPrompt(\`${safeTextForBtn}\`, '${safeTitleForBtn}')">
-             <i data-lucide="folder-plus" size="12" style="vertical-align:middle; margin-right:2px;"></i> 本棚に保存する
-         </button>
-     </div>
- `;
+ // The title, and a save button wired directly (the text is never put into an attribute).
+ const titleBox = document.getElementById('readerCurrentTitle');
+ titleBox.replaceChildren();
+ const titleRow = document.createElement('div'); titleRow.className = 'reader-title-row';
+ const titleText = document.createElement('span'); titleText.className = 'reader-title-text'; titleText.textContent = currentActiveTitle;
+ const saveButton = document.createElement('button'); saveButton.type = 'button'; saveButton.className = 'reader-save-button';
+ saveButton.dataset.saveRebound = '1';
+ saveButton.innerHTML = '<i data-lucide="folder-plus" size="13"></i> 本棚に保存';
+ const titleForSave = currentActiveTitle;
+ saveButton.onclick = () => window.showCustomSaveBookshelfPrompt(rawText, titleForSave);
+ const analysedSentences = (aiAnalysisResult && Array.isArray(aiAnalysisResult.sentences)) ? aiAnalysisResult.sentences : null;
+ const sentenceTotal = analysedSentences ? analysedSentences.length : (window.ReaderShelf ? window.ReaderShelf.sentenceCount(rawText) : 0);
+ const hasGrammar = !!analysedSentences && analysedSentences.some(x => x && Array.isArray(x.grammarHighlights) && x.grammarHighlights.length);
+ const titleMeta = document.createElement('small'); titleMeta.className = 'reader-title-meta'; titleMeta.textContent = sentenceTotal + '文' + (hasGrammar ? ' · 二重下線の表現をタップで文法の解説' : '');
+ titleRow.append(titleText, saveButton); titleBox.append(titleRow, titleMeta);
  window.initLucide();
  englishContainer.innerHTML = ''; let totalSummaryJa = "";
  let fallbackSentences = rawText.replace(/\n/g, ' ').match(/[^.?!]+[.?!]+|[^.?!]+$/g) || [rawText];
@@ -1225,42 +1238,7 @@ textHistory = textHistory.filter(h => h.text !== rawText);
  }
  window.initLucide();
 };
-window.showCustomSaveBookshelfPrompt = function(text, title) {
-if(document.getElementById('saveBookshelfOverlay')) return;
-const overlay = document.createElement('div');
-overlay.id = 'saveBookshelfOverlay';
-overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter: blur(5px);";
-const box = document.createElement('div');
-box.style.cssText = "background:var(--card-bg); border:1px solid var(--cosmic-cyan); border-radius:16px; padding:24px; width:85%; max-width:320px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.6);";
-// Where to keep it: a shelf book published by the admin, or one of this user's folders.
-const escapeOption = (t) => String(t).replace(/[&<>"']/g, (c) => "&#" + c.charCodeAt(0) + ";");
-let folderOptions = (Array.isArray(bookshelfBooks) ? bookshelfBooks : []).map(b => `<option value="book:${escapeOption(b.id)}">📚 ${escapeOption(b.name)}</option>`).join('') +
-    ['未分類', ...myFolders.filter(f => f && f !== '未分類')].map(f => `<option value="folder:${escapeOption(f)}">${f === '未分類' ? '未分類' : '📁 ' + escapeOption(f)}</option>`).join('');
-box.innerHTML = `<div style="color:white; font-size:18px; font-weight:800; margin-bottom:12px;">📁 本棚に保存</div> <select id="selectBookshelfFolder" class="search-input" style="width:100%; margin-bottom:12px;">${folderOptions}<option value="new_folder">➕ 新しいフォルダを作成</option></select> <input type="text" id="newFolderNameInput" class="search-input" placeholder="新しいフォルダ名を入力" style="display:none; width:100%; margin-bottom:16px;"> <div style="display:flex; gap:12px; margin-top: 12px;"> <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--input-bg); color:var(--text-main); font-weight:700; cursor:pointer;" id="cancelSaveBookshelfBtn">キャンセル</button> <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--cosmic-cyan); color:#000; font-weight:700; cursor:pointer;" id="confirmSaveBookshelfBtn">保存</button> </div>`;
-overlay.appendChild(box); document.body.appendChild(overlay);
-const selectEl = document.getElementById('selectBookshelfFolder');
-const newFolderInput = document.getElementById('newFolderNameInput');
-selectEl.onchange = (e) => { if (e.target.value === 'new_folder') { newFolderInput.style.display = 'block'; newFolderInput.focus(); } else { newFolderInput.style.display = 'none'; } };
-document.getElementById('cancelSaveBookshelfBtn').onclick = () => { document.body.removeChild(overlay); };
-document.getElementById('confirmSaveBookshelfBtn').onclick = () => {
-let choice = selectEl.value, folder = "未分類", bookId = "";
-if (choice === 'new_folder') { folder = newFolderInput.value.trim().slice(0, 40) || "未分類"; }
-else if (choice.startsWith('book:')) { bookId = choice.slice(5); folder = ""; }
-else if (choice.startsWith('folder:')) { folder = choice.slice(7) || "未分類"; }
-if(folder && !myFolders.includes(folder)) { myFolders.push(folder); localStorage.setItem('myFolders', JSON.stringify(myFolders)); }
-if(myBookshelf.some(item => item.text === text && (bookId ? item.bookId === bookId : (!item.bookId && (item.folder || "未分類") === folder)))) { alert("すでに保存されています。"); document.body.removeChild(overlay); return; }
-    myBookshelf.push({ 
-        id: Date.now(), 
-        folder: folder, 
-        ...(bookId ? { bookId: bookId } : {}),
-        title: title || "無題", 
-        text: text,
-        aiAnalysisData: currentActiveAiAnalysisCache ? JSON.parse(JSON.stringify(currentActiveAiAnalysisCache)) : null
-    });
-    window.queueBackgroundSave?.();
-    localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); alert(`「${bookId ? ((bookshelfBooks.find(b => b.id === bookId) || {}).name || '本棚') : folder}」に保存しました。`); window.renderBookshelf(); document.body.removeChild(overlay);
-};
-};
+// showCustomSaveBookshelfPrompt is in reader-shelf.js.
 window.closeWordPopover = function() { document.getElementById('wordPopover').classList.remove('show'); document.getElementById('wordPopover').style.display = 'none'; };
 window.closeReader = function() { document.getElementById('text-input-view').style.display = 'block'; document.getElementById('text-reader-view').style.display = 'none'; currentActiveAiAnalysisCache = null; };
 // 🌟 修正：実在ユーザー厳格判定＆本物プロフィール・アイコン取得フレンド追加処理
@@ -5571,24 +5549,31 @@ console.log("🛡️ 第7回パッチ（Firestore invalid-argument 根絶：unde
     '#penguinLoadingOverlay.penguin-fade-out{opacity:0;}',
     '.lq-spark{position:absolute;width:4px;height:4px;border-radius:50%;pointer-events:none;opacity:0;animation:lqSparkFloat linear infinite;}',
     '@keyframes lqSparkFloat{0%{transform:translateY(20px) scale(.6);opacity:0;}20%{opacity:.9;}80%{opacity:.6;}100%{transform:translateY(-90vh) scale(1);opacity:0;}}',
-    '.lq-area{display:flex;flex-direction:column;align-items:center;gap:14px;z-index:2;}',
-    '.lq-card-wrap{position:relative;width:230px;height:230px;perspective:1000px;touch-action:none;-webkit-tap-highlight-color:transparent;}',
-    '.lq-card{position:absolute;width:100%;height:100%;transform-style:preserve-3d;transition:transform .4s cubic-bezier(.25,1,.5,1);}',
-    '.lq-card.flipped{transform:rotateY(180deg);}',
-    '.lq-face{position:absolute;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden;',
-    'border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:26px;box-sizing:border-box;',
-    'color:#fff;text-align:center;border:2px solid rgba(255,255,255,.4);',
-    'background:radial-gradient(circle at 30% 28%, rgba(255,255,255,.14) 0%, rgba(0,240,255,.06) 55%, rgba(192,132,252,.08) 88%);',
-    'box-shadow:inset 0 12px 22px rgba(255,255,255,.28), inset 0 -10px 18px rgba(0,0,0,.25), 0 8px 24px rgba(0,0,0,.5), 0 0 22px rgba(0,240,255,.22);',
-    'transition:border-color .15s ease, box-shadow .15s ease;}',
-    '.lq-face.back{transform:rotateY(180deg);}',
-    '.lq-word{font-size:24px;font-weight:900;font-family:"Times New Roman",serif;word-break:break-word;line-height:1.25;text-shadow:0 1px 4px rgba(0,0,0,.8);}',
-    '.lq-meaning{font-size:15px;font-weight:700;line-height:1.5;word-break:break-word;color:#F1F5F9;text-shadow:0 1px 3px rgba(0,0,0,.8);}',
-    '.lq-hint{font-size:10px;color:rgba(255,255,255,.5);font-weight:700;letter-spacing:.5px;z-index:2;}',
-    '.lq-card-wrap.glow-ok .lq-face{border-color:#10B981;box-shadow:0 0 30px rgba(16,185,129,.6), inset 0 0 20px rgba(16,185,129,.3);}',
-    '.lq-card-wrap.glow-bad .lq-face{border-color:#EF4444;box-shadow:0 0 30px rgba(239,68,68,.6), inset 0 0 20px rgba(239,68,68,.3);}',
-    '.lq-card-wrap.glow-so .lq-face{border-color:#F59E0B;box-shadow:0 0 30px rgba(245,158,11,.6), inset 0 0 20px rgba(245,158,11,.3);}',
-    '.lq-book-label{font-size:10px;font-weight:800;color:var(--cosmic-purple-light);background:rgba(192,132,252,0.1);border:1px solid rgba(192,132,252,0.3);padding:3px 10px;border-radius:12px;letter-spacing:0.5px;margin-top:2px;box-shadow:0 0 8px rgba(192,132,252,0.2);text-shadow:0 0 6px rgba(192,132,252,0.4);}',
+    '.lq-area{display:flex;flex-direction:column;align-items:center;gap:14px;z-index:2;width:min(360px,calc(100vw - 32px));}',
+    '.lq-progress{width:100%;}',
+    '.lq-progress[hidden],.lq-quiz[hidden]{display:none!important;}',
+    '.lq-progress-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;color:#E2E8F0;font-size:12px;font-weight:700;}',
+    '.lq-progress-head strong{color:#00F0FF;font-size:20px;font-weight:900;font-variant-numeric:tabular-nums;text-shadow:0 0 10px rgba(0,240,255,.45);}',
+    '.lq-progress-track{height:6px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;}',
+    '.lq-progress-track span{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .35s ease;}',
+    '.lq-quiz{width:100%;display:flex;flex-direction:column;align-items:center;gap:10px;}',
+    '.lq-quiz-head{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;}',
+    '.lq-score{margin-left:auto;background:rgba(99,102,241,0.4);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;border:1px solid var(--accent);white-space:nowrap;}',
+    '.lq-up{display:flex;align-items:center;gap:4px;color:#fff;font-size:11px;font-weight:700;}',
+    '.lq-up i,.lq-up svg{color:var(--word-so);}',
+    '.lq-stage{position:relative;width:100%;min-height:260px;display:flex;align-items:center;justify-content:center;}',
+    '.lq-side{position:absolute;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;font-weight:900;pointer-events:none;z-index:20;}',
+    '.lq-side.is-bad{left:0;color:var(--word-bad);}.lq-side.is-ok{right:0;color:var(--word-ok);}',
+    '.lq-card-wrap{position:relative;width:240px;height:240px;touch-action:none;-webkit-tap-highlight-color:transparent;}',
+    '.lq-card-wrap .flashcard-wrapper-3d{left:0;top:0;}',
+    '.lq-card-wrap.glow-ok .flashcard-face-front,.lq-card-wrap.glow-ok .flashcard-face-back{border-color:#10B981!important;box-shadow:0 0 30px rgba(16,185,129,.6)!important;}',
+    '.lq-card-wrap.glow-bad .flashcard-face-front,.lq-card-wrap.glow-bad .flashcard-face-back{border-color:#EF4444!important;box-shadow:0 0 30px rgba(239,68,68,.6)!important;}',
+    '.lq-card-wrap.glow-so .flashcard-face-front,.lq-card-wrap.glow-so .flashcard-face-back{border-color:#F59E0B!important;box-shadow:0 0 30px rgba(245,158,11,.6)!important;}',
+    '.lq-ratings{margin:0!important;}',
+    '.lq-hint{font-size:10px;color:rgba(255,255,255,.55);font-weight:700;letter-spacing:.5px;z-index:2;}',
+    '.lq-book-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:800;color:var(--cosmic-purple-light);background:rgba(192,132,252,0.1);border:1px solid rgba(192,132,252,0.3);padding:3px 10px;border-radius:12px;letter-spacing:0.5px;}',
+    '.lq-book-label:empty{display:none;}',
+    '#penguinLoadingOverlay.has-progress .penguin-loading-text{display:none;}',
     '.penguin-loading-text{font-size:13px;font-weight:800;color:#00F0FF;letter-spacing:1px;z-index:2;text-shadow:0 0 10px rgba(0,240,255,.5);display:flex;align-items:center;gap:2px;}',
     '.pg-dot{animation:lqDotBlink 1.2s infinite;}',
     '.pg-dot:nth-of-type(2){animation-delay:.2s;}.pg-dot:nth-of-type(3){animation-delay:.4s;}',
@@ -5618,35 +5603,69 @@ window.__renderPenguinOverlay = function(message) {
     var c = Math.random() < 0.5 ? 'rgba(0,240,255,.8)' : 'rgba(192,132,252,.8)';
     sparks += '<span class="lq-spark" style="left:' + left + '%;bottom:-10px;background:' + c + ';animation-delay:' + delay + 's;animation-duration:' + dur + 's;"></span>';
   }
+  // The quiz uses the flashcard's card, side labels and ×△○ buttons.
   ov.innerHTML =
     sparks +
     '<div class="lq-area">' +
-      '<div class="lq-card-wrap" id="lqCardWrap" style="display:none;"></div>' +
-      '<div class="lq-hint" id="lqHint" style="display:none;">タップでめくる ／ 右⚪︎ ・ 左✕ ・ 上△</div>' +
+      '<div class="lq-progress" id="lqProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>' +
+        '<div class="lq-progress-head"><span id="lqProgressLabel"></span><strong id="lqProgressValue">0%</strong></div>' +
+        '<div class="lq-progress-track"><span id="lqProgressFill"></span></div>' +
+      '</div>' +
+      '<div class="lq-quiz" id="lqQuiz" hidden>' +
+        '<div class="lq-quiz-head"><span class="lq-book-label" id="lqBookLabel"></span><span class="lq-score" id="lqScore">回答 0</span></div>' +
+        '<div class="lq-up"><i data-lucide="arrow-up" size="12"></i><span>上: あいまい</span></div>' +
+        '<div class="lq-stage">' +
+          '<div class="lq-side is-bad"><i data-lucide="x-circle" size="16"></i><span>覚えていない</span></div>' +
+          '<div class="lq-card-wrap" id="lqCardWrap"></div>' +
+          '<div class="lq-side is-ok"><i data-lucide="check-circle" size="16"></i><span>覚えた</span></div>' +
+        '</div>' +
+        '<div class="warmup-ratings lq-ratings"><button type="button" data-lq="bad" aria-label="覚えていない">×</button><button type="button" data-lq="so" aria-label="あいまい">△</button><button type="button" data-lq="ok" aria-label="覚えた">○</button></div>' +
+        '<div class="lq-hint" id="lqHint">タップでめくる ／ スワイプかボタンで答える</div>' +
+      '</div>' +
     '</div>' +
     '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
       '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
   document.body.appendChild(ov);
   window.__pgLoad.overlay = ov;
+  ov.querySelectorAll('[data-lq]').forEach(function(button) {
+    button.onclick = function() {
+      var cur = window.__lqCurrent, wrap = ov.querySelector('#lqCardWrap'), status = button.dataset.lq;
+      if (!cur || !wrap) return;
+      window.__answerLoadQuiz(ov, wrap, cur.word, status, status === 'ok' ? 90 : status === 'bad' ? -90 : 0, status === 'so' ? -90 : 0);
+    };
+  });
+  window.__applyLoadingProgress(ov);
   requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
   window.__initLoadQuiz(ov);
+  if (typeof window.initLucide === 'function') window.initLucide();
+};
+
+// How far a long task has come (the English analysis): percent 0-100 and a label; null hides it.
+// Kept while the overlay is not shown yet, so an overlay that appears later starts at the right place.
+window.setLoadingProgress = function(percent, label) {
+  var st = window.__pgLoad;
+  st.progress = percent === null || percent === undefined ? null : { percent: Math.max(0, Math.min(100, Math.round(percent))), label: label || (st.progress && st.progress.label) || '' };
+  if (st.overlay) window.__applyLoadingProgress(st.overlay);
+};
+window.__applyLoadingProgress = function(ov) {
+  var p = window.__pgLoad.progress, box = ov.querySelector('#lqProgress');
+  if (!box) return;
+  box.hidden = !p;
+  ov.classList.toggle('has-progress', !!p);
+  if (!p) return;
+  box.setAttribute('aria-valuenow', String(p.percent));
+  box.setAttribute('aria-valuetext', p.label + ' ' + p.percent + '%');
+  ov.querySelector('#lqProgressLabel').textContent = p.label;
+  ov.querySelector('#lqProgressValue').textContent = p.percent + '%';
+  ov.querySelector('#lqProgressFill').style.width = p.percent + '%';
 };
 
 // ------------------------------------------------------------------
 // 【3】出題元ラベル表示
 // ------------------------------------------------------------------
 window.__setLoadQuizBookLabel = function(ov, name, show) {
-  var label = document.getElementById('lqBookLabel');
-  if (!label) {
-    label = document.createElement('div');
-    label.id = 'lqBookLabel';
-    label.className = 'lq-book-label';
-    var area = ov.querySelector('.lq-area');
-    if (!area) return;
-    area.appendChild(label);
-  }
-  if (show && name) { label.textContent = '📔 ' + name; label.style.display = 'block'; }
-  else { label.style.display = 'none'; }
+  var label = ov.querySelector('#lqBookLabel');
+  if (label) label.textContent = show && name ? '📔 ' + name : '';
 };
 
 // ------------------------------------------------------------------
@@ -5657,12 +5676,11 @@ window.__initLoadQuiz = function(ov) {
   q.owner=(typeof myId!=='undefined'&&myId)||'GUEST-000';
   q.answers = []; q.ok = 0; q.bad = 0; q.so = 0; q.index = 0; q.words = []; q.active = false; q.bookId = null;
   window.__lqCurrent = null;
+  var quizEl = ov.querySelector('#lqQuiz');
   var wrapEl = ov.querySelector('#lqCardWrap');
-  var hintEl = ov.querySelector('#lqHint');
   var hideAll = function() {
     q.active = false;
-    if (wrapEl) wrapEl.style.display = 'none';
-    if (hintEl) hintEl.style.display = 'none';
+    if (quizEl) quizEl.hidden = true;
     window.__setLoadQuizBookLabel(ov, '', false);
   };
   var setup = function(words, bookId, name) {
@@ -5673,8 +5691,8 @@ window.__initLoadQuiz = function(ov) {
     q.words = words.slice().sort(function(){ return Math.random() - 0.5; }).slice(0, 20);
     q.active = true;
     q.bookId = bookId;
-    if (wrapEl) { wrapEl.style.display = 'block'; window.__bindLoadQuizCardOnce(wrapEl); }
-    if (hintEl) hintEl.style.display = 'block';
+    if (quizEl) quizEl.hidden = false;
+    if (wrapEl) window.__bindLoadQuizCardOnce(wrapEl);
     window.__setLoadQuizBookLabel(ov, name, true);
     window.__renderLoadQuizCard(ov);
   };
@@ -5705,7 +5723,7 @@ window.__initLoadQuiz = function(ov) {
 };
 
 // ------------------------------------------------------------------
-// 【5】カード描画（★番号なし・現在の単語を共有状態へ）
+// 【5】カード描画（単語カードと同じ面・同じ大きさ）
 // ------------------------------------------------------------------
 window.__renderLoadQuizCard = function(ov) {
   var q = window.__loadQuiz;
@@ -5715,88 +5733,112 @@ window.__renderLoadQuizCard = function(ov) {
     q.index = 0;
   }
   var w = q.words[q.index];
-  var meaning = (w.meanings && w.meanings[0]) ? w.meanings[0].text : (w.meaning || '');
+  var first = w.meanings && w.meanings[0];
+  var meaning = first ? first.text : (w.meaning || '');
   var wrap = ov.querySelector('#lqCardWrap');
   if (!wrap) return;
   wrap.className = 'lq-card-wrap';
-  wrap.style.display = 'block';
-  wrap.style.transform = '';
-  wrap.style.opacity = '1';
-  wrap.style.transition = '';
-  wrap.innerHTML =
-    '<div class="lq-card" id="lqCard">' +
-      '<div class="lq-face front"><div class="lq-word">' + w.word + '</div></div>' +
-      '<div class="lq-face back"><div class="lq-meaning">' + meaning + '</div></div>' +
-    '</div>';
+  wrap.replaceChildren();
+  var card = document.createElement('div');
+  card.className = 'flashcard-wrapper-3d lq-flashcard';
+  var style = '';
+  try { if (typeof window.getFlashcardStyleByHistory === 'function') style = window.getFlashcardStyleByHistory({ num: w.num, en: w.word, meaningId: first && first.id, meaningIndex: 0, sourceWord: w }) || ''; } catch (e) {}
+  window.fillFlashcardFaces(card, w.word, meaning, w.num, style);
+  wrap.appendChild(card);
+  var stage = ov.querySelector('.lq-stage');
+  if (typeof window.sizeFlashcardFaces === 'function' && stage) {
+    window.sizeFlashcardFaces(card, stage, null);
+    var size = parseFloat(card.style.width) || 240;
+    wrap.style.width = wrap.style.height = size + 'px';
+  }
+  var score = ov.querySelector('#lqScore');
+  if (score) score.textContent = '回答 ' + q.answers.length + (q.answers.length ? '　○' + q.ok + ' △' + q.so + ' ×' + q.bad : '');
   window.__lqCurrent = { word: w, ov: ov };
-  window.__bindLoadQuizCardOnce(wrap);
 };
 
 // ------------------------------------------------------------------
-// 【6】★増殖根絶：枠に“生涯1組だけ”リスナーを貼る（委譲方式）
+// 【6】枠に“生涯1組だけ”リスナーを貼る（委譲方式）。タップでめくり、スワイプで答える。
 //     現在の単語は window.__lqCurrent から参照する
 // ------------------------------------------------------------------
 window.__bindLoadQuizCardOnce = function(wrap) {
   if (!wrap || wrap.dataset.lqBound === '1') return;
   wrap.dataset.lqBound = '1';
-  var startX = 0, startY = 0, dragging = false;
-  wrap.addEventListener('touchstart', function(e) {
-    if (!window.__lqCurrent) return;
-    startX = e.touches[0].clientX; startY = e.touches[0].clientY; dragging = true;
-    wrap.style.transition = 'none';
-  }, { passive: true });
-  wrap.addEventListener('touchmove', function(e) {
-    if (!dragging || !window.__lqCurrent) return;
-    var dx = e.touches[0].clientX - startX;
-    var dy = e.touches[0].clientY - startY;
-    wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (dx * 0.05) + 'deg)';
+  var pointer = null, moving = false;
+  var cardOf = function() { return wrap.querySelector('.lq-flashcard'); };
+  var glow = function(dx, dy) {
     wrap.classList.remove('glow-ok','glow-bad','glow-so');
     if (dy < -15 && Math.abs(dy) > Math.abs(dx)) wrap.classList.add('glow-so');
     else if (dx > 15) wrap.classList.add('glow-ok');
     else if (dx < -15) wrap.classList.add('glow-bad');
-  }, { passive: true });
-  wrap.addEventListener('touchend', function(e) {
-    if (!dragging) return; dragging = false;
-    var dx = e.changedTouches[0].clientX - startX;
-    var dy = e.changedTouches[0].clientY - startY;
+  };
+  var settle = function(card) {
     wrap.classList.remove('glow-ok','glow-bad','glow-so');
-    var cur = window.__lqCurrent;
-    if (!cur || !cur.word) return;
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-      wrap.style.transition = 'transform .2s ease';
-      wrap.style.transform = '';
-      var card = wrap.querySelector('#lqCard');
-      if (card) card.classList.toggle('flipped');
-    } else if (dx > 60) {
-      window.__answerLoadQuiz(cur.ov, wrap, cur.word, 'ok', dx, dy);
-    } else if (dx < -60) {
-      window.__answerLoadQuiz(cur.ov, wrap, cur.word, 'bad', dx, dy);
-    } else if (dy < -60) {
-      window.__answerLoadQuiz(cur.ov, wrap, cur.word, 'so', dx, dy);
-    } else {
-      wrap.style.transition = 'transform .25s ease';
-      wrap.style.transform = '';
-    }
+    if (!card) return;
+    card.classList.remove('is-dragging');
+    if (moving) { card.classList.add('is-settling'); setTimeout(function(){ card.classList.remove('is-settling'); }, 260); }
+    card.style.removeProperty('transform');
+    moving = false;
+  };
+  wrap.addEventListener('pointerdown', function(e) {
+    if (!window.__lqCurrent || !e.isPrimary) return;
+    try { wrap.setPointerCapture(e.pointerId); } catch (err) {}
+    pointer = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+    moving = false;
   });
+  wrap.addEventListener('pointermove', function(e) {
+    var card = cardOf();
+    if (!pointer || !card) return;
+    var dx = e.clientX - pointer.x, dy = e.clientY - pointer.y;
+    if (!moving) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      moving = true;
+      card.classList.remove('is-settling');
+      card.classList.add('is-dragging');
+    }
+    card.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (dx * 0.06) + 'deg)';
+    glow(dx, dy);
+  });
+  wrap.addEventListener('pointerup', function(e) {
+    var card = cardOf(), cur = window.__lqCurrent;
+    if (!pointer || !card || !cur) { pointer = null; return settle(card); }
+    var dx = e.clientX - pointer.x, dy = e.clientY - pointer.y;
+    var elapsed = Math.max(1, e.timeStamp - pointer.t);
+    pointer = null;
+    if (!moving) { card.classList.toggle('flipped'); return; }
+    var direction = window.flashcardSwipeDirection ? window.flashcardSwipeDirection(dx, dy, dx / elapsed, dy / elapsed)
+      : (dx > 60 ? 'right' : dx < -60 ? 'left' : dy < -60 ? 'up' : null);
+    if (!direction) return settle(card);
+    moving = false;
+    window.__answerLoadQuiz(cur.ov, wrap, cur.word, direction === 'right' ? 'ok' : direction === 'left' ? 'bad' : 'so', dx, dy);
+  });
+  wrap.addEventListener('pointercancel', function() { pointer = null; settle(cardOf()); });
 };
 
 // ------------------------------------------------------------------
-// 【7】回答処理（記録B：⚪︎△全部を退避）
+// 【7】回答処理（記録B：⚪︎△×全部を退避）
 // ------------------------------------------------------------------
 window.__answerLoadQuiz = function(ov, wrap, w, status, dx, dy) {
   var q = window.__loadQuiz;
+  if (!window.__lqCurrent || window.__lqCurrent.word !== w) return;
   q.answers.push({ num: w.num, word: w.word, status: status });
   if (status === 'ok') q.ok++;
   else if (status === 'bad') q.bad++;
   else if (status === 'so') q.so++;
   window.__lqCurrent = null; // 二重反応を物理的に遮断
-  wrap.style.transition = 'transform .35s cubic-bezier(.1,.8,.25,1), opacity .35s ease';
-  wrap.style.transform = 'translate(' + (dx * 2.2) + 'px,' + (dy * 2.2 - 40) + 'px) scale(.5) rotate(' + (dx * 0.08) + 'deg)';
-  wrap.style.opacity = '0';
+  if (window.AppSounds && window.AppSounds.play) window.AppSounds.play(status === 'ok' ? 'swipe-right' : status === 'bad' ? 'swipe-left' : 'navigate');
+  wrap.classList.remove('glow-ok','glow-bad','glow-so');
+  var card = wrap.querySelector('.lq-flashcard');
+  if (card) {
+    card.classList.remove('is-dragging', 'is-settling');
+    card.style.animation = 'none';
+    card.style.transition = 'transform .35s cubic-bezier(.1,.8,.25,1), opacity .35s ease';
+    card.style.transform = 'translate(' + (dx * 2.2) + 'px,' + (dy * 2.2 - 40) + 'px) scale(.5) rotate(' + (dx * 0.08) + 'deg)';
+    card.style.opacity = '0';
+  }
   q.index++;
   setTimeout(function() {
     if (window.__pgLoad.overlay === ov) window.__renderLoadQuizCard(ov);
-  }, 200);
+  }, 220);
 };
 
 // ------------------------------------------------------------------
@@ -5938,6 +5980,7 @@ window.__finalizeLoadQuiz = function() {
 // ------------------------------------------------------------------
 var __prevActuallyHidePenguinForQuiz8 = window.__actuallyHidePenguin;
 window.__actuallyHidePenguin = function() {
+  if (window.__pgLoad && window.__pgLoad.count <= 0) window.__pgLoad.progress = null;
   if (!window.__lqFinalized) {
     window.__lqFinalized = true;
     try { window.__finalizeLoadQuiz(); } catch(e){}
@@ -6352,177 +6395,7 @@ window.injectShelfAdminPanel = function() {
 // ------------------------------------------------------------------
 // 【3】保存ポップアップ上書き（フォルダ選択 → 教材選択）
 // ------------------------------------------------------------------
-// 【4】本棚描画上書き（2階層：教材リスト → 長文タイトルリスト）
-// ------------------------------------------------------------------
-window.renderBookshelf = function() {
-  var container = document.getElementById('myBookshelfContainer');
-  if (!container) return;
-  container.innerHTML = "";
-  // An item belongs to a published shelf book (bookId), else to its folder; no folder (or a
-  // deleted book) means 未分類.
-  var inBook = function(item) {
-    return !!item.bookId && bookshelfBooks.some(function(b) { return b.id === item.bookId; });
-  };
-  var folderOf = function(item) {
-    return inBook(item) ? null : (item.folder && item.folder !== '未分類' ? item.folder : '未分類');
-  };
-  var isOrphan = function(item) { return folderOf(item) === '未分類'; };
-  var folders = [];
-  (Array.isArray(myFolders) ? myFolders : []).concat(myBookshelf.map(folderOf)).forEach(function(name) {
-    if (name && name !== '未分類' && folders.indexOf(name) < 0) folders.push(name);
-  });
-  // 表示状態のガード
-  if (currentShelfView !== 'list' && currentShelfView !== 'unclassified') {
-    var isFolderView = String(currentShelfView).indexOf('folder:') === 0;
-    if (isFolderView ? folders.indexOf(currentShelfView.slice(7)) < 0 : !bookshelfBooks.some(function(b) { return b.id === currentShelfView; })) currentShelfView = 'list';
-  }
-
-  // ---------------- 1階層目：教材リスト ----------------
-  if (currentShelfView === 'list') {
-    if (bookshelfBooks.length === 0 && myBookshelf.length === 0 && folders.length === 0) {
-      container.innerHTML = '<div style="text-align:center;color:var(--text-sub);font-size:12px;padding:20px;">本棚は空です。<br>解析した長文を「本棚に保存する」で保存すると、ここに並びます。</div>';
-      return;
-    }
-    bookshelfBooks.forEach(function(book) {
-      var count = myBookshelf.filter(function(i) { return i.bookId === book.id; }).length;
-      var row = document.createElement('div');
-      row.className = 'shelf-book-row';
-      var coverWrap = document.createElement('div');
-      coverWrap.style.cssText = "width:42px;height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:6px;background:linear-gradient(160deg, rgba(0,240,255,0.15), rgba(192,132,252,0.15));border:1px solid rgba(255,255,255,0.25);overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.4);";
-      if (book.coverType === 'image' && book.cover) {
-        coverWrap.innerHTML = '<img src="' + book.cover + '" style="width:100%;height:100%;object-fit:cover;">';
-      } else {
-        coverWrap.innerHTML = '<span style="font-size:22px;">' + (book.cover || '📚') + '</span>';
-      }
-      var nameWrap = document.createElement('div');
-      nameWrap.style.cssText = "flex:1;min-width:0;";
-      nameWrap.innerHTML = '<div style="font-size:14px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + book.name + '</div>' +
-        '<div style="font-size:10px;color:var(--text-sub);margin-top:2px;">' + count + ' 本の長文を保存済み</div>';
-      var arrow = document.createElement('div');
-      arrow.style.cssText = "color:var(--cosmic-cyan);flex-shrink:0;";
-      arrow.innerHTML = '<i data-lucide="chevron-right" size="18"></i>';
-      row.appendChild(coverWrap);
-      row.appendChild(nameWrap);
-      row.appendChild(arrow);
-      row.onclick = function() { currentShelfView = book.id; window.renderBookshelf(); };
-      container.appendChild(row);
-    });
-    // This user's folders
-    folders.forEach(function(name) {
-      var count = myBookshelf.filter(function(i) { return folderOf(i) === name; }).length;
-      var frow = document.createElement('div');
-      frow.className = 'shelf-book-row';
-      var icon = document.createElement('div');
-      icon.style.cssText = "width:42px;height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:6px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);font-size:22px;";
-      icon.textContent = '📁';
-      var copy = document.createElement('div');
-      copy.style.cssText = "flex:1;min-width:0;";
-      var nameEl = document.createElement('div');
-      nameEl.style.cssText = "font-size:14px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-      nameEl.textContent = name;
-      var countEl = document.createElement('div');
-      countEl.style.cssText = "font-size:10px;color:var(--text-sub);margin-top:2px;";
-      countEl.textContent = count + ' 本の長文を保存済み';
-      copy.append(nameEl, countEl);
-      var chevron = document.createElement('div');
-      chevron.style.cssText = "color:var(--cosmic-cyan);flex-shrink:0;";
-      chevron.innerHTML = '<i data-lucide="chevron-right" size="18"></i>';
-      frow.append(icon, copy, chevron);
-      frow.onclick = function() { currentShelfView = 'folder:' + name; window.renderBookshelf(); };
-      container.appendChild(frow);
-    });
-    var uncount = myBookshelf.filter(isOrphan).length;
-    if (uncount > 0) {
-      var urow = document.createElement('div');
-      urow.className = 'shelf-book-row';
-      urow.innerHTML =
-        '<div style="width:42px;height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:6px;background:rgba(255,255,255,0.06);border:1px dashed rgba(255,255,255,0.3);font-size:22px;">🗂️</div>' +
-        '<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:800;color:#fff;">未分類</div>' +
-        '<div style="font-size:10px;color:var(--text-sub);margin-top:2px;">' + uncount + ' 本の長文を保存済み</div></div>' +
-        '<div style="color:var(--cosmic-cyan);flex-shrink:0;"><i data-lucide="chevron-right" size="18"></i></div>';
-      urow.onclick = function() { currentShelfView = 'unclassified'; window.renderBookshelf(); };
-      container.appendChild(urow);
-    }
-    window.initLucide();
-    return;
-  }
-
-  // ---------------- 2階層目：長文タイトルリスト ----------------
-  var isUnclassified = (currentShelfView === 'unclassified');
-  var folderName = String(currentShelfView).indexOf('folder:') === 0 ? currentShelfView.slice(7) : null;
-  var book = isUnclassified || folderName ? null : bookshelfBooks.find(function(b) { return b.id === currentShelfView; });
-  var items = myBookshelf.filter(function(i) {
-    return isUnclassified ? isOrphan(i) : folderName ? folderOf(i) === folderName : (i.bookId === currentShelfView);
-  });
-  var header = document.createElement('div');
-  header.style.cssText = "display:flex;align-items:center;gap:10px;margin-bottom:12px;";
-  var backBtn = document.createElement('button');
-  backBtn.className = 'list-action-link';
-  backBtn.style.cssText = "height:32px;padding:0 10px;font-size:11px;flex-shrink:0;";
-  backBtn.innerHTML = '<i data-lucide="arrow-left" size="13" style="vertical-align:middle;margin-right:2px;"></i>戻る';
-  backBtn.onclick = function() { currentShelfView = 'list'; window.renderBookshelf(); };
-  var titleEl = document.createElement('div');
-  titleEl.style.cssText = "flex:1;min-width:0;font-size:15px;font-weight:900;color:var(--cosmic-cyan);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-  titleEl.innerText = isUnclassified ? '🗂️ 未分類' : folderName ? '📁 ' + folderName : ('📖 ' + (book ? book.name : ''));
-  header.appendChild(backBtn);
-  header.appendChild(titleEl);
-  container.appendChild(header);
-  if (items.length === 0) {
-    var empty = document.createElement('div');
-    empty.style.cssText = "text-align:center;color:var(--text-sub);font-size:12px;padding:20px;";
-    empty.innerText = '保存された長文はありません。';
-    container.appendChild(empty);
-    // An empty folder of this user's can be removed.
-    if (folderName) {
-      var removeFolder = document.createElement('button');
-      removeFolder.type = 'button';
-      removeFolder.className = 'list-action-link';
-      removeFolder.style.cssText = "display:block;margin:0 auto;";
-      removeFolder.textContent = 'このフォルダを削除';
-      removeFolder.onclick = function() {
-        myFolders = myFolders.filter(function(f) { return f !== folderName; });
-        localStorage.setItem('myFolders', JSON.stringify(myFolders));
-        currentShelfView = 'list';
-        window.renderBookshelf();
-      };
-      container.appendChild(removeFolder);
-    }
-    window.initLucide();
-    return;
-  }
-  items.forEach(function(item) {
-    var row = document.createElement('div');
-    row.className = 'shelf-item-row';
-    var titleWrap = document.createElement('div');
-    titleWrap.style.cssText = "flex:1;min-width:0;font-size:13px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-    titleWrap.innerHTML = '<i data-lucide="file-text" size="12" style="color:var(--text-sub);margin-right:4px;vertical-align:middle;"></i>';
-    titleWrap.appendChild(document.createTextNode(item.title || '無題'));
-    var openBtn = document.createElement('button');
-    openBtn.className = 'list-action-link';
-    openBtn.innerText = '開く';
-    openBtn.onclick = function() {
-      window.switchReaderSubTab('analysis', 'none');
-      window.analyzeText(item.text, item.title || '無題', item.aiAnalysisData ? JSON.parse(JSON.stringify(item.aiAnalysisData)) : null);
-    };
-    var delBtn = document.createElement('button');
-    delBtn.className = 'word-delete-btn';
-    delBtn.style.cssText = "display:flex !important;background:none;border:none;color:#EF4444;padding:4px;cursor:pointer;";
-    delBtn.innerHTML = '<i data-lucide="trash-2" size="14"></i>';
-    delBtn.onclick = function(e) {
-      e.stopPropagation();
-      myBookshelf = myBookshelf.filter(function(b) { return b.id !== item.id; });
-      localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf));
-      window.queueBackgroundSave?.();
-      window.renderBookshelf();
-    };
-    row.appendChild(titleWrap);
-    row.appendChild(openBtn);
-    row.appendChild(delBtn);
-    container.appendChild(row);
-  });
-  window.initLucide();
-};
-
+// 【4】本棚の描画は reader-shelf.js（単語帳一覧と同じ並び）
 // ------------------------------------------------------------------
 // 【5】リーダータブの構造組み替え＋サブタブボタン（解析 / 本棚）
 // ------------------------------------------------------------------
@@ -6536,7 +6409,7 @@ window.initReaderSubTabStructure = function() {
   var hl = document.getElementById('historyListContainer');
   if (hl) historyCard = hl.closest('.card');
   var bc = document.getElementById('myBookshelfContainer');
-  if (bc) shelfCard = bc.closest('.card');
+  if (bc) shelfCard = bc.closest('.card, .reader-shelf');
   if (!analysisCard || !shelfCard) return;
   var host = (inputView && inputView.contains(analysisCard) && inputView.contains(shelfCard)) ? inputView : view;
 

@@ -1,72 +1,55 @@
 // ================================================================
 // Long-form reader helpers
 //
-// app.js owns rendering, history, bookshelf, and study-time lifecycle.
+// app.js owns rendering and the study-time lifecycle; reader-shelf.js draws the history and
+// the bookshelf.
 // This file only supplies the reader actions that app.js and index.html
 // call but do not define themselves. Keep it loaded after app.js.
 // ================================================================
 (function () {
     "use strict";
 
-    // render.js の廃止時に欠落していた履歴描画を reader.js 側で提供する。
-    window.renderHistoryList = function() {
-        var container = document.getElementById('historyListContainer');
-        if (!container) return;
-        container.innerHTML = '';
-        if (!Array.isArray(textHistory) || textHistory.length === 0) {
-            var empty = document.createElement('div');
-            empty.style.cssText = 'color:var(--text-sub);font-size:12px;';
-            empty.textContent = 'ログがありません';
-            container.appendChild(empty);
-            return;
-        }
-        textHistory.forEach(function(entry) {
-            var row = document.createElement('div');
-            row.className = 'list-item-row';
-            var title = document.createElement('div');
-            title.className = 'list-item-title';
-            var titleText = document.createElement('span');
-            titleText.textContent = entry.title || '無題';
-            title.appendChild(titleText);
-            var actions = document.createElement('div');
-            actions.style.cssText = 'display:flex;gap:8px;';
-            var openButton = document.createElement('button');
-            openButton.type = 'button';
-            openButton.className = 'list-action-link';
-            openButton.textContent = '開く';
-            // This button already opens the entry; the older rebinding patch in app.js must not add
-            // a second listener (which opened it twice and asked the AI again).
-            openButton.dataset.openRebound = '1';
-            openButton.addEventListener('click', function(event) {
-                if (event) event.stopPropagation();
-                window.analyzeText(entry.text, entry.title || '無題', entry.aiAnalysisData ? JSON.parse(JSON.stringify(entry.aiAnalysisData)) : null);
-            });
-            var deleteButton = document.createElement('button');
-            deleteButton.type = 'button';
-            deleteButton.className = 'word-delete-btn';
-            deleteButton.setAttribute('aria-label', '履歴を削除');
-            deleteButton.style.cssText = 'display:flex!important;background:none;border:none;color:var(--text-sub);padding:4px;cursor:pointer;';
-            deleteButton.innerHTML = '<i data-lucide="trash-2" size="14"></i>';
-            deleteButton.addEventListener('click', function(event) {
-                if (event) { event.stopPropagation(); event.preventDefault(); }
-                window.showCustomDeleteHistoryConfirm(entry.id);
-            });
-            actions.appendChild(openButton);
-            actions.appendChild(deleteButton);
-            row.appendChild(title);
-            row.appendChild(actions);
-            container.appendChild(row);
-        });
-        if (typeof window.initLucide === 'function') window.initLucide();
-    };
+    // The history list and the bookshelf are drawn by reader-shelf.js.
 
-    window.showCustomDeleteHistoryConfirm = function(id) {
-        textHistory = (Array.isArray(textHistory) ? textHistory : []).filter(function(entry) {
-            return String(entry.id) !== String(id);
-        });
-        localStorage.setItem('textHistory', JSON.stringify(textHistory));
-        window.renderHistoryList();
-    };
+    // Under the English box: how many sentences and words it has, paste and clear.
+    function countSentences(text) {
+        return (String(text).replace(/\n/g, ' ').match(/[^.?!]+[.?!]+|[^.?!]+$/g) || []).filter(function(s) { return /[A-Za-z]/.test(s); }).length;
+    }
+    function updateInputCount() {
+        var area = document.getElementById('englishTextarea'), count = document.getElementById('readerInputCount');
+        if (!area || !count) return;
+        var text = area.value.trim(), words = text ? (text.match(/[A-Za-z][A-Za-z'’-]*/g) || []).length : 0;
+        count.textContent = countSentences(text) + '文・' + words + '語';
+    }
+    function bindReaderInput() {
+        var area = document.getElementById('englishTextarea');
+        if (!area || area.dataset.inputBound) return;
+        area.dataset.inputBound = '1';
+        area.addEventListener('input', updateInputCount);
+        var paste = document.getElementById('readerPasteButton'), clear = document.getElementById('readerClearButton');
+        if (paste) paste.onclick = async function() {
+            try {
+                var text = await navigator.clipboard.readText();
+                if (!text.trim()) return window.showToast && window.showToast('クリップボードが空です。', 'info');
+                area.value = text.trim();
+                updateInputCount();
+            } catch (e) {
+                area.focus();
+                if (window.showToast) window.showToast('貼り付けできませんでした。入力欄を長押しして貼り付けてください。', 'info');
+            }
+        };
+        if (clear) clear.onclick = function() {
+            area.value = '';
+            var ja = document.getElementById('customJapanesetextarea'), title = document.getElementById('customTextTitle');
+            if (ja) ja.value = '';
+            if (title) title.value = '';
+            updateInputCount();
+            area.focus();
+        };
+        updateInputCount();
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindReaderInput, { once: true });
+    else bindReaderInput();
 
     window.startAnalysisWithEmbeddedTitle = function() {
         var textareaEl = document.getElementById('englishTextarea');
@@ -140,22 +123,77 @@
         };
     }
 
-    window.callGeminiAnalyzer = async function(text) {
+    // Reads a streamed (SSE) answer and returns its text; onText gets the text so far.
+    async function readStream(response, onText, onChunk) {
+        var buffer = '', out = '';
+        function take(chunk, last) {
+            buffer += chunk;
+            var lines = buffer.split(/\r?\n/);
+            buffer = last ? '' : lines.pop();
+            lines.forEach(function(line) {
+                if (line.indexOf('data:') !== 0) return;
+                try {
+                    var event = JSON.parse(line.slice(5).trim());
+                    var parts = event && event.candidates && event.candidates[0] && event.candidates[0].content && event.candidates[0].content.parts;
+                    (parts || []).forEach(function(part) { if (part.text && !part.thought) out += part.text; });
+                } catch (ignore) {}
+            });
+            onText(out);
+        }
+        var reader = response.body && response.body.getReader ? response.body.getReader() : null;
+        if (!reader) {
+            take(await response.text(), true);
+            return out;
+        }
+        var decoder = new TextDecoder();
+        for (;;) {
+            var step = await reader.read();
+            if (step.done) break;
+            onChunk();
+            take(decoder.decode(step.value, { stream: true }), false);
+        }
+        take(decoder.decode(), true);
+        return out;
+    }
+
+    // onProgress(percent, label): the analysis streams in, so the percent follows the sentences
+    // translated so far; before the first one, it creeps up slowly while the AI reads.
+    window.callGeminiAnalyzer = async function(text, onProgress) {
         var input = document.getElementById('sidebarApiKeyInput');
         var apiKey = (input && input.value.trim()) || localStorage.getItem('core_v4_geminiKey') || (typeof geminiApiKey !== 'undefined' ? geminiApiKey : '');
         if (!apiKey) {
             alert("Gemini APIキーが設定されていません。左上メニューからAPIキーを設定してください。");
             return null;
         }
+        var report = typeof onProgress === 'function' ? onProgress : function() {};
+        var expected = Math.max(1, (String(text).replace(/\n/g, ' ').match(/[^.?!]+[.?!]+|[^.?!]+$/g) || []).filter(function(s) { return s.trim(); }).length);
+        var shown = 1, done = 0, label = 'AIが英文を読んでいます';
+        function show(value, nextLabel) {
+            shown = Math.max(shown, Math.min(97, value));
+            if (nextLabel) label = nextLabel;
+            report(Math.round(shown), label);
+        }
+        // Between sentences the bar keeps moving, but never past the next sentence.
+        var creep = setInterval(function() {
+            var ceiling = done ? 12 + 85 * Math.min(1, (done + 0.9) / expected) : 12;
+            if (shown < ceiling) show(shown + (done ? 0.4 : 0.35));
+        }, 400);
         var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 45000) : null;
+        var timeoutId = null;
+        // Times out when nothing arrives for 45 seconds (a long text may take longer in total).
+        function arm() {
+            if (!controller) return;
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(function() { controller.abort(); }, 45000);
+        }
+        arm();
         try {
             var prompt = "以下の英文を解析し、指定したJSON形式だけを返してください。英文を省略しないでください。\n\n英文:\n" + text + "\n\nJSON形式:\n{\"fullSummaryAbstract\":\"英文全体の日本語要約（3文以内）\",\"sentences\":[{\"text\":\"元の英語の1文\",\"translation\":\"正確な日本語訳\",\"grammarHighlights\":[{\"phrase\":\"重要表現\",\"meaning\":\"日本語での文法説明\"}]}]}";
             // The newest Flash model first; a fixed model name that Google retires answers 404,
             // so the older name is the fallback.
             var models = ['gemini-flash-latest', 'gemini-2.5-flash'], response;
             for (var m = 0; m < models.length; m++) {
-                response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + models[m] + ':generateContent?key=' + encodeURIComponent(apiKey), {
+                response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + models[m] + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(apiKey), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -172,14 +210,20 @@
                 var apiMessage = "Gemini APIエラー（" + response.status + "）";
                 try {
                     var parsedError = JSON.parse(errorData);
+                    if (Array.isArray(parsedError)) parsedError = parsedError[0];
                     if (parsedError.error && parsedError.error.message) apiMessage += ": " + parsedError.error.message;
                 } catch (ignore) {}
                 alert(apiMessage);
                 return buildAnalysisFallback(text, apiMessage);
             }
-            var data = await response.json();
-            var parts = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
-            var responseText = parts && parts.map(function(part) { return part.text || ''; }).join('').trim();
+            show(8, 'AIが英文を読んでいます');
+            var responseText = (await readStream(response, function(sofar) {
+                var finished = (sofar.match(/"translation"\s*:\s*"(?:[^"\\]|\\.)*"/g) || []).length;
+                if (finished > done) {
+                    done = finished;
+                    show(12 + 85 * Math.min(1, done / expected), '和訳と文法を作っています（' + Math.min(done, expected) + ' / ' + expected + '文）');
+                }
+            }, arm)).trim();
             if (!responseText) throw new Error("Geminiから解析結果が返されませんでした");
             var cleanJsonText = responseText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
             var firstBrace = cleanJsonText.indexOf('{');
@@ -190,10 +234,11 @@
             return result;
         } catch (e) {
             console.error("Gemini Analyzer Error:", e);
-            var message = e && e.name === 'AbortError' ? "Gemini APIが45秒以内に応答しませんでした" : (e.message || "Gemini APIとの通信に失敗しました");
+            var message = e && e.name === 'AbortError' ? "Gemini APIが45秒以上応答しませんでした" : (e.message || "Gemini APIとの通信に失敗しました");
             alert(message);
             return buildAnalysisFallback(text, message);
         } finally {
+            clearInterval(creep);
             if (timeoutId) clearTimeout(timeoutId);
         }
     };

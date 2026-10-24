@@ -2724,3 +2724,33 @@ dialog.app-alert button{width:100%;min-height:46px;border:0;border-radius:14px;b
 /* Reader: what to do when there is no API key */
 .reader-key-notice{display:grid;gap:6px;margin:0 0 14px;padding:12px 14px;border:1px solid rgba(192,132,252,.45);border-radius:14px;background:rgba(192,132,252,.1);font-size:12px;line-height:1.6;color:var(--text-sub);}
 .reader-key-notice strong{font-size:13px;color:#fff;}.reader-key-notice button{justify-self:start;padding:8px 14px;border:1px solid rgba(255,255,255,.25);border-radius:10px;background:rgba(255,255,255,.08);color:#fff;font:700 12px system-ui,sans-serif;}
+/* Reader: the bookshelf and history use the word book list's rows (reader-shelf.js). */
+.reader-shelf{padding:4px 2px 28px;color:#e7e3da;}
+.reader-shelf .shelf-header .library-toolbar{flex-wrap:nowrap;gap:6px;}
+.reader-shelf .shelf-header .library-toolbar button{flex:0 1 auto;min-width:0;white-space:nowrap;}
+.shelf-entry > .textbook-list-item{min-height:84px;}
+.shelf-entry .textbook-list-details{gap:6px;}
+.shelf-entry-sub{overflow:hidden;color:#aaa397;font:600 11px/1.4 system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap;}
+.shelf-entry.is-compact > .textbook-list-item{grid-template-columns:minmax(0,1fr);min-height:58px;padding:8px 4px;}
+.shelf-entry.is-compact .textbook-list-name{font-size:14px;}
+.reader-history-card #historyListContainer .shelf-entry:last-child{border-bottom:0;}
+.shelf-history-empty{margin:0;color:var(--text-sub);font-size:12px;}
+/* Reader: input */
+.reader-field-label{display:block;margin-bottom:6px;color:var(--text-sub);font-size:11px;font-weight:700;}
+.reader-english-input{height:150px;margin-bottom:6px!important;}
+.reader-input-meta{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.reader-input-meta span{margin-right:auto;color:var(--text-sub);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
+.reader-input-meta button{min-height:32px;padding:0 12px;border:1px solid rgba(220,211,186,.28);border-radius:16px;background:rgba(15,23,42,.32);color:#eee8da;font:600 11px/1 system-ui,sans-serif;cursor:pointer;}
+.reader-input-meta button:active{background:rgba(220,211,186,.12);}
+.reader-manual-ja{margin-bottom:14px;}
+.reader-manual-ja summary{cursor:pointer;color:var(--text-sub);font-size:12px;font-weight:700;padding:6px 0;}
+.reader-manual-ja[open] summary{margin-bottom:6px;}
+/* Reader: result */
+.reader-analyzing{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px 16px;color:var(--cosmic-cyan);font-size:14px;font-weight:700;}
+.reader-title-row{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0;}
+.reader-title-text{min-width:0;overflow:hidden;color:#f0ece3;font:700 16px/1.4 Georgia,"Yu Mincho",serif;text-overflow:ellipsis;white-space:nowrap;}
+.reader-save-button{flex:none;display:inline-flex;align-items:center;gap:4px;min-height:32px;padding:0 12px;border:1px solid rgba(220,211,186,.28);border-radius:16px;background:rgba(15,23,42,.32);color:#eee8da;font:600 11px/1 system-ui,sans-serif;cursor:pointer;}
+.reader-save-button:active{background:rgba(220,211,186,.12);}
+.reader-title-meta{display:block;margin-top:6px;color:var(--text-sub);font-size:10px;font-weight:600;}
+.lq-ratings button[data-lq=ok]{color:#34d399}.lq-ratings button[data-lq=so]{color:#fbbf24}.lq-ratings button[data-lq=bad]{color:#fb7185}
+@media (max-width:359px){.lq-side span{display:none}}
