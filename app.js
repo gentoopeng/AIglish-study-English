@@ -728,7 +728,7 @@ if (height > maxDimension) { width = Math.round((width * maxDimension) / height)
 canvas.width = width; canvas.height = height;
 ctx.drawImage(img, 0, 0, width, height);
 adminUploadedBookCoverBase64 = canvas.toDataURL('image/jpeg', 0.7);
-alert("教材用のアイコン画像ファイルを受け付けました！");
+alert("アイコン画像を読み込みました。");
 };
 img.src = e.target.result;
 };
@@ -740,7 +740,7 @@ const titleInput = document.getElementById('adminNewBookTitle');
 if(!titleInput || !adminSelect) return;
 const selectedBookId = adminSelect.value;
  const title = titleInput.value.trim();
- if(!title) return alert("教材の名前を入力してください！");
+ if(!title) return alert("教材の名前を入力してください。");
  await window.syncTextbooksIndexFromFirestore();
  let finalCover = adminUploadedBookCoverBase64;
  let finalType = "image";
@@ -781,7 +781,7 @@ const selectedBookId = adminSelect.value;
              const vocabRef = window.fbDoc(window.db, "shared", "vocab_" + createdBookId);
              await window.fbSetDoc(vocabRef, { custom_words: [], emptyConfirmed:true, updatedAt: new Date().toISOString() }, { merge: false });
          }
-         alert(`🎉 教材リストデータ『${title}』を配信・適用完了しました！`);
+         alert(`教材リスト『${title}』を配信しました。`);
          titleInput.value = "";
          adminSelect.value = "";
          adminUploadedBookCoverBase64 = "";
@@ -792,7 +792,7 @@ const selectedBookId = adminSelect.value;
          await window.loadCurrentTextbookData();
          window.switchTab('vocab');
      } catch(e) {
-         alert("Firebaseとの通信に失敗しました。");
+         alert("通信に失敗しました。時間をおいて、もう一度お試しください。");
      }
  }
 };
@@ -800,15 +800,15 @@ window.deleteTextbookFromAdmin = async function() {
 const adminSelect = document.getElementById('adminEditBookSelect');
 if(!adminSelect) return;
 const selectedBookId = adminSelect.value;
-if(!selectedBookId) return alert("削除したい既存の教材をセレクトボックスから選択してください！");
+if(!selectedBookId) return alert("削除する教材を選んでください。");
 const targetBook = textbooksPool.find(b => b.id === selectedBookId);
- if(!confirm(`⚠️ 警告: 教材『${targetBook.name}』を完全に削除しますか？\nこの操作は取り消せません。`)) return;
+ if(!confirm(`教材『${targetBook.name}』を完全に削除しますか？\nこの操作は取り消せません。`)) return;
  textbooksPool = textbooksPool.filter(b => b.id !== selectedBookId);
  if (window.db && window.fbSetDoc && window.fbDoc) {
      try {
          const indexRef = window.fbDoc(window.db, "shared", "textbooks_index");
          await window.fbSetDoc(indexRef, { textbooks: textbooksPool.filter(function(book) { return !book.personal; }) }, { merge: true });
-         alert("🎉 指定された教材を完全にシステムから削除・同期しました。");
+         alert("教材を削除しました。");
          const titleInput = document.getElementById('adminNewBookTitle');
          if(titleInput) titleInput.value = "";
          adminSelect.value = "";
@@ -818,7 +818,7 @@ const targetBook = textbooksPool.find(b => b.id === selectedBookId);
          window.updateAdminEditBookSelectOptions();
          await window.loadCurrentTextbookData();
      } catch(e) {
-         alert("Firebaseとの通信に失敗しました。");
+         alert("通信に失敗しました。時間をおいて、もう一度お試しください。");
      }
  }
 };
@@ -915,11 +915,11 @@ if(isRegister) {
      const age = '';
      const pin = document.getElementById('regPin').value.trim();
      if(!pName || !pin) {
-         if(errorMsg) { errorMsg.innerText = "すべての項目を入力してください！"; errorMsg.style.display = 'block'; }
+         if(errorMsg) { errorMsg.innerText = "すべての項目を入力してください。"; errorMsg.style.display = 'block'; }
          return;
      }
      if(!/^\d{4}$/.test(pin)) {
-         if(errorMsg) { errorMsg.innerText = "暗証番号は4桁の数字で設定してください！"; errorMsg.style.display = 'block'; }
+         if(errorMsg) { errorMsg.innerText = "暗証番号は4桁の数字で設定してください。"; errorMsg.style.display = 'block'; }
          return;
      }
      const newId = window.generateUserId();
@@ -947,7 +947,7 @@ if(isRegister) {
              console.error("Firebaseへの新規ユーザー個別登録エラー:", e);
          }
      }
-     alert(`🎉 アカウント作成成功！\nあなたのログインIDは【 ${newId} 】です。\nログインに必要なので必ずメモしてください！`);
+     alert(`アカウントを作成しました。\nあなたのログインIDは【 ${newId} 】です。\nログインに必要なので、必ずメモしてください。`);
      localStorage.setItem('core_v4_userId', newId);
      localStorage.setItem('core_v4_userName', pName);
      localStorage.setItem('core_v4_userTarget', "未設定");
@@ -957,7 +957,7 @@ if(isRegister) {
      const idInput = document.getElementById('loginIdInput').value.trim();
      const pinInput = document.getElementById('loginPinInput').value.trim();
      if(!idInput || !pinInput) {
-         if(errorMsg) { errorMsg.innerText = "IDと暗証番号を入力してください！"; errorMsg.style.display = 'block'; }
+         if(errorMsg) { errorMsg.innerText = "IDと暗証番号を入力してください。"; errorMsg.style.display = 'block'; }
          return;
      }
      const users = await window.getAllUsers();
@@ -970,7 +970,7 @@ if(isRegister) {
              if(snap.exists()) {
                  const data = snap.data();
                  if(data.pin === pinInput) {
-                     user = { id: idInput, playerName: data.playerName || "修行者", realName: data.realName || "一般", age: data.age || "18", pin: data.pin };
+                     user = { id: idInput, playerName: data.playerName || "プレイヤー", realName: data.realName || "一般", age: data.age || "18", pin: data.pin };
                  }
              }
          } catch(e){}
@@ -978,7 +978,7 @@ if(isRegister) {
      if(user) {
          window.showLoginConfirmPopup(user);
      } else {
-         if(errorMsg) { errorMsg.innerText = "IDまたは暗証番号が間違っています！"; errorMsg.style.display = 'block'; }
+         if(errorMsg) { errorMsg.innerText = "IDまたは暗証番号が違います。"; errorMsg.style.display = 'block'; }
      }
  }
 };
@@ -1001,9 +1001,9 @@ const box = document.createElement('div');
  box.className = 'login-confirm-card';
  box.innerHTML = `
      <div class="login-confirm-avatar"><i data-lucide="user" size="32"></i></div>
-     <div style="color:white; font-size:18px; font-weight:800; margin-bottom:8px;">認証確認</div>
+     <div style="color:white; font-size:18px; font-weight:800; margin-bottom:8px;">ログインの確認</div>
      <div style="color:var(--text-sub); font-size:13px; margin-bottom:16px; line-height:1.6;">
-         以下のプロファイルでログインしますか？<br>
+         このアカウントでログインしますか？<br>
          <div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; margin-top:8px; text-align:left;">
              <strong>プレイヤー名:</strong> <span style="color:white;">${user.playerName}</span>
          </div>
@@ -1047,7 +1047,7 @@ try {
          div.innerHTML = `
              <div style="flex:1;">
                  <div style="color:var(--cosmic-cyan); font-family:monospace; font-weight:bold; letter-spacing:1px;">ID: ${u.id}</div>
-                 <div style="color:white; font-weight:bold; margin-top:2px;">${u.playerName || '修行者'}</div>
+                 <div style="color:white; font-weight:bold; margin-top:2px;">${u.playerName || 'プレイヤー'}</div>
              </div>
              <button class="list-action-link" style="background:rgba(239,68,68,0.2); color:#EF4444; border-color:#EF4444; height:28px; padding:0 8px; font-size:11px;" onclick="window.deleteUserByAdmin('${u.id}')">削除</button>
          `;
@@ -1219,7 +1219,7 @@ document.getElementById('confirmSaveBookshelfBtn').onclick = () => {
 let folder = selectEl.value;
 if (folder === 'new_folder') { folder = newFolderInput.value.trim(); if (!folder) folder = "未分類"; }
 if(!myFolders.includes(folder)) { myFolders.push(folder); localStorage.setItem('myFolders', JSON.stringify(myFolders)); }
-if(myBookshelf.some(item => item.text === text && item.folder === folder)) { alert("すでに保存されています！"); document.body.removeChild(overlay); return; }
+if(myBookshelf.some(item => item.text === text && item.folder === folder)) { alert("すでに保存されています。"); document.body.removeChild(overlay); return; }
     myBookshelf.push({ 
         id: Date.now(), 
         folder: folder, 
@@ -1227,7 +1227,7 @@ if(myBookshelf.some(item => item.text === text && item.folder === folder)) { ale
         text: text,
         aiAnalysisData: currentActiveAiAnalysisCache ? JSON.parse(JSON.stringify(currentActiveAiAnalysisCache)) : null
     });
-    localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); alert(`保存しました！`); window.renderBookshelf(); document.body.removeChild(overlay);
+    localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); alert(`保存しました。`); window.renderBookshelf(); document.body.removeChild(overlay);
 };
 };
 window.closeWordPopover = function() { document.getElementById('wordPopover').classList.remove('show'); document.getElementById('wordPopover').style.display = 'none'; };
@@ -1246,7 +1246,7 @@ if (!targetCode) {
      return;
  }
  if (myFriendList.some(f => f.code === targetCode)) {
-     alert("このフレンドは既に登録されています！");
+     alert("このフレンドはすでに登録されています。");
      return;
  }
  if (window.db && window.fbGetDoc && window.fbDoc) {
@@ -1255,12 +1255,12 @@ if (!targetCode) {
          const targetUserSnap = await window.fbGetDoc(targetUserRef);
          // 存在しないアカウントは確実に拒否
          if (!targetUserSnap.exists()) {
-             alert("指定されたIDコードを持つ修行者はシステム上に存在しません！");
+             alert("このIDのユーザーは見つかりません。");
              return;
          }
          const tData = targetUserSnap.data();
          if (tData.deleted) {
-             alert("指定されたIDコードを持つ修行者はシステム上に存在しません！");
+             alert("このIDのユーザーは見つかりません。");
              return;
          }
          let remoteLvl = 1;
@@ -1287,7 +1287,7 @@ if (!targetCode) {
              }
          }
          if (!realPlayerName || realPlayerName === targetCode) {
-             alert("指定されたIDコードを持つ修行者はシステム上に存在しません！");
+             alert("このIDのユーザーは見つかりません。");
              return;
          }
          const newFriend = {
@@ -1307,7 +1307,7 @@ if (!targetCode) {
          userStats.friends_count = myFriendList.length;
          await window.saveUserStats();
          window.checkAndRewardTitleBonusXP();
-         alert(`🎉 フレンド「${newFriend.name}」の追加に成功しました！`);
+         alert(`フレンド「${newFriend.name}」を追加しました。`);
          inputEl.value = "";
          window.sortAndRenderFriendList();
      } catch(e) {
@@ -1315,7 +1315,7 @@ if (!targetCode) {
          alert("通信エラーが発生しました。時間を置いて再度お試しください。");
      }
  } else {
-     alert("Firebaseが接続されていないため、ユーザーの検索ができません。");
+     alert("サーバーに接続できないため、ユーザーを検索できません。");
  }
 };
 window.sortAndRenderFriendList = function() {
@@ -1505,7 +1505,7 @@ localStorage.setItem('core_v4_userTitle', titleName);
 window.saveUserStats();
 window.applyProfileToUi();
 window.renderTitles();
-alert(`称号「${titleName}」を装備しました！`);
+alert(`称号「${titleName}」を装備しました。`);
 };
 window.unequipTitle = function() {
 selectedTitle = "称号なし";
@@ -2284,7 +2284,7 @@ window.fetchAllExpLeaderboardUsers = async function() {
       let name = d.playerName || "";
       if (!name) {
         const basic = (allUsers || []).find(function(u) { return u.id === id; });
-        name = basic ? (basic.playerName || basic.realName || "修行者") : "修行者";
+        name = basic ? (basic.playerName || basic.realName || "プレイヤー") : "プレイヤー";
       }
       users.push({
         id: id, name: name, title: d.selectedTitle || "称号なし",
@@ -2550,7 +2550,7 @@ window.ensureUserInAllUsers = async function(user) {
   let users = [];
   try { users = await window.getAllUsers(); } catch (e) {}
   if ((users || []).some(function(u) { return u && u.id === user.id; })) return;
-  users.push({ id: user.id, playerName: user.playerName || "修行者", realName: user.realName || "一般", age: user.age || "18", pin: user.pin || "" });
+  users.push({ id: user.id, playerName: user.playerName || "プレイヤー", realName: user.realName || "一般", age: user.age || "18", pin: user.pin || "" });
   await window.saveAllUsers(users);
 };
 
@@ -2613,16 +2613,16 @@ window.repairUserIntoAllUsers = async function() {
   if (!input) return;
   const targetId = input.value.trim().toUpperCase();
   if (!targetId) { alert("復旧したいユーザーIDを入力してください。"); return; }
-  if (!window.db || !window.fbGetDoc || !window.fbDoc) { alert("Firebaseに接続されていないため復旧できません。"); return; }
+  if (!window.db || !window.fbGetDoc || !window.fbDoc) { alert("サーバーに接続できないため、復旧できません。"); return; }
   try {
     const ref = window.fbDoc(window.db, "users", targetId);
     const snap = await window.fbGetDoc(ref);
-    if (!snap.exists()) { alert("指定されたIDのユーザーは Firebase 上に見つかりません。"); return; }
+    if (!snap.exists()) { alert("指定されたIDのユーザーは見つかりません。"); return; }
     const d = snap.data();
     if (d.deleted) { alert("指定されたユーザーは削除済みです。"); return; }
     let users = await window.getAllUsers();
     if ((users || []).some(function(u) { return u && u.id === targetId; })) { alert("そのユーザーは既にユーザー一覧に登録されています。"); input.value = ""; return; }
-    users.push({ id: targetId, playerName: d.playerName || "修行者", realName: d.realName || "一般", age: d.age || "18", pin: d.pin || "" });
+    users.push({ id: targetId, playerName: d.playerName || "プレイヤー", realName: d.realName || "一般", age: d.age || "18", pin: d.pin || "" });
     await window.saveAllUsers(users);
     alert("ユーザー一覧に復旧しました。");
     input.value = "";
@@ -2851,12 +2851,12 @@ window.recoverUserToAllUsers = async function(userData) {
     if (!existing) {
       await window.saveAllUsers([{
         id: userData.id,
-        playerName: userData.playerName || "修行者",
+        playerName: userData.playerName || "プレイヤー",
         realName: userData.realName || "一般",
         age: userData.age || "18",
         pin: pin
       }]);
-      console.log("✅ ユーザー " + userData.id + " をall_usersに自動復旧");
+      console.log("ユーザー " + userData.id + " をall_usersに自動復旧");
     } else if (pin && !window.LoginIdentity.storedPin(existing)) {
       await window.saveAllUsers([Object.assign({}, existing, { pin: pin })]);
     }
@@ -2891,7 +2891,7 @@ window.findUserInFirebase = async function(userId, pin) {
   if (result.state !== "found" || result.data.deleted) return null;
   const user = Object.assign({ id: userId }, result.data);
   if (!(await window.LoginIdentity.verify(user, [userId], pin))) return null;
-  return { id: userId, playerName: result.data.playerName || "修行者", realName: result.data.realName || "一般", age: result.data.age || "18", pin: await window.LoginIdentity.protect(userId, result.data.pin) };
+  return { id: userId, playerName: result.data.playerName || "プレイヤー", realName: result.data.realName || "一般", age: result.data.age || "18", pin: await window.LoginIdentity.protect(userId, result.data.pin) };
 };
 
 // 他端末でのログインに必要なPINがusers/{id}に無い場合だけ補完する。
@@ -2944,11 +2944,11 @@ window.__submitAuthForm = async function() {
     const pin = window.LoginIdentity.pin(document.getElementById("regPin").value);
 
     if (!pName || !pin) {
-      showError("すべての項目を入力してください！");
+      showError("すべての項目を入力してください。");
       return;
     }
     if (!/^\d{4}$/.test(pin)) {
-      showError("暗証番号は4桁の数字で設定してください！");
+      showError("暗証番号は4桁の数字で設定してください。");
       return;
     }
     if (!window.db || !window.fbSetDoc || !window.fbDoc) {
@@ -2984,7 +2984,7 @@ window.__submitAuthForm = async function() {
 
     try { await window.saveAllUsers([newUserObj]); } catch (e) { console.error("all_users登録エラー:", e); }
 
-    alert("🎉 アカウント作成成功！\nあなたのログインIDは【 " + newId + " 】です。\nログインに必要なので必ずメモしてください！");
+    alert("アカウントを作成しました。\nあなたのログインIDは【 " + newId + " 】です。\nログインに必要なので、必ずメモしてください。");
     localStorage.setItem("core_v4_userId", newId);
     localStorage.setItem("core_v4_userName", pName);
     localStorage.setItem("core_v4_userTarget", "未設定");
@@ -2996,7 +2996,7 @@ window.__submitAuthForm = async function() {
     const pinInput = window.LoginIdentity.pin(document.getElementById("loginPinInput").value);
 
     if (!ids.length || !pinInput) {
-      showError("IDと暗証番号を入力してください！");
+      showError("IDと暗証番号を入力してください。");
       return;
     }
 
@@ -3020,7 +3020,7 @@ window.__submitAuthForm = async function() {
       if (result.state !== "found") continue;
       if (result.data.deleted) { deleted = true; continue; }
       if (await window.LoginIdentity.verify(Object.assign({}, result.data, { id: ids[i] }), ids, pinInput)) {
-        user = { id: ids[i], playerName: result.data.playerName || "修行者", realName: result.data.realName || "一般", age: result.data.age || "18", pin: String(result.data.pin) };
+        user = { id: ids[i], playerName: result.data.playerName || "プレイヤー", realName: result.data.realName || "一般", age: result.data.age || "18", pin: String(result.data.pin) };
         loginMethod = "firebase_direct";
       }
     }
@@ -3086,11 +3086,11 @@ window.showLoginConfirmPopup = function(user) {
   box.className = "login-confirm-card";
   box.innerHTML =
     '<div class="login-confirm-avatar"><i data-lucide="user" size="32"></i></div>' +
-    '<div style="color:white; font-size:18px; font-weight:800; margin-bottom:8px;">認証確認</div>' +
+    '<div style="color:white; font-size:18px; font-weight:800; margin-bottom:8px;">ログインの確認</div>' +
     '<div style="color:var(--text-sub); font-size:13px; margin-bottom:16px; line-height:1.6;">' +
-    "以下のプロファイルでログインしますか？<br>" +
+    "このアカウントでログインしますか？<br>" +
     '<div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; margin-top:8px; text-align:left;">' +
-    "<strong>プレイヤー名:</strong> <span style=\"color:white;\">" + String(user.playerName || "修行者").replace(/[&<>"']/g, function(c) { return "&#" + c.charCodeAt(0) + ";"; }) + "</span><br>" +
+    "<strong>プレイヤー名:</strong> <span style=\"color:white;\">" + String(user.playerName || "プレイヤー").replace(/[&<>"']/g, function(c) { return "&#" + c.charCodeAt(0) + ";"; }) + "</span><br>" +
     "<strong>ID:</strong> <span style=\"color:white;\">" + String(user.id).replace(/[&<>"']/g, function(c) { return "&#" + c.charCodeAt(0) + ";"; }) + "</span>" +
     "</div></div>" +
     '<div style="display:flex; gap:12px;">' +
@@ -3109,7 +3109,7 @@ window.showLoginConfirmPopup = function(user) {
   document.getElementById("confirmLoginBtn").onclick = function() {
     // ログイン確定は端末へ即時反映する。クラウド復旧を待たせない。
     localStorage.setItem("core_v4_userId", user.id);
-    localStorage.setItem("core_v4_userName", user.playerName || "修行者");
+    localStorage.setItem("core_v4_userName", user.playerName || "プレイヤー");
     if (!localStorage.getItem("core_v4_userTarget")) localStorage.setItem("core_v4_userTarget", "未設定");
     if (!localStorage.getItem("core_v4_totalExp")) localStorage.setItem("core_v4_totalExp", "0");
 
@@ -3149,7 +3149,7 @@ window.autoRecoverCurrentUser = async function() {
         if (!data.deleted) {
           await window.recoverUserToAllUsers({
             id: savedId,
-            playerName: data.playerName || localStorage.getItem("core_v4_userName") || "修行者",
+            playerName: data.playerName || localStorage.getItem("core_v4_userName") || "プレイヤー",
             realName: data.realName || "一般",
             age: data.age || "18",
             pin: data.pin || ""
@@ -3195,7 +3195,7 @@ window.forceRecoverUser = async function(targetUserId) {
   targetUserId = targetUserId.trim().toUpperCase();
 
   if (!window.db || !window.fbGetDoc || !window.fbDoc) {
-    alert("Firebaseに接続されていません。");
+    alert("サーバーに接続できません。");
     return;
   }
 
@@ -3216,13 +3216,13 @@ window.forceRecoverUser = async function(targetUserId) {
 
     await window.recoverUserToAllUsers({
       id: targetUserId,
-      playerName: data.playerName || "修行者",
+      playerName: data.playerName || "プレイヤー",
       realName: data.realName || "一般",
       age: data.age || "18",
       pin: data.pin || ""
     });
 
-    alert("✅ ユーザー " + targetUserId + " を復旧しました！");
+    alert("ユーザー " + targetUserId + " を復旧しました！");
     window.renderAdminUserList();
   } catch (e) {
     console.error("強制復旧エラー:", e);
@@ -3380,7 +3380,7 @@ console.log("🔐 ログイン安定化＆自動復旧パッチ 適用完了");
           } else {
             await window.saveAllUsers([{
               id: userId,
-              playerName: userData.playerName || "修行者",
+              playerName: userData.playerName || "プレイヤー",
               pin: newPinDigest
             }]);
           }
@@ -3390,7 +3390,7 @@ console.log("🔐 ログイン安定化＆自動復旧パッチ 適用完了");
 
         document.body.removeChild(overlay);
 
-        alert("✅ PINを再設定しました！\n新しいPINでログインしてください。\n\nID: " + userId + "\n新PIN: " + newPin);
+        alert("PINを再設定しました。\n新しいPINでログインしてください。\n\nID: " + userId + "\n新PIN: " + newPin);
 
         const loginIdInput = document.getElementById("loginIdInput");
         const loginPinInput = document.getElementById("loginPinInput");
@@ -3631,7 +3631,7 @@ window.fetchAllExpLeaderboardUsers = async function() {
             let name = d.playerName || "";
             if (!name) {
                 const basic = (allUsers || []).find(function(u) { return u.id === id; });
-                name = basic ? (basic.playerName || basic.realName || "修行者") : "修行者";
+                name = basic ? (basic.playerName || basic.realName || "プレイヤー") : "プレイヤー";
             }
             users.push({
                 id: id, name: name, title: d.selectedTitle || "称号なし",
@@ -4035,11 +4035,11 @@ window.manualSaveAll = async function() {
     if (typeof window.flushUserStatsRefresh === 'function') { try { window.flushUserStatsRefresh(); } catch (e) {} }
     if (typeof window.saveUserVocabProgress === 'function') { try { await window.saveUserVocabProgress(); } catch (e) {} }
     if (typeof window.saveUserStats === 'function') { try { await window.saveUserStats(); } catch (e) {} }
-    window.showToast('💾 保存しました', 'ok');
+    window.showToast('保存しました', 'ok');
     if (btn) { btn.classList.add('header-save-done'); setTimeout(function() { btn.classList.remove('header-save-done'); }, 700); }
   } catch (e) {
     console.error('manualSaveAll error:', e);
-    window.showToast('⚠️ 保存に失敗しました', 'err');
+    window.showToast('保存に失敗しました', 'err');
   } finally {
     if (typeof window.hidePenguinLoading === 'function') window.hidePenguinLoading();
     if (btn) { btn.disabled = false; setTimeout(function() { btn.classList.remove('header-save-spin'); }, 300); }
@@ -4993,7 +4993,7 @@ window.updateLoadQuizBookSelect = function() {
   sel.value = current;
   sel.onchange = function() {
     localStorage.setItem('core_v4_loadquiz_book', sel.value);
-    if (typeof window.showToast === 'function') window.showToast('🎴 ロードクイズの出題元を設定しました', 'ok');
+    if (typeof window.showToast === 'function') window.showToast('ロードクイズの出題元を設定しました', 'ok');
   };
 };
 
@@ -5385,7 +5385,7 @@ window.updateLoadQuizBookSelect = function() {
   sel.value = current;
   sel.onchange = function() {
     localStorage.setItem('core_v4_loadquiz_book', sel.value);
-    if (typeof window.showToast === 'function') window.showToast('🎴 ロードクイズの出題元を設定しました', 'ok');
+    if (typeof window.showToast === 'function') window.showToast('ロードクイズの出題元を設定しました', 'ok');
   };
 };
 
@@ -5952,7 +5952,7 @@ window.updateLoadQuizBookSelect = function() {
   sel.value = current;
   sel.onchange = function() {
     localStorage.setItem('core_v4_loadquiz_book', sel.value);
-    if (typeof window.showToast === 'function') window.showToast('🎴 ロードクイズの出題元を設定しました', 'ok');
+    if (typeof window.showToast === 'function') window.showToast('ロードクイズの出題元を設定しました', 'ok');
   };
 };
 
@@ -6196,7 +6196,7 @@ window.handleAdminShelfCoverUpload = function(event) {
       canvas.width = width; canvas.height = height;
       ctx.drawImage(img, 0, 0, width, height);
       adminUploadedShelfCoverBase64 = canvas.toDataURL('image/jpeg', 0.7);
-      alert("本棚教材用の表紙画像ファイルを受け付けました！");
+      alert("表紙画像を読み込みました。");
     };
     img.src = e.target.result;
   };
@@ -6236,7 +6236,7 @@ window.saveOrUpdateShelfBookFromAdmin = async function() {
   var titleInput = document.getElementById('adminNewShelfTitle');
   if (!sel || !titleInput) return;
   var title = titleInput.value.trim();
-  if (!title) return alert("教材の名前を入力してください！");
+  if (!title) return alert("教材の名前を入力してください。");
   var selectedId = sel.value;
   var finalCover = adminUploadedShelfCoverBase64;
   var finalType = "image";
@@ -6258,7 +6258,7 @@ window.saveOrUpdateShelfBookFromAdmin = async function() {
   }
   try {
     await window.saveBookshelfIndexToFirestore();
-    alert("🎉 本棚教材『" + title + "』を配信・適用完了しました！");
+    alert("本棚の教材『" + title + "』を配信・適用完了しました！");
     titleInput.value = "";
     sel.value = "";
     adminUploadedShelfCoverBase64 = "";
@@ -6267,7 +6267,7 @@ window.saveOrUpdateShelfBookFromAdmin = async function() {
     window.updateAdminEditShelfSelectOptions();
     window.renderBookshelf();
   } catch (e) {
-    alert("Firebaseとの通信に失敗しました。");
+    alert("通信に失敗しました。時間をおいて、もう一度お試しください。");
   }
 };
 
@@ -6275,21 +6275,21 @@ window.deleteShelfBookFromAdmin = async function() {
   var sel = document.getElementById('adminEditShelfSelect');
   if (!sel) return;
   var selectedId = sel.value;
-  if (!selectedId) return alert("削除したい既存の本棚教材をセレクトボックスから選択してください！");
+  if (!selectedId) return alert("削除する本棚の教材を選んでください。");
   var target = bookshelfBooks.find(function(b) { return b.id === selectedId; });
   if (!target) return;
-  if (!confirm("⚠️ 警告: 本棚教材『" + target.name + "』を削除しますか？\n※保存済みの長文は「未分類」に移動します。")) return;
+  if (!confirm("本棚の教材『" + target.name + "』を削除しますか？\n※保存済みの長文は「未分類」に移動します。")) return;
   bookshelfBooks = bookshelfBooks.filter(function(b) { return b.id !== selectedId; });
   try {
     await window.saveBookshelfIndexToFirestore();
-    alert("🎉 指定された本棚教材を削除・同期しました。");
+    alert("本棚の教材を削除しました。");
     var titleInput = document.getElementById('adminNewShelfTitle');
     if (titleInput) titleInput.value = "";
     sel.value = "";
     window.updateAdminEditShelfSelectOptions();
     window.renderBookshelf();
   } catch (e) {
-    alert("Firebaseとの通信に失敗しました。");
+    alert("通信に失敗しました。時間をおいて、もう一度お試しください。");
   }
 };
 
@@ -8096,7 +8096,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
                 var name = d.playerName || '';
                 if (!name) {
                     var basic = (allUsers || []).find(function(u) { return u.id === id; });
-                    name = basic ? (basic.playerName || basic.realName || '修行者') : '修行者';
+                    name = basic ? (basic.playerName || basic.realName || 'プレイヤー') : 'プレイヤー';
                 }
                 users.push({
                     id: id, name: name, title: d.selectedTitle || '称号なし',
@@ -8241,7 +8241,7 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
             flash: '🃏 フラッシュスワイプ回数ランキング'
         };
         if (window.__communityRankHeadingEl) {
-            window.__communityRankHeadingEl.textContent = headingTexts[window.__communityRankType] || '修行者ランキング';
+            window.__communityRankHeadingEl.textContent = headingTexts[window.__communityRankType] || 'ランキング';
         }
         window.renderCommunityRankSubPills();
     };
@@ -10200,7 +10200,7 @@ window.__steResetWeek = function() {
 
 // 最終手段：ローカルの勉強時間データを根こそぎ消して再読込
 window.__steNukeStudyStorage = function() {
-    if (!confirm('⚠️ 最終手段：ローカルに保存された勉強時間データを完全に消去して再読み込みします。\n\n壊れた値が居座る場合に使います。よろしいですか？')) return;
+    if (!confirm('最終手段：ローカルに保存された勉強時間データを完全に消去して再読み込みします。\n\n壊れた値が居座る場合に使います。よろしいですか？')) return;
     if (!confirm('本当に消去して再読み込みしますか？（この操作は取り消せません）')) return;
     try {
         localStorage.removeItem('core_v4_study_today_secs');

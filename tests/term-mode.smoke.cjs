@@ -132,7 +132,7 @@ const { chromium } = require("playwright"),
     await years.first().pressSequentially("１５a83");
     assert.equal(await years.first().inputValue(), "1583");
     await page.locator(`#wordCardForm-${nobunaga}`).getByRole("button", { name: "保存する", exact: true }).click();
-    assert.equal(await page.locator("dialog.app-alert p").innerText(), "単語情報を更新しました！");
+    assert.equal(await page.locator("dialog.app-alert p").innerText(), "単語情報を更新しました。");
     await closeMessages();
     assert.equal(
       await page.evaluate((n) => vocabList.find((w) => String(w.num) === n).meanings[0].text, nobunaga),
