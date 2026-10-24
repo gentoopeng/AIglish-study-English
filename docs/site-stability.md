@@ -700,3 +700,25 @@ It fails if any visible element sticks out past the screen's left or right edge.
 **Loading screen during analysis**
 - **Real progress.** The analysis streams (`streamGenerateContent?alt=sse`), and the bar follows the sentences translated so far (「和訳と文法を作っています（2 / 4文）」). Before the first one, it creeps up slowly. The timeout is now 45 seconds without any data, rather than 45 seconds in total.
 - **The quiz matches the flashcards.** It uses the flashcard's round card and its side labels (覚えていない / 覚えた, 上: あいまい), with the ×△○ buttons of the warm-up. A tap flips the card; a swipe or a button answers. A counter shows how many words were answered and the ○△× totals.
+
+## Follow-up: Gemini errors in plain Japanese (10.21.52)
+
+A user saw 「Gemini APIエラー（503）: This model is currently experiencing high demand…」. 10.21.50 made two changes that led to it:
+- It put `gemini-flash-latest` first. That alias points to the newest Flash model, which is often busy.
+- It only tried the other model when a model returned 404.
+
+So a busy newest model ended the analysis, even though `gemini-2.5-flash` (used before 10.21.50) would have answered.
+
+Now:
+- **Model order.** `gemini-2.5-flash` is tried first, then `gemini-flash-latest`.
+- **Busy (500/502/503/504).** The model is asked once more after 2 seconds. If it is still busy, the other model is tried.
+- **Used up (429) or retired (404).** The other model is tried.
+- **Explaining the failure.** The reader shows what happened in Japanese, with a 「もう一度解析する」 button, instead of a pop-up with Google's English message. `window.describeGeminiError` builds the message:
+  - busy: 「AI（Gemini）が混み合っています… アプリやAPIキーの問題ではありません」
+  - quota: 「利用回数の上限」
+  - key: 「APIキーが使えません」
+  - also covered: too long, model missing, timeout, offline, unreadable answer
+- **Error code.** It stays in brackets at the end, e.g. （エラーコード 503）.
+- **Workbook.** The 解説 button follows the same order and uses the same messages.
+
+`tests/reader-errors.smoke.cjs` covers these cases.

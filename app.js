@@ -1224,6 +1224,19 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      block.appendChild(mainContent); englishContainer.appendChild(block);
  });
  document.getElementById('summaryJaContainer').innerHTML = totalSummaryJa; window.setTranslationMode(currentTranslationMode);
+ // When the AI failed: what happened, and a button to try again.
+ if (aiAnalysisResult && aiAnalysisResult.analysisError) {
+     const notice = document.createElement('div');
+     notice.className = 'reader-key-notice reader-error-notice';
+     notice.setAttribute('role', 'alert');
+     const heading = document.createElement('strong'); heading.textContent = aiAnalysisResult.errorTitle || 'AIの解析に失敗しました';
+     const detail = document.createElement('span'); detail.textContent = aiAnalysisResult.errorDetail || aiAnalysisResult.fullSummaryAbstract || '少し待ってから、もう一度お試しください。';
+     const again = document.createElement('button'); again.type = 'button'; again.textContent = 'もう一度解析する';
+     const retryTitle = currentActiveTitle;
+     again.onclick = () => window.analyzeText(rawText, retryTitle);
+     notice.append(heading, detail, again);
+     englishContainer.prepend(notice);
+ }
  // Without a key there is no translation or grammar: say so, instead of a silent 「和訳未取得」.
  if (!aiAnalysisResult) {
      const notice = document.createElement('div');

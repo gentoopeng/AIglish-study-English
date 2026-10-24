@@ -112,11 +112,32 @@
         });
     };
 
-    function buildAnalysisFallback(text, message) {
+    // What went wrong, in words a student can act on: { title, detail }. status is the HTTP status,
+    // or 'timeout' / 'network' / 'unreadable'; apiText is Google's own (English) message, if any.
+    function describeGeminiError(status, apiText) {
+        var code = typeof status === 'number' ? '（エラーコード ' + status + '）' : '';
+        if (status === 'timeout') return { title: 'AIから応答がありません', detail: '45秒以上なにも返ってきませんでした。通信状態を確認して、もう一度お試しください。' };
+        if (status === 'network') return { title: 'AIに接続できません', detail: 'インターネットにつながっているか確認して、もう一度お試しください。' };
+        if (status === 'unreadable') return { title: 'AIの返事を読み取れませんでした', detail: 'ときどき起きる失敗です。もう一度解析すると、たいてい直ります。' };
+        if (status === 401 || status === 403 || (status === 400 && /api key|API_KEY/i.test(apiText || '')))
+            return { title: 'APIキーが使えません', detail: 'メニューの「設定」にあるGemini APIキーが正しいか確認してください。キーを作り直したときは、新しいキーを保存し直してください。' + code };
+        if (status === 429) return { title: 'AIの利用回数の上限に達しました', detail: 'Geminiの無料枠には、1分あたり・1日あたりの回数に上限があります。1分ほど待つか、時間をおいてからもう一度お試しください。' + code };
+        if (status === 503 || status === 502 || status === 504)
+            return { title: 'AI（Gemini）が混み合っています', detail: 'Google側で利用が集中していて、一時的に応答できない状態です。アプリやAPIキーの問題ではありません。1〜2分ほど待ってから、もう一度お試しください。' + code };
+        if (status >= 500) return { title: 'AI（Gemini）側でエラーが起きました', detail: 'Google側の一時的な問題です。少し待ってから、もう一度お試しください。' + code };
+        if (status === 404) return { title: 'AIのモデルが見つかりません', detail: 'Google側でモデルの名前が変わった可能性があります。ページを再読み込みしてから、もう一度お試しください。' + code };
+        if (status === 400) return { title: 'AIがこの英文を受け付けませんでした', detail: '英文が長すぎるか、読めない文字が含まれている可能性があります。短く区切って試してください。' + code };
+        return { title: 'AIの解析に失敗しました', detail: '少し待ってから、もう一度お試しください。' + code };
+    }
+    window.describeGeminiError = describeGeminiError;
+
+    function buildAnalysisFallback(text, problem) {
         var sentences = String(text || '').replace(/\n/g, ' ').match(/[^.?!]+[.?!]+|[^.?!]+$/g) || [String(text || '')];
         return {
             analysisError: true,
-            fullSummaryAbstract: message,
+            errorTitle: problem.title,
+            errorDetail: problem.detail,
+            fullSummaryAbstract: '',
             sentences: sentences.filter(function(sentence) { return sentence.trim(); }).map(function(sentence) {
                 return { text: sentence.trim(), translation: "（AI和訳を取得できませんでした）", grammarHighlights: [] };
             })
@@ -189,10 +210,18 @@
         arm();
         try {
             var prompt = "以下の英文を解析し、指定したJSON形式だけを返してください。英文を省略しないでください。\n\n英文:\n" + text + "\n\nJSON形式:\n{\"fullSummaryAbstract\":\"英文全体の日本語要約（3文以内）\",\"sentences\":[{\"text\":\"元の英語の1文\",\"translation\":\"正確な日本語訳\",\"grammarHighlights\":[{\"phrase\":\"重要表現\",\"meaning\":\"日本語での文法説明\"}]}]}";
-            // The newest Flash model first; a fixed model name that Google retires answers 404,
-            // so the older name is the fallback.
-            var models = ['gemini-flash-latest', 'gemini-2.5-flash'], response;
+            // gemini-2.5-flash first (the newest model behind gemini-flash-latest is often busy).
+            // A busy model (5xx) is asked once more after a short wait; a busy, used-up (429) or
+            // retired (404) model hands over to the other one.
+            var models = ['gemini-2.5-flash', 'gemini-flash-latest'], response;
+            var busy = function(status) { return status === 500 || status === 502 || status === 503 || status === 504; };
             for (var m = 0; m < models.length; m++) {
+              for (var attempt = 0; attempt < 2; attempt++) {
+                if (attempt) {
+                    show(shown, 'AIが混み合っています。もう一度試しています');
+                    await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+                    arm();
+                }
                 response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + models[m] + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(apiKey), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -202,19 +231,20 @@
                     }),
                     signal: controller ? controller.signal : undefined
                 });
-                if (response.status !== 404) break;
+                if (!busy(response.status)) break;
+              }
+              if (response.ok || !(response.status === 404 || response.status === 429 || busy(response.status))) break;
+              if (m < models.length - 1) show(shown, '別のAIモデルで試しています');
             }
             if (!response.ok) {
-                var errorData = await response.text();
-                console.error("Gemini API Error details:", errorData);
-                var apiMessage = "Gemini APIエラー（" + response.status + "）";
+                var errorData = await response.text(), apiText = '';
                 try {
                     var parsedError = JSON.parse(errorData);
                     if (Array.isArray(parsedError)) parsedError = parsedError[0];
-                    if (parsedError.error && parsedError.error.message) apiMessage += ": " + parsedError.error.message;
+                    if (parsedError.error && parsedError.error.message) apiText = parsedError.error.message;
                 } catch (ignore) {}
-                alert(apiMessage);
-                return buildAnalysisFallback(text, apiMessage);
+                console.error("Gemini API Error details:", response.status, errorData);
+                return buildAnalysisFallback(text, describeGeminiError(response.status, apiText));
             }
             show(8, 'AIが英文を読んでいます');
             var responseText = (await readStream(response, function(sofar) {
@@ -224,19 +254,18 @@
                     show(12 + 85 * Math.min(1, done / expected), '和訳と文法を作っています（' + Math.min(done, expected) + ' / ' + expected + '文）');
                 }
             }, arm)).trim();
-            if (!responseText) throw new Error("Geminiから解析結果が返されませんでした");
+            if (!responseText) return buildAnalysisFallback(text, describeGeminiError('unreadable'));
             var cleanJsonText = responseText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
             var firstBrace = cleanJsonText.indexOf('{');
             var lastBrace = cleanJsonText.lastIndexOf('}');
             if (firstBrace >= 0 && lastBrace > firstBrace) cleanJsonText = cleanJsonText.slice(firstBrace, lastBrace + 1);
-            var result = JSON.parse(cleanJsonText);
-            if (!result || !Array.isArray(result.sentences) || !result.sentences.length) throw new Error("解析結果の文章データが空です");
+            var result = null;
+            try { result = JSON.parse(cleanJsonText); } catch (ignore) {}
+            if (!result || !Array.isArray(result.sentences) || !result.sentences.length) return buildAnalysisFallback(text, describeGeminiError('unreadable'));
             return result;
         } catch (e) {
             console.error("Gemini Analyzer Error:", e);
-            var message = e && e.name === 'AbortError' ? "Gemini APIが45秒以上応答しませんでした" : (e.message || "Gemini APIとの通信に失敗しました");
-            alert(message);
-            return buildAnalysisFallback(text, message);
+            return buildAnalysisFallback(text, describeGeminiError(e && e.name === 'AbortError' ? 'timeout' : 'network'));
         } finally {
             clearInterval(creep);
             if (timeoutId) clearTimeout(timeoutId);

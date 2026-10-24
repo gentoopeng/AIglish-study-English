@@ -14,13 +14,13 @@ const { chromium } = require("playwright"),
     let release;
     const answered = new Promise((resolve) => (release = resolve));
     await page.route("https://**/*", (r) => r.abort());
-    // The newest model name answers 404 here, so the older name must be tried next. The answer
+    // gemini-2.5-flash answers 404 here (as if retired), so the newest model must be tried next. The answer
     // streams in two parts, after the test has looked at the loading screen.
     await page.route("https://generativelanguage.googleapis.com/**", async (r) => {
       const url = r.request().url(),
         model = /models\/([^:]+):/.exec(url)[1];
       calls.push(model + (url.includes(":streamGenerateContent?alt=sse") ? ":stream" : ""));
-      if (model === "gemini-flash-latest") return r.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: { message: "not found" } }) });
+      if (model === "gemini-2.5-flash") return r.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: { message: "not found" } }) });
       await answered;
       const text = JSON.stringify({ fullSummaryAbstract: "要約です", sentences: [{ text: "I like apples.", translation: "私はりんごが好きです。", grammarHighlights: [{ phrase: "like", meaning: "好む" }] }, { text: "They are red.", translation: "それらは赤い。", grammarHighlights: [] }] }),
         half = Math.floor(text.length / 2),
@@ -55,7 +55,7 @@ const { chromium } = require("playwright"),
     const overlay = page.locator("#penguinLoadingOverlay");
     await overlay.locator("#lqProgress").waitFor({ state: "visible" });
     assert.match(await overlay.locator("#lqProgressValue").innerText(), /^\d+%$/);
-    assert.match(await overlay.locator("#lqProgressLabel").innerText(), /AIが英文を読んでいます|英文を送っています/);
+    assert.match(await overlay.locator("#lqProgressLabel").innerText(), /AIが英文を読んでいます|英文を送っています|別のAIモデルで試しています/);
     await overlay.locator(".lq-flashcard .flashcard-face-front").waitFor();
     assert.equal(await overlay.locator(".lq-side.is-ok").innerText(), "覚えた");
     await overlay.locator("#lqCardWrap").click();
@@ -64,7 +64,7 @@ const { chromium } = require("playwright"),
     await page.waitForFunction(() => /^回答 1/.test(document.getElementById("lqScore").textContent));
     release();
     await page.locator(".sentence-ja", { hasText: "私はりんごが好きです。" }).waitFor();
-    assert.deepEqual(calls, ["gemini-flash-latest:stream", "gemini-2.5-flash:stream"]);
+    assert.deepEqual(calls, ["gemini-2.5-flash:stream", "gemini-flash-latest:stream"]);
     assert.equal(await page.locator("#englishContainer .grammar-span").count(), 1);
     assert.equal(await page.locator(".reader-key-notice").count(), 0);
     assert.match(await page.locator(".reader-title-meta").innerText(), /^2文/);
