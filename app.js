@@ -1167,7 +1167,7 @@ textHistory = textHistory.filter(h => h.text !== rawText);
  const analysedSentences = (aiAnalysisResult && Array.isArray(aiAnalysisResult.sentences)) ? aiAnalysisResult.sentences : null;
  const sentenceTotal = analysedSentences ? analysedSentences.length : (window.ReaderShelf ? window.ReaderShelf.sentenceCount(rawText) : 0);
  const hasGrammar = !!analysedSentences && analysedSentences.some(x => x && Array.isArray(x.grammarHighlights) && x.grammarHighlights.length);
- const titleMeta = document.createElement('small'); titleMeta.className = 'reader-title-meta'; titleMeta.textContent = sentenceTotal + '文' + (hasGrammar ? ' · 二重下線の表現をタップで文法の解説' : '');
+ const titleMeta = document.createElement('small'); titleMeta.className = 'reader-title-meta'; titleMeta.textContent = sentenceTotal + '文' + (hasGrammar ? ' · 紫の下線の表現をタップで文法の解説' : '');
  titleRow.append(titleText, saveButton); titleBox.append(titleRow, titleMeta);
  window.initLucide();
  englishContainer.innerHTML = ''; let totalSummaryJa = "";
@@ -1182,42 +1182,53 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      const block = document.createElement('div'); block.className = 'sentence-container';
      const mainContent = document.createElement('div'); mainContent.style.flex = "1";
      mainContent.innerHTML = `<span class="sentence-num">${sIdx + 1}</span>`;
-     let highlights = sData.grammarHighlights || []; highlights.sort((a, b) => b.phrase.length - a.phrase.length);
-     let textMarker = sentenceText; let phraseMap = {};
-     highlights.forEach((h, hIdx) => {
-         let pKey = `___GRAMMAR_${hIdx}___`; 
-         let regex = new RegExp(h.phrase.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'gi');
-         if(textMarker.match(regex)) { textMarker = textMarker.replace(regex, pKey); phraseMap[pKey] = h; }
-     });
-     textMarker.split(' ').forEach(wStr => {
-         if (!wStr) return; let cleanToken = wStr.trim(), isGrammar = false, grammarData = null;
-         for(let key in phraseMap) { if(cleanToken.indexOf(key) !== -1) { isGrammar = true; grammarData = phraseMap[key]; wStr = wStr.replace(key, grammarData.phrase); break; } }
-         let wordContainer = mainContent;
-         if (isGrammar && grammarData) {
-             const gSpan = document.createElement('span'); gSpan.className = 'grammar-span'; 
-             gSpan.onclick = (e) => { if (e.target.classList.contains('word-span')) return; window.openGrammarPopover(e, grammarData.phrase, grammarData.meaning); };
-             mainContent.appendChild(gSpan); wordContainer = gSpan;
-         }
-         const subTokens = isGrammar ? wStr.split(' ') : [wStr];
-         subTokens.forEach((subToken, index) => {
-             if(!subToken) return; const cleanKey = subToken.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g,"");
-             const span = document.createElement('span'); span.className = 'word-span'; span.innerText = subToken + (index < subTokens.length - 1 ? ' ' : (isGrammar ? ' ' : ' '));
-             const vocabMatch = window.findVocabByToken(cleanKey);
-             if(vocabMatch) {
-                 span.classList.add('registered'); let hasOk = false; let hasBad = false; let hasSo = false; let hasAnyHistory = false;
-                 vocabMatch.meanings.forEach(m => { if(m.history && m.history.length > 0) hasAnyHistory = true; if(m.status === 'ok') hasOk = true; if(m.status === 'so') hasSo = true; if(m.status === 'bad') hasBad = true; });
-                 if(!hasAnyHistory) span.classList.add(`status-none`); else if(hasBad) span.classList.add(`status-bad`); else if(hasSo) span.classList.add(`status-so`); else if(hasOk) span.classList.add(`status-ok`);
-                 span.onclick = (e) => window.openWordPopoverFromVocab(e, vocabMatch, subToken);
-             } else {
-                 const dictMatch = dictionaryData.find(d => d.en === cleanKey);
-                 if(dictMatch) {
-                     span.classList.add('registered'); span.classList.add(wordMemory[cleanKey] ? `status-${wordMemory[cleanKey]}` : `status-none`);
-                     span.onclick = (e) => window.openWordPopover(e, cleanKey, subToken);
-                 }
-             }
-             wordContainer.appendChild(span);
+     // Grammar points: each phrase is found in the sentence (tolerating ~, quotes and spacing);
+     // the words it covers go into one marked span that opens the explanation.
+     const ranges = [];
+     (Array.isArray(sData.grammarHighlights) ? sData.grammarHighlights : [])
+         .filter(h => h && h.phrase)
+         .sort((a, b) => String(b.phrase).length - String(a.phrase).length)
+         .forEach(h => {
+             const at = typeof window.findGrammarPhrase === 'function' ? window.findGrammarPhrase(sentenceText, h.phrase, ranges) : null;
+             if (at) ranges.push(Object.assign(at, { h }));
          });
-     });
+     // Word-book words the AI found used in a registered meaning: num -> which meaning (1-based).
+     const usedVocab = new Map((Array.isArray(sData.vocab) ? sData.vocab : []).map(v => [String(v && v.num), Number(v && v.meaning) || 0]));
+     let currentRange = null, gSpan = null;
+     for (const token of sentenceText.matchAll(/\S+/g)) {
+         const range = ranges.find(r => token.index >= r.start && token.index < r.end) || null;
+         if (range !== currentRange) {
+             currentRange = range; gSpan = null;
+             if (range) {
+                 const h = range.h;
+                 gSpan = document.createElement('span'); gSpan.className = 'grammar-span';
+                 gSpan.onclick = (e) => window.openGrammarPopover(e, h.phrase, h.meaning, h.label);
+                 mainContent.append(' ', gSpan);
+             }
+         }
+         const subToken = token[0];
+         const cleanKey = typeof window.readerCleanToken === 'function' ? window.readerCleanToken(subToken) : subToken.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g,"");
+         // The space goes between the boxes: a space at the end of an inline-block is dropped.
+         const span = document.createElement('span'); span.className = 'word-span'; span.innerText = subToken;
+         let vocabMatch = window.findVocabByToken(cleanKey);
+         // A word used in a meaning that is not in the word book is left plain.
+         if (vocabMatch && aiAnalysisResult && aiAnalysisResult.vocabChecked && !usedVocab.has(String(vocabMatch.num))) { span.dataset.vocabSkip = '1'; vocabMatch = null; }
+         if(vocabMatch) {
+             span.classList.add('registered'); let hasOk = false; let hasBad = false; let hasSo = false; let hasAnyHistory = false;
+             vocabMatch.meanings.forEach(m => { if(m.history && m.history.length > 0) hasAnyHistory = true; if(m.status === 'ok') hasOk = true; if(m.status === 'so') hasSo = true; if(m.status === 'bad') hasBad = true; });
+             if(!hasAnyHistory) span.classList.add(`status-none`); else if(hasBad) span.classList.add(`status-bad`); else if(hasSo) span.classList.add(`status-so`); else if(hasOk) span.classList.add(`status-ok`);
+             const word = vocabMatch;
+             span.onclick = (e) => window.openReaderVocabDetails(e, word, usedVocab.get(String(word.num)) || 0);
+         } else if (!span.dataset.vocabSkip) {
+             const dictMatch = dictionaryData.find(d => d.en === cleanKey);
+             if(dictMatch) {
+                 span.classList.add('registered'); span.classList.add(wordMemory[cleanKey] ? `status-${wordMemory[cleanKey]}` : `status-none`);
+                 span.onclick = (e) => window.openWordPopover(e, cleanKey, subToken);
+             }
+         }
+         if (gSpan) { if (gSpan.firstChild) gSpan.append(' '); gSpan.append(span); }
+         else mainContent.append(' ', span);
+     }
      let finalJaText = customJaLines[sIdx] || sData.translation || sData.translations || "（和訳未取得）"; 
      totalSummaryJa += `${sIdx+1}. ${finalJaText}<br>`;
      const jaSpan = document.createElement('span'); jaSpan.className = 'sentence-ja'; jaSpan.innerText = finalJaText; mainContent.appendChild(jaSpan);
