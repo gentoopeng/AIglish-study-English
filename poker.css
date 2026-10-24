@@ -67,3 +67,65 @@ html body dialog.poker-screen{position:fixed;inset:0;width:100%;max-width:none;h
 .pk-raise-panel input[type=range]{width:100%;accent-color:#c6b790;}
 .pk-quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;}.pk-quick button{min-height:34px;padding:0 4px;font-size:11px;}
 .pk-hand-name{align-self:center;text-align:center;}
+.pk-sub{margin:8px 0 0;color:#8f8a7e;font-size:11px;}
+.pk-lobby .pk-howto{display:block;width:100%;margin:0 0 12px;background:transparent;border-style:dashed;color:#c6b790;}
+.pk-final{font:700 15px Georgia,"Yu Mincho",serif;color:#f0ece3;}
+/* Tutorial */
+html body dialog.pk-tutorial{width:min(420px,calc(100vw - 32px));max-height:92dvh;box-sizing:border-box;overflow:auto;padding:22px 20px 18px;border:1px solid rgba(213,201,172,.3);border-radius:20px;background:linear-gradient(150deg,rgba(27,35,49,.98),rgba(13,19,32,.99));color:#eee8da;box-shadow:0 24px 60px rgba(0,0,0,.6);}
+.pk-tutorial::backdrop{background:rgba(4,7,13,.7);}
+.pkt-title{margin:0 0 12px;color:#f0ece3;font:700 19px/1.35 Georgia,"Yu Mincho",serif;}
+.pkt-scene{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:230px;padding:14px 10px;border-radius:18px;background:radial-gradient(ellipse at 50% 40%,#1f5a4b 0%,#143f37 60%,#0e2b28 100%);box-shadow:inset 0 0 0 2px rgba(198,183,144,.3),inset 0 14px 30px rgba(0,0,0,.35);overflow:hidden;}
+.pkt-text{min-height:4.5em;margin:14px 2px 10px;color:#ddd6c6;font-size:13.5px;line-height:1.75;}
+.pkt-row{display:flex;gap:6px;justify-content:center;}
+.pkt-hole .pk-card,.pkt-flipper{width:52px;height:74px;}
+.pkt-hole .pk-card b{font-size:22px;}.pkt-hole .pk-card i{font-size:19px;}
+.pkt-flipper{position:relative;display:inline-block;}
+.pkt-flipper .pk-card{position:absolute;inset:0;}
+.pkt-caption,.pkt-labels span{color:#cfe6dc;font-size:11px;letter-spacing:.06em;}
+.pkt-labels{gap:52px;}
+.pkt-hand{margin:0;padding:4px 14px;border-radius:12px;background:#c6b790;color:#18202d;font:800 14px Georgia,"Yu Mincho",serif;}
+.pkt-ranks{width:100%;margin:0;padding:0;list-style:none;display:grid;gap:3px;}
+.pkt-ranks li{display:grid;grid-template-columns:9.5em 1fr;gap:8px;align-items:baseline;padding:2px 8px;border-radius:6px;background:rgba(0,0,0,.18);}
+.pkt-ranks strong{color:#f3e9cf;font-size:12px;}.pkt-ranks span{color:#bcd4ca;font-size:10.5px;}
+.pkt-ranks li:nth-child(-n+3) strong{color:#e9d9a6;}
+.pkt-moves{width:100%;display:grid;gap:6px;}
+.pkt-move{position:relative;display:grid;grid-template-columns:6em 1fr;align-items:center;gap:8px;padding:6px 10px;border:1px solid rgba(243,233,207,.18);border-radius:10px;background:rgba(0,0,0,.2);}
+.pkt-move strong{color:#f3e9cf;font-size:13px;}.pkt-move span{color:#bcd4ca;font-size:11px;}
+.pkt-chip{position:absolute;right:10px;top:50%;width:14px;height:14px;margin-top:-7px;border-radius:50%;background:radial-gradient(circle,#f3eee2 30%,#c6b790 32%,#c6b790 60%,#8d7a4c 62%);box-shadow:0 1px 3px rgba(0,0,0,.5);}
+.pkt-pot{padding:6px 16px;border:1px dashed rgba(243,233,207,.4);border-radius:14px;color:#f3e9cf;font:700 12px system-ui,sans-serif;}
+.pkt-pot.is-win{font-size:16px;border-style:solid;}
+.pkt-winner{padding:5px 14px;border-radius:12px;background:#c6b790;color:#18202d;font:800 15px Georgia,"Yu Mincho",serif;}
+.pkt-table{position:relative;width:88%;height:170px;border-radius:50%;border:4px solid #2a2117;background:rgba(0,0,0,.12);}
+.pkt-seat{position:absolute;display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid rgba(213,201,172,.35);border-radius:10px;background:rgba(10,16,28,.9);transform:translate(-50%,-50%);}
+.pkt-seat strong{color:#f0ece3;font-size:11px;}
+.pkt-seat.is-a{left:50%;top:100%;}.pkt-seat.is-b{left:4%;top:38%;}.pkt-seat.is-c{left:96%;top:38%;}
+.pkt-dealer,.pkt-blind{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;font:800 10px system-ui;}
+.pkt-dealer{background:#f3eee2;color:#18202d;}
+.pkt-blind{background:#3b6f62;color:#f3e9cf;}.pkt-blind.is-big{background:#c6b790;color:#18202d;}
+.pkt-dots{display:flex;justify-content:center;gap:6px;margin-bottom:12px;}
+.pkt-dots span{width:7px;height:7px;border-radius:50%;background:rgba(243,233,207,.25);transition:background .2s,transform .2s;}
+.pkt-dots span.is-on{background:#c6b790;transform:scale(1.25);}
+.pkt-nav{display:grid;grid-template-columns:1fr 2fr;gap:8px;}
+.pkt-nav button,.pkt-skip{min-height:42px;border:1px solid rgba(213,201,172,.35);border-radius:12px;background:rgba(15,23,42,.5);color:#eee8da;font:700 13px system-ui,sans-serif;cursor:pointer;}
+.pkt-nav .pk-primary{background:#c6b790;border-color:transparent;color:#18202d;}
+.pkt-nav button:disabled{opacity:.35;}
+.pkt-skip{display:block;margin:8px auto 0;min-height:30px;padding:0 14px;border:0;background:none;color:#8f8a7e;font-size:12px;}
+@media(prefers-reduced-motion:no-preference){
+  .pkt-in{animation:pktIn .45s cubic-bezier(.2,.8,.2,1) var(--d,0s) both;}
+  .pkt-flip{animation:pktIn .4s cubic-bezier(.2,.8,.2,1) var(--d,0s) both,pktFlipOut .25s ease-in calc(var(--d,0s) + .75s) forwards;}
+  .pkt-flip-face{animation:pktFlipIn .3s ease-out calc(var(--d,0s) + 1s) both;}
+  .pkt-best{animation:pktIn .45s cubic-bezier(.2,.8,.2,1) var(--d,0s) both,pktGlow .6s ease-out 1.3s forwards;}
+  .pkt-dim{animation:pktIn .45s cubic-bezier(.2,.8,.2,1) var(--d,0s) both,pktDim .6s ease-out 1.3s forwards;}
+  .pkt-chip{animation:pktChip .8s cubic-bezier(.4,0,.2,1) var(--d,0s) both;}
+  .pkt-pot.is-win{animation:pktIn .45s var(--d,0s) both,pktPulse 1.4s ease-in-out 1s infinite;}
+  .pkt-dealer,.pkt-blind{animation:pktPop .35s cubic-bezier(.2,.9,.3,1.4) var(--d,0s) both;}
+}
+@media(prefers-reduced-motion:reduce){.pkt-flip{display:none;}.pkt-dim{opacity:.35;}.pkt-best{box-shadow:0 0 0 2px #e9d9a6;}}
+@keyframes pktIn{from{transform:translateY(10px) scale(.94);opacity:0}to{transform:none;opacity:1}}
+@keyframes pktFlipOut{to{transform:rotateY(90deg);opacity:0}}
+@keyframes pktFlipIn{from{transform:rotateY(-90deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes pktGlow{to{transform:translateY(-6px);box-shadow:0 0 0 2px #e9d9a6,0 8px 18px rgba(233,217,166,.35)}}
+@keyframes pktDim{to{opacity:.32}}
+@keyframes pktChip{0%{transform:translate(0,0);opacity:0}15%{opacity:1}100%{transform:translate(-120px,90px) scale(.7);opacity:0}}
+@keyframes pktPulse{50%{box-shadow:0 0 18px rgba(233,217,166,.45)}}
+@keyframes pktPop{from{transform:scale(0)}to{transform:scale(1)}}

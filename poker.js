@@ -71,6 +71,7 @@
   // The dealer's record of the hand (all hole cards and the board), on its device only.
   const dealName = (code) => "aiglish_poker_deal_" + uid() + "_" + code;
   function readDeal(code) {
+    if (session?.practice && session.code === code) return session.deal;
     try {
       return JSON.parse(localStorage.getItem(dealName(code)) || "null");
     } catch {
@@ -122,6 +123,14 @@
     return -1;
   }
   async function update(code, change) {
+    // A practice table (against the computer) lives on this device only.
+    if (session?.practice && session.code === code) {
+      const next = change(JSON.parse(JSON.stringify(session.room)));
+      if (!next) return false;
+      session.room = next;
+      setTimeout(render, 0);
+      return true;
+    }
     return window.fbRunTransaction(window.db, async (tx) => {
       const snap = await tx.get(ref(code));
       if (!snap.exists()) throw Error("テーブルが見つかりません。");
@@ -141,6 +150,7 @@
     }
     return room;
   }
+  const deadlineOf = (room, hand) => (hand.toAct && room.settings.think ? Date.now() + room.settings.think * 1000 : 0);
   const say = (room, text) => {
     room.log = (room.log || []).concat(text).slice(-6);
   };
@@ -203,7 +213,7 @@
       .sort((a, b) => a[1].seat - b[1].seat)
       .map(([id]) => id);
     if (ready.length < 2) return;
-    const keys = await myKeys(code),
+    const keys = session.practice ? null : await myKeys(code),
       previous = room.dealer && ready.includes(room.dealer) ? ready.indexOf(room.dealer) : -1,
       dealer = ready[(previous + 1) % ready.length],
       cards = P.shuffle(P.deck(), random),
@@ -211,11 +221,14 @@
       enc = {};
     ready.forEach((id, i) => (dealt[id] = [cards[i], cards[i + ready.length]]));
     const board = cards.slice(ready.length * 2, ready.length * 2 + 5);
-    for (const id of ready) enc[id] = await seal(await shared(keys.priv, room.players[id].pub), dealt[id]);
     const no = (room.handNo || 0) + 1;
-    try {
-      localStorage.setItem(dealName(code), JSON.stringify({ no, holes: dealt, board }));
-    } catch {}
+    if (session.practice) session.deal = { no, holes: dealt, board };
+    else {
+      for (const id of ready) enc[id] = await seal(await shared(keys.priv, room.players[id].pub), dealt[id]);
+      try {
+        localStorage.setItem(dealName(code), JSON.stringify({ no, holes: dealt, board }));
+      } catch {}
+    }
     await update(code, (fresh) => {
       if ((fresh.handNo || 0) !== no - 1 || fresh.status === "closed") return null;
       // Players who left while a hand ran leave the table now.
@@ -231,7 +244,7 @@
         bigBlind: fresh.settings.bb,
       });
       hand.enc = enc;
-      hand.deadline = hand.toAct ? Date.now() + fresh.settings.think * 1000 : 0;
+      hand.deadline = deadlineOf(fresh, hand);
       fresh.handNo = no;
       fresh.dealer = hand.dealer;
       fresh.status = "playing";
@@ -264,26 +277,31 @@
             next = P.deal(hand, deal.board.slice(given, given + count));
           }
           next.enc = hand.enc;
-          next.deadline = next.toAct ? Date.now() + fresh.settings.think * 1000 : 0;
+          next.deadline = deadlineOf(fresh, next);
           return withHand(fresh, next);
         });
-      } else if (h && h.toAct && (now > h.deadline || room.players[h.toAct]?.left || !room.players[h.toAct])) {
+      } else if (h && h.toAct && room.players[h.toAct]?.bot) {
+        await botStep(room, h, now);
+      } else if (h && h.toAct && ((h.deadline && now > h.deadline) || room.players[h.toAct]?.left || !room.players[h.toAct])) {
         // Time is up (or the player left): check when free, otherwise fold.
         await update(code, (fresh) => {
           const hand = fresh.hand;
           if (!hand || hand.no !== h.no || hand.toAct !== h.toAct) return null;
           const gone = !fresh.players[hand.toAct] || fresh.players[hand.toAct].left;
-          if (!gone && Date.now() <= hand.deadline) return null;
+          if (!gone && (!hand.deadline || Date.now() <= hand.deadline)) return null;
           const o = P.options(hand, hand.toAct),
             next = o && o.check && !gone ? P.act(hand, hand.toAct, "check") : P.leave(hand, hand.toAct);
           say(fresh, (fresh.players[h.toAct]?.name || h.toAct) + "：" + (o && o.check && !gone ? "チェック（時間切れ）" : "フォールド（時間切れ）"));
           next.enc = hand.enc;
-          next.deadline = next.toAct ? Date.now() + fresh.settings.think * 1000 : 0;
+          next.deadline = deadlineOf(fresh, next);
           return withHand(fresh, next);
         });
       } else if (room.status === "playing" && (!h || (h.street === "done" && now - (room.doneAt || 0) > RESULT_MS))) {
-        const ready = Object.values(room.players).filter((p) => !p.left && p.stack > 0).length;
-        if (ready >= 2) await startHand(code);
+        const ready = Object.values(room.players).filter((p) => !p.left && p.stack > 0).length,
+          over = room.practice && (!(room.players[uid()]?.stack > 0) || !Object.values(room.players).some((p) => p.bot && p.stack > 0));
+        if (over) {
+          if (room.status !== "over") await update(code, (fresh) => ((fresh.status = "over"), fresh));
+        } else if (ready >= 2) await startHand(code);
         else
           await update(code, (fresh) => {
             if (fresh.status !== "playing" || (fresh.hand && fresh.hand.street !== "done")) return null;
@@ -298,6 +316,40 @@
     }
   }
 
+  async function botStep(room, h, now) {
+    const id = h.toAct,
+      key = h.no + ":" + id + ":" + h.street + ":" + JSON.stringify(h.bet);
+    if (session.botKey !== key) {
+      session.botKey = key;
+      session.botDue = now + 700 + random(900);
+      return;
+    }
+    if (now < session.botDue) return;
+    session.botKey = "";
+    let m = null;
+    try {
+      m = window.PokerBot.decide(h, id, session.deal.holes[id], room.players[id].bot);
+    } catch (error) {
+      console.warn("[poker] computer", error);
+    }
+    m = m || { type: P.options(h, id)?.check ? "check" : "fold" };
+    await update(room.code, (fresh) => {
+      const hand = fresh.hand;
+      if (!hand || hand.no !== h.no || hand.toAct !== id) return null;
+      let next;
+      try {
+        next = P.act(hand, id, m.type, m.to);
+      } catch {
+        next = P.act(hand, id, P.options(hand, id)?.check ? "check" : "fold");
+      }
+      const shown = ["call", "raise"].includes(next.last?.type) && next.last.amount ? " " + fmt(next.last.amount) : "";
+      say(fresh, fresh.players[id].name + "：" + actionText[next.last?.type || m.type] + shown);
+      next.enc = hand.enc;
+      next.deadline = deadlineOf(fresh, next);
+      return withHand(fresh, next);
+    });
+  }
+
   // ---- Player moves ----------------------------------------------------------------------
   async function move(type, to) {
     const code = session.code,
@@ -310,13 +362,13 @@
         shown = ["call", "raise", "allin"].includes(type) && next.last?.amount ? " " + fmt(next.last.amount) : "";
       say(room, (room.players[me]?.name || me) + "：" + label + shown);
       next.enc = hand.enc;
-      next.deadline = next.toAct ? Date.now() + room.settings.think * 1000 : 0;
+      next.deadline = deadlineOf(room, next);
       return withHand(room, next);
     });
   }
   async function leaveTable() {
     const s = session;
-    if (!s) return close();
+    if (!s || s.practice) return close();
     const me = uid();
     let loss = null;
     try {
@@ -352,7 +404,7 @@
     await update(session.code, (room) => {
       const p = room.players[me];
       if (!p || p.stack > 0) return null;
-      if (balance() < room.settings.buyIn) throw Error("ポイントが足りません。");
+      if (!room.practice && balance() < room.settings.buyIn) throw Error("ポイントが足りません。");
       p.stack = room.settings.buyIn;
       say(room, p.name + " がチップを追加しました");
       return room;
@@ -417,6 +469,11 @@
       '<label>持ち時間<select data-pk-think>' + THINK.map((n) => '<option value="' + n + '"' + (n === 30 ? " selected" : "") + ">" + n + "秒</option>").join("") + "</select></label>" +
       '<button type="button" class="pk-primary" data-pk-create>テーブルを作る</button></section>' +
       '<section class="pk-panel"><h3>テーブルに入る</h3><div class="pk-join"><input data-pk-code inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="0000" aria-label="テーブル番号"><button type="button" data-pk-join>参加</button></div></section>' +
+      '<section class="pk-panel"><h3>コンピュータと練習</h3>' +
+      '<label>相手<select data-pk-bots>' + [1, 2, 3, 4, 5].map((n) => '<option value="' + n + '"' + (n === 1 ? " selected" : "") + ">" + n + "人</option>").join("") + "</select></label>" +
+      '<label>強さ<select data-pk-level><option value="easy">やさしい</option><option value="normal" selected>ふつう</option><option value="hard">つよい</option></select></label>' +
+      '<button type="button" class="pk-primary" data-pk-practice>練習を始める</button><p class="pk-sub">ポイントは賭けません。チップは100枚、ブラインドは1/2です。</p></section>' +
+      '<button type="button" class="pk-howto" data-pk-howto>遊び方を見る</button>' +
       '<p class="pk-note">チップは参加費の分だけ配られます。勝ち負けは1ハンドごとにポイントへ反映され、途中で終わったハンドは反映されません。カードを配るのはテーブルを作った人の端末です。</p>' +
       '<p class="pk-status" data-pk-status role="status"></p>';
     view.querySelector(".pk-balance").textContent = "所持ポイント " + fmt(balance()) + "pt";
@@ -429,10 +486,39 @@
       enter(code);
     });
     view.querySelector("[data-pk-join]").onclick = guard(async () => enter(await join(view.querySelector("[data-pk-code]").value.trim())));
+    view.querySelector("[data-pk-practice]").onclick = () =>
+      practice({ bots: Number(view.querySelector("[data-pk-bots]").value), level: view.querySelector("[data-pk-level]").value, buyIn: 100, sb: 1, bb: 2 });
+    view.querySelector("[data-pk-howto]").onclick = () => window.PokerTutorial?.open({ practice: () => view.querySelector("[data-pk-practice]").click() });
   }
 
-  function enter(code) {
-    session = { code, id: uid(), room: null };
+  // A table against the computer: the player plus 1-5 computers, practice chips only.
+  const BOT_NAMES = ["ペンギン", "シロクマ", "アザラシ", "ラッコ", "キツネ"];
+  function practice(settings) {
+    const me = uid(),
+      players = { [me]: { name: nameOf(), seat: 0, stack: settings.buyIn, joinedAt: Date.now() } };
+    for (let i = 0; i < settings.bots; i++)
+      players["cpu-" + i] = { name: BOT_NAMES[i], seat: i + 1, stack: settings.buyIn, bot: settings.level, joinedAt: Date.now() };
+    const room = {
+      version: 1,
+      code: "practice",
+      practice: true,
+      practiceSettings: settings,
+      host: me,
+      status: "playing",
+      createdAt: Date.now(),
+      settings: { buyIn: settings.buyIn, sb: settings.sb, bb: settings.bb, seats: settings.bots + 1, think: 0 },
+      handNo: 0,
+      dealer: null,
+      hand: null,
+      doneAt: 0,
+      log: [],
+      players,
+    };
+    enter("practice", room);
+  }
+
+  function enter(code, practiceRoom) {
+    session = { code, id: uid(), room: practiceRoom || null, practice: !!practiceRoom, deal: null };
     const view = screen.querySelector("[data-pk-view]");
     view.className = "pk-table-view";
     view.innerHTML =
@@ -440,9 +526,20 @@
       '<div class="pk-felt"><div class="pk-seats"></div><div class="pk-center"><div class="pk-board"></div><p class="pk-pot"></p><p class="pk-log" aria-live="polite"></p></div></div>' +
       '<section class="pk-me"><div class="pk-hole"></div><p class="pk-hand-name"></p><div class="pk-actions"></div></section>' +
       '<p class="pk-status" data-pk-status role="status"></p>';
-    view.querySelector("[data-pk-room]").textContent = code;
+    view.querySelector("[data-pk-room]").textContent = practiceRoom ? "練習" : code;
     view.querySelector("[data-pk-leave]").onclick = guard(leaveTable);
+    view.querySelector("[data-pk-leave]").textContent = practiceRoom ? "やめる" : "席を立つ";
     unsubscribe?.();
+    unsubscribe = null;
+    if (practiceRoom) {
+      render();
+      clearInterval(ticker);
+      ticker = setInterval(() => {
+        renderClock();
+        dealerStep();
+      }, 300);
+      return;
+    }
     unsubscribe = window.fbOnSnapshot(ref(code), (snap) => {
       if (!session || session.code !== code || uid() !== session.id) return;
       if (!snap.exists()) {
@@ -463,12 +560,13 @@
   function seatPlaces(count) {
     return Array.from({ length: count }, (_, i) => {
       const angle = Math.PI / 2 + (i * 2 * Math.PI) / count;
-      return { x: 50 + 42 * Math.cos(angle), y: 50 + 40 * Math.sin(angle) };
+      return { x: 50 + 37 * Math.cos(angle), y: 50 + 40 * Math.sin(angle) };
     });
   }
   async function myHoles(room) {
     const h = room.hand,
       me = uid();
+    if (room.practice) return session.deal && session.deal.no === h?.no ? session.deal.holes[me] || null : null;
     if (!h || !h.enc?.[me]) return null;
     if (holes.no === h.no && holes.code === room.code) return holes.cards;
     const keys = await myKeys(room.code),
@@ -489,7 +587,7 @@
       me = uid(),
       h = room.hand,
       mine = room.players[me];
-    view.querySelector("[data-pk-rules]").textContent = "ブラインド " + room.settings.sb + "/" + room.settings.bb + " · 参加費 " + fmt(room.settings.buyIn) + "pt";
+    view.querySelector("[data-pk-rules]").textContent = "ブラインド " + room.settings.sb + "/" + room.settings.bb + (room.practice ? " · 練習（ポイントは賭けません）" : " · 参加費 " + fmt(room.settings.buyIn) + "pt");
     if (room.status === "closed") {
       view.querySelector(".pk-actions").replaceChildren(node("p", "pk-wait", "テーブルは閉じられました。"));
       view.querySelector(".pk-actions").append(button("ロビーへ", () => { close(); open(); }, "pk-primary"));
@@ -533,7 +631,7 @@
         const won = h.result.won?.[id];
         if (won) seat.append(node("span", "pk-won", "+" + fmt(won) + (h.result.hands?.[id] ? " " + h.result.hands[id].name : "")));
       }
-      if (h && h.toAct === id) seat.append(node("span", "pk-clock"));
+      if (h && h.toAct === id) seat.append(node("span", "pk-clock", p.bot ? "考え中…" : ""));
       seats.append(seat);
     });
     // Board and pot.
@@ -543,7 +641,7 @@
     view.querySelector(".pk-pot").textContent = h && h.street !== "done" ? "ポット " + fmt(P.potOf(h)) : "";
     view.querySelector(".pk-log").textContent = (room.log || []).slice(-1)[0] || "";
     // Points: this hand's result, once.
-    if (h?.street === "done" && h.result?.net && Object.hasOwn(h.result.net, me)) settle(handKey(room, h.no), h.result.net[me]);
+    if (!room.practice && h?.street === "done" && h.result?.net && Object.hasOwn(h.result.net, me)) settle(handKey(room, h.no), h.result.net[me]);
     renderMine(room);
     renderClock();
   }
@@ -569,6 +667,14 @@
     nameLine.textContent = cards ? (h.folded[me] ? "フォールド" : P.describe(cards.concat(h.board || []))) : "";
     actions.replaceChildren();
     const mine = room.players[me];
+    if (room.practice && room.status === "over") {
+      const won = mine && mine.stack > 0;
+      actions.append(node("p", "pk-wait pk-final", won ? "勝ちました！ 全員のチップを手に入れました。" : "チップがなくなりました。"));
+      const row = node("div", "pk-buttons");
+      row.append(button("ロビーへ", () => { close(); open(); }), button("もう一度", () => practice(room.practiceSettings), "pk-primary"));
+      actions.append(row);
+      return;
+    }
     if (room.status === "waiting") {
       const count = Object.values(room.players).filter((p) => !p.left).length;
       if (room.host === me) {
@@ -579,7 +685,7 @@
       } else actions.append(node("p", "pk-wait", "テーブルを作った人の開始を待っています（" + count + "人）"));
       return;
     }
-    if (mine && mine.stack <= 0 && (!h || h.street === "done" || !h.seats.includes(me))) {
+    if (!room.practice && mine && mine.stack <= 0 && (!h || h.street === "done" || !h.seats.includes(me))) {
       actions.append(node("p", "pk-wait", "チップがなくなりました。"));
       const add = button("チップを追加（" + fmt(room.settings.buyIn) + "pt）", rebuy, "pk-primary");
       add.disabled = balance() < room.settings.buyIn;
@@ -658,6 +764,12 @@
     document.body.classList.add("poker-open");
     screen.showModal();
     lobby();
+    let seen = false;
+    try {
+      seen = localStorage.getItem("aiglish_poker_tutorial_seen") === "1";
+      localStorage.setItem("aiglish_poker_tutorial_seen", "1");
+    } catch {}
+    if (!seen) window.PokerTutorial?.open({ practice: () => screen?.querySelector("[data-pk-practice]")?.click() });
   }
-  window.Poker = Object.freeze({ open, close, settle, _session: () => session });
+  window.Poker = Object.freeze({ open, close, settle, practice, card: cardEl, _session: () => session });
 })();
