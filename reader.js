@@ -181,19 +181,10 @@
     window.readerCleanToken = function(token) {
         return String(token || '').toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]"'’‘“”]/g, '');
     };
-    // The word book entries that appear in the text (inflected forms too), for the AI to check
-    // which are used in a registered meaning: [{ num, word, meanings: [text] }].
+    // The word-book entries that appear in the text, from the books chosen for the reader
+    // (ReaderVocab): [{ alias, book, num, word, meanings: [text] }].
     function vocabCandidates(text) {
-        if (typeof window.findVocabByToken !== 'function') return [];
-        var found = new Map();
-        String(text).split(/\s+/).forEach(function(token) {
-            var word = window.findVocabByToken(window.readerCleanToken(token));
-            if (!word || found.has(String(word.num)) || found.size >= 120) return;
-            var meanings = (word.meanings && word.meanings.length ? word.meanings.map(function(m) { return m.text; }) : [word.meaning || ''])
-                .map(function(t) { return String(t || '').replace(/\s+/g, ' ').trim().slice(0, 60); });
-            found.set(String(word.num), { num: String(word.num), word: String(word.word || ''), meanings: meanings });
-        });
-        return Array.from(found.values());
+        return window.ReaderVocab ? window.ReaderVocab.candidates(text) : [];
     }
     // Where a grammar phrase sits in its sentence: { start, end } or null. The AI's phrase may
     // differ in quotes or spacing, or carry ~ / ... / S V placeholders: then the longest plain
@@ -221,7 +212,7 @@
     var CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩';
     function analysisPrompt(text, candidates) {
         var list = candidates.length ? candidates.map(function(c) {
-            return '#' + c.num + ' ' + c.word + ': ' + c.meanings.map(function(m, i) { return (CIRCLED[i] || '(' + (i + 1) + ')') + m; }).join(' ');
+            return '[' + c.alias + '] ' + c.word + ': ' + c.meanings.map(function(m, i) { return (CIRCLED[i] || '(' + (i + 1) + ')') + m; }).join(' ');
         }).join('\n') : '（なし）';
         return 'あなたは高校生に英語を教える先生です。次の英文を解析してください。英文は省略せず、すべての文を順番どおりに sentences に入れてください。\n\n' +
             '各文について:\n' +
@@ -231,7 +222,7 @@
             '  - phrase: 英文からそのまま抜き出した連続する語句。英文と同じ綴り・記号で書き、「~」「...」「S V」「A」などの記号や言い換えは使わない\n' +
             '  - label: 文法事項の短い名前（例：「助動詞 must（推量）」「分詞構文（付帯状況）」）\n' +
             '  - meaning: 日本語での説明（1〜2文）\n' +
-            '- vocab: 下の「単語帳の単語」のうち、この文に出てくるもの（活用形を含む）で、登録された意味のどれかと同じ意味で使われているものだけ。num は番号、meaning は何番目の意味か（1から）。違う意味で使われているもの（例：単語帳の意味が「〜のような」なのに、文では「好む」の意味の like）は入れない。\n\n' +
+            '- vocab: 下の「単語帳の単語」のうち、この文に出てくるもの（活用形を含む）で、登録された意味のどれかと同じ意味で使われているものだけ。num は [ ] の中の記号（例：A261）、meaning は何番目の意味か（1から）。同じ単語が複数あるときは、文の意味に合うものを1つだけ選ぶ。違う意味で使われているもの（例：単語帳の意味が「〜のような」なのに、文では「好む」の意味の like）は入れない。\n\n' +
             'fullSummaryAbstract: 英文全体の日本語要約（3文以内）\n\n' +
             '単語帳の単語:\n' + list + '\n\n英文:\n' + text;
     }
@@ -349,7 +340,18 @@
             try { result = JSON.parse(cleanJsonText); } catch (ignore) {}
             if (!result || !Array.isArray(result.sentences) || !result.sentences.length) return buildAnalysisFallback(text, describeGeminiError('unreadable'));
             // Only words the AI judged to be used in a registered meaning are marked (see analyzeText).
+            // Aliases go back to { book, num }; vocabBooks says which books were checked.
+            var byAlias = {};
+            candidates.forEach(function(c) { byAlias[c.alias.toUpperCase()] = c; });
             result.vocabChecked = result.sentences.every(function(sentence) { return sentence && Array.isArray(sentence.vocab); });
+            result.vocabBooks = window.ReaderVocab ? window.ReaderVocab.books() : [];
+            result.sentences.forEach(function(sentence) {
+                if (!Array.isArray(sentence.vocab)) return;
+                sentence.vocab = sentence.vocab.map(function(v) {
+                    var c = v && byAlias[String(v.num).replace(/[\[\]#\s]/g, '').toUpperCase()];
+                    return c ? { book: c.book, num: c.num, meaning: Number(v.meaning) || 0 } : null;
+                }).filter(Boolean);
+            });
             return result;
         } catch (e) {
             console.error("Gemini Analyzer Error:", e);
@@ -400,13 +402,19 @@
         pop.classList.add('show');
     };
     // A word-book word tapped in the reader: the same card as the flashcard's ⓘ, with the meaning
-    // this sentence uses (when the AI said which).
-    window.openReaderVocabDetails = function(event, word, senseIndex) {
+    // this sentence uses (when the AI said which). A word from a book that is not open is shown
+    // read-only: its ratings belong to that book's own screen.
+    window.openReaderVocabDetails = function(event, entry, senseIndex) {
         if (event) event.stopPropagation();
-        var fresh = (Array.isArray(vocabList) && vocabList.find(function(v) { return String(v.num) === String(word.num); })) || word;
-        if (typeof window.openVocabDetailsSheet !== 'function') return window.openWordPopoverFromVocab(event, fresh, fresh.word);
-        var sense = senseIndex > 0 && fresh.meanings ? fresh.meanings[senseIndex - 1] : null;
-        window.openVocabDetailsSheet(fresh, sense ? 'この文での意味：' + (CIRCLED[senseIndex - 1] || '') + sense.text : '');
+        var word = window.ReaderVocab ? window.ReaderVocab.word(entry) : null;
+        if (!word) return;
+        var sense = senseIndex > 0 && word.meanings ? word.meanings[senseIndex - 1] : null;
+        var notes = [];
+        if (sense) notes.push('この文での意味：' + (CIRCLED[senseIndex - 1] || '') + sense.text);
+        var other = typeof currentTextbook !== 'string' || entry.book !== currentTextbook;
+        if (other) notes.push('「' + window.ReaderVocab.nameOf(entry.book) + '」の単語です。理解度はその単語帳で変えられます。');
+        if (typeof window.openVocabDetailsSheet !== 'function') return;
+        window.openVocabDetailsSheet(word, notes.join('\n'), { readOnly: other });
     };
 
     window.setTranslationMode = function(mode) {
@@ -424,36 +432,16 @@
     };
 
     window.updateReaderWordColors = function() {
-        document.querySelectorAll('.word-span').forEach(function(span) {
-            if (span.dataset.vocabSkip) return;
-            var text = span.innerText.trim();
-            var cleanKey = text.toLowerCase().replace(/[.,/#!$%^&*;:{}=-_`~()[]"']/g, "");
-            if (!cleanKey) return;
-            span.classList.remove('status-ok', 'status-so', 'status-bad', 'status-none');
-            var vocabMatch = window.findVocabByToken(cleanKey);
-            if (vocabMatch) {
-                span.classList.add('registered');
-                var hasOk = false,
-                    hasBad = false,
-                    hasSo = false,
-                    hasAnyHistory = false;
-                vocabMatch.meanings.forEach(function(m) {
-                    if (m.history && m.history.length > 0) hasAnyHistory = true;
-                    if (m.status === 'ok') hasOk = true;
-                    if (m.status === 'so') hasSo = true;
-                    if (m.status === 'bad') hasBad = true;
-                });
-                if (!hasAnyHistory) span.classList.add('status-none');
-                else if (hasBad) span.classList.add('status-bad');
-                else if (hasSo) span.classList.add('status-so');
-                else if (hasOk) span.classList.add('status-ok');
-            } else {
-                var dictMatch = dictionaryData.find(function(d) { return d.en === cleanKey; });
-                if (dictMatch) {
-                    span.classList.add('registered');
-                    span.classList.add(wordMemory[cleanKey] ? 'status-' + wordMemory[cleanKey] : 'status-none');
-                }
+        document.querySelectorAll('#englishContainer .word-span').forEach(function(span) {
+            if (span.dataset.vocabNum) {
+                if (window.ReaderVocab) window.ReaderVocab.paint(span);
+                return;
             }
+            if (span.dataset.vocabSkip) return;
+            var cleanKey = window.readerCleanToken(span.innerText.trim());
+            if (!cleanKey || !dictionaryData.find(function(d) { return d.en === cleanKey; })) return;
+            span.classList.remove('status-ok', 'status-so', 'status-bad', 'status-none');
+            span.classList.add('registered', wordMemory[cleanKey] ? 'status-' + wordMemory[cleanKey] : 'status-none');
         });
     };
 

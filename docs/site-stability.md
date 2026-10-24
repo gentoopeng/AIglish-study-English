@@ -739,3 +739,24 @@ Now:
 - **Inflected forms.** `findVocabByToken` also matches plain inflections the stem rules missed: apples, studies, chatted, making, tried.
 
 `tests/reader-vocab-grammar.smoke.cjs` covers these.
+
+## Follow-up: reader word books, meaning colours, shelf editing (10.21.54)
+
+**Word books for the reader** (`reader-vocab.js`)
+- 「参照する単語帳」 in the analysis card picks one or more word books. It is saved per account; when nothing is picked, the open book is used. The open book always comes first.
+- The words of these books are read, with this account's understanding merged in, and found with their inflections.
+- In the request, each book has a letter, so an entry reads `[A261] ready: ①用意ができた`. The AI's keys are mapped back to `{ book, num, meaning }`, and `vocabBooks` records which books were checked.
+- Words of books added later are marked without the check.
+- A word from a book that is not open opens its card read-only (no rating or editing), saying which book it belongs to.
+
+**Colours by the meaning used**
+- A marked word takes the understanding of the meaning the sentence uses. For example, run used as ②経営する is red when ② is rated ×, even if ① was never answered.
+- Without a meaning from the AI, the colour comes from the word as a whole, as before.
+- `updateReaderWordColors` repaints from the stored book, number and meaning.
+
+**Bookshelf**
+- Each text's ⋯ menu has 「名前・本文を編集」.
+- A changed text loses its saved analysis, and the next opening analyses it again. Any shelf text without an analysis keeps the next successful one.
+- 「並べ替え」 shows ▲▼ on the rows, for folders on the shelf and for texts in a folder. 「完了」, or leaving the view, ends it.
+
+`tests/reader-books.smoke.cjs` covers these.

@@ -333,8 +333,9 @@
     };
 
     // The word's card, the same one as in the word book, in a sheet from the bottom. note (optional)
-    // is shown above it, e.g. which meaning a reader sentence uses.
-    window.openVocabDetailsSheet = function(word, note) {
+    // is shown above it, e.g. which meaning a reader sentence uses. options.readOnly shows the card
+    // without its rating and edit controls (a word from a book that is not open).
+    window.openVocabDetailsSheet = function(word, note, options) {
         var sheet = document.getElementById('flashcardWordDetails');
         if (!sheet) {
             sheet = document.createElement('div');
@@ -349,6 +350,7 @@
 
         var content = sheet.querySelector('#flashcardDetailContent');
         content.replaceChildren();
+        content.classList.toggle('is-readonly', !!(options && options.readOnly));
         if (note) {
             var line = document.createElement('p');
             line.className = 'flashcard-detail-note';

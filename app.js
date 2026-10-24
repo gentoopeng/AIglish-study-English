@@ -1127,6 +1127,8 @@ textHistory = textHistory.filter(h => h.text !== rawText);
  let aiAnalysisResult = null;
  // The key may have been saved after this page loaded.
  if (!geminiApiKey) geminiApiKey = localStorage.getItem('core_v4_geminiKey') || "";
+ // The words of the books chosen for the reader, for the AI check and the colours.
+ if (window.ReaderVocab) { try { await window.ReaderVocab.load(); } catch (e) { console.warn('[reader] word books', e); } }
  if (preParsedData) {
      aiAnalysisResult = preParsedData;
  } else if (geminiApiKey) {
@@ -1147,6 +1149,12 @@ textHistory = textHistory.filter(h => h.text !== rawText);
          entry.aiAnalysisData = aiAnalysisResult;
          textHistory = textHistory.slice(0, 30);
          try { localStorage.setItem('textHistory', JSON.stringify(textHistory)); } catch (e) { entry.aiAnalysisData = null; }
+     }
+     // A bookshelf text without an analysis (new, edited or failed before) keeps this one.
+     if (!preParsedData && Array.isArray(myBookshelf)) {
+         let kept = false;
+         myBookshelf.forEach(item => { if (item.text === rawText && (!item.aiAnalysisData || item.aiAnalysisData.analysisError)) { item.aiAnalysisData = JSON.parse(JSON.stringify(aiAnalysisResult)); kept = true; } });
+         if (kept) { try { localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); } catch (e) {} window.queueBackgroundSave?.(); }
      }
  }
  if (geminiApiKey && !aiAnalysisResult) {
@@ -1192,8 +1200,11 @@ textHistory = textHistory.filter(h => h.text !== rawText);
              const at = typeof window.findGrammarPhrase === 'function' ? window.findGrammarPhrase(sentenceText, h.phrase, ranges) : null;
              if (at) ranges.push(Object.assign(at, { h }));
          });
-     // Word-book words the AI found used in a registered meaning: num -> which meaning (1-based).
-     const usedVocab = new Map((Array.isArray(sData.vocab) ? sData.vocab : []).map(v => [String(v && v.num), Number(v && v.meaning) || 0]));
+     // Word-book words the AI found used in a registered meaning ({ book, num, meaning }). Books the
+     // AI did not check (picked later) are marked without the check. Older analyses had no book.
+     const usedVocab = (Array.isArray(sData.vocab) ? sData.vocab : []).filter(v => v && v.num !== undefined);
+     const checkedBooks = Array.isArray(aiAnalysisResult && aiAnalysisResult.vocabBooks) ? aiAnalysisResult.vocabBooks : [typeof currentTextbook === 'string' ? currentTextbook : ''];
+     const vocabChecked = !!(aiAnalysisResult && aiAnalysisResult.vocabChecked);
      let currentRange = null, gSpan = null;
      for (const token of sentenceText.matchAll(/\S+/g)) {
          const range = ranges.find(r => token.index >= r.start && token.index < r.end) || null;
@@ -1210,15 +1221,22 @@ textHistory = textHistory.filter(h => h.text !== rawText);
          const cleanKey = typeof window.readerCleanToken === 'function' ? window.readerCleanToken(subToken) : subToken.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g,"");
          // The space goes between the boxes: a space at the end of an inline-block is dropped.
          const span = document.createElement('span'); span.className = 'word-span'; span.innerText = subToken;
-         let vocabMatch = window.findVocabByToken(cleanKey);
-         // A word used in a meaning that is not in the word book is left plain.
-         if (vocabMatch && aiAnalysisResult && aiAnalysisResult.vocabChecked && !usedVocab.has(String(vocabMatch.num))) { span.dataset.vocabSkip = '1'; vocabMatch = null; }
-         if(vocabMatch) {
-             span.classList.add('registered'); let hasOk = false; let hasBad = false; let hasSo = false; let hasAnyHistory = false;
-             vocabMatch.meanings.forEach(m => { if(m.history && m.history.length > 0) hasAnyHistory = true; if(m.status === 'ok') hasOk = true; if(m.status === 'so') hasSo = true; if(m.status === 'bad') hasBad = true; });
-             if(!hasAnyHistory) span.classList.add(`status-none`); else if(hasBad) span.classList.add(`status-bad`); else if(hasSo) span.classList.add(`status-so`); else if(hasOk) span.classList.add(`status-ok`);
-             const word = vocabMatch;
-             span.onclick = (e) => window.openReaderVocabDetails(e, word, usedVocab.get(String(word.num)) || 0);
+         // Which word-book entry this is: the one the AI said carries a registered meaning here
+         // (a word used in another meaning stays plain), or the first match when unchecked.
+         const matches = window.ReaderVocab ? window.ReaderVocab.find(cleanKey) : [];
+         let pick = null, sense = 0;
+         for (const entry of matches) {
+             if (vocabChecked && checkedBooks.includes(entry.book)) {
+                 const used = usedVocab.find(v => String(v.num) === entry.num && (v.book ? v.book === entry.book : entry.book === checkedBooks[0]));
+                 if (used) { pick = entry; sense = Number(used.meaning) || 0; break; }
+             } else if (!pick) pick = entry;
+         }
+         if (!pick && matches.length) span.dataset.vocabSkip = '1';
+         if (pick) {
+             span.dataset.vocabBook = pick.book; span.dataset.vocabNum = pick.num; span.dataset.sense = String(sense);
+             window.ReaderVocab.paint(span);
+             const chosen = pick, chosenSense = sense;
+             span.onclick = (e) => window.openReaderVocabDetails(e, chosen, chosenSense);
          } else if (!span.dataset.vocabSkip) {
              const dictMatch = dictionaryData.find(d => d.en === cleanKey);
              if(dictMatch) {
