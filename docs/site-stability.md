@@ -781,3 +781,10 @@ Some stored bookshelf or history data held entries that could not be used: `null
 - a value that is not a list becomes an empty list
 
 `tests/reader-save.smoke.cjs` restarts the app with such entries and checks that no error is shown.
+
+## Follow-up: warm-up opening (10.21.57)
+
+The warm-up now opens with a short scene instead of a card appearing at once. It uses the START card's look: a ring, the number of words in italic Georgia, then 「WORDS」 and 「単語スタート」.
+- After 1.5 seconds it fades, and the flashcard screen fades in.
+- A tap skips the scene.
+- With reduced motion, the scene has no animation and lasts 0.5 seconds.

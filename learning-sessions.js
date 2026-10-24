@@ -875,6 +875,24 @@
         }),
     );
     draw();
+    // Opening: the number of words grows in with a ring, then gives way to the first card.
+    // A tap skips it.
+    const intro = document.createElement("div");
+    intro.className = "warmup-intro";
+    intro.setAttribute("aria-hidden", "true");
+    intro.innerHTML =
+      '<span class="warmup-intro-ring"></span><span class="warmup-intro-count"></span><span class="warmup-intro-label">WORDS</span><span class="warmup-intro-sub">単語スタート</span>';
+    intro.querySelector(".warmup-intro-count").textContent = String(queue.length);
+    d.classList.add("warmup-intro-playing");
+    d.append(intro);
+    const endIntro = () => {
+      if (intro.classList.contains("is-leaving")) return;
+      intro.classList.add("is-leaving");
+      d.classList.remove("warmup-intro-playing");
+      setTimeout(() => intro.remove(), 450);
+    };
+    intro.addEventListener("pointerdown", endIntro);
+    setTimeout(endIntro, matchMedia("(prefers-reduced-motion: reduce)").matches ? 500 : 1500);
   }
   function startLoginWarmup() {
     welcomeEligible = uid();
