@@ -1215,8 +1215,20 @@ window.__readLearningRankingBackup=async function(id){
   var save=await fetchCloudSave(id),data=save&&save.data||{};
   return window.LearningRankingModel.merge(data.localStorage&&data.localStorage['core_v4_learning_ranking_v2_'+id],data.memory&&data.memory.userStats&&data.memory.userStats.learning_ranking_v2_json);
 };
-function applySavedMemory(memory,id) {
+// The reader's bookshelf, folders and history on this device, when this account changed them
+// after the backup being restored (reader-shelf.js stamps each change); otherwise null.
+function newerReaderData(id,savedAt){
+  try{
+    var mark=JSON.parse(localStorage.getItem('aiglish_reader_local')||'null');
+    if(!mark||mark.owner!==id||!(Number(mark.at)>(Date.parse(savedAt||'')||0)))return null;
+    var read=function(key){var value=JSON.parse(localStorage.getItem(key)||'null');return Array.isArray(value)?value:null;};
+    return {textHistory:read('textHistory'),myBookshelf:read('myBookshelf'),myFolders:read('myFolders')};
+  }catch(e){return null;}
+}
+function applySavedMemory(memory,id,savedAt) {
   if(!memory||typeof memory!=='object')return;
+  var readerLocal=newerReaderData(id,savedAt);
+  if(readerLocal)['textHistory','myBookshelf','myFolders'].forEach(function(key){if(readerLocal[key])memory[key]=readerLocal[key];});
   if(window.LibraryState)window.LibraryState.sanitizeSave({memory:memory},id);
   try{if(memory.totalExp!=null)totalExp=memory.totalExp;}catch(e){}
   try{if(memory.myName!=null)myName=memory.myName;}catch(e){}
@@ -1349,7 +1361,7 @@ async function autoLoadOnce() {
   restoreSaveStorage(save,id);
   if(save&&save.data&&save.data.memory){
     window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt||'',data:save.data.memory};
-    applySavedMemory(save.data.memory,id);
+    applySavedMemory(save.data.memory,id,save.savedAt);
   }
 }
 function openPanel() {
@@ -1371,7 +1383,7 @@ function restorePendingSaveMemory(){
   if(!pending)return;
   if(!window.__learningBootReady)window.StartupMonitor?.mark?.('saved-books-restore');
   if(window.LibraryState)window.LibraryState.sanitizeSave({memory:pending.data},pending.id);
-  applySavedMemory(pending.data,pending.id);
+  applySavedMemory(pending.data,pending.id,pending.savedAt);
   var restoredSuccessfully=true;
   try{
     var bookKey=pending.data.vocabBookKey||((typeof currentTextbook!=='undefined'&&currentTextbook)?currentTextbook:'default');
@@ -1486,6 +1498,8 @@ window.__restoreLearningFile=async function(save,id){
  if(memory.userStats){var ledger=window.StudyTimeModel.mergeCurrent(window.StudyTime.snapshot(),memory.userStats.study_calendar_v2);memory.userStats={...userStats,...memory.userStats,study_calendar_v2:ledger};}
  if(Array.isArray(memory.textbooksPool))memory.textbooksPool=Array.from(new Map([...memory.textbooksPool,...textbooksPool].map(book=>[book.id,book])).values());
  restoreSaveStorage(save,id);
+ // A restored file replaces the reader's data on this device too.
+ try{localStorage.removeItem('aiglish_reader_local');}catch(e){}
  window.switchTab('vocab');window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt,data:memory};restorePendingSaveMemory();
  if(window.__pendingGameSaveMemory)throw Error('復元の一部が完了していません。元のファイルを保管して再試行してください。');
  window.StudyTime.init();window.syncRankingMetrics();window.showVocabLibrarySelection();

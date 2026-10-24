@@ -760,3 +760,13 @@ Now:
 - 「並べ替え」 shows ▲▼ on the rows, for folders on the shelf and for texts in a folder. 「完了」, or leaving the view, ends it.
 
 `tests/reader-books.smoke.cjs` covers these.
+
+## Follow-up: bookshelf texts lost on restart (10.21.55)
+
+Texts saved to the bookshelf could disappear after the app was closed and opened again.
+- **The cause.** The bookshelf, folders and history go into device keys right away (`myBookshelf`, `myFolders`, `textHistory`). At startup, though, `applySavedMemory` replaced them with the last full backup. Full backups run only at boundaries, such as closing the result screen or leaving a tab. So a text saved just before the app was closed was gone at the next start.
+- **Changes are stamped.** Each change to the bookshelf or history now stamps the device copy for that account (`aiglish_reader_local`).
+- **Restore keeps the newer copy.** If that account's stamp is newer than the backup being restored, the restore keeps the device copy. The device keys are shared by every account on the device, so another account's stamp never counts. Restoring a backup file still replaces everything.
+- **Backup after changes.** A bookshelf change now starts a backup 1.5 seconds later (`saveAfterStudy("reader-shelf")`).
+
+`tests/reader-save.smoke.cjs` reproduces the loss and covers the fix.

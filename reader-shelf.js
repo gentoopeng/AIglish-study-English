@@ -30,8 +30,24 @@
       localStorage.setItem("myBookshelf", JSON.stringify(myBookshelf));
       localStorage.setItem("myFolders", JSON.stringify(myFolders));
     } catch {}
-    window.queueBackgroundSave?.();
+    window.markReaderDataChanged();
   }
+  // The bookshelf and history live in device keys, but startup restores the last full backup.
+  // So a change stamps the device copy as newer than any backup (the restore keeps it, see
+  // applySavedMemory in save-system.js), and a backup follows shortly.
+  let backupTimer = 0;
+  window.markReaderDataChanged = function () {
+    const owner = typeof myId === "string" && myId ? myId : "GUEST-000";
+    try {
+      localStorage.setItem("aiglish_reader_local", JSON.stringify({ owner, at: Date.now() }));
+    } catch {}
+    window.queueBackgroundSave?.();
+    if (owner === "GUEST-000") return;
+    clearTimeout(backupTimer);
+    backupTimer = setTimeout(() => {
+      if ((typeof myId === "string" ? myId : "") === owner) window.saveAfterStudy?.("reader-shelf");
+    }, 1500);
+  };
   const copy = (value) => (value ? JSON.parse(JSON.stringify(value)) : null);
   const sentenceCount = (text) =>
     (String(text || "").replace(/\n/g, " ").match(/[^.?!]+[.?!]+|[^.?!]+$/g) || []).filter((s) => s.trim()).length;
@@ -492,6 +508,7 @@
     try {
       localStorage.setItem("textHistory", JSON.stringify(textHistory));
     } catch {}
+    window.markReaderDataChanged();
     window.renderHistoryList();
   };
   window.ReaderShelf = Object.freeze({ sentenceCount, folders });
