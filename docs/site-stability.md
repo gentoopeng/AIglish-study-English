@@ -668,3 +668,12 @@ Exclamations that belong to the game stay: 「正解！」, 「スタート！�
 - the menu
 
 It fails if any visible element sticks out past the screen's left or right edge. Elements clipped by a scrolling parent, and the closed sidebar, are not counted. All screens pass today.
+
+## Follow-up: bookshelf and English analysis (10.21.50)
+
+- **Folders work.** Saving to the bookshelf now offers the admin shelves, 未分類 and the user's own folders, including a new one. The shelf shows each folder as a 📁 row, and opens it. An empty folder can be deleted. Before, the folder was saved but never shown, so every text landed in 未分類.
+- **Opening from history no longer asks the AI again.** History and the shelf reuse the saved analysis. The history 「開く」 button also had a second listener from an old patch that ran the analysis twice; it is marked so the patch skips it.
+- **Missing API key is explained.** Without a Gemini key, the result starts with a notice and a button to open the settings, instead of a silent 「和訳未取得」.
+- **Model names.** The reader and the workbook explanation call `gemini-flash-latest`, and fall back to `gemini-2.5-flash` when a model returns 404.
+
+`tests/reader-bookshelf.smoke.cjs` covers these steps.
