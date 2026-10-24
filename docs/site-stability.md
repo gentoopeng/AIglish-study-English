@@ -770,3 +770,14 @@ Texts saved to the bookshelf could disappear after the app was closed and opened
 - **Backup after changes.** A bookshelf change now starts a backup 1.5 seconds later (`saveAfterStudy("reader-shelf")`).
 
 `tests/reader-save.smoke.cjs` reproduces the loss and covers the fix.
+
+## Follow-up: broken bookshelf entries no longer stop the start (10.21.56)
+
+Some stored bookshelf or history data held entries that could not be used: `null`, a number, or an object where a list was expected. When the shelf or history drew such data, it threw an error. The app then showed the red error notice (e.g. 「Cannot read properties of null (reading 'bookId')（reader-shelf.js:19）」), and `loadLocalState` failed partway through the start.
+
+`reader-shelf.js` now tidies the three lists before every use:
+- texts without a string `text` are dropped
+- folder names that are not strings are dropped
+- a value that is not a list becomes an empty list
+
+`tests/reader-save.smoke.cjs` restarts the app with such entries and checks that no error is shown.
