@@ -834,7 +834,7 @@
         window.saveVocabToStorage();
         if(window.__captureManualVocabDraft)window.__captureManualVocabDraft();
         window.renderVocabList();
-        alert("単語情報を更新しました！");
+        alert("単語情報を更新しました。");
     };
 
     // ================================================================

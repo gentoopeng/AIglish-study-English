@@ -457,7 +457,7 @@
         if (previousButton) previousButton.disabled = flashcardSessionHistory.length === 0;
 
         if (remaining <= 0) {
-            alert('🎉 カードの試練達成！\n習得単語数: ' + flashcardLearnedCount + ' / ' + flashcardOriginQueue.length);
+            alert('カードの試練達成\n習得単語数: ' + flashcardLearnedCount + ' / ' + flashcardOriginQueue.length);
             window.quitFlashcardSession();
             return;
         }

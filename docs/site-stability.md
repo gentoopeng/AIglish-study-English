@@ -647,3 +647,12 @@ These fields did nothing, so they are gone.
 - Profiles no longer show 目標.
 
 The account write guard removes `realName`, `age` and `userTarget` from every write to an account document. On merge writes, it deletes them where they are present (`deleteField`, newly exposed as `window.fbDeleteField`). Existing accounts therefore lose these fields at their next profile save.
+
+## Follow-up: plainer messages (10.21.49)
+
+The look stays as it is. Only messages changed:
+- Pop-up messages and login errors no longer start with emoji (🎉 ✅ 💾 ⚠️ 🎴) or end with 「！」; they end with 「。」.
+- System words are gone. 「修行者」 is now 「プレイヤー」, 「認証確認」 is 「ログインの確認」, and 「以下のプロファイルで…」 is 「このアカウントで…」.
+- Messages that named Firebase now say 「サーバー」 or 「通信」.
+
+Exclamations that belong to the game stay: 「正解！」, 「スタート！」, 「ラスト10秒！」, 「準備完了！」.
