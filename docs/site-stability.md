@@ -802,3 +802,33 @@ The words of shared (distributed) books could not be edited at all. Admin rights
 - While the mode is on, a word edit to a shared book is published at once (`saveVocabMasterToStorage` → `shared/vocab_<id>`) instead of waiting for the next flush.
 
 `tests/shared-book-editing.smoke.cjs` covers both.
+
+## Follow-up: poker for points (10.21.59)
+
+The battle tab's lower card (ガチ, which had only shown 「準備中」) now opens **ポーカー**: Texas Hold'em played for study points.
+
+**Rules** (`poker-model.js`, no screen or network)
+- Covers the deck, the best five of seven cards with Japanese names, and blinds (heads-up: the dealer posts the small blind).
+- The action order keeps the big blind's option. A raise reopens the action, and the minimum raise is tracked.
+- All-ins create side pots. In a split pot, the odd chip goes to the first winner after the dealer. Leaving folds at once.
+- Every function returns a new hand, so all devices reach the same table.
+- `tests/poker-model.test.cjs` covers these.
+
+**Table** (`poker.js`, `poker.css`)
+- A table is one document, `pokerRooms/{4-digit number}`, found by its number like a battle room.
+- Its maker sets the buy-in (20–100,000 pt, at least 10 big blinds), the blinds (1/2 up to 50/100), the seat count (2–6) and the time to act (15–60 s).
+- Every move is a transaction through the model.
+- The maker's device deals. It shuffles with `crypto.getRandomValues` and seals each player's two cards for that player alone (ECDH P-256 + AES-GCM, one key pair per table and account, kept on the device). It also turns over the board and the showdown, handles running out of time (check if possible, otherwise fold), and starts the next hand 5 seconds after one ends, moving the dealer button.
+- Players who join during a hand play from the next one. A player without chips can add the buy-in again.
+
+**Points**
+- When a hand ends, each player adds their own result to their wallet (`users/{id}/learningPoints/main`, plus the public `studyPoints`). This happens once per table and hand: the result is keyed and recorded both in the wallet and on the device. The local wallet is then updated through `StudyPoints.restore`.
+- An unfinished hand changes nothing.
+- Leaving during a hand loses the chips already in the pot. That loss is settled when the player leaves.
+- Joining needs at least the buy-in in points.
+
+**Limits**
+- The maker's device knows every card it deals, and the table stops if the maker leaves.
+- As with the rest of the app, the checks run on the devices (see `docs/security.md`).
+
+`tests/poker.smoke.cjs` plays two hands between two devices; `tests/casual-lobby.smoke.cjs` opens poker from the battle tab.

@@ -20,8 +20,9 @@ Last updated for version 10.21.45.
 1. **Firestore rules are open.** Anyone who knows the project can read and write every document, including `users/{id}` (real name, age, PIN digest), groups, rooms and points.
 2. **A 4-digit PIN digest can be brute-forced.** There are only 10,000 PINs, so a slow digest delays an attacker but does not stop one. Only a server-side check with rate limiting stops this.
 3. **Real names and ages are still in `users/{id}`.** The users list downloads these documents when it scans users.
-4. **Admin checks run on the device.** Anyone can skip them by editing the page in their own browser.
-5. **The old admin password is in the git history.** Change it: replace the two digests in `window.verifyAdminPassword` (app.js) with `sha256("aiglish-admin:" + newPassword)`.
+4. **Poker trusts the table's maker.** The device that deals knows every card, and the points each player adds after a hand are computed on their own device. This is fine for friendly games, but it is not protected against cheating.
+5. **Admin checks run on the device.** Anyone can skip them by editing the page in their own browser.
+6. **The old admin password is in the git history.** Change it: replace the two digests in `window.verifyAdminPassword` (app.js) with `sha256("aiglish-admin:" + newPassword)`.
 
 ## Recommended next step: Firebase Authentication
 
