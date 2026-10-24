@@ -297,6 +297,8 @@ function collectAllData() {
       if(k.indexOf('core_v4_word_duel_rating_')===0)continue;
       if(k.indexOf('core_v4_study_points_')===0&&k!=='core_v4_study_points_'+myId)continue;
       if(k==='aiglish_cloud_usage_v1'||k.indexOf('core_v4_group_chat_draft_')===0)continue;
+      // Device-only: the API key, and the cached shared account list.
+      if(k==='core_v4_geminiKey'||k==='core_v4_users')continue;
       if (/^core_v4_(?:flash_queue|flash_cursor|group_synced)_/.test(k)) continue;
       if (k.indexOf('core_v4_textbook_file_') === 0) continue;
       if (k.indexOf('save_studio_') === 0 || k === 'aiglish_shared_background_catalog' || k === 'aiglish_profile_shop_catalog' || k === '__aiglish_render_guard' || k === '__aiglish_warmup_guard' || k === '__aiglish_deletion_guard' || k === '__aiglish_startup_diagnostic') continue;
@@ -666,6 +668,8 @@ window.__fixPatch3Applied = true;
 
 /* 収集時に除外する巨大キャッシュキーのプレフィックス */
 var EXCLUDE_PREFIXES = [
+'core_v4_geminiKey', // The API key stays on this device.
+'core_v4_users', // Cached shared account list, not part of a personal save.
 '__aiglish_startup_diagnostic',
 '__aiglish_render_guard',
 '__aiglish_warmup_guard',
@@ -1030,7 +1034,7 @@ function progress(percent, startedAt, text) {
 }
 function collectAll() {
   if(typeof window.__collectGameSaveData==='function') return window.__collectGameSaveData();
-  var ls={}; for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k!=='aiglish_cloud_usage_v1'&&k.indexOf('core_v4_group_chat_draft_')!==0)ls[k]=localStorage.getItem(k);} return {localStorage:ls,memory:{}};
+  var ls={}; for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k!=='aiglish_cloud_usage_v1'&&k!=='core_v4_geminiKey'&&k!=='core_v4_users'&&k.indexOf('core_v4_group_chat_draft_')!==0)ls[k]=localStorage.getItem(k);} return {localStorage:ls,memory:{}};
 }
 async function markCloudPending(id){try{localStorage.setItem('core_v4_autosave_pending_'+id,'1');if(window.AppStorage)await window.AppStorage.flush();}catch(error){console.warn('同期待ちの端末記録を保存できませんでした',error);}}
 var pendingSave=null;

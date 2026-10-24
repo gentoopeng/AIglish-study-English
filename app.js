@@ -2710,7 +2710,9 @@ window.getAllUsers = async function() {
     const snap = await window.fbGetDoc(ref);
     if (!snap.exists() || !snap.data() || !Array.isArray(snap.data().users)) return [];
     const cloudUsers = snap.data().users;
-    try { localStorage.setItem("core_v4_users", JSON.stringify(cloudUsers)); } catch (e) {}
+    // This device keeps the list without real names or ages.
+    try { localStorage.setItem("core_v4_users", JSON.stringify(cloudUsers.map(function(u) { return u && u.id ? window.LoginIdentity.publicEntry(u) : u; }))); } catch (e) {}
+    window.__scheduleAccountListMigration?.(cloudUsers);
     return cloudUsers;
   };
 
@@ -2735,14 +2737,31 @@ window.getAllUsers = async function() {
 // ------------------------------------------------------------------
 // 2. saveAllUsers: ID単位マージで他のユーザーを消さない
 // ------------------------------------------------------------------
-window.saveAllUsers = async function(incomingUsers) {
+window.saveAllUsers = async function(incomingUsers, knownDigests) {
+  // The shared list keeps only what login needs (no real name or age), and PINs only as digests.
+  // Digests are worked out before the transaction, which must stay short.
+  const digests = knownDigests instanceof Map ? knownDigests : new Map();
+  const prepare = async function(list) {
+    for (const u of list || []) {
+      const pin = u && u.id ? window.LoginIdentity.storedPin(u) : "";
+      if (pin && !window.LoginIdentity.isDigest(pin) && !digests.has(u.id + "\n" + pin))
+        digests.set(u.id + "\n" + pin, await window.LoginIdentity.digest(u.id, pin));
+    }
+  };
+  const clean = function(u) {
+    const entry = window.LoginIdentity.publicEntry(u);
+    const pin = window.LoginIdentity.storedPin(entry);
+    if (pin && !window.LoginIdentity.isDigest(pin) && digests.has(entry.id + "\n" + pin))
+      entry.pin = digests.get(entry.id + "\n" + pin);
+    return entry;
+  };
   const mergeInto = function(baseUsers) {
     const userMap = new Map();
     (baseUsers || []).forEach(function(u) { if (u && u.id) userMap.set(u.id, u); });
     (incomingUsers || []).forEach(function(u) {
       if (u && u.id) userMap.set(u.id, Object.assign({}, userMap.get(u.id) || {}, u));
     });
-    return Array.from(userMap.values());
+    return Array.from(userMap.values()).map(clean);
   };
   const rememberLocally = function(users) {
     try { localStorage.setItem("core_v4_users", JSON.stringify(users)); } catch (e) {}
@@ -2754,6 +2773,7 @@ window.saveAllUsers = async function(incomingUsers) {
     } catch (e) { return []; }
   };
 
+  try { await prepare(incomingUsers); await prepare(cachedUsers()); } catch (e) { console.warn("PINの保護を準備できませんでした:", e); }
   // 読み込みと書き込みを同じトランザクションで行い、同時登録・PIN再設定を古い一覧で上書きしない。
   if (window.db && window.fbRunTransaction && window.fbDoc) {
     try {
@@ -2778,6 +2798,43 @@ window.saveAllUsers = async function(incomingUsers) {
   const localUsers = mergeInto(cachedUsers());
   rememberLocally(localUsers);
   return localUsers;
+};
+
+// ------------------------------------------------------------------
+// 2b. 旧形式の一覧の移行: PINをダイジェストに、本名・年齢は一覧から外す
+// ------------------------------------------------------------------
+// The first device that reads a list with digits or real names rewrites it once, then gives each
+// still-legacy users/{id} the same digest (only where the document still holds those digits).
+window.__scheduleAccountListMigration = function(users) {
+  if (window.__accountListMigration || !Array.isArray(users)) return;
+  const L = window.LoginIdentity;
+  const legacy = users.filter(function(u) {
+    const pin = u && u.id ? L.storedPin(u) : "";
+    return u && u.id && (u.realName !== undefined || u.age !== undefined || (pin && !L.isDigest(pin)));
+  });
+  if (!legacy.length) return;
+  window.__accountListMigration = (async function() {
+    await new Promise(function(resolve) { setTimeout(resolve, 2500); });
+    const digests = new Map();
+    for (const u of legacy) {
+      const pin = L.storedPin(u);
+      if (pin && !L.isDigest(pin)) digests.set(u.id + "\n" + pin, await L.digest(u.id, pin));
+    }
+    await window.saveAllUsers([], digests);
+    if (!window.db || !window.fbRunTransaction || !window.fbDoc) return;
+    for (const [key, value] of digests) {
+      const parts = key.split("\n"), ref = window.fbDoc(window.db, "users", parts[0]);
+      try {
+        await window.fbRunTransaction(window.db, async function(tx) {
+          const snap = await tx.get(ref);
+          if (snap.exists() && String(snap.data().pin) === parts[1]) tx.set(ref, { pin: value }, { merge: true });
+        });
+      } catch (e) {
+        console.warn("PINの移行は次回に再試行します:", e);
+        break;
+      }
+    }
+  })().catch(function(e) { console.warn("ユーザー一覧の移行は次回に再試行します:", e); });
 };
 
 // ------------------------------------------------------------------
@@ -2835,14 +2892,15 @@ window.findUserInFirebase = async function(userId, pin) {
   const result = await window.lookupCloudAccount(userId);
   if (result.state !== "found" || result.data.deleted) return null;
   const user = Object.assign({ id: userId }, result.data);
-  if (!window.LoginIdentity.matches(user, [userId], pin)) return null;
-  return { id: userId, playerName: result.data.playerName || "修行者", realName: result.data.realName || "一般", age: result.data.age || "18", pin: String(result.data.pin) };
+  if (!(await window.LoginIdentity.verify(user, [userId], pin))) return null;
+  return { id: userId, playerName: result.data.playerName || "修行者", realName: result.data.realName || "一般", age: result.data.age || "18", pin: await window.LoginIdentity.protect(userId, result.data.pin) };
 };
 
 // 他端末でのログインに必要なPINがusers/{id}に無い場合だけ補完する。
 // 確認と書き込みを同じトランザクションで行い、直前のPIN再設定を古いPINで戻さない。
 window.restoreCloudPinIfMissing = async function(userId, pin) {
   if (!userId || !pin || !window.db || !window.fbRunTransaction || !window.fbDoc) return false;
+  pin = await window.LoginIdentity.protect(userId, pin);
   const ref = window.fbDoc(window.db, "users", userId);
   return window.fbRunTransaction(window.db, async function(tx) {
     const snap = await tx.get(ref);
@@ -2903,7 +2961,9 @@ window.__submitAuthForm = async function() {
     }
 
     const newId = window.generateUserId();
-    const newUserObj = { id: newId, playerName: pName, realName: rName, age: age, pin: pin };
+    // Only the digest of the PIN is stored; the shared list gets no real name or age.
+    const pinDigest = await window.LoginIdentity.digest(newId, pin);
+    const newUserObj = { id: newId, playerName: pName, pin: pinDigest };
 
     // users/{id} が無いと他の端末からログインできないため、保存できた場合だけ登録完了にする。
     try {
@@ -2913,7 +2973,7 @@ window.__submitAuthForm = async function() {
         playerName: pName,
         realName: rName,
         age: age,
-        pin: pin,
+        pin: pinDigest,
         selectedTitle: "称号なし",
         userTarget: "未設定",
         totalExp: 0,
@@ -2954,7 +3014,7 @@ window.__submitAuthForm = async function() {
 
     // 戦略1: all_users から検索
     try {
-      user = window.LoginIdentity.find(await window.getAllUsers(), ids, pinInput);
+      user = await window.LoginIdentity.findVerified(await window.getAllUsers(), ids, pinInput);
       if (user) loginMethod = "all_users";
     } catch (e) {
       console.error("戦略1 all_users検索エラー:", e);
@@ -2966,7 +3026,7 @@ window.__submitAuthForm = async function() {
       if (result.state === "unavailable") { unavailable = unavailable || result.reason; continue; }
       if (result.state !== "found") continue;
       if (result.data.deleted) { deleted = true; continue; }
-      if (window.LoginIdentity.matches(Object.assign({}, result.data, { id: ids[i] }), ids, pinInput)) {
+      if (await window.LoginIdentity.verify(Object.assign({}, result.data, { id: ids[i] }), ids, pinInput)) {
         user = { id: ids[i], playerName: result.data.playerName || "修行者", realName: result.data.realName || "一般", age: result.data.age || "18", pin: String(result.data.pin) };
         loginMethod = "firebase_direct";
       }
@@ -2975,12 +3035,29 @@ window.__submitAuthForm = async function() {
     // 戦略3: ローカルキャッシュから検索
     if (!user && !deleted) {
       try {
-        user = window.LoginIdentity.find(JSON.parse(localStorage.getItem("core_v4_users") || "[]"), ids, pinInput);
+        user = await window.LoginIdentity.findVerified(JSON.parse(localStorage.getItem("core_v4_users") || "[]"), ids, pinInput);
         if (user) loginMethod = "local_cache";
       } catch (e) {}
     }
 
     if (user) {
+      // A PIN still stored as digits is replaced by its digest, in users/{id} and the shared list.
+      if (!window.LoginIdentity.isDigest(window.LoginIdentity.storedPin(user))) {
+        const plain = window.LoginIdentity.storedPin(user);
+        user = Object.assign({}, user, { pin: await window.LoginIdentity.digest(user.id, pinInput) });
+        try {
+          if (window.db && window.fbRunTransaction && window.fbDoc) {
+            const ref = window.fbDoc(window.db, "users", user.id);
+            await window.fbRunTransaction(window.db, async function(tx) {
+              const snap = await tx.get(ref);
+              if (snap.exists() && String(snap.data().pin) === plain) tx.set(ref, { pin: user.pin }, { merge: true });
+            });
+          }
+          await window.saveAllUsers([{ id: user.id, pin: user.pin }]);
+        } catch (e) {
+          console.warn("PINの保護は次回のログインで再試行します:", e);
+        }
+      }
       // all_users以外から見つかった場合は自動復旧
       if (loginMethod !== "all_users") {
         try {
@@ -3020,9 +3097,8 @@ window.showLoginConfirmPopup = function(user) {
     '<div style="color:var(--text-sub); font-size:13px; margin-bottom:16px; line-height:1.6;">' +
     "以下のプロファイルでログインしますか？<br>" +
     '<div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; margin-top:8px; text-align:left;">' +
-    "<strong>プレイヤー名:</strong> <span style=\"color:white;\">" + (user.playerName || "修行者") + "</span><br>" +
-    "<strong>本名:</strong> <span style=\"color:white;\">" + (user.realName || "一般") + "</span><br>" +
-    "<strong>年齢:</strong> <span style=\"color:white;\">" + (user.age || "18") + "歳</span>" +
+    "<strong>プレイヤー名:</strong> <span style=\"color:white;\">" + String(user.playerName || "修行者").replace(/[&<>"']/g, function(c) { return "&#" + c.charCodeAt(0) + ";"; }) + "</span><br>" +
+    "<strong>ID:</strong> <span style=\"color:white;\">" + String(user.id).replace(/[&<>"']/g, function(c) { return "&#" + c.charCodeAt(0) + ";"; }) + "</span>" +
     "</div></div>" +
     '<div style="display:flex; gap:12px;">' +
     '<button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--input-bg); color:var(--text-main); font-weight:700; cursor:pointer;" id="cancelLoginBtn">キャンセル</button>' +
@@ -3294,10 +3370,11 @@ console.log("🔐 ログイン安定化＆自動復旧パッチ 適用完了");
           return;
         }
 
+        const newPinDigest = await window.LoginIdentity.digest(userId, newPin);
         if (window.db && window.fbSetDoc && window.fbDoc) {
           const userRef = window.fbDoc(window.db, "users", userId);
           await window.fbSetDoc(userRef, {
-            pin: newPin
+            pin: newPinDigest
           }, { merge: true });
         }
 
@@ -3306,14 +3383,12 @@ console.log("🔐 ログイン安定化＆自動復旧パッチ 適用完了");
           const idx = allUsers.findIndex(function(u) { return u.id === userId; });
           if (idx !== -1) {
             // 他のユーザーの古い端末キャッシュを書き戻さないよう、対象者だけを更新する。
-            await window.saveAllUsers([Object.assign({}, allUsers[idx], { pin: newPin })]);
+            await window.saveAllUsers([Object.assign({}, allUsers[idx], { pin: newPinDigest })]);
           } else {
             await window.saveAllUsers([{
               id: userId,
               playerName: userData.playerName || "修行者",
-              realName: userData.realName || "一般",
-              age: userData.age || "18",
-              pin: newPin
+              pin: newPinDigest
             }]);
           }
         } catch (e) {
@@ -6900,7 +6975,8 @@ window.__collectLocalSettings = function() {
         tc = (typeof rewardedTitlesStepsCache !== "undefined" && rewardedTitlesStepsCache) ? rewardedTitlesStepsCache : (JSON.parse(localStorage.getItem('core_v4_rewarded_titles_cache') || "{}"));
     } catch (e) {}
     return {
-        geminiKey: localStorage.getItem('core_v4_geminiKey') || "",
+        // The Gemini API key stays on this device; it is not uploaded with the cloud save.
+        geminiKey: "",
         loadQuizBook: localStorage.getItem('core_v4_loadquiz_book') || "auto",
         currentTextbook: localStorage.getItem('core_v4_current_textbook_id') || "",
         wordMemory: wm,
@@ -6945,7 +7021,8 @@ window.__mergeSettings = function(local, cloud, localIsNewer) {
 window.__applySettingsToLocal = function(s) {
     var changedTextbook = false;
     try {
-        if (typeof s.geminiKey === "string") {
+        // Older cloud saves carried the key; a save without one never clears the key on this device.
+        if (typeof s.geminiKey === "string" && s.geminiKey) {
             localStorage.setItem('core_v4_geminiKey', s.geminiKey);
             geminiApiKey = s.geminiKey;
             var aki = document.getElementById('sidebarApiKeyInput');
@@ -10274,4 +10351,39 @@ console.log('🧹 app.js 末尾パッチ（リセット復活根治：理解度�
 })();
 
 // Keep one verifier for the existing administrator password and PIN recovery.
-window.verifyAdminPassword = value => value === "tukinokopanda" || value === "tutinokopanda";
+// The admin password is checked against its SHA-256 digest, so the page source no longer shows it.
+// (It is still checked on this device; changing the password means replacing these digests.)
+window.__sha256Hex = function(text) {
+  const bytes = new TextEncoder().encode(String(text)), K = [], H = [1779033703, 3144134277, 1013904242, 2773480762, 1359893119, 2600822924, 528734635, 1541459225];
+  for (let n = 2, found = 0; found < 64; n++) {
+    let prime = true;
+    for (let d = 2; d * d <= n; d++) if (n % d === 0) { prime = false; break; }
+    if (prime) K[found++] = (Math.pow(n, 1 / 3) % 1) * 4294967296 | 0;
+  }
+  const length = bytes.length, padded = new Uint8Array(((length + 9 + 63) >> 6) << 6);
+  padded.set(bytes); padded[length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 4, length * 8);
+  view.setUint32(padded.length - 8, Math.floor(length / 536870912));
+  const w = new Int32Array(64), rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    for (let i = 0; i < 16; i++) w[i] = view.getInt32(offset + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3), s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (h + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0,
+        t2 = ((rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+    H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+  }
+  return H.map((x) => (x >>> 0).toString(16).padStart(8, "0")).join("");
+};
+window.verifyAdminPassword = value => [
+  "3e43d648d8d03a05389ee2375d99d8026aba3d63178992cf2312ce8aa7525feb",
+  "c1fe08f08e728acf949cf8eb6f073a557964c9d7580585642b013bc89a689c3c",
+].includes(window.__sha256Hex("aiglish-admin:" + String(value || "")));
