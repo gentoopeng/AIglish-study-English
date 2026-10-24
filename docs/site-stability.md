@@ -638,3 +638,12 @@ It no longer blocks the page, and it looks like the rest of the app instead of t
 **App icons.** The icon (`aiglish.png`, 1536 × 1024 and 2.2 MB) was declared as square 192/512 icons. It is replaced by square icons on the app's dark blue: `icon-192.png`, `icon-512.png` and `apple-touch-icon.png`, 12–66 KB each.
 
 **App name.** The page title and home-screen name were 「Core System V4」 / 「Core V4」. They are now 「TangoLabo」, as in the logo and the backup file names.
+
+## Follow-up: 本名・年齢・目標 retired (10.21.48)
+
+These fields did nothing, so they are gone.
+- Sign-up no longer asks for a real name or age.
+- The admin editor only edits the nickname.
+- Profiles no longer show 目標.
+
+The account write guard removes `realName`, `age` and `userTarget` from every write to an account document. On merge writes, it deletes them where they are present (`deleteField`, newly exposed as `window.fbDeleteField`). Existing accounts therefore lose these fields at their next profile save.

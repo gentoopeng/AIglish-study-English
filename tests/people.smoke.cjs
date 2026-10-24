@@ -106,9 +106,10 @@ const { chromium, webkit } = require("playwright"),
     );
     await page.getByRole("button", { name: "最近の人のプロフィール" }).click();
     assert.equal(await page.locator("dialog[open]").isVisible(), true);
-    assert.match(
+    // The profile no longer shows a goal (目標 was retired).
+    assert.doesNotMatch(
       await page.locator("dialog[open]").textContent(),
-      /英語を勉強/,
+      /目標|英語を勉強/,
     );
     await page.getByRole("button", { name: "閉じる", exact: true }).click();
     await page.getByRole("button", { name: "最近の人のプロフィール" }).click();
