@@ -2923,3 +2923,4 @@ html body .flash-warmup-dialog.warmup-intro-playing>.flashcard-session-screen{op
 html body .modern-btn{border:1px solid rgba(213,201,172,.45)!important;border-image:none!important;background:rgba(15,22,36,.85)!important;box-shadow:none!important;}
 html body .modern-btn:active{box-shadow:0 0 0 3px rgba(213,201,172,.18)!important;}
 .sidebar:not(.open){box-shadow:none!important;}
+.sidebar{border-image:none!important;border-right:1px solid rgba(213,201,172,.18)!important;}.sidebar.open{box-shadow:8px 0 30px rgba(0,0,0,.35)!important;}

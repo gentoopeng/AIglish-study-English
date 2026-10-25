@@ -111,6 +111,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // red +10, 7 pays 35 × 5.
     assert.match(await rl.locator(".cs-result").innerText(), /7（赤） 当たり\s*\+185枚/);
     assert.equal(await rl.locator('.cs-spot.is-hit[data-on="7"]').count(), 1);
+    // A single number hit gets the chip moment, inside the game screen.
+    await rl.locator(".ceremony.is-chips").waitFor({ state: "attached" });
+    assert.equal(await rl.locator(".ceremony .cer-word").textContent(), "HIT");
     assert.equal(await rl.locator("[data-cs-balance]").innerText(), "1,185枚");
     await page.screenshot({ path: "/tmp/casino-roulette.png" });
     await rl.getByRole("button", { name: "ルーレットを閉じる" }).click();
