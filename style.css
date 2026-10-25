@@ -2924,3 +2924,9 @@ html body .modern-btn{border:1px solid rgba(213,201,172,.45)!important;border-im
 html body .modern-btn:active{box-shadow:0 0 0 3px rgba(213,201,172,.18)!important;}
 .sidebar:not(.open){box-shadow:none!important;}
 .sidebar{border-image:none!important;border-right:1px solid rgba(213,201,172,.18)!important;}.sidebar.open{box-shadow:8px 0 30px rgba(0,0,0,.35)!important;}
+/* Flashcard settings: one quiet accent instead of alternating cyan and purple. */
+.book-flashcard-dialog{border-color:rgba(213,201,172,.3)!important;}
+#flashcard-setup-screen>div{border-color:rgba(213,201,172,.2)!important;}
+#flashcard-setup-screen div[style*="font-size:11px"]{color:#c6b790!important;letter-spacing:.04em;}
+#flashcard-setup-screen .pill-btn.active{background:#c6b790;border-color:#c6b790;color:#18202d;}
+#flashcard-setup-screen .modern-btn,#flashcard-setup-screen button[onclick*="startFlashcard"]{border-image:none!important;}
