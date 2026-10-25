@@ -65,7 +65,7 @@ const { chromium } = require("playwright"),
       };
     });
     await page.goto("http://127.0.0.1:8000");
-    await page.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+    await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
     await page.locator("#nav-vocab").click();
     await page.getByRole("button", { name: "＋ 単語帳を作る", exact: true }).click();

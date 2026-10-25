@@ -19,7 +19,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.route("https://**/*", (r) => r.abort());
     await page.addInitScript(() => localStorage.setItem("b3_tutorial_done", "1"));
     await page.goto(base);
-    await page.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+    await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
     await page.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
     // A result: the number runs up to the score, the ring stops at 70%, the note and sub show.

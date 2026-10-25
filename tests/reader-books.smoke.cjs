@@ -31,7 +31,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       localStorage.setItem("core_v4_geminiKey", "test-key");
     });
     await page.goto(base);
-    await page.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+    await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
     await page.locator("#nav-vocab").click();
     for (const [name, words] of [

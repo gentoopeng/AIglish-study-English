@@ -32,9 +32,8 @@
     const host = document.getElementById("view-battle");
     if (!host || host.childElementCount) return;
     host.innerHTML =
-      '<div class="battle-mode-grid"><button type="button" class="battle-mode-card mode-casual"><span>カジュアル<small>自由なルールで遊ぶ</small></span></button><button type="button" class="battle-mode-card mode-serious mode-poker"><span>ポーカー<small>ポイントを賭けるテキサスホールデム</small></span></button></div>';
+      '<div class="battle-mode-grid"><button type="button" class="battle-mode-card mode-casual"><span>単語バトル<small>単語の意味を早く当てた人が勝ち。2〜4人か、一人で</small></span></button></div>';
     host.querySelector(".mode-casual").onclick = () => window.openWordDuel();
-    host.querySelector(".mode-poker").onclick = () => window.Poker?.open();
   }
   function html() {
     return `<nav class="battle-config-tabs" aria-label="バトル設定"><button type="button" data-config-tab="books" aria-pressed="true">教材</button><button type="button" data-config-tab="rules" aria-pressed="false">ルール</button><button type="button" data-config-tab="events" aria-pressed="false">イベント</button></nav>

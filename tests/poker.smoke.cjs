@@ -45,7 +45,7 @@ const { chromium } = require("playwright"),
       });
       await page.exposeFunction("__pkUnsubscribe", () => listeners.delete(id));
       await page.goto("http://127.0.0.1:8000");
-      await page.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+      await page.getByRole("button", { name: "ゲストで試す" }).click();
       await page.waitForFunction(() => window.__learningBootReady === true);
       await page.evaluate((id) => {
         myId = id;
@@ -96,8 +96,8 @@ const { chromium } = require("playwright"),
     const wallet = (id) => docs.get("users/" + id + "/learningPoints/main").balance;
 
     // The battle tab offers poker where ガチ was.
-    await a.locator("#nav-battle").click();
-    await a.locator(".battle-mode-card.mode-poker", { hasText: "ポーカー" }).click();
+    await a.locator("#nav-casino").click();
+    await a.locator(".casino-game.mode-poker", { hasText: "ポーカー" }).click();
     const screenA = a.locator("dialog.poker-screen[open]");
     await screenA.waitFor();
     assert.match(await screenA.locator(".pk-balance").innerText(), /500pt/);

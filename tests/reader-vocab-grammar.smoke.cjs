@@ -30,7 +30,7 @@ const { chromium } = require("playwright"),
       localStorage.setItem("core_v4_geminiKey", "test-key");
     });
     await page.goto("http://127.0.0.1:8000");
-    await page.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+    await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
     await page.locator("#nav-vocab").click();
     await page.getByRole("button", { name: "＋ 単語帳を作る", exact: true }).click();
@@ -64,7 +64,7 @@ const { chromium } = require("playwright"),
     assert.equal(await grammar.nth(1).innerText(), "must be");
     assert.equal(await grammar.nth(1).evaluate((el) => getComputedStyle(el).borderBottomStyle), "solid");
     await word("must").click();
-    assert.equal(await page.locator("#popWordNum").innerText(), "💡 助動詞 must（推量）");
+    assert.equal(await page.locator("#popWordNum").innerText(), "助動詞 must（推量）");
     assert.match(await page.locator("#popMeaning").innerText(), /推量/);
     await page.evaluate(() => window.closeWordPopover());
     // A marked word opens the same card as the flashcard's ⓘ, with the meaning used here.

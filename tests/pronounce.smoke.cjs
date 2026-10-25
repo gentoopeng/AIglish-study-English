@@ -11,7 +11,7 @@ await page.addInitScript(()=>{localStorage.setItem('b3_tutorial_done','1');windo
  Object.defineProperty(window,'speechSynthesis',{configurable:true,value:{speak:u=>window.__spoken.push({text:u.text,lang:u.lang,rate:u.rate,voice:u.voice?.name}),cancel(){},getVoices:()=>voices,addEventListener(){}}});
  window.SpeechSynthesisUtterance=function(text){this.text=text;};});
 await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.openBookFlashcardSettings&&window.__saveCoordinatorApplied&&window.Pronounce);
-await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();
+await page.getByRole('button',{name:'ゲストで試す'}).click();
 await page.evaluate(()=>{textbooksPool=[{id:'test-book',name:'テスト単語帳',cover:'📘'}];textbooksCacheMap['test-book']=[{num:1,word:'study',meaning:'学ぶ',meanings:[{id:'1-0',text:'学ぶ'}]},{num:2,word:"don't",meaning:'しない',meanings:[{id:'2-0',text:'しない'}]}];window.switchTab('vocab');window.showVocabLibrarySelection();});
 await page.getByRole('button',{name:'テスト単語帳の学習方法を選ぶ'}).click();await page.getByRole('button',{name:'単語カード',exact:true}).click();
 await page.getByRole('button',{name:'カードを開始する'}).click();await page.waitForFunction(()=>flashcardOriginQueue.length>0&&document.getElementById('activeFlashcard'));

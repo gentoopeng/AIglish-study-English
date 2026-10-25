@@ -1,6 +1,6 @@
 const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict');
 (async()=>{const type=process.env.BROWSER==='webkit'?webkit:chromium,browser=await type.launch(type===chromium?{executablePath:'/usr/bin/chromium',args:['--no-sandbox']}:{executablePath:process.env.WEBKIT_EXECUTABLE_PATH});try{
- const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>r.abort());await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();await page.waitForFunction(()=>window.__learningBootReady);
+ const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>r.abort());await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストで試す'}).click();await page.waitForFunction(()=>window.__learningBootReady);
  const result=await page.evaluate(async()=>{
   myId='parts-budget';window.db={};currentTextbook='budget-book';window.LearningData.canSave=()=>true;
   const docs=new Map([['users/parts-budget',{}]]),groups=[];let fail=false;

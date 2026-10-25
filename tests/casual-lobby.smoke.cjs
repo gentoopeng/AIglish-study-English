@@ -16,7 +16,7 @@ const { chromium, webkit } = require("playwright"),
     await page.route("https://**/*", (r) => r.abort());
     await page.goto("http://127.0.0.1:8000");
     await page
-      .getByRole("button", { name: "ゲストとしてテストプレイ" })
+      .getByRole("button", { name: "ゲストで試す" })
       .click();
     await page.waitForFunction(() => window.__learningBootReady);
     await page.evaluate(() => {
@@ -76,17 +76,20 @@ const { chromium, webkit } = require("playwright"),
       "none",
     );
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    assert.equal(await page.locator(".battle-mode-card").count(), 2);
+    // Poker moved to the casino tab; the battle tab has one plain card and no picture.
+    assert.equal(await page.locator(".battle-mode-card").count(), 1);
+    assert.equal(await page.locator(".mode-casual").evaluate((el) => getComputedStyle(el).backgroundImage.includes("url(")), false);
     await page.screenshot({
       path: "/tmp/battle-modes-" + type.name() + ".png",
     });
-    // The lower card opens poker (it replaced ガチ).
-    await page.locator(".mode-poker").click();
+    await page.locator("#nav-casino").click();
+    await page.locator(".casino-game.mode-poker").click();
     await page.locator("dialog.poker-screen[open]").waitFor();
     // The first visit shows the how-to on top.
     await page.locator("dialog.pk-tutorial[open]").getByRole("button", { name: "スキップ" }).click();
     await page.getByRole("button", { name: "ポーカーを閉じる" }).click();
     await page.locator("dialog.poker-screen").waitFor({ state: "detached" });
+    await page.locator("#nav-battle").click();
     await page.locator(".mode-casual").click();
     await page.screenshot({
       path: "/tmp/battle-entry-" + type.name() + ".png",

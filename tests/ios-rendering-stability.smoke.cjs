@@ -9,7 +9,7 @@ const appleUA='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKi
   const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('crash',()=>errors.push('renderer crashed'));
   await page.route('https://**/*',r=>r.abort());
   await page.addInitScript(()=>{Object.defineProperty(navigator,'standalone',{get:()=>true});localStorage.setItem('b3_tutorial_done','1');});
-  await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();
+  await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストで試す'}).click();
   assert.equal(await page.locator('html').evaluate(el=>el.classList.contains('ios-stable-rendering')),true);
   assert.equal(await page.locator('.app-starfield').count(),0);
   assert.match(await page.locator('body').evaluate(el=>getComputedStyle(el,'::after').backgroundImage),/background-night\.webp/);

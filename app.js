@@ -313,7 +313,7 @@ window.renderVocabLibrarySelection = function() {
   if (!textbooksPool.length) {
     var empty = document.createElement('div');
     empty.className = 'vocab-library-empty';
-    empty.textContent = '現在、利用できる単語帳はありません。';
+    empty.textContent = 'まだ単語帳がありません。「＋ 単語帳を作る」か「みんなの単語帳」から始められます。';
     books.appendChild(empty);
   }
   textbooksPool.forEach(function(book, index) {
@@ -469,7 +469,7 @@ if(mode === 'login') {
     if(tabReg) tabReg.classList.remove('active');
     if (loginFields) loginFields.style.display = 'block';
     if (regFields) regFields.style.display = 'none';
-    if(btn) btn.innerHTML = 'システムへログイン <i data-lucide="arrow-right" size="16"></i>';
+    if(btn) btn.innerHTML = 'ログイン <i data-lucide="arrow-right" size="16"></i>';
 } else {
     if(tabLogin) tabLogin.classList.remove('active'); 
     if(tabReg) tabReg.classList.add('active');
@@ -555,7 +555,7 @@ textHistory = textHistory.filter(h => h.text !== rawText);
  const abstractCard = document.getElementById('summary-abstract-card');
  const abstractContainer = document.getElementById('summaryAbstractContainer');
  if (abstractCard) abstractCard.style.display = 'none';
- if (abstractContainer) abstractContainer.innerText = "要約データを生成しています...";
+ if (abstractContainer) abstractContainer.innerText = "要約を作っています…";
  window.initLucide();
  let aiAnalysisResult = null;
  // The key may have been saved after this page loaded.
@@ -2009,8 +2009,8 @@ window.onAppLoaded(async function() {
     const btn = document.createElement("button");
     btn.id = "pinRecoveryBtn";
     btn.type = "button";
-    btn.textContent = "🔑 PINを忘れた場合（再設定）";
-    btn.style.cssText = "width:100%; margin-top:12px; padding:10px; background:none; border:1px dashed rgba(255,255,255,0.3); border-radius:8px; color:var(--text-sub); font-size:12px; font-weight:700; cursor:pointer;";
+    btn.textContent = "PINを忘れたとき";
+    btn.style.cssText = "display:block; margin:-4px auto 14px; padding:8px 10px; background:none; border:0; color:var(--text-sub); font-size:12px; text-decoration:underline; text-underline-offset:3px; cursor:pointer;";
     btn.onclick = function() {
       openPinRecoveryDialog();
     };

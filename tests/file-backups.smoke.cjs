@@ -15,7 +15,7 @@ const { chromium, webkit } = require("playwright"),
     p.on("pageerror", (e) => errors.push(e.message));
     await p.route("https://**/*", (r) => r.abort());
     await p.goto("http://127.0.0.1:8000");
-    await p.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+    await p.getByRole("button", { name: "ゲストで試す" }).click();
     await p.waitForFunction(
       () => window.__learningBootReady && window.FileBackups,
     );

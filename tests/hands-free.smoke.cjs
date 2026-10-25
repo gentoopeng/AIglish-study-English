@@ -14,7 +14,7 @@ await page.addInitScript(()=>{localStorage.setItem('b3_tutorial_done','1');windo
  HTMLMediaElement.prototype.play=function(){window.__playing++;Object.defineProperty(this,'paused',{configurable:true,value:false});return Promise.resolve();};
  HTMLMediaElement.prototype.pause=function(){Object.defineProperty(this,'paused',{configurable:true,value:true});};});
 await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.openBookFlashcardSettings&&window.__saveCoordinatorApplied&&window.HandsFree);
-await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();
+await page.getByRole('button',{name:'ゲストで試す'}).click();
 await page.evaluate(()=>{textbooksPool=[{id:'hf-book',name:'ハンズフリー',cover:'📘'}];textbooksCacheMap['hf-book']=[{num:1,word:'apple',meaning:'りんご',meanings:[{id:'1-0',text:'りんご'}]},{num:2,word:'bread',meaning:'パン',meanings:[{id:'2-0',text:'パン'}]},{num:3,word:'cheese',meaning:'チーズ',meanings:[{id:'3-0',text:'チーズ'}]}];window.switchTab('vocab');window.showVocabLibrarySelection();
  const delay=document.getElementById('handsFreeAnswerDelay');delay.value='1';delay.dispatchEvent(new Event('change'));});
 assert.deepEqual(JSON.parse(await page.evaluate(()=>localStorage.getItem('aiglish_handsfree_settings'))),{answerDelay:1});

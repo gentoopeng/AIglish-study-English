@@ -228,7 +228,7 @@
     if(window.endOnlyCloudSaves)return Promise.resolve();
     var payload=snapToPayload({ myName: selfG('myName'), totalExp: selfG('totalExp'), selectedTitle: selfG('selectedTitle'), myTarget: selfG('myTarget'), myFriendList: selfG('myFriendList'), userStats: selfG('userStats'), todayStudySeconds: selfG('todayStudySeconds'), weeklyStudyMinutesLog: selfG('weeklyStudyMinutesLog'), lastAccessDateStr: selfG('lastAccessDateStr'), wordMemory: selfG('wordMemory'), textHistory: selfG('textHistory'), myBookshelf: selfG('myBookshelf'), myFolders: selfG('myFolders') });if(window.StudyTime){delete payload.stats;delete payload.userStats;delete payload.todayStudySeconds;delete payload.weeklyStudyMinutesLog;delete payload.lastAccessDateStr;}return fbWriteOf(id,payload).catch(function () { toast('⚠️ 端末内にだけ保存しました。ネット復帰後に再同期'); });
     }
-    function saveOther() { var t = T(); if (!t || t.mode !== 'other' || !t.uid) return Promise.resolve(); return fbWriteOf(t.uid, snapToPayload(t.snap || {}, { _editedByAdmin: true })).catch(function () { toast('⚠️ 保存に失敗しました'); }); }
+    function saveOther() { var t = T(); if (!t || t.mode !== 'other' || !t.uid) return Promise.resolve(); return fbWriteOf(t.uid, snapToPayload(t.snap || {}, { _editedByAdmin: true })).catch(function () { toast('保存できませんでした'); }); }
     function refreshDisplay() { try { if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay(); } catch (e) {} try { if (window.renderActivityChart) window.renderActivityChart(); } catch (e) {} }
     
     // ---- 今週の勉強秒数（ランキング用・絶対値＝二重加算なし） ----

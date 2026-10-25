@@ -111,7 +111,7 @@ const { chromium, webkit } = require("playwright"),
         listeners.get(p)?.delete(path),
       );
       await p.goto("http://127.0.0.1:8000");
-      await p.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+      await p.getByRole("button", { name: "ゲストで試す" }).click();
       await p.waitForFunction(() => window.__learningBootReady);
       await p.evaluate((id) => {
         myId = id;
@@ -597,10 +597,10 @@ const { chromium, webkit } = require("playwright"),
     await a.waitForFunction(() => window.FlashCheckpoint);
     if (
       await a
-        .getByRole("button", { name: "ゲストとしてテストプレイ" })
+        .getByRole("button", { name: "ゲストで試す" })
         .isVisible()
     )
-      await a.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+      await a.getByRole("button", { name: "ゲストで試す" }).click();
     await a.waitForFunction(() => window.__learningBootReady);
     await a.evaluate(() => {
       myId = "group-a";

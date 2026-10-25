@@ -211,7 +211,7 @@
   function placeOptions(selected) {
     const esc = (t) => String(t).replace(/[&<>"']/g, (c) => "&#" + c.charCodeAt(0) + ";");
     return (
-      books().map((b) => '<option value="book:' + esc(b.id) + '">📚 ' + esc(b.name) + "</option>").join("") +
+      books().map((b) => '<option value="book:' + esc(b.id) + '">' + esc(b.name) + "</option>").join("") +
       ["未分類", ...folders()]
         .map((f) => '<option value="folder:' + esc(f) + '">' + (f === "未分類" ? "未分類" : "📁 " + esc(f)) + "</option>")
         .join("") +
