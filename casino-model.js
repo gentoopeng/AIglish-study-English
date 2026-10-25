@@ -87,6 +87,10 @@
     d1: { label: "1〜12", pays: 2, hit: (n) => n >= 1 && n <= 12 },
     d2: { label: "13〜24", pays: 2, hit: (n) => n >= 13 && n <= 24 },
     d3: { label: "25〜36", pays: 2, hit: (n) => n >= 25 },
+    // The three long rows of the table ("2 to 1" on a real layout): 3, 6 … 36 on top.
+    c3: { label: "上の列", pays: 2, hit: (n) => n > 0 && n % 3 === 0 },
+    c2: { label: "中の列", pays: 2, hit: (n) => n > 0 && n % 3 === 2 },
+    c1: { label: "下の列", pays: 2, hit: (n) => n > 0 && n % 3 === 1 },
   };
   function spot(on) {
     if (SPOTS[on]) return SPOTS[on];

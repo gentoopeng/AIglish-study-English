@@ -109,7 +109,7 @@ const { chromium } = require("playwright"),
     assert.ok(["#2", "#3"].includes(badge), badge);
     await page.locator("#flashcard-play-screen").getByRole("button", { name: "中断", exact: true }).click();
     // Battle: one book with units offers a unit choice.
-    await page.locator("#nav-battle").click();
+    await page.locator("#nav-community").click(); await page.locator("#communitySegments button", { hasText: "単語バトル" }).click();
     await page.locator(".mode-casual").click();
     await page.locator("[data-battle-route=solo]").click();
     await page.locator(`.battle-book-picker input[value="${book}"]`).check();

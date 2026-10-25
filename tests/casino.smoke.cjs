@@ -23,9 +23,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
 
-    // Seven tabs still fit on a small phone, with the chip icon for the casino.
+    // Six tabs fit on a small phone, with the chip icon for the casino.
     const nav = await page.locator(".nav-bar .nav-item").evaluateAll((items) => items.map((b) => ({ id: b.id, right: b.getBoundingClientRect().right, wide: b.scrollWidth <= b.clientWidth + 1 })));
-    assert.equal(nav.length, 7);
+    assert.equal(nav.length, 6);
     assert.ok(nav.every((n) => n.right <= 375.5 && n.wide), JSON.stringify(nav));
     await page.locator("#nav-casino").click();
     const tab = page.locator("#view-casino.active");
@@ -95,7 +95,14 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await tab.locator(".mode-roulette").click();
     const rl = page.locator("dialog.casino-screen.is-roulette[open]");
     await rl.waitFor();
-    assert.equal(await rl.locator(".cs-numbers .cs-spot").count(), 36);
+    assert.equal(await rl.locator(".cs-board .is-num").count(), 36);
+    // The whole game fits on the phone screen: no scrolling to reach the table or the spin.
+    assert.ok(await rl.evaluate((d) => d.scrollHeight <= d.clientHeight + 1), "roulette scrolls");
+    // Laid out like the felt: 3 on top of the first column, 1 at the bottom, the row bets on the right.
+    const at = (on) => rl.locator('.cs-spot[data-on="' + on + '"]').evaluate((b) => [b.style.gridColumn, b.style.gridRow]);
+    assert.deepEqual(await at("3"), ["2", "1"]);
+    assert.deepEqual(await at("1"), ["2", "3"]);
+    assert.deepEqual(await at("c3"), ["14", "1"]);
     await rl.locator('.cs-spot[data-on="red"]').click();
     await rl.locator('.cs-chip-pick button', { hasText: /^5$/ }).click();
     await rl.locator('.cs-spot[data-on="7"]').click();
@@ -191,7 +198,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await bj.getByRole("button", { name: "+100" }).isDisabled(), true);
     await bj.getByRole("button", { name: "ブラックジャックを閉じる" }).click();
     assert.deepEqual(errors, []);
-    console.log("PASS: casino tab (7 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance");
+    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance");
   } finally {
     await browser.close();
   }

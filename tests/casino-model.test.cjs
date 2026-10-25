@@ -69,6 +69,10 @@ test("roulette pays by the spot and zero loses outside bets", () => {
   assert.equal(C.colourOf(32), "red");
   assert.equal(C.colourOf(0), "green");
   assert.equal(C.spot("37"), null);
+  // A row bet: 3, 6 … 36 pays 2 to 1, and zero is in no row.
+  assert.equal(C.rouletteSettle([{ on: "c3", amount: 4 }], 36).net, 8);
+  assert.equal(C.rouletteSettle([{ on: "c1", amount: 4 }], 34).net, 8);
+  assert.equal(C.rouletteSettle([{ on: "c2", amount: 4 }], 0).net, -4);
   assert.equal(new Set(C.WHEEL).size, 37);
 });
 
