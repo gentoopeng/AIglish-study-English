@@ -1,0 +1,45 @@
+/* Ceremony (ceremony.js): ring drawn, number counting up, a word falling in, sparks, then a zoom away.
+   The same look as the first-ten-words opening, for any screen. */
+.ceremony{position:absolute;inset:0;z-index:2147483000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:radial-gradient(circle at 50% 48%,rgba(30,44,74,.72) 0,rgba(8,13,22,.88) 60%);color:#fff;pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;animation:cerIn .4s ease-out both;}
+.ceremony.is-page{position:fixed;}
+.cer-glow{position:absolute;top:50%;left:50%;width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;background:radial-gradient(circle,rgba(233,217,166,.28) 0,rgba(233,217,166,0) 65%);pointer-events:none;animation:cerGlow 2.2s ease-in-out both;}
+.cer-ring{position:absolute;top:50%;left:50%;width:240px;height:240px;margin:-120px 0 0 -120px;overflow:visible;pointer-events:none;transform:rotate(-90deg);animation:cerRingSpin 2.2s cubic-bezier(.2,.8,.2,1) both;}
+.cer-ring circle{fill:none;stroke:rgba(255,255,255,.14);stroke-width:1.5;}
+.cer-ring circle.is-draw{stroke:#e9d9a6;stroke-width:2.5;stroke-linecap:round;stroke-dasharray:704;stroke-dashoffset:704;animation:cerDrawTo .95s .15s cubic-bezier(.45,0,.2,1) forwards;}
+.cer-number{position:relative;display:flex;align-items:baseline;justify-content:center;gap:4px;}
+.cer-count{text-align:center;font:italic 108px/1 Georgia,'Times New Roman',serif;font-variant-numeric:tabular-nums;text-shadow:0 2px 18px rgba(0,0,0,.8);animation:cerCount .5s .1s cubic-bezier(.2,.9,.25,1.25) both;}
+.ceremony.is-long .cer-count{font-size:72px;}
+.cer-suffix{font:italic 30px/1 Georgia,'Times New Roman',serif;color:#d8cfb8;text-shadow:0 2px 12px rgba(0,0,0,.8);}
+.cer-suffix:empty{display:none;}
+.ceremony.is-landed .cer-count{animation:cerLand .45s cubic-bezier(.2,.9,.25,1.4) both;color:#fff6dc;text-shadow:0 0 24px rgba(233,217,166,.75),0 2px 18px rgba(0,0,0,.8);}
+.cer-word{position:relative;display:flex;gap:.42em;padding-left:.42em;font:italic 20px/1 Georgia,'Times New Roman',serif;text-shadow:0 1px 8px #000;}
+.cer-word:empty{display:none;}
+.cer-word span{display:inline-block;animation:cerLetter .45s calc(.55s + var(--i) * .07s) cubic-bezier(.2,.9,.25,1.3) both;}
+.cer-sub{position:relative;padding:5px 14px;border:1px solid rgba(233,217,166,.45);border-radius:999px;font:700 13px/1 system-ui,sans-serif;letter-spacing:.24em;color:#f3e9cf;animation:cerUp .5s 1s ease-out both;}
+.cer-note{position:relative;margin-top:2px;color:#9fd5c2;font:800 15px/1 system-ui,sans-serif;letter-spacing:.06em;text-shadow:0 0 12px rgba(159,213,194,.45);animation:cerUp .5s 1.2s ease-out both;}
+.cer-sparks{position:absolute;top:50%;left:50%;width:0;height:0;pointer-events:none;}
+.cer-sparks i{position:absolute;top:-3px;left:-3px;width:6px;height:6px;border-radius:50%;background:#f3e9cf;box-shadow:0 0 8px #e9d9a6;opacity:0;transform:rotate(var(--a)) translateY(0);}
+.ceremony.is-landed .cer-sparks i{animation:cerSpark .8s cubic-bezier(.1,.8,.25,1) forwards;}
+.ceremony.is-leaving{pointer-events:none;animation:cerOut .55s ease-in forwards;}
+.ceremony.is-leaving .cer-number{animation:cerZoom .55s ease-in forwards;}
+.ceremony.is-leaving .cer-ring{animation:cerRingOut .55s ease-in forwards;}
+.ceremony.is-waiting,.ceremony.is-waiting *{animation-play-state:paused!important;}
+/* Results: a warmer ring that stops where the score does. */
+.ceremony.is-gold .cer-ring circle.is-draw{stroke:#f1d291;}
+.ceremony.is-gold .cer-glow{background:radial-gradient(circle,rgba(241,210,145,.36) 0,rgba(241,210,145,0) 65%);}
+.ceremony.is-gold .cer-sparks i{background:#fff1c8;box-shadow:0 0 10px #f1d291;}
+.ceremony.is-quiet .cer-ring circle.is-draw{stroke:#a9b4c9;}
+.ceremony.is-quiet .cer-glow{background:radial-gradient(circle,rgba(169,180,201,.22) 0,rgba(169,180,201,0) 65%);}
+@keyframes cerIn{from{opacity:0}to{opacity:1}}
+@keyframes cerGlow{0%{transform:scale(.3);opacity:0}45%{opacity:1}70%{transform:scale(1.05)}100%{transform:scale(1);opacity:.8}}
+@keyframes cerRingSpin{from{transform:rotate(-200deg) scale(.6);opacity:0}30%{opacity:1}to{transform:rotate(-90deg) scale(1);opacity:1}}
+@keyframes cerDrawTo{to{stroke-dashoffset:var(--to,0)}}
+@keyframes cerCount{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes cerLand{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}
+@keyframes cerLetter{from{transform:translateY(-22px) rotate(-12deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes cerUp{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+@keyframes cerSpark{0%{opacity:1;transform:rotate(var(--a)) translateY(-60px) scale(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(-150px) scale(.3)}}
+@keyframes cerOut{to{opacity:0}}
+@keyframes cerZoom{to{transform:scale(2.4);opacity:0}}
+@keyframes cerRingOut{to{transform:rotate(-90deg) scale(1.8);opacity:0}}
+@media(prefers-reduced-motion:reduce){.ceremony,.ceremony *{animation:none!important}.cer-ring circle.is-draw{stroke-dashoffset:var(--to,0)}}

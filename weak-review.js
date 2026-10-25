@@ -188,6 +188,7 @@
         answered: false,
       };
       render();
+      window.Ceremony?.play({ host: view, count: targets.length, word: "REVIEW", sub: "苦手復習スタート" });
     } catch (error) {
       if (token === opening && id === owner())
         message("復習を開けませんでした", error.message);
@@ -363,6 +364,20 @@
       "review-primary",
     );
     body.append(again, button("単語帳に戻る", close, "review-subtle"));
+    // The score counted up in a ring filled as far as it goes, with the points earned.
+    if (answered)
+      window.Ceremony?.play({
+        host: view,
+        result: true,
+        count: s.correct,
+        from: 0,
+        suffix: "/" + answered,
+        ring: s.correct / answered,
+        word: s.correct === answered ? "PERFECT" : "CLEAR",
+        sub: "正解",
+        note: s.points ? "+" + s.points + "pt" : "",
+        tone: s.correct / answered >= 0.5 ? "gold" : "quiet",
+      });
     const saving = Promise.resolve(window.saveAfterStudy?.("review-end"))
       .then((result) => {
         if (session !== s || owner() !== s.id || !view) return;

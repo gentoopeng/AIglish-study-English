@@ -696,6 +696,16 @@
             value(g.progress?.[id], g.goal.baseline?.[id], g.goal.type) >=
             g.goal.target,
         ).length;
+      // A goal the group has just reached is celebrated once on this device.
+      if (g.goal.done && window.Ceremony && d?.isConnected) {
+        const seen = "aiglish_group_goal_seen_" + g.id + "_" + g.goal.id;
+        let fresh = false;
+        try {
+          fresh = localStorage.getItem(seen) !== "1";
+          if (fresh) localStorage.setItem(seen, "1");
+        } catch {}
+        if (fresh) setTimeout(() => d.isConnected && window.Ceremony.play({ host: d, result: true, count: g.goal.target, from: 0, suffix: unit, word: "GOAL", sub: "みんなで目標達成", tone: "gold" }), 400);
+      }
       const summary = document.createElement("p");
       summary.className = "group-race-summary";
       summary.textContent =

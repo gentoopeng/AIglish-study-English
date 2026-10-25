@@ -149,7 +149,7 @@
         if (gain > 0) spawn(fx, "pk-win-text", { x: at(id).x, y: at(id).y - 12 }, { "--d": 0.9 + w * 0.2 + "s" }, "+" + gain.toLocaleString("ja-JP"), 2600);
         if (id === me) for (let s = 0; s < 14; s++) spawn(fx, "pk-spark", at(id), { "--a": s * (360 / 14) + "deg", "--d": 0.9 + (s % 3) * 0.05 + "s" }, undefined, 2200);
       });
-    if (now.over && !was.over) over(view, room.players[me]?.stack > 0);
+    if (now.over && !was.over) over(view, room, me);
   }
 
   // My two cards: flown in from the middle of the table and turned face up.
@@ -178,8 +178,14 @@
     });
   }
 
-  // End of a practice game: confetti for a win.
-  function over(view, won) {
+  // End of a practice game: the chips won (or the hands played) counted up, and confetti for a win.
+  function over(view, room, me) {
+    const won = room.players[me]?.stack > 0;
+    window.Ceremony?.play(
+      won
+        ? { result: true, count: room.players[me].stack, from: 0, word: "WIN", sub: "全員のチップを獲得", note: room.handNo + "ハンド", tone: "gold" }
+        : { result: true, count: room.handNo || 0, from: 0, suffix: "ハンド", ring: 1, word: "GOOD GAME", sub: "チップがなくなりました", tone: "quiet" },
+    );
     if (!won || calm()) return;
     const sky = node("div", "pk-confetti");
     sky.setAttribute("aria-hidden", "true");

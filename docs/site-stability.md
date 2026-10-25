@@ -956,3 +956,25 @@ The battle tab's lower card (ガチ, which had only shown 「準備中」) now o
 - Screenshots of the vocabulary, reader, battle and ranking tabs, the sidebar and the usage guide are pixel-identical before and after.
 - app.js is now about 230 KB (from 553 KB).
 
+
+### The opening animation everywhere (10.21.63.00)
+
+**The shared piece** (`ceremony.js`, `ceremony.css`)
+- The first-ten-words opening became `Ceremony.play`: a ring draws itself while a number counts up, a word falls in letter by letter, sparks burst, and it zooms away.
+- Options:
+  - `suffix` ("/10");
+  - `ring`, a fraction where the ring stops, for scores;
+  - `note`, such as "+14pt";
+  - `tone`: `gold` for a good result, `quiet` for a modest one.
+- A tap skips it, and it resolves once it has gone. It sits in the top open modal dialog (or the page), and waits for frames before it starts.
+- It is exempt from the iPhone motion kill, like the poker screens.
+
+**Where it plays**
+- First ten words: as before, now through the shared piece.
+- Flashcard sessions: at the start, the card count. At the end, the words learned out of the total, with the ring filled as far, replacing the old `alert`.
+- Weak-word review: at the start, the number of questions. At the end, the correct answers out of those answered, the points earned, and PERFECT when all are right.
+- Study tab: opening it on a day that extends a streak of two days or more shows the streak, once a day.
+- Groups: a reached shared goal, once per device.
+- Practice poker: the chips won, or the hands played after a loss.
+
+`tests/ceremony.smoke.cjs` covers the count, ring, tap-to-skip, dialog host, the flashcard ending without an alert, and reduced motion.
