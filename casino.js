@@ -500,7 +500,11 @@
         face.style.setProperty("--d", 0.06 * i + "s");
         b.append(face, node("small", "", state.held[i] && !state.done ? "キープ" : ""));
         b.disabled = state.done || state.rolls >= 3;
-        b.onclick = () => dice(body, C.diceToggle(state, i), null);
+        b.onclick = () => {
+          const next = C.diceToggle(state, i);
+          next.money = state.money;
+          dice(body, next, null);
+        };
         myDice.append(b);
       });
     } else for (let i = 0; i < 5; i++) myDice.append(node("span", "cs-die is-empty"));

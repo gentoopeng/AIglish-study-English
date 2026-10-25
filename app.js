@@ -313,7 +313,7 @@ window.renderVocabLibrarySelection = function() {
   if (!textbooksPool.length) {
     var empty = document.createElement('div');
     empty.className = 'vocab-library-empty';
-    empty.textContent = '現在、利用できる単語帳はありません。';
+    empty.textContent = 'まだ単語帳がありません。「＋ 単語帳を作る」か「みんなの単語帳」から始められます。';
     books.appendChild(empty);
   }
   textbooksPool.forEach(function(book, index) {
@@ -2009,7 +2009,7 @@ window.onAppLoaded(async function() {
     const btn = document.createElement("button");
     btn.id = "pinRecoveryBtn";
     btn.type = "button";
-    btn.textContent = "🔑 PINを忘れた場合（再設定）";
+    btn.textContent = "PINを忘れたとき";
     btn.style.cssText = "width:100%; margin-top:12px; padding:10px; background:none; border:1px dashed rgba(255,255,255,0.3); border-radius:8px; color:var(--text-sub); font-size:12px; font-weight:700; cursor:pointer;";
     btn.onclick = function() {
       openPinRecoveryDialog();

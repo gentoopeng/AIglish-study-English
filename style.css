@@ -2919,3 +2919,7 @@ html body .flash-warmup-dialog.warmup-intro-playing>.flashcard-session-screen{op
 #sidebarMenu::-webkit-scrollbar{width:4px;}
 #sidebarMenu::-webkit-scrollbar-track{background:transparent;}
 #sidebarMenu::-webkit-scrollbar-thumb{background:rgba(0,240,255,0.35);border-radius:2px;}
+/* Quieter primary buttons and no glow from the closed menu at the screen edge. */
+html body .modern-btn{border:1px solid rgba(213,201,172,.45)!important;border-image:none!important;background:rgba(15,22,36,.85)!important;box-shadow:none!important;}
+html body .modern-btn:active{box-shadow:0 0 0 3px rgba(213,201,172,.18)!important;}
+.sidebar:not(.open){box-shadow:none!important;}

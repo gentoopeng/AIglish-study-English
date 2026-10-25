@@ -71,6 +71,19 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await bj.getByRole("button", { name: "もう1枚" }).click();
     assert.match(await bj.locator(".cs-result").innerText(), /21を超えました\s*−60枚/);
     assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,000枚");
+    // Doubling on 11 takes one card for twice the bet.
+    await stacked(["5h", "6d", "Tc", "7s", "Ts"]);
+    await bj.getByRole("button", { name: "もう一度配る" }).click();
+    await bj.getByRole("button", { name: "倍にして1枚" }).click();
+    assert.match(await bj.locator(".cs-result").innerText(), /あなたの勝ち\s*\+120枚/);
+    assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,120枚");
+    await stacked(["Ts", "6h", "9d", "8c", "Kc"]);
+    await bj.getByRole("button", { name: "もう一度配る" }).click();
+    await bj.getByRole("button", { name: "もう1枚" }).click();
+    assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,060枚");
+    await bj.getByRole("button", { name: "もう一度配る" }).click();
+    await bj.getByRole("button", { name: "もう1枚" }).click();
+    assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,000枚");
     await page.evaluate(() => window.__restoreShuffle());
     await page.screenshot({ path: "/tmp/casino-blackjack.png" });
     await bj.getByRole("button", { name: "ブラックジャックを閉じる" }).click();
@@ -113,11 +126,24 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await dp.getByRole("button", { name: /キープ以外を振る（あと2回）/ }).click();
     await dp.getByRole("button", { name: /あと1回/ }).waitFor();
     await dp.getByRole("button", { name: "これで勝負" }).click();
-    const outcome = await dp.locator(".cs-result").innerText();
-    assert.match(outcome, /(あなたの勝ち\s*\+10枚|ディーラーの勝ち\s*−10枚|引き分け（賭けは戻ります）\s*±0枚)/);
-    const delta = outcome.includes("+10") ? 10 : outcome.includes("−10") ? -10 : 0;
-    assert.equal(await dp.locator("[data-cs-balance]").innerText(), (1185 + delta).toLocaleString("ja-JP") + "枚");
-    assert.equal(await dp.locator(".is-dealer .cs-die:not(.is-empty)").count(), 5);
+    let chips = 1185;
+    const settle = async () => {
+      const outcome = await dp.locator(".cs-result").innerText();
+      assert.match(outcome, /(あなたの勝ち\s*\+10枚|ディーラーの勝ち\s*−10枚|引き分け（賭けは戻ります）\s*±0枚)/);
+      chips += outcome.includes("+10") ? 10 : outcome.includes("−10") ? -10 : 0;
+      assert.equal(await dp.locator("[data-cs-balance]").innerText(), chips.toLocaleString("ja-JP") + "枚");
+      assert.equal(await dp.locator(".is-dealer .cs-die:not(.is-empty)").count(), 5);
+      return !outcome.includes("−10");
+    };
+    // Rounds with a held die until one is won or drawn, so the payout after holding is exercised.
+    let paid = await settle();
+    for (let i = 0; i < 40 && !paid; i++) {
+      await dp.getByRole("button", { name: "もう一度振る" }).click();
+      await dp.locator(".cs-die-btn").nth(2).click();
+      await dp.getByRole("button", { name: "これで勝負" }).click();
+      paid = await settle();
+    }
+    assert.ok(paid, "no round was won or drawn");
     await page.screenshot({ path: "/tmp/casino-dice.png" });
     await dp.getByRole("button", { name: "ダイスポーカーを閉じる" }).click();
 
