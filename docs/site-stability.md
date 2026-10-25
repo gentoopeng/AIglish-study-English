@@ -847,3 +847,11 @@ The battle tab's lower card (ガチ, which had only shown 「準備中」) now o
 - It opens by itself on the first visit to poker (`aiglish_poker_tutorial_seen`) and from 「遊び方を見る」 in the lobby. Its last button starts practice.
 
 `tests/poker-bot.test.cjs` checks the computer's moves; `tests/poker-practice.smoke.cjs` covers the how-to, a practice game to its end and 「もう一度」.
+
+### Study points: every way of answering a word pays the same (10.21.61.00)
+
+- Answering a word pays **2 points**, whichever way it was answered: a flashcard rating, a correct battle answer (or a talk quiz), or a correct weak-word review. A workbook problem recorded on its own also pays 2. Study time stays at 1 point a minute.
+- Before, the rates were 1 (card), 3 (battle) and 10 (weak review), so a weak review earned ten times what a card did for the same step.
+- The once-a-day rule is unchanged: one word in one book earns once per Japanese calendar day, whatever the method or the number of meanings.
+- Records made at the old rates (1, 3, 10) are still accepted, so answers waiting to sync when the app updates are paid as earned (`StudyPointPolicy.allowed`). Any other amount is refused.
+- `tests/study-points.test.cjs` keeps the settlement tests on distinct tiers and adds a test for the even rates and an old pending record.

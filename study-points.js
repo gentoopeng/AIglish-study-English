@@ -46,8 +46,7 @@
       /^\d{4}-\d{2}-\d{2}$/.test(entry.day || "") &&
       (source === "time"
         ? entryAmount(entry) > 0 && policy()?.mature(entry.day)
-        : Object.hasOwn(policy()?.rates || { review: 10 }, source) &&
-          entry.amount === (policy()?.rates || { review: 10 })[source])
+        : !!policy()?.allowed(source, entry.amount))
     );
   }
   function validate(value) {
@@ -234,7 +233,7 @@
       (source === "work" && window.LibraryState?.isDeleted("work", book, id))
     )
       throw Error("学習の記録先を確認してください。");
-    const amount = (policy()?.rates || { review: 10 })[source];
+    const amount = (policy()?.rates || { review: 2 })[source];
     if (!amount) throw Error("ポイントの獲得方法を確認してください。");
     return awardTarget(
       {
