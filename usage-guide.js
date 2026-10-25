@@ -1,8 +1,8 @@
 // The usage guide overlay: its quick start, the sections (from usage-guide-content.js), and the
 // sidebar entry. Moved out of app.js, where it was injected by a patch; styles are in usage-guide.css.
 window.__USAGE_GUIDE_STEPS = [
-    { icon: 'user-check', head: 'アカウントを作る／ログインする', desc: '初めての方は「新規作成」でプレイヤー名・本名・年齢・4桁の暗証番号を登録。発行されたIDはログインに必要なので必ずメモして。2回目以降はID＋暗証番号でログイン。' },
-    { icon: 'book-marked', head: '単語帳で単語を覚える', desc: '単語をタップして意味を確認し、右の4つのボタンで理解度をマーク。⚪︎＝定着／△＝曖昧／✕＝不可／ー＝リセット。理解度と復習の記録が保存されます。' },
+    { icon: 'user-check', head: 'アカウントを作る／ログインする', desc: '初めての方は「新規作成」で表示名と4桁の暗証番号を決めます。表示されたIDは次回のログインに使うので、メモしておいてください。2回目からはIDと暗証番号でログインします。' },
+    { icon: 'book-marked', head: '単語帳で単語を覚える', desc: '単語をタップして意味を確認し、右の4つのボタンで理解度を付けます。○は覚えた、△はあいまい、×はまだ、ーは付け直しです。' },
     { icon: 'zap', head: 'フラッシュ単語で定着させる', desc: '単語帳一覧の「›」からフラッシュ単語を開始できます。' }
 ];
 
@@ -53,12 +53,12 @@ window.__buildUsageGuideOverlay = function() {
         '<div class="ug-header-icon"><i data-lucide="book-open-check" size="20"></i></div>' +
         '<div class="ug-header-titles">' +
         '<div class="ug-header-title">使い方ガイド</div>' +
-        '<div class="ug-header-sub">HOW TO USE · 修行の手引き</div>' +
+        '<div class="ug-header-sub">HOW TO USE</div>' +
         '</div>' +
         '<button type="button" class="ug-close" id="ugCloseBtn" aria-label="閉じる"><i data-lucide="x" size="20"></i></button>' +
         '</div>' +
         '<div class="ug-body" id="ugBody">' +
-        '<div class="ug-section-title"><i data-lucide="rocket" size="16" style="color:var(--cosmic-cyan);"></i>まずはこの3ステップ</div>' +
+        '<div class="ug-section-title"><i data-lucide="rocket" size="16" style="color:var(--cosmic-cyan);"></i>はじめに</div>' +
         '<div class="ug-steps">' + stepsHtml + '</div>' +
         '<div class="ug-section-title"><i data-lucide="layout-grid" size="16" style="color:var(--cosmic-purple-light);"></i>機能別ガイド</div>' +
         '<div class="ug-acc-list">' + accHtml + '</div>' +
