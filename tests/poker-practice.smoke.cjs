@@ -46,8 +46,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const play = async (until) => {
       for (let i = 0; i < 400; i++) {
         if (await page.evaluate(until)) return;
-        const check = screen.getByRole("button", { name: "チェック" }),
-          call = screen.getByRole("button", { name: /^コール/ });
+        const check = screen.getByRole("button", { name: "様子見" }),
+          call = screen.getByRole("button", { name: /^同じだけ出す/ });
         if (await check.count()) await check.click({ timeout: 1000 }).catch(() => {});
         else if (await call.count()) await call.click({ timeout: 1000 }).catch(() => {});
         await page.waitForTimeout(250);

@@ -125,13 +125,13 @@ const { chromium } = require("playwright"),
     assert.equal(JSON.stringify(room().hand).includes(JSON.stringify(dealt.holes["poker-b"])), false);
     assert.deepEqual(await b.evaluate(() => [...document.querySelectorAll(".pk-hole .pk-card")].map((c) => c.getAttribute("aria-label"))), dealt.holes["poker-b"].map((c) => c[0].replace("T", "10") + { s: "♠", h: "♥", d: "♦", c: "♣" }[c[1]]));
     // Heads-up: the dealer (poker-a) is the small blind and acts first.
-    await screenA.getByRole("button", { name: /^コール 1$/ }).click();
-    await screenB.getByRole("button", { name: "チェック" }).click();
+    await screenA.getByRole("button", { name: /^同じだけ出す 1$/ }).click();
+    await screenB.getByRole("button", { name: "様子見" }).click();
     // The dealer turns the flop; poker-b bets the minimum and poker-a folds.
     await screenB.locator(".pk-board .pk-card:not(.is-slot)").nth(2).waitFor({ timeout: 10000 });
-    await screenB.getByRole("button", { name: "ベット" }).click();
-    await screenB.getByRole("button", { name: "決定" }).click();
-    await screenA.getByRole("button", { name: "フォールド" }).click();
+    await screenB.getByRole("button", { name: "賭ける" }).click();
+    await screenB.getByRole("button", { name: /^\d+ 出す$/ }).click();
+    await screenA.getByRole("button", { name: "降りる" }).click();
     await a.waitForFunction(() => window.Poker._session()?.room?.hand?.street === "done");
     await a.waitForFunction(() => window.StudyPoints.balance() === 498, null, { timeout: 10000 });
     await b.waitForFunction(() => window.StudyPoints.balance() === 502, null, { timeout: 10000 });
@@ -141,12 +141,12 @@ const { chromium } = require("playwright"),
     // Hand 2 starts by itself, the dealer button moves; both check to a showdown.
     await a.waitForFunction(() => window.Poker._session()?.room?.hand?.no === 2, null, { timeout: 15000 });
     assert.equal(room().hand.dealer, "poker-b");
-    await screenB.getByRole("button", { name: /^コール 1$/ }).click();
-    await screenA.getByRole("button", { name: "チェック" }).click();
+    await screenB.getByRole("button", { name: /^同じだけ出す 1$/ }).click();
+    await screenA.getByRole("button", { name: "様子見" }).click();
     for (const street of [3, 4, 5]) {
       await screenA.locator(".pk-board .pk-card:not(.is-slot)").nth(street - 1).waitFor({ timeout: 10000 });
-      await screenA.getByRole("button", { name: "チェック" }).click();
-      await screenB.getByRole("button", { name: "チェック" }).click();
+      await screenA.getByRole("button", { name: "様子見" }).click();
+      await screenB.getByRole("button", { name: "様子見" }).click();
     }
     await a.waitForFunction(() => window.Poker._session()?.room?.hand?.street === "done", null, { timeout: 10000 });
     const result = room().hand.result;

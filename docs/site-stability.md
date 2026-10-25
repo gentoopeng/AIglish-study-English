@@ -880,3 +880,32 @@ The battle tab's lower card (ガチ, which had only shown 「準備中」) now o
 - Start times are kept, so a redraw mid-animation resumes it with a negative delay instead of cutting it off.
 - Lobby panels and action buttons rise in, and the player to act has a pulsing ring.
 - Board cards and name plates are slightly smaller, so side seats no longer cover the board at a full table.
+
+### Poker in everyday words, hand help and the ranks sheet (10.21.61.00)
+
+**Words**
+- The buttons say what they do: 降りる (fold), 様子見 (check), 同じだけ出す N (call), 上乗せする / 賭ける (raise / bet).
+- The log and the words over the seats use the same terms, and "pot" is 場のチップ.
+- The how-to gives the poker term in brackets.
+
+**Choosing an amount**
+- The player types the number of chips to put in, or nudges it with − / ＋, the slider, or 少しだけ / 場の半分 / 場と同じ / 全部.
+- It shows how much of the stack this is and the minimum. The button reads 「N 出す」 (全部賭ける at the maximum).
+- The hand help steps aside while it is open, so the buttons stay on screen.
+
+**Hand help** (`poker-hint.js`)
+- Under the player's cards: the hand made now, in a name and plain words. The cards that make it glow on the table and in the hand.
+- Up to three better hands the next card could bring, each with the cards that do it and the chance of the next card being one of them. This is counted exactly over the unseen cards.
+- A pair that lands on the board by itself is not counted, since it is for everyone.
+- Before the flop, a tip about the two cards.
+
+**Ranks sheet** (「役の一覧」)
+- All hands from strongest to weakest, with an example and plain words.
+- The hand held now is marked 今の役, and hands one card away are marked あと1枚.
+
+**Results**
+- Each seat shows what that player gained or lost in the hand (+9 / −9), not the pot taken. This matches how points move at a real table.
+
+**Fix**
+- The table effects no longer fail while a table waits for its first hand. This failure had stopped the waiting room from drawing.
+- `tests/poker-hint.test.cjs` covers the hand help.

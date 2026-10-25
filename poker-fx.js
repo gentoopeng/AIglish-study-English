@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const words = { fold: "フォールド", check: "チェック", call: "コール", raise: "レイズ", allin: "オールイン" };
+  const words = { fold: "降りる", check: "様子見", call: "同じだけ", raise: "上乗せ", allin: "全部！" };
   let seen = null;
   const node = (tag, cls, text) => {
     const el = document.createElement(tag);
@@ -80,7 +80,7 @@
     seen = now;
     if (!was || calm()) return;
     const fx = layer(felt),
-      sameHand = was.hand === now.hand,
+      sameHand = !!h && was.hand === now.hand,
       newHand = !!h && !sameHand,
       t = performance.now(),
       dealing = !!h && (t - now.dealAt) / 1000,
@@ -144,8 +144,9 @@
     if (now.done && !was.done && h.result?.won)
       Object.entries(h.result.won).forEach(([id, amount], w) => {
         if (!amount) return;
+        const gain = h.result.net?.[id] || 0;
         chips(fx, POT, at(id), 8, felt, 0.35 + w * 0.2);
-        spawn(fx, "pk-win-text", { x: at(id).x, y: at(id).y - 12 }, { "--d": 0.9 + w * 0.2 + "s" }, "+" + amount.toLocaleString("ja-JP"), 2600);
+        if (gain > 0) spawn(fx, "pk-win-text", { x: at(id).x, y: at(id).y - 12 }, { "--d": 0.9 + w * 0.2 + "s" }, "+" + gain.toLocaleString("ja-JP"), 2600);
         if (id === me) for (let s = 0; s < 14; s++) spawn(fx, "pk-spark", at(id), { "--a": s * (360 / 14) + "deg", "--d": 0.9 + (s % 3) * 0.05 + "s" }, undefined, 2200);
       });
     if (now.over && !was.over) over(view, room.players[me]?.stack > 0);

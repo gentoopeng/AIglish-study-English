@@ -189,3 +189,49 @@ html body dialog.pk-tutorial{width:min(420px,calc(100vw - 32px));max-height:92dv
 /* Board cards a little smaller, so side seats never cover them at a full table. */
 .pk-board .pk-card{width:32px;height:46px;}.pk-board .pk-card b{font-size:15px;}.pk-board .pk-card i{font-size:13px;}
 .pk-plate{min-width:64px;max-width:88px;}
+/* Result of the hand per seat, and the player's hand help. */
+.pk-lost{padding:2px 8px;border-radius:10px;background:rgba(60,30,36,.85);color:#f0a8a8;font:800 11px system-ui,sans-serif;}
+.pk-card.is-part{box-shadow:0 0 0 2px #e9d9a6,0 0 14px rgba(233,217,166,.6),0 2px 6px rgba(0,0,0,.45);translate:0 -3px;}
+.pk-help{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;}
+.pk-help-top{display:flex;align-items:center;justify-content:center;gap:10px;}
+.pk-help .pk-hand-name{display:flex;align-items:baseline;gap:8px;}
+.pk-help .pk-hand-name strong{color:#e9d9a6;font:700 15px Georgia,"Yu Mincho",serif;}
+.pk-help .pk-hand-name small{color:#b9b2a2;font:600 11px system-ui,sans-serif;}
+.pk-ranks-open{min-height:28px;padding:0 10px;border:1px solid rgba(213,201,172,.35);border-radius:999px;background:transparent;color:#c6b790;font:700 11px system-ui,sans-serif;cursor:pointer;}
+.pk-draws{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:0;padding:0;list-style:none;}
+.pk-draws li{display:flex;align-items:baseline;gap:5px;padding:4px 10px;border:1px solid rgba(213,201,172,.22);border-radius:999px;background:rgba(15,22,36,.7);color:#cfc8b8;font-size:11px;}
+.pk-draws strong{color:#f0ece3;font-size:12px;}.pk-draws em{font-style:normal;color:#9fd5c2;font-weight:700;}
+.pk-draws li.is-big{border-color:rgba(233,217,166,.55);}
+.pk-draws li.pk-tip{color:#d9d2c2;}
+.pk-raise-title{margin:0;text-align:center;color:#f0ece3;font:700 14px system-ui,sans-serif;}
+.pk-raise-line{display:flex;align-items:center;justify-content:center;gap:10px;}
+.pk-step{width:44px;height:44px;border:1px solid rgba(213,201,172,.35);border-radius:50%;background:rgba(15,23,42,.6);color:#f0ece3;font:700 22px/1 system-ui;cursor:pointer;}
+.pk-raise-input{width:110px;height:46px;border:1px solid rgba(213,201,172,.45);border-radius:12px;background:rgba(8,12,20,.7);color:#f0ece3;text-align:center;font:700 24px Georgia,serif;font-variant-numeric:tabular-nums;}
+.pk-raise-note{margin:0;text-align:center;color:#b9b2a2;font-size:11px;}
+html body dialog.pk-ranks-sheet{width:min(420px,calc(100vw - 24px));max-height:92dvh;box-sizing:border-box;overflow:auto;padding:20px 16px 16px;border:1px solid rgba(213,201,172,.3);border-radius:20px;background:linear-gradient(150deg,rgba(27,35,49,.98),rgba(13,19,32,.99));color:#eee8da;box-shadow:0 24px 60px rgba(0,0,0,.6);}
+.pk-ranks-sheet::backdrop{background:rgba(4,7,13,.7);}
+.pk-ranks-sheet h2{margin:0 0 12px;color:#f0ece3;font:700 18px Georgia,"Yu Mincho",serif;}
+.pk-ranks-list{display:grid;gap:6px;margin:0 0 10px;padding:0;list-style:none;}
+.pk-ranks-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border:1px solid rgba(213,201,172,.14);border-radius:12px;background:rgba(0,0,0,.2);}
+.pk-ranks-list li.is-now{border-color:#e9d9a6;background:rgba(233,217,166,.12);box-shadow:0 0 0 1px rgba(233,217,166,.4);}
+.pk-ranks-list li.is-reach{border-color:rgba(159,213,194,.55);}
+.pk-rank-text{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.pk-rank-text strong{color:#f3e9cf;font-size:13px;}.pk-rank-text span{color:#b9b2a2;font-size:10.5px;}
+.pk-rank-tag{align-self:flex-start;margin-top:2px;padding:1px 8px;border-radius:999px;background:#e9d9a6;color:#18202d;font:800 10px system-ui;font-style:normal;}
+.pk-rank-tag.is-reach{background:#9fd5c2;}
+.pk-rank-cards{display:flex;gap:2px;flex:none;}
+.pk-ranks-sheet .pk-primary{display:block;width:100%;min-height:42px;border:0;border-radius:12px;background:#c6b790;color:#18202d;font:700 14px system-ui;}
+@media(prefers-reduced-motion:no-preference){
+.pk-card.is-part{transition:translate .25s ease,box-shadow .25s ease;}
+.pk-draws li{animation:pkRise .35s cubic-bezier(.2,.8,.2,1) both;}
+.pk-draws li:nth-child(2){animation-delay:.06s}.pk-draws li:nth-child(3){animation-delay:.12s}
+.pk-ranks-list li{animation:pkRise .4s calc(var(--i) * .04s) cubic-bezier(.2,.8,.2,1) both;}
+.pk-ranks-list li.is-now{animation:pkRise .4s calc(var(--i) * .04s) cubic-bezier(.2,.8,.2,1) both,pkNow 1.6s .6s ease-in-out infinite;}
+.pk-lost{animation:pkPop .4s .9s cubic-bezier(.2,.9,.25,1.4) both;}
+}
+@keyframes pkNow{0%,100%{box-shadow:0 0 0 1px rgba(233,217,166,.4)}50%{box-shadow:0 0 0 4px rgba(233,217,166,.15),0 0 16px rgba(233,217,166,.35)}}
+.pk-ranks-open{flex:none;white-space:nowrap;}
+.pk-help .pk-hand-name{flex-wrap:wrap;justify-content:center;row-gap:2px;}
+/* While choosing an amount, the hand help steps aside so the buttons stay on screen. */
+.pk-me.is-raising .pk-help{display:none;}
+.pk-raise-panel{gap:8px;padding:10px 12px;}
