@@ -844,7 +844,7 @@
       reach = new Set(cards && h && !h.folded[me] ? window.PokerHint.draws(cards, h.board || []).map((d) => d.category) : []);
     const sheet = node("dialog", "pk-ranks-sheet");
     sheet.setAttribute("aria-label", "役の一覧");
-    sheet.append(node("p", "pk-kicker", "HAND RANKINGS"), node("h2", "", "役の一覧（上ほど強い）"));
+    sheet.append(node("h2", "", "役の一覧（上ほど強い）"));
     const list = node("ol", "pk-ranks-list");
     EXAMPLES.forEach((example, i) => {
       const category = 9 - i,

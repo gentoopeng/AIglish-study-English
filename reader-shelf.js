@@ -129,7 +129,7 @@
   function dialog(title, markup) {
     const modal = window.openLibraryDialog(title, markup);
     const eyebrow = modal.querySelector(".library-editor-eyebrow");
-    if (eyebrow) eyebrow.textContent = "BOOKSHELF";
+    if (eyebrow) eyebrow.textContent = "";
     return modal;
   }
   const show = (view) => {
@@ -406,7 +406,7 @@
       currentShelfView = "list";
     if (currentShelfView === "list") {
       container.append(
-        header("BOOKSHELF", "本棚", [
+        header("", "本棚", [
           button("＋ フォルダを作る", createFolder),
           button("英文を解析する", () => window.switchReaderSubTab("analysis", "left")),
           ...(names.length > 1 ? [sortButton()] : []),

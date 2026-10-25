@@ -184,7 +184,7 @@
         '<div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" class="library-editor-primary" data-reader-books="save">保存</button></div>',
     );
     const eyebrow = modal.querySelector(".library-editor-eyebrow");
-    if (eyebrow) eyebrow.textContent = "READER";
+    if (eyebrow) eyebrow.textContent = "";
     const box = modal.querySelector(".reader-book-choices"),
       chosen = selected();
     if (!list.length) box.textContent = "単語帳がありません。単語帳タブで作るか追加してください。";

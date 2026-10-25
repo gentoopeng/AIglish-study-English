@@ -120,7 +120,7 @@
     function showDetail(entry,rank,context,existing){
         const detailKey=Object.keys(labels).find(key=>labels[key]===context)||'time';
         const dialog=existing||window.openLibraryDialog('学習記録','<div class="ranking-detail"><div class="ranking-detail-person"></div><p class="ranking-detail-place"></p><dl></dl></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
-        dialog.querySelector('.library-editor-eyebrow').textContent='LEARNING RECORDS';
+        dialog.querySelector('.library-editor-eyebrow').textContent='';
         const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');person.replaceChildren();dialog.querySelector('dl').replaceChildren();name(heading,entry.name,entry.appearance);person.append(window.RankingVisuals.avatar(entry.avatar,entry.name,entry.appearance),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[detailKey])+' · '+(rank?rank+'位':hasRecord(entry,detailKey)?'順位未取得':'未計測');
         Object.keys(labels).forEach(key=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=labels[key];dd.textContent=value(entry,key);dialog.querySelector('dl').append(dt,dd);});return dialog;
     }

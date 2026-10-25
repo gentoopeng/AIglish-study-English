@@ -104,7 +104,7 @@
       "プロフィール",
       '<div class="people-detail-person"></div><dl class="people-detail-data"></dl><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>',
     );
-    dialog.querySelector(".library-editor-eyebrow").textContent = "PEOPLE";
+    dialog.querySelector(".library-editor-eyebrow").textContent = "";
     const header = dialog.querySelector(".people-detail-person"),
       name = document.createElement("h3");
     window.RankingVisuals.name(name, doc.playerName || person.name);
