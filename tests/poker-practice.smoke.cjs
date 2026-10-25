@@ -36,6 +36,12 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await screen.locator(".pk-seat", { hasText: "ペンギン" }).waitFor();
     assert.match(await screen.locator("[data-pk-rules]").innerText(), /練習（ポイントは賭けません）/);
     await screen.locator(".pk-hole .pk-card:not(.is-back)").nth(1).waitFor();
+    // Motion: cards are dealt from the middle and every move shows a word over the player.
+    await screen.locator(".pk-card.pk-dealt").first().waitFor({ state: "attached" });
+    await page.evaluate(() => {
+      window.__pkSaid = 0;
+      new MutationObserver((list) => list.forEach((m) => m.addedNodes.forEach((n) => n.classList?.contains("pk-act") && window.__pkSaid++))).observe(document.querySelector(".pk-felt"), { childList: true, subtree: true });
+    });
     // Play by checking or calling; the computer answers by itself until hands are done.
     const play = async (until) => {
       for (let i = 0; i < 400; i++) {
@@ -50,6 +56,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     };
     await play(() => (window.Poker._session()?.room?.handNo || 0) >= 2);
     assert.ok(await page.evaluate(() => window.Poker._session().room.log.some((line) => /^ペンギン：/.test(line))));
+    assert.ok((await page.evaluate(() => window.__pkSaid)) >= 2, "moves are announced over the seats");
     // The game ends when one side has no chips; practice never touches points.
     await play(() => window.Poker._session()?.room?.hand?.street === "done");
     await page.evaluate(() => {

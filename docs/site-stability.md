@@ -855,3 +855,28 @@ The battle tab's lower card (ガチ, which had only shown 「準備中」) now o
 - The once-a-day rule is unchanged: one word in one book earns once per Japanese calendar day, whatever the method or the number of meanings.
 - Records made at the old rates (1, 3, 10) are still accepted, so answers waiting to sync when the app updates are paid as earned (`StudyPointPolicy.allowed`). Any other amount is refused.
 - `tests/study-points.test.cjs` keeps the settlement tests on distinct tiers and adds a test for the even rates and an old pending record.
+
+### Motion on iPhone, the warm-up opening, and poker motion (10.21.61.00)
+
+**iPhone**
+- On iPhone and iPad (`html.ios-stable-rendering`), `style.css` turned off every animation and transition page-wide. This is why the warm-up opening and the poker how-to did not move there.
+- They are now exempt: `.warmup-intro`, `.poker-screen` and `.pk-tutorial` with their contents. These only animate transform and opacity.
+- Blur, filters and backdrop captures stay off everywhere, and motion stays off on the rest of the page.
+
+**Warm-up opening** (`learning-sessions.js`)
+- A ring draws itself while the count runs up to the number of words, the letters of WORDS fall in, and sparks burst when the count lands. Then it zooms away to the first card, in about 2.3 s; a tap skips it.
+- It waits for frames to be drawn before it starts. The warm-up often opens while the app is still starting, and timers would otherwise run ahead of an animation nobody saw.
+- The card screen is hidden at once (no fade-out) while it plays, so the first card no longer shows through first.
+
+**Poker motion** (`poker-fx.js`)
+- The table is rebuilt on every change. `PokerFX.decorate` compares the new state with the last one drawn and animates only what changed:
+  - cards dealt from the middle;
+  - the board turned over;
+  - chips thrown in and swept to the pot;
+  - a word over each player who moves;
+  - folded cards sliding away;
+  - the pot flying to the winner, and sparks for the player's win;
+  - confetti when a practice game is won.
+- Start times are kept, so a redraw mid-animation resumes it with a negative delay instead of cutting it off.
+- Lobby panels and action buttons rise in, and the player to act has a pulsing ring.
+- Board cards and name plates are slightly smaller, so side seats no longer cover the board at a full table.

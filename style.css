@@ -1878,12 +1878,24 @@ html.ios-stable-rendering body *::before,
 html.ios-stable-rendering body *::after,
 html.ios-stable-rendering body::before,
 html.ios-stable-rendering body::after{
-animation:none!important;
-transition:none!important;
 backdrop-filter:none!important;
 -webkit-backdrop-filter:none!important;
 filter:none!important;
 will-change:auto!important;
+}
+/* Motion stays off page-wide, except in short-lived screens built for it (the warm-up opening,
+   poker and its how-to), which animate only transform and opacity. */
+html.ios-stable-rendering body,
+html.ios-stable-rendering body :not(:is(.warmup-intro,.warmup-intro *,.poker-screen,.poker-screen *,.pk-tutorial,.pk-tutorial *)),
+html.ios-stable-rendering body :not(:is(.warmup-intro,.warmup-intro *,.poker-screen,.poker-screen *,.pk-tutorial,.pk-tutorial *))::before,
+html.ios-stable-rendering body :not(:is(.warmup-intro,.warmup-intro *,.poker-screen,.poker-screen *,.pk-tutorial,.pk-tutorial *))::after,
+html.ios-stable-rendering body::before,
+html.ios-stable-rendering body::after{
+animation:none!important;
+transition:none!important;
+}
+@media(prefers-reduced-motion:no-preference){
+html.ios-stable-rendering body .flash-warmup-dialog:not(.warmup-intro-playing)>.flashcard-session-screen{transition:opacity .5s ease .15s,transform .5s cubic-bezier(.2,.8,.2,1) .15s!important;}
 }
 }
 
@@ -2774,21 +2786,41 @@ dialog.app-alert button{width:100%;min-height:46px;border:0;border-radius:14px;b
 .shelf-entry .shelf-move{color:#eee8da;}
 .flashcard-detail-content.is-readonly .word-row-container button:not(.pronounce-button):not(.word-expand-toggle){opacity:.4;}
 /* Warm-up opening: the word count grows in, then the first card appears. */
-.flash-warmup-dialog .warmup-intro{position:absolute;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:rgba(8,13,22,.5);color:#fff;pointer-events:auto;animation:warmupIntroIn .45s cubic-bezier(.2,.8,.2,1) both;}
-.warmup-intro-ring{position:absolute;top:50%;left:50%;width:230px;height:230px;margin:-115px 0 0 -115px;border:1px solid #ffffff80;border-radius:50%;box-shadow:inset 0 0 0 8px #ffffff08,0 0 0 12px #ffffff0c;pointer-events:none;animation:warmupIntroRing 1.5s cubic-bezier(.2,.8,.2,1) both;}
-.warmup-intro-count{position:relative;font:italic 104px/1 Georgia,'Times New Roman',serif;text-shadow:0 2px 16px #000;animation:warmupIntroCount .65s .05s cubic-bezier(.2,.9,.25,1.25) both;}
-.warmup-intro-label{position:relative;padding-left:.42em;font:italic 20px/1 Georgia,'Times New Roman',serif;letter-spacing:.42em;text-shadow:0 1px 8px #000;animation:warmupIntroUp .5s .3s ease-out both;}
-.warmup-intro-sub{position:relative;padding-left:.24em;font:700 13px/1 system-ui,sans-serif;letter-spacing:.24em;color:#ffffffcc;animation:warmupIntroUp .5s .45s ease-out both;}
-.flash-warmup-dialog .warmup-intro.is-leaving{pointer-events:none;animation:warmupIntroOut .45s ease-in forwards;}
-html body .flash-warmup-dialog>.flashcard-session-screen{transition:opacity .45s ease .1s,transform .45s ease .1s;}
-html body .flash-warmup-dialog.warmup-intro-playing>.flashcard-session-screen{opacity:0!important;transform:scale(.96);}
-@keyframes warmupIntroIn{from{opacity:0}to{opacity:1}}
-@keyframes warmupIntroRing{0%{transform:scale(.4);opacity:0}35%{opacity:1}100%{transform:scale(1.25);opacity:.25}}
-@keyframes warmupIntroCount{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
-@keyframes warmupIntroUp{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
-@keyframes warmupIntroOut{to{opacity:0;transform:scale(1.15)}}
-@media(prefers-reduced-motion:reduce){.flash-warmup-dialog .warmup-intro,.warmup-intro-ring,.warmup-intro-count,.warmup-intro-label,.warmup-intro-sub{animation:none!important}html body .flash-warmup-dialog>.flashcard-session-screen{transition:none}}
 /* Admin editing mode for shared word books. */
 .admin-book-editing{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;padding:8px 8px 8px 14px;border:1px solid rgba(245,158,11,.6);border-radius:14px;background:rgba(41,25,5,.92);color:#FDE68A;font:700 11px/1.4 system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.45);}
 .admin-book-editing button{flex:none;min-height:30px;padding:0 12px;border:1px solid rgba(253,230,138,.5);border-radius:10px;background:transparent;color:#FDE68A;font:700 11px system-ui,sans-serif;cursor:pointer;}
 .admin-players-dialog .admin-books-button{margin-left:8px;}
+/* Warm-up opening: ring drawn, count running up, WORDS falling in, sparks, then a zoom away. */
+.flash-warmup-dialog .warmup-intro{position:absolute;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:radial-gradient(circle at 50% 48%,rgba(30,44,74,.72) 0,rgba(8,13,22,.86) 60%);color:#fff;pointer-events:auto;animation:warmupIntroIn .4s ease-out both;}
+.warmup-intro-glow{position:absolute;top:50%;left:50%;width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;background:radial-gradient(circle,rgba(233,217,166,.28) 0,rgba(233,217,166,0) 65%);pointer-events:none;animation:warmupIntroGlow 2.2s ease-in-out both;}
+.warmup-intro-ring{position:absolute;top:50%;left:50%;width:240px;height:240px;margin:-120px 0 0 -120px;overflow:visible;pointer-events:none;transform:rotate(-90deg);animation:warmupIntroRingSpin 2.2s cubic-bezier(.2,.8,.2,1) both;}
+.warmup-intro-ring circle{fill:none;stroke:rgba(255,255,255,.14);stroke-width:1.5;}
+.warmup-intro-ring circle.is-draw{stroke:#e9d9a6;stroke-width:2.5;stroke-linecap:round;stroke-dasharray:704;stroke-dashoffset:704;animation:warmupIntroDraw .95s .15s cubic-bezier(.45,0,.2,1) forwards;}
+.warmup-intro-count{position:relative;min-width:2ch;text-align:center;font:italic 108px/1 Georgia,'Times New Roman',serif;font-variant-numeric:tabular-nums;text-shadow:0 2px 18px rgba(0,0,0,.8);animation:warmupIntroCount .5s .1s cubic-bezier(.2,.9,.25,1.25) both;}
+.warmup-intro.is-landed .warmup-intro-count{animation:warmupIntroLand .45s cubic-bezier(.2,.9,.25,1.4) both;color:#fff6dc;text-shadow:0 0 24px rgba(233,217,166,.75),0 2px 18px rgba(0,0,0,.8);}
+.warmup-intro-label{position:relative;display:flex;gap:.42em;padding-left:.42em;font:italic 20px/1 Georgia,'Times New Roman',serif;text-shadow:0 1px 8px #000;}
+.warmup-intro-label span{display:inline-block;animation:warmupIntroLetter .45s calc(.55s + var(--i) * .07s) cubic-bezier(.2,.9,.25,1.3) both;}
+.warmup-intro-sub{position:relative;padding:5px 14px;border:1px solid rgba(233,217,166,.45);border-radius:999px;font:700 13px/1 system-ui,sans-serif;letter-spacing:.24em;color:#f3e9cf;animation:warmupIntroUp .5s 1s ease-out both;}
+.warmup-intro-sparks{position:absolute;top:50%;left:50%;width:0;height:0;pointer-events:none;}
+.warmup-intro-sparks i{position:absolute;top:-3px;left:-3px;width:6px;height:6px;border-radius:50%;background:#f3e9cf;box-shadow:0 0 8px #e9d9a6;opacity:0;transform:rotate(var(--a)) translateY(0);}
+.warmup-intro.is-landed .warmup-intro-sparks i{animation:warmupIntroSpark .8s cubic-bezier(.1,.8,.25,1) forwards;}
+.flash-warmup-dialog .warmup-intro.is-leaving{pointer-events:none;animation:warmupIntroOut .55s ease-in forwards;}
+.warmup-intro.is-leaving .warmup-intro-count{animation:warmupIntroZoom .55s ease-in forwards;}
+.warmup-intro.is-leaving .warmup-intro-ring{animation:warmupIntroRingOut .55s ease-in forwards;}
+html body .flash-warmup-dialog:not(.warmup-intro-playing)>.flashcard-session-screen{transition:opacity .5s ease .15s,transform .5s cubic-bezier(.2,.8,.2,1) .15s;}
+/* Hidden at once while the opening plays, so the first card never shows through first. */
+html body .flash-warmup-dialog.warmup-intro-playing>.flashcard-session-screen{opacity:0!important;transform:scale(.94);transition:none!important;}
+.warmup-intro.is-waiting,.warmup-intro.is-waiting *{animation-play-state:paused!important;}
+@keyframes warmupIntroIn{from{opacity:0}to{opacity:1}}
+@keyframes warmupIntroGlow{0%{transform:scale(.3);opacity:0}45%{opacity:1}70%{transform:scale(1.05)}100%{transform:scale(1);opacity:.8}}
+@keyframes warmupIntroRingSpin{from{transform:rotate(-200deg) scale(.6);opacity:0}30%{opacity:1}to{transform:rotate(-90deg) scale(1);opacity:1}}
+@keyframes warmupIntroDraw{to{stroke-dashoffset:0}}
+@keyframes warmupIntroCount{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes warmupIntroLand{0%{transform:scale(1)}40%{transform:scale(1.28)}100%{transform:scale(1)}}
+@keyframes warmupIntroLetter{from{transform:translateY(-22px) rotate(-12deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes warmupIntroUp{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+@keyframes warmupIntroSpark{0%{opacity:1;transform:rotate(var(--a)) translateY(-60px) scale(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(-150px) scale(.3)}}
+@keyframes warmupIntroOut{to{opacity:0}}
+@keyframes warmupIntroZoom{to{transform:scale(2.4);opacity:0}}
+@keyframes warmupIntroRingOut{to{transform:rotate(-90deg) scale(1.8);opacity:0}}
+@media(prefers-reduced-motion:reduce){.flash-warmup-dialog .warmup-intro,.flash-warmup-dialog .warmup-intro *{animation:none!important}.warmup-intro-ring circle.is-draw{stroke-dashoffset:0}html body .flash-warmup-dialog>.flashcard-session-screen{transition:none!important}}

@@ -518,6 +518,7 @@
   }
 
   function enter(code, practiceRoom) {
+    window.PokerFX?.reset();
     session = { code, id: uid(), room: practiceRoom || null, practice: !!practiceRoom, deal: null };
     const view = screen.querySelector("[data-pk-view]");
     view.className = "pk-table-view";
@@ -640,6 +641,7 @@
     for (let i = 0; i < 5; i++) board.append(h?.board?.[i] ? cardEl(h.board[i]) : node("span", "pk-card is-slot"));
     view.querySelector(".pk-pot").textContent = h && h.street !== "done" ? "ポット " + fmt(P.potOf(h)) : "";
     view.querySelector(".pk-log").textContent = (room.log || []).slice(-1)[0] || "";
+    window.PokerFX?.decorate(view, room, ring, places, me);
     // Points: this hand's result, once.
     if (!room.practice && h?.street === "done" && h.result?.net && Object.hasOwn(h.result.net, me)) settle(handKey(room, h.no), h.result.net[me]);
     renderMine(room);
@@ -663,6 +665,7 @@
     if (session?.room !== room) return;
     hole.replaceChildren();
     if (cards) cards.forEach((c) => hole.append(cardEl(c)));
+    window.PokerFX?.hole(view, room, me);
     hole.classList.toggle("is-folded", !!h?.folded?.[me]);
     nameLine.textContent = cards ? (h.folded[me] ? "フォールド" : P.describe(cards.concat(h.board || []))) : "";
     actions.replaceChildren();
