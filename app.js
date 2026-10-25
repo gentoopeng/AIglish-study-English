@@ -469,7 +469,7 @@ if(mode === 'login') {
     if(tabReg) tabReg.classList.remove('active');
     if (loginFields) loginFields.style.display = 'block';
     if (regFields) regFields.style.display = 'none';
-    if(btn) btn.innerHTML = 'システムへログイン <i data-lucide="arrow-right" size="16"></i>';
+    if(btn) btn.innerHTML = 'ログイン <i data-lucide="arrow-right" size="16"></i>';
 } else {
     if(tabLogin) tabLogin.classList.remove('active'); 
     if(tabReg) tabReg.classList.add('active');
@@ -555,7 +555,7 @@ textHistory = textHistory.filter(h => h.text !== rawText);
  const abstractCard = document.getElementById('summary-abstract-card');
  const abstractContainer = document.getElementById('summaryAbstractContainer');
  if (abstractCard) abstractCard.style.display = 'none';
- if (abstractContainer) abstractContainer.innerText = "要約データを生成しています...";
+ if (abstractContainer) abstractContainer.innerText = "要約を作っています…";
  window.initLucide();
  let aiAnalysisResult = null;
  // The key may have been saved after this page loaded.

@@ -3,7 +3,7 @@
 'use strict';
 const records=[],limit=8;let toast=null,timer=null;
 function filename(value){if(!value)return '';try{return new URL(value,location.href).pathname.split('/').pop()||'index.html';}catch(error){return '';}}
-function show(record){if(!toast)return;toast.textContent='⚠️ '+record.message+(record.file?'（'+record.file+(record.line?':'+record.line:'')+'）':'');toast.classList.add('show');clearTimeout(timer);timer=setTimeout(()=>toast.classList.remove('show'),6000);}
+function show(record){if(!toast)return;toast.textContent=record.message+(record.file?'（'+record.file+(record.line?':'+record.line:'')+'）':'');toast.classList.add('show');clearTimeout(timer);timer=setTimeout(()=>toast.classList.remove('show'),6000);}
 function record(message,file,line,column,kind){const entry={message:String(message||'不明なエラー').slice(0,500),file:filename(file),line:Number(line)||0,column:Number(column)||0,kind,version:document.querySelector('meta[name=application-version]')?.content||'',at:new Date().toISOString()};records.push(entry);if(records.length>limit)records.shift();console.warn('[アプリのエラー]',entry);show(entry);}
 window.AppErrors={snapshot:()=>records.map(entry=>({...entry}))};
 window.addEventListener('app-storage-error',event=>record(event.detail,'app-storage.js',0,0,'storage'));

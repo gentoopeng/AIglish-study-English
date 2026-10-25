@@ -7,7 +7,7 @@ const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict
   page.on('pageerror',e=>errors.push(e.message));page.on('crash',()=>errors.push('crash'));await page.route('https://**/*',r=>r.abort());
   await page.addInitScript(()=>{localStorage.setItem('b3_tutorial_done','1');localStorage.setItem('aiglish_sound_settings',JSON.stringify({enabled:false,volume:.3}));});
   await page.goto('http://127.0.0.1:8000');await page.waitForFunction(()=>window.openProfileDialog);
-  await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();await page.waitForFunction(()=>window.__learningBootReady===true);
+  await page.getByRole('button',{name:'ゲストで試す'}).click();await page.waitForFunction(()=>window.__learningBootReady===true);
   await page.locator('.menu-trigger').click();assert.deepEqual(await page.locator('.sidebar-menu-list button').allTextContents(),['プロフィール','ポイント','設定','データとバックアップ','使い方ガイド','管理者ツール','ログアウト']);assert.equal(await page.locator('#usageGuideEntryBtn').count(),1);assert.equal(await page.locator('#sidebarMenu input,#sidebarMenu form,#game-start-screen,.study-tower-link').count(),0);
   await page.locator('#profileMenuButton').click();assert.equal(await page.locator('#profileDialog').evaluate(d=>d.open),true);assert.equal(await page.locator('#sidebarMenu').evaluate(d=>d.classList.contains('open')),false);
   assert.equal(await page.locator('#profileFrameSelector .frame-option').count(),8);assert.equal(await page.locator('#profileFrameAction').isDisabled(),true);

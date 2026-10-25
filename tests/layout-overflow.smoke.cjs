@@ -33,7 +33,7 @@ const { chromium } = require("playwright"),
     return { label, out };
   }, label);
   check(await scan("login"));
-  await page.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+  await page.getByRole("button", { name: "ゲストで試す" }).click();
   await page.waitForFunction(() => window.__learningBootReady === true);
   await page.waitForTimeout(800);
   check(await scan("home"));
@@ -58,7 +58,7 @@ const { chromium } = require("playwright"),
   check(await scan("flash-play"));
   await page.locator("#flashcard-play-screen").getByRole("button", { name: "中断", exact: true }).click().catch(() => {});
   await page.waitForTimeout(500);
-  for (const tab of ["nav-reader", "nav-community", "nav-battle"]) { await page.locator("#" + tab).click(); await page.waitForTimeout(500); check(await scan(tab)); }
+  for (const tab of ["nav-reader", "nav-community", "nav-battle", "nav-casino"]) { await page.locator("#" + tab).click(); await page.waitForTimeout(500); check(await scan(tab)); }
   await page.locator(".mode-casual").click(); await page.waitForTimeout(300); check(await scan("battle-entry"));
   await page.locator("[data-battle-route=solo]").click(); await page.waitForTimeout(300); check(await scan("battle-config"));
   await page.evaluate(() => document.querySelector("[data-duel-back]")?.click());

@@ -6,7 +6,7 @@ const assert=require('node:assert/strict');
  const page=await browser.newPage({viewport:{width:390,height:844}});page.setDefaultTimeout(10000);const errors=[];page.on('pageerror',error=>errors.push(error.message));await page.route('https://**/*',route=>route.abort());
  await page.addInitScript(()=>{localStorage.setItem('b3_tutorial_done','1');if(!localStorage.getItem('vv4_works_GUEST-000'))localStorage.setItem('vv4_works_GUEST-000',JSON.stringify([{id:'legacy',name:'以前の数学',from:1,to:2,entries:{1:{q:'昔の問題',ans:'答え',memo:'計算ミス',status:'bad',history:['bad'],lastReview:Date.now()-7*86400000,nextReview:Date.now()-86400000,subs:[{sub:1,q:'昔の小問',status:'ok',history:['ok']}]}},nonums:[]}]));});
  await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.WorkbookModel);
- await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();await page.locator('#nav-vocab').click();
+ await page.getByRole('button',{name:'ゲストで試す'}).click();await page.locator('#nav-vocab').click();
  assert.equal(await page.locator('#vocabLibraryWorks .textbook-list-arrow').count(),0);assert.equal(await page.locator('#vocabLibraryWorks .vocab-library-flash-button').count(),0);
  await page.getByRole('button',{name:'以前の数学の復習 1件',exact:true}).click();assert.equal(await page.getByRole('textbox',{name:'問1の問題文',exact:true}).inputValue(),'昔の問題');assert.equal(await page.locator('#workbookUnitList .word-row-container').count(),1);await page.getByRole('button',{name:'以前の数学 単語帳一覧に戻る'}).click();
  await page.getByRole('button',{name:'＋ ワークを作る',exact:true}).click();assert.equal(await page.locator('dialog.library-editor-dialog').count(),1);

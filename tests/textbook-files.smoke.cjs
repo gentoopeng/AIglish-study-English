@@ -14,7 +14,7 @@ const { chromium, webkit } = require("playwright"),
     await page.route("https://**/*", (r) => r.abort());
     await page.goto("http://127.0.0.1:8000");
     await page
-      .getByRole("button", { name: "ゲストとしてテストプレイ" })
+      .getByRole("button", { name: "ゲストで試す" })
       .click();
     await page.waitForFunction(() => window.__learningBootReady);
     const result = await page.evaluate(async () => {
@@ -288,7 +288,7 @@ const { chromium, webkit } = require("playwright"),
     await remote.route("https://**/*", (r) => r.abort());
     await remote.goto("http://127.0.0.1:8000");
     await remote
-      .getByRole("button", { name: "ゲストとしてテストプレイ" })
+      .getByRole("button", { name: "ゲストで試す" })
       .click();
     await remote.waitForFunction(() => window.__learningBootReady);
     const migrated = await remote.evaluate(async (records) => {

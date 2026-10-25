@@ -394,7 +394,7 @@
         currentTargetWordToken = null;
         currentTargetVocabNum = null;
         document.getElementById('popWord').innerText = phrase;
-        document.getElementById('popWordNum').innerText = "💡 " + (label || "文法");
+        document.getElementById('popWordNum').innerText = (label || "文法");
         document.getElementById('popMeaning').innerText = meaning;
         document.getElementById('popoverStatusBtns').style.display = "none";
         var pop = document.getElementById('wordPopover');
@@ -426,7 +426,7 @@
         });
         document.getElementById('summary-ja-card').style.display = mode === 'bottom' ? 'block' : 'none';
         var abstractCard = document.getElementById('summary-abstract-card');
-        if (abstractCard && document.getElementById('summaryAbstractContainer').innerText !== "要約データを生成しています...") {
+        if (abstractCard && document.getElementById('summaryAbstractContainer').innerText !== "要約を作っています…") {
             abstractCard.style.display = 'block';
         }
     };

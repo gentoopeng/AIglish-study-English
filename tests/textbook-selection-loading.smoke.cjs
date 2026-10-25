@@ -1,6 +1,6 @@
 const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict');
 (async()=>{const type=process.env.BROWSER==='webkit'?webkit:chromium,browser=await type.launch(type===chromium?{executablePath:'/usr/bin/chromium',args:['--no-sandbox']}:{executablePath:process.env.WEBKIT_EXECUTABLE_PATH});try{
-const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>r.abort());await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();await page.waitForFunction(()=>window.__learningBootReady);
+const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>r.abort());await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストで試す'}).click();await page.waitForFunction(()=>window.__learningBootReady);
 const result=await page.evaluate(async()=>{
  const words=Array.from({length:3000},(_,i)=>({num:i+1,word:'word'+i,meaning:'意味'+i,sub:'補足説明'.repeat(20)}));
  const progress={'1':{sig:'1::word0::意味0',status:'ok',history:['ok'],meanings:{'1-0':{status:'ok',history:['ok']}},note:'消えないメモ',sticky:true,editedAt:Date.now()}};

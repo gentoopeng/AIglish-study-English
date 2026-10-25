@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
  const type=process.env.BROWSER==='webkit'?webkit:chromium;const browser=await type.launch(type===chromium?{executablePath:'/usr/bin/chromium',args:['--no-sandbox']}:{executablePath:process.env.WEBKIT_EXECUTABLE_PATH});
  try{
   const page=await browser.newPage({viewport:{width:390,height:844}});page.setDefaultTimeout(10000);const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',route=>route.abort());await page.addInitScript(()=>localStorage.setItem('b3_tutorial_done','1'));
-  await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.getSharedVocabNoteTopic);await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();
+  await page.goto('http://127.0.0.1:8000',{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.getSharedVocabNoteTopic);await page.getByRole('button',{name:'ゲストで試す'}).click();
   await page.evaluate(async()=>{
    window.__gcLoginShown=true;myId='note-user';window.db={};currentTextbook='note-book';vocabList=window.migrateVocabData([{num:1,word:'study',meaning:'学ぶ',note:'自分だけのメモ',status:'ok',history:['ok']}]);
    window.__noteWrites=[];window.__noteCloud=new Map();window.fbDoc=(_, ...path)=>path.join('/');window.fbCollection=window.fbDoc;

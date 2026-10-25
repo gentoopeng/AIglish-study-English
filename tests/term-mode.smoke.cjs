@@ -16,7 +16,7 @@ const { chromium } = require("playwright"),
     });
     await page.goto("http://127.0.0.1:8000");
     await page.waitForFunction(() => window.TermQuestions && window.TermProgress && window.VocabWordEntry);
-    await page.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+    await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
     await page.locator("#nav-vocab").click();
     // A book in 用語・年号モード.

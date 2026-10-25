@@ -2,7 +2,7 @@ const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict
 (async()=>{
  const type=process.env.BROWSER==='webkit'?webkit:chromium,browser=await type.launch(type===chromium?{executablePath:'/usr/bin/chromium',args:['--no-sandbox']}:{executablePath:process.env.WEBKIT_EXECUTABLE_PATH});
  try{
- const page=await browser.newPage({viewport:{width:390,height:740}}),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.route('https://**/*',r=>r.abort());await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();await page.waitForFunction(()=>window.__learningBootReady&&window.AdminPlayers);
+ const page=await browser.newPage({viewport:{width:390,height:740}}),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.route('https://**/*',r=>r.abort());await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストで試す'}).click();await page.waitForFunction(()=>window.__learningBootReady&&window.AdminPlayers);
  assert.equal(await page.evaluate(()=>verifyAdminPassword('not-the-admin-password')),false);
  await page.evaluate(()=>{
  myId='GUEST-000';myName='管理者';window.verifyAdminPassword=value=>value==='test-admin';window.db={};window.__adminDocs=new Map();{const realSet=__adminDocs.set.bind(__adminDocs);__adminDocs.set=(k,v)=>realSet(k,v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).filter(([,x])=>!(x&&x.__delete))):v);}window.fbDeleteField=()=>({__delete:true});window.__adminReads=0;window.__adminWrites=0;

@@ -1886,9 +1886,9 @@ will-change:auto!important;
 /* Motion stays off page-wide, except in short-lived screens built for it (the warm-up opening,
    poker and its how-to), which animate only transform and opacity. */
 html.ios-stable-rendering body,
-html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.pk-tutorial,.pk-tutorial *)),
-html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.pk-tutorial,.pk-tutorial *))::before,
-html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.pk-tutorial,.pk-tutorial *))::after,
+html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.pk-tutorial,.pk-tutorial *)),
+html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.pk-tutorial,.pk-tutorial *))::before,
+html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.pk-tutorial,.pk-tutorial *))::after,
 html.ios-stable-rendering body::before,
 html.ios-stable-rendering body::after{
 animation:none!important;
@@ -2405,14 +2405,12 @@ html.ios-stable-rendering body .warmup-start-exiting .warmup-start-card::after{a
 
 #view-battle{min-height:calc(100dvh - 116px)}
 
-/* Battle entry: two static compressed pictures, no canvas or background animation. */
+/* Battle entry: one plain card on the app background. */
 #view-battle.active{position:fixed;inset:56px 0 60px;padding:0;min-height:0;overflow:hidden;}
-.battle-mode-grid{height:100%;display:grid;grid-template-rows:1fr 1fr;gap:3px;background:#101825;}
-.battle-mode-card{position:relative;display:grid;place-items:center;border:0;padding:0;isolation:isolate;background-position:center;background-size:cover;cursor:pointer;overflow:hidden;}
-.mode-casual{background-image:url('assets/battle/casual.webp');}.mode-serious{background-image:url('assets/battle/serious.webp');}
-.battle-mode-card:before{content:"";position:absolute;inset:0;background:linear-gradient(transparent 35%,#080f1e50);z-index:-1;}
-.battle-mode-card>span{margin-top:12%;display:block;min-width:160px;padding:12px 25px;border:1px solid #fff9;border-radius:10px;background:#152034b0;color:#fff7e7;font:700 clamp(22px,6vw,30px)/1.4 serif;letter-spacing:.14em;box-shadow:0 4px 15px #0003;transition:transform .2s,background .2s;}
-.battle-mode-card small{display:block;margin-top:4px;font:11px/1.4 system-ui;letter-spacing:.04em;}.battle-mode-card:active>span{transform:scale(.96);background:#152034df;}.battle-mode-card:focus-visible{outline:3px solid #e1c994;outline-offset:-4px;}
+.battle-mode-grid{height:100%;display:grid;place-items:center;padding:24px 16px;box-sizing:border-box;}
+.battle-mode-card{width:min(100%,380px);display:block;border:1px solid rgba(213,201,172,.28);border-radius:20px;padding:34px 22px;background:linear-gradient(150deg,rgba(27,35,49,.82),rgba(15,22,36,.9));color:#f0ece3;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:transform .2s,border-color .2s;}
+.battle-mode-card>span{display:block;font:700 26px/1.4 Georgia,"Yu Mincho",serif;letter-spacing:.12em;}
+.battle-mode-card small{display:block;margin-top:10px;color:#b9b3a4;font:12px/1.6 system-ui,sans-serif;letter-spacing:.02em;}.battle-mode-card:active{transform:scale(.98);border-color:#c6b790;}.battle-mode-card:focus-visible{outline:3px solid #e1c994;outline-offset:3px;}
 .word-duel-screen.is-configuring{height:100dvh;overflow:hidden;padding: max(10px,env(safe-area-inset-top)) 16px max(10px,env(safe-area-inset-bottom));}
 .is-configuring .duel-screen-header{margin-bottom:10px;}.is-configuring .duel-screen-badge{font-size:10px;padding:6px 9px;}.is-configuring .duel-content{min-height:0;gap:10px;overflow:hidden;}
 .battle-config-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:4px;border:1px solid #ffffff20;border-radius:14px;background:#101a2bd9;flex-shrink:0;}
@@ -2452,7 +2450,7 @@ html.ios-stable-rendering body .warmup-start-exiting .warmup-start-card::after{a
 .duel-player.is-leading::before{content:"👑";position:absolute;top:-9px;left:50%;z-index:1;font-size:15px;line-height:1;transform:translateX(-50%);}.word-duel-screen .duel-player.is-leading strong{color:#ffe27a;}
 @keyframes battle-panel-in{from{opacity:.5;transform:translateY(5px)}to{opacity:1;transform:none}}
 @media(max-height:720px){.is-configuring .duel-content{gap:7px;}.battle-config-panel{gap:8px;padding:12px;}.battle-config-panel input[type=number],.battle-config-panel select{padding:7px;}.battle-event-list{gap:8px;}.battle-time-wheels{margin:4px 0;}.battle-config-tabs button{padding:8px 4px!important;}.battle-rule-grid{gap:7px 10px;}.battle-config-hint{font-size:9px;}.battle-config-footer button{padding:9px;}}
-@media(prefers-reduced-motion:reduce){.battle-config-panel{animation:none;}.battle-mode-card>span{transition:none;}}
+@media(prefers-reduced-motion:reduce){.battle-config-panel{animation:none;}.battle-mode-card{transition:none;}}
 @media(max-height:650px){.battle-event-list{gap:5px;}.battle-event-list label{font-size:11px;gap:7px;}.battle-event-list input{width:16px;height:16px;}.battle-config-panel{gap:7px;}}
 .battle-config-panel input[type=number],.battle-config-panel select{color-scheme:dark;-webkit-appearance:none;appearance:none;background-color:#0f1a2c;}
 .battle-config-panel input[type=number]::-webkit-inner-spin-button,.battle-config-panel input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
@@ -2476,7 +2474,7 @@ html.ios-stable-rendering body .warmup-start-exiting .warmup-start-card::after{a
 @media(max-height:650px){.battle-event-group{gap:9px;}.battle-event-list strong{font-size:11px;}.battle-event-list small{font-size:9px;margin-top:2px;}.battle-event-categories button{padding:5px 3px!important;}.battle-event-presets button{padding:5px!important;}.battle-entry>button{padding:18px 14px!important;}}
 /* One-shot entrance, only while the battle tab is visible. No continuous effects. */
 @keyframes battle-choice-enter {from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
-@media(prefers-reduced-motion:no-preference){#view-battle.active .battle-mode-card{animation:battle-choice-enter .42s cubic-bezier(.2,.7,.2,1) both}#view-battle.active .mode-serious{animation-delay:.09s}}
+@media(prefers-reduced-motion:no-preference){#view-battle.active .battle-mode-card{animation:battle-choice-enter .42s cubic-bezier(.2,.7,.2,1) both}}
 .study-group-dialog .group-back-button{position:absolute;left:12px;top:12px;display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:10px;background:transparent;color:var(--text-main);cursor:pointer}
 .study-group-dialog>h2{margin-left:48px!important;min-height:32px}.study-group-dialog>.library-editor-eyebrow{margin-left:48px}
 .group-list-meta{white-space:normal;line-height:1.5}

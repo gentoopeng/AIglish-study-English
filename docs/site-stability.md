@@ -982,3 +982,15 @@ The battle tab's lower card (ガチ, which had only shown 「準備中」) now o
 - Practice poker: `chips` for a win, `fold` for a loss.
 
 `tests/ceremony.smoke.cjs` covers the count, score, touch-through, dialog host, the flashcard ending without an alert, the stars and streak days, every style, and reduced motion.
+
+## A casino tab and plainer words (10.21.64.00)
+
+A seventh tab, カジノ, with a poker-chip icon. It shows the balance as a chip and four tables: poker (moved here from the battle tab), and three house games, blackjack, roulette and dice poker. The rules live in `casino-model.js` with unit tests (`tests/casino-model.test.cjs`); the screen is `casino.js` and `casino.css`.
+
+Money: signed in with the cloud reachable, a round takes its bet when it starts and pays the bet back plus winnings when it ends, each through `Poker.settle` under its own round key, so a round left half way still costs its bet and nothing is paid twice. A bet is at most 1,000pt and never more than the balance. Guests and offline play use 1,000 practice chips kept on the device. Roulette keeps a single-zero wheel's edge (1/37), blackjack pays 3:2 with the dealer standing on 17, dice poker is even money against a dealer who plays a fixed way.
+
+The battle tab lost its two background photographs (`assets/battle/` is gone) and is one plain card. Motion in the casino is one-shot (deal, roll, wheel) and is exempted from the iOS animation kill like the poker table.
+
+Wording: stiff or slogan-like labels were made plain (ログイン, ゲストで試す, 表示名, 要約を作っています…, 全文の和訳, 単語・意味で探す), decorative emoji in dialogs and toasts were dropped, and the usage guide lost sentences that described implementation history rather than use.
+
+Validation: `node --test tests/*.test.cjs`, `node tests/casino.smoke.cjs`, the full smoke suite.

@@ -14,7 +14,7 @@ const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict
   });
   await page.goto('http://127.0.0.1:8000');await page.waitForFunction(()=>window.AppSounds);
   assert.equal(requests.length,0);assert.equal(await page.evaluate(()=>__players.length+__contexts.length),0,'no startup audio allocation');
-  await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();await page.waitForFunction(()=>window.__learningBootReady===true);
+  await page.getByRole('button',{name:'ゲストで試す'}).click();await page.waitForFunction(()=>window.__learningBootReady===true);
   await page.locator('.menu-trigger').click();await page.locator('#settingsMenuButton').click();await page.waitForFunction(()=>__players[0]?.readyState>=2);assert.equal(await page.evaluate(()=>__players.length),1);assert.equal(await page.evaluate(()=>__contexts.length),1);assert.equal(await page.evaluate(()=>__gains[0].gain.value.toFixed(1)),'0.3');
   await page.locator('#soundEnabled').uncheck();const muted=await page.evaluate(()=>__plays.length);await page.evaluate(()=>AppSounds.play('confirm'));assert.equal(await page.evaluate(()=>__plays.length),muted);assert.equal(await page.locator('#soundVolume').isDisabled(),true);assert.equal(await page.evaluate(()=>__players[0].paused),true);
   await page.reload();await page.waitForFunction(()=>window.__learningBootReady===true);await page.locator('.menu-trigger').click();await page.locator('#settingsMenuButton').click();assert.equal(await page.locator('#soundEnabled').isChecked(),false);assert.equal(await page.evaluate(()=>__players.length),0,'muted reload has no audio');

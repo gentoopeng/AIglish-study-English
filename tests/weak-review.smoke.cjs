@@ -24,7 +24,7 @@ const { chromium, webkit } = require("playwright"),
     await page.goto("http://127.0.0.1:8000");
     await page.waitForFunction(() => window.WeakReview && window.StudyPoints);
     await page
-      .getByRole("button", { name: "ゲストとしてテストプレイ" })
+      .getByRole("button", { name: "ゲストで試す" })
       .click();
     await page.waitForFunction(() => window.__learningBootReady === true);
     await page.evaluate(() => {

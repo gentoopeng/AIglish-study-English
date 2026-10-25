@@ -15,7 +15,7 @@ const { chromium, webkit } = require("playwright"),
     await page.goto("http://127.0.0.1:8000", { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => window.People);
     await page
-      .getByRole("button", { name: "ゲストとしてテストプレイ" })
+      .getByRole("button", { name: "ゲストで試す" })
       .click();
     await page.evaluate(() => {
       window.__gcLoginShown = true;

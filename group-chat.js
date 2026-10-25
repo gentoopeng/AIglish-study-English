@@ -160,7 +160,7 @@
         react = document.createElement("button"),
         name = state.group.members?.[item.owner]?.name || item.name || "";
       row.className = "group-chat-event";
-      text.textContent = "🎉 " + (name ? name + " · " : "") + item.text;
+      text.textContent = (name ? name + " · " : "") + item.text;
       time.textContent = clock(item.sentAt);
       time.dateTime = new Date(item.sentAt).toISOString();
       react.type = "button";

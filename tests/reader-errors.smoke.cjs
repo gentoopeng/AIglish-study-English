@@ -29,7 +29,7 @@ const { chromium } = require("playwright"),
       localStorage.setItem("core_v4_geminiKey", "test-key");
     });
     await page.goto("http://127.0.0.1:8000");
-    await page.getByRole("button", { name: "ゲストとしてテストプレイ" }).click();
+    await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
     await page.locator("#nav-reader").click();
     const analyse = async () => {

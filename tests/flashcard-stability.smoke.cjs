@@ -21,7 +21,7 @@ const assert = require("node:assert/strict");
     );
     await page.goto("http://127.0.0.1:8000");
     await page
-      .getByRole("button", { name: "ゲストとしてテストプレイ" })
+      .getByRole("button", { name: "ゲストで試す" })
       .click();
     await page.waitForFunction(() => window.__learningBootReady);
     await page.evaluate(() => {

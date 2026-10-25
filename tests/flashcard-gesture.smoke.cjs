@@ -1,7 +1,7 @@
 const {chromium,webkit}=require('playwright'),assert=require('node:assert/strict');
 (async()=>{const type=process.env.BROWSER==='webkit'?webkit:chromium,browser=await type.launch(type===chromium?{executablePath:'/usr/bin/chromium',args:['--no-sandbox']}:{executablePath:process.env.WEBKIT_EXECUTABLE_PATH});try{
 const page=await browser.newPage({viewport:{width:402,height:874},userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 Mobile Safari/604.1'}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>r.abort());
-await page.addInitScript(()=>localStorage.setItem('b3_tutorial_done','1'));await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストとしてテストプレイ'}).click();await page.waitForFunction(()=>window.__learningBootReady);
+await page.addInitScript(()=>localStorage.setItem('b3_tutorial_done','1'));await page.goto('http://127.0.0.1:8000');await page.getByRole('button',{name:'ゲストで試す'}).click();await page.waitForFunction(()=>window.__learningBootReady);
 const long='とても長い意味の説明が続きます。'.repeat(60);
 await page.evaluate(long=>{textbooksPool=[{id:'gesture-book',name:'操作確認'}];textbooksCacheMap['gesture-book']=Array.from({length:20},(_,i)=>({num:i+1,word:'word'+i,meaning:'意味'+i}));switchTab('vocab');showVocabLibrarySelection();},long);
 await page.getByRole('button',{name:'操作確認の学習方法を選ぶ'}).click();await page.getByRole('button',{name:'単語カード',exact:true}).click();await page.getByRole('button',{name:'カードを開始する'}).click();await page.locator('#activeFlashcard').waitFor({state:'visible'});
