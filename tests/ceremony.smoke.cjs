@@ -25,7 +25,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // A result: the number runs up to the score, the ring stops at 70%, the note and sub show.
     await page.evaluate(() => {
       window.__cerDone = false;
-      window.Ceremony.play({ result: true, count: 7, from: 0, suffix: "/10", ring: 0.7, word: "CLEAR", sub: "正解", note: "+14pt", tone: "gold" }).then(() => (window.__cerDone = true));
+      window.Ceremony.play({ style: "ring", result: true, count: 7, from: 0, suffix: "/10", score: 0.7, word: "CLEAR", sub: "正解", note: "+14pt", tone: "gold" }).then(() => (window.__cerDone = true));
     });
     const c = page.locator(".ceremony");
     await c.waitFor();
@@ -35,8 +35,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(Number(await c.evaluate((el) => el.style.getPropertyValue("--to"))).toFixed(1), (704 * 0.3).toFixed(1));
     await page.waitForFunction(() => document.querySelector(".ceremony.is-landed"));
     assert.equal(await c.locator(".cer-count").innerText(), "7");
-    // A tap skips it; the promise settles once it has gone.
-    await c.click();
+    // A touch anywhere ends it (and still reaches the page); the promise settles once it has gone.
+    await page.mouse.click(10, 10);
     await page.waitForFunction(() => window.__cerDone === true);
     assert.equal(await page.locator(".ceremony").count(), 0);
     // Inside an open modal dialog it goes on that dialog, not behind it.
@@ -61,12 +61,24 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.waitForFunction(() => document.querySelector(".ceremony.is-landed .cer-count")?.textContent === "3");
     assert.deepEqual(alerts, []);
     await page.evaluate(() => window.Ceremony.skip());
+    // Each moment has its own picture: three stars at a perfect score, the days of a streak.
+    await page.evaluate(() => { window.Ceremony.play({ style: "stars", count: 10, suffix: "/10", score: 1, word: "PERFECT" }); });
+    assert.equal(await page.locator(".ceremony.is-stars:not(.is-leaving) .cer-stars i.is-lit").count(), 3);
+    await page.evaluate(() => { window.Ceremony.play({ style: "stars", count: 4, suffix: "/10", score: 0.4, word: "CLEAR" }); });
+    assert.equal(await page.locator(".ceremony.is-stars:not(.is-leaving) .cer-stars i.is-lit").count(), 1);
+    await page.evaluate(() => { window.Ceremony.play({ style: "flame", count: 3, word: "DAYS", days: [false, false, false, false, true, true, true] }); });
+    assert.equal(await page.locator(".ceremony.is-flame:not(.is-leaving) .cer-days i.is-on").count(), 3);
+    for (const style of ["deck", "focus", "trophy", "chips", "fold"]) {
+      await page.evaluate((style) => { window.Ceremony.play({ style, count: 5, word: "OK" }); }, style);
+      assert.equal(await page.locator(".ceremony.is-" + style + ":not(.is-leaving)").count(), 1, style);
+    }
+    await page.evaluate(() => window.Ceremony.skip());
     // Reduced motion: the final number at once.
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.evaluate(() => { window.Ceremony.play({ count: 42, word: "DAYS" }); });
-    assert.equal(await page.locator(".ceremony .cer-count").innerText(), "42");
+    assert.equal(await page.locator(".ceremony:not(.is-leaving) .cer-count").innerText(), "42");
     assert.deepEqual(errors, []);
-    console.log("PASS: ceremony counts up to the score with the ring filled to it, skips on tap, sits in the top dialog, ends the flashcard deck without an alert, and respects reduced motion");
+    console.log("PASS: ceremony counts up to the score with the ring filled to it, skips on tap, sits in the top dialog, ends the flashcard deck without an alert, a picture per moment (stars, streak days and more), and reduced motion");
   } finally {
     await browser.close();
   }

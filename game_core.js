@@ -268,7 +268,7 @@
 
         window.renderFlashcardDeck();
         // The same opening as the first ten words: the card count runs up, then the deck.
-        if (window.Ceremony) window.Ceremony.play({ count: flashcardOriginQueue.length, word: termMode ? 'CARDS' : 'WORDS', sub: 'フラッシュカード' });
+        if (window.Ceremony) window.Ceremony.play({ style: 'deck', count: flashcardOriginQueue.length, word: termMode ? 'CARDS' : 'WORDS', sub: 'フラッシュカード' });
     };
 
     window.renderFlashcardHistoryBubbles = function(wordData) {
@@ -469,7 +469,7 @@
             // filled as far as they go (the old alert said the same in a box).
             var learned = flashcardLearnedCount, total = flashcardOriginQueue.length;
             window.quitFlashcardSession();
-            if (window.Ceremony) window.Ceremony.play({ result: true, count: learned, from: 0, suffix: '/' + total, ring: total ? learned / total : 0, word: 'COMPLETE', sub: '覚えた単語', tone: learned / Math.max(1, total) >= 0.5 ? 'gold' : 'quiet' });
+            if (window.Ceremony) window.Ceremony.play({ style: 'stars', result: true, count: learned, from: 0, suffix: '/' + total, score: total ? learned / total : 0, word: 'COMPLETE', sub: '覚えた単語', tone: learned / Math.max(1, total) >= 0.5 ? 'gold' : 'quiet' });
             else alert('カードの試練達成\n習得単語数: ' + learned + ' / ' + total);
             return;
         }

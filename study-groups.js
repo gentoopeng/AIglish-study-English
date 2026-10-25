@@ -704,7 +704,7 @@
           fresh = localStorage.getItem(seen) !== "1";
           if (fresh) localStorage.setItem(seen, "1");
         } catch {}
-        if (fresh) setTimeout(() => d.isConnected && window.Ceremony.play({ host: d, result: true, count: g.goal.target, from: 0, suffix: unit, word: "GOAL", sub: "みんなで目標達成", tone: "gold" }), 400);
+        if (fresh) setTimeout(() => d.isConnected && window.Ceremony.play({ style: "trophy", host: d, result: true, count: g.goal.target, from: 0, suffix: unit, word: "GOAL", sub: "みんなで目標達成", tone: "gold" }), 400);
       }
       const summary = document.createElement("p");
       summary.className = "group-race-summary";

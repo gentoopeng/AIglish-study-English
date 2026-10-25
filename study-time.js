@@ -149,7 +149,7 @@
         const now=Date.now(),days=streak(now),today=dateKey(now),key='aiglish_streak_seen_'+user;
         if(days<2||dayMilliseconds(data.days[today])<60000)return;
         try{if(localStorage.getItem(key)===today)return;localStorage.setItem(key,today);}catch(error){return;}
-        window.Ceremony.play({count:days,word:'DAYS',sub:'連続学習',note:'今日 '+spoken(dayMilliseconds(data.days[today])),tone:'gold'});
+        const week=Array.from({length:7},(_,i)=>{const d=new Date(now);d.setDate(d.getDate()-6+i);return d;});window.Ceremony.play({style:'flame',count:days,word:'DAYS',sub:'連続学習',note:'今日 '+spoken(dayMilliseconds(data.days[today])),days:week.map(d=>dayMilliseconds(data.days[dateKey(d)])>=60000),dayLabels:week.map(d=>weekdayNames[d.getDay()]),tone:'gold'});
     }
     function renderStats(now){
         const week=weekValues(data,weekStart(now)),today=dateKey(now),past=week.filter(v=>v.date<=today),sum=past.reduce((a,v)=>a+v.ms,0);

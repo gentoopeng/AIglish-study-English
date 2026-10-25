@@ -188,7 +188,7 @@
         answered: false,
       };
       render();
-      window.Ceremony?.play({ host: view, count: targets.length, word: "REVIEW", sub: "苦手復習スタート" });
+      window.Ceremony?.play({ style: "focus", host: view, count: targets.length, word: "REVIEW", sub: "苦手復習スタート" });
     } catch (error) {
       if (token === opening && id === owner())
         message("復習を開けませんでした", error.message);
@@ -367,12 +367,13 @@
     // The score counted up in a ring filled as far as it goes, with the points earned.
     if (answered)
       window.Ceremony?.play({
+        style: "stars",
         host: view,
         result: true,
         count: s.correct,
         from: 0,
         suffix: "/" + answered,
-        ring: s.correct / answered,
+        score: s.correct / answered,
         word: s.correct === answered ? "PERFECT" : "CLEAR",
         sub: "正解",
         note: s.points ? "+" + s.points + "pt" : "",

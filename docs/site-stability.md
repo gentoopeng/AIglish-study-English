@@ -957,24 +957,28 @@ The battle tab's lower card (ガチ, which had only shown 「準備中」) now o
 - app.js is now about 230 KB (from 553 KB).
 
 
-### The opening animation everywhere (10.21.63.00)
+### A moment for each start and result (10.21.63.00)
 
-**The shared piece** (`ceremony.js`, `ceremony.css`)
-- The first-ten-words opening became `Ceremony.play`: a ring draws itself while a number counts up, a word falls in letter by letter, sparks burst, and it zooms away.
-- Options:
-  - `suffix` ("/10");
-  - `ring`, a fraction where the ring stops, for scores;
-  - `note`, such as "+14pt";
-  - `tone`: `gold` for a good result, `quiet` for a modest one.
-- A tap skips it, and it resolves once it has gone. It sits in the top open modal dialog (or the page), and waits for frames before it starts.
-- It is exempt from the iPhone motion kill, like the poker screens.
+**The shared frame** (`ceremony.js`, `ceremony.css`)
+- `Ceremony.play` gives every moment the same frame: a number counting up, a word falling in letter by letter, a line under it, and a zoom away.
+- Each moment has its own picture (`style`):
+  - `ring`: the first ten words. The ring draws itself and sparks burst.
+  - `deck`: flashcards. Seven cards fan out and gather into one deck.
+  - `stars`: results. Up to three stars light (one per third of the score) and a bar fills to the score.
+  - `focus`: weak-word review. Target rings close in on the number, with a crosshair.
+  - `flame`: streaks. A flickering flame, and the last seven days light one by one.
+  - `trophy`: reached group goals. A cup rises in front of turning rays, with confetti.
+  - `chips`: a practice poker win. Chips rain down into stacks.
+  - `fold`: a practice poker loss. Two cards turn face down and drift away.
+- It never stands in the way: the first touch anywhere ends it and still reaches the screen underneath (a card flips, a button presses).
+- It sits in the top open modal dialog (or the page). It waits for frames before it starts, and it is exempt from the iPhone motion kill.
 
 **Where it plays**
-- First ten words: as before, now through the shared piece.
-- Flashcard sessions: at the start, the card count. At the end, the words learned out of the total, with the ring filled as far, replacing the old `alert`.
-- Weak-word review: at the start, the number of questions. At the end, the correct answers out of those answered, the points earned, and PERFECT when all are right.
-- Study tab: opening it on a day that extends a streak of two days or more shows the streak, once a day.
-- Groups: a reached shared goal, once per device.
-- Practice poker: the chips won, or the hands played after a loss.
+- First ten words: `ring`.
+- Flashcard start: `deck`. Flashcard end: `stars`, with the words learned out of the total. This replaces the old `alert`.
+- Weak-word review start: `focus`. Weak-word review end: `stars`, with the points earned, and PERFECT at full marks.
+- Study tab: `flame`. Opening it on a day that extends a streak of two days or more shows the streak, once a day.
+- Groups: `trophy`, for a reached goal, once per device.
+- Practice poker: `chips` for a win, `fold` for a loss.
 
-`tests/ceremony.smoke.cjs` covers the count, ring, tap-to-skip, dialog host, the flashcard ending without an alert, and reduced motion.
+`tests/ceremony.smoke.cjs` covers the count, score, touch-through, dialog host, the flashcard ending without an alert, the stars and streak days, every style, and reduced motion.

@@ -183,8 +183,8 @@
     const won = room.players[me]?.stack > 0;
     window.Ceremony?.play(
       won
-        ? { result: true, count: room.players[me].stack, from: 0, word: "WIN", sub: "全員のチップを獲得", note: room.handNo + "ハンド", tone: "gold" }
-        : { result: true, count: room.handNo || 0, from: 0, suffix: "ハンド", ring: 1, word: "GOOD GAME", sub: "チップがなくなりました", tone: "quiet" },
+        ? { style: "chips", result: true, count: room.players[me].stack, from: 0, word: "WIN", sub: "全員のチップを獲得", note: room.handNo + "ハンド", tone: "gold" }
+        : { style: "fold", result: true, count: room.handNo || 0, from: 0, suffix: "ハンド", word: "GOOD GAME", sub: "チップがなくなりました", tone: "quiet" },
     );
     if (!won || calm()) return;
     const sky = node("div", "pk-confetti");
