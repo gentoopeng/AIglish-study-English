@@ -109,7 +109,8 @@
         ? "ブラックジャック・ルーレット・ダイスポーカーは1回" + fmt(MAX_BET) + "ptまで賭けられます。"
         : "ゲストやオフラインのときは練習チップで遊べます（ポイントは増減しません）。";
     }
-    screen?.querySelector("[data-cs-balance]")?.replaceChildren(fmt(balance()) + unit());
+    // While the wheel turns the balance already holds the result; it shows once the wheel stops.
+    if (!screen?.querySelector(".cs-body.is-spinning")) screen?.querySelector("[data-cs-balance]")?.replaceChildren(fmt(balance()) + unit());
   }
 
   // ---- Game screen -----------------------------------------------------------------------
@@ -411,7 +412,7 @@
       screen?.scrollTo({ top: 0, behavior: calm() ? "auto" : "smooth" });
       const money = round("roulette");
       money.stake(staked);
-      refresh();
+      screen.querySelector("[data-cs-balance]").replaceChildren(fmt(balance()) + unit());
       const number = C.rouletteSpin(random),
         index = C.WHEEL.indexOf(number);
       // Several turns, ending with the winning pocket under the pointer at the top.
@@ -419,11 +420,12 @@
       wheel.querySelector(".cs-wheel-spin").style.transform = "rotate(" + turned + "deg)";
       wheel.querySelector(".cs-landed").textContent = "";
       message.replaceChildren();
-      await later(3600);
-      if (!screen || game?.body !== body) return;
+      // Paid as soon as the number is drawn, so closing during the spin never loses a win.
       const outcome = C.rouletteSettle([...bets].map(([on, amount]) => ({ on, amount })), number);
       const back = outcome.lines.filter((l) => l.won).reduce((a, l) => a + l.amount + l.net, 0);
       if (back > 0) money.pay(back);
+      await later(3600);
+      if (!screen || game?.body !== body) return;
       const landed = wheel.querySelector(".cs-landed");
       landed.textContent = String(number);
       landed.className = "cs-landed is-" + outcome.colour;
