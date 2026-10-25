@@ -944,3 +944,15 @@ The battle tab's lower card (ガチ, which had only shown 「準備中」) now o
 **Poker**
 - The practice test's long waits were the test's own doing: lowering the computer's stack in place could be undone before the next hand, so a game ran past the loop's 100 s budget. The stack is now set again after every hand, and the loop waits by time.
 - The dealer loop also gets two safeguards. A step that never finishes is released after 15 s. A computer turn that has not moved for 20 s checks or folds.
+
+**Further cleanup (same release)**
+- Removed:
+  - the old study-time editor and graph patches (5–10, 15–17). Each returned early when `StudyTime` exists, yet still ran timers every second or every five seconds.
+  - the old community-ranking patches (13–14) and two reader patches (vocab trainer, open-button rebinding). The current screens already avoid what they fixed.
+  - the retired admin panels for books, shelves, user repair and missing-number search. Their anchors are gone from the page; the six names still called from shared code are no-ops.
+  - the intermediate wrappers in the hide-loading chain, which finished the loading quiz up to four times.
+- Moved the usage guide overlay from app.js into `usage-guide.js` and `usage-guide.css`. Its sections and tips come from `usage-guide-content.js`, as before.
+- app.js no longer injects any CSS. Every injected sheet now sits in a stylesheet in the same cascade position.
+- Screenshots of the vocabulary, reader, battle and ranking tabs, the sidebar and the usage guide are pixel-identical before and after.
+- app.js is now about 230 KB (from 553 KB).
+

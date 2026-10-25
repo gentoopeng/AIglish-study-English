@@ -2935,3 +2935,19 @@ html body .flash-warmup-dialog.warmup-intro-playing>.flashcard-session-screen{op
 #friendListContainer .people-row{animation:peopleRise .4s calc(var(--i,0) * .035s) cubic-bezier(.2,.8,.2,1) both;}
 }
 @keyframes peopleRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* Reader sub-tabs and shelf rows, and the scrolling sidebar (were injected at runtime by app.js patches). */
+.reader-subtab-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 0;border-radius:10px;font-size:12px;font-weight:900;letter-spacing:1px;cursor:pointer;transition:all 0.25s ease;border:1px solid rgba(255,255,255,0.15);background:rgba(7,11,25,0.6);color:var(--text-sub);-webkit-tap-highlight-color:transparent;}
+.reader-subtab-btn.reader-subtab-active{border-color:var(--cosmic-cyan);background:linear-gradient(135deg, rgba(0,240,255,0.25) 0%, rgba(192,132,252,0.25) 100%);color:#FFFFFF;box-shadow:0 0 15px rgba(0,240,255,0.35);text-shadow:0 0 8px rgba(0,240,255,0.5);}
+.shelf-book-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);margin-bottom:8px;cursor:pointer;transition:all 0.2s ease;}
+.shelf-book-row:active{transform:scale(0.98);border-color:var(--cosmic-cyan);background:rgba(0,240,255,0.08);}
+.shelf-item-row{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.05);padding:10px 14px;border-radius:8px;margin-bottom:8px;}
+@keyframes shelfSlideInFromRight{0%{opacity:0;transform:translateX(50px);}100%{opacity:1;transform:translateX(0);}}
+@keyframes shelfSlideInFromLeft{0%{opacity:0;transform:translateX(-50px);}100%{opacity:1;transform:translateX(0);}}
+.shelf-slide-from-right{animation:shelfSlideInFromRight 0.3s cubic-bezier(0.25,1,0.5,1) forwards;}
+.shelf-slide-from-left{animation:shelfSlideInFromLeft 0.3s cubic-bezier(0.25,1,0.5,1) forwards;}
+#sidebarMenu{overflow-y:auto !important;-webkit-overflow-scrolling:touch;box-sizing:border-box;padding-bottom:96px !important;}
+#sidebarMenu > *{flex-shrink:0 !important;}
+#sidebarMenu::-webkit-scrollbar{width:4px;}
+#sidebarMenu::-webkit-scrollbar-track{background:transparent;}
+#sidebarMenu::-webkit-scrollbar-thumb{background:rgba(0,240,255,0.35);border-radius:2px;}

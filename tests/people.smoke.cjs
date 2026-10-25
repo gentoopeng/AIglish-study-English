@@ -141,7 +141,9 @@ const { chromium, webkit } = require("playwright"),
       0,
     );
     assert.equal(await page.locator("#usersRefreshButton").count(), 1);
-    assert.equal(await page.locator(".people-section-heading").count(), 0);
+    // Online and recent users come under their own headings, each with a count.
+    const headings = await page.locator("#friendListContainer .people-section-heading").allInnerTexts();
+    assert.ok(headings.length >= 1 && headings.every((text) => /^(オンライン|最近)（\d+）$/.test(text)), headings.join(","));
     await page.locator("#usersRefreshButton").click();
     await page.waitForFunction(
       () => !document.getElementById("usersRefreshButton").disabled,

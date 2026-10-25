@@ -202,6 +202,9 @@ window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 // 教材一覧だけ同期する。本体は開いた教材のローダーに任せる。
 // 🌟 単語帳データをFirebase (Firestore) と同期・保存処理
+// The book, shelf and user administration panels are retired (their screens are gone); the calls left in
+// shared code find no-ops.
+['updateAdminEditBookSelectOptions','updateAdminEditShelfSelectOptions','injectShelfAdminPanel','renderAdminUserList','injectAdminUserRepairBox','injectMissingNumberSearchPanel'].forEach(name=>{window[name]=function(){};});
 window.syncTextbooksIndexFromFirestore = async function() {
 if (window.db && window.fbGetDoc && window.fbDoc) {
 try {
@@ -219,19 +222,6 @@ console.error("教材インデックスの同期エラー:", e);
 }
 }
 window.updateAdminEditBookSelectOptions();
-};
-window.updateAdminEditBookSelectOptions = function() {
-const adminSelect = document.getElementById('adminEditBookSelect');
-if (!adminSelect) return;
-const currentVal = adminSelect.value;
-adminSelect.innerHTML = `<option value="">➕ 新規教材として一斉配信登録</option>`;
-textbooksPool.forEach(book => {
-const opt = document.createElement('option');
-opt.value = book.id;
-opt.innerText = book.name;
-adminSelect.appendChild(opt);
-});
-adminSelect.value = currentVal;
 };
 // 🌟 キャッシュ優先で単語帳データを爆速ロードする関数
 window.createTextbookListItem = function(book, index, onSelect) {
@@ -449,81 +439,6 @@ const popup = document.getElementById('textbookSelectPopupFrame');
 if (popup) { popup.classList.remove('show'); popup.style.display = 'none'; }
 await window.loadCurrentTextbookData();
 };
-window.saveOrUpdateTextbookFromAdmin = async function() {
-const adminSelect = document.getElementById('adminEditBookSelect');
-const titleInput = document.getElementById('adminNewBookTitle');
-if(!titleInput || !adminSelect) return;
-const selectedBookId = adminSelect.value;
- const title = titleInput.value.trim();
- if(!title) return alert("教材の名前を入力してください。");
- await window.syncTextbooksIndexFromFirestore();
- let finalCover = adminUploadedBookCoverBase64;
- let finalType = "image";
- let createdBookId = "";
- if (selectedBookId) {
-     const targetIdx = textbooksPool.findIndex(b => b.id === selectedBookId);
-     if (targetIdx !== -1) {
-         textbooksPool[targetIdx].name = title;
-         if (adminUploadedBookCoverBase64) {
-             textbooksPool[targetIdx].cover = finalCover;
-             textbooksPool[targetIdx].coverType = finalType;
-         }
-     }
- } else {
-     if(!adminUploadedBookCoverBase64) {
-         finalCover = "📔";
-         finalType = "text";
-     }
-     createdBookId = "textbook_" + Date.now();
-     textbooksPool.push({ id: createdBookId, name: title, cover: finalCover, coverType: finalType });
-     currentTextbook = createdBookId;
-     vocabList = [];
-     window.VocabMaster.confirmEmpty(createdBookId);
-     currentUserVocabProgress = {};
-     textbooksCacheMap[createdBookId] = [];
-     localStorage.setItem('core_v4_current_textbook_id', createdBookId);
-     localStorage.setItem('core_v4_cache_' + createdBookId, '[]');
-     localStorage.setItem('core_v4_custom_words_' + myId + '_' + createdBookId, '[]');
-     if (typeof window.getVocabProgressStorageKey === 'function') {
-         localStorage.setItem(window.getVocabProgressStorageKey(createdBookId), '{}');
-     }
- }
- if (window.db && window.fbSetDoc && window.fbDoc) {
-     try {
-         const indexRef = window.fbDoc(window.db, "shared", "textbooks_index");
-         await window.fbSetDoc(indexRef, { textbooks: textbooksPool.filter(function(book) { return !book.personal; }) }, { merge: true });
-         if (createdBookId) {
-             const vocabRef = window.fbDoc(window.db, "shared", "vocab_" + createdBookId);
-             await window.fbSetDoc(vocabRef, { custom_words: [], emptyConfirmed:true, updatedAt: new Date().toISOString() }, { merge: false });
-         }
-         alert(`教材リスト『${title}』を配信しました。`);
-         titleInput.value = "";
-         adminSelect.value = "";
-         adminUploadedBookCoverBase64 = "";
-         const fileInput = document.getElementById('adminBookCoverFileUploader');
-         if(fileInput) fileInput.value = "";
-         window.updateFlashcardSourceSelectOptions();
-         window.updateAdminEditBookSelectOptions();
-         await window.loadCurrentTextbookData();
-         window.switchTab('vocab');
-     } catch(e) {
-         alert("通信に失敗しました。時間をおいて、もう一度お試しください。");
-     }
- }
-};
-window.handleAdminEditSelectChange = function(val) {
-const titleInput = document.getElementById('adminNewBookTitle');
-const submitBtn = document.getElementById('adminBookSubmitBtn');
-if(!titleInput || !submitBtn) return;
-if(val) {
-    const match = textbooksPool.find(b => b.id === val);
-    if(match) titleInput.value = match.name;
-    submitBtn.innerText = "選択中の教材データを修正・上書き保存";
-} else {
-    titleInput.value = "";
-    submitBtn.innerText = "新規教材として一斉配信登録";
-}
-};
 // ==========================================================================
 // 🌟 活用形マッチング（語幹化＋インデックス＋照合）
 // ==========================================================================
@@ -534,17 +449,6 @@ if(val) {
 // 🌟 単語帳詳細ポップアップ（登録数・⚪︎△✕未学習・ドーナツグラフ）
 // ==========================================================================
 // 単語帳の切り替えボタンの右に「📊 詳細」ボタンを注入（1回だけ）
-window.saveAllUsers = async function(users) {
-localStorage.setItem('core_v4_users', JSON.stringify(users));
-if (window.db && window.fbSetDoc && window.fbDoc) {
-try {
-const ref = window.fbDoc(window.db, "shared", "all_users");
-await window.fbSetDoc(ref, { users: users }, { merge: true });
-} catch (e) {
-console.error("Error saving all users to Firebase:", e);
-}
-}
-};
 window.generateUserId = function() {
 const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 let id = "";
@@ -575,84 +479,6 @@ if(mode === 'login') {
 }
 window.initLucide();
 };
-window.handleAuthSubmit = async function() {
-const authReg = document.getElementById('authTabRegister');
-const isRegister = authReg ? authReg.classList.contains('active') : false;
-const errorMsg = document.getElementById('authErrorMsg');
-if (errorMsg) errorMsg.style.display = 'none';
-if(isRegister) {
-     const pName = document.getElementById('regPlayerName').value.trim();
-     const rName = '';
-     const age = '';
-     const pin = document.getElementById('regPin').value.trim();
-     if(!pName || !pin) {
-         if(errorMsg) { errorMsg.innerText = "すべての項目を入力してください。"; errorMsg.style.display = 'block'; }
-         return;
-     }
-     if(!/^\d{4}$/.test(pin)) {
-         if(errorMsg) { errorMsg.innerText = "暗証番号は4桁の数字で設定してください。"; errorMsg.style.display = 'block'; }
-         return;
-     }
-     const newId = window.generateUserId();
-     const users = await window.getAllUsers();
-     const newUserObj = { id: newId, playerName: pName, realName: rName, age: age, pin: pin };
-     users.push(newUserObj);
-     await window.saveAllUsers(users);
-     // Firebase usersコレクションに即時保存
-     if (window.db && window.fbSetDoc && window.fbDoc) {
-         try {
-             const userRef = window.fbDoc(window.db, "users", newId);
-             await window.fbSetDoc(userRef, {
-                 id: newId,
-                 playerName: pName,
-                 realName: rName,
-                 age: age,
-                 pin: pin,
-                 selectedTitle: "称号なし",
-                 userTarget: "未設定",
-                 totalExp: 0,
-                 avatar: "",
-                 userStats: { user_level: 1, study_burst: 0 }
-             }, { merge: true });
-         } catch(e) {
-             console.error("Firebaseへの新規ユーザー個別登録エラー:", e);
-         }
-     }
-     alert(`アカウントを作成しました。\nあなたのログインIDは【 ${newId} 】です。\nログインに必要なので、必ずメモしてください。`);
-     localStorage.setItem('core_v4_userId', newId);
-     localStorage.setItem('core_v4_userName', pName);
-     localStorage.setItem('core_v4_userTarget', "未設定");
-     localStorage.setItem('core_v4_totalExp', "0");
-     window.loadLocalState();
- } else {
-     const idInput = document.getElementById('loginIdInput').value.trim();
-     const pinInput = document.getElementById('loginPinInput').value.trim();
-     if(!idInput || !pinInput) {
-         if(errorMsg) { errorMsg.innerText = "IDと暗証番号を入力してください。"; errorMsg.style.display = 'block'; }
-         return;
-     }
-     const users = await window.getAllUsers();
-     let user = users.find(u => u.id === idInput && u.pin === pinInput);
-     // クラウド側からの救済取得
-     if(!user && window.db && window.fbGetDoc && window.fbDoc) {
-         try {
-             const userRef = window.fbDoc(window.db, "users", idInput);
-             const snap = await window.fbGetDoc(userRef);
-             if(snap.exists()) {
-                 const data = snap.data();
-                 if(data.pin === pinInput) {
-                     user = { id: idInput, playerName: data.playerName || "プレイヤー", realName: data.realName || "一般", age: data.age || "18", pin: data.pin };
-                 }
-             }
-         } catch(e){}
-     }
-     if(user) {
-         window.showLoginConfirmPopup(user);
-     } else {
-         if(errorMsg) { errorMsg.innerText = "IDまたは暗証番号が違います。"; errorMsg.style.display = 'block'; }
-     }
- }
-};
 window.handleGuestLogin = function() {
 const errorMsg = document.getElementById('authErrorMsg');
 if (errorMsg) errorMsg.style.display = 'none';
@@ -663,71 +489,7 @@ localStorage.setItem('core_v4_userTarget', "テストプレイ中");
 if(!localStorage.getItem('core_v4_totalExp')) localStorage.setItem('core_v4_totalExp', "0");
 window.loadLocalState();
 };
-window.showLoginConfirmPopup = function(user) {
-if(document.getElementById('loginOverlayLayer')) return;
-const overlay = document.createElement('div');
-overlay.id = 'loginOverlayLayer';
-overlay.className = 'login-confirm-overlay';
-const box = document.createElement('div');
- box.className = 'login-confirm-card';
- box.innerHTML = `
-     <div class="login-confirm-avatar"><i data-lucide="user" size="32"></i></div>
-     <div style="color:white; font-size:18px; font-weight:800; margin-bottom:8px;">ログインの確認</div>
-     <div style="color:var(--text-sub); font-size:13px; margin-bottom:16px; line-height:1.6;">
-         このアカウントでログインしますか？<br>
-         <div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; margin-top:8px; text-align:left;">
-             <strong>プレイヤー名:</strong> <span style="color:white;">${user.playerName}</span>
-         </div>
-     </div>
-     <div style="display:flex; gap:12px;">
-         <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--input-bg); color:var(--text-main); font-weight:700; cursor:pointer;" id="cancelLoginBtn">キャンセル</button>
-         <button style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--cosmic-cyan); color:#000; font-weight:700; cursor:pointer;" id="confirmLoginBtn">ログイン</button>
-     </div>
- `;
- overlay.appendChild(box);
- document.body.appendChild(overlay);
- window.initLucide();
- document.getElementById('cancelLoginBtn').onclick = () => { document.body.removeChild(overlay); };
- document.getElementById('confirmLoginBtn').onclick = () => {
-     localStorage.setItem('core_v4_userId', user.id);
-     localStorage.setItem('core_v4_userName', user.playerName);
-     if(!localStorage.getItem('core_v4_userTarget')) localStorage.setItem('core_v4_userTarget', "未設定");
-     if(!localStorage.getItem('core_v4_totalExp')) localStorage.setItem('core_v4_totalExp', "0");
-     document.body.removeChild(overlay);
-     window.loadLocalState();
- };
-};
-window.deleteUserByAdmin = function(targetUserId) {
-window.showCustomDeleteAdminUserConfirm(targetUserId);
-};
 // 🌟 管理者ユーザーリストレンダリング（安全な読み込み＆描画）
-window.renderAdminUserList = async function() {
-const container = document.getElementById('adminUserListContainer');
-if(!container) return;
-container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding: 10px;'>ユーザー一覧を取得中...</div>";
-try {
-     const users = await window.getAllUsers();
-     container.innerHTML = "";
-     if(!users || users.length === 0) {
-         container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding: 10px;'>ユーザーが登録されていません。</div>";
-         return;
-     }
-     users.forEach(u => {
-         const div = document.createElement('div');
-         div.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px;";
-         div.innerHTML = `
-             <div style="flex:1;">
-                 <div style="color:var(--cosmic-cyan); font-family:monospace; font-weight:bold; letter-spacing:1px;">ID: ${u.id}</div>
-                 <div style="color:white; font-weight:bold; margin-top:2px;">${u.playerName || 'プレイヤー'}</div>
-             </div>
-             <button class="list-action-link" style="background:rgba(239,68,68,0.2); color:#EF4444; border-color:#EF4444; height:28px; padding:0 8px; font-size:11px;" onclick="window.deleteUserByAdmin('${u.id}')">削除</button>
-         `;
-         container.appendChild(div);
-     });
- } catch(e) {
-     container.innerHTML = "<div style='color:var(--text-sub); font-size:12px; text-align:center; padding: 10px;'>ユーザー情報の取得に失敗しました。</div>";
- }
-};
 window.applyProfileToUi = function() {
 const pNameEl = document.getElementById('sideOptPlayerName');
 if(pNameEl) pNameEl.innerText = myName;
@@ -1651,92 +1413,14 @@ window.injectFriendRefreshButton = function() {}; // Replaced by the compact use
 // ------------------------------------------------------------------
 // 12. 欠番検索パネル
 // ------------------------------------------------------------------
-window.injectMissingNumberSearchPanel = function() {
-  if (document.getElementById("missingNumberSearchPanel")) return;
-  const anchor = document.getElementById("bulkWordInput");
-  if (!anchor || !anchor.parentNode) return;
-  const panel = document.createElement("div");
-  panel.id = "missingNumberSearchPanel";
-  panel.style.cssText = "margin:12px 0; padding:12px; border:1px dashed rgba(0,240,255,0.35); border-radius:12px; background:rgba(0,0,0,0.25);";
-  panel.innerHTML = '<div style="font-size:12px; font-weight:800; color:var(--cosmic-cyan); margin-bottom:8px;">🔢 欠番検索</div>' +
-    '<div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">' +
-    '<input type="number" id="missingRangeStart" class="search-input" placeholder="開始" style="width:90px; height:36px; margin:0;">' +
-    '<span style="color:var(--text-sub); font-size:12px;">〜</span>' +
-    '<input type="number" id="missingRangeEnd" class="search-input" placeholder="終了" style="width:90px; height:36px; margin:0;">' +
-    '<button class="list-action-link" style="height:36px;" onclick="window.runMissingNumberSearch()">検索</button></div>' +
-    '<div style="font-size:11px; color:var(--text-sub); margin-bottom:8px;">空欄の場合は 1〜登録最大番号 で検索します。</div>' +
-    '<div id="missingNumberResultSummary" style="font-size:12px; color:#fff; margin-bottom:8px;"></div>' +
-    '<textarea id="missingNumberCopyText" class="modern-textarea" readonly style="height:80px; margin:0 0 8px 0; font-size:12px;"></textarea>' +
-    '<button class="list-action-link" style="height:36px; width:100%; text-align:center;" onclick="window.copyMissingNumberText()">欠番をコピー</button>';
-  anchor.parentNode.insertBefore(panel, anchor.nextSibling);
-};
 
-window.runMissingNumberSearch = function() {
-  const summary = document.getElementById("missingNumberResultSummary");
-  const copyArea = document.getElementById("missingNumberCopyText");
-  if (!summary || !copyArea) return;
-  // Gaps are looked for in the numbers people see (display numbers), not identity numbers.
-  const shown = function(w) { return window.VocabOrder ? window.VocabOrder.no(w) : parseInt(w.num); };
-  const maxNum = (vocabList || []).reduce(function(max, w) { const n = shown(w); return isNaN(n) ? max : Math.max(max, n); }, 0);
-  const startEl = document.getElementById("missingRangeStart");
-  const endEl = document.getElementById("missingRangeEnd");
-  const startIsBlank = !startEl || startEl.value.trim() === "";
-  const endIsBlank = !endEl || endEl.value.trim() === "";
-  let start = startIsBlank ? 1 : parseInt(startEl.value);
-  let end = endIsBlank ? maxNum : parseInt(endEl.value);
-  if (endIsBlank && maxNum <= 0) { summary.innerText = "単語が登録されていないため、欠番を検索できません。"; copyArea.value = ""; return; }
-  if (isNaN(start) || isNaN(end)) { summary.innerText = "開始番号と終了番号を正しく入力してください。"; copyArea.value = ""; return; }
-  if (start > end) { const tmp = start; start = end; end = tmp; }
-  if (end - start > 100000) { summary.innerText = "検索範囲が広すぎます。100000件以内にしてください。"; copyArea.value = ""; return; }
-  const existingNums = new Set();
-  (vocabList || []).forEach(function(w) { const n = shown(w); if (!isNaN(n)) existingNums.add(n); });
-  const missing = [];
-  for (let n = start; n <= end; n++) { if (!existingNums.has(n)) missing.push(n); }
-  if (missing.length === 0) { summary.innerText = "欠番はありません（" + start + "〜" + end + "）"; copyArea.value = ""; return; }
-  const preview = missing.slice(0, 200).join(", ") + (missing.length > 200 ? " ..." : "");
-  summary.innerHTML = '欠番: <strong style="color:var(--cosmic-cyan);">' + missing.length + '件</strong>（' + start + '〜' + end + '）<br><span style="color:var(--text-sub); font-size:11px;">' + preview + '</span>';
-  copyArea.value = missing.join("\n");
-};
 
-window.copyMissingNumberText = async function() {
-  const copyArea = document.getElementById("missingNumberCopyText");
-  if (!copyArea || !copyArea.value) { alert("コピーする欠番がありません。先に検索してください。"); return; }
-  try { await navigator.clipboard.writeText(copyArea.value); alert("欠番をコピーしました。"); }
-  catch (e) {
-    copyArea.removeAttribute("readonly"); copyArea.select(); document.execCommand("copy"); copyArea.setAttribute("readonly", "");
-    alert("欠番をコピーしました。");
-  }
-};
 
 // ------------------------------------------------------------------
 // 13. 管理画面: 教材選択で単語帳切替
 // ------------------------------------------------------------------
-window.setCurrentTextbookAndReload = async function(bookId) {
-  if (!bookId) return;
-  if (typeof textbooksPool === "undefined" || !Array.isArray(textbooksPool)) return;
-  const book = textbooksPool.find(function(b) { return b.id === bookId; });
-  if (!book) return;
-  currentTextbook = bookId;
-  try { localStorage.setItem("core_v4_current_textbook_id", currentTextbook); } catch (e) {}
-  if (typeof window.loadCurrentTextbookData === "function") await window.loadCurrentTextbookData();
-  if (typeof window.updateFlashcardSourceSelectOptions === "function") window.updateFlashcardSourceSelectOptions();
-};
 
-const __prevHandleAdminEditSelectChangeForPatch = window.handleAdminEditSelectChange;
-window.handleAdminEditSelectChange = async function(val) {
-  if (typeof __prevHandleAdminEditSelectChangeForPatch === "function") __prevHandleAdminEditSelectChangeForPatch(val);
-  if (!val) return;
-  await window.setCurrentTextbookAndReload(val);
-};
 
-const __prevSaveOrUpdateTextbookFromAdminForPatch = window.saveOrUpdateTextbookFromAdmin;
-window.saveOrUpdateTextbookFromAdmin = async function() {
-  const selectEl = document.getElementById("adminEditBookSelect");
-  const selectedBefore = selectEl ? selectEl.value : "";
-  const wasExisting = selectedBefore && Array.isArray(textbooksPool) && textbooksPool.some(function(b) { return b.id === selectedBefore; });
-  if (typeof __prevSaveOrUpdateTextbookFromAdminForPatch === "function") await __prevSaveOrUpdateTextbookFromAdminForPatch.apply(this, arguments);
-  if (wasExisting && selectedBefore) await window.setCurrentTextbookAndReload(selectedBefore);
-};
 
 // ------------------------------------------------------------------
 // 14. アカウント安定化
@@ -1746,12 +1430,9 @@ window.__allUsersExactWrite = false;
 window.__lastLoginRecorded = false;
 
 
-const __prevSaveAllUsersForPatch = window.saveAllUsers;
 
 
-const __prevShowLoginConfirmPopupForPatch = window.showLoginConfirmPopup;
 
-const __prevHandleAuthSubmitForPatch = window.handleAuthSubmit;
 
 window.recordLastLoginOnce = async function() {
   if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
@@ -1763,40 +1444,7 @@ window.recordLastLoginOnce = async function() {
 // ------------------------------------------------------------------
 // 15. 管理者: ユーザーID復旧ボックス
 // ------------------------------------------------------------------
-window.injectAdminUserRepairBox = function() { return; // Retired duplicate account panel.
-  if (document.getElementById("adminUserRepairBox")) return;
-  const container = document.getElementById("adminUserListContainer");
-  if (!container || !container.parentNode) return;
-  const box = document.createElement("div");
-  box.id = "adminUserRepairBox";
-  box.style.cssText = "margin-bottom:12px; padding:12px; border:1px dashed rgba(0,240,255,0.35); border-radius:12px; background:rgba(0,0,0,0.25);";
-  box.innerHTML = '<div style="font-size:12px; font-weight:800; color:var(--cosmic-cyan); margin-bottom:8px;">🧩 ユーザー一覧復旧</div>' +
-    '<input type="text" id="adminRepairUserIdInput" class="search-input" placeholder="復旧したいユーザーID" style="margin-bottom:8px;">' +
-    '<button class="list-action-link" style="width:100%; height:36px; text-align:center;" onclick="window.repairUserIntoAllUsers()">ユーザー一覧に復旧</button>';
-  container.parentNode.insertBefore(box, container);
-};
 
-window.repairUserIntoAllUsers = async function() {
-  const input = document.getElementById("adminRepairUserIdInput");
-  if (!input) return;
-  const targetId = input.value.trim().toUpperCase();
-  if (!targetId) { alert("復旧したいユーザーIDを入力してください。"); return; }
-  if (!window.db || !window.fbGetDoc || !window.fbDoc) { alert("サーバーに接続できないため、復旧できません。"); return; }
-  try {
-    const ref = window.fbDoc(window.db, "users", targetId);
-    const snap = await window.fbGetDoc(ref);
-    if (!snap.exists()) { alert("指定されたIDのユーザーは見つかりません。"); return; }
-    const d = snap.data();
-    if (d.deleted) { alert("指定されたユーザーは削除済みです。"); return; }
-    let users = await window.getAllUsers();
-    if ((users || []).some(function(u) { return u && u.id === targetId; })) { alert("そのユーザーは既にユーザー一覧に登録されています。"); input.value = ""; return; }
-    users.push({ id: targetId, playerName: d.playerName || "プレイヤー", realName: d.realName || "一般", age: d.age || "18", pin: d.pin || "" });
-    await window.saveAllUsers(users);
-    alert("ユーザー一覧に復旧しました。");
-    input.value = "";
-    window.renderAdminUserList();
-  } catch (e) { alert("ユーザー復旧に失敗しました。"); }
-};
 
 // ------------------------------------------------------------------
 // 16. switchTab上書き（全機能のUI注入）
@@ -2869,7 +2517,6 @@ window.__restoreFlashcardSession = function() {
   window.__fcSessionActive = false;
 };
 
-var __prevStartFlashcardSessionForBookFix = window.startFlashcardSession;
 
 // 終了時に必ず復元（finish / quit 両方をカバー）
 var __prevFinishFlashcardSessionForBookFix = window.finishFlashcardSession;
@@ -2933,7 +2580,7 @@ window.onAppLoaded(function() {
 // ------------------------------------------------------------------
 // 【1】ロード画面の単語テスト（タンゴン削除）
 // ------------------------------------------------------------------
-window.__loadQuiz = window.__loadQuiz || { active:false, words:[], index:0, answers:[], ok:0, bad:0, so:0 };
+window.__loadQuiz = window.__loadQuiz || { active:false, words:[], index:0, answers:[], ok:0, bad:0, so:0, bookId:null };
 
 
 
@@ -2943,11 +2590,6 @@ window.__loadQuiz = window.__loadQuiz || { active:false, words:[], index:0, answ
 
 // ロード完了時：退避していた答えを単語帳へ反映して保存
 
-var __prevActuallyHidePenguinForQuiz = window.__actuallyHidePenguin;
-window.__actuallyHidePenguin = function() {
-  window.__finalizeLoadQuiz();
-  if (typeof __prevActuallyHidePenguinForQuiz === 'function') __prevActuallyHidePenguinForQuiz();
-};
 
 // ------------------------------------------------------------------
 // 【2】理解度保存の確実化（ローカル常時ベース＋Firebaseリトライ）
@@ -3048,11 +2690,6 @@ window.logoutToGate = async function() {
 // ------------------------------------------------------------------
 // 【7】非表示時に答えを確定する処理を確実に呼び出す
 // ------------------------------------------------------------------
-var __prevActuallyHidePenguinForQuiz5 = window.__actuallyHidePenguin;
-window.__actuallyHidePenguin = function() {
-  window.__finalizeLoadQuiz();
-  if (typeof __prevActuallyHidePenguinForQuiz5 === 'function') __prevActuallyHidePenguinForQuiz5();
-};
 
 // ------------------------------------------------------------------
 // 【8】設定画面に「出題元の単語帳」セクションを注入
@@ -3073,8 +2710,6 @@ window.__actuallyHidePenguin = function() {
 // ------------------------------------------------------------------
 // 【1】共有状態
 // ------------------------------------------------------------------
-window.__loadQuiz = window.__loadQuiz || { active:false, words:[], index:0, answers:[], ok:0, bad:0, so:0, bookId:null };
-window.__lqCurrent = window.__lqCurrent || null;
 
 // ------------------------------------------------------------------
 // 【2】ローディング描画（スコアバー無し・クイズ枠＋ヒントのみ）
@@ -3119,11 +2754,6 @@ window.__lqCurrent = window.__lqCurrent || null;
 // ------------------------------------------------------------------
 // 【12】ロード終了時に答えを確定
 // ------------------------------------------------------------------
-var __prevActuallyHidePenguinForQuiz6 = window.__actuallyHidePenguin;
-window.__actuallyHidePenguin = function() {
-  window.__finalizeLoadQuiz();
-  if (typeof __prevActuallyHidePenguinForQuiz6 === 'function') __prevActuallyHidePenguinForQuiz6();
-};
 
 // ------------------------------------------------------------------
 // 【13】設定画面：出題元の単語帳を選択
@@ -3236,7 +2866,6 @@ setTimeout(window.__installFbSetDocSanitize, 2500);
 // ------------------------------------------------------------------
 // 【1】共有状態（今のカード／退避した答え／出題元）
 // ------------------------------------------------------------------
-window.__loadQuiz = window.__loadQuiz || { active:false, words:[], index:0, answers:[], ok:0, bad:0, so:0, bookId:null };
 window.__lqCurrent = window.__lqCurrent || null; // { word, ov }
 
 // ------------------------------------------------------------------
@@ -3680,23 +3309,6 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
 // ------------------------------------------------------------------
 // 【0】パッチ専用スタイルの注入（タブボタン＋スライドアニメーション）
 // ------------------------------------------------------------------
-(function injectShelfTabPatchCss() {
-  if (document.getElementById('shelfTabPatchCss')) return;
-  var st = document.createElement('style');
-  st.id = 'shelfTabPatchCss';
-  st.textContent = [
-    '.reader-subtab-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 0;border-radius:10px;font-size:12px;font-weight:900;letter-spacing:1px;cursor:pointer;transition:all 0.25s ease;border:1px solid rgba(255,255,255,0.15);background:rgba(7,11,25,0.6);color:var(--text-sub);-webkit-tap-highlight-color:transparent;}',
-    '.reader-subtab-btn.reader-subtab-active{border-color:var(--cosmic-cyan);background:linear-gradient(135deg, rgba(0,240,255,0.25) 0%, rgba(192,132,252,0.25) 100%);color:#FFFFFF;box-shadow:0 0 15px rgba(0,240,255,0.35);text-shadow:0 0 8px rgba(0,240,255,0.5);}',
-    '.shelf-book-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);margin-bottom:8px;cursor:pointer;transition:all 0.2s ease;}',
-    '.shelf-book-row:active{transform:scale(0.98);border-color:var(--cosmic-cyan);background:rgba(0,240,255,0.08);}',
-    '.shelf-item-row{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.05);padding:10px 14px;border-radius:8px;margin-bottom:8px;}',
-    '@keyframes shelfSlideInFromRight{0%{opacity:0;transform:translateX(50px);}100%{opacity:1;transform:translateX(0);}}',
-    '@keyframes shelfSlideInFromLeft{0%{opacity:0;transform:translateX(-50px);}100%{opacity:1;transform:translateX(0);}}',
-    '.shelf-slide-from-right{animation:shelfSlideInFromRight 0.3s cubic-bezier(0.25,1,0.5,1) forwards;}',
-    '.shelf-slide-from-left{animation:shelfSlideInFromLeft 0.3s cubic-bezier(0.25,1,0.5,1) forwards;}'
-  ].join('\n');
-  document.head.appendChild(st);
-})();
 
 // ------------------------------------------------------------------
 // 【1】本棚教材データ（単語帳の textbooksPool とは完全独立）
@@ -3727,157 +3339,15 @@ window.syncBookshelfIndexFromFirestore = async function() {
   window.updateAdminEditShelfSelectOptions();
 };
 
-window.saveBookshelfIndexToFirestore = async function() {
-  try { localStorage.setItem('core_v4_bookshelf_books', JSON.stringify(bookshelfBooks)); } catch (e) {}
-  if (window.db && window.fbSetDoc && window.fbDoc) {
-    var ref = window.fbDoc(window.db, "shared", "bookshelf_index");
-    await window.fbSetDoc(ref, { books: bookshelfBooks, updatedAt: new Date().toISOString() }, { merge: true });
-  }
-};
 
 // ------------------------------------------------------------------
 // 【2】管理者画面：本棚教材の管理配信パネル（自動注入）
 // ------------------------------------------------------------------
-window.handleAdminShelfCoverUpload = function(event) {
-  var file = event.target.files[0];
-  if (!file || !file.type.startsWith('image/')) return;
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var img = new Image();
-    img.onload = function() {
-      var canvas = document.createElement('canvas');
-      var ctx = canvas.getContext('2d');
-      var maxDimension = 120;
-      var width = img.width, height = img.height;
-      if (width > height) {
-        if (width > maxDimension) { height = Math.round((height * maxDimension) / width); width = maxDimension; }
-      } else {
-        if (height > maxDimension) { width = Math.round((width * maxDimension) / height); height = maxDimension; }
-      }
-      canvas.width = width; canvas.height = height;
-      ctx.drawImage(img, 0, 0, width, height);
-      adminUploadedShelfCoverBase64 = canvas.toDataURL('image/jpeg', 0.7);
-      alert("表紙画像を読み込みました。");
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-};
 
-window.updateAdminEditShelfSelectOptions = function() {
-  var sel = document.getElementById('adminEditShelfSelect');
-  if (!sel) return;
-  var cur = sel.value;
-  sel.innerHTML = '<option value="">➕ 新規教材として登録</option>';
-  bookshelfBooks.forEach(function(b) {
-    var o = document.createElement('option');
-    o.value = b.id;
-    o.innerText = b.name;
-    sel.appendChild(o);
-  });
-  sel.value = cur;
-};
 
-window.handleAdminShelfEditSelectChange = function(val) {
-  var titleInput = document.getElementById('adminNewShelfTitle');
-  var submitBtn = document.getElementById('adminShelfSubmitBtn');
-  if (!titleInput || !submitBtn) return;
-  if (val) {
-    var match = bookshelfBooks.find(function(b) { return b.id === val; });
-    if (match) titleInput.value = match.name;
-    submitBtn.innerText = "選択中の教材データを修正・上書き保存";
-  } else {
-    titleInput.value = "";
-    submitBtn.innerText = "新規教材として登録";
-  }
-};
 
-window.saveOrUpdateShelfBookFromAdmin = async function() {
-  var sel = document.getElementById('adminEditShelfSelect');
-  var titleInput = document.getElementById('adminNewShelfTitle');
-  if (!sel || !titleInput) return;
-  var title = titleInput.value.trim();
-  if (!title) return alert("教材の名前を入力してください。");
-  var selectedId = sel.value;
-  var finalCover = adminUploadedShelfCoverBase64;
-  var finalType = "image";
-  if (selectedId) {
-    var idx = bookshelfBooks.findIndex(function(b) { return b.id === selectedId; });
-    if (idx !== -1) {
-      bookshelfBooks[idx].name = title;
-      if (adminUploadedShelfCoverBase64) {
-        bookshelfBooks[idx].cover = finalCover;
-        bookshelfBooks[idx].coverType = finalType;
-      }
-    }
-  } else {
-    if (!adminUploadedShelfCoverBase64) {
-      finalCover = "📚";
-      finalType = "text";
-    }
-    bookshelfBooks.push({ id: "shelfbook_" + Date.now(), name: title, cover: finalCover, coverType: finalType });
-  }
-  try {
-    await window.saveBookshelfIndexToFirestore();
-    alert("本棚の教材『" + title + "』を配信・適用完了しました！");
-    titleInput.value = "";
-    sel.value = "";
-    adminUploadedShelfCoverBase64 = "";
-    var fi = document.getElementById('adminShelfCoverFileUploader');
-    if (fi) fi.value = "";
-    window.updateAdminEditShelfSelectOptions();
-    window.renderBookshelf();
-  } catch (e) {
-    alert("通信に失敗しました。時間をおいて、もう一度お試しください。");
-  }
-};
 
-window.deleteShelfBookFromAdmin = async function() {
-  var sel = document.getElementById('adminEditShelfSelect');
-  if (!sel) return;
-  var selectedId = sel.value;
-  if (!selectedId) return alert("削除する本棚の教材を選んでください。");
-  var target = bookshelfBooks.find(function(b) { return b.id === selectedId; });
-  if (!target) return;
-  if (!confirm("本棚の教材『" + target.name + "』を削除しますか？\n※保存済みの長文は「未分類」に移動します。")) return;
-  bookshelfBooks = bookshelfBooks.filter(function(b) { return b.id !== selectedId; });
-  try {
-    await window.saveBookshelfIndexToFirestore();
-    alert("本棚の教材を削除しました。");
-    var titleInput = document.getElementById('adminNewShelfTitle');
-    if (titleInput) titleInput.value = "";
-    sel.value = "";
-    window.updateAdminEditShelfSelectOptions();
-    window.renderBookshelf();
-  } catch (e) {
-    alert("通信に失敗しました。時間をおいて、もう一度お試しください。");
-  }
-};
 
-window.injectShelfAdminPanel = function() {
-  if (document.getElementById('shelfAdminPanelCard')) return;
-  var anchor = document.getElementById('adminEditBookSelect');
-  if (!anchor) return;
-  var card = anchor.closest('.card');
-  if (!card || !card.parentNode) return;
-  var panel = document.createElement('div');
-  panel.id = 'shelfAdminPanelCard';
-  panel.className = 'card';
-  panel.style.cssText = "border:1px solid rgba(0,240,255,0.35);box-shadow:0 0 15px rgba(0,240,255,0.15);";
-  panel.innerHTML =
-    '<h2 style="color:var(--cosmic-cyan);">📚 本棚教材の管理配信システム</h2>' +
-    '<div style="font-size:11px;color:var(--text-sub);margin-bottom:10px;">リーダータブの「本棚」に表示される教材（表紙付き）を登録します。単語帳の教材とは別の独立システムです。</div>' +
-    '<label style="font-size:11px;color:var(--cosmic-cyan);font-weight:700;display:block;margin-bottom:4px;">対象の本棚教材を指定（新規 or 既存編集）</label>' +
-    '<select id="adminEditShelfSelect" class="search-input" onchange="window.handleAdminShelfEditSelectChange(this.value)"></select>' +
-    '<label style="font-size:11px;color:var(--cosmic-cyan);font-weight:700;display:block;margin-bottom:4px;">教材の名前</label>' +
-    '<input type="text" id="adminNewShelfTitle" class="search-input" placeholder="例: 長文問題集 Vol.1">' +
-    '<label style="font-size:11px;color:var(--cosmic-cyan);font-weight:700;display:block;margin-bottom:4px;">教材の表紙アイコン画像 (Canvas高圧縮変換)</label>' +
-    '<input type="file" id="adminShelfCoverFileUploader" accept="image/*" onchange="window.handleAdminShelfCoverUpload(event)" class="search-input" style="padding:8px 12px;height:auto;">' +
-    '<button id="adminShelfSubmitBtn" class="modern-btn" onclick="window.saveOrUpdateShelfBookFromAdmin()">新規教材として登録</button>' +
-    '<button class="modern-btn" style="margin-top:8px;background:rgba(239,68,68,0.12);color:#EF4444;border:1px solid #EF4444;" onclick="window.deleteShelfBookFromAdmin()">選択中の教材を削除</button>';
-  card.parentNode.insertBefore(panel, card.nextSibling);
-  window.updateAdminEditShelfSelectOptions();
-};
 
 // ------------------------------------------------------------------
 // 【3】保存ポップアップ上書き（フォルダ選択 → 教材選択）
@@ -4580,22 +4050,6 @@ window.onAppLoaded(async function() {
 //          ③ 下部ナビバー(60px)に隠れないよう底に余白を確保
 //    使い方: このブロックを app.js の末尾にそのまま貼り付けてください
 // ==========================================================================
-(function fixSidebarAdminMenuPatch() {
-    if (document.getElementById('sidebarAdminFixCss')) return;
-    var st = document.createElement('style');
-    st.id = 'sidebarAdminFixCss';
-    st.textContent = [
-        /* サイドバー本体：縦スクロールを許可＋下部ナビぶんの余白 */
-        '#sidebarMenu{overflow-y:auto !important;-webkit-overflow-scrolling:touch;box-sizing:border-box;padding-bottom:96px !important;}',
-        /* 中身（ボタン・パネル類）が縦に潰れるのを防ぐ */
-        '#sidebarMenu > *{flex-shrink:0 !important;}',
-        /* スクロールバーを細く目立たなく（コズミックシアン） */
-        '#sidebarMenu::-webkit-scrollbar{width:4px;}',
-        '#sidebarMenu::-webkit-scrollbar-track{background:transparent;}',
-        '#sidebarMenu::-webkit-scrollbar-thumb{background:rgba(0,240,255,0.35);border-radius:2px;}'
-    ].join('\n');
-    (document.head || document.documentElement).appendChild(st);
-})();
 // ==========================================================================
 // Flashcard text sizing is maintained in game_core.js.
 // 📖 使い方ガイドパッチ：ハンバーガーメニューの「ログアウト」直上に入口を追加
@@ -4610,372 +4064,12 @@ window.onAppLoaded(async function() {
 // ------------------------------------------------------------------
 // 【0】パッチ専用スタイルの注入（1回だけ）
 // ------------------------------------------------------------------
-(function injectUsageGuideCss() {
-    if (document.getElementById('usageGuideCss')) return;
-    var st = document.createElement('style');
-    st.id = 'usageGuideCss';
-    st.textContent = [
-        /* ---- オーバーレイ本体 ---- */
-        '#usageGuideOverlay{position:fixed;inset:0;z-index:100000;display:none;flex-direction:column;',
-        'background:radial-gradient(circle at 50% 0%, rgba(30,27,75,0.98) 0%, rgba(15,23,42,0.99) 60%, rgba(7,11,25,0.995) 100%);',
-        'backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);',
-        'opacity:0;transition:opacity .32s cubic-bezier(0.25,1,0.5,1);overflow:hidden;}',
-        '#usageGuideOverlay.ug-visible{opacity:1;}',
-        /* ---- 微粒子アンビエント ---- */
-        '.ug-ambient{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;}',
-        '.ug-ambient::before{content:"";position:absolute;inset:0;',
-        'background:radial-gradient(circle at 20% 15%, rgba(0,240,255,0.10) 0%, transparent 42%),',
-        'radial-gradient(circle at 82% 78%, rgba(192,132,252,0.10) 0%, transparent 45%);}',
-        '.ug-spark{position:absolute;bottom:-12px;border-radius:50%;pointer-events:none;opacity:0;',
-        'animation:ugFloat linear infinite;}',
-        '@keyframes ugFloat{0%{transform:translateY(0) scale(.5);opacity:0;}15%{opacity:.85;}85%{opacity:.5;}100%{transform:translateY(-102vh) scale(1);opacity:0;}}',
-        /* ---- ヘッダー帯 ---- */
-        '.ug-header{position:relative;z-index:2;flex-shrink:0;display:flex;align-items:center;gap:12px;',
-        'padding:18px 18px 16px 18px;border-bottom:1px solid rgba(0,240,255,0.22);',
-        'background:linear-gradient(180deg, rgba(7,11,25,0.55) 0%, rgba(7,11,25,0) 100%);}',
-        '.ug-header-icon{width:40px;height:40px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;',
-        'background:linear-gradient(135deg, rgba(0,240,255,0.22), rgba(192,132,252,0.22));',
-        'border:1px solid rgba(0,240,255,0.4);box-shadow:0 0 14px rgba(0,240,255,0.3);color:var(--cosmic-cyan);}',
-        '.ug-header-titles{flex:1;min-width:0;}',
-        '.ug-header-title{font-family:"Noto Serif JP",serif;font-size:19px;font-weight:900;color:#fff;letter-spacing:1px;',
-        'text-shadow:0 0 12px rgba(0,240,255,0.45);line-height:1.2;}',
-        '.ug-header-sub{font-size:10.5px;font-weight:700;color:var(--cosmic-purple-light);letter-spacing:1.5px;margin-top:3px;',
-        'text-shadow:0 0 8px rgba(192,132,252,0.4);}',
-        '.ug-close{width:38px;height:38px;flex-shrink:0;border-radius:10px;border:1px solid rgba(255,255,255,0.22);',
-        'background:rgba(255,255,255,0.05);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;',
-        'transition:all .2s ease;-webkit-tap-highlight-color:transparent;}',
-        '.ug-close:active{transform:scale(0.9);background:rgba(239,68,68,0.18);border-color:#EF4444;color:#FCA5A5;}',
-        /* ---- 本文スクロール領域 ---- */
-        '.ug-body{position:relative;z-index:2;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;',
-        'padding:20px 18px calc(28px + env(safe-area-inset-bottom)) 18px;}',
-        '.ug-body::-webkit-scrollbar{width:4px;}',
-        '.ug-body::-webkit-scrollbar-thumb{background:rgba(0,240,255,0.3);border-radius:2px;}',
-        /* ---- セクション見出し ---- */
-        '.ug-section-title{font-family:"Noto Serif JP",serif;font-size:15px;font-weight:900;color:#fff;',
-        'letter-spacing:1px;margin:26px 0 12px 0;display:flex;align-items:center;gap:8px;',
-        'text-shadow:0 0 10px rgba(0,240,255,0.35);}',
-        '.ug-section-title:first-child{margin-top:4px;}',
-        '.ug-section-title::after{content:"";flex:1;height:1px;',
-        'background:linear-gradient(90deg, rgba(0,240,255,0.5), transparent);}',
-        /* ---- クイックスタート ---- */
-        '.ug-steps{display:flex;flex-direction:column;gap:10px;}',
-        '.ug-step{display:flex;gap:12px;align-items:flex-start;padding:13px 14px;border-radius:14px;',
-        'background:linear-gradient(135deg, rgba(0,240,255,0.06), rgba(192,132,252,0.05));',
-        'border:1px solid rgba(255,255,255,0.12);box-shadow:0 4px 14px rgba(0,0,0,0.25);}',
-        '.ug-step-num{width:30px;height:30px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;',
-        'font-family:"Noto Serif JP",serif;font-size:15px;font-weight:900;color:#06121f;',
-        'background:linear-gradient(135deg, var(--cosmic-cyan), var(--cosmic-purple-light));',
-        'box-shadow:0 0 12px rgba(0,240,255,0.5);}',
-        '.ug-step-body{flex:1;min-width:0;}',
-        '.ug-step-head{font-size:13.5px;font-weight:800;color:#fff;margin-bottom:3px;display:flex;align-items:center;gap:6px;}',
-        '.ug-step-head i{color:var(--cosmic-cyan);flex-shrink:0;}',
-        '.ug-step-desc{font-size:11.5px;color:rgba(226,232,240,0.82);line-height:1.6;font-weight:500;}',
-        /* ---- アコーディオン ---- */
-        '.ug-acc{border-radius:13px;margin-bottom:9px;overflow:hidden;',
-        'border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.035);',
-        'transition:border-color .25s ease, box-shadow .25s ease;}',
-        '.ug-acc.open{border-color:rgba(0,240,255,0.4);box-shadow:0 0 14px rgba(0,240,255,0.16);}',
-        '.ug-acc-head{width:100%;display:flex;align-items:center;gap:10px;padding:13px 14px;',
-        'background:none;border:none;cursor:pointer;text-align:left;color:#fff;',
-        '-webkit-tap-highlight-color:transparent;transition:background .2s ease;}',
-        '.ug-acc-head:active{background:rgba(0,240,255,0.07);}',
-        '.ug-acc-ico{width:30px;height:30px;flex-shrink:0;border-radius:9px;display:flex;align-items:center;justify-content:center;',
-        'background:rgba(0,240,255,0.12);border:1px solid rgba(0,240,255,0.3);color:var(--cosmic-cyan);}',
-        '.ug-acc-title{flex:1;min-width:0;font-size:13px;font-weight:800;color:#fff;letter-spacing:0.3px;}',
-        '.ug-chev{flex-shrink:0;color:var(--text-sub);transition:transform .3s cubic-bezier(0.25,1,0.5,1);}',
-        '.ug-acc.open .ug-chev{transform:rotate(180deg);color:var(--cosmic-cyan);}',
-        '.ug-acc-body{max-height:0;overflow:hidden;box-sizing:border-box;padding:0 16px;',
-        'transition:max-height .38s cubic-bezier(0.25,1,0.5,1);}',
-        '.ug-acc.open .ug-acc-body{padding:2px 16px 15px 16px;}',
-        '.ug-acc-body p{font-size:12px;color:rgba(226,232,240,0.86);line-height:1.75;margin:0 0 9px 0;font-weight:500;}',
-        '.ug-acc-body p:last-child{margin-bottom:0;}',
-        '.ug-acc-body strong{color:var(--cosmic-cyan);font-weight:800;}',
-        '.ug-acc-body em{color:var(--cosmic-purple-light);font-style:normal;font-weight:800;}',
-        '.ug-acc-body ul{margin:0 0 9px 0;padding:0;list-style:none;}',
-        '.ug-acc-body li{position:relative;padding:5px 0 5px 18px;font-size:11.5px;color:rgba(226,232,240,0.84);line-height:1.6;}',
-        '.ug-acc-body li::before{content:"";position:absolute;left:2px;top:11px;width:6px;height:6px;border-radius:50%;',
-        'background:var(--cosmic-cyan);box-shadow:0 0 7px rgba(0,240,255,0.7);}',
-        /* ---- 理解度マークのミニ凡例 ---- */
-        '.ug-marks{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px 0;}',
-        '.ug-mark{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;',
-        'padding:3px 9px;border-radius:20px;border:1px solid rgba(255,255,255,0.18);background:rgba(0,0,0,0.25);}',
-        '.ug-mark b{width:13px;height:13px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:900;}',
-        /* ---- Tips ---- */
-        '.ug-tips{display:flex;flex-direction:column;gap:8px;}',
-        '.ug-tip{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border-radius:12px;',
-        'background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.22);}',
-        '.ug-tip-ico{flex-shrink:0;color:#FBBF24;margin-top:1px;filter:drop-shadow(0 0 5px rgba(245,158,11,0.5));}',
-        '.ug-tip-text{font-size:11.5px;color:rgba(254,243,199,0.92);line-height:1.65;font-weight:600;}',
-        /* ---- 近日公開 ---- */
-        /* ---- 入口ボタン（サイドバー内） ---- */
-        '#usageGuideEntryBtn{color:var(--cosmic-cyan) !important;}',
-        '#usageGuideEntryBtn i{color:var(--cosmic-cyan);filter:drop-shadow(0 0 5px rgba(0,240,255,0.5));}',
-        '#usageGuideEntryBtn:active{background:rgba(0,240,255,0.12) !important;}'
-    ].join('\n');
-    (document.head || document.documentElement).appendChild(st);
-})();
+
 
 // ------------------------------------------------------------------
 // 【1】ガイドの中身データ（クイックスタート／機能別／Tips）
 // ------------------------------------------------------------------
-window.__USAGE_GUIDE_STEPS = [
-    { icon: 'user-check', head: 'アカウントを作る／ログインする', desc: '初めての方は「新規作成」でプレイヤー名・本名・年齢・4桁の暗証番号を登録。発行されたIDはログインに必要なので必ずメモして。2回目以降はID＋暗証番号でログイン。' },
-    { icon: 'book-marked', head: '単語帳で単語を覚える', desc: '単語をタップして意味を確認し、右の4つのボタンで理解度をマーク。⚪︎＝定着／△＝曖昧／✕＝不可／ー＝リセット。理解度と復習の記録が保存されます。' },
-    { icon: 'zap', head: 'フラッシュ単語で定着させる', desc: '単語帳一覧の「›」からフラッシュ単語を開始できます。' }
-];
 
-window.__USAGE_GUIDE_SECTIONS = [
-    {
-        icon: 'book-open', title: '📔 単語帳',
-        html: '<p>登録単語を一覧し、<em>理解度</em>を4段階で管理する中心画面です。</p>' +
-              '<div class="ug-marks">' +
-              '<span class="ug-mark"><b style="background:#10B981;color:#000;">⚪︎</b>定着</span>' +
-              '<span class="ug-mark"><b style="background:#F59E0B;color:#000;">△</b>曖昧</span>' +
-              '<span class="ug-mark"><b style="background:#EF4444;color:#fff;">✕</b>不可</span>' +
-              '<span class="ug-mark"><b style="background:rgba(255,255,255,0.3);color:#fff;">ー</b>リセット</span>' +
-              '</div>' +
-              '<ul><li>単語をタップすると意味ポップアップが開き、その場でマークを変更できます。</li>' +
-              '<li>上部の<strong>表紙をタップ</strong>して教材を切り替え。範囲指定・検索・フィルタも利用可能。</li>' +
-              '<li>タイトル横の <strong>📊 詳細</strong>で、定着率のドーナツグラフを確認。</li></ul>'
-    },
-    {
-        icon: 'scan-text', title: '📖 スマート長文リーダー',
-        html: '<p>英文を貼り付けて「解析」すると、AIが<strong>全文要約・文ごとの和訳・文法ハイライト</strong>を自動生成します。</p>' +
-              '<ul><li>文中の単語をタップすると、登録語や内蔵辞書の意味をその場で確認。</li>' +
-              '<li>和訳は<strong>インライン表示</strong>と<strong>下部にまとめて表示</strong>を切り替え可能。</li>' +
-              '<li>読み終えた長文は<strong>本棚に保存</strong>して、あとから何度でも再開できます。</li></ul>'
-    },
-    {
-        icon: 'users', title: '👥 フレンド',
-        html: '<p>相手の<strong>IDコード</strong>で検索・追加して、修行仲間とつながります。</p>' +
-              '<ul><li>並び替えは「最終ログイン順」。</li>' +
-              '<li><strong>ランキングタブ</strong>で全ユーザーの学習記録を確認できます。</li>' +
-              '<li><strong>🔄 最新情報に更新</strong>で、相手のプロフィールやログイン時刻をクラウドから再取得。</li></ul>'
-    },
-    {
-        icon: 'layers', title: '🃏 フラッシュ単語',
-        html: '<p>単語帳一覧の「›」から設定を開き、カードをめくって学習します。</p>' +
-              '<ul><li>カードを<strong>タップ</strong>で裏返して答えを確認。</li>' +
-              '<li><strong>右スワイプ＝⚪︎覚えた</strong>／<strong>左スワイプ＝✕覚えてない</strong>／<strong>上スワイプ＝△スキップ</strong>。</li>' +
-              '<li>設定で<strong>出題する教材</strong>と<strong>方向（英→和／和→英）</strong>を選べます。</li></ul>'
-    },
-    {
-        icon: 'medal', title: '🏅 ランキング',
-        html: '<p>合計勉強時間、理解度を付けた単語数、フラッシュのスワイプ数を切り替えて確認できます。</p>' +
-              '<p>上位3名の表彰台をタップすると、それぞれの学習記録が開きます。</p>'
-    },
-    {
-        icon: 'cloud', title: '💾 保存と同期',
-        html: '<p>あなたのデータは<strong>端末</strong>と<strong>クラウド</strong>の両方に保存されます。</p>' +
-              '<ul><li>同じIDでログインすれば、<strong>別の端末でも続きから</strong>再開できます。</li>' +
-              '<li>右上の <strong>💾 ボタン</strong>で手動保存。大事な進捗はこまめに保存を。</li>' +
-              '<li>理解度・学習記録・設定類は、できるだけ<strong>新しい方が優先</strong>されるよう同期されます。</li></ul>'
-    }
-];
-
-window.__USAGE_GUIDE_TIPS = [
-    '読み込みを待つ間、<strong>ミニ単語クイズ</strong>が自動で表示されます。右⚪︎・左✕・上△で答えれば、選んだ教材の理解度にちゃんと保存されます。',
-    '理解度は<strong>4段階</strong>。間違えて付けたマークは <strong>ー（リセット）</strong>で元に戻せます。',
-    'リーダーで読んだ長文は<strong>本棚に保存</strong>しておくと、解析結果ごとあとから再開できて便利です。',
-    '単語帳の <strong>📊 詳細</strong>をこまめにチェック。定着率の推移がモチベーションになります。',
-    'アプリを閉じる前・端末を変える前は、右上の <strong>💾</strong>をひと押ししておくと安心です。'
-];
-
-// ------------------------------------------------------------------
-// 【2】オーバーレイのDOMを構築（1回だけ生成して再利用）
-// ------------------------------------------------------------------
-window.__buildUsageGuideOverlay = function() {
-    if (document.getElementById('usageGuideOverlay')) return;
-
-    // クイックスタート
-    var stepsHtml = '';
-    window.__USAGE_GUIDE_STEPS.forEach(function(s, i) {
-        stepsHtml +=
-            '<div class="ug-step">' +
-            '<div class="ug-step-num">' + (i + 1) + '</div>' +
-            '<div class="ug-step-body">' +
-            '<div class="ug-step-head"><i data-lucide="' + s.icon + '" size="15"></i>' + s.head + '</div>' +
-            '<div class="ug-step-desc">' + s.desc + '</div>' +
-            '</div></div>';
-    });
-
-    // 機能別アコーディオン
-    var accHtml = '';
-    window.__USAGE_GUIDE_SECTIONS.forEach(function(sec) {
-        accHtml +=
-            '<div class="ug-acc">' +
-            '<button type="button" class="ug-acc-head">' +
-            '<span class="ug-acc-ico"><i data-lucide="' + sec.icon + '" size="16"></i></span>' +
-            '<span class="ug-acc-title">' + sec.title + '</span>' +
-            '<i data-lucide="chevron-down" size="16" class="ug-chev"></i>' +
-            '</button>' +
-            '<div class="ug-acc-body">' + sec.html + '</div>' +
-            '</div>';
-    });
-
-    // Tips
-    var tipsHtml = '';
-    window.__USAGE_GUIDE_TIPS.forEach(function(t) {
-        tipsHtml +=
-            '<div class="ug-tip">' +
-            '<i data-lucide="lightbulb" size="15" class="ug-tip-ico"></i>' +
-            '<div class="ug-tip-text">' + t + '</div>' +
-            '</div>';
-    });
-
-    var ov = document.createElement('div');
-    ov.id = 'usageGuideOverlay';
-    ov.innerHTML =
-        '<div class="ug-ambient" id="ugAmbient"></div>' +
-        '<div class="ug-header">' +
-        '<div class="ug-header-icon"><i data-lucide="book-open-check" size="20"></i></div>' +
-        '<div class="ug-header-titles">' +
-        '<div class="ug-header-title">使い方ガイド</div>' +
-        '<div class="ug-header-sub">HOW TO USE · 修行の手引き</div>' +
-        '</div>' +
-        '<button type="button" class="ug-close" id="ugCloseBtn" aria-label="閉じる"><i data-lucide="x" size="20"></i></button>' +
-        '</div>' +
-        '<div class="ug-body" id="ugBody">' +
-        '<div class="ug-section-title"><i data-lucide="rocket" size="16" style="color:var(--cosmic-cyan);"></i>まずはこの3ステップ</div>' +
-        '<div class="ug-steps">' + stepsHtml + '</div>' +
-        '<div class="ug-section-title"><i data-lucide="layout-grid" size="16" style="color:var(--cosmic-purple-light);"></i>機能別ガイド</div>' +
-        '<div class="ug-acc-list">' + accHtml + '</div>' +
-        '<div class="ug-section-title"><i data-lucide="sparkles" size="16" style="color:#FBBF24;"></i>知っておくと得する Tips</div>' +
-        '<div class="ug-tips">' + tipsHtml + '</div>' +
-        '</div>';
-
-    document.body.appendChild(ov);
-
-    // 微粒子を生成
-    var ambient = ov.querySelector('#ugAmbient');
-    if (ambient) {
-        var sparks = '';
-        for (var i = 0; i < 16; i++) {
-            var left = Math.round(Math.random() * 100);
-            var delay = (Math.random() * 8).toFixed(2);
-            var dur = (7 + Math.random() * 8).toFixed(2);
-            var size = (2 + Math.round(Math.random() * 3));
-            var c = Math.random() < 0.5 ? 'rgba(0,240,255,0.8)' : 'rgba(192,132,252,0.8)';
-            sparks += '<span class="ug-spark" style="left:' + left + '%;width:' + size + 'px;height:' + size + 'px;background:' + c + ';animation-delay:' + delay + 's;animation-duration:' + dur + 's;"></span>';
-        }
-        ambient.innerHTML = sparks;
-    }
-
-    // 閉じるボタン
-    var closeBtn = ov.querySelector('#ugCloseBtn');
-    if (closeBtn) closeBtn.onclick = function() { window.closeUsageGuide(); };
-
-    // 背景タップで閉じる（ヘッダ・本文以外＝オーバーレイ直下のみ）
-    ov.addEventListener('click', function(e) {
-        if (e.target === ov) window.closeUsageGuide();
-    });
-
-    // アコーディオン（イベント委譲）
-    var body = ov.querySelector('#ugBody');
-    if (body) {
-        body.addEventListener('click', function(e) {
-            var head = e.target.closest('.ug-acc-head');
-            if (!head) return;
-            var acc = head.parentElement;
-            var accBody = acc.querySelector('.ug-acc-body');
-            if (!accBody) return;
-            var willOpen = !acc.classList.contains('open');
-            acc.classList.toggle('open', willOpen);
-            if (willOpen) {
-                accBody.style.maxHeight = accBody.scrollHeight + 24 + 'px';
-            } else {
-                accBody.style.maxHeight = '0px';
-            }
-        });
-    }
-
-    if (typeof window.initLucide === 'function') window.initLucide();
-};
-
-// ------------------------------------------------------------------
-// 【3】開く／閉じる
-// ------------------------------------------------------------------
-window.openUsageGuide = function() {
-    window.__buildUsageGuideOverlay();
-    var ov = document.getElementById('usageGuideOverlay');
-    if (!ov) return;
-    // サイドバーは閉じておく
-    if (typeof window.toggleSidebar === 'function') window.toggleSidebar(false);
-    ov.style.display = 'flex';
-    ov.scrollTop = 0;
-    var body = ov.querySelector('#ugBody');
-    if (body) body.scrollTop = 0;
-    // 開いているアコーディオンの高さを再計測（表示後に正しく出す）
-    var openAccs = ov.querySelectorAll('.ug-acc.open .ug-acc-body');
-    for (var i = 0; i < openAccs.length; i++) {
-        openAccs[i].style.maxHeight = openAccs[i].scrollHeight + 24 + 'px';
-    }
-    requestAnimationFrame(function() {
-        requestAnimationFrame(function() { ov.classList.add('ug-visible'); });
-    });
-};
-
-window.closeUsageGuide = function() {
-    var ov = document.getElementById('usageGuideOverlay');
-    if (!ov) return;
-    ov.classList.remove('ug-visible');
-    setTimeout(function() {
-        if (!ov.classList.contains('ug-visible')) ov.style.display = 'none';
-    }, 320);
-};
-
-// Escキーで閉じる（1回だけ登録）
-if (!window.__ugEscBound) {
-    window.__ugEscBound = true;
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' || e.keyCode === 27) {
-            var ov = document.getElementById('usageGuideOverlay');
-            if (ov && ov.classList.contains('ug-visible')) window.closeUsageGuide();
-        }
-    });
-}
-
-// ------------------------------------------------------------------
-// 【4】サイドバーへ入口ボタンを注入（ログアウトの直上）
-// ------------------------------------------------------------------
-window.injectUsageGuideButton = function() {
-    var sidebar = document.getElementById('sidebarMenu');
-    if (!sidebar) return;
-    if (document.getElementById('usageGuideEntryBtn')) {
-        if (typeof window.initLucide === 'function') window.initLucide();
-        return;
-    }
-    var btn = document.createElement('button');
-    btn.id = 'usageGuideEntryBtn';
-    btn.type = 'button';
-    btn.className = 'sidebar-item';
-    btn.innerHTML = '<i data-lucide="book-open-check" size="18"></i><span>使い方ガイド</span>';
-    btn.onclick = function() { window.openUsageGuide(); };
-
-    // 「ログアウト」を含む要素の直前に挿入
-    var anchor = null;
-    var children = sidebar.children;
-    for (var i = 0; i < children.length; i++) {
-        if ((children[i].textContent || '').indexOf('ログアウト') !== -1) { anchor = children[i]; break; }
-    }
-    if (anchor) sidebar.insertBefore(btn, anchor);
-    else sidebar.appendChild(btn);
-
-    if (typeof window.initLucide === 'function') window.initLucide();
-};
-
-// ------------------------------------------------------------------
-// 【5】loadLocalState に接続 ＋ 起動時注入
-// ------------------------------------------------------------------
-window.onAppLoaded(function() {
-    window.injectUsageGuideButton();
-});
-
-(function initUsageGuidePatch() {
-    function boot() { window.injectUsageGuideButton(); }
-    if (document.readyState !== 'loading') { setTimeout(boot, 400); }
-    else { document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); }); }
-})();
 
 // ==========================================================================
 // 🎴 第13回パッチ：フラッシュ単語の意味別出題
@@ -4987,48 +4081,6 @@ window.onAppLoaded(function() {
 //    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
 //    ※教材切替・ペンギンローディング・ゴーストエフェクト・テンポ等はすべてそのまま継承
 // ==========================================================================
-(function applyFlashcardMeaningPatch() {
-    if (window.__flashcardMeaningPatchApplied) return;
-    window.__flashcardMeaningPatchApplied = true;
-
-    var MEANING_CLEAN_REGEX = /[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g;
-    var CIRCLED_NUMS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
-
-    // ------------------------------------------------------------------
-    // ヘルパー①：カードから vocabList 内の単語を探す（num優先・wordフォールバック）
-    // ------------------------------------------------------------------
-
-    // ヘルパー②：カードが指す「狙った意味」を探す
-
-    // ------------------------------------------------------------------
-    // ① startFlashcardSession 上書き：既存処理の実行後にキューを意味ごとに展開
-    //    （教材切替・ペンギンローディング等はそのまま実行される）
-    // ------------------------------------------------------------------
-    var __prevStartFlashcardSessionForMeaningPatch = window.startFlashcardSession;
-
-    // ------------------------------------------------------------------
-    // ② getFlashcardStyleByHistory 上書き：その意味自身の履歴で背景色を決定
-    //    （意味IDが無いカードは従来の単語全体挙動をそのまま再現）
-    // ------------------------------------------------------------------
-
-    // ------------------------------------------------------------------
-    // ③ renderFlashcardHistoryBubbles 上書き：その意味自身の直近5回を表示
-    // ------------------------------------------------------------------
-
-    // ------------------------------------------------------------------
-    // ④ swipeFlashcard 上書き：スワイプした「その意味」だけを更新
-    //    仕組み：既存処理の実行直前だけ狙った意味を先頭へ移動し、
-    //           try/finally で必ず元の順番へ戻す（エフェクト・テンポは完全維持）
-    // ------------------------------------------------------------------
-    var __prevSwipeFlashcardForMeaningPatch = window.swipeFlashcard;
-
-    // ------------------------------------------------------------------
-    // ⑤ renderFlashcardDeck 上書き：意味が2つ以上ある単語に「意味 ①/②」バッジを注入
-    //    （既存の描画・オートフィット処理は一切触らず、描画後に追加だけ行う）
-    // ------------------------------------------------------------------
-    var __prevRenderFlashcardDeckForMeaningPatch = window.renderFlashcardDeck;
-
-})();
 // ==========================================================================
 // 🏆 第13回パッチ：フレンド欄ランキング強化（コミュニティランキングシステム）
 //    ① ランキング画面の上部にスワイプ式ランキングセレクターを新設
@@ -5042,152 +4094,6 @@ window.onAppLoaded(function() {
 //       一度だけクラウドへ反映（自分の過去分もランキングに載る）
 //    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
 // ==========================================================================
-(function applyCommunityRankingPatch() {
-    if (window.__communityRankingPatchApplied) return;
-    window.__communityRankingPatchApplied = true;
-
-    // ------------------------------------------------------------------
-    // 【0】パッチ専用スタイル（スワイプ式ピル・発光・ランキング数値）
-    // ------------------------------------------------------------------
-    (function injectCommunityRankCss() {
-        if (document.getElementById('communityRankCss')) return;
-        var st = document.createElement('style');
-        st.id = 'communityRankCss';
-        st.textContent = [
-            '.community-rank-scroller{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px 2px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none;}',
-            '.community-rank-scroller::-webkit-scrollbar{display:none;}',
-            '.community-rank-pill{flex-shrink:0;scroll-snap-align:start;padding:9px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.18);background:rgba(7,11,25,0.7);color:var(--text-sub);font-size:12px;font-weight:900;letter-spacing:0.5px;cursor:pointer;white-space:nowrap;transition:all 0.25s cubic-bezier(0.25,1,0.5,1);-webkit-tap-highlight-color:transparent;}',
-            '.community-rank-pill:active{transform:scale(0.95);}',
-            '.community-rank-pill-active{border-color:var(--cosmic-cyan);background:linear-gradient(135deg, rgba(0,240,255,0.28) 0%, rgba(192,132,252,0.28) 100%);color:#FFFFFF;box-shadow:0 0 16px rgba(0,240,255,0.45);text-shadow:0 0 8px rgba(0,240,255,0.6);}',
-            '.community-rank-subrow{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 6px 2px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}',
-            '.community-rank-subrow::-webkit-scrollbar{display:none;}',
-            '.community-rank-subpill{flex-shrink:0;padding:6px 13px;border-radius:16px;border:1px solid rgba(255,255,255,0.14);background:rgba(0,0,0,0.4);color:var(--text-sub);font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;transition:all 0.2s ease;-webkit-tap-highlight-color:transparent;}',
-            '.community-rank-subpill:active{transform:scale(0.94);}',
-            '.community-rank-subpill-active{border-color:var(--cosmic-purple-light);background:rgba(192,132,252,0.24);color:#FFFFFF;box-shadow:0 0 10px rgba(192,132,252,0.4);}',
-            '.community-rank-value-big{font-size:17px;font-weight:900;font-family:monospace;color:var(--cosmic-cyan);text-shadow:0 0 8px rgba(0,240,255,0.5);line-height:1.1;}',
-            '.community-rank-value-sub{font-size:8px;font-weight:normal;color:var(--text-sub);margin-top:2px;display:block;}'
-        ].join('\n');
-        (document.head || document.documentElement).appendChild(st);
-    })();
-
-    // ------------------------------------------------------------------
-    // 【1】状態変数と日付・時間ヘルパー
-    // ------------------------------------------------------------------
-    window.__communityRankType = 'flash';   // level|score|time|flash
-    window.__communityTimeRange = window.__communityTimeRange || 'total'; // total|weekly|daily
-
-    window.__getTodayKey = function() {
-        var d = new Date();
-        return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
-    };
-    window.__getWeekKey = function() {
-        var d = new Date();
-        var day = d.getDay();
-        var diffToMonday = (day === 0 ? -6 : 1 - day);
-        var monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffToMonday);
-        return monday.getFullYear() + '-' + (monday.getMonth() + 1) + '-' + monday.getDate();
-    };
-    window.__formatStudyTime = function(secs) {
-        var totalMin = Math.floor((secs || 0) / 60);
-        if (totalMin >= 60) {
-            var h = Math.floor(totalMin / 60);
-            var m = totalMin % 60;
-            return h + '時間' + (m > 0 ? m + '分' : '');
-        }
-        return totalMin + '分';
-    };
-
-    // ------------------------------------------------------------------
-    // 【2】週間・1日プレイ時間のクラウド同期
-    //     （勉強タイマーと同一の判定ロジックをミラーして毎秒加算）
-    // ------------------------------------------------------------------
-    window.__startCommunityStudyTimeSync = function() { if(window.StudyTime)window.StudyTime.init(); };
-
-    // ------------------------------------------------------------------
-    // 【3】難易度別スコアのクラウド送信（エンドレスは既存の殿堂を使用）
-    // ------------------------------------------------------------------
-
-
-    // ゲーム終了時にノーマル〜エキスパートのスコアも自動送信
-
-
-
-    // 起動時に既存のローカルベストを一度だけクラウドへ反映（自分の過去分も載る）
-
-
-    // ------------------------------------------------------------------
-    // 【4】全ユーザー取得（レベルEXP・プレイ時間・フラッシュ回数つき）
-    // ------------------------------------------------------------------
-    window.__communityUsersCache = null;
-    window.__communityUsersCacheAt = 0;
-    window.__communityUsersLoadingPromise = null;
-
-    // ------------------------------------------------------------------
-    // 【5】ランキング行の共通ビルダー（順位色・アバター・名前・称号・右側数値）
-    // ------------------------------------------------------------------
-    window.__buildCommunityRankRow = function(u, idx, valueHtml) {
-        var rankColor = idx === 0 ? '#FBBF24' : idx === 1 ? '#94A3B8' : idx === 2 ? '#D97706' : '#FFFFFF';
-        var bgStyle = u.isMe ? 'background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);' : 'background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);';
-        var avatarStr = '<span style="font-size:16px;">👤</span>';
-        if (u.customAvatar) avatarStr = '<img src="' + u.customAvatar + '" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan);">';
-        return '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin-bottom:4px; ' + bgStyle + ' font-size:12px;">' +
-            '<div style="display:flex; align-items:center; gap:10px;">' +
-            '<span style="color:' + rankColor + '; font-weight:900; font-size:14px; width:18px; text-align:center;">' + (idx + 1) + '</span>' +
-            '<div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">' + avatarStr + '</div>' +
-            '<div><div style="font-weight:bold; color:white;">' + u.name + '</div>' +
-            '<div style="font-size:9px; color:var(--text-sub); margin-top:1px;">' + u.title + '</div></div>' +
-            '</div>' +
-            '<div style="text-align:right;">' + valueHtml + '</div></div>';
-    };
-
-    // ------------------------------------------------------------------
-    // 【6】各ランキングの描画
-    // ------------------------------------------------------------------
-
-
-
-
-    // ------------------------------------------------------------------
-    // 【7】セレクターUI（スワイプ式ピル）
-    // ------------------------------------------------------------------
-    window.__findCommunityRankHeading = function() {return document.getElementById('titlesRankingHeading');};
-
-
-
-
-    // ------------------------------------------------------------------
-    // 【8】renderLeaderboard 上書き（新ランキングUI）
-    // ------------------------------------------------------------------
-
-    // ------------------------------------------------------------------
-    // 【9】loadLocalState 接続
-    // ------------------------------------------------------------------
-    window.onAppLoaded(function() {
-        try {
-            window.__startCommunityStudyTimeSync();
-            ;
-            window.injectCommunityRankingUI();
-        } catch (e) {
-            console.error('コミュニティランキングパッチ初期化エラー:', e);
-        }
-    });
-
-    // ------------------------------------------------------------------
-    // 【10】起動時注入
-    // ------------------------------------------------------------------
-    (function initCommunityRankingPatch() {
-        function boot() {
-            window.__startCommunityStudyTimeSync();
-            window.injectCommunityRankingUI();
-        }
-        if (document.readyState !== 'loading') {
-            setTimeout(boot, 400);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); });
-        }
-    })();
-
-})();
 // ==========================================================================
 // 🎨 第14回パッチ：フレンド欄ランキング 仕上げ
 //    ① 下の重複カード（単語テスト ハイスコアランキング）をコミュニティ画面から削除
@@ -5199,163 +4105,6 @@ window.onAppLoaded(function() {
 //    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
 //    ※🏆 第13回パッチ適用済みが前提（未適用時は何もしません）
 // ==========================================================================
-(function applyCommunityRankFinishPatch() {
-    if (window.__communityRankFinishApplied) return;
-    window.__communityRankFinishApplied = true;
-
-    // ------------------------------------------------------------------
-    // 【0】パッチ専用スタイル（枠分離・左右対称・ランキング枠拡張・重複削除）
-    // ------------------------------------------------------------------
-    (function injectCommunityRankFinishCss() {
-        if (document.getElementById('communityRankFinishCss')) return;
-        var st = document.createElement('style');
-        st.id = 'communityRankFinishCss';
-        st.textContent = [
-            // 外側の元カードを“器”だけにして透明化（内側の2枠を目立たせる）
-            '#view-titles .cr-outer-shell{background:transparent !important;border:none !important;box-shadow:none !important;padding:0 !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}',
-            // 選択エリアの枠（シアン発光）
-            '#crSelectShell{border:1px solid rgba(0,240,255,0.32);background:rgba(7,11,25,0.5);border-radius:14px;padding:12px 12px 10px;margin-bottom:12px;box-shadow:0 0 16px rgba(0,240,255,0.12), inset 0 0 18px rgba(0,240,255,0.06);}',
-            '#crSelectShell > *{margin-top:0;}',
-            '#crSelectShell .community-rank-scroller{margin-top:8px;}',
-            // ランキングエリアの枠（パープル発光）
-            '#crRankShell{border:1px solid rgba(192,132,252,0.32);background:rgba(15,10,30,0.45);border-radius:14px;padding:8px;box-shadow:0 0 16px rgba(192,132,252,0.10), inset 0 0 18px rgba(192,132,252,0.05);}',
-            // ランキングリストを縦に拡張＋スクロール
-            '#crRankShell #leaderboardContainer{min-height:340px;max-height:62vh;overflow-y:auto;padding:2px 4px;-webkit-overflow-scrolling:touch;}',
-            '#crRankShell #leaderboardContainer::-webkit-scrollbar{width:4px;}',
-            '#crRankShell #leaderboardContainer::-webkit-scrollbar-track{background:transparent;}',
-            '#crRankShell #leaderboardContainer::-webkit-scrollbar-thumb{background:rgba(192,132,252,0.4);border-radius:2px;}',
-            // サブピルを中央揃え＝左右対称（詳細度を上げて確実に上書き）
-            '#communityRankSubContainer .community-rank-subrow{justify-content:center;flex-wrap:wrap;}',
-            // 下の重複カードをコミュニティ画面からのみ削除（:has 対応ブラウザ用）
-            '#view-community .card:has(#leaderboardListContainer){display:none !important;}'
-        ].join('\n');
-        (document.head || document.documentElement).appendChild(st);
-    })();
-
-    // ------------------------------------------------------------------
-    // 【1】見出し要素の取得（前回パッチの保持値 → 無ければ再探索）
-    // ------------------------------------------------------------------
-    function getHeadingEl() {
-        if (window.__communityRankHeadingEl && document.body.contains(window.__communityRankHeadingEl)) {
-            return window.__communityRankHeadingEl;
-        }
-        if (typeof window.__findCommunityRankHeading === 'function') {
-            var h = window.__findCommunityRankHeading();
-            if (h) { window.__communityRankHeadingEl = h; return h; }
-        }
-        return null;
-    }
-
-    // ------------------------------------------------------------------
-    // 【2】選択エリア／ランキングエリアを別枠に分離（冪等）
-    // ------------------------------------------------------------------
-    window.__restructureCommunityRankLayout = function() {
-        var ctrl = document.getElementById('communityRankingControls');
-        var list = document.getElementById('leaderboardContainer');
-        if (!ctrl || !list) return; // 第13回パッチ未適用なら何もしない
-        if (document.getElementById('crSelectShell')) return; // 組替済み
-
-        var heading = getHeadingEl();
-
-        // 外側の元カードを透明な“器”にする
-        var outerCard = (heading && heading.closest ? heading.closest('.card') : null) || (list.closest ? list.closest('.card') : null);
-        if (outerCard) outerCard.classList.add('cr-outer-shell');
-
-        // 選択枠・ランキング枠を作成
-        var selectShell = document.createElement('div');
-        selectShell.id = 'crSelectShell';
-        var rankShell = document.createElement('div');
-        rankShell.id = 'crRankShell';
-
-        // 見出しがある場合：見出しの前に選択枠を挿入し、見出しとコントロールを収める
-        if (heading && heading.parentNode) {
-            heading.parentNode.insertBefore(selectShell, heading);
-            selectShell.appendChild(heading);
-        } else {
-            // 見出しが取れなければコントロールの前に選択枠を挿入
-            ctrl.parentNode.insertBefore(selectShell, ctrl);
-        }
-        if (ctrl.parentNode) selectShell.appendChild(ctrl);
-
-        // リストをランキング枠で包む
-        if (list.parentNode) {
-            list.parentNode.insertBefore(rankShell, list);
-            rankShell.appendChild(list);
-        }
-    };
-
-    // ------------------------------------------------------------------
-    // 【3】下の重複カードを非表示（:has 非対応ブラウザ用のJS保険）
-    //     ※#view-community 内にあるものだけ＝ゲームタブには触れない
-    // ------------------------------------------------------------------
-    window.__hideDuplicateGameRankCard = function() {
-        var lc = document.getElementById('leaderboardListContainer');
-        if (!lc) return;
-        var community = document.getElementById('view-community');
-        if (!community) return;
-        var card = lc.closest ? lc.closest('.card') : null;
-        if (card && community.contains(card)) card.style.display = 'none';
-    };
-
-    // 両方をまとめて実行するヘルパー
-    function applyFinishLayout() {
-        try { window.__restructureCommunityRankLayout(); } catch (e) {}
-        try { window.__hideDuplicateGameRankCard(); } catch (e) {}
-    }
-
-    // ------------------------------------------------------------------
-    // 【4】renderLeaderboard 上書き：描画後に枠分離＋重複削除＋見出し再取得
-    // ------------------------------------------------------------------
-    var __prevRenderLeaderboardForFinish = window.renderLeaderboard;
-
-    // ------------------------------------------------------------------
-    // 【5】renderCommunityRankPills 上書き：選択中のメインピルを中央へ寄せる
-    //     （スワイプ式はそのまま。タップで選んだピルがスッと中央に）
-    // ------------------------------------------------------------------
-    var __prevRenderCommunityRankPillsForFinish = window.renderCommunityRankPills;
-    if (typeof __prevRenderCommunityRankPillsForFinish === 'function') {
-        window.renderCommunityRankPills = function() {
-            var r = __prevRenderCommunityRankPillsForFinish.apply(this, arguments);
-            setTimeout(function() {
-                var sc = document.getElementById('communityRankMainScroller');
-                if (!sc) return;
-                var act = sc.querySelector('.community-rank-pill-active');
-                if (act && typeof act.scrollIntoView === 'function') {
-                    act.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-                }
-            }, 60);
-            return r;
-        };
-    }
-
-    // ------------------------------------------------------------------
-    // 【6】switchTab 上書き：コミュニティ切替時に確実にレイアウトを適用
-    // ------------------------------------------------------------------
-    window.onTabChange(function(tabId) {
-        if (tabId === 'community') {
-            setTimeout(applyFinishLayout, 80);
-            setTimeout(applyFinishLayout, 350);
-        }
-    });
-
-    // ------------------------------------------------------------------
-    // 【7】起動時注入（第13回パッチのDOM生成を待つため遅延＋再試行）
-    // ------------------------------------------------------------------
-    (function initCommunityRankFinishPatch() {
-        function boot() {
-            applyFinishLayout();
-            // 第13回パッチの描画より後にDOMが揃う場合の保険
-            setTimeout(applyFinishLayout, 300);
-            setTimeout(applyFinishLayout, 900);
-        }
-        if (document.readyState !== 'loading') {
-            setTimeout(boot, 450);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 450); });
-        }
-    })();
-
-})();
 // ==========================================================================
 // 📊 第15回パッチ：勉強時間グラフのログイン後“0分”現象を根治
 //    ① 週間ログ(weeklyStudyMinutesLog)＋本日秒数(todayStudySeconds)を
@@ -5367,198 +4116,6 @@ window.onAppLoaded(function() {
 //    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
 //    ※既存の勉強タイマーには一切触れません（別ミラーで値を写すだけ）
 // ==========================================================================
-(function applyStudyGraphSyncPatch() {
-    if (window.__studyGraphSyncPatchApplied) return;
-    window.__studyGraphSyncPatchApplied = true;
-    
-    // ------------------------------------------------------------------
-    // ヘルパー①：今日の日付文字列（既存の生成規則 "Y-M-D" に完全一致）
-    // ------------------------------------------------------------------
-    function sgTodayStr() {
-        var d = new Date();
-        return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
-    }
-    
-    // ヘルパー②：日付文字列 "Y-M-D" → 曜日インデックス（0=月 … 6=日）
-    //          既存 renderActivityChart の (getDay()-1, <0なら6) と同一
-    // ------------------------------------------------------------------
-    function sgDateToIdx(dateStr) {
-        if (!dateStr) return -1;
-        var p = String(dateStr).split('-');
-        if (p.length < 3) return -1;
-        var dt = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
-        if (isNaN(dt.getTime())) return -1;
-        var idx = dt.getDay() - 1;
-        if (idx < 0) idx = 6;
-        return idx;
-    }
-    
-    // ヘルパー③：2つの日付文字列の日数差（b - a）。不正なら -1
-    // ------------------------------------------------------------------
-    function sgDaysBetween(aStr, bStr) {
-        if (!aStr || !bStr) return -1;
-        var pa = String(aStr).split('-'),
-            pb = String(bStr).split('-');
-        if (pa.length < 3 || pb.length < 3) return -1;
-        var da = new Date(parseInt(pa[0], 10), parseInt(pa[1], 10) - 1, parseInt(pa[2], 10));
-        var db = new Date(parseInt(pb[0], 10), parseInt(pb[1], 10) - 1, parseInt(pb[2], 10));
-        if (isNaN(da.getTime()) || isNaN(db.getTime())) return -1;
-        var ms = db.getTime() - da.getTime();
-        return Math.round(ms / (1000 * 60 * 60 * 24));
-    }
-    
-    function sgIsLoggedIn() {
-        return (typeof myId !== 'undefined' && myId && myId !== 'GUEST-000');
-    }
-    
-    // ------------------------------------------------------------------
-    // 【1】ミラー：メモリ上のグラフデータを userStats へ写す
-    //     （saveUserStats が userStats ごとクラウドへ運ぶ＝既存経路に乗せる）
-    //     既存タイマーには触れない＝代入だけの軽量処理
-    // ------------------------------------------------------------------
-    window.__sgDirty = false;
-    window.__sgMirrorToUserStats = function() {
-        if(window.StudyTime)return;
-        if (typeof userStats === 'undefined' || !userStats) return;
-        try {
-            var log = (typeof weeklyStudyMinutesLog !== 'undefined' && Array.isArray(weeklyStudyMinutesLog)) ?
-                weeklyStudyMinutesLog.slice(0, 7) : [0, 0, 0, 0, 0, 0, 0];
-            while (log.length < 7) log.push(0);
-            userStats.study_weekly_log = log;
-            userStats.study_today_secs = (typeof todayStudySeconds !== 'undefined') ? (parseInt(todayStudySeconds) || 0) : 0;
-            userStats.study_last_date = (typeof lastAccessDateStr !== 'undefined') ? (lastAccessDateStr || '') : '';
-            userStats.study_weekly_log_today_date = userStats.study_last_date;
-            window.__sgDirty = true;
-        } catch (e) {}
-    };
-    
-    // ------------------------------------------------------------------
-    // 【2】復元：クラウド(userStats)からグラフをメモリへ戻す
-    //     ・ローカルとクラウドを“枠ごとに大きい方”でマージ（巻き戻り防止）
-    //     ・7日以上前のクラウドログは“古い週の残骸”とみなし採用しない
-    //     ・既存の曜日固定挙動は壊さない（週リセットは導入しない）
-    // ------------------------------------------------------------------
-    window.__sgRestoreFromCloud = function() {
-        if(window.StudyTime)return;
-        if (typeof userStats === 'undefined' || !userStats) return;
-        var s = userStats;
-        var todayStr = sgTodayStr();
-        
-        // 本日秒数：クラウドの最終日が“今日”なら大きい方を採用
-        var cloudLastDate = s.study_last_date || s.study_weekly_log_today_date || '';
-        var cloudTodaySecs = parseInt(s.study_today_secs) || 0;
-        if (cloudLastDate === todayStr) {
-            if (cloudTodaySecs > (parseInt(todayStudySeconds) || 0)) {
-                todayStudySeconds = cloudTodaySecs;
-            }
-        }
-        
-        var cloudLog = Array.isArray(s.study_weekly_log) ? s.study_weekly_log : null;
-        var cloudValid = cloudLog && cloudLog.length === 7 &&
-            (cloudLastDate === '' || sgDaysBetween(cloudLastDate, todayStr) < 7);
-        
-        var localLog = (typeof weeklyStudyMinutesLog !== 'undefined' && Array.isArray(weeklyStudyMinutesLog)) ?
-            weeklyStudyMinutesLog : [0, 0, 0, 0, 0, 0, 0];
-        while (localLog.length < 7) localLog.push(0);
-        
-        var merged = localLog.slice(0, 7);
-        if (cloudValid) {
-            for (var i = 0; i < 7; i++) {
-                var cv = parseFloat(cloudLog[i]) || 0;
-                var lv = parseFloat(merged[i]) || 0;
-                merged[i] = Math.max(lv, cv);
-            }
-            // クラウドの“最終日”が今日でない過去日で、その日の秒が残っている場合もその枠へ反映
-            if (cloudLastDate && cloudLastDate !== todayStr && cloudTodaySecs > 0) {
-                var cIdx = sgDateToIdx(cloudLastDate);
-                if (cIdx >= 0 && sgDaysBetween(cloudLastDate, todayStr) < 7) {
-                    merged[cIdx] = Math.max(merged[cIdx] || 0, cloudTodaySecs / 60);
-                }
-            }
-        }
-        
-        // 今日の枠には“いまの本日秒数”を必ず反映（描画と整合）
-        var todayIdx = sgDateToIdx(todayStr);
-        if (todayIdx >= 0) {
-            merged[todayIdx] = Math.max(merged[todayIdx] || 0, (parseInt(todayStudySeconds) || 0) / 60);
-        }
-        
-        weeklyStudyMinutesLog = merged;
-        
-        // ローカルキャッシュも復元値で揃える
-        try { localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog)); } catch (e) {}
-        try { localStorage.setItem('core_v4_study_today_secs', String(parseInt(todayStudySeconds) || 0)); } catch (e) {}
-        try { localStorage.setItem('core_v4_study_last_date', todayStr); } catch (e) {}
-        
-        // 復元直後に描画を更新（DOMが無ければ関数側でガードされる）
-        try { if (typeof window.renderActivityChart === 'function') window.renderActivityChart(); } catch (e) {}
-    };
-    
-    // ------------------------------------------------------------------
-    // 【3】loadUserStats をラップ：クラウド読み込み“後”に復元
-    //     （既存の全 loadUserStats 上書きが走り終わった後に実行される）
-    // ------------------------------------------------------------------
-    var __prevLoadUserStatsForStudyGraph = window.loadUserStats;
-    window.loadUserStats = async function() {
-        var r = __prevLoadUserStatsForStudyGraph ? await __prevLoadUserStatsForStudyGraph.apply(this, arguments) : undefined;
-        try { window.__sgRestoreFromCloud(); } catch (e) { console.error('study graph restore error:', e); }
-        return r;
-    };
-    
-    // ------------------------------------------------------------------
-    // 【4】renderActivityChart を上書き
-    //     ・1分未満は「○秒」表示（0は「0分」）
-    //     ・棒の高さは“その週の最大値”基準（少しの勉強でも棒が立つ）
-    //     ・DOM構造は既存と完全同一（class/id 不変＝CSSそのまま）
-    // ------------------------------------------------------------------
-    // 【5】ミラーの定期実行＋ページ離脱時のフラッシュ保存
-    //     ・5秒ごとにメモリ→userStats へ写す（軽い代入のみ）
-    //     ・クラウド書き込みは既存の saveUserStats 経路に任せる＋
-    //       ページ離脱時に dirty なら明示保存（勉強中に閉じても残る）
-    // ------------------------------------------------------------------
-    function sgStartMirrorLoop() {
-        if (window.__sgMirrorLoopStarted) return;
-        window.__sgMirrorLoopStarted = true;
-        
-        setInterval(function() {
-            try { window.__sgMirrorToUserStats(); } catch (e) {}
-        }, 5000);
-        
-        var flush = function() {
-            if (!sgIsLoggedIn()) return;
-            if (!window.__sgDirty) return;
-            try { window.__sgMirrorToUserStats(); } catch (e) {}
-            if (typeof window.saveUserStats === 'function') {
-                try { window.saveUserStats(); } catch (e) {}
-            }
-            window.__sgDirty = false;
-        };
-        window.addEventListener('pagehide', flush);
-        document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'hidden') flush();
-        });
-    }
-    
-    // ------------------------------------------------------------------
-    // 【6】起動時接続
-    // ------------------------------------------------------------------
-    (function initStudyGraphSyncPatch() {
-        function boot() {
-            try { window.__sgMirrorToUserStats(); } catch (e) {}
-            sgStartMirrorLoop();
-            // ログイン済みなら念のため一度復元＋描画
-            if (sgIsLoggedIn()) {
-                try { window.__sgRestoreFromCloud(); } catch (e) {}
-            }
-        }
-        if (document.readyState !== 'loading') {
-            setTimeout(boot, 400);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); });
-        }
-    })();
-    
-})();
 // ==========================================================================
 // 📊 第16回パッチ：勉強時間グラフ“描画トリガー”根治
 //    第15回パッチの取りこぼし2点を、既存コード0行変更で是正する
@@ -5571,66 +4128,6 @@ window.onAppLoaded(function() {
 //    ※第15回パッチ（__sgRestoreFromCloud / 上書き済み renderActivityChart）が
 //      前提。無ければ各所で typeof ガードが効き、安全に何もしません
 // ==========================================================================
-(function applyStudyGraphTriggerPatch() {
-    if (window.__studyGraphTriggerPatchApplied) return;
-    window.__studyGraphTriggerPatchApplied = true;
-    
-    // ------------------------------------------------------------------
-    // ヘルパー：今日の曜日インデックス（0=月 … 6=日／既存規則と同一）
-    // ------------------------------------------------------------------
-    function sgtTodayIdx() {
-        var i = new Date().getDay() - 1;
-        return i < 0 ? 6 : i;
-    }
-    
-    // ヘルパー：メモリ上の“今日分”を週間ログへ反映してから描画
-    //   （renderActivityChart 自身も今日分を代入するが、復元直後など
-    //     値が揃う前に呼ばれても確実に反映させるための二重保険）
-    function sgtReflectAndDraw() {
-        try {
-            var todayMin = (parseInt(todayStudySeconds) || 0) / 60;
-            if (typeof weeklyStudyMinutesLog !== 'undefined' && Array.isArray(weeklyStudyMinutesLog)) {
-                var idx = sgtTodayIdx();
-                var cur = parseFloat(weeklyStudyMinutesLog[idx]) || 0;
-                if (todayMin > cur) weeklyStudyMinutesLog[idx] = todayMin;
-            }
-        } catch (e) {}
-        try {
-            if (document.getElementById('activityBarChart') &&
-                typeof window.renderActivityChart === 'function') {
-                window.renderActivityChart();
-            }
-        } catch (e) {}
-    }
-    
-    // ヘルパー：クラウド復元（第15回）が居れば叩く
-    function sgtRestore() {
-        try {
-            if (typeof window.__sgRestoreFromCloud === 'function') {
-                window.__sgRestoreFromCloud();
-            }
-        } catch (e) {}
-    }
-    
-    // ------------------------------------------------------------------
-    // 【1】initStudyTimerAndDataRotation をラップ
-    //     既存処理（日跨ぎリセット含む）が走り終わった“後”に
-    //     復元を再実行 → リセットに潰された todayStudySeconds を復活
-    // ------------------------------------------------------------------
-    // ------------------------------------------------------------------
-    // 【3】loadLocalState をラップ：完了後に遅延キック
-    //     ブートストラップ末尾の renderActivityChart は復元“前”に走るため
-    //     全0を描いてしまう。復元“後”に遅延で上書きし直す
-    // ------------------------------------------------------------------
-    window.onAppLoaded(function() {
-            var kick = function() { sgtRestore();
-                sgtReflectAndDraw(); };
-            setTimeout(kick, 300);
-            setTimeout(kick, 900);
-            setTimeout(kick, 1800);
-    });
-    
-})();
 // ==========================================================================
 // ⏱️ 第17回パッチ：プレイ時間ランキングの整合性根治（週間 < 今日 の矛盾を撲滅）
 //    症状：ランキングの「1日」が「週間」より大きい（論理上ありえない逆転）
@@ -5645,149 +4142,6 @@ window.onAppLoaded(function() {
 //    ※🏆 第13回(コミュニティランキング)・📊 第15回(グラフ同期) 適用済みが前提。
 //      未適用の関数は typeof ガードで安全にスキップします
 // ==========================================================================
-(function applyPlayTimeConsistencyPatch() {
-    if (window.__playTimeConsistencyApplied) return;
-    window.__playTimeConsistencyApplied = true;
-
-    // ------------------------------------------------------------------
-    // ヘルパー：日付キー／週キー／時間フォーマット（第13回があればそれを使い、
-    //          無ければ同一ロジックのフォールバックを使う＝自己完結）
-    // ------------------------------------------------------------------
-    function ptcTodayKey() {
-        if (typeof window.__getTodayKey === 'function') return window.__getTodayKey();
-        var d = new Date();
-        return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
-    }
-    function ptcWeekKey() {
-        if (typeof window.__getWeekKey === 'function') return window.__getWeekKey();
-        var d = new Date();
-        var day = d.getDay();
-        var diff = (day === 0 ? -6 : 1 - day);
-        var m = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
-        return m.getFullYear() + '-' + (m.getMonth() + 1) + '-' + m.getDate();
-    }
-    function ptcFmt(secs) {
-        if (typeof window.__formatStudyTime === 'function') return window.__formatStudyTime(secs);
-        var t = Math.floor((secs || 0) / 60);
-        if (t >= 60) { var h = Math.floor(t / 60); var mm = t % 60; return h + '時間' + (mm > 0 ? mm + '分' : ''); }
-        return t + '分';
-    }
-    function ptcIsSelf(u) { return !!(u && u.isMe === true); }
-
-    // ------------------------------------------------------------------
-    // 核心：1ユーザーの range 別値を“矛盾なく”算出
-    //   ・daily  = 今日キー一致なら today_secs（自分はグローバル実測も取り込む）
-    //   ・weekly = 今週キー一致なら week_secs をベースにし、必ず daily 以上にする
-    //              今週キー不一致（前週の残骸）ならベース0 → daily だけ採用
-    //   ・total  = 必ず weekly 以上にする
-    //   → これで weekly < daily は構造的に発生しない
-    // ------------------------------------------------------------------
-    function ptcValue(u, range) {
-        var todayKey = ptcTodayKey();
-        var weekKey = ptcWeekKey();
-        var todaySecs = parseInt(u.study_today_secs) || 0;
-        // 自分はメモリ上の実測 todayStudySeconds も加味（復元ズレを吸収）
-        if (ptcIsSelf(u) && typeof todayStudySeconds !== 'undefined') {
-            var live = parseInt(todayStudySeconds) || 0;
-            if ((u.study_today_date || '') === todayKey || !u.study_today_date) {
-                if (live > todaySecs) todaySecs = live;
-            }
-        }
-        var daily = ((u.study_today_date || '') === todayKey) ? todaySecs : 0;
-        var weeklyBase = ((u.study_week_key || '') === weekKey) ? (parseInt(u.study_week_secs) || 0) : 0;
-        var weekly = Math.max(weeklyBase, daily);   // ★ 週間は今日を必ず内包
-        var total = Math.max(parseInt(u.study_total_secs) || 0, weekly); // ★ 総計は週間を必ず内包
-        if (range === 'daily') return daily;
-        if (range === 'weekly') return weekly;
-        return total;
-    }
-
-    // ------------------------------------------------------------------
-    // 自分自身の userStats を同じルールで整合（毎秒）
-    //   ・古い週キーの残骸を今週へ正規化（study_week_key を今週に上書き）
-    //   ・グローバル todayStudySeconds も整合値に揃えて表示の一貫性を確保
-    // ------------------------------------------------------------------
-    function ptcEnforceSelf() {
-        if(window.StudyTime)return;
-        if (typeof userStats === 'undefined' || !userStats) return;
-        var todayKey = ptcTodayKey();
-        var weekKey = ptcWeekKey();
-        var live = (typeof todayStudySeconds !== 'undefined') ? (parseInt(todayStudySeconds) || 0) : 0;
-
-        var ts = parseInt(userStats.study_today_secs) || 0;
-        if ((userStats.study_today_date || '') === todayKey || !userStats.study_today_date) {
-            if (live > ts) ts = live;
-        }
-        var daily = ((userStats.study_today_date || '') === todayKey) ? ts : 0;
-
-        var weeklyBase = ((userStats.study_week_key || '') === weekKey) ? (parseInt(userStats.study_week_secs) || 0) : 0;
-        var weekly = Math.max(weeklyBase, daily);   // 前週残骸は base0 → 今週は daily から再出発
-
-        var total = Math.max(parseInt(userStats.study_total_secs) || 0, weekly);
-
-        userStats.study_today_secs = ts;
-        userStats.study_week_secs = weekly;
-        userStats.study_total_secs = total;
-        if (!userStats.study_today_date) userStats.study_today_date = todayKey;
-        userStats.study_week_key = weekKey; // ★ 今週へ正規化（残骸を消す）
-
-        if (typeof todayStudySeconds !== 'undefined' && ts > todayStudySeconds) {
-            todayStudySeconds = ts;
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // drawCommunityTimeRanking 上書き：補正済み値で描画（自分も他者も）
-    // ------------------------------------------------------------------
-    window.drawCommunityTimeRanking = function(container, users) {
-        if (!container) return;
-        // 第13回の行ビルダーが無い環境では安全に終了（描画は第13回に依存）
-        if (typeof window.__buildCommunityRankRow !== 'function') return;
-        var range = window.__communityTimeRange || 'total';
-        var rows = (users || []).map(function(u) { return { u: u, val: ptcValue(u, range) }; });
-        rows.sort(function(a, b) { return b.val - a.val; });
-        var html = '';
-        rows.slice(0, 50).forEach(function(row, idx) {
-            html += window.__buildCommunityRankRow(row.u, idx,
-                '<div class="community-rank-value-big">' + ptcFmt(row.val) + '</div>');
-        });
-        container.innerHTML = html;
-    };
-
-    // ------------------------------------------------------------------
-    // 毎秒ウォッチドッグ（自分の整合。増やす方向の単調補正なので
-    //   第13回の sync ループ／第15回のミラーと競合しない）
-    // ------------------------------------------------------------------
-    if (!window.__ptcWatchdogStarted) {
-        window.__ptcWatchdogStarted = true;
-        setInterval(function() {
-            try { ptcEnforceSelf(); } catch (e) {}
-        }, 1000);
-    }
-
-    // ------------------------------------------------------------------
-    // loadUserStats ラップ：クラウド復元“後”に整合を1回実行
-    // ------------------------------------------------------------------
-    var __prevLoadUserStatsForPtc = window.loadUserStats;
-    window.loadUserStats = async function() {
-        var r = __prevLoadUserStatsForPtc ? await __prevLoadUserStatsForPtc.apply(this, arguments) : undefined;
-        try { ptcEnforceSelf(); } catch (e) {}
-        return r;
-    };
-
-    // ------------------------------------------------------------------
-    // 起動時：DOM／変数揃い次第1回整合
-    // ------------------------------------------------------------------
-    (function initPlayTimeConsistencyPatch() {
-        function boot() { try { ptcEnforceSelf(); } catch (e) {} }
-        if (document.readyState !== 'loading') {
-            setTimeout(boot, 500);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 500); });
-        }
-    })();
-
-})();
     // ==========================================================================
 // 📋 第16回パッチ：長文リーダー「登録単語トレー」
 //    英文を解析した瞬間、その長文に含まれる“単語帳登録済みの語”を自動で拾い、
@@ -5800,94 +4154,6 @@ window.onAppLoaded(function() {
 //    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
 //    ※analyzeText をラップするだけ＝既存の解析・和訳・本棚保存は一切不変
 // ==========================================================================
-(function applyReaderVocabTrainerPatch() {
-    if (window.__readerVocabTrainerApplied) return;
-    window.__readerVocabTrainerApplied = true;
-
-    // ------------------------------------------------------------------
-    // 【0】パッチ専用スタイル（コズミック発光・出現モーション・生きたフィードバック）
-    // ------------------------------------------------------------------
-    (function injectReaderTrainerCss() {
-        if (document.getElementById('readerTrainerCss')) return;
-        var st = document.createElement('style');
-        st.id = 'readerTrainerCss';
-        st.textContent = [
-            /* トレー外枠 */
-            '#readerVocabTrainerCard{margin:18px 0 4px 0;border:1px solid rgba(0,240,255,0.30);border-radius:14px;background:linear-gradient(160deg, rgba(7,11,25,0.55) 0%, rgba(20,15,45,0.45) 100%);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 22px rgba(0,0,0,0.35), inset 0 0 22px rgba(0,240,255,0.05);overflow:hidden;}',
-            /* 見出し（タップで開閉） */
-            '.rvt-head{display:flex;align-items:center;gap:10px;padding:13px 15px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;background:linear-gradient(90deg, rgba(0,240,255,0.10), rgba(192,132,252,0.06));transition:background .2s ease;}',
-            '.rvt-head:active{background:linear-gradient(90deg, rgba(0,240,255,0.20), rgba(192,132,252,0.12));}',
-            '.rvt-head-ico{width:30px;height:30px;flex-shrink:0;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;background:rgba(0,240,255,0.12);border:1px solid rgba(0,240,255,0.35);box-shadow:0 0 10px rgba(0,240,255,0.25);}',
-            '.rvt-head-title{flex:1;min-width:0;font-size:13px;font-weight:900;color:#fff;letter-spacing:.4px;text-shadow:0 0 8px rgba(0,240,255,0.35);}',
-            '.rvt-head-sub{display:block;font-size:9.5px;font-weight:700;color:var(--text-sub);letter-spacing:.3px;margin-top:2px;text-shadow:none;}',
-            '.rvt-count{flex-shrink:0;font-size:11px;font-weight:900;color:#06121f;background:linear-gradient(135deg, var(--cosmic-cyan), var(--cosmic-purple-light));padding:3px 10px;border-radius:20px;box-shadow:0 0 10px rgba(0,240,255,0.45);}',
-            '.rvt-chev{flex-shrink:0;color:var(--cosmic-cyan);font-size:12px;font-weight:900;transition:transform .3s cubic-bezier(0.25,1,0.5,1);}',
-            '#readerVocabTrainerCard.rvt-open .rvt-chev{transform:rotate(180deg);}',
-            /* 本文（伸縮） */
-            '.rvt-body{max-height:0;overflow:hidden;transition:max-height .4s cubic-bezier(0.25,1,0.5,1);}',
-            '#readerVocabTrainerCard.rvt-open .rvt-body{max-height:4000px;}',
-            '.rvt-body-inner{padding:6px 12px 14px 12px;display:flex;flex-direction:column;gap:9px;}',
-            /* 1語カード */
-            '.rvt-word{border:1px solid rgba(255,255,255,0.12);border-radius:11px;background:rgba(255,255,255,0.04);padding:10px 12px;transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease;animation:rvtRowIn .4s cubic-bezier(0.25,1,0.5,1) both;}',
-            '.rvt-word:hover{border-color:rgba(0,240,255,0.4);box-shadow:0 0 12px rgba(0,240,255,0.18);}',
-            '@keyframes rvtRowIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}',
-            '.rvt-word-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;}',
-            '.rvt-word-num{font-size:10px;font-weight:800;color:var(--text-sub);background:rgba(255,255,255,0.08);padding:2px 7px;border-radius:5px;flex-shrink:0;}',
-            '.rvt-word-en{font-family:"Times New Roman",serif;font-size:17px;font-weight:800;color:#fff;text-shadow:0 0 8px rgba(0,240,255,0.3);word-break:break-word;}',
-            /* 意味行 */
-            '.rvt-meaning-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed rgba(255,255,255,0.10);}',
-            '.rvt-meaning-row:first-of-type{border-top:none;}',
-            '.rvt-meaning-text{flex:1;min-width:0;font-size:12.5px;color:rgba(226,232,240,0.92);line-height:1.45;word-break:break-word;}',
-            '.rvt-btns{display:flex;gap:4px;flex-shrink:0;}',
-            '.rvt-btn{width:25px;height:25px;border-radius:50%;border:1px solid rgba(255,255,255,0.3);background:rgba(0,0,0,0.5);color:#fff;font-size:10px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .12s ease, box-shadow .15s ease, background .15s ease;-webkit-tap-highlight-color:transparent;}',
-            '.rvt-btn:active{transform:scale(0.82);}',
-            '.rvt-btn.rvt-on{animation:rvtPop .3s cubic-bezier(0.25,1.4,0.5,1);}',
-            '@keyframes rvtPop{0%{transform:scale(0.7);}60%{transform:scale(1.18);}100%{transform:scale(1);}}',
-            '.rvt-btn[data-st="ok"].rvt-active{background:var(--word-ok);color:#000;box-shadow:0 0 9px rgba(16,185,129,0.6);border-color:var(--word-ok);}',
-            '.rvt-btn[data-st="so"].rvt-active{background:var(--word-so);color:#000;box-shadow:0 0 9px rgba(245,158,11,0.6);border-color:var(--word-so);}',
-            '.rvt-btn[data-st="bad"].rvt-active{background:var(--word-bad);color:#fff;box-shadow:0 0 9px rgba(239,68,68,0.6);border-color:var(--word-bad);}',
-            '.rvt-btn[data-st="none"].rvt-active{background:rgba(255,255,255,0.32);color:#fff;box-shadow:0 0 7px rgba(255,255,255,0.3);}'
-        ].join('\n');
-        (document.head || document.documentElement).appendChild(st);
-    })();
-
-    // 登録語抽出に使うクリーン正規表現（既存 analyzeText と同一ルール）
-    var RVT_CLEAN = /[.,\/#!$%\^&\*;:{}=\-_`~()\[\]\"']/g;
-
-    // ------------------------------------------------------------------
-    // 【1】生テキストから“登録語”を登場順・重複排除で収集
-    //     （辞書語は除外＝findVocabByToken にヒットする語のみ）
-    // ------------------------------------------------------------------
-
-    // ------------------------------------------------------------------
-    // 【2】意味行の4ボタンを、現在の status に合わせて塗り直す
-    // ------------------------------------------------------------------
-
-    // ------------------------------------------------------------------
-    // 【3】マーク変更ハンドラ（単語帳と完全同期＋英文の色も追従）
-    // ------------------------------------------------------------------
-
-    // ------------------------------------------------------------------
-    // 【4】トレーDOMを構築して英文の直下へ挿入（0語なら非表示）
-    // ------------------------------------------------------------------
-
-    // ------------------------------------------------------------------
-    // 【5】analyzeText をラップ：解析完了“後”にトレーを組み立てる
-    //     （既存の解析・和訳・要約・本棚保存ロジックは一切不変）
-    // ------------------------------------------------------------------
-    var __prevAnalyzeTextForTrainer = window.analyzeText;
-    // ------------------------------------------------------------------
-    // 【6】リーダーを閉じた時はトレーも消す（既存 closeReader を拡張）
-    // ------------------------------------------------------------------
-    var __prevCloseReaderForTrainer = window.closeReader;
-    window.closeReader = function() {
-        var r = __prevCloseReaderForTrainer ? __prevCloseReaderForTrainer.apply(this, arguments) : undefined;
-        var t = document.getElementById('readerVocabTrainerCard');
-        if (t && t.parentNode) t.parentNode.removeChild(t);
-        return r;
-    };
-
-})();
 // ==========================================================================
 // 🔧 修正パッチ：長文リーダーの「開く」「本棚に保存する」ボタンが
 //    英文中のダブルクォート " で壊れて押せなくなる問題を根治
@@ -5899,113 +4165,6 @@ window.onAppLoaded(function() {
 //    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
 //    ※analyzeText / renderHistoryList をラップするだけ＝解析・和訳・本棚保存ロジックは不変
 // ==========================================================================
-(function applyReaderOpenButtonFixPatch() {
-    if (window.__readerOpenButtonFixApplied) return;
-    window.__readerOpenButtonFixApplied = true;
-
-    // ------------------------------------------------------------------
-    // 【1】履歴ログの「開く」ボタンを安全なリスナに付け替え
-    //     ・.list-item-row の出現順＝textHistory の順（forEach で append されるため）
-    //     ・壊れた onclick 属性を removeAttribute してからリスナを貼る
-    //     ・削除ボタン(.word-delete-btn)には触れない
-    // ------------------------------------------------------------------
-    window.__rebindHistoryOpenButtons = function() {
-        var container = document.getElementById('historyListContainer');
-        if (!container) return;
-        var rows = container.querySelectorAll('.list-item-row');
-        for (var i = 0; i < rows.length; i++) {
-            (function(idx) {
-                var row = rows[idx];
-                if (!row) return;
-                var openBtn = row.querySelector('.list-action-link');
-                if (!openBtn) return;
-                // 毎回 innerHTML で作り直されるので要素は新しい＝ガードは念のため
-                if (openBtn.dataset.openRebound === '1') return;
-                openBtn.removeAttribute('onclick');
-                openBtn.dataset.openRebound = '1';
-                openBtn.addEventListener('click', function(ev) {
-                    if (ev) ev.stopPropagation();
-                    var entry = (typeof textHistory !== 'undefined' && textHistory) ? textHistory[idx] : null;
-                    if (!entry) return;
-                    window.analyzeText(entry.text, entry.title || '無題');
-                });
-            })(i);
-        }
-    };
-
-    // ------------------------------------------------------------------
-    // 【2】解析画面の「本棚に保存する」ボタンを安全なリスナに付け替え
-    //     ・readerCurrentTitle 内の button が対象
-    //     ・テキストはグローバル変数 currentActiveReaderText / currentActiveTitle
-    //       を直接渡す（属性埋め込みをしないので " があっても壊れない）
-    // ------------------------------------------------------------------
-    window.__rebindSaveBookshelfButton = function() {
-        var titleBox = document.getElementById('readerCurrentTitle');
-        if (!titleBox) return;
-        var btn = titleBox.querySelector('button');
-        if (!btn) return;
-        if (btn.dataset.saveRebound === '1') return;
-        btn.removeAttribute('onclick');
-        btn.dataset.saveRebound = '1';
-        btn.addEventListener('click', function(ev) {
-            if (ev) ev.stopPropagation();
-            var txt = (typeof currentActiveReaderText !== 'undefined') ? currentActiveReaderText : '';
-            var ttl = (typeof currentActiveTitle !== 'undefined' && currentActiveTitle) ? currentActiveTitle : '無題';
-            if (typeof window.showCustomSaveBookshelfPrompt === 'function') {
-                window.showCustomSaveBookshelfPrompt(txt, ttl);
-            }
-        });
-    };
-
-    // 両方をまとめて実行するヘルパー
-    function rebindAll() {
-        try { window.__rebindHistoryOpenButtons(); } catch (e) {}
-        try { window.__rebindSaveBookshelfButton(); } catch (e) {}
-    }
-
-    // ------------------------------------------------------------------
-    // 【3】renderHistoryList をラップ：描画後に「開く」を付け替え
-    // ------------------------------------------------------------------
-    var __prevRenderHistoryListForOpenFix = window.renderHistoryList;
-    if (typeof __prevRenderHistoryListForOpenFix === 'function') {
-        window.renderHistoryList = function() {
-            var r = __prevRenderHistoryListForOpenFix.apply(this, arguments);
-            window.__rebindHistoryOpenButtons();
-            return r;
-        };
-    }
-
-    // ------------------------------------------------------------------
-    // 【4】analyzeText をラップ：描画後に「保存する」＋「開く」を付け替え
-    //     ・async 関数なので Promise 解決を待つ（readerCurrentTitle は await 後に設定される）
-    //     ・解析失敗で closeReader された場合もガード済み（要素が無ければ何もしない）
-    // ------------------------------------------------------------------
-    var __prevAnalyzeTextForOpenFix = window.analyzeText;
-    if (typeof __prevAnalyzeTextForOpenFix === 'function') {
-        window.analyzeText = function() {
-            var r = __prevAnalyzeTextForOpenFix.apply(this, arguments);
-            if (r && typeof r.then === 'function') {
-                r.then(function() { rebindAll(); }, function() { rebindAll(); });
-            } else {
-                rebindAll();
-            }
-            return r;
-        };
-    }
-
-    // ------------------------------------------------------------------
-    // 【5】起動時注入（履歴が初期描画された後の保険）
-    // ------------------------------------------------------------------
-    (function initReaderOpenButtonFixPatch() {
-        function boot() { rebindAll(); }
-        if (document.readyState !== 'loading') {
-            setTimeout(boot, 500);
-        } else {
-            document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 500); });
-        }
-    })();
-
-})();
 // ==========================================================================
 // 📊 第5回パッチ：勉強時間グラフ安定化 ＋ 日付跨ぎ修正
 // ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
@@ -6036,171 +4195,18 @@ window.onAppLoaded(function() {
 // ==========================================================================
 
 // ---------- 1. エディタのDOM／CSSを1回だけ注入 ----------
-window.__injectStudyTimeEditor = function() {
-    if (document.getElementById('studyTimeEditorOverlay')) return;
-
-    var style = document.createElement('style');
-    style.textContent = [
-        '#studyTimeEditorOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(7,10,18,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .22s ease;}',
-        '#studyTimeEditorOverlay.open{opacity:1;pointer-events:auto;}',
-        '.ste-card{width:min(340px,calc(100vw - 40px));background:linear-gradient(168deg,#242c42 0%,#161c2d 70%);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:22px 22px 18px;box-shadow:0 24px 64px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06);color:#fff;transform:translateY(16px) scale(.95);transition:transform .28s cubic-bezier(.2,.9,.3,1.25);font-family:inherit;}',
-        '#studyTimeEditorOverlay.open .ste-card{transform:none;}',
-        '.ste-eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;color:#8b93a7;margin-bottom:6px;}',
-        '.ste-date-row{display:flex;align-items:center;gap:8px;margin-bottom:18px;}',
-        '#steDateLabel{font-size:22px;font-weight:800;letter-spacing:.01em;}',
-        '#steTodayBadge{font-size:10px;font-weight:800;color:#052e16;background:linear-gradient(135deg,#4ade80,#22c55e);padding:3px 8px;border-radius:999px;}',
-        '.ste-steppers{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;}',
-        '.ste-group{display:flex;align-items:center;gap:8px;}',
-        '.ste-btn{width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff;font-size:20px;font-weight:700;cursor:pointer;transition:background .15s,transform .1s,border-color .15s;line-height:1;}',
-        '.ste-btn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.28);}',
-        '.ste-btn:active{transform:scale(.9);}',
-        '.ste-val{min-width:56px;text-align:center;}',
-        '.ste-val span{display:block;font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05;}',
-        '.ste-val em{display:block;font-style:normal;font-size:10px;color:#8b93a7;font-weight:700;margin-top:2px;}',
-        '.ste-colon{font-size:24px;font-weight:800;color:#5b6478;padding-bottom:12px;}',
-        '.ste-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:18px;}',
-        '.ste-chips button{font-size:11px;font-weight:700;color:#cdd3e1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:6px 11px;cursor:pointer;transition:transform .12s,background .15s;font-family:inherit;}',
-        '.ste-chips button:hover{background:rgba(255,255,255,.14);transform:translateY(-1px);}',
-        '.ste-chips .ste-reset{color:#fda4af;border-color:rgba(251,113,133,.35);background:rgba(251,113,133,.08);}',
-        '.ste-chips .ste-reset:hover{background:rgba(251,113,133,.18);}',
-        '.ste-footer{display:flex;gap:10px;}',
-        '.ste-cancel{flex:1;padding:11px 0;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:transparent;color:#cdd3e1;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s;font-family:inherit;}',
-        '.ste-cancel:hover{background:rgba(255,255,255,.07);}',
-        '.ste-save{flex:1.4;padding:11px 0;border-radius:12px;border:none;background:linear-gradient(135deg,#4ade80,#16a34a);color:#04150b;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,.35);transition:transform .12s,box-shadow .15s,filter .15s;font-family:inherit;}',
-        '.ste-save:hover{transform:translateY(-1px);filter:brightness(1.08);box-shadow:0 9px 24px rgba(34,197,94,.45);}',
-        '.ste-save:active{transform:scale(.97);}',
-        '#activityBarChart.editable .bar-wrapper{cursor:pointer;}',
-        '#activityBarChart.editable .bar-wrapper .bar-fill{transition:filter .15s, height .3s ease;}',
-        '#activityBarChart.editable .bar-wrapper:hover .bar-fill{filter:brightness(1.3) saturate(1.1);}',
-        '#steHint{text-align:center;font-size:10px;color:var(--text-sub,#8b93a7);margin-top:8px;opacity:.85;}',
-        '#steToast{position:fixed;bottom:28px;left:50%;transform:translate(-50%,14px);z-index:10000;background:linear-gradient(135deg,#14532d,#166534);color:#dcfce7;font-size:13px;font-weight:700;padding:10px 20px;border-radius:999px;border:1px solid rgba(74,222,128,.4);box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;}',
-        '#steToast.show{opacity:1;transform:translate(-50%,0);}',
-        '@keyframes stePulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.6)}100%{box-shadow:0 0 0 16px rgba(74,222,128,0)}}',
-        '.bar-fill.ste-saved{animation:stePulse .65s ease-out;}'
-    ].join('\n');
-    document.head.appendChild(style);
-
-    var overlay = document.createElement('div');
-    overlay.id = 'studyTimeEditorOverlay';
-    overlay.innerHTML =
-        '<div class="ste-card">' +
-            '<div class="ste-eyebrow">✏️ 勉強時間を編集</div>' +
-            '<div class="ste-date-row">' +
-                '<span id="steDateLabel"></span>' +
-                '<span id="steTodayBadge">今日</span>' +
-            '</div>' +
-            '<div class="ste-steppers">' +
-                '<div class="ste-group">' +
-                    '<button type="button" class="ste-btn" onclick="__steAdjust(-60)">−</button>' +
-                    '<div class="ste-val"><span id="steHours">00</span><em>時間</em></div>' +
-                    '<button type="button" class="ste-btn" onclick="__steAdjust(60)">＋</button>' +
-                '</div>' +
-                '<div class="ste-colon">:</div>' +
-                '<div class="ste-group">' +
-                    '<button type="button" class="ste-btn" onclick="__steAdjust(-5)">−</button>' +
-                    '<div class="ste-val"><span id="steMins">00</span><em>分</em></div>' +
-                    '<button type="button" class="ste-btn" onclick="__steAdjust(5)">＋</button>' +
-                '</div>' +
-            '</div>' +
-            '<div class="ste-chips">' +
-                '<button type="button" onclick="__steAdjust(15)">+15分</button>' +
-                '<button type="button" onclick="__steAdjust(30)">+30分</button>' +
-                '<button type="button" onclick="__steAdjust(60)">+1時間</button>' +
-                '<button type="button" class="ste-reset" onclick="__steReset()">0に戻す</button>' +
-            '</div>' +
-            '<div class="ste-footer">' +
-                '<button type="button" class="ste-cancel" onclick="__steClose()">キャンセル</button>' +
-                '<button type="button" class="ste-save" onclick="__steSave()">保存する</button>' +
-            '</div>' +
-        '</div>';
-    document.body.appendChild(overlay);
-
-    // 背景クリック／Escで閉じる
-    overlay.addEventListener('click', function(e) {
-        if (e.target === overlay) window.__steClose();
-    });
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') window.__steClose();
-    });
-};
 
 // ---------- 2. エディタの状態と操作 ----------
-window.__steState = { dayIdx: 0, minutes: 0, isToday: false };
 
-window.__steRenderValues = function() {
-    document.getElementById('steHours').textContent = String(Math.floor(window.__steState.minutes / 60)).padStart(2, '0');
-    document.getElementById('steMins').textContent = String(window.__steState.minutes % 60).padStart(2, '0');
-};
 
-window.__steAdjust = function(delta) {
-    window.__steState.minutes = Math.max(0, Math.min(24 * 60 - 5, window.__steState.minutes + delta));
-    window.__steState.minutes = Math.round(window.__steState.minutes / 5) * 5; // 5分単位にスナップ
-    window.__steRenderValues();
-};
 
-window.__steReset = function() {
-    window.__steState.minutes = 0;
-    window.__steRenderValues();
-};
 
 // ---------- 3. モーダルを開く（dayIdx: 0=月 〜 6=日） ----------
 
-window.__steClose = function() {
-    var ov = document.getElementById('studyTimeEditorOverlay');
-    if (ov) ov.classList.remove('open');
-};
 
 // ---------- 4. 保存 ----------
-window.__steSave = function() {
-    var st = window.__steState;
-
-    if (st.isToday) {
-        // 今日：秒数に換算して書き換え（以降もタイマーがここから加算）
-        todayStudySeconds = st.minutes * 60;
-        localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
-        if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay();
-
-        // 連続学習記録もついでに更新
-        if (st.minutes > userStats.study_burst && window.saveUserStats) {
-            userStats.study_burst = st.minutes;
-            window.saveUserStats();
-        }
-    } else {
-        // 過去：週間ログを直接書き換え
-        weeklyStudyMinutesLog[st.dayIdx] = st.minutes;
-        localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
-    }
-
-    window.__steClose();
-    window.renderActivityChart();
-
-    // 編集したバーをパルス表示
-    var chart = document.getElementById('activityBarChart');
-    if (chart && chart.children[st.dayIdx]) {
-        var fill = chart.children[st.dayIdx].querySelector('.bar-fill');
-        if (fill) {
-            fill.classList.remove('ste-saved');
-            void fill.offsetWidth; // アニメーション再トリガー
-            fill.classList.add('ste-saved');
-        }
-    }
-
-    window.__steToast(st.isToday ? '今日の勉強時間を保存しました ✓' : '勉強時間を保存しました ✓');
-};
 
 // ---------- 5. トースト ----------
-window.__steToast = function(msg) {
-    var t = document.getElementById('steToast');
-    if (!t) {
-        t = document.createElement('div');
-        t.id = 'steToast';
-        document.body.appendChild(t);
-    }
-    t.textContent = msg;
-    t.classList.add('show');
-    clearTimeout(t.__hideTimer);
-    t.__hideTimer = setTimeout(function() { t.classList.remove('show'); }, 2200);
-};
 
 // ==========================================================================
 // 📅 第7回パッチ：グラフの右端を常に最新（今日）にするローリング表示
@@ -6210,37 +4216,8 @@ window.__steToast = function(msg) {
 // ==========================================================================
 
 // ---------- 0. ローリング表示用の追加スタイル ----------
-(function() {
-    if (document.getElementById('steRollingStyle')) return;
-    var s = document.createElement('style');
-    s.id = 'steRollingStyle';
-    s.textContent = [
-        '.ste-day-lbl{font-size:10px;font-weight:bold;color:var(--text-sub,#8b93a7);margin-top:4px;line-height:1;}',
-        '.ste-date-lbl{font-size:8px;color:var(--text-sub,#8b93a7);opacity:.75;margin-top:2px;line-height:1;font-variant-numeric:tabular-nums;}',
-        '.bar-wrapper.ste-today .ste-day-lbl{color:#4ade80;}',
-        '.bar-wrapper.ste-today .ste-date-lbl{color:#4ade80;opacity:1;font-weight:800;}',
-        '.bar-wrapper.ste-today .bar-fill{box-shadow:0 0 12px rgba(74,222,128,.35);}'
-    ].join('\n');
-    document.head.appendChild(s);
-})();
 
 // ---------- 2. 保存後のパルスを正しいバーに出す（第6回パッチ補正） ----------
-if (window.__steSave) {
-    var __prevSteSaveForRolling = window.__steSave;
-    window.__steSave = function() {
-        var dayIdx = window.__steState.dayIdx;
-        __prevSteSaveForRolling.apply(this, arguments);
-        var chart = document.getElementById('activityBarChart');
-        if (!chart) return;
-        var fills = chart.querySelectorAll('.bar-fill');
-        for (var i = 0; i < fills.length; i++) fills[i].classList.remove('ste-saved');
-        var target = chart.querySelector('[data-day-idx="' + dayIdx + '"] .bar-fill');
-        if (target) {
-            void target.offsetWidth;
-            target.classList.add('ste-saved');
-        }
-    };
-}
 
 // ==========================================================================
 // 🔒 第8回パッチ：高さの正規化 ＋ 注釈削除 ＋ 編集を管理者限定に
@@ -6251,197 +4228,18 @@ if (window.__steSave) {
 // ==========================================================================
 
 // ---------- 0. バーの見た目（不透明グラデ＋発光＋遷移） ----------
-(function() {
-    if (document.getElementById('steV8Style')) return;
-    var s = document.createElement('style');
-    s.id = 'steV8Style';
-    s.textContent = [
-        // 値に比例して初めて意味を持つよう、バーを不透明な実体にする
-        '#activityBarChart .bar-fill{',
-        '  background:linear-gradient(180deg,#a5f3fc 0%,#22d3ee 42%,#0e7490 100%) !important;',
-        '  opacity:1 !important;border-radius:7px 7px 3px 3px;',
-        '  box-shadow:0 3px 12px rgba(34,211,238,.28),inset 0 1px 0 rgba(255,255,255,.35);',
-        '  transition:height .5s cubic-bezier(.2,.85,.25,1), filter .18s, box-shadow .25s;',
-        '}',
-        // 今日のバーは緑＋常時やわらかく脈動
-        '#activityBarChart .bar-wrapper.ste-today .bar-fill{',
-        '  background:linear-gradient(180deg,#bbf7d0 0%,#22c55e 48%,#15803d 100%) !important;',
-        '  box-shadow:0 0 16px rgba(34,197,94,.5),inset 0 1px 0 rgba(255,255,255,.4);',
-        '  animation:steTodayGlow 2.6s ease-in-out infinite;',
-        '}',
-        '@keyframes steTodayGlow{0%,100%{box-shadow:0 0 12px rgba(34,197,94,.35),inset 0 1px 0 rgba(255,255,255,.4)}50%{box-shadow:0 0 22px rgba(34,197,94,.65),inset 0 1px 0 rgba(255,255,255,.5)}}',
-        // 編集権限がある時だけ「押せる」見た目
-        '#activityBarChart.editable .bar-wrapper{cursor:pointer;}',
-        '#activityBarChart.editable .bar-wrapper:hover .bar-fill{filter:brightness(1.2) saturate(1.15);transform:translateY(-1px);}',
-        '#activityBarChart.editable .bar-wrapper:active .bar-fill{filter:brightness(.92);}',
-        '#activityBarChart:not(.editable) .bar-wrapper{cursor:default;}',
-        // 0分のバーは完全に消す（値=0 を正しく表現）
-        '#activityBarChart .bar-fill[data-zero="1"]{box-shadow:none;background:transparent !important;}'
-    ].join('\n');
-    document.head.appendChild(s);
-})();
 
 // ---------- 1. 管理者判定（単語帳編集と同じ権限を参照） ----------
-window.__steAdminGranted = window.__steAdminGranted || false;
 
-window.__steIsAdmin = function() {
-    // ─────────────────────────────────────────────────────────────
-    // ★ カスタマイズ箇所：お使いのアプリの管理者フラグ変数名が
-    //   下記のいずれにも無い場合、この1行だけを
-    //       return window.あなたのフラグ名 === true;
-    //   に書き換えてください（単語帳編集を制御している変数と同じもの）。
-    // ─────────────────────────────────────────────────────────────
-    try {
-        if (window.__steAdminGranted) return true;
-        if (window.isAdmin        === true) return true;
-        if (window.adminMode      === true) return true;
-        if (window.adminUnlocked  === true) return true;
-        if (window.__adminUnlocked=== true) return true;
-        if (window.adminVerified  === true) return true;
-        if (window.adminAuth      === true) return true;
-        if (window.userStats && (userStats.is_admin || userStats.isAdmin || userStats.admin)) return true;
-
-        var cls = ((document.body ? document.body.className : '') + ' ' +
-                   (document.documentElement ? document.documentElement.className : ''));
-        if (/(^|\s)(admin|admin-mode|admin-unlocked|is-admin|admin-verified|admin-auth)(\s|$|[-_])/i.test(cls)) return true;
-
-        // 管理者ツール／パネルが「開いている」間も編集可
-        var openSels = [
-            '#adminPanel.open', '#adminModal.open', '#adminTools.open',
-            '#admin-panel.open', '#admin-modal.open', '#adminToolsModal.open',
-            '.admin-panel.open', '.admin-modal.open', '.admin-tools.open',
-            '#adminPanel[style*="flex"]', '#adminPanel[style*="block"]',
-            '#adminModal[style*="flex"]', '#adminTools[style*="flex"]'
-        ];
-        for (var i = 0; i < openSels.length; i++) {
-            try { if (document.querySelector(openSels[i])) return true; } catch (e) {}
-        }
-    } catch (e) {}
-    return false;
-};
 
 // 権限状態が変わったらグラフの見た目（カーソル等）を即時同期
-var __steLastAdmin = null;
-function __steSyncAdminUI() {
-    var a = window.__steIsAdmin();
-    if (a !== __steLastAdmin) {
-        __steLastAdmin = a;
-        if (window.renderActivityChart) window.renderActivityChart();
-    }
-}
-try {
-    var __steMO = new MutationObserver(__steSyncAdminUI);
-    __steMO.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-admin', 'data-mode'] });
-    __steMO.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-admin'] });
-} catch (e) {}
-setInterval(__steSyncAdminUI, 800); // グローバル変数の変化はポーリングで拾う
+ // グローバル変数の変化はポーリングで拾う
 
 // ---------- 2. renderActivityChart 差し替え（比率スケール＋注釈なし） ----------
-window.renderActivityChart = function() {
-    if (typeof window.__steSanitizeStudyData === 'function') window.__steSanitizeStudyData(false);
-    if (!isFinite(Number(todayStudySeconds)) || todayStudySeconds < 0) todayStudySeconds = 0;
-    var chart = document.getElementById('activityBarChart');
-    if (!chart) return;
-
-    var now = new Date();
-    var currentDayIdx = now.getDay() - 1;
-    if (currentDayIdx < 0) currentDayIdx = 6;
-
-    weeklyStudyMinutesLog[currentDayIdx] = Math.floor(todayStudySeconds / 60);
-
-    var daysLabels = ['月', '火', '水', '木', '金', '土', '日'];
-
-    // ✅ 7日中の最大値を100%とする比率スケール（値と高さを一致させる）
-    var maxVal = 0;
-    for (var m = 0; m < 7; m++) maxVal = Math.max(maxVal, weeklyStudyMinutesLog[m] || 0);
-    var scaleMax = maxVal > 0 ? maxVal : 1;
-    function pctFor(raw) {
-        if (raw <= 0) return 0;                                   // 0分は本当に0
-        return Math.max(8, Math.round((raw / scaleMax) * 100));   // 最小8%〜最大100%
-    }
-
-    function dayIdxAtPos(p) { return (currentDayIdx + p + 1) % 7; }
-    function dateAtPos(p) { return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - p)); }
-    function subLabelFor(p) {
-        if (dayIdxAtPos(p) === currentDayIdx) return '今日';
-        var d = dateAtPos(p);
-        return (d.getMonth() + 1) + '/' + d.getDate();
-    }
-
-    function paintBar(wrap, p) {
-        var di = dayIdxAtPos(p);
-        var raw = weeklyStudyMinutesLog[di] || 0;
-        var pct = pctFor(raw);
-        wrap.dataset.dayIdx = di;
-        wrap.classList.toggle('ste-today', di === currentDayIdx);
-        var fill = wrap.querySelector('.bar-fill');
-        if (fill) { fill.style.height = pct + '%'; fill.dataset.zero = raw <= 0 ? '1' : '0'; }
-        if (wrap.children[0]) wrap.children[0].innerText = Math.floor(raw) + '分';
-        if (wrap.children[2]) wrap.children[2].innerText = daysLabels[di];
-        if (wrap.children[3]) wrap.children[3].innerText = subLabelFor(p);
-    }
-
-    if (chart.children.length === 7 && chart.__steRolling) {
-        for (var p = 0; p < 7; p++) paintBar(chart.children[p], p);
-    } else {
-        chart.innerHTML = '';
-        chart.__steRolling = true;
-        for (var p2 = 0; p2 < 7; p2++) {
-            var di2 = dayIdxAtPos(p2);
-            var raw2 = weeklyStudyMinutesLog[di2] || 0;
-            var wrap2 = document.createElement('div');
-            wrap2.className = 'bar-wrapper' + (di2 === currentDayIdx ? ' ste-today' : '');
-            wrap2.dataset.dayIdx = di2;
-            wrap2.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;flex:1;min-width:0;';
-
-            var vl = document.createElement('div');
-            vl.style.cssText = 'font-size:8px;font-weight:700;color:#FFFFFF;margin-bottom:2px;white-space:nowrap;';
-            vl.innerText = Math.floor(raw2) + '分';
-
-            var f = document.createElement('div');
-            f.className = 'bar-fill active';
-            f.style.height = pctFor(raw2) + '%';
-            f.dataset.zero = raw2 <= 0 ? '1' : '0';
-
-            var dl = document.createElement('div');
-            dl.className = 'ste-day-lbl';
-            dl.innerText = daysLabels[di2];
-
-            var dt = document.createElement('div');
-            dt.className = 'ste-date-lbl';
-            dt.innerText = subLabelFor(p2);
-
-            wrap2.appendChild(vl); wrap2.appendChild(f);
-            wrap2.appendChild(dl); wrap2.appendChild(dt);
-            chart.appendChild(wrap2);
-        }
-    }
-
-    // 編集権限がある時だけ「押せる」クラスを付与
-    if (window.__steIsAdmin()) chart.classList.add('editable');
-    else chart.classList.remove('editable');
-
-    // クリックバインド（1回だけ。dataset.dayIdx から曜日判定→ローリング後も正確）
-    if (!chart.__steBoundV8) {
-        chart.__steBoundV8 = true;
-        chart.addEventListener('click', function(e) {
-            var wrap = e.target.closest('.bar-wrapper');
-            if (!wrap || wrap.dataset.dayIdx === undefined) return;
-            window.__openStudyTimeEditor(parseInt(wrap.dataset.dayIdx, 10));
-        });
-    }
-
-    // ✅ 注釈は出さない（既存があれば撤去）
-    var oldHint = document.getElementById('steHint');
-    if (oldHint) oldHint.remove();
-};
 
 // ---------- 3. 編集モーダルを管理者ガードでラップ ----------
-var __origOpenEditor = window.__openStudyTimeEditor;
 
 // ---------- 4. 初期反映 ----------
-__steSyncAdminUI();
-if (window.renderActivityChart) window.renderActivityChart();
 
 // ==========================================================================
 // ✍️ 第9回パッチ：コントラスト改善 ＋ 1分単位の直接入力
@@ -6452,148 +4250,20 @@ if (window.renderActivityChart) window.renderActivityChart();
 // ==========================================================================
 
 // ---------- 0. スタイル：コントラスト ＋ 直接入力欄のデザイン ----------
-(function() {
-    if (document.getElementById('steV9Style')) return;
-    var s = document.createElement('style');
-    s.id = 'steV9Style';
-    s.textContent = [
-        // ── グラフ下の曜日／日付ラベルを濃く（今日の緑強調は維持） ──
-        '#activityBarChart .ste-day-lbl{color:#eef3fb !important;text-shadow:0 1px 2px rgba(0,0,0,.62);letter-spacing:.02em;}',
-        '#activityBarChart .ste-date-lbl{color:#dbe4f0 !important;opacity:1 !important;font-weight:700 !important;text-shadow:0 1px 2px rgba(0,0,0,.62);}',
-        '#activityBarChart .bar-wrapper.ste-today .ste-day-lbl{color:#4ade80 !important;text-shadow:0 0 8px rgba(34,197,94,.55),0 1px 2px rgba(0,0,0,.5);}',
-        '#activityBarChart .bar-wrapper.ste-today .ste-date-lbl{color:#86efac !important;text-shadow:0 0 8px rgba(34,197,94,.5),0 1px 2px rgba(0,0,0,.5);}',
-
-        // ── 総勉強時間ラベルの強制コントラスト（JSで data-ste-fixed を付与） ──
-        '[data-ste-fixed="1"]{color:#eaf0fa !important;text-shadow:0 1px 3px rgba(0,0,0,.6),0 0 1px rgba(0,0,0,.4);font-weight:800 !important;}',
-
-        // ── 直接入力ブロック ──
-        '.ste-direct{margin:2px 0 16px;padding:13px 14px;border-radius:14px;background:rgba(8,12,22,.42);border:1px solid rgba(255,255,255,.09);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);}',
-        '.ste-direct-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}',
-        '.ste-direct-title{font-size:11px;font-weight:800;letter-spacing:.04em;color:#aeb6c8;}',
-        '.ste-direct-title b{color:#5eead4;font-weight:800;}',
-        '#stePreview{font-size:12px;font-weight:800;color:#bbf7d0;font-variant-numeric:tabular-nums;background:rgba(34,197,94,.12);border:1px solid rgba(74,222,128,.3);padding:3px 9px;border-radius:999px;transition:transform .18s cubic-bezier(.2,.9,.3,1.3),background .2s,color .2s;}',
-        '#stePreview.bump{transform:scale(1.08);background:rgba(34,197,94,.22);}',
-        '.ste-direct-row{display:flex;align-items:center;gap:9px;}',
-        '#steDirectInput{-webkit-appearance:none;-moz-appearance:textfield;appearance:textfield;flex:0 0 auto;width:92px;padding:10px 12px;border-radius:11px;border:1.5px solid rgba(94,234,212,.32);background:rgba(4,10,16,.6);color:#f0fdfa;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right;outline:none;transition:border-color .18s,box-shadow .2s,background .2s;font-family:inherit;}',
-        '#steDirectInput::-webkit-outer-spin-button,#steDirectInput::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}',
-        '#steDirectInput:focus{border-color:#2dd4bf;box-shadow:0 0 0 3px rgba(45,212,191,.22),0 0 18px rgba(45,212,191,.25);background:rgba(4,14,18,.85);}',
-        '#steDirectInput:hover{border-color:rgba(94,234,212,.55);}',
-        '.ste-direct-unit{font-size:13px;font-weight:700;color:#9aa3b6;}',
-        '.ste-direct-hint{margin-top:8px;font-size:10px;color:#7e879b;line-height:1.4;}',
-        '.ste-divider{display:flex;align-items:center;gap:8px;margin:0 0 12px;color:#6b7488;font-size:10px;font-weight:700;letter-spacing:.08em;}',
-        '.ste-divider::before,.ste-divider::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);}'
-    ].join('\n');
-    document.head.appendChild(s);
-})();
 
 // ---------- 1. 総勉強時間ラベルのコントラスト修正 ----------
-window.__steFixContrast = function() {
-    // The current UI has a fixed label; do not scan every word, note and hidden view.
-    var label = document.getElementById('totalStudyTimeLabel');
-    if (label && label.getAttribute('data-ste-fixed') !== '1') label.setAttribute('data-ste-fixed','1');
-};
-window.__steFixContrast();
 
 // ---------- 2. 編集モーダルへ直接入力欄を注入 ----------
-window.__steInjectDirectInput = function() {
-    if (document.getElementById('steDirectInputRow')) return;
-    var steppers = document.querySelector('#studyTimeEditorOverlay .ste-steppers');
-    if (!steppers) return;
-
-    var block = document.createElement('div');
-    block.className = 'ste-direct';
-    block.id = 'steDirectInputRow';
-    block.innerHTML =
-        '<div class="ste-direct-head">' +
-            '<span class="ste-direct-title">✍️ <b>分</b>を直接入力</span>' +
-            '<span id="stePreview">0分</span>' +
-        '</div>' +
-        '<div class="ste-direct-row">' +
-            '<input id="steDirectInput" type="number" inputmode="numeric" min="0" max="1439" step="1" placeholder="0" autocomplete="off">' +
-            '<span class="ste-direct-unit">分</span>' +
-        '</div>' +
-        '<div class="ste-direct-hint">1分単位で入力できます（例：135 → 2時間15分）。±ボタンはクイック調整用。</div>';
-
-    // ステッパーの下に「または」区切り＋入力欄を挿入
-    var divider = document.createElement('div');
-    divider.className = 'ste-divider';
-    divider.textContent = 'または';
-    steppers.insertAdjacentElement('afterend', divider);
-    divider.insertAdjacentElement('afterend', block);
-
-    var input = document.getElementById('steDirectInput');
-    input.addEventListener('input', function() {
-        var v = parseInt(input.value, 10);
-        if (isNaN(v)) v = 0;
-        v = Math.max(0, Math.min(1439, v));
-        window.__steState.minutes = v;
-        window.__steUpdatePreview(true);
-    });
-    // blur時にクランプ値へ整形
-    input.addEventListener('blur', function() {
-        if (window.__steRenderValues) window.__steRenderValues();
-    });
-    // Enterで保存
-    input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); if (window.__steSave) window.__steSave(); }
-    });
-};
 
 // __injectStudyTimeEditor をラップして、DOM生成後に必ず入力欄を差し込む
-if (window.__injectStudyTimeEditor) {
-    var __origInjectV9 = window.__injectStudyTimeEditor;
-    window.__injectStudyTimeEditor = function() {
-        var r = __origInjectV9.apply(this, arguments);
-        window.__steInjectDirectInput();
-        return r;
-    };
-}
 
 // ---------- 3. プレビュー更新 ----------
-window.__steUpdatePreview = function(bump) {
-    var pv = document.getElementById('stePreview');
-    if (!pv) return;
-    var t = window.__steState.minutes || 0;
-    var h = Math.floor(t / 60), m = t % 60;
-    pv.textContent = h > 0 ? (h + '時間' + (m > 0 ? m + '分' : '')) : (m + '分');
-    if (bump) {
-        pv.classList.remove('bump'); void pv.offsetWidth; pv.classList.add('bump');
-        setTimeout(function() { pv.classList.remove('bump'); }, 200);
-    }
-};
 
 // ---------- 4. __steRenderValues をラップ（input／preview 同期） ----------
-if (window.__steRenderValues) {
-    var __origRenderValsV9 = window.__steRenderValues;
-    window.__steRenderValues = function() {
-        var r = __origRenderValsV9.apply(this, arguments);
-        // inputにフォーカス中はカーソル飛び防止のため値を書き戻さない
-        var input = document.getElementById('steDirectInput');
-        if (input && document.activeElement !== input) {
-            input.value = String(window.__steState.minutes || 0);
-        }
-        window.__steUpdatePreview(false);
-        return r;
-    };
-}
 
 // ---------- 5. モーダルを開いた直後にも入力欄の存在を保証 ----------
-if (window.__openStudyTimeEditor) {
-    var __origOpenV9 = window.__openStudyTimeEditor;
-    window.__openStudyTimeEditor = function(dayIdx) {
-        var r = __origOpenV9.apply(this, arguments);
-        window.__steInjectDirectInput();
-        // 開いた時の値を入力欄へ反映
-        var input = document.getElementById('steDirectInput');
-        if (input && document.activeElement !== input) input.value = String(window.__steState.minutes || 0);
-        window.__steUpdatePreview(false);
-        return r;
-    };
-}
 
 // ---------- 6. 初期反映 ----------
-window.__steFixContrast();
-if (window.renderActivityChart) window.renderActivityChart();
 
 // ==========================================================================
 // 🧹 第10回パッチ：壊れた勉強時間データの浄化 ＋ 不整合修正 ＋ 管理者リセット
@@ -6606,230 +4276,34 @@ if (window.renderActivityChart) window.renderActivityChart();
 //    ※必ず 第5→6→7→8→9回 の後に貼り付けてください
 // ==========================================================================
 
-var STE_DAY_SECS_MAX = 24 * 3600;   // 今日の秒数の上限（24h）
-var STE_DAY_MIN_MAX  = 1440;        // 1日の分数上限
+   // 今日の秒数の上限（24h）
+        // 1日の分数上限
 
 // ---------- 1. クランプ補助 ----------
-function __steClampSecs(x) {
-    var n = Number(x);
-    if (!isFinite(n) || isNaN(n)) return 0;
-    n = Math.floor(n);
-    if (n < 0) return 0;
-    if (n > STE_DAY_SECS_MAX) return STE_DAY_SECS_MAX;
-    return n;
-}
-function __steClampMin(x) {
-    var n = Number(x);
-    if (!isFinite(n) || isNaN(n)) return 0;
-    n = Math.floor(n);
-    if (n < 0) return 0;
-    if (n > STE_DAY_MIN_MAX) return STE_DAY_MIN_MAX;
-    return n;
-}
 
 // ---------- 2. データ浄化（変化があれば保存＋報告） ----------
-window.__steSanitizeStudyData = function(verbose) {
-    var changed = false;
-
-    // today 秒数
-    var oldSecs = todayStudySeconds;
-    var newSecs = __steClampSecs(todayStudySeconds);
-    if (newSecs !== oldSecs) { todayStudySeconds = newSecs; changed = true; }
-
-    // 週間ログ：配列保証＋長さ7＋各要素正規化
-    if (!Array.isArray(weeklyStudyMinutesLog)) {
-        weeklyStudyMinutesLog = [0,0,0,0,0,0,0]; changed = true;
-    }
-    if (weeklyStudyMinutesLog.length !== 7) {
-        var fixed = [];
-        for (var i = 0; i < 7; i++) fixed[i] = __steClampMin(weeklyStudyMinutesLog[i]);
-        weeklyStudyMinutesLog = fixed; changed = true;
-    } else {
-        for (var j = 0; j < 7; j++) {
-            var om = weeklyStudyMinutesLog[j];
-            var nm = __steClampMin(om);
-            if (nm !== om) { weeklyStudyMinutesLog[j] = nm; changed = true; }
-        }
-    }
-
-    if (changed) {
-        try {
-            localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
-            localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
-        } catch (e) {}
-        if (verbose) {
-            console.warn('🧹 勉強時間データを修復しました',
-                { todaySecs: [oldSecs, '→', todayStudySeconds],
-                  weekly: weeklyStudyMinutesLog.slice() });
-        }
-    }
-    return changed;
-};
 
 // 起動時に即浄化
-window.__steSanitizeStudyData(true);
 
 // ---------- 4. __steSave ラップ：保存時に today と log今日slot を同時書き ----------
-if (window.__steSave) {
-    var __prevSaveV10 = window.__steSave;
-    window.__steSave = function() {
-        // 書き込み値を必ずクランプ
-        window.__steState.minutes = __steClampMin(window.__steState.minutes);
-
-        var wasToday = window.__steState.isToday;
-        var setMin   = window.__steState.minutes;
-
-        var r = __prevSaveV10.apply(this, arguments);
-
-        if (wasToday) {
-            // ✅ 不整合根絶：today秒数 と log今日slot を同時に確定
-            todayStudySeconds = __steClampSecs(setMin * 60);
-            var now = new Date();
-            var cur = now.getDay() - 1; if (cur < 0) cur = 6;
-            weeklyStudyMinutesLog[cur] = setMin;
-            try {
-                localStorage.setItem('core_v4_study_today_secs', String(todayStudySeconds));
-                localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
-            } catch (e) {}
-            if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay();
-        } else {
-            // 過去も念のため正規化して保存
-            weeklyStudyMinutesLog[window.__steState.dayIdx] = setMin;
-            try { localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog)); } catch (e) {}
-        }
-        if (window.renderActivityChart) window.renderActivityChart();
-        return r;
-    };
-}
 
 // ---------- 5. 日付跨ぎ時の浄化（initStudyTimer 内 setInterval を補強） ----------
 // 既存の日付跨ぎ処理の“後”に浄化を挟むため、renderActivityChart 経由で既に是正される。
 // さらに安全網として、定期的にも浄化（重い処理は変化時のみ保存）。
-setInterval(function() { window.__steSanitizeStudyData(false); }, 5000);
 
 // ---------- 6. 管理者用リセットUIをモーダルに注入 ----------
-window.__steInjectAdminReset = function() {
-    if (document.getElementById('steAdminResetPanel')) return;
-    var card = document.querySelector('#studyTimeEditorOverlay .ste-card');
-    if (!card) return;
-    var footer = card.querySelector('.ste-footer');
-    if (!footer) return;
-
-    var panel = document.createElement('div');
-    panel.id = 'steAdminResetPanel';
-    panel.style.cssText = 'margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.14);display:none;';
-    panel.innerHTML =
-        '<div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#fca5a5;margin-bottom:8px;">🛠 管理者：データ修復・リセット</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:6px;">' +
-            '<button type="button" class="ste-btn-txt" data-act="repair">壊れた値だけ修復</button>' +
-            '<button type="button" class="ste-btn-txt" data-act="today0">今日を0に</button>' +
-            '<button type="button" class="ste-btn-txt" data-act="week0">全ログを0に</button>' +
-            '<button type="button" class="ste-btn-txt ste-danger" data-act="nuke">ローカル完全消去＆再読込</button>' +
-        '</div>';
-    footer.insertAdjacentElement('afterend', panel);
-
-    // ボタン用ミニスタイル
-    if (!document.getElementById('steV10BtnStyle')) {
-        var s = document.createElement('style');
-        s.id = 'steV10BtnStyle';
-        s.textContent =
-            '.ste-btn-txt{font-size:11px;font-weight:700;color:#e2e8f0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:7px 10px;cursor:pointer;font-family:inherit;transition:background .15s,transform .1s;}' +
-            '.ste-btn-txt:hover{background:rgba(255,255,255,.14);}' +
-            '.ste-btn-txt:active{transform:scale(.95);}' +
-            '.ste-btn-txt.ste-danger{color:#fecaca;border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.1);}' +
-            '.ste-btn-txt.ste-danger:hover{background:rgba(248,113,113,.2);}';
-        document.head.appendChild(s);
-    }
-
-    panel.addEventListener('click', function(e) {
-        var b = e.target.closest('[data-act]'); if (!b) return;
-        var act = b.getAttribute('data-act');
-        if (act === 'repair') window.__steRepairData();
-        else if (act === 'today0') window.__steResetToday();
-        else if (act === 'week0') window.__steResetWeek();
-        else if (act === 'nuke') window.__steNukeStudyStorage();
-    });
-};
 
 // 管理者判定に応じてパネル表示/非表示を同期
-window.__steSyncAdminResetPanel = function() {
-    var panel = document.getElementById('steAdminResetPanel');
-    if (!panel) return;
-    panel.style.display = (window.__steIsAdmin && window.__steIsAdmin()) ? 'block' : 'none';
-};
 
 // inject / open をラップして注入＋同期
-if (window.__injectStudyTimeEditor) {
-    var __origInjV10 = window.__injectStudyTimeEditor;
-    window.__injectStudyTimeEditor = function() {
-        var r = __origInjV10.apply(this, arguments);
-        window.__steInjectAdminReset();
-        window.__steSyncAdminResetPanel();
-        return r;
-    };
-}
-if (window.__openStudyTimeEditor) {
-    var __origOpenV10 = window.__openStudyTimeEditor;
-    window.__openStudyTimeEditor = function(dayIdx) {
-        var r = __origOpenV10.apply(this, arguments);
-        window.__steInjectAdminReset();
-        window.__steSyncAdminResetPanel();
-        return r;
-    };
-}
 
 // ---------- 7. リセット系コマンド ----------
-window.__steRepairData = function() {
-    var before = JSON.stringify({ s: todayStudySeconds, w: weeklyStudyMinutesLog });
-    window.__steSanitizeStudyData(true);
-    var after = JSON.stringify({ s: todayStudySeconds, w: weeklyStudyMinutesLog });
-    if (window.renderActivityChart) window.renderActivityChart();
-    if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay();
-    if (window.__steToast) window.__steToast(before === after ? '壊れた値はありませんでした ✓' : '壊れた値を修復しました 🧹');
-};
 
-window.__steResetToday = function() {
-    if (!confirm('今日の勉強時間を 0分 にリセットしますか？\n（過去のログは維持されます）')) return;
-    todayStudySeconds = 0;
-    var now = new Date(); var cur = now.getDay() - 1; if (cur < 0) cur = 6;
-    weeklyStudyMinutesLog[cur] = 0;
-    try {
-        localStorage.setItem('core_v4_study_today_secs', '0');
-        localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
-    } catch (e) {}
-    if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay();
-    if (window.renderActivityChart) window.renderActivityChart();
-    if (window.__steToast) window.__steToast('今日を 0分 にリセットしました ✓');
-};
 
-window.__steResetWeek = function() {
-    if (!confirm('最近7日間のログをすべて 0分 にリセットしますか？\n（今日も含みます。元に戻せません）')) return;
-    todayStudySeconds = 0;
-    weeklyStudyMinutesLog = [0,0,0,0,0,0,0];
-    try {
-        localStorage.setItem('core_v4_study_today_secs', '0');
-        localStorage.setItem('core_v4_study_weekly_log', JSON.stringify(weeklyStudyMinutesLog));
-    } catch (e) {}
-    if (window.__updateStudyTimeDisplay) window.__updateStudyTimeDisplay();
-    if (window.renderActivityChart) window.renderActivityChart();
-    if (window.__steToast) window.__steToast('7日間のログをリセットしました ✓');
-};
 
 // 最終手段：ローカルの勉強時間データを根こそぎ消して再読込
-window.__steNukeStudyStorage = function() {
-    if (!confirm('最終手段：ローカルに保存された勉強時間データを完全に消去して再読み込みします。\n\n壊れた値が居座る場合に使います。よろしいですか？')) return;
-    if (!confirm('本当に消去して再読み込みしますか？（この操作は取り消せません）')) return;
-    try {
-        localStorage.removeItem('core_v4_study_today_secs');
-        localStorage.removeItem('core_v4_study_weekly_log');
-        localStorage.removeItem('core_v4_study_last_date');
-    } catch (e) {}
-    location.reload();
-};
 
 // ---------- 8. 初期反映 ----------
-window.__steSanitizeStudyData(true);
-if (window.renderActivityChart) window.renderActivityChart();
 
 // ==========================================================================
 // Study time now uses explicit account keys in study-time.js.
