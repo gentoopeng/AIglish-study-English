@@ -21,91 +21,6 @@ window.syncDisplayedAppVersion();
 // 管理者権限フラグ
 window.isAdmin = false;
 // 🌟 経験値・レベル・ユーザー統計・プロフィールおよびフレンドリストの包括的保存（Firebase即時同期＆ローカル保存）
-window.saveUserStats = async function() {
-try {
-localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
-localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
-localStorage.setItem('core_v4_totalExp', String(totalExp));
-localStorage.setItem('core_v4_userName', myName);
-localStorage.setItem('core_v4_userTarget', myTarget);
-localStorage.setItem('core_v4_userTitle', selectedTitle);
-} catch(e) {}
-if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
-     try {
-         const userRef = window.fbDoc(window.db, "users", myId);
-         const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
-         await window.fbSetDoc(userRef, { 
-             id: myId,
-             userStats: userStats,
-             friendList: myFriendList,
-             playerName: myName,
-             selectedTitle: selectedTitle,
-             userTarget: myTarget,
-             totalExp: totalExp,
-             avatar: mySavedAvatar,
-             updatedAt: new Date().toISOString()
-         }, { merge: true });
-         // 共有ランキングノードへも反映
-         const lbRef = window.fbDoc(window.db, "shared_leaderboard", myId);
-         let lvlData = window.calculateLevelFromExp(totalExp);
-         await window.fbSetDoc(lbRef, {
-             id: myId,
-             name: myName,
-             title: selectedTitle,
-             exp: totalExp,
-             level: lvlData.level,
-             avatar: mySavedAvatar,
-             updatedAt: new Date().toISOString()
-         }, { merge: true });
-     } catch (e) {
-         console.error("Firebaseへのユーザーデータ即時保存エラー:", e);
-     }
- }
-};
-window.loadUserStats = async function() {
-try {
-const storedStats = localStorage.getItem('core_v4_user_stats_' + myId);
-if (storedStats) userStats = JSON.parse(storedStats);
-    const storedFriends = localStorage.getItem('core_v4_friend_list');
-     if (storedFriends) myFriendList = JSON.parse(storedFriends);
-     if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
-         const userRef = window.fbDoc(window.db, "users", myId);
-         const snap = await window.fbGetDoc(userRef);
-         if (snap.exists()) {
-             const data = snap.data();
-             if (data.userStats) {
-                 userStats = data.userStats;
-                 localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
-             }
-             if (data.friendList) {
-                 myFriendList = data.friendList;
-                 localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
-             }
-             if (data.totalExp !== undefined && data.totalExp !== null) {
-                 totalExp = parseInt(data.totalExp) || totalExp;
-                 localStorage.setItem('core_v4_totalExp', String(totalExp));
-             }
-             if (data.playerName) {
-                 myName = data.playerName;
-                 localStorage.setItem('core_v4_userName', myName);
-             }
-             if (data.selectedTitle) {
-                 selectedTitle = data.selectedTitle;
-                 localStorage.setItem('core_v4_userTitle', selectedTitle);
-             }
-             if (data.userTarget) {
-                 myTarget = data.userTarget;
-                 localStorage.setItem('core_v4_userTarget', myTarget);
-             }
-             if (data.avatar) {
-                 localStorage.setItem('core_v4_user_avatar_' + myId, data.avatar);
-             }
-         }
-     }
- } catch (e) {
-     console.error("Error loading user stats:", e);
- }
-};
 // 🌟 累計XPからレベル、次への必要XP、および現在のレベル内進捗%を計算する関数
 // Compatibility for older save and tower code; player levels are retired.
 window.calculateLevelFromExp = function() {
@@ -384,29 +299,7 @@ window.scrollToTop = function() {
 window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 // 教材一覧だけ同期する。本体は開いた教材のローダーに任せる。
-window.preloadAllTextbooksAndVocab = async function() {
-await window.syncTextbooksIndexFromFirestore();
-};
 // 🌟 単語帳データをFirebase (Firestore) と同期・保存処理
-window.saveVocabToStorage = async function() {
-// 🌟 単語変更のたびに語幹インデックスを再構築（活用形マッチング用）
-window.rebuildVocabStemIndex();
-const bookKey = currentTextbook || "default";
-localStorage.setItem(`core_v4_custom_words_${myId}_${bookKey}`, JSON.stringify(vocabList));
-textbooksCacheMap[bookKey] = vocabList;
-if (window.db && window.fbSetDoc && window.fbDoc) {
-    try {
-        const docName = currentTextbook ? `vocab_${currentTextbook}` : "vocab";
-        const sharedRef = window.fbDoc(window.db, "shared", docName);
-        await window.fbSetDoc(sharedRef, { 
-            custom_words: vocabList,
-            updatedAt: new Date().toISOString()
-        }, { merge: true });
-    } catch (error) {
-        console.error("Firebaseの保存に失敗しました:", error);
-    }
-}
-};
 window.syncTextbooksIndexFromFirestore = async function() {
 if (window.db && window.fbGetDoc && window.fbDoc) {
 try {
@@ -439,44 +332,6 @@ adminSelect.appendChild(opt);
 adminSelect.value = currentVal;
 };
 // 🌟 キャッシュ優先で単語帳データを爆速ロードする関数
-window.loadCurrentTextbookData = async function() {
-let storedWords = [];
-const bookKey = currentTextbook || "default";
-const currentLocalKey = `core_v4_custom_words_${myId}_${bookKey}`;
-if (textbooksCacheMap[bookKey]) {
-     storedWords = textbooksCacheMap[bookKey];
- } else {
-     const localCache = localStorage.getItem(`core_v4_cache_${bookKey}`);
-     if (localCache) {
-         storedWords = JSON.parse(localCache);
-     } else {
-         storedWords = JSON.parse(localStorage.getItem(currentLocalKey) || "[]");
-     }
- }
- vocabList = window.migrateVocabData(storedWords);
- window.rebuildVocabStemIndex();
- userStats.vocab_reg = vocabList.length;
- window.updateFlashcardSourceSelectOptions();
- window.renderVocabList();
- const currentBook = textbooksPool.find(b => b.id === currentTextbook);
- const coverContainer = document.getElementById('vocabCoverContainer');
- const titleContainer = document.getElementById('vocabBookTitle');
- if (currentBook) {
-     if (coverContainer) {
-         if (currentBook.coverType === "image" && currentBook.cover) {
-             coverContainer.innerHTML = `<img src="${currentBook.cover}" style="width:100%; height:100%; object-fit:cover; border-radius:50%; border:1px solid rgba(255,255,255,0.2);">`;
-         } else {
-             coverContainer.innerText = currentBook.cover || "📔";
-         }
-     }
-     if (titleContainer) titleContainer.innerText = currentBook.name;
- } else {
-     if (coverContainer) coverContainer.innerText = "📔";
-     if (titleContainer) titleContainer.innerText = "共通単語帳";
- }
- window.applyVocabMaxRange();
- window.injectVocabStatsButton();
-};
 window.createTextbookListItem = function(book, index, onSelect) {
      const row = document.createElement('button');
      row.type = 'button';
@@ -845,24 +700,6 @@ if(val) {
 // 🌟 単語帳詳細ポップアップ（登録数・⚪︎△✕未学習・ドーナツグラフ）
 // ==========================================================================
 // 単語帳の切り替えボタンの右に「📊 詳細」ボタンを注入（1回だけ）
-window.getAllUsers = async function() {
-let users = [];
-if (window.db && window.fbGetDoc && window.fbDoc) {
-try {
-const ref = window.fbDoc(window.db, "shared", "all_users");
-const snap = await window.fbGetDoc(ref);
-if (snap.exists() && snap.data().users) {
-users = snap.data().users;
-}
-} catch (e) {
-console.error("Error fetching all users from Firebase:", e);
-}
-}
-if (users.length === 0) {
-users = JSON.parse(localStorage.getItem('core_v4_users') || "[]");
-}
-return users;
-};
 window.saveAllUsers = async function(users) {
 localStorage.setItem('core_v4_users', JSON.stringify(users));
 if (window.db && window.fbSetDoc && window.fbDoc) {
@@ -1621,12 +1458,6 @@ if(typeof window.renderVocabList === 'function') window.renderVocabList();
 };
 // コミュニティ・ランキング表示の修正
 // Rankings live in the titles tab; friends no longer have horizontal sub-pages.
-window.showTitlesPage=function(index){
-    var pages=document.getElementById('titlesPages');if(!pages)return;
-    var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    pages.scrollTo({left:pages.clientWidth*index,behavior:reduced?'auto':'smooth'});
-    document.querySelectorAll('.titles-page-nav button').forEach(function(button,i){button.setAttribute('aria-pressed',String(i===index));});
-};
 var titlesPages=document.getElementById('titlesPages');
 if(titlesPages)titlesPages.addEventListener('scroll',function(){var index=Math.round(titlesPages.scrollLeft/Math.max(1,titlesPages.clientWidth));document.querySelectorAll('.titles-page-nav button').forEach(function(button,i){button.setAttribute('aria-pressed',String(i===index));});},{passive:true});
 window.switchCommunitySubTab=function(tabName){window.switchTab(tabName==='ranking'?'titles':'community');if(tabName==='ranking')window.showTitlesPage(1);};
@@ -1722,61 +1553,6 @@ window.applyUserProgressToVocabList = function() {
   userStats.vocab_fixed = vocabList.filter(function(w) {
     return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
   }).length;
-};
-window.loadUserVocabProgress = async function(bookKey) {
-bookKey = bookKey || currentTextbook || "default";
-currentUserVocabProgress = {};
-if (typeof myId === "undefined" || !myId) return;
-// ✅ 常に localStorage を先に読み込んでベースにする（Firebase失敗時の保険）
-try {
-var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
-if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
-} catch (e) {}
-// ゲスト、または Firebase 未接続ならローカルのみで終了
-if (myId === "GUEST-000" || !window.db || !window.fbGetDoc || !window.fbDoc) {
-return;
-}
-// Firebase にデータがあれば、それで上書き（クラウド優先）
-try {
-const ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-const snap = await window.fbGetDoc(ref);
-if (snap.exists() && snap.data() && snap.data().words) {
-currentUserVocabProgress = snap.data().words;
-}
-// ※ Firebase が空でも、上で読み込んだ localStorage のデータを維持する
-} catch (e) {
-// ※ 例外時も、上で読み込んだ localStorage のデータを維持する
-console.error("loadUserVocabProgress Firebase読み込みエラー（ローカルデータで継続）:", e);
-}
-};
-window.saveUserVocabProgress = async function() {
-if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
-if (typeof myId === "undefined" || !myId) return;
-const bookKey = currentTextbook || "default";
-currentUserVocabProgress = window.extractUserProgressFromVocabList();
-const payload = { words: currentUserVocabProgress, updatedAt: new Date().toISOString() };
-// ✅ ローカル保存（最優先・確実に）
-try {
-localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
-} catch (e) {
-console.error("saveUserVocabProgress ローカル保存エラー:", e);
-}
-// ✅ Firebase保存（リトライ付き・エラー可視化）
-if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
-try {
-const ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-if (typeof window.fbSetDocWithRetry === "function") {
-await window.fbSetDocWithRetry(ref, payload);
-} else {
-await window.fbSetDoc(ref, payload);
-}
-} catch (e) {
-console.error("saveUserVocabProgress Firebase保存エラー（ローカルには保存済み）:", e);
-}
-}
-userStats.vocab_fixed = vocabList.filter(function(w) {
-return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
-}).length;
 };
 window.saveVocabMasterToStorage = async function() {
   if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
@@ -2129,35 +1905,6 @@ window.loadCurrentTextbookData = async function(options) {
 // ------------------------------------------------------------------
 // 4. 上書き: updateMeaningStatus（部分更新＋デバウンス）
 // ------------------------------------------------------------------
-window.updateMeaningStatus = function(wordNum, meaningId, status, event) {
-  if (event) event.stopPropagation();
-  if(window.LearningData&&!window.LearningData.canSave(currentTextbook||"default")){if(window.showToast)window.showToast("理解度を読み込んでいます。完了後に回答してください。","err");return;}
-  var wIdx = vocabList.findIndex(function(w) { return String(w.num) === String(wordNum); });
-  if (wIdx < 0) return;
-  var mIdx = vocabList[wIdx].meanings.findIndex(function(m) { return String(m.id) === String(meaningId); });
-  if (mIdx < 0) return;
-  if (status === "none") {
-    vocabList[wIdx].meanings[mIdx].status = "none";
-    vocabList[wIdx].meanings[mIdx].history = [];
-  } else {
-    vocabList[wIdx].meanings[mIdx].status = status;
-    if (!vocabList[wIdx].meanings[mIdx].history) vocabList[wIdx].meanings[mIdx].history = [];
-    vocabList[wIdx].meanings[mIdx].history.push(status);
-
-  }
-  var agg = [];
-  vocabList[wIdx].meanings.forEach(function(m) {
-    if (m.history && m.history.length > 0) agg = agg.concat(m.history);
-  });
-  vocabList[wIdx].history = agg.slice(-20);
-  vocabList[wIdx].status = window.wordOverallStatus(vocabList[wIdx]);
-  userStats.vocab_fixed = vocabList.filter(function(w) {
-    return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
-  }).length;
-  window.updateVocabCardUi(wordNum);
-  window.scheduleVocabProgressSave(450);
-  window.scheduleUserStatsRefresh(600);
-};
 
 // ------------------------------------------------------------------
 // 5. フラッシュカード テンポ改善
@@ -2313,41 +2060,6 @@ window.__leaderboardCache = null;
 window.__leaderboardCacheAt = 0;
 window.__leaderboardLoadingPromise = null;
 
-window.fetchAllExpLeaderboardUsers = async function() {
-  const users = [];
-  if (!window.db || !window.fbGetDoc || !window.fbDoc) return users;
-  let allUsers = [];
-  try { allUsers = await window.getAllUsers(); } catch (e) {}
-  const ids = [];
-  (allUsers || []).forEach(function(u) {
-    if (u && u.id && u.id !== "GUEST-000" && ids.indexOf(u.id) === -1) ids.push(u.id);
-  });
-  if (typeof myId !== "undefined" && myId && myId !== "GUEST-000" && ids.indexOf(myId) === -1) ids.push(myId);
-  for (const id of ids) {
-    try {
-      const ref = window.fbDoc(window.db, "users", id);
-      const snap = await window.fbGetDoc(ref);
-      if (!snap.exists()) continue;
-      const d = snap.data();
-      if (d.deleted) continue;
-      const stats = d.userStats || {};
-      let exp = parseInt(d.totalExp) || 0;
-      let level = stats.user_level ? (parseInt(stats.user_level) || 1) : window.calculateLevelFromExp(exp).level;
-      let name = d.playerName || "";
-      if (!name) {
-        const basic = (allUsers || []).find(function(u) { return u.id === id; });
-        name = basic ? (basic.playerName || basic.realName || "プレイヤー") : "プレイヤー";
-      }
-      users.push({
-        id: id, name: name, title: d.selectedTitle || "称号なし",
-        exp: exp, lvl: level, icon: "👤",
-        customAvatar: (typeof d.avatar === "string") ? d.avatar : "",
-        isMe: id === myId
-      });
-    } catch (e) {}
-  }
-  return users;
-};
 
 window.drawExpLeaderboard = function(container, users) {
   let html = "";
@@ -2583,19 +2295,6 @@ window.mergeAllUsersSafe = async function(incomingUsers, exactWrite) {
 };
 
 const __prevSaveAllUsersForPatch = window.saveAllUsers;
-window.saveAllUsers = async function(users) {
-  const exactWrite = window.__allUsersExactWrite === true;
-  window.__allUsersExactWrite = false;
-  let finalUsers = users || [];
-  try { finalUsers = await window.mergeAllUsersSafe(users, exactWrite); } catch (e) {}
-  try { localStorage.setItem("core_v4_users", JSON.stringify(finalUsers)); } catch (e) {}
-  if (window.db && window.fbSetDoc && window.fbDoc) {
-    try {
-      const ref = window.fbDoc(window.db, "shared", "all_users");
-      await window.fbSetDoc(ref, { users: finalUsers }, { merge: true });
-    } catch (e) {}
-  }
-};
 
 window.ensureUserInAllUsers = async function(user) {
   if (!user || !user.id || user.id === "GUEST-000") return;
@@ -2607,35 +2306,8 @@ window.ensureUserInAllUsers = async function(user) {
 };
 
 const __prevShowLoginConfirmPopupForPatch = window.showLoginConfirmPopup;
-window.showLoginConfirmPopup = function(user) {
-  const res = __prevShowLoginConfirmPopupForPatch ? __prevShowLoginConfirmPopupForPatch.apply(this, arguments) : undefined;
-  setTimeout(function() {
-    const confirmBtn = document.getElementById("confirmLoginBtn");
-    if (confirmBtn && !confirmBtn.dataset.accountPatchWrapped) {
-      confirmBtn.dataset.accountPatchWrapped = "1";
-      const oldOnClick = confirmBtn.onclick;
-      confirmBtn.onclick = async function() {
-        try { await window.ensureUserInAllUsers(user); } catch (e) {}
-        if (typeof oldOnClick === "function") oldOnClick();
-      };
-    }
-  }, 0);
-  return res;
-};
 
 const __prevHandleAuthSubmitForPatch = window.handleAuthSubmit;
-window.handleAuthSubmit = async function() {
-  if (window.__authProcessing) return;
-  const btn = document.getElementById("authSubmitBtn");
-  window.__authProcessing = true;
-  if (btn) btn.disabled = true;
-  try {
-    if (typeof __prevHandleAuthSubmitForPatch === "function") await __prevHandleAuthSubmitForPatch.apply(this, arguments);
-  } finally {
-    window.__authProcessing = false;
-    if (btn) btn.disabled = false;
-  }
-};
 
 window.recordLastLoginOnce = async function() {
   if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
@@ -3549,112 +3221,12 @@ window.syncMyEntryToAllUsers = async function(force) {
     }
 };
 
-window.saveUserStats = async function() {
-    // ✅ 保存前に必ず totalExp からレベルを再計算（古い user_level を上書き）
-    try {
-        let lvlData = window.calculateLevelFromExp(totalExp);
-        userStats.user_level = lvlData.level;
-    } catch (e) {}
-
-    try {
-        localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
-        localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
-        localStorage.setItem('core_v4_totalExp', String(totalExp));
-        localStorage.setItem('core_v4_userName', myName);
-        localStorage.setItem('core_v4_userTarget', myTarget);
-        localStorage.setItem('core_v4_userTitle', selectedTitle);
-    } catch(e) {}
-
-    if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
-        try {
-            const userRef = window.fbDoc(window.db, "users", myId);
-            const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
-            let lvlData = window.calculateLevelFromExp(totalExp);
-            await window.fbSetDocWithRetry(userRef, {
-                id: myId,
-                userStats: userStats,
-                friendList: myFriendList,
-                playerName: myName,
-                selectedTitle: selectedTitle,
-                userTarget: myTarget,
-                totalExp: totalExp,
-                avatar: mySavedAvatar,
-                updatedAt: new Date().toISOString()
-            }, { merge: true });
-
-            const lbRef = window.fbDoc(window.db, "shared_leaderboard", myId);
-            await window.fbSetDocWithRetry(lbRef, {
-                id: myId,
-                name: myName,
-                title: selectedTitle,
-                exp: totalExp,
-                level: lvlData.level,
-                avatar: mySavedAvatar,
-                updatedAt: new Date().toISOString()
-            }, { merge: true });
-
-            // プレイヤー名を all_users へバックグラウンド同期（60秒スロットル）
-            window.syncMyEntryToAllUsers(false);
-        } catch (e) {
-            console.error("Firebaseユーザーデータ保存エラー（リトライ後）:", e);
-        }
-    }
-};
 
 // ------------------------------------------------------------------
 // Phase 1-B：loadUserStats を上書き
 //   ・totalExp は「ローカルとクラウドの大きい方」を採用（古いデータで上書きされて消えるのを防止）
 //   ・読み込み後にレベルを再計算
 // ------------------------------------------------------------------
-window.loadUserStats = async function() {
-    try {
-        const storedStats = localStorage.getItem('core_v4_user_stats_' + myId);
-        if (storedStats) userStats = JSON.parse(storedStats);
-        const storedFriends = localStorage.getItem('core_v4_friend_list');
-        if (storedFriends) myFriendList = JSON.parse(storedFriends);
-        if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
-            const userRef = window.fbDoc(window.db, "users", myId);
-            const snap = await window.fbGetDoc(userRef);
-            if (snap.exists()) {
-                const data = snap.data();
-                if (data.userStats) {
-                    userStats = data.userStats;
-                    localStorage.setItem('core_v4_user_stats_' + myId, JSON.stringify(userStats));
-                }
-                if (data.friendList) {
-                    myFriendList = data.friendList;
-                    localStorage.setItem('core_v4_friend_list', JSON.stringify(myFriendList));
-                }
-                // ✅ totalExp はローカルとクラウドの大きい方を採用（データ消失防止）
-                if (data.totalExp !== undefined && data.totalExp !== null) {
-                    const cloudExp = parseInt(data.totalExp) || 0;
-                    const localExp = totalExp || 0;
-                    totalExp = Math.max(cloudExp, localExp);
-                    localStorage.setItem('core_v4_totalExp', String(totalExp));
-                }
-                if (data.playerName) {
-                    myName = data.playerName;
-                    localStorage.setItem('core_v4_userName', myName);
-                }
-                if (data.selectedTitle) {
-                    selectedTitle = data.selectedTitle;
-                    localStorage.setItem('core_v4_userTitle', selectedTitle);
-                }
-                if (data.userTarget) {
-                    myTarget = data.userTarget;
-                    localStorage.setItem('core_v4_userTarget', myTarget);
-                }
-                if (data.avatar) {
-                    localStorage.setItem('core_v4_user_avatar_' + myId, data.avatar);
-                }
-                // ✅ 統合後の totalExp からレベルを再計算
-                userStats.user_level = window.computeLevelSafe(totalExp);
-            }
-        }
-    } catch (e) {
-        console.error("Error loading user stats:", e);
-    }
-};
 
 // ------------------------------------------------------------------
 // Phase 2-A：EXP全ユーザーランキングのレベル優先順を修正
@@ -3895,84 +3467,7 @@ window.__wrapWithPenguin = function(fnName) {
 //   ・単語帳切り替え時に必ず再バインド（古いデータを参照しないように）
 //   ・ポップアップに「現在の単語帳名」を表示（全体ではなく今の単語帳であることが分かる）
 // ------------------------------------------------------------------
-window.injectVocabStatsButton = function() {
-  var titleEl = document.getElementById('vocabBookTitle');
-  if (!titleEl) return;
-  var parent = titleEl.parentElement;
-  if (!parent) return;
-  var btn = document.getElementById('vocabStatsBtn');
-  if (!btn) {
-    btn = document.createElement('button');
-    btn.id = 'vocabStatsBtn';
-    btn.type = 'button';
-    btn.style.cssText = "margin-left:auto; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:11px; font-weight:700; padding:6px 10px; border-radius:20px; cursor:pointer; white-space:nowrap; flex-shrink:0;";
-    if (getComputedStyle(parent).display === 'block') {
-      parent.style.display = 'flex';
-      parent.style.alignItems = 'center';
-      parent.style.gap = '8px';
-    }
-    parent.appendChild(btn);
-  }
-  // クリック時に最新の vocabList（現在の単語帳）を読むように毎回再バインド
-  btn.textContent = '📊 詳細';
-  btn.onclick = function(e) { e.stopPropagation(); window.showVocabStatsPopup(); };
-};
 
-window.showVocabStatsPopup = function() {
-  var old = document.getElementById('vocabStatsOverlay'); if (old) old.remove();
-  // ✅ 現在の単語帳名を取得
-  var currentBook = (typeof textbooksPool !== 'undefined' && Array.isArray(textbooksPool))
-    ? textbooksPool.find(function(b){ return b.id === currentTextbook; })
-    : null;
-  var bookName = currentBook ? currentBook.name : '共通単語帳';
-  // ✅ 現在の単語帳（vocabList）のみを集計
-  var total = vocabList.length;
-  var ok = 0, so = 0, bad = 0, none = 0;
-  vocabList.forEach(function(w){
-    var s = window.wordOverallStatus(w);
-    if (s === 'ok') ok++; else if (s === 'so') so++; else if (s === 'bad') bad++; else none++;
-  });
-  var denom = total || 1;
-  var pct = function(v){ return total ? Math.round(v / denom * 100) : 0; };
-  var segs = [
-    { value: ok, color: '#10B981', label: '⚪︎ 定着' },
-    { value: so, color: '#F59E0B', label: '△ 曖昧' },
-    { value: bad, color: '#EF4444', label: '✕ 不可' },
-    { value: none, color: '#64748B', label: '未学習' }
-  ];
-  var r = 42, c = 2 * Math.PI * r, offset = 0, circles = '';
-  segs.forEach(function(seg){
-    var frac = seg.value / denom; var len = frac * c;
-    if (len > 0) circles += '<circle r="' + r + '" cx="60" cy="60" fill="none" stroke="' + seg.color + '" stroke-width="14" stroke-dasharray="' + len + ' ' + (c - len) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 60 60)"/>';
-    offset += len;
-  });
-  if (total === 0) circles = '<circle r="' + r + '" cx="60" cy="60" fill="none" stroke="#334155" stroke-width="14"/>';
-  var listHtml = '';
-  segs.forEach(function(seg){
-    listHtml += '<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.08); font-size:13px;">' +
-      '<span style="display:flex; align-items:center; gap:8px;"><span style="width:12px; height:12px; border-radius:3px; background:' + seg.color + '; display:inline-block;"></span>' + seg.label + '</span>' +
-      '<span style="font-weight:800;">' + seg.value + '語 <span style="color:var(--text-sub); font-weight:600;">(' + pct(seg.value) + '%)</span></span></div>';
-  });
-  var ov = document.createElement('div');
-  ov.id = 'vocabStatsOverlay';
-  ov.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(5px);";
-  var box = document.createElement('div');
-  box.style.cssText = "background:var(--card-bg); border:1px solid var(--cosmic-cyan); border-radius:16px; padding:20px; width:88%; max-width:340px; color:#fff; box-shadow:0 10px 30px rgba(0,0,0,0.6);";
-  box.innerHTML =
-    '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">' +
-      '<div style="font-size:16px; font-weight:900;">📊 単語帳の詳細</div>' +
-      '<button id="vocabStatsClose" style="background:none; border:none; color:var(--text-sub); font-size:20px; cursor:pointer; line-height:1;">×</button>' +
-    '</div>' +
-    '<div style="text-align:center; font-size:12px; color:var(--cosmic-purple-light); font-weight:800; margin-bottom:8px;">📔 ' + bookName + '</div>' +
-    '<div style="text-align:center; font-size:13px; margin-bottom:12px;">登録単語数: <strong style="color:var(--cosmic-cyan); font-size:18px;">' + total + '</strong> 語</div>' +
-    '<div style="display:flex; justify-content:center; margin-bottom:14px;">' +
-      '<svg width="120" height="120" viewBox="0 0 120 120">' + circles + '<text x="60" y="64" text-anchor="middle" fill="#fff" font-size="16" font-weight="900">' + total + '</text></svg>' +
-    '</div>' + listHtml;
-  ov.appendChild(box);
-  document.body.appendChild(ov);
-  ov.querySelector('#vocabStatsClose').onclick = function(){ ov.remove(); };
-  ov.onclick = function(e){ if (e.target === ov) ov.remove(); };
-};
 
 console.log("🐧 第2回パッチ（ペンギンローディング＋単語帳詳細ボタン修正）適用完了");
 // ==========================================================================
@@ -3980,53 +3475,6 @@ console.log("🐧 第2回パッチ（ペンギンローディング＋単語帳�
 //    ※このファイルの末尾にそのまま貼り付けてください。
 //    ※第2回パッチの __renderPenguinOverlay を自動で上書きします。
 // ==========================================================================
-window.__renderPenguinOverlay = function(message) {
-  if (window.__pgLoad.overlay) return;
-  var ov = document.createElement('div');
-  ov.id = 'penguinLoadingOverlay';
-  var penguinSvg =
-    '<svg viewBox="0 0 120 132" width="92" height="101" xmlns="http://www.w3.org/2000/svg">' +
-      '<defs>' +
-        '<linearGradient id="rpgBodyGrad" x1="0" y1="0" x2="0" y2="1">' +
-          '<stop offset="0" stop-color="#2d3b52"/>' +
-          '<stop offset="1" stop-color="#1a2333"/>' +
-        '</linearGradient>' +
-        '<linearGradient id="rpgBellyGrad" x1="0" y1="0" x2="0" y2="1">' +
-          '<stop offset="0" stop-color="#f7f9fb"/>' +
-          '<stop offset="1" stop-color="#dde4ea"/>' +
-        '</linearGradient>' +
-        '<radialGradient id="rpgChestGrad" cx="0.5" cy="0.35" r="0.75">' +
-          '<stop offset="0" stop-color="rgba(251,191,36,0.32)"/>' +
-          '<stop offset="1" stop-color="rgba(251,191,36,0)"/>' +
-        '</radialGradient>' +
-      '</defs>' +
-      '<path class="rpg-flipper-l" d="M27 56 C 18 64, 15 84, 22 98 C 27 102, 32 94, 31 80 C 30 68, 29 60, 27 56 Z" fill="#1c2534"/>' +
-      '<path class="rpg-flipper-r" d="M93 56 C 102 64, 105 84, 98 98 C 93 102, 88 94, 89 80 C 90 68, 91 60, 93 56 Z" fill="#1c2534"/>' +
-      '<path d="M60 12 C 38 12, 26 32, 25 55 C 24 86, 36 114, 60 114 C 84 114, 96 86, 95 55 C 94 32, 82 12, 60 12 Z" fill="url(#rpgBodyGrad)"/>' +
-      '<path d="M60 32 C 50 32, 44 36, 42 44 C 38 48, 36 56, 37 66 C 36 88, 44 108, 60 112 C 76 108, 84 88, 83 66 C 84 56, 82 48, 78 44 C 76 36, 70 32, 60 32 Z" fill="url(#rpgBellyGrad)"/>' +
-      '<ellipse cx="60" cy="58" rx="19" ry="14" fill="url(#rpgChestGrad)"/>' +
-      '<circle cx="47" cy="42" r="3.2" fill="#0d1220"/>' +
-      '<circle cx="73" cy="42" r="3.2" fill="#0d1220"/>' +
-      '<circle cx="48" cy="41" r="1.1" fill="#ffffff"/>' +
-      '<circle cx="74" cy="41" r="1.1" fill="#ffffff"/>' +
-      '<path d="M55 46 L65 46 L60 58 Z" fill="#2e3a4f"/>' +
-      '<path d="M57 46 L63 46 L60 52 Z" fill="#3d4a61"/>' +
-      '<path class="rpg-foot-l" d="M38 112 C 36 119, 40 124, 46 124 C 52 124, 54 118, 52 112 Z" fill="#46536b"/>' +
-      '<path class="rpg-foot-r" d="M68 112 C 66 118, 68 124, 74 124 C 80 124, 84 119, 82 112 Z" fill="#46536b"/>' +
-    '</svg>';
-  ov.innerHTML =
-    '<div class="penguin-loader-stage">' +
-      '<div class="penguin-ice-ground"></div>' +
-      '<div class="penguin-walk-track">' +
-        '<div class="penguin-waddle">' + penguinSvg + '</div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
-      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
-  document.body.appendChild(ov);
-  window.__pgLoad.overlay = ov;
-  requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
-};
 console.log("🐧 リアルペンギン差し替えパッチ 適用完了");
 // ==========================================================================
 window.showToast = function(msg, type) {
@@ -4353,60 +3801,7 @@ console.log('🎯 第3回パッチ（別教材FC理解度＋ランキング非�
 // ------------------------------------------------------------------
 window.__loadQuiz = window.__loadQuiz || { active:false, words:[], index:0, answers:[], ok:0, bad:0, so:0 };
 
-window.__renderPenguinOverlay = function(message) {
-  if (window.__pgLoad.overlay) return;
-  var ov = document.createElement('div');
-  ov.id = 'penguinLoadingOverlay';
-  var sparks = '';
-  for (var i = 0; i < 14; i++) {
-    var left = Math.round(Math.random() * 100);
-    var delay = (Math.random() * 6).toFixed(2);
-    var dur = (5 + Math.random() * 6).toFixed(2);
-    var c = Math.random() < 0.5 ? 'rgba(0,240,255,.8)' : 'rgba(192,132,252,.8)';
-    sparks += '<span class="lq-spark" style="left:' + left + '%;bottom:-10px;background:' + c + ';animation-delay:' + delay + 's;animation-duration:' + dur + 's;"></span>';
-  }
-  ov.innerHTML =
-    sparks +
-    '<div class="lq-area">' +
-      '<div class="lq-score" id="lqScore" style="display:none;">' +
-        '<span id="lqCount">0問</span>' +
-        '<span class="lq-ok" id="lqOk">⚪︎0</span>' +
-        '<span class="lq-so" id="lqSo">△0</span>' +
-        '<span class="lq-bad" id="lqBad">✕0</span>' +
-      '</div>' +
-      '<div class="lq-card-wrap" id="lqCardWrap" style="display:none;"></div>' +
-      '<div class="lq-hint" id="lqHint" style="display:none;">タップでめくる ／ 右⚪︎ ・ 左✕ ・ 上△</div>' +
-    '</div>' +
-    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
-      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
-  document.body.appendChild(ov);
-  window.__pgLoad.overlay = ov;
-  requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
-  window.__initLoadQuiz(ov);
-};
 
-window.__initLoadQuiz = function(ov) {
-  var q = window.__loadQuiz;
-  q.answers = []; q.ok = 0; q.bad = 0; q.so = 0; q.index = 0; q.words = []; q.active = false;
-  if (typeof vocabList !== 'undefined' && vocabList.length > 0) {
-    q.words = vocabList.slice().sort(function(){ return Math.random() - 0.5; }).slice(0, 20);
-    q.active = q.words.length > 0;
-  }
-  var scoreEl = ov.querySelector('#lqScore');
-  var wrapEl = ov.querySelector('#lqCardWrap');
-  var hintEl = ov.querySelector('#lqHint');
-  if (q.active) {
-    if (scoreEl) scoreEl.style.display = 'flex';
-    if (wrapEl) wrapEl.style.display = 'block';
-    if (hintEl) hintEl.style.display = 'block';
-    window.__renderLoadQuizCard(ov);
-    window.__updateLoadQuizScore(ov);
-  } else {
-    if (scoreEl) scoreEl.style.display = 'none';
-    if (wrapEl) wrapEl.style.display = 'none';
-    if (hintEl) hintEl.style.display = 'none';
-  }
-};
 
 window.__updateLoadQuizScore = function(ov) {
   var q = window.__loadQuiz;
@@ -4417,84 +3812,8 @@ window.__updateLoadQuizScore = function(ov) {
   var b = ov.querySelector('#lqBad'); if (b) b.textContent = '✕' + q.bad;
 };
 
-window.__renderLoadQuizCard = function(ov) {
-  var q = window.__loadQuiz;
-  if (!q.active || q.words.length === 0) return;
-  if (q.index >= q.words.length) {
-    q.words = q.words.sort(function(){ return Math.random() - 0.5; });
-    q.index = 0;
-  }
-  var w = q.words[q.index];
-  var meaning = (w.meanings && w.meanings[0]) ? w.meanings[0].text : (w.meaning || '');
-  var wrap = ov.querySelector('#lqCardWrap');
-  if (!wrap) return;
-  wrap.className = 'lq-card-wrap';
-  wrap.style.display = 'block';
-  wrap.style.transform = '';
-  wrap.style.opacity = '1';
-  wrap.style.transition = '';
-  wrap.innerHTML =
-    '<div class="lq-card" id="lqCard">' +
-      '<div class="lq-face front"><span class="lq-num">#' + w.num + '</span><div class="lq-word">' + w.word + '</div></div>' +
-      '<div class="lq-face back"><span class="lq-num">#' + w.num + '</span><div class="lq-meaning">' + meaning + '</div></div>' +
-    '</div>';
-  window.__bindLoadQuizCard(ov, wrap, w);
-};
 
-window.__bindLoadQuizCard = function(ov, wrap, w) {
-  var card = wrap.querySelector('#lqCard');
-  var startX = 0, startY = 0, dragging = false;
-  wrap.addEventListener('touchstart', function(e) {
-    startX = e.touches[0].clientX; startY = e.touches[0].clientY; dragging = true;
-    wrap.style.transition = 'none';
-  }, { passive: true });
-  wrap.addEventListener('touchmove', function(e) {
-    if (!dragging) return;
-    var dx = e.touches[0].clientX - startX;
-    var dy = e.touches[0].clientY - startY;
-    wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (dx * 0.05) + 'deg)';
-    wrap.classList.remove('glow-ok','glow-bad','glow-so');
-    if (dy < -15 && Math.abs(dy) > Math.abs(dx)) wrap.classList.add('glow-so');
-    else if (dx > 15) wrap.classList.add('glow-ok');
-    else if (dx < -15) wrap.classList.add('glow-bad');
-  }, { passive: true });
-  wrap.addEventListener('touchend', function(e) {
-    if (!dragging) return; dragging = false;
-    var dx = e.changedTouches[0].clientX - startX;
-    var dy = e.changedTouches[0].clientY - startY;
-    wrap.classList.remove('glow-ok','glow-bad','glow-so');
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-      wrap.style.transition = 'transform .2s ease';
-      wrap.style.transform = '';
-      if (card) card.classList.toggle('flipped');
-    } else if (dx > 60) {
-      window.__answerLoadQuiz(ov, wrap, w, 'ok', dx, dy);
-    } else if (dx < -60) {
-      window.__answerLoadQuiz(ov, wrap, w, 'bad', dx, dy);
-    } else if (dy < -60) {
-      window.__answerLoadQuiz(ov, wrap, w, 'so', dx, dy);
-    } else {
-      wrap.style.transition = 'transform .25s ease';
-      wrap.style.transform = '';
-    }
-  });
-};
 
-window.__answerLoadQuiz = function(ov, wrap, w, status, dx, dy) {
-  var q = window.__loadQuiz;
-  q.answers.push({ num: w.num, word: w.word, status: status });
-  if (status === 'ok') q.ok++;
-  else if (status === 'bad') q.bad++;
-  else if (status === 'so') q.so++;
-  window.__updateLoadQuizScore(ov);
-  wrap.style.transition = 'transform .35s cubic-bezier(.1,.8,.25,1), opacity .35s ease';
-  wrap.style.transform = 'translate(' + (dx * 2.2) + 'px,' + (dy * 2.2 - 40) + 'px) scale(.5) rotate(' + (dx * 0.08) + 'deg)';
-  wrap.style.opacity = '0';
-  q.index++;
-  setTimeout(function() {
-    if (window.__pgLoad.overlay === ov) window.__renderLoadQuizCard(ov);
-  }, 200);
-};
 
 // ロード完了時：退避していた答えを単語帳へ反映して保存
 window.__finalizeLoadQuiz = function() {
@@ -4534,53 +3853,7 @@ window.__actuallyHidePenguin = function() {
 // ------------------------------------------------------------------
 // 【2】理解度保存の確実化（ローカル常時ベース＋Firebaseリトライ）
 // ------------------------------------------------------------------
-window.loadUserVocabProgress = async function(bookKey) {
-  bookKey = bookKey || currentTextbook || 'default';
-  currentUserVocabProgress = {};
-  if (typeof myId === 'undefined' || !myId) return;
-  try {
-    var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
-    if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
-  } catch (e) {}
-  if (myId === 'GUEST-000' || !window.db || !window.fbGetDoc || !window.fbDoc) return;
-  try {
-    const ref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookKey);
-    const snap = await window.fbGetDoc(ref);
-    if (snap.exists() && snap.data() && snap.data().words) {
-      currentUserVocabProgress = snap.data().words;
-    }
-  } catch (e) {
-    console.error('loadUserVocabProgress Firebase読み込みエラー（ローカルデータで継続）:', e);
-  }
-};
 
-window.saveUserVocabProgress = async function() {
-  if (typeof window.rebuildVocabStemIndex === 'function') window.rebuildVocabStemIndex();
-  if (typeof myId === 'undefined' || !myId) return;
-  const bookKey = currentTextbook || 'default';
-  currentUserVocabProgress = window.extractUserProgressFromVocabList();
-  const payload = { words: currentUserVocabProgress, updatedAt: new Date().toISOString() };
-  try {
-    localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
-  } catch (e) {
-    console.error('saveUserVocabProgress ローカル保存エラー:', e);
-  }
-  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      const ref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookKey);
-      if (typeof window.fbSetDocWithRetry === 'function') {
-        await window.fbSetDocWithRetry(ref, payload);
-      } else {
-        await window.fbSetDoc(ref, payload);
-      }
-    } catch (e) {
-      console.error('saveUserVocabProgress Firebase保存エラー（ローカルには保存済み）:', e);
-    }
-  }
-  userStats.vocab_fixed = vocabList.filter(function(w) {
-    return w.meanings && w.meanings.some(function(m) { return m.status === 'ok'; });
-  }).length;
-};
 
 // ------------------------------------------------------------------
 // 【3】勉強時間の安定化（二重起動防止・毎秒表示・継続保存・総計記録）
@@ -4645,100 +3918,7 @@ window.__formatStudyTotal = function(secs) {
   return totalMin + '分';
 };
 
-window.refreshFriendListFromFirebase = async function(force) {
-  if (typeof myId === 'undefined' || !myId || myId === 'GUEST-000') return;
-  if (!window.db || !window.fbGetDoc || !window.fbDoc) return;
-  if (!Array.isArray(myFriendList) || myFriendList.length === 0) return;
-  var now = Date.now();
-  if (!force && window.__friendRefreshLastAt && now - window.__friendRefreshLastAt < 60000) return;
-  window.__friendRefreshLastAt = now;
-  var changed = false;
-  for (var i = 0; i < myFriendList.length; i++) {
-    var f = myFriendList[i];
-    try {
-      var ref = window.fbDoc(window.db, 'users', f.code);
-      var snap = await window.fbGetDoc(ref);
-      if (!snap.exists()) continue;
-      var d = snap.data();
-      if (d.deleted) continue;
-      var stats = d.userStats || {};
-      var remoteLevel = f.level || 1;
-      if (d.totalExp !== undefined && d.totalExp !== null) {
-        remoteLevel = window.computeLevelSafe(d.totalExp);
-      } else if (stats.user_level) {
-        remoteLevel = parseInt(stats.user_level) || remoteLevel;
-      }
-      var remoteName = d.playerName || f.name;
-      var remoteTitle = d.selectedTitle || f.title || '称号なし';
-      var remoteAvatar = (typeof d.avatar === 'string') ? d.avatar : (f.customAvatar || '');
-      var remoteTotalSecs = parseInt(stats.study_total_secs) || 0;
-      var remoteLastLoginStr = f.lastLoginStr || '';
-      var lastIso = stats.lastLoginAt || d.updatedAt || '';
-      if (lastIso) { var formatted = window.formatFriendLastLogin(lastIso); if (formatted) remoteLastLoginStr = formatted; }
-      var remoteTimestamp = f.timestamp || now;
-      if (lastIso) { var t = new Date(lastIso).getTime(); if (!isNaN(t)) remoteTimestamp = t; }
-      if (f.name !== remoteName || f.title !== remoteTitle || f.customAvatar !== remoteAvatar ||
-          f.level !== remoteLevel || f.studyTotalSecs !== remoteTotalSecs ||
-          f.lastLoginStr !== remoteLastLoginStr || f.timestamp !== remoteTimestamp) {
-        f.name = remoteName; f.title = remoteTitle; f.customAvatar = remoteAvatar;
-        f.level = remoteLevel; f.studyTotalSecs = remoteTotalSecs;
-        f.lastLoginStr = remoteLastLoginStr; f.timestamp = remoteTimestamp;
-        changed = true;
-      }
-    } catch (e) {}
-  }
-  if (changed) { try { await window.saveUserStats(); } catch (e) {} }
-  if (typeof window.sortAndRenderFriendList === 'function') window.sortAndRenderFriendList();
-};
 
-window.sortAndRenderFriendList = function() {
-  var container = document.getElementById('friendListContainer');
-  if (!container) return;
-  container.innerHTML = '';
-  if (myFriendList.length === 0) {
-    container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-sub); font-size:12px;"> <i data-lucide="user-plus" size="24" style="margin-bottom:6px; opacity:0.5;"></i><br> まだフレンドが登録されていません。<br>上部からIDで検索して追加してみましょう！ </div>';
-    window.initLucide();
-    return;
-  }
-  var sortType = document.getElementById('friendSortSelect').value;
-  var sortedList = myFriendList.slice();
-  if (sortType === 'login') {
-    sortedList.sort(function(a,b){ return b.timestamp - a.timestamp; });
-  } else if (sortType === 'level') {
-    sortedList.sort(function(a,b){ return b.level - a.level; });
-  } else if (sortType === 'studyTime') {
-    sortedList.sort(function(a,b){ return (b.studyTotalSecs||0) - (a.studyTotalSecs||0); });
-  }
-  sortedList.forEach(function(f) {
-    var item = document.createElement('div');
-    item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:10px 14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);';
-    var avatarContentStr = '<span style="font-size:24px; flex-shrink:0;">' + (f.avatar || '👤') + '</span>';
-    if (f.customAvatar) {
-      avatarContentStr = '<img src="' + f.customAvatar + '" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-purple-light);">';
-    }
-    var studyLabel = window.__formatStudyTotal(f.studyTotalSecs);
-    item.innerHTML =
-      '<div style="display:flex; align-items:center; gap:12px; flex:1; min-width:0;">' +
-        '<div style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">' + avatarContentStr + '</div>' +
-        '<div style="flex:1; min-width:0;">' +
-          '<div style="display:flex; align-items:baseline; gap:6px;">' +
-            '<span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.name + '</span>' +
-            '' +
-          '</div>' +
-          '<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">' +
-            '' +
-            '<span>🔑 ID: ' + f.code + '</span>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-      '<div style="text-align:right; flex-shrink:0; margin-left:8px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">' +
-        '<div style="font-size:9px; color:var(--text-sub); margin-top:0;">ログイン:<br><span style="color:#FFF; font-weight:600;">' + (f.lastLoginStr ? f.lastLoginStr.split(' ')[0] : '-') + '</span></div>' +
-        '<button style="background:none; border:none; color:var(--word-bad); padding:2px; cursor:pointer;" onclick="window.removeFriendDirect(\'' + f.code + '\', event)"><i data-lucide="user-x" size="14"></i></button>' +
-      '</div>';
-    container.appendChild(item);
-  });
-  window.initLucide();
-};
 
 console.log('🎴 第4回パッチ（ロード画面単語テスト＋理解度保存＋勉強時間安定化＋フレンド総計）適用完了');
 // ==========================================================================
@@ -4807,83 +3987,10 @@ window.__setLoadQuizBookLabel = function(ov, name, show) {
 // ------------------------------------------------------------------
 // 【3】クイズ初期化の上書き（出題元単語帳の選択に対応）
 // ------------------------------------------------------------------
-window.__initLoadQuiz = function(ov) {
-  var q = window.__loadQuiz;
-  q.answers = []; q.ok = 0; q.bad = 0; q.so = 0; q.index = 0; q.words = []; q.active = false; q.bookId = null;
-  var scoreEl = ov.querySelector('#lqScore');
-  var wrapEl = ov.querySelector('#lqCardWrap');
-  var hintEl = ov.querySelector('#lqHint');
-  var hideAll = function() {
-    q.active = false;
-    if (scoreEl) scoreEl.style.display = 'none';
-    if (wrapEl) wrapEl.style.display = 'none';
-    if (hintEl) hintEl.style.display = 'none';
-    window.__setLoadQuizBookLabel(ov, '', false);
-  };
-  var setup = function(words, bookId, name) {
-    if (!words || words.length === 0) { hideAll(); return; }
-    q.words = words.slice().sort(function(){ return Math.random() - 0.5; }).slice(0, 20);
-    q.active = true;
-    q.bookId = bookId;
-    if (scoreEl) scoreEl.style.display = 'flex';
-    if (wrapEl) wrapEl.style.display = 'block';
-    if (hintEl) hintEl.style.display = 'block';
-    window.__setLoadQuizBookLabel(ov, name, true);
-    window.__renderLoadQuizCard(ov);
-    window.__updateLoadQuizScore(ov);
-  };
-  var sel = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
-  var curBook = (typeof currentTextbook !== 'undefined') ? currentTextbook : 'default';
-  var useCurrent = (sel === 'auto' || sel === '' || sel === curBook);
-  if (useCurrent) {
-    var name = '今の単語帳';
-    if (typeof textbooksPool !== 'undefined' && textbooksPool) {
-      var cb = textbooksPool.find(function(b){ return b.id === curBook; });
-      if (cb) name = cb.name;
-    }
-    setup(vocabList, curBook, name);
-  } else {
-    var book = null;
-    if (typeof textbooksPool !== 'undefined' && textbooksPool) {
-      book = textbooksPool.find(function(b){ return b.id === sel; });
-    }
-    var bname = book ? book.name : sel;
-    window.__getBookMasterWords(sel).then(function(master){
-      if (window.__pgLoad.overlay !== ov) return;
-      var words = window.migrateVocabData((master || []).map(function(w){ return Object.assign({}, w); }));
-      setup(words, sel, bname);
-    }).catch(function(){
-      if (window.__pgLoad.overlay === ov) hideAll();
-    });
-  }
-};
 
 // ------------------------------------------------------------------
 // 【4】カード描画の上書き（番号表示を削除）
 // ------------------------------------------------------------------
-window.__renderLoadQuizCard = function(ov) {
-  var q = window.__loadQuiz;
-  if (!q.active || q.words.length === 0) return;
-  if (q.index >= q.words.length) {
-    q.words = q.words.sort(function(){ return Math.random() - 0.5; });
-    q.index = 0;
-  }
-  var w = q.words[q.index];
-  var meaning = (w.meanings && w.meanings[0]) ? w.meanings[0].text : (w.meaning || '');
-  var wrap = ov.querySelector('#lqCardWrap');
-  if (!wrap) return;
-  wrap.className = 'lq-card-wrap';
-  wrap.style.display = 'block';
-  wrap.style.transform = '';
-  wrap.style.opacity = '1';
-  wrap.style.transition = '';
-  wrap.innerHTML =
-    '<div class="lq-card" id="lqCard">' +
-      '<div class="lq-face front"><div class="lq-word">' + w.word + '</div></div>' +
-      '<div class="lq-face back"><div class="lq-meaning">' + meaning + '</div></div>' +
-    '</div>';
-  window.__bindLoadQuizCard(ov, wrap, w);
-};
 
 // ------------------------------------------------------------------
 // 【5】別教材の理解度へ答えを反映して保存
@@ -5009,45 +4116,7 @@ window.__actuallyHidePenguin = function() {
 // ------------------------------------------------------------------
 // 【8】設定画面に「出題元の単語帳」セクションを注入
 // ------------------------------------------------------------------
-window.injectLoadQuizSettings = function() {
-  var sidebar = document.getElementById('sidebarMenu');
-  if (!sidebar) return;
-  if (!document.getElementById('loadQuizSettingsSection')) {
-    var section = document.createElement('div');
-    section.id = 'loadQuizSettingsSection';
-    section.style.cssText = "margin:8px 16px;padding:12px;background:rgba(0,240,255,0.06);border:1px solid rgba(0,240,255,0.25);border-radius:10px;box-shadow:0 0 10px rgba(0,240,255,0.1);";
-    section.innerHTML =
-      '<div style="font-size:11px;font-weight:800;color:var(--cosmic-cyan);margin-bottom:8px;letter-spacing:0.5px;">🎴 ロード画面クイズ設定</div>' +
-      '<div style="font-size:10px;color:var(--text-sub);margin-bottom:6px;">出題元の単語帳</div>' +
-      '<select id="loadQuizBookSelect" class="search-input" style="width:100%;margin:0;height:36px;"></select>' +
-      '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:6px;line-height:1.4;">ロード中の単語クイズが、選んだ単語帳から出題されます。答えはその単語帳の理解度に保存されます。</div>';
-    var anchor = null;
-    var children = sidebar.children;
-    for (var i = 0; i < children.length; i++) {
-      if ((children[i].textContent || '').indexOf('ログアウト') !== -1) { anchor = children[i]; break; }
-    }
-    if (anchor) sidebar.insertBefore(section, anchor);
-    else sidebar.appendChild(section);
-  }
-  window.updateLoadQuizBookSelect();
-};
 
-window.updateLoadQuizBookSelect = function() {
-  var sel = document.getElementById('loadQuizBookSelect');
-  if (!sel) return;
-  var current = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
-  var html = '<option value="auto">自動（今の単語帳）</option>';
-  var pool = (typeof textbooksPool !== 'undefined' && textbooksPool) ? textbooksPool : [];
-  pool.forEach(function(b){
-    html += '<option value="' + b.id + '">' + b.name + '</option>';
-  });
-  sel.innerHTML = html;
-  sel.value = current;
-  sel.onchange = function() {
-    localStorage.setItem('core_v4_loadquiz_book', sel.value);
-    if (typeof window.showToast === 'function') window.showToast('ロードクイズの出題元を設定しました', 'ok');
-  };
-};
 
 console.log('🎴 第5回パッチ（ロードクイズ番号削除＋出題元単語帳選択）適用完了');
 // ==========================================================================
@@ -5077,31 +4146,6 @@ window.__lqCurrent = window.__lqCurrent || null;
 // ------------------------------------------------------------------
 // 【2】ローディング描画（スコアバー無し・クイズ枠＋ヒントのみ）
 // ------------------------------------------------------------------
-window.__renderPenguinOverlay = function(message) {
-  if (window.__pgLoad.overlay) return;
-  var ov = document.createElement('div');
-  ov.id = 'penguinLoadingOverlay';
-  var sparks = '';
-  for (var i = 0; i < 14; i++) {
-    var left = Math.round(Math.random() * 100);
-    var delay = (Math.random() * 6).toFixed(2);
-    var dur = (5 + Math.random() * 6).toFixed(2);
-    var c = Math.random() < 0.5 ? 'rgba(0,240,255,.8)' : 'rgba(192,132,252,.8)';
-    sparks += '<span class="lq-spark" style="left:' + left + '%;bottom:-10px;background:' + c + ';animation-delay:' + delay + 's;animation-duration:' + dur + 's;"></span>';
-  }
-  ov.innerHTML =
-    sparks +
-    '<div class="lq-area">' +
-      '<div class="lq-card-wrap" id="lqCardWrap" style="display:none;"></div>' +
-      '<div class="lq-hint" id="lqHint" style="display:none;">タップでめくる ／ 右⚪︎ ・ 左✕ ・ 上△</div>' +
-    '</div>' +
-    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
-      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
-  document.body.appendChild(ov);
-  window.__pgLoad.overlay = ov;
-  requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
-  window.__initLoadQuiz(ov);
-};
 
 // ------------------------------------------------------------------
 // 【3】出題元ラベル
@@ -5123,52 +4167,6 @@ window.__setLoadQuizBookLabel = function(ov, name, show) {
 // ------------------------------------------------------------------
 // 【4】クイズ初期化（出題元選択込み・スコアバー参照なし）
 // ------------------------------------------------------------------
-window.__initLoadQuiz = function(ov) {
-  var q = window.__loadQuiz;
-  q.answers = []; q.ok = 0; q.bad = 0; q.so = 0; q.index = 0; q.words = []; q.active = false; q.bookId = null;
-  var wrapEl = ov.querySelector('#lqCardWrap');
-  var hintEl = ov.querySelector('#lqHint');
-  var hideAll = function() {
-    q.active = false;
-    if (wrapEl) wrapEl.style.display = 'none';
-    if (hintEl) hintEl.style.display = 'none';
-    window.__setLoadQuizBookLabel(ov, '', false);
-  };
-  var setup = function(words, bookId, name) {
-    if (!words || words.length === 0) { hideAll(); return; }
-    q.words = words.slice().sort(function(){ return Math.random() - 0.5; }).slice(0, 20);
-    q.active = true;
-    q.bookId = bookId;
-    if (wrapEl) wrapEl.style.display = 'block';
-    if (hintEl) hintEl.style.display = 'block';
-    window.__setLoadQuizBookLabel(ov, name, true);
-    window.__renderLoadQuizCard(ov);
-  };
-  var sel = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
-  var curBook = (typeof currentTextbook !== 'undefined') ? currentTextbook : 'default';
-  var useCurrent = (sel === 'auto' || sel === '' || sel === curBook);
-  if (useCurrent) {
-    var name = '今の単語帳';
-    if (typeof textbooksPool !== 'undefined' && textbooksPool) {
-      var cb = textbooksPool.find(function(b){ return b.id === curBook; });
-      if (cb) name = cb.name;
-    }
-    setup((typeof vocabList !== 'undefined' ? vocabList : []), curBook, name);
-  } else {
-    var book = null;
-    if (typeof textbooksPool !== 'undefined' && textbooksPool) {
-      book = textbooksPool.find(function(b){ return b.id === sel; });
-    }
-    var bname = book ? book.name : sel;
-    window.__getBookMasterWords(sel).then(function(master){
-      if (window.__pgLoad.overlay !== ov) return;
-      var words = (typeof window.migrateVocabData === 'function') ? window.migrateVocabData((master || []).map(function(w){ return Object.assign({}, w); })) : (master || []);
-      setup(words, sel, bname);
-    }).catch(function(){
-      if (window.__pgLoad.overlay === ov) hideAll();
-    });
-  }
-};
 
 // ------------------------------------------------------------------
 // 【5】スコア表示更新（表示要素が無いので無害なno-op）
@@ -5178,30 +4176,6 @@ window.__updateLoadQuizScore = function() { /* スコアバーは表示しない
 // ------------------------------------------------------------------
 // 【6】カード描画（番号なし・現在の単語を共有状態へ）
 // ------------------------------------------------------------------
-window.__renderLoadQuizCard = function(ov) {
-  var q = window.__loadQuiz;
-  if (!q.active || q.words.length === 0) return;
-  if (q.index >= q.words.length) {
-    q.words = q.words.sort(function(){ return Math.random() - 0.5; });
-    q.index = 0;
-  }
-  var w = q.words[q.index];
-  var meaning = (w.meanings && w.meanings[0]) ? w.meanings[0].text : (w.meaning || '');
-  var wrap = ov.querySelector('#lqCardWrap');
-  if (!wrap) return;
-  wrap.className = 'lq-card-wrap';
-  wrap.style.display = 'block';
-  wrap.style.transform = '';
-  wrap.style.opacity = '1';
-  wrap.style.transition = '';
-  wrap.innerHTML =
-    '<div class="lq-card" id="lqCard">' +
-      '<div class="lq-face front"><div class="lq-word">' + w.word + '</div></div>' +
-      '<div class="lq-face back"><div class="lq-meaning">' + meaning + '</div></div>' +
-    '</div>';
-  window.__lqCurrent = { word: w, ov: ov };
-  window.__bindLoadQuizCard(ov, wrap);
-};
 
 // ------------------------------------------------------------------
 // 【7】スワイプ判定（★増殖防止：カード枠に1組だけ固定）
@@ -5252,39 +4226,10 @@ window.__bindLoadQuizCard = function(ov, wrap) {
 // ------------------------------------------------------------------
 // 【8】回答処理（記録B：⚪︎△✕全部を退避）
 // ------------------------------------------------------------------
-window.__answerLoadQuiz = function(ov, wrap, w, status, dx, dy) {
-  var q = window.__loadQuiz;
-  q.answers.push({ num: w.num, word: w.word, status: status });
-  if (status === 'ok') q.ok++;
-  else if (status === 'bad') q.bad++;
-  else if (status === 'so') q.so++;
-  wrap.style.transition = 'transform .35s cubic-bezier(.1,.8,.25,1), opacity .35s ease';
-  wrap.style.transform = 'translate(' + (dx * 2.2) + 'px,' + (dy * 2.2 - 40) + 'px) scale(.5) rotate(' + (dx * 0.08) + 'deg)';
-  wrap.style.opacity = '0';
-  q.index++;
-  setTimeout(function() {
-    if (window.__pgLoad.overlay === ov) window.__renderLoadQuizCard(ov);
-  }, 200);
-};
 
 // ------------------------------------------------------------------
 // 【9】指定教材のマスター単語取得
 // ------------------------------------------------------------------
-window.__getBookMasterWords = async function(bookId) {
-  var master = null;
-  try { if (typeof textbooksCacheMap !== 'undefined' && textbooksCacheMap && textbooksCacheMap[bookId]) master = textbooksCacheMap[bookId]; } catch(e){}
-  if (!master) {
-    try { var lc = localStorage.getItem('core_v4_cache_' + bookId); if (lc) master = JSON.parse(lc); } catch(e){}
-  }
-  if (!master && window.db && window.fbGetDoc && window.fbDoc) {
-    try {
-      var ref = window.fbDoc(window.db, 'shared', 'vocab_' + bookId);
-      var snap = await window.fbGetDoc(ref);
-      if (snap.exists() && snap.data() && snap.data().custom_words) master = snap.data().custom_words;
-    } catch(e){}
-  }
-  return master || [];
-};
 
 // ------------------------------------------------------------------
 // 【10】別教材の理解度へ反映して保存
@@ -5403,43 +4348,7 @@ window.__actuallyHidePenguin = function() {
 // ------------------------------------------------------------------
 // 【13】設定画面：出題元の単語帳を選択
 // ------------------------------------------------------------------
-window.injectLoadQuizSettings = function() {
-  var sidebar = document.getElementById('sidebarMenu');
-  if (!sidebar) return;
-  if (!document.getElementById('loadQuizSettingsSection')) {
-    var section = document.createElement('div');
-    section.id = 'loadQuizSettingsSection';
-    section.style.cssText = "margin:8px 16px;padding:12px;background:rgba(0,240,255,0.06);border:1px solid rgba(0,240,255,0.25);border-radius:10px;box-shadow:0 0 10px rgba(0,240,255,0.1);";
-    section.innerHTML =
-      '<div style="font-size:11px;font-weight:800;color:var(--cosmic-cyan);margin-bottom:8px;letter-spacing:0.5px;">🎴 ロード画面クイズ設定</div>' +
-      '<div style="font-size:10px;color:var(--text-sub);margin-bottom:6px;">出題元の単語帳</div>' +
-      '<select id="loadQuizBookSelect" class="search-input" style="width:100%;margin:0;height:36px;"></select>' +
-      '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:6px;line-height:1.4;">ロード中の単語クイズが、選んだ単語帳から出題されます。答えはその単語帳の理解度に保存されます。</div>';
-    var anchor = null;
-    var children = sidebar.children;
-    for (var i = 0; i < children.length; i++) {
-      if ((children[i].textContent || '').indexOf('ログアウト') !== -1) { anchor = children[i]; break; }
-    }
-    if (anchor) sidebar.insertBefore(section, anchor);
-    else sidebar.appendChild(section);
-  }
-  window.updateLoadQuizBookSelect();
-};
 
-window.updateLoadQuizBookSelect = function() {
-  var sel = document.getElementById('loadQuizBookSelect');
-  if (!sel) return;
-  var current = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
-  var html = '<option value="auto">自動（今の単語帳）</option>';
-  var pool = (typeof textbooksPool !== 'undefined' && textbooksPool) ? textbooksPool : [];
-  pool.forEach(function(b){ html += '<option value="' + b.id + '">' + b.name + '</option>'; });
-  sel.innerHTML = html;
-  sel.value = current;
-  sel.onchange = function() {
-    localStorage.setItem('core_v4_loadquiz_book', sel.value);
-    if (typeof window.showToast === 'function') window.showToast('ロードクイズの出題元を設定しました', 'ok');
-  };
-};
 
 console.log('🎴 第6回パッチ（ロードクイズ完全修正：増殖根絶＋スコアバー削除＋番号削除＋出題元選択）適用完了');
 // ==========================================================================
@@ -5507,34 +4416,6 @@ window.__safeBookKey = function(raw) {
 // ------------------------------------------------------------------
 // 【2】理解度保存を上書き（パス安全化＋掃除＋リトライ）
 // ------------------------------------------------------------------
-window.saveUserVocabProgress = async function() {
-  if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
-  if (typeof myId === "undefined" || !myId) return;
-  var bookKey = window.__safeBookKey(currentTextbook || "default");
-  currentUserVocabProgress = window.extractUserProgressFromVocabList();
-  var payload = { words: currentUserVocabProgress, updatedAt: new Date().toISOString() };
-  try {
-    localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
-  } catch (e) {
-    console.error("saveUserVocabProgress ローカル保存エラー:", e);
-  }
-  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
-    try {
-      var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-      var safe = window.__sanitizeForFirestore ? window.__sanitizeForFirestore(payload) : payload;
-      if (typeof window.fbSetDocWithRetry === "function") {
-        await window.fbSetDocWithRetry(ref, safe);
-      } else {
-        await window.fbSetDoc(ref, safe);
-      }
-    } catch (e) {
-      console.error("saveUserVocabProgress Firebase保存エラー（ローカルには保存済み）:", e);
-    }
-  }
-  userStats.vocab_fixed = vocabList.filter(function(w) {
-    return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
-  }).length;
-};
 
 // ------------------------------------------------------------------
 // 【3】window.fbSetDoc を横断ラップ（全保存を自動で掃除）
@@ -6035,43 +4916,7 @@ window.__actuallyHidePenguin = function() {
 // ------------------------------------------------------------------
 // 【12】設定画面：出題元の単語帳を選択
 // ------------------------------------------------------------------
-window.injectLoadQuizSettings = function() {
-  var sidebar = document.getElementById('sidebarMenu');
-  if (!sidebar) return;
-  if (!document.getElementById('loadQuizSettingsSection')) {
-    var section = document.createElement('div');
-    section.id = 'loadQuizSettingsSection';
-    section.style.cssText = "margin:8px 16px;padding:12px;background:rgba(0,240,255,0.06);border:1px solid rgba(0,240,255,0.25);border-radius:10px;box-shadow:0 0 10px rgba(0,240,255,0.1);";
-    section.innerHTML =
-      '<div style="font-size:11px;font-weight:800;color:var(--cosmic-cyan);margin-bottom:8px;letter-spacing:0.5px;">🎴 ロード画面クイズ設定</div>' +
-      '<div style="font-size:10px;color:var(--text-sub);margin-bottom:6px;">出題元の単語帳</div>' +
-      '<select id="loadQuizBookSelect" class="search-input" style="width:100%;margin:0;height:36px;"></select>' +
-      '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:6px;line-height:1.4;">ロード中の単語クイズが、選んだ単語帳から出題されます。答えはその単語帳の理解度に保存されます。</div>';
-    var anchor = null;
-    var children = sidebar.children;
-    for (var i = 0; i < children.length; i++) {
-      if ((children[i].textContent || '').indexOf('ログアウト') !== -1) { anchor = children[i]; break; }
-    }
-    if (anchor) sidebar.insertBefore(section, anchor);
-    else sidebar.appendChild(section);
-  }
-  window.updateLoadQuizBookSelect();
-};
 
-window.updateLoadQuizBookSelect = function() {
-  var sel = document.getElementById('loadQuizBookSelect');
-  if (!sel) return;
-  var current = localStorage.getItem('core_v4_loadquiz_book') || 'auto';
-  var html = '<option value="auto">自動（今の単語帳）</option>';
-  var pool = (typeof textbooksPool !== 'undefined' && textbooksPool) ? textbooksPool : [];
-  pool.forEach(function(b){ html += '<option value="' + b.id + '">' + b.name + '</option>'; });
-  sel.innerHTML = html;
-  sel.value = current;
-  sel.onchange = function() {
-    localStorage.setItem('core_v4_loadquiz_book', sel.value);
-    if (typeof window.showToast === 'function') window.showToast('ロードクイズの出題元を設定しました', 'ok');
-  };
-};
 
 window.onAppLoaded(function() {
   window.injectLoadQuizSettings();
@@ -6087,72 +4932,10 @@ console.log('🎴 第8回パッチ（ロードクイズ完全版：増殖根絶�
 // ------------------------------------------------------------------
 // 【1】saveUserVocabProgress 上書き（wordsJson 形式で保存）
 // ------------------------------------------------------------------
-window.saveUserVocabProgress = async function() {
-  if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
-  if (typeof myId === "undefined" || !myId) return;
-  var bookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : "default";
-  currentUserVocabProgress = window.extractUserProgressFromVocabList();
-  
-  // ローカル保存（従来通りオブジェクト形式）
-  try {
-    localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(currentUserVocabProgress));
-  } catch (e) {}
-  
-  // Firebase保存（JSON文字列化して index entry を激減）
-  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
-    try {
-      var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-      var payload = {
-        wordsJson: JSON.stringify(currentUserVocabProgress),
-        updatedAt: new Date().toISOString()
-      };
-      if (typeof window.fbSetDocWithRetry === "function") {
-        await window.fbSetDocWithRetry(ref, payload);
-      } else {
-        await window.fbSetDoc(ref, payload);
-      }
-    } catch (e) {
-      console.error("saveUserVocabProgress Firebase保存エラー（ローカルには保存済み）:", e);
-    }
-  }
-  
-  userStats.vocab_fixed = vocabList.filter(function(w) {
-    return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
-  }).length;
-};
 
 // ------------------------------------------------------------------
 // 【2】loadUserVocabProgress 上書き（新形式 wordsJson 優先、旧形式 words も対応）
 // ------------------------------------------------------------------
-window.loadUserVocabProgress = async function(bookKey) {
-  bookKey = bookKey || (typeof currentTextbook !== 'undefined' ? currentTextbook : "default");
-  currentUserVocabProgress = {};
-  if (typeof myId === "undefined" || !myId) return;
-  
-  // ローカルをベースに読み込み
-  try {
-    var raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
-    if (raw) currentUserVocabProgress = JSON.parse(raw) || {};
-  } catch (e) {}
-  
-  if (myId === "GUEST-000" || !window.db || !window.fbGetDoc || !window.fbDoc) return;
-  
-  // Firebase から読み込み（新形式 wordsJson 優先、旧形式 words も後方互換）
-  try {
-    var ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-    var snap = await window.fbGetDoc(ref);
-    if (snap.exists() && snap.data()) {
-      var data = snap.data();
-      if (data.wordsJson) {
-        currentUserVocabProgress = JSON.parse(data.wordsJson);
-      } else if (data.words) {
-        currentUserVocabProgress = data.words;
-      }
-    }
-  } catch (e) {
-    // Firebase 読み込み失敗時はローカルデータで継続
-  }
-};
 
 // ------------------------------------------------------------------
 // 【3】__applyQuizAnswersToBook 上書き（ロードクイズの別教材保存も wordsJson に）
@@ -6852,83 +5635,10 @@ window.__writeLocalVocabSnapshot = function(bookKey, words, ms) {
 // 【D】loadUserVocabProgress 上書き：タイムスタンプで「最新」を採用
 //     （古いクラウドによる理解度の巻き戻りを防止＋クラウドへ書き戻し）
 // ------------------------------------------------------------------
-window.loadUserVocabProgress = async function(bookKey) {
-    bookKey = bookKey || (typeof currentTextbook !== 'undefined' ? currentTextbook : "default");
-    currentUserVocabProgress = {};
-    if (typeof myId === "undefined" || !myId) return;
-    const localSnap = window.__readLocalVocabSnapshot(bookKey);
-    let bestWords = localSnap.words || {};
-    let bestMs = localSnap.updatedAt || 0;
-    let localIsNewest = true;
-    let cloudExisted = false;
-    if (myId !== "GUEST-000" && window.db && window.fbGetDoc && window.fbDoc) {
-        try {
-            const ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-            const snap = await window.fbGetDoc(ref);
-            if (snap.exists() && snap.data()) {
-                cloudExisted = true;
-                const data = snap.data();
-                let cloudWords = null;
-                if (data.wordsJson) {
-                    try { cloudWords = JSON.parse(data.wordsJson); } catch (e) { cloudWords = null; }
-                } else if (data.words) {
-                    cloudWords = data.words;
-                }
-                if (cloudWords && typeof cloudWords === 'object') {
-                    const cloudMs = data.updatedAt ? (new Date(data.updatedAt).getTime() || 0) : 0;
-                    if (cloudMs >= bestMs) {
-                        bestWords = cloudWords;
-                        bestMs = cloudMs;
-                        localIsNewest = false;
-                    }
-                }
-            }
-        } catch (e) {
-            console.error("loadUserVocabProgress Firebase読み込みエラー（ローカルデータで継続）:", e);
-        }
-    }
-    currentUserVocabProgress = bestWords || {};
-    // 採用したスナップショットでローカルキャッシュを揃える
-    window.__writeLocalVocabSnapshot(bookKey, currentUserVocabProgress, bestMs);
-    // ★ 書き戻し：ローカルが新しい（またはクラウドが空）ならクラウドへ反映
-    const hasData = currentUserVocabProgress && Object.keys(currentUserVocabProgress).length > 0;
-    if (hasData && (localIsNewest || !cloudExisted) && myId !== "GUEST-000" && window.db && window.fbSetDoc && window.fbDoc) {
-        try {
-            const wref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-            const wpayload = { wordsJson: JSON.stringify(currentUserVocabProgress), updatedAt: new Date().toISOString() };
-            if (typeof window.fbSetDocWithRetry === "function") window.fbSetDocWithRetry(wref, wpayload);
-            else window.fbSetDoc(wref, wpayload);
-        } catch (e) {}
-    }
-};
 
 // ------------------------------------------------------------------
 // 【E】saveUserVocabProgress 上書き：タイムスタンプ付きで保存
 // ------------------------------------------------------------------
-window.saveUserVocabProgress = async function() {
-    if (typeof window.rebuildVocabStemIndex === "function") window.rebuildVocabStemIndex();
-    if (typeof myId === "undefined" || !myId) return;
-    const bookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : "default";
-    currentUserVocabProgress = window.extractUserProgressFromVocabList();
-    const nowMs = Date.now();
-    const nowIso = new Date(nowMs).toISOString();
-    // ローカル保存（タイムスタンプ付き）
-    window.__writeLocalVocabSnapshot(bookKey, currentUserVocabProgress, nowMs);
-    // Firebase保存
-    if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== "GUEST-000") {
-        try {
-            const ref = window.fbDoc(window.db, "users", myId, "vocabProgress", bookKey);
-            const payload = { wordsJson: JSON.stringify(currentUserVocabProgress), updatedAt: nowIso };
-            if (typeof window.fbSetDocWithRetry === "function") await window.fbSetDocWithRetry(ref, payload);
-            else await window.fbSetDoc(ref, payload);
-        } catch (e) {
-            console.error("saveUserVocabProgress Firebase保存エラー（ローカルには保存済み）:", e);
-        }
-    }
-    userStats.vocab_fixed = vocabList.filter(function(w) {
-        return w.meanings && w.meanings.some(function(m) { return m.status === "ok"; });
-    }).length;
-};
 
 console.log("🔄 同期修正パッチ②（レベル収束＋理解度リセット防止＋書き戻し）適用完了");
 // ==========================================================================
@@ -7208,59 +5918,6 @@ window.loadUserVocabProgress = async function(bookKey) {
 // ------------------------------------------------------------------
 // 【F】フレンドのログイン履歴を「分」単位まで表示
 // ------------------------------------------------------------------
-window.sortAndRenderFriendList = function() {
-    var container = document.getElementById('friendListContainer');
-    if (!container) return;
-    container.innerHTML = "";
-    if (myFriendList.length === 0) {
-        container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-sub); font-size:12px;"> <i data-lucide="user-plus" size="24" style="margin-bottom:6px; opacity:0.5;"></i><br> まだフレンドが登録されていません。<br>上部からIDで検索して追加してみましょう！ </div>';
-        window.initLucide();
-        return;
-    }
-    var sortType = document.getElementById('friendSortSelect').value;
-    var sortedList = myFriendList.slice();
-    if (sortType === "login") {
-        sortedList.sort(function(a, b) { return b.timestamp - a.timestamp; });
-    } else if (sortType === "level") {
-        sortedList.sort(function(a, b) { return b.level - a.level; });
-    } else if (sortType === "studyTime") {
-        sortedList.sort(function(a, b) { return (b.studyTotalSecs || 0) - (a.studyTotalSecs || 0); });
-    }
-    sortedList.forEach(function(f) {
-        var item = document.createElement('div');
-        item.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:10px 14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);";
-        var avatarContentStr = '<span style="font-size:24px; flex-shrink:0;">' + (f.avatar || "👤") + '</span>';
-        if (f.customAvatar) {
-            avatarContentStr = '<img src="' + f.customAvatar + '" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-purple-light);">';
-        }
-        var studyLabel = (typeof window.__formatStudyTotal === "function") ? window.__formatStudyTotal(f.studyTotalSecs) : ((f.studyTotalSecs || 0) + "分");
-        var loginParts = (f.lastLoginStr || "").split(' ');
-        var loginDate = loginParts[0] || "-";
-        var loginTime = loginParts[1] || "";
-        var loginHtml = 'ログイン:<br><span style="color:#FFF; font-weight:600;">' + loginDate + '</span>';
-        if (loginTime) loginHtml += '<br><span style="color:var(--cosmic-cyan); font-weight:700;">' + loginTime + '</span>';
-        item.innerHTML =
-            '<div style="display:flex; align-items:center; gap:12px; flex:1; min-width:0;">' +
-            '<div style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">' + avatarContentStr + '</div>' +
-            '<div style="flex:1; min-width:0;">' +
-            '<div style="display:flex; align-items:baseline; gap:6px;">' +
-            '<span style="font-weight:bold; color:white; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + f.name + '</span>' +
-            '' +
-            '</div>' +
-            '<div style="font-size:9px; color:rgba(255,255,255,0.4); margin-top:3px; display:flex; gap:10px;">' +
-            '' +
-            '<span>🔑 ID: ' + f.code + '</span>' +
-            '</div>' +
-            '</div>' +
-            '</div>' +
-            '<div style="text-align:right; flex-shrink:0; margin-left:8px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">' +
-            '<div style="font-size:9px; color:var(--text-sub); margin-top:0; line-height:1.5;">' + loginHtml + '</div>' +
-            '<button style="background:none; border:none; color:var(--word-bad); padding:2px; cursor:pointer;" onclick="window.removeFriendDirect(\'' + f.code + '\', event)"><i data-lucide="user-x" size="14"></i></button>' +
-            '</div>';
-        container.appendChild(item);
-    });
-    window.initLucide();
-};
 
 // ------------------------------------------------------------------
 // 【H】loadLocalState につなげて全体を起動
@@ -9359,7 +8016,6 @@ window.__updateStudyTimeDisplay = function() {
 //    ・グラフ更新は10秒に1回に間引き
 //    ・二重起動防止ガード付き
 // ------------------------------------------------------------------
-window.initStudyTimerAndDataRotation = function() { if(window.StudyTime)window.StudyTime.init(); };
 
 console.log('📊 第5回パッチ（勉強時間グラフ安定化＋日付跨ぎ修正）適用完了');
 // ==========================================================================
