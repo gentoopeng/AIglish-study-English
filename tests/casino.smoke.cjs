@@ -149,6 +149,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.ok(paid, "no round was won or drawn");
     await page.screenshot({ path: "/tmp/casino-dice.png" });
     await dp.getByRole("button", { name: "ダイスポーカーを閉じる" }).click();
+    // The tab keeps today's running total of practice chips.
+    assert.equal(await tab.locator("[data-casino-today]").innerText(), "今日 " + (chips - 1000 > 0 ? "+" : chips < 1000 ? "−" : "±") + Math.abs(chips - 1000).toLocaleString("ja-JP") + "枚");
 
     // Signed in: bets move points once per round through the wallet transaction.
     await page.evaluate(() => {
