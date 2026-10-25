@@ -994,3 +994,7 @@ The battle tab lost its two background photographs (`assets/battle/` is gone) an
 Wording: stiff or slogan-like labels were made plain (ログイン, ゲストで試す, 表示名, 要約を作っています…, 全文の和訳, 単語・意味で探す), decorative emoji in dialogs and toasts were dropped, and the usage guide lost sentences that described implementation history rather than use.
 
 Validation: `node --test tests/*.test.cjs`, `node tests/casino.smoke.cjs`, the full smoke suite.
+
+## Rare casino wins and clearer help (10.21.65.00)
+
+A natural blackjack, a single-number roulette hit, and a dice-poker win with four or five of a kind play the chips moment over the game screen; ordinary rounds stay quiet. The points help explains that casino and poker change the balance directly and are not in the earned history. The usage guide's first steps match the current sign-up (a display name and a PIN), and the menu edge is a thin ivory line instead of a cyan glow.

@@ -212,6 +212,11 @@
     line.append(node("span", "", text), node("b", "", signed(net) + unit()));
     return line;
   }
+  // Only the rare wins get the full-screen moment, so ordinary rounds stay quiet.
+  function bigWin(word, net, sub, delay) {
+    if (!window.Ceremony || net <= 0) return;
+    setTimeout(() => screen && window.Ceremony.play({ style: "chips", result: true, count: net, from: 0, suffix: unit(), word, sub, tone: "gold" }), calm() ? 0 : delay);
+  }
   const rules = (summary, lines) => {
     const box = node("details", "cs-rules");
     box.append(node("summary", "", summary));
@@ -302,6 +307,10 @@
     }
     const words = { blackjack: "ブラックジャック！", win: "あなたの勝ち", push: "引き分け（賭けは戻ります）", lose: "ディーラーの勝ち", bust: "21を超えました" };
     const out = result(words[state.outcome], state.net, state.outcome === "blackjack" ? "win" : "");
+    if (state.outcome === "blackjack" && !state.celebrated) {
+      state.celebrated = true;
+      bigWin("BLACKJACK", state.net, "最初の2枚で21", 700);
+    }
     // The result shows once the dealer's cards have turned over.
     out.style.setProperty("--d", Math.max(0, state.dealer.length - shown.dealer) * 0.45 + 0.2 + "s");
     body.append(out, betBar("blackjack", "もう一度配る", (bet) => {
@@ -420,6 +429,7 @@
       landed.className = "cs-landed is-" + outcome.colour;
       board.querySelectorAll(".cs-spot").forEach((b) => b.classList.toggle("is-hit", !!C.spot(b.dataset.on)?.hit(number)));
       const colour = { red: "赤", black: "黒", green: "緑" }[outcome.colour];
+      if (outcome.lines.some((l) => l.won && /^\d+$/.test(l.on))) bigWin("HIT", outcome.net, number + " ぴったり", 400);
       message.replaceChildren(result(number + "（" + colour + "）" + (outcome.net > 0 ? " 当たり" : outcome.lines.some((l) => l.won) ? " 一部当たり" : " はずれ"), outcome.net));
       spinning = false;
       body.classList.remove("is-spinning");
@@ -551,6 +561,8 @@
         const done = C.diceStand(state, random);
         done.money = state.money;
         if (done.bet + done.net > 0) done.money.pay(done.bet + done.net);
+        const made = C.diceScore(done.dice)[0];
+        if (done.outcome === "win" && made >= 6) bigWin(made === 7 ? "FIVE DICE" : "FOUR DICE", done.net, C.DICE_NAMES[made], 1100);
         dice(body, done, null);
       };
       actions.append(again, stand);
