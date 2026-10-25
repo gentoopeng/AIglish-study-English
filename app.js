@@ -2010,7 +2010,7 @@ window.onAppLoaded(async function() {
     btn.id = "pinRecoveryBtn";
     btn.type = "button";
     btn.textContent = "PINを忘れたとき";
-    btn.style.cssText = "width:100%; margin-top:12px; padding:10px; background:none; border:1px dashed rgba(255,255,255,0.3); border-radius:8px; color:var(--text-sub); font-size:12px; font-weight:700; cursor:pointer;";
+    btn.style.cssText = "display:block; margin:-4px auto 14px; padding:8px 10px; background:none; border:0; color:var(--text-sub); font-size:12px; text-decoration:underline; text-underline-offset:3px; cursor:pointer;";
     btn.onclick = function() {
       openPinRecoveryDialog();
     };
