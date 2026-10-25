@@ -43,8 +43,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       new MutationObserver((list) => list.forEach((m) => m.addedNodes.forEach((n) => n.classList?.contains("pk-act") && window.__pkSaid++))).observe(document.querySelector(".pk-felt"), { childList: true, subtree: true });
     });
     // Play by checking or calling; the computer answers by itself until hands are done.
+    // The computer thinks for up to 1.6 s and the next hand waits 5 s, so allow time, not a count.
     const play = async (until) => {
-      for (let i = 0; i < 400; i++) {
+      for (const end = Date.now() + 240000; Date.now() < end; ) {
         if (await page.evaluate(until)) return;
         const check = screen.getByRole("button", { name: "様子見" }),
           call = screen.getByRole("button", { name: /^同じだけ出す/ });
@@ -58,12 +59,13 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.ok(await page.evaluate(() => window.Poker._session().room.log.some((line) => /^ペンギン：/.test(line))));
     assert.ok((await page.evaluate(() => window.__pkSaid)) >= 2, "moves are announced over the seats");
     // The game ends when one side has no chips; practice never touches points.
-    await play(() => window.Poker._session()?.room?.hand?.street === "done");
-    await page.evaluate(() => {
-      const room = window.Poker._session().room;
-      room.players["cpu-0"].stack = Math.min(room.players["cpu-0"].stack, 2) || room.players["cpu-0"].stack;
+    // Between hands the computer is left with at most two chips (set again after every hand, so a
+    // redraw cannot undo it); the blinds soon take them and the game ends.
+    await play(() => {
+      const room = window.Poker._session()?.room;
+      if (room?.hand?.street === "done" && room.players["cpu-0"].stack > 2) room.players["cpu-0"].stack = 2;
+      return room?.status === "over";
     });
-    await play(() => window.Poker._session()?.room?.status === "over");
     assert.match(await screen.locator(".pk-final").innerText(), /勝ちました|チップがなくなりました/);
     assert.equal(await page.evaluate(() => window.StudyPoints.balance()), points);
     // Again: a fresh table with the same settings.

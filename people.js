@@ -142,6 +142,20 @@
       dialog.querySelector("dl").append(dt, dd);
     });
   }
+  // "たった今", "12分前", "3時間前", "2日前".
+  function ago(time, now = Date.now()) {
+    if (!time) return "";
+    const minutes = Math.max(0, Math.floor((now - time) / 60000));
+    if (minutes < 1) return "たった今";
+    if (minutes < 60) return minutes + "分前";
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + "時間前";
+    return Math.floor(hours / 24) + "日前";
+  }
+  const studied = (seconds) => {
+    const minutes = Math.floor((seconds || 0) / 60);
+    return minutes >= 60 ? Math.floor(minutes / 60) + "時間" + (minutes % 60 ? (minutes % 60) + "分" : "") : minutes + "分";
+  };
   function row(person) {
     const wrapper = document.createElement("div");
     wrapper.className = "people-row";
@@ -167,6 +181,31 @@
       ),
       name,
     );
+    // Under the name: online or how long ago, today's study time, and a friend mark.
+    const isOnline = person.id !== uid() && online(person.timestamp);
+    const meta = document.createElement("small");
+    meta.className = "people-meta";
+    const when = document.createElement("span");
+    when.className = isOnline ? "is-online" : "";
+    when.textContent = isOnline ? "オンライン" : ago(person.timestamp);
+    meta.append(when);
+    if (person.today >= 60) {
+      const today = document.createElement("span");
+      today.className = "people-today";
+      today.textContent = "今日 " + studied(person.today);
+      meta.append(today);
+    }
+    if (person.friend) {
+      const mark = document.createElement("span");
+      mark.className = "people-friend";
+      mark.textContent = "フレンド";
+      meta.append(mark);
+    }
+    name.after(meta);
+    const text = document.createElement("span");
+    text.className = "people-text";
+    name.before(text);
+    text.append(name, meta);
     button.onclick = () => detail(person);
     wrapper.append(button);
     return wrapper;
@@ -175,14 +214,36 @@
     const host = document.getElementById("friendListContainer");
     if (!host) return;
     host.replaceChildren();
-    const list = users
+    const query = (document.getElementById("usersSearch")?.value || "").trim().toLowerCase();
+    const all = users
       .filter((person) => !deletedIds.has(person.id))
       .sort((a, b) => b.timestamp - a.timestamp || a.id.localeCompare(b.id));
-    for (const person of list) host.append(row(person, false));
+    const list = query ? all.filter((person) => String(person.name).toLowerCase().includes(query)) : all;
+    const count = document.getElementById("usersCount");
+    if (count) count.textContent = loadedAt ? all.length + "人" : "";
+    // Online first, then everyone active this week (friends included even when quiet).
+    const now = Date.now(),
+      groups = [
+        ["オンライン", list.filter((person) => person.id !== uid() && online(person.timestamp, now))],
+        ["最近", list.filter((person) => !(person.id !== uid() && online(person.timestamp, now)))],
+      ];
+    let index = 0;
+    for (const [title, people] of groups) {
+      if (!people.length) continue;
+      const heading = document.createElement("h3");
+      heading.className = "people-section-heading";
+      heading.textContent = title + "（" + people.length + "）";
+      host.append(heading);
+      for (const person of people) {
+        const item = row(person, false);
+        item.style.setProperty("--i", Math.min(index++, 12));
+        host.append(item);
+      }
+    }
     if (!list.length) {
       const hint = document.createElement("p");
       hint.className = "people-hint";
-      hint.textContent = loadedAt ? "ユーザーがいません。" : "読み込み中…";
+      hint.textContent = query && all.length ? "「" + query + "」に一致するユーザーはいません。" : loadedAt ? "ユーザーがいません。" : "読み込み中…";
       host.append(hint);
     }
   }
@@ -242,6 +303,8 @@
                   ? data.avatar
                   : "",
               timestamp: time,
+              friend,
+              today: window.StudyTimeModel.rankingSeconds(stats, "daily", Date.now()),
               doc: {
                 lastActiveAt: time,
               },

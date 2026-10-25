@@ -57,15 +57,6 @@
         });
     };
 
-    window.showFlashcardSetupScreen = function() {
-        var lbArea = document.getElementById('gameLeaderboardArea');
-        if (lbArea) lbArea.style.display = 'none';
-        document.getElementById('flashcard-setup-screen').style.display = 'block';
-        window.updateFlashcardSourceSelectOptions();
-        window.setFlashcardDirection('en2ja');
-        window.resetFlashcardStatusFilters();
-        window.applyVocabMaxRange();
-    };
 
     var flashcardSelectedStatuses = { ok: true, so: true, bad: true, none: true };
 

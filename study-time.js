@@ -135,6 +135,23 @@
     }
     function format(ms) {const seconds=Math.floor(positive(ms)/1000);return String(Math.floor(seconds/3600)).padStart(2,'0')+':'+String(Math.floor(seconds/60)%60).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');}
     function text(el,value){if(el&&el.textContent!==value)el.textContent=value;}
+    // Everyday lengths: "1時間5分", "12分", "40秒".
+    function spoken(ms){const minutes=Math.floor(positive(ms)/60000),hours=Math.floor(minutes/60),rest=minutes%60;if(hours)return hours+'時間'+(rest?rest+'分':'');if(minutes)return minutes+'分';const seconds=Math.floor(positive(ms)/1000);return seconds?seconds+'秒':'0分';}
+    // Short form for a calendar cell: "1:05" for an hour or more, "12分" below.
+    function cell(ms){const minutes=Math.floor(positive(ms)/60000);if(!minutes)return '';return minutes>=60?Math.floor(minutes/60)+':'+String(minutes%60).padStart(2,'0'):minutes+'分';}
+    // How dark a calendar day is: none, a little, 15 min, 45 min, 90 min.
+    const levelOf=ms=>{const minutes=positive(ms)/60000;return minutes>=90?4:minutes>=45?3:minutes>=15?2:minutes>=1?1:0;};
+    // Days in a row with at least a minute, counting back from today (or yesterday, if today has none yet).
+    function streak(now){let count=0;const d=new Date(now);if(dayMilliseconds(data.days[dateKey(d)])<60000)d.setDate(d.getDate()-1);while(dayMilliseconds(data.days[dateKey(d)])>=60000&&count<3660){count++;d.setDate(d.getDate()-1);}return count;}
+    function renderStats(now){
+        const week=weekValues(data,weekStart(now)),today=dateKey(now),past=week.filter(v=>v.date<=today),sum=past.reduce((a,v)=>a+v.ms,0);
+        text(document.getElementById('studyStatWeek'),spoken(sum));
+        text(document.getElementById('studyStatAverage'),spoken(past.length?sum/past.length:0));
+        text(document.getElementById('studyStatStreak'),streak(now)+'日');
+        text(document.getElementById('studyStatTotal'),spoken(total(data)));
+    }
+    const weekdayNames=['日','月','火','水','木','金','土'];
+    const dayLabel=date=>{const d=new Date(dateAt(date));return (d.getMonth()+1)+'月'+d.getDate()+'日（'+weekdayNames[d.getDay()]+'）';};
     function renderDisplay() {
         if(!data)return;const ms=dayMilliseconds(data.days[dateKey(Date.now())]);
         const header=document.getElementById('headerStudyTime');text(header,format(ms));
@@ -142,8 +159,10 @@
         const totalLabel=document.getElementById('totalStudyTimeValue');text(totalLabel,format(total(data)));
         const state=document.getElementById('studyTimerStatus');text(state,active?(leader?'計測中':'別のタブで計測中'):paused?'一時停止中':'待機中');
         const button=document.getElementById('studyTimerToggle');text(button,manual?'一時停止':'開始');
-        const selectedLabel=document.getElementById('studySelectedDay');text(selectedLabel,selected+' · '+format(dayMilliseconds(data.days[selected])));
-        const todayButton=document.querySelector('#studyCalendar [data-date="'+dateKey(Date.now())+'"] small');text(todayButton,format(ms));
+        const selectedLabel=document.getElementById('studySelectedDay');text(selectedLabel,dayLabel(selected)+'　'+spoken(dayMilliseconds(data.days[selected])));
+        const todayButton=document.querySelector('#studyCalendar [data-date="'+dateKey(Date.now())+'"]');
+        if(todayButton){text(todayButton.querySelector('small'),cell(ms));todayButton.dataset.level=String(levelOf(ms));}
+        renderStats(Date.now());
         if(currentActiveTabId==='study'){renderRanking();if(performance.now()-lastChart>=5000){lastChart=performance.now();chart();}}
     }
     function renderCalendar() {
@@ -151,7 +170,7 @@
         document.getElementById('studyMonthTitle').textContent=month.getFullYear()+'年'+(month.getMonth()+1)+'月';container.replaceChildren();
         const offset=(month.getDay()+6)%7;for(let i=0;i<offset;i++){const empty=document.createElement('span');empty.setAttribute('aria-hidden','true');container.append(empty);}
         const days=new Date(month.getFullYear(),month.getMonth()+1,0).getDate();
-        for(let n=1;n<=days;n++){const date=dateKey(new Date(month.getFullYear(),month.getMonth(),n)),ms=dayMilliseconds(data.days[date]);const button=document.createElement('button');button.type='button';button.dataset.date=date;button.className='study-day'+(date===dateKey(Date.now())?' is-today':'')+(date===selected?' is-selected':'');button.innerHTML='<span>'+n+'</span><small>'+format(ms)+'</small>';button.setAttribute('aria-label',date+' '+format(ms));button.onclick=()=>{selected=date;renderCalendar();renderDisplay();};container.append(button);}
+        for(let n=1;n<=days;n++){const date=dateKey(new Date(month.getFullYear(),month.getMonth(),n)),ms=dayMilliseconds(data.days[date]);const button=document.createElement('button');button.type='button';button.dataset.date=date;button.className='study-day'+(date===dateKey(Date.now())?' is-today':'')+(date===selected?' is-selected':'')+(date>dateKey(Date.now())?' is-future':'');button.dataset.level=String(levelOf(ms));button.innerHTML='<span>'+n+'</span><small>'+cell(ms)+'</small>';button.setAttribute('aria-label',dayLabel(date)+' '+spoken(ms));button.onclick=()=>{selected=date;renderCalendar();renderDisplay();};container.append(button);}
         renderDisplay();
     }
     function editDate(date) {
@@ -163,10 +182,14 @@
         const container=document.getElementById('studyWeekChart');if(!container||!data)return;
         const values=weekValues(data,selectedWeek),signature=JSON.stringify(values);if(container.dataset.signature===signature)return;container.dataset.signature=signature;container.replaceChildren();
         const max=Math.max(60000,...values.map(v=>v.ms)),labels=['月','火','水','木','金','土','日'];
-        document.getElementById('studyWeekRange').textContent=values[0].date+' — '+values[6].date;
-        document.getElementById('studyWeekTotal').textContent='合計 '+format(values.reduce((sum,v)=>sum+v.ms,0));
-        container.setAttribute('aria-label',values.map((v,i)=>labels[i]+'曜日 '+format(v.ms)).join('、'));
-        values.forEach(({date,ms},index)=>{const column=document.createElement('div');column.className='study-week-column'+(date===dateKey(Date.now())?' is-today':'');const time=document.createElement('span');time.className='study-week-value';time.textContent=format(ms);const track=document.createElement('div');track.className='study-week-track';const fill=document.createElement('div');fill.className='study-week-fill';fill.style.height=(ms/max*100)+'%';track.append(fill);const label=document.createElement('small');label.textContent=labels[index];column.append(time,track,label);container.append(column);});
+        document.getElementById('studyWeekRange').textContent=(()=>{const a=new Date(dateAt(values[0].date)),b=new Date(dateAt(values[6].date));return a.getFullYear()+'年'+(a.getMonth()+1)+'月'+a.getDate()+'日〜'+(a.getMonth()===b.getMonth()?'':(b.getMonth()+1)+'月')+b.getDate()+'日';})();
+        const today=dateKey(Date.now()),counted=values.filter(v=>v.date<=today),sum=values.reduce((total,v)=>total+v.ms,0),average=counted.length?counted.reduce((total,v)=>total+v.ms,0)/counted.length:0;
+        document.getElementById('studyWeekTotal').textContent='合計 '+spoken(sum)+(counted.length?'　1日平均 '+spoken(average):'');
+        container.setAttribute('aria-label',values.map((v,i)=>labels[i]+'曜日 '+spoken(v.ms)).join('、'));
+        // A dashed line at the week's daily average, over the bars.
+        const line=container.parentElement?.querySelector('.study-week-average');
+        if(line){line.hidden=!(average>=60000);line.style.setProperty('--avg',String(Math.min(1,average/max)));line.querySelector('span').textContent='平均 '+spoken(average);}
+        values.forEach(({date,ms},index)=>{const column=document.createElement('div');column.className='study-week-column'+(date===today?' is-today':'')+(date>today?' is-future':'');column.style.setProperty('--i',index);const time=document.createElement('span');time.className='study-week-value';time.textContent=ms>=60000?cell(ms):'';const track=document.createElement('div');track.className='study-week-track';const fill=document.createElement('div');fill.className='study-week-fill';fill.style.height=(ms/max*100)+'%';track.append(fill);const label=document.createElement('small');label.textContent=labels[index];track.prepend(time);column.append(track,label);container.append(column);});
         document.getElementById('studyNextWeek').disabled=selectedWeek>=weekStart(Date.now());
     }
     function friendValue(entry) {

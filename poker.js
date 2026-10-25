@@ -18,6 +18,7 @@
     unsubscribe = null,
     ticker = null,
     busy = false,
+    busySince = 0,
     holes = { no: -1, cards: null };
 
   const node = (tag, cls, text) => {
@@ -257,12 +258,18 @@
   // The dealer's turn of the board, showdown, timeouts and the next hand.
   async function dealerStep() {
     const room = session?.room;
+    // A dealer step that never finished (a lost network reply, a stalled tab) must not stop the table.
+    if (busy && Date.now() - busySince > 15000) {
+      console.warn("[poker] dealer step took too long; carrying on");
+      busy = false;
+    }
     if (!room || room.host !== uid() || room.status === "closed" || busy) return;
     const code = room.code,
       h = room.hand,
       deal = readDeal(code),
       now = Date.now();
     busy = true;
+    busySince = Date.now();
     try {
       if (h && h.street !== "done" && h.needs && deal && deal.no === h.no) {
         await update(code, (fresh) => {
@@ -283,6 +290,27 @@
           return withHand(fresh, next);
         });
       } else if (h && h.toAct && room.players[h.toAct]?.bot) {
+        // If a computer's turn has not moved for 20 s, it checks or folds so the table goes on.
+        const state = h.no + ":" + h.street + ":" + h.toAct + ":" + JSON.stringify(h.bet);
+        if (session.stuckState !== state) {
+          session.stuckState = state;
+          session.stuckAt = now;
+        } else if (now - session.stuckAt > 20000) {
+          console.warn("[poker] computer turn stalled; moving on");
+          session.stuckAt = now;
+          session.botKey = "";
+          session.botDue = 0;
+          await update(code, (fresh) => {
+            const hand = fresh.hand;
+            if (!hand || hand.no !== h.no || hand.toAct !== h.toAct) return null;
+            const next = P.act(hand, hand.toAct, P.options(hand, hand.toAct)?.check ? "check" : "fold");
+            say(fresh, (fresh.players[h.toAct]?.name || h.toAct) + "：" + actionText[next.last?.type || "check"]);
+            next.enc = hand.enc;
+            next.deadline = deadlineOf(fresh, next);
+            return withHand(fresh, next);
+          });
+          return;
+        }
         await botStep(room, h, now);
       } else if (h && h.toAct && ((h.deadline && now > h.deadline) || room.players[h.toAct]?.left || !room.players[h.toAct])) {
         // Time is up (or the player left): check when free, otherwise fold.
@@ -324,6 +352,11 @@
     if (session.botKey !== key) {
       session.botKey = key;
       session.botDue = now + 700 + random(900);
+      return;
+    }
+    // The due time is at most 1.6 s ahead; anything further is stale (the clock moved).
+    if (session.botDue - now > 5000) {
+      session.botKey = "";
       return;
     }
     if (now < session.botDue) return;
