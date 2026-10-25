@@ -89,10 +89,10 @@
     dice: '<svg viewBox="0 0 64 48" aria-hidden="true"><rect x="10" y="14" width="22" height="22" rx="5" transform="rotate(-10 21 25)" class="is-die"/><rect x="32" y="10" width="22" height="22" rx="5" transform="rotate(8 43 21)" class="is-die"/><g class="is-pip" transform="rotate(-10 21 25)"><circle cx="16" cy="19" r="2"/><circle cx="21" cy="25" r="2"/><circle cx="26" cy="31" r="2"/></g><g class="is-pip" transform="rotate(8 43 21)"><circle cx="38" cy="15" r="2"/><circle cx="48" cy="15" r="2"/><circle cx="38" cy="27" r="2"/><circle cx="48" cy="27" r="2"/></g></svg>',
   };
   const GAMES = [
-    { id: "poker", name: "ポーカー", line: "みんなやコンピュータと" },
-    { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち" },
-    { id: "roulette", name: "ルーレット", line: "玉が止まる数字を当てる" },
-    { id: "dice", name: "ダイスポーカー", line: "5つのダイスで役をつくる" },
+    { id: "poker", name: "ポーカー", line: "みんなやコンピュータと", level: "じっくり" },
+    { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち", level: "ふつう" },
+    { id: "roulette", name: "ルーレット", line: "玉が止まる数字を当てる", level: "かんたん" },
+    { id: "dice", name: "ダイスポーカー", line: "5つのダイスで役をつくる", level: "かんたん" },
   ];
 
   // ---- The tab ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@
         button.type = "button";
         button.dataset.game = game.id;
         button.innerHTML = '<span class="casino-pic">' + PICTURES[game.id] + "</span>";
-        button.append(node("b", "", game.name), node("small", "", game.line));
+        button.append(node("em", "casino-level is-" + (game.level === "かんたん" ? "easy" : game.level === "ふつう" ? "mid" : "deep"), game.level), node("b", "", game.name), node("small", "", game.line));
         button.onclick = () => (game.id === "poker" ? window.Poker?.open() : open(game.id));
         list.append(button);
       }
@@ -434,8 +434,14 @@
     const numbers = node("div", "cs-numbers");
     for (let n = 1; n <= 36; n++) numbers.append(spotButton(String(n), String(n), "is-" + C.colourOf(n)));
     const outside = node("div", "cs-outside");
-    for (const on of ["d1", "d2", "d3", "low", "even", "red", "black", "odd", "high"]) outside.append(spotButton(on, C.SPOTS[on].label, on === "red" ? "is-red" : on === "black" ? "is-black" : ""));
-    board.append(zero, numbers, outside);
+    for (const on of ["d1", "d2", "d3", "low", "even", "red", "black", "odd", "high"]) {
+      const b = spotButton(on, C.SPOTS[on].label, on === "red" ? "is-red" : on === "black" ? "is-black" : "");
+      // What it pays back, so a beginner can weigh the choices at a glance.
+      b.append(node("small", "cs-pays", C.SPOTS[on].pays + 1 + "倍"));
+      outside.append(b);
+    }
+    const legend = node("p", "cs-legend", "数字1つは36倍・12個の組は3倍・赤黒などは2倍で戻ります");
+    board.append(zero, numbers, outside, legend);
     const chipRow = node("div", "cs-chips cs-chip-pick");
     chipRow.setAttribute("aria-label", "置くチップ");
     for (const value of CHIPS) {
@@ -511,7 +517,7 @@
         b.querySelector(".cs-stake")?.remove();
         if (amount) b.append(node("i", "cs-stake", fmt(amount)));
       });
-      total.textContent = sum ? "賭けた合計 " + fmt(sum) + unit() : "置くチップを選んで、数字や色をタップ";
+      total.textContent = sum ? "賭けた合計 " + fmt(sum) + unit() : "チップを選んで、数字や色をタップ。初めてなら「赤」か「黒」がおすすめです";
       spin.disabled = spinning || !sum || sum > balance();
       clear.disabled = spinning || !sum;
     }
