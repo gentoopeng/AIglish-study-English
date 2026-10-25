@@ -1002,3 +1002,7 @@ A natural blackjack, a single-number roulette hit, and a dice-poker win with fou
 ## Today's casino total and a quieter flashcard setup (10.21.66.00)
 
 The casino header shows today's running total (Japan time), kept on the device separately for points and practice chips. The flashcard settings dialog uses the ivory accent for its labels, the selected mode and the start button instead of alternating cyan and purple neon, and the word-book details button lost its chart emoji.
+
+## Help for beginners at the tables (10.21.67.00)
+
+Blackjack suggests a move each turn (the button glows, with one line on why, from a simple basic strategy). Dice poker lights the dice worth keeping and offers one tap to keep them. A win pops with a small burst of chips, and the balance runs to its new value with a short flash. The casino tables rise in one after another when the tab opens. English eyebrow labels over Japanese headings (VOCABULARY, LIBRARY, CASINO, TEXAS HOLD'EM, HOW TO PLAY, HOW TO USE, MY VOCABULARY) are gone.

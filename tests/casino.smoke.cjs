@@ -61,6 +61,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.match(await bj.locator(".is-player .cs-hand-label b").innerText(), /^19/);
     assert.match(await bj.locator(".is-dealer .cs-hand-label b").innerText(), /10 ＋ \?/);
     assert.equal(await bj.locator(".is-dealer .pk-card.is-back").count(), 1);
+    // A beginner sees what to do and why: 19 stands.
+    assert.equal(await bj.locator(".cs-actions .is-suggested").innerText(), "これで勝負");
+    assert.match(await bj.locator(".cs-advice").innerText(), /^迷ったら「これで勝負」：17以上は/);
     assert.equal(await bj.locator("[data-cs-balance]").innerText(), "940枚");
     await bj.getByRole("button", { name: "これで勝負" }).click();
     assert.match(await bj.locator(".cs-result").innerText(), /あなたの勝ち\s*\+60枚/);
@@ -126,7 +129,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await dp.locator(".cs-die-btn").count(), 5);
     await dp.locator(".cs-die-btn").first().click();
     assert.equal(await dp.locator(".cs-die-btn").first().getAttribute("aria-pressed"), "true");
-    await dp.getByRole("button", { name: /キープ以外を振る（あと2回）/ }).click();
+    await dp.getByRole("button", { name: /振り直す（あと2回）/ }).click();
     await dp.getByRole("button", { name: /あと1回/ }).waitFor();
     await dp.getByRole("button", { name: "これで勝負" }).click();
     let chips = 1185;

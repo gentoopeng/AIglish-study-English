@@ -112,7 +112,7 @@
         dialog = document.createElement('dialog');
         dialog.className = 'library-editor-dialog';
         dialog.setAttribute('aria-labelledby', 'libraryEditorTitle');
-        dialog.innerHTML = '<div class="library-editor-eyebrow">MY VOCABULARY</div><h2 id="libraryEditorTitle"></h2>' + markup;
+        dialog.innerHTML = '<h2 id="libraryEditorTitle"></h2>' + markup;
         dialog.querySelector('h2').textContent = title;
         document.body.appendChild(dialog);
         dialog.addEventListener('cancel', function(event) { event.preventDefault(); close(); });

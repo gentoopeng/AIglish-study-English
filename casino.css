@@ -103,3 +103,28 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 @media(prefers-reduced-motion:reduce){.cs-wheel-spin{transition:none;}.casino-game{transition:none;}}
 .cs-body .cs-die-btn:disabled{opacity:1;}
 .casino-today{margin:0 0 0 auto;align-self:flex-end;color:#a8a293;font:600 12px system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;}.casino-today:empty{display:none;}
+
+/* Help for beginners: the suggested move glows softly, with one line on why. */
+.cs-advice{margin:0;padding:9px 12px;border-radius:12px;background:rgba(198,183,144,.1);color:#e7dcc0;font-size:12px;line-height:1.6;}
+.cs-body .cs-actions .is-suggested:not(.cs-primary){border-color:#e2cf9b;color:#f3e9cf;}
+.cs-body .cs-actions .is-suggested{box-shadow:0 0 0 3px rgba(226,207,155,.28);}
+.cs-advice-btn{min-height:40px;border:1px dashed rgba(226,207,155,.6);border-radius:12px;background:transparent;color:#e7dcc0;font:700 13px system-ui,sans-serif;cursor:pointer;}
+.cs-die-btn.is-suggested .cs-die{box-shadow:0 0 0 2px rgba(226,207,155,.75),0 0 14px rgba(226,207,155,.45),0 3px 8px rgba(0,0,0,.35);}
+/* A win: the line pops and chips burst from the amount. */
+.cs-result{position:relative;}
+.cs-burst{position:absolute;right:34px;top:50%;width:0;height:0;pointer-events:none;}
+.cs-burst i{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle,#f3e2a6 40%,#b89a55 42%);opacity:0;}
+.cs-balance [data-cs-balance]{display:inline-block;}
+@media(prefers-reduced-motion:no-preference){
+.cs-result.is-win{animation:cs-win .5s cubic-bezier(.2,1.5,.4,1) var(--d,0s) both;}
+.cs-burst i{animation:cs-burst .7s cubic-bezier(.2,.7,.3,1) calc(var(--d,0s) + .15s) both;}
+.cs-balance .is-up{animation:cs-flash-up .8s ease-out;}.cs-balance .is-down{animation:cs-flash-down .8s ease-out;}
+.cs-body .cs-actions .is-suggested,.cs-die-btn.is-suggested .cs-die{animation:cs-hint-glow 1.6s ease-in-out 2;}
+#view-casino.active .casino-game{animation:cs-rise .35s ease-out both;}
+#view-casino.active .casino-game:nth-child(2){animation-delay:.05s}#view-casino.active .casino-game:nth-child(3){animation-delay:.1s}#view-casino.active .casino-game:nth-child(4){animation-delay:.15s}
+}
+@keyframes cs-win{0%{opacity:0;transform:scale(.85)}60%{opacity:1;transform:scale(1.04)}100%{transform:none}}
+@keyframes cs-burst{0%{opacity:1;transform:rotate(var(--a)) translateX(0)}100%{opacity:0;transform:rotate(var(--a)) translateX(46px)}}
+@keyframes cs-flash-up{0%{transform:scale(1.18);color:#fff3c4}100%{transform:none}}
+@keyframes cs-flash-down{0%{transform:scale(.94);color:#e7a3a3}100%{transform:none}}
+@keyframes cs-hint-glow{50%{box-shadow:0 0 0 5px rgba(226,207,155,.12),0 0 18px rgba(226,207,155,.5)}}

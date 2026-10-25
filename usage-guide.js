@@ -53,7 +53,6 @@ window.__buildUsageGuideOverlay = function() {
         '<div class="ug-header-icon"><i data-lucide="book-open-check" size="20"></i></div>' +
         '<div class="ug-header-titles">' +
         '<div class="ug-header-title">使い方ガイド</div>' +
-        '<div class="ug-header-sub">HOW TO USE</div>' +
         '</div>' +
         '<button type="button" class="ug-close" id="ugCloseBtn" aria-label="閉じる"><i data-lucide="x" size="20"></i></button>' +
         '</div>' +

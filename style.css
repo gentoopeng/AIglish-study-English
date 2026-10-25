@@ -1886,9 +1886,9 @@ will-change:auto!important;
 /* Motion stays off page-wide, except in short-lived screens built for it (the warm-up opening,
    poker and its how-to), which animate only transform and opacity. */
 html.ios-stable-rendering body,
-html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.pk-tutorial,.pk-tutorial *)),
-html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.pk-tutorial,.pk-tutorial *))::before,
-html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.pk-tutorial,.pk-tutorial *))::after,
+html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,#view-casino *,.pk-tutorial,.pk-tutorial *)),
+html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,#view-casino *,.pk-tutorial,.pk-tutorial *))::before,
+html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,#view-casino *,.pk-tutorial,.pk-tutorial *))::after,
 html.ios-stable-rendering body::before,
 html.ios-stable-rendering body::after{
 animation:none!important;
