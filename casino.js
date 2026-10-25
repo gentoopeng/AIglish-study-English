@@ -430,18 +430,38 @@
       };
       return b;
     };
-    const zero = spotButton("0", "0", "is-green is-zero");
-    const numbers = node("div", "cs-numbers");
-    for (let n = 1; n <= 36; n++) numbers.append(spotButton(String(n), String(n), "is-" + C.colourOf(n)));
-    const outside = node("div", "cs-outside");
-    for (const on of ["d1", "d2", "d3", "low", "even", "red", "black", "odd", "high"]) {
-      const b = spotButton(on, C.SPOTS[on].label, on === "red" ? "is-red" : on === "black" ? "is-black" : "");
-      // What it pays back, so a beginner can weigh the choices at a glance.
-      b.append(node("small", "cs-pays", C.SPOTS[on].pays + 1 + "倍"));
-      outside.append(b);
+    // The table as it is printed on felt: 0 on the left, three rows of twelve numbers (3, 6 … 36
+    // on top), the row bets on the right, the dozens and the even-money bets underneath.
+    const place = (b, column, row) => {
+      b.style.gridColumn = column;
+      b.style.gridRow = row;
+      board.append(b);
+      return b;
+    };
+    place(spotButton("0", "0", "is-zero"), "1", "1 / 4");
+    for (let n = 1; n <= 36; n++) {
+      const b = spotButton(String(n), "", "is-num");
+      b.append(node("span", "cs-pip is-" + C.colourOf(n), String(n)));
+      place(b, String(Math.ceil(n / 3) + 1), String(3 - ((n - 1) % 3)));
     }
-    const legend = node("p", "cs-legend", "数字1つは36倍・12個の組は3倍・赤黒などは2倍で戻ります");
-    board.append(zero, numbers, outside, legend);
+    // What each outside bet pays back, so a beginner can weigh them at a glance.
+    const outside = (on, text, column, row, cls) => {
+      const b = place(spotButton(on, text, "is-outside " + (cls || "")), column, row);
+      b.setAttribute("aria-label", C.SPOTS[on].label + "（" + (C.SPOTS[on].pays + 1) + "倍）");
+      b.append(node("small", "cs-pays", C.SPOTS[on].pays + 1 + "倍"));
+    };
+    outside("c3", "列", "14", "1");
+    outside("c2", "列", "14", "2");
+    outside("c1", "列", "14", "3");
+    outside("d1", "1〜12", "2 / 6", "4");
+    outside("d2", "13〜24", "6 / 10", "4");
+    outside("d3", "25〜36", "10 / 14", "4");
+    outside("low", "1〜18", "2 / 4", "5");
+    outside("even", "偶数", "4 / 6", "5");
+    outside("red", "赤", "6 / 8", "5", "is-red");
+    outside("black", "黒", "8 / 10", "5", "is-black");
+    outside("odd", "奇数", "10 / 12", "5");
+    outside("high", "19〜36", "12 / 14", "5");
     const chipRow = node("div", "cs-chips cs-chip-pick");
     chipRow.setAttribute("aria-label", "置くチップ");
     for (const value of CHIPS) {
@@ -455,7 +475,10 @@
       chipRow.append(b);
     }
     const total = node("p", "cs-hint");
-    const message = node("p", "cs-result-slot");
+    const message = node("div", "cs-result-slot");
+    const recent = node("div", "cs-recent");
+    recent.setAttribute("aria-label", "最近の数字");
+    const history = [];
     const actions = node("div", "cs-actions");
     const clear = node("button", "", "賭けを外す");
     clear.type = "button";
@@ -474,8 +497,6 @@
       body.classList.add("is-spinning");
       board.querySelectorAll(".is-hit").forEach((b) => b.classList.remove("is-hit"));
       draw();
-      // The table is below the wheel on a phone: bring the wheel back into view to watch it turn.
-      screen?.scrollTo({ top: 0, behavior: calm() ? "auto" : "smooth" });
       const money = round("roulette");
       money.stake(staked);
       showBalance(screen.querySelector("[data-cs-balance]"));
@@ -499,6 +520,8 @@
       const colour = { red: "赤", black: "黒", green: "緑" }[outcome.colour];
       if (outcome.lines.some((l) => l.won && /^\d+$/.test(l.on))) bigWin("HIT", outcome.net, number + " ぴったり", 400);
       message.replaceChildren(result(number + "（" + colour + "）" + (outcome.net > 0 ? " 当たり" : outcome.lines.some((l) => l.won) ? " 一部当たり" : " はずれ"), outcome.net));
+      history.unshift(number);
+      recent.replaceChildren(...history.slice(0, 8).map((n) => node("i", "is-" + C.colourOf(n), String(n))));
       spinning = false;
       body.classList.remove("is-spinning");
       // The same bets stay on the table for another spin, as long as they can still be paid.
@@ -517,13 +540,17 @@
         b.querySelector(".cs-stake")?.remove();
         if (amount) b.append(node("i", "cs-stake", fmt(amount)));
       });
-      total.textContent = sum ? "賭けた合計 " + fmt(sum) + unit() : "チップを選んで、数字や色をタップ。初めてなら「赤」か「黒」がおすすめです";
+      total.textContent = sum ? "賭けた合計 " + fmt(sum) + unit() : "数字や色をタップしてチップを置きます（初めてなら赤か黒）";
       spin.disabled = spinning || !sum || sum > balance();
       clear.disabled = spinning || !sum;
     }
+    const stage = node("div", "cs-stage");
+    const side = node("div", "cs-stage-side");
+    side.append(message, recent);
+    stage.append(wheel, side);
+    body.classList.add("is-roulette-body");
     body.append(
-      wheel,
-      message,
+      stage,
       chipRow,
       board,
       total,
@@ -531,7 +558,8 @@
       rules("ルーレットの遊び方", [
         "玉が止まる場所を予想してチップを置きます。いくつ置いても構いません。",
         "数字1つを当てると36倍（賭けた分＋35倍）。",
-        "1〜12などの12個の組は3倍、赤・黒・奇数・偶数・1〜18・19〜36は2倍で戻ります。",
+        "右の「列」は横一列の12個、1〜12などは12個の組で、どちらも3倍で戻ります。",
+        "赤・黒・奇数・偶数・1〜18・19〜36は2倍で戻ります。",
         "0は数字に賭けたときだけ当たりです。",
       ]),
     );

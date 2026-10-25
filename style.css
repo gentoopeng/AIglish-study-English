@@ -2474,7 +2474,7 @@ html.ios-stable-rendering body .warmup-start-exiting .warmup-start-card::after{a
 @media(max-height:650px){.battle-event-group{gap:9px;}.battle-event-list strong{font-size:11px;}.battle-event-list small{font-size:9px;margin-top:2px;}.battle-event-categories button{padding:5px 3px!important;}.battle-event-presets button{padding:5px!important;}.battle-entry>button{padding:18px 14px!important;}}
 /* One-shot entrance, only while the battle tab is visible. No continuous effects. */
 @keyframes battle-choice-enter {from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
-@media(prefers-reduced-motion:no-preference){#view-battle.active .battle-mode-card{animation:battle-choice-enter .42s cubic-bezier(.2,.7,.2,1) both}}
+@media(prefers-reduced-motion:no-preference){#communityBattle:not([hidden]) .battle-mode-card{animation:battle-choice-enter .42s cubic-bezier(.2,.7,.2,1) both}}
 .study-group-dialog .group-back-button{position:absolute;left:12px;top:12px;display:grid;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:10px;background:transparent;color:var(--text-main);cursor:pointer}
 .study-group-dialog>h2{margin-left:48px!important;min-height:32px}.study-group-dialog>.library-editor-eyebrow{margin-left:48px}
 .group-list-meta{white-space:normal;line-height:1.5}
@@ -2931,3 +2931,6 @@ html body .modern-btn:active{box-shadow:0 0 0 3px rgba(213,201,172,.18)!importan
 #flashcard-setup-screen .pill-btn.active{background:#c6b790;border-color:#c6b790;color:#18202d;}
 #flashcard-setup-screen .modern-btn,#flashcard-setup-screen button[onclick*="startFlashcard"]{border-image:none!important;}
 .library-editor-eyebrow:empty,.vocab-library-kicker:empty{display:none!important;}
+/* Word battle inside the users tab. */
+#communityBattle .battle-mode-grid{height:auto;padding:18px 0 8px;}
+#communityBattle #view-battle{min-height:0;}

@@ -38,7 +38,7 @@ const { chromium } = require("playwright"),
         }
       return map;
     }, book);
-    await page.locator("#nav-battle").click();
+    await page.locator("#nav-community").click(); await page.locator("#communitySegments button", { hasText: "単語バトル" }).click();
     await page.locator(".mode-casual").click();
     await page.locator("[data-battle-route=solo]").click();
     await page.locator(`.battle-book-picker input[value="${book}"]`).check();

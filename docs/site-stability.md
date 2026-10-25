@@ -1006,3 +1006,7 @@ The casino header shows today's running total (Japan time), kept on the device s
 ## Help for beginners at the tables (10.21.67.00)
 
 Blackjack suggests a move each turn (the button glows, with one line on why, from a simple basic strategy). Dice poker lights the dice worth keeping and offers one tap to keep them. A win pops with a small burst of chips, and the balance runs to its new value with a short flash. The casino tables rise in one after another when the tab opens. English eyebrow labels over Japanese headings (VOCABULARY, LIBRARY, CASINO, TEXAS HOLD'EM, HOW TO PLAY, HOW TO USE, MY VOCABULARY) are gone.
+
+## Word battle in the users tab; a roulette table like the felt (10.21.68.00)
+
+The 単語バトル tab is gone: word battle is the third segment of the users tab (ユーザー・グループ・単語バトル), so the bar has six tabs. Roulette now fits on one phone screen without scrolling. The wheel sits beside the last result and the last eight numbers, and the table is laid out as on felt: 0 on the left, three rows of twelve with 3 … 36 on top, the row bets (列, pays 3×) on the right, the dozens and the even-money bets underneath, each with what it pays.

@@ -61,7 +61,7 @@ const { chromium, webkit } = require("playwright"),
         LearningData.restore(book, progress);
       }
     });
-    await page.locator("#nav-battle").click();
+    await page.locator("#nav-community").click(); await page.locator("#communitySegments button", { hasText: "単語バトル" }).click();
     assert.equal(
       await page
         .locator(".mode-casual")
@@ -89,7 +89,7 @@ const { chromium, webkit } = require("playwright"),
     await page.locator("dialog.pk-tutorial[open]").getByRole("button", { name: "スキップ" }).click();
     await page.getByRole("button", { name: "ポーカーを閉じる" }).click();
     await page.locator("dialog.poker-screen").waitFor({ state: "detached" });
-    await page.locator("#nav-battle").click();
+    await page.locator("#nav-community").click(); await page.locator("#communitySegments button", { hasText: "単語バトル" }).click();
     await page.locator(".mode-casual").click();
     await page.screenshot({
       path: "/tmp/battle-entry-" + type.name() + ".png",

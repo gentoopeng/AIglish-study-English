@@ -222,7 +222,7 @@ const { chromium, webkit } = require("playwright"),
     }
     async function lobby(page, intent = "create") {
       records.set(page, []);
-      await page.locator("#nav-battle").click();
+      await page.locator("#nav-community").click(); await page.locator("#communitySegments button", { hasText: "単語バトル" }).click();
       await page.locator(".mode-casual").click();
       assert.equal(await page.locator("[data-config-tab]").count(), 0);
       await page.locator("[data-battle-route=" + intent + "]").click();

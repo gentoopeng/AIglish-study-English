@@ -945,17 +945,29 @@
     const battle = root.querySelector(".duel-entry");
     for (const node of [...root.children])
       if (node !== battle) friends.append(node);
+    // Word battle lives here too, as the third segment (it used to be a tab of its own).
+    const duel = document.createElement("section");
+    duel.id = "communityBattle";
+    duel.hidden = true;
+    const arena = document.getElementById("view-battle");
+    if (arena) {
+      arena.hidden = false;
+      duel.append(arena);
+    }
     for (const [name, el] of [
       ["ユーザー", friends],
       ["グループ", groups],
+      ["単語バトル", duel],
     ]) {
       const b = button(name, async () => {
         friends.hidden = el !== friends;
         groups.hidden = el !== groups;
+        duel.hidden = el !== duel;
         nav
           .querySelectorAll("button")
           .forEach((n) => n.setAttribute("aria-pressed", String(n === b)));
         if (el === groups) await load();
+        else if (el === duel) return;
         else {
           window.People?.render();
           await window.People?.refresh(false);
@@ -964,7 +976,7 @@
       b.setAttribute("aria-pressed", String(el === friends));
       nav.append(b);
     }
-    root.append(nav, friends, groups);
+    root.append(nav, friends, groups, duel);
     if (battle) battle.remove();
     document.querySelector("#createStudyGroup").innerHTML =
       '<span class="group-create-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M19 7v8m-4-4h8"/></svg></span><span>グループを作る</span>';

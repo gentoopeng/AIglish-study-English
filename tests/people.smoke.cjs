@@ -152,9 +152,11 @@ const { chromium, webkit } = require("playwright"),
     const ids = await page
       .locator(".nav-bar .nav-item")
       .evaluateAll((nodes) => nodes.map((node) => node.id));
-    assert.equal(ids[ids.indexOf("nav-community") + 1], "nav-battle");
+    // Word battle is the third segment of the users tab, not a tab of its own.
+    assert.equal(ids.includes("nav-battle"), false);
     assert.equal(await page.locator("#nav-community").innerText(), "ユーザー");
-    await page.locator("#nav-battle").click();
+    assert.deepEqual(await page.locator("#communitySegments button").allInnerTexts(), ["ユーザー", "グループ", "単語バトル"]);
+    await page.locator("#communitySegments button", { hasText: "単語バトル" }).click();
     assert.equal(await page.locator("#view-battle").isVisible(), true);
     assert.equal(
       await page.locator("#view-battle").evaluate((el) => el.childElementCount),

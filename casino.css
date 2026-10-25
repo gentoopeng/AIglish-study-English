@@ -67,9 +67,6 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 .cs-landed{position:absolute;left:50%;top:50%;display:grid;place-items:center;width:64px;height:64px;border-radius:50%;transform:translate(-50%,-50%);color:#fff;font:800 26px system-ui,sans-serif;}
 .cs-landed:empty{display:none;}.cs-landed.is-red{background:#9b2228;}.cs-landed.is-black{background:#151a24;}.cs-landed.is-green{background:#1d6b4f;}
 .cs-landed:not(:empty){box-shadow:0 0 0 3px #e2cf9b,0 6px 18px rgba(0,0,0,.5);animation:cs-pop .35s cubic-bezier(.2,1.6,.4,1);}
-.cs-board{display:grid;gap:4px;}
-.cs-numbers{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;}
-.cs-outside{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}
 .cs-spot{position:relative;min-height:36px;padding:0 2px;border:1px solid rgba(243,233,207,.25);border-radius:8px;background:#143f37;color:#f3eee2;font:700 13px system-ui,sans-serif;cursor:pointer;}
 .cs-spot.is-red{background:#7d1c22;}.cs-spot.is-black{background:#151a24;}.cs-spot.is-green{background:#1d6b4f;}
 .cs-spot.is-hit{outline:2px solid #f3e2a6;outline-offset:-1px;box-shadow:0 0 12px rgba(243,226,166,.6);}
@@ -129,8 +126,34 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 @keyframes cs-flash-down{0%{transform:scale(.94);color:#e7a3a3}100%{transform:none}}
 @keyframes cs-hint-glow{50%{box-shadow:0 0 0 5px rgba(226,207,155,.12),0 0 18px rgba(226,207,155,.5)}}
 .cs-pays{display:block;margin-top:1px;color:#d9cba4;font:600 9px/1.2 system-ui,sans-serif;opacity:.85;}
-.cs-outside .cs-spot{min-height:42px;line-height:1.2;}
-.cs-legend{margin:2px 0 0;color:#8f8a7e;font-size:10.5px;text-align:center;}
 .casino-game{position:relative;}
 .casino-level{position:absolute;top:12px;right:12px;padding:2px 8px;border-radius:999px;border:1px solid rgba(213,201,172,.35);color:#cfc8b8;font:700 10px/1.5 system-ui,sans-serif;font-style:normal;}
 .casino-level.is-easy{border-color:rgba(159,213,194,.55);color:#bfe6d6;}.casino-level.is-deep{border-color:rgba(226,207,155,.55);color:#e7dcc0;}
+
+/* Roulette on one screen: the wheel beside the last result, then the table as printed on felt. */
+.is-roulette-body{gap:10px;}
+.cs-stage{display:flex;align-items:center;gap:12px;}
+.cs-stage .cs-wheel{flex-shrink:0;width:min(42vw,25dvh,200px);margin:0;}
+.cs-stage-side{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;}
+.cs-stage-side .cs-result{flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;font-size:12px;}
+.cs-stage-side .cs-result b{font-size:20px;}
+.cs-stage-side .cs-burst{right:auto;left:40px;top:70%;}
+.cs-result-slot:empty::before{content:"玉の止まる場所を予想しよう";display:block;padding:10px 12px;border:1px dashed rgba(213,201,172,.25);border-radius:14px;color:#8f8a7e;font-size:12px;line-height:1.5;}
+.cs-recent{display:flex;flex-wrap:wrap;gap:4px;min-height:22px;}
+.cs-recent i{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;color:#fff;font:700 10px system-ui,sans-serif;font-style:normal;}
+.cs-recent i:first-child{box-shadow:0 0 0 2px #e2cf9b;}
+.cs-recent .is-red{background:#9b2228;}.cs-recent .is-black{background:#151a24;border:1px solid #ffffff30;}.cs-recent .is-green{background:#1d6b4f;}
+.cs-board{display:grid;grid-template-columns:1.15fr repeat(12,minmax(0,1fr)) 1.35fr;grid-template-rows:repeat(3,minmax(30px,4.6dvh)) repeat(2,minmax(30px,4.4dvh));gap:0;padding:4px;border-radius:10px;background:#16573f;box-shadow:inset 0 0 0 2px #e2cf9b55;}
+.cs-board .cs-spot{min-height:0;padding:0;border:1px solid rgba(255,255,255,.55);border-radius:0;background:transparent;color:#fff;font:700 11px/1.1 system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.cs-board .cs-spot:active{background:rgba(255,255,255,.12);}
+.cs-board .is-zero{font-size:15px;border-radius:40% 0 0 40%;}
+.cs-pip{display:grid;place-items:center;width:86%;max-width:24px;height:84%;border-radius:50%;font:800 10.5px system-ui,sans-serif;letter-spacing:-.04em;}
+.cs-pip.is-red{background:#c8202b;}.cs-pip.is-black{background:#10141c;}
+.cs-board .is-outside{font-size:10.5px;}
+.cs-board .is-outside.is-red{color:#ff6b6b;}.cs-board .is-outside.is-black{color:#10141c;text-shadow:0 0 1px #fff8;}
+.cs-board .cs-pays{display:block;margin-top:1px;color:#f3e9cf;font:600 8.5px/1 system-ui,sans-serif;opacity:.8;}
+.cs-board .cs-spot.is-hit{outline:2px solid #ffe38a;outline-offset:-2px;box-shadow:inset 0 0 12px rgba(255,227,138,.55);z-index:1;}
+.cs-board .cs-stake{right:-3px;top:-5px;min-width:16px;height:16px;padding:0 3px;font:800 8.5px/16px system-ui,sans-serif;border-radius:8px;}
+.is-roulette-body .cs-hint{font-size:11px;}
+.is-roulette-body .cs-chips .cs-chip-btn{min-height:40px;max-width:48px;}
+@media(max-height:700px){.is-roulette-body{gap:7px;}.is-roulette-body .cs-chips .cs-chip-btn{min-height:36px;max-width:42px;}}
