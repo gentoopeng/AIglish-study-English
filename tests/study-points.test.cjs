@@ -3,7 +3,10 @@ const { test } = require("node:test"),
   vm = require("node:vm"),
   fs = require("node:fs"),
   { webcrypto } = require("node:crypto");
-function setup(remote = new Map()) {
+// Most tests check settlement with distinct tiers (the pre-10.21.61.00 rates, still valid for
+// old records); `even` uses the shipped rates, where every way of answering pays the same.
+const TIERS = { card: 1, work: 1, quiz: 3, review: 10 };
+function setup(remote = new Map(), even = false) {
   const values = new Map(),
     c = {
       myId: "a",
@@ -39,6 +42,12 @@ function setup(remote = new Map()) {
     "study-points.js",
   ])
     vm.runInNewContext(fs.readFileSync(file, "utf8"), c);
+  if (!even)
+    c.StudyPointPolicy = {
+      ...c.StudyPointPolicy,
+      rates: TIERS,
+      allowed: (source, amount) => Object.hasOwn(TIERS, source) && amount === TIERS[source],
+    };
   return { c, values, points: c.StudyPoints, remote };
 }
 test("word/day claims deduplicate meanings, retries and two devices; next day has a separate receipt", async () => {
@@ -549,4 +558,25 @@ test("simultaneous devices retry conflicting tier settlements without losing or 
     await client.points.refresh();
     assert.equal(client.points.balance(), 10);
   }
+});
+
+test("every way of answering a word pays the same 2 points once a day; records at the old rates still settle", async () => {
+  const a = setup(new Map(), true);
+  for (const source of ["card", "quiz", "review"]) assert.equal(a.points.reward(source, "book", "1"), source === "card" ? 2 : 0);
+  assert.equal(a.points.reward("review", "book", "2"), 2);
+  assert.equal(a.points.reward("work", "workbook", "3"), 2);
+  assert.equal(a.points.balance(), 6);
+  await a.points.flush();
+  assert.equal(a.points.balance(), 6);
+  // A review answered before the update, still waiting to sync at its old amount.
+  const day = a.c.WeakReviewModel.day(),
+    value = a.points.read(),
+    token = JSON.stringify([day, "book", "9"]);
+  value.pending[token] = { source: "review", book: "book", num: "9", day, amount: 10, at: Date.now() };
+  a.values.set("core_v4_study_points_a", JSON.stringify(value));
+  await a.points.flush();
+  assert.equal(a.points.balance(), 16);
+  assert.equal(Object.keys(a.points.read().pending).length, 0);
+  // Amounts no rate ever paid are refused.
+  assert.equal(a.c.StudyPointPolicy.allowed("review", 7), false);
 });

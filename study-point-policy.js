@@ -1,7 +1,11 @@
-// One daily content reward, upgraded by recall quality rather than added per action.
+// One daily content reward per word (or workbook problem): the same for every way of answering.
 (function (root) {
   "use strict";
-  const rates = Object.freeze({ card: 1, work: 1, quiz: 3, review: 10 });
+  const rates = Object.freeze({ card: 2, work: 2, quiz: 2, review: 2 });
+  // Amounts from before the rates were evened out (10.21.61.00), still valid for records made then.
+  const earlier = Object.freeze({ card: [1], work: [1], quiz: [3], review: [10] });
+  const allowed = (source, amount) =>
+    Object.hasOwn(rates, source) && (amount === rates[source] || earlier[source].includes(amount));
   const day = (now = Date.now()) =>
     new Date(now + 9 * 3600000).toISOString().slice(0, 10);
   const dayStart = (date) => Date.parse(date + "T00:00:00+09:00");
@@ -70,6 +74,7 @@
   }
   const api = {
     rates,
+    allowed,
     day,
     dayStart,
     amount,

@@ -280,8 +280,8 @@ const { chromium, webkit } = require("playwright"),
     await answer(a);
     assert.equal(
       await a.evaluate(() => StudyPoints.balance()),
-      103,
-      "a real quiz answer earns three regardless of solo score settings",
+      102,
+      "a real quiz answer earns the same 2 points regardless of solo score settings",
     );
     await answer(a);
     await answer(a);

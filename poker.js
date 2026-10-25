@@ -151,10 +151,12 @@
     return room;
   }
   const deadlineOf = (room, hand) => (hand.toAct && room.settings.think ? Date.now() + room.settings.think * 1000 : 0);
+  const signed = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + fmt(Math.abs(n || 0));
   const say = (room, text) => {
     room.log = (room.log || []).concat(text).slice(-6);
   };
-  const actionText = { fold: "フォールド", check: "チェック", call: "コール", raise: "レイズ", allin: "オールイン" };
+  // Everyday words rather than poker terms, for people new to the game.
+  const actionText = { fold: "降りた", check: "様子見", call: "同じだけ出した", raise: "上乗せ", allin: "全部賭けた" };
 
   async function create(settings) {
     connected();
@@ -270,7 +272,7 @@
           if (hand.needs === "showdown") {
             next = P.showdown(hand, deal.holes);
             const winners = Object.keys(next.result.won);
-            say(fresh, winners.map((id) => (fresh.players[id]?.name || id) + " +" + fmt(next.result.won[id])).join("、") + "（" + (next.result.hands[winners[0]]?.name || "") + "）");
+            say(fresh, winners.map((id) => (fresh.players[id]?.name || id) + " " + signed(next.result.net[id])).join("、") + "（" + (next.result.hands[winners[0]]?.name || "") + "）");
           } else {
             const given = hand.board.length,
               count = hand.needs === "flop" ? 3 : 1;
@@ -291,7 +293,7 @@
           if (!gone && (!hand.deadline || Date.now() <= hand.deadline)) return null;
           const o = P.options(hand, hand.toAct),
             next = o && o.check && !gone ? P.act(hand, hand.toAct, "check") : P.leave(hand, hand.toAct);
-          say(fresh, (fresh.players[h.toAct]?.name || h.toAct) + "：" + (o && o.check && !gone ? "チェック（時間切れ）" : "フォールド（時間切れ）"));
+          say(fresh, (fresh.players[h.toAct]?.name || h.toAct) + "：" + (o && o.check && !gone ? "様子見（時間切れ）" : "降りた（時間切れ）"));
           next.enc = hand.enc;
           next.deadline = deadlineOf(fresh, next);
           return withHand(fresh, next);
@@ -453,6 +455,7 @@
     el.classList.toggle("is-red", card[1] === "h" || card[1] === "d");
     el.append(node("b", "", card[0] === "T" ? "10" : card[0]), node("i", "", { s: "♠", h: "♥", d: "♦", c: "♣" }[card[1]]));
     el.setAttribute("aria-label", P.pretty(card));
+    el.dataset.card = card;
     return el;
   }
 
@@ -518,16 +521,18 @@
   }
 
   function enter(code, practiceRoom) {
+    window.PokerFX?.reset();
     session = { code, id: uid(), room: practiceRoom || null, practice: !!practiceRoom, deal: null };
     const view = screen.querySelector("[data-pk-view]");
     view.className = "pk-table-view";
     view.innerHTML =
       '<header class="pk-bar"><div><strong>テーブル <span data-pk-room></span></strong><small data-pk-rules></small></div><button type="button" class="pk-leave" data-pk-leave>席を立つ</button></header>' +
       '<div class="pk-felt"><div class="pk-seats"></div><div class="pk-center"><div class="pk-board"></div><p class="pk-pot"></p><p class="pk-log" aria-live="polite"></p></div></div>' +
-      '<section class="pk-me"><div class="pk-hole"></div><p class="pk-hand-name"></p><div class="pk-actions"></div></section>' +
+      '<section class="pk-me"><div class="pk-hole"></div><div class="pk-help" hidden><div class="pk-help-top"><p class="pk-hand-name"></p><button type="button" class="pk-ranks-open">役の一覧</button></div><ul class="pk-draws"></ul></div><div class="pk-actions"></div></section>' +
       '<p class="pk-status" data-pk-status role="status"></p>';
     view.querySelector("[data-pk-room]").textContent = practiceRoom ? "練習" : code;
     view.querySelector("[data-pk-leave]").onclick = guard(leaveTable);
+    view.querySelector(".pk-ranks-open").onclick = openRanks;
     view.querySelector("[data-pk-leave]").textContent = practiceRoom ? "やめる" : "席を立つ";
     unsubscribe?.();
     unsubscribe = null;
@@ -627,9 +632,11 @@
         (shown || [null, null]).forEach((c) => cards.append(cardEl(c, true)));
         seat.append(cards);
       }
-      if (h?.street === "done" && h.result) {
-        const won = h.result.won?.[id];
-        if (won) seat.append(node("span", "pk-won", "+" + fmt(won) + (h.result.hands?.[id] ? " " + h.result.hands[id].name : "")));
+      // The result is what each player gained or lost this hand (what they put in counts too).
+      if (h?.street === "done" && h.result && inHand) {
+        const net = h.result.net?.[id] || 0;
+        if (net > 0) seat.append(node("span", "pk-won", signed(net) + (h.result.hands?.[id] ? " " + h.result.hands[id].name : "")));
+        else if (net < 0) seat.append(node("span", "pk-lost", signed(net)));
       }
       if (h && h.toAct === id) seat.append(node("span", "pk-clock", p.bot ? "考え中…" : ""));
       seats.append(seat);
@@ -638,8 +645,9 @@
     const board = view.querySelector(".pk-board");
     board.replaceChildren();
     for (let i = 0; i < 5; i++) board.append(h?.board?.[i] ? cardEl(h.board[i]) : node("span", "pk-card is-slot"));
-    view.querySelector(".pk-pot").textContent = h && h.street !== "done" ? "ポット " + fmt(P.potOf(h)) : "";
+    view.querySelector(".pk-pot").textContent = h && h.street !== "done" ? "場のチップ " + fmt(P.potOf(h)) : "";
     view.querySelector(".pk-log").textContent = (room.log || []).slice(-1)[0] || "";
+    window.PokerFX?.decorate(view, room, ring, places, me);
     // Points: this hand's result, once.
     if (!room.practice && h?.street === "done" && h.result?.net && Object.hasOwn(h.result.net, me)) settle(handKey(room, h.no), h.result.net[me]);
     renderMine(room);
@@ -657,14 +665,15 @@
     const me = uid(),
       h = room.hand,
       hole = view.querySelector(".pk-hole"),
-      nameLine = view.querySelector(".pk-hand-name"),
       actions = view.querySelector(".pk-actions"),
       cards = h && h.seats.includes(me) ? await myHoles(room) : null;
     if (session?.room !== room) return;
+    view.querySelector(".pk-me")?.classList.remove("is-raising");
     hole.replaceChildren();
     if (cards) cards.forEach((c) => hole.append(cardEl(c)));
+    window.PokerFX?.hole(view, room, me);
     hole.classList.toggle("is-folded", !!h?.folded?.[me]);
-    nameLine.textContent = cards ? (h.folded[me] ? "フォールド" : P.describe(cards.concat(h.board || []))) : "";
+    help(view, h, cards, me);
     actions.replaceChildren();
     const mine = room.players[me];
     if (room.practice && room.status === "over") {
@@ -698,46 +707,132 @@
       return;
     }
     const row = node("div", "pk-buttons");
-    row.append(button("フォールド", () => move("fold"), "pk-fold"));
-    row.append(o.check ? button("チェック", () => move("check")) : button("コール " + fmt(o.call), () => move("call")));
+    row.append(button("降りる", () => move("fold"), "pk-fold"));
+    row.append(o.check ? button("様子見", () => move("check")) : button("同じだけ出す " + fmt(o.call), () => move("call")));
     if (o.raise) {
-      const raise = button(h.current ? "レイズ" : "ベット", () => {}, "pk-raise");
+      const raise = button(h.current ? "上乗せする" : "賭ける", () => {}, "pk-raise");
       raise.onclick = () => openRaise(o, h);
       row.append(raise);
     }
     actions.append(row);
   }
+  // Choosing how much to put in: a number to type or nudge, a slider, and four easy presets.
+  // `to` is this round's total for the player, as the model counts it.
   function openRaise(o, h) {
-    const actions = screen.querySelector(".pk-actions");
+    const actions = screen.querySelector(".pk-actions"),
+      me = uid(),
+      already = h.bet[me] || 0,
+      step = Math.max(1, h.bb / 2);
     actions.replaceChildren();
+    actions.closest(".pk-me")?.classList.add("is-raising");
     const panel = node("div", "pk-raise-panel"),
-      amount = node("strong", "pk-raise-amount"),
+      title = node("p", "pk-raise-title", h.current ? "いくら上乗せする？" : "いくら賭ける？"),
+      line = node("div", "pk-raise-line"),
+      less = node("button", "pk-step", "−"),
+      more = node("button", "pk-step", "＋"),
+      input = node("input", "pk-raise-input"),
+      note = node("p", "pk-raise-note"),
       slider = node("input");
+    less.type = more.type = "button";
+    less.setAttribute("aria-label", "減らす");
+    more.setAttribute("aria-label", "増やす");
+    input.type = "number";
+    input.inputMode = "numeric";
+    input.setAttribute("aria-label", "出すチップ");
     slider.type = "range";
     slider.min = String(o.raise.min);
     slider.max = String(o.raise.max);
-    slider.step = String(Math.max(1, h.bb / 2));
-    slider.value = String(o.raise.min);
-    slider.setAttribute("aria-label", "レイズ額");
-    const show = () => (amount.textContent = (Number(slider.value) >= o.raise.max ? "オールイン " : "") + fmt(slider.value));
-    slider.oninput = show;
-    show();
-    const quick = node("div", "pk-quick"),
-      set = (value) => {
-        slider.value = String(Math.max(o.raise.min, Math.min(o.raise.max, Math.round(value))));
-        show();
-      };
-    [["最小", o.raise.min], ["½ポット", h.current + o.pot / 2], ["ポット", h.current + o.pot], ["オールイン", o.raise.max]].forEach(([label, value]) => {
+    slider.step = String(step);
+    slider.setAttribute("aria-label", "出すチップの調整");
+    let to = o.raise.min;
+    const set = (value, typed) => {
+      to = Math.max(o.raise.min, Math.min(o.raise.max, Math.round(value)));
+      slider.value = String(to);
+      if (!typed) input.value = String(to - already);
+      const all = to >= o.raise.max;
+      note.textContent = all ? "手持ちを全部出します" : "手持ち " + fmt(h.stacks[me]) + " のうち " + fmt(to - already) + " 出します（最低 " + fmt(o.raise.min - already) + "）";
+      confirm.textContent = all ? "全部賭ける" : fmt(to - already) + " 出す";
+    };
+    const confirm = button("出す", () => (to >= o.raise.max ? move("allin") : move("raise", to)), "pk-primary");
+    slider.oninput = () => set(Number(slider.value));
+    input.oninput = () => input.value !== "" && set(Number(input.value) + already, true);
+    input.onblur = () => set(to);
+    less.onclick = () => set(to - step * 2);
+    more.onclick = () => set(to + step * 2);
+    line.append(less, input, more);
+    const quick = node("div", "pk-quick");
+    [["少しだけ", o.raise.min], ["場の半分", h.current + o.pot / 2], ["場と同じ", h.current + o.pot], ["全部", o.raise.max]].forEach(([label, value]) => {
       const b = node("button", "", label);
       b.type = "button";
       b.onclick = () => set(value);
       quick.append(b);
     });
     const row = node("div", "pk-buttons");
-    row.append(button("戻る", () => renderMine(session.room), "pk-fold"));
-    row.append(button("決定", () => (Number(slider.value) >= o.raise.max ? move("allin") : move("raise", Number(slider.value))), "pk-primary"));
-    panel.append(amount, slider, quick, row);
+    row.append(button("戻る", () => renderMine(session.room), "pk-fold"), confirm);
+    panel.append(title, line, note, slider, quick, row);
     actions.append(panel);
+    set(o.raise.min);
+  }
+
+  // What the player's cards make now, which cards make it, and what the next card could bring.
+  function help(view, h, cards, me) {
+    const box = view.querySelector(".pk-help"),
+      name = view.querySelector(".pk-hand-name"),
+      list = view.querySelector(".pk-draws");
+    view.querySelectorAll(".pk-card.is-part").forEach((c) => c.classList.remove("is-part"));
+    list.replaceChildren();
+    box.hidden = !cards;
+    if (!cards) return;
+    if (h.folded[me]) {
+      name.textContent = "このハンドは降りました";
+      return;
+    }
+    const H = window.PokerHint,
+      board = h.board || [],
+      now = H.made(cards, board);
+    name.replaceChildren(node("strong", "", now.name), node("small", "", now.plain));
+    if (now.category > 0) for (const card of now.cards) view.querySelectorAll('.pk-card[data-card="' + card + '"]').forEach((c) => c.classList.add("is-part"));
+    if (h.street === "done") return;
+    if (!board.length) for (const tip of H.start(cards)) list.append(node("li", "pk-tip", tip));
+    for (const d of H.draws(cards, board).slice(0, 3)) {
+      const item = node("li", "pk-draw" + (d.category >= 4 ? " is-big" : ""));
+      item.append(node("span", "", d.need + "が来たら"), node("strong", "", d.name), node("em", "", "次で約" + Math.round(d.next * 100) + "%"));
+      list.append(item);
+    }
+  }
+  // All hands from strongest to weakest, with an example, the one held now and the ones in reach.
+  const EXAMPLES = ["As Ks Qs Js Ts", "9h 8h 7h 6h 5h", "Qc Qd Qh Qs 2d", "Kc Kd Kh 4s 4d", "Ad Jd 8d 6d 3d", "9c 8d 7s 6h 5c", "7c 7d 7h Ks 2d", "Jc Jd 4h 4s 9d", "Ac Ad 9s 6h 3c", "Ac Jd 8s 6h 3c"];
+  function openRanks() {
+    const room = session?.room,
+      h = room?.hand,
+      me = uid(),
+      cards = h && holes.no === h.no ? holes.cards : room?.practice && session.deal?.no === h?.no ? session.deal.holes[me] : null,
+      now = cards && h && !h.folded[me] ? window.PokerHint.made(cards, h.board || []).category : -1,
+      reach = new Set(cards && h && !h.folded[me] ? window.PokerHint.draws(cards, h.board || []).map((d) => d.category) : []);
+    const sheet = node("dialog", "pk-ranks-sheet");
+    sheet.setAttribute("aria-label", "役の一覧");
+    sheet.append(node("p", "pk-kicker", "HAND RANKINGS"), node("h2", "", "役の一覧（上ほど強い）"));
+    const list = node("ol", "pk-ranks-list");
+    EXAMPLES.forEach((example, i) => {
+      const category = 9 - i,
+        item = node("li", category === now ? "is-now" : reach.has(category) ? "is-reach" : "");
+      item.style.setProperty("--i", i);
+      const text = node("div", "pk-rank-text");
+      text.append(node("strong", "", P.NAMES[category]), node("span", "", window.PokerHint.PLAIN[category]));
+      if (category === now) text.append(node("em", "pk-rank-tag", "今の役"));
+      else if (reach.has(category)) text.append(node("em", "pk-rank-tag is-reach", "あと1枚"));
+      const row = node("div", "pk-rank-cards");
+      example.split(" ").forEach((c) => row.append(cardEl(c, true)));
+      item.append(text, row);
+      list.append(item);
+    });
+    const done = node("button", "pk-primary", "閉じる");
+    done.type = "button";
+    done.onclick = () => sheet.close();
+    sheet.addEventListener("close", () => sheet.remove());
+    sheet.append(list, node("p", "pk-note", "同じ役どうしは、使っている数字が大きいほうが勝ちです。"), done);
+    screen.append(sheet);
+    sheet.showModal();
   }
   function renderClock() {
     const room = session?.room,

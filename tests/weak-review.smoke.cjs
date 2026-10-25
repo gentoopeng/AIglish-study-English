@@ -145,7 +145,7 @@ const { chromium, webkit } = require("playwright"),
       .click();
     assert.match(
       await page.locator(".review-feedback").innerText(),
-      /正解.*9pt/,
+      /正解　この単語は本日支給済み/,
     );
     assert.equal(await page.evaluate(() => __reviewSaves), 0);
     assert.match(await page.locator(".review-progress").innerText(), /正解 1/);
@@ -201,7 +201,7 @@ const { chromium, webkit } = require("playwright"),
       await page.screenshot({
         path: process.env.SCREENSHOT.replace(/\.png$/, "-result.png"),
       });
-    assert.equal(await page.evaluate(() => StudyPoints.balance()), 10);
+    assert.equal(await page.evaluate(() => StudyPoints.balance()), 2);
     assert.equal(
       await page.evaluate(() => LearningData.read("review-book")["1"].note),
       "大切なメモ",
@@ -228,7 +228,7 @@ const { chromium, webkit } = require("playwright"),
       .click();
     assert.equal(await page.locator(".weak-review-screen").count(), 0);
     assert.equal(await page.locator("#headerDuelRating").count(), 0);
-    assert.equal(await page.locator("#headerStudyPoints").innerText(), "10pt");
+    assert.equal(await page.locator("#headerStudyPoints").innerText(), "2pt");
     await page.locator("#headerStudyPoints").click();
     await page.getByRole("dialog", { name: "ポイント", exact: true }).waitFor();
     assert.equal(await page.locator(".points-history li").count(), 1);
@@ -244,12 +244,12 @@ const { chromium, webkit } = require("playwright"),
     await page.getByRole("button", { name: "獲得方法", exact: true }).click();
     assert.match(
       await page.locator(".points-methods").innerText(),
-      /合計10pt／単語・日/,
+      /2pt／単語・日/,
     );
     await page.getByRole("button", { name: "ポイントを閉じる" }).click();
     await page.locator(".menu-trigger").click();
     await page.locator("#studyPointsMenuButton").click();
-    assert.equal(await page.locator("[data-points-total]").innerText(), "10pt");
+    assert.equal(await page.locator("[data-points-total]").innerText(), "2pt");
     await page.getByRole("button", { name: "ポイントを閉じる" }).click();
     assert.deepEqual(errors, []);
     console.log(

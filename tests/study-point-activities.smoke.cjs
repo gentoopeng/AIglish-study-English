@@ -55,11 +55,11 @@ const { chromium, webkit } = require("playwright"),
     await page.evaluate(() => swipeFlashcard("left", -100, 0));
     assert.equal(
       await page.evaluate(() => StudyPoints.balance()),
-      1,
+      2,
       "bad self-assessment earns the same card participation point as ok",
     );
     await page.evaluate(() => swipeFlashcard("up", 0, -100));
-    assert.equal(await page.evaluate(() => StudyPoints.balance()), 2);
+    assert.equal(await page.evaluate(() => StudyPoints.balance()), 4);
     assert.equal(
       await page.evaluate(() => window.__pointCloudCalls),
       0,
@@ -83,7 +83,7 @@ const { chromium, webkit } = require("playwright"),
     );
     assert.equal(
       time.points,
-      2,
+      4,
       "today's time does not earn before sleep corrections",
     );
     const sleep = await page.evaluate(() => {
@@ -124,12 +124,12 @@ const { chromium, webkit } = require("playwright"),
       .click();
     const status = page.locator('[data-unit-id="1"] [data-status="bad"]');
     await status.click();
-    assert.equal(await page.evaluate(() => StudyPoints.balance()), 3);
+    assert.equal(await page.evaluate(() => StudyPoints.balance()), 6);
     await page.locator('[data-unit-id="1"] [data-status="none"]').click();
     await page.locator('[data-unit-id="1"] [data-status="ok"]').click();
     assert.equal(
       await page.evaluate(() => StudyPoints.balance()),
-      3,
+      6,
       "resetting and changing status cannot farm points",
     );
     await page
@@ -141,7 +141,7 @@ const { chromium, webkit } = require("playwright"),
       .click();
     assert.equal(
       await page.evaluate(() => StudyPoints.balance()),
-      3,
+      6,
       "bulk status changes do not earn points",
     );
     await page.locator("#headerStudyPoints").click();
@@ -154,7 +154,7 @@ const { chromium, webkit } = require("playwright"),
       /ワークの学習記録/,
     );
     await page.getByRole("button", { name: "獲得方法", exact: true }).click();
-    assert.match(await page.locator(".points-methods").innerText(), /差額2pt/);
+    assert.match(await page.locator(".points-methods").innerText(), /どの方法で答えても1単語2pt/);
     assert.equal(
       await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth,

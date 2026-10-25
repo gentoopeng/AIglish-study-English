@@ -680,8 +680,8 @@ const { chromium, webkit } = require("playwright"),
     assert.equal(await a.locator(".warmup-count").textContent(), "2 / 10");
     assert.equal(
       await a.evaluate(() => StudyPoints.balance()),
-      1,
-      "self-rated login warm-up earns the card tier, not the quiz tier",
+      2,
+      "a self-rated login warm-up card earns the same 2 points as any answer",
     );
     const status = await a.evaluate((prompt) => {
       const w = vocabList.find((w) => w.word === prompt);
