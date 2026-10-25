@@ -397,6 +397,8 @@
       body.classList.add("is-spinning");
       board.querySelectorAll(".is-hit").forEach((b) => b.classList.remove("is-hit"));
       draw();
+      // The table is below the wheel on a phone: bring the wheel back into view to watch it turn.
+      screen?.scrollTo({ top: 0, behavior: calm() ? "auto" : "smooth" });
       const money = round("roulette");
       money.stake(staked);
       refresh();
