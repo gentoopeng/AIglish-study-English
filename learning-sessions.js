@@ -871,62 +871,12 @@
         }),
     );
     draw();
-    // Opening: a ring draws itself while the word count runs up to the total, the letters of
-    // WORDS fall into place and sparks burst out; then it zooms away to the first card.
-    // A tap skips it.
-    const intro = document.createElement("div"),
-      calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    intro.className = "warmup-intro";
-    intro.setAttribute("aria-hidden", "true");
-    intro.innerHTML =
-      '<span class="warmup-intro-glow"></span><svg class="warmup-intro-ring" viewBox="0 0 240 240"><circle cx="120" cy="120" r="112"></circle><circle class="is-draw" cx="120" cy="120" r="112"></circle></svg>' +
-      '<span class="warmup-intro-sparks"></span><span class="warmup-intro-count"></span><span class="warmup-intro-label"></span><span class="warmup-intro-sub">単語スタート</span>';
-    const count = intro.querySelector(".warmup-intro-count"),
-      total = queue.length;
-    [..."WORDS"].forEach((letter, i) => {
-      const span = document.createElement("span");
-      span.textContent = letter;
-      span.style.setProperty("--i", i);
-      intro.querySelector(".warmup-intro-label").append(span);
-    });
-    for (let i = 0; i < 12; i++) {
-      const spark = document.createElement("i");
-      spark.style.setProperty("--a", i * 30 + "deg");
-      intro.querySelector(".warmup-intro-sparks").append(spark);
+    // Opening (ceremony.js): the word count runs up inside a ring, WORDS falls into place and sparks
+    // burst; the first card stays hidden until it zooms away. A tap skips it.
+    if (window.Ceremony) {
+      d.classList.add("warmup-intro-playing");
+      window.Ceremony.play({ host: d, count: queue.length, word: "WORDS", sub: "単語スタート", onLeave: () => d.classList.remove("warmup-intro-playing") });
     }
-    count.textContent = calm ? String(total) : "1";
-    // Held still until frames are really being drawn: the warm-up often opens while the app is
-    // still starting, and timers would otherwise run ahead of an animation nobody saw.
-    intro.classList.add("is-waiting");
-    d.classList.add("warmup-intro-playing");
-    d.append(intro);
-    let shown = 1,
-      tick = null;
-    const run = () => {
-      if (intro.classList.contains("is-leaving")) return;
-      intro.classList.remove("is-waiting");
-      setTimeout(endIntro, calm ? 600 : 2300);
-      if (calm) return;
-      // The count runs up with the ring (about 0.9 s), then lands with a pop and the sparks.
-      tick = setInterval(() => {
-        shown = Math.min(total, shown + 1);
-        count.textContent = String(shown);
-        if (shown >= total) {
-          clearInterval(tick);
-          intro.classList.add("is-landed");
-        }
-      }, Math.max(40, Math.round(900 / Math.max(1, total - 1))));
-    };
-    requestAnimationFrame(() => requestAnimationFrame(run));
-    const endIntro = () => {
-      if (intro.classList.contains("is-leaving")) return;
-      clearInterval(tick);
-      count.textContent = String(total);
-      intro.classList.add("is-leaving");
-      d.classList.remove("warmup-intro-playing");
-      setTimeout(() => intro.remove(), 600);
-    };
-    intro.addEventListener("pointerdown", endIntro);
   }
   function startLoginWarmup() {
     welcomeEligible = uid();

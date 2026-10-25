@@ -143,6 +143,14 @@
     const levelOf=ms=>{const minutes=positive(ms)/60000;return minutes>=90?4:minutes>=45?3:minutes>=15?2:minutes>=1?1:0;};
     // Days in a row with at least a minute, counting back from today (or yesterday, if today has none yet).
     function streak(now){let count=0;const d=new Date(now);if(dayMilliseconds(data.days[dateKey(d)])<60000)d.setDate(d.getDate()-1);while(dayMilliseconds(data.days[dateKey(d)])>=60000&&count<3660){count++;d.setDate(d.getDate()-1);}return count;}
+    // Opening the study tab on a day that extends a streak of two days or more celebrates it, once a day.
+    function celebrateStreak(){
+        if(!data||!window.Ceremony||!user||user==='GUEST-000')return;
+        const now=Date.now(),days=streak(now),today=dateKey(now),key='aiglish_streak_seen_'+user;
+        if(days<2||dayMilliseconds(data.days[today])<60000)return;
+        try{if(localStorage.getItem(key)===today)return;localStorage.setItem(key,today);}catch(error){return;}
+        const week=Array.from({length:7},(_,i)=>{const d=new Date(now);d.setDate(d.getDate()-6+i);return d;});window.Ceremony.play({style:'flame',count:days,word:'DAYS',sub:'連続学習',note:'今日 '+spoken(dayMilliseconds(data.days[today])),days:week.map(d=>dayMilliseconds(data.days[dateKey(d)])>=60000),dayLabels:week.map(d=>weekdayNames[d.getDay()]),tone:'gold'});
+    }
     function renderStats(now){
         const week=weekValues(data,weekStart(now)),today=dateKey(now),past=week.filter(v=>v.date<=today),sum=past.reduce((a,v)=>a+v.ms,0);
         text(document.getElementById('studyStatWeek'),spoken(sum));
@@ -254,7 +262,7 @@
     const oldLoad=window.loadUserStats;
     window.loadUserStats=async function(){const owner=uid(),result=await oldLoad.apply(this,arguments);if(uid()===owner){ensureUser();if(userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);persist();sync();renderCalendar();chart();}return result;};
     const oldSave=window.saveUserStats;window.saveUserStats=function(){if(data&&uid()===user&&userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);sync();return oldSave.apply(this,arguments);};
-    const oldSwitch=window.switchTab;window.switchTab=function(tab){if(tab!=='study')cancelRanking();tick();const result=oldSwitch.apply(this,arguments);active=eligible();lastMono=performance.now();lastWall=Date.now();if(!active)unlock();else claim();if(tab==='study'){renderCalendar();refreshRanking();}return result;};
+    const oldSwitch=window.switchTab;window.switchTab=function(tab){if(tab!=='study')cancelRanking();tick();const result=oldSwitch.apply(this,arguments);active=eligible();lastMono=performance.now();lastWall=Date.now();if(!active)unlock();else claim();if(tab==='study'){renderCalendar();refreshRanking();celebrateStreak();}return result;};
     const oldLogout=window.logoutToGate;window.logoutToGate=async function(){tick();active=false;unlock();return oldLogout.apply(this,arguments);};
     document.getElementById('studyTimerToggle').onclick=()=>{tick();manual=!manual;paused=!manual;active=eligible();if(active)claim();else unlock();renderDisplay();};
     document.getElementById('studyPreviousMonth').onclick=()=>{month.setMonth(month.getMonth()-1);renderCalendar();};document.getElementById('studyNextMonth').onclick=()=>{month.setMonth(month.getMonth()+1);renderCalendar();};
