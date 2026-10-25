@@ -183,6 +183,7 @@
     const row = node("div", "cs-bet-row");
     row.append(node("span", "", "賭ける"), amount, clear);
     bar.append(row, chips, play);
+    if (real() && balance() <= 0) bar.append(node("p", "cs-hint", "賭けられるポイントがありません。単語カードや苦手復習でポイントがたまります。"));
     if (!real() && balance() <= 0) {
       const reset = node("button", "cs-reset", "練習チップを" + fmt(PRACTICE_START) + "枚に戻す");
       reset.type = "button";
