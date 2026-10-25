@@ -230,12 +230,6 @@
     // 4. 一括インポート・削除・リセット
     // ================================================================
 
-    window.toggleBulkImportCard = function() {
-        var sec = document.getElementById('bulkImportToggleSection');
-        if (!sec) return;
-        sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
-        if (sec.style.display === 'block') window.renderBulkDeleteList();
-    };
 
     window.parseVocabImport = function(text, existing) {
         text = text.trim();
@@ -294,9 +288,6 @@
         });
     };
 
-    window.selectAllBulkDelete = function(checked) {
-        document.querySelectorAll('.bulk-delete-chk').forEach(function(chk) { chk.checked = checked; });
-    };
 
     window.showCustomBulkDeleteConfirm = function(count, numsToDelete) {
         if (document.getElementById('bulkDelOverlayLayer')) return;
@@ -322,12 +313,6 @@
         };
     };
 
-    window.handleBulkDeleteExecute = function() {
-        var checkedBoxes = document.querySelectorAll('.bulk-delete-chk:checked');
-        if (checkedBoxes.length === 0) return alert("削除したい単語にチェックを入れてください。");
-        var nums = Array.from(checkedBoxes).map(function(chk) { return String(chk.value); });
-        window.showCustomBulkDeleteConfirm(checkedBoxes.length, nums);
-    };
 
     window.showCustomBulkResetConfirm = function(count, numsToReset) {
         if (document.getElementById('bulkResetOverlayLayer')) return;
@@ -358,12 +343,6 @@
         };
     };
 
-    window.handleBulkResetExecute = function() {
-        var checkedBoxes = document.querySelectorAll('.bulk-delete-chk:checked');
-        if (checkedBoxes.length === 0) return alert("リセットしたい単語にチェックを入れてください。");
-        var nums = Array.from(checkedBoxes).map(function(chk) { return String(chk.value); });
-        window.showCustomBulkResetConfirm(checkedBoxes.length, nums);
-    };
 
     // ================================================================
     // 5. フィルタ・削除確認
@@ -706,23 +685,6 @@
         window.initLucide();
     };
 
-    window.coreSystemStaticGuideToggle = function(event, btn) {
-        if (event) event.stopPropagation();
-        var contentBox = btn.nextElementSibling;
-        var stateTextLabel = btn.querySelector('.guide-toggle-state-text');
-        if (contentBox.style.display === 'none' || !contentBox.style.display) {
-            contentBox.style.display = 'block';
-            if (stateTextLabel) {
-                stateTextLabel.innerHTML = '閉じる <i data-lucide="chevron-up" size="12"></i>';
-            }
-        } else {
-            contentBox.style.display = 'none';
-            if (stateTextLabel) {
-                stateTextLabel.innerHTML = '開く <i data-lucide="chevron-down" size="12"></i>';
-            }
-        }
-        window.initLucide();
-    };
 
     // ================================================================
     // 10. 管理者インライン編集

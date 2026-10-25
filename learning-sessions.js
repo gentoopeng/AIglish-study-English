@@ -369,10 +369,6 @@
     }
     box.append(nav, pie, history);
   };
-  window.openMeaningHistory = function () {
-    window.showVocabStatsPopup();
-    document.querySelector("[data-chart-mode=history]")?.click();
-  };
   const renderList = window.renderVocabList;
   window.renderVocabList = function () {
     const result = renderList.apply(this, arguments);

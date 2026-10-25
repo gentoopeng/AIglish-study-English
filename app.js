@@ -310,23 +310,6 @@ window.createTextbookListItem = function(book, index, onSelect) {
      return row;
 };
 
-window.openTextbookSelectPopup = function() {
- const container = document.getElementById('textbookListSelectContainer');
- if(!container) return;
- container.innerHTML = "";
- if(textbooksPool.length === 0) {
-     const empty = document.createElement('div');
-     empty.className = 'textbook-list-empty';
-     empty.textContent = '現在、配信中の教材はありません。';
-     container.appendChild(empty);
- }
- textbooksPool.forEach((book, index) => {
-     container.appendChild(window.createTextbookListItem(book, index, window.switchTextbookContext));
- });
- window.updateAdminEditBookSelectOptions();
- const popup = document.getElementById('textbookSelectPopupFrame');
- if(popup) { popup.style.display = 'flex'; popup.classList.add('show'); }
-};
 
 window.renderVocabLibrarySelection = function() {
   var selection = document.getElementById('vocabLibrarySelection');
@@ -466,31 +449,6 @@ const popup = document.getElementById('textbookSelectPopupFrame');
 if (popup) { popup.classList.remove('show'); popup.style.display = 'none'; }
 await window.loadCurrentTextbookData();
 };
-window.handleAdminBookCoverUpload = function(event) {
-const file = event.target.files[0];
-if (!file || !file.type.startsWith('image/')) return;
-const reader = new FileReader();
-reader.onload = function(e) {
-const img = new Image();
-img.onload = function() {
-const canvas = document.createElement('canvas');
-const ctx = canvas.getContext('2d');
-const maxDimension = 120;
-let width = img.width, height = img.height;
-if (width > height) {
-if (width > maxDimension) { height = Math.round((height * maxDimension) / width); width = maxDimension; }
-} else {
-if (height > maxDimension) { width = Math.round((width * maxDimension) / height); height = maxDimension; }
-}
-canvas.width = width; canvas.height = height;
-ctx.drawImage(img, 0, 0, width, height);
-adminUploadedBookCoverBase64 = canvas.toDataURL('image/jpeg', 0.7);
-alert("アイコン画像を読み込みました。");
-};
-img.src = e.target.result;
-};
-reader.readAsDataURL(file);
-};
 window.saveOrUpdateTextbookFromAdmin = async function() {
 const adminSelect = document.getElementById('adminEditBookSelect');
 const titleInput = document.getElementById('adminNewBookTitle');
@@ -548,32 +506,6 @@ const selectedBookId = adminSelect.value;
          window.updateAdminEditBookSelectOptions();
          await window.loadCurrentTextbookData();
          window.switchTab('vocab');
-     } catch(e) {
-         alert("通信に失敗しました。時間をおいて、もう一度お試しください。");
-     }
- }
-};
-window.deleteTextbookFromAdmin = async function() {
-const adminSelect = document.getElementById('adminEditBookSelect');
-if(!adminSelect) return;
-const selectedBookId = adminSelect.value;
-if(!selectedBookId) return alert("削除する教材を選んでください。");
-const targetBook = textbooksPool.find(b => b.id === selectedBookId);
- if(!confirm(`教材『${targetBook.name}』を完全に削除しますか？\nこの操作は取り消せません。`)) return;
- textbooksPool = textbooksPool.filter(b => b.id !== selectedBookId);
- if (window.db && window.fbSetDoc && window.fbDoc) {
-     try {
-         const indexRef = window.fbDoc(window.db, "shared", "textbooks_index");
-         await window.fbSetDoc(indexRef, { textbooks: textbooksPool.filter(function(book) { return !book.personal; }) }, { merge: true });
-         alert("教材を削除しました。");
-         const titleInput = document.getElementById('adminNewBookTitle');
-         if(titleInput) titleInput.value = "";
-         adminSelect.value = "";
-         currentTextbook = textbooksPool.length > 0 ? textbooksPool[0].id : "";
-         localStorage.setItem('core_v4_current_textbook_id', currentTextbook);
-         window.updateFlashcardSourceSelectOptions();
-         window.updateAdminEditBookSelectOptions();
-         await window.loadCurrentTextbookData();
      } catch(e) {
          alert("通信に失敗しました。時間をおいて、もう一度お試しください。");
      }
@@ -1214,24 +1146,10 @@ const headerLevelTextEl = document.getElementById('headerLevelTextSlot');
 if(headerLevelTextEl) headerLevelTextEl.innerText = `Lv.${lvlData.level} [Next:${lvlData.nextLevelRequiredExp}]`;
 }
 };
-window.handleTextbookChange = function(value) {
-const coverContainer = document.getElementById('vocabCoverContainer');
-if (!coverContainer) return;
-const match = textbooksPool.find(b => b.id === value);
-if(match) {
-if(match.coverType === "image" && match.cover) {
-coverContainer.innerHTML = `<img src="${match.cover}" style="width:100%; height:100%; object-fit:cover;">`;
-} else {
-coverContainer.innerText = match.cover || "📔";
-}
-}
-if(typeof window.renderVocabList === 'function') window.renderVocabList();
-};
 // コミュニティ・ランキング表示の修正
 // Rankings live in the titles tab; friends no longer have horizontal sub-pages.
 var titlesPages=document.getElementById('titlesPages');
 if(titlesPages)titlesPages.addEventListener('scroll',function(){var index=Math.round(titlesPages.scrollLeft/Math.max(1,titlesPages.clientWidth));document.querySelectorAll('.titles-page-nav button').forEach(function(button,i){button.setAttribute('aria-pressed',String(i===index));});},{passive:true});
-window.switchCommunitySubTab=function(tabName){window.switchTab(tabName==='ranking'?'titles':'community');if(tabName==='ranking')window.showTitlesPage(1);};
 window.onTabChange(function(tabId){if(tabId==='titles')window.renderLeaderboard();});
 // ==========================================================================
 // 📦 統合機能パッチ（アプリ内完結版）
@@ -1455,14 +1373,6 @@ window.addEventListener("pagehide", function() {
   window.flushChangedVocabData();
 });
 
-window.scheduleVocabProgressSave = function(delay) {
-  delay = delay || 500;
-  if (window.__vocabSaveTimer) clearTimeout(window.__vocabSaveTimer);
-  window.__vocabSaveTimer = setTimeout(async function() {
-    window.__vocabSaveTimer = null;
-    try { await window.saveUserVocabProgress(); } catch (e) {}
-  }, delay);
-};
 
 window.flushVocabProgressSave = async function() {
   if (window.__vocabSaveTimer) { clearTimeout(window.__vocabSaveTimer); window.__vocabSaveTimer = null; }
@@ -1687,46 +1597,10 @@ window.__flashcardNextDelay = 150;
 // ------------------------------------------------------------------
 window.__seasonRankingAnchor = window.__seasonRankingAnchor || new Date(2026, 6, 27, 0, 0, 0);
 
-window.getSeasonModeOrder = function() { return ["ja2en", "en2ja", "mixed"]; };
-window.getSeasonModeLabel = function(mode) {
-  if (mode === "ja2en") return "英訳";
-  if (mode === "en2ja") return "和訳";
-  return "まぜ";
-};
-window.getCurrentSeasonNo = function() {
-  const now = new Date();
-  const anchor = window.__seasonRankingAnchor;
-  if (now < anchor) return 0;
-  const diffDays = Math.floor((now.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24));
-  return Math.floor(diffDays / 7) + 1;
-};
-window.getSeasonStart = function(seasonNo) {
-  return new Date(window.__seasonRankingAnchor.getTime() + (seasonNo - 1) * 7 * 24 * 60 * 60 * 1000);
-};
-window.getSeasonEnd = function(seasonNo) {
-  return new Date(window.__seasonRankingAnchor.getTime() + seasonNo * 7 * 24 * 60 * 60 * 1000 - 1000);
-};
-window.getSeasonMode = function(seasonNo) {
-  const modes = window.getSeasonModeOrder();
-  if (seasonNo <= 0) return modes[0];
-  return modes[(seasonNo - 1) % modes.length];
-};
-window.formatSeasonDate = function(d) {
-  return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
-};
 window.ensureSeasonUserStats = function() {
   if (!userStats) return;
   if (!Array.isArray(userStats.seasonTitles)) userStats.seasonTitles = [];
   if (!Array.isArray(userStats.settledSeasons)) userStats.settledSeasons = [];
-};
-window.sortRankingScores = function(scores) {
-  return (scores || []).slice().sort(function(a, b) {
-    if (b.score !== a.score) return b.score - a.score;
-    return (a.timestamp || 0) - (b.timestamp || 0);
-  });
-};
-window.makeRankingDateStr = function(d) {
-  return (d.getMonth() + 1) + "/" + d.getDate() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 };
 
 
@@ -1743,20 +1617,6 @@ window.makeRankingDateStr = function(d) {
 
 
 
-window.buildRankingRowHtml = function(record, index) {
-  const rankColors = ["#FBBF24", "#94A3B8", "#D97706", "white", "white", "white"];
-  const rankColor = rankColors[index] || "white";
-  const isMe = record.id === myId;
-  const bgStyle = isMe ? "background: linear-gradient(135deg, rgba(192, 132, 252, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border-left: 3px solid var(--cosmic-purple-light);" : "border-bottom:1px solid rgba(255,255,255,0.05);";
-  const displayName = isMe ? record.name + " (あなた)" : record.name;
-  return '<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; ' + bgStyle + '">' +
-    '<div style="display:flex; gap:12px; align-items:center;">' +
-    '<span style="color:' + rankColor + '; font-weight:900; font-size:14px; width:18px; text-align:center;">' + (index + 1) + '</span>' +
-    '<span style="color:white; font-weight:800; letter-spacing:0.5px;">' + displayName + '</span></div>' +
-    '<div style="text-align:right;"><span style="color:var(--cosmic-cyan); font-weight:900; font-family:monospace; font-size:13px; margin-right:8px;">' +
-    record.score + ' <span style="font-size:8px; font-weight:normal; color:var(--text-sub);">PTS</span></span>' +
-    '<span style="color:var(--text-sub); font-size:9px; display:block; margin-top:1px;">' + (record.date || "") + '</span></div></div>';
-};
 // ------------------------------------------------------------------
 // 8. endGameSession上書き（殿堂＋シーズン保存）
 // ------------------------------------------------------------------
@@ -1775,23 +1635,6 @@ window.__leaderboardCacheAt = 0;
 window.__leaderboardLoadingPromise = null;
 
 
-window.drawExpLeaderboard = function(container, users) {
-  let html = "";
-  users.forEach(function(u, idx) {
-    const rankColor = idx === 0 ? "#FBBF24" : idx === 1 ? "#94A3B8" : idx === 2 ? "#D97706" : "#FFFFFF";
-    const bgStyle = u.isMe ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);" : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
-    let avatarStr = '<span style="font-size:16px;">' + (u.icon || "👤") + '</span>';
-    if (u.customAvatar) avatarStr = '<img src="' + u.customAvatar + '" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan);">';
-    html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin-bottom:4px; ' + bgStyle + ' font-size:12px;">' +
-      '<div style="display:flex; align-items:center; gap:10px;">' +
-      '<span style="color:' + rankColor + '; font-weight:900; font-size:14px; width:18px; text-align:center;">' + (idx + 1) + '</span>' +
-      '<div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">' + avatarStr + '</div>' +
-      '<div><div style="font-weight:bold; color:white;">' + u.name + ' <span style="font-size:9px; color:var(--cosmic-cyan); font-weight:normal; margin-left:4px;">LV.' + u.lvl + '</span></div>' +
-      '<div style="font-size:9px; color:var(--text-sub); margin-top:1px;">' + u.title + '</div></div></div>' +
-      '<div style="text-align:right; font-weight:900; color:var(--word-so); font-family:monospace;">' + u.exp + ' <span style="font-size:8px; color:var(--text-sub); font-weight:normal;">EXP</span></div></div>';
-  });
-  container.innerHTML = html;
-};
 
 
 // ------------------------------------------------------------------
@@ -1800,23 +1643,10 @@ window.drawExpLeaderboard = function(container, users) {
 window.__friendRefreshLastAt = 0;
 window.__friendRefreshButtonInjected = false;
 
-window.formatFriendLastLogin = function(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
-};
 
 window.injectFriendRefreshButton = function() {}; // Replaced by the compact users toolbar.
 
 
-window.manualRefreshFriendList = async function() {
-  const btn = document.getElementById("friendRefreshButton");
-  if (btn) { btn.disabled = true; btn.textContent = "更新中..."; }
-  try { await window.refreshFriendListFromFirebase(true); }
-  catch (e) { alert("フレンド情報の更新に失敗しました。"); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = "🔄 最新情報に更新"; } }
-};
 
 // ------------------------------------------------------------------
 // 12. 欠番検索パネル
@@ -1915,34 +1745,9 @@ window.__authProcessing = false;
 window.__allUsersExactWrite = false;
 window.__lastLoginRecorded = false;
 
-window.mergeAllUsersSafe = async function(incomingUsers, exactWrite) {
-  let baseUsers = [];
-  if (window.db && window.fbGetDoc && window.fbDoc) {
-    try {
-      const ref = window.fbDoc(window.db, "shared", "all_users");
-      const snap = await window.fbGetDoc(ref);
-      if (snap.exists() && snap.data().users) baseUsers = snap.data().users;
-    } catch (e) {}
-  }
-  if (exactWrite) return incomingUsers || [];
-  const userMap = new Map();
-  (baseUsers || []).forEach(function(u) { if (u && u.id) userMap.set(u.id, u); });
-  (incomingUsers || []).forEach(function(u) {
-    if (u && u.id) { const old = userMap.get(u.id) || {}; userMap.set(u.id, Object.assign({}, old, u)); }
-  });
-  return Array.from(userMap.values());
-};
 
 const __prevSaveAllUsersForPatch = window.saveAllUsers;
 
-window.ensureUserInAllUsers = async function(user) {
-  if (!user || !user.id || user.id === "GUEST-000") return;
-  let users = [];
-  try { users = await window.getAllUsers(); } catch (e) {}
-  if ((users || []).some(function(u) { return u && u.id === user.id; })) return;
-  users.push({ id: user.id, playerName: user.playerName || "プレイヤー", realName: user.realName || "一般", age: user.age || "18", pin: user.pin || "" });
-  await window.saveAllUsers(users);
-};
 
 const __prevShowLoginConfirmPopupForPatch = window.showLoginConfirmPopup;
 
@@ -2049,7 +1854,6 @@ window.onAppLoaded(async function() {
 // ------------------------------------------------------------------
 
 
-console.log("📦 統合機能パッチ（アプリ内完結版）適用完了");
 // ==========================================================================
 // 🔐 ログイン安定化＆自動復旧パッチ
 // ==========================================================================
@@ -2249,13 +2053,6 @@ window.lookupCloudAccount = async function(userId) {
   }
 };
 
-window.findUserInFirebase = async function(userId, pin) {
-  const result = await window.lookupCloudAccount(userId);
-  if (result.state !== "found" || result.data.deleted) return null;
-  const user = Object.assign({ id: userId }, result.data);
-  if (!(await window.LoginIdentity.verify(user, [userId], pin))) return null;
-  return { id: userId, playerName: result.data.playerName || "プレイヤー", realName: result.data.realName || "一般", age: result.data.age || "18", pin: await window.LoginIdentity.protect(userId, result.data.pin) };
-};
 
 // 他端末でのログインに必要なPINがusers/{id}に無い場合だけ補完する。
 // 確認と書き込みを同じトランザクションで行い、直前のPIN再設定を古いPINで戻さない。
@@ -2549,51 +2346,7 @@ window.onAppLoaded(async function() {
 // ------------------------------------------------------------------
 // 9. 管理者用: 指定ユーザーをall_usersに強制復旧
 // ------------------------------------------------------------------
-window.forceRecoverUser = async function(targetUserId) {
-  if (!targetUserId) {
-    alert("復旧したいユーザーIDを入力してください。");
-    return;
-  }
 
-  targetUserId = targetUserId.trim().toUpperCase();
-
-  if (!window.db || !window.fbGetDoc || !window.fbDoc) {
-    alert("サーバーに接続できません。");
-    return;
-  }
-
-  try {
-    const userRef = window.fbDoc(window.db, "users", targetUserId);
-    const snap = await window.fbGetDoc(userRef);
-
-    if (!snap.exists()) {
-      alert("ユーザー " + targetUserId + " はFirebase上に見つかりません。");
-      return;
-    }
-
-    const data = snap.data();
-    if (data.deleted) {
-      alert("ユーザー " + targetUserId + " は削除済みです。");
-      return;
-    }
-
-    await window.recoverUserToAllUsers({
-      id: targetUserId,
-      playerName: data.playerName || "プレイヤー",
-      realName: data.realName || "一般",
-      age: data.age || "18",
-      pin: data.pin || ""
-    });
-
-    alert("ユーザー " + targetUserId + " を復旧しました！");
-    window.renderAdminUserList();
-  } catch (e) {
-    console.error("強制復旧エラー:", e);
-    alert("復旧に失敗しました: " + e.message);
-  }
-};
-
-console.log("🔐 ログイン安定化＆自動復旧パッチ 適用完了");
 // ==========================================================================
 // 🔑 PIN再設定（ログイン画面に「PINを忘れた場合」を追加）
 // ==========================================================================
@@ -2871,48 +2624,12 @@ window.syncMyEntryToAllUsers = async function(force) {
 // Phase 2-A：EXP全ユーザーランキングのレベル優先順を修正
 //   （古い user_level を信じず、必ず totalExp から計算する）
 // ------------------------------------------------------------------
-window.fetchAllExpLeaderboardUsers = async function() {
-    const users = [];
-    if (!window.db || !window.fbGetDoc || !window.fbDoc) return users;
-    let allUsers = [];
-    try { allUsers = await window.getAllUsers(); } catch (e) {}
-    const ids = [];
-    (allUsers || []).forEach(function(u) {
-        if (u && u.id && u.id !== "GUEST-000" && ids.indexOf(u.id) === -1) ids.push(u.id);
-    });
-    if (typeof myId !== "undefined" && myId && myId !== "GUEST-000" && ids.indexOf(myId) === -1) ids.push(myId);
-    for (const id of ids) {
-        try {
-            const ref = window.fbDoc(window.db, "users", id);
-            const snap = await window.fbGetDoc(ref);
-            if (!snap.exists()) continue;
-            const d = snap.data();
-            if (d.deleted) continue;
-            let exp = parseInt(d.totalExp) || 0;
-            // ✅ 修正：totalExp からレベルを計算（古い user_level を使わない）
-            let level = window.computeLevelSafe(exp);
-            let name = d.playerName || "";
-            if (!name) {
-                const basic = (allUsers || []).find(function(u) { return u.id === id; });
-                name = basic ? (basic.playerName || basic.realName || "プレイヤー") : "プレイヤー";
-            }
-            users.push({
-                id: id, name: name, title: d.selectedTitle || "称号なし",
-                exp: exp, lvl: level, icon: "👤",
-                customAvatar: (typeof d.avatar === "string") ? d.avatar : "",
-                isMe: id === myId
-            });
-        } catch (e) {}
-    }
-    return users;
-};
 
 // ------------------------------------------------------------------
 // Phase 2-B：フレンド最新化のレベル優先順を修正
 //   （古い user_level を信じず、必ず totalExp から計算する）
 // ------------------------------------------------------------------
 
-console.log("🔄 第1回パッチ（同期ズレ解消＋レベル1バグ修正＋保存信頼性向上）適用完了");
 // ==========================================================================
 // 🐧 第2回パッチ：ペンギンローディング ＋ 単語帳詳細ボタン修正
 //    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
@@ -2933,41 +2650,6 @@ window.__pgLoad = window.__pgLoad || {
   message: '読み込み中'
 };
 
-window.__renderPenguinOverlay = function(message) {
-  if (window.__pgLoad.overlay) return;
-  var ov = document.createElement('div');
-  ov.id = 'penguinLoadingOverlay';
-  var penguinSvg =
-    '<svg viewBox="0 0 120 122" width="88" height="90" xmlns="http://www.w3.org/2000/svg">' +
-      '<ellipse class="pg-wing-l" cx="24" cy="66" rx="10" ry="22" fill="#16213E"/>' +
-      '<ellipse class="pg-wing-r" cx="96" cy="66" rx="10" ry="22" fill="#16213E"/>' +
-      '<path d="M60 12 C 35 12, 22 33, 22 58 C 22 89, 37 112, 60 112 C 83 112, 98 89, 98 58 C 98 33, 85 12, 60 12 Z" fill="#1B2A4A"/>' +
-      '<ellipse cx="60" cy="75" rx="26" ry="31" fill="#F1F5F9"/>' +
-      '<ellipse cx="47" cy="41" rx="11" ry="13" fill="#F1F5F9"/>' +
-      '<ellipse cx="73" cy="41" rx="11" ry="13" fill="#F1F5F9"/>' +
-      '<circle cx="48" cy="41" r="3.2" fill="#0F172A"/>' +
-      '<circle cx="72" cy="41" r="3.2" fill="#0F172A"/>' +
-      '<circle cx="49" cy="40" r="1.1" fill="#FFFFFF"/>' +
-      '<circle cx="73" cy="40" r="1.1" fill="#FFFFFF"/>' +
-      '<circle cx="39" cy="50" r="4.5" fill="rgba(236,72,153,0.4)"/>' +
-      '<circle cx="81" cy="50" r="4.5" fill="rgba(236,72,153,0.4)"/>' +
-      '<path d="M53 49 L67 49 L60 58 Z" fill="#F59E0B"/>' +
-      '<ellipse class="pg-foot-l" cx="45" cy="113" rx="13" ry="5.5" fill="#F59E0B"/>' +
-      '<ellipse class="pg-foot-r" cx="75" cy="113" rx="13" ry="5.5" fill="#F59E0B"/>' +
-    '</svg>';
-  ov.innerHTML =
-    '<div class="penguin-loader-stage">' +
-      '<div class="penguin-ice-ground"></div>' +
-      '<div class="penguin-walk-track">' +
-        '<div class="penguin-waddle">' + penguinSvg + '</div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="penguin-loading-text">🐧 ' + (message || '読み込み中') +
-      '<span class="pg-dot">.</span><span class="pg-dot">.</span><span class="pg-dot">.</span></div>';
-  document.body.appendChild(ov);
-  window.__pgLoad.overlay = ov;
-  requestAnimationFrame(function(){ ov.classList.add('penguin-visible'); });
-};
 window.__updatePenguinText = function(message) {
   var overlay = window.__pgLoad && window.__pgLoad.overlay;
   var label = overlay && overlay.querySelector('.penguin-loading-text');
@@ -3065,13 +2747,11 @@ window.__wrapWithPenguin = function(fnName) {
 // ------------------------------------------------------------------
 
 
-console.log("🐧 第2回パッチ（ペンギンローディング＋単語帳詳細ボタン修正）適用完了");
 // ==========================================================================
 // 🐧 ペンギン差し替えパッチ：リアル版（アデリー/コウテイペンギン風）
 //    ※このファイルの末尾にそのまま貼り付けてください。
 //    ※第2回パッチの __renderPenguinOverlay を自動で上書きします。
 // ==========================================================================
-console.log("🐧 リアルペンギン差し替えパッチ 適用完了");
 // ==========================================================================
 window.showToast = function(msg, type) {
   var host = document.getElementById('toastHost');
@@ -3176,16 +2856,6 @@ window.__fetchMasterWordsForBook = async function(bookKey) {
 };
 
 // セッション教材へ差し替えた後、範囲内に単語があるか事前チェック用のプール
-window.__buildFlashcardPool = function() {
-  var startEl = document.getElementById('flashcardRangeStart');
-  var endEl = document.getElementById('flashcardRangeEnd');
-  var startNum = startEl ? (parseInt(startEl.value) || 1) : 1;
-  var endNum = endEl ? (parseInt(endEl.value) || 100) : 100;
-  return vocabList.filter(function(w) {
-    var n = parseInt(w.num);
-    return n >= startNum && n <= endNum;
-  });
-};
 
 // 退避した状態を元へ戻す
 window.__restoreFlashcardSession = function() {
@@ -3250,7 +2920,6 @@ window.onAppLoaded(function() {
   else { document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 300); }); }
 })();
 
-console.log('🎯 第3回パッチ（別教材FC理解度＋ランキング非消失＋保存ボタン＋トースト）適用完了');
 // ==========================================================================
 // 🎴 第4回パッチ：ロード画面を単語テストに（タンゴン削除）
 //    ＋ 理解度保存の確実化 ＋ 勉強時間の安定化 ＋ フレンド勉強時間「総計」化
@@ -3260,46 +2929,6 @@ console.log('🎯 第3回パッチ（別教材FC理解度＋ランキング非�
 // ------------------------------------------------------------------
 // 【0】パッチ専用スタイルの注入（1回だけ）
 // ------------------------------------------------------------------
-(function injectPatch4Css() {
-  if (document.getElementById('patch4Css')) return;
-  var st = document.createElement('style');
-  st.id = 'patch4Css';
-  st.textContent = [
-    '#penguinLoadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;',
-    'background:radial-gradient(circle at 50% 38%, rgba(30,27,75,0.97) 0%, rgba(15,23,42,0.985) 72%);',
-    'z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;',
-    'opacity:0;transition:opacity .25s ease;overflow:hidden;}',
-    '#penguinLoadingOverlay.penguin-visible{opacity:1;}',
-    '#penguinLoadingOverlay.penguin-fade-out{opacity:0;}',
-    '.lq-spark{position:absolute;width:4px;height:4px;border-radius:50%;pointer-events:none;opacity:0;animation:lqSparkFloat linear infinite;}',
-    '@keyframes lqSparkFloat{0%{transform:translateY(20px) scale(.6);opacity:0;}20%{opacity:.9;}80%{opacity:.6;}100%{transform:translateY(-90vh) scale(1);opacity:0;}}',
-    '.lq-area{display:flex;flex-direction:column;align-items:center;gap:14px;z-index:2;}',
-    '.lq-score{font-size:13px;font-weight:800;color:#E2E8F0;letter-spacing:.5px;display:flex;gap:10px;align-items:center;',
-    'background:rgba(7,11,25,.55);border:1px solid rgba(0,240,255,.35);padding:6px 14px;border-radius:20px;box-shadow:0 0 12px rgba(0,240,255,.25);}',
-    '.lq-score .lq-ok{color:#34D399;}.lq-score .lq-bad{color:#F87171;}.lq-score .lq-so{color:#FBBF24;}',
-    '.lq-card-wrap{position:relative;width:230px;height:230px;perspective:1000px;touch-action:none;}',
-    '.lq-card{position:absolute;width:100%;height:100%;transform-style:preserve-3d;transition:transform .4s cubic-bezier(.25,1,.5,1);}',
-    '.lq-card.flipped{transform:rotateY(180deg);}',
-    '.lq-face{position:absolute;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden;',
-    'border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:26px;box-sizing:border-box;',
-    'color:#fff;text-align:center;border:2px solid rgba(255,255,255,.4);',
-    'background:radial-gradient(circle at 30% 28%, rgba(255,255,255,.14) 0%, rgba(0,240,255,.06) 55%, rgba(192,132,252,.08) 88%);',
-    'box-shadow:inset 0 12px 22px rgba(255,255,255,.28), inset 0 -10px 18px rgba(0,0,0,.25), 0 8px 24px rgba(0,0,0,.5), 0 0 22px rgba(0,240,255,.22);}',
-    '.lq-face.back{transform:rotateY(180deg);}',
-    '.lq-word{font-size:24px;font-weight:900;font-family:"Times New Roman",serif;word-break:break-word;line-height:1.25;text-shadow:0 1px 4px rgba(0,0,0,.8);}',
-    '.lq-meaning{font-size:15px;font-weight:700;line-height:1.5;word-break:break-word;color:#F1F5F9;text-shadow:0 1px 3px rgba(0,0,0,.8);}',
-    '.lq-num{position:absolute;top:22px;font-size:10px;font-weight:800;color:rgba(255,255,255,.55);}',
-    '.lq-hint{font-size:10px;color:rgba(255,255,255,.5);font-weight:700;letter-spacing:.5px;z-index:2;}',
-    '.lq-card-wrap.glow-ok .lq-face{border-color:#10B981;box-shadow:0 0 30px rgba(16,185,129,.6), inset 0 0 20px rgba(16,185,129,.3);}',
-    '.lq-card-wrap.glow-bad .lq-face{border-color:#EF4444;box-shadow:0 0 30px rgba(239,68,68,.6), inset 0 0 20px rgba(239,68,68,.3);}',
-    '.lq-card-wrap.glow-so .lq-face{border-color:#F59E0B;box-shadow:0 0 30px rgba(245,158,11,.6), inset 0 0 20px rgba(245,158,11,.3);}',
-    '.penguin-loading-text{font-size:13px;font-weight:800;color:#00F0FF;letter-spacing:1px;z-index:2;text-shadow:0 0 10px rgba(0,240,255,.5);display:flex;align-items:center;gap:2px;}',
-    '.pg-dot{animation:lqDotBlink 1.2s infinite;}',
-    '.pg-dot:nth-of-type(2){animation-delay:.2s;}.pg-dot:nth-of-type(3){animation-delay:.4s;}',
-    '@keyframes lqDotBlink{0%,80%,100%{opacity:.2;}40%{opacity:1;}}'
-  ].join('\n');
-  document.head.appendChild(st);
-})();
 
 // ------------------------------------------------------------------
 // 【1】ロード画面の単語テスト（タンゴン削除）
@@ -3308,46 +2937,11 @@ window.__loadQuiz = window.__loadQuiz || { active:false, words:[], index:0, answ
 
 
 
-window.__updateLoadQuizScore = function(ov) {
-  var q = window.__loadQuiz;
-  var total = q.ok + q.bad + q.so;
-  var c = ov.querySelector('#lqCount'); if (c) c.textContent = total + '問';
-  var o = ov.querySelector('#lqOk'); if (o) o.textContent = '⚪︎' + q.ok;
-  var s = ov.querySelector('#lqSo'); if (s) s.textContent = '△' + q.so;
-  var b = ov.querySelector('#lqBad'); if (b) b.textContent = '✕' + q.bad;
-};
 
 
 
 
 // ロード完了時：退避していた答えを単語帳へ反映して保存
-window.__finalizeLoadQuiz = function() {
-  var q = window.__loadQuiz;
-  if (!q) return;
-  if (q.answers && q.answers.length > 0 && typeof vocabList !== 'undefined') {
-    var applied = 0;
-    q.answers.forEach(function(ans) {
-      var w = vocabList.find(function(v){ return String(v.num) === String(ans.num); });
-      if (w && String(w.word) === String(ans.word)) {
-        w.status = ans.status;
-        if (w.meanings && w.meanings.length > 0) {
-          w.meanings[0].status = ans.status;
-          if (!w.meanings[0].history) w.meanings[0].history = [];
-          w.meanings[0].history.push(ans.status);
-        }
-        if (!w.history) w.history = [];
-        w.history.push(ans.status);
-        applied++;
-      }
-    });
-    if (applied > 0) {
-      if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(300);
-      if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(300);
-    }
-  }
-  q.answers = [];
-  q.active = false;
-};
 
 var __prevActuallyHidePenguinForQuiz = window.__actuallyHidePenguin;
 window.__actuallyHidePenguin = function() {
@@ -3413,19 +3007,9 @@ window.logoutToGate = async function() {
 // ------------------------------------------------------------------
 // 【4】フレンド勉強時間を「全期間総計」に
 // ------------------------------------------------------------------
-window.__formatStudyTotal = function(secs) {
-  var totalMin = Math.floor((secs || 0) / 60);
-  if (totalMin >= 60) {
-    var h = Math.floor(totalMin / 60);
-    var m = totalMin % 60;
-    return h + '時間' + (m > 0 ? m + '分' : '');
-  }
-  return totalMin + '分';
-};
 
 
 
-console.log('🎴 第4回パッチ（ロード画面単語テスト＋理解度保存＋勉強時間安定化＋フレンド総計）適用完了');
 // ==========================================================================
 // 🎴 第5回パッチ：ロード画面クイズ改善
 //    ① カードの「#31」などの番号表示を削除
@@ -3436,58 +3020,14 @@ console.log('🎴 第4回パッチ（ロード画面単語テスト＋理解度�
 // ------------------------------------------------------------------
 // 【0】パッチ専用スタイルの注入（1回だけ）
 // ------------------------------------------------------------------
-(function injectPatch5Css() {
-  if (document.getElementById('patch5Css')) return;
-  var st = document.createElement('style');
-  st.id = 'patch5Css';
-  st.textContent = [
-    '.lq-book-label{font-size:10px;font-weight:800;color:var(--cosmic-purple-light);background:rgba(192,132,252,0.1);border:1px solid rgba(192,132,252,0.3);padding:3px 10px;border-radius:12px;letter-spacing:0.5px;margin-top:2px;box-shadow:0 0 8px rgba(192,132,252,0.2);text-shadow:0 0 6px rgba(192,132,252,0.4);}'
-  ].join('\n');
-  document.head.appendChild(st);
-})();
 
 // ------------------------------------------------------------------
 // 【1】指定教材のマスター単語を取得（キャッシュ→ローカル→Firebase）
 // ------------------------------------------------------------------
-window.__getBookMasterWords = async function(bookId) {
-  if (typeof window.__fetchMasterWordsForBook === 'function') {
-    try { return await window.__fetchMasterWordsForBook(bookId); } catch(e){}
-  }
-  var master = null;
-  try { if (typeof textbooksCacheMap !== 'undefined' && textbooksCacheMap && textbooksCacheMap[bookId]) master = textbooksCacheMap[bookId]; } catch(e){}
-  if (!master) {
-    try { var lc = localStorage.getItem('core_v4_cache_' + bookId); if (lc) master = JSON.parse(lc); } catch(e){}
-  }
-  if (!master && window.db && window.fbGetDoc && window.fbDoc) {
-    try {
-      var ref = window.fbDoc(window.db, 'shared', 'vocab_' + bookId);
-      var snap = await window.fbGetDoc(ref);
-      if (snap.exists() && snap.data() && snap.data().custom_words) master = snap.data().custom_words;
-    } catch(e){}
-  }
-  return master || [];
-};
 
 // ------------------------------------------------------------------
 // 【2】出題元単語帳ラベルの表示ヘルパー
 // ------------------------------------------------------------------
-window.__setLoadQuizBookLabel = function(ov, name, show) {
-  var label = document.getElementById('lqBookLabel');
-  if (!label) {
-    label = document.createElement('div');
-    label.id = 'lqBookLabel';
-    label.className = 'lq-book-label';
-    var area = ov.querySelector('.lq-area');
-    if (!area) return;
-    area.appendChild(label);
-  }
-  if (show && name) {
-    label.textContent = '📔 ' + name;
-    label.style.display = 'block';
-  } else {
-    label.style.display = 'none';
-  }
-};
 
 // ------------------------------------------------------------------
 // 【3】クイズ初期化の上書き（出題元単語帳の選択に対応）
@@ -3500,114 +3040,10 @@ window.__setLoadQuizBookLabel = function(ov, name, show) {
 // ------------------------------------------------------------------
 // 【5】別教材の理解度へ答えを反映して保存
 // ------------------------------------------------------------------
-window.__applyQuizAnswersToBook = async function(bookId, answers) {
-  var master = await window.__getBookMasterWords(bookId);
-  if (!master || master.length === 0) return 0;
-  var words = window.migrateVocabData(master.map(function(w){ return Object.assign({}, w); }));
-  var progress = {};
-  var pkey = window.getVocabProgressStorageKey(bookId);
-  try { progress = JSON.parse(localStorage.getItem(pkey)) || {}; } catch(e){}
-  if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      var pref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
-      var psnap = await window.fbGetDoc(pref);
-      if (psnap.exists() && psnap.data() && psnap.data().words) progress = psnap.data().words;
-    } catch(e){}
-  }
-  words.forEach(function(w){
-    var key = String(w.num);
-    var p = progress[key];
-    w.status = 'none'; w.history = [];
-    w.meanings = (w.meanings||[]).map(function(m){ return {id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:'none', history:[]}; });
-    if (p && p.sig === window.buildWordSignature(w)) {
-      w.status = p.status || 'none';
-      w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
-      w.meanings = w.meanings.map(function(m){
-        var mp = p.meanings ? p.meanings[m.id] : null;
-        if (mp) return {id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[]};
-        return m;
-      });
-    }
-  });
-  var applied = 0;
-  answers.forEach(function(ans){
-    var w = words.find(function(v){ return String(v.num) === String(ans.num); });
-    if (w && String(w.word) === String(ans.word)) {
-      w.status = ans.status;
-      if (w.meanings && w.meanings.length > 0) {
-        w.meanings[0].status = ans.status;
-        if (!w.meanings[0].history) w.meanings[0].history = [];
-        w.meanings[0].history.push(ans.status);
-      }
-      if (!w.history) w.history = [];
-      w.history.push(ans.status);
-      applied++;
-    }
-  });
-  if (applied === 0) return 0;
-  var newProgress = {};
-  words.forEach(function(w){
-    var key = String(w.num);
-    var wp = {
-      sig: window.buildWordSignature(w),
-      status: w.status || 'none',
-      history: Array.isArray(w.history) ? w.history.slice(-20) : [],
-      meanings: {}
-    };
-    (w.meanings||[]).forEach(function(m){
-      wp.meanings[m.id] = { status: m.status||'none', history: Array.isArray(m.history)?m.history.slice(-20):[] };
-    });
-    newProgress[key] = wp;
-  });
-  try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch(e){}
-  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      var sref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
-      var payload = { words: newProgress, updatedAt: new Date().toISOString() };
-      if (typeof window.fbSetDocWithRetry === 'function') await window.fbSetDocWithRetry(sref, payload);
-      else await window.fbSetDoc(sref, payload);
-    } catch(e){}
-  }
-  return applied;
-};
 
 // ------------------------------------------------------------------
 // 【6】クイズ終了処理の上書き（選んだ単語帳へ保存）
 // ------------------------------------------------------------------
-window.__finalizeLoadQuiz = function() {
-  var q = window.__loadQuiz;
-  if (!q) return;
-  var answers = (q.answers || []).slice();
-  q.answers = [];
-  q.active = false;
-  if (answers.length > 0) {
-    var curBook = (typeof currentTextbook !== 'undefined') ? currentTextbook : 'default';
-    var bookId = q.bookId || curBook;
-    if (bookId === curBook) {
-      var applied = 0;
-      answers.forEach(function(ans){
-        var w = vocabList.find(function(v){ return String(v.num) === String(ans.num); });
-        if (w && String(w.word) === String(ans.word)) {
-          w.status = ans.status;
-          if (w.meanings && w.meanings.length > 0) {
-            w.meanings[0].status = ans.status;
-            if (!w.meanings[0].history) w.meanings[0].history = [];
-            w.meanings[0].history.push(ans.status);
-          }
-          if (!w.history) w.history = [];
-          w.history.push(ans.status);
-          applied++;
-        }
-      });
-      if (applied > 0) {
-        if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(300);
-        if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(300);
-      }
-    } else {
-      window.__applyQuizAnswersToBook(bookId, answers);
-    }
-  }
-};
 
 // ------------------------------------------------------------------
 // 【7】非表示時に答えを確定する処理を確実に呼び出す
@@ -3623,7 +3059,6 @@ window.__actuallyHidePenguin = function() {
 // ------------------------------------------------------------------
 
 
-console.log('🎴 第5回パッチ（ロードクイズ番号削除＋出題元単語帳選択）適用完了');
 // ==========================================================================
 // 🎴 第6回パッチ：ロード画面クイズ 完全修正版（自己完結）
 //    ① 耳の増殖バグ根絶（1カード=1リスナー） ② スコアバー削除 ③ 番号削除
@@ -3634,13 +3069,6 @@ console.log('🎴 第5回パッチ（ロードクイズ番号削除＋出題元�
 // ------------------------------------------------------------------
 // 【0】スタイル補完（出題元ラベル。主要スタイルは既存パッチで定義済み）
 // ------------------------------------------------------------------
-(function injectPatch6Css() {
-  if (document.getElementById('patch6Css')) return;
-  var st = document.createElement('style');
-  st.id = 'patch6Css';
-  st.textContent = '.lq-book-label{font-size:10px;font-weight:800;color:var(--cosmic-purple-light);background:rgba(192,132,252,0.1);border:1px solid rgba(192,132,252,0.3);padding:3px 10px;border-radius:12px;letter-spacing:0.5px;margin-top:2px;box-shadow:0 0 8px rgba(192,132,252,0.2);text-shadow:0 0 6px rgba(192,132,252,0.4);}';
-  document.head.appendChild(st);
-})();
 
 // ------------------------------------------------------------------
 // 【1】共有状態
@@ -3655,19 +3083,6 @@ window.__lqCurrent = window.__lqCurrent || null;
 // ------------------------------------------------------------------
 // 【3】出題元ラベル
 // ------------------------------------------------------------------
-window.__setLoadQuizBookLabel = function(ov, name, show) {
-  var label = document.getElementById('lqBookLabel');
-  if (!label) {
-    label = document.createElement('div');
-    label.id = 'lqBookLabel';
-    label.className = 'lq-book-label';
-    var area = ov.querySelector('.lq-area');
-    if (!area) return;
-    area.appendChild(label);
-  }
-  if (show && name) { label.textContent = '📔 ' + name; label.style.display = 'block'; }
-  else { label.style.display = 'none'; }
-};
 
 // ------------------------------------------------------------------
 // 【4】クイズ初期化（出題元選択込み・スコアバー参照なし）
@@ -3676,7 +3091,6 @@ window.__setLoadQuizBookLabel = function(ov, name, show) {
 // ------------------------------------------------------------------
 // 【5】スコア表示更新（表示要素が無いので無害なno-op）
 // ------------------------------------------------------------------
-window.__updateLoadQuizScore = function() { /* スコアバーは表示しない */ };
 
 // ------------------------------------------------------------------
 // 【6】カード描画（番号なし・現在の単語を共有状態へ）
@@ -3685,48 +3099,6 @@ window.__updateLoadQuizScore = function() { /* スコアバーは表示しない
 // ------------------------------------------------------------------
 // 【7】スワイプ判定（★増殖防止：カード枠に1組だけ固定）
 // ------------------------------------------------------------------
-window.__bindLoadQuizCard = function(ov, wrap) {
-  if (wrap.dataset.lqBound === '1') return;
-  wrap.dataset.lqBound = '1';
-  var startX = 0, startY = 0, dragging = false;
-  wrap.addEventListener('touchstart', function(e) {
-    startX = e.touches[0].clientX; startY = e.touches[0].clientY; dragging = true;
-    wrap.style.transition = 'none';
-  }, { passive: true });
-  wrap.addEventListener('touchmove', function(e) {
-    if (!dragging) return;
-    var dx = e.touches[0].clientX - startX;
-    var dy = e.touches[0].clientY - startY;
-    wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (dx * 0.05) + 'deg)';
-    wrap.classList.remove('glow-ok','glow-bad','glow-so');
-    if (dy < -15 && Math.abs(dy) > Math.abs(dx)) wrap.classList.add('glow-so');
-    else if (dx > 15) wrap.classList.add('glow-ok');
-    else if (dx < -15) wrap.classList.add('glow-bad');
-  }, { passive: true });
-  wrap.addEventListener('touchend', function(e) {
-    if (!dragging) return; dragging = false;
-    var dx = e.changedTouches[0].clientX - startX;
-    var dy = e.changedTouches[0].clientY - startY;
-    wrap.classList.remove('glow-ok','glow-bad','glow-so');
-    var cur = window.__lqCurrent;
-    if (!cur || !cur.word) return;
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-      wrap.style.transition = 'transform .2s ease';
-      wrap.style.transform = '';
-      var card = wrap.querySelector('#lqCard');
-      if (card) card.classList.toggle('flipped');
-    } else if (dx > 60) {
-      window.__answerLoadQuiz(ov, wrap, cur.word, 'ok', dx, dy);
-    } else if (dx < -60) {
-      window.__answerLoadQuiz(ov, wrap, cur.word, 'bad', dx, dy);
-    } else if (dy < -60) {
-      window.__answerLoadQuiz(ov, wrap, cur.word, 'so', dx, dy);
-    } else {
-      wrap.style.transition = 'transform .25s ease';
-      wrap.style.transform = '';
-    }
-  });
-};
 
 // ------------------------------------------------------------------
 // 【8】回答処理（記録B：⚪︎△✕全部を退避）
@@ -3739,107 +3111,10 @@ window.__bindLoadQuizCard = function(ov, wrap) {
 // ------------------------------------------------------------------
 // 【10】別教材の理解度へ反映して保存
 // ------------------------------------------------------------------
-window.__applyQuizAnswersToBook = async function(bookId, answers) {
-  var master = await window.__getBookMasterWords(bookId);
-  if (!master || master.length === 0) return 0;
-  var words = (typeof window.migrateVocabData === 'function') ? window.migrateVocabData(master.map(function(w){ return Object.assign({}, w); })) : master.map(function(w){ return Object.assign({}, w); });
-  var progress = {};
-  var pkey = window.getVocabProgressStorageKey(bookId);
-  try { progress = JSON.parse(localStorage.getItem(pkey)) || {}; } catch(e){}
-  if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      var pref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
-      var psnap = await window.fbGetDoc(pref);
-      if (psnap.exists() && psnap.data() && psnap.data().words) progress = psnap.data().words;
-    } catch(e){}
-  }
-  words.forEach(function(w){
-    var key = String(w.num);
-    var p = progress[key];
-    w.status = 'none'; w.history = [];
-    w.meanings = (w.meanings || []).map(function(m){ return { id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:'none', history:[] }; });
-    if (p && p.sig === window.buildWordSignature(w)) {
-      w.status = p.status || 'none';
-      w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
-      w.meanings = w.meanings.map(function(m){
-        var mp = p.meanings ? p.meanings[m.id] : null;
-        if (mp) return { id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[] };
-        return m;
-      });
-    }
-  });
-  var applied = 0;
-  answers.forEach(function(ans){
-    var w = words.find(function(v){ return String(v.num) === String(ans.num); });
-    if (w && String(w.word) === String(ans.word)) {
-      w.status = ans.status;
-      if (w.meanings && w.meanings.length > 0) {
-        w.meanings[0].status = ans.status;
-        if (!w.meanings[0].history) w.meanings[0].history = [];
-        w.meanings[0].history.push(ans.status);
-      }
-      if (!w.history) w.history = [];
-      w.history.push(ans.status);
-      applied++;
-    }
-  });
-  if (applied === 0) return 0;
-  var newProgress = {};
-  words.forEach(function(w){
-    var key = String(w.num);
-    var wp = { sig: window.buildWordSignature(w), status: w.status || 'none', history: Array.isArray(w.history) ? w.history.slice(-20) : [], meanings: {} };
-    (w.meanings || []).forEach(function(m){ wp.meanings[m.id] = { status: m.status || 'none', history: Array.isArray(m.history) ? m.history.slice(-20) : [] }; });
-    newProgress[key] = wp;
-  });
-  try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch(e){}
-  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      var sref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
-      var payload = { words: newProgress, updatedAt: new Date().toISOString() };
-      if (typeof window.fbSetDocWithRetry === 'function') await window.fbSetDocWithRetry(sref, payload);
-      else await window.fbSetDoc(sref, payload);
-    } catch(e){}
-  }
-  return applied;
-};
 
 // ------------------------------------------------------------------
 // 【11】クイズ終了：退避した答えを選んだ単語帳へ反映
 // ------------------------------------------------------------------
-window.__finalizeLoadQuiz = function() {
-  var q = window.__loadQuiz;
-  if (!q) return;
-  var answers = (q.answers || []).slice();
-  q.answers = [];
-  q.active = false;
-  if (answers.length > 0) {
-    var curBook = (typeof currentTextbook !== 'undefined') ? currentTextbook : 'default';
-    var bookId = q.bookId || curBook;
-    if (bookId === curBook) {
-      var applied = 0;
-      answers.forEach(function(ans){
-        var w = (typeof vocabList !== 'undefined' ? vocabList : []).find(function(v){ return String(v.num) === String(ans.num); });
-        if (w && String(w.word) === String(ans.word)) {
-          w.status = ans.status;
-          if (w.meanings && w.meanings.length > 0) {
-            w.meanings[0].status = ans.status;
-            if (!w.meanings[0].history) w.meanings[0].history = [];
-            w.meanings[0].history.push(ans.status);
-          }
-          if (!w.history) w.history = [];
-          w.history.push(ans.status);
-          applied++;
-        }
-      });
-      if (applied > 0) {
-        if (typeof window.scheduleVocabProgressSave === 'function') window.scheduleVocabProgressSave(300);
-        if (typeof window.scheduleUserStatsRefresh === 'function') window.scheduleUserStatsRefresh(300);
-      }
-    } else {
-      window.__applyQuizAnswersToBook(bookId, answers);
-    }
-  }
-};
 
 // ------------------------------------------------------------------
 // 【12】ロード終了時に答えを確定
@@ -3855,7 +3130,6 @@ window.__actuallyHidePenguin = function() {
 // ------------------------------------------------------------------
 
 
-console.log('🎴 第6回パッチ（ロードクイズ完全修正：増殖根絶＋スコアバー削除＋番号削除＋出題元選択）適用完了');
 // ==========================================================================
 // 🛡️ 第7回パッチ：Firestore invalid-argument 根絶
 //    ・保存データから undefined / NaN / Infinity / 関数 / 循環参照 を自動除去
@@ -3911,12 +3185,6 @@ window.__sanitizeForFirestore = function sanitize(val, seen) {
 // ------------------------------------------------------------------
 // 【1】教材キー(パス)を安全化するヘルパー
 // ------------------------------------------------------------------
-window.__safeBookKey = function(raw) {
-  var key = (typeof raw === "string") ? raw.trim() : "";
-  if (!key) key = "default";
-  if (key.indexOf("/") !== -1) key = key.replace(/\//g, "_");
-  return key;
-};
 
 // ------------------------------------------------------------------
 // 【2】理解度保存を上書き（パス安全化＋掃除＋リトライ）
@@ -3953,7 +3221,6 @@ if (document.readyState === "loading") {
 setTimeout(window.__installFbSetDocSanitize, 800);
 setTimeout(window.__installFbSetDocSanitize, 2500);
 
-console.log("🛡️ 第7回パッチ（Firestore invalid-argument 根絶：undefined/NaN 除去＋パス安全化＋横断ラップ）適用完了");
 // ==========================================================================
 // 🎴 第8回パッチ：ロード画面クイズ 完全自己完結版
 //    ① 耳の増殖を根絶（枠に生涯1リスナー＝委譲方式）→ 1スワイプ=1回答
@@ -3965,51 +3232,6 @@ console.log("🛡️ 第7回パッチ（Firestore invalid-argument 根絶：unde
 // ------------------------------------------------------------------
 // 【0】スタイル注入（自己完結：主要スタイルをここで確定）
 // ------------------------------------------------------------------
-(function injectPatch8Css() {
-  if (document.getElementById('patch8Css')) return;
-  var st = document.createElement('style');
-  st.id = 'patch8Css';
-  st.textContent = [
-    '#penguinLoadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;',
-    'background:radial-gradient(circle at 50% 38%, rgba(30,27,75,0.97) 0%, rgba(15,23,42,0.985) 72%);',
-    'z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;',
-    'opacity:0;transition:opacity .25s ease;overflow:hidden;}',
-    '#penguinLoadingOverlay.penguin-visible{opacity:1;}',
-    '#penguinLoadingOverlay.penguin-fade-out{opacity:0;}',
-    '.lq-spark{position:absolute;width:4px;height:4px;border-radius:50%;pointer-events:none;opacity:0;animation:lqSparkFloat linear infinite;}',
-    '@keyframes lqSparkFloat{0%{transform:translateY(20px) scale(.6);opacity:0;}20%{opacity:.9;}80%{opacity:.6;}100%{transform:translateY(-90vh) scale(1);opacity:0;}}',
-    '.lq-area{display:flex;flex-direction:column;align-items:center;gap:14px;z-index:2;width:min(360px,calc(100vw - 32px));}',
-    '.lq-progress{width:100%;}',
-    '.lq-progress[hidden],.lq-quiz[hidden]{display:none!important;}',
-    '.lq-progress-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:8px;color:#E2E8F0;font-size:12px;font-weight:700;}',
-    '.lq-progress-head strong{color:#00F0FF;font-size:20px;font-weight:900;font-variant-numeric:tabular-nums;text-shadow:0 0 10px rgba(0,240,255,.45);}',
-    '.lq-progress-track{height:6px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;}',
-    '.lq-progress-track span{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#00F0FF,#C084FC);transition:width .35s ease;}',
-    '.lq-quiz{width:100%;display:flex;flex-direction:column;align-items:center;gap:10px;}',
-    '.lq-quiz-head{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;}',
-    '.lq-score{margin-left:auto;background:rgba(99,102,241,0.4);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;border:1px solid var(--accent);white-space:nowrap;}',
-    '.lq-up{display:flex;align-items:center;gap:4px;color:#fff;font-size:11px;font-weight:700;}',
-    '.lq-up i,.lq-up svg{color:var(--word-so);}',
-    '.lq-stage{position:relative;width:100%;min-height:260px;display:flex;align-items:center;justify-content:center;}',
-    '.lq-side{position:absolute;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;font-weight:900;pointer-events:none;z-index:20;}',
-    '.lq-side.is-bad{left:0;color:var(--word-bad);}.lq-side.is-ok{right:0;color:var(--word-ok);}',
-    '.lq-card-wrap{position:relative;width:240px;height:240px;touch-action:none;-webkit-tap-highlight-color:transparent;}',
-    '.lq-card-wrap .flashcard-wrapper-3d{left:0;top:0;}',
-    '.lq-card-wrap.glow-ok .flashcard-face-front,.lq-card-wrap.glow-ok .flashcard-face-back{border-color:#10B981!important;box-shadow:0 0 30px rgba(16,185,129,.6)!important;}',
-    '.lq-card-wrap.glow-bad .flashcard-face-front,.lq-card-wrap.glow-bad .flashcard-face-back{border-color:#EF4444!important;box-shadow:0 0 30px rgba(239,68,68,.6)!important;}',
-    '.lq-card-wrap.glow-so .flashcard-face-front,.lq-card-wrap.glow-so .flashcard-face-back{border-color:#F59E0B!important;box-shadow:0 0 30px rgba(245,158,11,.6)!important;}',
-    '.lq-ratings{margin:0!important;}',
-    '.lq-hint{font-size:10px;color:rgba(255,255,255,.55);font-weight:700;letter-spacing:.5px;z-index:2;}',
-    '.lq-book-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:800;color:var(--cosmic-purple-light);background:rgba(192,132,252,0.1);border:1px solid rgba(192,132,252,0.3);padding:3px 10px;border-radius:12px;letter-spacing:0.5px;}',
-    '.lq-book-label:empty{display:none;}',
-    '#penguinLoadingOverlay.has-progress .penguin-loading-text{display:none;}',
-    '.penguin-loading-text{font-size:13px;font-weight:800;color:#00F0FF;letter-spacing:1px;z-index:2;text-shadow:0 0 10px rgba(0,240,255,.5);display:flex;align-items:center;gap:2px;}',
-    '.pg-dot{animation:lqDotBlink 1.2s infinite;}',
-    '.pg-dot:nth-of-type(2){animation-delay:.2s;}.pg-dot:nth-of-type(3){animation-delay:.4s;}',
-    '@keyframes lqDotBlink{0%,80%,100%{opacity:.2;}40%{opacity:1;}}'
-  ].join('\n');
-  document.head.appendChild(st);
-})();
 
 // ------------------------------------------------------------------
 // 【1】共有状態（今のカード／退避した答え／出題元）
@@ -4294,70 +3516,6 @@ window.__getBookMasterWords = async function(bookId) {
 // ------------------------------------------------------------------
 // 【9】別教材の理解度へ反映して保存（記録B）
 // ------------------------------------------------------------------
-window.__applyQuizAnswersToBook = async function(bookId, answers) {
-  var master = await window.__getBookMasterWords(bookId);
-  if (!master || master.length === 0) return 0;
-  var words = (typeof window.migrateVocabData === 'function') ? window.migrateVocabData(master.map(function(w){ return Object.assign({}, w); })) : master.map(function(w){ return Object.assign({}, w); });
-  var progress = {};
-  var pkey = (typeof window.getVocabProgressStorageKey === 'function') ? window.getVocabProgressStorageKey(bookId) : ('core_v4_user_vocab_progress_' + myId + '_' + bookId);
-  try { progress = JSON.parse(localStorage.getItem(pkey)) || {}; } catch(e){}
-  if (window.db && window.fbGetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      var pref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
-      var psnap = await window.fbGetDoc(pref);
-      if (psnap.exists() && psnap.data() && psnap.data().words) progress = psnap.data().words;
-    } catch(e){}
-  }
-  var sig = (typeof window.buildWordSignature === 'function') ? window.buildWordSignature : function(w){ return String(w.num)+'::'+String(w.word||'').toLowerCase(); };
-  words.forEach(function(w){
-    var key = String(w.num);
-    var p = progress[key];
-    w.status = 'none'; w.history = [];
-    w.meanings = (w.meanings || []).map(function(m){ return { id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:'none', history:[] }; });
-    if (p && p.sig === sig(w)) {
-      w.status = p.status || 'none';
-      w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
-      w.meanings = w.meanings.map(function(m){
-        var mp = p.meanings ? p.meanings[m.id] : null;
-        if (mp) return { id:m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status:mp.status||'none', history:Array.isArray(mp.history)?mp.history.slice(-20):[] };
-        return m;
-      });
-    }
-  });
-  var applied = 0;
-  answers.forEach(function(ans){
-    var w = words.find(function(v){ return String(v.num) === String(ans.num); });
-    if (w && String(w.word) === String(ans.word)) {
-      w.status = ans.status;
-      if (w.meanings && w.meanings.length > 0) {
-        w.meanings[0].status = ans.status;
-        if (!w.meanings[0].history) w.meanings[0].history = [];
-        w.meanings[0].history.push(ans.status);
-      }
-      if (!w.history) w.history = [];
-      w.history.push(ans.status);
-      applied++;
-    }
-  });
-  if (applied === 0) return 0;
-  var newProgress = {};
-  words.forEach(function(w){
-    var key = String(w.num);
-    var wp = { sig: sig(w), status: w.status || 'none', history: Array.isArray(w.history) ? w.history.slice(-20) : [], meanings: {} };
-    (w.meanings || []).forEach(function(m){ wp.meanings[m.id] = { status: m.status || 'none', history: Array.isArray(m.history) ? m.history.slice(-20) : [] }; });
-    newProgress[key] = wp;
-  });
-  try { localStorage.setItem(pkey, JSON.stringify(newProgress)); } catch(e){}
-  if (window.db && window.fbSetDoc && window.fbDoc && myId && myId !== 'GUEST-000') {
-    try {
-      var sref = window.fbDoc(window.db, 'users', myId, 'vocabProgress', bookId);
-      var payload = { words: newProgress, updatedAt: new Date().toISOString() };
-      if (typeof window.fbSetDocWithRetry === 'function') await window.fbSetDocWithRetry(sref, payload);
-      else await window.fbSetDoc(sref, payload);
-    } catch(e){}
-  }
-  return applied;
-};
 
 // ------------------------------------------------------------------
 // 【10】クイズ終了：退避した答えを選んだ単語帳へ反映（記録B）
@@ -4427,7 +3585,6 @@ window.onAppLoaded(function() {
   window.injectLoadQuizSettings();
 });
 
-console.log('🎴 第8回パッチ（ロードクイズ完全版：増殖根絶＋スコアバー削除＋番号削除＋出題元選択＋記録B）適用完了');
 // ==========================================================================
 // 🗜️ 第9回パッチ：Firestore index entry 上限エラー根絶
 //    vocabProgress を JSON 文字列で保存（index entry 数を激減）
@@ -4514,7 +3671,6 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
   return applied;
 };
 
-console.log('🗜️ 第9回パッチ（Firestore index entry 上限エラー根絶：wordsJson 形式）適用完了');
 // ==========================================================================
 // 📚 本棚タブパッチ：スワイプ切替（解析 ⇔ 本棚）＋ 教材本棚システム
 //    ※このファイルの末尾にそのまま貼り付けてください（既存コードは変更不要）
@@ -4924,7 +4080,6 @@ window.onAppLoaded(function() {
     document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); });
   }
 })();
-console.log("📚 本棚タブパッチ（スワイプ切替＋教材本棚システム＋管理パネル）適用完了");
 // ==========================================================================
 // 🔄 同期修正パッチ②：レベルバラバラ＆理解度リセット 根本修正
 //    ① saveUserStats：書き込み前にクラウドと照合して「大きい方」を採用
@@ -5114,27 +4269,7 @@ window.loadUserStats = async function() {
 //     ※本体データは従来どおりの形式で保存し、タイムスタンプだけ別キーに保存
 //       （ロードクイズの別教材保存処理との互換性を保つため）
 // ------------------------------------------------------------------
-window.__readLocalVocabSnapshot = function(bookKey) {
-    let words = {};
-    let ts = 0;
-    try {
-        const raw = localStorage.getItem(window.getVocabProgressStorageKey(bookKey));
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === 'object') words = parsed;
-        }
-    } catch (e) {}
-    try {
-        const t = localStorage.getItem(window.getVocabProgressStorageKey(bookKey) + '__ts');
-        if (t) ts = parseInt(t) || 0;
-    } catch (e) {}
-    return { words: words, updatedAt: ts };
-};
 
-window.__writeLocalVocabSnapshot = function(bookKey, words, ms) {
-    try { localStorage.setItem(window.getVocabProgressStorageKey(bookKey), JSON.stringify(words)); } catch (e) {}
-    try { localStorage.setItem(window.getVocabProgressStorageKey(bookKey) + '__ts', String(ms)); } catch (e) {}
-};
 
 // ------------------------------------------------------------------
 // 【D】loadUserVocabProgress 上書き：タイムスタンプで「最新」を採用
@@ -5145,7 +4280,6 @@ window.__writeLocalVocabSnapshot = function(bookKey, words, ms) {
 // 【E】saveUserVocabProgress 上書き：タイムスタンプ付きで保存
 // ------------------------------------------------------------------
 
-console.log("🔄 同期修正パッチ②（レベル収束＋理解度リセット防止＋書き戻し）適用完了");
 // ==========================================================================
 // 🔄 同期修正パッチ③：設定まるごと同期 ＋ 表示強化
 //    【個人ごと同期】APIキー／ロード時単語帳／選択中教材／
@@ -5436,7 +4570,6 @@ window.onAppLoaded(async function() {
     }
 });
 
-console.log("🔄 同期修正パッチ③（設定まるごと同期＋全員共有＋分単位ログイン履歴＋総勉強時間表示）適用完了");
 // ==========================================================================
 // 🔧 修正パッチ：管理者メニューが押せない問題（サイドバー圧迫＆下部隠れ）
 //    原因: サイドバーに「🎴 ロード画面クイズ設定」パネルが追加されたことで
@@ -5463,7 +4596,6 @@ console.log("🔄 同期修正パッチ③（設定まるごと同期＋全員�
     ].join('\n');
     (document.head || document.documentElement).appendChild(st);
 })();
-console.log('🔧 サイドバー管理者メニュー修正パッチ（スクロール化＋圧縮防止＋下部余白）適用完了');
 // ==========================================================================
 // Flashcard text sizing is maintained in game_core.js.
 // 📖 使い方ガイドパッチ：ハンバーガーメニューの「ログアウト」直上に入口を追加
@@ -5845,7 +4977,6 @@ window.onAppLoaded(function() {
     else { document.addEventListener('DOMContentLoaded', function() { setTimeout(boot, 400); }); }
 })();
 
-console.log('📖 使い方ガイドパッチ（サイドバー入口＋フルスクリーンアコーディオンガイド）適用完了');
 // ==========================================================================
 // 🎴 第13回パッチ：フラッシュ単語の意味別出題
 //    ① 複数の意味を持つ単語を「意味ごとの別カード」として出題（同じ単語が意味の数だけ出る）
@@ -5866,26 +4997,8 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     // ヘルパー①：カードから vocabList 内の単語を探す（num優先・wordフォールバック）
     // ------------------------------------------------------------------
-    function findVocabForCard(wordData) {
-        if (!wordData) return null;
-        if (wordData.sourceWord) return wordData.sourceWord;
-        var match = null;
-        if (wordData.num !== undefined && wordData.num !== null) {
-            match = vocabList.find(function(v) { return String(v.num) === String(wordData.num); });
-        }
-        if (!match && wordData.en) {
-            var cleanKey = String(wordData.en).toLowerCase().replace(MEANING_CLEAN_REGEX, "");
-            match = vocabList.find(function(v) { return v.word.toLowerCase() === cleanKey; });
-        }
-        return match;
-    }
 
     // ヘルパー②：カードが指す「狙った意味」を探す
-    function findTargetMeaning(vocabMatch, wordData) {
-        if (!vocabMatch || !vocabMatch.meanings) return null;
-        if (wordData.meaningId === undefined || wordData.meaningId === null) return null;
-        return vocabMatch.meanings.find(function(m) { return String(m.id) === String(wordData.meaningId); }) || null;
-    }
 
     // ------------------------------------------------------------------
     // ① startFlashcardSession 上書き：既存処理の実行後にキューを意味ごとに展開
@@ -5915,7 +5028,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     var __prevRenderFlashcardDeckForMeaningPatch = window.renderFlashcardDeck;
 
-    console.log('🎴 第13回パッチ（フラッシュ単語の意味別出題）適用完了');
 })();
 // ==========================================================================
 // 🏆 第13回パッチ：フレンド欄ランキング強化（コミュニティランキングシステム）
@@ -6009,47 +5121,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     window.__communityUsersCache = null;
     window.__communityUsersCacheAt = 0;
     window.__communityUsersLoadingPromise = null;
-    window.fetchAllCommunityRankingUsers = async function() {
-        var users = [];
-        if (!window.db || !window.fbGetDoc || !window.fbDoc) return users;
-        var allUsers = [];
-        try { allUsers = await window.getAllUsers(); } catch (e) {}
-        var ids = [];
-        (allUsers || []).forEach(function(u) {
-            if (u && u.id && u.id !== 'GUEST-000' && ids.indexOf(u.id) === -1) ids.push(u.id);
-        });
-        if (myId && myId !== 'GUEST-000' && ids.indexOf(myId) === -1) ids.push(myId);
-        for (var i = 0; i < ids.length; i++) {
-            var id = ids[i];
-            try {
-                var ref = window.fbDoc(window.db, 'users', id);
-                var snap = await window.fbGetDoc(ref);
-                if (!snap.exists()) continue;
-                var d = snap.data();
-                if (d.deleted) continue;
-                var stats = d.userStats || {};
-                var exp = parseInt(d.totalExp) || 0;
-                var name = d.playerName || '';
-                if (!name) {
-                    var basic = (allUsers || []).find(function(u) { return u.id === id; });
-                    name = basic ? (basic.playerName || basic.realName || 'プレイヤー') : 'プレイヤー';
-                }
-                users.push({
-                    id: id, name: name, title: d.selectedTitle || '称号なし',
-                    exp: exp, lvl: window.computeLevelSafe(exp),
-                    customAvatar: (typeof d.avatar === 'string') ? d.avatar : '',
-                    isMe: id === myId,
-                    flash_count: parseInt(stats.flash_count) || 0,
-                    study_total_secs: parseInt(stats.study_total_secs) || 0,
-                    study_today_secs: parseInt(stats.study_today_secs) || 0,
-                    study_today_date: stats.study_today_date || '',
-                    study_week_secs: parseInt(stats.study_week_secs) || 0,
-                    study_week_key: stats.study_week_key || ''
-                });
-            } catch (e) {}
-        }
-        return users;
-    };
 
     // ------------------------------------------------------------------
     // 【5】ランキング行の共通ビルダー（順位色・アバター・名前・称号・右側数値）
@@ -6072,49 +5143,8 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     // 【6】各ランキングの描画
     // ------------------------------------------------------------------
-    window.drawCommunityLevelRanking = function(container, users) {
-        users.sort(function(a, b) {
-            if (b.lvl !== a.lvl) return b.lvl - a.lvl;
-            return b.exp - a.exp;
-        });
-        var html = '';
-        users.slice(0, 50).forEach(function(u, idx) {
-            html += window.__buildCommunityRankRow(u, idx,
-                '<div class="community-rank-value-big">Lv.' + u.lvl + '</div>' +
-                '<span class="community-rank-value-sub">' + u.exp + ' EXP</span>');
-        });
-        container.innerHTML = html;
-    };
 
-    window.drawCommunityTimeRanking = function(container, users) {
-        var range = window.__communityTimeRange;
-        var todayKey = window.__getTodayKey();
-        var weekKey = window.__getWeekKey();
-        var getValue = function(u) {
-            if (range === 'total') return u.study_total_secs || 0;
-            if (range === 'daily') return (u.study_today_date === todayKey) ? (u.study_today_secs || 0) : 0;
-            if (range === 'weekly') return (u.study_week_key === weekKey) ? (u.study_week_secs || 0) : 0;
-            return 0;
-        };
-        var rows = users.map(function(u) { return { u: u, val: getValue(u) }; });
-        rows.sort(function(a, b) { return b.val - a.val; });
-        var html = '';
-        rows.slice(0, 50).forEach(function(row, idx) {
-            html += window.__buildCommunityRankRow(row.u, idx,
-                '<div class="community-rank-value-big">' + window.__formatStudyTime(row.val) + '</div>');
-        });
-        container.innerHTML = html;
-    };
 
-    window.drawCommunityFlashRanking = function(container, users) {
-        users.sort(function(a, b) { return (b.flash_count || 0) - (a.flash_count || 0); });
-        var html = '';
-        users.slice(0, 50).forEach(function(u, idx) {
-            html += window.__buildCommunityRankRow(u, idx,
-                '<div class="community-rank-value-big">' + (u.flash_count || 0) + '<span style="font-size:9px; color:var(--text-sub); font-weight:normal;"> 回</span></div>');
-        });
-        container.innerHTML = html;
-    };
 
 
     // ------------------------------------------------------------------
@@ -6157,7 +5187,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         }
     })();
 
-    console.log('🏆 第13回パッチ（フレンド欄ランキング強化：スワイプ式セレクター＋4種ランキング＋クラウド送信）適用完了');
 })();
 // ==========================================================================
 // 🎨 第14回パッチ：フレンド欄ランキング 仕上げ
@@ -6326,7 +5355,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         }
     })();
 
-    console.log('🎨 第14回パッチ（フレンド欄ランキング仕上げ：枠分離＋左右対称＋重複削除＋選択中央寄せ）適用完了');
 })();
 // ==========================================================================
 // 📊 第15回パッチ：勉強時間グラフのログイン後“0分”現象を根治
@@ -6530,7 +5558,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         }
     })();
     
-    console.log('📊 第15回パッチ（勉強時間グラフ同期＋復元＋秒表示＋週最大値基準）適用完了');
 })();
 // ==========================================================================
 // 📊 第16回パッチ：勉強時間グラフ“描画トリガー”根治
@@ -6603,7 +5630,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
             setTimeout(kick, 1800);
     });
     
-    console.log('📊 第16回パッチ（勉強時間グラフ描画トリガー：復元＋遅延キック）適用完了');
 })();
 // ==========================================================================
 // ⏱️ 第17回パッチ：プレイ時間ランキングの整合性根治（週間 < 今日 の矛盾を撲滅）
@@ -6761,7 +5787,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         }
     })();
 
-    console.log('⏱️ 第17回パッチ（プレイ時間整合：週間≧今日・総計≧週間 を構造で保証）適用完了');
 })();
     // ==========================================================================
 // 📋 第16回パッチ：長文リーダー「登録単語トレー」
@@ -6833,168 +5858,18 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // 【1】生テキストから“登録語”を登場順・重複排除で収集
     //     （辞書語は除外＝findVocabByToken にヒットする語のみ）
     // ------------------------------------------------------------------
-    window.__collectRegisteredWordsInText = function(text) {
-        var collected = [];
-        var seen = {};
-        if (!text || typeof window.findVocabByToken !== 'function') return collected;
-        var tokens = String(text).split(/\s+/);
-        for (var i = 0; i < tokens.length; i++) {
-            var raw = tokens[i];
-            if (!raw) continue;
-            var clean = raw.toLowerCase().replace(RVT_CLEAN, '');
-            if (!clean) continue;
-            var v = window.findVocabByToken(clean);
-            if (v && !seen[String(v.num)]) {
-                seen[String(v.num)] = true;
-                collected.push(v);
-            }
-        }
-        return collected;
-    };
 
     // ------------------------------------------------------------------
     // 【2】意味行の4ボタンを、現在の status に合わせて塗り直す
     // ------------------------------------------------------------------
-    window.__paintTrainerMeaningRow = function(rowEl, vocabItem) {
-        if (!rowEl || !vocabItem) return;
-        var mid = rowEl.getAttribute('data-mid');
-        var m = null;
-        for (var i = 0; i < (vocabItem.meanings || []).length; i++) {
-            if (String(vocabItem.meanings[i].id) === String(mid)) { m = vocabItem.meanings[i]; break; }
-        }
-        var st = m ? (m.status || 'none') : 'none';
-        var btns = rowEl.querySelectorAll('.rvt-btn');
-        for (var b = 0; b < btns.length; b++) {
-            var bst = btns[b].getAttribute('data-st');
-            if (bst === st) btns[b].classList.add('rvt-active');
-            else btns[b].classList.remove('rvt-active');
-        }
-    };
 
     // ------------------------------------------------------------------
     // 【3】マーク変更ハンドラ（単語帳と完全同期＋英文の色も追従）
     // ------------------------------------------------------------------
-    window.__trainerMark = function(num, meaningId, status, btnEl) {
-        // 既存の更新処理を流用（vocabList・EXP・保存・単語帳再描画を全部こなす）
-        if (typeof window.updateMeaningStatus === 'function') {
-            window.updateMeaningStatus(num, meaningId, status, null);
-        }
-        // 押したボタンをぽんとはねさせる
-        if (btnEl) {
-            btnEl.classList.remove('rvt-on');
-            void btnEl.offsetWidth;
-            btnEl.classList.add('rvt-on');
-        }
-        // 該当語を vocabList から引き直して行を再塗装
-        var v = null;
-        for (var i = 0; i < vocabList.length; i++) {
-            if (String(vocabList[i].num) === String(num)) { v = vocabList[i]; break; }
-        }
-        if (v && btnEl) {
-            var row = btnEl.closest('.rvt-meaning-row');
-            window.__paintTrainerMeaningRow(row, v);
-        }
-        // 英文内の語の色も即時追従
-        if (typeof window.updateReaderWordColors === 'function') {
-            try { window.updateReaderWordColors(); } catch (e) {}
-        }
-    };
 
     // ------------------------------------------------------------------
     // 【4】トレーDOMを構築して英文の直下へ挿入（0語なら非表示）
     // ------------------------------------------------------------------
-    window.__buildReaderVocabTrainer = function() {
-        var eng = document.getElementById('englishContainer');
-        if (!eng || !eng.parentNode) return;
-
-        // 古いトレーがあれば除去
-        var old = document.getElementById('readerVocabTrainerCard');
-        if (old && old.parentNode) old.parentNode.removeChild(old);
-
-        var words = window.__collectRegisteredWordsInText(currentActiveReaderText || '');
-        if (!words || words.length === 0) return; // 登録語なし＝トレー不出
-
-        var card = document.createElement('div');
-        card.id = 'readerVocabTrainerCard';
-        card.className = 'rvt-open'; // 1語以上＝最初から展開
-
-        // ---- 見出し ----
-        var head = document.createElement('div');
-        head.className = 'rvt-head';
-        head.innerHTML =
-            '<span class="rvt-head-ico">📋</span>' +
-            '<span class="rvt-head-title">この長文の登録単語' +
-            '<span class="rvt-head-sub">タップで開閉 ／ 意味ごとに理解度をチェック</span></span>' +
-            '<span class="rvt-count">' + words.length + '語</span>' +
-            '<span class="rvt-chev">▾</span>';
-        head.onclick = function() { card.classList.toggle('rvt-open'); };
-        card.appendChild(head);
-
-        // ---- 本文 ----
-        var body = document.createElement('div');
-        body.className = 'rvt-body';
-        var inner = document.createElement('div');
-        inner.className = 'rvt-body-inner';
-
-        words.forEach(function(v, wIdx) {
-            var wCard = document.createElement('div');
-            wCard.className = 'rvt-word';
-            wCard.style.animationDelay = Math.min(wIdx * 0.04, 0.6) + 's';
-
-            var wHead = document.createElement('div');
-            wHead.className = 'rvt-word-head';
-            wHead.innerHTML =
-                '<span class="rvt-word-num">#' + v.num + '</span>' +
-                '<span class="rvt-word-en">' + (v.word || '') + '</span>';
-            wCard.appendChild(wHead);
-
-            (v.meanings || []).forEach(function(m) {
-                var row = document.createElement('div');
-                row.className = 'rvt-meaning-row';
-                row.setAttribute('data-mid', String(m.id));
-
-                var txt = document.createElement('span');
-                txt.className = 'rvt-meaning-text';
-                txt.textContent = m.text || '';
-                row.appendChild(txt);
-
-                var btns = document.createElement('div');
-                btns.className = 'rvt-btns';
-                var defs = [
-                    { st: 'ok',   label: '⚪︎' },
-                    { st: 'so',   label: '△' },
-                    { st: 'bad',  label: '✕' },
-                    { st: 'none', label: 'ー' }
-                ];
-                defs.forEach(function(d) {
-                    var b = document.createElement('button');
-                    b.type = 'button';
-                    b.className = 'rvt-btn';
-                    b.setAttribute('data-st', d.st);
-                    b.textContent = d.label;
-                    b.onclick = function(ev) {
-                        if (ev) ev.stopPropagation();
-                        window.__trainerMark(v.num, m.id, d.st, b);
-                    };
-                    btns.appendChild(b);
-                });
-                row.appendChild(btns);
-
-                // 初期塗装
-                window.__paintTrainerMeaningRow(row, v);
-                wCard.appendChild(row);
-            });
-
-            inner.appendChild(wCard);
-        });
-
-        body.appendChild(inner);
-        card.appendChild(body);
-
-        // 英文コンテナの“直後”に挿入
-        if (eng.nextSibling) eng.parentNode.insertBefore(card, eng.nextSibling);
-        else eng.parentNode.appendChild(card);
-    };
 
     // ------------------------------------------------------------------
     // 【5】analyzeText をラップ：解析完了“後”にトレーを組み立てる
@@ -7012,7 +5887,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         return r;
     };
 
-    console.log('📋 第16回パッチ（長文リーダー登録単語トレー：自動抽出＋意味別チェック＋英文色追従）適用完了');
 })();
 // ==========================================================================
 // 🔧 修正パッチ：長文リーダーの「開く」「本棚に保存する」ボタンが
@@ -7131,7 +6005,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
         }
     })();
 
-    console.log('🔧 長文リーダー開く/保存ボタン修正パッチ（" エスケープ欠落の根治：リスナ付け替え方式）適用完了');
 })();
 // ==========================================================================
 // 📊 第5回パッチ：勉強時間グラフ安定化 ＋ 日付跨ぎ修正
@@ -7154,7 +6027,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
 //    ・二重起動防止ガード付き
 // ------------------------------------------------------------------
 
-console.log('📊 第5回パッチ（勉強時間グラフ安定化＋日付跨ぎ修正）適用完了');
 // ==========================================================================
 // ✏️ 第6回パッチ：勉強時間の手動編集（今日 ＋ 過去7日分）
 //    ・グラフのバーをクリック → その日の時間を編集するモーダルが開く
@@ -7330,7 +6202,6 @@ window.__steToast = function(msg) {
     t.__hideTimer = setTimeout(function() { t.classList.remove('show'); }, 2200);
 };
 
-console.log('✏️ 第6回パッチ（勉強時間の手動編集）適用完了');
 // ==========================================================================
 // 📅 第7回パッチ：グラフの右端を常に最新（今日）にするローリング表示
 //    ・左端 = 6日前 … 右端 = 今日（日付が変わると自動で並び替え）
@@ -7371,7 +6242,6 @@ if (window.__steSave) {
     };
 }
 
-console.log('📅 第7回パッチ（右端が最新・ローリング表示）適用完了');
 // ==========================================================================
 // 🔒 第8回パッチ：高さの正規化 ＋ 注釈削除 ＋ 編集を管理者限定に
 //    ・バー高さを「7日中の最大値=100%」の比率スケールに変更（値と一致）
@@ -7573,7 +6443,6 @@ var __origOpenEditor = window.__openStudyTimeEditor;
 __steSyncAdminUI();
 if (window.renderActivityChart) window.renderActivityChart();
 
-console.log('🔒 第8回パッチ（高さ正規化＋注釈削除＋編集を管理者限定）適用完了');
 // ==========================================================================
 // ✍️ 第9回パッチ：コントラスト改善 ＋ 1分単位の直接入力
 //    ・「総勉強時間」ラベルとグラフ下の日付／曜日を背景透過に負けない濃さへ
@@ -7726,7 +6595,6 @@ if (window.__openStudyTimeEditor) {
 window.__steFixContrast();
 if (window.renderActivityChart) window.renderActivityChart();
 
-console.log('✍️ 第9回パッチ（コントラスト改善＋1分単位直接入力）適用完了');
 // ==========================================================================
 // 🧹 第10回パッチ：壊れた勉強時間データの浄化 ＋ 不整合修正 ＋ 管理者リセット
 //    ・読み込み/保存/日付跨ぎ時に today秒数・週間ログ を正規化
@@ -7963,7 +6831,6 @@ window.__steNukeStudyStorage = function() {
 window.__steSanitizeStudyData(true);
 if (window.renderActivityChart) window.renderActivityChart();
 
-console.log('🧹 第10回パッチ（データ浄化＋不整合修正＋管理者リセット）適用完了');
 // ==========================================================================
 // Study time now uses explicit account keys in study-time.js.
 // ===== 窓（fix.js 用ブリッジ・差し替え版）：app.js の一番下に1回だけ =====
@@ -8089,7 +6956,6 @@ try { window.__fixLastGen = cloudGen; } catch (e) {}
 }
 } catch (e) {}
 });
-console.log('🧹 app.js 末尾パッチ（リセット復活根治：理解度保持のまま派生データのみ無効化）適用完了');
 })();
 
 // Keep one verifier for the existing administrator password and PIN recovery.

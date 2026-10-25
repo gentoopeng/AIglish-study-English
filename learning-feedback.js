@@ -10,9 +10,6 @@ window.__batch3Applied = true;
 // Error diagnostics are installed before startup in runtime-errors.js.
 
 // Keep legacy callers on the same bounded, configurable sound player.
-window.__b3SoundOk=()=>window.AppSounds?.play('swipe-right');
-window.__b3SoundBad=()=>window.AppSounds?.play('swipe-left');
-window.__b3SoundTap=()=>window.AppSounds?.play('tap');
 
 /* ==================================================================
 【4】オフラインバナー

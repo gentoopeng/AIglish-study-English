@@ -181,9 +181,7 @@
     }
     // Compatibility names keep old save files readable; title behavior is retired.
     ['renderTitles','renderSeasonTitles','equipTitle','unequipTitle','checkAndRewardTitleBonusXP','updateTitleProgressUI'].forEach(key=>{window[key]=function(){};});
-    window.showTitlesPage=function(){window.switchTab('titles');};
-    window.injectCommunityRankingUI=function(){};window.renderCommunityRankPills=function(){};window.renderCommunityRankSubPills=function(){};
-    window.renderLeaderboard=function(force){render();if(typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')return refresh(!!force);};
+    window.injectCommunityRankingUI=function(){};window.renderCommunityRankPills=function(){};    window.renderLeaderboard=function(force){render();if(typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')return refresh(!!force);};
     document.querySelectorAll('[data-rank-mode]').forEach(button=>button.onclick=()=>{inflight?.controller.abort();rankMode=button.dataset.rankMode;selectCache();document.querySelectorAll('[data-rank-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.rankMode===rankMode)));render();refresh(false);});
     document.getElementById('rankingRefresh').onclick=()=>refresh(true,true);
     window.onTabChange(tab=>{if(tab==='titles'){render();refresh(false);}else if(tab==='vocab'){ensure();scanCurrent();persist();}});

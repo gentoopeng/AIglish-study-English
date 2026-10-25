@@ -162,9 +162,6 @@ window.flushManualVocabDraft=function(bookKey){
   if(window.LibraryState&&window.LibraryState.isDeleted('book',bookKey))return Promise.resolve(false);
   var id=myId;return window.LibraryState?window.LibraryState.track(id,function(){return __flushDraftWithDeletionTracking(bookKey);}):__flushDraftWithDeletionTracking(bookKey);
 };
-window.flushAllManualVocabDrafts = function(){
-  return Promise.all(Object.keys(window.__dirtyManualVocabDrafts||{}).map(function(bookKey){return window.flushManualVocabDraft(bookKey);}));
-};
 // 手動セーブ前に教材を行き来しても、共有キャッシュではなく編集中の下書きを表示する。
 if(!window.__manualDraftBookLoaderApplied&&typeof window.loadCurrentTextbookData==='function'){
   window.__manualDraftBookLoaderApplied=true;

@@ -1,8 +1,7 @@
 // Loading quiz belongs to the vocabulary library, independently of profile UI.
 (function(){
 'use strict';
-window.injectLoadQuizSettings=function(){};window.updateLoadQuizBookSelect=function(){};
-const pin=()=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-label','ロードクイズ出題対象');svg.classList.add('loading-quiz-pin');svg.innerHTML='<path d="m16 3 5 5-4 1-3 6-5-5 6-3zM9 15l-6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>';return svg;};
+window.injectLoadQuizSettings=function(){};const pin=()=>{const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-label','ロードクイズ出題対象');svg.classList.add('loading-quiz-pin');svg.innerHTML='<path d="m16 3 5 5-4 1-3 6-5-5 6-3zM9 15l-6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>';return svg;};
 function matches(num,bookId,q=window.UserProfile.read().loadingQuiz){return !!q&&q.bookId===bookId&&Number(num)>=q.from&&Number(num)<=q.to;}
 window.filterLoadingQuizWords=function(words,bookId){if(window.LibraryState.isDeleted('book',bookId))return [];const q=window.UserProfile.read().loadingQuiz;return q&&q.bookId===bookId?words.filter(word=>matches(word.num,bookId,q)):words;};
 const oldQuizInit=window.__initLoadQuiz;window.__initLoadQuiz=function(){const q=window.UserProfile.read().loadingQuiz;if(q)localStorage.setItem('core_v4_loadquiz_book',q.bookId);return oldQuizInit.apply(this,arguments);};

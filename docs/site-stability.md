@@ -909,3 +909,38 @@ The battle tab's lower card (ガチ, which had only shown 「準備中」) now o
 **Fix**
 - The table effects no longer fail while a table waits for its first hand. This failure had stopped the waiting room from drawing.
 - `tests/poker-hint.test.cjs` covers the hand help.
+
+### Cleaning out retired and replaced code, a new study tab and users tab (10.21.62.00)
+
+**How the code was chosen** (nothing was removed by guesswork)
+- V8 coverage was recorded over all 97 browser tests.
+- A JavaScript parser (acorn) found:
+  - `window.NAME` functions that a later statement or a later-loaded script replaces before anything stores, passes or calls the old one;
+  - functions whose name appears nowhere else (no script, test or `index.html`);
+  - local helpers nothing calls.
+- Each pass was repeated until nothing more qualified. A parser check also confirms that no identifier is left undefined.
+- `app.js` went from 553 KB to about 380 KB; `fix.js` from 113 KB to 28 KB.
+
+**What went**
+- Retired titles and their XP bonuses. The old function names stay as no-ops for compatibility, and `totalExp` is still carried in saves.
+- `fix.js`'s admin data panel: the title editor, wipe-all and selective-wipe screens. Its entry button had been disabled, but a 0.3 s timer still checked for it. The account sync, study sync and the receivers for old reset flags stay.
+- Four to five overwritten versions each of `saveUserStats`, `loadUserStats`, the vocab-progress loaders, the friend list, leaderboards, the loading-quiz functions and the penguin overlay.
+- Unreferenced season, leaderboard and admin helpers, and 32 "patch applied" console messages.
+
+**Loading overlay CSS**
+- It used to be injected at runtime by patches 4, 5, 6 and 8. It now lives in one block in `style.css`, with rules for markup that no longer exists dropped.
+- Screenshots of the overlay with animations frozen were compared before and after: they are pixel-identical apart from the quiz word.
+
+**Study tab** (`study-time.js`)
+- Summary tiles under today's time: this week, the daily average, the streak (days in a row with a minute or more) and the total.
+- The calendar is a heat map (1, 15, 45 and 90 minutes or more) with "1:05" / "12分" labels and a legend. A detail row shows the selected day.
+- The week chart puts each value on its bar, draws a dashed line at the week's average, and shows the range as 「10月19日〜25日」.
+
+**Users tab** (`people.js`)
+- A name search and a count.
+- Sections for online (active in the last 15 minutes) and recent users.
+- Each row shows how long ago the person was active, today's study time and a friend mark.
+
+**Poker**
+- The practice test's long waits were the test's own doing: lowering the computer's stack in place could be undone before the next hand, so a game ran past the loop's 100 s budget. The stack is now set again after every hand, and the loop waits by time.
+- The dealer loop also gets two safeguards. A step that never finishes is released after 15 s. A computer turn that has not moved for 20 s checks or folds.
