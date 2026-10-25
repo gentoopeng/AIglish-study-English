@@ -187,111 +187,13 @@ gold_spent: 0,
 goal_text: "",
 weekly_rank_first: false
 };
-const TITLE_DATABASE = [
-{ id: 'test_count', name: '試練 of 挑戦者', steps: [10, 100, 500, 2500, 9999], desc: '単語テストの総解答問題数', unit: '問' },
-{ id: 'combo_max', name: 'コンボマスター', steps: [2, 5, 10, 30, 50], desc: '単語テストでの連続正解コンボ記録', unit: '連' },
-{ id: 'mistake_count', name: '不撓不屈', steps: [5, 25, 100, 500, 999], desc: '単語テストで間違えて学んだ総誤答数', unit: '回' },
-{ id: 'vocab_fixed', name: '記憶 of 定着者', steps: [5, 25, 100, 500, 999], desc: '単語帳コレクションで「定着 ⚪︎」を達成した総語数', unit: '語' },
-{ id: 'study_burst', name: '集中バースト', steps: [5, 15, 30, 60, 120], desc: '1日の最大総勉強時間記録', unit: '分' },
-{ id: 'reader_open', name: '読解 of 旅人', steps: [3, 10, 25, 50, 99], desc: 'スマート長文リーダーを起動して解析した総回数', unit: '回' },
-{ id: 'flash_count', name: '手のひら返し', steps: [10, 100, 500, 2500, 9999], desc: 'フラッシュカード単語をめくって学習した総回数', unit: '回' },
-{ id: 'friends_count', name: 'friends', steps: [1, 5, 10, 25, 50], desc: '追加して登録を完了したフレンドの総人数', unit: '人' },
-];
-const SPECIAL_TITLES = [
-{ id: 'goal_setting', name: '必勝', desc: 'プロフィール目標に「大学合格」の文字を入れる', check: () => userStats.goal_text.includes('大学合格') },
-{ id: 'weekly_rank', name: 'ランキング王者', desc: 'ソロ/ハイスコアランキングで自分が1位を獲得する', check: () => userStats.weekly_rank_first === true }
-];
+// Titles and their XP bonuses are retired; old callers find no-ops (ranking.js keeps the same names).
+['renderTitles','renderSeasonTitles','equipTitle','unequipTitle','checkAndRewardTitleBonusXP','updateTitleProgressUI'].forEach(name=>{window[name]=function(){};});
 let rewardedTitlesStepsCache = JSON.parse(localStorage.getItem('core_v4_rewarded_titles_cache') || "{}");
-window.checkAndRewardTitleBonusXP = function() {
-let xpAddedFlag = false;
-TITLE_DATABASE.forEach(title => {
-     const val = userStats[title.id] || 0;
-     let currentStepReached = 0;
-     title.steps.forEach((target, idx) => {
-         if (val >= target) {
-             currentStepReached = idx + 1;
-         }
-     });
-     if (!rewardedTitlesStepsCache[title.id]) {
-         rewardedTitlesStepsCache[title.id] = 0;
-     }
-     if (currentStepReached > rewardedTitlesStepsCache[title.id]) {
-         xpAddedFlag = true;
-         rewardedTitlesStepsCache[title.id] = currentStepReached;
-     }
- });
- SPECIAL_TITLES.forEach(title => {
-     const isUnlocked = title.check();
-     if (isUnlocked && !rewardedTitlesStepsCache[title.id]) {
-
-         rewardedTitlesStepsCache[title.id] = 1;
-         xpAddedFlag = true;
-     }
- });
- if (xpAddedFlag) {
-     localStorage.setItem('core_v4_totalExp', totalExp);
-     localStorage.setItem('core_v4_rewarded_titles_cache', JSON.stringify(rewardedTitlesStepsCache));
-     let newLvlData = window.calculateLevelFromExp(totalExp);
-     userStats.user_level = newLvlData.level;
-     window.saveUserStats();
-     window.applyProfileToUi();
-     window.renderTitles();
-     window.renderLeaderboard();
- }
-};
-const RARITY_MAP = [
-{ name: 'コモン', class: 'badge-common' },
-{ name: 'アンコモン', class: 'badge-uncommon' },
-{ name: 'レア', class: 'badge-rare' },
-{ name: 'スーパーレア', class: 'badge-epic' },
-{ name: 'レジェンダリー', class: 'badge-legendary' }
-];
 // ==========================================================================
 // 🌟 3. 各種機能の定義
 // ==========================================================================
 
-window.renderLeaderboard = function() {
-const container = document.getElementById('leaderboardContainer');
-if(!container) return;
-let users = [];
- const mySavedAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || "";
- let lvlData = window.calculateLevelFromExp(totalExp);
- let calculatedLvl = lvlData.level;
- userStats.user_level = calculatedLvl; 
- users.push({
-     name: `${myName} (あなた)`,
-     title: selectedTitle,
-     exp: totalExp,
-     lvl: calculatedLvl,
-     icon: "👤",
-     customAvatar: mySavedAvatar,
-     isMe: true
- });
- users.sort((a, b) => b.exp - a.exp);
- let html = "";
- users.forEach((u, idx) => {
-     let rankColor = idx === 0 ? "#FBBF24" : idx === 1 ? "#94A3B8" : idx === 2 ? "#D97706" : "#FFFFFF";
-     let bgStyle = u.isMe ? "background: linear-gradient(90deg, rgba(0, 240, 255, 0.15) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--cosmic-cyan);" : "background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);";
-     let avatarUiNodeStr = `<span style="font-size:16px;">${u.icon}</span>`;
-     if (u.customAvatar) {
-         avatarUiNodeStr = `<img src="${u.customAvatar}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--cosmic-cyan);">`;
-     }
-     html += `
-         <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:8px; margin-bottom:4px; ${bgStyle} font-size:12px;">
-             <div style="display:flex; align-items:center; gap:10px;">
-                 <span style="color:${rankColor}; font-weight:900; font-size:14px; width:18px; text-align:center;">${idx + 1}</span>
-                 <div style="width:24px; height:24px; display:flex; align-items:center; justify-content:center;">${avatarUiNodeStr}</div>
-                 <div>
-                     <div style="font-weight:bold; color:white;">${u.name} <span style="font-size:9px; color:var(--cosmic-cyan); font-weight:normal; margin-left:4px;">LV.${u.lvl}</span></div>
-                     <div style="font-size:9px; color:var(--text-sub); margin-top:1px;">${u.title}</div>
-                 </div>
-             </div>
-             <div style="text-align:right; font-weight:900; color:var(--word-so); font-family:monospace;">${u.exp} <span style="font-size:8px; color:var(--text-sub); font-weight:normal;">EXP</span></div>
-         </div>`;
- });
- container.innerHTML = html;
- window.saveUserStats();
-};
 window.initLucide = function() {
 if(window.lucide) { window.lucide.createIcons(); }
 };
@@ -1272,137 +1174,6 @@ await window.saveUserStats();
 }
 };
 // 🌟 プロフィール保存処理（Firebaseへ即時リアルタイム反映）
-window.renderTitles = function() {
-const listContainer = document.getElementById('titles-list');
-const selectEl = document.getElementById('sideSelectTitle');
-if (!listContainer) return;
-listContainer.innerHTML = "";
- if (selectEl) {
-     selectEl.innerHTML = `<option value="称号なし">称号なし</option>`;
- }
- let unlockedCount = 0;
- let totalPossible = 0;
- TITLE_DATABASE.forEach(title => {
-     const val = userStats[title.id] || 0;
-     let reachedStep = 0;
-     title.steps.forEach((target, idx) => {
-         if (val >= target) {
-             reachedStep = idx + 1;
-         }
-     });
-     unlockedCount += reachedStep;
-     totalPossible += 5;
-     const card = document.createElement('div');
-     card.className = "word-row-container";
-     card.style.cssText = "border-radius: 12px; padding: 14px; margin-bottom: 10px; border: 1.5px solid rgba(255,255,255,0.15); background: rgba(30, 41, 59, 0.85); box-sizing: border-box;";
-     let badgeHTML = `<span class="badge-common" style="padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #4b5563;">未解放</span>`;
-     let activeFullTitle = "";
-     if (reachedStep > 0) {
-         const rarity = RARITY_MAP[reachedStep - 1];
-         badgeHTML = `<span class="${rarity.class}" style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-shadow: 0 0 5px rgba(0,0,0,0.5);">${rarity.name} (段階 ${reachedStep})</span>`;
-         activeFullTitle = `【${rarity.name}】${title.name}`;
-         if (selectEl) {
-             const opt = document.createElement('option');
-             opt.value = activeFullTitle;
-             opt.innerText = activeFullTitle;
-             selectEl.appendChild(opt);
-         }
-     }
-     const isEquipped = selectedTitle === activeFullTitle && reachedStep > 0;
-     const targetVal = reachedStep === 5 ? "MAX" : title.steps[reachedStep];
-     card.innerHTML = `
-         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-             <div style="font-weight:900; font-size:16px; color:#ffffff;">${title.name}</div>
-             <div>${badgeHTML}</div>
-         </div>
-         <div style="font-size:12.5px; color:#FFFFFF; margin-bottom:8px; font-weight:700;">
-             現在の進捗状況: <span style="color:var(--cosmic-cyan); font-weight:900;">${val}</span> / 次の段階目標値: ${targetVal}${title.unit}
-         </div>
-         <div style="font-size:11px; color:rgba(255,255,255,0.85); font-weight:600; margin-bottom:12px; line-height:1.4; background:rgba(0,0,0,0.25); padding:6px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.05);">
-             📊 課題内容: ${title.desc}<br>
-             📈 進化段階ライン: ${title.steps.join(' ➔ ')} (${title.unit})
-         </div>
-         ${reachedStep > 0 ? 
-             `<button class="modern-btn" style="height: 34px; font-size:11px; background:${isEquipped ? 'var(--word-ok-bg) !important' : 'rgba(0,0,0,0.3) !important'}; border-color:${isEquipped ? 'var(--word-ok)' : 'var(--border)'} !important; color:${isEquipped ? 'var(--word-ok)' : 'white'} !important; box-shadow: none !important;" onclick="equipTitle('${activeFullTitle}')">
-                 ${isEquipped ? 'セット中' : '称号をセットする'}
-             </button>` : 
-             `<button class="modern-btn" style="height: 34px; font-size:11px; background: rgba(0,0,0,0.5) !important; color:var(--text-sub) !important; border-color:var(--border) !important; box-shadow: none !important; cursor: not-allowed;" disabled>条件未達成</button>`
-         }
-     `;
-     listContainer.appendChild(card);
- });
- SPECIAL_TITLES.forEach(title => {
-     const isUnlocked = title.check();
-     totalPossible += 1;
-     if (isUnlocked) unlockedCount += 1;
-     const card = document.createElement('div');
-     card.className = "word-row-container";
-     card.style.cssText = "border-radius: 12px; padding: 14px; margin-bottom: 10px; border: 1.5px solid #F59E0B; background: linear-gradient(135deg, rgba(245,158,11,0.05) 0%, rgba(30,41,59,0.9) 100%); box-sizing: border-box;";
-     const activeFullTitle = `【特別】${title.name}`;
-     if (isUnlocked) {
-         let badgeHTML = `<span class="badge-legendary" style="padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">レジェンダリー</span>`;
-         if (selectEl) {
-             const opt = document.createElement('option');
-             opt.value = activeFullTitle;
-             opt.innerText = activeFullTitle;
-             selectEl.appendChild(opt);
-         }
-         const isEquipped = selectedTitle === activeFullTitle;
-         card.innerHTML = `
-             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                 <div style="font-weight:900; font-size:16px; color:#f59e0b; text-shadow:0 0 10px rgba(245,158,11,0.4);"><i data-lucide="sparkles" size="14" style="vertical-align:middle; margin-right:4px;"></i>${title.name}</div>
-                 <div>${badgeHTML}</div>
-             </div>
-             <div style="font-size:12.5px; color:#FFFFFF; font-weight:700; margin-bottom:12px; background:rgba(0,0,0,0.25); padding:6px 10px; border-radius:6px; border:1px solid rgba(245,158,11,0.2);">
-                 👑 解放達成条件: ${title.desc}
-             </div>
-             <button class="modern-btn" style="height: 34px; font-size:11px; background:${isEquipped ? 'var(--word-ok-bg) !important' : 'rgba(0,0,0,0.3) !important'}; border-color:${isEquipped ? 'var(--word-ok)' : '#F59E0B'} !important; color:${isEquipped ? 'var(--word-ok)' : 'white'} !important; box-shadow: none !important;" onclick="equipTitle('${activeFullTitle}')">
-                 ${isEquipped ? 'セット中' : '称号をセットする'}
-             </button>
-         `;
-     } else {
-         card.innerHTML = `
-             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                 <div style="font-weight:900; font-size:16px; color:rgba(255,255,255,0.25); font-style:italic;">🔒 未知のシークレット称号</div>
-                 <div><span class="badge-common" style="padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #4b5563; background:rgba(0,0,0,0.4);">???</span></div>
-             </div>
-             <div style="font-size:11.5px; color:rgba(255,255,255,0.4); font-weight:500; line-height:1.4; text-align:center; padding:10px 0;">
-                 🕵️‍♂️ 隠された特定のミッションをクリアするとロックが解除されます。
-             </div>
-             <button class="modern-btn" style="height: 34px; font-size:11px; background: rgba(0,0,0,0.5) !important; color:var(--text-sub) !important; border-color:var(--border) !important; box-shadow: none !important; cursor: not-allowed;" disabled>🔒 封印中</button>
-         `;
-     }
-     listContainer.appendChild(card);
- });
- if (selectEl) {
-     selectEl.value = selectedTitle;
- }
- const percent = totalPossible > 0 ? Math.round((unlockedCount / totalPossible) * 100) : 0;
- const progressTextEl = document.getElementById('title-progress-text');
- const progressBarEl = document.getElementById('title-progress-bar');
- if (progressTextEl) progressTextEl.innerText = `${unlockedCount} / ${totalPossible}個 (${percent}%)`;
- if (progressBarEl) progressBarEl.style.width = `${percent}%`;
- const equippedDisplayEl = document.getElementById('equipped-title-display');
- if (equippedDisplayEl) {
-     equippedDisplayEl.innerText = selectedTitle ? selectedTitle : "（未装備）";
- }
- window.initLucide();
-};
-window.equipTitle = function(titleName) {
-selectedTitle = titleName;
-localStorage.setItem('core_v4_userTitle', titleName);
-window.saveUserStats();
-window.applyProfileToUi();
-window.renderTitles();
-alert(`称号「${titleName}」を装備しました。`);
-};
-window.unequipTitle = function() {
-selectedTitle = "称号なし";
-localStorage.setItem('core_v4_userTitle', "称号なし");
-window.saveUserStats();
-window.applyProfileToUi();
-window.renderTitles();
-};
 // ==========================================================================
 // 🎮 フラッシュカード（単語フラッシュ）制御モジュール
 // ==========================================================================
@@ -1943,25 +1714,6 @@ window.getSeasonMode = function(seasonNo) {
 window.formatSeasonDate = function(d) {
   return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
 };
-window.getSeasonRemainingText = function(seasonNo) {
-  const end = window.getSeasonEnd(seasonNo);
-  const diff = end.getTime() - Date.now();
-  if (diff <= 0) return "終了";
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  if (days > 0) return "残り " + days + "日" + hours + "時間";
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  return "残り " + hours + "時間" + minutes + "分";
-};
-window.getSeasonStartCountdownText = function() {
-  const start = window.getSeasonStart(1);
-  const diff = start.getTime() - Date.now();
-  if (diff <= 0) return "シーズン開始済み";
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  if (days > 0) return "第1シーズン開始まで あと " + days + "日" + hours + "時間";
-  return "第1シーズン開始まで あと " + hours + "時間";
-};
 window.ensureSeasonUserStats = function() {
   if (!userStats) return;
   if (!Array.isArray(userStats.seasonTitles)) userStats.seasonTitles = [];
@@ -2014,44 +1766,6 @@ window.buildRankingRowHtml = function(record, index) {
 // ------------------------------------------------------------------
 // 9. シーズン称号表示
 // ------------------------------------------------------------------
-const __originalRenderTitlesForPatch = window.renderTitles;
-window.renderTitles = function() {
-  if (typeof __originalRenderTitlesForPatch === "function") __originalRenderTitlesForPatch();
-  window.renderSeasonTitles();
-};
-window.renderSeasonTitles = function() {
-  const listContainer = document.getElementById("titles-list");
-  const selectEl = document.getElementById("sideSelectTitle");
-  if (!listContainer) return;
-  window.ensureSeasonUserStats();
-  const oldSection = document.getElementById("seasonTitlesSection");
-  if (oldSection) oldSection.remove();
-  if (!userStats.seasonTitles || userStats.seasonTitles.length === 0) return;
-  const section = document.createElement("div");
-  section.id = "seasonTitlesSection";
-  let html = '<div style="margin:18px 0 10px 0; font-size:14px; font-weight:900; color:var(--cosmic-cyan);">🏆 シーズン称号</div>';
-  userStats.seasonTitles.forEach(function(titleName) {
-    if (selectEl) {
-      const exists = Array.from(selectEl.options).some(function(opt) { return opt.value === titleName; });
-      if (!exists) {
-        const opt = document.createElement("option");
-        opt.value = titleName;
-        opt.innerText = titleName;
-        selectEl.appendChild(opt);
-      }
-    }
-    const isEquipped = selectedTitle === titleName;
-    html += '<div class="word-row-container" style="border-radius:12px; padding:14px; margin-bottom:10px; border:1.5px solid #FBBF24; background:linear-gradient(135deg, rgba(251,191,36,0.08) 0%, rgba(30,41,59,0.9) 100%); box-sizing:border-box;">' +
-      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">' +
-      '<div style="font-weight:900; font-size:15px; color:#FBBF24;">' + titleName + '</div>' +
-      '<span class="badge-legendary" style="padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">シーズン</span></div>' +
-      '<button class="modern-btn" style="height:34px; font-size:11px; background:' + (isEquipped ? "var(--word-ok-bg)" : "rgba(0,0,0,0.3)") + '; border-color:' + (isEquipped ? "var(--word-ok)" : "#FBBF24") + '; color:' + (isEquipped ? "var(--word-ok)" : "white") + '; box-shadow:none;" onclick="window.equipTitle(\'' + titleName + '\')">' +
-      (isEquipped ? "セット中" : "称号をセットする") + '</button></div>';
-  });
-  section.innerHTML = html;
-  listContainer.appendChild(section);
-  if (selectEl) selectEl.value = selectedTitle;
-};
 
 // ------------------------------------------------------------------
 // 10. EXP全ユーザーランキング
@@ -2079,42 +1793,6 @@ window.drawExpLeaderboard = function(container, users) {
   container.innerHTML = html;
 };
 
-window.renderLeaderboard = async function(force) {
-  const container = document.getElementById("leaderboardContainer");
-  if (!container) return;
-  if (typeof myId === "undefined" || myId === "GUEST-000") {
-    container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ゲストはランキング対象外です。</div>';
-    return;
-  }
-  let lvlData = window.calculateLevelFromExp(totalExp);
-  userStats.user_level = lvlData.level;
-  const selfAvatar = localStorage.getItem("core_v4_user_avatar_" + myId) || "";
-  const selfUser = { id: myId, name: myName + " (あなた)", title: selectedTitle, exp: totalExp, lvl: lvlData.level, icon: "👤", customAvatar: selfAvatar, isMe: true };
-  const now = Date.now();
-  const cacheValid = window.__leaderboardCache && (now - window.__leaderboardCacheAt < 60000);
-  if (cacheValid && !force) {
-    let users = window.__leaderboardCache.filter(function(u) { return u.id !== myId; }).map(function(u) { return Object.assign({}, u); });
-    users.push(selfUser);
-    users.sort(function(a, b) { return b.exp - a.exp; });
-    window.drawExpLeaderboard(container, users.slice(0, 50));
-    return;
-  }
-  container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ランキングを取得中...</div>';
-  try {
-    if (!window.__leaderboardLoadingPromise) {
-      window.__leaderboardLoadingPromise = window.fetchAllExpLeaderboardUsers()
-        .then(function(users) { window.__leaderboardCache = users; window.__leaderboardCacheAt = Date.now(); return users; })
-        .finally(function() { window.__leaderboardLoadingPromise = null; });
-    }
-    const remoteUsers = await window.__leaderboardLoadingPromise;
-    let users = (remoteUsers || []).filter(function(u) { return u.id !== myId; }).map(function(u) { return Object.assign({}, u); });
-    users.push(selfUser);
-    users.sort(function(a, b) { return b.exp - a.exp; });
-    window.drawExpLeaderboard(container, users.slice(0, 50));
-  } catch (e) {
-    window.drawExpLeaderboard(container, [selfUser]);
-  }
-};
 
 // ------------------------------------------------------------------
 // 11. フレンド最新化
@@ -2131,45 +1809,6 @@ window.formatFriendLastLogin = function(iso) {
 
 window.injectFriendRefreshButton = function() {}; // Replaced by the compact users toolbar.
 
-window.refreshFriendListFromFirebase = async function(force) {
-  if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
-  if (!window.db || !window.fbGetDoc || !window.fbDoc) return;
-  if (!Array.isArray(myFriendList) || myFriendList.length === 0) return;
-  const now = Date.now();
-  if (!force && window.__friendRefreshLastAt && now - window.__friendRefreshLastAt < 60000) return;
-  window.__friendRefreshLastAt = now;
-  let changed = false;
-  for (let i = 0; i < myFriendList.length; i++) {
-    const f = myFriendList[i];
-    try {
-      const ref = window.fbDoc(window.db, "users", f.code);
-      const snap = await window.fbGetDoc(ref);
-      if (!snap.exists()) continue;
-      const d = snap.data();
-      if (d.deleted) continue;
-      const stats = d.userStats || {};
-      let remoteLevel = f.level || 1;
-      if (stats.user_level) remoteLevel = parseInt(stats.user_level) || remoteLevel;
-      else if (d.totalExp !== undefined && d.totalExp !== null) remoteLevel = window.calculateLevelFromExp(parseInt(d.totalExp) || 0).level;
-      const remoteName = d.playerName || f.name;
-      const remoteTitle = d.selectedTitle || f.title || "称号なし";
-      const remoteAvatar = (typeof d.avatar === "string") ? d.avatar : (f.customAvatar || "");
-      const remoteStudyTime = parseInt(stats.study_burst) || 0;
-      let remoteLastLoginStr = f.lastLoginStr || "";
-      const lastIso = stats.lastLoginAt || d.updatedAt || "";
-      if (lastIso) { const formatted = window.formatFriendLastLogin(lastIso); if (formatted) remoteLastLoginStr = formatted; }
-      let remoteTimestamp = f.timestamp || now;
-      if (lastIso) { const t = new Date(lastIso).getTime(); if (!isNaN(t)) remoteTimestamp = t; }
-      if (f.name !== remoteName || f.title !== remoteTitle || f.customAvatar !== remoteAvatar || f.level !== remoteLevel || f.studyTime !== remoteStudyTime || f.lastLoginStr !== remoteLastLoginStr || f.timestamp !== remoteTimestamp) {
-        f.name = remoteName; f.title = remoteTitle; f.customAvatar = remoteAvatar;
-        f.level = remoteLevel; f.studyTime = remoteStudyTime; f.lastLoginStr = remoteLastLoginStr; f.timestamp = remoteTimestamp;
-        changed = true;
-      }
-    } catch (e) {}
-  }
-  if (changed) { try { await window.saveUserStats(); } catch (e) {} }
-  if (typeof window.sortAndRenderFriendList === "function") window.sortAndRenderFriendList();
-};
 
 window.manualRefreshFriendList = async function() {
   const btn = document.getElementById("friendRefreshButton");
@@ -3272,49 +2911,6 @@ window.fetchAllExpLeaderboardUsers = async function() {
 // Phase 2-B：フレンド最新化のレベル優先順を修正
 //   （古い user_level を信じず、必ず totalExp から計算する）
 // ------------------------------------------------------------------
-window.refreshFriendListFromFirebase = async function(force) {
-    if (typeof myId === "undefined" || !myId || myId === "GUEST-000") return;
-    if (!window.db || !window.fbGetDoc || !window.fbDoc) return;
-    if (!Array.isArray(myFriendList) || myFriendList.length === 0) return;
-    const now = Date.now();
-    if (!force && window.__friendRefreshLastAt && now - window.__friendRefreshLastAt < 60000) return;
-    window.__friendRefreshLastAt = now;
-    let changed = false;
-    for (let i = 0; i < myFriendList.length; i++) {
-        const f = myFriendList[i];
-        try {
-            const ref = window.fbDoc(window.db, "users", f.code);
-            const snap = await window.fbGetDoc(ref);
-            if (!snap.exists()) continue;
-            const d = snap.data();
-            if (d.deleted) continue;
-            const stats = d.userStats || {};
-            // ✅ 修正：totalExp からレベルを計算（古い user_level を使わない）
-            let remoteLevel = f.level || 1;
-            if (d.totalExp !== undefined && d.totalExp !== null) {
-                remoteLevel = window.computeLevelSafe(d.totalExp);
-            } else if (stats.user_level) {
-                remoteLevel = parseInt(stats.user_level) || remoteLevel;
-            }
-            const remoteName = d.playerName || f.name;
-            const remoteTitle = d.selectedTitle || f.title || "称号なし";
-            const remoteAvatar = (typeof d.avatar === "string") ? d.avatar : (f.customAvatar || "");
-            const remoteStudyTime = parseInt(stats.study_burst) || 0;
-            let remoteLastLoginStr = f.lastLoginStr || "";
-            const lastIso = stats.lastLoginAt || d.updatedAt || "";
-            if (lastIso) { const formatted = window.formatFriendLastLogin(lastIso); if (formatted) remoteLastLoginStr = formatted; }
-            let remoteTimestamp = f.timestamp || now;
-            if (lastIso) { const t = new Date(lastIso).getTime(); if (!isNaN(t)) remoteTimestamp = t; }
-            if (f.name !== remoteName || f.title !== remoteTitle || f.customAvatar !== remoteAvatar || f.level !== remoteLevel || f.studyTime !== remoteStudyTime || f.lastLoginStr !== remoteLastLoginStr || f.timestamp !== remoteTimestamp) {
-                f.name = remoteName; f.title = remoteTitle; f.customAvatar = remoteAvatar;
-                f.level = remoteLevel; f.studyTime = remoteStudyTime; f.lastLoginStr = remoteLastLoginStr; f.timestamp = remoteTimestamp;
-                changed = true;
-            }
-        } catch (e) {}
-    }
-    if (changed) { try { await window.saveUserStats(); } catch (e) {} }
-    if (typeof window.sortAndRenderFriendList === "function") window.sortAndRenderFriendList();
-};
 
 console.log("🔄 第1回パッチ（同期ズレ解消＋レベル1バグ修正＋保存信頼性向上）適用完了");
 // ==========================================================================
@@ -3604,50 +3200,6 @@ window.__restoreFlashcardSession = function() {
 };
 
 var __prevStartFlashcardSessionForBookFix = window.startFlashcardSession;
-window.startFlashcardSession = async function() {
-  var sourceSelector = document.getElementById('flashcardSourceSelect');
-  var chosenBookKey = sourceSelector ? (sourceSelector.value || currentTextbook || 'default') : (currentTextbook || 'default');
-  var currentBookKey = currentTextbook || 'default';
-  var isCurrent = (chosenBookKey === currentBookKey);
-
-  if (!isCurrent) {
-    // 現在の状態を退避
-    window.__fcSaved = {
-      vocabList: vocabList,
-      bookKey: currentTextbook,
-      progress: (typeof currentUserVocabProgress !== 'undefined') ? currentUserVocabProgress : {}
-    };
-    window.__fcSessionActive = true;
-
-    // セッション教材のマスター単語を取得して vocabList にセット
-    var master = await window.__fetchMasterWordsForBook(chosenBookKey);
-    vocabList = window.migrateVocabData ? window.migrateVocabData(master) : master;
-    currentTextbook = chosenBookKey;
-
-    // その教材の“自分の理解度”を読み込んで適用
-    if (typeof window.loadUserVocabProgress === 'function') {
-      try { await window.loadUserVocabProgress(chosenBookKey); } catch (e) {}
-    }
-    if (typeof window.applyUserProgressToVocabList === 'function') {
-      try { window.applyUserProgressToVocabList(); } catch (e) {}
-    } else if (typeof window.rebuildVocabStemIndex === 'function') {
-      window.rebuildVocabStemIndex();
-    }
-
-    // 範囲内に単語が無ければ復元して終了（元の関数のalertと二重にしない）
-    if (window.__buildFlashcardPool().length === 0) {
-      window.__restoreFlashcardSession();
-      alert('指定された範囲または教材にデータが存在しません。単語登録を確認してください。');
-      return;
-    }
-  } else {
-    window.__fcSessionActive = false;
-    window.__fcSaved = null;
-  }
-
-  // 元の実行（pool は差し替え後の vocabList から作られる＝選択教材で出題＆保存）
-  return __prevStartFlashcardSessionForBookFix.apply(this, arguments);
-};
 
 // 終了時に必ず復元（finish / quit 両方をカバー）
 var __prevFinishFlashcardSessionForBookFix = window.finishFlashcardSession;
@@ -3666,53 +3218,6 @@ window.quitFlashcardSession = window.finishFlashcardSession;
 // D. ランキングを“消さない”描画に上書き
 //    （取得中は既存の中身を保持。初回だけ「取得中」。失敗時も自分だけは残す）
 // ------------------------------------------------------------------
-window.renderLeaderboard = async function(force) {
-  var container = document.getElementById('leaderboardContainer');
-  if (!container) return;
-  if (typeof myId === 'undefined' || myId === 'GUEST-000') {
-    container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ゲストはランキング対象外です。</div>';
-    return;
-  }
-  var lvlData = window.calculateLevelFromExp(totalExp);
-  userStats.user_level = lvlData.level;
-  var selfAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || '';
-  var selfUser = { id: myId, name: myName + ' (あなた)', title: selectedTitle, exp: totalExp, lvl: lvlData.level, icon: '👤', customAvatar: selfAvatar, isMe: true };
-
-  var drawWithSelf = function(remoteUsers) {
-    var users = (remoteUsers || []).filter(function(u) { return u.id !== myId; }).map(function(u) { return Object.assign({}, u); });
-    users.push(selfUser);
-    users.sort(function(a, b) { return b.exp - a.exp; });
-    window.drawExpLeaderboard(container, users.slice(0, 50));
-  };
-
-  var now = Date.now();
-  var cacheValid = window.__leaderboardCache && (now - window.__leaderboardCacheAt < 60000);
-  if (cacheValid && !force) {
-    delete container.dataset.lbLoading;
-    drawWithSelf(window.__leaderboardCache);
-    return;
-  }
-
-  // 既にランキングが描画済みなら、取得中も消さない
-  var hasExisting = container.children.length > 0 && !container.dataset.lbLoading;
-  if (!hasExisting) {
-    container.dataset.lbLoading = '1';
-    container.innerHTML = '<div class="__lb_loading" style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ランキングを取得中...</div>';
-  }
-  try {
-    if (!window.__leaderboardLoadingPromise) {
-      window.__leaderboardLoadingPromise = window.fetchAllExpLeaderboardUsers()
-        .then(function(users) { window.__leaderboardCache = users; window.__leaderboardCacheAt = Date.now(); return users; })
-        .finally(function() { window.__leaderboardLoadingPromise = null; });
-    }
-    var remoteUsers = await window.__leaderboardLoadingPromise;
-    delete container.dataset.lbLoading;
-    drawWithSelf(remoteUsers);
-  } catch (e) {
-    delete container.dataset.lbLoading;
-    if (!hasExisting) drawWithSelf([]); // 既存が無い時だけ自分を描画（既存は消さない）
-  }
-};
 
 // ------------------------------------------------------------------
 // E. switchTab 上書き：コミュニティ切替後の transform/opacity 残留を解消
@@ -6387,145 +5892,15 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     //    （教材切替・ペンギンローディング等はそのまま実行される）
     // ------------------------------------------------------------------
     var __prevStartFlashcardSessionForMeaningPatch = window.startFlashcardSession;
-    window.startFlashcardSession = async function() {
-        await __prevStartFlashcardSessionForMeaningPatch.apply(this, arguments);
-
-        // セッションが始まっていない場合（プールが空で早期リターンした等）は何もしない
-        var playScreen = document.getElementById('flashcard-play-screen');
-        if (!playScreen || playScreen.style.display !== 'flex') return;
-        if (!flashcardOriginQueue || flashcardOriginQueue.length === 0) return;
-
-        // 各単語カードを「意味ごとのカード」へ展開
-        var expanded = [];
-        flashcardOriginQueue.forEach(function(card) {
-            var vocabMatch = findVocabForCard(card);
-            if (vocabMatch && vocabMatch.meanings && vocabMatch.meanings.length > 0) {
-                var valid = vocabMatch.meanings.filter(function(m) { return m.text && String(m.text).trim() !== ''; });
-                if (valid.length === 0) valid = [vocabMatch.meanings[0]];
-                valid.forEach(function(m, badgeIdx) {
-                    expanded.push({
-                        num: card.num,
-                        en: card.en,
-                        ja: m.text,
-                        meaningId: m.id,
-                        meaningBadgeIndex: badgeIdx,
-                        totalMeanings: valid.length
-                    });
-                });
-            } else {
-                // 意味が取得できない場合の保険：そのまま維持（既存挙動）
-                expanded.push({ num: card.num, en: card.en, ja: card.ja });
-            }
-        });
-
-        flashcardOriginQueue = expanded.sort(function() { return Math.random() - 0.5; });
-        flashcardCurrentIndex = 0;
-        flashcardLearnedCount = 0;
-        flashcardSessionHistory = [];
-        window.renderFlashcardDeck();
-    };
 
     // ------------------------------------------------------------------
     // ② getFlashcardStyleByHistory 上書き：その意味自身の履歴で背景色を決定
     //    （意味IDが無いカードは従来の単語全体挙動をそのまま再現）
     // ------------------------------------------------------------------
-    window.getFlashcardStyleByHistory = function(wordData) {
-        var vocabMatch = findVocabForCard(wordData);
-        var allHistory = [];
-
-        var targetMeaning = findTargetMeaning(vocabMatch, wordData);
-        if (targetMeaning) {
-            // ✅ 意味別：この意味の履歴だけを読む
-            if (targetMeaning.history && targetMeaning.history.length > 0) {
-                allHistory = allHistory.concat(targetMeaning.history);
-            }
-        } else if (vocabMatch) {
-            // フォールバック：従来の単語全体挙動
-            if (vocabMatch.history && vocabMatch.history.length > 0) {
-                allHistory = allHistory.concat(vocabMatch.history);
-            }
-            if (vocabMatch.meanings) {
-                vocabMatch.meanings.forEach(function(m) {
-                    if (m.history && m.history.length > 0) allHistory = allHistory.concat(m.history);
-                });
-            }
-        } else {
-            var cleanKey = String(wordData.en || '').toLowerCase().replace(MEANING_CLEAN_REGEX, "");
-            var memStatus = wordMemory[cleanKey];
-            if (memStatus && memStatus !== 'none') allHistory.push(memStatus);
-        }
-
-        allHistory=allHistory.filter(function(h){return h==='ok'||h==='so'||h==='bad';});
-        if (allHistory.length === 0) {
-            var status=targetMeaning?targetMeaning.status:(vocabMatch&&vocabMatch.status);
-            var rim={ok:'#10b981',so:'#f59e0b',bad:'#ef4444'}[status]||'#94a3b8';
-            return "--flashcard-rim-color:"+rim+";background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0%, #130a24 75%, #090514 100%) !important; border: none !important; box-shadow: none !important;";
-        }
-
-        var totalScore = 0;
-        allHistory.forEach(function(h) {
-            if (h === 'ok') totalScore += 1;
-            else if (h === 'so') totalScore += 4;
-            else if (h === 'bad') totalScore += 9;
-        });
-        var avg = totalScore / allHistory.length;
-        var green = [16, 185, 129], yellow = [245, 158, 11], red = [239, 68, 68];
-        var r, g, b;
-        if (avg <= 5) {
-            var ratio = (avg - 1) / (5 - 1);
-            r = Math.round(green[0] + (yellow[0] - green[0]) * ratio);
-            g = Math.round(green[1] + (yellow[1] - green[1]) * ratio);
-            b = Math.round(green[2] + (yellow[2] - green[2]) * ratio);
-        } else {
-            var ratio2 = (avg - 5) / (9 - 5);
-            r = Math.round(yellow[0] + (red[0] - yellow[0]) * ratio2);
-            g = Math.round(yellow[1] + (red[1] - yellow[1]) * ratio2);
-            b = Math.round(yellow[2] + (red[2] - yellow[2]) * ratio2);
-        }
-        return "--flashcard-rim-color:rgb("+r+","+g+","+b+");background: radial-gradient(circle at center, rgba(" + r + ", " + g + ", " + b + ", 0.22) 0%, rgba(" + r + ", " + g + ", " + b + ", 0.12) 50%, rgba(" + r + ", " + g + ", " + b + ", 0) 100%);";
-    };
 
     // ------------------------------------------------------------------
     // ③ renderFlashcardHistoryBubbles 上書き：その意味自身の直近5回を表示
     // ------------------------------------------------------------------
-    window.renderFlashcardHistoryBubbles = function(wordData) {
-        var container = document.getElementById('fcHistoryContainer');
-        if (!container) return;
-        container.innerHTML = "";
-
-        var vocabMatch = findVocabForCard(wordData);
-        var targetHistory = [];
-
-        var targetMeaning = findTargetMeaning(vocabMatch, wordData);
-        if (targetMeaning) {
-            // ✅ 意味別
-            if (targetMeaning.history && targetMeaning.history.length > 0) {
-                targetHistory = targetHistory.concat(targetMeaning.history);
-            } else if (targetMeaning.status && targetMeaning.status !== 'none') {
-                targetHistory.push(targetMeaning.status);
-            }
-        } else if (vocabMatch) {
-            // フォールバック：従来の単語全体挙動
-            if (vocabMatch.history && vocabMatch.history.length > 0) {
-                targetHistory = targetHistory.concat(vocabMatch.history);
-            } else if (vocabMatch.status && vocabMatch.status !== 'none') {
-                targetHistory.push(vocabMatch.status);
-            }
-        } else {
-            var cleanKey = String(wordData.en || '').toLowerCase().replace(MEANING_CLEAN_REGEX, "");
-            var memStatus = wordMemory[cleanKey];
-            if (memStatus && memStatus !== 'none') targetHistory.push(memStatus);
-        }
-
-        var displayList = targetHistory.slice(-5);
-        while (displayList.length < 5) displayList.unshift('none');
-        displayList.forEach(function(status) {
-            var bubble = document.createElement('div');
-            bubble.className = "fc-history-bubble";
-            if (status !== 'none') bubble.classList.add(status);
-            container.appendChild(bubble);
-        });
-    };
 
     // ------------------------------------------------------------------
     // ④ swipeFlashcard 上書き：スワイプした「その意味」だけを更新
@@ -6533,97 +5908,12 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     //           try/finally で必ず元の順番へ戻す（エフェクト・テンポは完全維持）
     // ------------------------------------------------------------------
     var __prevSwipeFlashcardForMeaningPatch = window.swipeFlashcard;
-    window.swipeFlashcard = function(direction, finalDx, finalDy) {
-        var currentWord = flashcardOriginQueue[flashcardCurrentIndex];
-        var vocabMatch = findVocabForCard(currentWord);
-        var originalIndex = -1;
-
-        if (vocabMatch && vocabMatch.meanings && currentWord &&
-            currentWord.meaningId !== undefined && currentWord.meaningId !== null) {
-            originalIndex = vocabMatch.meanings.findIndex(function(m) { return String(m.id) === String(currentWord.meaningId); });
-        }
-
-        var needRestore = false;
-        if (vocabMatch && vocabMatch.meanings && originalIndex > 0) {
-            var target = vocabMatch.meanings.splice(originalIndex, 1)[0];
-            vocabMatch.meanings.unshift(target);
-            needRestore = true;
-        }
-
-        try {
-            return __prevSwipeFlashcardForMeaningPatch.apply(this, arguments);
-        } finally {
-            // 意味の順番を必ず元に戻す
-            if (needRestore && vocabMatch && vocabMatch.meanings) {
-                var moved = vocabMatch.meanings.shift();
-                vocabMatch.meanings.splice(originalIndex, 0, moved);
-            }
-            // 単語全体の状態を全意味から集計（updateMeaningStatus と同じ方式）
-            if (vocabMatch && vocabMatch.meanings && vocabMatch.meanings.length > 0 &&
-                typeof window.wordOverallStatus === 'function') {
-                var agg = [];
-                vocabMatch.meanings.forEach(function(m) {
-                    if (m.history && m.history.length > 0) agg = agg.concat(m.history);
-                });
-                vocabMatch.history = agg.slice(-20);
-                vocabMatch.status = window.wordOverallStatus(vocabMatch);
-            }
-            // フラッシュカードの回答も単語帳ボタンと同じ正規領域へ即時保存する。
-            // saveVocabToStorage は手動セーブ待ちのため、ここで端末理解度を確定する。
-            try {
-                var flashBookKey = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default';
-                var flashProgress = window.extractUserProgressFromVocabList();
-                var flashProgressKey = window.getVocabProgressStorageKey(flashBookKey);
-                var flashChangedAt = Date.now();
-                if(window.LearningData)flashProgress=window.LearningData.commit(flashBookKey,flashProgress,vocabMatch&&vocabMatch.num);
-                currentUserVocabProgress = flashProgress;
-                localStorage.setItem(flashProgressKey, JSON.stringify(flashProgress));
-                localStorage.setItem(flashProgressKey + '__ts', String(flashChangedAt));
-                window.__vocabProgressRevisionByBook = window.__vocabProgressRevisionByBook || {};
-                window.__vocabProgressRevisionByBook[flashBookKey] = (window.__vocabProgressRevisionByBook[flashBookKey] || 0) + 1;
-                if (typeof window.markVocabProgressDirty === 'function') window.markVocabProgressDirty(flashBookKey, vocabMatch ? vocabMatch.num : null);
-                if (typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
-            } catch (saveError) {
-                console.error('フラッシュカード理解度の即時保存に失敗しました:', saveError);
-            }
-        }
-    };
 
     // ------------------------------------------------------------------
     // ⑤ renderFlashcardDeck 上書き：意味が2つ以上ある単語に「意味 ①/②」バッジを注入
     //    （既存の描画・オートフィット処理は一切触らず、描画後に追加だけ行う）
     // ------------------------------------------------------------------
     var __prevRenderFlashcardDeckForMeaningPatch = window.renderFlashcardDeck;
-    window.renderFlashcardDeck = function() {
-        var r = __prevRenderFlashcardDeckForMeaningPatch.apply(this, arguments);
-        try {
-            var answeredCount = Math.min(flashcardCurrentIndex, flashcardOriginQueue.length);
-            var learnedRate = answeredCount > 0 ? Math.round((flashcardLearnedCount / answeredCount) * 100) : 0;
-            var progressText = document.getElementById('flashcardProgressText');
-            if (progressText) {
-                progressText.innerText = '今回の理解度: ◯ ' + flashcardLearnedCount + ' / 回答 ' + answeredCount + '（' + learnedRate + '%）';
-            }
-            var wordData = flashcardOriginQueue[flashcardCurrentIndex];
-            if (wordData && wordData.totalMeanings && wordData.totalMeanings > 1) {
-                var card = document.getElementById('activeFlashcard');
-                if (card) {
-                    var idxChar = CIRCLED_NUMS[wordData.meaningBadgeIndex] || String(wordData.meaningBadgeIndex + 1);
-                    var totalChar = CIRCLED_NUMS[wordData.totalMeanings - 1] || String(wordData.totalMeanings);
-                    var faces = card.querySelectorAll('.flashcard-face-front, .flashcard-face-back');
-                    for (var i = 0; i < faces.length; i++) {
-                        var face = faces[i];
-                        if (face.querySelector('.fc-meaning-badge')) continue;
-                        var badge = document.createElement('span');
-                        badge.className = 'fc-meaning-badge';
-                        badge.style.cssText = "position:absolute; bottom:26px; left:50%; transform:translateX(-50%); font-size:10px; font-weight:800; color:var(--cosmic-purple-light); background:rgba(0,0,0,0.45); border:1px solid rgba(192,132,252,0.5); padding:2px 8px; border-radius:10px; letter-spacing:0.5px; pointer-events:none; text-shadow:0 0 6px rgba(192,132,252,0.6); white-space:nowrap; z-index:10;";
-                        badge.innerText = '意味 ' + idxChar + ' / ' + totalChar;
-                        face.appendChild(badge);
-                    }
-                }
-            }
-        } catch (e) {}
-        return r;
-    };
 
     console.log('🎴 第13回パッチ（フラッシュ単語の意味別出題）適用完了');
 })();
@@ -6832,154 +6122,12 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // ------------------------------------------------------------------
     window.__findCommunityRankHeading = function() {return document.getElementById('titlesRankingHeading');};
 
-    window.injectCommunityRankingUI = function() {
-        var container = document.getElementById('leaderboardContainer');
-        if (!container || !container.parentNode) return;
-        if (document.getElementById('communityRankingControls')) {
-            if (!window.__communityRankHeadingEl) window.__communityRankHeadingEl = window.__findCommunityRankHeading();
-            return;
-        }
-        var ctrl = document.createElement('div');
-        ctrl.id = 'communityRankingControls';
-        ctrl.style.cssText = 'margin-bottom:10px;';
-        var mainScroller = document.createElement('div');
-        mainScroller.id = 'communityRankMainScroller';
-        mainScroller.className = 'community-rank-scroller';
-        ctrl.appendChild(mainScroller);
-        var subContainer = document.createElement('div');
-        subContainer.id = 'communityRankSubContainer';
-        ctrl.appendChild(subContainer);
-        container.parentNode.insertBefore(ctrl, container);
 
-        // タッチ分離：ピル上のスワイプをコミュニティ画面の左右タブ切替に伝えない
-        ['touchstart', 'touchmove'].forEach(function(evt) {
-            ctrl.addEventListener(evt, function(e) { e.stopPropagation(); }, { passive: true });
-        });
 
-        window.__communityRankHeadingEl = window.__findCommunityRankHeading();
-        window.renderCommunityRankPills();
-    };
-
-    window.renderCommunityRankPills = function() {
-        var scroller = document.getElementById('communityRankMainScroller');
-        if (!scroller) return;
-        var types = [
-            { key: 'flash', label: '🃏 フラッシュ' }
-        ];
-        var html = '';
-        types.forEach(function(t) {
-            var active = (window.__communityRankType === t.key);
-            html += '<button type="button" class="community-rank-pill' + (active ? ' community-rank-pill-active' : '') + '" data-rank-type="' + t.key + '">' + t.label + '</button>';
-        });
-        scroller.innerHTML = html;
-        var pills = scroller.querySelectorAll('.community-rank-pill');
-        for (var i = 0; i < pills.length; i++) {
-            pills[i].onclick = function() {
-                window.__communityRankType = this.getAttribute('data-rank-type');
-                window.renderCommunityRankPills();
-                window.renderCommunityRankSubPills();
-                window.renderLeaderboard(false);
-            };
-        }
-        var headingTexts = {
-            level: '🏆 レベルランキング（自分と全ユーザー）',
-            time: '⏱️ プレイ時間ランキング',
-            flash: '🃏 フラッシュスワイプ回数ランキング'
-        };
-        if (window.__communityRankHeadingEl) {
-            window.__communityRankHeadingEl.textContent = headingTexts[window.__communityRankType] || 'ランキング';
-        }
-        window.renderCommunityRankSubPills();
-    };
-
-    window.renderCommunityRankSubPills = function() {
-        var subContainer = document.getElementById('communityRankSubContainer');
-        if (!subContainer) return;
-        var type = window.__communityRankType;
-        var html = '';
-        if (type === 'time') {
-            var ranges = [
-                { key: 'total', label: '総計' },
-                { key: 'weekly', label: '週間' },
-                { key: 'daily', label: '1日' }
-            ];
-            html += '<div class="community-rank-subrow">';
-            ranges.forEach(function(r) {
-                var active = (window.__communityTimeRange === r.key);
-                html += '<button type="button" class="community-rank-subpill' + (active ? ' community-rank-subpill-active' : '') + '" data-time-range="' + r.key + '">' + r.label + '</button>';
-            });
-            html += '</div>';
-        }
-        subContainer.innerHTML = html;
-
-        var bind = function(selector, attr, stateKey) {
-            var els = subContainer.querySelectorAll(selector);
-            for (var i = 0; i < els.length; i++) {
-                els[i].onclick = function() {
-                    window[stateKey] = this.getAttribute(attr);
-                    window.renderCommunityRankSubPills();
-                    window.renderLeaderboard(false);
-                };
-            }
-        };
-        bind('[data-time-range]', 'data-time-range', '__communityTimeRange');
-    };
 
     // ------------------------------------------------------------------
     // 【8】renderLeaderboard 上書き（新ランキングUI）
     // ------------------------------------------------------------------
-    window.renderLeaderboard = async function(force) {
-        var container = document.getElementById('leaderboardContainer');
-        if (!container) return;
-        if (typeof myId === 'undefined' || myId === 'GUEST-000') {
-            container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ゲストはランキング対象外です。</div>';
-            return;
-        }
-        var lvlData = window.calculateLevelFromExp(totalExp);
-        userStats.user_level = lvlData.level;
-        window.injectCommunityRankingUI();
-
-        var type = window.__communityRankType;
-
-
-        var selfAvatar = localStorage.getItem('core_v4_user_avatar_' + myId) || '';
-        var selfUser = {
-            id: myId, name: myName + ' (あなた)', title: selectedTitle,
-            exp: totalExp, lvl: lvlData.level, customAvatar: selfAvatar, isMe: true,
-            flash_count: userStats.flash_count || 0,
-            study_total_secs: userStats.study_total_secs || 0,
-            study_today_secs: userStats.study_today_secs || 0,
-            study_today_date: window.__getTodayKey(),
-            study_week_secs: userStats.study_week_secs || 0,
-            study_week_key: window.__getWeekKey()
-        };
-
-        var now = Date.now();
-        var cacheValid = window.__communityUsersCache && (now - window.__communityUsersCacheAt < 60000);
-        var remoteUsers;
-        if (cacheValid && !force) {
-            remoteUsers = window.__communityUsersCache;
-        } else {
-            container.innerHTML = '<div style="color:var(--text-sub); font-size:12px; text-align:center; padding:12px;">ランキングを取得中...</div>';
-            try {
-                if (!window.__communityUsersLoadingPromise) {
-                    window.__communityUsersLoadingPromise = window.fetchAllCommunityRankingUsers()
-                        .then(function(users) { window.__communityUsersCache = users; window.__communityUsersCacheAt = Date.now(); return users; })
-                        .finally(function() { window.__communityUsersLoadingPromise = null; });
-                }
-                remoteUsers = await window.__communityUsersLoadingPromise;
-            } catch (e) {
-                remoteUsers = [];
-            }
-        }
-
-        var users = (remoteUsers || []).filter(function(u) { return u.id !== myId; }).map(function(u) { return Object.assign({}, u); });
-        users.push(selfUser);
-
-        if (type === 'level') window.drawCommunityLevelRanking(container, users);
-        else if (type === 'time') window.drawCommunityTimeRanking(container, users);
-        else if (type === 'flash') window.drawCommunityFlashRanking(container, users);
-    };
 
     // ------------------------------------------------------------------
     // 【9】loadLocalState 接続
@@ -7130,11 +6278,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
     // 【4】renderLeaderboard 上書き：描画後に枠分離＋重複削除＋見出し再取得
     // ------------------------------------------------------------------
     var __prevRenderLeaderboardForFinish = window.renderLeaderboard;
-    window.renderLeaderboard = async function() {
-        var r = __prevRenderLeaderboardForFinish ? await __prevRenderLeaderboardForFinish.apply(this, arguments) : undefined;
-        applyFinishLayout();
-        return r;
-    };
 
     // ------------------------------------------------------------------
     // 【5】renderCommunityRankPills 上書き：選択中のメインピルを中央へ寄せる
@@ -7998,12 +7141,6 @@ console.log('📖 使い方ガイドパッチ（サイドバー入口＋フル�
 // ------------------------------------------------------------------
 // A. 時間表示の更新を分離（毎秒呼んでも軽量なテキスト更新のみ）
 // ------------------------------------------------------------------
-window.__updateStudyTimeDisplay = function() {
-    var minStr = String(Math.floor(todayStudySeconds / 60)).padStart(2, '0');
-    var secStr = String(todayStudySeconds % 60).padStart(2, '0');
-    var el = document.getElementById('todayStudyTimeDisplay');
-    if (el) el.innerText = minStr + '分' + secStr + '秒';
-};
 
 // ------------------------------------------------------------------
 // B. グラフ描画の完全上書き
@@ -8135,32 +7272,6 @@ window.__steReset = function() {
 };
 
 // ---------- 3. モーダルを開く（dayIdx: 0=月 〜 6=日） ----------
-window.__openStudyTimeEditor = function(dayIdx) {
-    window.__injectStudyTimeEditor();
-
-    var now = new Date();
-    var cur = now.getDay() - 1;
-    if (cur < 0) cur = 6;
-
-    // その曜日の直近の日付を計算
-    var diff = cur - dayIdx;
-    if (diff < 0) diff += 7;
-    var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
-
-    var isToday = (dayIdx === cur);
-    var totalMin = isToday
-        ? Math.floor(todayStudySeconds / 60)
-        : Math.floor(weeklyStudyMinutesLog[dayIdx] || 0);
-
-    window.__steState = { dayIdx: dayIdx, minutes: totalMin, isToday: isToday };
-
-    var dow = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
-    document.getElementById('steDateLabel').textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日（' + dow + '）';
-    document.getElementById('steTodayBadge').style.display = isToday ? 'inline-block' : 'none';
-    window.__steRenderValues();
-
-    document.getElementById('studyTimeEditorOverlay').classList.add('open');
-};
 
 window.__steClose = function() {
     var ov = document.getElementById('studyTimeEditorOverlay');
@@ -8457,13 +7568,6 @@ window.renderActivityChart = function() {
 
 // ---------- 3. 編集モーダルを管理者ガードでラップ ----------
 var __origOpenEditor = window.__openStudyTimeEditor;
-window.__openStudyTimeEditor = function(dayIdx) {
-    if (!window.__steIsAdmin()) {
-        if (window.__steToast) window.__steToast('🔒 編集は管理者ツール開放後に可能です');
-        return;
-    }
-    return __origOpenEditor ? __origOpenEditor.call(this, dayIdx) : undefined;
-};
 
 // ---------- 4. 初期反映 ----------
 __steSyncAdminUI();
