@@ -89,10 +89,10 @@
     dice: '<svg viewBox="0 0 64 48" aria-hidden="true"><rect x="10" y="14" width="22" height="22" rx="5" transform="rotate(-10 21 25)" class="is-die"/><rect x="32" y="10" width="22" height="22" rx="5" transform="rotate(8 43 21)" class="is-die"/><g class="is-pip" transform="rotate(-10 21 25)"><circle cx="16" cy="19" r="2"/><circle cx="21" cy="25" r="2"/><circle cx="26" cy="31" r="2"/></g><g class="is-pip" transform="rotate(8 43 21)"><circle cx="38" cy="15" r="2"/><circle cx="48" cy="15" r="2"/><circle cx="38" cy="27" r="2"/><circle cx="48" cy="27" r="2"/></g></svg>',
   };
   const GAMES = [
-    { id: "poker", name: "ポーカー", line: "みんなやコンピュータと" },
-    { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち" },
-    { id: "roulette", name: "ルーレット", line: "玉が止まる数字を当てる" },
-    { id: "dice", name: "ダイスポーカー", line: "5つのダイスで役をつくる" },
+    { id: "poker", name: "ポーカー", line: "みんなやコンピュータと", level: "じっくり" },
+    { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち", level: "ふつう" },
+    { id: "roulette", name: "ルーレット", line: "玉が止まる数字を当てる", level: "かんたん" },
+    { id: "dice", name: "ダイスポーカー", line: "5つのダイスで役をつくる", level: "かんたん" },
   ];
 
   // ---- The tab ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@
         button.type = "button";
         button.dataset.game = game.id;
         button.innerHTML = '<span class="casino-pic">' + PICTURES[game.id] + "</span>";
-        button.append(node("b", "", game.name), node("small", "", game.line));
+        button.append(node("em", "casino-level is-" + (game.level === "かんたん" ? "easy" : game.level === "ふつう" ? "mid" : "deep"), game.level), node("b", "", game.name), node("small", "", game.line));
         button.onclick = () => (game.id === "poker" ? window.Poker?.open() : open(game.id));
         list.append(button);
       }
@@ -129,9 +129,27 @@
         : "ゲストやオフラインのときは練習チップで遊べます（ポイントは増減しません）。";
     }
     // While the wheel turns the balance already holds the result; it shows once the wheel stops.
-    if (!screen?.querySelector(".cs-body.is-spinning")) screen?.querySelector("[data-cs-balance]")?.replaceChildren(fmt(balance()) + unit());
+    if (!screen?.querySelector(".cs-body.is-spinning")) showBalance(screen?.querySelector("[data-cs-balance]"));
   }
 
+  // The number runs to its new value and flashes up or down, so a win or a bet is felt.
+  function showBalance(el) {
+    if (!el) return;
+    const to = balance(),
+      from = Number(el.dataset.value);
+    el.dataset.value = String(to);
+    clearInterval(el._tick);
+    if (!Number.isFinite(from) || from === to || calm()) return void (el.textContent = fmt(to) + unit());
+    el.classList.remove("is-up", "is-down");
+    void el.offsetWidth;
+    el.classList.add(to > from ? "is-up" : "is-down");
+    let step = 0;
+    el._tick = setInterval(() => {
+      step++;
+      el.textContent = fmt(Math.round(from + ((to - from) * step) / 12)) + unit();
+      if (step >= 12) clearInterval(el._tick);
+    }, 30);
+  }
   // ---- Game screen -----------------------------------------------------------------------
   let screen = null,
     game = null;
@@ -143,7 +161,7 @@
     screen.innerHTML =
       '<button type="button" class="cs-close" aria-label="' +
       info.name +
-      'を閉じる">×</button><header class="cs-bar"><div><p class="cs-kicker">CASINO</p><h2></h2></div><p class="cs-balance"><span class="cs-coin">' +
+      'を閉じる">×</button><header class="cs-bar"><div><h2></h2></div><p class="cs-balance"><span class="cs-coin">' +
       CHIP_SVG +
       '</span><span data-cs-balance></span></p></header><div class="cs-body"></div>';
     screen.querySelector("h2").textContent = info.name;
@@ -230,6 +248,16 @@
     const line = node("p", "cs-result is-" + (tone || (net > 0 ? "win" : net < 0 ? "lose" : "push")));
     line.setAttribute("role", "status");
     line.append(node("span", "", text), node("b", "", signed(net) + unit()));
+    if (net > 0 && !calm()) {
+      const burst = node("span", "cs-burst");
+      burst.setAttribute("aria-hidden", "true");
+      for (let i = 0; i < 10; i++) {
+        const chip = node("i");
+        chip.style.setProperty("--a", i * 36 + "deg");
+        burst.append(chip);
+      }
+      line.append(burst);
+    }
     return line;
   }
   // Only the rare wins get the full-screen moment, so ordinary rounds stay quiet.
@@ -316,12 +344,15 @@
         actions.append(b);
         return b;
       };
-      button("もう1枚", C.bjHit);
-      button("これで勝負", C.bjStand, true);
+      const hit = button("もう1枚", C.bjHit);
+      const stand = button("これで勝負", C.bjStand, true);
       const double = button("倍にして1枚", C.bjDouble);
       double.disabled = !C.bjCanDouble(state) || balance() < state.bet;
       if (!double.disabled) double.onclick = ((go) => () => (state.money.stake(state.bet), go()))(double.onclick);
-      body.append(actions);
+      // For beginners: what most players would do here, and why.
+      const tip = advice(state, !double.disabled);
+      ({ hit, stand, double })[tip.move].classList.add("is-suggested");
+      body.append(actions, node("p", "cs-advice", "迷ったら「" + { hit: "もう1枚", stand: "これで勝負", double: "倍にして1枚" }[tip.move] + "」：" + tip.why));
       body.append(node("p", "cs-hint", "賭けている額 " + fmt(state.bet * (state.doubled ? 2 : 1)) + unit()));
       return refresh();
     }
@@ -342,6 +373,16 @@
       blackjack(body, dealt, { player: 0, dealer: 0 });
     }));
     refresh();
+  }
+  function advice(state, canDouble) {
+    const mine = C.bjTotal(state.player),
+      up = C.bjTotal([state.dealer[0]]).total;
+    if (canDouble && (mine.total === 11 || (mine.total === 10 && up <= 9)) && !mine.soft) return { move: "double", why: "次に10点札が来やすい、勝負どころです" };
+    if (mine.total <= 11) return { move: "hit", why: "11以下なら、引いても21を超えません" };
+    if (mine.soft && mine.total <= 17) return { move: "hit", why: "Aを1と数え直せるので、超えにくい手です" };
+    if (mine.total >= 17) return { move: "stand", why: "17以上は、引くと超えやすくなります" };
+    if (up >= 7) return { move: "hit", why: "ディーラーの見えている札が強めです" };
+    return { move: "stand", why: "ディーラーの札が弱め。相手が21を超えるのを待ちます" };
   }
   // Pays a finished round once: the stake (doubled or not) back plus what it won.
   function finishIfDone(state) {
@@ -393,8 +434,14 @@
     const numbers = node("div", "cs-numbers");
     for (let n = 1; n <= 36; n++) numbers.append(spotButton(String(n), String(n), "is-" + C.colourOf(n)));
     const outside = node("div", "cs-outside");
-    for (const on of ["d1", "d2", "d3", "low", "even", "red", "black", "odd", "high"]) outside.append(spotButton(on, C.SPOTS[on].label, on === "red" ? "is-red" : on === "black" ? "is-black" : ""));
-    board.append(zero, numbers, outside);
+    for (const on of ["d1", "d2", "d3", "low", "even", "red", "black", "odd", "high"]) {
+      const b = spotButton(on, C.SPOTS[on].label, on === "red" ? "is-red" : on === "black" ? "is-black" : "");
+      // What it pays back, so a beginner can weigh the choices at a glance.
+      b.append(node("small", "cs-pays", C.SPOTS[on].pays + 1 + "倍"));
+      outside.append(b);
+    }
+    const legend = node("p", "cs-legend", "数字1つは36倍・12個の組は3倍・赤黒などは2倍で戻ります");
+    board.append(zero, numbers, outside, legend);
     const chipRow = node("div", "cs-chips cs-chip-pick");
     chipRow.setAttribute("aria-label", "置くチップ");
     for (const value of CHIPS) {
@@ -431,7 +478,7 @@
       screen?.scrollTo({ top: 0, behavior: calm() ? "auto" : "smooth" });
       const money = round("roulette");
       money.stake(staked);
-      screen.querySelector("[data-cs-balance]").replaceChildren(fmt(balance()) + unit());
+      showBalance(screen.querySelector("[data-cs-balance]"));
       const number = C.rouletteSpin(random),
         index = C.WHEEL.indexOf(number);
       // Several turns, ending with the winning pocket under the pointer at the top.
@@ -470,7 +517,7 @@
         b.querySelector(".cs-stake")?.remove();
         if (amount) b.append(node("i", "cs-stake", fmt(amount)));
       });
-      total.textContent = sum ? "賭けた合計 " + fmt(sum) + unit() : "置くチップを選んで、数字や色をタップ";
+      total.textContent = sum ? "賭けた合計 " + fmt(sum) + unit() : "チップを選んで、数字や色をタップ。初めてなら「赤」か「黒」がおすすめです";
       spin.disabled = spinning || !sum || sum > balance();
       clear.disabled = spinning || !sum;
     }
@@ -523,6 +570,7 @@
     const myLine = node("p", "cs-hand-label");
     myLine.append(node("span", "", "あなた"));
     const myDice = node("div", "cs-dice");
+    const suggest = state && !state.done && state.rolls < 3 ? C.dealerKeeps(state.dice) : null;
     if (state) {
       myLine.append(node("b", "", handName(state.dice)));
       state.dice.forEach((v, i) => {
@@ -534,6 +582,7 @@
         face.style.setProperty("--d", 0.06 * i + "s");
         b.append(face, node("small", "", state.held[i] && !state.done ? "キープ" : ""));
         b.disabled = state.done || state.rolls >= 3;
+        if (suggest?.[i] && !state.held[i]) b.classList.add("is-suggested");
         b.onclick = () => {
           const next = C.diceToggle(state, i);
           next.money = state.money;
@@ -568,7 +617,7 @@
     if (!state.done) {
       const left = 3 - state.rolls;
       const actions = node("div", "cs-actions");
-      const again = node("button", "", left ? "キープ以外を振る（あと" + left + "回）" : "もう振れません");
+      const again = node("button", "", left ? "振り直す（あと" + left + "回）" : "もう振れません");
       again.type = "button";
       again.disabled = !C.diceCanRoll(state);
       again.onclick = () => {
@@ -587,7 +636,17 @@
         dice(body, done, null);
       };
       actions.append(again, stand);
-      body.append(actions, node("p", "cs-hint", left ? "残したいダイスをタップ" : "これで勝負しましょう"));
+      body.append(actions);
+      if (left && suggest?.some((k, i) => k && !state.held[i])) {
+        const keep = node("button", "cs-advice-btn", "おすすめのダイスをキープ");
+        keep.type = "button";
+        keep.onclick = () => {
+          const next = { ...JSON.parse(JSON.stringify({ ...state, money: null })), held: suggest.slice(), money: state.money };
+          dice(body, next, null);
+        };
+        body.append(keep);
+      }
+      body.append(node("p", "cs-hint", left ? (suggest?.every(Boolean) ? "もう役ができています。このまま勝負できます" : "光っているダイスを残すのがおすすめ。タップで選べます") : "これで勝負しましょう"));
       return refresh();
     }
     const words = { win: "あなたの勝ち", lose: "ディーラーの勝ち", push: "引き分け（賭けは戻ります）" };

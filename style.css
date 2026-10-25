@@ -1886,9 +1886,9 @@ will-change:auto!important;
 /* Motion stays off page-wide, except in short-lived screens built for it (the warm-up opening,
    poker and its how-to), which animate only transform and opacity. */
 html.ios-stable-rendering body,
-html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.pk-tutorial,.pk-tutorial *)),
-html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.pk-tutorial,.pk-tutorial *))::before,
-html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.pk-tutorial,.pk-tutorial *))::after,
+html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.casino,.casino *,.pk-tutorial,.pk-tutorial *)),
+html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.casino,.casino *,.pk-tutorial,.pk-tutorial *))::before,
+html.ios-stable-rendering body :not(:is(.ceremony,.ceremony *,.poker-screen,.poker-screen *,.casino-screen,.casino-screen *,.casino,.casino *,.pk-tutorial,.pk-tutorial *))::after,
 html.ios-stable-rendering body::before,
 html.ios-stable-rendering body::after{
 animation:none!important;
@@ -2930,3 +2930,4 @@ html body .modern-btn:active{box-shadow:0 0 0 3px rgba(213,201,172,.18)!importan
 #flashcard-setup-screen div[style*="font-size:11px"]{color:#c6b790!important;letter-spacing:.04em;}
 #flashcard-setup-screen .pill-btn.active{background:#c6b790;border-color:#c6b790;color:#18202d;}
 #flashcard-setup-screen .modern-btn,#flashcard-setup-screen button[onclick*="startFlashcard"]{border-image:none!important;}
+.library-editor-eyebrow:empty,.vocab-library-kicker:empty{display:none!important;}

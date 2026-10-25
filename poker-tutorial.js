@@ -160,7 +160,7 @@
     dialog.className = "pk-tutorial";
     dialog.setAttribute("aria-label", "ポーカーの遊び方");
     dialog.innerHTML =
-      '<p class="pk-kicker">HOW TO PLAY</p><h2 class="pkt-title"></h2><div class="pkt-scene" aria-hidden="true"></div><p class="pkt-text"></p>' +
+      '<h2 class="pkt-title"></h2><div class="pkt-scene" aria-hidden="true"></div><p class="pkt-text"></p>' +
       '<div class="pkt-dots"></div><div class="pkt-nav"><button type="button" data-pkt="back">戻る</button><button type="button" data-pkt="next" class="pk-primary">次へ</button></div>' +
       '<button type="button" class="pkt-skip" data-pkt="skip">スキップ</button>';
     const dots = dialog.querySelector(".pkt-dots");

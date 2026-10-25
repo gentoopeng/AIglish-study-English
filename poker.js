@@ -497,7 +497,7 @@
     view.replaceChildren();
     view.className = "pk-lobby";
     view.innerHTML =
-      '<p class="pk-kicker">TEXAS HOLD’EM</p><h2>ポーカー</h2><p class="pk-balance"></p>' +
+      '<h2>ポーカー</h2><p class="pk-balance"></p>' +
       '<section class="pk-panel"><h3>テーブルを作る</h3>' +
       '<label>参加費<span class="pk-field"><input type="number" data-pk-buyin min="20" step="10" value="100" inputmode="numeric"><em>pt</em></span></label>' +
       '<label>ブラインド<select data-pk-blinds>' + BLINDS.map(([s, b], i) => '<option value="' + i + '"' + (i ? "" : " selected") + ">" + s + " / " + b + "</option>").join("") + "</select></label>" +
@@ -844,7 +844,7 @@
       reach = new Set(cards && h && !h.folded[me] ? window.PokerHint.draws(cards, h.board || []).map((d) => d.category) : []);
     const sheet = node("dialog", "pk-ranks-sheet");
     sheet.setAttribute("aria-label", "役の一覧");
-    sheet.append(node("p", "pk-kicker", "HAND RANKINGS"), node("h2", "", "役の一覧（上ほど強い）"));
+    sheet.append(node("h2", "", "役の一覧（上ほど強い）"));
     const list = node("ol", "pk-ranks-list");
     EXAMPLES.forEach((example, i) => {
       const category = 9 - i,
