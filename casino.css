@@ -102,3 +102,4 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 .cs-stake{animation-name:none;}
 @media(prefers-reduced-motion:reduce){.cs-wheel-spin{transition:none;}.casino-game{transition:none;}}
 .cs-body .cs-die-btn:disabled{opacity:1;}
+.casino-today{margin:0 0 0 auto;align-self:flex-end;color:#a8a293;font:600 12px system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap;}.casino-today:empty{display:none;}

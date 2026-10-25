@@ -199,7 +199,7 @@
         box.style.cssText = "background:var(--card-bg); border:1px solid var(--cosmic-cyan); border-radius:16px; padding:20px; width:88%; max-width:340px; color:#fff; box-shadow:0 10px 30px rgba(0,0,0,0.6);";
         var currentBook = (typeof textbooksPool !== 'undefined' && Array.isArray(textbooksPool)) ? textbooksPool.find(function(b) { return b.id === currentTextbook; }) : null;
         var bookName = window.escapeVocabText(currentBook ? currentBook.name : '共通単語帳');
-        box.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;"><div style="font-size:16px; font-weight:900;">📊 単語帳の詳細</div><button id="vocabStatsClose" style="background:none; border:none; color:var(--text-sub); font-size:20px; cursor:pointer; line-height:1;">×</button></div><div style="text-align:center; font-size:12px; color:var(--cosmic-purple-light); font-weight:800; margin-bottom:8px;">📔 ' + bookName + '</div><div style="text-align:center; font-size:13px; margin-bottom:12px;">登録された意味: <strong style="color:var(--cosmic-cyan); font-size:18px;">' + total + '</strong> 件</div><div style="display:flex; justify-content:center; margin-bottom:14px;"><svg width="120" height="120" viewBox="0 0 120 120">' + circles + '<text x="60" y="64" text-anchor="middle" fill="#fff" font-size="16" font-weight="900">' + total + '</text></svg></div>' + listHtml;
+        box.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;"><div style="font-size:16px; font-weight:900;">単語帳の詳細</div><button id="vocabStatsClose" style="background:none; border:none; color:var(--text-sub); font-size:20px; cursor:pointer; line-height:1;">×</button></div><div style="text-align:center; font-size:12px; color:var(--cosmic-purple-light); font-weight:800; margin-bottom:8px;">📔 ' + bookName + '</div><div style="text-align:center; font-size:13px; margin-bottom:12px;">登録された意味: <strong style="color:var(--cosmic-cyan); font-size:18px;">' + total + '</strong> 件</div><div style="display:flex; justify-content:center; margin-bottom:14px;"><svg width="120" height="120" viewBox="0 0 120 120">' + circles + '<text x="60" y="64" text-anchor="middle" fill="#fff" font-size="16" font-weight="900">' + total + '</text></svg></div>' + listHtml;
         ov.appendChild(box);
         document.body.appendChild(ov);
         ov.querySelector('#vocabStatsClose').onclick = function() { ov.remove(); };
@@ -215,7 +215,7 @@
         var btn = document.createElement('button');
         btn.id = 'vocabStatsBtn';
         btn.type = 'button';
-        btn.textContent = '📊 詳細';
+        btn.textContent = '詳細';
         btn.style.cssText = "margin-left:auto; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:11px; font-weight:700; padding:6px 10px; border-radius:20px; cursor:pointer; white-space:nowrap; flex-shrink:0;";
         btn.onclick = function(e) { e.stopPropagation(); window.showVocabStatsPopup(); };
         if (getComputedStyle(parent).display === 'block') {

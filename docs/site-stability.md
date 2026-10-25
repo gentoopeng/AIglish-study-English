@@ -998,3 +998,7 @@ Validation: `node --test tests/*.test.cjs`, `node tests/casino.smoke.cjs`, the f
 ## Rare casino wins and clearer help (10.21.65.00)
 
 A natural blackjack, a single-number roulette hit, and a dice-poker win with four or five of a kind play the chips moment over the game screen; ordinary rounds stay quiet. The points help explains that casino and poker change the balance directly and are not in the earned history. The usage guide's first steps match the current sign-up (a display name and a PIN), and the menu edge is a thin ivory line instead of a cyan glow.
+
+## Today's casino total and a quieter flashcard setup (10.21.66.00)
+
+The casino header shows today's running total (Japan time), kept on the device separately for points and practice chips. The flashcard settings dialog uses the ivory accent for its labels, the selected mode and the start button instead of alternating cyan and purple neon, and the word-book details button lost its chart emoji.

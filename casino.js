@@ -44,8 +44,25 @@
   }
   const balance = () => (real() ? Math.max(0, (window.StudyPoints?.balance() || 0) + pending) : practiceChips());
   const unit = () => (real() ? "pt" : "枚");
+  // Today's running total (Japan time), kept apart for points and practice chips.
+  const todayName = () => "aiglish_casino_today_" + uid() + (real() ? "" : "_practice");
+  const today = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  function todayNet() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(todayName()) || "null");
+      return saved && saved.day === today() ? Number(saved.net) || 0 : 0;
+    } catch {
+      return 0;
+    }
+  }
+  function addToday(delta) {
+    try {
+      localStorage.setItem(todayName(), JSON.stringify({ day: today(), net: todayNet() + delta }));
+    } catch {}
+  }
   function move(key, delta) {
     if (!delta) return;
+    addToday(delta);
     if (!real()) return setPractice(practiceChips() + delta);
     pending += delta;
     window.Poker.settle(key, delta).finally(() => {
@@ -86,7 +103,7 @@
       host.innerHTML =
         '<section class="casino" aria-label="カジノ"><header class="casino-head"><span class="casino-chip">' +
         CHIP_SVG +
-        '</span><div><small data-casino-unit></small><strong data-casino-balance></strong></div></header><div class="casino-games"></div><p class="casino-note"></p></section>';
+        '</span><div><small data-casino-unit></small><strong data-casino-balance></strong></div><p class="casino-today" data-casino-today></p></header><div class="casino-games"></div><p class="casino-note"></p></section>';
       const list = host.querySelector(".casino-games");
       for (const game of GAMES) {
         const button = node("button", "casino-game mode-" + game.id);
@@ -105,6 +122,8 @@
     if (host?.childElementCount) {
       host.querySelector("[data-casino-unit]").textContent = real() ? "所持ポイント" : "練習チップ";
       host.querySelector("[data-casino-balance]").textContent = fmt(balance()) + unit();
+      const net = todayNet();
+      host.querySelector("[data-casino-today]").textContent = net ? "今日 " + signed(net) + unit() : "";
       host.querySelector(".casino-note").textContent = real()
         ? "ブラックジャック・ルーレット・ダイスポーカーは1回" + fmt(MAX_BET) + "ptまで賭けられます。"
         : "ゲストやオフラインのときは練習チップで遊べます（ポイントは増減しません）。";
