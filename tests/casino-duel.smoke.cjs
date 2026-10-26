@@ -96,6 +96,10 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const room = () => [...docs.entries()].find(([path]) => path.startsWith("pokerRooms/"))?.[1];
     const wallet = (id) => docs.get("users/" + id + "/learningPoints/main").balance;
 
+    // Everything in the lobby stays inside the phone's width, the bet amount included.
+    const edges = await a.locator(".cs-duel-lobby").evaluate((panel) => [panel.getBoundingClientRect().right, Math.max(...[...panel.querySelectorAll("button, input, output")].map((el) => el.getBoundingClientRect().right))]);
+    assert.ok(edges[0] <= 375 && edges[1] <= edges[0], JSON.stringify(edges));
+    assert.equal(await a.locator("[data-mode=friend]").innerText(), "フレンドとタイマン");
     // A makes a table for 50pt and gets a number to share.
     await a.locator(".cs-duel-lobby").getByRole("button", { name: "+50" }).click();
     await a.locator(".cs-duel-lobby .cs-bet").filter({ hasText: "60pt" }).waitFor();

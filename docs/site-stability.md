@@ -1013,8 +1013,12 @@ The 単語バトル tab is gone: word battle is the third segment of the users t
 
 ## Dice poker against a friend (10.21.69.00)
 
-Dice poker has a second mode, フレンドとたいまん: one player makes a table with a bet and gets a 4-digit number, the friend enters it, and the round starts. Both bets leave the wallets once per round, each player rolls their own dice (two re-rolls, kept on the device so a reload cannot roll again), and the other player's dice stay hidden until both have stood. The better hand's owner pays themselves both bets; a tie gives each their bet back; every wallet is moved only by its owner, once per round key. Both must agree to a rematch. If a player leaves mid-round, the one who stays gets their bet back. The table is stored with the poker tables (marked `kind: "dice"`), so it needs no new cloud rules, and poker refuses a dice table's number.
+Dice poker has a second mode, フレンドとタイマン: one player makes a table with a bet and gets a 4-digit number, the friend enters it, and the round starts. Both bets leave the wallets once per round, each player rolls their own dice (two re-rolls, kept on the device so a reload cannot roll again), and the other player's dice stay hidden until both have stood. The better hand's owner pays themselves both bets; a tie gives each their bet back; every wallet is moved only by its owner, once per round key. Both must agree to a rematch. If a player leaves mid-round, the one who stays gets their bet back. The table is stored with the poker tables (marked `kind: "dice"`), so it needs no new cloud rules, and poker refuses a dice table's number.
 
 ## Poker settings by tapping, play on after losing, casino at the right (10.21.70.00)
 
 The poker lobby has two tabs, コンピュータと and みんなと, and every setting is a row of buttons instead of a drop-down. Practice can now set the starting chips (50–500) and the blinds (1/2 up to 10/20). Creating a table shows a live check of the entry and blinds, with quick amounts. Running out of chips no longer means setting up again: in practice, チップを足して続ける tops up and plays on against the same computers, and at a real table a rebuy restarts play by itself instead of waiting for the host. The flashcard start no longer plays the deck animation (the end result stays), and the casino tab is the rightmost tab.
+
+## The friend lobby fits the phone (10.21.71.00)
+
+The 4-digit number box's natural width pushed the friend lobby wider than an iPhone screen, which cut off the bet amount, the last chips and the buttons. Bet bars now use a single `minmax(0, 1fr)` column and the box fills its row, and the smoke test checks that nothing in the lobby passes the screen edge. The mode reads フレンドとタイマン.
