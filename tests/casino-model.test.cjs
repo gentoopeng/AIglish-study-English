@@ -182,18 +182,44 @@ test("chinchiro rolls up to three times, and settles against the parent", () => 
   assert.equal(C.chinParentDecides(H([1, 1, 1])), -5);
   assert.equal(C.chinParentDecides(H([4, 5, 6])), -2);
   assert.equal(C.chinParentDecides(H([1, 2, 3])), 2);
-  assert.equal(C.chinParentDecides(none.hand), 1);
+  assert.equal(C.chinParentDecides(none.hand), null, "a parent with no hand still has to be beaten");
   assert.equal(C.chinParentDecides(H([3, 3, 4])), null);
   // Otherwise points compare, and the child's own big or bad hands count.
   assert.equal(C.chinSettle(H([3, 3, 4]), H([5, 5, 6])), 1);
   assert.equal(C.chinSettle(H([3, 3, 4]), H([5, 5, 2])), -1);
-  assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 1, 4])), 0);
+  assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 1, 4])), -1, "the same point goes to the parent");
+  assert.equal(C.chinSettle(none.hand, H([2, 2, 1])), 1);
+  assert.equal(C.chinSettle(none.hand, none.hand), -1);
   assert.equal(C.chinSettle(H([3, 3, 4]), H([2, 2, 2])), 3);
   assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 2, 3])), -2);
   assert.equal(C.chinSettle(H([3, 3, 4]), none.hand), -1);
   assert.equal(C.chinVs(H([6, 6, 6]), H([4, 5, 6])), 1);
   assert.equal(C.chinVs(H([2, 2, 3]), H([1, 1, 3])), 0);
   assert.equal(C.chinTurn(rng(3)).done, true);
+  // A child throws at most twice: two throws of 1-3-5 (no hand) end the turn as 目なし.
+  let k = 0;
+  const noHand = () => [0, 2, 4][k++ % 3];
+  let c = C.chinNext(C.chinNext(C.chinStart(), noHand, C.CHILD_THROWS), noHand, C.CHILD_THROWS);
+  assert.equal(c.done, true);
+  assert.equal(c.rolls.length, 2);
+  assert.equal(c.hand.name, "目なし");
+});
+
+test("against the computer parent a child wins about 4 times in 10", () => {
+  const random = rng(77);
+  let wins = 0;
+  const N = 60000;
+  for (let i = 0; i < N; i++) {
+    const parent = C.chinTurn(random).hand;
+    let m = C.chinParentDecides(parent);
+    if (m === null) {
+      let child = C.chinStart();
+      while (!child.done) child = C.chinNext(child, random, C.CHILD_THROWS);
+      m = C.chinSettle(parent, child.hand);
+    }
+    if (m > 0) wins++;
+  }
+  assert.ok(Math.abs(wins / N - 0.4) < 0.025, "win rate " + (wins / N).toFixed(3));
 });
 
 test("roulette pays by the spot and zero loses outside bets", () => {

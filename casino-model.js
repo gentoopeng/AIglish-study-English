@@ -288,6 +288,9 @@
   // ピンゾロ (1-1-1, 5×) > ゾロ目 (three the same, 3×) > シゴロ (4-5-6, 2×) > a point (two the
   // same: the third die is the point, 6 high) > 目なし (no hand in three rolls) > ヒフミ (1-2-3,
   // pays 2×). The parent (the dealer) rolls first; a decisive parent hand settles at once.
+  // The house keeps an edge the way real tables do: the parent throws up to three times but a
+  // child only twice, ties go to the parent, and a parent with no hand still has to be beaten.
+  // A child wins about 4 times in 10.
   function chinHand(dice) {
     const d = dice.slice().sort((a, b) => a - b),
       key = d.join("");
@@ -301,13 +304,15 @@
   }
   const NO_HAND = { rank: 0, name: "目なし", mult: 1 };
   const chinThrow = (random) => [roll(random), roll(random), roll(random)];
-  // One more throw for a turn: { rolls: [[a, b, c] …], hand, done }.
-  function chinNext(turn, random) {
+  const PARENT_THROWS = 3,
+    CHILD_THROWS = 2;
+  // One more throw for a turn: { rolls: [[a, b, c] …], hand, done }, up to `most` throws.
+  function chinNext(turn, random, most = PARENT_THROWS) {
     if (turn.done) return turn;
     const rolls = turn.rolls.concat([chinThrow(random)]),
       hand = chinHand(rolls[rolls.length - 1]);
     if (hand) return { rolls, hand, done: true };
-    return rolls.length >= 3 ? { rolls, hand: NO_HAND, done: true } : { rolls, hand: null, done: false };
+    return rolls.length >= most ? { rolls, hand: NO_HAND, done: true } : { rolls, hand: null, done: false };
   }
   const chinStart = () => ({ rolls: [], hand: null, done: false });
   // A whole turn at once, for the computer parent.
@@ -320,7 +325,6 @@
   function chinParentDecides(parent) {
     if (parent.rank >= 80) return -parent.mult;
     if (parent.rank === -10) return 2;
-    if (parent.rank === 0) return 1;
     return null;
   }
   // The child against the parent: multiples of the bet for the child.
@@ -330,7 +334,8 @@
     if (child.rank >= 80) return child.mult;
     if (child.rank === -10) return -2;
     if (child.rank === 0) return -1;
-    return Math.sign(child.rank - parent.rank);
+    // The same point, or no hand against no hand, goes to the parent.
+    return child.rank > parent.rank ? 1 : -1;
   }
   // One against one: simply the stronger hand, the same hand a tie.
   const chinVs = (a, b) => Math.sign(a.rank - b.rank);
@@ -341,6 +346,7 @@
     chinStart,
     chinTurn,
     chinParentDecides,
+    CHILD_THROWS,
     chinSettle,
     chinVs,
     bjTotal,
