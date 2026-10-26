@@ -1212,16 +1212,6 @@ window.__readLearningRankingBackup=async function(id){
   var save=await fetchCloudSave(id),data=save&&save.data||{};
   return window.LearningRankingModel.merge(data.localStorage&&data.localStorage['core_v4_learning_ranking_v2_'+id],data.memory&&data.memory.userStats&&data.memory.userStats.learning_ranking_v2_json);
 };
-// The reader's bookshelf, folders and history on this device, when this account changed them
-// after the backup being restored (reader-shelf.js stamps each change); otherwise null.
-function newerReaderData(id,savedAt){
-  try{
-    var mark=JSON.parse(localStorage.getItem('aiglish_reader_local')||'null');
-    if(!mark||mark.owner!==id||!(Number(mark.at)>(Date.parse(savedAt||'')||0)))return null;
-    var read=function(key){var value=JSON.parse(localStorage.getItem(key)||'null');return Array.isArray(value)?value:null;};
-    return {textHistory:read('textHistory'),myBookshelf:read('myBookshelf'),myFolders:read('myFolders')};
-  }catch(e){return null;}
-}
 function applySavedMemory(memory,id,savedAt) {
   if(!memory||typeof memory!=='object')return;
   var readerLocal=newerReaderData(id,savedAt);
@@ -1258,7 +1248,12 @@ function applySavedMemory(memory,id,savedAt) {
 function restoreSaveStorage(save,id){
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
+    // The reader's shelf, folders and history changed on this device after this backup stay as
+    // they are; the backup's copy (and its old change mark) must not overwrite them first.
+    var keepReader=!!newerReaderData(id,save.savedAt);
     for(var key in stored){
+      if(key==='aiglish_reader_local')continue; // This device's own change mark.
+      if(keepReader&&(key==='myBookshelf'||key==='textHistory'||key==='myFolders'))continue;
       if(key.indexOf("core_v4_word_duel_rating_")===0)continue;
       if(key.indexOf('core_v4_study_points_')===0){if(key==='core_v4_study_points_'+id&&window.StudyPoints){try{window.StudyPoints.restore(JSON.parse(stored[key]||'{}'),id);}catch(error){console.warn('ポイントの復元を保留しました。端末の記録を保持します。',error);}}continue;}
       if(window.LearningSessionsStorage?.restore(key,stored[key]))continue;
@@ -1324,6 +1319,16 @@ function restoreSaveStorage(save,id){
       try{localStorage.setItem(key,stored[key]);}catch(e){}
     }
   }
+}
+// The reader's bookshelf, folders and history on this device, when this account changed them
+// after the backup being restored (reader-shelf.js stamps each change); otherwise null.
+function newerReaderData(id,savedAt){
+  try{
+    var mark=JSON.parse(localStorage.getItem('aiglish_reader_local')||'null');
+    if(!mark||mark.owner!==id||!(Number(mark.at)>(Date.parse(savedAt||'')||0)))return null;
+    var read=function(key){var value=JSON.parse(localStorage.getItem(key)||'null');return Array.isArray(value)?value:null;};
+    return {textHistory:read('textHistory'),myBookshelf:read('myBookshelf'),myFolders:read('myFolders')};
+  }catch(e){return null;}
 }
 async function autoLoadOnce() {
   var id=loginUid(); if(!id)return;
@@ -1494,9 +1499,9 @@ window.__restoreLearningFile=async function(save,id){
  var memory=save.data.memory||{};
  if(memory.userStats){var ledger=window.StudyTimeModel.mergeCurrent(window.StudyTime.snapshot(),memory.userStats.study_calendar_v2);memory.userStats={...userStats,...memory.userStats,study_calendar_v2:ledger};}
  if(Array.isArray(memory.textbooksPool))memory.textbooksPool=Array.from(new Map([...memory.textbooksPool,...textbooksPool].map(book=>[book.id,book])).values());
- restoreSaveStorage(save,id);
  // A restored file replaces the reader's data on this device too.
  try{localStorage.removeItem('aiglish_reader_local');}catch(e){}
+ restoreSaveStorage(save,id);
  window.switchTab('vocab');window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt,data:memory};restorePendingSaveMemory();
  if(window.__pendingGameSaveMemory)throw Error('復元の一部が完了していません。元のファイルを保管して再試行してください。');
  window.StudyTime.init();window.syncRankingMetrics();window.showVocabLibrarySelection();

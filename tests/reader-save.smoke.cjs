@@ -19,7 +19,8 @@ const { chromium } = require("playwright"),
         localStorage.setItem("core_v4_userId", "shelf-user");
         localStorage.setItem(
           "save_studio_shelf-user_main",
-          JSON.stringify({ slot: "main", savedAt: "2026-01-01T00:00:00.000Z", data: { localStorage: {}, memory: { myBookshelf: [], myFolders: ["未分類"], textHistory: [] } } }),
+          // A real backup also holds the device keys as they were then, the old change mark too.
+          JSON.stringify({ slot: "main", savedAt: "2026-01-01T00:00:00.000Z", data: { localStorage: { myBookshelf: "[]", myFolders: '["未分類"]', textHistory: "[]", aiglish_reader_local: JSON.stringify({ owner: "shelf-user", at: Date.parse("2025-12-31T00:00:00.000Z") }) }, memory: { myBookshelf: [], myFolders: ["未分類"], textHistory: [] } } }),
         );
         localStorage.setItem("myBookshelf", JSON.stringify([{ id: 1767225600000, folder: "模試", title: "第1問", text: "Hello world.", aiAnalysisData: null }]));
         localStorage.setItem("myFolders", JSON.stringify(["未分類", "模試"]));
