@@ -90,13 +90,14 @@
       const [bonusSnap, walletSnap] = [await tx.get(bonusRef(me)), await tx.get(walletRef(me))];
       const last = bonusSnap.exists() ? bonusSnap.data() : {};
       if (last.day === day) return { already: true, prize: Number(last.prize) || 0 };
-      const prize = M.drawPrize(),
+      const segment = M.drawSegment(),
+        prize = M.SEGMENTS[segment],
         wallet = walletSnap.exists() ? walletSnap.data() : {},
         value = { balance: (Number(wallet.balance) || 0) + prize, revision: (Number(wallet.revision) || 0) + 1 };
-      tx.set(bonusRef(me), { day, prize, at: Date.now() });
+      tx.set(bonusRef(me), { day, prize, segment, at: Date.now() });
       tx.set(walletRef(me), value, { merge: true });
       tx.set(window.fbDoc(window.db, "users", me), { studyPoints: value.balance }, { merge: true });
-      return { prize, value };
+      return { prize, segment, value };
     });
     if (uid() !== me) return result;
     store.set(bonusKey(), JSON.stringify({ day, prize: result.prize }));
@@ -212,11 +213,12 @@
   }
 
   // ---- The wheel -------------------------------------------------------------------------
-  const COLORS = ["#d5bf86", "#22324c", "#b98a4a", "#2c4466", "#e6d29a", "#1b2a40"];
+  // One colour per prize, brighter the rarer: the few gold and red slices stand out.
+  const COLORS = { 10: "#1b2a40", 50: "#2c4466", 100: "#3d6378", 200: "#b98a4a", 500: "#e6d29a", 1000: "#c9483f" };
   function wheelFace() {
     const ns = "http://www.w3.org/2000/svg",
       svg = document.createElementNS(ns, "svg"),
-      n = M.PRIZES.length,
+      n = M.SEGMENTS.length,
       r = 100;
     svg.setAttribute("viewBox", "-110 -110 220 220");
     svg.setAttribute("aria-hidden", "true");
@@ -224,22 +226,24 @@
     ring.setAttribute("r", "108");
     ring.setAttribute("class", "notice-wheel-rim");
     svg.append(ring);
-    M.PRIZES.forEach((prize, i) => {
+    M.SEGMENTS.forEach((prize, i) => {
       const a0 = ((i * 360) / n - 90) * (Math.PI / 180),
         a1 = (((i + 1) * 360) / n - 90) * (Math.PI / 180);
       const path = document.createElementNS(ns, "path");
       path.setAttribute("d", `M0 0 L${r * Math.cos(a0)} ${r * Math.sin(a0)} A${r} ${r} 0 0 1 ${r * Math.cos(a1)} ${r * Math.sin(a1)} Z`);
-      path.setAttribute("fill", COLORS[i % COLORS.length]);
+      path.setAttribute("fill", COLORS[prize]);
+      path.setAttribute("class", "notice-wheel-slice");
       svg.append(path);
       const mid = (i + 0.5) * (360 / n);
       const label = document.createElementNS(ns, "text");
-      label.setAttribute("transform", `rotate(${mid}) translate(0 -66) rotate(0)`);
-      label.setAttribute("class", i % 2 ? "is-dark" : "is-light");
-      label.textContent = prize >= 1000 ? "1000" : String(prize);
+      // Read outward along the radius, so 50 labels fit.
+      label.setAttribute("transform", `rotate(${mid - 90}) translate(62 0)`);
+      label.setAttribute("class", prize >= 500 ? "is-light" : "is-dark");
+      label.textContent = String(prize);
       svg.append(label);
     });
     const hub = document.createElementNS(ns, "circle");
-    hub.setAttribute("r", "16");
+    hub.setAttribute("r", "22");
     hub.setAttribute("class", "notice-wheel-hub");
     svg.append(hub);
     return svg;
@@ -258,7 +262,7 @@
     back.type = "button";
     back.onclick = open;
     const odds = node("details", "notice-odds");
-    odds.append(node("summary", "", "出る確率"), node("p", "", [1000, 500, 200, 100, 50, 10].map((p) => fmt(p) + "pt " + M.percent(p)).join("・")));
+    odds.append(node("summary", "", "出る確率"), node("p", "", M.TIERS.map((p) => fmt(p) + "pt " + M.percent(p) + "（" + M.COUNTS[p] + "マス）").join("・")));
     body.append(stage, status, spin, odds, back);
     spin.onclick = async () => {
       if (spinning) return;
@@ -284,7 +288,7 @@
         status.textContent = "今日はもう受け取りました（+" + fmt(result.prize) + "pt）。また明日。";
         return;
       }
-      const angle = M.stopAngle(result.prize, 6, Math.random() * 0.7 - 0.35);
+      const angle = M.stopAngle(result.segment, 6, Math.random() * 0.7 - 0.35);
       const landed = () => {
         if (!spinning) return;
         spinning = false;

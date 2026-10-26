@@ -2,33 +2,41 @@
 // day it is in Japan) and the list of notices from the team.
 (function (root) {
   "use strict";
-  // The wheel, clockwise from the top. Each prize has one segment; how often it comes up is its
-  // weight out of 1000. On average a day's spin pays 66pt.
-  const PRIZES = [1000, 10, 200, 50, 500, 100];
-  const WEIGHTS = { 10: 450, 50: 300, 100: 150, 200: 70, 500: 25, 1000: 5 };
+  // The wheel: 50 equal segments, clockwise from the top. The rarer the prize, the fewer its
+  // segments (1000pt has one, 10pt has twenty), so what the wheel shows is the real chance.
+  // On average a day's spin pays about 91pt.
+  const COUNTS = { 1000: 1, 500: 2, 200: 4, 100: 8, 50: 15, 10: 20 };
+  const TIERS = [1000, 500, 200, 100, 50, 10];
+  // Each prize's segments are spread evenly round the wheel, the rarest placed first.
+  const SEGMENTS = (() => {
+    const total = Object.values(COUNTS).reduce((a, b) => a + b, 0),
+      wheel = Array(total).fill(null);
+    TIERS.forEach((prize, tier) => {
+      const n = COUNTS[prize];
+      for (let k = 0; k < n; k++) {
+        let at = Math.round((k * total) / n + (tier * total) / (2 * TIERS.length)) % total;
+        while (wheel[at] !== null) at = (at + 1) % total;
+        wheel[at] = prize;
+      }
+    });
+    return Object.freeze(wheel);
+  })();
   const MAX_NOTICES = 30;
   // The day changes at midnight in Japan, wherever the device is.
   function dayKey(now = Date.now()) {
     const d = new Date(now + 9 * 3600 * 1000);
     return d.toISOString().slice(0, 10);
   }
-  function drawPrize(random = Math.random) {
-    let r = Math.floor(random() * 1000);
-    for (const prize of [10, 50, 100, 200, 500, 1000]) {
-      r -= WEIGHTS[prize];
-      if (r < 0) return prize;
-    }
-    return 10;
+  // Which segment the wheel stops on; every segment is as likely as any other.
+  const drawSegment = (random = Math.random) => Math.min(SEGMENTS.length - 1, Math.floor(random() * SEGMENTS.length));
+  // Where the wheel stops: whole turns plus the angle that puts the segment under the pointer at
+  // the top, a little off its centre so it does not look mechanical.
+  function stopAngle(segment, turns = 6, jitter = 0) {
+    if (!(segment >= 0 && segment < SEGMENTS.length)) throw Error("unknown segment");
+    const size = 360 / SEGMENTS.length;
+    return turns * 360 + (360 - (segment * size + size / 2)) + Math.max(-0.35, Math.min(0.35, jitter)) * size;
   }
-  // Where the wheel stops: whole turns plus the angle that puts the prize's segment under the
-  // pointer at the top, a little off its centre so it does not look mechanical.
-  function stopAngle(prize, turns = 6, jitter = 0) {
-    const size = 360 / PRIZES.length,
-      at = PRIZES.indexOf(prize);
-    if (at < 0) throw Error("unknown prize");
-    return turns * 360 + (360 - (at * size + size / 2)) + Math.max(-0.35, Math.min(0.35, jitter)) * size;
-  }
-  const percent = (prize) => WEIGHTS[prize] / 10 + "%";
+  const percent = (prize) => (COUNTS[prize] * 100) / SEGMENTS.length + "%";
 
   const clean = (text, max) => String(text || "").replace(/\s+$/g, "").slice(0, max);
   function addNotice(list, { id, title, body, at, by }) {
@@ -43,7 +51,7 @@
   // Notices newer than the last time this device opened the box.
   const unread = (list, seenAt) => (Array.isArray(list) ? list : []).filter((n) => n.at > (Number(seenAt) || 0)).length;
 
-  const api = Object.freeze({ PRIZES, WEIGHTS, MAX_NOTICES, dayKey, drawPrize, stopAngle, percent, addNotice, removeNotice, unread });
+  const api = Object.freeze({ SEGMENTS, COUNTS, TIERS, MAX_NOTICES, dayKey, drawSegment, stopAngle, percent, addNotice, removeNotice, unread });
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.NoticesModel = api;
 })(typeof window === "object" ? window : globalThis);
