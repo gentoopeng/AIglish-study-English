@@ -21,8 +21,9 @@ Last updated for version 10.21.45.
 2. **A 4-digit PIN digest can be brute-forced.** There are only 10,000 PINs, so a slow digest delays an attacker but does not stop one. Only a server-side check with rate limiting stops this.
 3. **Real names and ages are still in `users/{id}`.** The users list downloads these documents when it scans users.
 4. **Poker trusts the table's maker.** The device that deals knows every card, and the points each player adds after a hand are computed on their own device. This is fine for friendly games, but it is not protected against cheating.
-5. **Admin checks run on the device.** Anyone can skip them by editing the page in their own browser.
-6. **The old admin password is in the git history.** Change it: replace the two digests in `window.verifyAdminPassword` (app.js) with `sha256("aiglish-admin:" + newPassword)`.
+5. **Point lending trusts each device.** `pointLoans/{a__b}` holds a pair's history and which transfers the receiver has added to their wallet; `pointLoanInbox/{id}` lists a person's pairs. Each move runs in one transaction with the record, so in normal use nothing is paid twice and each wallet is written only by its owner's device. With the rules open, someone could still write these documents directly, just as they can already write their own wallet.
+6. **Admin checks run on the device.** Anyone can skip them by editing the page in their own browser.
+7. **The old admin password is in the git history.** Change it: replace the two digests in `window.verifyAdminPassword` (app.js) with `sha256("aiglish-admin:" + newPassword)`.
 
 ## Recommended next step: Firebase Authentication
 
