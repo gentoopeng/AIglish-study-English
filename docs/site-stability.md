@@ -1010,3 +1010,7 @@ Blackjack suggests a move each turn (the button glows, with one line on why, fro
 ## Word battle in the users tab; a roulette table like the felt (10.21.68.00)
 
 The 単語バトル tab is gone: word battle is the third segment of the users tab (ユーザー・グループ・単語バトル), so the bar has six tabs. Roulette now fits on one phone screen without scrolling. The wheel sits beside the last result and the last eight numbers, and the table is laid out as on felt: 0 on the left, three rows of twelve with 3 … 36 on top, the row bets (列, pays 3×) on the right, the dozens and the even-money bets underneath, each with what it pays.
+
+## Dice poker against a friend (10.21.69.00)
+
+Dice poker has a second mode, フレンドとたいまん: one player makes a table with a bet and gets a 4-digit number, the friend enters it, and the round starts. Both bets leave the wallets once per round, each player rolls their own dice (two re-rolls, kept on the device so a reload cannot roll again), and the other player's dice stay hidden until both have stood. The better hand's owner pays themselves both bets; a tie gives each their bet back; every wallet is moved only by its owner, once per round key. Both must agree to a rematch. If a player leaves mid-round, the one who stays gets their bet back. The table is stored with the poker tables (marked `kind: "dice"`), so it needs no new cloud rules, and poker refuses a dice table's number.
