@@ -101,6 +101,7 @@ const { chromium } = require("playwright"),
     const screenA = a.locator("dialog.poker-screen[open]");
     await screenA.waitFor();
     assert.match(await screenA.locator(".pk-balance").innerText(), /500pt/);
+    await screenA.locator('[data-pk-tab="tables"]').click();
     await screenA.locator("[data-pk-buyin]").fill("100");
     await screenA.getByRole("button", { name: "テーブルを作る" }).last().click();
     await screenA.locator("[data-pk-room]").waitFor();
@@ -109,6 +110,7 @@ const { chromium } = require("playwright"),
     // The second player joins with the number.
     await b.evaluate(() => window.Poker.open());
     const screenB = b.locator("dialog.poker-screen[open]");
+    await screenB.locator('[data-pk-tab="tables"]').click();
     await screenB.locator("[data-pk-code]").fill(code);
     await screenB.getByRole("button", { name: "参加" }).click();
     await screenB.locator(".pk-seat", { hasText: "poker-a" }).waitFor();

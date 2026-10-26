@@ -68,9 +68,39 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     });
     assert.match(await screen.locator(".pk-final").innerText(), /勝ちました|チップがなくなりました/);
     assert.equal(await page.evaluate(() => window.StudyPoints.balance()), points);
-    // Again: a fresh table with the same settings.
-    await screen.getByRole("button", { name: "もう一度" }).click();
-    await page.waitForFunction(() => window.Poker._session()?.room?.status === "playing" && window.Poker._session().room.players["cpu-0"].stack === 100 || window.Poker._session()?.room?.handNo === 1);
+    if (await screen.getByRole("button", { name: "チップを足して続ける" }).count()) {
+      // Lost: top up and play on at the same table, no new table to set up.
+      const no = await page.evaluate(() => window.Poker._session().room.handNo);
+      await screen.getByRole("button", { name: "チップを足して続ける" }).click();
+      await page.waitForFunction((no) => { const r = window.Poker._session()?.room; return r?.status === "playing" && r.handNo >= no; }, no);
+      assert.equal(await page.evaluate((me) => window.Poker._session().room.players[me].stack > 0, await page.evaluate(() => myId || "GUEST-000")), true);
+    } else {
+      // Won: again, a fresh table with the same settings.
+      await screen.getByRole("button", { name: "もう一度" }).click();
+      await page.waitForFunction(() => window.Poker._session()?.room?.status === "playing" && window.Poker._session().room.players["cpu-0"].stack === 100 || window.Poker._session()?.room?.handNo === 1);
+    }
+    // Practice settings are chosen by tapping: 200 chips and blinds 2 / 4.
+    await screen.getByRole("button", { name: "やめる" }).click();
+    await page.evaluate(() => window.Poker.open());
+    const lobby = page.locator("dialog.poker-screen[open]");
+    await lobby.locator('[data-pk-tab="practice"]').click();
+    await lobby.locator("[data-pk-chips] .pk-pill", { hasText: "200枚" }).click();
+    await lobby.locator("[data-pk-practice-blinds] .pk-pill", { hasText: "2 / 4" }).click();
+    assert.equal(await lobby.locator("[data-pk-chips] [aria-checked=true]").innerText(), "200枚");
+    await lobby.getByRole("button", { name: "練習を始める" }).click();
+    await page.waitForFunction(() => window.Poker._session()?.room?.settings?.bb === 4);
+    assert.deepEqual(await page.evaluate(() => { const r = window.Poker._session().room; return [r.settings.buyIn, r.settings.sb, r.settings.bb]; }), [200, 2, 4]);
+    // Losing every chip: top up and play on against the same computers.
+    await play(() => {
+      const room = window.Poker._session()?.room,
+        me = Object.keys(room?.players || {}).find((id) => !id.startsWith("cpu-"));
+      if (room?.hand?.street === "done" && room.players[me].stack > 3) room.players[me].stack = 3;
+      return room?.status === "over";
+    }).catch(() => {});
+    if (await page.evaluate(() => window.Poker._session()?.room?.status === "over" && !Object.values(window.Poker._session().room.players).some((p) => !p.bot && p.stack > 0))) {
+      await screen.getByRole("button", { name: "チップを足して続ける" }).click();
+      await page.waitForFunction(() => { const r = window.Poker._session()?.room; return r?.status === "playing" && Object.values(r.players).some((p) => !p.bot && p.stack === 200); });
+    }
     // The how-to is also in the lobby.
     await screen.getByRole("button", { name: "やめる" }).click();
     await page.evaluate(() => window.Poker.open());
