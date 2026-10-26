@@ -1068,3 +1068,7 @@ The login bonus wheel has 50 equal segments instead of six, and how often a priz
 ## The bonus wheel turns on iPhones (10.21.81.00)
 
 Reported: the login bonus wheel did not turn; it showed the result at once. On iPhones the stable-rendering rule turns off transitions and animations outside a short list of screens built for motion, and the notice box was not on it, so the wheel's CSS transition never ran. The box is now on the list, and the wheel no longer relies on a transition: it is driven frame by frame. It starts turning at the tap, speeds up, keeps running at full speed while the prize is drawn (no stop and restart when the answer arrives), then slows the way a real wheel does (an ease-out that begins at the speed it was turning, at least three more turns) onto the drawn segment. The pointer flicks back as each segment's edge passes, hard when the wheel is slow and only a tremble at speed. With reduced motion it goes straight to the segment. The smoke test spins it on a page marked as an iPhone and checks it turns and stops on the slice that is paid.
+
+## Dice without a throwing animation (10.21.82.00)
+
+On request the dice animation is gone: the tumbling, the shaking bowl and the landing added in 10.21.79.00, and also the earlier drop-in roll. Dice in dice poker and chinchiro (all modes) show their numbers at once, and the hand's name, the hint and the result show with them. The smoke test checks that thrown dice have no animation.
