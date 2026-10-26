@@ -47,12 +47,25 @@ async function playerList(visit,isCurrent){
 async function refresh(){
  const request=++generation,body=dialog.querySelector('[data-body]');body.replaceChildren();const refresh=element('button','一覧を更新');refresh.type='button';refresh.disabled=busy;refresh.onclick=()=>refreshList();
  const books=element('button',bookEditing()?'単語帳の編集モードを終了':'配信中の単語帳を編集する');books.type='button';books.className='admin-books-button';books.onclick=()=>{if(bookEditing()){setBookEditing(false);books.textContent='配信中の単語帳を編集する';return;}setBookEditing(true);dialog.close();window.switchTab?.('vocab');window.showToast?.('管理者モードです。配信中の単語帳の単語を編集できます。','info');};
- body.append(refresh,books);message('プレイヤーを読み込み中…');
+ const notices=element('button','お知らせを配信');notices.type='button';notices.className='admin-notices-button';notices.onclick=compose;
+ body.append(refresh,books,notices);message('プレイヤーを読み込み中…');
  try{guard();const players=[];await deadline(playerList((id,data)=>{if(id!=='GUEST-000')players.push({id,name:data.playerName||id,deleted:!!data.deleted});},()=>authorized&&dialog.open&&generation===request));
  if(request!==generation||!authorized)return;
  for(const player of players){const row=element('button');row.type='button';row.className='admin-player-row';row.append(element('strong',player.name),element('small',player.id+(player.deleted?' · 削除済み':'')));row.onclick=()=>edit(player.id);body.append(row);}
  message(players.length?'プレイヤーを選んで編集してください。':'プレイヤーがいません。');
  }catch(error){if(request===generation){generation++;message(error.message);}}
+}
+// Notices for everyone: write one, or take one down. They show in the bell's box.
+async function compose(){
+ if(busy)return;generation++;const body=dialog.querySelector('[data-body]'),form=element('form');body.replaceChildren();form.className='admin-notice-form';
+ const title=element('input'),text=element('textarea'),titleLabel=element('label','タイトル'),textLabel=element('label','本文');
+ title.name='title';title.maxLength=60;title.required=true;text.name='body';text.maxLength=1000;titleLabel.append(title);textLabel.append(text);
+ const send=element('button','全員に配信');send.type='submit';const back=element('button','一覧に戻る');back.type='button';back.onclick=refreshList;
+ const list=element('ul');list.className='admin-notice-list';list.setAttribute('aria-label','配信中のお知らせ');
+ form.append(element('h3','お知らせを配信'),titleLabel,textLabel,send,back);body.append(form,element('h3','配信中'),list);
+ const draw=items=>{list.replaceChildren();for(const n of items){const li=element('li'),drop=element('button','取り下げる');drop.type='button';drop.onclick=async()=>{if(busy)return;lock(true);message('取り下げています…');try{guard();draw(await deadline(window.Notices.remove(n.id)));message('取り下げました。');}catch(error){message(error.message);}finally{lock(false);}};li.append(element('span',n.title),drop);list.append(li);}if(!items.length)list.append(element('li','配信中のお知らせはありません。'));};
+ form.onsubmit=async event=>{event.preventDefault();if(busy)return;lock(true);message('配信しています…');try{guard();draw(await deadline(window.Notices.post({title:title.value,body:text.value})));title.value='';text.value='';message('配信しました。ベルのお知らせに届きます。');}catch(error){message(error.message);}finally{lock(false);}};
+ message('読み込み中…');try{guard();draw(await deadline(window.Notices.load()));message('タイトルと本文を入れて配信してください。');}catch(error){message(error.message);}
 }
 async function refreshList(){if(busy)return;lock(true);try{await refresh();}finally{lock(false);}}
 async function playerInfo(id){

@@ -1050,3 +1050,13 @@ Blackjack is one table model for alone and together (`tableDeal` … `tableOutco
 ## Chinchiro against the house: about 4 wins in 10 (10.21.78.00)
 
 Players won 47% of rounds against the computer parent (expected value about −0.6% of the bet), which felt too easy. Three house rules used at real tables now apply when playing the computer (alone and together): a child throws at most twice while the parent throws three times, ties go to the parent, and a parent with no hand (目なし) is no longer an automatic loss for the parent. A simulation in the unit tests checks that a child wins about 40% of rounds. One against one stays even between the two players.
+
+## お知らせボックス, daily login bonus, thrown dice (10.21.79.00)
+
+A bell at the top right of the header opens the お知らせボックス: today's login bonus first, then notices from the team, newest first, with 新着 on the ones this device has not seen. The bell's red badge counts unseen notices plus a bonus not yet taken today. Notices live in one document, `shared/notices` (`{ items }`, the latest 30), read when a signed-in account opens the app (at most every 30 minutes, the last copy kept on the device for the badge) and whenever the box opens; the admin tools have お知らせを配信 to post one (title up to 60 characters, body up to 1000) and 取り下げる to take one down, both as transactions on that document.
+
+The login bonus is a wheel of six prizes (10, 50, 100, 200, 500, 1000pt) spun once per day in Japan time, for signed-in accounts. The prize is drawn inside the transaction that reads and writes `users/{id}/learningPoints/bonus` (`{ day, prize, at }`) and adds the prize to the wallet, so a second tap or another device that day gets the earlier result and nothing more. The bonus has its own document because the points sync rewrites the wallet document whole. Odds are 45% / 30% / 15% / 7% / 2.5% / 0.5% from 10 up to 1000 (66pt a day on average); they are shown under the wheel and are set in `notices-model.js`. A 500 or 1000 gets the chip ceremony.
+
+Dice in the casino (dice poker, chinchiro, alone, together and one-against-one) are thrown rather than placed: each tumbles through random faces for about 0.65 s, the chinchiro bowl shakes, and they land one after another with a bounce on the numbers rolled. The hand's name, the hint and the result stay hidden until the dice have landed. With reduced motion the dice show their numbers at once.
+
+Tests: `tests/notices-model.test.cjs` (prize weights, Japan day boundary, wheel stop angle, notice list) and `tests/notices.smoke.cjs` (bell placement, admin post and take-down, badge, wheel pays once into the wallet, second device refused, guest message, dice tumble and land on their numbers).
