@@ -23,84 +23,100 @@ test("blackjack totals count aces as 1 or 11", () => {
   assert.equal(C.isBlackjack(["7h", "7d", "7c"]), false);
 });
 
-test("blackjack settles each outcome with the right amount", () => {
-  const base = { game: "blackjack", bet: 10, deck: [], doubled: false, done: false };
-  assert.equal(C.bjStand({ ...base, player: ["Th", "9d"], dealer: ["Tc", "8s"] }).net, 10);
-  assert.equal(C.bjStand({ ...base, player: ["Th", "8d"], dealer: ["Tc", "8s"] }).outcome, "push");
-  assert.equal(C.bjStand({ ...base, player: ["Th", "7d"], dealer: ["Tc", "8s"] }).net, -10);
-  // The dealer draws to 17: 16 takes the 8 and busts.
-  const drew = C.bjStand({ ...base, deck: ["8c"], player: ["Th", "2d"], dealer: ["Tc", "6s"] });
-  assert.equal(drew.dealer.length, 3);
-  assert.equal(drew.outcome, "win");
-  // A bust loses without the dealer drawing.
-  const bust = C.bjHit({ ...base, deck: ["5s", "Kc"], player: ["Th", "6d"], dealer: ["Tc", "6s"] });
-  assert.equal(bust.outcome, "bust");
-  assert.equal(bust.dealer.length, 2);
-  assert.equal(bust.net, -10);
-  // Doubling takes one card for twice the bet.
-  const doubled = C.bjDouble({ ...base, deck: ["Ts"], player: ["5h", "6d"], dealer: ["Tc", "7s"] });
-  assert.equal(doubled.player.length, 3);
-  assert.equal(doubled.net, 20);
-});
+// A deck that deals the given cards first (in that order), then anything.
+const fromDeck = (cards) => {
+  const P = require("../poker-model.js");
+  const deck = P.deck().filter((c) => !cards.includes(c)).concat(cards.slice().reverse());
+  const original = P.shuffle;
+  P.shuffle = () => deck.slice();
+  return () => (P.shuffle = original);
+};
 
-test("a dealt blackjack pays 3 to 2 at once", () => {
-  for (let seed = 1; seed < 400; seed++) {
-    const round = C.bjDeal(10, rng(seed));
-    assert.equal(round.player.length + round.dealer.length + round.deck.length, 52);
-    if (C.isBlackjack(round.player) && !C.isBlackjack(round.dealer)) {
-      assert.equal(round.done, true);
-      assert.equal(round.net, 15);
-      return;
-    }
-  }
-  assert.fail("no blackjack dealt");
-});
-
-test("a shared blackjack table: deal round the table, turns in order, dealer last", () => {
-  // random(i + 1) = i never swaps, so the deck stays in order and cards come off the end:
-  // Ac, Kc, Qc, Jc, Tc, 9c, 8c …
-  const keep = (n) => n - 1;
-  let t = C.tableDeal(["p1", "p2"], { p1: 10, p2: 20 }, keep);
-  assert.deepEqual(t.hands.p1.cards, ["Ac", "Jc"]);
-  assert.deepEqual(t.hands.p2.cards, ["Kc", "Tc"]);
-  assert.deepEqual(t.dealer, ["Qc", "9c"]);
-  // p1 has blackjack and needs no move; p2 acts.
-  assert.equal(t.hands.p1.done, true);
+test("the dealer starts with one card and draws the rest after everyone, one at a time to 17", () => {
+  // Deal order: p1, p2, dealer, p1, p2; then hits, then the dealer's cards.
+  const restore = fromDeck(["Th", "9d", "6c", "8h", "7c", "Kd", "5s", "4h"]);
+  let t = C.tableDeal(["p1", "p2"], { p1: 10, p2: 20 }, () => 0);
+  restore();
+  assert.deepEqual(t.dealer, ["6c"]);
+  assert.deepEqual(t.seats.p1.hands[0].cards, ["Th", "8h"]);
+  assert.deepEqual(t.seats.p2.hands[0].cards, ["9d", "7c"]);
+  assert.equal(t.turn, "p1");
+  assert.equal(C.tableAct(t, "p2", "hit"), t, "only the player whose turn it is can act");
+  t = C.tableAct(t, "p1", "stand");
   assert.equal(t.turn, "p2");
-  assert.equal(C.tableAct(t, "p1", "hit"), t, "only the player whose turn it is can act");
-  t = C.tableAct(t, "p2", "stand");
+  t = C.tableAct(t, "p2", "hit"); // 16 + K = bust
   assert.equal(t.done, true);
-  assert.equal(t.turn, null);
-  assert.deepEqual(C.tableOutcome(t, "p1"), { outcome: "blackjack", net: 15, stake: 10 });
-  assert.deepEqual(C.tableOutcome(t, "p2"), { outcome: "win", net: 20, stake: 20 });
+  // The dealer turns 5 (11), then 4 (15)... and keeps drawing to 17.
+  assert.equal(t.dealer[0], "6c");
+  assert.ok(C.bjTotal(t.dealer).total >= 17);
+  assert.equal(C.tableOutcome(t, "p2").results[0].outcome, "bust");
 });
 
-test("hitting, doubling and leaving at a shared table", () => {
-  const base = (hands, dealer, deck) => ({ deck, dealer, order: Object.keys(hands), turn: Object.keys(hands)[0], done: false, hands });
-  let t = base({ a: { cards: ["5h", "6d"], bet: 10, doubled: false, done: false }, b: { cards: ["Th", "6s"], bet: 10, doubled: false, done: false } }, ["Tc", "7s"], ["Ks", "9d", "Th"]);
-  assert.equal(C.tableCanDouble(t, "a"), true);
-  t = C.tableAct(t, "a", "double");
-  assert.deepEqual(t.hands.a.cards, ["5h", "6d", "Th"]);
-  assert.equal(t.turn, "b");
-  t = C.tableAct(t, "b", "hit");
-  assert.equal(bjTotal(t.hands.b.cards), 25);
-  // Everyone is done: the dealer stands on 17 and the round is settled.
+test("a natural pays 3 to 2 unless the dealer's second card makes one too", () => {
+  let restore = fromDeck(["Ah", "9c", "Kd", "5s"]);
+  let t = C.tableDeal(["me"], { me: 10 }, () => 0);
+  restore();
+  assert.equal(t.done, true, "nobody left to act");
+  assert.deepEqual(t.dealer, ["9c", "5s"], "with no live hand the dealer only turns one more");
+  assert.deepEqual(C.tableOutcome(t, "me"), { results: [{ outcome: "blackjack", net: 15, stake: 10 }], net: 15, stake: 10 });
+  restore = fromDeck(["Ah", "Tc", "Kd", "As"]);
+  t = C.tableDeal(["me"], { me: 10 }, () => 0);
+  restore();
+  assert.equal(C.tableOutcome(t, "me").results[0].outcome, "push");
+});
+
+test("double down takes one card for twice the bet", () => {
+  const restore = fromDeck(["5h", "Tc", "6d", "Ts", "7s"]);
+  let t = C.tableDeal(["me"], { me: 10 }, () => 0);
+  restore();
+  assert.equal(C.tableCan(t, "me", "double"), true);
+  assert.equal(C.tableCost(t, "me", "double"), 10);
+  t = C.tableAct(t, "me", "double");
+  assert.deepEqual(t.seats.me.hands[0].cards, ["5h", "6d", "Ts"]);
+  assert.deepEqual(t.dealer, ["Tc", "7s"]);
+  assert.deepEqual(C.tableOutcome(t, "me"), { results: [{ outcome: "win", net: 20, stake: 20 }], net: 20, stake: 20 });
+  assert.equal(C.tableCan(t, "me", "double"), false);
+});
+
+test("split plays each half as its own hand; split aces take one card each", () => {
+  let restore = fromDeck(["8h", "Tc", "8d", "3s", "Kc", "Ts", "7s"]);
+  let t = C.tableDeal(["me"], { me: 10 }, () => 0);
+  restore();
+  assert.equal(C.tableCan(t, "me", "split"), true);
+  assert.equal(C.tableCan(t, "me", "hit"), true);
+  t = C.tableAct(t, "me", "split");
+  assert.deepEqual(t.seats.me.hands.map((h) => h.cards), [["8h", "3s"], ["8d", "Kc"]]);
+  assert.equal(t.seats.me.active, 0);
+  t = C.tableAct(t, "me", "double"); // 11 + T = 21 on the first half, doubled
+  assert.equal(t.seats.me.active, 1);
+  t = C.tableAct(t, "me", "stand"); // 18 on the second
   assert.equal(t.done, true);
-  assert.deepEqual(C.tableOutcome(t, "a"), { outcome: "win", net: 20, stake: 20 });
-  assert.equal(C.tableOutcome(t, "b").outcome, "bust");
-  // A player who leaves mid-round is dropped and play moves on.
-  let u = base({ a: { cards: ["Th", "8d"], bet: 5, doubled: false, done: false }, b: { cards: ["9h", "9s"], bet: 5, doubled: false, done: false } }, ["Tc", "6s"], ["2c", "Kd"]);
+  assert.deepEqual(t.dealer, ["Tc", "7s"]);
+  const out = C.tableOutcome(t, "me");
+  assert.deepEqual(out.results.map((r) => r.outcome), ["win", "win"]);
+  assert.equal(out.net, 30);
+  assert.equal(out.stake, 30);
+  // Aces: one card each and done; A+K after a split is 21, not a blackjack.
+  restore = fromDeck(["Ah", "9c", "Ad", "Kh", "5c", "8s"]);
+  t = C.tableDeal(["me"], { me: 10 }, () => 0);
+  restore();
+  t = C.tableAct(t, "me", "split");
+  assert.equal(t.done, true);
+  assert.deepEqual(C.tableOutcome(t, "me").results.map((r) => r.outcome), ["win", "lose"]);
+  assert.equal(C.tableOutcome(t, "me").results[0].net, 10, "21 after a split pays even money");
+});
+
+test("a player who leaves mid-round is dropped and play moves on", () => {
+  const restore = fromDeck(["Th", "9h", "6s", "8d", "9s", "Kd", "Ac"]);
+  let u = C.tableDeal(["a", "b"], { a: 5, b: 5 }, () => 0);
+  restore();
   u = C.tableDrop(u, "a");
   assert.deepEqual(u.order, ["b"]);
   assert.equal(u.turn, "b");
   u = C.tableAct(u, "b", "stand");
-  assert.deepEqual(u.dealer, ["Tc", "6s", "Kd"]);
-  assert.equal(C.tableOutcome(u, "b").outcome, "win");
-  // When every hand is bust the dealer does not draw.
-  const v = C.tableAct(base({ a: { cards: ["Th", "6d"], bet: 5, doubled: false, done: false } }, ["2c", "3s"], ["9h", "Kd"]), "a", "hit");
-  assert.deepEqual(v.dealer, ["2c", "3s"]);
+  assert.equal(u.done, true);
+  assert.equal(C.tableOutcome(u, "b").results[0].outcome, "win");
 });
-const bjTotal = (cards) => C.bjTotal(cards).total;
 
 test("blackjack head to head: both draw, nearer 21 wins, busts and naturals", () => {
   const keep = (n) => n - 1; // deck in order: Ac, Kc, Qc, Jc, Tc …
@@ -127,6 +143,57 @@ test("the dice dealer plays the fixed way and hands compare", () => {
   assert.equal(d.dice.length, 5);
   assert.ok(d.rolls.length >= 1 && d.rolls.length <= 3);
   assert.ok(C.diceVs([5, 5, 5, 6, 6], [6, 6, 6, 1, 2]) > 0, "a full house beats three of a kind");
+});
+
+test("chinchiro hands, strongest first", () => {
+  const name = (d) => C.chinHand(d)?.name ?? null;
+  assert.equal(name([1, 1, 1]), "ピンゾロ");
+  assert.equal(name([4, 4, 4]), "4のゾロ目");
+  assert.equal(name([6, 4, 5]), "シゴロ");
+  assert.equal(name([3, 1, 2]), "ヒフミ");
+  assert.equal(name([2, 2, 5]), "5の目");
+  assert.equal(name([6, 3, 3]), "6の目");
+  assert.equal(name([1, 3, 5]), null);
+  const rank = (d) => C.chinHand(d).rank;
+  assert.ok(rank([1, 1, 1]) > rank([6, 6, 6]) && rank([6, 6, 6]) > rank([2, 2, 2]) && rank([2, 2, 2]) > rank([4, 5, 6]));
+  assert.ok(rank([4, 5, 6]) > rank([5, 5, 6]) && rank([5, 5, 6]) > rank([5, 5, 1]) && rank([5, 5, 1]) > rank([1, 2, 3]));
+});
+
+test("chinchiro rolls up to three times, and settles against the parent", () => {
+  // No hand twice, then a point.
+  const throws = [1, 3, 5, 2, 4, 6, 2, 2, 5].map((n) => n - 1);
+  let i = 0;
+  const random = () => throws[i++];
+  let t = C.chinStart();
+  t = C.chinNext(t, random);
+  assert.equal(t.done, false);
+  t = C.chinNext(t, random);
+  assert.equal(t.done, false);
+  t = C.chinNext(t, random);
+  assert.equal(t.done, true);
+  assert.equal(t.hand.name, "5の目");
+  assert.equal(C.chinNext(t, random), t);
+  // Three throws without a hand is 目なし.
+  i = 0;
+  const none = C.chinNext(C.chinNext(C.chinNext(C.chinStart(), () => [0, 2, 4][i++ % 3]), () => [1, 3, 5][i++ % 3]), () => [0, 2, 4][i++ % 3]);
+  assert.equal(none.hand.name, "目なし");
+  const H = (d) => C.chinHand(d);
+  // A decisive parent settles at once.
+  assert.equal(C.chinParentDecides(H([1, 1, 1])), -5);
+  assert.equal(C.chinParentDecides(H([4, 5, 6])), -2);
+  assert.equal(C.chinParentDecides(H([1, 2, 3])), 2);
+  assert.equal(C.chinParentDecides(none.hand), 1);
+  assert.equal(C.chinParentDecides(H([3, 3, 4])), null);
+  // Otherwise points compare, and the child's own big or bad hands count.
+  assert.equal(C.chinSettle(H([3, 3, 4]), H([5, 5, 6])), 1);
+  assert.equal(C.chinSettle(H([3, 3, 4]), H([5, 5, 2])), -1);
+  assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 1, 4])), 0);
+  assert.equal(C.chinSettle(H([3, 3, 4]), H([2, 2, 2])), 3);
+  assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 2, 3])), -2);
+  assert.equal(C.chinSettle(H([3, 3, 4]), none.hand), -1);
+  assert.equal(C.chinVs(H([6, 6, 6]), H([4, 5, 6])), 1);
+  assert.equal(C.chinVs(H([2, 2, 3]), H([1, 1, 3])), 0);
+  assert.equal(C.chinTurn(rng(3)).done, true);
 });
 
 test("roulette pays by the spot and zero loses outside bets", () => {
@@ -195,9 +262,9 @@ test("over many rounds no game gives away points", () => {
   let bj = 0,
     dice = 0;
   for (let i = 0; i < 4000; i++) {
-    let round = C.bjDeal(10, random);
-    while (!round.done) round = C.bjTotal(round.player).total < 17 ? C.bjHit(round) : C.bjStand(round);
-    bj += round.net;
+    let round = C.tableDeal(["me"], { me: 10 }, random);
+    while (!round.done) round = C.tableAct(round, "me", C.bjTotal(round.seats.me.hands[round.seats.me.active].cards).total < 17 ? "hit" : "stand");
+    bj += C.tableOutcome(round, "me").net;
     // Playing the dealer's own way comes out about even.
     let d = C.diceStart(10, random);
     for (let r = 0; r < 2; r++) {

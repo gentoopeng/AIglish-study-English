@@ -134,10 +134,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await a.evaluate(() => window.PointLoans.person("loan-b", "loan-b"));
     await dialogOf(a).getByText("loan-bさんが 100pt 借りたいそうです").waitFor();
     await dialogOf(a).locator(".loans-request").getByRole("button", { name: "断る" }).click();
-    await dialogOf(a).locator(".loans-history li").first().waitFor();
+    // Wait for the redrawn screen, not the one still showing before the answer.
+    await dialogOf(a).locator(".loans-history li span", { hasText: "断った" }).waitFor();
     assert.deepEqual((await dialogOf(a).locator(".loans-history li span").allInnerTexts()), ["100pt 借りたいと頼まれた・断った", "30pt 返ってきた", "30pt 請求した・済み", "50pt 貸した"]);
     await b.evaluate(() => window.PointLoans.person("loan-a", "loan-a"));
-    await dialogOf(b).locator(".loans-history li").first().waitFor();
+    await dialogOf(b).locator(".loans-history li span", { hasText: "断られた" }).waitFor();
     assert.deepEqual((await dialogOf(b).locator(".loans-history li span").allInnerTexts()), ["100pt 借りたいと頼んだ・断られた", "30pt 返した", "30pt 請求された・済み", "50pt 借りた"]);
     assert.match(await dialogOf(b).locator(".loans-history").innerText(), /「ポーカー用」/);
     // Repaying the rest: no more than is owed.

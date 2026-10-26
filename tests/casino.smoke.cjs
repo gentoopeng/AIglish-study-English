@@ -30,7 +30,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.locator("#nav-casino").click();
     const tab = page.locator("#view-casino.active");
     await tab.locator(".casino-game").nth(3).waitFor();
-    assert.deepEqual(await tab.locator(".casino-game b").allInnerTexts(), ["ポーカー", "ブラックジャック", "ルーレット", "ダイスポーカー"]);
+    assert.deepEqual(await tab.locator(".casino-game b").allInnerTexts(), ["ポーカー", "ブラックジャック", "ルーレット", "ダイスポーカー", "チンチロ"]);
     assert.equal(await tab.locator("[data-casino-unit]").innerText(), "練習チップ");
     assert.equal(await tab.locator("[data-casino-balance]").innerText(), "1,000枚");
     await page.screenshot({ path: "/tmp/casino-tab.png" });
@@ -50,7 +50,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
         window.__restoreShuffle = () => (window.PokerModel.shuffle = original);
         window.PokerModel.shuffle = () => deck.slice();
       }, cards);
-    await stacked(["Th", "9h", "Td", "7c"]);
+    // Deal order: player, dealer, player; then the player's draws; the dealer's second card last.
+    await stacked(["Th", "Td", "9h", "7c"]);
     await tab.locator(".mode-blackjack").click();
     const bj = page.locator("dialog.casino-screen.is-blackjack[open]");
     await bj.waitFor();
@@ -58,34 +59,49 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await bj.getByRole("button", { name: "+50" }).click();
     assert.equal(await bj.locator(".cs-bet").innerText(), "60枚");
     await bj.getByRole("button", { name: "配る" }).click();
-    assert.match(await bj.locator(".is-player .cs-hand-label b").innerText(), /^19/);
-    assert.match(await bj.locator(".is-dealer .cs-hand-label b").innerText(), /10 ＋ \?/);
-    assert.equal(await bj.locator(".is-dealer .pk-card.is-back").count(), 1);
-    // A beginner sees what to do and why: 19 stands.
-    assert.equal(await bj.locator(".cs-actions .is-suggested").innerText(), "これで勝負");
-    assert.match(await bj.locator(".cs-advice").innerText(), /^迷ったら「これで勝負」：17以上は/);
+    assert.match(await bj.locator(".cs-seat .cs-hand-label b").innerText(), /^19/);
+    // The dealer has one card until the player is done.
+    assert.match(await bj.locator(".is-dealer .cs-hand-label b").innerText(), /^10（2枚目はみんなのあと）/);
+    assert.equal(await bj.locator(".is-dealer .pk-card:not(.is-back)").count(), 1);
+    // A beginner sees what to do and why: 19 stands. No pair, so no split; 19 can still double.
+    assert.deepEqual(await bj.locator(".cs-moves button b").allInnerTexts(), ["ヒット", "スタンド", "ダブル"]);
+    assert.equal(await bj.locator(".cs-moves .is-suggested b").innerText(), "スタンド");
+    assert.match(await bj.locator(".cs-advice").innerText(), /^迷ったら「スタンド」：17以上は/);
     assert.equal(await bj.locator("[data-cs-balance]").innerText(), "940枚");
-    await bj.getByRole("button", { name: "これで勝負" }).click();
+    await bj.locator("[data-move=stand]").click();
     assert.match(await bj.locator(".cs-result").innerText(), /あなたの勝ち\s*\+60枚/);
+    assert.deepEqual(await bj.locator(".is-dealer .pk-card b").allInnerTexts(), ["10", "7"]);
     assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,060枚");
-    // A bust: 10+6 takes a king.
-    await stacked(["Ts", "6h", "9d", "8c", "Kc"]);
+    // A bust: 10+6 takes a king; the dealer then only turns one card.
+    await stacked(["Ts", "9d", "6h", "Kc", "8c"]);
     await bj.getByRole("button", { name: "もう一度配る" }).click();
-    await bj.getByRole("button", { name: "もう1枚" }).click();
+    await bj.locator("[data-move=hit]").click();
     assert.match(await bj.locator(".cs-result").innerText(), /21を超えました\s*−60枚/);
     assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,000枚");
     // Doubling on 11 takes one card for twice the bet.
-    await stacked(["5h", "6d", "Tc", "7s", "Ts"]);
+    await stacked(["5h", "Tc", "6d", "Ts", "7s"]);
     await bj.getByRole("button", { name: "もう一度配る" }).click();
-    await bj.getByRole("button", { name: "倍にして1枚" }).click();
+    await bj.locator("[data-move=double]").click();
     assert.match(await bj.locator(".cs-result").innerText(), /あなたの勝ち\s*\+120枚/);
     assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,120枚");
-    await stacked(["Ts", "6h", "9d", "8c", "Kc"]);
+    // Splitting two 8s: two hands of 60 each, both beat the dealer's 17.
+    await stacked(["8h", "Tc", "8d", "3s", "Kc", "Ts", "7s"]);
     await bj.getByRole("button", { name: "もう一度配る" }).click();
-    await bj.getByRole("button", { name: "もう1枚" }).click();
-    assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,060枚");
-    await bj.getByRole("button", { name: "もう一度配る" }).click();
-    await bj.getByRole("button", { name: "もう1枚" }).click();
+    assert.equal(await bj.locator(".cs-moves .is-suggested b").innerText(), "スプリット");
+    await bj.locator("[data-move=split]").click();
+    assert.equal(await bj.locator(".cs-seat-hand").count(), 2);
+    assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,000枚");
+    await bj.locator("[data-move=double]").click(); // 8+3 = 11, doubled with a 10
+    await bj.locator("[data-move=stand]").click(); // 8+K = 18
+    assert.match(await bj.locator(".cs-result").innerText(), /手1 勝ち・手2 勝ち\s*\+180枚/);
+    assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,300枚");
+    await page.screenshot({ path: "/tmp/casino-blackjack-split.png" });
+    // Back to 1,000 for the checks below: five busts of 60.
+    await stacked(["Ts", "9d", "6h", "Kc", "8c"]);
+    for (let i = 0; i < 5; i++) {
+      await bj.getByRole("button", { name: "もう一度配る" }).click();
+      await bj.locator("[data-move=hit]").click();
+    }
     assert.equal(await bj.locator("[data-cs-balance]").innerText(), "1,000枚");
     await page.evaluate(() => window.__restoreShuffle());
     await page.screenshot({ path: "/tmp/casino-blackjack.png" });
@@ -162,6 +178,28 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // The tab keeps today's running total of practice chips.
     assert.equal(await tab.locator("[data-casino-today]").innerText(), "今日 " + (chips - 1000 > 0 ? "+" : chips < 1000 ? "−" : "±") + Math.abs(chips - 1000).toLocaleString("ja-JP") + "枚");
 
+    // Chinchiro alone: the parent rolls 3-3-4 (a point of 4), I roll 5-5-6 (6) and win.
+    await page.evaluate(() => {
+      const seq = [0, 2, 2, 3, 4, 4, 5];
+      const original = crypto.getRandomValues.bind(crypto);
+      crypto.getRandomValues = (array) => (array.length === 1 && array instanceof Uint32Array && seq.length ? ((array[0] = seq.shift()), array) : original(array));
+      window.__restoreChin = () => (crypto.getRandomValues = original);
+    });
+    const before = await page.evaluate(() => window.Casino.balance());
+    await tab.locator(".mode-chinchiro").click();
+    const cc = page.locator("dialog.casino-screen.is-chinchiro[open]");
+    await cc.waitFor();
+    assert.deepEqual(await cc.locator(".cs-mode button").allInnerTexts(), ["ひとりで", "一緒に", "タイマン"]);
+    await cc.getByRole("button", { name: "勝負する" }).click();
+    assert.match(await cc.locator(".cs-chin-side").first().innerText(), /4の目/);
+    await cc.locator("[data-chin-roll]").click();
+    await page.evaluate(() => window.__restoreChin());
+    assert.match(await cc.locator(".cs-chin-side").nth(1).innerText(), /6の目/);
+    assert.match(await cc.locator(".cs-result").innerText(), /あなたの勝ち\s*\+10枚/);
+    assert.equal(await page.evaluate(() => window.Casino.balance()), before + 10);
+    await page.screenshot({ path: "/tmp/casino-chinchiro.png" });
+    await cc.getByRole("button", { name: "チンチロを閉じる" }).click();
+
     // Signed in: bets move points once per round through the wallet transaction.
     await page.evaluate(() => {
       myId = "casino-a";
@@ -180,11 +218,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     });
     assert.equal(await tab.locator("[data-casino-unit]").innerText(), "所持ポイント");
     assert.equal(await tab.locator("[data-casino-balance]").innerText(), "300pt");
-    await stacked(["Ts", "7h", "Td", "9c"]);
+    await stacked(["Ts", "Td", "7h", "9c"]);
     await tab.locator(".mode-blackjack").click();
     await bj.waitFor();
     await bj.getByRole("button", { name: "配る" }).click();
-    await bj.getByRole("button", { name: "これで勝負" }).click();
+    await bj.locator("[data-move=stand]").click();
     assert.match(await bj.locator(".cs-result").innerText(), /ディーラーの勝ち\s*−60pt/);
     await page.waitForFunction(() => window.__wallet["users/casino-a/learningPoints/main"].balance === 240 && window.StudyPoints.balance() === 240);
     await page.evaluate(() => window.__restoreShuffle());
