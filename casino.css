@@ -179,3 +179,6 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 .cs-duel-thinking{color:#a8a293!important;font-weight:600;}
 @media(prefers-reduced-motion:no-preference){.cs-duel-code{animation:cs-win .5s cubic-bezier(.2,1.5,.4,1) both;}.cs-duel-thinking{animation:cs-think 1.4s ease-in-out infinite;}}
 @keyframes cs-think{50%{opacity:.45}}
+/* Grids never grow past the screen: the number box's natural width used to push the panel wider. */
+.cs-betbar{grid-template-columns:minmax(0,1fr);}
+.cs-duel-join input{width:100%;}

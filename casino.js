@@ -92,7 +92,7 @@
     { id: "poker", name: "ポーカー", line: "みんなやコンピュータと", level: "じっくり" },
     { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち", level: "ふつう" },
     { id: "roulette", name: "ルーレット", line: "玉が止まる数字を当てる", level: "かんたん" },
-    { id: "dice", name: "ダイスポーカー", line: "役をつくる。フレンドとたいまんも", level: "かんたん" },
+    { id: "dice", name: "ダイスポーカー", line: "役をつくる。フレンドとタイマンも", level: "かんたん" },
   ];
 
   // ---- The tab ---------------------------------------------------------------------------
@@ -701,7 +701,7 @@
     bar.setAttribute("aria-label", "対戦相手");
     for (const [id, text] of [
       ["dealer", "ディーラーと"],
-      ["friend", "フレンドとたいまん"],
+      ["friend", "フレンドとタイマン"],
     ]) {
       const b = node("button", "", text);
       b.type = "button";
