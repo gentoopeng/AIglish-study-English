@@ -336,8 +336,10 @@
             sheet.innerHTML = '<button type="button" class="flashcard-detail-backdrop" aria-label="詳細を閉じる"></button><section class="flashcard-detail-panel" role="dialog" aria-modal="true" aria-label="単語の詳細"><div class="flashcard-detail-handle"></div><button type="button" class="flashcard-detail-close" aria-label="閉じる">×</button><div id="flashcardDetailContent" class="flashcard-detail-content"></div></section>';
             sheet.querySelector('.flashcard-detail-backdrop').onclick = window.closeFlashcardWordDetails;
             sheet.querySelector('.flashcard-detail-close').onclick = window.closeFlashcardWordDetails;
-            document.body.appendChild(sheet);
         }
+        // options.host: an open modal dialog to show it in (anything outside would sit behind it).
+        var host = (options && options.host) || document.body;
+        if (sheet.parentNode !== host) host.appendChild(sheet);
 
         var content = sheet.querySelector('#flashcardDetailContent');
         content.replaceChildren();

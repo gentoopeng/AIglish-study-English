@@ -560,24 +560,13 @@
       );
     }
 
+    // The same word card as the regular flashcards' i, inside this dialog so it shows on top.
+    // A word from another book than the open one is shown without its rating controls.
     info.onclick = () => {
       const word = queue[index];
       if (!word) return;
-      const details = document.createElement("dialog");
-      details.className = "menu-dialog warmup-word-details";
-      const title = document.createElement("h2"),
-        body = document.createElement("p"),
-        back = document.createElement("button");
-      title.textContent = word.word;
-      body.textContent =
-        word.subInfo || word.sub_info || word.note || "補足情報はありません。";
-      back.type = "button";
-      back.textContent = "閉じる";
-      back.onclick = () => details.close();
-      details.append(title, body, back);
-      document.body.append(details);
-      details.addEventListener("close", () => details.remove(), { once: true });
-      details.showModal();
+      const own = book === currentTextbook ? vocabList.find((w) => String(w.num) === String(word.num)) : null;
+      window.openVocabDetailsSheet(own || word, null, { readOnly: !own, host: d });
     };
     previous.onclick = () => {
       const last = answers.pop();
@@ -611,6 +600,7 @@
         window.removeEventListener("pagehide", clearShowing);
         clearShowing();
         clearTimeout(startTimer);
+        window.closeFlashcardWordDetails?.();
         document.body.classList.remove("flash-warmup-open");
         window.StartupMonitor?.event?.('warmup:closed');
         welcomePending = false;
