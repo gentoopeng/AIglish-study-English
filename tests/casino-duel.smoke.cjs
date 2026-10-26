@@ -162,6 +162,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       return window.fbRunTransaction(window.db, async (tx) => tx.set(window.fbDoc(window.db, "pokerRooms", code), room));
     }, code);
     await fresh.locator(".casino-game.mode-poker").click();
+    await fresh.locator('[data-pk-tab="tables"]').click();
     await fresh.locator("[data-pk-code]").fill(code);
     await fresh.locator("[data-pk-join]").click();
     await fresh.getByText("この番号はポーカーのテーブルではありません。").waitFor();

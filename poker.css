@@ -235,3 +235,23 @@ html body dialog.pk-ranks-sheet{width:min(420px,calc(100vw - 24px));max-height:9
 /* While choosing an amount, the hand help steps aside so the buttons stay on screen. */
 .pk-me.is-raising .pk-help{display:none;}
 .pk-raise-panel{gap:8px;padding:10px 12px;}
+/* Lobby: two tabs, and every setting as a row of buttons to tap. */
+.pk-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:14px;padding:4px;border:1px solid rgba(213,201,172,.22);border-radius:14px;background:rgba(10,16,28,.6);}
+.pk-lobby .pk-tab{min-height:40px;border:0;border-radius:10px;background:transparent;color:#a8a293;font:700 14px system-ui,sans-serif;}
+.pk-lobby .pk-tab[aria-selected=true]{background:#c6b790;color:#18202d;}
+.pk-setting{margin:0 0 14px;}
+.pk-setting-label{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 0 7px;color:#cfc8b8;font-size:12px;font-weight:700;}
+.pk-setting-label small{color:#8f8a7e;font-weight:400;font-size:10.5px;}
+.pk-pills{display:grid;grid-template-columns:repeat(var(--n,4),minmax(0,1fr));gap:6px;}.pk-quick-row{display:flex;flex-wrap:wrap;gap:6px;}
+.pk-lobby .pk-pill{flex:1 0 auto;min-width:0;min-height:38px;padding:0 10px;border:1px solid rgba(213,201,172,.28);border-radius:999px;background:rgba(8,12,20,.5);color:#d9d2c2;font:700 13px system-ui,sans-serif;font-variant-numeric:tabular-nums;}
+.pk-lobby .pk-pill[aria-checked=true]{border-color:#e2cf9b;background:rgba(226,207,155,.18);color:#f3e9cf;box-shadow:0 0 0 2px rgba(226,207,155,.18);}
+.pk-quick-row{margin:-6px 0 14px;}.pk-lobby .pk-quick-row .pk-pill{min-height:32px;font-size:12px;}
+.pk-buyin{display:flex;align-items:center;gap:8px;}
+.pk-buyin input{flex:1;min-width:0;height:44px;padding:0 12px;border:1px solid rgba(213,201,172,.3);border-radius:12px;background:rgba(8,12,20,.6);color:#f3e9cf;font:700 20px system-ui,sans-serif;text-align:right;}
+.pk-buyin em{font-style:normal;color:#999386;}
+.pk-check{margin:0 0 10px;padding:8px 10px;border-radius:10px;background:rgba(198,183,144,.1);color:#e7dcc0;font-size:12px;line-height:1.5;}
+.pk-check.is-bad{background:rgba(231,163,163,.1);color:#f1b4b4;}
+.pk-table-panels .pk-sub{margin-top:8px;}
+@media(prefers-reduced-motion:no-preference){.pk-lobby .pk-pill{transition:background .15s,border-color .15s,transform .1s;}.pk-lobby .pk-pill:active{transform:scale(.95);}.pk-tab-body>*{animation:pk-pane-in .2s ease-out;}}
+@keyframes pk-pane-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.pk-lobby .pk-panel>h3+.pk-sub{margin:-4px 0 14px;}

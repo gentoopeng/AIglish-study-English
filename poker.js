@@ -159,7 +159,7 @@
   // Everyday words rather than poker terms, for people new to the game.
   const actionText = { fold: "降りた", check: "様子見", call: "同じだけ出した", raise: "上乗せ", allin: "全部賭けた" };
 
-  async function create(settings) {
+  async function createTable(settings) {
     connected();
     if (balance() < settings.buyIn) throw Error("ポイントが足りません（所持 " + fmt(balance()) + "pt）。");
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -443,6 +443,10 @@
       if (!room.practice && balance() < room.settings.buyIn) throw Error("ポイントが足りません。");
       p.stack = room.settings.buyIn;
       say(room, p.name + " がチップを追加しました");
+      // Play goes straight on: no new table, and no waiting for the host to press start again.
+      const ready = Object.values(room.players).filter((x) => !x.left && x.stack > 0).length;
+      if (room.practice) room.status = "playing";
+      else if (room.status === "waiting" && room.handNo > 0 && ready >= 2) room.status = "playing";
       return room;
     });
   }
@@ -493,39 +497,157 @@
     return el;
   }
 
+  // Choices as a row of buttons, so every option is visible and one tap away.
+  function pills(name, options, value) {
+    const group = node("div", "pk-pills");
+    group.setAttribute("role", "radiogroup");
+    group.dataset[name] = "";
+    group.value = String(value);
+    // Even rows: up to five across, six as two rows of three.
+    group.style.setProperty("--n", String(options.length > 5 ? 3 : options.length));
+    for (const [v, text] of options) {
+      const b = node("button", "pk-pill", text);
+      b.type = "button";
+      b.setAttribute("role", "radio");
+      b.dataset.value = String(v);
+      b.setAttribute("aria-checked", String(String(v) === String(value)));
+      b.onclick = () => {
+        group.value = String(v);
+        group.querySelectorAll(".pk-pill").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+        group.dispatchEvent(new Event("change"));
+      };
+      group.append(b);
+    }
+    return group;
+  }
+  function field(label, control, hint) {
+    const row = node("div", "pk-setting");
+    const head = node("p", "pk-setting-label", label);
+    if (hint) head.append(node("small", "", hint));
+    row.append(head, control);
+    return row;
+  }
+  const lobbyTab = () => {
+    try {
+      return localStorage.getItem("aiglish_poker_lobby_tab") || "practice";
+    } catch {
+      return "practice";
+    }
+  };
   function lobby() {
     const view = screen.querySelector("[data-pk-view]");
     view.replaceChildren();
     view.className = "pk-lobby";
-    view.innerHTML =
-      '<h2>ポーカー</h2><p class="pk-balance"></p>' +
-      '<section class="pk-panel"><h3>テーブルを作る</h3>' +
-      '<label>参加費<span class="pk-field"><input type="number" data-pk-buyin min="20" step="10" value="100" inputmode="numeric"><em>pt</em></span></label>' +
-      '<label>ブラインド<select data-pk-blinds>' + BLINDS.map(([s, b], i) => '<option value="' + i + '"' + (i ? "" : " selected") + ">" + s + " / " + b + "</option>").join("") + "</select></label>" +
-      '<label>人数<select data-pk-seats>' + [2, 3, 4, 5, 6].map((n) => '<option value="' + n + '"' + (n === 6 ? " selected" : "") + ">最大" + n + "人</option>").join("") + "</select></label>" +
-      '<label>持ち時間<select data-pk-think>' + THINK.map((n) => '<option value="' + n + '"' + (n === 30 ? " selected" : "") + ">" + n + "秒</option>").join("") + "</select></label>" +
-      '<button type="button" class="pk-primary" data-pk-create>テーブルを作る</button></section>' +
-      '<section class="pk-panel"><h3>テーブルに入る</h3><div class="pk-join"><input data-pk-code inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="0000" aria-label="テーブル番号"><button type="button" data-pk-join>参加</button></div></section>' +
-      '<section class="pk-panel"><h3>コンピュータと練習</h3>' +
-      '<label>相手<select data-pk-bots>' + [1, 2, 3, 4, 5].map((n) => '<option value="' + n + '"' + (n === 1 ? " selected" : "") + ">" + n + "人</option>").join("") + "</select></label>" +
-      '<label>強さ<select data-pk-level><option value="easy">やさしい</option><option value="normal" selected>ふつう</option><option value="hard">つよい</option></select></label>' +
-      '<button type="button" class="pk-primary" data-pk-practice>練習を始める</button><p class="pk-sub">ポイントは賭けません。チップは100枚、ブラインドは1/2です。</p></section>' +
-      '<button type="button" class="pk-howto" data-pk-howto>遊び方を見る</button>' +
-      '<p class="pk-note">チップは参加費の分だけ配られます。勝ち負けは1ハンドごとにポイントへ反映され、途中で終わったハンドは反映されません。カードを配るのはテーブルを作った人の端末です。</p>' +
-      '<p class="pk-status" data-pk-status role="status"></p>';
+    view.innerHTML = '<h2>ポーカー</h2><p class="pk-balance"></p><div class="pk-tabs" role="tablist"></div><div class="pk-tab-body"></div><button type="button" class="pk-howto" data-pk-howto>遊び方を見る</button><p class="pk-status" data-pk-status role="status"></p>';
     view.querySelector(".pk-balance").textContent = "所持ポイント " + fmt(balance()) + "pt";
-    view.querySelector("[data-pk-create]").onclick = guard(async () => {
-      const buyIn = Math.floor(Number(view.querySelector("[data-pk-buyin]").value)),
-        [sb, bb] = BLINDS[Number(view.querySelector("[data-pk-blinds]").value)];
-      if (!(buyIn >= 20 && buyIn <= 100000)) throw Error("参加費は20〜100,000ptで決めてください。");
-      if (buyIn < bb * 10) throw Error("参加費はビッグブラインドの10倍以上にしてください（" + fmt(bb * 10) + "pt〜）。");
-      const code = await create({ buyIn, sb, bb, seats: Number(view.querySelector("[data-pk-seats]").value), think: Number(view.querySelector("[data-pk-think]").value) });
+    const tabs = view.querySelector(".pk-tabs"),
+      body = view.querySelector(".pk-tab-body");
+    const blindChoices = BLINDS.map(([sb, bb], i) => [i, sb + " / " + bb]);
+    // ---- Practice against the computer
+    const practicePanel = node("section", "pk-panel");
+    practicePanel.append(node("h3", "", "コンピュータと練習"), node("p", "pk-sub", "ポイントは賭けません。ゲストでもオフラインでも遊べます。"));
+    const bots = pills("pkBots", [1, 2, 3, 4, 5].map((n) => [n, n + "人"]), 1),
+      level = pills("pkLevel", [["easy", "やさしい"], ["normal", "ふつう"], ["hard", "つよい"]], "normal"),
+      chips = pills("pkChips", [50, 100, 200, 500].map((n) => [n, n + "枚"]), 100),
+      practiceBlinds = pills("pkPracticeBlinds", blindChoices.slice(0, 4), 0);
+    practicePanel.append(
+      field("相手の人数", bots),
+      field("強さ", level),
+      field("はじめのチップ", chips),
+      field("ブラインド", practiceBlinds, "毎回はじめに出す額（小 / 大）"),
+    );
+    const startPractice = node("button", "pk-primary", "練習を始める");
+    startPractice.type = "button";
+    startPractice.dataset.pkPractice = "";
+    practicePanel.append(startPractice);
+    // ---- Real tables
+    const tablePanel = node("div", "pk-table-panels");
+    const create = node("section", "pk-panel");
+    create.append(node("h3", "", "テーブルを作る"));
+    const buyIn = node("input");
+    Object.assign(buyIn, { type: "number", min: 20, step: 10, value: 100, inputMode: "numeric" });
+    buyIn.dataset.pkBuyin = "";
+    buyIn.setAttribute("aria-label", "参加費");
+    const buyRow = node("div", "pk-buyin");
+    const unitLabel = node("em", "", "pt");
+    buyRow.append(buyIn, unitLabel);
+    const quick = node("div", "pk-quick-row");
+    for (const n of [50, 100, 300, 500, 1000]) {
+      const b = node("button", "pk-pill", fmt(n));
+      b.type = "button";
+      b.onclick = () => {
+        buyIn.value = String(n);
+        check();
+      };
+      quick.append(b);
+    }
+    const blinds = pills("pkBlinds", blindChoices, 0),
+      seats = pills("pkSeats", [2, 3, 4, 5, 6].map((n) => [n, n + "人"]), 6),
+      think = pills("pkThink", THINK.map((n) => [n, n + "秒"]), 30);
+    const note = node("p", "pk-check");
+    create.append(field("参加費（はじめのチップ）", buyRow), quick, field("ブラインド", blinds, "毎回はじめに出す額（小 / 大）"), field("最大人数", seats), field("1手の持ち時間", think), note);
+    const makeButton = node("button", "pk-primary", "テーブルを作る");
+    makeButton.type = "button";
+    makeButton.dataset.pkCreate = "";
+    create.append(makeButton);
+    // A live check, so a wrong amount is seen before pressing the button.
+    function check() {
+      const value = Math.floor(Number(buyIn.value)),
+        bb = BLINDS[Number(blinds.value)][1];
+      let text = "";
+      if (!(value >= 20 && value <= 100000)) text = "参加費は20〜100,000ptで決めてください。";
+      else if (value < bb * 10) text = "このブラインドなら参加費は" + fmt(bb * 10) + "pt以上にしてください。";
+      else if (value > balance()) text = "所持ポイントが足りません（" + fmt(balance()) + "pt）。";
+      else text = "チップ " + fmt(value) + "枚で、ブラインド " + BLINDS[Number(blinds.value)].join(" / ") + " から始まります。";
+      note.textContent = text;
+      note.classList.toggle("is-bad", !text.startsWith("チップ"));
+    }
+    buyIn.oninput = check;
+    blinds.addEventListener("change", check);
+    check();
+    const joinPanel = node("section", "pk-panel");
+    joinPanel.innerHTML = '<h3>テーブルに入る</h3><div class="pk-join"><input data-pk-code inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="0000" aria-label="テーブル番号"><button type="button" data-pk-join>参加</button></div><p class="pk-sub">作った人から4桁の番号を聞いて入れます。</p>';
+    tablePanel.append(joinPanel, create, node("p", "pk-note", "勝ち負けは1ハンドごとにポイントへ反映され、途中で終わったハンドは反映されません。カードを配るのはテーブルを作った人の端末です。"));
+    // ---- Tabs
+    const panes = { practice: practicePanel, tables: tablePanel };
+    for (const [id, text] of [
+      ["practice", "コンピュータと"],
+      ["tables", "みんなと"],
+    ]) {
+      const b = node("button", "pk-tab", text);
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.dataset.pkTab = id;
+      b.onclick = () => {
+        try {
+          localStorage.setItem("aiglish_poker_lobby_tab", id);
+        } catch {}
+        tabs.querySelectorAll(".pk-tab").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+        body.replaceChildren(panes[id]);
+      };
+      tabs.append(b);
+    }
+    tabs.querySelector('[data-pk-tab="' + lobbyTab() + '"]')?.click();
+    makeButton.onclick = guard(async () => {
+      const value = Math.floor(Number(buyIn.value)),
+        [sb, bb] = BLINDS[Number(blinds.value)];
+      if (!(value >= 20 && value <= 100000)) throw Error("参加費は20〜100,000ptで決めてください。");
+      if (value < bb * 10) throw Error("参加費はビッグブラインドの10倍以上にしてください（" + fmt(bb * 10) + "pt〜）。");
+      const code = await createTable({ buyIn: value, sb, bb, seats: Number(seats.value), think: Number(think.value) });
       enter(code);
     });
-    view.querySelector("[data-pk-join]").onclick = guard(async () => enter(await join(view.querySelector("[data-pk-code]").value.trim())));
-    view.querySelector("[data-pk-practice]").onclick = () =>
-      practice({ bots: Number(view.querySelector("[data-pk-bots]").value), level: view.querySelector("[data-pk-level]").value, buyIn: 100, sb: 1, bb: 2 });
-    view.querySelector("[data-pk-howto]").onclick = () => window.PokerTutorial?.open({ practice: () => view.querySelector("[data-pk-practice]").click() });
+    joinPanel.querySelector("[data-pk-join]").onclick = guard(async () => enter(await join(joinPanel.querySelector("[data-pk-code]").value.trim())));
+    startPractice.onclick = () => {
+      const [sb, bb] = BLINDS[Number(practiceBlinds.value)];
+      practice({ bots: Number(bots.value), level: level.value, buyIn: Number(chips.value), sb, bb });
+    };
+    view.querySelector("[data-pk-howto]").onclick = () =>
+      window.PokerTutorial?.open({
+        practice: () => {
+          tabs.querySelector('[data-pk-tab="practice"]').click();
+          startPractice.click();
+        },
+      });
   }
 
   // A table against the computer: the player plus 1-5 computers, practice chips only.
@@ -714,7 +836,10 @@
       const won = mine && mine.stack > 0;
       actions.append(node("p", "pk-wait pk-final", won ? "勝ちました！ 全員のチップを手に入れました。" : "チップがなくなりました。"));
       const row = node("div", "pk-buttons");
-      row.append(button("ロビーへ", () => { close(); open(); }), button("もう一度", () => practice(room.practiceSettings), "pk-primary"));
+      row.append(button("ロビーへ", () => { close(); open(); }));
+      // Out of chips: top up and keep playing the same computers, or start over.
+      if (!won) row.append(button("最初から", () => practice(room.practiceSettings)), button("チップを足して続ける", rebuy, "pk-primary"));
+      else row.append(button("もう一度", () => practice(room.practiceSettings), "pk-primary"));
       actions.append(row);
       return;
     }

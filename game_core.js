@@ -267,8 +267,6 @@
         });
 
         window.renderFlashcardDeck();
-        // The same opening as the first ten words: the card count runs up, then the deck.
-        if (window.Ceremony) window.Ceremony.play({ style: 'deck', count: flashcardOriginQueue.length, word: termMode ? 'CARDS' : 'WORDS', sub: 'フラッシュカード' });
     };
 
     window.renderFlashcardHistoryBubbles = function(wordData) {
