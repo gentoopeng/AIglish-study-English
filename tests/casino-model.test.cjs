@@ -56,6 +56,52 @@ test("a dealt blackjack pays 3 to 2 at once", () => {
   assert.fail("no blackjack dealt");
 });
 
+test("a shared blackjack table: deal round the table, turns in order, dealer last", () => {
+  // random(i + 1) = i never swaps, so the deck stays in order and cards come off the end:
+  // Ac, Kc, Qc, Jc, Tc, 9c, 8c …
+  const keep = (n) => n - 1;
+  let t = C.tableDeal(["p1", "p2"], { p1: 10, p2: 20 }, keep);
+  assert.deepEqual(t.hands.p1.cards, ["Ac", "Jc"]);
+  assert.deepEqual(t.hands.p2.cards, ["Kc", "Tc"]);
+  assert.deepEqual(t.dealer, ["Qc", "9c"]);
+  // p1 has blackjack and needs no move; p2 acts.
+  assert.equal(t.hands.p1.done, true);
+  assert.equal(t.turn, "p2");
+  assert.equal(C.tableAct(t, "p1", "hit"), t, "only the player whose turn it is can act");
+  t = C.tableAct(t, "p2", "stand");
+  assert.equal(t.done, true);
+  assert.equal(t.turn, null);
+  assert.deepEqual(C.tableOutcome(t, "p1"), { outcome: "blackjack", net: 15, stake: 10 });
+  assert.deepEqual(C.tableOutcome(t, "p2"), { outcome: "win", net: 20, stake: 20 });
+});
+
+test("hitting, doubling and leaving at a shared table", () => {
+  const base = (hands, dealer, deck) => ({ deck, dealer, order: Object.keys(hands), turn: Object.keys(hands)[0], done: false, hands });
+  let t = base({ a: { cards: ["5h", "6d"], bet: 10, doubled: false, done: false }, b: { cards: ["Th", "6s"], bet: 10, doubled: false, done: false } }, ["Tc", "7s"], ["Ks", "9d", "Th"]);
+  assert.equal(C.tableCanDouble(t, "a"), true);
+  t = C.tableAct(t, "a", "double");
+  assert.deepEqual(t.hands.a.cards, ["5h", "6d", "Th"]);
+  assert.equal(t.turn, "b");
+  t = C.tableAct(t, "b", "hit");
+  assert.equal(bjTotal(t.hands.b.cards), 25);
+  // Everyone is done: the dealer stands on 17 and the round is settled.
+  assert.equal(t.done, true);
+  assert.deepEqual(C.tableOutcome(t, "a"), { outcome: "win", net: 20, stake: 20 });
+  assert.equal(C.tableOutcome(t, "b").outcome, "bust");
+  // A player who leaves mid-round is dropped and play moves on.
+  let u = base({ a: { cards: ["Th", "8d"], bet: 5, doubled: false, done: false }, b: { cards: ["9h", "9s"], bet: 5, doubled: false, done: false } }, ["Tc", "6s"], ["2c", "Kd"]);
+  u = C.tableDrop(u, "a");
+  assert.deepEqual(u.order, ["b"]);
+  assert.equal(u.turn, "b");
+  u = C.tableAct(u, "b", "stand");
+  assert.deepEqual(u.dealer, ["Tc", "6s", "Kd"]);
+  assert.equal(C.tableOutcome(u, "b").outcome, "win");
+  // When every hand is bust the dealer does not draw.
+  const v = C.tableAct(base({ a: { cards: ["Th", "6d"], bet: 5, doubled: false, done: false } }, ["2c", "3s"], ["9h", "Kd"]), "a", "hit");
+  assert.deepEqual(v.dealer, ["2c", "3s"]);
+});
+const bjTotal = (cards) => C.bjTotal(cards).total;
+
 test("roulette pays by the spot and zero loses outside bets", () => {
   const bets = [
     { on: "red", amount: 10 },

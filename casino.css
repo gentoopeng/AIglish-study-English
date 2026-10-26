@@ -182,3 +182,19 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 /* Grids never grow past the screen: the number box's natural width used to push the panel wider. */
 .cs-betbar{grid-template-columns:minmax(0,1fr);}
 .cs-duel-join input{width:100%;}
+
+/* Tables with friends. */
+.cs-group-people{display:flex;flex-wrap:wrap;gap:6px;}
+.cs-group-person{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1px solid rgba(213,201,172,.28);border-radius:999px;color:#cfc8b8;font-size:12px;}
+.cs-group-person.is-me{border-color:#e2cf9b;color:#f3e9cf;}
+.cs-group-person.is-turn{background:rgba(226,207,155,.18);}
+.cs-group-person small{padding:0 5px;border-radius:6px;background:#c6b790;color:#18202d;font-size:9.5px;font-weight:800;}
+.cs-group-code{margin:0;padding:8px 12px;border:1px dashed rgba(213,201,172,.35);border-radius:12px;color:#e7dcc0;font-size:13px;text-align:center;}
+.cs-group-bets{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px;color:#cfc8b8;font-size:11px;}
+.cs-group-joined{margin:0;color:#a8a293;font-size:12px;text-align:center;}
+.cs-group-bj{gap:12px;}
+.cs-group-seat{padding:6px 8px;border-radius:12px;}
+.cs-group-seat.is-me{background:rgba(255,255,255,.05);}
+.cs-group-seat.is-turn{box-shadow:0 0 0 2px rgba(226,207,155,.6);}
+.cs-group-bj .cs-cards{min-height:0;}
+.cs-group-bj .cs-group-seat .pk-card{width:42px;height:60px;}.cs-group-bj .cs-group-seat .pk-card b{font-size:18px;}.cs-group-bj .cs-group-seat .pk-card i{font-size:15px;}

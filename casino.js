@@ -90,8 +90,8 @@
   };
   const GAMES = [
     { id: "poker", name: "ポーカー", line: "みんなやコンピュータと", level: "じっくり" },
-    { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち", level: "ふつう" },
-    { id: "roulette", name: "ルーレット", line: "玉が止まる数字を当てる", level: "かんたん" },
+    { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち。フレンドとも", level: "ふつう" },
+    { id: "roulette", name: "ルーレット", line: "止まる数字を当てる。フレンドとも", level: "かんたん" },
     { id: "dice", name: "ダイスポーカー", line: "役をつくる。フレンドとタイマンも", level: "かんたん" },
   ];
 
@@ -179,6 +179,7 @@
   }
   function close() {
     leaveDuel();
+    leaveGroup();
     if (game?.timer) clearTimeout(game.timer);
     game = null;
     if (screen?.open) screen.close();
@@ -304,6 +305,7 @@
       playerRow.append(label("あなた"), cards([null, null], false, 9));
       table.append(dealerRow, playerRow);
       body.append(
+        modeSwitch(body, "dealer", "blackjack"),
         table,
         betBar("blackjack", "配る", (bet) => {
           const money = round("blackjack");
@@ -408,31 +410,11 @@
     });
     return '<svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="99" class="is-rim"/><g class="cs-wheel-spin">' + parts.join("") + '<circle cx="100" cy="100" r="62" class="is-inner"/><circle cx="100" cy="100" r="14" class="is-hub"/></g></svg>';
   }
-  function roulette(body) {
-    body.replaceChildren();
-    const bets = new Map();
-    let chip = 10,
-      spinning = false,
-      turned = 0;
-    const wheel = node("div", "cs-wheel");
-    wheel.innerHTML = wheelSvg() + '<span class="cs-pointer" aria-hidden="true"></span><output class="cs-landed" aria-live="polite"></output>';
+  // The table as it is printed on felt: 0 on the left, three rows of twelve numbers (3, 6 … 36
+  // on top), the row bets on the right, the dozens and the even-money bets underneath.
+  // `spot(on, label, cls)` makes each button, so solo and shared tables place chips their own way.
+  function rouletteBoard(spotButton) {
     const board = node("div", "cs-board");
-    const spotButton = (on, label, cls) => {
-      const b = node("button", "cs-spot " + (cls || ""), label);
-      b.type = "button";
-      b.dataset.on = on;
-      b.onclick = () => {
-        if (spinning) return;
-        const total = [...bets.values()].reduce((a, v) => a + v, 0);
-        const add = Math.min(chip, cap() - total);
-        if (add <= 0) return status("これ以上は賭けられません（1回" + fmt(cap()) + unit() + "まで）");
-        bets.set(on, (bets.get(on) || 0) + add);
-        draw();
-      };
-      return b;
-    };
-    // The table as it is printed on felt: 0 on the left, three rows of twelve numbers (3, 6 … 36
-    // on top), the row bets on the right, the dozens and the even-money bets underneath.
     const place = (b, column, row) => {
       b.style.gridColumn = column;
       b.style.gridRow = row;
@@ -463,18 +445,67 @@
     outside("black", "黒", "8 / 10", "5", "is-black");
     outside("odd", "奇数", "10 / 12", "5");
     outside("high", "19〜36", "12 / 14", "5");
-    const chipRow = node("div", "cs-chips cs-chip-pick");
-    chipRow.setAttribute("aria-label", "置くチップ");
+    return board;
+  }
+  // A chip picker: five chip sizes, one pressed.
+  function chipPicker(onPick, chosen) {
+    const row = node("div", "cs-chips cs-chip-pick");
+    row.setAttribute("aria-label", "置くチップ");
     for (const value of CHIPS) {
       const b = node("button", "cs-chip-btn", fmt(value));
       b.type = "button";
-      b.setAttribute("aria-pressed", String(value === chip));
+      b.setAttribute("aria-pressed", String(value === chosen));
       b.onclick = () => {
-        chip = value;
-        chipRow.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        onPick(value);
+        row.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       };
-      chipRow.append(b);
+      row.append(b);
     }
+    return row;
+  }
+  // The wheel: spinTo(n) turns it so pocket n stops under the pointer; land(n) shows the number.
+  function makeWheel() {
+    const wheel = node("div", "cs-wheel");
+    wheel.innerHTML = wheelSvg() + '<span class="cs-pointer" aria-hidden="true"></span><output class="cs-landed" aria-live="polite"></output>';
+    let turned = 0;
+    return {
+      el: wheel,
+      spinTo(number) {
+        const index = C.WHEEL.indexOf(number);
+        turned += 360 * 5 + ((360 - ((index * 360) / 37 + (turned % 360))) % 360 + 360) % 360;
+        wheel.querySelector(".cs-wheel-spin").style.transform = "rotate(" + turned + "deg)";
+        wheel.querySelector(".cs-landed").textContent = "";
+      },
+      land(number) {
+        const landed = wheel.querySelector(".cs-landed");
+        landed.textContent = String(number);
+        landed.className = "cs-landed is-" + C.colourOf(number);
+      },
+    };
+  }
+  function roulette(body) {
+    body.replaceChildren();
+    const bets = new Map();
+    let chip = 10,
+      spinning = false;
+    const wheelBox = makeWheel(),
+      wheel = wheelBox.el;
+    const spotButton = (on, label, cls) => {
+      const b = node("button", "cs-spot " + (cls || ""), label);
+      b.type = "button";
+      b.dataset.on = on;
+      b.onclick = () => {
+        if (spinning) return;
+        const total = [...bets.values()].reduce((a, v) => a + v, 0);
+        const add = Math.min(chip, cap() - total);
+        if (add <= 0) return status("これ以上は賭けられません（1回" + fmt(cap()) + unit() + "まで）");
+        bets.set(on, (bets.get(on) || 0) + add);
+        draw();
+      };
+      return b;
+    };
+    const board = rouletteBoard(spotButton);
+    const chipRow = chipPicker((value) => (chip = value), chip);
     const total = node("p", "cs-hint");
     const message = node("div", "cs-result-slot");
     const recent = node("div", "cs-recent");
@@ -501,12 +532,9 @@
       const money = round("roulette");
       money.stake(staked);
       showBalance(screen.querySelector("[data-cs-balance]"));
-      const number = C.rouletteSpin(random),
-        index = C.WHEEL.indexOf(number);
+      const number = C.rouletteSpin(random);
       // Several turns, ending with the winning pocket under the pointer at the top.
-      turned += 360 * 5 + ((360 - ((index * 360) / 37 + (turned % 360))) % 360 + 360) % 360;
-      wheel.querySelector(".cs-wheel-spin").style.transform = "rotate(" + turned + "deg)";
-      wheel.querySelector(".cs-landed").textContent = "";
+      wheelBox.spinTo(number);
       message.replaceChildren();
       // Paid as soon as the number is drawn, so closing during the spin never loses a win.
       const outcome = C.rouletteSettle([...bets].map(([on, amount]) => ({ on, amount })), number);
@@ -514,9 +542,7 @@
       if (back > 0) money.pay(back);
       await later(3600);
       if (!screen || game?.body !== body) return;
-      const landed = wheel.querySelector(".cs-landed");
-      landed.textContent = String(number);
-      landed.className = "cs-landed is-" + outcome.colour;
+      wheelBox.land(number);
       board.querySelectorAll(".cs-spot").forEach((b) => b.classList.toggle("is-hit", !!C.spot(b.dataset.on)?.hit(number)));
       const colour = { red: "赤", black: "黒", green: "緑" }[outcome.colour];
       if (outcome.lines.some((l) => l.won && /^\d+$/.test(l.on))) bigWin("HIT", outcome.net, number + " ぴったり", 400);
@@ -551,6 +577,7 @@
     stage.append(wheel, side);
     body.classList.add("is-roulette-body");
     body.append(
+      modeSwitch(body, "dealer", "roulette"),
       stage,
       chipRow,
       board,
@@ -695,13 +722,14 @@
   const duelRef = (code) => window.fbDoc(window.db, "pokerRooms", code);
   const playerName = () => String((typeof myName === "string" && myName) || uid()).slice(0, 24);
   let duel = null;
-  function modeSwitch(body, active) {
+  // Dealer or friends, at the top of each house game.
+  function modeSwitch(body, active, kind = "dice") {
     const bar = node("div", "cs-mode");
     bar.setAttribute("role", "group");
-    bar.setAttribute("aria-label", "対戦相手");
+    bar.setAttribute("aria-label", "遊び方");
     for (const [id, text] of [
-      ["dealer", "ディーラーと"],
-      ["friend", "フレンドとタイマン"],
+      ["dealer", kind === "dice" ? "ディーラーと" : "ひとりで"],
+      ["friend", kind === "dice" ? "フレンドとタイマン" : "フレンドと一緒に"],
     ]) {
       const b = node("button", "", text);
       b.type = "button";
@@ -710,8 +738,11 @@
       b.onclick = () => {
         if (id === active) return;
         leaveDuel();
-        if (id === "friend") duelLobby(body);
-        else dice(body);
+        leaveGroup();
+        body.classList.remove("is-roulette-body");
+        if (kind === "dice") id === "friend" ? duelLobby(body) : dice(body);
+        else if (id === "friend") groupLobby(body, kind);
+        else ({ blackjack, roulette })[kind](body);
       };
       bar.append(b);
     }
@@ -1006,6 +1037,466 @@
       room.status = "closed";
       room.leftBy = uid();
       return room;
+    }).catch(() => {});
+  }
+
+  // ---- Blackjack and roulette with friends -----------------------------------------------
+  // Up to six people at a 4-digit table, all playing the house rather than each other. Each puts
+  // in their own bet; the table's maker deals or spins; each settles only their own bet, once per
+  // round. Stored with the poker tables, marked by kind, like the dice duel.
+  const GROUP_MAX = 6;
+  const GAME_NAMES = { blackjack: "ブラックジャック", roulette: "ルーレット" };
+  let group = null;
+  function groupLobby(body, kind, message = "") {
+    leaveGroup();
+    body.replaceChildren(modeSwitch(body, "friend", kind));
+    const panel = node("div", "cs-betbar cs-duel-lobby");
+    panel.append(
+      node("p", "cs-duel-title", "フレンドと一緒に" + GAME_NAMES[kind]),
+      node("p", "cs-hint", kind === "roulette" ? "同じルーレットに、それぞれ好きなところへ賭けます。勝ち負けは自分の賭けだけです。" : "同じディーラーを相手に、それぞれ自分の手で勝負します。順番に1人ずつ引きます。"),
+    );
+    const status = node("p", "cs-duel-status", message);
+    status.setAttribute("role", "status");
+    const guard = (fn) => async () => {
+      status.textContent = "";
+      try {
+        await fn();
+      } catch (error) {
+        status.textContent = error?.message || "うまくいきませんでした。もう一度お試しください。";
+      }
+    };
+    const make = node("button", "cs-primary", "テーブルを作る");
+    make.type = "button";
+    make.dataset.groupCreate = "";
+    make.onclick = guard(async () => enterGroup(body, kind, await createGroup(kind)));
+    const join = node("div", "cs-duel-join");
+    const input = node("input");
+    input.inputMode = "numeric";
+    input.maxLength = 4;
+    input.placeholder = "4桁の番号";
+    input.setAttribute("aria-label", "テーブル番号");
+    input.dataset.groupCode = "";
+    const go = node("button", "cs-primary", "入る");
+    go.type = "button";
+    go.onclick = guard(async () => enterGroup(body, kind, await joinGroup(input.value.trim(), kind)));
+    join.append(input, go);
+    panel.append(node("p", "cs-duel-step", "1. 自分でテーブルを作る（最大" + GROUP_MAX + "人）"), make, node("p", "cs-duel-step", "2. または、フレンドの番号で入る"), join, status);
+    body.append(
+      panel,
+      rules("フレンドと一緒に遊ぶには", [
+        "「テーブルを作る」で出る4桁の番号をフレンドに伝え、フレンドは「入る」に番号を入れます。",
+        "賭ける額や場所は、それぞれが自分で決めます。賭けた分は確定したときに引かれます。",
+        kind === "roulette" ? "みんなが賭けたら、テーブルを作った人が「回す」を押します。" : "みんなが賭けたら、テーブルを作った人が「配る」を押します。順番が来たら自分の手を決めます。",
+        "勝ち負けはディーラーとの間だけで、フレンドのポイントは動きません。",
+        "テーブルを作った人が抜けるとテーブルは終わり、まだ決まっていない賭けは戻ります。",
+      ]),
+    );
+    refresh();
+  }
+  async function createGroup(kind) {
+    duelReady();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = String(1000 + random(9000));
+      const made = await window.fbRunTransaction(window.db, async (tx) => {
+        const snap = await tx.get(duelRef(code));
+        if (snap.exists() && snap.data().status !== "closed") return false;
+        tx.set(duelRef(code), { kind, version: 1, code, host: uid(), status: "open", createdAt: Date.now(), round: 1, phase: "betting", players: { [uid()]: { name: playerName(), joinedAt: Date.now() } }, bets: {}, game: null, number: null, history: [] });
+        return true;
+      });
+      if (made) return code;
+    }
+    throw Error("テーブル番号を作れませんでした。もう一度お試しください。");
+  }
+  async function joinGroup(code, kind) {
+    duelReady();
+    if (!/^\d{4}$/.test(code)) throw Error("4桁の番号を入れてください。");
+    await updateDuel(code, (room) => {
+      if (room.kind !== kind) throw Error("この番号は" + GAME_NAMES[kind] + "のテーブルではありません。");
+      if (room.status === "closed") throw Error("このテーブルは終わっています。");
+      if (room.players[uid()]) return null;
+      if (Object.keys(room.players).length >= GROUP_MAX) throw Error("このテーブルは満席です（" + GROUP_MAX + "人）。");
+      room.players[uid()] = { name: playerName(), joinedAt: Date.now() };
+      return room;
+    });
+    return code;
+  }
+  function enterGroup(body, kind, code) {
+    leaveGroup(false);
+    group = { kind, code, body, room: null, moved: {}, bets: new Map(), chip: 10, wheel: null, shownRound: 0 };
+    const mine = group;
+    group.unsub = window.fbOnSnapshot(duelRef(code), (snap) => {
+      if (group !== mine) return;
+      if (!snap.exists()) return groupLobby(body, kind, "テーブルが見つかりません。");
+      group.room = snap.data();
+      drawGroup();
+    });
+  }
+  const groupKey = (room) => "casino:" + room.kind + ":" + room.code + ":" + room.createdAt + ":" + room.round;
+  function groupHasMoved(room, part) {
+    const key = groupKey(room) + ":" + part;
+    try {
+      if (localStorage.getItem("aiglish_casino_moved_" + key)) return true;
+    } catch {}
+    return !!group?.moved[key];
+  }
+  function groupMove(room, part, delta) {
+    const key = groupKey(room) + ":" + part;
+    if (group.moved[key]) return;
+    group.moved[key] = true;
+    try {
+      if (localStorage.getItem("aiglish_casino_moved_" + key)) return;
+      localStorage.setItem("aiglish_casino_moved_" + key, "1");
+    } catch {}
+    move(key, delta);
+  }
+  // A bet that was taken but never settled comes back (the table closed, or I left before play).
+  function refundOpen(room) {
+    if (groupHasMoved(room, "bet") && !groupHasMoved(room, "pay") && !groupHasMoved(room, "settled")) {
+      const amount = room.kind === "roulette" ? Object.values(room.bets?.[uid()] || {}).reduce((a, v) => a + v, 0) : room.bets?.[uid()] || 0;
+      if (amount) groupMove(room, "refund", amount + (groupHasMoved(room, "double") ? amount : 0));
+    }
+  }
+  const nameOf = (room, id) => (id === uid() ? "あなた" : room.players[id]?.name || "だれか");
+  function drawGroup() {
+    const { room, body, kind } = group,
+      me = uid(),
+      host = room.host === me;
+    body.replaceChildren(modeSwitch(body, "friend", kind));
+    const head = node("div", "cs-duel-head");
+    head.append(node("span", "", "テーブル " + room.code), node("b", "", Object.keys(room.players).length + "人"));
+    const leave = node("button", "cs-duel-leave", "抜ける");
+    leave.type = "button";
+    leave.onclick = async () => {
+      await leaveGroup();
+      groupLobby(body, kind);
+    };
+    head.append(leave);
+    body.append(head);
+    if (room.status === "closed") {
+      refundOpen(room);
+      body.append(node("p", "cs-duel-wait", "テーブルを作った人が抜けたので、テーブルは終わりました。決まっていない賭けは戻ります。"));
+      const back = node("button", "cs-primary", "ロビーへ");
+      back.type = "button";
+      back.onclick = () => groupLobby(body, kind);
+      const row = node("div", "cs-actions");
+      row.append(back);
+      body.append(row);
+      return refresh();
+    }
+    // Who is here, and the number to share while friends are still coming.
+    const people = node("div", "cs-group-people");
+    for (const [id, p] of Object.entries(room.players).sort((a, b) => a[1].joinedAt - b[1].joinedAt)) {
+      const chip = node("span", "cs-group-person" + (id === me ? " is-me" : "") + (room.game?.turn === id ? " is-turn" : ""), id === me ? "あなた" : p.name);
+      if (id === room.host) chip.append(node("small", "", "親"));
+      people.append(chip);
+    }
+    // Roulette keeps to one screen: its side panel already lists everyone and their bets.
+    if (kind !== "roulette") body.append(people);
+    if (Object.keys(room.players).length < 2) body.append(node("p", "cs-group-code", "フレンドにこの番号を伝えてください：" + room.code));
+    if (kind === "roulette") drawGroupRoulette(room, body, me, host);
+    else drawGroupBlackjack(room, body, me, host);
+    refresh();
+  }
+
+  // Roulette together: everyone bets on the same spin.
+  function drawGroupRoulette(room, body, me, host) {
+    if (!group.wheel) group.wheel = makeWheel();
+    const wheelBox = group.wheel,
+      mineBets = room.bets?.[me],
+      confirmed = !!mineBets,
+      spun = room.phase === "spun";
+    const stage = node("div", "cs-stage");
+    const side = node("div", "cs-stage-side");
+    const message = node("div", "cs-result-slot");
+    const recent = node("div", "cs-recent");
+    recent.replaceChildren(...(room.history || []).slice(0, 8).map((n) => node("i", "is-" + C.colourOf(n), String(n))));
+    // Everyone's bets so far.
+    const list = node("ul", "cs-group-bets");
+    for (const id of Object.keys(room.players)) {
+      const total = Object.values(room.bets?.[id] || {}).reduce((a, v) => a + v, 0);
+      list.append(node("li", "", nameOf(room, id) + "：" + (total ? fmt(total) + "pt" : "まだ")));
+    }
+    side.append(message, list, recent);
+    stage.append(wheelBox.el, side);
+    const board = rouletteBoard((on, label, cls) => {
+      const b = node("button", "cs-spot " + (cls || ""), label);
+      b.type = "button";
+      b.dataset.on = on;
+      b.onclick = () => {
+        if (confirmed || spun) return;
+        const sum = [...group.bets.values()].reduce((a, v) => a + v, 0),
+          add = Math.min(group.chip, cap() - sum);
+        if (add <= 0) return;
+        group.bets.set(on, (group.bets.get(on) || 0) + add);
+        drawGroup();
+      };
+      return b;
+    });
+    const shown = confirmed ? new Map(Object.entries(mineBets)) : group.bets;
+    board.querySelectorAll(".cs-spot").forEach((b) => {
+      const amount = shown.get(b.dataset.on) || 0;
+      if (amount) b.append(node("i", "cs-stake", fmt(amount)));
+      if (spun && C.spot(b.dataset.on)?.hit(room.number)) b.classList.add("is-hit");
+    });
+    body.classList.add("is-roulette-body");
+    body.append(stage);
+    if (!confirmed && !spun) body.append(chipPicker((v) => (group.chip = v), group.chip));
+    body.append(board);
+    const hint = node("p", "cs-hint");
+    const actions = node("div", "cs-actions");
+    const sum = [...shown.values()].reduce((a, v) => a + v, 0);
+    if (!spun) {
+      if (!confirmed) {
+        hint.textContent = sum ? "賭けた合計 " + fmt(sum) + unit() + "。よければ「賭けを確定」" : "数字や色をタップしてチップを置きます";
+        const clear = node("button", "", "賭けを外す");
+        clear.type = "button";
+        clear.disabled = !sum;
+        clear.onclick = () => {
+          group.bets.clear();
+          drawGroup();
+        };
+        const ok = node("button", host ? "" : "cs-primary", "賭けを確定");
+        ok.type = "button";
+        ok.disabled = !sum || sum > balance();
+        ok.onclick = async () => {
+          ok.disabled = true;
+          const bets = Object.fromEntries(group.bets);
+          const at = room.round;
+          const done = await updateDuel(room.code, (fresh) => {
+            if (fresh.status === "closed" || fresh.round !== at || fresh.phase !== "betting" || fresh.bets?.[me]) return null;
+            fresh.bets = { ...(fresh.bets || {}), [me]: bets };
+            return fresh;
+          }).catch(() => false);
+          if (done) {
+            groupMove({ ...room, round: at }, "bet", -sum);
+            group.bets.clear();
+          } else ok.disabled = false;
+        };
+        actions.append(clear, ok);
+      } else hint.textContent = "賭けを確定しました（" + fmt(sum) + "pt）。" + (host ? "みんなが賭けたら回してください" : "親が回すのを待っています");
+      if (host) {
+        const spin = node("button", "cs-primary", "回す");
+        spin.type = "button";
+        spin.dataset.groupSpin = "";
+        spin.disabled = !Object.keys(room.bets || {}).length;
+        spin.onclick = async () => {
+          spin.disabled = true;
+          const number = C.rouletteSpin(random);
+          await updateDuel(room.code, (fresh) => {
+            if (fresh.phase !== "betting" || fresh.round !== room.round) return null;
+            fresh.phase = "spun";
+            fresh.number = number;
+            fresh.spunAt = Date.now();
+            fresh.history = [number].concat(fresh.history || []).slice(0, 20);
+            return fresh;
+          }).catch(() => (spin.disabled = false));
+        };
+        actions.append(spin);
+      }
+    } else {
+      // The number is drawn: turn the wheel once for this round, then show what my bets did.
+      const outcome = mineBets ? C.rouletteSettle(Object.entries(mineBets).map(([on, amount]) => ({ on, amount })), room.number) : null;
+      if (outcome) {
+        const back = outcome.lines.filter((l) => l.won).reduce((a, l) => a + l.amount + l.net, 0);
+        if (back > 0) groupMove(room, "pay", back);
+        else groupMove(room, "settled", 0);
+      }
+      const reveal = () => {
+        wheelBox.land(room.number);
+        const colour = { red: "赤", black: "黒", green: "緑" }[C.colourOf(room.number)];
+        message.replaceChildren(outcome ? result(room.number + "（" + colour + "）" + (outcome.net > 0 ? " 当たり" : outcome.lines.some((l) => l.won) ? " 一部当たり" : " はずれ"), outcome.net) : node("p", "cs-hint", room.number + "（" + colour + "）でした"));
+      };
+      if (group.shownRound !== room.round) {
+        group.shownRound = room.round;
+        wheelBox.spinTo(room.number);
+        group.revealAt = Date.now() + (calm() ? 0 : 3600);
+      }
+      const wait = Math.max(0, (group.revealAt || 0) - Date.now());
+      if (wait) setTimeout(() => group?.room === room && reveal(), wait);
+      else reveal();
+      hint.textContent = host ? "次の勝負は「次へ」で始まります" : "親が「次へ」を押すと次の勝負です";
+      if (host) {
+        const next = node("button", "cs-primary", "次へ");
+        next.type = "button";
+        next.onclick = () =>
+          updateDuel(room.code, (fresh) => {
+            if (fresh.round !== room.round) return null;
+            fresh.round++;
+            fresh.phase = "betting";
+            fresh.bets = {};
+            fresh.number = null;
+            return fresh;
+          }).catch(() => {});
+        actions.append(next);
+      }
+    }
+    body.append(hint, actions);
+  }
+
+  // Blackjack together: one dealer, everyone's own hand, in turn.
+  function drawGroupBlackjack(room, body, me, host) {
+    const t = room.game,
+      bet = room.bets?.[me] || 0;
+    const felt = node("div", "cs-felt cs-bj cs-group-bj");
+    const dealer = node("div", "cs-hand is-dealer");
+    const line = (who, total) => {
+      const l = node("p", "cs-hand-label");
+      l.append(node("span", "", who));
+      if (total) l.append(node("b", "", total));
+      return l;
+    };
+    const cardRow = (list, hideSecond) => {
+      const row = node("div", "cs-cards");
+      list.forEach((c, i) => row.append(window.Poker.card(hideSecond && i === 1 ? null : c)));
+      return row;
+    };
+    if (t) dealer.append(line("ディーラー", t.done ? String(C.bjTotal(t.dealer).total) : C.bjTotal([t.dealer[0]]).total + " ＋ ?"), cardRow(t.dealer, !t.done));
+    else dealer.append(line("ディーラー"), cardRow([null, null]));
+    felt.append(dealer);
+    if (t)
+      for (const id of t.order) {
+        const h = t.hands[id];
+        const seat = node("div", "cs-hand is-player cs-group-seat" + (id === me ? " is-me" : "") + (t.turn === id ? " is-turn" : ""));
+        const total = C.bjTotal(h.cards).total;
+        seat.append(line(nameOf(room, id) + "（" + fmt(h.bet * (h.doubled ? 2 : 1)) + "pt）", String(total) + (t.turn === id ? "・考え中" : "")), cardRow(h.cards));
+        felt.append(seat);
+      }
+    body.append(felt);
+    const hint = node("p", "cs-hint");
+    const actions = node("div", "cs-actions");
+    if (!t || room.phase === "betting") {
+      // Betting: each joins this game with their own amount.
+      if (!bet) {
+        body.append(
+          betBar("group-bj", "この額で参加", async (amount) => {
+            const at = room.round;
+            const done = await updateDuel(room.code, (fresh) => {
+              if (fresh.status === "closed" || fresh.round !== at || fresh.phase !== "betting" || fresh.bets?.[me]) return null;
+              fresh.bets = { ...(fresh.bets || {}), [me]: amount };
+              return fresh;
+            }).catch(() => false);
+            if (done) groupMove({ ...room, round: at }, "bet", -amount);
+          }),
+        );
+      } else hint.textContent = fmt(bet) + "pt で参加しています。" + (host ? "みんながそろったら配ってください" : "親が配るのを待っています");
+      const joined = Object.keys(room.bets || {});
+      body.append(node("p", "cs-group-joined", "参加：" + (joined.length ? joined.map((id) => nameOf(room, id)).join("・") : "まだだれも")));
+      if (host) {
+        const deal = node("button", "cs-primary", "配る");
+        deal.type = "button";
+        deal.dataset.groupDeal = "";
+        deal.disabled = !joined.length;
+        deal.onclick = async () => {
+          deal.disabled = true;
+          await updateDuel(room.code, (fresh) => {
+            if (fresh.phase !== "betting" || fresh.round !== room.round) return null;
+            const order = Object.keys(fresh.bets || {})
+              .filter((id) => fresh.players[id])
+              .sort((a, b) => fresh.players[a].joinedAt - fresh.players[b].joinedAt);
+            if (!order.length) return null;
+            fresh.game = C.tableDeal(order, fresh.bets, random);
+            fresh.phase = fresh.game.done ? "done" : "playing";
+            return fresh;
+          }).catch(() => (deal.disabled = false));
+        };
+        actions.append(deal);
+      }
+    } else if (!t.done) {
+      if (t.turn === me) {
+        const act = (text, moveName, primary) => {
+          const b = node("button", primary ? "cs-primary" : "", text);
+          b.type = "button";
+          b.onclick = async () => {
+            b.disabled = true;
+            const ok = await updateDuel(room.code, (fresh) => {
+              if (!fresh.game || fresh.game.turn !== me || fresh.round !== room.round) return null;
+              fresh.game = C.tableAct(fresh.game, me, moveName);
+              if (fresh.game.done) fresh.phase = "done";
+              return fresh;
+            }).catch(() => false);
+            if (ok && moveName === "double") groupMove(room, "double", -t.hands[me].bet);
+            if (!ok) b.disabled = false;
+          };
+          actions.append(b);
+          return b;
+        };
+        const hit = act("もう1枚", "hit"),
+          stand = act("これで勝負", "stand", true),
+          double = act("倍にして1枚", "double");
+        double.disabled = !C.tableCanDouble(t, me) || balance() < t.hands[me].bet;
+        const tip = advice({ player: t.hands[me].cards, dealer: t.dealer }, !double.disabled);
+        ({ hit, stand, double })[tip.move].classList.add("is-suggested");
+        hint.textContent = "あなたの番です。迷ったら「" + { hit: "もう1枚", stand: "これで勝負", double: "倍にして1枚" }[tip.move] + "」：" + tip.why;
+      } else {
+        hint.textContent = (t.order.includes(me) ? "" : "この勝負は見学中です。") + nameOf(room, t.turn) + "さんの番です";
+        // The table's maker can move things on when someone is away.
+        if (host && t.turn !== me) {
+          const skip = node("button", "", nameOf(room, t.turn) + "さんを飛ばす");
+          skip.type = "button";
+          skip.onclick = () =>
+            updateDuel(room.code, (fresh) => {
+              if (!fresh.game || fresh.game.turn !== t.turn) return null;
+              fresh.game = C.tableAct(fresh.game, t.turn, "stand");
+              if (fresh.game.done) fresh.phase = "done";
+              return fresh;
+            }).catch(() => {});
+          actions.append(skip);
+        }
+      }
+    } else {
+      // Done: each settles their own hand.
+      const mine = C.tableOutcome(t, me);
+      if (mine) {
+        if (mine.stake + mine.net > 0) groupMove(room, "pay", mine.stake + mine.net);
+        else groupMove(room, "settled", 0);
+        const words = { blackjack: "ブラックジャック！", win: "あなたの勝ち", push: "引き分け（賭けは戻ります）", lose: "ディーラーの勝ち", bust: "21を超えました" };
+        body.append(result(words[mine.outcome], mine.net, mine.outcome === "blackjack" ? "win" : ""));
+      }
+      hint.textContent = host ? "「次のゲーム」でまた賭けられます" : "親が「次のゲーム」を押すとまた賭けられます";
+      if (host) {
+        const next = node("button", "cs-primary", "次のゲーム");
+        next.type = "button";
+        next.onclick = () =>
+          updateDuel(room.code, (fresh) => {
+            if (fresh.round !== room.round) return null;
+            fresh.round++;
+            fresh.phase = "betting";
+            fresh.bets = {};
+            fresh.game = null;
+            return fresh;
+          }).catch(() => {});
+        actions.append(next);
+      }
+    }
+    body.append(hint, actions);
+  }
+  async function leaveGroup(tell = true) {
+    const current = group;
+    if (!current) return;
+    group = null;
+    current.unsub?.();
+    const room = current.room;
+    if (!tell || !room || room.status === "closed") return;
+    const me = uid();
+    // Leaving before play gives my bet back; leaving mid-hand loses it.
+    const before = room.kind === "roulette" ? room.phase === "betting" : !room.game;
+    group = current;
+    if (before) refundOpen(room);
+    group = null;
+    await updateDuel(current.code, (fresh) => {
+      if (fresh.status === "closed") return null;
+      if (fresh.host === me) {
+        fresh.status = "closed";
+        fresh.leftBy = me;
+        return fresh;
+      }
+      delete fresh.players[me];
+      if (fresh.phase === "betting" && fresh.bets) delete fresh.bets[me];
+      if (fresh.game && !fresh.game.done) {
+        fresh.game = C.tableDrop(fresh.game, me);
+        if (fresh.game.done) fresh.phase = "done";
+      }
+      return fresh;
     }).catch(() => {});
   }
 

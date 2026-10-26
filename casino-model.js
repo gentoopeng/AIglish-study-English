@@ -71,6 +71,62 @@
     return { ...round, done: true, outcome, net };
   }
 
+  // ---- Blackjack at a shared table -------------------------------------------------------
+  // Several players against one dealer, each with their own hand and bet, acting in turn.
+  //   { deck, dealer, order, turn, done, hands: { id: { cards, bet, doubled, done } } }
+  function tableDeal(order, bets, random) {
+    const deck = P.shuffle(P.deck(), random),
+      hands = {};
+    for (const id of order) hands[id] = { cards: [deck.pop()], bet: bets[id], doubled: false, done: false };
+    const dealer = [deck.pop()];
+    for (const id of order) hands[id].cards.push(deck.pop());
+    dealer.push(deck.pop());
+    const table = { deck, dealer, order: order.slice(), turn: null, done: false, hands };
+    // A dealer blackjack ends the round at once; a player's blackjack needs no move.
+    if (isBlackjack(dealer)) for (const id of order) hands[id].done = true;
+    else for (const id of order) if (isBlackjack(hands[id].cards)) hands[id].done = true;
+    return advance(table);
+  }
+  // The next player still to act, or the dealer's turn when nobody is left.
+  function advance(table) {
+    table.turn = table.order.find((id) => !table.hands[id].done) || null;
+    if (table.turn) return table;
+    const live = table.order.some((id) => bjTotal(table.hands[id].cards).total <= 21 && !isBlackjack(table.hands[id].cards));
+    if (live && !isBlackjack(table.dealer)) while (bjTotal(table.dealer).total < 17) table.dealer.push(table.deck.pop());
+    table.done = true;
+    return table;
+  }
+  const tableCanDouble = (table, id) => !table.done && table.turn === id && table.hands[id].cards.length === 2 && !table.hands[id].doubled;
+  function tableAct(table, id, move) {
+    if (table.done || table.turn !== id) return table;
+    const next = clone(table),
+      hand = next.hands[id];
+    if (move === "hit") {
+      hand.cards.push(next.deck.pop());
+      if (bjTotal(hand.cards).total >= 21) hand.done = true;
+    } else if (move === "double") {
+      if (!tableCanDouble(table, id)) return table;
+      hand.doubled = true;
+      hand.cards.push(next.deck.pop());
+      hand.done = true;
+    } else hand.done = true; // stand, or skipped for someone who is away
+    return advance(next);
+  }
+  // A player who left is out of the order; the round goes on without them.
+  function tableDrop(table, id) {
+    if (!table.hands[id] || table.done) return table;
+    const next = clone(table);
+    next.order = next.order.filter((x) => x !== id);
+    delete next.hands[id];
+    return advance(next);
+  }
+  function tableOutcome(table, id) {
+    const hand = table.hands[id];
+    if (!hand || !table.done) return null;
+    const { outcome, net } = bjFinish({ bet: hand.bet, doubled: hand.doubled, player: hand.cards, dealer: table.dealer });
+    return { outcome, net, stake: hand.bet * (hand.doubled ? 2 : 1) };
+  }
+
   // ---- Roulette --------------------------------------------------------------------------
   // A single-zero wheel. A bet is { on, amount } where `on` is a number "0".."36" or one of the
   // outside spots below. Zero loses every outside bet.
@@ -194,6 +250,11 @@
     bjStand,
     bjDouble,
     bjCanDouble,
+    tableDeal,
+    tableAct,
+    tableDrop,
+    tableCanDouble,
+    tableOutcome,
     REDS,
     WHEEL,
     SPOTS,
