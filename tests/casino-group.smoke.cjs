@@ -104,6 +104,18 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await screenOf(a, "roulette").locator("[data-mode=group]").innerText(), "一緒に");
     // Roulette has nobody to play against, so no タイマン.
     assert.deepEqual(await screenOf(a, "roulette").locator(".cs-mode button").allInnerTexts(), ["ひとりで", "一緒に"]);
+    // A refused cloud write is said in plain words under the button, which comes back.
+    await a.evaluate(() => {
+      window.__tx = window.fbRunTransaction;
+      window.fbRunTransaction = async () => {
+        throw Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" });
+      };
+    });
+    await screenOf(a, "roulette").locator("[data-group-create]").click();
+    await screenOf(a, "roulette").locator(".cs-duel-status", { hasText: "許可されていません" }).waitFor();
+    assert.equal(await screenOf(a, "roulette").locator("[data-group-create]").innerText(), "テーブルを作る");
+    assert.equal(await screenOf(a, "roulette").locator("[data-group-create]").isDisabled(), false);
+    await a.evaluate(() => (window.fbRunTransaction = window.__tx));
     await screenOf(a, "roulette").locator("[data-group-create]").click();
     await screenOf(a, "roulette").locator(".cs-group-code").waitFor();
     const code = room().code;

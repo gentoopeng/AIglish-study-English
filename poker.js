@@ -472,10 +472,44 @@
     screen = null;
     document.body.classList.remove("poker-open");
   }
+  // What went wrong, in words a player can act on. Cloud errors arrive as English codes.
+  function message(error) {
+    if (!error) return "";
+    const code = String(error.code || "").replace(/^firestore\//, "");
+    const known = {
+      "permission-denied": "クラウドに書き込めませんでした（許可されていません）。アプリの管理者に伝えてください。",
+      unavailable: "クラウドにつながりません。電波のよい場所でもう一度お試しください。",
+      "deadline-exceeded": "時間がかかりすぎました。電波のよい場所でもう一度お試しください。",
+      "resource-exhausted": "クラウドの利用上限に達しています。時間をおいてお試しください。",
+      aborted: "混み合っています。もう一度お試しください。",
+      "failed-precondition": "混み合っています。もう一度お試しください。",
+    };
+    if (known[code]) return known[code];
+    const text = String(error.message || error);
+    // Our own messages are Japanese already; anything else keeps its code for whoever fixes it.
+    return /[ぁ-んァ-ン一-龥]/.test(text) ? text : "うまくいきませんでした。もう一度お試しください。（" + (code || text).slice(0, 60) + "）";
+  }
   function errorText(error) {
     const box = screen?.querySelector("[data-pk-status]");
-    if (box) box.textContent = error?.message || String(error);
+    if (!box) return;
+    box.textContent = message(error);
+    if (box.textContent) box.scrollIntoView?.({ block: "nearest" });
   }
+  // A button that says what it is doing until the cloud answers, and cannot be pressed twice.
+  const working = (button, text, fn) =>
+    guard(async () => {
+      const label = button.textContent;
+      button.disabled = true;
+      button.textContent = text;
+      try {
+        await fn();
+      } finally {
+        if (button.isConnected) {
+          button.disabled = false;
+          button.textContent = label;
+        }
+      }
+    });
   const guard = (fn) => async (...args) => {
     try {
       errorText("");
@@ -538,7 +572,7 @@
     const view = screen.querySelector("[data-pk-view]");
     view.replaceChildren();
     view.className = "pk-lobby";
-    view.innerHTML = '<h2>ポーカー</h2><p class="pk-balance"></p><div class="pk-tabs" role="tablist"></div><div class="pk-tab-body"></div><button type="button" class="pk-howto" data-pk-howto>遊び方を見る</button><p class="pk-status" data-pk-status role="status"></p>';
+    view.innerHTML = '<h2>ポーカー</h2><p class="pk-balance"></p><div class="pk-tabs" role="tablist"></div><div class="pk-tab-body"></div><p class="pk-status" data-pk-status role="status"></p><button type="button" class="pk-howto" data-pk-howto>遊び方を見る</button>';
     view.querySelector(".pk-balance").textContent = "所持ポイント " + fmt(balance()) + "pt";
     const tabs = view.querySelector(".pk-tabs"),
       body = view.querySelector(".pk-tab-body");
@@ -628,7 +662,7 @@
       tabs.append(b);
     }
     tabs.querySelector('[data-pk-tab="' + lobbyTab() + '"]')?.click();
-    makeButton.onclick = guard(async () => {
+    makeButton.onclick = working(makeButton, "作っています…", async () => {
       const value = Math.floor(Number(buyIn.value)),
         [sb, bb] = BLINDS[Number(blinds.value)];
       if (!(value >= 20 && value <= 100000)) throw Error("参加費は20〜100,000ptで決めてください。");
@@ -636,7 +670,8 @@
       const code = await createTable({ buyIn: value, sb, bb, seats: Number(seats.value), think: Number(think.value) });
       enter(code);
     });
-    joinPanel.querySelector("[data-pk-join]").onclick = guard(async () => enter(await join(joinPanel.querySelector("[data-pk-code]").value.trim())));
+    const joinButton = joinPanel.querySelector("[data-pk-join]");
+    joinButton.onclick = working(joinButton, "入っています…", async () => enter(await join(joinPanel.querySelector("[data-pk-code]").value.trim())));
     startPractice.onclick = () => {
       const [sb, bb] = BLINDS[Number(practiceBlinds.value)];
       practice({ bots: Number(bots.value), level: level.value, buyIn: Number(chips.value), sb, bb });
@@ -1025,5 +1060,5 @@
     } catch {}
     if (!seen) window.PokerTutorial?.open({ practice: () => screen?.querySelector("[data-pk-practice]")?.click() });
   }
-  window.Poker = Object.freeze({ open, close, settle, practice, card: cardEl, _session: () => session });
+  window.Poker = Object.freeze({ open, close, settle, practice, card: cardEl, message, _session: () => session });
 })();
