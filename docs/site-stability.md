@@ -1026,3 +1026,7 @@ The 4-digit number box's natural width pushed the friend lobby wider than an iPh
 ## Lending points between users (10.21.72.00)
 
 ポイントの貸し借り opens from the points dialog or from another user's profile (貸す / 借りたいと頼む). Per person it shows where the two stand, requests waiting for an answer (貸す・払う / 断る), the actions (貸す, 返す up to what is owed, 借りたいと頼む, 返してと請求 up to what is lent) and the shared history, newest first. The rules are in `point-loans-model.js` with unit tests; `point-loans.js` moves the points inside one transaction with the record and collects anything sent to this account once, when the app starts (one inbox read) and when the screen opens. See docs/security.md for the storage.
+
+## The lending screen in the points dialog's frame (10.21.73.00)
+
+On an iPhone the lending screen showed only its title: its body was a flex item growing from zero inside a dialog without a fixed height, which Safari left at zero. The screen now uses the points dialog's own frame (`.study-points-dialog`): the dialog scrolls as a whole, and its buttons, borders, gold numbers and type match the points screen it opens from. Names in the title keep their case.

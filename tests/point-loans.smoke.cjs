@@ -86,6 +86,10 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await a.evaluate(() => window.People.open("loan-b"));
     await a.locator(".people-loans").getByRole("button", { name: "貸す" }).click();
     await dialogOf(a).getByRole("heading", { name: "loan-bさんとの貸し借り" }).waitFor();
+    // The screen sits in the points dialog's frame and its body is never squashed to nothing.
+    assert.equal(await dialogOf(a).evaluate((d) => d.classList.contains("study-points-dialog")), true);
+    await dialogOf(a).locator("[data-loan-amount]").waitFor();
+    assert.ok((await dialogOf(a).locator(".loans-body").evaluate((el) => el.getBoundingClientRect().height)) > 200);
     await dialogOf(a).locator("[data-loan-amount]").fill("50");
     await dialogOf(a).getByRole("textbox", { name: "ひとこと" }).fill("ポーカー用");
     await dialogOf(a).getByRole("button", { name: "貸す", exact: true }).click();

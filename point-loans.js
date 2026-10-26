@@ -154,7 +154,8 @@
   }
   function frame(title) {
     closeDialog();
-    dialog = node("dialog", "library-editor-dialog loans-dialog");
+    // The same frame as the points dialog it opens from.
+    dialog = node("dialog", "study-points-dialog loans-dialog");
     dialog.setAttribute("aria-label", title);
     const head = node("header", "loans-head");
     const back = node("button", "loans-close", "×");
