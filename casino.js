@@ -1811,10 +1811,10 @@
   // Three dice in a bowl. The parent (the computer) rolls first; unless that settles it, each
   // player rolls up to three times until the dice make a hand.
   const CHIN_RULES = [
-    "3つのサイコロをどんぶりに振ります。役ができるまで、1回の番で3回まで振れます。",
+    "3つのサイコロをどんぶりに振り、役ができるまで振り直せます。親（ディーラー）は3回まで、子（あなた）は2回までです。",
     "強い順：ピンゾロ（1・1・1）＞ゾロ目（3つ同じ）＞シゴロ（4・5・6）＞目（2つ同じで、残り1つが目。6が強い）＞目なし＞ヒフミ（1・2・3）。",
-    "親（ディーラー）が先に振ります。親がシゴロ・ゾロ目・ピンゾロなら親の勝ち、ヒフミや目なしなら子の勝ちで、すぐ決まります。",
-    "それ以外は子が振り、目の大きいほうが勝ちです。子のシゴロは2倍、ゾロ目は3倍、ピンゾロは5倍もらえ、ヒフミは2倍払います。",
+    "親が先に振ります。親がシゴロ・ゾロ目・ピンゾロなら親の勝ち、ヒフミなら子の勝ちで、すぐ決まります。",
+    "それ以外は子が振り、目の大きいほうが勝ちです。同じ目（目なし同士も）は親の勝ち。子のシゴロは2倍、ゾロ目は3倍、ピンゾロは5倍もらえ、ヒフミは2倍払います。",
     "負けたときは役によって賭けの2〜5倍を払うことがあります（所持ポイントの分まで）。",
   ];
   function bowl(dice, rolling) {
@@ -1867,17 +1867,17 @@
     state.rolled = false;
     body.append(felt);
     if (early === null && !child.done) {
-      const go = node("button", "cs-primary", child.rolls.length ? "もう一度振る（" + (3 - child.rolls.length) + "回まで）" : "サイコロを振る");
+      const go = node("button", "cs-primary", child.rolls.length ? "もう一度振る（あと" + (C.CHILD_THROWS - child.rolls.length) + "回）" : "サイコロを振る");
       go.type = "button";
       go.dataset.chinRoll = "";
       go.onclick = () => {
-        state.child = C.chinNext(child, random);
+        state.child = C.chinNext(child, random, C.CHILD_THROWS);
         state.rolled = true;
         chinchiro(body, state);
       };
       const row = node("div", "cs-actions");
       row.append(go);
-      body.append(node("p", "cs-hint", "親は「" + parent.hand.name + "」。" + (child.rolls.length ? "役ができるまで、あと" + (3 - child.rolls.length) + "回振れます" : "あなたの番です")), row);
+      body.append(node("p", "cs-hint", "親は「" + parent.hand.name + "」。" + (child.rolls.length ? "役ができるまで、あと" + (C.CHILD_THROWS - child.rolls.length) + "回振れます" : "あなたの番です（" + C.CHILD_THROWS + "回まで）")), row);
       return refresh();
     }
     const m = early !== null ? early : C.chinSettle(parent.hand, child.hand);
@@ -1956,11 +1956,11 @@
     if (others.childElementCount) body.append(others);
     if (inGame && early === null && !g.hands[me]) {
       if (!mine.done) {
-        const go = node("button", "cs-primary", mine.rolls.length ? "もう一度振る（" + (3 - mine.rolls.length) + "回まで）" : "サイコロを振る");
+        const go = node("button", "cs-primary", mine.rolls.length ? "もう一度振る（あと" + (C.CHILD_THROWS - mine.rolls.length) + "回）" : "サイコロを振る");
         go.type = "button";
         go.dataset.chinRoll = "";
         go.onclick = async () => {
-          mine = C.chinNext(mine, random);
+          mine = C.chinNext(mine, random, C.CHILD_THROWS);
           try {
             localStorage.setItem(local, JSON.stringify(mine));
           } catch {}
@@ -1974,7 +1974,7 @@
           drawGroup();
         };
         actions.append(go);
-        hint.textContent = "親は「" + g.parent.hand.name + "」。役ができるまで3回まで振れます";
+        hint.textContent = "親は「" + g.parent.hand.name + "」。子は" + C.CHILD_THROWS + "回まで振れます";
         body.append(hint, actions);
         return;
       }
