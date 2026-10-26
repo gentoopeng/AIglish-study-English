@@ -92,7 +92,7 @@
     { id: "poker", name: "ポーカー", line: "みんなやコンピュータと", level: "じっくり" },
     { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち", level: "ふつう" },
     { id: "roulette", name: "ルーレット", line: "玉が止まる数字を当てる", level: "かんたん" },
-    { id: "dice", name: "ダイスポーカー", line: "5つのダイスで役をつくる", level: "かんたん" },
+    { id: "dice", name: "ダイスポーカー", line: "役をつくる。フレンドとたいまんも", level: "かんたん" },
   ];
 
   // ---- The tab ---------------------------------------------------------------------------
@@ -178,6 +178,7 @@
     refresh();
   }
   function close() {
+    leaveDuel();
     if (game?.timer) clearTimeout(game.timer);
     game = null;
     if (screen?.open) screen.close();
@@ -631,6 +632,7 @@
     };
     if (!state) {
       body.append(
+        modeSwitch(body, "dealer"),
         betBar("dice", "ダイスを振る", start),
         rules("ダイスポーカーの遊び方", [
           "5つのダイスを振り、残したいダイスをタップして「キープ」します。",
@@ -682,6 +684,329 @@
     out.style.setProperty("--d", "0.9s");
     body.append(out, betBar("dice", "もう一度振る", start));
     refresh();
+  }
+
+
+  // ---- Dice poker against a friend -------------------------------------------------------
+  // Two players at a 4-digit table. Both put in the same bet when the round starts, each rolls
+  // their own five dice (two re-rolls), and the better hand takes both bets; the same hand gives
+  // each their bet back. Every player only ever moves their own points. The table lives in the
+  // poker tables' collection, marked kind "dice", so poker never opens it.
+  const duelRef = (code) => window.fbDoc(window.db, "pokerRooms", code);
+  const playerName = () => String((typeof myName === "string" && myName) || uid()).slice(0, 24);
+  let duel = null;
+  function modeSwitch(body, active) {
+    const bar = node("div", "cs-mode");
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "対戦相手");
+    for (const [id, text] of [
+      ["dealer", "ディーラーと"],
+      ["friend", "フレンドとたいまん"],
+    ]) {
+      const b = node("button", "", text);
+      b.type = "button";
+      b.dataset.mode = id;
+      b.setAttribute("aria-pressed", String(id === active));
+      b.onclick = () => {
+        if (id === active) return;
+        leaveDuel();
+        if (id === "friend") duelLobby(body);
+        else dice(body);
+      };
+      bar.append(b);
+    }
+    return bar;
+  }
+  function duelReady() {
+    if (!real()) throw Error("フレンドとの対戦は、ログインしてクラウドにつながっているときに遊べます。");
+    if (!window.fbOnSnapshot) throw Error("クラウドにつながっていません。");
+  }
+  function duelLobby(body, message = "") {
+    body.replaceChildren(modeSwitch(body, "friend"));
+    const panel = node("div", "cs-betbar cs-duel-lobby");
+    panel.append(node("p", "cs-duel-title", "フレンドと1対1で勝負"), node("p", "cs-hint", "同じ額を賭けて、強い役を作ったほうが2人分をもらいます。"));
+    const status = node("p", "cs-duel-status", message);
+    status.setAttribute("role", "status");
+    const guard = (fn) => async () => {
+      status.textContent = "";
+      try {
+        await fn();
+      } catch (error) {
+        status.textContent = error?.message || "うまくいきませんでした。もう一度お試しください。";
+      }
+    };
+    const make = betBar("duel", "テーブルを作る", (bet) => guard(async () => enterDuel(body, await createDuel(bet)))());
+    const join = node("div", "cs-duel-join");
+    const input = node("input");
+    input.inputMode = "numeric";
+    input.maxLength = 4;
+    input.placeholder = "4桁の番号";
+    input.setAttribute("aria-label", "テーブル番号");
+    input.dataset.duelCode = "";
+    const go = node("button", "cs-primary", "入る");
+    go.type = "button";
+    go.onclick = guard(async () => enterDuel(body, await joinDuel(input.value.trim())));
+    join.append(input, go);
+    panel.append(node("p", "cs-duel-step", "1. 自分でテーブルを作る"), make, node("p", "cs-duel-step", "2. または、相手の番号で入る"), join, status);
+    body.append(
+      panel,
+      rules("フレンド対戦の遊び方", [
+        "「テーブルを作る」で出る4桁の番号を相手に伝え、相手は「入る」に番号を入れます。",
+        "そろったら2人とも賭けた額が引かれ、それぞれ自分のダイスを振ります（振り直しは2回まで）。",
+        "相手のダイスは、両方が「これで勝負」を押すまで見えません。",
+        "強い役のほうが2人分の賭けをもらいます。同じ役と目なら、賭けはそれぞれに戻ります。",
+        "途中で相手が抜けたときは、あなたの賭けは戻ります。",
+      ]),
+    );
+    refresh();
+  }
+  async function createDuel(bet) {
+    duelReady();
+    if (bet > balance()) throw Error("ポイントが足りません。");
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = String(1000 + random(9000));
+      const made = await window.fbRunTransaction(window.db, async (tx) => {
+        const snap = await tx.get(duelRef(code));
+        if (snap.exists() && snap.data().status !== "closed") return false;
+        tx.set(duelRef(code), { kind: "dice", version: 1, code, host: uid(), status: "waiting", createdAt: Date.now(), bet, round: 1, players: { [uid()]: { name: playerName(), joinedAt: Date.now() } }, hands: {}, rematch: {} });
+        return true;
+      });
+      if (made) return code;
+    }
+    throw Error("テーブル番号を作れませんでした。もう一度お試しください。");
+  }
+  async function updateDuel(code, change) {
+    return window.fbRunTransaction(window.db, async (tx) => {
+      const snap = await tx.get(duelRef(code));
+      if (!snap.exists()) throw Error("テーブルが見つかりません。");
+      const next = change(JSON.parse(JSON.stringify(snap.data())));
+      if (!next) return false;
+      tx.set(duelRef(code), next);
+      return true;
+    });
+  }
+  async function joinDuel(code) {
+    duelReady();
+    if (!/^\d{4}$/.test(code)) throw Error("4桁の番号を入れてください。");
+    await updateDuel(code, (room) => {
+      if (room.kind !== "dice") throw Error("この番号はダイスポーカーのテーブルではありません。");
+      if (room.status === "closed") throw Error("このテーブルは終わっています。");
+      if (room.players[uid()]) return null;
+      if (Object.keys(room.players).length >= 2) throw Error("このテーブルはもう2人そろっています。");
+      if (room.bet > balance()) throw Error(fmt(room.bet) + "pt の勝負に対してポイントが足りません。");
+      room.players[uid()] = { name: playerName(), joinedAt: Date.now() };
+      room.status = "playing";
+      return room;
+    });
+    return code;
+  }
+  // This device's own dice for a round, kept so a reload cannot roll a fresh hand.
+  const localName = (room) => "aiglish_casino_duel_" + uid() + "_" + room.code + "_" + room.createdAt + "_" + room.round;
+  function localHand(room) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(localName(room)) || "null");
+      if (saved) return saved;
+    } catch {}
+    const fresh = C.diceStart(room.bet, random);
+    saveHand(room, fresh);
+    return fresh;
+  }
+  function saveHand(room, hand) {
+    try {
+      localStorage.setItem(localName(room), JSON.stringify(hand));
+    } catch {}
+  }
+  const roundKey = (room) => "casino:duel:" + room.code + ":" + room.createdAt + ":" + room.round;
+  function enterDuel(body, code) {
+    leaveDuel();
+    duel = { code, body, room: null, moved: {} };
+    const mine = duel;
+    duel.unsub = window.fbOnSnapshot(duelRef(code), (snap) => {
+      if (duel !== mine) return;
+      if (!snap.exists()) return duelLobby(body, "テーブルが見つかりません。");
+      duel.room = snap.data();
+      drawDuel();
+    });
+  }
+  // Money moves once per round and key, however often the table redraws.
+  function hasMoved(room, part) {
+    const key = roundKey(room) + ":" + part;
+    try {
+      if (localStorage.getItem("aiglish_casino_moved_" + key)) return true;
+    } catch {}
+    return !!duel.moved[key];
+  }
+  function duelMove(room, part, delta) {
+    const key = roundKey(room) + ":" + part;
+    if (duel.moved[key]) return;
+    duel.moved[key] = true;
+    try {
+      if (localStorage.getItem("aiglish_casino_moved_" + key)) return;
+      localStorage.setItem("aiglish_casino_moved_" + key, "1");
+    } catch {}
+    move(key, delta);
+  }
+  function drawDuel() {
+    const { room, body } = duel,
+      me = uid(),
+      otherId = Object.keys(room.players).find((id) => id !== me),
+      other = otherId ? room.players[otherId] : null;
+    body.replaceChildren(modeSwitch(body, "friend"));
+    const head = node("div", "cs-duel-head");
+    head.append(node("span", "", "テーブル " + room.code), node("b", "", "賭け " + fmt(room.bet) + "pt"));
+    const leave = node("button", "cs-duel-leave", "抜ける");
+    leave.type = "button";
+    leave.onclick = async () => {
+      await leaveDuel();
+      duelLobby(body);
+    };
+    head.append(leave);
+    body.append(head);
+    if (room.status === "waiting") {
+      const wait = node("div", "cs-duel-wait");
+      wait.append(node("p", "", "この番号を相手に伝えてください"), node("strong", "cs-duel-code", room.code), node("p", "cs-hint", "相手が入ると、すぐに始まります。"));
+      body.append(wait);
+      return refresh();
+    }
+    const myHand = room.hands?.[me],
+      theirHand = otherId ? room.hands?.[otherId] : null;
+    if (room.status === "closed") {
+      // The other player left: a round still open gives this player their bet back.
+      if (hasMoved(room, "bet") && !(myHand && theirHand)) duelMove(room, "refund", room.bet);
+      body.append(node("p", "cs-duel-wait", room.leftBy === me ? "テーブルを抜けました。" : "相手がテーブルを抜けました。" + (myHand && theirHand ? "" : "賭けは戻ります。")));
+      const back = node("button", "cs-primary", "ロビーへ");
+      back.type = "button";
+      back.onclick = () => {
+        leaveDuel(false);
+        duelLobby(body);
+      };
+      const row = node("div", "cs-actions");
+      row.append(back);
+      body.append(row);
+      return refresh();
+    }
+    duelMove(room, "bet", -room.bet);
+    let hand = localHand(room);
+    const felt = node("div", "cs-felt cs-dice-table");
+    const them = node("div", "cs-hand is-dealer");
+    const theirLine = node("p", "cs-hand-label");
+    theirLine.append(node("span", "", other?.name || "相手"));
+    const theirDice = node("div", "cs-dice");
+    const both = !!(myHand && theirHand);
+    if (both) {
+      theirLine.append(node("b", "", handName(theirHand.dice)));
+      theirHand.dice.forEach((v, i) => {
+        const el = die(v, "is-rolling");
+        el.style.setProperty("--d", 0.15 * i + "s");
+        theirDice.append(el);
+      });
+    } else {
+      theirLine.append(node("b", "cs-duel-thinking", theirHand ? "決めました" : "考え中…"));
+      for (let i = 0; i < 5; i++) theirDice.append(node("span", "cs-die is-empty"));
+    }
+    them.append(theirLine, theirDice);
+    const mine = node("div", "cs-hand is-player");
+    const myLine = node("p", "cs-hand-label");
+    myLine.append(node("span", "", "あなた"), node("b", "", handName(myHand ? myHand.dice : hand.dice)));
+    const myDice = node("div", "cs-dice");
+    const locked = !!myHand || hand.rolls >= 3;
+    const suggest = locked ? null : C.dealerKeeps(hand.dice);
+    (myHand ? myHand.dice : hand.dice).forEach((v, i) => {
+      const b = node("button", "cs-die-btn");
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(!myHand && hand.held[i]));
+      b.setAttribute("aria-label", v + "の目" + (!myHand && hand.held[i] ? "（キープ中）" : ""));
+      b.append(die(v, duel.rolled?.[i] ? "is-rolling" : ""), node("small", "", !myHand && hand.held[i] ? "キープ" : ""));
+      b.disabled = locked;
+      if (suggest?.[i] && !hand.held[i]) b.classList.add("is-suggested");
+      b.onclick = () => {
+        hand = C.diceToggle(hand, i);
+        saveHand(room, hand);
+        duel.rolled = null;
+        drawDuel();
+      };
+      myDice.append(b);
+    });
+    duel.rolled = null;
+    mine.append(myLine, myDice);
+    felt.append(them, mine);
+    body.append(felt);
+    if (!myHand) {
+      const left = 3 - hand.rolls;
+      const actions = node("div", "cs-actions");
+      const again = node("button", "", left ? "振り直す（あと" + left + "回）" : "もう振れません");
+      again.type = "button";
+      again.disabled = !C.diceCanRoll(hand);
+      again.onclick = () => {
+        duel.rolled = hand.held.map((h) => !h);
+        hand = C.diceReroll(hand, random);
+        saveHand(room, hand);
+        drawDuel();
+      };
+      const stand = node("button", "cs-primary", "これで勝負");
+      stand.type = "button";
+      stand.onclick = async () => {
+        stand.disabled = true;
+        const at = room.round;
+        await updateDuel(room.code, (fresh) => {
+          if (fresh.status !== "playing" || fresh.round !== at || fresh.hands?.[me]) return null;
+          fresh.hands = { ...(fresh.hands || {}), [me]: { dice: hand.dice, at: Date.now() } };
+          return fresh;
+        }).catch(() => (stand.disabled = false));
+      };
+      actions.append(again, stand);
+      body.append(actions, node("p", "cs-hint", left ? "光っているダイスを残すのがおすすめ。相手のダイスは2人とも決めるまで見えません" : "これで勝負しましょう"));
+      return refresh();
+    }
+    if (!both) {
+      body.append(node("p", "cs-duel-wait", "相手が決めるのを待っています…"));
+      return refresh();
+    }
+    // Both hands are in: each player settles only their own side.
+    const order = C.compare(C.diceScore(myHand.dice), C.diceScore(theirHand.dice)),
+      net = order > 0 ? room.bet : order < 0 ? -room.bet : 0;
+    if (order > 0) duelMove(room, "pay", room.bet * 2);
+    else if (order === 0) duelMove(room, "pay", room.bet);
+    const out = result(order > 0 ? "あなたの勝ち" : order < 0 ? (other?.name || "相手") + "の勝ち" : "引き分け（賭けは戻ります）", net);
+    out.style.setProperty("--d", "0.9s");
+    body.append(out);
+    if (order > 0 && C.diceScore(myHand.dice)[0] >= 6 && !duel.moved[roundKey(room) + ":big"]) {
+      duel.moved[roundKey(room) + ":big"] = true;
+      bigWin("WIN", room.bet, "フレンドに勝ちました", 1100);
+    }
+    const again = node("button", "cs-primary", room.rematch?.[me] ? "相手を待っています…" : "もう一勝負");
+    again.type = "button";
+    again.disabled = !!room.rematch?.[me] || balance() < room.bet;
+    again.onclick = () =>
+      updateDuel(room.code, (fresh) => {
+        if (fresh.status !== "playing" || fresh.round !== room.round) return null;
+        fresh.rematch = { ...(fresh.rematch || {}), [me]: true };
+        // Both agreed: the next round starts with fresh hands.
+        if (Object.keys(fresh.players).every((id) => fresh.rematch[id])) {
+          fresh.round++;
+          fresh.hands = {};
+          fresh.rematch = {};
+        }
+        return fresh;
+      }).catch(() => {});
+    const row = node("div", "cs-actions");
+    row.append(again);
+    body.append(row);
+    if (balance() < room.bet) body.append(node("p", "cs-hint", "もう一勝負するにはポイントが足りません。"));
+    refresh();
+  }
+  async function leaveDuel(tell = true) {
+    const current = duel;
+    if (!current) return;
+    duel = null;
+    current.unsub?.();
+    if (!tell || !current.room || current.room.status === "closed") return;
+    await updateDuel(current.code, (room) => {
+      if (room.status === "closed") return null;
+      room.status = "closed";
+      room.leftBy = uid();
+      return room;
+    }).catch(() => {});
   }
 
   window.addEventListener("study-points-changed", refresh);

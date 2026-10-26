@@ -192,6 +192,7 @@
     if (!/^\d{4}$/.test(code)) throw Error("4桁のテーブル番号を入力してください。");
     const keys = await myKeys(code);
     await update(code, (room) => {
+      if (room.kind && room.kind !== "poker") throw Error("この番号はポーカーのテーブルではありません。");
       if (room.status === "closed") throw Error("このテーブルは終了しています。");
       if (room.players[uid()]) {
         room.players[uid()].left = false;

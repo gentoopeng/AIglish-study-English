@@ -157,3 +157,25 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 .is-roulette-body .cs-hint{font-size:11px;}
 .is-roulette-body .cs-chips .cs-chip-btn{min-height:40px;max-width:48px;}
 @media(max-height:700px){.is-roulette-body{gap:7px;}.is-roulette-body .cs-chips .cs-chip-btn{min-height:36px;max-width:42px;}}
+
+/* Dice poker: against the dealer or a friend. */
+.cs-mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border:1px solid rgba(213,201,172,.22);border-radius:14px;background:rgba(10,16,28,.6);}
+.cs-mode button{min-height:38px;border:0;border-radius:10px;background:transparent;color:#a8a293;font:700 13px system-ui,sans-serif;cursor:pointer;}
+.cs-mode [aria-pressed=true]{background:#c6b790;color:#18202d;}
+.cs-duel-title{margin:0;color:#f3e9cf;font:700 16px/1.4 Georgia,"Yu Mincho",serif;}
+.cs-duel-lobby .cs-hint{text-align:left;}
+.cs-duel-step{margin:6px 0 0;color:#c6b790;font-size:12px;font-weight:700;}
+.cs-duel-lobby .cs-betbar{padding:0;border:0;background:none;}
+.cs-duel-join{display:flex;gap:8px;}
+.cs-duel-join input{flex:1;min-width:0;height:44px;padding:0 12px;border:1px solid rgba(213,201,172,.35);border-radius:12px;background:rgba(8,12,20,.6);color:#f3e9cf;font:700 18px system-ui,sans-serif;letter-spacing:.4em;text-align:center;}
+.cs-duel-join button{min-width:84px;min-height:44px;border-radius:12px;border:0;font:700 14px system-ui,sans-serif;cursor:pointer;}
+.cs-duel-status{min-height:1.4em;margin:0;color:#fca5a5;font-size:12px;text-align:center;}
+.cs-duel-head{display:flex;align-items:center;gap:10px;color:#cfc8b8;font-size:12px;}
+.cs-duel-head b{color:#e2cf9b;}
+.cs-duel-leave{margin-left:auto;min-height:32px;padding:0 12px;border:1px solid rgba(213,201,172,.35);border-radius:10px;background:transparent;color:#eee8da;font:700 12px system-ui,sans-serif;cursor:pointer;}
+.cs-duel-wait{margin:0;padding:18px 14px;border:1px dashed rgba(213,201,172,.3);border-radius:16px;text-align:center;color:#cfc8b8;font-size:13px;}
+.cs-duel-wait p{margin:0;}
+.cs-duel-code{display:block;margin:10px 0;color:#f3e9cf;font:800 44px/1 system-ui,sans-serif;letter-spacing:.18em;}
+.cs-duel-thinking{color:#a8a293!important;font-weight:600;}
+@media(prefers-reduced-motion:no-preference){.cs-duel-code{animation:cs-win .5s cubic-bezier(.2,1.5,.4,1) both;}.cs-duel-thinking{animation:cs-think 1.4s ease-in-out infinite;}}
+@keyframes cs-think{50%{opacity:.45}}
