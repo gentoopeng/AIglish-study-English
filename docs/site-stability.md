@@ -1082,3 +1082,11 @@ Test: `tests/poker-computer-points.smoke.cjs` (no strength choice, buy-in in poi
 ## Bookshelf texts lost at the next start (10.21.84.00)
 
 Reported: texts saved to the bookshelf were gone. At start the app restores the last full backup in two steps: first the device keys stored in the backup (`restoreSaveStorage`), then the in-memory data (`applySavedMemory`). The second step keeps the reader's shelf, folders and history when this device changed them after the backup (the `aiglish_reader_local` mark), but the first step had already written the backup's old `myBookshelf`, `textHistory` and `myFolders` over the device copies, and the backup's old change mark over the new one. So a text saved after the last backup (one that had not been backed up yet, for example when the app was closed within a few seconds, offline, or while a study screen deferred the backup) was dropped at the next start. Now the first step skips those three keys when the device copy is newer, and never restores the change mark, which belongs to the device. Restoring a backup file still replaces the device copies (the mark is cleared before the keys are written). `tests/reader-save.smoke.cjs` now uses a backup that holds the device keys as a real one does; it failed before the fix.
+
+## The warm-up's i, and the sticky note in the word sheet (10.21.85.00)
+
+The first-ten warm-up's i opened a small box with only the word and its extra note. It now opens the same sheet as the regular flashcards' i: the word book's card for that word (meanings, ratings, note, 付箋, pronunciation). The sheet is placed inside the warm-up dialog (`openVocabDetailsSheet` takes `options.host`), since anything outside an open modal dialog sits behind it, and it closes with the warm-up. A word from another book than the open one is shown without its controls.
+
+Reported: after i on a flashcard, the sticky note button did not respond. It changed the word and redrew the word list, but the card in the sheet is not part of the list, so the button never showed the change. The button and the card now show it themselves.
+
+Test: `tests/warmup-details.smoke.cjs`.

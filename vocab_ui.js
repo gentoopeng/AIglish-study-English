@@ -1005,7 +1005,9 @@
         var history = cardBody ? cardBody.querySelector('[data-vocab-history]') : null;
         if (cardBody) cardBody.insertBefore(window.createVocabNoteSection(w), history || null);
         var pin=document.createElement('button');pin.type='button';pin.className='vocab-sticky-button';pin.setAttribute('aria-label','付箋を付ける');pin.setAttribute('aria-pressed',String(!!w.sticky));pin.innerHTML='<i data-lucide="sticky-note" size="13"></i>';
-        pin.onclick=function(e){e.stopPropagation();if(window.LearningData&&!LearningData.canSave(currentTextbook))return;var actual=vocabList.find(function(word){return String(word.num)===String(w.num);});if(!actual)return;actual.sticky=!actual.sticky;window.saveVocabProgressLocally(actual.num);if(window.__captureManualVocabDraft)window.__captureManualVocabDraft();window.renderVocabList();};
+        pin.onclick=function(e){e.stopPropagation();if(window.LearningData&&!LearningData.canSave(currentTextbook))return;var actual=vocabList.find(function(word){return String(word.num)===String(w.num);});if(!actual)return;actual.sticky=!actual.sticky;w.sticky=actual.sticky;window.saveVocabProgressLocally(actual.num);if(window.__captureManualVocabDraft)window.__captureManualVocabDraft();
+        // This card may sit outside the list (the flashcard's detail sheet), so it shows the change itself.
+        pin.setAttribute('aria-pressed',String(actual.sticky));card.classList.toggle('has-sticky',actual.sticky);window.renderVocabList();};
         var markers=document.createElement('span');markers.className='vocab-word-markers';if(adminActionButtons)markers.classList.add('with-admin');markers.append(pin);card.querySelector('.word-main-line').append(markers);
         return card;
     };
