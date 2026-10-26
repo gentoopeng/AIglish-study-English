@@ -120,11 +120,22 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // The wheel: one spin, the prize into the wallet.
     await box.locator(".notice-bonus").getByRole("button", { name: "回す" }).click();
     await box.locator(".notice-wheel svg").waitFor();
+    assert.equal(await box.locator(".notice-wheel-slice").count(), 50);
+    assert.match(await box.locator(".notice-odds p").textContent(), /^1,000pt 2%（1マス）・500pt 4%（2マス）.*10pt 40%（20マス）$/);
     await a.screenshot({ path: "/tmp/notices-wheel.png" });
     await box.locator(".notice-spin").click();
     await box.getByText("受け取りました。また明日。").waitFor();
+    await a.screenshot({ path: "/tmp/notices-wheel-stopped.png" });
     const prize = docs.get("users/nb-a/learningPoints/bonus").prize;
     assert.ok([10, 50, 100, 200, 500, 1000].includes(prize));
+    const segment = docs.get("users/nb-a/learningPoints/bonus").segment;
+    assert.equal(await a.evaluate((i) => window.NoticesModel.SEGMENTS[i], segment), prize);
+    // The slice under the pointer is the one drawn.
+    const under = await a.evaluate(() => {
+      const p = document.querySelector(".notice-wheel-pointer").getBoundingClientRect();
+      return [...document.elementsFromPoint(p.left + p.width / 2, p.bottom + 6)].find((el) => el.classList?.contains("notice-wheel-slice"))?.getAttribute("fill");
+    });
+    assert.equal(under, { 10: "#1b2a40", 50: "#2c4466", 100: "#3d6378", 200: "#b98a4a", 500: "#e6d29a", 1000: "#c9483f" }[prize]);
     assert.equal(await box.locator(".notice-won").innerText(), "+" + prize.toLocaleString("ja-JP") + "pt");
     assert.equal(docs.get("users/nb-a/learningPoints/main").balance, 500 + prize);
     assert.equal(docs.get("users/nb-a").studyPoints, 500 + prize);

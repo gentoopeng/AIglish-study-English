@@ -33,7 +33,8 @@
 .notice-wheel-disc svg{display:block;width:100%;height:100%;}
 .notice-wheel-rim{fill:#0d1626;stroke:#d5bf86;stroke-width:2;}
 .notice-wheel-hub{fill:#111c2c;stroke:#d5bf86;stroke-width:3;}
-.notice-wheel text{font:800 17px system-ui,sans-serif;text-anchor:middle;dominant-baseline:middle;}
+.notice-wheel text{font:800 8px system-ui,sans-serif;text-anchor:start;dominant-baseline:middle;}
+.notice-wheel-slice{stroke:#0d1626;stroke-width:.4;}
 .notice-wheel text.is-light{fill:#1b2333;}.notice-wheel text.is-dark{fill:#f4eddf;}
 .notice-wheel-pointer{position:absolute;z-index:1;top:-8px;left:50%;width:0;height:0;margin-left:-11px;border:11px solid transparent;border-top:22px solid #f4eddf;border-bottom:0;filter:drop-shadow(0 2px 3px #0009);}
 .notice-wheel.is-won .notice-wheel-pointer{border-top-color:#e6d29a;}
