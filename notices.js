@@ -269,43 +269,103 @@
       spinning = true;
       spin.disabled = back.disabled = true;
       status.textContent = "回しています…";
-      disc.classList.add("is-waiting");
+      // The wheel starts turning at the tap and keeps going while the prize is drawn.
+      const motion = calm() ? null : turning(disc, stage.querySelector(".notice-wheel-pointer"));
       let result;
       try {
         result = await claim();
       } catch (error) {
         spinning = false;
-        disc.classList.remove("is-waiting");
+        motion?.halt();
         spin.disabled = back.disabled = false;
         status.textContent = window.Poker?.message?.(error) || error.message;
         return;
       }
-      disc.classList.remove("is-waiting");
       if (result.already) {
         spinning = false;
+        motion?.halt();
         back.disabled = false;
         spin.hidden = true;
         status.textContent = "今日はもう受け取りました（+" + fmt(result.prize) + "pt）。また明日。";
         return;
       }
-      const angle = M.stopAngle(result.segment, 6, Math.random() * 0.7 - 0.35);
-      const landed = () => {
-        if (!spinning) return;
-        spinning = false;
-        back.disabled = false;
-        spin.hidden = true;
-        status.replaceChildren(node("strong", "notice-won", "+" + fmt(result.prize) + "pt"), document.createTextNode(" 受け取りました。また明日。"));
-        stage.classList.add("is-won");
-        if (result.prize >= 500 && window.Ceremony)
-          window.Ceremony.play({ style: "chips", result: true, count: result.prize, from: 0, suffix: "pt", word: "BONUS", sub: "ログインボーナス", tone: "gold" });
-      };
-      if (calm()) {
-        disc.style.transform = `rotate(${angle % 360}deg)`;
-        return landed();
+      const angle = M.stopAngle(result.segment, 0, Math.random() * 0.7 - 0.35);
+      if (motion) await motion.stopAt(angle);
+      else disc.style.transform = `rotate(${angle}deg)`;
+      spinning = false;
+      back.disabled = false;
+      spin.hidden = true;
+      status.replaceChildren(node("strong", "notice-won", "+" + fmt(result.prize) + "pt"), document.createTextNode(" 受け取りました。また明日。"));
+      stage.classList.add("is-won");
+      if (result.prize >= 500 && window.Ceremony)
+        window.Ceremony.play({ style: "chips", result: true, count: result.prize, from: 0, suffix: "pt", word: "BONUS", sub: "ログインボーナス", tone: "gold" });
+    };
+  }
+  // A wheel with weight: it speeds up from rest, runs at full speed until told where to stop,
+  // then slows the way a real wheel does (its speed falling smoothly to nothing, at least three
+  // more turns) and settles on that angle. The pointer flicks back as each segment's edge passes.
+  function turning(disc, pointer) {
+    const TOP = 900, // degrees per second at full speed
+      size = 360 / M.SEGMENTS.length;
+    let angle = 0,
+      speed = 0,
+      last = performance.now(),
+      plan = null,
+      wanted = null,
+      done = null,
+      frame = 0;
+    const draw = () => {
+      disc.style.transform = `rotate(${angle}deg)`;
+      if (pointer) {
+        // How far into the current segment the pointer is; it is pushed back at each edge and
+        // springs forward. At speed the flicks blur into a small tremble.
+        const into = (((angle % size) + size) % size) / size,
+          kick = Math.min(1, speed / 240) * 4 + Math.max(0, 1 - speed / 240) * 22;
+        pointer.style.transform = `rotate(${-kick * Math.max(0, 1 - into * 3)}deg)`;
       }
-      disc.addEventListener("transitionend", landed, { once: true });
-      setTimeout(landed, 5200);
-      requestAnimationFrame(() => (disc.style.transform = `rotate(${angle}deg)`));
+    };
+    const step = (now) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      if (plan) {
+        const t = Math.min(1, (now - plan.at) / plan.time),
+          left = 1 - t;
+        angle = plan.from + plan.distance * (1 - left * left * left);
+        speed = (3 * plan.distance * left * left) / (plan.time / 1000);
+        draw();
+        if (t >= 1) {
+          if (pointer) pointer.style.transform = "";
+          return done();
+        }
+      } else {
+        speed = Math.min(TOP, speed + TOP * 2.5 * dt);
+        angle += speed * dt;
+        draw();
+        // Once at full speed, slow down onto the target: an ease-out (1 - (1 - t)^3) begins at
+        // the current speed when its time is 3 × distance / speed.
+        if (wanted !== null && speed >= TOP) {
+          const distance = ((((wanted - angle) % 360) + 360) % 360) + 3 * 360;
+          plan = { at: now, from: angle, distance, time: (3 * distance * 1000) / speed };
+        }
+      }
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return {
+      // Ease out (1 - (1 - t)^3) starts at the current speed when time = 3 × distance / speed.
+      stopAt(target) {
+        return new Promise((resolve) => {
+          done = resolve;
+          wanted = target;
+        });
+      },
+      halt() {
+        cancelAnimationFrame(frame);
+        angle = 0;
+        speed = 0;
+        draw();
+        if (pointer) pointer.style.transform = "";
+      },
     };
   }
 
