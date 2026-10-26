@@ -200,3 +200,24 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 .cs-group-bj .cs-group-seat .pk-card{width:42px;height:60px;}.cs-group-bj .cs-group-seat .pk-card b{font-size:18px;}.cs-group-bj .cs-group-seat .pk-card i{font-size:15px;}
 .cs-group-dice li{font-size:12px;}
 .cs-my-dice .cs-dice{justify-content:center;}
+
+/* Blackjack: seats with one or more hands, and the four moves. */
+.cs-bj .cs-seat{display:flex;flex-direction:column;gap:8px;padding:6px 8px;border-radius:12px;}
+.cs-bj .cs-seat.is-me{background:rgba(255,255,255,.05);}
+.cs-bj .cs-seat.is-turn{box-shadow:0 0 0 2px rgba(226,207,155,.55);}
+.cs-seat-hand.is-active .cs-hand-label span{color:#f3e2a6;}
+.cs-seat-hand.is-active .cs-cards{filter:drop-shadow(0 0 6px rgba(243,226,166,.45));}
+.cs-hand-label.is-win b,.cs-hand-label.is-blackjack b{color:#f3e2a6;}.cs-hand-label.is-lose b,.cs-hand-label.is-bust b{color:#e7a3a3;}
+.cs-seat+.cs-seat .cs-cards .pk-card,.cs-seat .cs-seat-hand+.cs-seat-hand .pk-card{width:46px;height:66px;}
+.cs-bj-actions{display:flex;flex-direction:column;gap:8px;}
+.cs-moves{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));grid-auto-flow:column;}
+.cs-moves button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:52px;padding:4px 6px;}
+.cs-moves button b{font-size:14px;}.cs-moves button small{font-size:10px;font-weight:600;opacity:.8;}
+
+/* Chinchiro: a bowl of three dice. */
+.cs-chin{gap:14px;}
+.cs-bowl{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;height:96px;margin:0 auto;width:min(100%,260px);border-radius:50%;background:radial-gradient(ellipse at 50% 40%,#f6efe0 0%,#e4d6b8 55%,#b9a37a 72%,#7a6440 74%,transparent 76%);box-shadow:inset 0 -6px 14px rgba(0,0,0,.18);}
+.cs-bowl .cs-die{width:40px;height:40px;padding:6px;}.cs-bowl .cs-die i{width:7px;height:7px;}
+.cs-bowl .cs-die.is-empty{background:rgba(122,100,64,.18);box-shadow:inset 0 0 0 1px rgba(122,100,64,.35);}
+.cs-chin-before{margin:4px 0 0;color:#cfe6dc;font-size:11px;text-align:center;opacity:.8;}
+.casino-pic .is-bowl{fill:#e4d6b8;stroke:#7a6440;stroke-width:1.2;}.casino-pic .is-bowl-in{fill:#f6efe0;}

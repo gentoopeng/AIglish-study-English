@@ -74,7 +74,8 @@
   function round(game) {
     const key = "casino:" + game + ":" + Date.now().toString(36) + random(1e6).toString(36);
     return {
-      stake: (bet) => move(key + ":bet", -bet),
+      // Each part of a round is its own key, so a double or a split after the bet is taken too.
+      stake: (bet, part = "bet") => move(key + ":" + part, -bet),
       pay: (amount) => move(key + ":pay", amount),
     };
   }
@@ -86,13 +87,15 @@
     poker: '<svg viewBox="0 0 64 48" aria-hidden="true"><rect x="12" y="6" width="22" height="32" rx="3" transform="rotate(-12 23 22)" class="is-card"/><rect x="28" y="8" width="22" height="32" rx="3" transform="rotate(10 39 24)" class="is-card"/><path d="M39 17c-3 4-6 5-6 8a3 3 0 0 0 5 2l-1 4h4l-1-4a3 3 0 0 0 5-2c0-3-3-4-6-8z" class="is-ink" transform="rotate(10 39 24)"/></svg>',
     blackjack: '<svg viewBox="0 0 64 48" aria-hidden="true"><rect x="14" y="8" width="22" height="32" rx="3" class="is-card"/><rect x="28" y="8" width="22" height="32" rx="3" class="is-card"/><text x="19" y="22" class="is-ink">A</text><text x="33" y="22" class="is-red">K</text></svg>',
     roulette: '<svg viewBox="0 0 64 48" aria-hidden="true"><circle cx="32" cy="24" r="19" class="is-rim"/><circle cx="32" cy="24" r="14" fill="none" stroke-dasharray="5.5 5.5" class="is-pockets"/><circle cx="32" cy="24" r="6" class="is-hub"/><circle cx="32" cy="9" r="2.6" class="is-ball"/></svg>',
+    chinchiro: '<svg viewBox="0 0 64 48" aria-hidden="true"><ellipse cx="32" cy="30" rx="26" ry="13" class="is-bowl"/><ellipse cx="32" cy="27" rx="21" ry="8" class="is-bowl-in"/><rect x="16" y="20" width="10" height="10" rx="2.5" class="is-die"/><rect x="28" y="18" width="10" height="10" rx="2.5" class="is-die"/><rect x="40" y="21" width="10" height="10" rx="2.5" class="is-die"/><g class="is-pip"><circle cx="21" cy="25" r="1.6"/><circle cx="31" cy="21" r="1.4"/><circle cx="35" cy="25" r="1.4"/><circle cx="43" cy="24" r="1.4"/><circle cx="47" cy="28" r="1.4"/><circle cx="45" cy="26" r="1.4"/></g></svg>',
     dice: '<svg viewBox="0 0 64 48" aria-hidden="true"><rect x="10" y="14" width="22" height="22" rx="5" transform="rotate(-10 21 25)" class="is-die"/><rect x="32" y="10" width="22" height="22" rx="5" transform="rotate(8 43 21)" class="is-die"/><g class="is-pip" transform="rotate(-10 21 25)"><circle cx="16" cy="19" r="2"/><circle cx="21" cy="25" r="2"/><circle cx="26" cy="31" r="2"/></g><g class="is-pip" transform="rotate(8 43 21)"><circle cx="38" cy="15" r="2"/><circle cx="48" cy="15" r="2"/><circle cx="38" cy="27" r="2"/><circle cx="48" cy="27" r="2"/></g></svg>',
   };
   const GAMES = [
     { id: "poker", name: "ポーカー", line: "みんなやコンピュータと", level: "じっくり" },
-    { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち。フレンドとも", level: "ふつう" },
-    { id: "roulette", name: "ルーレット", line: "止まる数字を当てる。フレンドとも", level: "かんたん" },
-    { id: "dice", name: "ダイスポーカー", line: "役をつくる。フレンドとタイマンも", level: "かんたん" },
+    { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち", level: "ふつう" },
+    { id: "roulette", name: "ルーレット", line: "止まる数字を当てる", level: "かんたん" },
+    { id: "dice", name: "ダイスポーカー", line: "5つのダイスで役をつくる", level: "かんたん" },
+    { id: "chinchiro", name: "チンチロ", line: "どんぶりに3つのサイコロ", level: "かんたん" },
   ];
 
   // ---- The tab ---------------------------------------------------------------------------
@@ -174,7 +177,7 @@
     document.body.classList.add("casino-open");
     screen.showModal();
     game = { id, body: screen.querySelector(".cs-body") };
-    ({ blackjack, roulette, dice })[id](game.body);
+    ({ blackjack, roulette, dice, chinchiro })[id](game.body);
     refresh();
   }
   function close() {
@@ -277,122 +280,177 @@
   };
 
   // ---- Blackjack -------------------------------------------------------------------------
-  function blackjack(body, state = null, shown = { player: 0, dealer: 0 }) {
-    body.replaceChildren();
-    const table = node("div", "cs-felt cs-bj");
-    const dealerRow = node("div", "cs-hand is-dealer"),
-      playerRow = node("div", "cs-hand is-player");
-    const cards = (list, hideSecond, from) => {
+  // ---- Blackjack: one table view for alone and together -----------------------------------
+  // Cards come out one at a time in the order they were dealt (round the table, then the dealer),
+  // and the dealer's cards after everyone has played. `seen` remembers what was already shown.
+  const MOVE_WORDS = {
+    hit: ["ヒット", "もう1枚"],
+    stand: ["スタンド", "これで勝負"],
+    double: ["ダブル", "賭け2倍で1枚"],
+    split: ["スプリット", "2つの手に分ける"],
+  };
+  const OUTCOME_WORDS = { blackjack: "ブラックジャック", win: "勝ち", push: "引き分け", lose: "負け", bust: "21超え" };
+  function bjFelt(t, me, nameFor, seen) {
+    const felt = node("div", "cs-felt cs-bj");
+    const fresh = !seen.round || seen.round !== t.dealtAt;
+    if (fresh) {
+      for (const k of Object.keys(seen)) delete seen[k];
+      seen.round = t.dealtAt;
+    }
+    const queue = [];
+    const cardsRow = (key, cards) => {
       const row = node("div", "cs-cards");
-      list.forEach((card, i) => {
-        const el = window.Poker.card(hideSecond && i === 1 ? null : card);
-        if (i >= from) {
-          el.classList.add("cs-deal");
-          el.style.setProperty("--d", (i - from) * (state?.done ? 0.45 : 0.15) + "s");
-        }
+      const before = seen[key] || 0;
+      cards.forEach((c, i) => {
+        const el = window.Poker.card(c);
+        if (i >= before && !calm()) queue.push({ el, key, i });
         row.append(el);
       });
+      seen[key] = cards.length;
       return row;
     };
-    const label = (who, total) => {
-      const line = node("p", "cs-hand-label");
-      line.append(node("span", "", who));
-      if (total) line.append(node("b", "", total));
-      return line;
+    const label = (who, total, cls) => {
+      const l = node("p", "cs-hand-label" + (cls ? " " + cls : ""));
+      l.append(node("span", "", who));
+      if (total) l.append(node("b", "", total));
+      return l;
+    };
+    const dealer = node("div", "cs-hand is-dealer");
+    const dealerTotal = C.bjTotal(t.dealer).total;
+    const dealerRow = cardsRow("dealer", t.dealer);
+    // Until everyone has played the dealer has one card; the face-down one only marks the place.
+    if (!t.done) dealerRow.append(window.Poker.card(null));
+    dealer.append(label("ディーラー", t.done ? String(dealerTotal) : dealerTotal + "（2枚目はみんなのあと）"), dealerRow);
+    felt.append(dealer);
+    for (const id of t.order) {
+      const seat = t.seats[id];
+      const box = node("div", "cs-hand is-player cs-seat" + (id === me ? " is-me" : "") + (t.turn === id ? " is-turn" : ""));
+      seat.hands.forEach((h, i) => {
+        const total = C.bjTotal(h.cards).total;
+        const out = t.done ? C.tableOutcome(t, id).results[i] : null;
+        const who = (i === 0 ? nameFor(id) : "") + (seat.hands.length > 1 ? "　手" + (i + 1) : "") + "（" + fmt(h.bet * (h.doubled ? 2 : 1)) + "）";
+        const hand = node("div", "cs-seat-hand" + (t.turn === id && seat.active === i ? " is-active" : ""));
+        hand.append(label(who, String(total) + (out ? "・" + OUTCOME_WORDS[out.outcome] : ""), out ? "is-" + out.outcome : ""), cardsRow(id + ":" + i, h.cards));
+        box.append(hand);
+      });
+      felt.append(box);
+    }
+    // The order cards come out in: a fresh deal goes round the table twice with the dealer between.
+    if (fresh) {
+      const rank = (q) => (q.key === "dealer" ? (q.i === 0 ? t.order.length : 1000 + q.i) : q.i === 0 ? t.order.indexOf(q.key.split(":")[0]) : t.order.length + 1 + t.order.indexOf(q.key.split(":")[0]) + q.i * 10);
+      queue.sort((a, b) => rank(a) - rank(b));
+    } else queue.sort((a, b) => (a.key === "dealer") - (b.key === "dealer"));
+    queue.forEach((q, k) => {
+      q.el.classList.add("cs-deal");
+      q.el.style.setProperty("--d", (k * 0.38).toFixed(2) + "s");
+    });
+    felt.dataset.dealTime = String(queue.length * 0.38);
+    return felt;
+  }
+  // The buttons for my turn, with the usual move marked and why.
+  function bjActions(t, me, onMove) {
+    const box = node("div", "cs-bj-actions");
+    const row = node("div", "cs-actions cs-moves");
+    const buttons = {};
+    for (const move of ["hit", "stand", "double", "split"]) {
+      if ((move === "double" || move === "split") && !C.tableCan(t, me, move)) continue;
+      const b = node("button", move === "stand" ? "cs-primary" : "");
+      b.type = "button";
+      b.dataset.move = move;
+      b.append(node("b", "", MOVE_WORDS[move][0]), node("small", "", MOVE_WORDS[move][1]));
+      const cost = C.tableCost(t, me, move);
+      b.disabled = cost > balance();
+      b.onclick = () => {
+        row.querySelectorAll("button").forEach((x) => (x.disabled = true));
+        onMove(move, cost);
+      };
+      buttons[move] = b;
+      row.append(b);
+    }
+    const seat = t.seats[me],
+      h = seat.hands[seat.active];
+    const tip = advice({ player: h.cards, dealer: t.dealer }, !!buttons.double && !buttons.double.disabled, !!buttons.split && !buttons.split.disabled);
+    buttons[tip.move]?.classList.add("is-suggested");
+    box.append(row, node("p", "cs-advice", (seat.hands.length > 1 ? "手" + (seat.active + 1) + "：" : "") + "迷ったら「" + MOVE_WORDS[tip.move][0] + "」：" + tip.why));
+    return box;
+  }
+  function bjResultLine(out) {
+    if (!out) return null;
+    const best = out.results.map((r) => r.outcome);
+    const text = best.length > 1 ? best.map((o, i) => "手" + (i + 1) + " " + OUTCOME_WORDS[o]).join("・") : { blackjack: "ブラックジャック！", win: "あなたの勝ち", push: "引き分け（賭けは戻ります）", lose: "ディーラーの勝ち", bust: "21を超えました" }[best[0]];
+    return result(text, out.net, best.includes("blackjack") && out.net > 0 ? "win" : "");
+  }
+  function blackjack(body, state = null) {
+    body.replaceChildren();
+    const start = (bet) => {
+      const money = round("blackjack");
+      money.stake(bet);
+      const t = C.tableDeal(["me"], { me: bet }, random);
+      t.dealtAt = Date.now();
+      blackjack(body, { t, bet, money, seen: {}, extras: 0 });
     };
     if (!state) {
-      dealerRow.append(label("ディーラー"), cards([null, null], false, 9));
-      playerRow.append(label("あなた"), cards([null, null], false, 9));
-      table.append(dealerRow, playerRow);
+      const table = node("div", "cs-felt cs-bj");
+      const empty = (who) => {
+        const seat = node("div", "cs-hand");
+        const l = node("p", "cs-hand-label");
+        l.append(node("span", "", who));
+        const row = node("div", "cs-cards");
+        row.append(window.Poker.card(null), window.Poker.card(null));
+        seat.append(l, row);
+        return seat;
+      };
+      table.append(empty("ディーラー"), empty("あなた"));
       body.append(
         modeSwitch(body, "dealer", "blackjack"),
         table,
-        betBar("blackjack", "配る", (bet) => {
-          const money = round("blackjack");
-          money.stake(bet);
-          const dealt = C.bjDeal(bet, random);
-          dealt.money = money;
-          finishIfDone(dealt);
-          blackjack(body, dealt, { player: 0, dealer: 0 });
-        }),
+        betBar("blackjack", "配る", start),
         rules("ブラックジャックの遊び方", [
-          "カードの合計を21に近づけます。21を超えたら負けです。",
-          "絵札（J・Q・K）は10、Aは1か11の都合のよいほうで数えます。",
-          "「もう1枚」で引き、「これで勝負」で止めます。ディーラーは17以上になるまで引きます。",
-          "勝つと賭けた分がもらえます。最初の2枚でA＋10点札（ブラックジャック）なら1.5倍です。",
-          "「倍にして1枚」は賭けを2倍にして、あと1枚だけ引きます。",
+          "カードの合計を21に近づけます。21を超えたら負けです。絵札は10、Aは1か11で数えます。",
+          "ディーラーは最初1枚だけ。みんなが終わってから、17以上になるまで1枚ずつ引きます。",
+          "ヒットでもう1枚、スタンドでそこで勝負。勝つと賭けた分がもらえ、最初の2枚で21（ブラックジャック）なら1.5倍です。",
+          "ダブル：賭けを2倍にして、あと1枚だけ引きます。",
+          "スプリット：同じ数の2枚を2つの手に分けて、それぞれ勝負します（賭けがもう1つ分かかります）。Aを分けたときは1枚ずつです。",
         ]),
       );
       return refresh();
     }
-    const hidden = !state.done;
-    const dealerTotal = hidden ? C.bjTotal([state.dealer[0]]).total + " ＋ ?" : String(C.bjTotal(state.dealer).total);
-    dealerRow.append(label("ディーラー", dealerTotal), cards(state.dealer, hidden, shown.dealer));
-    const mine = C.bjTotal(state.player);
-    playerRow.append(label("あなた", String(mine.total) + (mine.soft && mine.total < 21 ? "（Aを11で数えています）" : "")), cards(state.player, false, shown.player));
-    table.append(dealerRow, playerRow);
-    body.append(table);
-    const next = { player: state.player.length, dealer: hidden ? 2 : state.dealer.length };
-    if (!state.done) {
-      const actions = node("div", "cs-actions");
-      const button = (text, fn, primary) => {
-        const b = node("button", primary ? "cs-primary" : "", text);
-        b.type = "button";
-        b.onclick = () => {
-          const after = fn(state);
-          after.money = state.money;
-          finishIfDone(after);
-          blackjack(body, after, next);
-        };
-        actions.append(b);
-        return b;
-      };
-      const hit = button("もう1枚", C.bjHit);
-      const stand = button("これで勝負", C.bjStand, true);
-      const double = button("倍にして1枚", C.bjDouble);
-      double.disabled = !C.bjCanDouble(state) || balance() < state.bet;
-      if (!double.disabled) double.onclick = ((go) => () => (state.money.stake(state.bet), go()))(double.onclick);
-      // For beginners: what most players would do here, and why.
-      const tip = advice(state, !double.disabled);
-      ({ hit, stand, double })[tip.move].classList.add("is-suggested");
-      body.append(actions, node("p", "cs-advice", "迷ったら「" + { hit: "もう1枚", stand: "これで勝負", double: "倍にして1枚" }[tip.move] + "」：" + tip.why));
-      body.append(node("p", "cs-hint", "賭けている額 " + fmt(state.bet * (state.doubled ? 2 : 1)) + unit()));
+    const { t } = state;
+    const felt = bjFelt(t, "me", () => "あなた", state.seen);
+    body.append(modeSwitch(body, "dealer", "blackjack"), felt);
+    if (!t.done) {
+      body.append(
+        bjActions(t, "me", (move, cost) => {
+          if (cost) state.money.stake(cost, move + (++state.extras));
+          state.t = C.tableAct(t, "me", move);
+          state.t.dealtAt = t.dealtAt;
+          blackjack(body, state);
+        }),
+      );
       return refresh();
     }
-    const words = { blackjack: "ブラックジャック！", win: "あなたの勝ち", push: "引き分け（賭けは戻ります）", lose: "ディーラーの勝ち", bust: "21を超えました" };
-    const out = result(words[state.outcome], state.net, state.outcome === "blackjack" ? "win" : "");
-    if (state.outcome === "blackjack" && !state.celebrated) {
-      state.celebrated = true;
-      bigWin("BLACKJACK", state.net, "最初の2枚で21", 700);
+    const out = C.tableOutcome(t, "me");
+    if (!state.paid) {
+      state.paid = true;
+      if (out.stake + out.net > 0) state.money.pay(out.stake + out.net);
+      if (out.results.some((r) => r.outcome === "blackjack") && out.net > 0) bigWin("BLACKJACK", out.net, "最初の2枚で21", 700 + Number(felt.dataset.dealTime) * 1000);
     }
-    // The result shows once the dealer's cards have turned over.
-    out.style.setProperty("--d", Math.max(0, state.dealer.length - shown.dealer) * 0.45 + 0.2 + "s");
-    body.append(out, betBar("blackjack", "もう一度配る", (bet) => {
-      const money = round("blackjack");
-      money.stake(bet);
-      const dealt = C.bjDeal(bet, random);
-      dealt.money = money;
-      finishIfDone(dealt);
-      blackjack(body, dealt, { player: 0, dealer: 0 });
-    }));
+    const line = bjResultLine(out);
+    line.style.setProperty("--d", (Number(felt.dataset.dealTime) + 0.2).toFixed(2) + "s");
+    body.append(line, betBar("blackjack", "もう一度配る", start));
     refresh();
   }
-  function advice(state, canDouble) {
+  function advice(state, canDouble, canSplit) {
     const mine = C.bjTotal(state.player),
-      up = C.bjTotal([state.dealer[0]]).total;
+      up = C.bjTotal([state.dealer[0]]).total,
+      pair = state.player.length === 2 && state.player[0][0] === state.player[1][0] ? state.player[0][0] : "";
+    if (canSplit && (pair === "A" || pair === "8")) return { move: "split", why: pair === "A" ? "Aは分けると、それぞれ21を狙えます" : "8が2枚の16は弱い手。分けたほうが勝ちやすくなります" };
     if (canDouble && (mine.total === 11 || (mine.total === 10 && up <= 9)) && !mine.soft) return { move: "double", why: "次に10点札が来やすい、勝負どころです" };
     if (mine.total <= 11) return { move: "hit", why: "11以下なら、引いても21を超えません" };
     if (mine.soft && mine.total <= 17) return { move: "hit", why: "Aを1と数え直せるので、超えにくい手です" };
     if (mine.total >= 17) return { move: "stand", why: "17以上は、引くと超えやすくなります" };
     if (up >= 7) return { move: "hit", why: "ディーラーの見えている札が強めです" };
     return { move: "stand", why: "ディーラーの札が弱め。相手が21を超えるのを待ちます" };
-  }
-  // Pays a finished round once: the stake (doubled or not) back plus what it won.
-  function finishIfDone(state) {
-    if (!state.done || state.paid) return;
-    state.paid = true;
-    const stake = state.bet * (state.doubled ? 2 : 1);
-    if (stake + state.net > 0) state.money.pay(stake + state.net);
   }
 
   // ---- Roulette --------------------------------------------------------------------------
@@ -746,7 +804,7 @@
         body.classList.remove("is-roulette-body");
         if (id === "group") groupLobby(body, game);
         else if (id === "duel") duelLobby(body, game);
-        else ({ blackjack, roulette, dice })[game](body);
+        else ({ blackjack, roulette, dice, chinchiro })[game](body);
       };
       bar.append(b);
     }
@@ -785,7 +843,7 @@
     leaveDuel();
     body.replaceChildren(modeSwitch(body, "duel", game));
     const panel = node("div", "cs-betbar cs-duel-lobby");
-    panel.append(node("p", "cs-duel-title", "フレンドと1対1で勝負"), node("p", "cs-hint", game === "dice" ? "同じ額を賭けて、強い役を作ったほうが2人分をもらいます。" : "同じ額を賭けて、21に近いほうが2人分をもらいます。ディーラーはいません。"));
+    panel.append(node("p", "cs-duel-title", "フレンドと1対1で勝負"), node("p", "cs-hint", { dice: "同じ額を賭けて、強い役を作ったほうが2人分をもらいます。", blackjack: "同じ額を賭けて、21に近いほうが2人分をもらいます。ディーラーはいません。", chinchiro: "同じ額を賭けて、2人ともサイコロを振り、強い役のほうが2人分をもらいます。" }[game]));
     const status = node("p", "cs-duel-status", message);
     status.setAttribute("role", "status");
     const guard = lobbyGuard(status);
@@ -806,9 +864,9 @@
       panel,
       rules("タイマンの遊び方", [
         "「テーブルを作る」で出る4桁の番号を相手に伝え、相手は「入る」に番号を入れます。",
-        game === "dice" ? "そろったら2人とも賭けた額が引かれ、それぞれ自分のダイスを振ります（振り直しは2回まで）。" : "そろったら2人とも賭けた額が引かれ、2枚ずつ配られます。それぞれ「もう1枚」か「これで勝負」を選びます。",
-        game === "dice" ? "相手のダイスは、両方が「これで勝負」を押すまで見えません。" : "相手のカードは1枚目だけ見えます。21を超えたら負け、同じ数なら引き分けです。",
-        game === "dice" ? "強い役のほうが2人分の賭けをもらいます。同じ役と目なら、賭けはそれぞれに戻ります。" : "21に近いほうが2人分の賭けをもらいます。最初の2枚で21（ブラックジャック）は、引いて作った21より強い手です。",
+        { dice: "そろったら2人とも賭けた額が引かれ、それぞれ自分のダイスを振ります（振り直しは2回まで）。", blackjack: "そろったら2人とも賭けた額が引かれ、2枚ずつ配られます。それぞれ「もう1枚」か「これで勝負」を選びます。", chinchiro: "そろったら2人とも賭けた額が引かれ、それぞれ役ができるまで3回までサイコロを振ります。" }[game],
+        { dice: "相手のダイスは、両方が「これで勝負」を押すまで見えません。", blackjack: "相手のカードは1枚目だけ見えます。21を超えたら負け、同じ数なら引き分けです。", chinchiro: "相手のどんぶりは、2人とも振り終わるまで見えません。" }[game],
+        { dice: "強い役のほうが2人分の賭けをもらいます。同じ役と目なら、賭けはそれぞれに戻ります。", blackjack: "21に近いほうが2人分の賭けをもらいます。最初の2枚で21（ブラックジャック）は、引いて作った21より強い手です。", chinchiro: "強い役のほうが2人分の賭けをもらいます（タイマンでは倍率なし）。同じ強さなら引き分けです。" }[game],
         "途中で相手が抜けたときは、あなたの賭けは戻ります。",
       ]),
     );
@@ -947,6 +1005,7 @@
     }
     duelMove(room, "bet", -room.bet);
     if (game === "blackjack") return drawBlackjackDuel(room, body, me, otherId, other);
+    if (game === "chinchiro") return drawChinchiroDuel(room, body, me, otherId, other);
     let hand = localHand(room);
     const felt = node("div", "cs-felt cs-dice-table");
     const them = node("div", "cs-hand is-dealer");
@@ -1150,7 +1209,7 @@
   // in their own bet; the table's maker deals or spins; each settles only their own bet, once per
   // round. Stored with the poker tables, marked by kind, like the dice duel.
   const GROUP_MAX = 6;
-  const GAME_NAMES = { blackjack: "ブラックジャック", roulette: "ルーレット", dice: "ダイスポーカー" };
+  const GAME_NAMES = { blackjack: "ブラックジャック", roulette: "ルーレット", dice: "ダイスポーカー", chinchiro: "チンチロ" };
   // Dice tables for friends together are kept apart from the dice duel's.
   const groupKind = (game) => (game === "dice" ? "dice-together" : game);
   const gameOf = (kind) => (kind === "dice-together" ? "dice" : kind);
@@ -1162,7 +1221,7 @@
     const panel = node("div", "cs-betbar cs-duel-lobby");
     panel.append(
       node("p", "cs-duel-title", "フレンドと一緒に" + GAME_NAMES[game]),
-      node("p", "cs-hint", { roulette: "同じルーレットに、それぞれ好きなところへ賭けます。勝ち負けは自分の賭けだけです。", blackjack: "同じディーラーを相手に、それぞれ自分の手で勝負します。順番に1人ずつ引きます。", dice: "同じディーラーを相手に、それぞれ自分のダイスで勝負します。" }[game]),
+      node("p", "cs-hint", { roulette: "同じルーレットに、それぞれ好きなところへ賭けます。勝ち負けは自分の賭けだけです。", blackjack: "同じディーラーを相手に、それぞれ自分の手で勝負します。順番に1人ずつ引きます。", dice: "同じディーラーを相手に、それぞれ自分のダイスで勝負します。", chinchiro: "コンピュータの親を相手に、みんなが子になって勝負します。" }[game]),
     );
     const status = node("p", "cs-duel-status", message);
     status.setAttribute("role", "status");
@@ -1188,7 +1247,7 @@
       rules("フレンドと一緒に遊ぶには", [
         "「テーブルを作る」で出る4桁の番号をフレンドに伝え、フレンドは「入る」に番号を入れます。",
         "賭ける額や場所は、それぞれが自分で決めます。賭けた分は確定したときに引かれます。",
-        { roulette: "みんなが賭けたら、テーブルを作った人が「回す」を押します。", blackjack: "みんなが賭けたら、テーブルを作った人が「配る」を押します。順番が来たら自分の手を決めます。", dice: "みんなが賭けたら、テーブルを作った人が「始める」を押します。それぞれダイスを振り、全員が決めるとディーラーが振ります。" }[game],
+        { roulette: "みんなが賭けたら、テーブルを作った人が「回す」を押します。", blackjack: "みんなが賭けたら、テーブルを作った人が「配る」を押します。順番が来たら自分の手を決めます。", dice: "みんなが賭けたら、テーブルを作った人が「始める」を押します。それぞれダイスを振り、全員が決めるとディーラーが振ります。", chinchiro: "みんなが賭けたら、テーブルを作った人が「始める」を押します。親が振ったあと、それぞれ自分のサイコロを振ります。" }[game],
         "勝ち負けはディーラーとの間だけで、フレンドのポイントは動きません。",
         "テーブルを作った人が抜けるとテーブルは終わり、まだ決まっていない賭けは戻ります。",
       ]),
@@ -1258,8 +1317,9 @@
   // A bet that was taken but never settled comes back (the table closed, or I left before play).
   function refundOpen(room) {
     if (groupHasMoved(room, "bet") && !groupHasMoved(room, "pay") && !groupHasMoved(room, "settled")) {
-      const amount = room.kind === "roulette" ? Object.values(room.bets?.[uid()] || {}).reduce((a, v) => a + v, 0) : room.bets?.[uid()] || 0;
-      if (amount) groupMove(room, "refund", amount + (groupHasMoved(room, "double") ? amount : 0));
+      const seat = room.kind === "blackjack" ? room.game?.seats?.[uid()] : null;
+      const amount = room.kind === "roulette" ? Object.values(room.bets?.[uid()] || {}).reduce((a, v) => a + v, 0) : seat ? seat.hands.reduce((a, h) => a + h.bet * (h.doubled ? 2 : 1), 0) : room.bets?.[uid()] || 0;
+      if (amount) groupMove(room, "refund", amount);
     }
   }
   const nameOf = (room, id) => (id === uid() ? "あなた" : room.players[id]?.name || "だれか");
@@ -1301,6 +1361,7 @@
     if (Object.keys(room.players).length < 2) body.append(node("p", "cs-group-code", "フレンドにこの番号を伝えてください：" + room.code));
     if (kind === "roulette") drawGroupRoulette(room, body, me, host);
     else if (kind === "dice-together") drawGroupDice(room, body, me, host);
+    else if (kind === "chinchiro") drawGroupChinchiro(room, body, me, host);
     else drawGroupBlackjack(room, body, me, host);
     refresh();
   }
@@ -1444,48 +1505,36 @@
   function drawGroupBlackjack(room, body, me, host) {
     const t = room.game,
       bet = room.bets?.[me] || 0;
-    const felt = node("div", "cs-felt cs-bj cs-group-bj");
-    const dealer = node("div", "cs-hand is-dealer");
-    const line = (who, total) => {
+    if (!group.seen) group.seen = {};
+    if (t) body.append(bjFelt(t, me, (id) => nameOf(room, id), group.seen));
+    else {
+      const felt = node("div", "cs-felt cs-bj");
       const l = node("p", "cs-hand-label");
-      l.append(node("span", "", who));
-      if (total) l.append(node("b", "", total));
-      return l;
-    };
-    const cardRow = (list, hideSecond) => {
+      l.append(node("span", "", "ディーラー"));
       const row = node("div", "cs-cards");
-      list.forEach((c, i) => row.append(window.Poker.card(hideSecond && i === 1 ? null : c)));
-      return row;
-    };
-    if (t) dealer.append(line("ディーラー", t.done ? String(C.bjTotal(t.dealer).total) : C.bjTotal([t.dealer[0]]).total + " ＋ ?"), cardRow(t.dealer, !t.done));
-    else dealer.append(line("ディーラー"), cardRow([null, null]));
-    felt.append(dealer);
-    if (t)
-      for (const id of t.order) {
-        const h = t.hands[id];
-        const seat = node("div", "cs-hand is-player cs-group-seat" + (id === me ? " is-me" : "") + (t.turn === id ? " is-turn" : ""));
-        const total = C.bjTotal(h.cards).total;
-        seat.append(line(nameOf(room, id) + "（" + fmt(h.bet * (h.doubled ? 2 : 1)) + "pt）", String(total) + (t.turn === id ? "・考え中" : "")), cardRow(h.cards));
-        felt.append(seat);
-      }
-    body.append(felt);
+      row.append(window.Poker.card(null));
+      const d = node("div", "cs-hand is-dealer");
+      d.append(l, row);
+      felt.append(d);
+      body.append(felt);
+    }
     const hint = node("p", "cs-hint");
     const actions = node("div", "cs-actions");
-    if (!t || room.phase === "betting") {
+    if (!t) {
       // Betting: each joins this game with their own amount.
-      if (!bet) {
+      if (!bet)
         body.append(
           betBar("group-bj", "この額で参加", async (amount) => {
             const at = room.round;
             const done = await updateDuel(room.code, (fresh) => {
-              if (fresh.status === "closed" || fresh.round !== at || fresh.phase !== "betting" || fresh.bets?.[me]) return null;
+              if (fresh.status === "closed" || fresh.round !== at || fresh.game || fresh.bets?.[me]) return null;
               fresh.bets = { ...(fresh.bets || {}), [me]: amount };
               return fresh;
             }).catch(() => false);
             if (done) groupMove({ ...room, round: at }, "bet", -amount);
           }),
         );
-      } else hint.textContent = fmt(bet) + "pt で参加しています。" + (host ? "みんながそろったら配ってください" : "親が配るのを待っています");
+      else hint.textContent = fmt(bet) + "pt で参加しています。" + (host ? "みんながそろったら配ってください" : "親が配るのを待っています");
       const joined = Object.keys(room.bets || {});
       body.append(node("p", "cs-group-joined", "参加：" + (joined.length ? joined.map((id) => nameOf(room, id)).join("・") : "まだだれも")));
       if (host) {
@@ -1496,84 +1545,83 @@
         deal.onclick = async () => {
           deal.disabled = true;
           await updateDuel(room.code, (fresh) => {
-            if (fresh.phase !== "betting" || fresh.round !== room.round) return null;
+            if (fresh.game || fresh.round !== room.round) return null;
             const order = Object.keys(fresh.bets || {})
               .filter((id) => fresh.players[id])
               .sort((a, b) => fresh.players[a].joinedAt - fresh.players[b].joinedAt);
             if (!order.length) return null;
             fresh.game = C.tableDeal(order, fresh.bets, random);
+            fresh.game.dealtAt = Date.now();
             fresh.phase = fresh.game.done ? "done" : "playing";
             return fresh;
           }).catch(() => (deal.disabled = false));
         };
         actions.append(deal);
       }
-    } else if (!t.done) {
+      body.append(hint, actions);
+      return;
+    }
+    if (!t.done) {
       if (t.turn === me) {
-        const act = (text, moveName, primary) => {
-          const b = node("button", primary ? "cs-primary" : "", text);
-          b.type = "button";
-          b.onclick = async () => {
-            b.disabled = true;
+        body.append(
+          bjActions(t, me, async (moveName, cost) => {
+            const seat = t.seats[me];
             const ok = await updateDuel(room.code, (fresh) => {
               if (!fresh.game || fresh.game.turn !== me || fresh.round !== room.round) return null;
+              const dealtAt = fresh.game.dealtAt;
               fresh.game = C.tableAct(fresh.game, me, moveName);
+              fresh.game.dealtAt = dealtAt;
               if (fresh.game.done) fresh.phase = "done";
               return fresh;
             }).catch(() => false);
-            if (ok && moveName === "double") groupMove(room, "double", -t.hands[me].bet);
-            if (!ok) b.disabled = false;
-          };
-          actions.append(b);
-          return b;
-        };
-        const hit = act("もう1枚", "hit"),
-          stand = act("これで勝負", "stand", true),
-          double = act("倍にして1枚", "double");
-        double.disabled = !C.tableCanDouble(t, me) || balance() < t.hands[me].bet;
-        const tip = advice({ player: t.hands[me].cards, dealer: t.dealer }, !double.disabled);
-        ({ hit, stand, double })[tip.move].classList.add("is-suggested");
-        hint.textContent = "あなたの番です。迷ったら「" + { hit: "もう1枚", stand: "これで勝負", double: "倍にして1枚" }[tip.move] + "」：" + tip.why;
+            if (ok && cost) groupMove(room, moveName + ":" + seat.hands.length + ":" + seat.active, -cost);
+            if (!ok) drawGroup();
+          }),
+        );
       } else {
         hint.textContent = (t.order.includes(me) ? "" : "この勝負は見学中です。") + nameOf(room, t.turn) + "さんの番です";
         // The table's maker can move things on when someone is away.
-        if (host && t.turn !== me) {
+        if (host) {
           const skip = node("button", "", nameOf(room, t.turn) + "さんを飛ばす");
           skip.type = "button";
           skip.onclick = () =>
             updateDuel(room.code, (fresh) => {
               if (!fresh.game || fresh.game.turn !== t.turn) return null;
+              const dealtAt = fresh.game.dealtAt;
               fresh.game = C.tableAct(fresh.game, t.turn, "stand");
+              fresh.game.dealtAt = dealtAt;
               if (fresh.game.done) fresh.phase = "done";
               return fresh;
             }).catch(() => {});
           actions.append(skip);
         }
       }
-    } else {
-      // Done: each settles their own hand.
-      const mine = C.tableOutcome(t, me);
-      if (mine) {
-        if (mine.stake + mine.net > 0) groupMove(room, "pay", mine.stake + mine.net);
-        else groupMove(room, "settled", 0);
-        const words = { blackjack: "ブラックジャック！", win: "あなたの勝ち", push: "引き分け（賭けは戻ります）", lose: "ディーラーの勝ち", bust: "21を超えました" };
-        body.append(result(words[mine.outcome], mine.net, mine.outcome === "blackjack" ? "win" : ""));
-      }
-      hint.textContent = host ? "「次のゲーム」でまた賭けられます" : "親が「次のゲーム」を押すとまた賭けられます";
-      if (host) {
-        const next = node("button", "cs-primary", "次のゲーム");
-        next.type = "button";
-        next.onclick = () =>
-          updateDuel(room.code, (fresh) => {
-            if (fresh.round !== room.round) return null;
-            fresh.round++;
-            fresh.phase = "betting";
-            fresh.bets = {};
-            fresh.game = null;
-            return fresh;
-          }).catch(() => {});
-        actions.append(next);
-      }
+      body.append(hint, actions);
+      return;
+    }
+    // Done: each settles their own hands.
+    const mine = C.tableOutcome(t, me);
+    if (mine) {
+      if (mine.stake + mine.net > 0) groupMove(room, "pay", mine.stake + mine.net);
+      else groupMove(room, "settled", 0);
+      const line = bjResultLine(mine);
+      line.style.setProperty("--d", "1.2s");
+      body.append(line);
+    }
+    hint.textContent = host ? "「次のゲーム」でまた賭けられます" : "親が「次のゲーム」を押すとまた賭けられます";
+    if (host) {
+      const next = node("button", "cs-primary", "次のゲーム");
+      next.type = "button";
+      next.onclick = () =>
+        updateDuel(room.code, (fresh) => {
+          if (fresh.round !== room.round) return null;
+          fresh.round++;
+          fresh.phase = "betting";
+          fresh.bets = {};
+          fresh.game = null;
+          return fresh;
+        }).catch(() => {});
+      actions.append(next);
     }
     body.append(hint, actions);
   }
@@ -1758,6 +1806,264 @@
     felt.append(seat);
     return felt;
   }
+
+  // ---- Chinchiro ---------------------------------------------------------------------------
+  // Three dice in a bowl. The parent (the computer) rolls first; unless that settles it, each
+  // player rolls up to three times until the dice make a hand.
+  const CHIN_RULES = [
+    "3つのサイコロをどんぶりに振ります。役ができるまで、1回の番で3回まで振れます。",
+    "強い順：ピンゾロ（1・1・1）＞ゾロ目（3つ同じ）＞シゴロ（4・5・6）＞目（2つ同じで、残り1つが目。6が強い）＞目なし＞ヒフミ（1・2・3）。",
+    "親（ディーラー）が先に振ります。親がシゴロ・ゾロ目・ピンゾロなら親の勝ち、ヒフミや目なしなら子の勝ちで、すぐ決まります。",
+    "それ以外は子が振り、目の大きいほうが勝ちです。子のシゴロは2倍、ゾロ目は3倍、ピンゾロは5倍もらえ、ヒフミは2倍払います。",
+    "負けたときは役によって賭けの2〜5倍を払うことがあります（所持ポイントの分まで）。",
+  ];
+  function bowl(dice, rolling) {
+    const el = node("div", "cs-bowl");
+    (dice || [null, null, null]).forEach((v, i) => {
+      if (!v) return el.append(node("span", "cs-die is-empty"));
+      const d = die(v, rolling ? "is-rolling" : "");
+      d.style.setProperty("--d", (0.08 * i).toFixed(2) + "s");
+      el.append(d);
+    });
+    return el;
+  }
+  // One side's turn: who, the hand so far, the bowl with the latest throw, and the throws before.
+  function chinSide(who, turn, hidden, rolling) {
+    const seat = node("div", "cs-hand cs-chin-side");
+    const l = node("p", "cs-hand-label");
+    l.append(node("span", "", who), node("b", "", hidden ? (turn?.done ? "決めました" : "振っています…") : turn?.hand ? turn.hand.name : turn?.rolls?.length ? "まだ役なし" : ""));
+    const last = turn?.rolls?.length && !hidden ? turn.rolls[turn.rolls.length - 1] : null;
+    seat.append(l, bowl(last, rolling));
+    if (turn?.rolls?.length > 1 && !hidden) {
+      const before = node("p", "cs-chin-before", turn.rolls.slice(0, -1).map((r, i) => i + 1 + "投目 " + r.join("・")).join("　"));
+      seat.append(before);
+    }
+    return seat;
+  }
+  // Settling against the parent: the bet back and the winnings, or what more the loss costs.
+  function chinMoney(m, bet, pay, extra) {
+    if (m > 0) pay(bet + m * bet);
+    else if (m === 0) pay(bet);
+    else if (m < -1) extra(Math.min((-m - 1) * bet, balance()));
+  }
+  const chinWords = (m) => (m > 1 ? "あなたの勝ち（" + m + "倍）" : m === 1 ? "あなたの勝ち" : m === 0 ? "引き分け（賭けは戻ります）" : m < -1 ? "親の勝ち（" + -m + "倍）" : "親の勝ち");
+  function chinchiro(body, state = null) {
+    body.replaceChildren(modeSwitch(body, "dealer", "chinchiro"));
+    const felt = node("div", "cs-felt cs-chin");
+    const start = (bet) => {
+      const money = round("chinchiro");
+      money.stake(bet);
+      chinchiro(body, { bet, money, parent: C.chinTurn(random), child: C.chinStart(), shown: false });
+    };
+    if (!state) {
+      felt.append(chinSide("親（ディーラー）", null), chinSide("あなた", null));
+      body.append(felt, betBar("chinchiro", "勝負する", start), rules("チンチロの遊び方", CHIN_RULES));
+      return refresh();
+    }
+    const { parent, child } = state;
+    const early = C.chinParentDecides(parent.hand);
+    felt.append(chinSide("親（ディーラー）", parent, false, !state.shown), chinSide("あなた", early !== null ? null : child, false, state.rolled));
+    state.shown = true;
+    state.rolled = false;
+    body.append(felt);
+    if (early === null && !child.done) {
+      const go = node("button", "cs-primary", child.rolls.length ? "もう一度振る（" + (3 - child.rolls.length) + "回まで）" : "サイコロを振る");
+      go.type = "button";
+      go.dataset.chinRoll = "";
+      go.onclick = () => {
+        state.child = C.chinNext(child, random);
+        state.rolled = true;
+        chinchiro(body, state);
+      };
+      const row = node("div", "cs-actions");
+      row.append(go);
+      body.append(node("p", "cs-hint", "親は「" + parent.hand.name + "」。" + (child.rolls.length ? "役ができるまで、あと" + (3 - child.rolls.length) + "回振れます" : "あなたの番です")), row);
+      return refresh();
+    }
+    const m = early !== null ? early : C.chinSettle(parent.hand, child.hand);
+    if (!state.paid) {
+      state.paid = true;
+      chinMoney(m, state.bet, state.money.pay, (n) => n > 0 && state.money.stake(n, "extra"));
+      if (m >= 3) bigWin(child.hand?.name === "ピンゾロ" ? "PINZORO" : "ZOROME", m * state.bet, child.hand?.name || "", 900);
+    }
+    const out = result((early !== null ? "親が「" + parent.hand.name + "」：" : "") + chinWords(m), m * state.bet);
+    out.style.setProperty("--d", "0.6s");
+    body.append(out, betBar("chinchiro", "もう一度", start));
+    refresh();
+  }
+
+  // Chinchiro together: the computer is the parent for the whole table.
+  function drawGroupChinchiro(room, body, me, host) {
+    const g = room.game,
+      bet = room.bets?.[me] || 0;
+    const felt = node("div", "cs-felt cs-chin");
+    felt.append(chinSide("親（ディーラー）", g?.parent || null, false, g && group.parentShown !== room.round));
+    if (g) group.parentShown = room.round;
+    const hint = node("p", "cs-hint");
+    const actions = node("div", "cs-actions");
+    if (!g) {
+      body.append(felt);
+      if (!bet)
+        body.append(
+          betBar("group-chin", "この額で参加", async (amount) => {
+            const at = room.round;
+            const done = await updateDuel(room.code, (fresh) => {
+              if (fresh.status === "closed" || fresh.round !== at || fresh.game || fresh.bets?.[me]) return null;
+              fresh.bets = { ...(fresh.bets || {}), [me]: amount };
+              return fresh;
+            }).catch(() => false);
+            if (done) groupMove({ ...room, round: at }, "bet", -amount);
+          }),
+        );
+      else hint.textContent = fmt(bet) + "pt で参加しています。" + (host ? "みんながそろったら始めてください" : "親が始めるのを待っています");
+      const joined = Object.keys(room.bets || {});
+      body.append(node("p", "cs-group-joined", "参加：" + (joined.length ? joined.map((id) => nameOf(room, id)).join("・") : "まだだれも")));
+      if (host) {
+        const go = node("button", "cs-primary", "始める（親が振ります）");
+        go.type = "button";
+        go.dataset.groupDeal = "";
+        go.disabled = !joined.length;
+        go.onclick = () =>
+          updateDuel(room.code, (fresh) => {
+            if (fresh.game || fresh.round !== room.round) return null;
+            const order = Object.keys(fresh.bets || {}).filter((id) => fresh.players[id]);
+            if (!order.length) return null;
+            fresh.game = { order, parent: C.chinTurn(random), hands: {} };
+            fresh.phase = "playing";
+            return fresh;
+          }).catch(() => {});
+        actions.append(go);
+      }
+      body.append(rules("チンチロの遊び方", CHIN_RULES), hint, actions);
+      return;
+    }
+    const early = C.chinParentDecides(g.parent.hand),
+      inGame = g.order.includes(me);
+    const local = "aiglish_casino_chin_" + uid() + "_" + room.code + "_" + room.createdAt + "_" + room.round;
+    let mine = g.hands[me] || null;
+    if (!mine && inGame && early === null) {
+      try {
+        mine = JSON.parse(localStorage.getItem(local) || "null");
+      } catch {}
+      mine = mine || C.chinStart();
+    }
+    if (inGame) felt.append(chinSide("あなた", early !== null ? null : mine, false, group.chinRolled));
+    group.chinRolled = false;
+    body.append(felt);
+    // The others, once they have finished.
+    const others = node("ul", "cs-group-bets cs-group-dice");
+    for (const id of g.order) if (id !== me) others.append(node("li", "", nameOf(room, id) + "：" + (early !== null ? "—" : g.hands[id] ? g.hands[id].hand.name : "振っています…")));
+    if (others.childElementCount) body.append(others);
+    if (inGame && early === null && !g.hands[me]) {
+      if (!mine.done) {
+        const go = node("button", "cs-primary", mine.rolls.length ? "もう一度振る（" + (3 - mine.rolls.length) + "回まで）" : "サイコロを振る");
+        go.type = "button";
+        go.dataset.chinRoll = "";
+        go.onclick = async () => {
+          mine = C.chinNext(mine, random);
+          try {
+            localStorage.setItem(local, JSON.stringify(mine));
+          } catch {}
+          group.chinRolled = true;
+          if (mine.done)
+            await updateDuel(room.code, (fresh) => {
+              if (!fresh.game || fresh.round !== room.round || fresh.game.hands[me]) return null;
+              fresh.game.hands = { ...fresh.game.hands, [me]: mine };
+              return fresh;
+            }).catch(() => {});
+          drawGroup();
+        };
+        actions.append(go);
+        hint.textContent = "親は「" + g.parent.hand.name + "」。役ができるまで3回まで振れます";
+        body.append(hint, actions);
+        return;
+      }
+    }
+    if (inGame && (early !== null || mine?.done)) {
+      const m = early !== null ? early : C.chinSettle(g.parent.hand, mine.hand);
+      if (m > 0 || m === 0) groupMove(room, "pay", bet + Math.max(0, m) * bet);
+      else {
+        groupMove(room, "settled", 0);
+        if (m < -1) groupMove(room, "extra", -Math.min((-m - 1) * bet, balance()));
+      }
+      const out = result((early !== null ? "親が「" + g.parent.hand.name + "」：" : "") + chinWords(m), m * bet);
+      out.style.setProperty("--d", "0.6s");
+      body.append(out);
+    }
+    hint.textContent = host ? "「次のゲーム」でまた賭けられます" : "親（テーブルを作った人）が「次のゲーム」を押すとまた賭けられます";
+    if (host) {
+      const next = node("button", "cs-primary", "次のゲーム");
+      next.type = "button";
+      next.onclick = () =>
+        updateDuel(room.code, (fresh) => {
+          if (fresh.round !== room.round) return null;
+          fresh.round++;
+          fresh.phase = "betting";
+          fresh.bets = {};
+          fresh.game = null;
+          return fresh;
+        }).catch(() => {});
+      actions.append(next);
+    }
+    body.append(hint, actions);
+  }
+
+  // Chinchiro one against one: both roll, the other's bowl stays covered until both are done.
+  function drawChinchiroDuel(room, body, me, otherId, other) {
+    const local = "aiglish_casino_chin_" + uid() + "_" + room.code + "_" + room.createdAt + "_" + room.round;
+    let mine = room.hands?.[me] || null;
+    if (!mine) {
+      try {
+        mine = JSON.parse(localStorage.getItem(local) || "null");
+      } catch {}
+      mine = mine || C.chinStart();
+    }
+    const theirs = otherId ? room.hands?.[otherId] : null,
+      both = !!(room.hands?.[me] && theirs);
+    const felt = node("div", "cs-felt cs-chin");
+    felt.append(chinSide(other?.name || "相手", theirs, !both, both && duel.chinShown !== room.round), chinSide("あなた", mine, false, duel.chinRolled));
+    if (both) duel.chinShown = room.round;
+    duel.chinRolled = false;
+    body.append(felt);
+    if (!room.hands?.[me]) {
+      const go = node("button", "cs-primary", mine.rolls.length ? "もう一度振る（" + (3 - mine.rolls.length) + "回まで）" : "サイコロを振る");
+      go.type = "button";
+      go.dataset.chinRoll = "";
+      go.onclick = async () => {
+        mine = C.chinNext(mine, random);
+        try {
+          localStorage.setItem(local, JSON.stringify(mine));
+        } catch {}
+        duel.chinRolled = true;
+        if (mine.done)
+          await updateDuel(room.code, (fresh) => {
+            if (fresh.status !== "playing" || fresh.round !== room.round || fresh.hands?.[me]) return null;
+            fresh.hands = { ...(fresh.hands || {}), [me]: mine };
+            return fresh;
+          }).catch(() => {});
+        drawDuel();
+      };
+      const row = node("div", "cs-actions");
+      row.append(go);
+      body.append(row, node("p", "cs-hint", "役ができるまで3回まで振れます。相手のどんぶりは2人とも決めるまで見えません"));
+      return refresh();
+    }
+    if (!both) {
+      body.append(node("p", "cs-duel-wait", "相手が振り終わるのを待っています…"));
+      return refresh();
+    }
+    const order = C.chinVs(room.hands[me].hand, theirs.hand),
+      net = order > 0 ? room.bet : order < 0 ? -room.bet : 0;
+    if (order > 0) duelMove(room, "pay", room.bet * 2);
+    else if (order === 0) duelMove(room, "pay", room.bet);
+    else duelMove(room, "settled", 0);
+    const out = result(order > 0 ? "あなたの勝ち" : order < 0 ? (other?.name || "相手") + "の勝ち" : "引き分け（賭けは戻ります）", net);
+    out.style.setProperty("--d", "0.6s");
+    body.append(out);
+    rematchRow(room, body, me);
+    refresh();
+  }
+
   async function leaveGroup(tell = true) {
     const current = group;
     if (!current) return;
@@ -1780,7 +2086,7 @@
       }
       delete fresh.players[me];
       if (fresh.phase === "betting" && fresh.bets) delete fresh.bets[me];
-      if (fresh.kind === "dice-together" && fresh.game && !fresh.game.dealer) fresh.game.order = fresh.game.order.filter((id) => id !== me);
+      if ((fresh.kind === "dice-together" && fresh.game && !fresh.game.dealer) || (fresh.kind === "chinchiro" && fresh.game)) fresh.game.order = fresh.game.order.filter((id) => id !== me);
       else if (fresh.game && !fresh.game.done) {
         fresh.game = C.tableDrop(fresh.game, me);
         if (fresh.game.done) fresh.phase = "done";

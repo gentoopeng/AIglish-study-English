@@ -27,104 +27,109 @@
     return { total, soft: aces > 0 };
   }
   const isBlackjack = (cards) => cards.length === 2 && bjTotal(cards).total === 21;
-  function bjDeal(bet, random) {
-    const deck = P.shuffle(P.deck(), random);
-    const round = { game: "blackjack", bet, deck, player: [deck.pop(), deck.pop()], dealer: [deck.pop(), deck.pop()], doubled: false, done: false, outcome: "", net: 0 };
-    if (isBlackjack(round.player) || isBlackjack(round.dealer)) return bjFinish(round);
-    return round;
-  }
-  const bjCanDouble = (round) => !round.done && round.player.length === 2 && !round.doubled;
-  function bjHit(round) {
-    if (round.done) return round;
-    const next = clone(round);
-    next.player.push(next.deck.pop());
-    return bjTotal(next.player).total >= 21 ? bjDealerPlays(next) : next;
-  }
-  const bjStand = (round) => (round.done ? round : bjDealerPlays(clone(round)));
-  function bjDouble(round) {
-    if (!bjCanDouble(round)) return round;
-    const next = clone(round);
-    next.doubled = true;
-    next.player.push(next.deck.pop());
-    return bjDealerPlays(next);
-  }
-  function bjDealerPlays(round) {
-    // The dealer only draws when the player is still in.
-    if (bjTotal(round.player).total <= 21) while (bjTotal(round.dealer).total < 17) round.dealer.push(round.deck.pop());
-    return bjFinish(round);
-  }
-  function bjFinish(round) {
-    const stake = round.bet * (round.doubled ? 2 : 1),
-      me = bjTotal(round.player).total,
-      them = bjTotal(round.dealer).total,
-      mine = isBlackjack(round.player),
-      theirs = isBlackjack(round.dealer);
-    let outcome;
-    if (mine && theirs) outcome = "push";
-    else if (mine) outcome = "blackjack";
-    else if (theirs) outcome = "lose";
-    else if (me > 21) outcome = "bust";
-    else if (them > 21 || me > them) outcome = "win";
-    else if (me === them) outcome = "push";
-    else outcome = "lose";
-    const net = { blackjack: Math.floor((round.bet * 3) / 2), win: stake, push: 0, lose: -stake, bust: -stake }[outcome];
-    return { ...round, done: true, outcome, net };
-  }
 
-  // ---- Blackjack at a shared table -------------------------------------------------------
-  // Several players against one dealer, each with their own hand and bet, acting in turn.
-  //   { deck, dealer, order, turn, done, hands: { id: { cards, bet, doubled, done } } }
+  // A table: one dealer (the computer) and a seat for each player, also for one player alone.
+  // The dealer starts with a single card and draws the rest after everyone has finished (the
+  // European rule), one card at a time to 17. Each seat holds one hand, or more after a split.
+  //   { deck, dealer, order, turn, done, seats: { id: { active, hands: [hand] } } }
+  //   hand: { cards, bet, doubled, split, done }
+  const hand = (cards, bet, split = false) => ({ cards, bet, doubled: false, split, done: false });
+  const natural = (h) => !h.split && isBlackjack(h.cards);
+  const seatDone = (seat) => seat.hands.every((h) => h.done);
   function tableDeal(order, bets, random) {
     const deck = P.shuffle(P.deck(), random),
-      hands = {};
-    for (const id of order) hands[id] = { cards: [deck.pop()], bet: bets[id], doubled: false, done: false };
-    const dealer = [deck.pop()];
-    for (const id of order) hands[id].cards.push(deck.pop());
-    dealer.push(deck.pop());
-    const table = { deck, dealer, order: order.slice(), turn: null, done: false, hands };
-    // A dealer blackjack ends the round at once; a player's blackjack needs no move.
-    if (isBlackjack(dealer)) for (const id of order) hands[id].done = true;
-    else for (const id of order) if (isBlackjack(hands[id].cards)) hands[id].done = true;
-    return advance(table);
+      first = {};
+    // Round the table as a dealer would: one card each, the dealer's one, then everyone's second.
+    for (const id of order) first[id] = deck.pop();
+    const dealer = [deck.pop()],
+      seats = {};
+    for (const id of order) {
+      const h = hand([first[id], deck.pop()], bets[id]);
+      h.done = isBlackjack(h.cards);
+      seats[id] = { active: 0, hands: [h] };
+    }
+    return advance({ deck, dealer, order: order.slice(), turn: null, done: false, seats });
   }
   // The next player still to act, or the dealer's turn when nobody is left.
   function advance(table) {
-    table.turn = table.order.find((id) => !table.hands[id].done) || null;
+    for (const seat of Object.values(table.seats)) while (seat.active < seat.hands.length && seat.hands[seat.active].done) seat.active++;
+    table.turn = table.order.find((id) => !seatDone(table.seats[id])) || null;
     if (table.turn) return table;
-    const live = table.order.some((id) => bjTotal(table.hands[id].cards).total <= 21 && !isBlackjack(table.hands[id].cards));
+    const live = table.order.some((id) => table.seats[id].hands.some((h) => bjTotal(h.cards).total <= 21 && !natural(h)));
+    // The dealer always turns a second card; with live hands still in play it draws to 17.
+    table.dealer.push(table.deck.pop());
     if (live && !isBlackjack(table.dealer)) while (bjTotal(table.dealer).total < 17) table.dealer.push(table.deck.pop());
     table.done = true;
     return table;
   }
-  const tableCanDouble = (table, id) => !table.done && table.turn === id && table.hands[id].cards.length === 2 && !table.hands[id].doubled;
+  const activeHand = (table, id) => table.seats[id]?.hands[table.seats[id].active];
+  // hit / stand always; double on a hand's first two cards; split a pair of the same value (up to four hands).
+  function tableCan(table, id, move) {
+    const seat = table.seats[id],
+      h = activeHand(table, id);
+    if (table.done || table.turn !== id || !h || h.done) return false;
+    if (move === "hit" || move === "stand") return true;
+    if (move === "double") return h.cards.length === 2 && !h.doubled;
+    if (move === "split") return h.cards.length === 2 && cardValue(h.cards[0]) === cardValue(h.cards[1]) && seat.hands.length < 4;
+    return false;
+  }
+  // The extra points a move puts in: a double or a split adds the hand's bet once more.
+  const tableCost = (table, id, move) => (move === "double" || move === "split" ? activeHand(table, id)?.bet || 0 : 0);
   function tableAct(table, id, move) {
-    if (table.done || table.turn !== id) return table;
+    if (!tableCan(table, id, move)) return table;
     const next = clone(table),
-      hand = next.hands[id];
+      seat = next.seats[id],
+      h = seat.hands[seat.active];
     if (move === "hit") {
-      hand.cards.push(next.deck.pop());
-      if (bjTotal(hand.cards).total >= 21) hand.done = true;
-    } else if (move === "double") {
-      if (!tableCanDouble(table, id)) return table;
-      hand.doubled = true;
-      hand.cards.push(next.deck.pop());
-      hand.done = true;
-    } else hand.done = true; // stand, or skipped for someone who is away
+      h.cards.push(next.deck.pop());
+      if (bjTotal(h.cards).total >= 21) h.done = true;
+    } else if (move === "stand") h.done = true;
+    else if (move === "double") {
+      h.doubled = true;
+      h.cards.push(next.deck.pop());
+      h.done = true;
+    } else if (move === "split") {
+      const [a, b] = h.cards,
+        aces = a[0] === "A",
+        one = hand([a, next.deck.pop()], h.bet, true),
+        two = hand([b, next.deck.pop()], h.bet, true);
+      // Split aces take one card each and stop; any hand reaching 21 stops.
+      for (const x of [one, two]) x.done = aces || bjTotal(x.cards).total >= 21;
+      seat.hands.splice(seat.active, 1, one, two);
+    }
     return advance(next);
   }
   // A player who left is out of the order; the round goes on without them.
   function tableDrop(table, id) {
-    if (!table.hands[id] || table.done) return table;
+    if (!table.seats[id] || table.done) return table;
     const next = clone(table);
     next.order = next.order.filter((x) => x !== id);
-    delete next.hands[id];
+    delete next.seats[id];
     return advance(next);
   }
+  function handResult(h, dealer) {
+    const stake = h.bet * (h.doubled ? 2 : 1),
+      me = bjTotal(h.cards).total,
+      them = bjTotal(dealer).total,
+      mine = natural(h),
+      theirs = isBlackjack(dealer);
+    let outcome;
+    if (mine && theirs) outcome = "push";
+    else if (mine) outcome = "blackjack";
+    else if (me > 21) outcome = "bust";
+    else if (theirs) outcome = "lose";
+    else if (them > 21 || me > them) outcome = "win";
+    else if (me === them) outcome = "push";
+    else outcome = "lose";
+    const net = { blackjack: Math.floor((h.bet * 3) / 2), win: stake, push: 0, lose: -stake, bust: -stake }[outcome];
+    return { outcome, net, stake };
+  }
+  // Every hand of a seat against the dealer, and the seat's total.
   function tableOutcome(table, id) {
-    const hand = table.hands[id];
-    if (!hand || !table.done) return null;
-    const { outcome, net } = bjFinish({ bet: hand.bet, doubled: hand.doubled, player: hand.cards, dealer: table.dealer });
-    return { outcome, net, stake: hand.bet * (hand.doubled ? 2 : 1) };
+    const seat = table.seats[id];
+    if (!seat || !table.done) return null;
+    const results = seat.hands.map((h) => handResult(h, table.dealer));
+    return { results, net: results.reduce((a, r) => a + r.net, 0), stake: results.reduce((a, r) => a + r.stake, 0) };
   }
 
   // ---- Blackjack head to head -------------------------------------------------------------
@@ -278,15 +283,71 @@
     return next;
   }
 
+  // ---- Chinchiro ----------------------------------------------------------------------
+  // Three dice in a bowl, rolled up to three times until they make a hand. Strongest first:
+  // ピンゾロ (1-1-1, 5×) > ゾロ目 (three the same, 3×) > シゴロ (4-5-6, 2×) > a point (two the
+  // same: the third die is the point, 6 high) > 目なし (no hand in three rolls) > ヒフミ (1-2-3,
+  // pays 2×). The parent (the dealer) rolls first; a decisive parent hand settles at once.
+  function chinHand(dice) {
+    const d = dice.slice().sort((a, b) => a - b),
+      key = d.join("");
+    if (key === "111") return { rank: 100, name: "ピンゾロ", mult: 5 };
+    if (d[0] === d[2]) return { rank: 90 + d[0], name: d[0] + "のゾロ目", mult: 3 };
+    if (key === "456") return { rank: 80, name: "シゴロ", mult: 2 };
+    if (key === "123") return { rank: -10, name: "ヒフミ", mult: 2 };
+    if (d[0] === d[1]) return { rank: d[2], name: d[2] + "の目", mult: 1 };
+    if (d[1] === d[2]) return { rank: d[0], name: d[0] + "の目", mult: 1 };
+    return null;
+  }
+  const NO_HAND = { rank: 0, name: "目なし", mult: 1 };
+  const chinThrow = (random) => [roll(random), roll(random), roll(random)];
+  // One more throw for a turn: { rolls: [[a, b, c] …], hand, done }.
+  function chinNext(turn, random) {
+    if (turn.done) return turn;
+    const rolls = turn.rolls.concat([chinThrow(random)]),
+      hand = chinHand(rolls[rolls.length - 1]);
+    if (hand) return { rolls, hand, done: true };
+    return rolls.length >= 3 ? { rolls, hand: NO_HAND, done: true } : { rolls, hand: null, done: false };
+  }
+  const chinStart = () => ({ rolls: [], hand: null, done: false });
+  // A whole turn at once, for the computer parent.
+  function chinTurn(random) {
+    let turn = chinStart();
+    while (!turn.done) turn = chinNext(turn, random);
+    return turn;
+  }
+  // When the parent's hand alone decides: the child's multiple of the bet (+ wins, − loses), else null.
+  function chinParentDecides(parent) {
+    if (parent.rank >= 80) return -parent.mult;
+    if (parent.rank === -10) return 2;
+    if (parent.rank === 0) return 1;
+    return null;
+  }
+  // The child against the parent: multiples of the bet for the child.
+  function chinSettle(parent, child) {
+    const early = chinParentDecides(parent);
+    if (early !== null) return early;
+    if (child.rank >= 80) return child.mult;
+    if (child.rank === -10) return -2;
+    if (child.rank === 0) return -1;
+    return Math.sign(child.rank - parent.rank);
+  }
+  // One against one: simply the stronger hand, the same hand a tie.
+  const chinVs = (a, b) => Math.sign(a.rank - b.rank);
+
   const api = {
+    chinHand,
+    chinNext,
+    chinStart,
+    chinTurn,
+    chinParentDecides,
+    chinSettle,
+    chinVs,
     bjTotal,
     isBlackjack,
-    bjDeal,
-    bjHit,
-    bjStand,
-    bjDouble,
-    bjCanDouble,
     tableDeal,
+    tableCan,
+    tableCost,
     duelDeal,
     duelAct,
     duelDone,
@@ -295,7 +356,6 @@
     diceVs,
     tableAct,
     tableDrop,
-    tableCanDouble,
     tableOutcome,
     REDS,
     WHEEL,

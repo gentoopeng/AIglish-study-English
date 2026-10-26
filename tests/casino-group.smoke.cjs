@@ -171,19 +171,22 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await screenOf(b, "blackjack").getByRole("button", { name: "この額で参加" }).click();
     await balanceIs(a, 500);
     await balanceIs(b, 665);
-    // A deck dealt round the table: A 10+9, B 9+7, dealer 10+7; B's hit is a 5.
+    // Dealt round the table: A, B, the dealer's one card, A, B; then B's hit (a 5); the dealer's
+    // second card comes after everyone. A 10+9, B 9+7(+5), dealer 10+7.
     await a.evaluate(() => {
-      const cards = ["Th", "9d", "Tc", "9h", "7c", "7s", "5c"];
+      const cards = ["Th", "9d", "Tc", "9h", "7c", "5c", "7s"];
       const deck = window.PokerModel.deck().filter((c) => !cards.includes(c)).concat(cards.slice().reverse());
       window.PokerModel.shuffle = () => deck.slice();
     });
     assert.equal(await screenOf(b, "blackjack").locator("[data-group-deal]").count(), 0);
     await screenOf(a, "blackjack").locator("[data-group-deal]").click();
-    await screenOf(a, "blackjack").getByText(/あなたの番です/).waitFor();
+    await screenOf(a, "blackjack").locator("[data-move=stand]").waitFor();
     await screenOf(b, "blackjack").getByText("group-aさんの番です").waitFor();
-    await screenOf(a, "blackjack").getByRole("button", { name: "これで勝負" }).click();
-    await screenOf(b, "blackjack").getByText(/あなたの番です。迷ったら「もう1枚」/).waitFor();
-    await screenOf(b, "blackjack").getByRole("button", { name: "もう1枚" }).click();
+    // The dealer shows one card while players are still playing.
+    assert.equal(await screenOf(b, "blackjack").locator(".is-dealer .pk-card:not(.is-back)").count(), 1);
+    await screenOf(a, "blackjack").locator("[data-move=stand]").click();
+    await screenOf(b, "blackjack").locator(".cs-advice", { hasText: "迷ったら「ヒット」" }).waitFor();
+    await screenOf(b, "blackjack").locator("[data-move=hit]").click();
     // Everyone is done: the dealer stands on 17 and each sees their own result.
     await screenOf(a, "blackjack").locator(".cs-result").waitFor();
     await screenOf(b, "blackjack").locator(".cs-result").waitFor();
@@ -232,8 +235,39 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       await balanceIs(page, start + (order > 0 ? 20 : order === 0 ? 10 : 0));
     }
     await a.screenshot({ path: "/tmp/casino-group-dice.png" });
+    await screenOf(a, "dice").getByRole("button", { name: "ダイスポーカーを閉じる" }).click();
+    await screenOf(b, "dice").getByRole("button", { name: "ダイスポーカーを閉じる" }).click();
+    await a.evaluate(() => (crypto.getRandomValues = Object.getPrototypeOf(crypto).getRandomValues.bind(crypto)));
+
+    // ---- Chinchiro together: the computer is the parent for everyone
+    const w = { a: await a.evaluate(() => window.StudyPoints.balance()), b: await b.evaluate(() => window.StudyPoints.balance()) };
+    await open(a, "chinchiro");
+    await screenOf(a, "chinchiro").locator("[data-group-create]").click();
+    await screenOf(a, "chinchiro").locator(".cs-group-code").waitFor();
+    const code4 = room().code;
+    assert.equal(room().kind, "chinchiro");
+    await open(b, "chinchiro");
+    await screenOf(b, "chinchiro").locator("[data-group-code]").fill(code4);
+    await screenOf(b, "chinchiro").getByRole("button", { name: "入る", exact: true }).click();
+    await screenOf(b, "chinchiro").getByRole("button", { name: "この額で参加" }).waitFor();
+    await screenOf(a, "chinchiro").getByRole("button", { name: "この額で参加" }).click();
+    await screenOf(b, "chinchiro").getByRole("button", { name: "この額で参加" }).click();
+    await balanceIs(a, w.a - 10);
+    await balanceIs(b, w.b - 10);
+    await screenOf(a, "chinchiro").locator("[data-group-deal]").click();
+    for (const page of [a, b]) {
+      const sc = screenOf(page, "chinchiro");
+      for (let k = 0; k < 3 && (await sc.locator("[data-chin-roll]").count()); k++) await sc.locator("[data-chin-roll]").click();
+      await sc.locator(".cs-result").waitFor();
+    }
+    const cg = room().game;
+    const expect = (id) => a.evaluate(([parent, hand]) => (window.CasinoModel.chinParentDecides(parent) ?? window.CasinoModel.chinSettle(parent, hand)), [cg.parent.hand, cg.hands[id]?.hand || null]);
+    for (const [page, id, start] of [[a, "group-a", w.a], [b, "group-b", w.b]]) {
+      const m = await expect(id);
+      await balanceIs(page, m >= 0 ? start + m * 10 : start - Math.min(-m, 5) * 10);
+    }
     assert.deepEqual(errors, []);
-    console.log("PASS: roulette together (own bets, maker spins, each paid once, one screen, next round, closes when the maker leaves), blackjack together (own bets, turns in order, dealer last, each paid once, refund when the maker leaves), dice poker together against one dealer");
+    console.log("PASS: roulette together (own bets, maker spins, each paid once, one screen, next round, closes when the maker leaves), blackjack together (own bets, turns in order, dealer last, each paid once, refund when the maker leaves), dice poker and chinchiro together against one dealer");
   } finally {
     await browser.close();
   }

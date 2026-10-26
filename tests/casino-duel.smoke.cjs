@@ -194,6 +194,31 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await a.locator("dialog.casino-screen").getByRole("button", { name: "ブラックジャックを閉じる" }).click();
     await b.locator("dialog.casino-screen").getByRole("button", { name: "ブラックジャックを閉じる" }).click();
 
+    // Chinchiro one against one: both roll; the stronger hand takes both bets.
+    const startC = { a: await a.evaluate(() => window.StudyPoints.balance()), b: await b.evaluate(() => window.StudyPoints.balance()) };
+    for (const page of [a, b]) {
+      await page.locator(".mode-chinchiro").click();
+      await page.locator("dialog.casino-screen.is-chinchiro [data-mode=duel]").click();
+    }
+    await a.getByRole("button", { name: "テーブルを作る" }).click();
+    const ccCode = await a.locator(".cs-duel-code").innerText();
+    await b.locator("[data-duel-code]").fill(ccCode);
+    await b.getByRole("button", { name: "入る", exact: true }).click();
+    for (const page of [a, b]) {
+      await page.locator("[data-chin-roll]").waitFor();
+      for (let k = 0; k < 3 && (await page.locator("[data-chin-roll]").count()); k++) await page.locator("[data-chin-roll]").click();
+    }
+    await a.locator(".cs-result").waitFor();
+    await b.locator(".cs-result").waitFor();
+    const chinRoom = [...docs.entries()].filter(([path]) => path.startsWith("pokerRooms/")).map(([, v]) => v).find((r) => r.kind === "chinchiro-duel");
+    const chinOrder = await a.evaluate(([x, y]) => window.CasinoModel.chinVs(x, y), [chinRoom.hands["duel-a"].hand, chinRoom.hands["duel-b"].hand]);
+    const bet = chinRoom.bet;
+    await a.waitForFunction((n) => window.StudyPoints.balance() === n, startC.a + chinOrder * bet);
+    await b.waitForFunction((n) => window.StudyPoints.balance() === n, startC.b - chinOrder * bet);
+    await a.getByRole("button", { name: "抜ける" }).click();
+    await a.locator("dialog.casino-screen").getByRole("button", { name: "チンチロを閉じる" }).click();
+    await b.locator("dialog.casino-screen").getByRole("button", { name: "チンチロを閉じる" }).click();
+
     // Poker does not open a dice table's number.
     const fresh = await pageFor("duel-a");
     await fresh.getByRole("button", { name: "ダイスポーカーを閉じる" }).click();
