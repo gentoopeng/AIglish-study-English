@@ -96,12 +96,14 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const screenOf = (page, game) => page.locator("dialog.casino-screen.is-" + game + "[open]");
     async function open(page, game) {
       await page.locator(".mode-" + game).click();
-      await screenOf(page, game).locator("[data-mode=friend]").click();
+      await screenOf(page, game).locator("[data-mode=group]").click();
     }
 
     // ---- Roulette together
     await open(a, "roulette");
-    assert.equal(await screenOf(a, "roulette").locator("[data-mode=friend]").innerText(), "フレンドと一緒に");
+    assert.equal(await screenOf(a, "roulette").locator("[data-mode=group]").innerText(), "一緒に");
+    // Roulette has nobody to play against, so no タイマン.
+    assert.deepEqual(await screenOf(a, "roulette").locator(".cs-mode button").allInnerTexts(), ["ひとりで", "一緒に"]);
     await screenOf(a, "roulette").locator("[data-group-create]").click();
     await screenOf(a, "roulette").locator(".cs-group-code").waitFor();
     const code = room().code;
@@ -188,8 +190,38 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await screenOf(b, "blackjack").getByText(/テーブルは終わりました/).waitFor();
     await balanceIs(b, 685);
     assert.equal(wallet("group-b"), 685);
+    await screenOf(a, "blackjack").getByRole("button", { name: "ブラックジャックを閉じる" }).click();
+    await screenOf(b, "blackjack").getByRole("button", { name: "ブラックジャックを閉じる" }).click();
+
+    // ---- Dice poker together: both play the same dealer
+    await open(a, "dice");
+    await screenOf(a, "dice").locator("[data-group-create]").click();
+    await screenOf(a, "dice").locator(".cs-group-code").waitFor();
+    const code3 = room().code;
+    assert.equal(room().kind, "dice-together");
+    await open(b, "dice");
+    await screenOf(b, "dice").locator("[data-group-code]").fill(code3);
+    await screenOf(b, "dice").getByRole("button", { name: "入る", exact: true }).click();
+    await screenOf(b, "dice").getByRole("button", { name: "この額で参加" }).waitFor();
+    await screenOf(a, "dice").getByRole("button", { name: "この額で参加" }).click();
+    await screenOf(b, "dice").getByRole("button", { name: "この額で参加" }).click();
+    await balanceIs(a, 510);
+    await balanceIs(b, 675);
+    await screenOf(a, "dice").locator("[data-group-deal]").click();
+    await screenOf(a, "dice").getByRole("button", { name: "これで勝負" }).click();
+    await screenOf(b, "dice").locator(".cs-group-dice", { hasText: "group-a：決めました" }).waitFor();
+    await screenOf(b, "dice").getByRole("button", { name: "これで勝負" }).click();
+    // Once both have stood the maker's device rolls for the dealer and each settles alone.
+    await screenOf(a, "dice").locator(".cs-result").waitFor();
+    await screenOf(b, "dice").locator(".cs-result").waitFor();
+    const dg = room().game;
+    for (const [page, id, start] of [[a, "group-a", 510], [b, "group-b", 675]]) {
+      const order = await page.evaluate(([x, y]) => window.CasinoModel.diceVs(x, y), [dg.hands[id], dg.dealer]);
+      await balanceIs(page, start + (order > 0 ? 20 : order === 0 ? 10 : 0));
+    }
+    await a.screenshot({ path: "/tmp/casino-group-dice.png" });
     assert.deepEqual(errors, []);
-    console.log("PASS: roulette together (own bets, maker spins, each paid once, one screen, next round, closes when the maker leaves), blackjack together (own bets, turns in order, dealer last, each paid once, refund when the maker leaves)");
+    console.log("PASS: roulette together (own bets, maker spins, each paid once, one screen, next round, closes when the maker leaves), blackjack together (own bets, turns in order, dealer last, each paid once, refund when the maker leaves), dice poker together against one dealer");
   } finally {
     await browser.close();
   }

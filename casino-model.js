@@ -127,6 +127,35 @@
     return { outcome, net, stake: hand.bet * (hand.doubled ? 2 : 1) };
   }
 
+  // ---- Blackjack head to head -------------------------------------------------------------
+  // Two players, no dealer: each draws from one deck at the same time, and the hand nearer 21
+  // wins. Over 21 loses to anything that is not; two busts, or the same total, is a tie, and a
+  // two-card 21 beats any other 21.
+  function duelDeal(ids, random) {
+    const deck = P.shuffle(P.deck(), random),
+      hands = {};
+    for (const id of ids) hands[id] = { cards: [deck.pop()], done: false };
+    for (const id of ids) {
+      hands[id].cards.push(deck.pop());
+      hands[id].done = isBlackjack(hands[id].cards);
+    }
+    return { deck, hands };
+  }
+  function duelAct(game, id, move) {
+    const hand = game.hands[id];
+    if (!hand || hand.done) return game;
+    const next = clone(game),
+      mine = next.hands[id];
+    if (move === "hit") {
+      mine.cards.push(next.deck.pop());
+      if (bjTotal(mine.cards).total >= 21) mine.done = true;
+    } else mine.done = true;
+    return next;
+  }
+  const duelDone = (game) => Object.values(game.hands).every((h) => h.done);
+  const duelScore = (cards) => (bjTotal(cards).total > 21 ? -1 : isBlackjack(cards) ? 22 : bjTotal(cards).total);
+  const duelCompare = (a, b) => Math.sign(duelScore(a) - duelScore(b));
+
   // ---- Roulette --------------------------------------------------------------------------
   // A single-zero wheel. A bet is { on, amount } where `on` is a number "0".."36" or one of the
   // outside spots below. Zero loses every outside bet.
@@ -222,9 +251,8 @@
     const keep = new Set(Object.keys(counts).filter((face) => counts[face] >= 2).map(Number));
     return dice.map((d) => keep.has(d));
   }
-  function diceStand(round, random) {
-    if (round.done) return round;
-    const next = clone(round);
+  // The dealer's own five dice, played the fixed way (also for a table of friends).
+  function diceDealer(random) {
     let dealer = Array.from({ length: 5 }, () => roll(random));
     const rolls = [dealer.slice()];
     for (let r = 0; r < 2; r++) {
@@ -233,6 +261,14 @@
       dealer = dealer.map((d, i) => (keep[i] ? d : roll(random)));
       rolls.push(dealer.slice());
     }
+    return { dice: dealer, rolls };
+  }
+  // > 0 when `a` wins, < 0 when `b` does, 0 for the same hand.
+  const diceVs = (a, b) => compare(diceScore(a), diceScore(b));
+  function diceStand(round, random) {
+    if (round.done) return round;
+    const next = clone(round);
+    const { dice: dealer, rolls } = diceDealer(random);
     next.dealer = dealer;
     next.dealerRolls = rolls;
     const order = compare(diceScore(next.dice), diceScore(dealer));
@@ -251,6 +287,12 @@
     bjDouble,
     bjCanDouble,
     tableDeal,
+    duelDeal,
+    duelAct,
+    duelDone,
+    duelCompare,
+    diceDealer,
+    diceVs,
     tableAct,
     tableDrop,
     tableCanDouble,
