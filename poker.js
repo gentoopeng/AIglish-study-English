@@ -435,12 +435,22 @@
     }
     close();
   }
+  // Leaving a computer table mid-hand: the chips this hand already took are lost, as at a real
+  // table, so walking away from a bad hand costs what is in the pot.
+  function forfeit() {
+    const room = session?.practice ? session.room : null,
+      me = uid(),
+      hand = room?.hand;
+    if (!room?.staked || !hand || hand.street === "done" || !hand.seats.includes(me)) return;
+    const lost = hand.total?.[me] || 0;
+    if (lost) settle(handKey(room, hand.no), -lost);
+  }
   async function rebuy() {
     const me = uid();
     await update(session.code, (room) => {
       const p = room.players[me];
       if (!p || p.stack > 0) return null;
-      if (!room.practice && balance() < room.settings.buyIn) throw Error("ポイントが足りません。");
+      if ((!room.practice || room.staked) && balance() < room.settings.buyIn) throw Error("ポイントが足りません。");
       p.stack = room.settings.buyIn;
       say(room, p.name + " がチップを追加しました");
       // Play goes straight on: no new table, and no waiting for the host to press start again.
@@ -461,6 +471,7 @@
 
   // ---- Screen ----------------------------------------------------------------------------
   function close() {
+    forfeit();
     unsubscribe?.();
     unsubscribe = null;
     clearInterval(ticker);
@@ -579,18 +590,20 @@
     const blindChoices = BLINDS.map(([sb, bb], i) => [i, sb + " / " + bb]);
     // ---- Practice against the computer
     const practicePanel = node("section", "pk-panel");
-    practicePanel.append(node("h3", "", "コンピュータと練習"), node("p", "pk-sub", "ポイントは賭けません。ゲストでもオフラインでも遊べます。"));
+    const staked = canStake();
+    practicePanel.append(
+      node("h3", "", "コンピュータと対戦"),
+      node("p", "pk-sub", staked ? "ポイントを賭けて対戦します。はじめのチップの分が参加費で、勝ち負けは1ハンドごとにポイントへ反映されます。" : "ゲストやオフラインでは練習チップで遊べます（ポイントは賭けません）。"),
+    );
     const bots = pills("pkBots", [1, 2, 3, 4, 5].map((n) => [n, n + "人"]), 1),
-      level = pills("pkLevel", [["easy", "やさしい"], ["normal", "ふつう"], ["hard", "つよい"]], "normal"),
-      chips = pills("pkChips", [50, 100, 200, 500].map((n) => [n, n + "枚"]), 100),
+      chips = pills("pkChips", [50, 100, 200, 500].map((n) => [n, n + (staked ? "pt" : "枚")]), 100),
       practiceBlinds = pills("pkPracticeBlinds", blindChoices.slice(0, 4), 0);
     practicePanel.append(
       field("相手の人数", bots),
-      field("強さ", level),
-      field("はじめのチップ", chips),
+      field(staked ? "参加費（はじめのチップ）" : "はじめのチップ", chips),
       field("ブラインド", practiceBlinds, "毎回はじめに出す額（小 / 大）"),
     );
-    const startPractice = node("button", "pk-primary", "練習を始める");
+    const startPractice = node("button", "pk-primary", staked ? "対戦を始める" : "練習を始める");
     startPractice.type = "button";
     startPractice.dataset.pkPractice = "";
     practicePanel.append(startPractice);
@@ -672,10 +685,10 @@
     });
     const joinButton = joinPanel.querySelector("[data-pk-join]");
     joinButton.onclick = working(joinButton, "入っています…", async () => enter(await join(joinPanel.querySelector("[data-pk-code]").value.trim())));
-    startPractice.onclick = () => {
+    startPractice.onclick = working(startPractice, "準備しています…", async () => {
       const [sb, bb] = BLINDS[Number(practiceBlinds.value)];
-      practice({ bots: Number(bots.value), level: level.value, buyIn: Number(chips.value), sb, bb });
-    };
+      practice({ bots: Number(bots.value), buyIn: Number(chips.value), sb, bb });
+    });
     view.querySelector("[data-pk-howto]").onclick = () =>
       window.PokerTutorial?.open({
         practice: () => {
@@ -685,17 +698,24 @@
       });
   }
 
-  // A table against the computer: the player plus 1-5 computers, practice chips only.
+  // A table against the computer: the player plus 1-5 computers. Signed in and online, the
+  // player's chips are points (settled each hand, like a real table); a guest or an offline
+  // device plays with practice chips. The computer always plays at one strength, tuned so a
+  // casual player wins about 4 games in 10 heads-up.
   const BOT_NAMES = ["ペンギン", "シロクマ", "アザラシ", "ラッコ", "キツネ"];
+  const canStake = () => uid() !== "GUEST-000" && !!(window.db && window.fbRunTransaction) && !window.FirestoreReadGuard?.paused?.();
   function practice(settings) {
+    const staked = canStake();
+    if (staked && balance() < settings.buyIn) throw Error("ポイントが足りません（所持 " + fmt(balance()) + "pt）。");
     const me = uid(),
       players = { [me]: { name: nameOf(), seat: 0, stack: settings.buyIn, joinedAt: Date.now() } };
     for (let i = 0; i < settings.bots; i++)
-      players["cpu-" + i] = { name: BOT_NAMES[i], seat: i + 1, stack: settings.buyIn, bot: settings.level, joinedAt: Date.now() };
+      players["cpu-" + i] = { name: BOT_NAMES[i], seat: i + 1, stack: settings.buyIn, bot: "normal", joinedAt: Date.now() };
     const room = {
       version: 1,
       code: "practice",
       practice: true,
+      staked,
       practiceSettings: settings,
       host: me,
       status: "playing",
@@ -783,7 +803,7 @@
       me = uid(),
       h = room.hand,
       mine = room.players[me];
-    view.querySelector("[data-pk-rules]").textContent = "ブラインド " + room.settings.sb + "/" + room.settings.bb + (room.practice ? " · 練習（ポイントは賭けません）" : " · 参加費 " + fmt(room.settings.buyIn) + "pt");
+    view.querySelector("[data-pk-rules]").textContent = "ブラインド " + room.settings.sb + "/" + room.settings.bb + (room.practice && !room.staked ? " · 練習（ポイントは賭けません）" : " · 参加費 " + fmt(room.settings.buyIn) + "pt");
     if (room.status === "closed") {
       view.querySelector(".pk-actions").replaceChildren(node("p", "pk-wait", "テーブルは閉じられました。"));
       view.querySelector(".pk-actions").append(button("ロビーへ", () => { close(); open(); }, "pk-primary"));
@@ -840,7 +860,7 @@
     view.querySelector(".pk-log").textContent = (room.log || []).slice(-1)[0] || "";
     window.PokerFX?.decorate(view, room, ring, places, me);
     // Points: this hand's result, once.
-    if (!room.practice && h?.street === "done" && h.result?.net && Object.hasOwn(h.result.net, me)) settle(handKey(room, h.no), h.result.net[me]);
+    if ((!room.practice || room.staked) && h?.street === "done" && h.result?.net && Object.hasOwn(h.result.net, me)) settle(handKey(room, h.no), h.result.net[me]);
     renderMine(room);
     renderClock();
   }
@@ -870,6 +890,7 @@
     if (room.practice && room.status === "over") {
       const won = mine && mine.stack > 0;
       actions.append(node("p", "pk-wait pk-final", won ? "勝ちました！ 全員のチップを手に入れました。" : "チップがなくなりました。"));
+      if (room.staked) actions.append(node("p", "pk-wait", "所持ポイント " + fmt(balance()) + "pt"));
       const row = node("div", "pk-buttons");
       row.append(button("ロビーへ", () => { close(); open(); }));
       // Out of chips: top up and keep playing the same computers, or start over.

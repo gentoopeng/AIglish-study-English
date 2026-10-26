@@ -1072,3 +1072,9 @@ Reported: the login bonus wheel did not turn; it showed the result at once. On i
 ## Dice without a throwing animation (10.21.82.00)
 
 On request the dice animation is gone: the tumbling, the shaking bowl and the landing added in 10.21.79.00, and also the earlier drop-in roll. Dice in dice poker and chinchiro (all modes) show their numbers at once, and the hand's name, the hint and the result show with them. The smoke test checks that thrown dice have no animation.
+
+## Poker against the computer for points, one strength (10.21.83.00)
+
+The poker lobby's computer table (now コンピュータと対戦) has no strength to choose: the computer always plays at the old ふつう, which was tuned so a simulated casual player wins about 40% of games heads-up. Signed in and online, the starting chips (50 / 100 / 200 / 500) are points: a game needs that many in the wallet, each finished hand's result is settled into the wallet once (the same `Poker.settle` keys as a real table, `practice:<createdAt>:<hand>`), and チップを足して続ける needs the buy-in again. Leaving in the middle of a hand (やめる, ×, or the screen closing) loses the chips that hand already took, so walking away from a bad hand does not undo it. A guest or an offline device still plays with practice chips. With more computers the table is harder to win outright, as before.
+
+Test: `tests/poker-computer-points.smoke.cjs` (no strength choice, buy-in in points and refused above the balance, each hand settled into the wallet, leaving mid-hand loses the chips in it).

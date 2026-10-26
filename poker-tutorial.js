@@ -175,7 +175,7 @@
       [...dots.children].forEach((dot, i) => dot.classList.toggle("is-on", i === at));
       dialog.querySelector('[data-pkt="back"]').disabled = at === 0;
       const next = dialog.querySelector('[data-pkt="next"]');
-      next.textContent = at === STEPS.length - 1 ? (options.practice ? "コンピュータと練習する" : "はじめる") : "次へ";
+      next.textContent = at === STEPS.length - 1 ? (options.practice ? "コンピュータと対戦する" : "はじめる") : "次へ";
     };
     const finish = (practice) => {
       dialog.close();
