@@ -141,6 +141,26 @@
       dd.textContent = value;
       dialog.querySelector("dl").append(dt, dd);
     });
+    // Lending points starts from the other person's profile.
+    if (window.PointLoans && person.id !== account && account !== "GUEST-000") {
+      const loans = document.createElement("div");
+      loans.className = "people-loans";
+      for (const [text, primary] of [
+        ["貸す", true],
+        ["借りたいと頼む", false],
+      ]) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = text;
+        if (primary) b.className = "library-editor-primary";
+        b.onclick = () => {
+          window.closeLibraryDialog?.();
+          window.PointLoans.person(person.id, doc.playerName || person.name);
+        };
+        loans.append(b);
+      }
+      dialog.querySelector(".library-editor-actions").before(loans);
+    }
   }
   // "たった今", "12分前", "3時間前", "2日前".
   function ago(time, now = Date.now()) {

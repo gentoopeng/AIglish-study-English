@@ -128,6 +128,12 @@
     total.dataset.pointsTotal = "";
     const pending = node("p", undefined, "points-pending");
     pending.dataset.pointsPending = "";
+    const loans = node("button", "ポイントの貸し借り", "points-loans");
+    loans.type = "button";
+    loans.onclick = () => {
+      close();
+      window.PointLoans?.open();
+    };
     const tabs = node("div", undefined, "points-tabs");
     for (const [id, label] of [
       ["history", "獲得履歴"],
@@ -218,7 +224,7 @@
     status.dataset.pointsStatus = "";
     status.setAttribute("role", "status");
     footer.append(update, status);
-    dialog.append(header, total, pending, tabs, history, methods, footer);
+    dialog.append(header, total, pending, loans, tabs, history, methods, footer);
     dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
       close();

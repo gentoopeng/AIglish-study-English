@@ -1022,3 +1022,7 @@ The poker lobby has two tabs, コンピュータと and みんなと, and every 
 ## The friend lobby fits the phone (10.21.71.00)
 
 The 4-digit number box's natural width pushed the friend lobby wider than an iPhone screen, which cut off the bet amount, the last chips and the buttons. Bet bars now use a single `minmax(0, 1fr)` column and the box fills its row, and the smoke test checks that nothing in the lobby passes the screen edge. The mode reads フレンドとタイマン.
+
+## Lending points between users (10.21.72.00)
+
+ポイントの貸し借り opens from the points dialog or from another user's profile (貸す / 借りたいと頼む). Per person it shows where the two stand, requests waiting for an answer (貸す・払う / 断る), the actions (貸す, 返す up to what is owed, 借りたいと頼む, 返してと請求 up to what is lent) and the shared history, newest first. The rules are in `point-loans-model.js` with unit tests; `point-loans.js` moves the points inside one transaction with the record and collects anything sent to this account once, when the app starts (one inbox read) and when the screen opens. See docs/security.md for the storage.
