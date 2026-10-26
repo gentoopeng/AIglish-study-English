@@ -102,6 +102,33 @@ test("hitting, doubling and leaving at a shared table", () => {
 });
 const bjTotal = (cards) => C.bjTotal(cards).total;
 
+test("blackjack head to head: both draw, nearer 21 wins, busts and naturals", () => {
+  const keep = (n) => n - 1; // deck in order: Ac, Kc, Qc, Jc, Tc …
+  let g = C.duelDeal(["a", "b"], keep);
+  assert.deepEqual(g.hands.a.cards, ["Ac", "Qc"]);
+  assert.deepEqual(g.hands.b.cards, ["Kc", "Jc"]);
+  assert.equal(g.hands.a.done, true, "a two-card 21 needs no move");
+  assert.equal(C.duelDone(g), false);
+  g = C.duelAct(g, "b", "stand");
+  assert.equal(C.duelDone(g), true);
+  assert.equal(C.duelCompare(g.hands.a.cards, g.hands.b.cards), 1);
+  assert.equal(C.duelCompare(["Th", "9d"], ["Tc", "9s"]), 0);
+  assert.equal(C.duelCompare(["Th", "6d", "8c"], ["2c", "3s"]), -1, "over 21 loses to anything under");
+  assert.equal(C.duelCompare(["Th", "6d", "8c"], ["Tc", "6s", "9h"]), 0, "two busts tie");
+  assert.equal(C.duelCompare(["Ah", "Kd"], ["7c", "7s", "7h"]), 1, "a natural beats a drawn 21");
+  // Hitting to 21 or over ends that hand only.
+  const h = C.duelAct({ deck: ["5c"], hands: { a: { cards: ["Th", "6d"], done: false }, b: { cards: ["2c", "3d"], done: false } } }, "a", "hit");
+  assert.equal(h.hands.a.done, true);
+  assert.equal(h.hands.b.done, false);
+});
+
+test("the dice dealer plays the fixed way and hands compare", () => {
+  const d = C.diceDealer(rng(5));
+  assert.equal(d.dice.length, 5);
+  assert.ok(d.rolls.length >= 1 && d.rolls.length <= 3);
+  assert.ok(C.diceVs([5, 5, 5, 6, 6], [6, 6, 6, 1, 2]) > 0, "a full house beats three of a kind");
+});
+
 test("roulette pays by the spot and zero loses outside bets", () => {
   const bets = [
     { on: "red", amount: 10 },

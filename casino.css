@@ -159,7 +159,7 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 @media(max-height:700px){.is-roulette-body{gap:7px;}.is-roulette-body .cs-chips .cs-chip-btn{min-height:36px;max-width:42px;}}
 
 /* Dice poker: against the dealer or a friend. */
-.cs-mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border:1px solid rgba(213,201,172,.22);border-radius:14px;background:rgba(10,16,28,.6);}
+.cs-mode{display:grid;grid-template-columns:repeat(var(--n,2),minmax(0,1fr));gap:4px;padding:4px;border:1px solid rgba(213,201,172,.22);border-radius:14px;background:rgba(10,16,28,.6);}
 .cs-mode button{min-height:38px;border:0;border-radius:10px;background:transparent;color:#a8a293;font:700 13px system-ui,sans-serif;cursor:pointer;}
 .cs-mode [aria-pressed=true]{background:#c6b790;color:#18202d;}
 .cs-duel-title{margin:0;color:#f3e9cf;font:700 16px/1.4 Georgia,"Yu Mincho",serif;}
@@ -198,3 +198,5 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 .cs-group-seat.is-turn{box-shadow:0 0 0 2px rgba(226,207,155,.6);}
 .cs-group-bj .cs-cards{min-height:0;}
 .cs-group-bj .cs-group-seat .pk-card{width:42px;height:60px;}.cs-group-bj .cs-group-seat .pk-card b{font-size:18px;}.cs-group-bj .cs-group-seat .pk-card i{font-size:15px;}
+.cs-group-dice li{font-size:12px;}
+.cs-my-dice .cs-dice{justify-content:center;}

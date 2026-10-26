@@ -88,7 +88,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       await page.locator("#nav-casino").click();
       await page.locator(".mode-dice").click();
       await page.locator("dialog.casino-screen.is-dice[open]").waitFor();
-      await page.locator("[data-mode=friend]").click();
+      await page.locator("[data-mode=duel]").click();
       return page;
     }
     const a = await pageFor("duel-a"),
@@ -99,7 +99,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // Everything in the lobby stays inside the phone's width, the bet amount included.
     const edges = await a.locator(".cs-duel-lobby").evaluate((panel) => [panel.getBoundingClientRect().right, Math.max(...[...panel.querySelectorAll("button, input, output")].map((el) => el.getBoundingClientRect().right))]);
     assert.ok(edges[0] <= 375 && edges[1] <= edges[0], JSON.stringify(edges));
-    assert.equal(await a.locator("[data-mode=friend]").innerText(), "フレンドとタイマン");
+    assert.equal(await a.locator("[data-mode=duel]").innerText(), "タイマン");
+    assert.deepEqual(await a.locator(".cs-mode button").allInnerTexts(), ["ひとりで", "一緒に", "タイマン"]);
     // A makes a table for 50pt and gets a number to share.
     await a.locator(".cs-duel-lobby").getByRole("button", { name: "+50" }).click();
     await a.locator(".cs-duel-lobby .cs-bet").filter({ hasText: "60pt" }).waitFor();
@@ -157,6 +158,41 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(wallet("duel-a"), expected[0]);
     assert.equal(wallet("duel-b"), expected[1] - 60);
     assert.equal(room().status, "closed");
+
+    // Blackjack one against one: A deals; A 10+9 stands, B 10+6 hits a king and busts.
+    await a.locator("dialog.casino-screen").getByRole("button", { name: "ダイスポーカーを閉じる" }).click().catch(() => {});
+    await b.locator("dialog.casino-screen").getByRole("button", { name: "ダイスポーカーを閉じる" }).click().catch(() => {});
+    const before = { a: wallet("duel-a"), b: wallet("duel-b") };
+    for (const page of [a, b]) {
+      await page.locator(".mode-blackjack").click();
+      await page.locator("dialog.casino-screen.is-blackjack [data-mode=duel]").click();
+    }
+    await a.evaluate(() => {
+      const cards = ["Th", "Tc", "9h", "6c", "Kd"];
+      const deck = window.PokerModel.deck().filter((c) => !cards.includes(c)).concat(cards.slice().reverse());
+      window.PokerModel.shuffle = () => deck.slice();
+    });
+    await a.getByRole("button", { name: "テーブルを作る" }).click();
+    const bjCode = await a.locator(".cs-duel-code").innerText();
+    await b.locator("[data-duel-code]").fill(bjCode);
+    await b.getByRole("button", { name: "入る", exact: true }).click();
+    await a.getByRole("button", { name: "これで勝負" }).waitFor();
+    await b.getByRole("button", { name: "もう1枚" }).waitFor();
+    // B sees only A's first card until both are done.
+    assert.equal(await b.locator(".is-dealer .pk-card.is-back").count(), 1);
+    await a.getByRole("button", { name: "これで勝負" }).click();
+    await b.getByRole("button", { name: "もう1枚" }).click();
+    await a.locator(".cs-result").waitFor();
+    await b.locator(".cs-result").waitFor();
+    // The bet is the one used last time (60pt).
+    assert.match(await a.locator(".cs-result").innerText(), /あなたの勝ち\s*\+60pt/);
+    assert.match(await b.locator(".cs-result").innerText(), /duel-aの勝ち\s*−60pt/);
+    await a.waitForFunction((n) => window.StudyPoints.balance() === n, before.a + 60);
+    await b.waitForFunction((n) => window.StudyPoints.balance() === n, before.b - 60);
+    await a.screenshot({ path: "/tmp/casino-bj-duel.png" });
+    await a.getByRole("button", { name: "抜ける" }).click();
+    await a.locator("dialog.casino-screen").getByRole("button", { name: "ブラックジャックを閉じる" }).click();
+    await b.locator("dialog.casino-screen").getByRole("button", { name: "ブラックジャックを閉じる" }).click();
 
     // Poker does not open a dice table's number.
     const fresh = await pageFor("duel-a");
