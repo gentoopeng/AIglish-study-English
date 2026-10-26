@@ -257,7 +257,12 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await screenOf(a, "chinchiro").locator("[data-group-deal]").click();
     for (const page of [a, b]) {
       const sc = screenOf(page, "chinchiro");
-      for (let k = 0; k < 3 && (await sc.locator("[data-chin-roll]").count()); k++) await sc.locator("[data-chin-roll]").click();
+      for (let k = 0; k < 3; k++) {
+        const roll = sc.locator("[data-chin-roll]");
+        if (!(await roll.count())) break;
+        await roll.click({ timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(150);
+      }
       await sc.locator(".cs-result").waitFor();
     }
     const cg = room().game;

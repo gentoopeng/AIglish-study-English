@@ -206,7 +206,13 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await b.getByRole("button", { name: "入る", exact: true }).click();
     for (const page of [a, b]) {
       await page.locator("[data-chin-roll]").waitFor();
-      for (let k = 0; k < 3 && (await page.locator("[data-chin-roll]").count()); k++) await page.locator("[data-chin-roll]").click();
+      // Roll until this side's turn is over (the button goes once the hand is written).
+      for (let k = 0; k < 3; k++) {
+        const roll = page.locator("[data-chin-roll]");
+        if (!(await roll.count())) break;
+        await roll.click({ timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(150);
+      }
     }
     await a.locator(".cs-result").waitFor();
     await b.locator(".cs-result").waitFor();
