@@ -753,10 +753,34 @@
     return bar;
   }
   function duelReady() {
-    if (!real()) throw Error("フレンドとの対戦は、ログインしてクラウドにつながっているときに遊べます。");
-    if (!window.fbOnSnapshot) throw Error("クラウドにつながっていません。");
+    if (uid() === "GUEST-000") throw Error("フレンドと遊ぶにはログインが必要です（ゲストでは使えません）。");
+    if (window.FirestoreReadGuard?.paused?.()) throw Error("クラウドの利用上限に達しています。時間をおいてお試しください。");
+    if (!real() || !window.fbOnSnapshot) throw Error("クラウドにつながっていません。通信を確認してもう一度お試しください。");
   }
   const duelKind = (game) => (game === "dice" ? "dice" : game + "-duel");
+  // Lobby buttons say what they are doing until the cloud answers, and any failure is shown in
+  // plain words right under them.
+  function lobbyGuard(status) {
+    return (fn, button, text) => async () => {
+      status.textContent = "";
+      const label = button?.textContent;
+      if (button) {
+        button.disabled = true;
+        button.textContent = text;
+      }
+      try {
+        await fn();
+      } catch (error) {
+        console.warn("[casino] table", error);
+        status.textContent = window.Poker?.message?.(error) || error?.message || "うまくいきませんでした。もう一度お試しください。";
+      } finally {
+        if (button?.isConnected) {
+          button.disabled = false;
+          button.textContent = label;
+        }
+      }
+    };
+  }
   function duelLobby(body, game = "dice", message = "") {
     leaveDuel();
     body.replaceChildren(modeSwitch(body, "duel", game));
@@ -764,15 +788,8 @@
     panel.append(node("p", "cs-duel-title", "フレンドと1対1で勝負"), node("p", "cs-hint", game === "dice" ? "同じ額を賭けて、強い役を作ったほうが2人分をもらいます。" : "同じ額を賭けて、21に近いほうが2人分をもらいます。ディーラーはいません。"));
     const status = node("p", "cs-duel-status", message);
     status.setAttribute("role", "status");
-    const guard = (fn) => async () => {
-      status.textContent = "";
-      try {
-        await fn();
-      } catch (error) {
-        status.textContent = error?.message || "うまくいきませんでした。もう一度お試しください。";
-      }
-    };
-    const make = betBar("duel", "テーブルを作る", (bet) => guard(async () => enterDuel(body, await createDuel(bet, game), game))());
+    const guard = lobbyGuard(status);
+    const make = betBar("duel", "テーブルを作る", (bet) => guard(async () => enterDuel(body, await createDuel(bet, game), game), make.querySelector("[data-cs-play]"), "作っています…")());
     const join = node("div", "cs-duel-join");
     const input = node("input");
     input.inputMode = "numeric";
@@ -782,7 +799,7 @@
     input.dataset.duelCode = "";
     const go = node("button", "cs-primary", "入る");
     go.type = "button";
-    go.onclick = guard(async () => enterDuel(body, await joinDuel(input.value.trim(), game), game));
+    go.onclick = guard(async () => enterDuel(body, await joinDuel(input.value.trim(), game), game), go, "入っています…");
     join.append(input, go);
     panel.append(node("p", "cs-duel-step", "1. 自分でテーブルを作る"), make, node("p", "cs-duel-step", "2. または、相手の番号で入る"), join, status);
     body.append(
@@ -863,6 +880,10 @@
       if (!snap.exists()) return duelLobby(body, game, "テーブルが見つかりません。");
       duel.room = snap.data();
       drawDuel();
+    }, (error) => {
+      if (duel !== mine) return;
+      console.warn("[casino] listen", error);
+      duelLobby(body, game, window.Poker?.message?.(error) || "テーブルを読み込めませんでした。");
     });
   }
   // Money moves once per round and key, however often the table redraws.
@@ -1145,18 +1166,11 @@
     );
     const status = node("p", "cs-duel-status", message);
     status.setAttribute("role", "status");
-    const guard = (fn) => async () => {
-      status.textContent = "";
-      try {
-        await fn();
-      } catch (error) {
-        status.textContent = error?.message || "うまくいきませんでした。もう一度お試しください。";
-      }
-    };
+    const guard = lobbyGuard(status);
     const make = node("button", "cs-primary", "テーブルを作る");
     make.type = "button";
     make.dataset.groupCreate = "";
-    make.onclick = guard(async () => enterGroup(body, kind, await createGroup(kind)));
+    make.onclick = guard(async () => enterGroup(body, kind, await createGroup(kind)), make, "作っています…");
     const join = node("div", "cs-duel-join");
     const input = node("input");
     input.inputMode = "numeric";
@@ -1166,7 +1180,7 @@
     input.dataset.groupCode = "";
     const go = node("button", "cs-primary", "入る");
     go.type = "button";
-    go.onclick = guard(async () => enterGroup(body, kind, await joinGroup(input.value.trim(), kind)));
+    go.onclick = guard(async () => enterGroup(body, kind, await joinGroup(input.value.trim(), kind)), go, "入っています…");
     join.append(input, go);
     panel.append(node("p", "cs-duel-step", "1. 自分でテーブルを作る（最大" + GROUP_MAX + "人）"), make, node("p", "cs-duel-step", "2. または、フレンドの番号で入る"), join, status);
     body.append(
@@ -1217,6 +1231,10 @@
       if (!snap.exists()) return groupLobby(body, gameOf(kind), "テーブルが見つかりません。");
       group.room = snap.data();
       drawGroup();
+    }, (error) => {
+      if (group !== mine) return;
+      console.warn("[casino] listen", error);
+      groupLobby(body, gameOf(kind), window.Poker?.message?.(error) || "テーブルを読み込めませんでした。");
     });
   }
   const groupKey = (room) => "casino:" + room.kind + ":" + room.code + ":" + room.createdAt + ":" + room.round;
