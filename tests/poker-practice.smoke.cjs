@@ -30,7 +30,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await tutorial.getByRole("button", { name: "戻る" }).click();
     assert.match(await tutorial.locator(".pkt-title").innerText(), /^6\./);
     await tutorial.getByRole("button", { name: "次へ" }).click();
-    await tutorial.getByRole("button", { name: "コンピュータと練習する" }).click();
+    await tutorial.getByRole("button", { name: "コンピュータと対戦する" }).click();
     // A practice table with one computer.
     const screen = page.locator("dialog.poker-screen[open]");
     await screen.locator(".pk-seat", { hasText: "ペンギン" }).waitFor();
