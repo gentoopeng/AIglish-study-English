@@ -15,6 +15,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       errors = [];
     docs.set("users/nb-a", { playerName: "nb-a", studyPoints: 500 });
     docs.set("users/nb-a/learningPoints/main", { balance: 500, revision: 1, history: {} });
+    docs.set("users/nb-c", { playerName: "nb-c", studyPoints: 500 });
+    docs.set("users/nb-c/learningPoints/main", { balance: 500, revision: 1, history: {} });
     async function pageFor(id, motion = "reduce") {
       const page = await browser.newPage({ viewport: { width: 375, height: 740 } });
       page.on("pageerror", (error) => errors.push(id + ": " + error.message));
@@ -171,6 +173,32 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.deepEqual(docs.get("shared/notices").items, []);
     await a.getByRole("button", { name: "管理者ツールを閉じる" }).click();
 
+    // With motion, on an iPhone (where most motion is turned off): the wheel really turns, from
+    // the tap, slows down and stops on the slice that is paid.
+    const w = await pageFor("wheel", "no-preference");
+    await signIn(w, "nb-c");
+    await w.evaluate(() => document.documentElement.classList.add("ios-stable-rendering"));
+    await w.evaluate(() => window.Notices.open());
+    const boxW = w.locator("dialog.notices-dialog[open]");
+    await boxW.locator(".notice-bonus").getByRole("button", { name: "回す" }).click();
+    await boxW.locator(".notice-spin").click();
+    const turn = () => w.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector(".notice-wheel-disc")).transform).toString());
+    const t1 = await turn();
+    await w.waitForTimeout(250);
+    const t2 = await turn();
+    await w.waitForTimeout(250);
+    const t3 = await turn();
+    assert.ok(t1 !== t2 && t2 !== t3, "the wheel turns: " + [t1, t2, t3].join(" | "));
+    assert.equal(await boxW.locator(".notice-wheel-status").innerText(), "回しています…");
+    await boxW.getByText("受け取りました。また明日。").waitFor({ timeout: 12000 });
+    const prizeW = docs.get("users/nb-c/learningPoints/bonus").prize;
+    const underW = await w.evaluate(() => {
+      const p = document.querySelector(".notice-wheel-pointer").getBoundingClientRect();
+      return [...document.elementsFromPoint(p.left + p.width / 2, p.bottom + 6)].find((el) => el.classList?.contains("notice-wheel-slice"))?.getAttribute("fill");
+    });
+    assert.equal(underW, { 10: "#1b2a40", 50: "#2c4466", 100: "#3d6378", 200: "#b98a4a", 500: "#e6d29a", 1000: "#c9483f" }[prizeW]);
+    assert.equal(docs.get("users/nb-c/learningPoints/main").balance, 500 + prizeW);
+
     // Dice: thrown dice tumble, then land; the hand's name and the result wait for the landing.
     const c = await pageFor("dice", "no-preference");
     await c.locator("#nav-casino").click();
@@ -185,7 +213,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const faces = await ch.locator(".cs-bowl .cs-die.is-landed").evaluateAll((list) => list.map((d) => [Number(d.dataset.value), d.querySelectorAll("i.is-on").length]));
     for (const [value, pips] of faces) assert.equal(pips, value);
     assert.deepEqual(errors, []);
-    console.log("PASS: bell at the top right with unread badge, admin posts and takes down a notice, notice marked new then read, bonus wheel pays once into the wallet, second device refused, guest message, dice tumble and land on their numbers");
+    console.log("PASS: bell at the top right with unread badge, admin posts and takes down a notice, notice marked new then read, bonus wheel pays once into the wallet, the wheel really turns on an iPhone and stops on the paid slice, second device refused, guest message, dice tumble and land on their numbers");
   } finally {
     await browser.close();
   }
