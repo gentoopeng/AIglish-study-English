@@ -89,19 +89,9 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 /* Motion: one-shot only, nothing loops. */
 @media(prefers-reduced-motion:no-preference){
 .cs-deal{animation:cs-deal .38s cubic-bezier(.2,.8,.3,1) var(--d,0s) both;}
-.cs-die.is-rolling{animation:cs-tumble .16s linear infinite;}
-.cs-die.is-rolling.is-landed{animation:cs-land .42s cubic-bezier(.3,1.6,.5,1) both;}
-.cs-bowl.is-shaking{animation:cs-shake .13s ease-in-out infinite;}
-.cs-hand:has(.cs-die.is-rolling:not(.is-landed)) .cs-hand-label b{opacity:0;}
-.cs-hand:has(.cs-die.is-landed) .cs-hand-label b{animation:cs-name-pop .36s cubic-bezier(.3,1.5,.5,1) both;}
 .cs-result{animation:cs-rise .3s ease-out var(--d,0s) both;}
 }
 @keyframes cs-deal{from{opacity:0;transform:translate(40px,-30px) rotate(12deg) scale(.8)}to{opacity:1;transform:none}}
-@keyframes cs-tumble{0%{transform:translateY(-6px) rotate(-18deg)}50%{transform:translateY(2px) rotate(16deg)}100%{transform:translateY(-6px) rotate(-18deg)}}
-@keyframes cs-land{0%{transform:translateY(-10px) rotate(10deg) scale(1.08)}60%{transform:translateY(2px) scale(.96)}100%{transform:none}}
-@keyframes cs-shake{0%,100%{transform:translateX(0) rotate(0)}25%{transform:translateX(-3px) rotate(-1.2deg)}75%{transform:translateX(3px) rotate(1.2deg)}}
-@keyframes cs-name-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
-@keyframes cs-roll{0%{opacity:0;transform:translateY(-26px) rotate(-200deg) scale(.7)}70%{opacity:1;transform:translateY(3px) rotate(12deg)}100%{transform:none}}
 @keyframes cs-rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes cs-pop{from{transform:translate(-50%,-50%) scale(.4)}to{transform:translate(-50%,-50%) scale(1)}}
 .cs-stake{animation-name:none;}
@@ -229,9 +219,3 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 .cs-bowl .cs-die.is-empty{background:rgba(122,100,64,.18);box-shadow:inset 0 0 0 1px rgba(122,100,64,.35);}
 .cs-chin-before{margin:4px 0 0;color:#cfe6dc;font-size:11px;text-align:center;opacity:.8;}
 .casino-pic .is-bowl{fill:#e4d6b8;stroke:#7a6440;stroke-width:1.2;}.casino-pic .is-bowl-in{fill:#f6efe0;}
-/* The outcome waits until the dice have landed. */
-@media(prefers-reduced-motion:no-preference){
-.cs-body:has(.cs-die.is-rolling:not(.is-landed)) :is(.cs-result,.cs-hint){visibility:hidden;}
-.cs-body:has(.cs-die.is-landed) .cs-result{animation:cs-after-land .32s ease-out both;}
-}
-@keyframes cs-after-land{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}

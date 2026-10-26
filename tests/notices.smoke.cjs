@@ -3,7 +3,7 @@
 // The お知らせボックス: the bell at the top right with an unread badge; a notice posted from the
 // admin tools reaches the box; the daily login bonus is spun from the box, pays into the wallet
 // once a day (a second device gets nothing more); a guest is told to log in. Also the dice in
-// the casino tumble and land before the hand and the result show.
+// the casino appear without a throwing animation.
 const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
 const base = process.env.APP_URL || "http://127.0.0.1:8000";
@@ -199,21 +199,20 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(underW, { 10: "#1b2a40", 50: "#2c4466", 100: "#3d6378", 200: "#b98a4a", 500: "#e6d29a", 1000: "#c9483f" }[prizeW]);
     assert.equal(docs.get("users/nb-c/learningPoints/main").balance, 500 + prizeW);
 
-    // Dice: thrown dice tumble, then land; the hand's name and the result wait for the landing.
+    // Dice: no throwing animation; with motion allowed they show their numbers at once, still.
     const c = await pageFor("dice", "no-preference");
     await c.locator("#nav-casino").click();
     await c.locator("#view-casino.active .mode-chinchiro").click();
     const ch = c.locator("dialog.casino-screen[open]");
     await ch.getByRole("button", { name: "勝負する" }).click();
-    await ch.locator(".cs-bowl .cs-die.is-rolling").first().waitFor();
-    await ch.locator(".cs-bowl .cs-die.is-landed").first().waitFor();
-    await c.waitForFunction(() => !document.querySelector(".cs-bowl .cs-die.is-rolling:not(.is-landed)"), null, { timeout: 4000 });
-    assert.equal(await ch.locator(".cs-bowl.is-shaking").count(), 0);
-    // The landed faces are the numbers rolled.
-    const faces = await ch.locator(".cs-bowl .cs-die.is-landed").evaluateAll((list) => list.map((d) => [Number(d.dataset.value), d.querySelectorAll("i.is-on").length]));
-    for (const [value, pips] of faces) assert.equal(pips, value);
+    await ch.locator(".cs-bowl .cs-die:not(.is-empty)").first().waitFor();
+    const faces = await ch.locator(".cs-bowl .cs-die:not(.is-empty)").evaluateAll((list) => list.map((d) => [Number(d.dataset.value), d.querySelectorAll("i.is-on").length, getComputedStyle(d).animationName]));
+    for (const [value, pips, animation] of faces) {
+      assert.equal(pips, value);
+      assert.equal(animation, "none");
+    }
     assert.deepEqual(errors, []);
-    console.log("PASS: bell at the top right with unread badge, admin posts and takes down a notice, notice marked new then read, bonus wheel pays once into the wallet, the wheel really turns on an iPhone and stops on the paid slice, second device refused, guest message, dice tumble and land on their numbers");
+    console.log("PASS: bell at the top right with unread badge, admin posts and takes down a notice, notice marked new then read, bonus wheel pays once into the wallet, the wheel really turns on an iPhone and stops on the paid slice, second device refused, guest message, dice shown at once without animation");
   } finally {
     await browser.close();
   }

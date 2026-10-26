@@ -654,36 +654,10 @@
 
   // ---- Dice poker ------------------------------------------------------------------------
   const PIPS = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
-  function face(el, value) {
-    el.dataset.value = value;
-    el.querySelectorAll("i").forEach((pip, i) => (pip.className = PIPS[value].includes(i + 1) ? "is-on" : ""));
-  }
-  // A rolling die tumbles through random faces, then lands on its own number with a bounce.
-  // Each die stops a little after the one before (its --d delay), and the bowl it sits in shakes.
   function die(value, cls) {
     const el = node("span", "cs-die " + (cls || ""));
-    for (let i = 1; i <= 9; i++) el.append(node("i"));
-    face(el, value);
-    if (/is-rolling/.test(cls || "") && !calm()) {
-      el.dataset.value = value;
-      queueMicrotask(() => {
-        const delay = parseFloat(el.style.getPropertyValue("--d")) * 1000 || 0,
-          stop = performance.now() + 650 + delay;
-        const bowlEl = el.closest(".cs-bowl");
-        bowlEl?.classList.add("is-shaking");
-        const tick = () => {
-          if (performance.now() >= stop || !el.isConnected) {
-            face(el, value);
-            el.classList.add("is-landed");
-            if (bowlEl && !bowlEl.querySelector(".cs-die.is-rolling:not(.is-landed)")) bowlEl.classList.remove("is-shaking");
-            return;
-          }
-          face(el, 1 + Math.floor(Math.random() * 6));
-          setTimeout(tick, 70);
-        };
-        tick();
-      });
-    }
+    el.dataset.value = value;
+    for (let i = 1; i <= 9; i++) el.append(node("i", PIPS[value].includes(i) ? "is-on" : ""));
     return el;
   }
   const handName = (dice) => {
