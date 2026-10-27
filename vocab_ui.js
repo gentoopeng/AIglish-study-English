@@ -1044,7 +1044,7 @@
             };
             var term = -1;
             return m.text.replace(/^(\s*)([0-9０-９]{1,4})(\s*年?)/, function(all, lead, year, rest) { return lead + mark('y:' + mid, year) + rest; })
-                .replace(/「([^「」]+)」/g, function(all, text) { term++; return '「' + mark('t:' + mid + ':' + term, text) + '」'; });
+                .replace(/「([^「」]+)」/g, function(all, text) { term++; return mark('t:' + mid + ':' + term, text); });
         }
         // Main meanings first; seldom-used ones (minor) under them, smaller, each still rated on its own.
         function meaningRow(m, minor) {

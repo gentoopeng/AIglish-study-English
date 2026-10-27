@@ -2974,3 +2974,8 @@ html body .modern-btn:active{box-shadow:0 0 0 3px rgba(213,201,172,.18)!importan
 .inline-minor-input{display:flex;align-items:center;gap:6px;flex-basis:100%;margin-top:6px;font-size:11px;color:var(--text-sub);}
 .vocab-entry-minor{display:flex!important;align-items:center;gap:6px;margin:4px 0 0;font-size:12px;color:var(--text-sub);}
 .vocab-entry-minor input{width:auto!important;margin:0;}
+/* 用語・年号モード questions: the headword, a year and the blank never split across lines, and a
+   line does not start with a closing bracket or small kana. */
+.term-text{line-break:strict;word-break:normal!important;overflow-wrap:break-word!important;}
+.term-keep{white-space:nowrap;}
+mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);border-radius:0;}

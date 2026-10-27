@@ -410,9 +410,10 @@
     };
 
     // Shared card surface and sizing for ordinary flashcards and the login warm-up.
-    window.fillFlashcardFaces=function(cardWrap,front,back,num,style){
+    // options.term: a 用語・年号モード question, shown with its year and blank kept whole (TermQuestions.show).
+    window.fillFlashcardFaces=function(cardWrap,front,back,num,style,options){
         var rotator=document.createElement('div');rotator.className='flashcard-inner-rotator';
-        ['front','back'].forEach(function(side){var face=document.createElement('div');face.className='flashcard-face-'+side;face.style.cssText=style||'';if(side==='front'){var badge=document.createElement('span');badge.className='flashcard-number';badge.textContent='#'+num;face.append(badge);}var text=document.createElement('div');text.style.cssText='font-size:'+(side==='front'?24:16)+'px;font-weight:'+(side==='front'?900:700)+';text-align:center;color:white;word-break:break-word;overflow-wrap:anywhere';if(side==='front')text.style.fontFamily='Times New Roman, serif';text.textContent=side==='front'?front:back;face.append(text);rotator.append(face);});cardWrap.append(rotator);
+        ['front','back'].forEach(function(side){var face=document.createElement('div');face.className='flashcard-face-'+side;face.style.cssText=style||'';if(side==='front'){var badge=document.createElement('span');badge.className='flashcard-number';badge.textContent='#'+num;face.append(badge);}var text=document.createElement('div');text.style.cssText='font-size:'+(side==='front'?24:16)+'px;font-weight:'+(side==='front'?900:700)+';text-align:center;color:white;word-break:break-word;overflow-wrap:anywhere';if(side==='front')text.style.fontFamily='Times New Roman, serif';var shown=side==='front'?front:back;if(options&&options.term&&window.TermQuestions&&window.TermQuestions.show)window.TermQuestions.show(text,shown);else text.textContent=shown;face.append(text);rotator.append(face);});cardWrap.append(rotator);
     };
     window.sizeFlashcardFaces=function(cardWrap,stage,posLabel){
         var texts=Array.from(cardWrap.querySelectorAll('.flashcard-face-front > div,.flashcard-face-back > div'));
@@ -630,7 +631,7 @@
         frontText = window.escapeVocabText(frontText);
         backText = window.escapeVocabText(backText);
         var customStyle = (typeof window.getFlashcardStyleByHistory === 'function') ? window.getFlashcardStyleByHistory(wordData) : "";
-        window.fillFlashcardFaces(cardWrap,flashcardDirectionMode === 'en2ja'?wordData.en:wordData.ja,flashcardDirectionMode === 'en2ja'?wordData.ja:wordData.en,wordData.shownNo||wordData.num,customStyle);
+        window.fillFlashcardFaces(cardWrap,flashcardDirectionMode === 'en2ja'?wordData.en:wordData.ja,flashcardDirectionMode === 'en2ja'?wordData.ja:wordData.en,wordData.shownNo||wordData.num,customStyle,{term:!!wordData.termKey});
         stage.appendChild(cardWrap);
         // The text box must grow with the circle; flex shrinking otherwise hides extra lines.
         window.sizeFlashcardFaces(cardWrap,stage,posLabel);
