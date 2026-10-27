@@ -580,3 +580,39 @@ test("every way of answering a word pays the same 2 points once a day; records a
   // Amounts no rate ever paid are refused.
   assert.equal(a.c.StudyPointPolicy.allowed("review", 7), false);
 });
+test("total earned: past awards added up once from the day records, then grown with each award; poker keys kept", async () => {
+  const remote = new Map([
+    ["users/a/learningPoints/main", { balance: 50, revision: 3, poker: { "casino:x:pay": 1 } }],
+    ["users/a/reviewPointDays/d1", { claims: { 1: { amount: 10, source: "review" }, 2: 3 } }],
+    ["users/a/reviewPointDays/d2", { claims: { 7: 10 } }],
+  ]);
+  const a = setup(remote),
+    date = a.c.WeakReviewModel.day();
+  let reads = 0;
+  a.c.fbCollection = (_, ...parts) => parts.join("/");
+  a.c.fbGetDocs = async (path) => {
+    reads++;
+    return { docs: [...remote].filter(([k]) => k.startsWith(path + "/")).map(([, v]) => ({ data: () => v })) };
+  };
+  assert.equal(a.points.earned(), null);
+  a.points.award("book", "1", date);
+  await a.points.flush();
+  // 23 before (10 + 3 + 10), then this award's 10. Spending never lowers it.
+  assert.equal(remote.get("users/a/learningPoints/main").earned, 33);
+  assert.equal(remote.get("users/a").earnedPoints, 33);
+  assert.equal(a.points.earned(), 33);
+  assert.deepEqual(remote.get("users/a/learningPoints/main").poker, { "casino:x:pay": 1 });
+  // Counted once: a later award adds only itself, with no second read of the records.
+  a.points.award("book", "2", date);
+  await a.points.flush();
+  assert.equal(remote.get("users/a/learningPoints/main").earned, 43);
+  assert.equal(reads, 1);
+  // Another device that has not counted yet takes the cloud's total instead of counting again.
+  const b = setup(remote);
+  b.c.fbCollection = a.c.fbCollection;
+  b.c.fbGetDocs = a.c.fbGetDocs;
+  b.c.fbGetDoc = async (ref) => ({ exists: () => remote.has(ref), data: () => remote.get(ref) });
+  await b.points.flush();
+  assert.equal(b.points.earned(), 43);
+  assert.equal(reads, 1);
+});

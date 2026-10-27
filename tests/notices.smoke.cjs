@@ -14,7 +14,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       versions = new Map(),
       errors = [];
     docs.set("users/nb-a", { playerName: "nb-a", studyPoints: 500 });
-    docs.set("users/nb-a/learningPoints/main", { balance: 500, revision: 1, history: {} });
+    docs.set("users/nb-a/learningPoints/main", { balance: 500, revision: 1, history: {}, earned: 800 });
     docs.set("users/nb-c", { playerName: "nb-c", studyPoints: 500 });
     docs.set("users/nb-c/learningPoints/main", { balance: 500, revision: 1, history: {} });
     async function pageFor(id, motion = "reduce") {
@@ -140,6 +140,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(under, { 10: "#1b2a40", 50: "#2c4466", 100: "#3d6378", 200: "#b98a4a", 500: "#e6d29a", 1000: "#c9483f" }[prize]);
     assert.equal(await box.locator(".notice-won").innerText(), "+" + prize.toLocaleString("ja-JP") + "pt");
     assert.equal(docs.get("users/nb-a/learningPoints/main").balance, 500 + prize);
+    // The bonus counts toward the total earned, on the wallet and for the ranking.
+    assert.equal(docs.get("users/nb-a/learningPoints/main").earned, 800 + prize);
+    assert.equal(docs.get("users/nb-a").earnedPoints, 800 + prize);
     assert.equal(docs.get("users/nb-a").studyPoints, 500 + prize);
     assert.equal(await a.evaluate(() => window.StudyPoints.balance()), 500 + prize);
     assert.equal(docs.get("users/nb-a/learningPoints/bonus").day, await a.evaluate(() => window.NoticesModel.dayKey()));
