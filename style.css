@@ -2952,3 +2952,18 @@ html body .modern-btn:active{box-shadow:0 0 0 3px rgba(213,201,172,.18)!importan
 .word-row-container .word-main-line:has(.vocab-word-markers.with-admin)>div:first-child{align-items:flex-start!important;}
 .word-row-container .word-main-line:has(.vocab-word-markers.with-admin) .word-num-badge{margin-top:3px;}
 }
+/* 目次: the units like a book's contents, each opening its words; editors change a unit in place. */
+.vocab-unit-toc{list-style:none;margin:0 0 12px;padding:0;max-height:60dvh;overflow:auto;}
+.vocab-unit-toc li{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);}
+.vocab-unit-toc li.is-current .vocab-unit-toc-open strong{color:#e4cc91;}
+.vocab-unit-toc-open{flex:1;min-width:0;display:grid;gap:2px;padding:10px 4px;border:0;background:none;color:var(--text-main);text-align:left;cursor:pointer;}
+.vocab-unit-toc-open strong{font-size:15px;overflow-wrap:anywhere;}.vocab-unit-toc-open small{font-size:11px;color:var(--text-sub);}
+.vocab-unit-toc-edit{flex-shrink:0;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-sub);font-size:12px;}
+.vocab-unit-toc-form{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px;padding:4px 0 10px;font-size:11px;color:var(--text-sub);}
+.vocab-unit-toc-form label{display:grid;gap:3px;}
+.vocab-unit-toc-form input{width:70px;box-sizing:border-box;padding:7px;border:1px solid var(--border);border-radius:8px;background:rgba(15,23,42,.7);color:#fff;font-size:16px;}
+.vocab-unit-toc-form input[data-unit-edit-name]{width:min(100%,220px);}
+.vocab-unit-toc-form button{padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.06);color:#fff;font-size:12px;}
+.vocab-unit-toc-form button[type=submit]{border-color:var(--accent);background:rgba(99,102,241,.3);font-weight:700;}
+.vocab-unit-toc-empty{font-size:13px;color:var(--text-sub);}
+.vocab-unit-toc-button strong{color:#e4cc91;}

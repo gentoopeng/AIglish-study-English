@@ -96,7 +96,7 @@
         if (unitSelect && unitField && window.VocabOrder) {
             var units = window.VocabOrder.units(words || []);
             unitSelect.replaceChildren(new Option('すべての単元', ''));
-            units.forEach(function(unit) { unitSelect.append(new Option(unit.name + '（#' + unit.from + '–' + unit.to + '・' + unit.count + '語）', unit.name)); });
+            units.forEach(function(unit) { unitSelect.append(new Option(unit.name + '（#' + unit.from + '–' + unit.to + '・' + unit.count + '語）', unit.key)); });
             unitSelect.value = '';
             unitField.hidden = !units.length;
         }
@@ -209,11 +209,13 @@
         // 用語・年号モード: one entry becomes several questions; each is filtered by its own result.
         var termMode = !!(window.TermProgress && window.TermQuestions && window.TermProgress.enabled(currentTextbook));
         var termStore = termMode ? window.TermProgress.read(currentTextbook) : null;
+        // The chosen unit is one run of numbers (units with the same name elsewhere are separate).
+        var unitNums = unit && typeof vocabList !== 'undefined' && window.VocabOrder ? new Set((window.VocabOrder.findUnit(vocabList, unit) || { nums: [] }).nums) : null;
         if (typeof vocabList !== 'undefined') {
             vocabList.forEach(function(w) {
                 var n = window.VocabOrder ? window.VocabOrder.no(w) : parseInt(w.num);
                 if (n < startNum || n > endNum) return;
-                if (unit && !(w.unit && window.VocabOrder.cleanUnit(w.unit) === unit)) return;
+                if (unitNums && !unitNums.has(String(w.num))) return;
                 if (termMode) {
                     window.TermQuestions.questions(w).forEach(function(q) {
                         var result = (termStore[String(w.num)] || {})[q.key];

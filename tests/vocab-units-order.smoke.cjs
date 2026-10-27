@@ -74,10 +74,11 @@ const { chromium } = require("playwright"),
     await page.getByLabel("単元の名前").fill("第1章");
     await page.getByRole("button", { name: "付ける", exact: true }).click();
     const chips = await page.locator(".vocab-unit-chip").allInnerTexts();
-    assert.equal(chips.length, 3);
-    assert.match(chips[1], /第1章[\s\S]*#1–2 · 2語/);
-    assert.match(chips[2], /第2章[\s\S]*#3–3 · 1語/);
-    await page.locator('.vocab-unit-chip[data-unit="第1章"]').click();
+    assert.equal(chips.length, 4);
+    assert.match(chips[0], /目次[\s\S]*2単元/);
+    assert.match(chips[2], /第1章[\s\S]*#1–2 · 2語/);
+    assert.match(chips[3], /第2章[\s\S]*#3–3 · 1語/);
+    await page.locator('.vocab-unit-chip[data-unit="第1章@1"]').click();
     assert.deepEqual(await shown(), [["one", "#1"], ["two", "#2"]]);
     await page.locator('.vocab-unit-chip[data-unit=""]').click();
     // Moving a word in its edit form: "four" (#5) to #1 moves the others down, records intact.
@@ -100,7 +101,7 @@ const { chromium } = require("playwright"),
     await page.getByRole("button", { name: "単語カード", exact: true }).click();
     assert.equal(await page.locator("#flashcardUnitField").isVisible(), true);
     assert.equal(await page.locator("#flashcardRangeEnd").inputValue(), "5");
-    await page.locator("#flashcardUnitSelect").selectOption("第1章");
+    await page.locator("#flashcardUnitSelect").selectOption({ label: "第1章（#2–3・2語）" });
     await page.getByRole("button", { name: "カードを開始する" }).click();
     await page.waitForFunction(() => flashcardOriginQueue.length > 0);
     const queue = await page.evaluate(() => flashcardOriginQueue.map((w) => [w.en, w.shownNo]).sort());
@@ -116,9 +117,41 @@ const { chromium } = require("playwright"),
     const others = page.locator(`.battle-book-picker input:checked:not([value="${book}"])`);
     for (let i = await others.count(); i > 0; i--) await others.first().uncheck();
     assert.equal(await page.locator(".battle-unit").isVisible(), true);
-    assert.deepEqual(await page.locator("[data-range-unit] option").allTextContents(), ["すべて", "第1章（2語）", "第2章（1語）"]);
+    assert.deepEqual(await page.locator("[data-range-unit] option").allTextContents(), ["すべて", "第1章（#2–3・2語）", "第2章（#4–4・1語）"]);
+    // The same name further on is its own unit; 目次 lists the units and edits a name and range.
+    await page.reload();
+    await page.waitForFunction(() => window.__learningBootReady === true);
+    await page.locator("#nav-vocab").click();
+    await openBook();
+    await page.waitForFunction(() => document.querySelectorAll("#vocabListContainer .word-row-container").length === 5);
+    await page.getByText("番号の範囲に単元を付ける", { exact: true }).click();
+    await page.getByLabel("単元にする最初の番号").fill("5");
+    await page.getByLabel("単元にする最後の番号").fill("5");
+    await page.getByLabel("単元の名前").fill("第1章");
+    await page.getByRole("button", { name: "付ける", exact: true }).click();
+    assert.deepEqual(await page.locator(".vocab-unit-chip strong").allInnerTexts(), ["目次", "すべて", "第1章", "第2章", "第1章"]);
+    await page.locator('.vocab-unit-chip[data-unit="第1章@5"]').click();
+    assert.deepEqual(await shown(), [["three", "#5"]]);
+    await page.getByRole("button", { name: /^目次/ }).click();
+    const toc = page.locator("dialog.vocab-unit-toc-dialog[open]");
+    assert.deepEqual(await toc.locator(".vocab-unit-toc-open small").allInnerTexts(), ["5語", "#2–3 · 2語 · ○0%", "#4–4 · 1語 · ○0%", "#5–5 · 1語 · ○100%"]);
+    assert.equal(await toc.locator("li.is-current strong").innerText(), "第1章");
+    await toc.getByRole("button", { name: "第1章を編集" }).nth(1).click();
+    await toc.locator("[data-unit-edit-name]").fill("まとめ");
+    await toc.locator("[data-unit-edit-from]").fill("4");
+    await toc.getByRole("button", { name: "保存", exact: true }).click();
+    await toc.locator(".vocab-unit-toc-open strong", { hasText: "まとめ" }).waitFor();
+    assert.deepEqual(await toc.locator(".vocab-unit-toc-open strong").allInnerTexts(), ["すべて", "第1章", "まとめ"]);
+    await toc.locator(".vocab-unit-toc-open", { hasText: "まとめ" }).click();
+    assert.deepEqual(await shown(), [["between", "#4"], ["three", "#5"]]);
+    assert.deepEqual(await page.evaluate(() => vocabList.map((w) => [w.word, w.unit || ""]).sort()), [["between", "まとめ"], ["four", ""], ["one", "第1章"], ["three", "まとめ"], ["two", "第1章"]]);
+    await page.getByRole("button", { name: /^目次/ }).click();
+    await toc.getByRole("button", { name: "まとめを編集" }).click();
+    await toc.getByRole("button", { name: "単元を外す" }).click();
+    await toc.locator(".vocab-unit-toc-open strong", { hasText: "まとめ" }).waitFor({ state: "detached" });
+    assert.deepEqual(await toc.locator(".vocab-unit-toc-open strong").allInnerTexts(), ["すべて", "第1章"]);
     assert.deepEqual(errors, []);
-    console.log("PASS: insert between #2 and #3 (consent for a used number), records stay with their word, units by range with a filtering contents list, move by number, restart, flashcard unit filter and display numbers, battle unit choice");
+    console.log("PASS: insert between #2 and #3 (consent for a used number), records stay with their word, units by range with a filtering contents list, the same name further on as its own unit, 目次 with name and range editing, move by number, restart, flashcard unit filter and display numbers, battle unit choice");
   } finally {
     await browser.close();
   }

@@ -183,7 +183,7 @@ ${eventHtml()}
         const units = window.VocabOrder ? window.VocabOrder.units(words) : [];
         unitSelect.replaceChildren(new Option("すべて", ""));
         for (const unit of units)
-          unitSelect.append(new Option(unit.name + "（" + unit.count + "語）", unit.name));
+          unitSelect.append(new Option(unit.name + "（#" + unit.from + "–" + unit.to + "・" + unit.count + "語）", unit.key));
         unitSelect.closest(".battle-unit").hidden = !units.length;
       }
       const mode = screen.querySelector("[data-question-mode]").value;
@@ -392,12 +392,14 @@ ${eventHtml()}
         normalized = window.migrateVocabData(
           window.stripVocabProgressFromWords(source),
         );
+      // The chosen unit is one run of numbers (units with the same name elsewhere are separate).
+      const unitNums = unit && window.VocabOrder ? new Set((window.VocabOrder.findUnit(normalized, unit) || { nums: [] }).nums) : null;
       for (const word of normalized) {
         if (
           ids.length === 1 &&
           ((window.VocabOrder ? window.VocabOrder.no(word) : Number(word.num)) < from ||
             (window.VocabOrder ? window.VocabOrder.no(word) : Number(word.num)) > to ||
-            (unit && window.VocabOrder.cleanUnit(word.unit) !== unit))
+            (unitNums && !unitNums.has(String(word.num))))
         )
           continue;
         const saved = progress[String(word.num)],

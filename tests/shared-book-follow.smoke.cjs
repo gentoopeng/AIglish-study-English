@@ -29,7 +29,7 @@ const { chromium } = require("playwright"),
       localStorage.setItem("core_v4_custom_words_follower_personal_old", JSON.stringify(old));
       window.__docs = new Map([
         ["shared/textbooks_index", { textbooks: [{ id: "shared-1", name: "配信単語", termMode: true, updatedAt: "2026-10-27T03:00:00.000Z" }, { id: "shared-2", name: "別の配信" }] }],
-        ["shared/vocab_shared-1", { custom_words: [{ num: 1, word: "1600 「関ヶ原の戦い」", meaning: "徳川家康が勝つ" }, { num: 2, word: "apples", meaning: "りんご" }] }],
+        ["shared/vocab_shared-1", { custom_words: [{ num: 1, word: "1600 「関ヶ原の戦い」", meaning: "徳川家康が勝つ", unit: "江戸" }, { num: 2, word: "apples", meaning: "りんご" }] }],
       ]);
       window.__reads = [];
       window.db = {};
@@ -46,7 +46,7 @@ const { chromium } = require("playwright"),
       const copy = () => JSON.parse(localStorage.getItem("core_v4_personal_library_follower")).books.find((b) => b.id === "personal_old");
       await window.syncTextbooksIndexFromFirestore();
       await wait(() => copy().sourceSyncedAt);
-      const first = { copy: copy(), words: JSON.parse(localStorage.getItem("core_v4_cache_personal_old")).map((w) => w.word), mode: window.TermQuestions?.enabled ? null : null, reads: __reads.slice() };
+      const first = { copy: copy(), units: JSON.parse(localStorage.getItem("core_v4_cache_personal_old")).map((w) => w.unit || ""), words: JSON.parse(localStorage.getItem("core_v4_cache_personal_old")).map((w) => w.word), mode: window.TermQuestions?.enabled ? null : null, reads: __reads.slice() };
       // Nothing new: no read of the book's words.
       __reads = [];
       await window.syncTextbooksIndexFromFirestore();
@@ -64,6 +64,8 @@ const { chromium } = require("playwright"),
     assert.equal(result.first.copy.copiedFrom, "shared-1");
     assert.equal(result.first.copy.termMode, true);
     assert.deepEqual(result.first.words, ["1600 「関ヶ原の戦い」", "apples"]);
+    // Units are part of the words, so a unit set on the distributed book reaches the copy too.
+    assert.deepEqual(result.first.units, ["江戸", ""]);
     assert.ok(result.first.reads.includes("shared/vocab_shared-1"));
     assert.deepEqual(result.second.filter((p) => p.startsWith("shared/vocab_")), []);
     assert.deepEqual(result.third.words, ["1600 「関ヶ原の戦い」", "apple pie"]);

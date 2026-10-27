@@ -56,24 +56,43 @@
       .trim()
       .slice(0, UNIT_LIMIT);
   }
-  // Units in the order they first appear, with their display ranges and sizes.
+  // Units in number order. A unit is an unbroken run of words with the same unit name, so the
+  // same name used again further on (another chapter's "まとめ") is a separate unit rather than
+  // one range spanning the words between. `key` names one run: its name and first number.
   function units(words) {
-    const list = [],
-      byName = new Map();
+    const list = [];
+    let last = null;
     for (const w of sort(words)) {
       const name = cleanUnit(w.unit);
-      if (!name) continue;
-      let unit = byName.get(name);
-      if (!unit) {
-        unit = { name, count: 0, from: no(w), to: no(w), nums: [] };
-        byName.set(name, unit);
-        list.push(unit);
+      if (!name) {
+        last = null;
+        continue;
       }
-      unit.count++;
-      unit.to = no(w);
-      unit.nums.push(String(w.num));
+      if (!last || last.name !== name) {
+        last = { key: name + "@" + no(w), name, count: 0, from: no(w), to: no(w), nums: [] };
+        list.push(last);
+      }
+      last.count++;
+      last.to = no(w);
+      last.nums.push(String(w.num));
     }
     return list;
+  }
+  const findUnit = (words, key) => (key ? units(words).find((u) => u.key === key) || null : null);
+  // Change one unit: its name and its range. The words it had lose the unit, then the new range
+  // gets it (taking those words from any other unit). An empty name removes the unit.
+  function editUnit(words, key, { name, from, to }) {
+    const unit = findUnit(words, key);
+    if (!unit) throw Error("単元が見つかりません。");
+    const had = new Set(unit.nums),
+      cleared = (words || []).map((w) => {
+        if (!had.has(String(w.num))) return w;
+        const copy = { ...w };
+        delete copy.unit;
+        return copy;
+      });
+    if (!cleanUnit(name)) return { words: cleared, changed: had.size };
+    return assignUnit(cleared, from, to, name);
   }
   // Assign a unit to every word whose display number lies in [from, to].
   function assignUnit(words, from, to, name) {
@@ -93,7 +112,7 @@
     });
     return { words: copies, changed };
   }
-  const model = { no, sort, maxNo, place, units, assignUnit, cleanUnit, UNIT_LIMIT };
+  const model = { no, sort, maxNo, place, units, findUnit, editUnit, assignUnit, cleanUnit, UNIT_LIMIT };
   root.VocabOrder = model;
   if (typeof module !== "undefined") module.exports = model;
 })(typeof window === "undefined" ? globalThis : window);
