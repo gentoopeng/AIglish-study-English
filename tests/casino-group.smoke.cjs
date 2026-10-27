@@ -68,7 +68,17 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
                 reads[path] = version;
                 return { exists: () => !!value, data: () => structuredClone(value) };
               },
-              set: (ref, value, options) => writes.push({ path: pathOf(ref), value: JSON.parse(JSON.stringify(value)), merge: options?.merge === true }),
+              set: (ref, value, options) => {
+                // Like Firestore: no list directly inside a list, and no undefined values.
+                (function check(v, inList) {
+                  if (v === undefined) throw Error("Unsupported field value: undefined");
+                  if (Array.isArray(v)) {
+                    if (inList) throw Error("Nested arrays are not supported");
+                    v.forEach((x) => check(x, true));
+                  } else if (v && typeof v === "object") Object.values(v).forEach((x) => check(x, false));
+                })(value, false);
+                writes.push({ path: pathOf(ref), value: JSON.parse(JSON.stringify(value)), merge: options?.merge === true });
+              },
             });
             if (await __gtCommit({ reads, writes })) return result;
           }
@@ -225,8 +235,15 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await screenOf(a, "dice").locator("[data-group-deal]").click();
     await screenOf(a, "dice").getByRole("button", { name: "これで勝負" }).click();
     await screenOf(b, "dice").locator(".cs-group-dice", { hasText: "group-a：決めました" }).waitFor();
+    // The maker's phone goes quiet; the last to stand rolls for the dealer instead.
+    const away = listeners.get("group-a");
+    listeners.delete("group-a");
     await screenOf(b, "dice").getByRole("button", { name: "これで勝負" }).click();
-    // Once both have stood the maker's device rolls for the dealer and each settles alone.
+    await screenOf(b, "dice").locator(".cs-result").waitFor();
+    assert.ok(room().game.dealer);
+    listeners.set("group-a", away);
+    await notify("pokerRooms/" + code3);
+    // Each settles alone.
     await screenOf(a, "dice").locator(".cs-result").waitFor();
     await screenOf(b, "dice").locator(".cs-result").waitFor();
     const dg = room().game;

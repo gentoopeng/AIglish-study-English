@@ -68,7 +68,17 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
                 reads[path] = version;
                 return { exists: () => !!value, data: () => structuredClone(value) };
               },
-              set: (ref, value, options) => writes.push({ path: pathOf(ref), value: JSON.parse(JSON.stringify(value)), merge: options?.merge === true }),
+              set: (ref, value, options) => {
+                // Like Firestore: no list directly inside a list, and no undefined values.
+                (function check(v, inList) {
+                  if (v === undefined) throw Error("Unsupported field value: undefined");
+                  if (Array.isArray(v)) {
+                    if (inList) throw Error("Nested arrays are not supported");
+                    v.forEach((x) => check(x, true));
+                  } else if (v && typeof v === "object") Object.values(v).forEach((x) => check(x, false));
+                })(value, false);
+                writes.push({ path: pathOf(ref), value: JSON.parse(JSON.stringify(value)), merge: options?.merge === true });
+              },
             });
             if (await __dlCommit({ reads, writes })) return result;
           }
@@ -159,7 +169,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(wallet("duel-b"), expected[1] - 60);
     assert.equal(room().status, "closed");
 
-    // Blackjack one against one: A deals; A 10+9 stands, B 10+6 hits a king and busts.
+    // Blackjack one against one: A 10+9 stands, B 10+6 hits a king and busts.
     await a.locator("dialog.casino-screen").getByRole("button", { name: "ダイスポーカーを閉じる" }).click().catch(() => {});
     await b.locator("dialog.casino-screen").getByRole("button", { name: "ダイスポーカーを閉じる" }).click().catch(() => {});
     const before = { a: wallet("duel-a"), b: wallet("duel-b") };
@@ -167,11 +177,13 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       await page.locator(".mode-blackjack").click();
       await page.locator("dialog.casino-screen.is-blackjack [data-mode=duel]").click();
     }
-    await a.evaluate(() => {
-      const cards = ["Th", "Tc", "9h", "6c", "Kd"];
-      const deck = window.PokerModel.deck().filter((c) => !cards.includes(c)).concat(cards.slice().reverse());
-      window.PokerModel.shuffle = () => deck.slice();
-    });
+    // Either phone may deal, so both get the same deck.
+    for (const page of [a, b])
+      await page.evaluate(() => {
+        const cards = ["Th", "Tc", "9h", "6c", "Kd"];
+        const deck = window.PokerModel.deck().filter((c) => !cards.includes(c)).concat(cards.slice().reverse());
+        window.PokerModel.shuffle = () => deck.slice();
+      });
     await a.getByRole("button", { name: "テーブルを作る" }).click();
     const bjCode = await a.locator(".cs-duel-code").innerText();
     await b.locator("[data-duel-code]").fill(bjCode);
@@ -190,6 +202,13 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await a.waitForFunction((n) => window.StudyPoints.balance() === n, before.a + 60);
     await b.waitForFunction((n) => window.StudyPoints.balance() === n, before.b - 60);
     await a.screenshot({ path: "/tmp/casino-bj-duel.png" });
+    // The next round is dealt too (it used to stay on 配っています… after a rematch).
+    await a.getByRole("button", { name: "もう一勝負" }).click();
+    await b.getByRole("button", { name: "もう一勝負" }).click();
+    await a.getByRole("button", { name: "これで勝負" }).waitFor();
+    await b.getByRole("button", { name: "もう1枚" }).waitFor();
+    assert.equal([...docs.values()].find((r) => r.code === bjCode && r.kind === "blackjack-duel").round, 2);
+    await a.waitForFunction((n) => window.StudyPoints.balance() === n, before.a);
     await a.getByRole("button", { name: "抜ける" }).click();
     await a.locator("dialog.casino-screen").getByRole("button", { name: "ブラックジャックを閉じる" }).click();
     await b.locator("dialog.casino-screen").getByRole("button", { name: "ブラックジャックを閉じる" }).click();
@@ -204,7 +223,23 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const ccCode = await a.locator(".cs-duel-code").innerText();
     await b.locator("[data-duel-code]").fill(ccCode);
     await b.getByRole("button", { name: "入る", exact: true }).click();
-    for (const page of [a, b]) {
+    // A's finished hand fails to reach the table: it is said, and 結果を送る sends it again.
+    await a.locator("[data-chin-roll]").waitFor();
+    await a.evaluate(() => {
+      window.__tx = window.fbRunTransaction;
+      window.fbRunTransaction = async () => {
+        throw Object.assign(new Error("Failed to get document because the client is offline."), { code: "unavailable" });
+      };
+    });
+    for (let k = 0; k < 3 && !(await a.getByRole("button", { name: "結果を送る" }).count()); k++) {
+      await a.locator("[data-chin-roll]").click();
+      await a.waitForTimeout(150);
+    }
+    await a.locator(".cs-send-note").waitFor();
+    await a.evaluate(() => (window.fbRunTransaction = window.__tx));
+    await a.getByRole("button", { name: "結果を送る" }).click();
+    await a.getByText("相手が振り終わるのを待っています…").waitFor();
+    for (const page of [b]) {
       await page.locator("[data-chin-roll]").waitFor();
       // Roll until this side's turn is over (the button goes once the hand is written).
       for (let k = 0; k < 3; k++) {

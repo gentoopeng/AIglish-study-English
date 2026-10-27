@@ -221,7 +221,9 @@
     play.onclick = () => {
       if (bet <= 0 || bet > balance()) return draw();
       lastBet[id] = bet;
-      onPlay(bet);
+      const pending = onPlay(bet);
+      // At a friends' table the bet goes through the cloud first.
+      if (pending?.then) send(play, () => pending);
     };
     const row = node("div", "cs-bet-row");
     row.append(node("span", "", "賭ける"), amount, clear);
@@ -360,9 +362,13 @@
       b.append(node("b", "", MOVE_WORDS[move][0]), node("small", "", MOVE_WORDS[move][1]));
       const cost = C.tableCost(t, me, move);
       b.disabled = cost > balance();
-      b.onclick = () => {
-        row.querySelectorAll("button").forEach((x) => (x.disabled = true));
-        onMove(move, cost);
+      b.onclick = async () => {
+        const all = [...row.querySelectorAll("button")],
+          was = all.map((x) => x.disabled);
+        all.forEach((x) => (x.disabled = true));
+        await onMove(move, cost, b);
+        // Still here means the move did not go through: the buttons work again.
+        if (row.isConnected) all.forEach((x, i) => (x.disabled = was[i]));
       };
       buttons[move] = b;
       row.append(b);
@@ -839,6 +845,45 @@
       }
     };
   }
+  // Buttons at a friends' table wait for the cloud. Until it answers they say so, a slow answer
+  // is explained, and a failure is shown right under them so a press never seems to do nothing.
+  // Resolves to the cloud's answer, or false when it failed.
+  async function send(button, fn, busy = "送っています…") {
+    const label = button ? [...button.childNodes] : null,
+      place = button?.closest(".cs-actions, .cs-betbar, .cs-bj-actions") || button;
+    const say = (text) => {
+      if (!place?.isConnected) return;
+      place.parentElement.querySelector(":scope > .cs-send-note")?.remove();
+      if (!text) return;
+      const p = node("p", "cs-duel-status cs-send-note", text);
+      p.setAttribute("role", "alert");
+      place.after(p);
+    };
+    say("");
+    if (button) {
+      button.disabled = true;
+      if (busy) button.textContent = busy;
+    }
+    const slow = setTimeout(() => say("通信に時間がかかっています。このまま少し待ってください。"), 8000);
+    try {
+      const done = await fn();
+      say("");
+      return done;
+    } catch (error) {
+      console.warn("[casino] send", error);
+      say((window.Poker?.message?.(error) || error?.message || "送れませんでした。") + "（もう一度押してください）");
+      return false;
+    } finally {
+      clearTimeout(slow);
+      if (button?.isConnected) {
+        button.disabled = false;
+        button.replaceChildren(...label);
+      }
+    }
+  }
+  // The cloud cannot keep a list inside a list, so each chinchiro throw travels as "3,5,5".
+  const chinUp = (turn) => turn && { ...turn, rolls: turn.rolls.map((r) => (Array.isArray(r) ? r.join(",") : r)) };
+  const chinDown = (turn) => turn && { ...turn, rolls: (turn.rolls || []).map((r) => (typeof r === "string" ? r.split(",").map(Number) : r)) };
   function duelLobby(body, game = "dice", message = "") {
     leaveDuel();
     body.replaceChildren(modeSwitch(body, "duel", game));
@@ -1065,14 +1110,15 @@
       };
       const stand = node("button", "cs-primary", "これで勝負");
       stand.type = "button";
-      stand.onclick = async () => {
-        stand.disabled = true;
+      stand.onclick = () => {
         const at = room.round;
-        await updateDuel(room.code, (fresh) => {
-          if (fresh.status !== "playing" || fresh.round !== at || fresh.hands?.[me]) return null;
-          fresh.hands = { ...(fresh.hands || {}), [me]: { dice: hand.dice, at: Date.now() } };
-          return fresh;
-        }).catch(() => (stand.disabled = false));
+        send(stand, () =>
+          updateDuel(room.code, (fresh) => {
+            if (fresh.status !== "playing" || fresh.round !== at || fresh.hands?.[me]) return null;
+            fresh.hands = { ...(fresh.hands || {}), [me]: { dice: hand.dice, at: Date.now() } };
+            return fresh;
+          }),
+        );
       };
       actions.append(again, stand);
       body.append(actions, node("p", "cs-hint", left ? "光っているダイスを残すのがおすすめ。相手のダイスは2人とも決めるまで見えません" : "これで勝負しましょう"));
@@ -1104,17 +1150,19 @@
     again.type = "button";
     again.disabled = !!room.rematch?.[me] || balance() < room.bet;
     again.onclick = () =>
-      updateDuel(room.code, (fresh) => {
-        if (fresh.status !== "playing" || fresh.round !== room.round) return null;
-        fresh.rematch = { ...(fresh.rematch || {}), [me]: true };
-        if (Object.keys(fresh.players).every((id) => fresh.rematch[id])) {
-          fresh.round++;
-          fresh.hands = {};
-          fresh.deal = null;
-          fresh.rematch = {};
-        }
-        return fresh;
-      }).catch(() => {});
+      send(again, () =>
+        updateDuel(room.code, (fresh) => {
+          if (fresh.status !== "playing" || fresh.round !== room.round) return null;
+          fresh.rematch = { ...(fresh.rematch || {}), [me]: true };
+          if (Object.keys(fresh.players).every((id) => fresh.rematch[id])) {
+            fresh.round++;
+            fresh.hands = {};
+            fresh.deal = null;
+            fresh.rematch = {};
+          }
+          return fresh;
+        }),
+      );
     const row = node("div", "cs-actions");
     row.append(again);
     body.append(row);
@@ -1125,15 +1173,27 @@
   function drawBlackjackDuel(room, body, me, otherId, other) {
     const deal = room.deal;
     if (!deal) {
-      if (room.host === me && !duel.dealing) {
-        duel.dealing = room.round;
-        updateDuel(room.code, (fresh) => {
+      // Either player's device deals, once a round; the cloud keeps only the first deal.
+      const dealNow = () => {
+        const mine = duel;
+        mine.dealing = room.round;
+        return updateDuel(room.code, (fresh) => {
           if (fresh.deal || fresh.round !== room.round || fresh.status !== "playing") return null;
           fresh.deal = C.duelDeal(Object.keys(fresh.players).sort((a, b) => fresh.players[a].joinedAt - fresh.players[b].joinedAt), random);
           return fresh;
-        }).catch(() => (duel && (duel.dealing = 0)));
-      }
+        }).catch((error) => {
+          mine.dealing = 0;
+          throw error;
+        });
+      };
+      if (duel.dealing !== room.round) dealNow().catch((error) => console.warn("[casino] deal", error));
       body.append(node("p", "cs-duel-wait", "カードを配っています…"));
+      const again = node("button", "", "もう一度配る");
+      again.type = "button";
+      again.onclick = () => send(again, dealNow);
+      const row = node("div", "cs-actions");
+      row.append(again);
+      body.append(row);
       return refresh();
     }
     const mine = deal.hands[me],
@@ -1157,14 +1217,14 @@
       const act = (text, moveName, primary) => {
         const b = node("button", primary ? "cs-primary" : "", text);
         b.type = "button";
-        b.onclick = async () => {
-          b.disabled = true;
-          await updateDuel(room.code, (fresh) => {
-            if (!fresh.deal || fresh.round !== room.round || fresh.deal.hands[me]?.done) return null;
-            fresh.deal = C.duelAct(fresh.deal, me, moveName);
-            return fresh;
-          }).catch(() => (b.disabled = false));
-        };
+        b.onclick = () =>
+          send(b, () =>
+            updateDuel(room.code, (fresh) => {
+              if (!fresh.deal || fresh.round !== room.round || fresh.deal.hands[me]?.done) return null;
+              fresh.deal = C.duelAct(fresh.deal, me, moveName);
+              return fresh;
+            }),
+          );
         actions.append(b);
         return b;
       };
@@ -1349,6 +1409,9 @@
       body.append(row);
       return refresh();
     }
+    // A bet the table holds is taken once, even when the answer to the button was lost.
+    const placed = kind === "roulette" ? Object.values(room.bets?.[me] || {}).reduce((a, v) => a + v, 0) : room.bets?.[me] || 0;
+    if (placed) groupMove(room, "bet", -placed);
     // Who is here, and the number to share while friends are still coming.
     const people = node("div", "cs-group-people");
     for (const [id, p] of Object.entries(room.players).sort((a, b) => a[1].joinedAt - b[1].joinedAt)) {
@@ -1427,18 +1490,19 @@
         ok.type = "button";
         ok.disabled = !sum || sum > balance();
         ok.onclick = async () => {
-          ok.disabled = true;
           const bets = Object.fromEntries(group.bets);
           const at = room.round;
-          const done = await updateDuel(room.code, (fresh) => {
-            if (fresh.status === "closed" || fresh.round !== at || fresh.phase !== "betting" || fresh.bets?.[me]) return null;
-            fresh.bets = { ...(fresh.bets || {}), [me]: bets };
-            return fresh;
-          }).catch(() => false);
+          const done = await send(ok, () =>
+            updateDuel(room.code, (fresh) => {
+              if (fresh.status === "closed" || fresh.round !== at || fresh.phase !== "betting" || fresh.bets?.[me]) return null;
+              fresh.bets = { ...(fresh.bets || {}), [me]: bets };
+              return fresh;
+            }),
+          );
           if (done) {
             groupMove({ ...room, round: at }, "bet", -sum);
-            group.bets.clear();
-          } else ok.disabled = false;
+            if (group) group.bets.clear();
+          }
         };
         actions.append(clear, ok);
       } else hint.textContent = "賭けを確定しました（" + fmt(sum) + "pt）。" + (host ? "みんなが賭けたら回してください" : "親が回すのを待っています");
@@ -1447,17 +1511,18 @@
         spin.type = "button";
         spin.dataset.groupSpin = "";
         spin.disabled = !Object.keys(room.bets || {}).length;
-        spin.onclick = async () => {
-          spin.disabled = true;
+        spin.onclick = () => {
           const number = C.rouletteSpin(random);
-          await updateDuel(room.code, (fresh) => {
-            if (fresh.phase !== "betting" || fresh.round !== room.round) return null;
-            fresh.phase = "spun";
-            fresh.number = number;
-            fresh.spunAt = Date.now();
-            fresh.history = [number].concat(fresh.history || []).slice(0, 20);
-            return fresh;
-          }).catch(() => (spin.disabled = false));
+          send(spin, () =>
+            updateDuel(room.code, (fresh) => {
+              if (fresh.phase !== "betting" || fresh.round !== room.round) return null;
+              fresh.phase = "spun";
+              fresh.number = number;
+              fresh.spunAt = Date.now();
+              fresh.history = [number].concat(fresh.history || []).slice(0, 20);
+              return fresh;
+            }),
+          );
         };
         actions.append(spin);
       }
@@ -1482,11 +1547,12 @@
       const wait = Math.max(0, (group.revealAt || 0) - Date.now());
       if (wait) setTimeout(() => group?.room === room && reveal(), wait);
       else reveal();
-      hint.textContent = host ? "次の勝負は「次へ」で始まります" : "親が「次へ」を押すと次の勝負です";
-      if (host) {
-        const next = node("button", "cs-primary", "次へ");
-        next.type = "button";
-        next.onclick = () =>
+      // Anyone at the table can start the next spin, so play goes on when the maker is away.
+      hint.textContent = "次の勝負は「次へ」で始まります";
+      const next = node("button", "cs-primary", "次へ");
+      next.type = "button";
+      next.onclick = () =>
+        send(next, () =>
           updateDuel(room.code, (fresh) => {
             if (fresh.round !== room.round) return null;
             fresh.round++;
@@ -1494,11 +1560,30 @@
             fresh.bets = {};
             fresh.number = null;
             return fresh;
-          }).catch(() => {});
-        actions.append(next);
-      }
+          }),
+        );
+      actions.append(next);
     }
     body.append(hint, actions);
+  }
+
+  // The next game, once this one is decided. Anyone at the table can press it, so play goes on
+  // when the table's maker is away.
+  function nextGame(room) {
+    const next = node("button", "cs-primary", "次のゲーム");
+    next.type = "button";
+    next.onclick = () =>
+      send(next, () =>
+        updateDuel(room.code, (fresh) => {
+          if (fresh.round !== room.round) return null;
+          fresh.round++;
+          fresh.phase = "betting";
+          fresh.bets = {};
+          fresh.game = null;
+          return fresh;
+        }),
+      );
+    return next;
   }
 
   // Blackjack together: one dealer, everyone's own hand, in turn.
@@ -1530,7 +1615,7 @@
               if (fresh.status === "closed" || fresh.round !== at || fresh.game || fresh.bets?.[me]) return null;
               fresh.bets = { ...(fresh.bets || {}), [me]: amount };
               return fresh;
-            }).catch(() => false);
+            });
             if (done) groupMove({ ...room, round: at }, "bet", -amount);
           }),
         );
@@ -1542,9 +1627,8 @@
         deal.type = "button";
         deal.dataset.groupDeal = "";
         deal.disabled = !joined.length;
-        deal.onclick = async () => {
-          deal.disabled = true;
-          await updateDuel(room.code, (fresh) => {
+        deal.onclick = () =>
+          send(deal, () => updateDuel(room.code, (fresh) => {
             if (fresh.game || fresh.round !== room.round) return null;
             const order = Object.keys(fresh.bets || {})
               .filter((id) => fresh.players[id])
@@ -1554,8 +1638,7 @@
             fresh.game.dealtAt = Date.now();
             fresh.phase = fresh.game.done ? "done" : "playing";
             return fresh;
-          }).catch(() => (deal.disabled = false));
-        };
+          }));
         actions.append(deal);
       }
       body.append(hint, actions);
@@ -1564,27 +1647,31 @@
     if (!t.done) {
       if (t.turn === me) {
         body.append(
-          bjActions(t, me, async (moveName, cost) => {
+          bjActions(t, me, async (moveName, cost, button) => {
             const seat = t.seats[me];
-            const ok = await updateDuel(room.code, (fresh) => {
-              if (!fresh.game || fresh.game.turn !== me || fresh.round !== room.round) return null;
-              const dealtAt = fresh.game.dealtAt;
-              fresh.game = C.tableAct(fresh.game, me, moveName);
-              fresh.game.dealtAt = dealtAt;
-              if (fresh.game.done) fresh.phase = "done";
-              return fresh;
-            }).catch(() => false);
+            const ok = await send(
+              button,
+              () =>
+                updateDuel(room.code, (fresh) => {
+                  if (!fresh.game || fresh.game.turn !== me || fresh.round !== room.round) return null;
+                  const dealtAt = fresh.game.dealtAt;
+                  fresh.game = C.tableAct(fresh.game, me, moveName);
+                  fresh.game.dealtAt = dealtAt;
+                  if (fresh.game.done) fresh.phase = "done";
+                  return fresh;
+                }),
+              null,
+            );
             if (ok && cost) groupMove(room, moveName + ":" + seat.hands.length + ":" + seat.active, -cost);
-            if (!ok) drawGroup();
           }),
         );
       } else {
         hint.textContent = (t.order.includes(me) ? "" : "この勝負は見学中です。") + nameOf(room, t.turn) + "さんの番です";
-        // The table's maker can move things on when someone is away.
-        if (host) {
-          const skip = node("button", "", nameOf(room, t.turn) + "さんを飛ばす");
-          skip.type = "button";
-          skip.onclick = () =>
+        // Anyone at the table can move things on when the player whose turn it is is away.
+        const skip = node("button", "", nameOf(room, t.turn) + "さんを飛ばす");
+        skip.type = "button";
+        skip.onclick = () =>
+          send(skip, () =>
             updateDuel(room.code, (fresh) => {
               if (!fresh.game || fresh.game.turn !== t.turn) return null;
               const dealtAt = fresh.game.dealtAt;
@@ -1592,9 +1679,9 @@
               fresh.game.dealtAt = dealtAt;
               if (fresh.game.done) fresh.phase = "done";
               return fresh;
-            }).catch(() => {});
-          actions.append(skip);
-        }
+            }),
+          );
+        actions.append(skip);
       }
       body.append(hint, actions);
       return;
@@ -1608,21 +1695,8 @@
       line.style.setProperty("--d", "1.2s");
       body.append(line);
     }
-    hint.textContent = host ? "「次のゲーム」でまた賭けられます" : "親が「次のゲーム」を押すとまた賭けられます";
-    if (host) {
-      const next = node("button", "cs-primary", "次のゲーム");
-      next.type = "button";
-      next.onclick = () =>
-        updateDuel(room.code, (fresh) => {
-          if (fresh.round !== room.round) return null;
-          fresh.round++;
-          fresh.phase = "betting";
-          fresh.bets = {};
-          fresh.game = null;
-          return fresh;
-        }).catch(() => {});
-      actions.append(next);
-    }
+    hint.textContent = "「次のゲーム」でまた賭けられます";
+    actions.append(nextGame(room));
     body.append(hint, actions);
   }
 
@@ -1657,7 +1731,7 @@
               if (fresh.status === "closed" || fresh.round !== at || fresh.game || fresh.bets?.[me]) return null;
               fresh.bets = { ...(fresh.bets || {}), [me]: amount };
               return fresh;
-            }).catch(() => false);
+            });
             if (done) groupMove({ ...room, round: at }, "bet", -amount);
           }),
         );
@@ -1670,14 +1744,16 @@
         start.dataset.groupDeal = "";
         start.disabled = !joined.length;
         start.onclick = () =>
-          updateDuel(room.code, (fresh) => {
-            if (fresh.game || fresh.round !== room.round) return null;
-            const order = Object.keys(fresh.bets || {}).filter((id) => fresh.players[id]);
-            if (!order.length) return null;
-            fresh.game = { order, hands: {}, dealer: null };
-            fresh.phase = "playing";
-            return fresh;
-          }).catch(() => {});
+          send(start, () =>
+            updateDuel(room.code, (fresh) => {
+              if (fresh.game || fresh.round !== room.round) return null;
+              const order = Object.keys(fresh.bets || {}).filter((id) => fresh.players[id]);
+              if (!order.length) return null;
+              fresh.game = { order, hands: {}, dealer: null };
+              fresh.phase = "playing";
+              return fresh;
+            }),
+          );
         actions.append(start);
       }
       body.append(hint, actions);
@@ -1694,6 +1770,8 @@
     if (list.childElementCount) body.append(list);
     const inGame = g.order.includes(me),
       mineDone = g.hands[me];
+    // Passed over before deciding: the bet comes back.
+    if (!inGame && bet) groupMove(room, "pay", bet);
     if (inGame && !mineDone && !g.dealer) {
       let hand = localHand(room);
       body.append(myDiceRow(hand, null, (i) => {
@@ -1712,14 +1790,14 @@
       };
       const stand = node("button", "cs-primary", "これで勝負");
       stand.type = "button";
-      stand.onclick = async () => {
-        stand.disabled = true;
-        await updateDuel(room.code, (fresh) => {
-          if (!fresh.game || fresh.game.dealer || fresh.round !== room.round || fresh.game.hands[me]) return null;
-          fresh.game.hands = { ...fresh.game.hands, [me]: hand.dice };
-          return fresh;
-        }).catch(() => (stand.disabled = false));
-      };
+      stand.onclick = () =>
+        send(stand, () =>
+          updateDuel(room.code, (fresh) => {
+            if (!fresh.game || fresh.game.dealer || fresh.round !== room.round || fresh.game.hands[me]) return null;
+            fresh.game.hands = { ...fresh.game.hands, [me]: hand.dice };
+            return fresh;
+          }),
+        );
       actions.append(again, stand);
       hint.textContent = left ? "光っているダイスを残すのがおすすめ" : "これで勝負しましょう";
       body.append(hint, actions);
@@ -1728,27 +1806,41 @@
     if (mineDone) body.append(myDiceRow({ dice: mineDone, held: [], rolls: 3 }, true));
     const waiting = g.order.filter((id) => !g.hands[id]);
     if (!g.dealer) {
-      // When every hand is in, the table's maker rolls for the dealer.
-      if (host && !waiting.length && group.rolling !== room.round) {
-        group.rolling = room.round;
-        updateDuel(room.code, (fresh) => {
+      // When every hand is in, whichever device sees it first rolls for the dealer (the cloud
+      // keeps only one roll), so the table does not wait on its maker's screen.
+      const rollDealer = () => {
+        const mine = group;
+        mine.rolling = room.round;
+        return updateDuel(room.code, (fresh) => {
           if (!fresh.game || fresh.game.dealer || fresh.round !== room.round) return null;
           if (fresh.game.order.some((id) => !fresh.game.hands[id])) return null;
           fresh.game.dealer = C.diceDealer(random).dice;
           fresh.phase = "done";
           return fresh;
-        }).catch(() => group && (group.rolling = 0));
-      }
-      hint.textContent = inGame ? "みんなが決めるのを待っています…" : "この勝負は見学中です";
-      if (host && waiting.length) {
+        }).catch((error) => {
+          mine.rolling = 0;
+          throw error;
+        });
+      };
+      if (!waiting.length && group.rolling !== room.round) rollDealer().catch((error) => console.warn("[casino] dealer", error));
+      hint.textContent = !waiting.length ? "ディーラーが振っています…" : inGame ? "みんなが決めるのを待っています…" : bet ? "待たずに進めたので、この勝負は見学です（賭けは戻ります）" : "この勝負は見学中です";
+      if (!waiting.length) {
+        const roll = node("button", "", "ディーラーを振る");
+        roll.type = "button";
+        roll.onclick = () => send(roll, rollDealer);
+        actions.append(roll);
+      } else if (host) {
+        // The maker can go on without someone who is away; their bet comes back.
         const skip = node("button", "", "待たずに進める（" + waiting.map((id) => nameOf(room, id)).join("・") + "）");
         skip.type = "button";
         skip.onclick = () =>
-          updateDuel(room.code, (fresh) => {
-            if (!fresh.game || fresh.game.dealer || fresh.round !== room.round) return null;
-            fresh.game.order = fresh.game.order.filter((id) => fresh.game.hands[id]);
-            return fresh;
-          }).catch(() => {});
+          send(skip, () =>
+            updateDuel(room.code, (fresh) => {
+              if (!fresh.game || fresh.game.dealer || fresh.round !== room.round) return null;
+              fresh.game.order = fresh.game.order.filter((id) => fresh.game.hands[id]);
+              return fresh;
+            }),
+          );
         actions.append(skip);
       }
       body.append(hint, actions);
@@ -1765,21 +1857,8 @@
       out.style.setProperty("--d", "0.9s");
       body.append(out);
     }
-    hint.textContent = host ? "「次のゲーム」でまた賭けられます" : "親が「次のゲーム」を押すとまた賭けられます";
-    if (host) {
-      const next = node("button", "cs-primary", "次のゲーム");
-      next.type = "button";
-      next.onclick = () =>
-        updateDuel(room.code, (fresh) => {
-          if (fresh.round !== room.round) return null;
-          fresh.round++;
-          fresh.phase = "betting";
-          fresh.bets = {};
-          fresh.game = null;
-          return fresh;
-        }).catch(() => {});
-      actions.append(next);
-    }
+    hint.textContent = "「次のゲーム」でまた賭けられます";
+    actions.append(nextGame(room));
     body.append(hint, actions);
   }
   // My five dice as buttons: tap to keep; the ones worth keeping glow.
@@ -1894,7 +1973,8 @@
 
   // Chinchiro together: the computer is the parent for the whole table.
   function drawGroupChinchiro(room, body, me, host) {
-    const g = room.game,
+    const raw = room.game,
+      g = raw && { ...raw, parent: chinDown(raw.parent), hands: Object.fromEntries(Object.entries(raw.hands || {}).map(([id, turn]) => [id, chinDown(turn)])) },
       bet = room.bets?.[me] || 0;
     const felt = node("div", "cs-felt cs-chin");
     felt.append(chinSide("親（ディーラー）", g?.parent || null, false, g && group.parentShown !== room.round));
@@ -1911,7 +1991,7 @@
               if (fresh.status === "closed" || fresh.round !== at || fresh.game || fresh.bets?.[me]) return null;
               fresh.bets = { ...(fresh.bets || {}), [me]: amount };
               return fresh;
-            }).catch(() => false);
+            });
             if (done) groupMove({ ...room, round: at }, "bet", -amount);
           }),
         );
@@ -1924,14 +2004,16 @@
         go.dataset.groupDeal = "";
         go.disabled = !joined.length;
         go.onclick = () =>
-          updateDuel(room.code, (fresh) => {
-            if (fresh.game || fresh.round !== room.round) return null;
-            const order = Object.keys(fresh.bets || {}).filter((id) => fresh.players[id]);
-            if (!order.length) return null;
-            fresh.game = { order, parent: C.chinTurn(random), hands: {} };
-            fresh.phase = "playing";
-            return fresh;
-          }).catch(() => {});
+          send(go, () =>
+            updateDuel(room.code, (fresh) => {
+              if (fresh.game || fresh.round !== room.round) return null;
+              const order = Object.keys(fresh.bets || {}).filter((id) => fresh.players[id]);
+              if (!order.length) return null;
+              fresh.game = { order, parent: chinUp(C.chinTurn(random)), hands: {} };
+              fresh.phase = "playing";
+              return fresh;
+            }),
+          );
         actions.append(go);
       }
       body.append(rules("チンチロの遊び方", CHIN_RULES), hint, actions);
@@ -1955,29 +2037,37 @@
     for (const id of g.order) if (id !== me) others.append(node("li", "", nameOf(room, id) + "：" + (early !== null ? "—" : g.hands[id] ? g.hands[id].hand.name : "振っています…")));
     if (others.childElementCount) body.append(others);
     if (inGame && early === null && !g.hands[me]) {
-      if (!mine.done) {
-        const go = node("button", "cs-primary", mine.rolls.length ? "もう一度振る（あと" + (C.CHILD_THROWS - mine.rolls.length) + "回）" : "サイコロを振る");
-        go.type = "button";
-        go.dataset.chinRoll = "";
-        go.onclick = async () => {
+      // A finished hand goes to the table; if that does not get through, it is sent again.
+      const submit = () =>
+        updateDuel(room.code, (fresh) => {
+          if (!fresh.game || fresh.round !== room.round || fresh.game.hands?.[me]) return null;
+          fresh.game.hands = { ...(fresh.game.hands || {}), [me]: chinUp(mine) };
+          return fresh;
+        });
+      const go = node("button", "cs-primary", mine.done ? "結果を送る" : mine.rolls.length ? "もう一度振る（あと" + (C.CHILD_THROWS - mine.rolls.length) + "回）" : "サイコロを振る");
+      go.type = "button";
+      go.dataset.chinRoll = "";
+      if (mine.done) {
+        go.onclick = () => send(go, submit);
+        if (group.chinSent !== local) {
+          group.chinSent = local;
+          send(go, submit);
+        }
+        hint.textContent = "結果をテーブルに送っています";
+      } else {
+        go.onclick = () => {
           mine = C.chinNext(mine, random, C.CHILD_THROWS);
           try {
             localStorage.setItem(local, JSON.stringify(mine));
           } catch {}
           group.chinRolled = true;
-          if (mine.done)
-            await updateDuel(room.code, (fresh) => {
-              if (!fresh.game || fresh.round !== room.round || fresh.game.hands[me]) return null;
-              fresh.game.hands = { ...fresh.game.hands, [me]: mine };
-              return fresh;
-            }).catch(() => {});
           drawGroup();
         };
-        actions.append(go);
         hint.textContent = "親は「" + g.parent.hand.name + "」。子は" + C.CHILD_THROWS + "回まで振れます";
-        body.append(hint, actions);
-        return;
       }
+      actions.append(go);
+      body.append(hint, actions);
+      return;
     }
     if (inGame && (early !== null || mine?.done)) {
       const m = early !== null ? early : C.chinSettle(g.parent.hand, mine.hand);
@@ -1990,69 +2080,65 @@
       out.style.setProperty("--d", "0.6s");
       body.append(out);
     }
-    hint.textContent = host ? "「次のゲーム」でまた賭けられます" : "親（テーブルを作った人）が「次のゲーム」を押すとまた賭けられます";
-    if (host) {
-      const next = node("button", "cs-primary", "次のゲーム");
-      next.type = "button";
-      next.onclick = () =>
-        updateDuel(room.code, (fresh) => {
-          if (fresh.round !== room.round) return null;
-          fresh.round++;
-          fresh.phase = "betting";
-          fresh.bets = {};
-          fresh.game = null;
-          return fresh;
-        }).catch(() => {});
-      actions.append(next);
-    }
+    hint.textContent = "「次のゲーム」でまた賭けられます";
+    actions.append(nextGame(room));
     body.append(hint, actions);
   }
 
   // Chinchiro one against one: both roll, the other's bowl stays covered until both are done.
   function drawChinchiroDuel(room, body, me, otherId, other) {
     const local = "aiglish_casino_chin_" + uid() + "_" + room.code + "_" + room.createdAt + "_" + room.round;
-    let mine = room.hands?.[me] || null;
+    const sent = chinDown(room.hands?.[me]) || null;
+    let mine = sent;
     if (!mine) {
       try {
         mine = JSON.parse(localStorage.getItem(local) || "null");
       } catch {}
       mine = mine || C.chinStart();
     }
-    const theirs = otherId ? room.hands?.[otherId] : null,
-      both = !!(room.hands?.[me] && theirs);
+    const theirs = otherId ? chinDown(room.hands?.[otherId]) : null,
+      both = !!(sent && theirs);
     const felt = node("div", "cs-felt cs-chin");
     felt.append(chinSide(other?.name || "相手", theirs, !both, both && duel.chinShown !== room.round), chinSide("あなた", mine, false, duel.chinRolled));
     if (both) duel.chinShown = room.round;
     duel.chinRolled = false;
     body.append(felt);
-    if (!room.hands?.[me]) {
-      const go = node("button", "cs-primary", mine.rolls.length ? "もう一度振る（" + (3 - mine.rolls.length) + "回まで）" : "サイコロを振る");
+    if (!sent) {
+      // A finished hand goes to the table; if that does not get through, it is sent again.
+      const submit = () =>
+        updateDuel(room.code, (fresh) => {
+          if (fresh.status !== "playing" || fresh.round !== room.round || fresh.hands?.[me]) return null;
+          fresh.hands = { ...(fresh.hands || {}), [me]: chinUp(mine) };
+          return fresh;
+        });
+      const go = node("button", "cs-primary", mine.done ? "結果を送る" : mine.rolls.length ? "もう一度振る（" + (3 - mine.rolls.length) + "回まで）" : "サイコロを振る");
       go.type = "button";
       go.dataset.chinRoll = "";
-      go.onclick = async () => {
-        mine = C.chinNext(mine, random);
-        try {
-          localStorage.setItem(local, JSON.stringify(mine));
-        } catch {}
-        duel.chinRolled = true;
-        if (mine.done)
-          await updateDuel(room.code, (fresh) => {
-            if (fresh.status !== "playing" || fresh.round !== room.round || fresh.hands?.[me]) return null;
-            fresh.hands = { ...(fresh.hands || {}), [me]: mine };
-            return fresh;
-          }).catch(() => {});
-        drawDuel();
-      };
       const row = node("div", "cs-actions");
       row.append(go);
-      body.append(row, node("p", "cs-hint", "役ができるまで3回まで振れます。相手のどんぶりは2人とも決めるまで見えません"));
+      if (mine.done) {
+        go.onclick = () => send(go, submit);
+        if (duel.chinSent !== local) {
+          duel.chinSent = local;
+          send(go, submit);
+        }
+      } else
+        go.onclick = () => {
+          mine = C.chinNext(mine, random);
+          try {
+            localStorage.setItem(local, JSON.stringify(mine));
+          } catch {}
+          duel.chinRolled = true;
+          drawDuel();
+        };
+      body.append(row, node("p", "cs-hint", mine.done ? "結果を相手に送っています" : "役ができるまで3回まで振れます。相手のどんぶりは2人とも決めるまで見えません"));
       return refresh();
     }
     if (!both) {
       body.append(node("p", "cs-duel-wait", "相手が振り終わるのを待っています…"));
       return refresh();
     }
-    const order = C.chinVs(room.hands[me].hand, theirs.hand),
+    const order = C.chinVs(sent.hand, theirs.hand),
       net = order > 0 ? room.bet : order < 0 ? -room.bet : 0;
     if (order > 0) duelMove(room, "pay", room.bet * 2);
     else if (order === 0) duelMove(room, "pay", room.bet);
