@@ -404,7 +404,7 @@ ${eventHtml()}
           continue;
         const saved = progress[String(word.num)],
           sig = window.buildWordSignature(word),
-          compatible = !saved?.sig || saved.sig === sig;
+          compatible = !saved?.sig || (window.sameWordSignature||Object.is)(saved.sig, sig);
         // 用語・年号モード: each generated question is its own battle question with its own record.
         if (terms) {
           for (const q of window.TermQuestions.questions(word)) {

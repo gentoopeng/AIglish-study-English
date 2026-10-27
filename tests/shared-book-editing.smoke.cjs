@@ -81,6 +81,17 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     }));
     assert.deepEqual(copy, { name: "配信単語（自分用）", own: true, words: ["study", "apples"], rated: "ok", originalListed: false });
     await page.locator("#vocabListContainer .card-edit-btn").first().waitFor();
+    // The original, taken off the list, comes back from 非表示の単語帳.
+    await page.evaluate(() => window.syncTextbooksIndexFromFirestore());
+    await page.evaluate(() => window.showVocabLibrarySelection());
+    await page.getByRole("button", { name: "非表示の単語帳" }).click();
+    const hiddenRow = page.locator("#libraryHiddenBooks .library-catalog-item", { hasText: "配信単語" }).filter({ hasText: "配信中" });
+    await hiddenRow.getByRole("button", { name: "一覧に戻す" }).click();
+    await page.waitForFunction(() => textbooksPool.some((b) => b.id === "shared-1"));
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => window.selectVocabLibraryBook(textbooksPool.find((b) => b.personal && b.name === "配信単語（自分用）").id));
+    await page.waitForFunction(() => /^personal_/.test(currentTextbook) && !window.__vocabSelectionRequest);
+    await page.locator("#vocabListContainer .card-edit-btn").first().waitFor();
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find((k) => k.startsWith("core_v4_personal_library_")))).books.find((b) => b.id === currentTextbook).copiedFrom), "shared-1");
     // The copy is changed (用語・年号モード, a word with 「」), and then sent back to the distributed book.
     await page.locator('#vocabListContainer [data-word-num="1"] .card-edit-btn').click();
@@ -145,7 +156,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(created.linked, created.entry.id);
     assert.equal(created.hidden, true);
     assert.deepEqual(errors, []);
-    console.log("PASS: admin editing mode keeps rights after the tools close and edits the original, ends on 終了; copy to own book keeps words and understanding and hides the original, remembers it, and the admin sends the copy's words and 用語・年号モード back to the distributed book, and distributes a book of their own as a new one");
+    console.log("PASS: admin editing mode keeps rights after the tools close and edits the original, ends on 終了; copy to own book keeps words and understanding and hides the original (which comes back from 非表示の単語帳), remembers it, and the admin sends the copy's words and 用語・年号モード back to the distributed book, and distributes a book of their own as a new one");
   } finally {
     await browser.close();
   }

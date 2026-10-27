@@ -2,6 +2,8 @@
 (function() {
     'use strict';
     function userId() { return myId || 'GUEST-000'; }
+    // The distributed books as the index lists them, hidden ones included (the pool leaves those out).
+    var sharedBooks = [];
     function key() { return 'core_v4_personal_library_' + userId(); }
     function readLibrary() {
         var raw = localStorage.getItem(key());
@@ -13,7 +15,10 @@
     }
     function refreshPool() {
         var data = readLibrary();
-        var shared = textbooksPool.filter(function(book) { return !book.personal && !(window.LibraryState&&window.LibraryState.isDeleted('book',book.id)); });
+        // Hidden distributed books are not in the pool, so the index's list brings one back when unhidden.
+        var shared = textbooksPool.filter(function(book) { return !book.personal; });
+        sharedBooks.forEach(function(book) { if (!shared.some(function(b) { return b.id === book.id; })) shared.push(book); });
+        shared = shared.filter(function(book) { return !(window.LibraryState&&window.LibraryState.isDeleted('book',book.id)); });
         textbooksPool = shared.filter(function(book) { return data.hidden.indexOf(book.id) < 0; }).concat(data.books.filter(function(book){return data.hidden.indexOf(book.id)<0;}));
     }
     const pendingCatalogs=new Set();
@@ -49,7 +54,7 @@
     var originalSync = window.syncTextbooksIndexFromFirestore;
     window.syncTextbooksIndexFromFirestore = async function() {
         var shared = null;
-        try { var result = await originalSync.apply(this, arguments); shared = textbooksPool.filter(function(b) { return b && b.id && !b.personal; }); return result; }
+        try { var result = await originalSync.apply(this, arguments); shared = textbooksPool.filter(function(b) { return b && b.id && !b.personal; }); sharedBooks = shared; return result; }
         finally { refreshPool(); window.renderVocabLibrarySelection(); if (shared) followSharedBooks(shared).catch(function(error) { console.warn('配信中の単語帳の変更を次回に反映します', error); }); }
     };
     // A copy of a distributed word book follows it: when the admin changes the distributed book
@@ -428,7 +433,7 @@
         var book = textbooksPool.find(function(item) { return item.id === bookId; });
         if (!book) return;
         var modal = open('自分用にコピーして編集', '<p class="library-editor-hint"></p>' +
-            '<label class="library-term-mode"><input type="checkbox" id="libraryCopyHide" checked>元の単語帳を一覧から外す<small>あとから「非表示の自分の単語帳」で戻せます。</small></label>' +
+            '<label class="library-term-mode"><input type="checkbox" id="libraryCopyHide" checked>元の単語帳を一覧から外す<small>あとから「非表示の単語帳」で戻せます。</small></label>' +
             '<p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryCopyConfirm" class="library-editor-primary">コピーする</button></div>');
         modal.querySelector('.library-editor-hint').textContent = '「' + book.name + '」の単語と、これまでの理解度を自分の単語帳にコピーします。コピーした単語帳は自由に編集できます（元の単語帳は変わりません）。';
         var confirmButton = modal.querySelector('#libraryCopyConfirm');
@@ -594,7 +599,7 @@
     };
     window.openHiddenTextbookList = function() {
         var data = readLibrary();
-        var modal = open('非表示の自分の単語帳', '<div id="libraryHiddenBooks"></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
+        var modal = open('非表示の単語帳', '<div id="libraryHiddenBooks"></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
         var list = modal.querySelector('#libraryHiddenBooks');
         data.books.filter(function(book) { return data.hidden.indexOf(book.id) >= 0; }).forEach(function(book) {
             var row = document.createElement('div'); row.className = 'library-catalog-item';
@@ -603,7 +608,16 @@
             manage.onclick = function() { window.openLibraryBookActions(book.id); };
             row.append(name, manage); list.append(row);
         });
-        if (!list.children.length) list.textContent = '非表示の自分の単語帳はありません。';
+        // Distributed books taken off the list (for example when copied for oneself) come back here.
+        sharedBooks.filter(function(book) { return data.hidden.indexOf(book.id) >= 0; }).forEach(function(book) {
+            var row = document.createElement('div'); row.className = 'library-catalog-item';
+            var name = document.createElement('div'); name.textContent = book.name;
+            var tag = document.createElement('small'); tag.textContent = '配信中'; name.append(' ', tag);
+            var restore = document.createElement('button'); restore.type = 'button'; restore.textContent = '一覧に戻す';
+            restore.onclick = function() { var latest = readLibrary(); setHidden(latest, book.id, false); persist(latest); row.remove(); if (!list.children.length) list.textContent = '非表示の単語帳はありません。'; window.showToast?.('「' + book.name + '」を一覧に戻しました。', 'ok'); };
+            row.append(name, restore); list.append(row);
+        });
+        if (!list.children.length) list.textContent = '非表示の単語帳はありません。';
     };
     window.openPublicTextbookCatalog = async function() {
         var catalog = open('みんなの単語帳', '<p class="library-editor-hint">公開された単語帳を、自分用に追加できます。</p><div id="libraryCatalog" aria-live="polite">読み込み中…</div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
@@ -648,7 +662,7 @@
         } catch (error) { list.textContent = error.message; }
     };
     var render = window.renderVocabLibrarySelection;
-    window.renderVocabLibrarySelection = function() { refreshPool(); var hidden = document.getElementById('libraryHiddenBooksButton'); if(hidden){var data=readLibrary();hidden.hidden=!data.books.some(function(book){return data.hidden.indexOf(book.id)>=0;});} return render.apply(this, arguments); };
+    window.renderVocabLibrarySelection = function() { refreshPool(); var hidden = document.getElementById('libraryHiddenBooksButton'); if(hidden){var data=readLibrary();hidden.hidden=!data.books.concat(sharedBooks).some(function(book){return data.hidden.indexOf(book.id)>=0;});} return render.apply(this, arguments); };
     window.onAppLoaded(function() { refreshPool(); window.renderVocabLibrarySelection(); });
     window.renderVocabLibrarySelection();
 })();

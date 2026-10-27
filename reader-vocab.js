@@ -41,7 +41,7 @@
     const signature = window.buildWordSignature;
     return words.map((w) => {
       const p = progress[String(w.num)],
-        fits = p && (!p.sig || !signature || p.sig === signature(w));
+        fits = p && (!p.sig || !signature || (window.sameWordSignature||Object.is)(p.sig, signature(w)));
       return Object.assign({}, w, {
         status: fits ? p.status || "none" : "none",
         history: fits && Array.isArray(p.history) ? p.history : [],

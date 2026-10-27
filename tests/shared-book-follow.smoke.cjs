@@ -59,7 +59,18 @@ const { chromium } = require("playwright"),
       await window.syncTextbooksIndexFromFirestore();
       await wait(() => JSON.parse(localStorage.getItem("core_v4_cache_personal_old"))[1].word === "apple pie");
       const third = { copy: copy(), words: JSON.parse(localStorage.getItem("core_v4_cache_personal_old")).map((w) => w.word), pool: textbooksPool.find((b) => b.id === "personal_old") };
-      return { first, second, third };
+      // Ratings stay with the word while its number and headword are the same, even when the
+      // admin changed its meanings; a different word in that number starts afresh.
+      const word = { num: 1, word: "1600 「関ヶ原の戦い」", meaning: "", meanings: [{ id: "1-0", text: "徳川家康が勝つ（東軍）" }] };
+      const oldSig = window.buildWordSignature({ num: 1, word: "1600 「関ヶ原の戦い」", meanings: [{ text: "徳川家康が勝つ" }] });
+      currentUserVocabProgress = { 1: { sig: oldSig, status: "ok", note: "メモ", sticky: true, meanings: { "1-0": { status: "ok", history: ["ok"] } } } };
+      vocabList = [structuredClone(word)];
+      window.applyUserProgressToVocabList();
+      const kept = [vocabList[0].meanings[0].status, vocabList[0].note, vocabList[0].sticky];
+      vocabList = [{ ...structuredClone(word), word: "1615 大坂夏の陣" }];
+      window.applyUserProgressToVocabList();
+      const fresh = [vocabList[0].meanings[0].status, vocabList[0].note];
+      return { first, second, third, kept, fresh };
     });
     assert.equal(result.first.copy.copiedFrom, "shared-1");
     assert.equal(result.first.copy.termMode, true);
@@ -71,8 +82,10 @@ const { chromium } = require("playwright"),
     assert.deepEqual(result.third.words, ["1600 「関ヶ原の戦い」", "apple pie"]);
     assert.equal(result.third.copy.termMode, undefined);
     assert.equal(!!result.third.pool?.termMode, false);
+    assert.deepEqual(result.kept, ["ok", "メモ", true]);
+    assert.deepEqual(result.fresh, ["none", "メモ"]);
     assert.deepEqual(errors, []);
-    console.log("PASS: an old copy is matched by name, takes the distributed book's words and 用語・年号モード; no extra read when unchanged; a later admin change and mode off reach it");
+    console.log("PASS: an old copy is matched by name, takes the distributed book's words and 用語・年号モード; no extra read when unchanged; a later admin change and mode off reach it; ratings stay when only meanings changed");
   } finally {
     await browser.close();
   }
