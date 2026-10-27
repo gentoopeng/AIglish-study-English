@@ -409,7 +409,14 @@ ${eventHtml()}
         if (terms) {
           for (const q of window.TermQuestions.questions(word)) {
             const record = compatible ? terms[String(word.num)]?.[q.key] : null,
-              status = record?.status || "none";
+              // Not yet answered in this mode: its meaning's rating, as in 単語カード.
+              status =
+                record?.status ||
+                (compatible
+                  ? saved?.meanings?.[String(q.mid)]?.status ||
+                    (word.meanings.length === 1 ? saved?.status : null)
+                  : null) ||
+                "none";
             if (mode === "status" && !statuses.includes(status)) continue;
             sampler.add({
               word: q.prompt,
