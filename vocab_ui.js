@@ -24,8 +24,12 @@
                     var parts = mStr.split(/(?=[①-⑳])/).map(function(p) {
                         return p.replace(/[①-⑳]/g, '').trim();
                     }).filter(function(p) { return p; });
+                    // 「［まれ］」 at the start of a meaning marks it seldom used (pasted or typed lists).
                     w.meanings = parts.map(function(p, i) {
-                        return { id: w.num + "-" + i, text: p, status: 'none', history: [] };
+                        var minor = /^[［\[]まれ[］\]]\s*/.test(p);
+                        var m = { id: w.num + "-" + i, text: p.replace(/^[［\[]まれ[］\]]\s*/, ''), status: 'none', history: [] };
+                        if (minor) m.minor = true;
+                        return m;
                     });
                 } else {
                     w.meanings.push({ id: w.num + "-0", text: mStr.trim(), status: 'none', history: [] });
@@ -772,6 +776,8 @@
             [['','品詞未設定'],['名','名詞'],['動','動詞'],['形','形容詞'],['形動','形容動詞'],['助詞','助詞'],['連','連体詞'],['副','副詞'],['前','前置詞'],['接','接続詞'],['代','代名詞'],['冠','冠詞'],['助','助動詞'],['間','間投詞']].forEach(function(item){var option=document.createElement('option');option.value=item[0];option.textContent=item[1];posSelect.appendChild(option);});
             var registered=window.getFlashcardPartOfSpeech?window.getFlashcardPartOfSpeech(wEl,m):null;if(registered&&!Array.from(posSelect.options).some(function(option){return option.value===registered.short;})){var compound=document.createElement('option');compound.value=registered.short;compound.textContent=registered.name;posSelect.appendChild(compound);}posSelect.value=registered&&registered.short||'';
             itemRow.insertBefore(posSelect,itemRow.lastElementChild);
+            var minorBox=document.createElement('label');minorBox.className='inline-minor-input';minorBox.innerHTML='<input type="checkbox">あまり使わない';minorBox.querySelector('input').checked=m.minor===true;minorBox.querySelector('input').setAttribute('aria-label','意味'+(index+1)+'はあまり使わない意味');
+            itemRow.style.flexWrap='wrap';itemRow.appendChild(minorBox);
             if (termMode) {
                 var parsed = window.TermQuestions.parseLine(m.text), textInput = itemRow.querySelector('input');
                 var year = document.createElement('input');
@@ -849,6 +855,7 @@
                     id: oldM ? oldM.id : wordNum + '-' + idx + '-' + Date.now(),
                     text: txt,
                     partOfSpeech: inp.parentElement.querySelector('.inline-pos-input').value,
+                    minor: !!(inp.parentElement.querySelector('.inline-minor-input input') && inp.parentElement.querySelector('.inline-minor-input input').checked),
                     status: oldM ? oldM.status : "none",
                     history: oldM ? oldM.history : []
                 });
@@ -1039,9 +1046,16 @@
             return m.text.replace(/^(\s*)([0-9０-９]{1,4})(\s*年?)/, function(all, lead, year, rest) { return lead + mark('y:' + mid, year) + rest; })
                 .replace(/「([^「」]+)」/g, function(all, text) { term++; return '「' + mark('t:' + mid + ':' + term, text) + '」'; });
         }
-        w.meanings.forEach(function(m) {
-            meaningsHtml += '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4;">' + marked(m) + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
-        });
+        // Main meanings first; seldom-used ones (minor) under them, smaller, each still rated on its own.
+        function meaningRow(m, minor) {
+            return '<div' + (minor ? ' class="vocab-meaning-minor"' : '') + ' style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span class="vocab-meaning-text" style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4;">' + marked(m) + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
+        }
+        var minorMeanings = w.meanings.filter(function(m) { return m.minor === true; });
+        w.meanings.forEach(function(m) { if (m.minor !== true) meaningsHtml += meaningRow(m, false); });
+        if (minorMeanings.length) {
+            meaningsHtml += '<p class="vocab-minor-heading">あまり使わない意味</p>';
+            minorMeanings.forEach(function(m) { meaningsHtml += meaningRow(m, true); });
+        }
         meaningsHtml += '</div>';
         var adminActionButtons = "";
         if (window.canEditCurrentTextbook ? window.canEditCurrentTextbook() : window.isAdmin) {
