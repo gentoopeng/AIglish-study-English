@@ -550,7 +550,24 @@
             }
         };
     }
-    window.LibraryPushShared = Object.freeze({ open: openPushShared, push: pushToShared });
+    // Admin editing mode: 用語・年号モード on a distributed book itself (everyone's app reads it from
+    // the shared index), stamped as changed so copies of it follow too.
+    async function setSharedTermMode(bookId, on) {
+        if (window.__adminBookEditing !== true || window.isAdmin !== true) throw new Error('管理者ツールで「配信中の単語帳を編集する」にしてから操作してください。');
+        if (!window.db || !window.fbRunTransaction || !window.fbDoc) throw new Error('クラウドにつながっていません。');
+        var now = new Date().toISOString();
+        await window.fbRunTransaction(window.db, async function(tx) {
+            var ref = window.fbDoc(window.db, 'shared', 'textbooks_index'), snap = await tx.get(ref);
+            var list = snap.exists() && Array.isArray(snap.data().textbooks) ? snap.data().textbooks.map(function(b) { return Object.assign({}, b); }) : [];
+            var entry = list.find(function(b) { return b && b.id === bookId; });
+            if (!entry) throw new Error('配信中の単語帳が見つかりません。');
+            if (on) entry.termMode = true; else delete entry.termMode;
+            entry.updatedAt = now;
+            tx.set(ref, { textbooks: list }, { merge: true });
+        });
+        textbooksPool.concat(sharedBooks).forEach(function(b) { if (b.id === bookId) { if (on) b.termMode = true; else delete b.termMode; b.updatedAt = now; } });
+    }
+    window.LibraryPushShared = Object.freeze({ open: openPushShared, push: pushToShared, termMode: setSharedTermMode });
 
     window.openLibraryBookActions = function(bookId) {
         var actionUserId = userId();
@@ -560,12 +577,24 @@
         var modal = open(book.name, '<div class="library-editor-actions library-editor-actions-stack">' +
             (own ? '<button type="button" id="libraryEditBook">名前・表紙を編集 / 単語を追加</button>' : '<button type="button" id="libraryCopyBook">自分用にコピーして編集</button>') +
             (own && window.__adminBookEditing === true && window.isAdmin === true ? '<button type="button" id="libraryPushShared">全員に配信・反映</button>' : '') +
+            (!own && window.__adminBookEditing === true && window.isAdmin === true ? '<button type="button" id="librarySharedTermMode">' + (book.termMode === true ? '用語・年号モードをオフにする' : '用語・年号モードにする') + '</button>' : '') +
             (readLibrary().hidden.indexOf(bookId) >= 0 ? '<button type="button" id="libraryRestoreBook">一覧に戻す</button>' : '') +
             '<button type="button" id="libraryRemoveBook" class="library-editor-danger">' + '自分の一覧から外す' + '</button>' + '<button type="button" id="libraryEraseBook" class="library-editor-danger">' + (own ? '単語帳を完全削除' : '自分の単語帳データを完全削除') + '</button>' + '<button type="button" data-library-close>閉じる</button></div>');
         if (own) modal.querySelector('#libraryEditBook').onclick = function() { window.openLibraryBookEditor(bookId); };
         else modal.querySelector('#libraryCopyBook').onclick = function() { openCopyBook(bookId); };
         var push = modal.querySelector('#libraryPushShared');
         if (push) push.onclick = function() { openPushShared(bookId); };
+        var termSwitch = modal.querySelector('#librarySharedTermMode');
+        if (termSwitch) termSwitch.onclick = async function() {
+            var on = book.termMode !== true;
+            termSwitch.disabled = true;
+            try {
+                await setSharedTermMode(bookId, on);
+                close();
+                window.showToast?.('「' + book.name + '」を' + (on ? '用語・年号モードにしました。「」で囲んだ言葉と行の頭の年号から問題を作ります。' : '通常の単語帳に戻しました。'), 'ok');
+                if (currentTextbook === bookId) window.renderVocabList?.();
+            } catch (error) { termSwitch.disabled = false; alert(error.message); }
+        };
         var restore = modal.querySelector('#libraryRestoreBook');
         if (restore) restore.onclick = function() { var data = readLibrary(); setHidden(data,bookId,false); persist(data); close(); };
         function removeBook(permanent) {
