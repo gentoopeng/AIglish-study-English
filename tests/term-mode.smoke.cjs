@@ -50,14 +50,18 @@ const { chromium } = require("playwright"),
     await page.getByRole("button", { name: "カードを開始する" }).click();
     await page.waitForFunction(() => flashcardOriginQueue.length > 0 && document.getElementById("activeFlashcard"));
     const queue = await page.evaluate(() => flashcardOriginQueue.map((q) => [q.termKey, q.en, q.ja, q.termInput]).sort());
-    assert.equal(queue.length, 9);
+    // 織田信長 has two lines: a whole card for each, as one card per meaning in the normal mode.
+    assert.equal(queue.length, 10);
     assert.deepEqual(
       queue.filter((q) => q[0].startsWith("t:")).map((q) => q[2]).sort(),
       ["本能寺の変", "武田勝頼", "鎌倉幕府", "長篠の戦い"].sort(),
     );
     // The whole-entry card follows the chosen direction (英→日 by default: the headword first);
     // blank and year cards always show the question first.
-    assert.ok(queue.some((q) => q[0] === "w" && q[1] === "織田信長" && q[2].includes("1582年 本能寺の変で死亡")));
+    assert.deepEqual(
+      queue.filter((q) => q[0].startsWith("w") && q[1] === "織田信長").map((q) => q[2]).sort(),
+      ["1575年 長篠の戦いでは武田勝頼を破った", "1582年 本能寺の変で死亡したとされる人物"],
+    );
     const fronts = await page.evaluate(async () => {
       const seen = {};
       const start = flashcardCurrentIndex;
@@ -67,7 +71,7 @@ const { chromium } = require("playwright"),
         seen[kind] = document.querySelector("#activeFlashcard .flashcard-face-front").textContent;
       }
       flashcardDirectionMode = "ja2en";
-      flashcardCurrentIndex = flashcardOriginQueue.findIndex((q) => q.termKey === "w" && q.en === "織田信長");
+      flashcardCurrentIndex = flashcardOriginQueue.findIndex((q) => q.termKey === "w:" + q.meaningId && q.en === "織田信長" && q.ja.startsWith("1582"));
       window.renderFlashcardDeck();
       seen.wReverse = document.querySelector("#activeFlashcard .flashcard-face-front").textContent;
       flashcardDirectionMode = "en2ja";
@@ -83,7 +87,7 @@ const { chromium } = require("playwright"),
     assert.deepEqual(queue.filter((q) => q[3]).map((q) => q[2]).sort(), ["1192", "1575", "1582"]);
     // Answer every card: year cards typed (the first wrong, the rest right), others swiped ○.
     let wrongYear = null;
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 10; i++) {
       const item = await page.evaluate(() => {
         const q = flashcardOriginQueue[flashcardCurrentIndex];
         return { key: q.termKey, answer: q.ja, input: q.termInput, front: document.querySelector("#activeFlashcard .flashcard-face-front").textContent };

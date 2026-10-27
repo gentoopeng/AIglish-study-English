@@ -1184,3 +1184,9 @@ Test: `tests/weak-review-model.test.cjs` (a dominant word keeps all its meanings
 Reported: with a distributed book in 用語・年号モード, narrowing 単語カード by understanding (for example × only) gave about five cards. In this mode every question keeps its own record. A question not yet answered in the mode counted as 未学習, even when its meaning showed × or △ in the word list. So ratings made before the admin turned the mode on were ignored by the filter, and only the few questions answered since remained. Now a question with no record of its own goes by its meaning's rating (`getFlashcardMeaningStatus`). A question's own record still wins. 単語バトル's status filter applies the same rule.
 
 Test: `tests/term-flashcard-filter.smoke.cjs` (× only: questions without a record follow their meaning's ×, one answered ○ is left out; the old code gave an empty deck).
+
+## 用語・年号モード: one card per meaning (10.22.02.00)
+
+Reported: in 用語・年号モード a word set up with one card per meaning came out as a single card. The whole-entry question joined every line of an entry into one card, which suits a history entry but folded a word's separate meanings together, so a narrowed range gave far fewer cards than in the normal mode. Now each line (meaning) gives its own whole question: that line shown, the headword answered. This is one card per meaning, as in the normal mode. Year and 「」 questions are unchanged. An entry with one line keeps the key `w`, so its record stays. Entries with several lines use `w:<meaning id>`, and until they are answered they follow their meaning's rating (10.22.01.00).
+
+Tests: `tests/term-questions.test.cjs` (one whole question per line, single-line key kept) and `tests/term-flashcard-filter.smoke.cjs` (a two-meaning word gives two cards, each showing its own meaning).

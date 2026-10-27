@@ -2,7 +2,8 @@
 //
 // An entry is a headword (織田信長) and description lines. A line may start with a year
 // ("1582 「本能寺の変」で死亡したとされる人物") and may mark terms with 「」. From each entry:
-//   whole  — every line shown, answer the headword
+//   whole  — one line shown, answer the headword (one question per line, like one card per
+//            meaning in the normal mode)
 //   year   — a line without its year, answer the year (typed, digits only)
 //   blank  — a line with one 「」 term blanked, answer that term (one question per term)
 // The text is stored as is (the year is just the start of the line), so no save path can drop it.
@@ -55,16 +56,17 @@
       parts = lines(word),
       list = [];
     if (!head || !parts.length) return list;
-    list.push({
-      key: "w",
-      kind: "whole",
-      mid: parts[0].mid,
-      index: parts[0].index,
-      prompt: parts.map((p) => (p.year ? p.year + "年 " : "") + plain(p.body)).join("\n"),
-      answer: head,
-      input: false,
-    });
     for (const p of parts) {
+      // An entry with one line keeps the key "w" it always had, so its record stays.
+      list.push({
+        key: parts.length === 1 ? "w" : "w:" + p.mid,
+        kind: "whole",
+        mid: p.mid,
+        index: p.index,
+        prompt: (p.year ? p.year + "年 " : "") + plain(p.body),
+        answer: head,
+        input: false,
+      });
       if (p.year && p.body)
         list.push({
           key: "y:" + p.mid,
