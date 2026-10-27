@@ -70,7 +70,17 @@ const { chromium } = require("playwright"),
                 reads[path] = version;
                 return { exists: () => !!value, data: () => structuredClone(value) };
               },
-              set: (ref, value, options) => writes.push({ path: pathOf(ref), value: JSON.parse(JSON.stringify(value)), merge: options?.merge === true }),
+              set: (ref, value, options) => {
+                // Like Firestore: no list directly inside a list, and no undefined values.
+                (function check(v, inList) {
+                  if (v === undefined) throw Error("Unsupported field value: undefined");
+                  if (Array.isArray(v)) {
+                    if (inList) throw Error("Nested arrays are not supported");
+                    v.forEach((x) => check(x, true));
+                  } else if (v && typeof v === "object") Object.values(v).forEach((x) => check(x, false));
+                })(value, false);
+                writes.push({ path: pathOf(ref), value: JSON.parse(JSON.stringify(value)), merge: options?.merge === true });
+              },
             });
             if (await __pkCommit({ reads, writes })) return result;
           }

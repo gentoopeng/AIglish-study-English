@@ -1146,3 +1146,15 @@ Reported (and confirmed): a device that had opened a distributed book once kept 
 ## 用語・年号モード flashcards follow the chosen direction (10.21.97.00)
 
 Reported: in an English book with 用語・年号モード, choosing 和訳 (英→日) still showed the Japanese first. The mode forced every card question-first, and the whole-entry card's question is the meanings, so the word came second. The whole-entry card (the word and its meanings) now follows the chosen direction like any card: 英→日 shows the word first, 日→英 the meanings. Blank and year cards are questions with one answer and still show the question first (`questionFirst` on the card). Test: `tests/term-mode.smoke.cjs`.
+
+## Casino tables with friends no longer stall (10.21.98.00)
+
+Reported: at タイマン and 一緒に tables, buttons sometimes did nothing and cards were sometimes never dealt, so the game could not go on. Found and fixed:
+
+- **Blackjack タイマン never dealt the second round.** The deal flag stayed set after the first deal, so after もう一勝負 the table sat on 「カードを配っています…」. The deal now happens once per round, from either player's phone (the cloud keeps only the first), and a 「もう一度配る」 button appears while waiting.
+- **Chinchiro tables could never send a hand.** Each throw was stored as a list inside a list, which Firestore refuses, so starting a 一緒に chinchiro table and sending a finished タイマン hand always failed silently. Throws now travel as `"3,5,5"` (`chinUp` / `chinDown`). A finished hand that did not get through is sent again automatically, with a 「結果を送る」 button.
+- **Dice 一緒に waited on the maker's screen.** Only the table maker's device rolled for the dealer. Now any device that sees every hand in rolls it (the transaction keeps one roll), and a 「ディーラーを振る」 button is there too. A player passed over by 待たずに進める gets their bet back.
+- **Buttons failed silently.** Every table button now goes through `send()`: it shows 「送っています…」, explains a slow answer after 8 seconds, and shows the reason under the button when the cloud refuses, then works again. A bet the table holds is taken from the snapshot too, so a lost answer cannot leave it unpaid.
+- **Play waited on the maker.** 「次へ」, 「次のゲーム」 and 「〜さんを飛ばす」 can be pressed by anyone at the table.
+
+The fake clouds in the casino and poker smoke tests now refuse nested lists and `undefined` like Firestore does. New checks: a blackjack duel deals round 2, the group dice dealer is rolled by a non-maker while the maker's phone is quiet, and a chinchiro hand that failed to send is shown and resent.
