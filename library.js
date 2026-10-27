@@ -48,8 +48,77 @@
     window.canEditCurrentTextbook = function() { return !!window.isAdmin || window.isPersonalTextbook(currentTextbook); };
     var originalSync = window.syncTextbooksIndexFromFirestore;
     window.syncTextbooksIndexFromFirestore = async function() {
-        try { return await originalSync.apply(this, arguments); }
-        finally { refreshPool(); window.renderVocabLibrarySelection(); }
+        var shared = null;
+        try { var result = await originalSync.apply(this, arguments); shared = textbooksPool.filter(function(b) { return b && b.id && !b.personal; }); return result; }
+        finally { refreshPool(); window.renderVocabLibrarySelection(); if (shared) followSharedBooks(shared).catch(function(error) { console.warn('配信中の単語帳の変更を次回に反映します', error); }); }
+    };
+    // A copy of a distributed word book follows it: when the admin changes the distributed book
+    // (its entry in shared/textbooks_index gets a newer updatedAt), every user's copy takes the
+    // new words and the book's 用語・年号モード. Ratings, notes and sticky notes are kept by word
+    // number. The index is read at start anyway, so an unchanged book costs no reads.
+    function setCopyMaster(id, master) {
+        var owner = userId();
+        localStorage.setItem('core_v4_custom_words_' + owner + '_' + id, JSON.stringify(master));
+        localStorage.setItem('core_v4_cache_' + id, JSON.stringify(master));
+        textbooksCacheMap[id] = master;
+        var draftKey = window.__manualVocabLocalKey(id), old = null;
+        try { old = JSON.parse(localStorage.getItem(draftKey) || 'null'); } catch (e) {}
+        var progress = (old && old.progress) || (window.LearningData ? window.LearningData.read(id) : {}) || {};
+        var draft = { master: master, emptyConfirmed: false, progress: progress, savedAt: new Date().toISOString() };
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+        window.__manualVocabDrafts[id] = draft;
+        window.__dirtyManualVocabDrafts = window.__dirtyManualVocabDrafts || {};
+        window.__manualVocabDraftRevisions = window.__manualVocabDraftRevisions || {};
+        window.__manualVocabDraftRevisions[id] = (window.__manualVocabDraftRevisions[id] || 0) + 1;
+        window.__dirtyManualVocabDrafts[id] = window.__manualVocabDraftRevisions[id];
+    }
+    var following = false;
+    async function followSharedBooks(shared) {
+        if (following || userId() === 'GUEST-000' || !window.db || !window.fbGetDoc) return;
+        following = true;
+        try {
+            var owner = userId(), data = readLibrary(), changed = false, reopen = false;
+            var plainName = function(name) { return String(name || '').replace(/（自分用）$/, ''); };
+            for (var i = 0; i < data.books.length; i++) {
+                var copy = data.books[i];
+                if (!copy.personal) continue;
+                // Copies made before copiedFrom was kept are matched once by name.
+                var source = shared.find(function(b) { return b.id === copy.copiedFrom; }) ||
+                    (!copy.copiedFrom && /（自分用）$/.test(copy.name || '') ? shared.find(function(b) { return b.name === plainName(copy.name); }) : null);
+                if (!source) continue;
+                if (copy.copiedFrom !== source.id) { copy.copiedFrom = source.id; changed = true; }
+                if (!!copy.termMode !== (source.termMode === true)) { if (source.termMode === true) copy.termMode = true; else delete copy.termMode; changed = true; }
+                var at = Date.parse(source.updatedAt || '') || 0;
+                if (!at || at <= (Date.parse(copy.sourceSyncedAt || '') || 0)) continue;
+                var snap = await window.fbGetDoc(window.fbDoc(window.db, 'shared', 'vocab_' + source.id));
+                if (userId() !== owner) return;
+                var words = snap.exists() && Array.isArray(snap.data().custom_words) ? window.stripVocabProgressFromWords(snap.data().custom_words) : null;
+                if (!words || !words.length) continue;
+                setCopyMaster(copy.id, words);
+                copy.sourceSyncedAt = source.updatedAt;
+                changed = true;
+                if (currentTextbook === copy.id) reopen = true;
+            }
+            if (!changed || userId() !== owner) return;
+            persist(data);
+            if (reopen && !document.body.classList.contains('in-game-active') && typeof window.loadCurrentTextbookData === 'function') {
+                await window.loadCurrentTextbookData();
+                window.renderVocabList?.();
+            }
+        } finally { following = false; }
+    }
+    // Marks a distributed book as changed, so the copies follow it (above).
+    window.__touchSharedBook = async function(bookId) {
+        if (!window.db || !window.fbRunTransaction || !window.fbDoc || !bookId) return;
+        var now = new Date().toISOString();
+        await window.fbRunTransaction(window.db, async function(tx) {
+            var ref = window.fbDoc(window.db, 'shared', 'textbooks_index'), snap = await tx.get(ref);
+            var list = snap.exists() && Array.isArray(snap.data().textbooks) ? snap.data().textbooks.map(function(b) { return Object.assign({}, b); }) : [];
+            var entry = list.find(function(b) { return b && b.id === bookId; });
+            if (!entry) return;
+            entry.updatedAt = now;
+            tx.set(ref, { textbooks: list }, { merge: true });
+        });
     };
     var originalMasterSave = window.saveVocabMasterToStorage;
     window.saveVocabMasterToStorage = async function() {
@@ -398,13 +467,16 @@
             entry = list.find(function(b) { return b && b.id === targetId; });
             if (!entry) throw new Error('配信中の単語帳が見つかりません。');
             if (termMode) entry.termMode = true; else delete entry.termMode;
+            entry.updatedAt = now;
             tx.set(indexRef, { textbooks: list }, { merge: true });
             tx.set(window.fbDoc(window.db, 'shared', 'vocab_' + targetId), { custom_words: master, emptyConfirmed: false, updatedAt: now }, { merge: true });
         });
         // This device sees the new words and mode at once.
         textbooksCacheMap[targetId] = master;
         try { localStorage.setItem('core_v4_cache_' + targetId, JSON.stringify(master)); } catch (e) {}
-        textbooksPool.forEach(function(b) { if (b.id === targetId) { if (termMode) b.termMode = true; else delete b.termMode; } });
+        textbooksPool.forEach(function(b) { if (b.id === targetId) { if (termMode) b.termMode = true; else delete b.termMode; b.updatedAt = now; } });
+        var mine = readLibrary(), self = mine.books.find(function(b) { return b.id === copyId; });
+        if (self) { self.copiedFrom = targetId; self.sourceSyncedAt = now; if (termMode) self.termMode = true; else delete self.termMode; persist(mine); }
         return { name: entry.name, count: master.length };
     }
     async function openPushShared(copyId) {
