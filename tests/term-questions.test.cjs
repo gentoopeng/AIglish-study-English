@@ -10,21 +10,24 @@ const nobunaga = {
   ],
 };
 
-test("one entry gives the whole, year and blank questions (one blank per 「」)", () => {
+test("one entry gives a whole question per line, then year and blank questions (one blank per 「」)", () => {
   const list = t.questions(nobunaga);
   assert.deepEqual(
     list.map((q) => [q.key, q.prompt, q.answer, q.input]),
     [
-      ["w", "1582年 本能寺の変で死亡したとされる人物\n1575年 長篠の戦いでは武田勝頼を破った", "織田信長", false],
+      ["w:7-0", "1582年 本能寺の変で死亡したとされる人物", "織田信長", false],
       ["y:7-0", "織田信長：本能寺の変で死亡したとされる人物（何年？）", "1582", true],
       ["t:7-0:0", "織田信長　1582年　（＿＿）で死亡したとされる人物", "本能寺の変", false],
+      ["w:7-1", "1575年 長篠の戦いでは武田勝頼を破った", "織田信長", false],
       ["y:7-1", "織田信長：長篠の戦いでは武田勝頼を破った（何年？）", "1575", true],
       ["t:7-1:0", "織田信長　1575年　（＿＿）では武田勝頼を破った", "長篠の戦い", false],
       ["t:7-1:1", "織田信長　1575年　長篠の戦いでは（＿＿）を破った", "武田勝頼", false],
     ],
   );
-  // Each question points at the line it came from; the whole question uses the first line.
-  assert.deepEqual(list.map((q) => q.mid), ["7-0", "7-0", "7-0", "7-1", "7-1", "7-1"]);
+  // Each question points at the line it came from.
+  assert.deepEqual(list.map((q) => q.mid), ["7-0", "7-0", "7-0", "7-1", "7-1", "7-1", "7-1"]);
+  // An entry with one line keeps the key "w" its record was saved under.
+  assert.deepEqual(t.questions({ num: 8, word: "x", meanings: [{ id: "8-0", text: "「y」の人" }] }).map((q) => q.key), ["w", "t:8-0:0"]);
 });
 
 test("lines without a year or 「」 still give the whole question; empty entries give none", () => {
