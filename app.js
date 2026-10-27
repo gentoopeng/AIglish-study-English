@@ -1309,6 +1309,8 @@ window.loadCurrentTextbookData = async function(options) {
   const uid = (typeof myId !== "undefined" && myId) ? myId : "GUEST-000";
   if(window.LibraryState&&window.LibraryState.isDeleted('book',bookKey,uid))return;
   const currentLocalKey = "core_v4_custom_words_" + uid + "_" + bookKey;
+  // A distributed book changed by the admin since this device's copy is read again (library.js).
+  if(typeof window.__refreshSharedMaster==="function"){try{await window.__refreshSharedMaster(bookKey);}catch(error){console.warn("配信中の単語帳の更新を次回に確認します",error);}if(myId!==uid||(currentTextbook||"default")!==bookKey||window.__vocabMasterLoadSequence!==request)return;}
   const localDraft=window.VocabMaster.resolve(bookKey);
   if(localDraft)storedWords=localDraft.master;
   else if(currentTextbook){
