@@ -181,6 +181,25 @@ const { chromium } = require("playwright"),
       await page.evaluate((n) => vocabList.find((w) => String(w.num) === n).meanings[0].text, nobunaga),
       "1583 「本能寺の変」で死亡したとされる人物",
     );
+    // A meaning may run over two lines: Enter in its box adds a line break (empty lines and
+    // stray spaces dropped), and the list shows the two lines.
+    await page.locator(`.word-row-container[data-word-num="${nobunaga}"] .card-edit-btn`).click();
+    const second = page.locator(`.inline-m-input-${nobunaga}`).nth(1);
+    await second.fill("「長篠の戦い」では  ");
+    await second.press("End");
+    await second.press("Enter");
+    await second.press("Enter");
+    await second.pressSequentially("武田勝頼を破った");
+    assert.ok((await second.evaluate((e) => e.clientHeight)) > 40);
+    await page.locator(`#wordCardForm-${nobunaga}`).getByRole("button", { name: "保存する", exact: true }).click();
+    await closeMessages();
+    assert.equal(
+      await page.evaluate((n) => vocabList.find((w) => String(w.num) === n).meanings[1].text, nobunaga),
+      "1575 「長篠の戦い」では\n武田勝頼を破った",
+    );
+    const twoLines = await page.locator(`.word-row-container[data-word-num="${nobunaga}"] .vocab-meaning-text`).nth(1).evaluate((e) => [e.innerText, getComputedStyle(e).whiteSpace]);
+    assert.match(twoLines[0], /では\n武田勝頼/);
+    assert.equal(twoLines[1], "pre-line");
     // Books without the mode are unaffected: cards are the plain word/meaning pairs.
     assert.equal(await page.evaluate(() => TermProgress.enabled("no-such-book")), false);
     assert.deepEqual(errors, []);

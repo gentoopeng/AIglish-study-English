@@ -33,9 +33,9 @@ const { chromium } = require("playwright"),
     await page.locator("#vocabAddWord").click();
     await page.locator("#vocabEntryWord").fill("follow");
     const rows = page.locator(".vocab-entry-meaning");
-    await rows.nth(0).locator("input:not([type=checkbox])").fill("〜に従う");
+    await rows.nth(0).locator("textarea").fill("〜に従う");
     await page.getByRole("button", { name: "＋ 意味を追加" }).click();
-    await rows.nth(1).locator("input:not([type=checkbox])").fill("〜を理解する");
+    await rows.nth(1).locator("textarea").fill("〜を理解する");
     await rows.nth(1).getByLabel("あまり使わない意味").check();
     assert.equal(await rows.nth(0).getByLabel("あまり使わない意味").isChecked(), false);
     await page.getByRole("button", { name: "追加する", exact: true }).click();

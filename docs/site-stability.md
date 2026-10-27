@@ -1190,3 +1190,9 @@ Test: `tests/term-flashcard-filter.smoke.cjs` (× only: questions without a reco
 Reported: in 用語・年号モード a word set up with one card per meaning came out as a single card. The whole-entry question joined every line of an entry into one card, which suits a history entry but folded a word's separate meanings together, so a narrowed range gave far fewer cards than in the normal mode. Now each line (meaning) gives its own whole question: that line shown, the headword answered. This is one card per meaning, as in the normal mode. Year and 「」 questions are unchanged. An entry with one line keeps the key `w`, so its record stays. Entries with several lines use `w:<meaning id>`, and until they are answered they follow their meaning's rating (10.22.01.00).
 
 Tests: `tests/term-questions.test.cjs` (one whole question per line, single-line key kept) and `tests/term-flashcard-filter.smoke.cjs` (a two-meaning word gives two cards, each showing its own meaning).
+
+## Meanings can take line breaks (10.22.03.00)
+
+Reported: meanings that put a phrase and its Japanese together (「A be followed by B」Aの次にBが続く) wrapped mid-phrase and were hard to read. A meaning's box, in the add dialog and in the inline editor, is now a text area: Enter adds a line break, and the box grows with its text. Each line is trimmed and empty lines are dropped (`cleanMeaningText`). The word list (`.vocab-meaning-text`) and flashcard faces show the breaks with `white-space: pre-line`. In 用語・年号モード questions already break at a newline (`TermQuestions.show`). The line-based paste import is unchanged: one line is one word.
+
+Test: `tests/term-mode.smoke.cjs` (Enter twice and trailing spaces are saved as one break, the box grows, the list shows two lines).
