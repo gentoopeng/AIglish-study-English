@@ -79,12 +79,12 @@
     }
     var following = false;
     async function followSharedBooks(shared) {
-        if (following || userId() === 'GUEST-000' || !window.db || !window.fbGetDoc) return;
+        if (following || !window.db || !window.fbGetDoc) return;
         following = true;
         try {
             var owner = userId(), data = readLibrary(), changed = false, reopen = false;
             var plainName = function(name) { return String(name || '').replace(/（自分用）$/, ''); };
-            for (var i = 0; i < data.books.length; i++) {
+            for (var i = 0; i < data.books.length && owner !== 'GUEST-000'; i++) {
                 var copy = data.books[i];
                 if (!copy.personal) continue;
                 // Copies made before copiedFrom was kept are matched once by name.
@@ -104,14 +104,41 @@
                 changed = true;
                 if (currentTextbook === copy.id) reopen = true;
             }
-            if (!changed || userId() !== owner) return;
-            persist(data);
+            // The distributed book that is open catches up with the admin's changes.
+            if (currentTextbook && !window.isPersonalTextbook(currentTextbook) && await refreshSharedMaster(currentTextbook) && userId() === owner) reopen = true;
+            if (changed && userId() === owner) persist(data);
+            if (!changed && !reopen) return;
             if (reopen && !document.body.classList.contains('in-game-active') && typeof window.loadCurrentTextbookData === 'function') {
                 await window.loadCurrentTextbookData();
                 window.renderVocabList?.();
             }
         } finally { following = false; }
     }
+    // A distributed book a device already has is read from the device, so the admin's changes
+    // would never arrive. Its index entry's updatedAt says when it last changed; when that is newer
+    // than this device's copy, the words are read once and replace the device copy (the cache, and
+    // the master of its local draft; ratings, notes and sticky notes are stored apart and stay).
+    var syncedKey = function(book) { return 'core_v4_shared_synced_' + book; };
+    async function refreshSharedMaster(book) {
+        if (!book || window.isPersonalTextbook(book) || !window.db || !window.fbGetDoc) return false;
+        var entry = sharedBooks.find(function(b) { return b.id === book; }) || textbooksPool.find(function(b) { return b.id === book && !b.personal; });
+        var at = Date.parse(entry && entry.updatedAt || '') || 0;
+        if (!at || at <= (Number(localStorage.getItem(syncedKey(book))) || 0)) return false;
+        var owner = userId(), snap = await window.fbGetDoc(window.fbDoc(window.db, 'shared', 'vocab_' + book));
+        if (userId() !== owner) return false;
+        var words = snap.exists() && Array.isArray(snap.data().custom_words) ? window.stripVocabProgressFromWords(snap.data().custom_words) : null;
+        if (!words || !words.length) return false;
+        textbooksCacheMap[book] = words;
+        localStorage.setItem('core_v4_cache_' + book, JSON.stringify(words));
+        if (localStorage.getItem('core_v4_custom_words_' + owner + '_' + book) !== null) localStorage.setItem('core_v4_custom_words_' + owner + '_' + book, JSON.stringify(words));
+        var draftKey = window.__manualVocabLocalKey(book), draft = null;
+        try { draft = JSON.parse(localStorage.getItem(draftKey) || 'null'); } catch (e) {}
+        if (draft) { draft.master = words; draft.savedAt = new Date().toISOString(); localStorage.setItem(draftKey, JSON.stringify(draft)); }
+        if (window.__manualVocabDrafts && window.__manualVocabDrafts[book]) window.__manualVocabDrafts[book] = Object.assign({}, window.__manualVocabDrafts[book], { master: words, savedAt: new Date().toISOString() });
+        localStorage.setItem(syncedKey(book), String(at));
+        return true;
+    }
+    window.__refreshSharedMaster = refreshSharedMaster;
     // Marks a distributed book as changed, so the copies follow it (above).
     window.__touchSharedBook = async function(bookId) {
         if (!window.db || !window.fbRunTransaction || !window.fbDoc || !bookId) return;
@@ -124,6 +151,9 @@
             entry.updatedAt = now;
             tx.set(ref, { textbooks: list }, { merge: true });
         });
+        // This device already has these words.
+        textbooksPool.concat(sharedBooks).forEach(function(b) { if (b.id === bookId) b.updatedAt = now; });
+        try { localStorage.setItem(syncedKey(bookId), String(Date.parse(now))); } catch (e) {}
     };
     var originalMasterSave = window.saveVocabMasterToStorage;
     window.saveVocabMasterToStorage = async function() {
@@ -491,7 +521,8 @@
         // This device sees the new words and mode at once.
         textbooksCacheMap[targetId] = master;
         try { localStorage.setItem('core_v4_cache_' + targetId, JSON.stringify(master)); } catch (e) {}
-        textbooksPool.forEach(function(b) { if (b.id === targetId) { if (termMode) b.termMode = true; else delete b.termMode; b.updatedAt = now; } });
+        textbooksPool.concat(sharedBooks).forEach(function(b) { if (b.id === targetId) { if (termMode) b.termMode = true; else delete b.termMode; b.updatedAt = now; } });
+        try { localStorage.setItem(syncedKey(targetId), String(Date.parse(now))); } catch (e) {}
         if (created) textbooksPool.push(Object.assign({}, entry));
         var mine = readLibrary(), self = mine.books.find(function(b) { return b.id === copyId; });
         // The admin keeps working in their own book; the new distributed one stays out of their list.
@@ -566,6 +597,7 @@
             tx.set(ref, { textbooks: list }, { merge: true });
         });
         textbooksPool.concat(sharedBooks).forEach(function(b) { if (b.id === bookId) { if (on) b.termMode = true; else delete b.termMode; b.updatedAt = now; } });
+        try { localStorage.setItem(syncedKey(bookId), String(Date.parse(now))); } catch (e) {}
     }
     window.LibraryPushShared = Object.freeze({ open: openPushShared, push: pushToShared, termMode: setSharedTermMode });
 
