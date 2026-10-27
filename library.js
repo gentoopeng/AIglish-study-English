@@ -453,18 +453,30 @@
     // Admin editing mode: a word book the admin copied for themselves (to change it freely, or to
     // turn on 用語・年号モード) goes back to the distributed book everyone uses. The distributed
     // book's words become the copy's (numbers kept, so everyone's ratings stay on their words),
-    // and its 用語・年号モード is set in the shared index, in one transaction.
+    // and its 用語・年号モード is set in the shared index, in one transaction. A book of the admin's
+    // own that is not a copy can be distributed as a new book (targetId NEW_SHARED); from then on
+    // it is linked to it like a copy.
+    var NEW_SHARED = '__new__';
     async function pushToShared(copyId, targetId, termMode) {
         if (window.__adminBookEditing !== true || window.isAdmin !== true) throw new Error('管理者ツールで「配信中の単語帳を編集する」にしてから操作してください。');
         if (!window.db || !window.fbRunTransaction || !window.fbDoc) throw new Error('クラウドにつながっていません。');
         var master = currentTextbook === copyId && Array.isArray(vocabList) && vocabList.length ? window.stripVocabProgressFromWords(vocabList) : await window.__getBookMasterWords(copyId);
         if (!Array.isArray(master) || !master.length) throw new Error('反映する単語がありません。');
-        var now = new Date().toISOString(), entry = null;
+        var now = new Date().toISOString(), entry = null, created = targetId === NEW_SHARED;
+        var own = readLibrary().books.find(function(b) { return b.id === copyId; });
+        if (created) {
+            if (!own) throw new Error('単語帳が見つかりません。');
+            targetId = 'shared_' + crypto.randomUUID();
+        }
         await window.fbRunTransaction(window.db, async function(tx) {
             var indexRef = window.fbDoc(window.db, 'shared', 'textbooks_index');
             var snap = await tx.get(indexRef);
             var list = snap.exists() && Array.isArray(snap.data().textbooks) ? snap.data().textbooks.map(function(b) { return Object.assign({}, b); }) : [];
             entry = list.find(function(b) { return b && b.id === targetId; });
+            if (!entry && created) {
+                entry = { id: targetId, name: String(own.name || '単語帳').replace(/（自分用）$/, '').slice(0, 80), cover: own.cover || '📔', coverType: own.coverType === 'image' ? 'image' : 'text' };
+                list.push(entry);
+            }
             if (!entry) throw new Error('配信中の単語帳が見つかりません。');
             if (termMode) entry.termMode = true; else delete entry.termMode;
             entry.updatedAt = now;
@@ -475,28 +487,45 @@
         textbooksCacheMap[targetId] = master;
         try { localStorage.setItem('core_v4_cache_' + targetId, JSON.stringify(master)); } catch (e) {}
         textbooksPool.forEach(function(b) { if (b.id === targetId) { if (termMode) b.termMode = true; else delete b.termMode; b.updatedAt = now; } });
+        if (created) textbooksPool.push(Object.assign({}, entry));
         var mine = readLibrary(), self = mine.books.find(function(b) { return b.id === copyId; });
-        if (self) { self.copiedFrom = targetId; self.sourceSyncedAt = now; if (termMode) self.termMode = true; else delete self.termMode; persist(mine); }
+        // The admin keeps working in their own book; the new distributed one stays out of their list.
+        if (created) setHidden(mine, targetId, true);
+        if (self) { self.copiedFrom = targetId; self.sourceSyncedAt = now; if (termMode) self.termMode = true; else delete self.termMode; }
+        if (self || created) persist(mine);
         return { name: entry.name, count: master.length };
     }
     async function openPushShared(copyId) {
         var copy = readLibrary().books.find(function(b) { return b.id === copyId; });
         if (!copy) return;
-        var modal = open('配信中の単語帳に反映', '<p class="library-editor-hint"></p><label for="libraryPushTarget">反映先</label><select id="libraryPushTarget"><option value="">読み込み中…</option></select>' +
+        var modal = open('全員に配信・反映', '<p class="library-editor-hint"></p><label for="libraryPushTarget">反映先</label><select id="libraryPushTarget"><option value="">読み込み中…</option></select>' +
             '<label class="library-term-mode"><input type="checkbox" id="libraryPushTermMode">用語・年号モード<small>「」で囲んだ言葉と、行の頭の年号から問題を作ります。</small></label>' +
             '<p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryPushConfirm" class="library-editor-primary">全員に反映</button></div>');
-        modal.querySelector('.library-editor-hint').textContent = '「' + copy.name + '」の単語で、配信中の単語帳を置き換えます。番号が同じ単語の理解度はそのまま残ります。';
+        var hint = modal.querySelector('.library-editor-hint');
+        var explain = function() {
+            hint.textContent = select.value === NEW_SHARED
+                ? '「' + copy.name + '」を新しい単語帳として全員に配信します。このあと直した内容も、ここからまた反映できます。'
+                : '「' + copy.name + '」の単語で、配信中の単語帳を置き換えます。番号が同じ単語の理解度・メモ・付箋は、使っている人それぞれにそのまま残ります。';
+        };
         modal.querySelector('#libraryPushTermMode').checked = copy.termMode === true;
-        var select = modal.querySelector('#libraryPushTarget'), confirmButton = modal.querySelector('#libraryPushConfirm'), error = modal.querySelector('.library-editor-error');
+        var select = modal.querySelector('#libraryPushTarget');
+        explain();
+        select.onchange = explain;
+        var confirmButton = modal.querySelector('#libraryPushConfirm'), error = modal.querySelector('.library-editor-error');
         confirmButton.disabled = true;
         try {
             var snap = await window.fbGetDoc(window.fbDoc(window.db, 'shared', 'textbooks_index'));
             var list = snap.exists() && Array.isArray(snap.data().textbooks) ? snap.data().textbooks.filter(function(b) { return b && b.id && !b.personal; }) : [];
-            if (!list.length) throw new Error('配信中の単語帳がありません。');
             var guess = list.find(function(b) { return b.id === copy.copiedFrom; }) || list.find(function(b) { return (b.name + '（自分用）') === copy.name || b.name === String(copy.name).replace(/（自分用）$/, ''); });
             select.replaceChildren();
             list.forEach(function(b) { var option = document.createElement('option'); option.value = b.id; option.textContent = b.name || b.id; select.append(option); });
-            if (guess) select.value = guess.id;
+            var fresh = document.createElement('option');
+            fresh.value = NEW_SHARED;
+            fresh.textContent = '＋ 新しく配信する';
+            select.append(fresh);
+            // A book that is not a copy of a distributed one starts as a new one.
+            select.value = guess ? guess.id : NEW_SHARED;
+            explain();
             confirmButton.disabled = false;
         } catch (e) { error.textContent = e.message || '配信中の単語帳を読み込めませんでした。'; return; }
         confirmButton.onclick = async function() {
@@ -525,7 +554,7 @@
         var own = window.isPersonalTextbook(bookId);
         var modal = open(book.name, '<div class="library-editor-actions library-editor-actions-stack">' +
             (own ? '<button type="button" id="libraryEditBook">名前・表紙を編集 / 単語を追加</button>' : '<button type="button" id="libraryCopyBook">自分用にコピーして編集</button>') +
-            (own && window.__adminBookEditing === true && window.isAdmin === true ? '<button type="button" id="libraryPushShared">配信中の単語帳に反映</button>' : '') +
+            (own && window.__adminBookEditing === true && window.isAdmin === true ? '<button type="button" id="libraryPushShared">全員に配信・反映</button>' : '') +
             (readLibrary().hidden.indexOf(bookId) >= 0 ? '<button type="button" id="libraryRestoreBook">一覧に戻す</button>' : '') +
             '<button type="button" id="libraryRemoveBook" class="library-editor-danger">' + '自分の一覧から外す' + '</button>' + '<button type="button" id="libraryEraseBook" class="library-editor-danger">' + (own ? '単語帳を完全削除' : '自分の単語帳データを完全削除') + '</button>' + '<button type="button" data-library-close>閉じる</button></div>');
         if (own) modal.querySelector('#libraryEditBook').onclick = function() { window.openLibraryBookEditor(bookId); };
