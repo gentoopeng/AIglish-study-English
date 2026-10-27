@@ -1,8 +1,8 @@
 // Requires Playwright, Chromium and a running local HTTP server.
 // Run: node tests/vocab-card-wrap.smoke.cjs
 // A word card's title on a narrow phone with the edit buttons: the word is never split inside
-// (it moves to its own line under the number, with its speaker), phrases break between words,
-// and nothing runs under the buttons.
+// and stays beside its number when it fits (the buttons get smaller instead; the speaker may
+// move under the word), phrases break between words, and nothing runs under the buttons.
 const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
 (async () => {
@@ -31,12 +31,13 @@ const { chromium } = require("playwright"),
           range.selectNodeContents(span);
           const lines = [...range.getClientRects()].map((r) => Math.round(r.top));
           const box = span.getBoundingClientRect(),
-            s = speaker.getBoundingClientRect();
+            s = speaker.getBoundingClientRect(),
+            badge = card.querySelector(".word-num-badge").getBoundingClientRect();
           return {
             word: w.word,
             lines: new Set(lines).size,
             underButtons: box.right > markers.left && box.top < markers.bottom,
-            speakerBeside: Math.abs(s.top + s.height / 2 - (box.top + box.height / 2)) < 20,
+            besideNumber: box.left > badge.right && Math.abs(box.top - badge.top) < 12,
             inside: box.right <= card.getBoundingClientRect().right,
           };
         });
@@ -45,13 +46,14 @@ const { chromium } = require("playwright"),
         if (r.word !== "take into account") assert.equal(r.lines, 1, width + "px: " + JSON.stringify(r));
         else assert.ok(r.lines <= 2, width + "px: " + JSON.stringify(r));
         assert.equal(r.underButtons, false, width + "px: " + JSON.stringify(r));
-        assert.equal(r.speakerBeside, true, width + "px: " + JSON.stringify(r));
+        // A word that fits beside the number stays there; one too long for the space moves down whole.
+        if (r.word === "disregard" || width >= 375) assert.equal(r.besideNumber, true, width + "px: " + JSON.stringify(r));
         assert.equal(r.inside, true, width + "px: " + JSON.stringify(r));
       }
       assert.deepEqual(errors, []);
       await page.close();
     }
-    console.log("PASS: word card titles stay whole on narrow phones with the edit buttons, speaker beside the word, nothing under the buttons");
+    console.log("PASS: word card titles stay whole on narrow phones with the edit buttons, word beside its number, nothing under the buttons");
   } finally {
     await browser.close();
   }
