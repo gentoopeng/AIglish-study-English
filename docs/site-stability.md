@@ -1122,3 +1122,9 @@ Reported: two units with the same name in different places were shown as one uni
 ## Seldom-used meanings (10.21.92.00)
 
 A meaning can be marked あまり使わない意味 (`minor: true` on the meaning): a checkbox under each meaning in the add form and the word's edit form, or 「［まれ］」 at the start of a meaning in a pasted list. On the word card the main meanings come first, then a small heading and the seldom-used ones in smaller text. Each still has its own rating, gets its own flashcard (labelled あまり使わない意味 under the card) and its own questions in battles, like any meaning. The flag is part of the book's words (`stripVocabProgressFromWords` keeps it, and the merges of ratings into words keep it), so it is saved, backed up and reaches everyone with a distributed book; it is not part of the word's signature, so marking a meaning keeps its rating. Test: `tests/minor-meanings.smoke.cjs`.
+
+## 用語・年号モード: no 「」 on cards, questions without odd line breaks (10.21.93.00)
+
+On the word card of a 用語・年号モード book the 「」 around a term are no longer shown: the term is the marker itself (coloured by its results, or a thin gold underline before it has any). The text stays as typed, with the 「」, in the edit form, since they mark the terms.
+
+Question text on flashcards and in battles (`TermQuestions.show`) keeps the headword (when short), a year ("1582年"), the blank "（＿＿）" and "（何年？）" whole on one line, puts each description line of the whole-entry question on its own line, and uses strict line breaking so a line does not start with a closing bracket or small kana. Before, the card text could break anywhere, including inside the year or the blank, and the whole-entry question's lines ran together. Test: `tests/term-mode.smoke.cjs`.

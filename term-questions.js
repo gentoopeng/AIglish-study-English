@@ -116,7 +116,26 @@
     next[num] = word;
     return next;
   }
-  const model = { parseLine, questions, normalizeYear, correctYear, shade, record, plain, BLANK };
+  // A question's text split into pieces that must not break across lines: the headword, a year
+  // ("1582年"), the blank and "（何年？）" (parts joined by a full-width space or "："), and
+  // line breaks between description lines. The rest breaks normally.
+  const KEEP = /([0-9０-９]{1,4}年|（＿＿）|（何年？）)/;
+  function pieces(text) {
+    const out = [];
+    String(text || "")
+      .split("\n")
+      .forEach((line, i) => {
+        if (i) out.push({ br: true });
+        line.split(/(　|：)/).forEach((part, j, all) => {
+          if (!part) return;
+          // The headword (the first part, before "　" or "：") stays whole when it is short.
+          if (j === 0 && all.length > 1 && part.length <= 12) return out.push({ text: part, keep: true });
+          part.split(KEEP).forEach((bit) => bit && out.push({ text: bit, keep: KEEP.test(bit) }));
+        });
+      });
+    return out;
+  }
+  const model = { parseLine, questions, normalizeYear, correctYear, shade, record, plain, pieces, BLANK };
   root.TermQuestions = model;
   if (typeof module !== "undefined") module.exports = model;
   if (!root.document) return;
@@ -145,6 +164,21 @@
     localStorage.setItem(key(book), JSON.stringify(next));
     return next;
   }
+  // Shows a question's text in an element with pieces() kept whole (no innerHTML of the text).
+  function show(node, text) {
+    node.replaceChildren();
+    node.classList.add("term-text");
+    for (const p of pieces(text)) {
+      if (p.br) node.append(document.createElement("br"));
+      else if (p.keep) {
+        const span = document.createElement("span");
+        span.className = "term-keep";
+        span.textContent = p.text;
+        node.append(span);
+      } else node.append(document.createTextNode(p.text));
+    }
+  }
+  model.show = show;
   function enabled(book) {
     const pool = typeof textbooksPool !== "undefined" ? textbooksPool : [];
     return (pool || []).some((b) => b && b.id === book && b.termMode === true);

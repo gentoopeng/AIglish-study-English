@@ -1119,7 +1119,8 @@
     const q = m.question(session.pool, session.seed, session.answers.length),
       host = dialog.querySelector(".duel-options");
     const promptNode = dialog.querySelector(".duel-prompt");
-    promptNode.textContent = q.prompt;
+    if (q.kind && window.TermQuestions?.show) window.TermQuestions.show(promptNode, q.prompt);
+    else promptNode.textContent = q.prompt;
     promptNode.classList.toggle("is-term", !!q.kind);
     dialog.querySelector(".duel-question-label").textContent =
       "第" + (session.answers.length + 1) + "問";

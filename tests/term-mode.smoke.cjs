@@ -107,6 +107,21 @@ const { chromium } = require("playwright"),
     );
     assert.ok(marks.some(([text, rated, tone, history]) => text === "本能寺の変" && rated && tone === "16,185,129" && history === "○"), JSON.stringify(marks));
     assert.ok(marks.some(([text, rated, tone, history]) => text === wrongYear.answer && rated && tone === "239,68,68" && history === "×"), JSON.stringify(marks));
+    // The 「」 are not shown on the card, only the marked term.
+    const cardText = await page.evaluate(() => [...document.querySelectorAll("#vocabListContainer .vocab-meaning-text")].map((e) => e.textContent).join(" "));
+    assert.ok(cardText.includes("本能寺の変") && !/[「」]/.test(cardText), cardText);
+    // Question text keeps the headword, a year and the blank whole, and lines apart.
+    const shown = await page.evaluate(() => {
+      const box = document.createElement("div");
+      box.style.cssText = "width:120px;font-size:20px";
+      document.body.append(box);
+      window.TermQuestions.show(box, "織田信長　1582年　（＿＿）で死亡したとされる人物\n1575年 長篠の戦い");
+      const keeps = [...box.querySelectorAll(".term-keep")].map((k) => [k.textContent, k.getClientRects().length]);
+      const brs = box.querySelectorAll("br").length;
+      box.remove();
+      return { keeps, brs };
+    });
+    assert.deepEqual(shown, { keeps: [["織田信長", 1], ["1582年", 1], ["（＿＿）", 1], ["1575年", 1]], brs: 1 });
     await page.evaluate(() => document.querySelector("#vocabListContainer mark.term-mark.is-rated").click());
     // The pencil editor has a digits-only year box per line, filled from the start of the line.
     // Messages use the app's dialog: close any left from finishing the deck, and after saving.
