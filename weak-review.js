@@ -127,7 +127,7 @@
             text = String(meaning.text || "").trim();
           if (!prompt || !text) continue;
           sampler.add({ word: prompt, meaning: text, duelRef: { book, num } });
-          if (saved?.sig && saved.sig !== sig) continue;
+          if (saved?.sig && !(window.sameWordSignature||Object.is)(saved.sig, sig)) continue;
           const prior =
             saved?.meanings?.[String(meaning.id)] ||
             (word.meanings.length === 1 ? { status: saved?.status } : null);
@@ -259,7 +259,7 @@
       if (window.LibraryState?.isDeleted("book", s.book, s.id))
         throw Error("この単語帳は削除されています。");
       const saved = window.LearningData.read(s.book)[target.ref.num];
-      if (saved?.sig && saved.sig !== target.ref.sig)
+      if (saved?.sig && !(window.sameWordSignature||Object.is)(saved.sig, target.ref.sig))
         throw Error("教材が変更されています。終了して開き直してください。");
       let points = 0;
       if (correct)

@@ -8,7 +8,7 @@ function apply(book,ref,answer,id,options={}){
  if(id!==owner()||window.__learningBootReady===false)throw Error('理解度の読み込みが完了していません。');
  if(!book||!ref||typeof ref.num!=='string'||typeof ref.mid!=='string'||!ref.sig)throw Error('単語の保存先を確認できません。');
  const before=window.LearningData.read(book)[ref.num]||{};
- if(before.sig&&before.sig!==ref.sig)throw Error('単語帳が変更されているため、この回答の理解度は上書きしません。');
+ if(before.sig&&!(window.sameWordSignature||Object.is)(before.sig,ref.sig))throw Error('単語帳が変更されているため、この回答の理解度は上書きしません。');
  const status=typeof answer==='boolean'?(answer?'ok':'bad'):answer;
  if(!['ok','so','bad'].includes(status))throw Error('理解度の指定を確認してください。');
  const previous=before.meanings?.[ref.mid]||{};
@@ -27,7 +27,7 @@ function apply(book,ref,answer,id,options={}){
  if(typeof currentTextbook==='string'&&currentTextbook===book&&window.LearningData.canSave(book)){
   currentUserVocabProgress=words;
   const item=typeof vocabList!=='undefined'&&vocabList.find(item=>String(item.num)===ref.num);
-  if(item&&window.buildWordSignature(item)===ref.sig){item.status=word.status;item.history=word.history;for(const meaning of item.meanings||[]){const value=word.meanings[String(meaning.id)];if(value){meaning.status=value.status;meaning.history=value.history;}}}
+  if(item&&(window.sameWordSignature||Object.is)(window.buildWordSignature(item),ref.sig)){item.status=word.status;item.history=word.history;for(const meaning of item.meanings||[]){const value=word.meanings[String(meaning.id)];if(value){meaning.status=value.status;meaning.history=value.history;}}}
  }
  window.recordRankedWord?.(book,ref.num);return words[ref.num];
 }
@@ -46,7 +46,7 @@ async function flush(id=owner()){
     if(!remote||typeof remote!=='object'||Array.isArray(remote))throw Error('クラウドの理解度を読み取れません。上書きを停止しました。');
     const result={...remote};
     for(const [num,change]of Object.entries(changes)){
-     const value=local[num],old=remote[num];if(!value||old&&((old.sig&&old.sig!==value.sig)||(old.editedAt||0)>value.editedAt))continue;
+     const value=local[num],old=remote[num];if(!value||old&&((old.sig&&!(window.sameWordSignature||Object.is)(old.sig,value.sig))||(old.editedAt||0)>value.editedAt))continue;
      const meanings={...value.meanings,...old?.meanings};for(const mid of change.mids)if(value.meanings?.[mid])meanings[mid]=value.meanings[mid];
      const combined={...old,...value,note:value.note||old?.note||'',meanings};combined.status=overall(meanings,change.count);result[num]=combined;
     }

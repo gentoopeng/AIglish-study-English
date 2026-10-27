@@ -79,7 +79,7 @@
     const lookup = new Map(vocabList.map((w) => [String(w.num), w])),
       queue = saved.queue.items.map((ref) => {
         const w = lookup.get(ref.num);
-        if (!w || window.buildWordSignature(w) !== ref.sig) return null;
+        if (!w || !(window.sameWordSignature||Object.is)(window.buildWordSignature(w), ref.sig)) return null;
         const meaning =
           w.meanings?.find((m) => String(m.id) === String(ref.mid)) ||
           w.meanings?.[ref.index];

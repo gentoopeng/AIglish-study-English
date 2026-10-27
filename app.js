@@ -928,6 +928,16 @@ window.getVocabProgressStorageKey = function(bookKey) {
   return "core_v4_user_vocab_progress_" + uid + "_" + (bookKey || "default");
 };
 
+// Whether a rating record belongs to this word. Its signature is number::headword::meanings; a
+// record stays with the word while the number and headword are the same, so correcting or adding
+// a meaning (here, or by the admin in a distributed book) keeps everyone's ratings, which are
+// stored per meaning id. Only a different word in that number starts afresh.
+window.sameWordSignature = function(a, b) {
+  if (a === b) return true;
+  if (typeof a !== "string" || typeof b !== "string" || !a || !b) return false;
+  var head = function(sig) { return sig.split("::").slice(0, 2).join("::"); };
+  return head(a) === head(b);
+};
 window.buildWordSignature = function(w) {
   var texts = (w.meanings || []).map(function(m) {
     return String(m.text || "").trim();
@@ -989,7 +999,7 @@ window.applyUserProgressToVocabList = function() {
     w.meanings = (w.meanings || []).map(function(m) {
       return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, status: "none", history: [] };
     });
-    if (p && p.sig === window.buildWordSignature(w)) {
+    if (p && (window.sameWordSignature||Object.is)(p.sig, window.buildWordSignature(w))) {
       w.status = p.status || "none";
       w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
       w.meanings = w.meanings.map(function(m) {
@@ -3254,7 +3264,7 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
     w.status = 'none';
     w.history = [];
     w.meanings = (w.meanings || []).map(function(m) { return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, status: 'none', history: [] }; });
-    if (p && p.sig === sig(w)) {
+    if (p && (window.sameWordSignature||Object.is)(p.sig, sig(w))) {
       w.status = p.status || 'none';
       w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
       w.meanings = w.meanings.map(function(m) {

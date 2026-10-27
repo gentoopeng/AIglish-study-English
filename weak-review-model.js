@@ -15,7 +15,9 @@
   }
   function stampWord(previous, incoming, now) {
     if (!incoming?.meanings) return incoming;
-    const compatible = !previous?.sig || previous.sig === incoming.sig,
+    // The same word while number and headword match (see sameWordSignature in app.js).
+    const head = (sig) => String(sig || "").split("::").slice(0, 2).join("::"),
+      compatible = !previous?.sig || previous.sig === incoming.sig || head(previous.sig) === head(incoming.sig),
       old = compatible ? previous || {} : {},
       result = { ...incoming, meanings: { ...incoming.meanings } },
       date = day(now);
