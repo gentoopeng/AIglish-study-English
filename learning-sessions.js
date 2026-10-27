@@ -600,7 +600,8 @@
         window.removeEventListener("pagehide", clearShowing);
         clearShowing();
         clearTimeout(startTimer);
-        window.closeFlashcardWordDetails?.();
+        // Only the sheet shown inside this warm-up; one opened elsewhere since stays open.
+        if (document.getElementById("flashcardWordDetails")?.parentNode === d) window.closeFlashcardWordDetails?.();
         document.body.classList.remove("flash-warmup-open");
         window.StartupMonitor?.event?.('warmup:closed');
         welcomePending = false;

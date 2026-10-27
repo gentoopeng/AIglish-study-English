@@ -91,7 +91,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // Only in the admin editing mode.
     await page.evaluate(() => window.showVocabLibrarySelection());
     await page.getByRole("button", { name: "配信単語（自分用）の管理", exact: true }).click();
-    assert.equal(await page.getByRole("button", { name: "配信中の単語帳に反映" }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "全員に配信・反映" }).count(), 0);
     await page.keyboard.press("Escape");
     await page.evaluate(() => window.AdminPlayers.open());
     await page.locator(".admin-players-dialog input[type=password]").fill("x");
@@ -99,7 +99,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.getByRole("button", { name: "配信中の単語帳を編集する" }).click();
     await page.evaluate(() => window.showVocabLibrarySelection());
     await page.getByRole("button", { name: "配信単語（自分用）の管理", exact: true }).click();
-    await page.getByRole("button", { name: "配信中の単語帳に反映" }).click();
+    await page.getByRole("button", { name: "全員に配信・反映" }).click();
     const push = page.locator("dialog[open]", { hasText: "反映先" });
     await push.locator("#libraryPushTarget option", { hasText: "別の配信" }).waitFor({ state: "attached" });
     assert.equal(await push.locator("#libraryPushTarget").inputValue(), "shared-1");
@@ -113,8 +113,39 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.ok(Date.parse(shared.index[0].updatedAt) > Date.now() - 60000);
     assert.deepEqual(shared.index.map(({ updatedAt, ...rest }) => rest), [{ id: "shared-1", name: "配信単語", termMode: true }, { id: "shared-2", name: "別の配信" }]);
     assert.ok(!(await page.evaluate((id) => __docs.has("shared/vocab_" + id), copyId)));
+    // A book of the admin's own that is not a copy: distributed as a new book, then linked to it.
+    await page.evaluate(() => {
+      const key = Object.keys(localStorage).find((k) => k.startsWith("core_v4_personal_library_"));
+      const data = JSON.parse(localStorage.getItem(key));
+      data.books.push({ id: "personal_mine", name: "自作の用語集", cover: "📗", coverType: "text", personal: true, visibility: "private", termMode: true });
+      localStorage.setItem(key, JSON.stringify(data));
+      const words = [{ num: 1, word: "794 「平安京」に都を移す", meaning: "桓武天皇" }];
+      localStorage.setItem("core_v4_cache_personal_mine", JSON.stringify(words));
+      textbooksCacheMap["personal_mine"] = words;
+      window.renderVocabLibrarySelection();
+    });
+    await page.getByRole("button", { name: "自作の用語集の管理", exact: true }).click();
+    await page.getByRole("button", { name: "全員に配信・反映" }).click();
+    const fresh = page.locator("dialog[open]", { hasText: "反映先" });
+    await fresh.locator("#libraryPushTarget option", { hasText: "新しく配信する" }).waitFor({ state: "attached" });
+    assert.equal(await fresh.locator("#libraryPushTarget").inputValue(), "__new__");
+    assert.equal(await fresh.locator("#libraryPushTermMode").isChecked(), true);
+    assert.match(await fresh.locator(".library-editor-hint").innerText(), /新しい単語帳として全員に配信/);
+    await fresh.getByRole("button", { name: "全員に反映" }).click();
+    await page.locator("dialog[open]", { hasText: "反映先" }).waitFor({ state: "detached" });
+    const created = await page.evaluate(() => {
+      const entry = __docs.get("shared/textbooks_index").textbooks.find((b) => b.name === "自作の用語集");
+      const key = Object.keys(localStorage).find((k) => k.startsWith("core_v4_personal_library_"));
+      const lib = JSON.parse(localStorage.getItem(key));
+      return { entry, words: entry && __docs.get("shared/vocab_" + entry.id)?.custom_words.map((w) => w.word), linked: lib.books.find((b) => b.id === "personal_mine").copiedFrom, hidden: entry && lib.hidden.includes(entry.id) };
+    });
+    assert.ok(/^shared_/.test(created.entry.id));
+    assert.equal(created.entry.termMode, true);
+    assert.deepEqual(created.words, ["794 「平安京」に都を移す"]);
+    assert.equal(created.linked, created.entry.id);
+    assert.equal(created.hidden, true);
     assert.deepEqual(errors, []);
-    console.log("PASS: admin editing mode keeps rights after the tools close and edits the original, ends on 終了; copy to own book keeps words and understanding and hides the original, remembers it, and the admin sends the copy's words and 用語・年号モード back to the distributed book");
+    console.log("PASS: admin editing mode keeps rights after the tools close and edits the original, ends on 終了; copy to own book keeps words and understanding and hides the original, remembers it, and the admin sends the copy's words and 用語・年号モード back to the distributed book, and distributes a book of their own as a new one");
   } finally {
     await browser.close();
   }

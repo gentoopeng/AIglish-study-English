@@ -1106,3 +1106,9 @@ Every user's own copy of a distributed word book now follows the admin's changes
 ## The word stays beside its number (10.21.89.00)
 
 Reported after 10.21.86.00: on a phone the word had moved to its own line under the number. It is back beside the number. On phones (430px wide or less) with the edit buttons, the 付箋, edit and delete buttons are smaller instead (30px wide, 18px icons), which leaves the title row about 50px more; the speaker moves under the word when the row is still short. A word too long for the space beside the number (such as "responsibility" on a 308px-wide screen) moves down whole rather than splitting. `tests/vocab-card-wrap.smoke.cjs` checks this at 308, 375 and 430px.
+
+## Distributing a private book of the admin's own (10.21.90.00)
+
+The admin editing mode's action on an own book is now 全員に配信・反映, and it works for any own book, also one kept 自分だけ that was never copied from a distributed book: its target list ends with ＋ 新しく配信する (preselected when the book is not linked to a distributed one). That adds a new entry (`shared_<uuid>`, the book's name without 「（自分用）」, its cover, 用語・年号モード) to `shared/textbooks_index` and writes its words, in the same transaction as before; the own book is linked to it (`copiedFrom`), so later edits go out with the same action, and the new distributed book stays out of the admin's own list. Everyone else's ratings, notes and sticky notes are kept by word number whenever a distributed book's words are replaced. Test: `tests/shared-book-editing.smoke.cjs`.
+
+Also: closing the warm-up closed the word sheet even when it had been opened afterwards outside the warm-up (the warm-up's close event can come after its exit animation). It now closes the sheet only when the sheet is inside the warm-up.
