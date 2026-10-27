@@ -1090,3 +1090,7 @@ The first-ten warm-up's i opened a small box with only the word and its extra no
 Reported: after i on a flashcard, the sticky note button did not respond. It changed the word and redrew the word list, but the card in the sheet is not part of the list, so the button never showed the change. The button and the card now show it themselves.
 
 Test: `tests/warmup-details.smoke.cjs`.
+
+## Word card titles split inside the word (10.21.86.00)
+
+Reported: on a phone, a word card in an editable book showed "disregar / d". The title row leaves room on the right for the 付箋, edit and delete buttons, which on a narrow phone left the word about 40px, and the word was allowed to break anywhere (`overflow-wrap: anywhere`). The word and its speaker are now one group (`.word-title`) that breaks only between words, or inside one only when it cannot fit a whole line. On phones (430px wide or less) with the edit buttons, the number sits on the buttons' line and the word with its speaker takes the full next line. Test: `tests/vocab-card-wrap.smoke.cjs` (308, 375 and 430px).
