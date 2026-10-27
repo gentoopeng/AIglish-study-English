@@ -9,6 +9,17 @@
             return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char];
         });
     };
+    // A meaning may take several lines (a phrase, then its Japanese). Each line is trimmed and
+    // empty lines dropped, so a stray Enter leaves no gap.
+    window.cleanMeaningText = function(value) {
+        return String(value == null ? '' : value).split(/\r?\n/).map(function(line) { return line.trim(); }).filter(Boolean).join('\n');
+    };
+    // Meaning boxes are text areas: Enter adds a line break and the box grows to fit.
+    window.growMeaningBox = function(box) {
+        var fit = function() { box.style.height = 'auto'; box.style.height = Math.max(36, box.scrollHeight + 2) + 'px'; };
+        box.addEventListener('input', fit);
+        requestAnimationFrame(fit);
+    };
 
     // ================================================================
     // 1. データ変換・ユーティリティ
@@ -770,8 +781,9 @@
         wEl.meanings.forEach(function(m, index) {
             var itemRow = document.createElement('div');
             itemRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:12px;";
-            itemRow.innerHTML = '<input type="text" class="search-input inline-m-input-' + wordNum + '" style="margin:0; flex:1; height:36px;" value="' + window.escapeVocabText(m.text) + '"><button class="list-action-link" style="background:#EF4444; color:white; border:none; padding:0 10px; height:36px; display:flex; align-items:center;" onclick="window.removeInlineMeaningField(event, \'' + wordNum + '\', ' + index + ')"><i data-lucide="trash-2" size="14"></i></button>';
-            itemRow.querySelector('input').style.minWidth='0';
+            itemRow.innerHTML = '<textarea rows="1" class="search-input inline-m-input inline-m-input-' + wordNum + '" style="margin:0; flex:1;">' + window.escapeVocabText(m.text) + '</textarea><button class="list-action-link" style="background:#EF4444; color:white; border:none; padding:0 10px; height:36px; display:flex; align-items:center;" onclick="window.removeInlineMeaningField(event, \'' + wordNum + '\', ' + index + ')"><i data-lucide="trash-2" size="14"></i></button>';
+            // A meaning may run over several lines: Enter adds a line break, and the box grows with it.
+            var meaningBox=itemRow.querySelector('textarea');meaningBox.style.minWidth='0';window.growMeaningBox(meaningBox);
             var posSelect=document.createElement('select');posSelect.className='inline-pos-input';posSelect.setAttribute('aria-label','意味'+(index+1)+'の品詞');
             [['','品詞未設定'],['名','名詞'],['動','動詞'],['形','形容詞'],['形動','形容動詞'],['助詞','助詞'],['連','連体詞'],['副','副詞'],['前','前置詞'],['接','接続詞'],['代','代名詞'],['冠','冠詞'],['助','助動詞'],['間','間投詞']].forEach(function(item){var option=document.createElement('option');option.value=item[0];option.textContent=item[1];posSelect.appendChild(option);});
             var registered=window.getFlashcardPartOfSpeech?window.getFlashcardPartOfSpeech(wEl,m):null;if(registered&&!Array.from(posSelect.options).some(function(option){return option.value===registered.short;})){var compound=document.createElement('option');compound.value=registered.short;compound.textContent=registered.name;posSelect.appendChild(compound);}posSelect.value=registered&&registered.short||'';
@@ -779,7 +791,7 @@
             var minorBox=document.createElement('label');minorBox.className='inline-minor-input';minorBox.innerHTML='<input type="checkbox">あまり使わない';minorBox.querySelector('input').checked=m.minor===true;minorBox.querySelector('input').setAttribute('aria-label','意味'+(index+1)+'はあまり使わない意味');
             itemRow.style.flexWrap='wrap';itemRow.appendChild(minorBox);
             if (termMode) {
-                var parsed = window.TermQuestions.parseLine(m.text), textInput = itemRow.querySelector('input');
+                var parsed = window.TermQuestions.parseLine(m.text), textInput = itemRow.querySelector('textarea');
                 var year = document.createElement('input');
                 year.type = 'text'; year.inputMode = 'numeric'; year.pattern = '[0-9]*'; year.maxLength = 4;
                 year.className = 'search-input inline-year-input'; year.placeholder = '年号'; year.autocomplete = 'off';
@@ -844,7 +856,7 @@
         }
         var updatedMeanings = [];
         mInputs.forEach(function(inp, idx) {
-            var txt = inp.value.trim();
+            var txt = window.cleanMeaningText(inp.value);
             // The year box goes back at the start of the line, as in the add form.
             var yearBox = inp.parentElement.querySelector('.inline-year-input');
             var yearValue = yearBox && window.TermQuestions ? window.TermQuestions.normalizeYear(yearBox.value) : '';
@@ -1048,7 +1060,7 @@
         }
         // Main meanings first; seldom-used ones (minor) under them, smaller, each still rated on its own.
         function meaningRow(m, minor) {
-            return '<div' + (minor ? ' class="vocab-meaning-minor"' : '') + ' style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span class="vocab-meaning-text" style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4;">' + marked(m) + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
+            return '<div' + (minor ? ' class="vocab-meaning-minor"' : '') + ' style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span class="vocab-meaning-text" style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4; white-space:pre-line;">' + marked(m) + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
         }
         var minorMeanings = w.meanings.filter(function(m) { return m.minor === true; });
         w.meanings.forEach(function(m) { if (m.minor !== true) meaningsHtml += meaningRow(m, false); });

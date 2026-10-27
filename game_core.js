@@ -425,7 +425,7 @@
         var diameter=240,maxDiameter=Math.max(240,Math.min(420,window.innerWidth-32));
         function sizeTextArea(){
             cardWrap.style.width=cardWrap.style.height=diameter+'px';
-            texts.forEach(function(text){text.style.width=(diameter*.74)+'px';text.style.padding='0';text.style.boxSizing='border-box';text.style.flexShrink='0';text.style.whiteSpace='normal';text.style.lineHeight='1.5';text.style.maxHeight='none';});
+            texts.forEach(function(text){text.style.width=(diameter*.74)+'px';text.style.padding='0';text.style.boxSizing='border-box';text.style.flexShrink='0';text.style.whiteSpace='pre-line';text.style.lineHeight='1.5';text.style.maxHeight='none';});
         }
         sizeTextArea();
         while(diameter<maxDiameter && texts.some(function(text){return text.scrollHeight>diameter*.62;})) {

@@ -27,7 +27,12 @@
     if (!Array.isArray(fields.meanings) || !fields.meanings.length)
       throw Error("意味・答えを入力してください。");
     const meanings = fields.meanings.map((m, i) => {
-      const text = String(m.text || "").trim();
+      // Lines kept (a meaning may run over several), each trimmed, empty ones dropped.
+      const text = String(m.text || "")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join("\n");
       if (!text) throw Error("意味・答え " + (i + 1) + " を入力してください。");
       return {
         id: num + "-" + i,
@@ -330,7 +335,7 @@
           .querySelector(".vocab-entry-year")
           ?.setAttribute("aria-label", "説明 " + (i + 1) + " の年号");
         row
-          .querySelector("input:not(.vocab-entry-year)")
+          .querySelector("textarea")
           .setAttribute("aria-label", (term ? "説明 " : "意味・答え ") + (i + 1));
         row
           .querySelector("select")
@@ -344,7 +349,8 @@
     function addMeaning(focus = true) {
       const row = el("div", undefined, "vocab-entry-meaning"),
         label = el("label"),
-        input = el("input"),
+        // A text area, so Enter adds a line break (a phrase on one line, its Japanese on the next).
+        input = el("textarea", undefined, "vocab-entry-meaning-text"),
         select = el("select"),
         remove = el("button", "−"),
         controls = el("div", undefined, "vocab-entry-meaning-controls");
@@ -353,6 +359,11 @@
       input.required = true;
       input.placeholder = term ? "例：「本能寺の変」で死亡したとされる人物" : "例：〜に従う";
       input.autocomplete = "off";
+      input.rows = 1;
+      input.oninput = () => {
+        input.style.height = "auto";
+        input.style.height = input.scrollHeight + 2 + "px";
+      };
       label.htmlFor = inputId;
       for (const [value, text] of positions) {
         const option = el("option", text);
@@ -363,7 +374,7 @@
       remove.onclick = () => {
         row.remove();
         relabel();
-        list.querySelector("input:not(.vocab-entry-year)").focus();
+        list.querySelector("textarea").focus();
       };
       if (term) {
         // Digits only: full-width digits are converted, everything else is dropped as typed.
@@ -419,7 +430,7 @@
             sub: form.querySelector("#vocabEntrySub").value,
             meanings: [...list.children].map((row) => {
               const year = row.querySelector(".vocab-entry-year")?.value || "",
-                text = row.querySelector("input:not(.vocab-entry-year)").value;
+                text = row.querySelector("textarea").value;
               return {
                 text: year && text.trim() ? year + " " + text.trim() : text,
                 partOfSpeech: row.querySelector("select").value,

@@ -2690,7 +2690,9 @@ html body dialog.vocab-entry-dialog{width:min(560px,calc(100vw - 16px));max-heig
 .vocab-entry-dialog textarea{min-height:96px;font-size:17px;padding:12px 14px;border-radius:12px;}
 .vocab-entry-dialog label{font-size:13px;}
 .vocab-entry-meaning-controls{grid-template-columns:auto minmax(0,1fr) auto;gap:8px;}
-.vocab-entry-meaning-controls>input:not(.vocab-entry-year){grid-column:1/-1;grid-row:1;}
+.vocab-entry-meaning-controls>.vocab-entry-meaning-text{grid-column:1/-1;grid-row:1;}
+.vocab-entry-dialog textarea.vocab-entry-meaning-text{min-height:52px;resize:none;overflow:hidden;line-height:1.4;}
+textarea.inline-m-input{min-height:36px;resize:none;overflow:hidden;line-height:1.4;padding-top:7px;padding-bottom:7px;font:inherit;}
 .vocab-entry-meaning-controls>select,.vocab-entry-meaning-controls>.vocab-entry-year{grid-column:1;grid-row:2;}
 .vocab-entry-meaning-controls>select{min-height:40px!important;width:auto;min-width:130px;padding:8px 10px!important;font-size:14px!important;}
 .vocab-entry-meaning-controls>button{grid-column:3;grid-row:2;width:40px;height:40px;}
