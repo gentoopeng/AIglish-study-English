@@ -1170,3 +1170,11 @@ Reported: チンチロ felt too plain. The dice stay as asked in 10.21.82.00: th
 - Earlier throws show as small dice instead of text.
 
 The motion is skipped when the device asks for reduced motion. The notices smoke test still checks that thrown dice have no animation.
+
+## 苦手復習 no longer cut short by a word with many meanings (10.22.00.00)
+
+Reported: a word test (苦手復習) showed only about five questions. `reviewPlan` never put the same word twice in a row, and it stopped as soon as only one word had meanings left. That word's other weak meanings were dropped from the round. A word with six weak meanings gave one question, and four on one word plus one on another gave three questions out of five. Now another word still comes between two meanings of one word whenever there is one. Once only one word is left, its remaining meanings come one after another, up to the 20 questions of a round.
+
+Which meanings count is unchanged: those marked × or △ before today. A meaning first marked today comes the next day.
+
+Test: `tests/weak-review-model.test.cjs` (a dominant word keeps all its meanings, a single word gives every meaning oldest first, a round stops at 20).
