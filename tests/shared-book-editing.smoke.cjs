@@ -61,6 +61,26 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.locator("#wordCardForm-2").getByRole("button", { name: "保存する" }).click();
     await page.locator("dialog.app-alert button").click();
     await page.waitForFunction(() => __writes.some((w) => w.path === "shared/vocab_shared-1" && w.data.custom_words.some((x) => x.word === "apples")));
+    // On the original itself: 用語・年号モード from its menu, and units, both reaching everyone.
+    await page.evaluate(() => window.showVocabLibrarySelection());
+    await page.getByRole("button", { name: "配信単語の管理", exact: true }).click();
+    await page.getByRole("button", { name: "用語・年号モードにする" }).click();
+    await page.waitForFunction(() => __docs.get("shared/textbooks_index").textbooks.find((b) => b.id === "shared-1").termMode === true);
+    assert.equal(await page.evaluate(() => window.TermProgress.enabled("shared-1")), true);
+    await page.locator("#vocabLibraryBooks .textbook-list-item", { hasText: "配信単語" }).click();
+    await page.waitForFunction(() => currentTextbook === "shared-1" && !window.__vocabSelectionRequest);
+    await page.getByText("番号の範囲に単元を付ける", { exact: true }).click();
+    await page.getByLabel("単元にする最初の番号").fill("1");
+    await page.getByLabel("単元にする最後の番号").fill("2");
+    await page.getByLabel("単元の名前").fill("第1章");
+    await page.getByRole("button", { name: "付ける", exact: true }).click();
+    await page.waitForFunction(() => __writes.some((w) => w.path === "shared/vocab_shared-1" && w.data.custom_words.every((x) => x.unit === "第1章")));
+    await page.waitForFunction(() => !!__docs.get("shared/textbooks_index").textbooks.find((b) => b.id === "shared-1").updatedAt);
+    // And off again from the menu.
+    await page.evaluate(() => window.showVocabLibrarySelection());
+    await page.getByRole("button", { name: "配信単語の管理", exact: true }).click();
+    await page.getByRole("button", { name: "用語・年号モードをオフにする" }).click();
+    await page.waitForFunction(() => !__docs.get("shared/textbooks_index").textbooks.find((b) => b.id === "shared-1").termMode);
     await page.locator("#adminBookEditingBanner").getByRole("button", { name: "終了" }).click();
     assert.equal(await page.evaluate(() => window.isAdmin), false);
     assert.equal(await page.locator("#adminBookEditingBanner").count(), 0);
@@ -156,7 +176,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(created.linked, created.entry.id);
     assert.equal(created.hidden, true);
     assert.deepEqual(errors, []);
-    console.log("PASS: admin editing mode keeps rights after the tools close and edits the original, ends on 終了; copy to own book keeps words and understanding and hides the original (which comes back from 非表示の単語帳), remembers it, and the admin sends the copy's words and 用語・年号モード back to the distributed book, and distributes a book of their own as a new one");
+    console.log("PASS: admin editing mode keeps rights after the tools close and edits the original, sets 用語・年号モード and units on the original itself, ends on 終了; copy to own book keeps words and understanding and hides the original (which comes back from 非表示の単語帳), remembers it, and the admin sends the copy's words and 用語・年号モード back to the distributed book, and distributes a book of their own as a new one");
   } finally {
     await browser.close();
   }
