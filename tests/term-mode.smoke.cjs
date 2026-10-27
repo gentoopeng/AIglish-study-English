@@ -55,7 +55,31 @@ const { chromium } = require("playwright"),
       queue.filter((q) => q[0].startsWith("t:")).map((q) => q[2]).sort(),
       ["本能寺の変", "武田勝頼", "鎌倉幕府", "長篠の戦い"].sort(),
     );
-    assert.ok(queue.some((q) => q[0] === "w" && q[2] === "織田信長" && q[1].includes("1582年 本能寺の変で死亡")));
+    // The whole-entry card follows the chosen direction (英→日 by default: the headword first);
+    // blank and year cards always show the question first.
+    assert.ok(queue.some((q) => q[0] === "w" && q[1] === "織田信長" && q[2].includes("1582年 本能寺の変で死亡")));
+    const fronts = await page.evaluate(async () => {
+      const seen = {};
+      const start = flashcardCurrentIndex;
+      for (const kind of ["w", "t:", "y:"]) {
+        flashcardCurrentIndex = flashcardOriginQueue.findIndex((q) => q.termKey.startsWith(kind) && (kind !== "w" || q.en === "織田信長"));
+        window.renderFlashcardDeck();
+        seen[kind] = document.querySelector("#activeFlashcard .flashcard-face-front").textContent;
+      }
+      flashcardDirectionMode = "ja2en";
+      flashcardCurrentIndex = flashcardOriginQueue.findIndex((q) => q.termKey === "w" && q.en === "織田信長");
+      window.renderFlashcardDeck();
+      seen.wReverse = document.querySelector("#activeFlashcard .flashcard-face-front").textContent;
+      flashcardDirectionMode = "en2ja";
+      flashcardCurrentIndex = start;
+      window.renderFlashcardDeck();
+      return seen;
+    });
+    assert.match(fronts.w, /織田信長/);
+    assert.doesNotMatch(fronts.w, /本能寺/);
+    assert.match(fronts["t:"], /（＿＿）/);
+    assert.match(fronts["y:"], /（何年？）/);
+    assert.match(fronts.wReverse, /本能寺の変/);
     assert.deepEqual(queue.filter((q) => q[3]).map((q) => q[2]).sort(), ["1192", "1575", "1582"]);
     // Answer every card: year cards typed (the first wrong, the rest right), others swiped ○.
     let wrongYear = null;
