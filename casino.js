@@ -1896,14 +1896,22 @@
     "それ以外は子が振り、目の大きいほうが勝ちです。同じ目（目なし同士も）は親の勝ち。子のシゴロは2倍、ゾロ目は3倍、ピンゾロは5倍もらえ、ヒフミは2倍払います。",
     "負けたときは役によって賭けの2〜5倍を払うことがあります（所持ポイントの分まで）。",
   ];
-  function bowl(dice, rolling) {
+  // How loud a hand's stamp is: the rarer the hand, the brighter.
+  const chinTone = (hand) => (hand.rank >= 100 ? "is-legend" : hand.rank >= 90 ? "is-zoro" : hand.rank === 80 ? "is-shigoro" : hand.rank < 0 ? "is-hifumi" : hand.rank === 0 ? "is-none" : "is-me");
+  // The bowl: the dice lie a little turned where they fell, not in a neat row, and the hand is
+  // stamped across it (pressed down on a fresh throw).
+  function bowl(dice, rolling, hand) {
     const el = node("div", "cs-bowl");
     (dice || [null, null, null]).forEach((v, i) => {
       if (!v) return el.append(node("span", "cs-die is-empty"));
       const d = die(v, rolling ? "is-rolling" : "");
-      d.style.setProperty("--d", (0.08 * i).toFixed(2) + "s");
+      d.style.setProperty("--tilt", (((v * 37 + i * 53) % 31) - 15) + "deg");
+      d.style.setProperty("--lift", [-6, 5, -3][i] + "px");
       el.append(d);
     });
+    if (dice && hand) {
+      el.append(node("b", "cs-chin-stamp " + chinTone(hand) + (rolling ? " is-fresh" : ""), hand.name));
+    }
     return el;
   }
   // One side's turn: who, the hand so far, the bowl with the latest throw, and the throws before.
@@ -1912,9 +1920,16 @@
     const l = node("p", "cs-hand-label");
     l.append(node("span", "", who), node("b", "", hidden ? (turn?.done ? "決めました" : "振っています…") : turn?.hand ? turn.hand.name : turn?.rolls?.length ? "まだ役なし" : ""));
     const last = turn?.rolls?.length && !hidden ? turn.rolls[turn.rolls.length - 1] : null;
-    seat.append(l, bowl(last, rolling));
+    const hand = last ? turn.hand || (turn.done ? null : { rank: 0, name: "役なし" }) : null;
+    seat.append(l, bowl(last, rolling, hand));
+    if (rolling && hand && hand.rank >= 80) seat.classList.add("is-big");
     if (turn?.rolls?.length > 1 && !hidden) {
-      const before = node("p", "cs-chin-before", turn.rolls.slice(0, -1).map((r, i) => i + 1 + "投目 " + r.join("・")).join("　"));
+      const before = node("div", "cs-chin-before");
+      turn.rolls.slice(0, -1).forEach((r, i) => {
+        const past = node("span", "", i + 1 + "投目");
+        r.forEach((v) => past.append(die(v, "is-mini")));
+        before.append(past);
+      });
       seat.append(before);
     }
     return seat;

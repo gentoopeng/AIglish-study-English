@@ -1158,3 +1158,15 @@ Reported: at タイマン and 一緒に tables, buttons sometimes did nothing an
 - **Play waited on the maker.** 「次へ」, 「次のゲーム」 and 「〜さんを飛ばす」 can be pressed by anyone at the table.
 
 The fake clouds in the casino and poker smoke tests now refuse nested lists and `undefined` like Firestore does. New checks: a blackjack duel deals round 2, the group dice dealer is rolled by a non-maker while the maker's phone is quiet, and a chinchiro hand that failed to send is shown and resent.
+
+## Chinchiro less plain, dice still without animation (10.21.99.00)
+
+Reported: チンチロ felt too plain. The dice stay as asked in 10.21.82.00: they show their numbers at once and do not move. The look carries the game instead:
+
+- The table is a lacquered red, and the bowl is deeper, with an indigo rim.
+- The three dice lie slightly turned where they fell, not in a neat row.
+- The hand is stamped across the bowl, pressed down briefly on a fresh throw. Rarer hands get louder stamps: 役なし and 目なし grey, a point in gold on black, ヒフミ blue, シゴロ red, ゾロ目 and ピンゾロ gold with a glow.
+- On シゴロ or better the seat glows once.
+- Earlier throws show as small dice instead of text.
+
+The motion is skipped when the device asks for reduced motion. The notices smoke test still checks that thrown dice have no animation.
