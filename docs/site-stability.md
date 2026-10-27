@@ -1178,3 +1178,9 @@ Reported: a word test (苦手復習) showed only about five questions. `reviewPl
 Which meanings count is unchanged: those marked × or △ before today. A meaning first marked today comes the next day.
 
 Test: `tests/weak-review-model.test.cjs` (a dominant word keeps all its meanings, a single word gives every meaning oldest first, a round stops at 20).
+
+## 用語・年号モード cards filtered by understanding go by the list's ratings (10.22.01.00)
+
+Reported: with a distributed book in 用語・年号モード, narrowing 単語カード by understanding (for example × only) gave about five cards. In this mode every question keeps its own record. A question not yet answered in the mode counted as 未学習, even when its meaning showed × or △ in the word list. So ratings made before the admin turned the mode on were ignored by the filter, and only the few questions answered since remained. Now a question with no record of its own goes by its meaning's rating (`getFlashcardMeaningStatus`). A question's own record still wins. 単語バトル's status filter applies the same rule.
+
+Test: `tests/term-flashcard-filter.smoke.cjs` (× only: questions without a record follow their meaning's ×, one answered ○ is left out; the old code gave an empty deck).

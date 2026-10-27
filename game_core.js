@@ -219,7 +219,10 @@
                 if (termMode) {
                     window.TermQuestions.questions(w).forEach(function(q) {
                         var result = (termStore[String(w.num)] || {})[q.key];
-                        if (!flashcardSelectedStatuses[result ? result.status : 'none']) return;
+                        // A question not yet answered in this mode goes by its meaning's rating (what the
+                        // word list shows), so ratings from before the mode was turned on still count.
+                        var meaning = (w.meanings || []).find(function(m) { return String(m.id) === String(q.mid); });
+                        if (!flashcardSelectedStatuses[result ? result.status : getFlashcardMeaningStatus(meaning, w)]) return;
                         // The whole-entry question is the word and its meanings, so it follows the chosen
                         // direction like any card (英→日: the word first). A blank or year question is a
                         // question with one answer, so it always shows the question first.
