@@ -34,6 +34,9 @@
       balance = window.StudyPoints.balance(account);
     dialog.querySelector("[data-points-total]").textContent =
       balance.toLocaleString("ja-JP") + "pt";
+    const earned = window.StudyPoints.earned?.(account);
+    dialog.querySelector("[data-points-earned]").textContent =
+      "総獲得ポイント " + (earned === null || earned === undefined ? "集計中" : earned.toLocaleString("ja-JP") + "pt");
     dialog.querySelector("[data-points-pending]").textContent = Object.keys(
       value.pending,
     ).length
@@ -126,6 +129,9 @@
     header.append(heading, dismiss);
     const total = node("p", undefined, "points-total");
     total.dataset.pointsTotal = "";
+    // Everything earned by studying and the daily bonus; spending and the casino do not lower it.
+    const earnedLine = node("p", undefined, "points-earned");
+    earnedLine.dataset.pointsEarned = "";
     const pending = node("p", undefined, "points-pending");
     pending.dataset.pointsPending = "";
     const loans = node("button", "ポイントの貸し借り", "points-loans");
@@ -224,7 +230,7 @@
     status.dataset.pointsStatus = "";
     status.setAttribute("role", "status");
     footer.append(update, status);
-    dialog.append(header, total, pending, loans, tabs, history, methods, footer);
+    dialog.append(header, total, earnedLine, pending, loans, tabs, history, methods, footer);
     dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
       close();

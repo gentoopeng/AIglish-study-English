@@ -1196,3 +1196,22 @@ Tests: `tests/term-questions.test.cjs` (one whole question per line, single-line
 Reported: meanings that put a phrase and its Japanese together (「A be followed by B」Aの次にBが続く) wrapped mid-phrase and were hard to read. A meaning's box, in the add dialog and in the inline editor, is now a text area: Enter adds a line break, and the box grows with its text. Each line is trimmed and empty lines are dropped (`cleanMeaningText`). The word list (`.vocab-meaning-text`) and flashcard faces show the breaks with `white-space: pre-line`. In 用語・年号モード questions already break at a newline (`TermQuestions.show`). The line-based paste import is unchanged: one line is one word.
 
 Test: `tests/term-mode.smoke.cjs` (Enter twice and trailing spaces are saved as one break, the box grows, the list shows two lines).
+
+## 総獲得ポイント and its ranking (10.22.04.00)
+
+Requested: a total of points ever earned, with a ranking. The wallet (`users/{id}/learningPoints/main`) gains `earned`, and the user document gains `earnedPoints`, written in the same transaction as the balance.
+
+What counts:
+- Study awards (in `StudyPoints.flush`) and the daily bonus (`notices.js`) add to it.
+- Casino and poker results (`Poker.settle`) and point loans do not, so it never goes down and shows how much someone has studied.
+
+The total did not exist before, so `backfillEarned` adds up every study award once from the per-day award records (`reviewPointDays`) before the first flush that counts. Until then the transaction leaves `earned` unset, so nothing is counted twice or lost. A device that finds the wallet already counted takes its total and reads no records. Daily bonuses from before are not in those records and are not included. A guest's total is kept on the device.
+
+The study flush wrote the wallet without merge, which dropped the `poker` map of settled casino and poker keys; that map is now carried over.
+
+Screens:
+- The points dialog shows 総獲得ポイント under the balance.
+- The ranking's ポイント mode has a second podium, 総獲得ポイント (`earnedPoints` is in the projected fields).
+- The detail dialog lists it too.
+
+Tests: `tests/study-points.test.cjs` checks the one-time count from the records, growth with later awards, the poker keys being kept, and a second device taking the cloud total without reading. `tests/notices.smoke.cjs` checks that the bonus adds to the total. The ranking smoke tests check the second podium.

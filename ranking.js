@@ -102,15 +102,15 @@
     function avatar(value,label,appearance){const frame=document.createElement('span');frame.className='podium-avatar';const safe=typeof value==='string'&&(/^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(value));if(safe){const img=document.createElement('img');preview(img,value);img.alt=String(label||'ユーザー')+'のアイコン';img.referrerPolicy='no-referrer';img.onerror=()=>{img.remove();frame.prepend(document.createTextNode(String(label||'人').trim().slice(0,1)));};frame.append(img);}else{frame.textContent=String(label||'人').trim().slice(0,1);}return frame;}
     window.RankingVisuals={name,avatar,appearanceOf:doc=>appearanceOf(doc)};
     let rankMode='learning';
-    const labels={points:'ポイント',time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
+    const labels={points:'ポイント',earned:'総獲得ポイント',time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
     const hasRecord=(entry,key)=>entry[key]>0;
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
-    const value=(row,key)=>row[key]===undefined||row[key]===null?'未取得':key==='points'?nonnegative(row.points).toLocaleString('ja-JP')+'pt':key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
+    const value=(row,key)=>row[key]===undefined||row[key]===null?'未取得':key==='points'||key==='earned'?nonnegative(row[key]).toLocaleString('ja-JP')+'pt':key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
     function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
     function appearanceOf(doc){let profile;try{profile=JSON.parse(doc.profileCustomizationJson||'{}');}catch{profile={};}if(!profile||typeof profile!=='object'||Array.isArray(profile))profile={};const value={nameColor:/^#[0-9a-f]{6}$/i.test(profile.nameColor||'')?profile.nameColor:'',frame:typeof profile.frame==='string'?profile.frame:''};return value.nameColor||value.frame?JSON.stringify(value):null;}
-    function row(id,doc,group){const brief=window.RankingQuery.summary(doc),learning=group!=='points',stats=learning&&!brief?statsOf(doc):{},combined=learning&&!brief?fromProfile(doc):null;return {id,name:doc.playerName||doc.name||id,avatar:typeof doc.avatar==='string'&&doc.avatar.length<=48000?doc.avatar:'',appearance:appearanceOf(doc),points:nonnegative(doc.studyPoints),time:brief?.time??(learning?window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()):null),words:learning?(brief?.words??wordCount(combined)):null,flash:learning?(brief?.flash??flashCount(combined)):null};}
+    function row(id,doc,group){const brief=window.RankingQuery.summary(doc),learning=group!=='points',stats=learning&&!brief?statsOf(doc):{},combined=learning&&!brief?fromProfile(doc):null;return {id,name:doc.playerName||doc.name||id,avatar:typeof doc.avatar==='string'&&doc.avatar.length<=48000?doc.avatar:'',appearance:appearanceOf(doc),points:nonnegative(doc.studyPoints),earned:doc.earnedPoints===undefined||doc.earnedPoints===null?undefined:nonnegative(doc.earnedPoints),time:brief?.time??(learning?window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()):null),words:learning?(brief?.words??wordCount(combined)):null,flash:learning?(brief?.flash??flashCount(combined)):null};}
 
-    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record),studyPoints:window.StudyPoints?.balance()||0});}
+    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record),studyPoints:window.StudyPoints?.balance()||0,earnedPoints:window.StudyPoints?.earned?.()??undefined});}
     function deadline(promise,ms=15000){let timer;return Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('通信が完了しませんでした')),ms))]).finally(()=>clearTimeout(timer));}
     async function detail(entry,rank,context){
         const account=owner(),dialog=showDetail(entry,rank,context);
@@ -129,7 +129,7 @@
     function sameShape(left,right){return !!left&&left.length===right.length&&left.every((row,i)=>row.length===right[i].length&&row.every((value,j)=>value===right[i][j]));}
     function render(){
         const host=document.getElementById('rankingPodium');if(!host)return;ensure();const local=self(),rows=cache.filter(entry=>entry.id!==user);if(user!=='GUEST-000')rows.push(local);
-        const metrics=rankMode==='learning'?['time','words','flash']:['points'];
+        const metrics=rankMode==='learning'?['time','words','flash']:['points','earned'];
         host.querySelectorAll('[data-podium-metric]').forEach(section=>{if(!metrics.includes(section.dataset.podiumMetric))section.remove();});
         host.classList.toggle('is-battle-mode',rankMode==='points');
         metrics.forEach(key=>{

@@ -852,7 +852,8 @@ const { chromium, webkit } = require("playwright"),
     await a.locator("#rankingRefresh").click();
     await a.locator("[data-podium-metric=points] .place-1 strong").waitFor();
     assert.equal(await a.locator("[data-podium-metric=solo]").count(), 0);
-    assert.equal(await a.locator(".ranking-mini-panel").count(), 1);
+    // The balance and 総獲得ポイント podiums.
+    assert.equal(await a.locator(".ranking-mini-panel").count(), 2);
     await a.locator(".points-roster summary").click();
     assert.equal(await a.locator(".points-roster li").count(), 1);
     await a.screenshot({ path: "/tmp/rate-expanded-" + type.name() + ".png" });

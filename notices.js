@@ -93,10 +93,15 @@
       const segment = M.drawSegment(),
         prize = M.SEGMENTS[segment],
         wallet = walletSnap.exists() ? walletSnap.data() : {},
-        value = { balance: (Number(wallet.balance) || 0) + prize, revision: (Number(wallet.revision) || 0) + 1 };
+        value = {
+          balance: (Number(wallet.balance) || 0) + prize,
+          revision: (Number(wallet.revision) || 0) + 1,
+          // The bonus counts toward the total earned once that total exists.
+          ...(Number.isSafeInteger(wallet.earned) ? { earned: wallet.earned + prize } : {}),
+        };
       tx.set(bonusRef(me), { day, prize, segment, at: Date.now() });
       tx.set(walletRef(me), value, { merge: true });
-      tx.set(window.fbDoc(window.db, "users", me), { studyPoints: value.balance }, { merge: true });
+      tx.set(window.fbDoc(window.db, "users", me), { studyPoints: value.balance, ...(value.earned !== undefined ? { earnedPoints: value.earned } : {}) }, { merge: true });
       return { prize, segment, value };
     });
     if (uid() !== me) return result;

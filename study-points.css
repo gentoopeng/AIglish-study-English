@@ -66,6 +66,12 @@
   color: #e6d29a;
   font-variant-numeric: tabular-nums;
 }
+.points-earned {
+  font-size: 13px;
+  margin: 4px 0 14px;
+  color: #d2c4aa;
+  font-variant-numeric: tabular-nums;
+}
 .points-pending {
   font-size: 12px;
   margin: 0 0 14px;

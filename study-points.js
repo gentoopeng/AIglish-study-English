@@ -54,7 +54,7 @@
       !value ||
       typeof value !== "object" ||
       Array.isArray(value) ||
-      ["balance", "revision"].some(
+      ["balance", "revision", "earned"].some(
         (field) =>
           value[field] !== undefined &&
           (!Number.isSafeInteger(value[field]) || value[field] < 0),
@@ -108,6 +108,10 @@
       settled: maps(b.settled, a.settled),
       history: history(b.history, a.history),
       publishedRevision: Number(newest.publishedRevision) || 0,
+      // Everything ever earned (study and the daily bonus); it only grows, so the larger wins.
+      ...(Number.isSafeInteger(a.earned) || Number.isSafeInteger(b.earned)
+        ? { earned: Math.max(Number(a.earned) || 0, Number(b.earned) || 0) }
+        : {}),
       timeSent: { ...b.timeSent, ...a.timeSent },
       timeAck: { ...b.timeAck, ...a.timeAck },
     };
@@ -193,6 +197,7 @@
     value.history = history(value.history, { [token]: entry });
     if (id === "GUEST-000") {
       value.balance += Math.max(0, entry.amount - before);
+      value.earned = (Number(value.earned) || 0) + Math.max(0, entry.amount - before);
       value.settled[token] = Math.max(
         level(value.settled[token]),
         entry.amount,
@@ -321,6 +326,8 @@
     )
       return false;
     const execute = async () => {
+      // A failed count is tried again next time; it never holds up the awards themselves.
+      await backfillEarned(id).catch((error) => console.warn("総獲得ポイントは次の同期で数えます", error));
       const bookHashes = new Map();
       // Small groups keep mobile transactions bounded, including after offline sessions.
       while (id === owner()) {
@@ -436,9 +443,12 @@
                 book: shard.claims[0][1].book,
               });
           }
+          const counted = Number.isSafeInteger(wallet.earned);
           const value = {
             balance: (Number(wallet.balance) || 0) + delta,
             revision: (Number(wallet.revision) || 0) + (delta ? 1 : 0),
+            // Counted only once the past has been added up (backfillEarned), so nothing is lost.
+            ...(counted ? { earned: wallet.earned + delta } : {}),
             history: history(earned, wallet.history),
             acknowledged: Object.fromEntries(
               Object.entries(earned).map(([token, item]) => [
@@ -456,10 +466,13 @@
               balance: value.balance,
               revision: value.revision,
               history: value.history,
+              ...(counted ? { earned: value.earned } : {}),
+              // Poker and casino keys stay, so a result is never settled twice.
+              ...(wallet.poker && typeof wallet.poker === "object" ? { poker: wallet.poker } : {}),
             });
           tx.set(
             window.fbDoc(window.db, "users", id),
-            { studyPoints: value.balance },
+            { studyPoints: value.balance, ...(counted ? { earnedPoints: value.earned } : {}) },
             { merge: true },
           );
           return value;
@@ -484,6 +497,8 @@
             delete latest.pending[token];
         }
         latest.history = history(latest.history, result.history);
+        if (Number.isSafeInteger(result.earned))
+          latest.earned = Math.max(Number(latest.earned) || 0, result.earned);
         if (result.revision >= latest.revision) {
           latest.balance = result.balance;
           latest.revision = result.revision;
@@ -505,6 +520,59 @@
         running = null;
       });
     return running;
+  }
+  // The total earned did not exist at first: added up once from every study award the cloud
+  // holds (one record per day, book and 512 words), then kept in the wallet and grown with each
+  // award. Daily bonuses from before are not in those records.
+  async function backfillEarned(id = owner()) {
+    if (
+      id !== owner() ||
+      id === "GUEST-000" ||
+      Number.isSafeInteger(read(id).earned) ||
+      !window.fbGetDocs ||
+      !window.fbCollection
+    )
+      return;
+    const keep = (total) => {
+      const next = read(id);
+      next.earned = Math.max(Number(next.earned) || 0, total);
+      write(id, next);
+    };
+    // Already counted (on another device): take that total and read nothing more.
+    if (window.fbGetDoc) {
+      const snap = await window.fbGetDoc(
+        window.fbDoc(window.db, "users", id, "learningPoints", "main"),
+      );
+      if (id !== owner()) return;
+      const counted = snap.exists() ? snap.data()?.earned : undefined;
+      if (Number.isSafeInteger(counted)) return keep(counted);
+    }
+    const records = await window.fbGetDocs(
+      window.fbCollection(window.db, "users", id, "reviewPointDays"),
+    );
+    if (id !== owner()) return;
+    let sum = 0;
+    for (const doc of records.docs || [])
+      for (const claim of Object.values(doc.data()?.claims || {}))
+        sum += typeof claim === "object" ? entryAmount(claim) : level(claim);
+    const earned = await window.fbRunTransaction(window.db, async (tx) => {
+      const ref = window.fbDoc(window.db, "users", id, "learningPoints", "main"),
+        snap = await tx.get(ref),
+        wallet = snap.exists() ? validate(snap.data()) : {};
+      if (Number.isSafeInteger(wallet.earned)) return wallet.earned;
+      tx.set(ref, { earned: sum }, { merge: true });
+      tx.set(window.fbDoc(window.db, "users", id), { earnedPoints: sum }, { merge: true });
+      return sum;
+    });
+    if (id !== owner()) return;
+    keep(earned);
+  }
+  // Everything earned so far, with awards still waiting to be sent; null until it is known.
+  function earned(id = owner()) {
+    const value = read(id);
+    // A guest's wallet is only on this device; what it held before the count began counts too.
+    if (id === "GUEST-000") return Math.max(Number(value.earned) || 0, value.balance);
+    return Number.isSafeInteger(value.earned) ? value.earned + pendingAmount(value) : null;
   }
   async function publish(id = owner()) {
     if (id !== owner()) return false;
@@ -529,7 +597,10 @@
       const data = validate(snap.data());
       tx.set(
         window.fbDoc(window.db, "users", id),
-        { studyPoints: Number(data.balance) || 0 },
+        {
+          studyPoints: Number(data.balance) || 0,
+          ...(Number.isSafeInteger(data.earned) ? { earnedPoints: data.earned } : {}),
+        },
         { merge: true },
       );
       return data;
@@ -628,6 +699,7 @@
     pendingAmount,
     collectTime,
     balance,
+    earned,
     flush,
     merge,
     read,
