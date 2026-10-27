@@ -59,3 +59,25 @@ test("units are listed in order of appearance with their ranges, and can be assi
   assert.throws(() => o.assignUnit(words, 3, 1, "x"), /範囲/);
   assert.equal(o.cleanUnit("a".repeat(100)).length, o.UNIT_LIMIT);
 });
+
+test("the same unit name in two places makes two units, and a unit's name and range can be changed", () => {
+  let words = book([1, 2, 3, 4, 5, 6, 7]);
+  words = o.assignUnit(words, 1, 2, "第1章").words;
+  words = o.assignUnit(words, 3, 3, "まとめ").words;
+  words = o.assignUnit(words, 4, 5, "第2章").words;
+  words = o.assignUnit(words, 6, 7, "まとめ").words;
+  const list = o.units(words);
+  assert.deepEqual(list.map((u) => [u.name, u.from, u.to, u.count]), [["第1章", 1, 2, 2], ["まとめ", 3, 3, 1], ["第2章", 4, 5, 2], ["まとめ", 6, 7, 2]]);
+  assert.equal(new Set(list.map((u) => u.key)).size, 4);
+  assert.deepEqual(o.findUnit(words, list[3].key).nums, ["6", "7"]);
+  // A word without a unit also splits a run.
+  const gap = o.assignUnit(o.assignUnit(book([1, 2, 3]), 1, 3, "A").words, 2, 2, "").words;
+  assert.deepEqual(o.units(gap).map((u) => [u.from, u.to]), [[1, 1], [3, 3]]);
+  // Rename the second まとめ and widen it to 5–7: word 5 leaves 第2章.
+  const edited = o.editUnit(words, list[3].key, { name: "第2章まとめ", from: 5, to: 7 }).words;
+  assert.deepEqual(o.units(edited).map((u) => [u.name, u.from, u.to]), [["第1章", 1, 2], ["まとめ", 3, 3], ["第2章", 4, 4], ["第2章まとめ", 5, 7]]);
+  // Narrowing frees words; an empty name removes the unit.
+  assert.deepEqual(o.units(o.editUnit(words, list[0].key, { name: "第1章", from: 1, to: 1 }).words).map((u) => [u.name, u.from, u.to])[0], ["第1章", 1, 1]);
+  assert.deepEqual(o.units(o.editUnit(words, list[1].key, { name: "" }).words).map((u) => u.name), ["第1章", "第2章", "まとめ"]);
+  assert.throws(() => o.editUnit(words, "none@9", { name: "x", from: 1, to: 1 }), /見つかりません/);
+});

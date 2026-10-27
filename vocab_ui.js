@@ -348,9 +348,60 @@
     // 5. フィルタ・削除確認
     // ================================================================
 
-    var selectedUnderstanding=new Set(),selectedExtras=new Set(),noteScope=0,selectedUnit='';
-    // Table of contents: one chip per unit with its size and how much of it is ○; choosing one filters
-    // the list. Editors can give a range of numbers a unit from here.
+    var selectedUnderstanding=new Set(),selectedExtras=new Set(),noteScope=0,selectedUnit='',selectedUnitNums=null;
+    // Units: one chip per unit (an unbroken run of numbers with one name; the same name used again
+    // further on is its own unit) with its range, size and how much is ○; choosing one filters the
+    // list. 目次 lists them like a book's contents. Editors set a range's unit, and change a unit's
+    // name or range from the contents. The units are part of the book's words, so they reach
+    // everyone with the book (the admin editing mode, or 全員に配信・反映).
+    function unitProgress(unit){var nums=new Set(unit.nums),meanings=[].concat.apply([],vocabList.filter(function(w){return nums.has(String(w.num));}).map(function(w){return w.meanings||[];})),ok=meanings.filter(function(m){return m.status==='ok';}).length;return meanings.length?Math.round(ok/meanings.length*100):0;}
+    function applyUnits(result,message){
+        if(!result.changed){alert('その範囲に単語がありません。');return false;}
+        var units=new Map(result.words.map(function(w){return [String(w.num),w.unit];}));
+        vocabList.forEach(function(w){var unit=units.get(String(w.num));if(unit)w.unit=unit;else delete w.unit;});
+        window.saveVocabToStorage();if(window.__captureManualVocabDraft)window.__captureManualVocabDraft();
+        window.showToast?.(message||result.changed+'語の単元を設定しました。','ok');window.renderVocabList();return true;
+    }
+    var unitShape=function(){return vocabList.map(function(w){var x={num:w.num};if(w.no!==undefined)x.no=w.no;if(w.unit)x.unit=w.unit;return x;});};
+    function selectUnit(key){selectedUnit=key;vocabPage=0;window.renderVocabList();}
+    function openUnitContents(){
+        var units=window.VocabOrder.units(vocabList),editable=window.canEditCurrentTextbook?window.canEditCurrentTextbook():window.isAdmin;
+        var modal=window.openLibraryDialog('目次','<ol class="vocab-unit-toc"></ol><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
+        modal.classList.add('vocab-unit-toc-dialog');
+        var list=modal.querySelector('.vocab-unit-toc');
+        var row=function(key,name,detail,unit){
+            var li=document.createElement('li');if(selectedUnit===key)li.className='is-current';
+            var open=document.createElement('button');open.type='button';open.className='vocab-unit-toc-open';
+            var title=document.createElement('strong');title.textContent=name;var small=document.createElement('small');small.textContent=detail;open.append(title,small);
+            open.onclick=function(){window.closeLibraryDialog();selectUnit(key);};
+            li.append(open);
+            if(unit&&editable){
+                var edit=document.createElement('button');edit.type='button';edit.className='vocab-unit-toc-edit';edit.textContent='編集';edit.setAttribute('aria-label',name+'を編集');
+                edit.onclick=function(){
+                    if(li.querySelector('form'))return;
+                    var form=document.createElement('form');form.className='vocab-unit-toc-form';
+                    form.innerHTML='<label>名前<input type="text" maxlength="60" data-unit-edit-name></label><label>番号<input type="number" min="1" step="1" data-unit-edit-from></label><span>〜</span><label><input type="number" min="1" step="1" data-unit-edit-to aria-label="最後の番号"></label><button type="submit">保存</button><button type="button" data-unit-remove>単元を外す</button>';
+                    form.querySelector('[data-unit-edit-name]').value=unit.name;form.querySelector('[data-unit-edit-from]').value=unit.from;form.querySelector('[data-unit-edit-to]').value=unit.to;
+                    var save=function(name){
+                        try{
+                            var result=window.VocabOrder.editUnit(unitShape(),unit.key,{name:name,from:form.querySelector('[data-unit-edit-from]').value,to:form.querySelector('[data-unit-edit-to]').value});
+                            if(selectedUnit===unit.key)selectedUnit='';
+                            if(applyUnits(result,name.trim()?'「'+name.trim()+'」を保存しました。':'「'+unit.name+'」を外しました。'))openUnitContents();
+                        }catch(error){alert(error.message);}
+                    };
+                    form.onsubmit=function(event){event.preventDefault();var name=form.querySelector('[data-unit-edit-name]').value;if(!name.trim()){alert('名前を入れてください（外すときは「単元を外す」）。');return;}save(name);};
+                    form.querySelector('[data-unit-remove]').onclick=function(){save('');};
+                    li.append(form);form.querySelector('[data-unit-edit-name]').focus();
+                };
+                li.append(edit);
+            }
+            list.append(li);
+        };
+        row('','すべて',vocabList.length+'語');
+        units.forEach(function(unit){row(unit.key,unit.name,'#'+unit.from+'–'+unit.to+' · '+unit.count+'語 · ○'+unitProgress(unit)+'%',unit);});
+        if(!units.length){var empty=document.createElement('li');empty.className='vocab-unit-toc-empty';empty.textContent='まだ単元がありません。'+(editable?'一覧の上の「番号の範囲に単元を付ける」から作れます。':'');list.append(empty);}
+    }
+    window.openVocabUnitContents=openUnitContents;
     function unitContents(list){
         // Its own element just above the list, so the list itself still starts with its pages.
         var container=document.getElementById('vocabUnitContents');
@@ -358,20 +409,21 @@
         container.replaceChildren();
         var units=window.VocabOrder?window.VocabOrder.units(vocabList):[];
         var options=document.createElement('datalist');options.id='vocabUnitOptions';
-        units.forEach(function(unit){var option=document.createElement('option');option.value=unit.name;options.append(option);});
+        Array.from(new Set(units.map(function(unit){return unit.name;}))).forEach(function(name){var option=document.createElement('option');option.value=name;options.append(option);});
         container.append(options);
-        if(selectedUnit&&!units.some(function(unit){return unit.name===selectedUnit;}))selectedUnit='';
+        var current=selectedUnit?units.find(function(unit){return unit.key===selectedUnit;}):null;
+        if(!current)selectedUnit='';
+        selectedUnitNums=current?new Set(current.nums):null;
         var editable=window.canEditCurrentTextbook?window.canEditCurrentTextbook():window.isAdmin;
         if(!units.length&&!editable)return;
-        var box=document.createElement('section');box.className='vocab-unit-contents';box.setAttribute('aria-label','単元の目次');
+        var box=document.createElement('section');box.className='vocab-unit-contents';box.setAttribute('aria-label','単元');
         if(units.length){
             var row=document.createElement('div');row.className='vocab-unit-chips';
-            var chip=function(name,label,detail){var button=document.createElement('button');button.type='button';button.className='vocab-unit-chip';button.setAttribute('aria-pressed',String(selectedUnit===name));button.dataset.unit=name;var title=document.createElement('strong');title.textContent=label;button.append(title);if(detail){var small=document.createElement('small');small.textContent=detail;button.append(small);}button.onclick=function(){selectedUnit=name;vocabPage=0;window.renderVocabList();};return button;};
+            var toc=document.createElement('button');toc.type='button';toc.className='vocab-unit-chip vocab-unit-toc-button';toc.innerHTML='<strong>目次</strong><small></small>';toc.querySelector('small').textContent=units.length+'単元';toc.onclick=openUnitContents;
+            row.append(toc);
+            var chip=function(key,label,detail){var button=document.createElement('button');button.type='button';button.className='vocab-unit-chip';button.setAttribute('aria-pressed',String(selectedUnit===key));button.dataset.unit=key;var title=document.createElement('strong');title.textContent=label;button.append(title);if(detail){var small=document.createElement('small');small.textContent=detail;button.append(small);}button.onclick=function(){selectUnit(key);};return button;};
             row.append(chip('','すべて',vocabList.length+'語'));
-            units.forEach(function(unit){
-                var words=vocabList.filter(function(w){return w.unit&&window.VocabOrder.cleanUnit(w.unit)===unit.name;}),meanings=[].concat.apply([],words.map(function(w){return w.meanings||[];})),ok=meanings.filter(function(m){return m.status==='ok';}).length;
-                row.append(chip(unit.name,unit.name,'#'+unit.from+'–'+unit.to+' · '+unit.count+'語 · ○'+(meanings.length?Math.round(ok/meanings.length*100):0)+'%'));
-            });
+            units.forEach(function(unit){row.append(chip(unit.key,unit.name,'#'+unit.from+'–'+unit.to+' · '+unit.count+'語 · ○'+unitProgress(unit)+'%'));});
             box.append(row);
         }
         if(editable){
@@ -380,12 +432,7 @@
             details.querySelector('[data-unit-apply]').onclick=function(){
                 try{
                     var from=Number(details.querySelector('[data-unit-from]').value),to=Number(details.querySelector('[data-unit-to]').value),name=details.querySelector('[data-unit-name]').value;
-                    var result=window.VocabOrder.assignUnit(vocabList.map(function(w){return w.unit?{num:w.num,no:w.no,unit:w.unit}:{num:w.num,no:w.no};}),from,to,name);
-                    if(!result.changed){alert('その範囲に単語がありません。');return;}
-                    var units=new Map(result.words.map(function(w){return [String(w.num),w.unit];}));
-                    vocabList.forEach(function(w){var unit=units.get(String(w.num));if(unit)w.unit=unit;else delete w.unit;});
-                    window.saveVocabToStorage();if(window.__captureManualVocabDraft)window.__captureManualVocabDraft();
-                    window.showToast?.(result.changed+'語の単元を設定しました。','ok');window.renderVocabList();
+                    applyUnits(window.VocabOrder.assignUnit(unitShape(),from,to,name));
                 }catch(error){alert(error.message);}
             };
             box.append(details);
@@ -1033,7 +1080,7 @@
         unitContents(container);
         var filtered = (window.VocabOrder ? window.VocabOrder.sort(vocabList) : vocabList).filter(function(w) {
             var n = window.VocabOrder ? window.VocabOrder.no(w) : parseInt(w.num);
-            if (selectedUnit && !(w.unit && window.VocabOrder.cleanUnit(w.unit) === selectedUnit)) return false;
+            if (selectedUnitNums && !selectedUnitNums.has(String(w.num))) return false;
             if (!isNaN(n) && (n < startRange || n > endRange)) return false;
             if(selectedUnderstanding.size && !(w.meanings||[]).some(function(m){return selectedUnderstanding.has(m.status||'none');}))return false;
             if(selectedExtras.has('sticky')&&!w.sticky)return false;
