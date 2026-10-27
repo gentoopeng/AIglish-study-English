@@ -115,9 +115,11 @@
     const result = [];
     let previous = null;
     while (result.length < limit) {
-      const choices = [...groups.entries()]
-        .filter(([word, list]) => word !== previous && list.length)
-        .sort(
+      const left = [...groups.entries()].filter(([, list]) => list.length);
+      // Another word comes between two meanings of one word when there is one; once only one
+      // word is left, its remaining meanings still come, one after another.
+      const others = left.filter(([word]) => word !== previous),
+        choices = (others.length ? others : left).sort(
           (a, b) =>
             b[1].length - a[1].length || (a[1][0].at || 0) - (b[1][0].at || 0),
         );

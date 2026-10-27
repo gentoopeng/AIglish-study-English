@@ -122,7 +122,7 @@ test("review order separates meanings of the same word, preserving their origina
   assert.equal(plan[2].ref.mid, "2");
   assert.equal(input[1].prompt, "a");
 });
-test("a dominant remaining word waits for a new round rather than appearing consecutively", () => {
+test("a word with many weak meanings is not cut short: others come between while there are any", () => {
   const input = Array.from({ length: 8 }, (_, i) => ({
     prompt: "a",
     at: i,
@@ -131,9 +131,11 @@ test("a dominant remaining word waits for a new round rather than appearing cons
   input.push({ prompt: "b", at: 9, ref: { num: "b", mid: "1" } });
   assert.deepEqual(
     m.reviewPlan(input).map((item) => item.prompt),
-    ["a", "b", "a"],
+    ["a", "b", "a", "a", "a", "a", "a", "a", "a"],
   );
-  assert.equal(m.reviewPlan(input.slice(0, 8)).length, 1);
+  // Every meaning of a single word still comes, oldest first, up to the round's limit.
+  assert.deepEqual(m.reviewPlan(input.slice(0, 8)).map((item) => item.ref.mid), ["0", "1", "2", "3", "4", "5", "6", "7"]);
+  assert.equal(m.reviewPlan(Array.from({ length: 30 }, (_, i) => ({ prompt: "w" + (i % 3), at: i, ref: { num: String(i % 3), mid: String(i) } }))).length, 20);
 });
 test("planning avoids an unnecessary early finish when the oldest word is the minority", () => {
   const plan = m.reviewPlan([
