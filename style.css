@@ -2938,9 +2938,17 @@ html body .modern-btn:active{box-shadow:0 0 0 3px rgba(213,201,172,.18)!importan
 /* Word battle inside the users tab. */
 #communityBattle .battle-mode-grid{height:auto;padding:18px 0 8px;}
 #communityBattle #view-battle{min-height:0;}
-/* On a phone with the edit buttons, the number stays beside the buttons and the word with its
-   speaker takes the whole next line, so it is not squeezed into the gap between them. */
+/* On a phone with the edit buttons, the word stays beside its number: the 付箋, edit and
+   delete buttons get smaller instead (30 px wide, 18 px icons), and the speaker moves under the
+   word when the line is still too short. */
 @media(max-width:430px){
-.word-row-container .word-main-line:has(.vocab-word-markers.with-admin){padding-right:0!important;}
-.word-row-container .word-main-line:has(.vocab-word-markers.with-admin)>div:first-child{flex:1 1 100%;display:grid!important;grid-template-rows:47px auto;align-items:center;justify-items:start;row-gap:2px;}
+.word-row-container .word-main-line:has(.vocab-word-markers.with-admin){padding-right:98px!important;}
+.word-row-container :is(.card-edit-btn,.card-delete-btn){width:30px;height:40px;padding:0!important;display:inline-grid;place-items:center;}
+.word-row-container :is(.card-edit-btn,.card-delete-btn) svg{width:18px;height:18px;}
+.word-row-container .vocab-word-markers.with-admin{right:72px;top:8px;height:40px;}
+.word-row-container .vocab-word-markers.with-admin .vocab-sticky-button{width:30px;height:40px;min-height:40px;}
+.word-row-container .vocab-word-markers.with-admin .vocab-sticky-button svg{width:18px;height:18px;}
+.word-row-container .word-main-line:has(.vocab-word-markers.with-admin) .word-title{flex:1 1 0%;min-width:min-content;flex-wrap:wrap;row-gap:4px;}
+.word-row-container .word-main-line:has(.vocab-word-markers.with-admin)>div:first-child{align-items:flex-start!important;}
+.word-row-container .word-main-line:has(.vocab-word-markers.with-admin) .word-num-badge{margin-top:3px;}
 }
