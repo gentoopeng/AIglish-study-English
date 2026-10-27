@@ -220,7 +220,11 @@
                     window.TermQuestions.questions(w).forEach(function(q) {
                         var result = (termStore[String(w.num)] || {})[q.key];
                         if (!flashcardSelectedStatuses[result ? result.status : 'none']) return;
-                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: q.prompt, ja: q.answer, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
+                        // The whole-entry question is the word and its meanings, so it follows the chosen
+                        // direction like any card (英→日: the word first). A blank or year question is a
+                        // question with one answer, so it always shows the question first.
+                        var whole = q.kind === 'whole';
+                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : q.prompt, ja: whole ? q.prompt : q.answer, questionFirst: !whole, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
                     });
                     return;
                 }
@@ -247,8 +251,6 @@
             return;
         }
 
-        // Term questions always show the question first and the answer on the back.
-        if (termMode) flashcardDirectionMode = 'en2ja';
         flashcardOriginQueue = pool.slice().sort(function() { return Math.random() - 0.5; });
         flashcardCurrentIndex = 0;
         flashcardLearnedCount = 0;
@@ -626,12 +628,14 @@
             settle();
         });
 
-        var frontText = flashcardDirectionMode === 'en2ja' ? wordData.en : wordData.ja;
-        var backText = flashcardDirectionMode === 'en2ja' ? wordData.ja : wordData.en;
+        // A blank or year question shows its question (en) first whatever the direction.
+        var enFirst = wordData.questionFirst === true || flashcardDirectionMode === 'en2ja';
+        var frontText = enFirst ? wordData.en : wordData.ja;
+        var backText = enFirst ? wordData.ja : wordData.en;
         frontText = window.escapeVocabText(frontText);
         backText = window.escapeVocabText(backText);
         var customStyle = (typeof window.getFlashcardStyleByHistory === 'function') ? window.getFlashcardStyleByHistory(wordData) : "";
-        window.fillFlashcardFaces(cardWrap,flashcardDirectionMode === 'en2ja'?wordData.en:wordData.ja,flashcardDirectionMode === 'en2ja'?wordData.ja:wordData.en,wordData.shownNo||wordData.num,customStyle,{term:!!wordData.termKey});
+        window.fillFlashcardFaces(cardWrap,enFirst?wordData.en:wordData.ja,enFirst?wordData.ja:wordData.en,wordData.shownNo||wordData.num,customStyle,{term:!!wordData.termKey});
         stage.appendChild(cardWrap);
         // The text box must grow with the circle; flex shrinking otherwise hides extra lines.
         window.sizeFlashcardFaces(cardWrap,stage,posLabel);
