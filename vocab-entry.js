@@ -33,6 +33,7 @@
         id: num + "-" + i,
         text,
         ...(m.partOfSpeech ? { partOfSpeech: String(m.partOfSpeech) } : {}),
+        ...(m.minor ? { minor: true } : {}),
       };
     });
     const entry = {
@@ -380,6 +381,14 @@
       }
       controls.append(input, select, remove);
       row.append(label, controls);
+      // A meaning seldom used but worth knowing: shown small under the main ones.
+      if (!term) {
+        const minor = el("label", undefined, "vocab-entry-minor"),
+          box = el("input");
+        box.type = "checkbox";
+        minor.append(box, document.createTextNode("あまり使わない意味"));
+        row.append(minor);
+      }
       list.append(row);
       relabel();
       if (focus) input.focus();
@@ -414,6 +423,7 @@
               return {
                 text: year && text.trim() ? year + " " + text.trim() : text,
                 partOfSpeech: row.querySelector("select").value,
+                minor: !!row.querySelector(".vocab-entry-minor input")?.checked,
               };
             }),
           },

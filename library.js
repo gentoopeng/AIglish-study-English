@@ -630,7 +630,7 @@
                         var id = 'personal_' + crypto.randomUUID();
                         // A copy numbers words in the order they are shown and keeps their units.
                         var clean = (window.VocabOrder ? window.VocabOrder.sort(master) : master).map(function(word, index) {
-                            return {num:index+1,...(window.VocabOrder&&window.VocabOrder.cleanUnit(word.unit)?{unit:window.VocabOrder.cleanUnit(word.unit)}:{}),word:word.word,meaning:word.meaning,sub:typeof word.sub==='string'?word.sub:'',meanings:(Array.isArray(word.meanings)&&word.meanings.length?word.meanings:[{text:word.meaning}]).map(function(meaning, i){return {id:(index+1)+'-'+i,text:String(meaning.text||''),partOfSpeech:String(meaning.partOfSpeech||meaning.pos||word.partOfSpeech||word.pos||'')};})};
+                            return {num:index+1,...(window.VocabOrder&&window.VocabOrder.cleanUnit(word.unit)?{unit:window.VocabOrder.cleanUnit(word.unit)}:{}),word:word.word,meaning:word.meaning,sub:typeof word.sub==='string'?word.sub:'',meanings:(Array.isArray(word.meanings)&&word.meanings.length?word.meanings:[{text:word.meaning}]).map(function(meaning, i){return {id:(index+1)+'-'+i,text:String(meaning.text||''),partOfSpeech:String(meaning.partOfSpeech||meaning.pos||word.partOfSpeech||word.pos||''),...(meaning.minor===true?{minor:true}:{})};})};
                         });
                         var draft = {master:clean,progress:{},savedAt:new Date().toISOString()};
                         localStorage.setItem('core_v4_custom_words_' + userId() + '_' + id, JSON.stringify(clean));

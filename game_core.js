@@ -235,7 +235,8 @@
                         ja: meaning.text || w.meaning || '',
                         meaningId: meaning.id !== undefined && meaning.id !== null ? String(meaning.id) : null,
                         meaningIndex: meaningIndex,
-                        partOfSpeech: window.getFlashcardPartOfSpeech(w,meaning)
+                        partOfSpeech: window.getFlashcardPartOfSpeech(w,meaning),
+                        minor: meaning.minor === true
                     });
                 });
             });
@@ -484,7 +485,8 @@
         if(note.trim()){var panel=window.createFlashcardNotePreview(note);panel.id='flashcardNotePreview';stage.parentElement.parentElement.insertBefore(panel,stage.parentElement);}
 
         var posLabel=document.getElementById('flashcardPartOfSpeech');
-        if(posLabel){posLabel.hidden=!wordData.partOfSpeech;posLabel.textContent=wordData.partOfSpeech?wordData.partOfSpeech.short:'';posLabel.title=wordData.partOfSpeech?wordData.partOfSpeech.name:'';posLabel.setAttribute('aria-label',wordData.partOfSpeech?wordData.partOfSpeech.name:'');}
+        // The part of speech, and whether this is a seldom-used meaning.
+        if(posLabel){var posName=wordData.partOfSpeech?wordData.partOfSpeech.name:'',minorText=wordData.minor?'あまり使わない意味':'';posLabel.hidden=!posName&&!minorText;posLabel.textContent=[wordData.partOfSpeech?wordData.partOfSpeech.short:'',minorText].filter(Boolean).join('・');posLabel.title=[posName,minorText].filter(Boolean).join('・');posLabel.setAttribute('aria-label',posLabel.title);}
         window.renderFlashcardHistoryBubbles(wordData);
         var cardWrap = document.createElement('div');
         cardWrap.className = "flashcard-wrapper-3d";

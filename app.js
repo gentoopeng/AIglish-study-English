@@ -946,6 +946,8 @@ window.stripVocabProgressFromWords = function(words) {
       clean.meanings = w.meanings.map(function(m, i) {
         var meaning={ id: m.id || (String(w.num) + "-" + i), text: m.text || "" };
         if(m.partOfSpeech||m.pos)meaning.partOfSpeech=String(m.partOfSpeech||m.pos);
+        // A meaning worth knowing though seldom used: shown small under the main ones, rated and tested like any other.
+        if(m.minor===true)meaning.minor=true;
         return meaning;
       });
     }
@@ -985,7 +987,7 @@ window.applyUserProgressToVocabList = function() {
     w.status = "none";
     w.history = [];
     w.meanings = (w.meanings || []).map(function(m) {
-      return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status: "none", history: [] };
+      return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, status: "none", history: [] };
     });
     if (p && p.sig === window.buildWordSignature(w)) {
       w.status = p.status || "none";
@@ -993,7 +995,7 @@ window.applyUserProgressToVocabList = function() {
       w.meanings = w.meanings.map(function(m) {
         var mp = p.meanings ? p.meanings[m.id] : null;
         if (mp) {
-          return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status: mp.status || "none", history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
+          return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, status: mp.status || "none", history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
         }
         return m;
       });
@@ -3251,13 +3253,13 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
     w.note = p && typeof p.note === 'string' ? p.note : String(w.note || ''); w.sticky = !!(p && p.sticky);
     w.status = 'none';
     w.history = [];
-    w.meanings = (w.meanings || []).map(function(m) { return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status: 'none', history: [] }; });
+    w.meanings = (w.meanings || []).map(function(m) { return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, status: 'none', history: [] }; });
     if (p && p.sig === sig(w)) {
       w.status = p.status || 'none';
       w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
       w.meanings = w.meanings.map(function(m) {
         var mp = p.meanings ? p.meanings[m.id] : null;
-        if (mp) return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', status: mp.status || 'none', history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
+        if (mp) return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, status: mp.status || 'none', history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
         return m;
       });
     }
