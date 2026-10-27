@@ -1021,6 +1021,8 @@ window.saveVocabMasterToStorage = async function() {
       const docName = currentTextbook ? "vocab_" + currentTextbook : "vocab";
       const sharedRef = window.fbDoc(window.db, "shared", docName);
       await window.fbSetDoc(sharedRef, { custom_words: masterWords, emptyConfirmed:masterWords.length===0, updatedAt: new Date().toISOString() }, { merge: true });
+      // Copies of this book in users' own books follow it (library.js).
+      if (currentTextbook && typeof window.__touchSharedBook === "function") await window.__touchSharedBook(currentTextbook);
     } catch (e) {}
   }
 };

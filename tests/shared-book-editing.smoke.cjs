@@ -109,7 +109,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const shared = await page.evaluate(() => ({ words: __docs.get("shared/vocab_shared-1").custom_words.map((w) => w.word), index: __docs.get("shared/textbooks_index").textbooks, cached: JSON.parse(localStorage.getItem("core_v4_cache_shared-1")).map((w) => w.word) }));
     assert.deepEqual(shared.words, ["1600 「関ヶ原の戦い」", "apples"]);
     assert.deepEqual(shared.cached, shared.words);
-    assert.deepEqual(shared.index, [{ id: "shared-1", name: "配信単語", termMode: true }, { id: "shared-2", name: "別の配信" }]);
+    // The book is stamped as changed, so everyone's copies follow it.
+    assert.ok(Date.parse(shared.index[0].updatedAt) > Date.now() - 60000);
+    assert.deepEqual(shared.index.map(({ updatedAt, ...rest }) => rest), [{ id: "shared-1", name: "配信単語", termMode: true }, { id: "shared-2", name: "別の配信" }]);
     assert.ok(!(await page.evaluate((id) => __docs.has("shared/vocab_" + id), copyId)));
     assert.deepEqual(errors, []);
     console.log("PASS: admin editing mode keeps rights after the tools close and edits the original, ends on 終了; copy to own book keeps words and understanding and hides the original, remembers it, and the admin sends the copy's words and 用語・年号モード back to the distributed book");
