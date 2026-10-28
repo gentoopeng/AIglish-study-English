@@ -762,6 +762,7 @@
                 cardBody.style.display = 'none';
                 cardForm.style.display = 'block';
                 window.renderInlineEditFormMeanings(wordNum);
+                window.renderInlineLinksEditor(wordNum);
             } else {
                 cardBody.style.display = 'block';
                 cardForm.style.display = 'none';
@@ -769,6 +770,80 @@
         }
         window.initLucide();
     };
+
+    // Links to other words of this book (同義語・反意語・関連). A link holds the other word's number,
+    // so it follows that word when its text or position changes.
+    var LINK_KINDS = { syn: '同義語', ant: '反意語', rel: '関連' };
+    window.WORD_LINK_KINDS = LINK_KINDS;
+    function linkTarget(text) {
+        var t = String(text || '').trim().replace(/^[#＃]/, '');
+        if (!t) return null;
+        if (/^[0-9０-９]+$/.test(t)) {
+            var n = Number(t.replace(/[０-９]/g, function(d) { return String.fromCharCode(d.charCodeAt(0) - 0xfee0); }));
+            return vocabList.find(function(w) { return (window.VocabOrder ? window.VocabOrder.no(w) : Number(w.num)) === n; }) || null;
+        }
+        var lower = t.toLowerCase();
+        return vocabList.find(function(w) { return String(w.word || '').trim().toLowerCase() === lower; }) || null;
+    }
+    window.renderInlineLinksEditor = function(wordNum, draft) {
+        var holder = document.getElementById('inlineEditLinks-' + wordNum);
+        if (!holder) return;
+        var word = vocabList.find(function(w) { return String(w.num) === String(wordNum); });
+        var links = draft || (word && Array.isArray(word.links) ? word.links.map(function(l) { return { num: String(l.num), kind: l.kind }; }) : []);
+        holder.__links = links;
+        holder.replaceChildren();
+        var title = document.createElement('p'); title.className = 'inline-links-title'; title.textContent = '関連する単語（同義語など）';
+        var list = document.createElement('div'); list.className = 'inline-links-list';
+        links.forEach(function(link, index) {
+            var target = vocabList.find(function(w) { return String(w.num) === link.num; });
+            var chip = document.createElement('span'); chip.className = 'inline-link-chip';
+            chip.textContent = (LINK_KINDS[link.kind] || '関連') + '：' + (target ? target.word : '#' + link.num + '（見つかりません）');
+            var remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×';
+            remove.setAttribute('aria-label', (target ? target.word : '#' + link.num) + 'へのリンクを外す');
+            remove.onclick = function(e) { e.stopPropagation(); links.splice(index, 1); window.renderInlineLinksEditor(wordNum, links); };
+            chip.append(remove); list.append(chip);
+        });
+        var row = document.createElement('div'); row.className = 'inline-links-add';
+        var kind = document.createElement('select'); kind.className = 'inline-link-kind'; kind.setAttribute('aria-label', 'リンクの種類');
+        Object.keys(LINK_KINDS).forEach(function(key) { kind.append(new Option(LINK_KINDS[key], key)); });
+        var input = document.createElement('input'); input.type = 'text'; input.className = 'search-input inline-link-input';
+        input.placeholder = '単語または番号'; input.setAttribute('aria-label', 'リンクする単語または番号');
+        var add = document.createElement('button'); add.type = 'button'; add.className = 'list-action-link'; add.textContent = '追加';
+        var message = document.createElement('p'); message.className = 'inline-links-message'; message.setAttribute('role', 'status');
+        add.onclick = function(e) {
+            e.stopPropagation();
+            var target = linkTarget(input.value);
+            if (!target) { message.textContent = 'この単語帳に「' + input.value.trim() + '」が見つかりません。単語か番号で入れてください。'; return; }
+            if (String(target.num) === String(wordNum)) { message.textContent = '自分自身にはリンクできません。'; return; }
+            if (links.some(function(l) { return l.num === String(target.num); })) { message.textContent = '「' + target.word + '」はもうリンクしています。'; return; }
+            if (links.length >= 20) { message.textContent = 'リンクは20個までです。'; return; }
+            links.push({ num: String(target.num), kind: kind.value });
+            window.renderInlineLinksEditor(wordNum, links);
+            var next = document.querySelector('#inlineEditLinks-' + wordNum + ' .inline-link-input'); if (next) next.focus();
+        };
+        input.onkeydown = function(e) { if (e.key === 'Enter') { e.preventDefault(); add.click(); } };
+        row.append(kind, input, add);
+        holder.append(title, list, row, message);
+    };
+    // Saving a word's links: a 同義語/反意語 link is the same both ways, so the other word gets (or
+    // loses) the link back to this one.
+    function saveWordLinks(word, links) {
+        var before = Array.isArray(word.links) ? word.links : [];
+        var mine = String(word.num);
+        if (links.length) word.links = links.slice(0, 20); else delete word.links;
+        before.forEach(function(old) {
+            if (links.some(function(l) { return l.num === String(old.num); })) return;
+            var other = vocabList.find(function(w) { return String(w.num) === String(old.num); });
+            if (other && Array.isArray(other.links)) { other.links = other.links.filter(function(l) { return String(l.num) !== mine; }); if (!other.links.length) delete other.links; }
+        });
+        links.forEach(function(link) {
+            var other = vocabList.find(function(w) { return String(w.num) === link.num; });
+            if (!other) return;
+            var back = (other.links || []).filter(function(l) { return String(l.num) !== mine; });
+            if (back.length < 20) back.push({ num: mine, kind: link.kind });
+            other.links = back;
+        });
+    }
 
     window.renderInlineEditFormMeanings = function(wordNum) {
         var listContainer = document.getElementById('inlineEditMeaningsList-' + wordNum);
@@ -800,8 +875,8 @@
                 year.oninput = function() { year.value = window.TermQuestions.normalizeYear(year.value); };
                 if (parsed.year) textInput.value = parsed.body;
                 textInput.setAttribute('aria-label', '説明' + (index + 1));
-                posSelect.hidden = true;
                 itemRow.insertBefore(year, textInput);
+                itemRow.classList.add('is-term-row');
                 // Asked by its 「」 only: no "which headword?" card for this line.
                 var onlyBox = document.createElement('label'); onlyBox.className = 'inline-minor-input inline-blank-only';
                 onlyBox.innerHTML = '<input type="checkbox">「」の問題だけ出す';
@@ -842,6 +917,8 @@
         var mInputs = document.querySelectorAll('.inline-m-input-' + wordNum);
         if (wordInput) vocabList[wIdx].word = wordInput.value.trim();
         if (subInput) vocabList[wIdx].sub = subInput.value.trim();
+        var linksHolder = document.getElementById('inlineEditLinks-' + wordNum);
+        if (linksHolder && linksHolder.__links) saveWordLinks(vocabList[wIdx], linksHolder.__links);
         var unitInput = document.getElementById('inlineEditUnitInput-' + wordNum);
         if (unitInput && window.VocabOrder) {
             var unit = window.VocabOrder.cleanUnit(unitInput.value);
@@ -1067,7 +1144,9 @@
         }
         // Main meanings first; seldom-used ones (minor) under them, smaller, each still rated on its own.
         function meaningRow(m, minor) {
-            return '<div' + (minor ? ' class="vocab-meaning-minor"' : '') + ' style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span class="vocab-meaning-text" style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4; white-space:pre-line;">' + marked(m) + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
+            var pos = window.getFlashcardPartOfSpeech ? window.getFlashcardPartOfSpeech(w, m) : null;
+            var posHtml = pos && pos.short ? '<span class="vocab-meaning-pos" title="' + window.escapeVocabText(pos.name || pos.short) + '">' + window.escapeVocabText(pos.short) + '</span>' : '';
+            return '<div' + (minor ? ' class="vocab-meaning-minor"' : '') + ' style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; border-bottom:1px dashed rgba(255,255,255,0.1); padding-bottom:4px;"><span class="vocab-meaning-text" style="font-size:14px; color:white; font-weight:600; flex:1; line-height:1.4; white-space:pre-line;">' + posHtml + marked(m) + '</span><div style="display:flex; gap:4px; flex-shrink:0; margin-left:8px;"><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'ok' ? 'var(--word-ok)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'ok' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'ok\', event)">⚪︎</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'so' ? 'var(--word-so)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'so' ? '#000' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'so\', event)">△</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'bad' ? 'var(--word-bad)' : 'rgba(0,0,0,0.5)') + '; color:' + (m.status === 'bad' ? '#FFF' : 'white') + '; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'bad\', event)">✕</button><button style="width:24px; height:24px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:' + (m.status === 'none' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.5)') + '; color:white; font-size:10px; font-weight:900; cursor:pointer;" onpointerdown="window.updateMeaningStatus(\'' + w.num + '\', \'' + m.id + '\', \'none\', event)">ー</button></div></div>';
         }
         var minorMeanings = w.meanings.filter(function(m) { return m.minor === true; });
         w.meanings.forEach(function(m) { if (m.minor !== true) meaningsHtml += meaningRow(m, false); });
@@ -1080,10 +1159,31 @@
         if (window.canEditCurrentTextbook ? window.canEditCurrentTextbook() : window.isAdmin) {
             adminActionButtons = '<div style="position:absolute; right:8px; top:8px; display:flex; gap:2px; z-index:100;"><button class="card-edit-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')"><i data-lucide="edit-3" size="18"></i></button><button class="card-delete-btn" style="background:none; border:none; color:var(--text-sub); padding:10px; cursor:pointer;" onclick="event.stopPropagation(); window.showCustomDeleteConfirm(\'' + w.num + '\')"><i data-lucide="trash-2" size="18"></i></button></div>';
         }
-        card.innerHTML = adminActionButtons + '<div id="wordCardBody-' + w.num + '"><div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;"><div style="display:flex; align-items:center; gap:8px;"><span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#' + w.shownNo + '</span><span class="word-title"><span style="font-size:18px; font-weight:800; color:white;">' + w.word + '</span><button type="button" class="pronounce-button word-speak-button" data-sound="none" data-say="' + w.word + '" aria-label="発音を聞く"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg></button></span></div></div>' + meaningsHtml + (w.sub ? '<div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;"><button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">サブ情報を展開 <i data-lucide="chevron-down" size="12"></i></button><div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;"><div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">' + w.sub + '</div></div></div>' : '') + '<div data-vocab-history="' + w.num + '" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">' + dotsHtml + '</div></div><div id="wordCardForm-' + w.num + '" style="display:none; padding-top:32px;"><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; display:block; margin-bottom:4px;">単語</label><input type="text" id="inlineEditWordInput-' + w.num + '" class="search-input" style="margin:0;" value="' + w.word + '"></div><div class="inline-edit-place"><label>番号<input type="number" min="1" step="1" id="inlineEditNoInput-' + w.num + '" class="search-input" value="' + w.shownNo + '"></label><label>単元<input type="text" maxlength="60" list="vocabUnitOptions" id="inlineEditUnitInput-' + w.num + '" class="search-input" value="' + w.unit + '" placeholder="なし"></label></div><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label><div id="inlineEditMeaningsList-' + w.num + '"></div><button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, \'' + w.num + '\')"><i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加</button></div><div style="margin-bottom:14px;"><label style="font-size:11px; color:var(--text-sub); font-weight:700; display:block; margin-bottom:4px;">サブ情報</label><textarea id="inlineEditSubInput-' + w.num + '" class="modern-textarea" style="height:60px; margin:0;">' + (w.sub || "") + '</textarea></div><div style="display:flex; gap:8px;"><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:rgba(255,255,255,0.05); border:1px solid var(--border);" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')">キャンセル</button><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:var(--accent); color:white; border:none;" onclick="window.saveInlineWordEdit(event, \'' + w.num + '\')">保存する</button></div></div>';
+        card.innerHTML = adminActionButtons + '<div id="wordCardBody-' + w.num + '"><div class="word-main-line" style="display:flex; justify-content:space-between; align-items:center; padding-right:76px;"><div style="display:flex; align-items:center; gap:8px;"><span class="word-num-badge" style="background:rgba(255,255,255,0.3); color:white; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px;">#' + w.shownNo + '</span><span class="word-title"><span style="font-size:18px; font-weight:800; color:white;">' + w.word + '</span><button type="button" class="pronounce-button word-speak-button" data-sound="none" data-say="' + w.word + '" aria-label="発音を聞く"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg></button></span></div></div>' + meaningsHtml + (w.sub ? '<div class="word-static-info" style="margin-top:4px; padding-top:0; border:none;"><button class="word-expand-toggle" style="background:none; border:none; color:#C7D2FE; font-size:11px; font-weight:700; cursor:pointer; padding:4px 0; display:inline-flex; align-items:center; gap:4px; z-index:40;" onclick="window.coreSystemToggleExpand(event, this)">サブ情報を展開 <i data-lucide="chevron-down" size="12"></i></button><div class="word-meaning-extra" style="display:none; font-size:12.5px; color:#FFF; line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.25); white-space:pre-line;"><div class="sub-info-block" style="background:rgba(0, 0, 0, 0.45); padding:6px 10px; border-radius:6px; font-size:12px; color:#FFF;">' + w.sub + '</div></div></div>' : '') + '<div data-vocab-history="' + w.num + '" style="display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; align-items:center; margin-top:12px; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1);">' + dotsHtml + '</div></div><div id="wordCardForm-' + w.num + '" style="display:none; padding-top:32px;"><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-cyan); font-weight:700; display:block; margin-bottom:4px;">単語</label><input type="text" id="inlineEditWordInput-' + w.num + '" class="search-input" style="margin:0;" value="' + w.word + '"></div><div class="inline-edit-place"><label>番号<input type="number" min="1" step="1" id="inlineEditNoInput-' + w.num + '" class="search-input" value="' + w.shownNo + '"></label><label>単元<input type="text" maxlength="60" list="vocabUnitOptions" id="inlineEditUnitInput-' + w.num + '" class="search-input" value="' + w.unit + '" placeholder="なし"></label></div><div style="margin-bottom:12px;"><label style="font-size:11px; color:var(--cosmic-purple-light); font-weight:700; display:block; margin-bottom:4px;">意味の編集 (パーツ個別管理)</label><div id="inlineEditMeaningsList-' + w.num + '"></div><button class="list-action-link" style="width:100%; text-align:center; height:32px; border-style:dashed; margin-top:4px;" onclick="window.addInlineMeaningField(event, \'' + w.num + '\')"><i data-lucide="plus" size="12" style="vertical-align:middle;"></i> 意味を追加</button></div><div class="inline-links" id="inlineEditLinks-' + w.num + '"></div><div style="margin-bottom:14px;"><label style="font-size:11px; color:var(--text-sub); font-weight:700; display:block; margin-bottom:4px;">サブ情報</label><textarea id="inlineEditSubInput-' + w.num + '" class="modern-textarea" style="height:60px; margin:0;">' + (w.sub || "") + '</textarea></div><div style="display:flex; gap:8px;"><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:rgba(255,255,255,0.05); border:1px solid var(--border);" onclick="window.toggleInlineWordEdit(event, \'' + w.num + '\')">キャンセル</button><button class="list-action-link" style="flex:1; text-align:center; height:36px; background:var(--accent); color:white; border:none;" onclick="window.saveInlineWordEdit(event, \'' + w.num + '\')">保存する</button></div></div>';
         var cardBody = card.querySelector('#wordCardBody-' + w.num);
         var history = cardBody ? cardBody.querySelector('[data-vocab-history]') : null;
         if (cardBody) cardBody.insertBefore(window.createVocabNoteSection(w), history || null);
+        // Links to other words: tap one to open that word's card.
+        var linked = (Array.isArray(w.links) ? w.links : []).map(function(l) {
+            return { kind: l.kind, word: (typeof vocabList !== 'undefined' ? vocabList : []).find(function(x) { return String(x.num) === String(l.num); }) };
+        }).filter(function(x) { return x.word; });
+        if (cardBody && linked.length) {
+            var linksRow = document.createElement('div'); linksRow.className = 'vocab-word-links';
+            Object.keys(LINK_KINDS).forEach(function(key) {
+                var group = linked.filter(function(x) { return (LINK_KINDS[x.kind] ? x.kind : 'rel') === key; });
+                if (!group.length) return;
+                var label = document.createElement('span'); label.className = 'vocab-link-kind'; label.textContent = LINK_KINDS[key];
+                linksRow.append(label);
+                group.forEach(function(x) {
+                    var b = document.createElement('button'); b.type = 'button'; b.className = 'vocab-link'; b.textContent = x.word.word;
+                    b.setAttribute('aria-label', LINK_KINDS[key] + '「' + x.word.word + '」のカードを開く');
+                    b.onclick = function(e) { e.stopPropagation(); var host = card.closest('dialog[open]'); window.openVocabDetailsSheet(x.word, null, host ? { host: host } : undefined); };
+                    linksRow.append(b);
+                });
+            });
+            var noteSection = cardBody.querySelector('.vocab-note-section') || history || null;
+            cardBody.insertBefore(linksRow, noteSection && noteSection.parentNode === cardBody ? noteSection : history || null);
+        }
         var pin=document.createElement('button');pin.type='button';pin.className='vocab-sticky-button';pin.setAttribute('aria-label','付箋を付ける');pin.setAttribute('aria-pressed',String(!!w.sticky));pin.innerHTML='<i data-lucide="sticky-note" size="13"></i>';
         pin.onclick=function(e){e.stopPropagation();if(window.LearningData&&!LearningData.canSave(currentTextbook))return;var actual=vocabList.find(function(word){return String(word.num)===String(w.num);});if(!actual)return;actual.sticky=!actual.sticky;w.sticky=actual.sticky;window.saveVocabProgressLocally(actual.num);if(window.__captureManualVocabDraft)window.__captureManualVocabDraft();
         // This card may sit outside the list (the flashcard's detail sheet), so it shows the change itself.

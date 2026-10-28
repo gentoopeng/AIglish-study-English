@@ -388,7 +388,6 @@
         year.autocomplete = "off";
         year.oninput = () =>
           (year.value = root.TermQuestions.normalizeYear(year.value));
-        select.hidden = true;
         controls.append(year);
       }
       controls.append(input, select, remove);
@@ -410,6 +409,7 @@
         row.append(only);
       }
       list.append(row);
+      requestAnimationFrame(() => input.oninput());
       relabel();
       if (focus) input.focus();
     }

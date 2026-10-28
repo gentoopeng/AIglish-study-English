@@ -704,8 +704,11 @@
                     try {
                         var id = 'personal_' + crypto.randomUUID();
                         // A copy numbers words in the order they are shown and keeps their units.
-                        var clean = (window.VocabOrder ? window.VocabOrder.sort(master) : master).map(function(word, index) {
-                            return {num:index+1,...(window.VocabOrder&&window.VocabOrder.cleanUnit(word.unit)?{unit:window.VocabOrder.cleanUnit(word.unit)}:{}),word:word.word,meaning:word.meaning,sub:typeof word.sub==='string'?word.sub:'',meanings:(Array.isArray(word.meanings)&&word.meanings.length?word.meanings:[{text:word.meaning}]).map(function(meaning, i){return {id:(index+1)+'-'+i,text:String(meaning.text||''),partOfSpeech:String(meaning.partOfSpeech||meaning.pos||word.partOfSpeech||word.pos||''),...(meaning.minor===true?{minor:true}:{}),...(meaning.blankOnly===true?{blankOnly:true}:{})};})};
+                        var ordered = window.VocabOrder ? window.VocabOrder.sort(master) : master;
+                        // Links point at word numbers, which the copy renumbers.
+                        var renumbered = new Map(ordered.map(function(word, index) { return [String(word.num), index + 1]; }));
+                        var clean = ordered.map(function(word, index) {
+                            return {num:index+1,...(window.VocabOrder&&window.VocabOrder.cleanUnit(word.unit)?{unit:window.VocabOrder.cleanUnit(word.unit)}:{}),word:word.word,meaning:word.meaning,sub:typeof word.sub==='string'?word.sub:'',meanings:(Array.isArray(word.meanings)&&word.meanings.length?word.meanings:[{text:word.meaning}]).map(function(meaning, i){return {id:(index+1)+'-'+i,text:String(meaning.text||''),partOfSpeech:String(meaning.partOfSpeech||meaning.pos||word.partOfSpeech||word.pos||''),...(meaning.minor===true?{minor:true}:{}),...(meaning.blankOnly===true?{blankOnly:true}:{})};}),...(Array.isArray(word.links)&&word.links.some(function(l){return renumbered.has(String(l.num));})?{links:word.links.filter(function(l){return renumbered.has(String(l.num));}).map(function(l){return {num:String(renumbered.get(String(l.num))),kind:l.kind};})}:{})};
                         });
                         var draft = {master:clean,progress:{},savedAt:new Date().toISOString()};
                         localStorage.setItem('core_v4_custom_words_' + userId() + '_' + id, JSON.stringify(clean));

@@ -2981,3 +2981,27 @@ html body .modern-btn:active{box-shadow:0 0 0 3px rgba(213,201,172,.18)!importan
 .term-text{line-break:strict;word-break:normal!important;overflow-wrap:break-word!important;}
 .term-keep{white-space:nowrap;}
 mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);border-radius:0;}
+
+/* A meaning's part of speech, small before its text. */
+.vocab-meaning-pos{display:inline-block;margin-right:6px;padding:0 5px;border:1px solid rgba(255,255,255,.35);border-radius:5px;font-size:10px;font-weight:700;line-height:16px;color:#d6dbe6;vertical-align:2px;}
+/* Links to other words (同義語・反意語・関連): tap one to open that word's card. */
+.vocab-word-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 10px;}
+.vocab-link-kind{font-size:11px;font-weight:700;color:#c9c2b0;}
+.vocab-link-kind:not(:first-child){margin-left:6px;}
+.vocab-link{min-height:28px;padding:2px 10px;border:1px solid rgba(226,207,155,.55);border-radius:999px;background:rgba(226,207,155,.1);color:#f3e9cf;font:600 13px system-ui,sans-serif;cursor:pointer;}
+.inline-links{margin-bottom:12px;}
+.inline-links-title{margin:0 0 4px;font-size:11px;font-weight:700;color:var(--text-sub);}
+.inline-links-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+.inline-link-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 4px 2px 10px;border:1px solid rgba(255,255,255,.25);border-radius:999px;font-size:12px;}
+.inline-link-chip button{width:24px;height:24px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:inherit;cursor:pointer;}
+.inline-links-add{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px;align-items:center;}
+.inline-links-add select{height:36px;}
+.inline-links-add .inline-link-input{margin:0;height:36px;}
+.inline-links-add button{height:36px;padding:0 12px;}
+.inline-links-message{min-height:1em;margin:4px 0 0;font-size:11px;color:#fca5a5;}
+.inline-links-message:empty{display:none;}
+.vocab-entry-dialog.is-term-mode .vocab-entry-meaning-controls>select{grid-column:2;justify-self:start;}
+/* 用語・年号モード rows: the description on its own line, then year, part of speech and delete. */
+.is-term-row textarea.inline-m-input{flex:1 1 100%!important;order:-1;margin-bottom:6px!important;}
+.inline-links-add select{height:36px;padding:0 6px;border:1px solid var(--border);border-radius:9px;background:#111827;color:#fff;font-size:14px;}
+.inline-links-add button{border:1px solid var(--border);background:rgba(255,255,255,.08);color:#fff;border-radius:9px;}
