@@ -1248,3 +1248,22 @@ Test: `tests/term-mode.smoke.cjs` (a 「」 card's front in each direction).
 Reported: 10.22.07.00 had the two sides the wrong way round. The 「」 term is the English, so 英単語を先に now shows it alone in front, with the headword and the rest of the line behind (A be followed by B → follow / Aの次にBが続く). 意味を先に shows the other way round.
 
 Test: `tests/term-mode.smoke.cjs`.
+
+## Part of speech per meaning in every book; links between words (10.22.09.00)
+
+Requested: a part of speech for each meaning, and links to other words (synonyms and the like).
+
+**Part of speech.** Each meaning already had a part-of-speech select, but 用語・年号モード hid it in the add dialog and the editor. It is shown there now; in the editor the description takes its own line. The word list shows a meaning's part of speech as a small label before its text (`.vocab-meaning-pos`, from `getFlashcardPartOfSpeech`).
+
+**Links.**
+- A word keeps `links: [{ num, kind }]`, where kind is `syn` (同義語), `ant` (反意語) or `rel` (関連), up to 20.
+- **Adding:** in the editor, under 関連する単語, pick the kind and type the other word's headword or number. A word not in the book, or the word itself, is refused in plain words.
+- **Both ways:** saving puts the same link on the other word, and taking one off removes it there too.
+- **On the card:** links show as buttons grouped by kind; tapping one opens that word's card in the detail sheet, where its own links work the same way.
+- **Kept:**
+  - Links point at the permanent `num`, so they survive edits and renumbering.
+  - `stripVocabProgressFromWords` keeps them.
+  - Copying a book (自分用に追加) maps them to the copy's new numbers.
+  - They are not part of the word signature, so ratings stay matched.
+
+Test: `tests/word-links.smoke.cjs`.
