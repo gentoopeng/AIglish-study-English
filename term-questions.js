@@ -61,7 +61,9 @@
     if (nl > 0) {
       const english = body.slice(0, nl).trim(),
         japanese = body.slice(nl + 1).trim();
-      if (english && japanese && /「[^「」]+」/.test(english) && !JAPANESE.test(english)) return { english, japanese };
+      // Without 「」 the whole English line is what is asked (considering / Vしようかと思う).
+      if (english && japanese && /[A-Za-z]/.test(english) && !JAPANESE.test(english) && JAPANESE.test(japanese))
+        return /「[^「」]+」/.test(english) ? { english, japanese } : { english: "「" + english + "」", japanese, bare: true };
     }
     const lead = /^「([^「」]+)」\s*([\s\S]+)$/.exec(body);
     if (lead && !JAPANESE.test(lead[1]) && JAPANESE.test(lead[2]))
@@ -87,7 +89,9 @@
       // be one-to-one) gives no whole question, as long as it has a term to ask.
       // An entry with one line keeps the key "w" it always had, so its record stays. A phrase line
       // is asked through its own card below (a "which headword?" card would not be one-to-one).
-      const ph = p.terms[0] ? phrase(p.body) : null;
+      const ph = (p.terms[0] || !p.terms.length) ? phrase(p.body) : null;
+      // A bare English line stands for its own 「」.
+      if (ph?.bare) p.terms = [plain(ph.english)];
       if (!(p.only && p.terms.some(Boolean)) && !ph)
         list.push({
           key: parts.length === 1 ? "w" : "w:" + p.mid,
