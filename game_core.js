@@ -234,9 +234,20 @@
                     return;
                 }
                 var meanings = w.meanings && w.meanings.length ? w.meanings : [{ id: null, text: w.meaning, status: w.status || 'none', history: w.history || [] }];
+                // A meaning set to 「」の問題だけ gives its 「」 cards here too (the same cards as 用語・年号
+                // モード), rated on the meaning as usual; without a 「」 it stays an ordinary card.
+                var termCards = window.TermQuestions && meanings.some(function(m) { return m && m.blankOnly === true; }) ? window.TermQuestions.questions(w) : [];
                 meanings.forEach(function(meaning, meaningIndex) {
                     var meaningStatus = getFlashcardMeaningStatus(meaning, w);
                     if (!flashcardSelectedStatuses[meaningStatus]) return;
+                    var own = meaning.blankOnly === true ? termCards.filter(function(q) { return q.index === meaningIndex && q.kind === 'blank'; }) : [];
+                    if (own.length) {
+                        own.forEach(function(q) {
+                            var card = q.front !== undefined;
+                            pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: card ? q.front : q.prompt, ja: card ? q.back : q.answer, questionFirst: !card, reverse: card ? q.reverse : undefined, head: w.word, meaningId: meaning.id !== undefined && meaning.id !== null ? String(meaning.id) : null, meaningIndex: meaningIndex, partOfSpeech: window.getFlashcardPartOfSpeech(w,meaning), termCard: true });
+                        });
+                        return;
+                    }
                     pool.push({
                         num: w.num,
                         shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num,
@@ -643,7 +654,7 @@
         frontText = window.escapeVocabText(frontText);
         backText = window.escapeVocabText(backText);
         var customStyle = (typeof window.getFlashcardStyleByHistory === 'function') ? window.getFlashcardStyleByHistory(wordData) : "";
-        window.fillFlashcardFaces(cardWrap,shownFront,shownBack,wordData.shownNo||wordData.num,customStyle,{term:!!wordData.termKey,head:wordData.head});
+        window.fillFlashcardFaces(cardWrap,shownFront,shownBack,wordData.shownNo||wordData.num,customStyle,{term:!!(wordData.termKey||wordData.termCard),head:wordData.head});
         stage.appendChild(cardWrap);
         // The text box must grow with the circle; flex shrinking otherwise hides extra lines.
         window.sizeFlashcardFaces(cardWrap,stage,posLabel);
