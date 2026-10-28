@@ -1,5 +1,6 @@
-// The casino tab: the points balance as a chip, and four tables to sit at. Poker opens its own
-// screen; blackjack, roulette and dice poker are played against the house here.
+// The casino tab: the points balance as a chip, and the tables to sit at. Poker opens its own
+// screen; blackjack, roulette, dice poker and chinchiro are played against the house here, and
+// すごろくビンゴ (sugoroku.js) uses this screen and wallet.
 //
 // Logged in with the cloud reachable, a game stakes points: the bet leaves the wallet when the
 // round starts and anything won comes back when it ends, each through Poker.settle once per
@@ -90,8 +91,11 @@
     chinchiro: '<svg viewBox="0 0 64 48" aria-hidden="true"><ellipse cx="32" cy="30" rx="26" ry="13" class="is-bowl"/><ellipse cx="32" cy="27" rx="21" ry="8" class="is-bowl-in"/><rect x="16" y="20" width="10" height="10" rx="2.5" class="is-die"/><rect x="28" y="18" width="10" height="10" rx="2.5" class="is-die"/><rect x="40" y="21" width="10" height="10" rx="2.5" class="is-die"/><g class="is-pip"><circle cx="21" cy="25" r="1.6"/><circle cx="31" cy="21" r="1.4"/><circle cx="35" cy="25" r="1.4"/><circle cx="43" cy="24" r="1.4"/><circle cx="47" cy="28" r="1.4"/><circle cx="45" cy="26" r="1.4"/></g></svg>',
     dice: '<svg viewBox="0 0 64 48" aria-hidden="true"><rect x="10" y="14" width="22" height="22" rx="5" transform="rotate(-10 21 25)" class="is-die"/><rect x="32" y="10" width="22" height="22" rx="5" transform="rotate(8 43 21)" class="is-die"/><g class="is-pip" transform="rotate(-10 21 25)"><circle cx="16" cy="19" r="2"/><circle cx="21" cy="25" r="2"/><circle cx="26" cy="31" r="2"/></g><g class="is-pip" transform="rotate(8 43 21)"><circle cx="38" cy="15" r="2"/><circle cx="48" cy="15" r="2"/><circle cx="38" cy="27" r="2"/><circle cx="48" cy="27" r="2"/></g></svg>',
   };
+  PICTURES.sugoroku =
+    '<svg viewBox="0 0 64 48" aria-hidden="true"><rect x="10" y="4" width="40" height="40" rx="4" class="is-sg-ring"/><rect x="18" y="12" width="24" height="24" rx="2" class="is-card"/><g class="is-sg-mark"><circle cx="24" cy="18" r="3"/><circle cx="30" cy="24" r="3"/><circle cx="36" cy="30" r="3"/></g><circle cx="14" cy="8" r="3.4" class="is-sg-piece"/><text x="44" y="46" class="is-sg-jp">JP</text></svg>';
   const GAMES = [
     { id: "poker", name: "ポーカー", line: "みんなやコンピュータと", level: "じっくり" },
+    { id: "sugoroku", name: "すごろくビンゴ", line: "マスを埋めてジャックポット", level: "じっくり" },
     { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち", level: "ふつう" },
     { id: "roulette", name: "ルーレット", line: "止まる数字を当てる", level: "かんたん" },
     { id: "dice", name: "ダイスポーカー", line: "5つのダイスで役をつくる", level: "かんたん" },
@@ -177,7 +181,8 @@
     document.body.classList.add("casino-open");
     screen.showModal();
     game = { id, body: screen.querySelector(".cs-body") };
-    ({ blackjack, roulette, dice, chinchiro })[id](game.body);
+    if (id === "sugoroku") window.Sugoroku.play(game.body, { round, balance, unit, real, refresh, uid });
+    else ({ blackjack, roulette, dice, chinchiro })[id](game.body);
     refresh();
   }
   function close() {

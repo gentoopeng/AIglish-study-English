@@ -30,7 +30,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.locator("#nav-casino").click();
     const tab = page.locator("#view-casino.active");
     await tab.locator(".casino-game").nth(3).waitFor();
-    assert.deepEqual(await tab.locator(".casino-game b").allInnerTexts(), ["ポーカー", "ブラックジャック", "ルーレット", "ダイスポーカー", "チンチロ"]);
+    assert.deepEqual(await tab.locator(".casino-game b").allInnerTexts(), ["ポーカー", "すごろくビンゴ", "ブラックジャック", "ルーレット", "ダイスポーカー", "チンチロ"]);
     assert.equal(await tab.locator("[data-casino-unit]").innerText(), "練習チップ");
     assert.equal(await tab.locator("[data-casino-balance]").innerText(), "1,000枚");
     await page.screenshot({ path: "/tmp/casino-tab.png" });
