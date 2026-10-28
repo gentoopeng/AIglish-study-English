@@ -1297,3 +1297,11 @@ Tests: `vocab-entry`, `minor-meanings` and `term-mode` smoke tests use the chips
 ## メモ and the rating history on one line (10.22.12.00)
 
 Requested: put the rating history to the right of メモ to make cards more compact. The history (`[data-vocab-history]`) now sits in a `.vocab-note-head` row with the メモ button at the foot of each word card. The memo text and its editor still open full width below. The history keeps its element, so updates after a rating work as before. The card loses a separate row and a dashed rule.
+
+## "+" patterns join the headword; the headword in bold (10.22.13.00)
+
+Requested: expect with + to V showed "expect" and "+ to V" on two lines; it should read "expect to V". The headword should also be bold.
+- **Joined patterns:** a phrase line whose English starts with "+" now joins onto the headword without the plus signs, on one line. + to V → expect to V; + A + 「as」 B → consider A as B. This applies to both sides of the card and to the blanked form (consider A （＿＿） B).
+- **Bold headword:** on 用語・年号モード cards the headword is bold wherever it stands as a whole word (`TermQuestions.show(node, text, head)`), and the rest of the text is normal weight so it stands out.
+
+Test: `tests/term-questions.test.cjs` (consider A as B, expect to V).

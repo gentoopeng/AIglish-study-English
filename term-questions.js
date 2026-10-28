@@ -112,10 +112,14 @@
         // One card for the line. 英単語を先に: the English in full (with the headword when it is
         // not in it) → the Japanese. 意味を先に: the headword, the English with its 「」 blanked
         // (unless the 「」 is the whole English) and the Japanese → the 「」 and the full English.
-        const english = plain(ph.english).replace(/[ 　]+/g, " ").trim(),
-          shown = english.toLowerCase().includes(head.toLowerCase()) ? english : head + "\n" + english,
+        // A pattern written with "+" (+ to V, + A + as B) joins onto the headword without the
+        // plus signs, on one line: expect to V, consider A as B.
+        const pattern = /^\s*[+＋]/.test(plain(ph.english)),
+          join = (text) => (pattern ? head + " " + text.replace(/\s*[+＋]\s*/g, " ").replace(/[ 　]+/g, " ").trim() : text),
+          english = join(plain(ph.english).replace(/[ 　]+/g, " ").trim()),
+          shown = pattern || english.toLowerCase().includes(head.toLowerCase()) ? english : head + "\n" + english,
           whole = ph.english.trim() === "「" + p.terms[0] + "」",
-          blanked = ph.english.replace(TERM, BLANK).replace(/[ 　]+/g, " ").trim();
+          blanked = join(ph.english.replace(TERM, BLANK).replace(/[ 　]+/g, " ").trim());
         list.push({
           key: "t:" + p.mid + ":0",
           kind: "blank",
@@ -126,8 +130,8 @@
           front: shown,
           back: ph.japanese,
           reverse: {
-            front: head + "\n" + (whole ? "" : blanked + "\n") + ph.japanese,
-            back: p.terms.filter(Boolean).join("、") + (whole ? "" : "\n" + english),
+            front: (pattern ? blanked : head + (whole ? "" : "\n" + blanked)) + "\n" + ph.japanese,
+            back: whole ? (pattern ? english : p.terms.filter(Boolean).join("、")) : p.terms.filter(Boolean).join("、") + "\n" + english,
           },
           input: false,
         });
@@ -227,17 +231,35 @@
     return next;
   }
   // Shows a question's text in an element with pieces() kept whole (no innerHTML of the text).
-  function show(node, text) {
+  // head (optional): the headword, shown in bold wherever it stands as a word.
+  function show(node, text, head) {
     node.replaceChildren();
     node.classList.add("term-text");
+    const word = String(head || "").trim(),
+      find = word ? new RegExp("(^|[^A-Za-z])(" + word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?![A-Za-z])", "gi") : null;
+    // Plain text with the headword picked out.
+    const add = (parent, value) => {
+      if (!find) return parent.append(document.createTextNode(value));
+      let at = 0;
+      for (const m of value.matchAll(find)) {
+        const start = m.index + m[1].length;
+        if (start > at) parent.append(document.createTextNode(value.slice(at, start)));
+        const b = document.createElement("b");
+        b.className = "term-head";
+        b.textContent = m[2];
+        parent.append(b);
+        at = start + m[2].length;
+      }
+      if (at < value.length) parent.append(document.createTextNode(value.slice(at)));
+    };
     for (const p of pieces(text)) {
       if (p.br) node.append(document.createElement("br"));
       else if (p.keep) {
         const span = document.createElement("span");
         span.className = "term-keep";
-        span.textContent = p.text;
+        add(span, p.text);
         node.append(span);
-      } else node.append(document.createTextNode(p.text));
+      } else add(node, p.text);
     }
   }
   model.show = show;

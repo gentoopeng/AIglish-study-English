@@ -3031,3 +3031,6 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 .vocab-note-head .vocab-note-toggle{flex:none;}
 .vocab-note-head [data-vocab-history]{margin-top:0!important;padding-top:0!important;border-top:0!important;flex:0 1 auto;min-width:0;}
 .word-row-container .vocab-note-section{margin-top:6px;}
+
+/* The headword in a 用語・年号モード card, bold against the rest. */
+.term-text b.term-head{font-weight:900;}
