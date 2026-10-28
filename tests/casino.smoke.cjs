@@ -235,8 +235,19 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await bj.locator(".cs-bet").innerText(), "240pt");
     assert.equal(await bj.getByRole("button", { name: "+100" }).isDisabled(), true);
     await bj.getByRole("button", { name: "ブラックジャックを閉じる" }).click();
+    // すごろくビンゴ is a preview: even signed in it plays on practice chips and leaves points alone.
+    await tab.locator(".mode-sugoroku").click();
+    const sg = page.locator("dialog.casino-screen.is-sugoroku[open]");
+    await sg.locator("[data-sg-roll]").waitFor();
+    assert.match(await sg.locator("[data-cs-balance]").innerText(), /枚$/);
+    await sg.locator("[data-sg-roll]").click();
+    await page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning"));
+    assert.equal(await page.evaluate(() => window.__wallet["users/casino-a/learningPoints/main"].balance), 240);
+    assert.equal(await page.evaluate(() => window.StudyPoints.balance()), 240);
+    await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    assert.equal(await tab.locator("[data-casino-balance]").innerText(), "240pt");
     assert.deepEqual(errors, []);
-    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance");
+    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on practice chips only");
   } finally {
     await browser.close();
   }
