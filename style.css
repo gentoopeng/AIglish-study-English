@@ -3005,3 +3005,23 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 .is-term-row textarea.inline-m-input{flex:1 1 100%!important;order:-1;margin-bottom:6px!important;}
 .inline-links-add select{height:36px;padding:0 6px;border:1px solid var(--border);border-radius:9px;background:#111827;color:#fff;font-size:14px;}
 .inline-links-add button{border:1px solid var(--border);background:rgba(255,255,255,.08);color:#fff;border-radius:9px;}
+
+/* The add form: a numbered box per meaning, part of speech as one-tap chips, and a preview of
+   the cards it makes. */
+.vocab-entry-meaning{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08);}
+.vocab-entry-meaning-head{display:grid;grid-template-columns:22px minmax(0,1fr) 36px;gap:6px;align-items:start;}
+.vocab-entry-meaning-no{padding-top:14px;font-size:13px;font-weight:700;color:#c9c2b0;text-align:center;}
+.vocab-entry-dialog textarea.vocab-entry-meaning-text{min-height:48px;}
+.vocab-entry-remove{width:36px;height:48px;border:0;background:transparent;color:#c5bda9;font-size:20px;cursor:pointer;}
+.vocab-entry-remove[hidden]{visibility:hidden;display:block;}
+.vocab-entry-tools{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0 28px;}
+.vocab-entry-pos{display:flex;flex-wrap:wrap;gap:6px;}
+.vocab-entry-chip{min-width:36px;min-height:34px;padding:0 10px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:transparent;color:#d6dbe6;font:600 14px system-ui,sans-serif;cursor:pointer;}
+.vocab-entry-chip[aria-pressed=true]{border-color:#e2cf9b;background:#e2cf9b;color:#1b2333;}
+.vocab-entry-wrap{border-style:dashed;}
+.vocab-entry-preview{display:flex;flex-direction:column;gap:2px;margin:8px 0 0 28px;font-size:12px;color:#cfc8ba;}
+.vocab-entry-preview:empty{display:none;}
+.vocab-entry-preview-label{font-size:11px;font-weight:700;color:#9ea6b5;}
+.vocab-entry-preview-card b{color:#f3e9cf;font-weight:700;}
+.vocab-entry-dup{margin:4px 0 0;font-size:12px;color:#f3c77a;}
+.vocab-entry-dup:empty{display:none;}

@@ -1279,3 +1279,17 @@ A **phrase line** is now recognised automatically: English with its 「」 on th
 So "as" is never asked alone, and 「following」 / 次の works in both directions. Other 「」 lines keep their earlier behaviour. 単語バトル still uses the blanked sentence and the term.
 
 Test: `tests/term-questions.test.cjs`, with the user's examples.
+
+## A simpler add-word form (10.22.11.00)
+
+Requested: the add form asked for too much setting and too much thinking. Each meaning is now a numbered box, and:
+- **Part of speech:** one-tap chips (名 動 形 副 前 接; tap again to clear) instead of a list. The other parts of speech are in the word's editor.
+- **あまり使わない:** a まれ chip instead of a checkbox.
+- **Year:** written at the start of the line (1192 「鎌倉幕府」を開いた). The separate year box is gone; the line was already stored that way.
+- **「」の問題だけ出す:** the checkbox is gone. Phrase lines decide their cards automatically (10.22.10.00), and the editor still has the checkbox for other lines.
+- **「」で囲む:** in 用語・年号モード this button wraps the selected words in 「」, or puts 「」 at the cursor.
+- **Preview:** under each meaning, the cards it will make are shown as typed (front → back), taken from the same `TermQuestions.questions` as the cards.
+- **Duplicates:** a word already in the book is pointed out with its number. Adding it again is still allowed.
+- **続けて追加する:** remembered per account.
+
+Tests: `vocab-entry`, `minor-meanings` and `term-mode` smoke tests use the chips, the まれ chip and 「」で囲む, and check the preview.
