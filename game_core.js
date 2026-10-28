@@ -229,7 +229,7 @@
                         // line behind; 意味を先に the other way round. A year question is typed, so it always
                         // shows the question first.
                         var whole = q.kind === 'whole', card = q.front !== undefined;
-                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.front : q.prompt, ja: whole ? q.prompt : card ? q.back : q.answer, questionFirst: !whole && !card, reverse: card ? q.reverse : undefined, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
+                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.front : q.prompt, ja: whole ? q.prompt : card ? q.back : q.answer, questionFirst: !whole && !card, reverse: card ? q.reverse : undefined, head: w.word, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
                     });
                     return;
                 }
@@ -420,7 +420,7 @@
     // options.term: a 用語・年号モード question, shown with its year and blank kept whole (TermQuestions.show).
     window.fillFlashcardFaces=function(cardWrap,front,back,num,style,options){
         var rotator=document.createElement('div');rotator.className='flashcard-inner-rotator';
-        ['front','back'].forEach(function(side){var face=document.createElement('div');face.className='flashcard-face-'+side;face.style.cssText=style||'';if(side==='front'){var badge=document.createElement('span');badge.className='flashcard-number';badge.textContent='#'+num;face.append(badge);}var text=document.createElement('div');text.style.cssText='font-size:'+(side==='front'?24:16)+'px;font-weight:'+(side==='front'?900:700)+';text-align:center;color:white;word-break:break-word;overflow-wrap:anywhere';if(side==='front')text.style.fontFamily='Times New Roman, serif';var shown=side==='front'?front:back;if(options&&options.term&&window.TermQuestions&&window.TermQuestions.show)window.TermQuestions.show(text,shown);else text.textContent=shown;face.append(text);rotator.append(face);});cardWrap.append(rotator);
+        ['front','back'].forEach(function(side){var face=document.createElement('div');face.className='flashcard-face-'+side;face.style.cssText=style||'';if(side==='front'){var badge=document.createElement('span');badge.className='flashcard-number';badge.textContent='#'+num;face.append(badge);}var text=document.createElement('div');text.style.cssText='font-size:'+(side==='front'?24:16)+'px;font-weight:'+(side==='front'?900:700)+';text-align:center;color:white;word-break:break-word;overflow-wrap:anywhere';if(side==='front')text.style.fontFamily='Times New Roman, serif';var shown=side==='front'?front:back;if(options&&options.term&&window.TermQuestions&&window.TermQuestions.show){if(options.head)text.style.fontWeight='400';window.TermQuestions.show(text,shown,options.head);}else text.textContent=shown;face.append(text);rotator.append(face);});cardWrap.append(rotator);
     };
     window.sizeFlashcardFaces=function(cardWrap,stage,posLabel){
         var texts=Array.from(cardWrap.querySelectorAll('.flashcard-face-front > div,.flashcard-face-back > div'));
@@ -643,7 +643,7 @@
         frontText = window.escapeVocabText(frontText);
         backText = window.escapeVocabText(backText);
         var customStyle = (typeof window.getFlashcardStyleByHistory === 'function') ? window.getFlashcardStyleByHistory(wordData) : "";
-        window.fillFlashcardFaces(cardWrap,shownFront,shownBack,wordData.shownNo||wordData.num,customStyle,{term:!!wordData.termKey});
+        window.fillFlashcardFaces(cardWrap,shownFront,shownBack,wordData.shownNo||wordData.num,customStyle,{term:!!wordData.termKey,head:wordData.head});
         stage.appendChild(cardWrap);
         // The text box must grow with the circle; flex shrinking otherwise hides extra lines.
         window.sizeFlashcardFaces(cardWrap,stage,posLabel);

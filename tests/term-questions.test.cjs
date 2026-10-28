@@ -74,9 +74,12 @@ test("a phrase line (English with 「」, then Japanese) gives one card: the Eng
   // The 「」 is a word inside a pattern: never asked alone.
   const as = one("consider", "+ A + 「as」 B\nAをBとみなす");
   assert.deepEqual(as.map((q) => q.key), ["t:1-0:0"]);
-  assert.equal(as[0].front, "consider\n+ A + as B");
+  // Written with "+", the pattern joins onto the headword on one line.
+  assert.equal(as[0].front, "consider A as B");
   assert.equal(as[0].back, "AをBとみなす");
-  assert.deepEqual(as[0].reverse, { front: "consider\n+ A + （＿＿） B\nAをBとみなす", back: "as\n+ A + as B" });
+  assert.deepEqual(as[0].reverse, { front: "consider A （＿＿） B\nAをBとみなす", back: "as\nconsider A as B" });
+  const to = one("expect", "「+ to V」\nVするつもりだ")[0];
+  assert.deepEqual([to.front, to.back, to.reverse], ["expect to V", "Vするつもりだ", { front: "expect （＿＿）\nVするつもりだ", back: "expect to V" }]);
   // The 「」 is the whole English, on its own line or straight before the Japanese.
   const followed = one("follow", "「A be followed by B」\nAの次にBが続く")[0];
   assert.deepEqual([followed.front, followed.back, followed.reverse], ["A be followed by B", "Aの次にBが続く", { front: "follow\nAの次にBが続く", back: "A be followed by B" }]);
