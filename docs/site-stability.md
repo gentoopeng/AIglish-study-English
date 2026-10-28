@@ -1232,3 +1232,13 @@ Reported: in 用語・年号モード a line such as 「following」 次の unde
 The flag is kept wherever meanings are copied: the master, progress merges, shared and copied books, and the add form.
 
 Tests: `tests/term-questions.test.cjs` (no whole question for a flagged line that has a term) and `tests/term-mode.smoke.cjs` (checkbox in the editor, the flag kept in the saved words, the questions without the whole card).
+
+## 「」 cards follow the card direction (10.22.07.00)
+
+Reported: with 「」の問題だけ, the cards came out the wrong way round. In 表：英単語を先に the card still started from the 「」 phrase, which is part of the meaning. 「」 cards no longer always show their question first. They follow the chosen direction like the whole-entry card:
+- 英単語を先に: the headword and the rest of the line in front, the 「」 term behind.
+- 意味を先に: the term alone in front, the headword and the rest behind.
+
+Year cards are typed, so they still show the question first.
+
+Test: `tests/term-mode.smoke.cjs` (a 「」 card's front in each direction).
