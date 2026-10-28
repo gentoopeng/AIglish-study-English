@@ -229,6 +229,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const keys = await page.evaluate(() => Object.keys(window.__wallet["users/casino-a/learningPoints/main"].poker));
     assert.equal(keys.length, 1);
     assert.match(keys[0], /^casino:blackjack:.+:bet$/);
+    // Points bet in the casino feed the shared jackpots (3% and 1% of the 60pt).
+    await page.waitForFunction(() => window.__wallet["shared/casino_jackpot"]?.bet === 60);
+    assert.deepEqual(await page.evaluate(() => window.CasinoJackpot.amounts()), { jp: 1001, sjp: 10000 });
     // Over the balance, the bet stops at what there is.
     await bj.getByRole("button", { name: "+100" }).click();
     await bj.getByRole("button", { name: "+100" }).click();
@@ -247,7 +250,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     assert.equal(await tab.locator("[data-casino-balance]").innerText(), "240pt");
     assert.deepEqual(errors, []);
-    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on practice chips only");
+    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on practice chips only, bets feed the shared jackpot");
   } finally {
     await browser.close();
   }
