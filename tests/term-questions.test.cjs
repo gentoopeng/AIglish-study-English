@@ -78,6 +78,12 @@ test("a phrase line (English with 「」, then Japanese) gives one card: the Eng
   assert.equal(as[0].front, "consider A as B");
   assert.equal(as[0].back, "AをBとみなす");
   assert.deepEqual(as[0].reverse, { front: "consider A （＿＿） B\nAをBとみなす", back: "as\nconsider A as B" });
+  // English on the first line and Japanese below is a phrase line even without 「」: the whole
+  // English line is asked, and there is no "which headword?" card.
+  const bare = one("consider", "considering\nVしようかと思う");
+  assert.deepEqual(bare.map((q) => [q.key, q.front, q.back, q.reverse]), [["t:1-0:0", "considering", "Vしようかと思う", { front: "consider\nVしようかと思う", back: "considering" }]]);
+  // A Japanese-only line still gets its "which headword?" card.
+  assert.deepEqual(one("consider", "〜を考慮する").map((q) => q.key), ["w"]);
   // A derived word is shown as it is, without the headword above it.
   const derived = one("increase", "「increasingly」\nますます")[0];
   assert.deepEqual([derived.front, derived.back, derived.reverse], ["increasingly", "ますます", { front: "increase\nますます", back: "increasingly" }]);
