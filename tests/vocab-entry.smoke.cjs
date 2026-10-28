@@ -68,9 +68,13 @@ const { chromium, webkit } = require("playwright"),
     await page
       .getByRole("textbox", { name: "意味・答え 1", exact: true })
       .fill("〜に従う");
+    // Part of speech: one tap on a chip.
     await page
-      .getByRole("combobox", { name: "意味 1 の品詞", exact: true })
-      .selectOption("動");
+      .getByRole("group", { name: "意味 1 の品詞", exact: true })
+      .getByRole("button", { name: "動", exact: true })
+      .click();
+    // The card it will make is shown as it is typed.
+    assert.match(await page.locator(".vocab-entry-preview").first().innerText(), /follow → 〜に従う/);
     await page
       .getByRole("button", { name: "＋ 意味を追加", exact: true })
       .click();

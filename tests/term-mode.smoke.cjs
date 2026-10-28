@@ -33,10 +33,14 @@ const { chromium } = require("playwright"),
     await page.locator("#vocabAddWord").click();
     assert.equal(await page.locator(".vocab-entry-dialog.is-term-mode").count(), 1);
     await page.locator("#vocabEntryWord").fill("源頼朝");
-    const year = page.getByLabel("説明 1 の年号");
-    await year.pressSequentially("１１a9b2");
-    assert.equal(await year.inputValue(), "1192");
-    await page.getByRole("textbox", { name: "説明 1", exact: true }).fill("「鎌倉幕府」を開いた");
+    // The year is written at the start of the line; 「」で囲む wraps the selected words.
+    const line = page.getByRole("textbox", { name: "説明 1", exact: true });
+    await line.fill("1192 鎌倉幕府を開いた");
+    await line.evaluate((e) => e.setSelectionRange(5, 9));
+    await page.getByRole("button", { name: "「」で囲む" }).click();
+    assert.equal(await line.inputValue(), "1192 「鎌倉幕府」を開いた");
+    // The cards it makes are shown before adding.
+    assert.match(await page.locator(".vocab-entry-preview").innerText(), /源頼朝 → 1192年 鎌倉幕府を開いた/);
     await page.getByRole("button", { name: "追加する", exact: true }).click();
     await page.locator(".vocab-entry-dialog").waitFor({ state: "detached" });
     assert.equal(await page.evaluate(() => vocabList.find((w) => w.word === "源頼朝").meanings[0].text), "1192 「鎌倉幕府」を開いた");

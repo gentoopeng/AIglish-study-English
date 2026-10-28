@@ -296,7 +296,7 @@
     ));
     d.setAttribute("aria-labelledby", "vocabEntryTitle");
     d.innerHTML =
-      '<header><div><h2 id="vocabEntryTitle">単語を追加</h2><p class="vocab-entry-book"></p></div><button type="button" data-entry-close aria-label="単語の追加を閉じる">×</button></header><form><label for="vocabEntryWord">単語・用語・問題文</label><input id="vocabEntryWord" required autocomplete="off" placeholder="例：follow ／ あはれなり"><div class="vocab-entry-meanings"></div><button type="button" class="vocab-entry-add-meaning">＋ 意味を追加</button><details><summary>サブ情報・番号・単元を設定</summary><label for="vocabEntrySub">サブ情報</label><textarea id="vocabEntrySub" rows="3" placeholder="用法・例文・関連知識など（任意）"></textarea><label for="vocabEntryUnit">単元</label><input id="vocabEntryUnit" list="vocabEntryUnits" autocomplete="off" maxlength="60" placeholder="例：第1章 ／ 鎌倉時代（任意）"><datalist id="vocabEntryUnits"></datalist><label for="vocabEntryNumber">単語番号</label><input id="vocabEntryNumber" type="number" min="1" step="1"><label class="vocab-entry-insert"><input type="checkbox" id="vocabEntryInsert">使用中の番号なら差し込む（それ以降の番号を1つずつずらす）</label><p class="library-editor-hint">通常は末尾の次の番号を自動で使います。2と3の間に入れるなら「3」にして差し込みます。理解度などの記録は単語ごとに保たれます。</p></details><p class="vocab-entry-status" role="status"></p><p class="library-editor-error" role="alert"></p><label class="vocab-entry-continue"><input type="checkbox" id="vocabEntryContinue">続けて追加する</label><div class="library-editor-actions"><button type="button" data-entry-close>キャンセル</button><button type="submit" class="library-editor-primary">追加する</button></div></form>';
+      '<header><div><h2 id="vocabEntryTitle">単語を追加</h2><p class="vocab-entry-book"></p></div><button type="button" data-entry-close aria-label="単語の追加を閉じる">×</button></header><form><label for="vocabEntryWord">単語・用語・問題文</label><input id="vocabEntryWord" required autocomplete="off" placeholder="例：follow ／ あはれなり"><p class="vocab-entry-dup" role="status"></p><div class="vocab-entry-meanings"></div><button type="button" class="vocab-entry-add-meaning">＋ 意味を追加</button><details><summary>サブ情報・番号・単元を設定</summary><label for="vocabEntrySub">サブ情報</label><textarea id="vocabEntrySub" rows="3" placeholder="用法・例文・関連知識など（任意）"></textarea><label for="vocabEntryUnit">単元</label><input id="vocabEntryUnit" list="vocabEntryUnits" autocomplete="off" maxlength="60" placeholder="例：第1章 ／ 鎌倉時代（任意）"><datalist id="vocabEntryUnits"></datalist><label for="vocabEntryNumber">単語番号</label><input id="vocabEntryNumber" type="number" min="1" step="1"><label class="vocab-entry-insert"><input type="checkbox" id="vocabEntryInsert">使用中の番号なら差し込む（それ以降の番号を1つずつずらす）</label><p class="library-editor-hint">通常は末尾の次の番号を自動で使います。2と3の間に入れるなら「3」にして差し込みます。理解度などの記録は単語ごとに保たれます。</p></details><p class="vocab-entry-status" role="status"></p><p class="library-editor-error" role="alert"></p><label class="vocab-entry-continue"><input type="checkbox" id="vocabEntryContinue">続けて追加する</label><div class="library-editor-actions"><button type="button" data-entry-close>キャンセル</button><button type="submit" class="library-editor-primary">追加する</button></div></form>';
     d.querySelector(".vocab-entry-book").textContent =
       metadata(book)?.name || "単語帳";
     // 用語・年号モード: each line can start with a year (digits only) and mark terms with 「」.
@@ -305,7 +305,7 @@
     if (term) {
       const hint = el(
         "p",
-        "「」で囲んだ言葉が空欄の問題に、年号を入れた行は年号の問題になります。",
+        "「」で囲んだ所が問題になります。英語の行の下に日本語を書くと、英語↔日本語のカードに。行の頭に年号を書くと年号の問題も出ます。できるカードは下に出ます。",
         "library-editor-hint vocab-entry-term-hint",
       );
       d.querySelector(".vocab-entry-meanings").before(hint);
@@ -315,7 +315,7 @@
       number = d.querySelector("#vocabEntryNumber"),
       list = d.querySelector(".vocab-entry-meanings"),
       error = d.querySelector(".library-editor-error"),
-      message = d.querySelector("[role=status]");
+      message = d.querySelector(".vocab-entry-status");
     let manual = false;
     const unitInput = d.querySelector("#vocabEntryUnit"),
       nextShown = (words) => root.VocabOrder.maxNo(words) + 1;
@@ -328,86 +328,117 @@
     number.oninput = () => {
       manual = number.value !== "";
     };
+    // The common parts of speech as one-tap chips (tap again to clear); the rest are in the
+    // word's editor.
+    const CHIPS = [
+      ["名", "名詞"],
+      ["動", "動詞"],
+      ["形", "形容詞"],
+      ["副", "副詞"],
+      ["前", "前置詞"],
+      ["接", "接続詞"],
+    ];
     function relabel() {
       [...list.children].forEach((row, i) => {
-        row.querySelector("label").textContent =
-          (term ? "説明 " : "意味・答え ") + (i + 1);
-        row
-          .querySelector(".vocab-entry-year")
-          ?.setAttribute("aria-label", "説明 " + (i + 1) + " の年号");
-        row
-          .querySelector("textarea")
-          .setAttribute("aria-label", (term ? "説明 " : "意味・答え ") + (i + 1));
-        row
-          .querySelector("select")
-          .setAttribute("aria-label", "意味 " + (i + 1) + " の品詞");
-        row
-          .querySelector("button")
-          .setAttribute("aria-label", "意味 " + (i + 1) + " を削除");
-        row.querySelector("button").hidden = list.children.length === 1;
+        const n = i + 1,
+          remove = row.querySelector(".vocab-entry-remove");
+        row.querySelector(".vocab-entry-meaning-no").textContent = String(n);
+        row.querySelector("textarea").setAttribute("aria-label", (term ? "説明 " : "意味・答え ") + n);
+        row.querySelector(".vocab-entry-pos").setAttribute("aria-label", "意味 " + n + " の品詞");
+        row.querySelector(".vocab-entry-minor-chip").setAttribute("aria-label", "意味 " + n + " はあまり使わない意味");
+        remove.setAttribute("aria-label", "意味 " + n + " を削除");
+        remove.hidden = list.children.length === 1;
       });
+    }
+    // What the meaning will become: the cards it makes, front → back, so nothing has to be
+    // worked out in advance.
+    function preview(row) {
+      const out = row.querySelector(".vocab-entry-preview"),
+        text = row.querySelector("textarea").value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join("\n"),
+        word = form.querySelector("#vocabEntryWord").value.trim() || "（単語）";
+      out.replaceChildren();
+      if (!text) return;
+      const one = (s) => String(s).split("\n").join(" / ");
+      let cards = [[word, text]];
+      if (term && root.TermQuestions) {
+        cards = root.TermQuestions.questions({ num: 0, word, meanings: [{ id: "p", text }] }).map((q) =>
+          q.kind === "whole" ? [word, q.prompt] : q.front !== undefined ? [q.front, q.back] : [q.prompt, q.answer],
+        );
+      }
+      out.append(el("span", "カード", "vocab-entry-preview-label"));
+      for (const [front, back] of cards) {
+        const card = el("span", undefined, "vocab-entry-preview-card");
+        card.append(el("b", one(front)), document.createTextNode(" → " + one(back)));
+        out.append(card);
+      }
+    }
+    function chip(text, cls) {
+      const b = el("button", text, "vocab-entry-chip" + (cls ? " " + cls : ""));
+      b.type = "button";
+      b.setAttribute("aria-pressed", "false");
+      return b;
     }
     function addMeaning(focus = true) {
       const row = el("div", undefined, "vocab-entry-meaning"),
-        label = el("label"),
+        head = el("div", undefined, "vocab-entry-meaning-head"),
+        no = el("span", undefined, "vocab-entry-meaning-no"),
         // A text area, so Enter adds a line break (a phrase on one line, its Japanese on the next).
         input = el("textarea", undefined, "vocab-entry-meaning-text"),
-        select = el("select"),
-        remove = el("button", "−"),
-        controls = el("div", undefined, "vocab-entry-meaning-controls");
-      const inputId = "entryMeaning-" + crypto.randomUUID();
-      input.id = inputId;
+        remove = el("button", "×", "vocab-entry-remove"),
+        tools = el("div", undefined, "vocab-entry-tools"),
+        pos = el("div", undefined, "vocab-entry-pos"),
+        minor = chip("まれ", "vocab-entry-minor-chip"),
+        shown = el("p", undefined, "vocab-entry-preview");
+      row.dataset.pos = "";
       input.required = true;
-      input.placeholder = term ? "例：「本能寺の変」で死亡したとされる人物" : "例：〜に従う";
-      input.autocomplete = "off";
       input.rows = 1;
+      input.autocomplete = "off";
+      input.placeholder = term ? "例：「as follows」\n次のように" : "例：〜に従う";
       input.oninput = () => {
         input.style.height = "auto";
         input.style.height = input.scrollHeight + 2 + "px";
+        preview(row);
       };
-      label.htmlFor = inputId;
-      for (const [value, text] of positions) {
-        const option = el("option", text);
-        option.value = value;
-        select.append(option);
-      }
       remove.type = "button";
       remove.onclick = () => {
         row.remove();
         relabel();
         list.querySelector("textarea").focus();
       };
-      if (term) {
-        // Digits only: full-width digits are converted, everything else is dropped as typed.
-        const year = el("input", undefined, "vocab-entry-year");
-        year.type = "text";
-        year.inputMode = "numeric";
-        year.pattern = "[0-9]*";
-        year.maxLength = 4;
-        year.placeholder = "年号";
-        year.autocomplete = "off";
-        year.oninput = () =>
-          (year.value = root.TermQuestions.normalizeYear(year.value));
-        controls.append(year);
+      head.append(no, input, remove);
+      pos.setAttribute("role", "group");
+      for (const [short, name] of CHIPS) {
+        const b = chip(short, "vocab-entry-pos-chip");
+        b.title = name;
+        b.dataset.pos = short;
+        b.onclick = () => {
+          row.dataset.pos = row.dataset.pos === short ? "" : short;
+          pos.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.pos === row.dataset.pos)));
+        };
+        pos.append(b);
       }
-      controls.append(input, select, remove);
-      row.append(label, controls);
       // A meaning seldom used but worth knowing: shown small under the main ones.
-      if (!term) {
-        const minor = el("label", undefined, "vocab-entry-minor"),
-          box = el("input");
-        box.type = "checkbox";
-        minor.append(box, document.createTextNode("あまり使わない意味"));
-        row.append(minor);
-      } else {
-        // When the 「」 is a different phrase (「following」 under follow), asking for the headword
-        // is not one-to-one: this line can be asked by its 「」 only.
-        const only = el("label", undefined, "vocab-entry-minor vocab-entry-blank-only"),
-          box = el("input");
-        box.type = "checkbox";
-        only.append(box, document.createTextNode("「」の問題だけ出す"));
-        row.append(only);
+      minor.title = "あまり使わない意味";
+      minor.onclick = () => minor.setAttribute("aria-pressed", String(minor.getAttribute("aria-pressed") !== "true"));
+      tools.append(pos, minor);
+      if (term) {
+        // Wraps the selected words in 「」 (or puts 「」 at the cursor), the part to be asked.
+        const wrap = chip("「」で囲む", "vocab-entry-wrap");
+        wrap.removeAttribute("aria-pressed");
+        wrap.onpointerdown = (event) => event.preventDefault();
+        wrap.onclick = () => {
+          const a = input.selectionStart ?? input.value.length,
+            z = input.selectionEnd ?? a,
+            v = input.value;
+          input.value = v.slice(0, a) + "「" + v.slice(a, z) + "」" + v.slice(z);
+          input.focus();
+          const caret = a === z ? a + 1 : z + 2;
+          input.setSelectionRange(caret, caret);
+          input.oninput();
+        };
+        tools.append(wrap);
       }
+      row.append(head, tools, shown);
       list.append(row);
       requestAnimationFrame(() => input.oninput());
       relabel();
@@ -415,6 +446,27 @@
     }
     addMeaning(false);
     d.querySelector(".vocab-entry-add-meaning").onclick = () => addMeaning();
+    // The word: the previews follow it, and a word already in the book is pointed out (adding it
+    // again is still allowed, e.g. a different use).
+    const wordInput = form.querySelector("#vocabEntryWord"),
+      dup = d.querySelector(".vocab-entry-dup");
+    wordInput.oninput = () => {
+      [...list.children].forEach(preview);
+      const typed = wordInput.value.trim().toLowerCase(),
+        found = typed && (root.VocabMaster.resolve(book)?.master || []).find((w) => String(w.word || "").trim().toLowerCase() === typed);
+      dup.textContent = found ? "「" + found.word + "」はすでに #" + root.VocabOrder.no(found) + " にあります。" : "";
+    };
+    // 続けて追加する is remembered, so it is set once.
+    const keep = form.querySelector("#vocabEntryContinue"),
+      keepName = "aiglish_entry_continue_" + id;
+    try {
+      keep.checked = localStorage.getItem(keepName) === "1";
+    } catch {}
+    keep.onchange = () => {
+      try {
+        localStorage.setItem(keepName, keep.checked ? "1" : "0");
+      } catch {}
+    };
     d.querySelectorAll("[data-entry-close]").forEach(
       (b) => (b.onclick = close),
     );
@@ -437,16 +489,11 @@
             unit: unitInput.value,
             word: form.querySelector("#vocabEntryWord").value,
             sub: form.querySelector("#vocabEntrySub").value,
-            meanings: [...list.children].map((row) => {
-              const year = row.querySelector(".vocab-entry-year")?.value || "",
-                text = row.querySelector("textarea").value;
-              return {
-                text: year && text.trim() ? year + " " + text.trim() : text,
-                partOfSpeech: row.querySelector("select").value,
-                minor: !term && !!row.querySelector(".vocab-entry-minor input")?.checked,
-                blankOnly: !!row.querySelector(".vocab-entry-blank-only input")?.checked,
-              };
-            }),
+            meanings: [...list.children].map((row) => ({
+              text: row.querySelector("textarea").value,
+              partOfSpeech: row.dataset.pos || "",
+              minor: row.querySelector(".vocab-entry-minor-chip").getAttribute("aria-pressed") === "true",
+            })),
           },
           book,
           id,
@@ -454,6 +501,7 @@
         root.showToast?.("「" + entry.word + "」を追加しました。", "ok");
         if (form.querySelector("#vocabEntryContinue").checked) {
           form.querySelector("#vocabEntryWord").value = "";
+          dup.textContent = "";
           form.querySelector("#vocabEntrySub").value = "";
           manual = false;
           number.value = nextShown(root.VocabMaster.resolve(book).master);

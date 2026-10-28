@@ -36,8 +36,8 @@ const { chromium } = require("playwright"),
     await rows.nth(0).locator("textarea").fill("〜に従う");
     await page.getByRole("button", { name: "＋ 意味を追加" }).click();
     await rows.nth(1).locator("textarea").fill("〜を理解する");
-    await rows.nth(1).getByLabel("あまり使わない意味").check();
-    assert.equal(await rows.nth(0).getByLabel("あまり使わない意味").isChecked(), false);
+    await rows.nth(1).getByRole("button", { name: "意味 2 はあまり使わない意味" }).click();
+    assert.equal(await rows.nth(0).getByRole("button", { name: "意味 1 はあまり使わない意味" }).getAttribute("aria-pressed"), "false");
     await page.getByRole("button", { name: "追加する", exact: true }).click();
     await page.locator(".vocab-entry-dialog").waitFor({ state: "detached" });
     const card = page.locator('#vocabListContainer .word-row-container[data-word-num="4"]');
