@@ -109,15 +109,17 @@
           input: true,
         });
       if (ph) {
-        // One card for the line. 英単語を先に: the English in full (with the headword when it is
-        // not in it) → the Japanese. 意味を先に: the headword, the English with its 「」 blanked
-        // (unless the 「」 is the whole English) and the Japanese → the 「」 and the full English.
+        // One card for the line. 英単語を先に: the English in full → the Japanese. 意味を先に: the
+        // headword, the English with its 「」 blanked (unless the 「」 is the whole English) and the
+        // Japanese → the 「」 and the full English.
         // A pattern written with "+" (+ to V, + A + as B) joins onto the headword without the
         // plus signs, on one line: expect to V, consider A as B.
         const pattern = /^\s*[+＋]/.test(plain(ph.english)),
           join = (text) => (pattern ? head + " " + text.replace(/\s*[+＋]\s*/g, " ").replace(/[ 　]+/g, " ").trim() : text),
           english = join(plain(ph.english).replace(/[ 　]+/g, " ").trim()),
-          shown = pattern || english.toLowerCase().includes(head.toLowerCase()) ? english : head + "\n" + english,
+          // The English line as it is (increasingly, as follows); a "+" pattern already starts
+          // with the headword.
+          shown = english,
           whole = ph.english.trim() === "「" + p.terms[0] + "」",
           blanked = join(ph.english.replace(TERM, BLANK).replace(/[ 　]+/g, " ").trim());
         list.push({

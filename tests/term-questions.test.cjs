@@ -78,6 +78,9 @@ test("a phrase line (English with 「」, then Japanese) gives one card: the Eng
   assert.equal(as[0].front, "consider A as B");
   assert.equal(as[0].back, "AをBとみなす");
   assert.deepEqual(as[0].reverse, { front: "consider A （＿＿） B\nAをBとみなす", back: "as\nconsider A as B" });
+  // A derived word is shown as it is, without the headword above it.
+  const derived = one("increase", "「increasingly」\nますます")[0];
+  assert.deepEqual([derived.front, derived.back, derived.reverse], ["increasingly", "ますます", { front: "increase\nますます", back: "increasingly" }]);
   const to = one("expect", "「+ to V」\nVするつもりだ")[0];
   assert.deepEqual([to.front, to.back, to.reverse], ["expect to V", "Vするつもりだ", { front: "expect （＿＿）\nVするつもりだ", back: "expect to V" }]);
   // The 「」 is the whole English, on its own line or straight before the Japanese.

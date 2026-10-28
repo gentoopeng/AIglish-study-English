@@ -1305,3 +1305,7 @@ Requested: expect with + to V showed "expect" and "+ to V" on two lines; it shou
 - **Bold headword:** on 用語・年号モード cards the headword is bold wherever it stands as a whole word (`TermQuestions.show(node, text, head)`), and the rest of the text is normal weight so it stands out.
 
 Test: `tests/term-questions.test.cjs` (consider A as B, expect to V).
+
+## Derived words without the headword above them (10.22.14.00)
+
+Reported: a phrase card for increasingly (under increase) showed "increase" above "increasingly". The headword was added whenever the English line did not contain it exactly. Lines written with "+" now join onto the headword (10.22.13.00), so the 英単語を先に side shows the English line as it is. The 意味を先に side still starts with the headword. Test: `tests/term-questions.test.cjs`.
