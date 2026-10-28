@@ -58,7 +58,7 @@
         ? word.meanings
         : [{ id: String(word?.num) + "-0", text: word?.meaning || "" }];
     return meanings
-      .map((m, index) => ({ mid: String(m.id ?? String(word.num) + "-" + index), index, ...parseLine(m.text) }))
+      .map((m, index) => ({ mid: String(m.id ?? String(word.num) + "-" + index), index, only: m.blankOnly === true, ...parseLine(m.text) }))
       .filter((line) => line.body || line.year);
   }
   function questions(word) {
@@ -67,16 +67,19 @@
       list = [];
     if (!head || !parts.length) return list;
     for (const p of parts) {
+      // A line set to 「」の問題だけ (its 「」 is a different phrase, so "which headword?" would not
+      // be one-to-one) gives no whole question, as long as it has a term to ask.
       // An entry with one line keeps the key "w" it always had, so its record stays.
-      list.push({
-        key: parts.length === 1 ? "w" : "w:" + p.mid,
-        kind: "whole",
-        mid: p.mid,
-        index: p.index,
-        prompt: (p.year ? p.year + "年 " : "") + plain(p.body),
-        answer: head,
-        input: false,
-      });
+      if (!(p.only && p.terms.some(Boolean)))
+        list.push({
+          key: parts.length === 1 ? "w" : "w:" + p.mid,
+          kind: "whole",
+          mid: p.mid,
+          index: p.index,
+          prompt: (p.year ? p.year + "年 " : "") + plain(p.body),
+          answer: head,
+          input: false,
+        });
       if (p.year && p.body)
         list.push({
           key: "y:" + p.mid,

@@ -1221,3 +1221,14 @@ Tests: `tests/study-points.test.cjs` checks the one-time count from the records,
 Requested: a 用語・年号モード card made from a 「」 term shows only the term; turned over, the headword and, on the next line, the rest of that meaning without the term. For 「A be followed by B」 + Aの次にBが続く under follow: front "A be followed by B", back "follow" / "Aの次にBが続く". Blank questions gain `front` and `back`, which 単語カード uses. Other 「」 terms in the line are shown plain, and the year stays with the headword. 単語バトル keeps the blanked sentence and the term as before, so its same-kind choices are unchanged.
 
 Tests: `tests/term-questions.test.cjs` (the user's example; only the asked term is taken out) and `tests/term-mode.smoke.cjs` (card fronts and backs).
+
+## 「」の問題だけ出す, chosen per meaning (10.22.06.00)
+
+Reported: in 用語・年号モード a line such as 「following」 次の under follow gave a "which headword?" card (front: follow, back: 「following」 次の), which is not one-to-one because the 「」 is a different phrase. When adding or editing a word in this mode, each line now has a checkbox, 「」の問題だけ出す, stored as `blankOnly: true` on the meaning:
+- With it, the line gives no whole question, only its 「」 cards (and its year card, if any).
+- A line without any 「」 is unaffected, so it still gets its whole card.
+- Without it, the line works as before, for books where the 「」 is just part of the description.
+
+The flag is kept wherever meanings are copied: the master, progress merges, shared and copied books, and the add form.
+
+Tests: `tests/term-questions.test.cjs` (no whole question for a flagged line that has a term) and `tests/term-mode.smoke.cjs` (checkbox in the editor, the flag kept in the saved words, the questions without the whole card).

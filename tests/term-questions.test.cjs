@@ -77,3 +77,7 @@ test("a 「」 card shows only the term; turned over, the headword and the rest 
   const two = t.questions({ num: 2, word: "x", meanings: [{ id: "2-0", text: "「a」と 「b」" }] }).filter((q) => q.kind === "blank");
   assert.deepEqual(two.map((q) => [q.front, q.back]), [["a", "x\nと b"], ["b", "x\naと"]]);
 });
+test("a line set to 「」の問題だけ gives no whole question, but still its 「」 (and year) questions", () => {
+  const word = { num: 1, word: "follow", meanings: [{ id: "1-0", text: "〈指示〉に従う" }, { id: "1-1", text: "「following」\n次の", blankOnly: true }, { id: "1-2", text: "続く", blankOnly: true }] };
+  assert.deepEqual(t.questions(word).map((q) => q.key), ["w:1-0", "t:1-1:0", "w:1-2"]);
+});
