@@ -225,11 +225,11 @@
                         if (!flashcardSelectedStatuses[result ? result.status : getFlashcardMeaningStatus(meaning, w)]) return;
                         // The whole-entry question is the word and its meanings, so it follows the chosen
                         // direction like any card (英→日: the word first). A 「」 card follows it too: 英単語を
-                        // 先に shows the headword and the rest of the line, asking for the 「」 term; 意味を先に
-                        // shows the term alone, with the headword and the rest behind. A year question is
-                        // typed, so it always shows the question first.
+                        // 先に shows the 「」 term (the English) alone, with the headword and the rest of the
+                        // line behind; 意味を先に the other way round. A year question is typed, so it always
+                        // shows the question first.
                         var whole = q.kind === 'whole', card = q.front !== undefined;
-                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.back : q.prompt, ja: whole ? q.prompt : card ? q.front : q.answer, questionFirst: !whole && !card, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
+                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.front : q.prompt, ja: whole ? q.prompt : card ? q.back : q.answer, questionFirst: !whole && !card, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
                     });
                     return;
                 }

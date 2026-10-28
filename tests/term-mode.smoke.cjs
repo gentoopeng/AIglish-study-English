@@ -54,11 +54,11 @@ const { chromium } = require("playwright"),
     assert.equal(queue.length, 10);
     assert.deepEqual(
       // A 「」 card: only the term on the front; the headword and the rest of the line behind.
-      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[2]).sort(),
+      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[1]).sort(),
       ["本能寺の変", "武田勝頼", "鎌倉幕府", "長篠の戦い"].sort(),
     );
     assert.deepEqual(
-      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[1]).sort(),
+      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[2]).sort(),
       ["源頼朝　1192年\nを開いた", "織田信長　1575年\nでは武田勝頼を破った", "織田信長　1575年\n長篠の戦いではを破った", "織田信長　1582年\nで死亡したとされる人物"].sort(),
     );
     // The whole-entry card follows the chosen direction (英→日 by default: the headword first);
@@ -79,7 +79,7 @@ const { chromium } = require("playwright"),
       flashcardCurrentIndex = flashcardOriginQueue.findIndex((q) => q.termKey === "w:" + q.meaningId && q.en === "織田信長" && q.ja.startsWith("1582"));
       window.renderFlashcardDeck();
       seen.wReverse = document.querySelector("#activeFlashcard .flashcard-face-front").textContent;
-      flashcardCurrentIndex = flashcardOriginQueue.findIndex((q) => q.termKey.startsWith("t:") && q.ja === "本能寺の変");
+      flashcardCurrentIndex = flashcardOriginQueue.findIndex((q) => q.termKey.startsWith("t:") && q.en === "本能寺の変");
       window.renderFlashcardDeck();
       seen.tReverse = document.querySelector("#activeFlashcard .flashcard-face-front").textContent;
       flashcardDirectionMode = "en2ja";
@@ -89,10 +89,10 @@ const { chromium } = require("playwright"),
     });
     assert.match(fronts.w, /織田信長/);
     assert.doesNotMatch(fronts.w, /本能寺/);
-    // A 「」 card follows the direction: 英単語を先に shows the headword and the rest of the line;
-    // 意味を先に shows the 「」 term alone.
-    assert.match(fronts["t:"], /織田信長|源頼朝/);
-    assert.equal(fronts.tReverse.replace(/^#\d+/, ""), "本能寺の変");
+    // A 「」 card follows the direction: 英単語を先に shows the 「」 term alone; 意味を先に shows the
+    // headword and the rest of the line.
+    assert.doesNotMatch(fronts["t:"], /織田信長|源頼朝|（＿＿）/);
+    assert.match(fronts.tReverse, /織田信長　1582年/);
     assert.match(fronts["y:"], /（何年？）/);
     assert.match(fronts.wReverse, /本能寺の変/);
     assert.deepEqual(queue.filter((q) => q[3]).map((q) => q[2]).sort(), ["1192", "1575", "1582"]);

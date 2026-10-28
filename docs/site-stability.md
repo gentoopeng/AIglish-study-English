@@ -1242,3 +1242,9 @@ Reported: with 「」の問題だけ, the cards came out the wrong way round. In
 Year cards are typed, so they still show the question first.
 
 Test: `tests/term-mode.smoke.cjs` (a 「」 card's front in each direction).
+
+## 「」 cards: the term on the English side (10.22.08.00)
+
+Reported: 10.22.07.00 had the two sides the wrong way round. The 「」 term is the English, so 英単語を先に now shows it alone in front, with the headword and the rest of the line behind (A be followed by B → follow / Aの次にBが続く). 意味を先に shows the other way round.
+
+Test: `tests/term-mode.smoke.cjs`.
