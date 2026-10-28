@@ -52,6 +52,22 @@
       .filter(Boolean)
       .join("\n");
   }
+  const JAPANESE = /[\u3040-\u30ff\u3400-\u9fff]/;
+  // A phrase line in an English book: the English with its 「」 and then the Japanese, either on
+  // the next line ("+ A + 「as」 B" / "AをBとみなす") or straight after a leading 「」 (「following」次の).
+  // Lines like 「本能寺の変」で死亡した (the 「」 is Japanese) are not phrase lines.
+  function phrase(body) {
+    const nl = body.indexOf("\n");
+    if (nl > 0) {
+      const english = body.slice(0, nl).trim(),
+        japanese = body.slice(nl + 1).trim();
+      if (english && japanese && /「[^「」]+」/.test(english) && !JAPANESE.test(english)) return { english, japanese };
+    }
+    const lead = /^「([^「」]+)」\s*([\s\S]+)$/.exec(body);
+    if (lead && !JAPANESE.test(lead[1]) && JAPANESE.test(lead[2]))
+      return { english: "「" + lead[1] + "」", japanese: lead[2].trim() };
+    return null;
+  }
   function lines(word) {
     const meanings =
       Array.isArray(word?.meanings) && word.meanings.length
@@ -69,8 +85,10 @@
     for (const p of parts) {
       // A line set to 「」の問題だけ (its 「」 is a different phrase, so "which headword?" would not
       // be one-to-one) gives no whole question, as long as it has a term to ask.
-      // An entry with one line keeps the key "w" it always had, so its record stays.
-      if (!(p.only && p.terms.some(Boolean)))
+      // An entry with one line keeps the key "w" it always had, so its record stays. A phrase line
+      // is asked through its own card below (a "which headword?" card would not be one-to-one).
+      const ph = p.terms[0] ? phrase(p.body) : null;
+      if (!(p.only && p.terms.some(Boolean)) && !ph)
         list.push({
           key: parts.length === 1 ? "w" : "w:" + p.mid,
           kind: "whole",
@@ -90,6 +108,31 @@
           answer: p.year,
           input: true,
         });
+      if (ph) {
+        // One card for the line. 英単語を先に: the English in full (with the headword when it is
+        // not in it) → the Japanese. 意味を先に: the headword, the English with its 「」 blanked
+        // (unless the 「」 is the whole English) and the Japanese → the 「」 and the full English.
+        const english = plain(ph.english).replace(/[ 　]+/g, " ").trim(),
+          shown = english.toLowerCase().includes(head.toLowerCase()) ? english : head + "\n" + english,
+          whole = ph.english.trim() === "「" + p.terms[0] + "」",
+          blanked = ph.english.replace(TERM, BLANK).replace(/[ 　]+/g, " ").trim();
+        list.push({
+          key: "t:" + p.mid + ":0",
+          kind: "blank",
+          mid: p.mid,
+          index: p.index,
+          prompt: head + "　" + blankOut(p.body, 0),
+          answer: p.terms[0],
+          front: shown,
+          back: ph.japanese,
+          reverse: {
+            front: head + "\n" + (whole ? "" : blanked + "\n") + ph.japanese,
+            back: p.terms.filter(Boolean).join("、") + (whole ? "" : "\n" + english),
+          },
+          input: false,
+        });
+        continue;
+      }
       p.terms.forEach((term, t) =>
         term &&
         list.push({

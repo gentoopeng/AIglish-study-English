@@ -1267,3 +1267,15 @@ Requested: a part of speech for each meaning, and links to other words (synonyms
   - They are not part of the word signature, so ratings stay matched.
 
 Test: `tests/word-links.smoke.cjs`.
+
+## Phrase lines: one card each way, no settings (10.22.10.00)
+
+Reported: a 「」 marking one word inside a pattern (consider: + A + 「as」 B / AをBとみなす) became a card showing "as" alone. Setting each meaning by hand (「」の問題だけ出す) was also a chore.
+
+A **phrase line** is now recognised automatically: English with its 「」 on the first line and Japanese on the next, or a leading 「…」 directly followed by Japanese (「following」次の). A line whose 「」 is Japanese, as in history books, is not one. A phrase line gives one card (key `t:<meaning>:0`, so its record stays) and no "which headword?" card:
+- **英単語を先に:** the English line in full, with the headword added when the line does not contain it → the Japanese.
+- **意味を先に:** the headword, the English with its 「」 blanked (left out when the 「」 is the whole English) and the Japanese → the 「」 and the English line. These are the card's `reverse` fields.
+
+So "as" is never asked alone, and 「following」 / 次の works in both directions. Other 「」 lines keep their earlier behaviour. 単語バトル still uses the blanked sentence and the term.
+
+Test: `tests/term-questions.test.cjs`, with the user's examples.

@@ -27,7 +27,7 @@ test("one entry gives a whole question per line, then year and blank questions (
   // Each question points at the line it came from.
   assert.deepEqual(list.map((q) => q.mid), ["7-0", "7-0", "7-0", "7-1", "7-1", "7-1", "7-1"]);
   // An entry with one line keeps the key "w" its record was saved under.
-  assert.deepEqual(t.questions({ num: 8, word: "x", meanings: [{ id: "8-0", text: "「y」の人" }] }).map((q) => q.key), ["w", "t:8-0:0"]);
+  assert.deepEqual(t.questions({ num: 8, word: "x", meanings: [{ id: "8-0", text: "「人物」の名" }] }).map((q) => q.key), ["w", "t:8-0:0"]);
 });
 
 test("lines without a year or 「」 still give the whole question; empty entries give none", () => {
@@ -69,13 +69,21 @@ test("an empty 「」 keeps the numbering of the terms after it", () => {
   const list = t.questions({ num: 3, word: "x", meanings: [{ id: "3-0", text: "「 」と「本題」" }] });
   assert.deepEqual(list.filter((q) => q.kind === "blank").map((q) => [q.key, q.answer, q.prompt]), [["t:3-0:1", "本題", "x　 と（＿＿）"]]);
 });
-test("a 「」 card shows only the term; turned over, the headword and the rest of the line", () => {
-  const card = t.questions({ num: 1, word: "follow", meanings: [{ id: "1-0", text: "「A be followed by B」\nAの次にBが続く" }] }).find((q) => q.kind === "blank");
-  assert.equal(card.front, "A be followed by B");
-  assert.equal(card.back, "follow\nAの次にBが続く");
-  // Another term in the same line stays, shown plain; only this one is taken out.
-  const two = t.questions({ num: 2, word: "x", meanings: [{ id: "2-0", text: "「a」と 「b」" }] }).filter((q) => q.kind === "blank");
-  assert.deepEqual(two.map((q) => [q.front, q.back]), [["a", "x\nと b"], ["b", "x\naと"]]);
+test("a phrase line (English with 「」, then Japanese) gives one card: the English → the Japanese, or the Japanese with the 「」 blanked → the 「」", () => {
+  const one = (word, text) => t.questions({ num: 1, word, meanings: [{ id: "1-0", text }] });
+  // The 「」 is a word inside a pattern: never asked alone.
+  const as = one("consider", "+ A + 「as」 B\nAをBとみなす");
+  assert.deepEqual(as.map((q) => q.key), ["t:1-0:0"]);
+  assert.equal(as[0].front, "consider\n+ A + as B");
+  assert.equal(as[0].back, "AをBとみなす");
+  assert.deepEqual(as[0].reverse, { front: "consider\n+ A + （＿＿） B\nAをBとみなす", back: "as\n+ A + as B" });
+  // The 「」 is the whole English, on its own line or straight before the Japanese.
+  const followed = one("follow", "「A be followed by B」\nAの次にBが続く")[0];
+  assert.deepEqual([followed.front, followed.back, followed.reverse], ["A be followed by B", "Aの次にBが続く", { front: "follow\nAの次にBが続く", back: "A be followed by B" }]);
+  const following = one("follow", "「following」次の");
+  assert.deepEqual(following.map((q) => [q.key, q.front, q.back]), [["t:1-0:0", "following", "次の"]]);
+  // A history line (the 「」 is Japanese) keeps its whole, year and blank questions.
+  assert.deepEqual(one("織田信長", "1582 「本能寺の変」で死亡").map((q) => q.key), ["w", "y:1-0", "t:1-0:0"]);
 });
 test("a line set to 「」の問題だけ gives no whole question, but still its 「」 (and year) questions", () => {
   const word = { num: 1, word: "follow", meanings: [{ id: "1-0", text: "〈指示〉に従う" }, { id: "1-1", text: "「following」\n次の", blankOnly: true }, { id: "1-2", text: "続く", blankOnly: true }] };

@@ -229,7 +229,7 @@
                         // line behind; 意味を先に the other way round. A year question is typed, so it always
                         // shows the question first.
                         var whole = q.kind === 'whole', card = q.front !== undefined;
-                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.front : q.prompt, ja: whole ? q.prompt : card ? q.back : q.answer, questionFirst: !whole && !card, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
+                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.front : q.prompt, ja: whole ? q.prompt : card ? q.back : q.answer, questionFirst: !whole && !card, reverse: card ? q.reverse : undefined, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
                     });
                     return;
                 }
@@ -637,10 +637,13 @@
         var enFirst = wordData.questionFirst === true || flashcardDirectionMode === 'en2ja';
         var frontText = enFirst ? wordData.en : wordData.ja;
         var backText = enFirst ? wordData.ja : wordData.en;
+        // A phrase card has its own 意味を先に side (the English with its 「」 blanked → the 「」).
+        if (!enFirst && wordData.reverse) { frontText = wordData.reverse.front; backText = wordData.reverse.back; }
+        var shownFront = frontText, shownBack = backText;
         frontText = window.escapeVocabText(frontText);
         backText = window.escapeVocabText(backText);
         var customStyle = (typeof window.getFlashcardStyleByHistory === 'function') ? window.getFlashcardStyleByHistory(wordData) : "";
-        window.fillFlashcardFaces(cardWrap,enFirst?wordData.en:wordData.ja,enFirst?wordData.ja:wordData.en,wordData.shownNo||wordData.num,customStyle,{term:!!wordData.termKey});
+        window.fillFlashcardFaces(cardWrap,shownFront,shownBack,wordData.shownNo||wordData.num,customStyle,{term:!!wordData.termKey});
         stage.appendChild(cardWrap);
         // The text box must grow with the circle; flex shrinking otherwise hides extra lines.
         window.sizeFlashcardFaces(cardWrap,stage,posLabel);
