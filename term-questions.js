@@ -42,6 +42,16 @@
     let seen = -1;
     return body.replace(TERM, (all, term) => (++seen === index ? BLANK : term));
   }
+  // The line without one 「」 term (the others shown plain), each line tidied, empty ones dropped.
+  function without(body, index) {
+    let seen = -1;
+    return body
+      .replace(TERM, (all, term) => (++seen === index ? "" : term))
+      .split("\n")
+      .map((line) => line.replace(/[ 　]{2,}/g, " ").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
   function lines(word) {
     const meanings =
       Array.isArray(word?.meanings) && word.meanings.length
@@ -86,6 +96,10 @@
           index: p.index,
           prompt: head + (p.year ? "　" + p.year + "年" : "") + "　" + blankOut(p.body, t),
           answer: term,
+          // As a card: only the term on the front; turned over, the headword and, on the next
+          // line, the rest of the line without that term. (Battles keep prompt and answer.)
+          front: term,
+          back: head + (p.year ? "　" + p.year + "年" : "") + (without(p.body, t) ? "\n" + without(p.body, t) : ""),
           input: false,
         }),
       );

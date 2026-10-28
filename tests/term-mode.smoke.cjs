@@ -53,8 +53,13 @@ const { chromium } = require("playwright"),
     // 織田信長 has two lines: a whole card for each, as one card per meaning in the normal mode.
     assert.equal(queue.length, 10);
     assert.deepEqual(
-      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[2]).sort(),
+      // A 「」 card: only the term on the front; the headword and the rest of the line behind.
+      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[1]).sort(),
       ["本能寺の変", "武田勝頼", "鎌倉幕府", "長篠の戦い"].sort(),
+    );
+    assert.deepEqual(
+      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[2]).sort(),
+      ["源頼朝　1192年\nを開いた", "織田信長　1575年\nでは武田勝頼を破った", "織田信長　1575年\n長篠の戦いではを破った", "織田信長　1582年\nで死亡したとされる人物"].sort(),
     );
     // The whole-entry card follows the chosen direction (英→日 by default: the headword first);
     // blank and year cards always show the question first.
@@ -81,7 +86,7 @@ const { chromium } = require("playwright"),
     });
     assert.match(fronts.w, /織田信長/);
     assert.doesNotMatch(fronts.w, /本能寺/);
-    assert.match(fronts["t:"], /（＿＿）/);
+    assert.doesNotMatch(fronts["t:"], /織田信長|源頼朝|（＿＿）/);
     assert.match(fronts["y:"], /（何年？）/);
     assert.match(fronts.wReverse, /本能寺の変/);
     assert.deepEqual(queue.filter((q) => q[3]).map((q) => q[2]).sort(), ["1192", "1575", "1582"]);

@@ -1215,3 +1215,9 @@ Screens:
 - The detail dialog lists it too.
 
 Tests: `tests/study-points.test.cjs` checks the one-time count from the records, growth with later awards, the poker keys being kept, and a second device taking the cloud total without reading. `tests/notices.smoke.cjs` checks that the bonus adds to the total. The ranking smoke tests check the second podium.
+
+## 「」 cards: the term alone, the rest behind (10.22.05.00)
+
+Requested: a 用語・年号モード card made from a 「」 term shows only the term; turned over, the headword and, on the next line, the rest of that meaning without the term. For 「A be followed by B」 + Aの次にBが続く under follow: front "A be followed by B", back "follow" / "Aの次にBが続く". Blank questions gain `front` and `back`, which 単語カード uses. Other 「」 terms in the line are shown plain, and the year stays with the headword. 単語バトル keeps the blanked sentence and the term as before, so its same-kind choices are unchanged.
+
+Tests: `tests/term-questions.test.cjs` (the user's example; only the asked term is taken out) and `tests/term-mode.smoke.cjs` (card fronts and backs).
