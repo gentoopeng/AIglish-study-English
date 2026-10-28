@@ -224,11 +224,12 @@
                         var meaning = (w.meanings || []).find(function(m) { return String(m.id) === String(q.mid); });
                         if (!flashcardSelectedStatuses[result ? result.status : getFlashcardMeaningStatus(meaning, w)]) return;
                         // The whole-entry question is the word and its meanings, so it follows the chosen
-                        // direction like any card (英→日: the word first). A blank or year question is a
-                        // question with one answer, so it always shows the question first. A 「」 card shows
-                        // only the term; turned over, the headword and the rest of its line.
-                        var whole = q.kind === 'whole';
-                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : q.front !== undefined ? q.front : q.prompt, ja: whole ? q.prompt : q.back !== undefined ? q.back : q.answer, questionFirst: !whole, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
+                        // direction like any card (英→日: the word first). A 「」 card follows it too: 英単語を
+                        // 先に shows the headword and the rest of the line, asking for the 「」 term; 意味を先に
+                        // shows the term alone, with the headword and the rest behind. A year question is
+                        // typed, so it always shows the question first.
+                        var whole = q.kind === 'whole', card = q.front !== undefined;
+                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.back : q.prompt, ja: whole ? q.prompt : card ? q.front : q.answer, questionFirst: !whole && !card, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
                     });
                     return;
                 }
@@ -632,7 +633,7 @@
             settle();
         });
 
-        // A blank or year question shows its question (en) first whatever the direction.
+        // A year question shows its question (en) first whatever the direction.
         var enFirst = wordData.questionFirst === true || flashcardDirectionMode === 'en2ja';
         var frontText = enFirst ? wordData.en : wordData.ja;
         var backText = enFirst ? wordData.ja : wordData.en;
