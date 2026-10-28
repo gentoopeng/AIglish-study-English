@@ -1,11 +1,13 @@
 // すごろくビンゴ: the screen for SugorokuModel inside the casino.
 //
-// Quiet most of the time — ivory numbers on a dark green felt, one thin gold line — and warm
-// only when it matters: a line, the jackpot wheels and a jackpot. A roll is worked out and saved
-// before anything moves, and its chips are paid at once, so closing half way changes nothing.
-// An event game is saved move by move in state.pending, so it carries on where it was left.
-// For now the game is a preview: the casino gives it practice chips only, and a jackpot is shown
-// but not paid.
+// One screen, no scrolling: the jackpots, the card, the die beside a strip of the track with
+// the piece on it, and the bet and roll button. The wheels and the event games come up over it.
+// It is a dark green felt with brass and ivory; the wheels carry the colour (gold for the big
+// multiples, wine for nothing) and only BINGO and the jackpot wheels dim the room.
+//
+// A roll is worked out and saved before anything moves, and its chips are paid at once, so
+// closing half way changes nothing. An event game is saved move by move in state.pending.
+// For now the game is a preview: practice chips only, and a jackpot is shown but not paid.
 (function () {
   "use strict";
   const S = window.SugorokuModel,
@@ -19,18 +21,18 @@
     if (text !== undefined) el.textContent = text;
     return el;
   };
-  const SQUARE = { start: ["START", ""], normal: ["", "ルーレット"], event: ["EVENT", "ゲーム"], accident: ["!", "アクシデント"] };
+  const SQUARE = { start: "START", normal: "", event: "★", accident: "!" };
   const GAME_NAMES = { blackjack: "ブラックジャック", dice: "ダイスポーカー", chinchiro: "チンチロ", ball: "ボール確定" };
-  const WHEEL_NAMES = { normal: "", event: "イベント", accident: "アクシデント", bingo: "BINGO", jp: "JACKPOT CHANCE", sjp: "SUPER JACKPOT CHANCE" };
+  const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", jp: "JACKPOT CHANCE", sjp: "SUPER JACKPOT CHANCE" };
   const HOT = new Set(["bingo", "jp", "sjp"]);
   const RULES_TEXT = [
     "プレ版のため練習チップで遊びます。ポイントは動かず、ジャックポットも演出だけです。",
     "1回に使う額（10・50・100）を選んでサイコロを振ります。出る目は同じですが、額が大きいほど通常マスのルーレットに「ボール」が多く入ります。",
-    "通常マス：ルーレットで ×3〜×0 のどれかが額に掛かって戻ります。「ボール」ならボールが出て額がそのまま戻ります。",
-    "EVENT：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれかが選ばれます。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると額の半分が戻ります。ボール確定はボールと額の1.5倍です。",
-    "アクシデント：額の0〜2倍が引かれるか、STARTに戻ります。",
-    "STARTを通るとボールが出て、額に関係なく少しもらえます（周回が増えるほど少しずつ増えます）。",
-    "ボールが出るとカードの番号が1つ開きます。たて・よこ・ななめが1列そろうと、前のビンゴから使った額をもとにルーレットが回り、「JP CHANCE」からジャックポットを狙えます。",
+    "通常マス：ルーレットで ×3〜×0 のどれかが額に掛かって戻ります。「●（ボール）」ならボールが出て額がそのまま戻ります。",
+    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると半分が戻ります。ボール確定はボールと額の1.5倍です。",
+    "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
+    "80マスを1周するとボールが出て、額に関係なく少しもらえます。",
+    "ボールでカードの番号が開きます。1列そろうと、前のビンゴから使った額をもとにルーレットが回り、JP CHANCEからジャックポットを狙えます。",
     "ジャックポットはカジノ全体で賭けられたポイントから貯まります。",
   ];
 
@@ -63,6 +65,8 @@
         console.warn("[sugoroku] load", error);
       }
     }
+    // A save from a smaller board starts the piece again from START.
+    if (state && state.pos >= S.SIZE) state.pos = 0;
     return state || S.newState(random);
   }
 
@@ -84,12 +88,19 @@
   function draw() {
     const { body, state } = view;
     body.classList.add("sg-body");
+    body.closest("dialog")?.classList.add("is-fit");
+
     const pots = node("div", "sg-pots");
-    pots.append(pot("jp", "JACKPOT"), pot("sjp", "SUPER JACKPOT"));
+    const help = node("button", "sg-help", "?");
+    help.type = "button";
+    help.setAttribute("aria-label", "すごろくビンゴの遊び方");
+    help.onclick = rules;
+    pots.append(pot("jp", "JACKPOT"), pot("sjp", "SUPER JACKPOT"), help);
     view.unsub?.();
     view.unsub = window.CasinoJackpot?.onChange(() => view?.body.isConnected && hud());
     window.CasinoJackpot?.refresh();
 
+    const cardWrap = node("div", "sg-card-wrap");
     const card = node("div", "sg-card");
     card.setAttribute("aria-label", "ビンゴカード");
     view.cells = state.card.map((n, i) => {
@@ -98,31 +109,31 @@
       card.append(cell);
       return cell;
     });
+    view.say = node("p", "sg-say");
+    view.say.setAttribute("role", "status");
+    cardWrap.append(card, view.say);
 
+    const board = node("div", "sg-boardrow");
+    view.die = cube();
     const track = node("div", "sg-track");
     const lane = node("div", "sg-lane");
     view.squares = Array.from({ length: S.SIZE }, (_, i) => {
       const kind = S.kindAt(i),
         sq = node("div", "sg-sq is-" + kind);
-      sq.append(node("small", "", String(i)), node("b", "", SQUARE[kind][0] || "◯"), node("em", "", SQUARE[kind][1]));
+      sq.append(node("small", "", String(i)), node("b", "", SQUARE[kind]));
       lane.append(sq);
       return sq;
     });
+    view.piece = node("i", "sg-piece");
+    lane.append(view.piece);
     track.append(lane);
     view.track = track;
-    view.lap = node("p", "sg-lap");
+    view.lane = lane;
+    board.append(view.die.box, track);
+    board.onclick = () => view.busy && (view.fast = true);
+    cardWrap.onclick = board.onclick;
 
-    const stage = node("div", "sg-stage");
-    view.die = node("div", "sg-die");
-    view.die.setAttribute("aria-hidden", "true");
-    view.say = node("p", "sg-say");
-    view.say.setAttribute("role", "status");
-    stage.append(view.die, view.say);
-    stage.onclick = () => view.busy && (view.fast = true);
-    track.onclick = stage.onclick;
-
-    const info = node("dl", "sg-info");
-    view.info = info;
+    view.info = node("p", "sg-status");
 
     const controls = node("div", "sg-controls");
     const costs = node("div", "sg-costs");
@@ -147,12 +158,11 @@
     view.go.type = "button";
     view.go.dataset.sgRoll = "";
     view.go.onclick = roll;
-    view.note = node("p", "sg-note");
-    controls.append(costs, view.go, view.note);
+    controls.append(costs, view.go);
 
     view.layer = node("div", "sg-layer");
     view.layer.hidden = true;
-    body.replaceChildren(pots, card, stage, track, view.lap, info, controls, rulesBox(), view.layer);
+    body.replaceChildren(pots, cardWrap, board, view.info, controls, view.layer);
     hud();
     place(state.pos, false);
   }
@@ -162,37 +172,40 @@
     box.append(node("small", "", name), node("b", ""));
     return box;
   }
-  function rulesBox() {
-    const box = node("details", "cs-rules");
-    box.append(node("summary", "", "すごろくビンゴの遊び方"));
+  function rules() {
+    if (view.busy) return;
+    const layer = view.layer;
+    layer.className = "sg-layer";
+    layer.hidden = false;
+    const box = node("div", "sg-sheet");
+    box.append(node("p", "sg-sheet-title", "すごろくビンゴの遊び方"));
     const list = node("ul");
     for (const text of RULES_TEXT) list.append(node("li", "", text));
-    box.append(list);
-    return box;
+    const close = node("button", "sg-game-btn", "閉じる");
+    close.type = "button";
+    close.onclick = () => (layer.hidden = true);
+    box.append(list, close);
+    layer.replaceChildren(box);
   }
   function hud() {
     const { state } = view;
     const pots = window.CasinoJackpot?.amounts() || { jp: 0, sjp: 0 };
     for (const kind of ["jp", "sjp"]) view.body.querySelector('[data-pot="' + kind + '"] b').textContent = fmt(pots[kind]) + "pt";
-    const reach = new Set(S.reach(state).flatMap((line) => S.LINES[line]));
-    const done = new Set(state.lines.flatMap((line) => S.LINES[line]));
+    const reaches = S.reach(state),
+      reach = new Set(reaches.flatMap((line) => S.LINES[line])),
+      done = new Set(state.lines.flatMap((line) => S.LINES[line]));
     view.cells.forEach((cell, i) => {
       cell.classList.toggle("is-on", state.marks[i]);
       cell.classList.toggle("is-reach", !state.marks[i] && reach.has(i));
       cell.classList.toggle("is-line", done.has(i));
     });
-    view.lap.textContent = "マス " + state.pos + " / " + S.SIZE + "　・　" + state.laps + "周";
-    const rows = [
-      ["次のビンゴのもと", fmt(state.stake) + api.unit()],
-      ["ビンゴ", state.lines.length + "列（リーチ" + S.reach(state).length + "）"],
-      ["カード", state.cards + 1 + "枚目"],
-    ];
     view.info.replaceChildren(
-      ...rows.map(([k, v]) => {
-        const row = node("div");
-        row.append(node("dt", "", k), node("dd", "", v));
-        return row;
-      }),
+      node("span", "", "ビンゴのもと "),
+      node("b", "", fmt(state.stake) + api.unit()),
+      node("span", "", "　リーチ "),
+      node("b", "", String(reaches.length)),
+      node("span", "", "　" + (state.laps + 1) + "周目 "),
+      node("b", "", state.pos + "/" + S.SIZE),
     );
     view.costs.querySelectorAll("button").forEach((b) => {
       b.setAttribute("aria-checked", String(Number(b.dataset.cost) === view.cost));
@@ -200,15 +213,52 @@
     });
     const short = api.balance() < view.cost;
     view.go.disabled = view.busy || short || !!state.pending;
-    view.note.textContent = short ? "チップが足りません。" : "盤面をタップすると早送りできます。";
+    view.go.textContent = short ? "チップが足りません" : view.busy ? "…" : "サイコロを振る";
   }
-  // The piece is the lit square; the lane slides so it stays in the middle.
+  // The piece sits on its square; the strip slides so the piece stays a little left of centre.
   function place(pos, smooth = true) {
     view.squares.forEach((sq, i) => sq.classList.toggle("is-here", i === pos));
-    const sq = view.squares[pos],
-      track = view.track;
-    const left = sq.offsetLeft - (track.clientWidth - sq.offsetWidth) / 2;
-    track.scrollTo?.({ left, behavior: smooth && !calm() && !view.fast ? "smooth" : "auto" });
+    const sq = view.squares[pos];
+    view.piece.style.transform = "translateX(" + (sq.offsetLeft + sq.offsetWidth / 2) + "px)";
+    view.piece.classList.remove("is-hop");
+    if (smooth && !calm() && !view.fast) {
+      void view.piece.offsetWidth;
+      view.piece.classList.add("is-hop");
+    }
+    const left = sq.offsetLeft - view.track.clientWidth * 0.35;
+    view.track.scrollTo?.({ left, behavior: smooth && !calm() && !view.fast ? "smooth" : "auto" });
+  }
+
+  // ---- The die: a cube that tumbles and lands on its number --------------------------------
+  const PIPS = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
+  // Which way the cube turns to show each number at the front.
+  const FACE = { 1: [0, 0], 6: [0, 180], 3: [0, -90], 4: [0, 90], 5: [-90, 0], 2: [90, 0] };
+  function cube() {
+    const box = node("div", "sg-dice3d"),
+      body = node("div", "sg-cube");
+    box.setAttribute("aria-hidden", "true");
+    for (const [v, side] of [[1, "front"], [6, "back"], [3, "right"], [4, "left"], [5, "top"], [2, "bottom"]]) {
+      const face = node("div", "sg-face is-" + side + (v === 1 ? " is-one" : ""));
+      for (let i = 1; i <= 9; i++) face.append(node("i", PIPS[v].includes(i) ? "is-on" : ""));
+      body.append(face);
+    }
+    box.append(body, node("span", "sg-shadow"));
+    let turn = [0, 0];
+    return {
+      box,
+      async roll(value) {
+        const [x, y] = FACE[value],
+          quick = calm() || view.fast;
+        // Whole extra turns so it tumbles, then the face for the number.
+        turn = [turn[0] - (turn[0] % 360) + 720 + x, turn[1] - (turn[1] % 360) + 720 + y];
+        body.style.transition = quick ? "none" : "transform 1000ms cubic-bezier(.2,.75,.25,1)";
+        box.classList.remove("is-rolling");
+        void box.offsetWidth;
+        if (!quick) box.classList.add("is-rolling");
+        body.style.transform = "rotateX(" + turn[0] + "deg) rotateY(" + turn[1] + "deg)";
+        await wait(1050);
+      },
+    };
   }
 
   // ---- A roll ----------------------------------------------------------------------------
@@ -253,32 +303,33 @@
     }
   }
   function say(text, cls = "") {
-    view.say.className = "sg-say " + cls;
-    view.say.textContent = text;
+    const el = view.say;
+    el.className = "sg-say " + cls;
+    el.textContent = text;
+    if (!text) return;
+    void el.offsetWidth;
+    el.classList.add("is-on");
   }
   async function show(events, live) {
     for (const e of events) {
       if (!view?.body.isConnected) return;
       if (e.t === "die") {
-        view.die.textContent = String(e.value);
-        view.die.classList.remove("is-on");
-        void view.die.offsetWidth;
-        view.die.classList.add("is-on");
         say("");
-        await wait(450);
+        await view.die.roll(e.value);
       } else if (e.t === "step") {
         live.pos = e.to;
         place(e.to);
         hud();
-        await wait(160);
+        await wait(190);
       } else if (e.t === "lap") {
         live.laps = e.laps;
-        say(e.laps + "周目　+" + fmt(e.amount) + api.unit() + "とボール", "is-gain");
-        await wait(800);
+        say(e.laps + "周　+" + fmt(e.amount) + api.unit() + "・ボール", "is-gain");
+        await wait(900);
       } else if (e.t === "land") {
-        view.squares[e.square].classList.add("is-flash");
-        setTimeout(() => view?.squares[e.square]?.classList.remove("is-flash"), 500);
-        await wait(250);
+        const sq = view.squares[e.square];
+        sq.classList.add("is-flash");
+        setTimeout(() => sq.classList.remove("is-flash"), 600);
+        await wait(220);
       } else if (e.t === "wheel") {
         if (e.wheel === "bingo") live.stake = 0;
         await wheel(e);
@@ -286,10 +337,10 @@
         live.marks[e.cell] = true;
         const cell = view.cells[e.cell];
         cell.classList.add("is-new");
-        setTimeout(() => cell.classList.remove("is-new"), 1200);
-        say("ボール " + e.number, "is-ball");
+        setTimeout(() => cell.classList.remove("is-new"), 1300);
+        say("BALL  " + e.number, "is-ball");
         hud();
-        await wait(700);
+        await wait(900);
       } else if (e.t === "line") {
         live.lines.push(e.line);
         hud();
@@ -297,83 +348,93 @@
           const cell = view.cells[c];
           cell.style.setProperty("--i", i);
           cell.classList.add("is-run");
-          setTimeout(() => cell.classList.remove("is-run"), 1600);
+          setTimeout(() => cell.classList.remove("is-run"), 1800);
         });
         say("BINGO", "is-hot");
-        await wait(1500);
+        await wait(1600);
       } else if (e.t === "take") {
         say("アクシデント　−" + fmt(e.amount) + api.unit(), "is-loss");
-        await wait(800);
+        await wait(900);
       } else if (e.t === "back") {
-        live.pos = 0;
-        place(0);
-        say("STARTに戻る", "is-loss");
-        await wait(800);
+        live.pos = e.to;
+        place(e.to);
+        hud();
+        say(e.by ? e.by + "マス戻る" : "STARTに戻る", "is-loss");
+        await wait(900);
       } else if (e.t === "sure") {
         say("ボール確定　+" + fmt(e.amount) + api.unit(), "is-gain");
-        await wait(700);
+        await wait(800);
       } else if (e.t === "result") {
         say({ win: "勝ち　+", push: "引き分け　+", lose: "負け　+" }[e.outcome] + fmt(e.amount) + api.unit(), e.outcome === "win" ? "is-gain" : "");
-        await wait(800);
+        await wait(900);
       } else if (e.t === "jackpot") {
         await jackpot(e.kind);
       } else if (e.t === "complete") {
-        say("カードがすべて開きました。新しいカードへ", "is-hot");
-        await wait(1400);
+        say("カードコンプリート", "is-hot");
+        await wait(1500);
       }
     }
   }
 
   // ---- Wheels ----------------------------------------------------------------------------
-  function slotLabel(wheel, slot, base) {
-    if (wheel === "event") return [slot === "ball" ? "ボール" : { blackjack: "BJ", dice: "ダイス", chinchiro: "チンチロ" }[slot], ""];
-    if (wheel === "accident") return slot.start ? ["START", "へ"] : slot.take ? ["−" + slot.take, "倍"] : ["0", "セーフ"];
-    if (slot.ball) return ["●", "ボール"];
-    if (slot.next) return [slot.next === "jp" ? "JP" : "SJP", "CHANCE"];
-    if (slot.jackpot) return [slot.jackpot === "jp" ? "JACKPOT" : "SUPER", slot.jackpot === "jp" ? "" : "JACKPOT"];
-    if (wheel === "normal") return ["×" + slot.x, ""];
-    return ["×" + slot.x, fmt(Math.round(base * slot.x))];
+  // The colour says what a slot is worth before the label is read.
+  function tone(wheel, slot) {
+    if (wheel === "event") return slot === "ball" ? "ball" : "game-" + slot;
+    if (wheel === "accident") return slot.start ? "worst" : slot.back ? "bad" : slot.take >= 1.5 ? "worst" : slot.take ? "bad" : "safe";
+    if (slot.ball) return "ball";
+    if (slot.next || slot.jackpot) return "jackpot";
+    if (wheel !== "normal") {
+      const top = Math.max(...S.RULES.wheels[wheel].map((s) => s.x || 0));
+      return slot.x >= top * 0.6 ? "gold" : slot.x >= top * 0.3 ? "high" : slot.x >= top * 0.12 ? "mid" : "low";
+    }
+    return slot.x >= 3 ? "gold" : slot.x >= 2 ? "champagne" : slot.x >= 1.25 ? "high" : slot.x >= 0.5 ? "mid" : slot.x > 0 ? "low" : "zero";
+  }
+  function slotLabel(wheel, slot) {
+    if (wheel === "event") return slot === "ball" ? "BALL" : { blackjack: "BJ", dice: "DICE", chinchiro: "チンチロ" }[slot];
+    if (wheel === "accident") return slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
+    if (slot.ball) return "●";
+    if (slot.next) return slot.next === "jp" ? "JP" : "SJP";
+    if (slot.jackpot) return slot.jackpot === "jp" ? "JACKPOT" : "SUPER";
+    return "×" + slot.x;
   }
   function wheelSvg(e) {
     const n = e.slots.length,
       r = 100,
-      svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "-110 -110 220 220");
+      ns = "http://www.w3.org/2000/svg",
+      svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "-118 -118 236 236");
     svg.setAttribute("aria-hidden", "true");
-    const disc = document.createElementNS(svg.namespaceURI, "g");
-    disc.setAttribute("class", "sg-disc");
+    const el = (tag, attrs) => {
+      const x = document.createElementNS(ns, tag);
+      for (const [k, v] of Object.entries(attrs)) x.setAttribute(k, v);
+      return x;
+    };
+    svg.append(el("circle", { r: 116, class: "sg-rim" }));
+    // Lamps round the rim: they run while the wheel turns and flash on the result.
+    const lamps = el("g", { class: "sg-lamps" });
+    for (let i = 0; i < 24; i++) {
+      const a = (i * Math.PI * 2) / 24;
+      const lamp = el("circle", { cx: Math.sin(a) * 108, cy: -Math.cos(a) * 108, r: 2.6, class: "sg-lamp" });
+      lamp.style.setProperty("--i", i);
+      lamps.append(lamp);
+    }
+    svg.append(lamps);
+    const disc = el("g", { class: "sg-disc" });
     const at = (deg, rad) => [Math.sin((deg * Math.PI) / 180) * rad, -Math.cos((deg * Math.PI) / 180) * rad];
     e.slots.forEach((slot, i) => {
       const a = (i * 360) / n,
         b = ((i + 1) * 360) / n,
         [x1, y1] = at(a, r),
         [x2, y2] = at(b, r);
-      const path = document.createElementNS(svg.namespaceURI, "path");
-      path.setAttribute("d", "M0 0L" + x1 + " " + y1 + "A" + r + " " + r + " 0 0 1 " + x2 + " " + y2 + "Z");
-      const special = slot === "ball" || slot.ball || slot.next || slot.jackpot || slot.start || (slot.x >= 3 && e.wheel === "normal");
-      path.setAttribute("class", "sg-seg" + (i % 2 ? " is-odd" : "") + (special ? " is-special" : "") + (slot.jackpot ? " is-jackpot" : "") + (slot.x === 0 ? " is-zero" : ""));
-      disc.append(path);
-      const [top, sub] = slotLabel(e.wheel, slot, e.base),
-        mid = (a + b) / 2,
-        [tx, ty] = at(mid, n > 12 ? 78 : 66);
-      const text = document.createElementNS(svg.namespaceURI, "text");
-      text.setAttribute("transform", "translate(" + tx + " " + ty + ") rotate(" + mid + ")");
-      text.setAttribute("class", "sg-seg-text" + (n > 12 ? " is-small" : ""));
-      text.textContent = top;
-      if (sub && n <= 12) {
-        const tspan = document.createElementNS(svg.namespaceURI, "tspan");
-        tspan.setAttribute("x", "0");
-        tspan.setAttribute("dy", "11");
-        tspan.setAttribute("class", "sg-seg-sub");
-        tspan.textContent = sub;
-        text.append(tspan);
-      }
+      disc.append(el("path", { d: "M0 0L" + x1 + " " + y1 + "A" + r + " " + r + " 0 0 1 " + x2 + " " + y2 + "Z", class: "sg-seg is-" + tone(e.wheel, slot) }));
+      const mid = (a + b) / 2,
+        [tx, ty] = at(mid, n > 12 ? 80 : 68),
+        label = slotLabel(e.wheel, slot);
+      const text = el("text", { transform: "translate(" + tx + " " + ty + ") rotate(" + mid + ")", class: "sg-seg-text is-" + tone(e.wheel, slot) + (label.length > 4 ? " is-long" : "") + (n > 12 ? " is-many" : "") });
+      text.textContent = label;
       disc.append(text);
     });
-    const hub = document.createElementNS(svg.namespaceURI, "circle");
-    hub.setAttribute("r", "14");
-    hub.setAttribute("class", "sg-hub");
-    svg.append(disc, hub);
+    svg.append(disc, el("circle", { r: 20, class: "sg-hub" }));
     return { svg, disc };
   }
   async function wheel(e) {
@@ -382,31 +443,47 @@
     layer.className = "sg-layer is-" + e.wheel + (hot ? " is-hot" : "");
     layer.hidden = false;
     const box = node("div", "sg-wheel");
-    box.append(node("p", "sg-wheel-title", e.wheel === "normal" ? fmt(e.base) + api.unit() + " のルーレット" : WHEEL_NAMES[e.wheel]));
+    box.append(node("p", "sg-wheel-title", e.wheel === "normal" ? "BET " + fmt(e.base) + api.unit() : WHEEL_NAMES[e.wheel]));
     const face = node("div", "sg-wheel-face");
     const { svg, disc } = wheelSvg(e);
     face.append(svg, node("i", "sg-pointer"));
     box.append(face);
     const outcome = node("p", "sg-wheel-out");
     box.append(outcome);
-    if (hot && e.wheel !== "jp" && e.wheel !== "sjp") box.append(node("p", "sg-wheel-base", "もと " + fmt(Math.round(e.base)) + api.unit()));
+    if (e.wheel === "bingo") box.append(node("p", "sg-wheel-base", "前のビンゴから " + fmt(Math.round(e.base)) + api.unit()));
     layer.replaceChildren(box);
     const n = e.slots.length,
-      turns = { normal: 3, event: 3, accident: 3, bingo: 4, jp: 5, sjp: 6 }[e.wheel],
+      turns = { normal: 4, event: 4, accident: 4, bingo: 5, jp: 6, sjp: 7 }[e.wheel],
       jitter = (random(60) - 30) / 100,
       angle = turns * 360 - ((e.index + 0.5 + jitter * 0.8) * 360) / n;
-    const time = calm() || view.fast ? 0 : { normal: 1300, event: 1600, accident: 1600, bingo: 2600, jp: 3400, sjp: 4200 }[e.wheel];
-    disc.style.transition = time ? "transform " + time + "ms cubic-bezier(.12,.6,.08,1)" : "none";
+    const time = calm() || view.fast ? 0 : { normal: 1700, event: 2000, accident: 2000, bingo: 3000, jp: 3800, sjp: 4600 }[e.wheel];
+    box.classList.add("is-spinning");
+    disc.style.transition = time ? "transform " + time + "ms cubic-bezier(.15,.6,.1,1)" : "none";
     void disc.getBoundingClientRect();
     disc.style.transform = "rotate(" + angle + "deg)";
     await wait(time + 60);
-    const slot = e.slots[e.index],
-      [top, sub] = slotLabel(e.wheel, slot, e.base);
+    box.classList.remove("is-spinning");
+    const slot = e.slots[e.index];
+    outcome.className = "sg-wheel-out is-" + tone(e.wheel, slot);
     outcome.textContent =
-      e.wheel === "event" ? GAME_NAMES[slot] : e.wheel === "accident" ? (slot.start ? "STARTに戻る" : slot.take ? "−" + fmt(Math.round(e.base * slot.take)) + api.unit() : "セーフ") : e.amount !== undefined ? top + "　+" + fmt(e.amount) + api.unit() + (slot.ball ? "　ボール" : "") : top + " " + sub;
+      e.wheel === "event"
+        ? GAME_NAMES[slot]
+        : e.wheel === "accident"
+          ? slot.start
+            ? "STARTに戻る"
+            : slot.back
+              ? slot.back + "マス戻る"
+              : slot.take
+                ? "−" + fmt(Math.round(e.base * slot.take)) + api.unit()
+                : "セーフ"
+          : slot.next
+            ? slot.next === "jp" ? "JACKPOT CHANCE" : "SUPER JACKPOT CHANCE"
+            : slot.jackpot
+              ? slot.jackpot === "jp" ? "JACKPOT" : "SUPER JACKPOT"
+              : "×" + slot.x + "　+" + fmt(e.amount) + api.unit() + (slot.ball ? "　BALL" : "");
     box.classList.add("is-done");
     if (slot.next || slot.jackpot) layer.classList.add("is-hotter");
-    await wait(hot ? 1300 : 650);
+    await wait(hot || slot.x >= 2 || slot.ball ? 1300 : 750);
     layer.hidden = true;
   }
   async function jackpot(kind) {
@@ -419,12 +496,12 @@
     const value = node("b", "", "0pt");
     box.append(node("p", "sg-jackpot-word", word), value, node("small", "", "プレ版のため、ジャックポットは演出のみです"));
     layer.replaceChildren(box);
-    const steps = calm() || view.fast ? 1 : 40;
+    const steps = calm() || view.fast ? 1 : 50;
     for (let i = 1; i <= steps; i++) {
       value.textContent = fmt(Math.round((amount * i) / steps)) + "pt";
       await wait(40);
     }
-    await wait(2600);
+    await wait(2800);
     layer.hidden = true;
   }
 
@@ -574,7 +651,6 @@
       draw();
     }
   }
-  const PIPS = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
   function die(value) {
     const el = node("span", "cs-die");
     el.dataset.value = value;

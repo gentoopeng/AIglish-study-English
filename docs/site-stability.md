@@ -1410,3 +1410,28 @@ Tests:
 - `tests/sugoroku-model.test.cjs`: shape, each square, lap, line base, jackpot chain, return under 100%.
 - `tests/sugoroku.smoke.cjs`: card, track and jackpots; pay and save; resume; an event game kept and settled; a line spins BINGO.
 - `tests/casino.smoke.cjs`: a 60pt blackjack bet adds 60 to the shared total.
+
+## すごろくビンゴ: livelier, one screen, harder laps (10.22.21.00)
+
+Feedback on the second design: the wheels clumped the same values together, the screen was too plain, the die needed a full animation, laps came too easily, and the game did not fit one screen.
+
+- **Wheels.** `spread()` in the model lays every wheel out so the same slot is spread round it instead of side by side; the model test checks no normal slot sits next to its twin.
+- **Colour.** Each slot is coloured by worth:
+  - gold ×3, champagne ×2, emerald ×1.25–1.5, dark green ×0.5–0.75, charcoal ×0.1–0.25, wine ×0, ivory for a ball
+  - each event game has its own colour
+  - The rim has 24 lamps that run while the wheel turns and flash on the result.
+  - The result pops in its slot's colour.
+- **Board.**
+  - Card numbers are round chips; opened ones are ivory and a finished line is gold.
+  - Squares are tinted by kind (★ event, ! accident).
+  - A brass piece hops along the strip.
+  - The jackpot plates get a slow shine.
+- **Die.** A 3D cube with pips tumbles about two turns, is tossed up and lands on its number.
+- **Harder laps.**
+  - The ring is now 80 squares (9 events, 7 accidents), about 23 rolls a lap.
+  - The accident wheel adds "3マス戻る".
+  - The normal wheels were re-tuned so each bet still returns about 96% (1M-roll simulation: 96.2 / 95.8 / 95.6%).
+- **One screen.**
+  - The card takes the height that is left (100dvh − 350px), the rules moved behind a "?" button, and the counts are one line.
+  - The roll button sits inside 375×667, 375×740 and 390×844; the smoke test checks it.
+  - The counts line is `.sg-status`, because style.css forces every class containing "info" into a column.

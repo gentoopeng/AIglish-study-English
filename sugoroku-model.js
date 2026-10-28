@@ -5,7 +5,7 @@
 //              more ball slots, the die itself is the same for every bet
 //   event    – a four-way wheel: blackjack, dice poker or chinchiro is played once for the bet
 //              (a win also gives a ball, a loss gives back half), or a sure ball (×1.5 back)
-//   accident – a wheel: lose 0–2× the bet more, or go back to START
+//   accident – a wheel: lose 0–2× the bet more, go back three squares, or go back to START
 // Passing START gives a ball and a lap prize that does not depend on the bet.
 // A ball opens one number on a 7×7 card (48 numbers, the middle free). A new line spins the
 // bingo wheel on what was bet since the last line; two of its 20 slots lead to the jackpot
@@ -16,30 +16,51 @@
 // Every amount lives in RULES so it can be tuned. `random(n)` gives 0..n-1.
 (function (root) {
   "use strict";
+  // Lays a wheel out so the same slot is spread round it instead of sitting side by side: each
+  // kind, most common first, takes the free places nearest to evenly spaced points.
+  function spread(list) {
+    const groups = new Map();
+    for (const slot of list) {
+      const key = JSON.stringify(slot);
+      groups.set(key, (groups.get(key) || []).concat([slot]));
+    }
+    const out = Array(list.length).fill(null),
+      n = list.length;
+    let offset = 0;
+    for (const items of [...groups.values()].sort((a, b) => b.length - a.length)) {
+      items.forEach((slot, k) => {
+        let at = Math.round(offset + (k * n) / items.length) % n;
+        while (out[at]) at = (at + 1) % n;
+        out[at] = slot;
+      });
+      offset += 1.7;
+    }
+    return out;
+  }
   const N = (x, n = 1) => Array(n).fill({ x });
   const BALL = (x = 1, n = 1) => Array(n).fill({ x, ball: true });
   const RULES = {
     costs: [10, 50, 100],
-    // The ring: 50 squares. S start, n normal, E event, A accident.
-    board: "SnnnEnnnnAnnnEnnnnnnAnnEnnnnnAnnnnEnnnAnnnnEnnnnnA",
+    // The ring: 80 squares, about 23 rolls a lap. S start, n normal, E event, A accident.
+    board: Array.from({ length: 80 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
     // Normal wheels by bet: 24 slots each, a ball slot also pays back the bet.
     normal: {
-      10: [...N(3), ...N(2), ...N(1.5, 2), ...N(1.25, 3), ...N(0.75, 3), ...N(0.5, 5), ...N(0.25, 5), ...N(0.1, 2), ...N(0, 1), ...BALL(1, 1)],
-      50: [...N(3), ...N(2, 2), ...N(1.5, 2), ...N(1.25, 3), ...N(0.75, 5), ...N(0.5, 4), ...N(0.25, 2), ...N(0.1, 2), ...N(0, 1), ...BALL(1, 2)],
-      100: [...N(3), ...N(2), ...N(1.5, 3), ...N(1.25, 3), ...N(0.75, 6), ...N(0.5, 3), ...N(0.25, 1), ...N(0.1, 2), ...N(0, 1), ...BALL(1, 3)],
+      10: spread([...N(3), ...N(2), ...N(1.5, 2), ...N(1.25, 3), ...N(0.75, 4), ...N(0.5, 5), ...N(0.25, 4), ...N(0.1, 2), ...N(0, 1), ...BALL(1, 1)]),
+      50: spread([...N(3), ...N(2, 2), ...N(1.5, 2), ...N(1.25, 3), ...N(0.75, 4), ...N(0.5, 4), ...N(0.25, 3), ...N(0.1, 2), ...N(0, 1), ...BALL(1, 2)]),
+      100: spread([...N(3), ...N(2), ...N(1.5, 2), ...N(1.25, 4), ...N(0.75, 5), ...N(0.5, 3), ...N(0.25, 2), ...N(0.1, 2), ...N(0, 1), ...BALL(1, 3)]),
     },
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
     eventPay: { lose: 0.5, push: 1, sure: 1.5 },
-    // Accident wheel: take: multiples of the bet taken on top, start: back to START.
-    accident: [{ take: 0 }, { take: 0.5 }, { take: 1 }, { take: 1.5 }, { take: 2 }, { start: true }, { take: 0.5 }, { start: true }],
+    // Accident wheel: take: multiples of the bet taken on top, back: squares back, start: back to START.
+    accident: [{ take: 0 }, { take: 0.5 }, { back: 3 }, { take: 1 }, { start: true }, { take: 1.5 }, { back: 3 }, { take: 2 }, { take: 0.5 }, { start: true }],
     // The lap prize: the same for every bet, a little more with every lap, up to a ceiling.
     lap: (laps) => Math.min(20, 5 + Math.floor(Math.sqrt(laps) / 2)),
     // Wheels after a line. x: multiples of what was bet since the last line.
     wheels: {
-      bingo: [...N(0.02, 4), ...N(0.05, 4), ...N(0.08, 3), ...N(0.1, 3), ...N(0.15, 2), ...N(0.2, 1), ...N(0.3, 1), ...Array(2).fill({ next: "jp" })],
-      jp: [...N(0.2, 4), ...N(0.3, 4), ...N(0.4, 3), ...N(0.5, 3), ...N(0.8, 1), ...N(1, 1), ...Array(2).fill({ jackpot: "jp" }), ...Array(2).fill({ next: "sjp" })],
-      sjp: [...N(1, 4), ...N(1.5, 4), ...N(2, 4), ...N(2.5, 3), ...N(3, 2), ...N(5, 1), ...Array(2).fill({ jackpot: "sjp" })],
+      bingo: spread([...N(0.02, 4), ...N(0.05, 4), ...N(0.08, 3), ...N(0.1, 3), ...N(0.15, 2), ...N(0.2, 1), ...N(0.3, 1), ...Array(2).fill({ next: "jp" })]),
+      jp: spread([...N(0.2, 4), ...N(0.3, 4), ...N(0.4, 3), ...N(0.5, 3), ...N(0.8, 1), ...N(1, 1), ...Array(2).fill({ jackpot: "jp" }), ...Array(2).fill({ next: "sjp" })]),
+      sjp: spread([...N(1, 4), ...N(1.5, 4), ...N(2, 4), ...N(2.5, 3), ...N(3, 2), ...N(5, 1), ...Array(2).fill({ jackpot: "sjp" })]),
     },
   };
   const SIZE = RULES.board.length,
@@ -178,7 +199,10 @@
       events.push({ t: "wheel", wheel: "accident", slots: RULES.accident, index, base: cost });
       if (slot.start) {
         state.pos = 0;
-        events.push({ t: "back" });
+        events.push({ t: "back", to: 0 });
+      } else if (slot.back) {
+        state.pos = Math.max(0, state.pos - slot.back);
+        events.push({ t: "back", to: state.pos, by: slot.back });
       } else if (slot.take) {
         const amount = money(cost * slot.take);
         gain -= amount;
