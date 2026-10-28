@@ -31,7 +31,14 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
     const screen = page.locator("dialog.casino-screen.is-sugoroku[open]");
     await screen.locator(".sg-card").waitFor();
     assert.equal(await screen.locator(".sg-cell").count(), 49);
-    assert.equal(await screen.locator(".sg-sq").count(), 50);
+    assert.equal(await screen.locator(".sg-sq").count(), 80);
+    // The whole game fits the screen: the roll button is in view without scrolling.
+    const fits = await page.evaluate(() => {
+      const go = document.querySelector(".sg-go").getBoundingClientRect(),
+        card = document.querySelector(".sg-card").getBoundingClientRect();
+      return go.bottom <= innerHeight && card.top >= 0 && card.width > 230;
+    });
+    assert.ok(fits, "fits one screen");
     assert.equal(await screen.locator('[data-pot="jp"] b').innerText(), "1,000pt");
     const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth || [...document.querySelectorAll(".sg-cell,.sg-cost,.sg-go")].some((el) => el.scrollWidth > el.clientWidth + 1));
     assert.equal(wide, false);
@@ -108,13 +115,13 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
       s.marks = s.marks.map((_, i) => i !== 6);
       s.lines = [];
       s.stake = 400;
-      s.pos = 48;
+      s.pos = 78;
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").waitFor();
     assert.ok((await screen.locator(".sg-cell.is-reach").count()) >= 1);
-    // From square 48 any die passes START, and the lap gives a ball.
+    // From square 78 any die passes START, and the lap gives a ball.
     await screen.locator("[data-sg-roll]").click();
     await screen.locator(".sg-layer.is-bingo").waitFor({ state: "attached" });
     await settled();

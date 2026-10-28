@@ -19,7 +19,7 @@ const at = (kind, from = 1) => {
 };
 
 test("the board, card and wheels have the agreed shape", () => {
-  assert.equal(S.SIZE, 50);
+  assert.equal(S.SIZE, 80);
   assert.equal(S.kindAt(0), "start");
   const s = S.newState(rng(1));
   assert.equal(s.card.length, 49);
@@ -29,6 +29,11 @@ test("the board, card and wheels have the agreed shape", () => {
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     for (const x of [3, 2, 1.5, 1.25, 0.75, 0.5, 0.25, 0.1, 0]) assert.ok(values.has(x), cost + " has ×" + x);
+  }
+  // The same multiple never sits next to itself on the normal wheels.
+  for (const cost of S.RULES.costs) {
+    const w = S.RULES.normal[cost];
+    assert.ok(w.every((slot, i) => JSON.stringify(slot) !== JSON.stringify(w[(i + 1) % w.length])), cost + " is spread");
   }
   // Bigger bets carry more ball slots on the same die.
   const balls = (cost) => S.RULES.normal[cost].filter((x) => x.ball).length;
@@ -58,7 +63,7 @@ test("a normal square spins its wheel on the bet; a ball slot opens a number", (
 });
 
 test("passing START gives a lap prize that does not depend on the bet, and a ball", () => {
-  const s = { ...S.newState(seq([0])), pos: 48 };
+  const s = { ...S.newState(seq([0])), pos: S.SIZE - 2 };
   const small = S.roll(s, 10, seq([2, 0, 0])),
     big = S.roll(s, 100, seq([2, 0, 0]));
   const lap = (out) => out.events.find((e) => e.t === "lap");
@@ -93,7 +98,7 @@ test("an event square waits for its game; win, push and loss pay as agreed", () 
   assert.ok(sure.events.some((e) => e.t === "ball"));
 });
 
-test("an accident takes up to twice the bet or sends the piece to START", () => {
+test("an accident takes up to twice the bet, or sends the piece back three squares or to START", () => {
   const s = S.newState(seq([0]));
   const square = at("accident");
   s.pos = square - 1;
@@ -103,6 +108,9 @@ test("an accident takes up to twice the bet or sends the piece to START", () => 
   const home = S.roll(s, 50, seq([0, back]));
   assert.equal(home.state.pos, 0);
   assert.equal(home.gain, 0);
+  const three = S.roll(s, 50, seq([0, S.RULES.accident.findIndex((x) => x.back === 3)]));
+  assert.equal(three.state.pos, square - 3);
+  assert.deepEqual(three.events.at(-1), { t: "back", to: square - 3, by: 3 });
 });
 
 test("a new line spins the bingo wheel on what was bet since the last line", () => {

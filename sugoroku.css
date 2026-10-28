@@ -1,113 +1,158 @@
-/* すごろくビンゴ: quiet by default — dark green felt, ivory figures, one thin gold line — and warm
-   only for a line, the jackpot wheels and a jackpot. */
+/* すごろくビンゴ: a night table — dark green felt, brass and ivory. The wheels carry the colour
+   (gold for the big multiples, wine for nothing); BINGO and the jackpot wheels dim the room.
+   Everything fits one phone screen: the card takes whatever height is left. */
 .casino-pic .is-sg-ring{fill:#13211c;stroke:#c4a364;stroke-width:1.2;}
 .casino-pic .is-sg-mark circle{fill:#c4a364;}
 .casino-pic .is-sg-piece{fill:#ece4cf;}
 .casino-pic .is-sg-jp{fill:#c4a364;font:600 9px Georgia,serif;letter-spacing:.1em;}
-.casino-screen.is-sugoroku{background:#0c100f;}
-.sg-body{position:relative;gap:12px;--gold:#c4a364;--ivory:#ece4cf;--muted:#8b877b;--line:rgba(196,163,100,.32);--felt:#12201b;}
+.casino-screen.is-sugoroku{background:radial-gradient(ellipse 120% 70% at 50% 35%,#16302a 0%,#0d1a17 55%,#080d0c 100%);}
+.casino-screen.is-sugoroku .cs-bar{margin-bottom:8px;}
+.sg-body{position:relative;gap:9px;--gold:#cfae6a;--brass:#a8884a;--ivory:#f0e8d4;--muted:#9a9584;--line:rgba(207,174,106,.38);--felt:#132a23;--wine:#6e2a2c;}
 
 /* Jackpots */
-.sg-pots{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.sg-pot{padding:9px 10px 8px;border:1px solid var(--line);border-radius:10px;text-align:center;}
-.sg-pot small{display:block;color:var(--gold);font:600 9px/1.2 system-ui,sans-serif;letter-spacing:.24em;}
-.sg-pot b{display:block;margin-top:3px;color:var(--ivory);font:500 19px/1.2 Georgia,"Yu Mincho",serif;font-variant-numeric:tabular-nums;}
+.sg-pots{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:stretch;}
+.sg-pot{position:relative;padding:5px 8px 6px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(180deg,rgba(207,174,106,.12),rgba(207,174,106,.02));text-align:center;overflow:hidden;}
+.sg-pot::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 40%,rgba(255,240,200,.18) 50%,transparent 60%);transform:translateX(-100%);animation:sg-shine 7s ease-in-out infinite;}
+.sg-pot.is-sjp::after{animation-delay:3.5s;}
+@keyframes sg-shine{0%,80%{transform:translateX(-100%);}100%{transform:translateX(100%);}}
+.sg-pot small{display:block;color:var(--gold);font:600 8px/1.2 system-ui,sans-serif;letter-spacing:.22em;}
+.sg-pot b{display:block;color:var(--ivory);font:500 17px/1.2 Georgia,"Yu Mincho",serif;font-variant-numeric:tabular-nums;}
+.sg-help{width:34px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--gold);font:600 15px Georgia,serif;cursor:pointer;}
 
-/* The card */
-.sg-card{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--felt);}
-.sg-cell{position:relative;display:grid;place-items:center;aspect-ratio:1;border-radius:4px;background:rgba(236,228,207,.06);color:var(--ivory);font:500 clamp(12px,3.6vw,15px)/1 Georgia,"Yu Mincho",serif;font-variant-numeric:tabular-nums;}
+/* The card: as large as the screen leaves room for */
+.sg-card-wrap{position:relative;width:min(100%,calc(100dvh - 350px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));min-width:240px;margin:0 auto;}
+.sg-card{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:7px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(160deg,#183429,#0f221c);box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 24px rgba(0,0,0,.35);}
+.sg-cell{position:relative;display:grid;place-items:center;aspect-ratio:1;border-radius:50%;background:rgba(240,232,212,.05);color:rgba(240,232,212,.82);font:500 clamp(11px,3.4vw,15px)/1 Georgia,"Yu Mincho",serif;font-variant-numeric:tabular-nums;transition:background .3s,color .3s;}
 .sg-cell span{position:relative;z-index:1;}
-.sg-cell.is-free{color:var(--gold);font:600 8px/1 system-ui,sans-serif;letter-spacing:.12em;}
-.sg-cell.is-on:not(.is-free){background:var(--ivory);color:#13211c;}
-.sg-cell.is-reach{box-shadow:inset 0 0 0 1px var(--gold);}
-.sg-cell.is-line:not(.is-free){background:var(--gold);color:#13211c;}
-.sg-cell.is-new{animation:sg-new 1.1s ease-out;}
-@keyframes sg-new{0%{transform:scale(1.35);box-shadow:0 0 0 2px var(--ivory);}100%{transform:none;box-shadow:none;}}
-.sg-cell.is-run{animation:sg-run 1.4s ease-out calc(var(--i,0) * 90ms) both;}
-@keyframes sg-run{0%{box-shadow:0 0 0 0 rgba(224,190,120,0);}30%{box-shadow:0 0 14px 3px rgba(224,190,120,.75);transform:scale(1.08);}100%{box-shadow:none;transform:none;}}
+.sg-cell.is-free{border-radius:50%;background:radial-gradient(circle at 35% 30%,#e8cf93,#a8884a);color:#2a1f0c;font:700 7px/1 system-ui,sans-serif;letter-spacing:.08em;}
+.sg-cell.is-on:not(.is-free){background:radial-gradient(circle at 35% 30%,#fbf6e8,#d9ceb0 70%,#b9ab86);color:#1b2a24;box-shadow:0 1px 2px rgba(0,0,0,.45);}
+.sg-cell.is-reach{box-shadow:0 0 0 1.5px var(--gold);animation:sg-reach 1.6s ease-in-out infinite;}
+@keyframes sg-reach{50%{box-shadow:0 0 0 1.5px var(--gold),0 0 10px rgba(207,174,106,.6);}}
+.sg-cell.is-line:not(.is-free){background:radial-gradient(circle at 35% 30%,#f3dc9f,#c49a48 70%,#8e6c2c);color:#241a08;}
+.sg-cell.is-new{animation:sg-new 1.2s cubic-bezier(.2,1.4,.4,1);}
+@keyframes sg-new{0%{transform:scale(2);opacity:0;}45%{transform:scale(.9);opacity:1;}100%{transform:none;}}
+.sg-cell.is-run{animation:sg-run 1.6s ease-out calc(var(--i,0) * 110ms) both;}
+@keyframes sg-run{0%{transform:none;}25%{transform:scale(1.18);box-shadow:0 0 16px 4px rgba(240,205,130,.85);}100%{transform:none;}}
+.sg-say{position:absolute;left:50%;bottom:10%;z-index:2;margin:0;padding:7px 16px;border-radius:999px;background:rgba(8,13,12,.86);color:var(--ivory);font:600 14px/1.3 system-ui,sans-serif;white-space:nowrap;transform:translateX(-50%);opacity:0;pointer-events:none;}
+.sg-say.is-on{animation:sg-say 2s ease-out forwards;}
+@keyframes sg-say{0%{opacity:0;transform:translate(-50%,8px);}10%,75%{opacity:1;transform:translate(-50%,0);}100%{opacity:0;}}
+.sg-say.is-gain{color:#b9e0c3;}
+.sg-say.is-loss{color:#e8a99a;}
+.sg-say.is-ball{color:var(--gold);letter-spacing:.12em;}
+.sg-say.is-hot{top:42%;bottom:auto;padding:10px 26px;border:1px solid var(--gold);color:var(--gold);font:500 26px/1.2 Georgia,"Yu Mincho",serif;letter-spacing:.2em;box-shadow:0 0 30px rgba(207,174,106,.45);}
 
-/* Die and the line of words */
-.sg-stage{display:flex;align-items:center;gap:12px;min-height:52px;padding:0 4px;}
-.sg-die{display:grid;place-items:center;flex:0 0 46px;height:46px;border:1px solid var(--line);border-radius:10px;color:var(--ivory);font:500 26px/1 Georgia,serif;}
-.sg-die:empty{border-style:dashed;opacity:.5;}
-.sg-die.is-on{animation:sg-die .35s ease-out;}
-@keyframes sg-die{0%{transform:scale(.6);opacity:0;}100%{transform:none;opacity:1;}}
-.sg-say{flex:1;margin:0;color:var(--ivory);font:500 15px/1.4 system-ui,sans-serif;}
-.sg-say.is-gain{color:#a9cdb2;}
-.sg-say.is-loss{color:#d39a8d;}
-.sg-say.is-ball{color:var(--ivory);}
-.sg-say.is-hot{color:var(--gold);font:600 20px/1.3 Georgia,"Yu Mincho",serif;letter-spacing:.12em;}
+/* The die and the track */
+.sg-boardrow{display:flex;align-items:center;gap:10px;height:78px;}
+.sg-dice3d{position:relative;flex:0 0 58px;height:58px;perspective:360px;}
+.sg-cube{position:absolute;inset:4px;transform-style:preserve-3d;}
+.sg-face{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:6px;box-sizing:border-box;border-radius:8px;background:linear-gradient(145deg,#fffdf6,#e6dcc3);box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);backface-visibility:hidden;}
+.sg-face i{width:8px;height:8px;margin:auto;border-radius:50%;}
+.sg-face i.is-on{background:#1d2622;}
+.sg-face.is-one i.is-on{width:10px;height:10px;background:#b4232a;}
+.sg-face.is-front{transform:translateZ(25px);}
+.sg-face.is-back{transform:rotateY(180deg) translateZ(25px);}
+.sg-face.is-right{transform:rotateY(90deg) translateZ(25px);}
+.sg-face.is-left{transform:rotateY(-90deg) translateZ(25px);}
+.sg-face.is-top{transform:rotateX(90deg) translateZ(25px);}
+.sg-face.is-bottom{transform:rotateX(-90deg) translateZ(25px);}
+.sg-shadow{position:absolute;left:8px;right:8px;bottom:-6px;height:6px;border-radius:50%;background:rgba(0,0,0,.45);filter:blur(3px);}
+.sg-dice3d.is-rolling .sg-cube{animation:sg-toss 1s cubic-bezier(.3,.7,.4,1);}
+.sg-dice3d.is-rolling .sg-shadow{animation:sg-toss-shadow 1s cubic-bezier(.3,.7,.4,1);}
+@keyframes sg-toss{0%{translate:0 0;}30%{translate:0 -30px;}60%{translate:0 0;}75%{translate:0 -8px;}90%{translate:0 0;}}
+@keyframes sg-toss-shadow{30%{transform:scale(.55);opacity:.4;}60%{transform:none;opacity:1;}}
 
-/* The track: a strip of squares that slides with the piece */
-.sg-track{position:relative;overflow:hidden;padding:4px 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent);mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent);}
-.sg-lane{display:flex;gap:6px;width:max-content;padding:0 45%;}
-.sg-sq{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:54px;height:62px;border:1px solid rgba(236,228,207,.12);border-radius:8px;color:var(--muted);transition:border-color .2s,color .2s;}
-.sg-sq small{position:absolute;top:3px;left:5px;font:500 8px/1 system-ui,sans-serif;opacity:.7;}
-.sg-sq b{font:500 13px/1 Georgia,serif;}
-.sg-sq em{font:normal 600 8px/1 system-ui,sans-serif;letter-spacing:.04em;}
-.sg-sq.is-start{color:var(--gold);}
-.sg-sq.is-start b{font-size:10px;letter-spacing:.1em;}
-.sg-sq.is-event{border-color:rgba(196,163,100,.45);color:var(--gold);}
-.sg-sq.is-event b{font-size:10px;letter-spacing:.1em;}
-.sg-sq.is-accident{border-color:rgba(211,154,141,.4);color:#d39a8d;}
-.sg-sq.is-here{border-color:var(--ivory);color:var(--ivory);background:rgba(236,228,207,.08);}
-.sg-sq.is-here::after{content:"";position:absolute;bottom:-1px;left:50%;width:18px;height:2px;margin-left:-9px;background:var(--ivory);}
-.sg-sq.is-flash{background:rgba(236,228,207,.16);}
-.sg-lap{margin:-6px 0 0;color:var(--muted);font-size:11px;text-align:center;font-variant-numeric:tabular-nums;}
+.sg-track{position:relative;flex:1;min-width:0;height:78px;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 10%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 10%,#000 88%,transparent);}
+.sg-lane{position:relative;display:flex;align-items:flex-end;gap:5px;width:max-content;height:100%;padding:0 60% 0 35%;box-sizing:content-box;}
+.sg-sq{position:relative;display:grid;place-items:center;flex:0 0 46px;height:46px;border-radius:10px;background:rgba(240,232,212,.06);color:var(--muted);box-shadow:inset 0 -2px 0 rgba(0,0,0,.25);}
+.sg-sq small{position:absolute;top:2px;left:4px;font:500 7px/1 system-ui,sans-serif;opacity:.6;}
+.sg-sq b{font:700 13px/1 Georgia,serif;}
+.sg-sq.is-normal b::before{content:"";display:block;width:12px;height:12px;border-radius:50%;background:conic-gradient(#c49a48 0 25%,#1f5e47 0 50%,#6e2a2c 0 62%,#2a3a34 0);opacity:.75;}
+.sg-sq.is-start{background:linear-gradient(160deg,#c9a85f,#8e6c2c);color:#241a08;}
+.sg-sq.is-start b{font-size:8px;letter-spacing:.08em;}
+.sg-sq.is-event{background:linear-gradient(160deg,rgba(207,174,106,.4),rgba(207,174,106,.12));color:#f6dfa6;}
+.sg-sq.is-accident{background:linear-gradient(160deg,rgba(150,52,52,.55),rgba(110,42,44,.3));color:#f1b5a7;}
+.sg-sq.is-here{box-shadow:0 0 0 1.5px var(--ivory),inset 0 -2px 0 rgba(0,0,0,.25);}
+.sg-sq.is-flash{animation:sg-flash .6s ease-out;}
+@keyframes sg-flash{0%{filter:brightness(2);transform:scale(1.12);}100%{filter:none;transform:none;}}
+.sg-piece{position:absolute;left:0;top:4px;width:22px;height:22px;margin-left:-11px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#e7dcc0 55%,#a8884a);box-shadow:0 3px 5px rgba(0,0,0,.5),0 0 0 1.5px #8e6c2c;transition:transform .17s ease-out;}
+.sg-piece.is-hop{animation:sg-hop .19s ease-out;}
+@keyframes sg-hop{50%{translate:0 -10px;}}
 
-/* Counts */
-.sg-info{display:grid;gap:5px;margin:0;padding:10px 12px;border-top:1px solid rgba(236,228,207,.08);border-bottom:1px solid rgba(236,228,207,.08);font-size:12px;}
-.sg-info div{display:flex;justify-content:space-between;gap:12px;}
-.sg-info dt{color:var(--muted);}
-.sg-info dd{margin:0;color:var(--ivory);text-align:right;font-variant-numeric:tabular-nums;}
+.sg-body .sg-status{display:block;margin:0;color:var(--muted);font-size:11px;text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sg-body .sg-status span,.sg-body .sg-status b{display:inline;}
+.sg-status b{color:var(--ivory);font-weight:600;}
 
 /* Controls */
-.sg-controls{display:grid;gap:8px;}
-.sg-costs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
-.sg-cost{min-height:40px;border:1px solid rgba(236,228,207,.16);border-radius:10px;background:transparent;color:var(--muted);font:500 14px Georgia,serif;cursor:pointer;}
-.sg-cost[aria-checked=true]{border-color:var(--gold);color:var(--ivory);}
-.sg-cost:disabled{opacity:.5;}
-.sg-go{min-height:54px;border:1px solid var(--gold);border-radius:12px;background:#1a2a24;color:var(--ivory);font:600 16px system-ui,sans-serif;letter-spacing:.12em;cursor:pointer;}
-.sg-go:active:not(:disabled){background:#22362f;}
-.sg-go:disabled{opacity:.4;cursor:default;}
-.sg-note{margin:0;color:var(--muted);font-size:11px;text-align:center;}
+.sg-controls{display:grid;gap:7px;}
+.sg-costs{display:grid;grid-template-columns:repeat(3,1fr);padding:3px;border:1px solid rgba(240,232,212,.14);border-radius:12px;}
+.sg-cost{min-height:34px;border:0;border-radius:9px;background:transparent;color:var(--muted);font:500 14px Georgia,serif;cursor:pointer;transition:background .2s,color .2s;}
+.sg-cost[aria-checked=true]{background:linear-gradient(180deg,#d6b773,#a8884a);color:#1f1608;font-weight:700;}
+.sg-cost:disabled:not([aria-checked=true]){opacity:.5;}
+.sg-go{min-height:52px;border:0;border-radius:14px;background:linear-gradient(180deg,#e2c582,#b08d48 60%,#8e6c2c);color:#1f1608;font:700 17px system-ui,sans-serif;letter-spacing:.14em;box-shadow:0 4px 0 #5e4719,0 10px 20px rgba(0,0,0,.4);cursor:pointer;}
+.sg-go:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 #5e4719;}
+.sg-go:disabled{filter:grayscale(.6) brightness(.6);cursor:default;}
 
 /* Wheels and games over the screen */
-.sg-layer{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:16px;background:rgba(6,9,8,.55);transition:background .4s;}
+.sg-layer{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:16px;background:rgba(5,9,8,.5);}
 .sg-layer[hidden]{display:none;}
-.sg-layer.is-hot{background:rgba(4,6,5,.82);}
-.sg-wheel,.sg-game,.sg-jackpot{width:min(100%,380px);padding:18px 16px;border:1px solid var(--line);border-radius:16px;background:#101816;color:var(--ivory);text-align:center;box-sizing:border-box;}
+.sg-layer.is-hot{background:rgba(3,5,4,.84);}
+.sg-layer.is-hotter{background:radial-gradient(circle at 50% 45%,rgba(120,90,30,.45),rgba(3,5,4,.92) 70%);}
+.sg-wheel,.sg-game,.sg-jackpot,.sg-sheet{width:min(100%,380px);padding:16px 14px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,#152b24,#0d1a16);color:var(--ivory);text-align:center;box-sizing:border-box;box-shadow:0 18px 40px rgba(0,0,0,.5);}
+.sg-wheel{animation:sg-up .25s ease-out;}
+@keyframes sg-up{from{opacity:0;transform:translateY(14px) scale(.96);}}
 .sg-layer.is-hot .sg-wheel{border-color:var(--gold);}
-.sg-layer.is-hotter .sg-wheel{box-shadow:0 0 40px rgba(224,190,120,.35);}
-.sg-wheel-title{margin:0 0 10px;color:var(--gold);font:600 13px/1.3 system-ui,sans-serif;letter-spacing:.2em;}
-.sg-layer.is-hot .sg-wheel-title{font:500 20px/1.3 Georgia,"Yu Mincho",serif;letter-spacing:.14em;}
-.sg-wheel-face{position:relative;width:min(70vw,250px);aspect-ratio:1;margin:0 auto;}
-.sg-layer.is-hot .sg-wheel-face{width:min(78vw,290px);}
-.sg-wheel-face svg{display:block;width:100%;height:100%;}
+.sg-wheel-title{margin:0 0 8px;color:var(--gold);font:600 13px/1.3 Georgia,"Yu Mincho",serif;letter-spacing:.22em;}
+.sg-layer.is-hot .sg-wheel-title{font-size:20px;letter-spacing:.16em;}
+.sg-wheel-face{position:relative;width:min(72vw,270px);aspect-ratio:1;margin:0 auto;}
+.sg-layer.is-hot .sg-wheel-face{width:min(80vw,300px);}
+.sg-wheel-face svg{display:block;width:100%;height:100%;overflow:visible;}
+.sg-rim{fill:#2b2213;stroke:#cfae6a;stroke-width:2;}
+.sg-lamp{fill:#5a4a2a;}
+.sg-wheel.is-spinning .sg-lamp{animation:sg-lamp .6s linear infinite;animation-delay:calc(var(--i) * -25ms);}
+@keyframes sg-lamp{0%,30%{fill:#ffe9b0;}31%,100%{fill:#5a4a2a;}}
+.sg-wheel.is-done .sg-lamp{animation:sg-lamp-done .5s steps(1) 3;fill:#ffe9b0;}
+@keyframes sg-lamp-done{50%{fill:#5a4a2a;}}
 .sg-disc{transform-origin:0 0;}
-.sg-seg{fill:#173027;stroke:rgba(196,163,100,.5);stroke-width:.6;}
-.sg-seg.is-odd{fill:#0f1c18;}
-.sg-seg.is-zero{fill:#2a1d1a;}
-.sg-seg.is-special{fill:#3a3020;}
-.sg-seg.is-jackpot{fill:#6b5428;}
-.sg-hub{fill:#0c100f;stroke:var(--gold);stroke-width:1;}
-.sg-seg-text{fill:var(--ivory);font:500 10px Georgia,serif;text-anchor:middle;dominant-baseline:middle;}
-.sg-seg-text.is-small{font-size:7.5px;}
-.sg-seg-sub{fill:var(--muted);font:600 6px system-ui,sans-serif;}
-.sg-pointer{position:absolute;top:-4px;left:50%;width:0;height:0;margin-left:-7px;border:7px solid transparent;border-top:13px solid var(--ivory);}
-.sg-wheel-out{min-height:1.4em;margin:12px 0 0;color:var(--ivory);font:500 17px/1.4 Georgia,"Yu Mincho",serif;}
-.sg-wheel.is-done .sg-wheel-out{animation:sg-die .3s ease-out;}
-.sg-layer.is-hot .sg-wheel-out{color:var(--gold);font-size:20px;}
-.sg-wheel-base{margin:4px 0 0;color:var(--muted);font-size:11px;}
+.sg-seg{stroke:rgba(20,14,6,.7);stroke-width:.8;}
+.sg-seg.is-gold,.sg-seg.is-jackpot{fill:#cfa24c;}
+.sg-seg.is-champagne{fill:#9c7f45;}
+.sg-seg.is-high{fill:#1f6b50;}
+.sg-seg.is-mid{fill:#1a4339;}
+.sg-seg.is-low{fill:#1d2a27;}
+.sg-seg.is-zero,.sg-seg.is-worst{fill:#6e2a2c;}
+.sg-seg.is-bad{fill:#4a2526;}
+.sg-seg.is-safe{fill:#1f6b50;}
+.sg-seg.is-ball{fill:#efe6cf;}
+.sg-seg.is-game-blackjack{fill:#1f6b50;}
+.sg-seg.is-game-dice{fill:#1d3a5c;}
+.sg-seg.is-game-chinchiro{fill:#6b3f22;}
+.sg-hub{fill:#1b140a;stroke:#cfae6a;stroke-width:2;}
+.sg-seg-text{fill:#f0e8d4;font:600 11px Georgia,serif;text-anchor:middle;dominant-baseline:middle;}
+.sg-seg-text.is-many{font-size:9px;}
+.sg-seg-text.is-long{font-size:7px;letter-spacing:.04em;}
+.sg-seg-text.is-gold,.sg-seg-text.is-jackpot,.sg-seg-text.is-champagne,.sg-seg-text.is-ball{fill:#1f1608;}
+.sg-pointer{position:absolute;top:-6px;left:50%;width:0;height:0;margin-left:-9px;border:9px solid transparent;border-top:16px solid var(--ivory);filter:drop-shadow(0 2px 2px rgba(0,0,0,.6));}
+.sg-wheel-out{min-height:1.4em;margin:10px 0 0;color:var(--ivory);font:500 19px/1.4 Georgia,"Yu Mincho",serif;}
+.sg-wheel.is-done .sg-wheel-out{animation:sg-pop .4s cubic-bezier(.2,1.5,.4,1);}
+@keyframes sg-pop{from{transform:scale(.6);opacity:0;}}
+.sg-wheel-out.is-gold,.sg-wheel-out.is-jackpot,.sg-wheel-out.is-champagne{color:var(--gold);font-size:24px;}
+.sg-wheel-out.is-zero,.sg-wheel-out.is-worst,.sg-wheel-out.is-bad{color:#e8a99a;}
+.sg-wheel-out.is-ball{color:var(--ivory);letter-spacing:.06em;}
+.sg-wheel-base{margin:2px 0 0;color:var(--muted);font-size:11px;}
 
-.sg-jackpot{padding:30px 16px;border-color:var(--gold);box-shadow:0 0 60px rgba(224,190,120,.4);}
-.sg-jackpot-word{margin:0;color:var(--gold);font:500 24px/1.3 Georgia,"Yu Mincho",serif;letter-spacing:.2em;}
-.sg-jackpot b{display:block;margin:14px 0;color:var(--ivory);font:500 36px/1.2 Georgia,serif;font-variant-numeric:tabular-nums;}
+.sg-jackpot{padding:34px 16px;border-color:var(--gold);box-shadow:0 0 80px rgba(230,190,110,.45);animation:sg-up .4s ease-out;}
+.sg-jackpot-word{margin:0;color:var(--gold);font:500 26px/1.3 Georgia,"Yu Mincho",serif;letter-spacing:.22em;}
+.sg-jackpot b{display:block;margin:14px 0;color:var(--ivory);font:500 38px/1.2 Georgia,serif;font-variant-numeric:tabular-nums;}
 .sg-jackpot small{color:var(--muted);font-size:11px;}
 
+.sg-sheet{text-align:left;}
+.sg-sheet-title{margin:0 0 6px;color:var(--gold);font:600 15px Georgia,"Yu Mincho",serif;text-align:center;}
+.sg-sheet ul{max-height:55dvh;overflow:auto;margin:0 0 12px;padding-left:18px;color:#d9d2c0;font-size:12px;line-height:1.75;}
+.sg-sheet .sg-game-btn{width:100%;}
+
 /* Event games */
-.sg-game-rule{margin:-4px 0 12px;color:var(--muted);font-size:11px;}
-.sg-game-table{display:grid;gap:12px;padding:12px;border-radius:12px;background:var(--felt);}
+.sg-game-rule{margin:-4px 0 10px;color:var(--muted);font-size:11px;}
+.sg-game-table{display:grid;gap:12px;padding:12px;border-radius:12px;background:var(--felt);box-shadow:inset 0 0 0 1px rgba(207,174,106,.2);}
 .sg-hand{display:grid;gap:6px;justify-items:center;}
 .sg-hand>span{color:var(--ivory);font-size:12px;}
 .sg-cards{display:flex;gap:5px;justify-content:center;min-height:62px;}
@@ -118,9 +163,9 @@
 .sg-die-btn.is-held{border-color:var(--gold);}
 .sg-game-line{min-height:1.4em;margin:10px 0;color:var(--ivory);font:500 14px/1.4 system-ui,sans-serif;}
 .sg-game-actions{display:flex;gap:8px;}
-.sg-game-btn{flex:1;min-height:46px;border:1px solid var(--gold);border-radius:10px;background:#1a2a24;color:var(--ivory);font:600 14px system-ui,sans-serif;cursor:pointer;}
-.sg-game-btn:disabled{opacity:.4;}
+.sg-game-btn{flex:1;min-height:46px;border:0;border-radius:12px;background:linear-gradient(180deg,#d6b773,#a8884a);color:#1f1608;font:700 14px system-ui,sans-serif;cursor:pointer;}
+.sg-game-btn:disabled{filter:grayscale(.6) brightness(.6);}
 
 @media (prefers-reduced-motion:reduce){
-  .sg-cell.is-new,.sg-cell.is-run,.sg-die.is-on{animation:none;}
+  .sg-pot::after,.sg-cell.is-reach,.sg-cell.is-new,.sg-cell.is-run,.sg-dice3d .sg-cube,.sg-lamp{animation:none !important;}
 }
