@@ -1335,3 +1335,13 @@ The prompt ends with a follow / consider example taken from the user's page.
 A JSON array is still a full replacement (a backup restore).
 
 Test: `tests/ai-import.smoke.cjs`.
+
+## Poker: any buy-in and blinds (10.22.17.00)
+
+Requested: poker stakes should be freely settable.
+
+- Computer table: the buy-in buttons (50–1,000) now have a number box below them for any amount from 20 to 100,000. It must also be at least 10× the big blind. A typed amount matching a button lights that button.
+- Blinds on both the computer and friends tables: a 「自由」 choice opens a box for the big blind (2–10,000); the small blind is half of it. The friends table's live check shows any problem before 「テーブルを作る」.
+- Points rules are unchanged: a staked buy-in still cannot exceed the balance.
+
+Test: `tests/poker-practice.smoke.cjs` types 333 chips and a 自由 big blind of 8, then checks the table settings are 333 / 4 / 8.

@@ -255,3 +255,8 @@ html body dialog.pk-ranks-sheet{width:min(420px,calc(100vw - 24px));max-height:9
 @media(prefers-reduced-motion:no-preference){.pk-lobby .pk-pill{transition:background .15s,border-color .15s,transform .1s;}.pk-lobby .pk-pill:active{transform:scale(.95);}.pk-tab-body>*{animation:pk-pane-in .2s ease-out;}}
 @keyframes pk-pane-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .pk-lobby .pk-panel>h3+.pk-sub{margin:-4px 0 14px;}
+/* Any amount: a box under the quick choices. */
+.pk-amount-field{display:grid;gap:8px;}
+.pk-blind-free[hidden]{display:none;}
+.pk-blind-free span{color:#d5c9ac;font-weight:700;}
+.pk-blind-free em{font-size:12px;}
