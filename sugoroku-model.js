@@ -6,7 +6,7 @@
 //   event    – a four-way wheel: blackjack, dice poker or chinchiro is played once for the bet
 //              (a win also gives a ball, a loss gives back half), or a sure ball (×1.5 back)
 //   accident – a wheel: lose 0–2× the bet more, go back three squares, or go back to START
-// Passing START gives a ball and a lap prize that does not depend on the bet.
+// Passing START gives a ball, nothing else.
 // A ball opens one number on a 7×7 card (48 numbers, the middle free). A new line spins the
 // bingo wheel on what was bet since the last line; two of its 20 slots lead to the jackpot
 // wheel, whose jackpot and super-jackpot-chance slots are two in 20 each (one in ten), and so on.
@@ -45,8 +45,8 @@
     board: Array.from({ length: 80 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
     // Normal wheels by bet: 24 slots each, a ball slot also pays back the bet.
     normal: {
-      10: spread([...N(3), ...N(2), ...N(1.5, 2), ...N(1.25, 3), ...N(0.75, 4), ...N(0.5, 5), ...N(0.25, 4), ...N(0.1, 2), ...N(0, 1), ...BALL(1, 1)]),
-      50: spread([...N(3), ...N(2, 2), ...N(1.5, 2), ...N(1.25, 3), ...N(0.75, 4), ...N(0.5, 4), ...N(0.25, 3), ...N(0.1, 2), ...N(0, 1), ...BALL(1, 2)]),
+      10: spread([...N(3), ...N(2), ...N(1.5, 2), ...N(1.25, 4), ...N(0.75, 7), ...N(0.5, 4), ...N(0.25, 2), ...N(0.1, 1), ...N(0, 1), ...BALL(1, 1)]),
+      50: spread([...N(3), ...N(2, 2), ...N(1.5, 2), ...N(1.25, 3), ...N(0.75, 5), ...N(0.5, 4), ...N(0.25, 2), ...N(0.1, 2), ...N(0, 1), ...BALL(1, 2)]),
       100: spread([...N(3), ...N(2), ...N(1.5, 2), ...N(1.25, 4), ...N(0.75, 5), ...N(0.5, 3), ...N(0.25, 2), ...N(0.1, 2), ...N(0, 1), ...BALL(1, 3)]),
     },
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
@@ -54,8 +54,6 @@
     eventPay: { lose: 0.5, push: 1, sure: 1.5 },
     // Accident wheel: take: multiples of the bet taken on top, back: squares back, start: back to START.
     accident: [{ take: 0 }, { take: 0.5 }, { back: 3 }, { take: 1 }, { start: true }, { take: 1.5 }, { back: 3 }, { take: 2 }, { take: 0.5 }, { start: true }],
-    // The lap prize: the same for every bet, a little more with every lap, up to a ceiling.
-    lap: (laps) => Math.min(20, 5 + Math.floor(Math.sqrt(laps) / 2)),
     // Wheels after a line. x: multiples of what was bet since the last line.
     wheels: {
       bingo: spread([...N(0.02, 4), ...N(0.05, 4), ...N(0.08, 3), ...N(0.1, 3), ...N(0.15, 2), ...N(0.2, 1), ...N(0.3, 1), ...Array(2).fill({ next: "jp" })]),
@@ -179,9 +177,7 @@
       events.push({ t: "step", to: state.pos });
       if (state.pos === 0) {
         state.laps++;
-        const amount = RULES.lap(state.laps);
-        gain += amount;
-        events.push({ t: "lap", laps: state.laps, amount });
+        events.push({ t: "lap" });
         gain += ball(state, random, events);
       }
     }

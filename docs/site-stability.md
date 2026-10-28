@@ -1435,3 +1435,9 @@ Feedback on the second design: the wheels clumped the same values together, the 
   - The card takes the height that is left (100dvh − 350px), the rules moved behind a "?" button, and the counts are one line.
   - The roll button sits inside 375×667, 375×740 and 390×844; the smoke test checks it.
   - The counts line is `.sg-status`, because style.css forces every class containing "info" into a column.
+
+## すごろくビンゴ: START gives only a ball (10.22.22.00)
+
+As asked, the lap prize is gone. Passing START now gives one ball and nothing else, and the "◯周目" count is no longer shown.
+
+Without the lap prize, 10-chip rolls dropped to about 88%. The 10 and 50 normal wheels were re-tuned to make up for it. A 1M-roll simulation now gives 96.5 / 96.7 / 95.1% for 10 / 50 / 100.

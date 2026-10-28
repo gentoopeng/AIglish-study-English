@@ -31,7 +31,7 @@
     "通常マス：ルーレットで ×3〜×0 のどれかが額に掛かって戻ります。「●（ボール）」ならボールが出て額がそのまま戻ります。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると半分が戻ります。ボール確定はボールと額の1.5倍です。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
-    "80マスを1周するとボールが出て、額に関係なく少しもらえます。",
+    "STARTを通るとボールが1つ出ます。",
     "ボールでカードの番号が開きます。1列そろうと、前のビンゴから使った額をもとにルーレットが回り、JP CHANCEからジャックポットを狙えます。",
     "ジャックポットはカジノ全体で賭けられたポイントから貯まります。",
   ];
@@ -204,8 +204,6 @@
       node("b", "", fmt(state.stake) + api.unit()),
       node("span", "", "　リーチ "),
       node("b", "", String(reaches.length)),
-      node("span", "", "　" + (state.laps + 1) + "周目 "),
-      node("b", "", state.pos + "/" + S.SIZE),
     );
     view.costs.querySelectorAll("button").forEach((b) => {
       b.setAttribute("aria-checked", String(Number(b.dataset.cost) === view.cost));
@@ -322,8 +320,7 @@
         hud();
         await wait(190);
       } else if (e.t === "lap") {
-        live.laps = e.laps;
-        say(e.laps + "周　+" + fmt(e.amount) + api.unit() + "・ボール", "is-gain");
+        say("START通過　ボール", "is-ball");
         await wait(900);
       } else if (e.t === "land") {
         const sq = view.squares[e.square];

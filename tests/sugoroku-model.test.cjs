@@ -62,15 +62,15 @@ test("a normal square spins its wheel on the bet; a ball slot opens a number", (
   assert.throws(() => S.roll(s, 7, seq([0])));
 });
 
-test("passing START gives a lap prize that does not depend on the bet, and a ball", () => {
+test("passing START gives a ball and nothing else", () => {
   const s = { ...S.newState(seq([0])), pos: S.SIZE - 2 };
-  const small = S.roll(s, 10, seq([2, 0, 0])),
-    big = S.roll(s, 100, seq([2, 0, 0]));
-  const lap = (out) => out.events.find((e) => e.t === "lap");
-  assert.deepEqual(lap(small), { t: "lap", laps: 1, amount: S.RULES.lap(1) });
-  assert.equal(lap(big).amount, lap(small).amount);
-  assert.ok(small.events.some((e) => e.t === "ball"));
-  assert.ok(S.RULES.lap(10000) <= 20 && S.RULES.lap(100) > S.RULES.lap(1));
+  // Die 3 passes START onto square 1; the ball opens a number, then square 1's wheel lands on ×0.
+  const zero = S.RULES.normal[10].findIndex((x) => x.x === 0);
+  const out = S.roll(s, 10, seq([2, 0, zero]));
+  const at = out.events.findIndex((e) => e.t === "lap");
+  assert.deepEqual(out.events[at], { t: "lap" });
+  assert.equal(out.events[at + 1].t, "ball");
+  assert.equal(out.gain, 0);
 });
 
 test("an event square waits for its game; win, push and loss pay as agreed", () => {
