@@ -90,6 +90,25 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await lobby.getByRole("button", { name: "練習を始める" }).click();
     await page.waitForFunction(() => window.Poker._session()?.room?.settings?.bb === 4);
     assert.deepEqual(await page.evaluate(() => { const r = window.Poker._session().room; return [r.settings.buyIn, r.settings.sb, r.settings.bb]; }), [200, 2, 4]);
+    // Any amount can be typed too: 333 chips and a big blind of 8 under 自由 (small blind 4).
+    await screen.getByRole("button", { name: "やめる" }).click();
+    await page.evaluate(() => window.Poker.open());
+    await lobby.locator('[data-pk-tab="practice"]').click();
+    await lobby.locator(".pk-amount-field", { has: page.locator("[data-pk-chips]") }).locator("input.pk-amount").fill("333");
+    assert.equal(await lobby.locator("[data-pk-chips] [aria-checked=true]").count(), 0);
+    await lobby.locator("[data-pk-practice-blinds] .pk-pill", { hasText: "自由" }).click();
+    await lobby.locator(".pk-amount-field", { has: page.locator("[data-pk-practice-blinds]") }).locator("input.pk-amount").fill("8");
+    await lobby.getByRole("button", { name: "練習を始める" }).click();
+    await page.waitForFunction(() => window.Poker._session()?.room?.settings?.bb === 8);
+    assert.deepEqual(await page.evaluate(() => { const r = window.Poker._session().room; return [r.settings.buyIn, r.settings.sb, r.settings.bb]; }), [333, 4, 8]);
+    // Back to 200 / 2-4 for the top-up check below.
+    await screen.getByRole("button", { name: "やめる" }).click();
+    await page.evaluate(() => window.Poker.open());
+    await lobby.locator('[data-pk-tab="practice"]').click();
+    await lobby.locator("[data-pk-chips] .pk-pill", { hasText: "200枚" }).click();
+    await lobby.locator("[data-pk-practice-blinds] .pk-pill", { hasText: "2 / 4" }).click();
+    await lobby.getByRole("button", { name: "練習を始める" }).click();
+    await page.waitForFunction(() => window.Poker._session()?.room?.settings?.bb === 4);
     // Losing every chip: top up and play on against the same computers.
     await play(() => {
       const room = window.Poker._session()?.room,
@@ -109,7 +128,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await tutorial.getByRole("button", { name: "スキップ" }).click();
     assert.equal(await page.locator("dialog.pk-tutorial").count(), 0);
     assert.deepEqual(errors, []);
-    console.log("PASS: how-to opens on the first visit (7 scenes, back/next, to practice), practice vs computer without points, game end and again, how-to from the lobby");
+    console.log("PASS: how-to opens on the first visit (7 scenes, back/next, to practice), practice vs computer without points, typed amounts and 自由 blinds, game end and again, how-to from the lobby");
   } finally {
     await browser.close();
   }

@@ -565,6 +565,49 @@
     }
     return group;
   }
+  // Quick choices with a box under them for any amount; group.value follows whichever was used
+  // last, and a typed amount that matches a choice lights it up.
+  function amountChoices(name, options, value, unit, label) {
+    const group = pills(name, options, value),
+      box = node("input", "pk-amount");
+    Object.assign(box, { type: "number", min: 1, step: 1, inputMode: "numeric", value: String(value) });
+    box.setAttribute("aria-label", label);
+    const light = () => group.querySelectorAll(".pk-pill").forEach((x) => x.setAttribute("aria-checked", String(x.dataset.value === group.value)));
+    group.addEventListener("change", () => (box.value = group.value));
+    box.oninput = () => {
+      group.value = String(Math.floor(Number(box.value)) || "");
+      light();
+      group.dispatchEvent(new CustomEvent("typed"));
+    };
+    const wrap = node("div", "pk-amount-field");
+    const row = node("div", "pk-buyin");
+    row.append(box, node("em", "", unit));
+    wrap.append(group, row);
+    wrap.group = group;
+    return wrap;
+  }
+  // Blinds: the usual pairs, or 自由 with the big blind typed (the small blind is half of it).
+  function blindChoices(name, count) {
+    const group = pills(name, BLINDS.slice(0, count).map(([sb, bb], i) => [i, sb + " / " + bb]).concat([["free", "自由"]]), 0),
+      box = node("input", "pk-amount");
+    Object.assign(box, { type: "number", min: 2, step: 2, inputMode: "numeric", value: "20" });
+    box.setAttribute("aria-label", "ビッグブラインド");
+    const row = node("div", "pk-buyin pk-blind-free");
+    row.append(node("span", "", "大"), box, node("em", "", "（小はその半分）"));
+    row.hidden = true;
+    group.addEventListener("change", () => (row.hidden = group.value !== "free"));
+    box.oninput = () => group.dispatchEvent(new Event("change"));
+    const wrap = node("div", "pk-amount-field");
+    wrap.append(group, row);
+    wrap.group = group;
+    wrap.pair = () => {
+      if (group.value !== "free") return BLINDS[Number(group.value)];
+      const bb = Math.floor(Number(box.value));
+      if (!(bb >= 2 && bb <= 10000)) throw Error("ビッグブラインドは2〜10,000で決めてください。");
+      return [Math.max(1, Math.floor(bb / 2)), bb];
+    };
+    return wrap;
+  }
   function field(label, control, hint) {
     const row = node("div", "pk-setting");
     const head = node("p", "pk-setting-label", label);
@@ -587,7 +630,6 @@
     view.querySelector(".pk-balance").textContent = "所持ポイント " + fmt(balance()) + "pt";
     const tabs = view.querySelector(".pk-tabs"),
       body = view.querySelector(".pk-tab-body");
-    const blindChoices = BLINDS.map(([sb, bb], i) => [i, sb + " / " + bb]);
     // ---- Practice against the computer
     const practicePanel = node("section", "pk-panel");
     const staked = canStake();
@@ -596,12 +638,13 @@
       node("p", "pk-sub", staked ? "ポイントを賭けて対戦します。はじめのチップの分が参加費で、勝ち負けは1ハンドごとにポイントへ反映されます。" : "ゲストやオフラインでは練習チップで遊べます（ポイントは賭けません）。"),
     );
     const bots = pills("pkBots", [1, 2, 3, 4, 5].map((n) => [n, n + "人"]), 1),
-      chips = pills("pkChips", [50, 100, 200, 500].map((n) => [n, n + (staked ? "pt" : "枚")]), 100),
-      practiceBlinds = pills("pkPracticeBlinds", blindChoices.slice(0, 4), 0);
+      chipsField = amountChoices("pkChips", [50, 100, 200, 500, 1000].map((n) => [n, n + (staked ? "pt" : "枚")]), 100, staked ? "pt" : "枚", staked ? "参加費" : "はじめのチップ"),
+      chips = chipsField.group,
+      blindsPractice = blindChoices("pkPracticeBlinds", 4);
     practicePanel.append(
       field("相手の人数", bots),
-      field(staked ? "参加費（はじめのチップ）" : "はじめのチップ", chips),
-      field("ブラインド", practiceBlinds, "毎回はじめに出す額（小 / 大）"),
+      field(staked ? "参加費（はじめのチップ）" : "はじめのチップ", chipsField, "好きな額も入れられます"),
+      field("ブラインド", blindsPractice, "毎回はじめに出す額（小 / 大）"),
     );
     const startPractice = node("button", "pk-primary", staked ? "対戦を始める" : "練習を始める");
     startPractice.type = "button";
@@ -628,24 +671,33 @@
       };
       quick.append(b);
     }
-    const blinds = pills("pkBlinds", blindChoices, 0),
+    const blindsTable = blindChoices("pkBlinds", BLINDS.length),
+      blinds = blindsTable.group,
       seats = pills("pkSeats", [2, 3, 4, 5, 6].map((n) => [n, n + "人"]), 6),
       think = pills("pkThink", THINK.map((n) => [n, n + "秒"]), 30);
     const note = node("p", "pk-check");
-    create.append(field("参加費（はじめのチップ）", buyRow), quick, field("ブラインド", blinds, "毎回はじめに出す額（小 / 大）"), field("最大人数", seats), field("1手の持ち時間", think), note);
+    create.append(field("参加費（はじめのチップ）", buyRow), quick, field("ブラインド", blindsTable, "毎回はじめに出す額（小 / 大）"), field("最大人数", seats), field("1手の持ち時間", think), note);
     const makeButton = node("button", "pk-primary", "テーブルを作る");
     makeButton.type = "button";
     makeButton.dataset.pkCreate = "";
     create.append(makeButton);
     // A live check, so a wrong amount is seen before pressing the button.
     function check() {
-      const value = Math.floor(Number(buyIn.value)),
-        bb = BLINDS[Number(blinds.value)][1];
-      let text = "";
-      if (!(value >= 20 && value <= 100000)) text = "参加費は20〜100,000ptで決めてください。";
+      const value = Math.floor(Number(buyIn.value));
+      let text = "",
+        pair = null;
+      try {
+        pair = blindsTable.pair();
+      } catch (error) {
+        text = error.message;
+      }
+      const bb = pair ? pair[1] : 0;
+      if (!pair) {
+        // The blinds' own message is already in text.
+      } else if (!(value >= 20 && value <= 100000)) text = "参加費は20〜100,000ptで決めてください。";
       else if (value < bb * 10) text = "このブラインドなら参加費は" + fmt(bb * 10) + "pt以上にしてください。";
       else if (value > balance()) text = "所持ポイントが足りません（" + fmt(balance()) + "pt）。";
-      else text = "チップ " + fmt(value) + "枚で、ブラインド " + BLINDS[Number(blinds.value)].join(" / ") + " から始まります。";
+      else text = "チップ " + fmt(value) + "枚で、ブラインド " + pair.join(" / ") + " から始まります。";
       note.textContent = text;
       note.classList.toggle("is-bad", !text.startsWith("チップ"));
     }
@@ -677,7 +729,7 @@
     tabs.querySelector('[data-pk-tab="' + lobbyTab() + '"]')?.click();
     makeButton.onclick = working(makeButton, "作っています…", async () => {
       const value = Math.floor(Number(buyIn.value)),
-        [sb, bb] = BLINDS[Number(blinds.value)];
+        [sb, bb] = blindsTable.pair();
       if (!(value >= 20 && value <= 100000)) throw Error("参加費は20〜100,000ptで決めてください。");
       if (value < bb * 10) throw Error("参加費はビッグブラインドの10倍以上にしてください（" + fmt(bb * 10) + "pt〜）。");
       const code = await createTable({ buyIn: value, sb, bb, seats: Number(seats.value), think: Number(think.value) });
@@ -686,8 +738,12 @@
     const joinButton = joinPanel.querySelector("[data-pk-join]");
     joinButton.onclick = working(joinButton, "入っています…", async () => enter(await join(joinPanel.querySelector("[data-pk-code]").value.trim())));
     startPractice.onclick = working(startPractice, "準備しています…", async () => {
-      const [sb, bb] = BLINDS[Number(practiceBlinds.value)];
-      practice({ bots: Number(bots.value), buyIn: Number(chips.value), sb, bb });
+      const [sb, bb] = blindsPractice.pair(),
+        buyIn = Math.floor(Number(chips.value));
+      // Any amount: at least ten big blinds, and (for points) no more than the wallet holds.
+      if (!(buyIn >= 20 && buyIn <= 100000)) throw Error((staked ? "参加費" : "はじめのチップ") + "は20〜100,000で決めてください。");
+      if (buyIn < bb * 10) throw Error("このブラインドなら" + (staked ? "参加費" : "はじめのチップ") + "は" + fmt(bb * 10) + "以上にしてください。");
+      practice({ bots: Number(bots.value), buyIn, sb, bb });
     });
     view.querySelector("[data-pk-howto]").onclick = () =>
       window.PokerTutorial?.open({
