@@ -1441,3 +1441,16 @@ Feedback on the second design: the wheels clumped the same values together, the 
 As asked, the lap prize is gone. Passing START now gives one ball and nothing else, and the "◯周目" count is no longer shown.
 
 Without the lap prize, 10-chip rolls dropped to about 88%. The 10 and 50 normal wheels were re-tuned to make up for it. A 1M-roll simulation now gives 96.5 / 96.7 / 95.1% for 10 / 50 / 100.
+
+## 「」の問題だけ in ordinary word books (10.22.23.00)
+
+Reported: a meaning set to 「」の問題だけ (「consideration」 / 考慮、思いやり under consider) still came up as an ordinary card, with the headword "consider" on the front.
+
+The setting and the 「」 cards were only used in 用語・年号モード. In an ordinary book every meaning became a headword card.
+
+Now `startFlashcardSession` in an ordinary book handles a meaning with `blankOnly` like 用語・年号モード does:
+- It gives the same 「」 cards (`TermQuestions.questions`, kind "blank").
+- Each card carries `termCard` for the bold-headword display and the 意味を先に side, but no `termKey`, so its ○△× is recorded on that meaning as usual.
+- A meaning without the setting, or without a 「」, stays an ordinary card.
+
+Test: `tests/blank-only-flashcard.smoke.cjs`.
