@@ -1313,3 +1313,25 @@ Reported: a phrase card for increasingly (under increase) showed "increase" abov
 ## English over Japanese is a phrase line even without 「」 (10.22.15.00)
 
 Reported: consider's line "considering / Vしようかと思う" still gave a "which headword?" card (consider → considering Vしようかと思う). That line had no 「」, so it was not a phrase line. A first line of English with no Japanese, above Japanese, is now a phrase line on its own: the whole English line is what is asked (considering ↔ Vしようかと思う), and there is no headword card. 「」 is needed only to ask for part of the English (+ A + 「as」 B). A Japanese-only line such as 〜を考慮する keeps its headword card. Test: `tests/term-questions.test.cjs`.
+
+## A Gemini prompt for English word books, and an import that merges (10.22.16.00)
+
+Requested: a prompt for Gemini that turns a photo of the word book into the format the cards use, since doing it by hand does not scale.
+
+**The prompt.** The word-book editor has a second prompt button: 英単語帳（熟語・派生語・語法を意味ごとのカードに）用. The prompt asks for `{"words":[{num, word, meanings:[{text, pos, minor}], sub}]}`, with these rules:
+- One meaning per card. The headword's own meanings are in Japanese only.
+- Phrases, derivatives and patterns are English over Japanese.
+- 「」 marks only the part to ask; patterns start with "+"; ( ) is written out.
+- `pos` is one character per meaning.
+- Notes (★ cautions, MINIMAL PHRASES, examples) go to `sub` without repeating the cards.
+
+The prompt ends with a follow / consider example taken from the user's page.
+
+**The import.** `parseVocabImport` accepts that object, even inside a code block, through `importAiWords`:
+- Each meaning gets an id (`num-k`), its part of speech, its line breaks and まれ.
+- Only the numbers given are added or replaced; a replaced word keeps its unit, display number and links.
+- Unreadable JSON is refused in plain words.
+
+A JSON array is still a full replacement (a backup restore).
+
+Test: `tests/ai-import.smoke.cjs`.
