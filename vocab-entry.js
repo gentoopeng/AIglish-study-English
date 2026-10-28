@@ -39,6 +39,7 @@
         text,
         ...(m.partOfSpeech ? { partOfSpeech: String(m.partOfSpeech) } : {}),
         ...(m.minor ? { minor: true } : {}),
+        ...(m.blankOnly ? { blankOnly: true } : {}),
       };
     });
     const entry = {
@@ -399,6 +400,14 @@
         box.type = "checkbox";
         minor.append(box, document.createTextNode("あまり使わない意味"));
         row.append(minor);
+      } else {
+        // When the 「」 is a different phrase (「following」 under follow), asking for the headword
+        // is not one-to-one: this line can be asked by its 「」 only.
+        const only = el("label", undefined, "vocab-entry-minor vocab-entry-blank-only"),
+          box = el("input");
+        box.type = "checkbox";
+        only.append(box, document.createTextNode("「」の問題だけ出す"));
+        row.append(only);
       }
       list.append(row);
       relabel();
@@ -434,7 +443,8 @@
               return {
                 text: year && text.trim() ? year + " " + text.trim() : text,
                 partOfSpeech: row.querySelector("select").value,
-                minor: !!row.querySelector(".vocab-entry-minor input")?.checked,
+                minor: !term && !!row.querySelector(".vocab-entry-minor input")?.checked,
+                blankOnly: !!row.querySelector(".vocab-entry-blank-only input")?.checked,
               };
             }),
           },

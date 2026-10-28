@@ -802,6 +802,12 @@
                 textInput.setAttribute('aria-label', '説明' + (index + 1));
                 posSelect.hidden = true;
                 itemRow.insertBefore(year, textInput);
+                // Asked by its 「」 only: no "which headword?" card for this line.
+                var onlyBox = document.createElement('label'); onlyBox.className = 'inline-minor-input inline-blank-only';
+                onlyBox.innerHTML = '<input type="checkbox">「」の問題だけ出す';
+                onlyBox.querySelector('input').checked = m.blankOnly === true;
+                onlyBox.querySelector('input').setAttribute('aria-label', '説明' + (index + 1) + 'は「」の問題だけ出す');
+                itemRow.appendChild(onlyBox);
             }
             listContainer.appendChild(itemRow);
         });
@@ -868,6 +874,7 @@
                     text: txt,
                     partOfSpeech: inp.parentElement.querySelector('.inline-pos-input').value,
                     minor: !!(inp.parentElement.querySelector('.inline-minor-input input') && inp.parentElement.querySelector('.inline-minor-input input').checked),
+                    blankOnly: !!(inp.parentElement.querySelector('.inline-blank-only input') && inp.parentElement.querySelector('.inline-blank-only input').checked),
                     status: oldM ? oldM.status : "none",
                     history: oldM ? oldM.history : []
                 });

@@ -958,6 +958,8 @@ window.stripVocabProgressFromWords = function(words) {
         if(m.partOfSpeech||m.pos)meaning.partOfSpeech=String(m.partOfSpeech||m.pos);
         // A meaning worth knowing though seldom used: shown small under the main ones, rated and tested like any other.
         if(m.minor===true)meaning.minor=true;
+        // 用語・年号モード: this meaning asks only its 「」 terms (no "which headword?" card).
+        if(m.blankOnly===true)meaning.blankOnly=true;
         return meaning;
       });
     }
@@ -997,7 +999,7 @@ window.applyUserProgressToVocabList = function() {
     w.status = "none";
     w.history = [];
     w.meanings = (w.meanings || []).map(function(m) {
-      return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, status: "none", history: [] };
+      return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, blankOnly: m.blankOnly === true, status: "none", history: [] };
     });
     if (p && (window.sameWordSignature||Object.is)(p.sig, window.buildWordSignature(w))) {
       w.status = p.status || "none";
@@ -1005,7 +1007,7 @@ window.applyUserProgressToVocabList = function() {
       w.meanings = w.meanings.map(function(m) {
         var mp = p.meanings ? p.meanings[m.id] : null;
         if (mp) {
-          return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, status: mp.status || "none", history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
+          return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, blankOnly: m.blankOnly === true, status: mp.status || "none", history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
         }
         return m;
       });
@@ -3265,13 +3267,13 @@ window.__applyQuizAnswersToBook = async function(bookId, answers) {
     w.note = p && typeof p.note === 'string' ? p.note : String(w.note || ''); w.sticky = !!(p && p.sticky);
     w.status = 'none';
     w.history = [];
-    w.meanings = (w.meanings || []).map(function(m) { return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, status: 'none', history: [] }; });
+    w.meanings = (w.meanings || []).map(function(m) { return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, blankOnly: m.blankOnly === true, status: 'none', history: [] }; });
     if (p && (window.sameWordSignature||Object.is)(p.sig, sig(w))) {
       w.status = p.status || 'none';
       w.history = Array.isArray(p.history) ? p.history.slice(-20) : [];
       w.meanings = w.meanings.map(function(m) {
         var mp = p.meanings ? p.meanings[m.id] : null;
-        if (mp) return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, status: mp.status || 'none', history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
+        if (mp) return { id: m.id, text: m.text, partOfSpeech: m.partOfSpeech || m.pos || '', minor: m.minor === true, blankOnly: m.blankOnly === true, status: mp.status || 'none', history: Array.isArray(mp.history) ? mp.history.slice(-20) : [] };
         return m;
       });
     }

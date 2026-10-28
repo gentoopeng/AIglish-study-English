@@ -205,6 +205,19 @@ const { chromium } = require("playwright"),
     const twoLines = await page.locator(`.word-row-container[data-word-num="${nobunaga}"] .vocab-meaning-text`).nth(1).evaluate((e) => [e.innerText, getComputedStyle(e).whiteSpace]);
     assert.match(twoLines[0], /では\n武田勝頼/);
     assert.equal(twoLines[1], "pre-line");
+    // 「」の問題だけ出す: that line gives no "which headword?" card, only its 「」 (and year) cards;
+    // the setting is kept with the book's words.
+    await page.locator(`.word-row-container[data-word-num="${nobunaga}"] .card-edit-btn`).click();
+    await page.getByRole("checkbox", { name: "説明2は「」の問題だけ出す" }).check();
+    await page.locator(`#wordCardForm-${nobunaga}`).getByRole("button", { name: "保存する", exact: true }).click();
+    await closeMessages();
+    const only = await page.evaluate((n) => {
+      const w = vocabList.find((x) => String(x.num) === n);
+      return { flag: w.meanings[1].blankOnly, kept: window.stripVocabProgressFromWords([w])[0].meanings[1].blankOnly, keys: window.TermQuestions.questions(w).map((q) => q.key.split(":")[0]) };
+    }, nobunaga);
+    assert.equal(only.flag, true);
+    assert.equal(only.kept, true);
+    assert.deepEqual(only.keys, ["w", "y", "t", "y", "t"]);
     // Books without the mode are unaffected: cards are the plain word/meaning pairs.
     assert.equal(await page.evaluate(() => TermProgress.enabled("no-such-book")), false);
     assert.deepEqual(errors, []);
