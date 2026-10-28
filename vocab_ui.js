@@ -246,9 +246,48 @@
     // ================================================================
 
 
+    // Words from an AI (the 英単語帳 prompt): {"words":[{num, word, meanings:[{text, pos, minor}], sub}]}.
+    // Each meaning becomes one card; a line break in a meaning is kept. Only the numbers given are
+    // added or replaced, and a replaced word keeps its unit, display number and links.
+    function importAiWords(data, existing) {
+        var list = data && Array.isArray(data.words) ? data.words : null;
+        if (!list) throw new Error('「words」の一覧が見つかりません。AIの出力をそのまま貼り付けてください。');
+        var words = JSON.parse(JSON.stringify(existing || []));
+        list.forEach(function(item, index) {
+            var num = Number(item && item.num), head = String(item && item.word || '').trim();
+            if (!Number.isInteger(num) || num < 1 || !head) throw new Error((index + 1) + '件目に番号と単語がありません。');
+            var meanings = (Array.isArray(item.meanings) ? item.meanings : []).map(function(m) {
+                m = typeof m === 'string' ? { text: m } : (m || {});
+                var lines = String(m.text || '').replace(/\\n/g, '\n').split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+                return lines.length ? { text: lines.join('\n'), partOfSpeech: String(m.pos || m.partOfSpeech || '').trim(), minor: m.minor === true } : null;
+            }).filter(Boolean).map(function(m, k) {
+                var meaning = { id: num + '-' + k, text: m.text, status: 'none', history: [] };
+                if (m.partOfSpeech) meaning.partOfSpeech = m.partOfSpeech;
+                if (m.minor) meaning.minor = true;
+                return meaning;
+            });
+            if (!meanings.length) throw new Error('「' + head + '」に意味がありません。');
+            var word = { num: num, word: head, meaning: meanings.length === 1 ? meanings[0].text : meanings.map(function(m, k) { return (k < 20 ? String.fromCharCode(0x2460 + k) : '(' + (k + 1) + ')') + m.text.split('\n').join(' '); }).join(''), meanings: meanings, sub: String(item.sub || '').trim() };
+            var at = words.findIndex(function(w) { return Number(w.num) === num; });
+            if (at >= 0) ['unit', 'no', 'links'].forEach(function(key) { if (words[at][key] !== undefined) word[key] = words[at][key]; });
+            else if (item.unit && window.VocabOrder && window.VocabOrder.cleanUnit(item.unit)) word.unit = window.VocabOrder.cleanUnit(item.unit);
+            if (at >= 0) words[at] = word; else words.push(word);
+        });
+        words.sort(function(a, b) { return Number(a.num) - Number(b.num); });
+        return words;
+    }
+    window.importAiWords = importAiWords;
+
     window.parseVocabImport = function(text, existing) {
         text = text.trim();
         if (!text) return JSON.parse(JSON.stringify(existing || []));
+        // An AI answer may come in a code block.
+        var unfenced = text.replace(/^```[a-zA-Z]*\s*/, '').replace(/```\s*$/, '').trim();
+        if (unfenced[0] === '{') {
+            var data;
+            try { data = JSON.parse(unfenced); } catch (e) { throw new Error('AIの出力を読み取れませんでした。最初の { から最後の } までをそのまま貼り付けてください。'); }
+            return importAiWords(data, existing);
+        }
         if (text[0] === '[') {
             var parsed = JSON.parse(text);
             if (!Array.isArray(parsed) || !parsed.every(function(w) { return w && w.word && Number.isInteger(Number(w.num)) && Number(w.num) > 0; })) throw new Error('JSONには番号と単語を指定してください。');
