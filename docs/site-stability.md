@@ -1369,3 +1369,44 @@ Tests: `tests/sugoroku-model.test.cjs` (moves, squares, laps, line base, jackpot
 ## すごろくビンゴ: preview on practice chips only (10.22.19.00)
 
 The game will be shown to everyone as a preview before its design is settled, so it must not change anyone's points. `real()` in casino.js is false while すごろくビンゴ is open. Its bets, payouts, balance and saving then use practice chips on the device, even when signed in; the other casino games are unchanged. `tests/casino.smoke.cjs` rolls while signed in and checks the wallet stays at 240pt.
+
+## すごろくビンゴ, second design, and the casino's shared jackpots (10.22.20.00)
+
+Rebuilt from the agreed design. Every amount is in `RULES` in `sugoroku-model.js`.
+
+**The board** has 50 squares: START, normal, 6 event and 5 accident.
+- **Normal:** a 24-slot wheel of ×3 / ×2 / ×1.5 / ×1.25 / ×0.75 / ×0.5 / ×0.25 / ×0.1 / ×0 and ball slots.
+  - The die is the same for every bet. A bigger bet only gets a different wheel with more ball slots: 1, 2 or 3 of 24.
+- **Event:** blackjack, dice poker, chinchiro or a sure ball.
+  - A game is played once for the bet, with the existing CasinoModel rules and small tables on this screen.
+  - A win pays bet × (1 + the game's multiple) and gives a ball. A push gives the bet back, and a loss gives half back.
+  - A sure ball pays ×1.5.
+  - The game's round is saved in `state.pending` after every move, so leaving does not re-deal it.
+- **Accident:** lose 0–2× the bet, or go back to START. In the preview it takes at most the chips there are, so there is no debt.
+
+**Laps and the card**
+- A lap gives a ball and a prize that does not depend on the bet: min(20, 5 + ⌊√laps / 2⌋).
+- A ball opens one closed number on a 7×7 card (48 numbers and FREE, 16 lines).
+- A new line spins the bingo wheel (20 slots) on what was bet since the last line.
+- Its two JP CHANCE slots lead to the jackpot wheel: 2 JACKPOT, 2 SJP CHANCE, 16 multiples. The SJP wheel has 2 SUPER JACKPOT slots. Every chance is one in ten, as asked.
+
+**Simulation** (1M rolls per bet, event games played the plain way):
+- Return about 95.5–96% for each bet.
+- Bingo about every 20 / 17 / 14 rolls and a JACKPOT about every 2,100 / 1,700 / 1,350 rolls at 10 / 50 / 100.
+
+**Shared jackpots** (`casino-jackpot.js`)
+- Every point bet in the casino goes through `Poker.settle`. Its negative moves are added to `shared/casino_jackpot.bet`.
+- Each device sums them and sends about once a minute; the total is read at most once a minute.
+- JACKPOT = 1,000 + 3% and SUPER JACKPOT = 10,000 + 1% of the total since each was last won.
+- Both are shown at the top of the casino tab and on the game.
+- In the preview a jackpot only plays its effect; nothing is paid or reset.
+
+**The screen**
+- Calm by default: dark felt, ivory serif figures, one gold line.
+- Darker and gold only for BINGO, the jackpot wheels and a jackpot.
+- The wheels are round SVG wheels. The track is a strip that keeps the piece in the middle.
+
+Tests:
+- `tests/sugoroku-model.test.cjs`: shape, each square, lap, line base, jackpot chain, return under 100%.
+- `tests/sugoroku.smoke.cjs`: card, track and jackpots; pay and save; resume; an event game kept and settled; a line spins BINGO.
+- `tests/casino.smoke.cjs`: a 60pt blackjack bet adds 60 to the shared total.

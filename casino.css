@@ -7,6 +7,11 @@
 .casino-chip .cs-chip-svg{width:30px;height:30px;}
 .casino-head small{display:block;color:#a8a293;font-size:11px;letter-spacing:.06em;}
 .casino-head strong{display:block;margin-top:2px;color:#f3e9cf;font:700 24px/1.2 system-ui,sans-serif;font-variant-numeric:tabular-nums;}
+.casino-jackpots{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:-6px 0 18px;}
+.casino-jackpots p{margin:0;padding:10px 12px;border:1px solid rgba(201,164,92,.45);border-radius:12px;background:rgba(12,16,14,.72);text-align:center;}
+.casino-jackpots small{display:block;color:#b59a63;font:600 9px/1.2 system-ui,sans-serif;letter-spacing:.22em;}
+.casino-jackpots b{display:block;margin-top:4px;color:#efe4c8;font:600 18px/1.2 Georgia,"Yu Mincho",serif;font-variant-numeric:tabular-nums;}
+.casino-jackpots .is-sjp{border-color:rgba(201,164,92,.8);}
 .casino-games{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .casino-game{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:150px;padding:14px;border:1px solid rgba(213,201,172,.22);border-radius:16px;background:linear-gradient(160deg,rgba(24,33,48,.88),rgba(13,19,32,.94));color:#f0ece3;text-align:left;cursor:pointer;transition:transform .15s,border-color .15s;}
 .casino-game:active{transform:scale(.97);border-color:#c6b790;}.casino-game:focus-visible{outline:3px solid #e1c994;outline-offset:2px;}

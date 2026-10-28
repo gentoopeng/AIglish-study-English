@@ -112,6 +112,8 @@
         localStorage.setItem(settledName(), JSON.stringify(keys));
       } catch {}
       if (next && uid() === account) window.StudyPoints?.restore?.({ ...next, publishedRevision: next.revision });
+      // Points put on the table feed the casino's shared jackpots.
+      if (next && delta < 0) window.CasinoJackpot?.add(-delta);
     }).catch((error) => console.warn("[poker] points", error));
     return settling;
   }

@@ -111,7 +111,7 @@
       host.innerHTML =
         '<section class="casino" aria-label="カジノ"><header class="casino-head"><span class="casino-chip">' +
         CHIP_SVG +
-        '</span><div><small data-casino-unit></small><strong data-casino-balance></strong></div><p class="casino-today" data-casino-today></p></header><div class="casino-games"></div><p class="casino-note"></p></section>';
+        '</span><div><small data-casino-unit></small><strong data-casino-balance></strong></div><p class="casino-today" data-casino-today></p></header><div class="casino-jackpots" data-casino-jackpots><p class="is-jp"><small>JACKPOT</small><b></b></p><p class="is-sjp"><small>SUPER JACKPOT</small><b></b></p></div><div class="casino-games"></div><p class="casino-note"></p></section>';
       const list = host.querySelector(".casino-games");
       for (const game of GAMES) {
         const button = node("button", "casino-game mode-" + game.id);
@@ -125,9 +125,20 @@
     }
     refresh();
   }
+  // The shared jackpots, always in points: they grow with every point bet in the casino.
+  function showJackpots() {
+    const box = document.querySelector("#view-casino [data-casino-jackpots]");
+    if (!box || !window.CasinoJackpot) return;
+    const { jp, sjp } = window.CasinoJackpot.amounts();
+    box.querySelector(".is-jp b").textContent = fmt(jp) + "pt";
+    box.querySelector(".is-sjp b").textContent = fmt(sjp) + "pt";
+  }
+  window.CasinoJackpot?.onChange(showJackpots);
   function refresh() {
     const host = document.getElementById("view-casino");
     if (host?.childElementCount) {
+      showJackpots();
+      window.CasinoJackpot?.refresh();
       host.querySelector("[data-casino-unit]").textContent = real() ? "所持ポイント" : "練習チップ";
       host.querySelector("[data-casino-balance]").textContent = fmt(balance()) + unit();
       const net = todayNet();
