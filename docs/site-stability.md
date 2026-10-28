@@ -1293,3 +1293,7 @@ Requested: the add form asked for too much setting and too much thinking. Each m
 - **続けて追加する:** remembered per account.
 
 Tests: `vocab-entry`, `minor-meanings` and `term-mode` smoke tests use the chips, the まれ chip and 「」で囲む, and check the preview.
+
+## メモ and the rating history on one line (10.22.12.00)
+
+Requested: put the rating history to the right of メモ to make cards more compact. The history (`[data-vocab-history]`) now sits in a `.vocab-note-head` row with the メモ button at the foot of each word card. The memo text and its editor still open full width below. The history keeps its element, so updates after a rating work as before. The card loses a separate row and a dashed rule.

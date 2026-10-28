@@ -3025,3 +3025,9 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 .vocab-entry-preview-card b{color:#f3e9cf;font-weight:700;}
 .vocab-entry-dup{margin:4px 0 0;font-size:12px;color:#f3c77a;}
 .vocab-entry-dup:empty{display:none;}
+
+/* メモ and the rating history on one line at the foot of a word card. */
+.vocab-note-head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.vocab-note-head .vocab-note-toggle{flex:none;}
+.vocab-note-head [data-vocab-history]{margin-top:0!important;padding-top:0!important;border-top:0!important;flex:0 1 auto;min-width:0;}
+.word-row-container .vocab-note-section{margin-top:6px;}
