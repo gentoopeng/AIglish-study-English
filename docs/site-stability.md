@@ -1345,3 +1345,23 @@ Requested: poker stakes should be freely settable.
 - Points rules are unchanged: a staked buy-in still cannot exceed the balance.
 
 Test: `tests/poker-practice.smoke.cjs` types 333 chips and a 自由 big blind of 8, then checks the table settings are 333 / 4 / 8.
+
+## Casino: すごろくビンゴ (10.22.18.00)
+
+Requested: a long-running medal-game style game with jackpots, played with points (no medals).
+
+- `sugoroku-model.js` holds the rules with no screen, and every number lives in `RULES` so amounts and the line-up can be tuned later.
+  - A roll costs 10, 50 or 100. The piece goes round a 24-square ring, the square's number is marked on a 5×5 card (the middle is free), and the square's effect happens: points, a free roll, more squares, or one random number marked.
+  - A new line spins a 10-slot roulette. Its prizes are multiples of what was bet since the last line; several lines at once share it.
+  - One slot leads to the JACKPOT CHANCE roulette, which has the jackpot and a slot leading to the SUPER JACKPOT CHANCE roulette.
+  - The two jackpots are the player's own pools. 3% and 1% of each bet go into them, and a win resets the pool to its seed (100 / 1,000).
+  - A full card starts a new one.
+- Measured over 2 million rolls: about 92% of the bet comes back.
+  - A line comes about every 4.3 rolls and a card is done in about 51 rolls.
+  - A jackpot comes about every 360 rolls and a super jackpot about every 4,000.
+- `sugoroku.js` draws it in the casino screen and uses the casino wallet (points, or practice chips for guests).
+  - A roll is worked out, saved and paid before the board plays it, so closing half way loses nothing.
+  - Progress is kept on the device and, with points, in `users/{id}/sync/sugoroku`. The copy with more rolls wins.
+  - Tapping the board fast-forwards.
+
+Tests: `tests/sugoroku-model.test.cjs` (moves, squares, laps, line base, jackpot reset, return rate) and `tests/sugoroku.smoke.cjs` (board, rolls pay and save, resume, a line spins the roulette).
