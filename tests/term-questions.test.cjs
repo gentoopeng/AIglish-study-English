@@ -69,3 +69,11 @@ test("an empty 「」 keeps the numbering of the terms after it", () => {
   const list = t.questions({ num: 3, word: "x", meanings: [{ id: "3-0", text: "「 」と「本題」" }] });
   assert.deepEqual(list.filter((q) => q.kind === "blank").map((q) => [q.key, q.answer, q.prompt]), [["t:3-0:1", "本題", "x　 と（＿＿）"]]);
 });
+test("a 「」 card shows only the term; turned over, the headword and the rest of the line", () => {
+  const card = t.questions({ num: 1, word: "follow", meanings: [{ id: "1-0", text: "「A be followed by B」\nAの次にBが続く" }] }).find((q) => q.kind === "blank");
+  assert.equal(card.front, "A be followed by B");
+  assert.equal(card.back, "follow\nAの次にBが続く");
+  // Another term in the same line stays, shown plain; only this one is taken out.
+  const two = t.questions({ num: 2, word: "x", meanings: [{ id: "2-0", text: "「a」と 「b」" }] }).filter((q) => q.kind === "blank");
+  assert.deepEqual(two.map((q) => [q.front, q.back]), [["a", "x\nと b"], ["b", "x\naと"]]);
+});
