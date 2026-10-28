@@ -28,7 +28,8 @@
   // ---- Wallet ----------------------------------------------------------------------------
   // Settlements still on their way are counted at once, so a fast second bet sees them.
   let pending = 0;
-  const real = () => uid() !== "GUEST-000" && !!window.db && !!window.fbRunTransaction && !!window.Poker?.settle && !window.FirestoreReadGuard?.paused?.();
+  // すごろくビンゴ is a preview for now: always on practice chips, so it cannot move points.
+  const real = () => game?.id !== "sugoroku" && uid() !== "GUEST-000" && !!window.db && !!window.fbRunTransaction && !!window.Poker?.settle && !window.FirestoreReadGuard?.paused?.();
   const practiceName = () => "aiglish_casino_chips_" + uid();
   function practiceChips() {
     try {

@@ -1365,3 +1365,7 @@ Requested: a long-running medal-game style game with jackpots, played with point
   - Tapping the board fast-forwards.
 
 Tests: `tests/sugoroku-model.test.cjs` (moves, squares, laps, line base, jackpot reset, return rate) and `tests/sugoroku.smoke.cjs` (board, rolls pay and save, resume, a line spins the roulette).
+
+## すごろくビンゴ: preview on practice chips only (10.22.19.00)
+
+The game will be shown to everyone as a preview before its design is settled, so it must not change anyone's points. `real()` in casino.js is false while すごろくビンゴ is open. Its bets, payouts, balance and saving then use practice chips on the device, even when signed in; the other casino games are unchanged. `tests/casino.smoke.cjs` rolls while signed in and checks the wallet stays at 240pt.
