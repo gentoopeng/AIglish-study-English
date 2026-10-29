@@ -208,18 +208,33 @@ const SAVE = "aiglish_sugoroku_sg-a",
     assert.ok(cloudSave.rolls >= 1 && cloudSave.pending === null);
 
     // A jackpot win: the pot is taken with this device's unsent bets in, and starts again from
-    // its seed; a second win right after gets the seed and what came in since.
+    // its seed. 400,000 bet: the JACKPOT would be 13,000 but stops at 10,000, and the 3,000 past
+    // the cap stays for the SUPER JACKPOT. A second JACKPOT right after gets the seed and what
+    // came in since; the SUPER JACKPOT then takes its share, the spill and all.
     const wins = await page.evaluate(async () => {
-      window.__store["shared/casino_jackpot"] = { bet: 100000, jpFrom: 0, sjpFrom: 0 };
+      window.__store["shared/casino_jackpot"] = { bet: 400000, jpFrom: 0, sjpFrom: 0 };
       localStorage.setItem("aiglish_casino_jackpot_pending", "0");
       const first = await window.CasinoJackpot.win("jp", { id: "sg-a", n: "A" });
+      const spill = window.__store["shared/casino_jackpot"].spill;
       // 20,000 bet on this device and not sent yet.
       localStorage.setItem("aiglish_casino_jackpot_pending", "20000");
       const second = await window.CasinoJackpot.win("jp", { id: "sg-c", n: "C" });
+      const before = window.CasinoJackpot.amounts();
+      const sjp = await window.CasinoJackpot.win("sjp", { id: "sg-a", n: "A" });
       const pot = window.__store["shared/casino_jackpot"];
-      return { first, second, bet: pot.bet, jpFrom: pot.jpFrom, sjpFrom: pot.sjpFrom, who: pot.wins.map((w) => [w.kind, w.n, w.amount]), now: window.CasinoJackpot.amounts() };
+      return { first, spill, second, before, sjp, bet: pot.bet, from: [pot.jpFrom, pot.sjpFrom, pot.spill], who: pot.wins.map((w) => [w.kind, w.n, w.amount]), now: window.CasinoJackpot.amounts() };
     });
-    assert.deepEqual(wins, { first: 6000, second: 5200, bet: 120000, jpFrom: 120000, sjpFrom: 0, who: [["jp", "A", 6000], ["jp", "C", 5200]], now: { jp: 5000, sjp: 50600 } });
+    assert.deepEqual(wins, {
+      first: 10000,
+      spill: 3000,
+      second: 1600,
+      before: { jp: 1000, sjp: 5000 + 8400 + 3000 },
+      sjp: 16400,
+      bet: 420000,
+      from: [420000, 420000, 0],
+      who: [["jp", "A", 10000], ["jp", "C", 1600], ["sjp", "A", 16400]],
+      now: { jp: 1000, sjp: 5000 },
+    });
     assert.deepEqual(errors, []);
     console.log("PASS: shared すごろくビンゴ: untrusted card data checked, reach numbers, a failed write charges nothing, a player's part collected once, a line shared and logged, records, 早送り kept, script taps ignored, a jackpot win takes the pot and starts it again");
   } finally {

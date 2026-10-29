@@ -53,7 +53,7 @@
     // The normal wheel: 24 slots; a ball slot gives a ball and nothing else (a ball that misses
     // the card pays missPay).
     normal: {
-      100: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25), ...N(0.75, 2), ...N(0.5, 5), ...N(0.25, 7), ...N(0.1, 2), ...N(0, 1), ...BALL(0, 3)]),
+      100: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25, 2), ...N(0.75, 2), ...N(0.5, 5), ...N(0.25, 6), ...N(0.1, 2), ...N(0, 1), ...BALL(0, 3)]),
     },
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
@@ -76,8 +76,8 @@
     // After a line: x pays the bet × x; game starts a mini game; miss is the bingo prize alone;
     // the super-jackpot chance leads to the second wheel, where back spins the first again.
     wheels: {
-      bingo: [{ x: 5 }, { game: "timer" }, { x: 10 }, { game: "tap" }, { jackpot: "jp" }, { game: "dice" }, { x: 20 }, { game: "math" }, { miss: true }, { next: "sjp" }],
-      sjp: [{ jackpot: "sjp" }, { jackpot: "jp" }, { game: "tapex" }, { jackpot: "jp" }, { back: true }],
+      bingo: [{ x: 5 }, { game: "timer" }, { x: 10 }, { game: "tap" }, { jackpot: "jp" }, { game: "dice" }, { x: 20 }, { game: "math" }, { jackpot: "jp" }, { next: "sjp" }],
+      sjp: [{ jackpot: "sjp" }, { jackpot: "jp" }, { game: "tapex" }, { jackpot: "sjp" }, { back: true }],
     },
     // Mini games, scored in points (multiplied like the line's other prizes):
     // timer – stop at 10 seconds: 1,000 less 5 for every 0.01 s off; tap / tapex – taps in 10

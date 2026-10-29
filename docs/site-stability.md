@@ -1723,3 +1723,31 @@ Tests:
 
 - `tests/casino.smoke.cjs`: a roll on points is one wallet move, keyed `casino:sugoroku:…:net`, and its bet feeds the jackpots.
 - `tests/sugoroku-shared.smoke.cjs`: now on points. It checks the wallet after a collected share, an accident past the wallet becoming a casino debt, and the cloud copy.
+
+## Jackpots sized to what is bet, and won more often (10.22.36.00)
+
+The user found the jackpots too large for what the casino takes in. A word earns 2pt and a roll costs 100pt, but the SUPER JACKPOT stood at 50,000 before anything was bet: about 90% of a typical SUPER JACKPOT was seed. The user also allowed the jackpots to come more often.
+
+- **Pots are mostly real bets.**
+  - JACKPOT = 1,000 + 3% of what was bet since it was last won, up to 10,000.
+  - SUPER JACKPOT = 5,000 + 2%, up to 100,000.
+  - What the JACKPOT would hold past its cap goes to the SUPER JACKPOT. It is kept in `spill` once the JACKPOT is won, until the SUPER JACKPOT is won.
+  - `CasinoJackpot.win` keeps all of this in its one transaction.
+- **More often.** The bingo wheel's ハズレ became a second JACKPOT slot. The SUPER JACKPOT CHANCE wheel now has the SUPER JACKPOT twice and the JACKPOT once.
+- **Balance kept.** The normal wheel's second ×1.25 slot came back (it had been made ×0.25 in 10.22.33.00).
+
+Simulated with the pot fed only by すごろくビンゴ (sim6.cjs, 1.5 million rolls, cap and spill modelled):
+
+| | 1 player | 5 players |
+| --- | ---: | ---: |
+| Without jackpots | 91% | 87.8% |
+| Jackpots | 7.4% | 7.4% |
+| Total | about 98.4% | about 95.2% |
+| JACKPOT | once in about 800 rolls, typically about 3,350pt | same |
+| SUPER JACKPOT | once in about 4,200–4,500 rolls, typically about 14,000pt | same |
+
+Tests:
+
+- `tests/sugoroku-model.test.cjs`: the wheels.
+- `tests/sugoroku-shared.smoke.cjs`: the cap, the spill carried into the SUPER JACKPOT, and every pot starting again.
+- `tests/casino.smoke.cjs`, `tests/sugoroku.smoke.cjs`: the new amounts.
