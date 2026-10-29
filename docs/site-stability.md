@@ -1594,3 +1594,13 @@ It opens the add form with `openVocabWordEntry({ after: word })`:
 The existing `VocabOrder.place` moves the later numbers down. Numbers are display numbers, so every record stays with its word.
 
 Test: `tests/vocab-insert.smoke.cjs`.
+
+## 「」 cards: the back reads as a sentence (10.22.31.00)
+
+Reported with a screenshot: in a 用語・年号モード history book, the 「大連」 card of 蘇我馬子 showed "大連" on the front and on the back "大臣の官職につきの官職であった物部守屋を滅ぼした人物".
+
+The back was the line with the asked term cut out. That breaks any sentence whose 「」 sits mid-sentence.
+
+The back now shows the headword and the whole line, with the asked term kept in its place in 「」 and any other terms plain: "蘇我馬子 / 大臣の官職につき「大連」の官職であった物部守屋を滅ぼした人物". The front is unchanged.
+
+Test: `tests/term-questions.test.cjs`.
