@@ -108,20 +108,48 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
     const paid = { win: 100, push: 50, lose: 25 }[outcome];
     assert.ok((await page.evaluate(() => window.Casino.balance())) >= chips + paid, outcome);
 
-    // A row one short with everything else open: the next ball makes a line and spins BINGO.
+    // The draws are fixed from here: the next values crypto gives go to the die, then the ball.
+    const fix = (values) =>
+      page.evaluate((values) => {
+        const real = window.__realRandom || (window.__realRandom = crypto.getRandomValues.bind(crypto));
+        window.__queue = values.slice();
+        crypto.getRandomValues = (array) => (window.__queue.length ? ((array[0] = window.__queue.shift()), array) : real(array));
+      }, values);
+    // A ball off the card: it rolls in, greys out and pays 1.5× the bet (50 → 75).
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
-    await page.evaluate((name) => {
+    const missNo = await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.pos = 79;
+      localStorage.setItem(name, JSON.stringify(s));
+      return Array.from({ length: 100 }, (_, i) => i + 1).find((n) => !s.card.includes(n));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").waitFor();
+    const before = await saved();
+    // Die 1 onto START (a ball), START's wheel on its ×0 slot.
+    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[50].findIndex((x) => x.x === 0));
+    await fix([0, missNo - 1, zeroAt]);
+    await screen.locator("[data-sg-roll]").click();
+    await settled();
+    const missed = await saved();
+    assert.equal(missed.won - before.won, 75);
+    assert.equal(missed.marks.filter(Boolean).length, before.marks.filter(Boolean).length);
+
+    // A row one short with everything else open: a ball on that number makes a line and spins BINGO.
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    const lastNo = await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
       s.marks = s.marks.map((_, i) => i !== 6);
       s.lines = [];
       s.stake = 400;
-      s.pos = 78;
+      s.pos = 79;
       localStorage.setItem(name, JSON.stringify(s));
+      return s.card[6];
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").waitFor();
     assert.ok((await screen.locator(".sg-cell.is-reach").count()) >= 1);
-    // From square 78 any die passes START, and the lap gives a ball.
+    await fix([0, lastNo - 1]);
     await screen.locator("[data-sg-roll]").click();
     await screen.locator(".sg-layer.is-bingo").waitFor({ state: "attached" });
     await settled();
@@ -131,7 +159,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
     assert.ok(done.cards >= 1, "the full card started again");
     await page.screenshot({ path: "/tmp/sugoroku-after.png", fullPage: true });
     assert.deepEqual(errors, []);
-    console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled, a line spins BINGO");
+    console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled, a ball off the card pays 1.5×, a line spins BINGO");
   } finally {
     await browser.close();
   }
