@@ -96,6 +96,8 @@
 /* Controls */
 .sg-controls{display:grid;gap:7px;}
 .sg-costs{display:grid;grid-template-columns:repeat(3,1fr);padding:3px;border:1px solid rgba(240,232,212,.14);border-radius:12px;}
+.sg-costs.is-fixed{display:flex;justify-content:center;align-items:baseline;gap:8px;margin:0;padding:6px;color:var(--muted);font-size:12px;}
+.sg-costs.is-fixed b{color:var(--ivory);font:500 18px Georgia,serif;}
 .sg-cost{min-height:34px;border:0;border-radius:9px;background:transparent;color:var(--muted);font:500 14px Georgia,serif;cursor:pointer;transition:background .2s,color .2s;}
 .sg-cost[aria-checked=true]{background:linear-gradient(180deg,#d6b773,#a8884a);color:#1f1608;font-weight:700;}
 .sg-cost:disabled:not([aria-checked=true]){opacity:.5;}

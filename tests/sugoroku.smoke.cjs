@@ -64,28 +64,38 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       await settled();
     };
 
-    // Rolls at 50 chips each: chips always = 1000 − bets + what came back.
-    await screen.getByRole("radio", { name: "50枚" }).click();
-    for (let i = 0; i < 6; i++) {
+    // Rolls at the fixed 100 chips: chips always = 1000 − bets + what came back.
+    assert.match(await screen.locator(".sg-costs").innerText(), /1回\s*100枚/);
+    const start = await page.evaluate(() => window.Casino.balance());
+    for (let i = 0; i < 4; i++) {
       await screen.locator("[data-sg-roll]").click();
       await settled();
       await playGame();
     }
     const after = await saved();
-    assert.equal(after.rolls, 6);
-    assert.equal(after.bet, 300);
+    assert.equal(after.rolls, 4);
+    assert.equal(after.bet, 400);
     assert.equal(after.pending, null);
-    assert.equal(await page.evaluate(() => window.Casino.balance()), 1000 - 300 + after.won);
+    assert.equal(await page.evaluate(() => window.Casino.balance()), start - 400 + after.won);
     const afterCard = await card();
     assert.equal(await screen.locator(".sg-cell.is-on").count(), afterCard.owners.filter((o) => o && o !== "*").length);
     assert.equal(await screen.locator(".sg-cell.is-mine").count(), afterCard.owners.filter((o) => o === "GUEST-000").length);
     assert.equal(await page.evaluate(() => [...document.querySelectorAll(".sg-sq")].findIndex((s) => s.classList.contains("is-here"))), after.pos);
 
+    // Out of practice chips, the button fills them up again.
+    await page.evaluate(() => localStorage.setItem("aiglish_casino_chips_GUEST-000", "40"));
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.getByRole("button", { name: "練習チップを1,000枚に戻す" }).click();
+    assert.equal(await page.evaluate(() => window.Casino.balance()), 1000);
+    await screen.getByRole("button", { name: "サイコロを振る" }).waitFor();
+
     // Closed and opened again: the same card and place.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").waitFor();
-    assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll(".sg-cell")].map((c) => c.title || c.textContent)), afterCard.cells.map((n, i) => (afterCard.owners[i] === "GUEST-000" ? "ゲストのボール（" + n + "）" : n ? String(n) : "FREE")));
+    const guestName = await page.evaluate(() => myName);
+    assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll(".sg-cell")].map((c) => c.title || c.textContent)), afterCard.cells.map((n, i) => (afterCard.owners[i] === "GUEST-000" ? guestName + "のボール（" + n + "）" : n ? String(n) : "FREE")));
 
     // An event game left half way comes back where it was.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
@@ -119,7 +129,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
         window.__queue = values.slice();
         crypto.getRandomValues = (array) => (window.__queue.length ? ((array[0] = window.__queue.shift()), array) : real(array));
       }, values);
-    // A ball off the card: it rolls in, greys out and pays 1.5× the bet (50 → 75).
+    // A ball off the card: it rolls in, greys out and pays 1.5× the bet (100 → 150).
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     const missNo = await page.evaluate(([name, cardName]) => {
       const s = JSON.parse(localStorage.getItem(name));
@@ -133,12 +143,12 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const before = await saved(),
       beforeCard = await card();
     // Die 1 onto START (a ball), START's wheel on its ×0 slot.
-    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[50].findIndex((x) => x.x === 0));
+    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball));
     await fix([0, missNo - 1, zeroAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
     const missed = await saved();
-    assert.equal(missed.won - before.won, 75);
+    assert.equal(missed.won - before.won, 150);
     assert.deepEqual((await card()).owners, beforeCard.owners);
 
     // Another player's ball shows their initial and name; the top row is the guest's own but its

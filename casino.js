@@ -193,7 +193,7 @@
     document.body.classList.add("casino-open");
     screen.showModal();
     game = { id, body: screen.querySelector(".cs-body") };
-    if (id === "sugoroku") window.Sugoroku.play(game.body, { round, balance, unit, real, refresh, uid });
+    if (id === "sugoroku") window.Sugoroku.play(game.body, { round, balance, unit, real, refresh, uid, resetPractice: () => (setPractice(PRACTICE_START), refresh()), practiceStart: PRACTICE_START });
     else ({ blackjack, roulette, dice, chinchiro })[id](game.body);
     refresh();
   }

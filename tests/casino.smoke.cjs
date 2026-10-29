@@ -264,11 +264,10 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const firstNo = hitNo || (await page.evaluate(() => [...document.querySelectorAll(".sg-cell span")].map((x) => Number(x.textContent)).find(Boolean)));
     await page.evaluate(([n]) => {
       const S = window.SugorokuModel,
-        q = [0, S.RULES.normal[10].findIndex((x) => x.ball), n - 1],
+        q = [0, S.RULES.normal[100].findIndex((x) => x.ball), n - 1],
         real = crypto.getRandomValues.bind(crypto);
       crypto.getRandomValues = (a) => (q.length ? ((a[0] = q.shift()), a) : real(a));
     }, [firstNo]);
-    await sg.getByRole("radio", { name: "10枚" }).click();
     await sg.locator("[data-sg-roll]").click();
     await page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning") && window.__wallet["shared/sugoroku_card"]);
     const sharedCard = await page.evaluate(() => window.__wallet["shared/sugoroku_card"]);
