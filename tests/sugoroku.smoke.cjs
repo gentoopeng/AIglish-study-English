@@ -26,8 +26,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.locator("#nav-casino").click();
     const tab = page.locator("#view-casino.active");
     // The casino's jackpots are always on the tab.
-    assert.equal(await tab.locator("[data-casino-jackpots] .is-jp b").innerText(), "5,000pt");
-    assert.equal(await tab.locator("[data-casino-jackpots] .is-sjp b").innerText(), "50,000pt");
+    assert.equal(await tab.locator("[data-casino-jackpots] .is-jp b").innerText(), "1,000pt");
+    assert.equal(await tab.locator("[data-casino-jackpots] .is-sjp b").innerText(), "5,000pt");
     await tab.locator(".casino-game.mode-sugoroku").click();
     const screen = page.locator("dialog.casino-screen.is-sugoroku[open]");
     await screen.locator(".sg-card").waitFor();
@@ -40,7 +40,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       return go.bottom <= innerHeight && card.top >= 0 && card.width > 230;
     });
     assert.ok(fits, "fits one screen");
-    assert.equal(await screen.locator('[data-pot="jp"] b').innerText(), "5,000pt");
+    assert.equal(await screen.locator('[data-pot="jp"] b').innerText(), "1,000pt");
     const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth || [...document.querySelectorAll(".sg-cell,.sg-cost,.sg-go")].some((el) => el.scrollWidth > el.clientWidth + 1));
     assert.equal(wide, false);
     await page.screenshot({ path: "/tmp/sugoroku.png", fullPage: true });

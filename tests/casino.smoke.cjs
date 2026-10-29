@@ -229,9 +229,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const keys = await page.evaluate(() => Object.keys(window.__wallet["users/casino-a/learningPoints/main"].poker));
     assert.equal(keys.length, 1);
     assert.match(keys[0], /^casino:blackjack:.+:bet$/);
-    // Points bet in the casino feed the shared jackpots (1% and 0.5% of what was bet).
+    // Points bet in the casino feed the shared jackpots (3% and 2% of what was bet).
     await page.waitForFunction(() => window.__wallet["shared/casino_jackpot"]?.bet === 60);
-    assert.deepEqual(await page.evaluate(() => window.CasinoJackpot.amounts()), { jp: 5000, sjp: 50000 });
+    assert.deepEqual(await page.evaluate(() => window.CasinoJackpot.amounts()), { jp: 1001, sjp: 5001 });
     // A poker hand lost to another player (no house share) does not feed them.
     const pendingBefore = await page.evaluate(() => localStorage.getItem("aiglish_casino_jackpot_pending"));
     await page.evaluate(() => window.Poker.settle("ROOM1:0:1", -10));

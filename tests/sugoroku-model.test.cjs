@@ -42,19 +42,19 @@ test("the board, card and wheels have the agreed shape", () => {
   }
   // One fixed bet for everybody.
   assert.deepEqual(S.RULES.costs, [100]);
-  // The bingo wheel: ×5 / ×10 / ×20, four mini games, a miss, the jackpot and the super chance.
+  // The bingo wheel: ×5 / ×10 / ×20, four mini games, the jackpot twice and the super chance.
   const bingo = S.RULES.wheels.bingo;
   assert.equal(bingo.length, 10);
   assert.deepEqual(bingo.filter((x) => x.x).map((x) => x.x).sort((a, b) => a - b), [5, 10, 20]);
   assert.deepEqual(bingo.filter((x) => x.game).map((x) => x.game).sort(), ["dice", "math", "tap", "timer"]);
-  assert.equal(bingo.filter((x) => x.miss).length, 1);
-  assert.equal(bingo.filter((x) => x.jackpot === "jp").length, 1);
+  assert.equal(bingo.filter((x) => x.miss).length, 0);
+  assert.equal(bingo.filter((x) => x.jackpot === "jp").length, 2);
   assert.equal(bingo.filter((x) => x.next === "sjp").length, 1);
-  // The super chance: the super jackpot, the jackpot twice, the bigger tapping game, back.
+  // The super chance: the super jackpot twice, the jackpot, the bigger tapping game, back.
   const sjp = S.RULES.wheels.sjp;
   assert.equal(sjp.length, 5);
-  assert.equal(sjp.filter((x) => x.jackpot === "sjp").length, 1);
-  assert.equal(sjp.filter((x) => x.jackpot === "jp").length, 2);
+  assert.equal(sjp.filter((x) => x.jackpot === "sjp").length, 2);
+  assert.equal(sjp.filter((x) => x.jackpot === "jp").length, 1);
   assert.equal(sjp.filter((x) => x.game === "tapex").length, 1);
   assert.equal(sjp.filter((x) => x.back).length, 1);
   // An old save (with its own card) keeps its place and counts.
@@ -216,8 +216,6 @@ test("the jackpot is a slot of the bingo wheel, the super chance leads to its ow
   assert.deepEqual(back.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["normal", "bingo", "sjp", "bingo"]);
   assert.equal(back.gain, 43 + 1000);
   assert.deepEqual(sjp.state.jpWait, ["sjp"]);
-  // A miss is the bingo prize alone.
-  assert.equal(lineReady([slot("bingo", (x) => x.miss)]).gain, 43);
 });
 
 test("a mini game waits in state.bonus, blocks rolling and pays its score, 0 when left", () => {
