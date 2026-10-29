@@ -1678,3 +1678,26 @@ Tests:
 - `tests/sugoroku-shared.smoke.cjs`: shared card, failed write, collection, log, records, 早送り, script taps and the jackpot win transaction.
 - `tests/point-loans.smoke.cjs`: debt to the casino.
 - `tests/sugoroku.smoke.cjs` and `tests/casino.smoke.cjs`: updated.
+
+## すごろくビンゴ: おまかせ, old shares, the casino tab notice (10.22.34.00)
+
+These are the follow-ups that can be done without a server.
+
+- **おまかせ.** In a ★ event game, おまかせ plays the round with a plain strategy and presses つづける by itself:
+  - blackjack: draw below 17;
+  - dice poker: keep what the dealer would (`CasinoModel.dealerKeeps`), at most three throws;
+  - chinchiro: throw until done.
+
+  In 早送り it starts on its own. While it plays, the other buttons are off.
+- **Old shares go.** A part of someone else's line is stamped when it grows (`owedAt`). A part not collected within 30 days is dropped, and the card keeps at most the 200 newest parts (`SugorokuModel.tidyOwed`, run with every change), so the shared card cannot grow without end. A part on an older card without a stamp starts counting from its first change.
+- **Casino tab.** The すごろくビンゴ tile shows 「分け前 N 届いています」 when a part waits for this player. The shared card is read at most every five minutes for this, and the notice is cleared once the part is collected.
+- **A crowded card.** A failed write to the shared card is tried once more after a short pause before the player is asked to roll again.
+- **Jackpot shares.** Only points bet against the house feed the jackpots. Poker and one-to-one duels between players have no house share to pay for them, so they no longer add to the pots (before, they created points).
+- **Mini games.** The 10秒ぴったり button and the 暗算 keypad only take real presses, as the tapping game already did. This stops a script on the page. A player can still play the result in another way, which only a server can prevent.
+
+Tests:
+
+- `tests/sugoroku-model.test.cjs`: stamping, expiry and the cap.
+- `tests/sugoroku.smoke.cjs`: おまかせ through a blackjack round, and a script press ignored by the timer.
+- `tests/sugoroku-shared.smoke.cjs`: `owedAt` written, and the casino tab notice for the other player.
+- `tests/casino.smoke.cjs`: a poker hand does not feed the jackpots.

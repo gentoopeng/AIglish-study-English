@@ -41,8 +41,10 @@
     "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の1.5倍がもらえます。1列そろえるとビンゴ賞金（300）と、ビンゴルーレット（掛け金×5・×10・×20、10秒ぴったり、連打、サイコロ、暗算、ハズレ、JACKPOT、SUPER JACKPOT CHANCE）。SUPER JACKPOT CHANCEはSUPER JACKPOT・JACKPOT×2・連打EX・もう一回の5つ。自分のボールだけでそろえると賞金とミニゲームが1.5倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
     "ビンゴ賞金は、その列にボールを置いていた人でボールの数に応じて山分けします。ほかの人の分は、その人が次にすごろくビンゴを開いたときに届きます。ルーレットとミニゲームはそろえた人のものです。",
     "連打は120回まで数えます。",
-    "ジャックポットはカジノ全体で賭けられたポイントから貯まります（JACKPOT 5,000 + 1%、SUPER JACKPOT 50,000 + 0.5%）。",
-    "「早送り」にすると、ふだんのマスは短く、ビンゴやジャックポットはいつもどおり見られます。盤面をタップするとその回を最後まで飛ばせます。",
+    "ジャックポットは、カジノでハウス（ディーラー）相手に賭けられたポイントから貯まります（JACKPOT 5,000 + 1%、SUPER JACKPOT 50,000 + 0.5%）。",
+    "「早送り」にすると、ふだんのマスは短く、ビンゴやジャックポットはいつもどおり見られます。★マスのゲームも自動（おまかせ）で進みます。盤面をタップするとその回を最後まで飛ばせます。",
+    "★マスのゲームは「おまかせ」を押すと、決まったやり方（ブラックジャックは17未満なら引く など）で自動で進みます。",
+    "ほかの人のビンゴの分け前は、30日受け取りに来ないと消えます。届いている分はカジノのタブにも出ます。",
   ];
 
   // ---- Saving ----------------------------------------------------------------------------
@@ -106,7 +108,7 @@
       .map((e) => ({ t: e.t, id: e.id, n: String(e.n ?? "").slice(0, 24), c: Math.min(12, Math.max(1, Math.floor(Number(e.c) || 1))), at: e.at }));
   }
   function readCard(data) {
-    const card = data && { cells: data.cells, owners: data.owners, ...(data.owed ? { owed: data.owed } : {}) };
+    const card = data && { cells: data.cells, owners: data.owners, ...(data.owed ? { owed: data.owed } : {}), ...(data.owedAt ? { owedAt: data.owedAt } : {}) };
     return S.validCard(card) ? { card, people: cleanPeople(data.people), log: cleanLog(data.log) } : null;
   }
   function keepCard(card, people, log) {
@@ -185,6 +187,7 @@
         out = change(got.card),
         at = Date.now(),
         entries = [];
+      S.tidyOwed(out.card, now.card, at);
       for (const e of out.events) {
         if (e.t === "line") entries.push({ t: "bingo", id, n: mine.n, c: e.count, at });
         if (e.t === "jackpot") entries.push({ t: e.kind, id, n: mine.n, c: 1, at });
@@ -194,21 +197,47 @@
       return { out, collected: got.amount, people: keep(out.card, now.people), log: entries.length ? (now.log || []).concat(entries).slice(-30) : now.log || [] };
     };
     if (view.online) {
-      const result = await window.fbRunTransaction(window.db, async (tx) => {
-        const snap = await tx.get(cardRef());
-        const now = (snap.exists() && readCard(snap.data())) || { card: S.newCard(random), people: {}, log: [] };
-        const done = apply(now);
-        if (!snap.exists() || done.collected || JSON.stringify(done.out.card) !== JSON.stringify(now.card) || done.log !== now.log)
-          tx.set(cardRef(), { cells: done.out.card.cells, owners: done.out.card.owners, owed: done.out.card.owed || {}, people: done.people, log: done.log, updatedAt: Date.now() });
-        return { ...done, before: now };
-      });
+      const attempt = () =>
+        window.fbRunTransaction(window.db, async (tx) => {
+          const snap = await tx.get(cardRef());
+          const now = (snap.exists() && readCard(snap.data())) || { card: S.newCard(random), people: {}, log: [] };
+          const done = apply(now);
+          if (!snap.exists() || done.collected || JSON.stringify(done.out.card) !== JSON.stringify(now.card) || done.log !== now.log)
+            tx.set(cardRef(), { cells: done.out.card.cells, owners: done.out.card.owners, owed: done.out.card.owed || {}, owedAt: done.out.card.owedAt || {}, people: done.people, log: done.log, updatedAt: Date.now() });
+          return { ...done, before: now };
+        });
+      // Many players at once can crowd the one card: one more try after a moment before giving up.
+      let result;
+      try {
+        result = await attempt();
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 400 + random(400)));
+        result = await attempt();
+      }
       keepCard(result.out.card, result.people, result.log);
+      // Whatever waited was just taken.
+      peek = { id, at: Date.now(), amount: 0 };
       return result;
     }
     const now = cachedCard() || { card: view.card, people: view.people, log: view.log };
     const done = apply(now);
     keepCard(done.out.card, done.people, done.log);
     return { ...done, before: now };
+  }
+  // What waits for `id` on the shared card (their part of other players' lines), for the casino
+  // tab; the cloud is read at most every five minutes.
+  let peek = { id: null, at: 0, amount: 0 };
+  async function waiting(id) {
+    if (!id || id === "GUEST-000" || !window.db || !window.fbDoc || !window.fbGetDoc || window.FirestoreReadGuard?.paused?.()) return 0;
+    if (peek.id !== id || Date.now() - peek.at > 300e3)
+      try {
+        const snap = await window.fbGetDoc(window.fbDoc(window.db, "shared", "sugoroku_card")),
+          found = snap.exists() ? readCard(snap.data()) : null;
+        peek = { id, at: Date.now(), amount: found?.card.owed?.[id] || 0 };
+      } catch (error) {
+        console.warn("[sugoroku] waiting", error);
+      }
+    return peek.id === id ? peek.amount : 0;
   }
   // Other players' balls come in while the screen is open.
   function listen() {
@@ -906,17 +935,38 @@
       line = node("p", "sg-game-line");
     box.append(table, line, actions);
     layer.replaceChildren(box);
+    // おまかせ plays the round with a plain strategy (blackjack: draw below 17; dice poker: keep
+    // what the dealer would; chinchiro: throw until done) and goes on by itself. In 早送り it
+    // starts on its own. Each game sets `step` (one move; false when the round is over) and `redraw`.
+    let auto = false,
+      step = null,
+      redraw = null;
+    const autoBtn = node("button", "sg-game-btn sg-auto", "おまかせ");
+    autoBtn.type = "button";
+    autoBtn.dataset.sgGame = "auto";
+    const play = async () => {
+      if (auto || !step) return;
+      auto = true;
+      autoBtn.disabled = true;
+      redraw();
+      while (view?.layer === layer && !layer.hidden && step()) await wait(400);
+    };
+    autoBtn.onclick = play;
     const button = (text, onClick, data) => {
       const b = node("button", "sg-game-btn", text);
       b.type = "button";
       if (data) b.dataset.sgGame = data;
       b.onclick = onClick;
+      // While おまかせ plays, only つづける is pressed (by itself).
+      if (auto && data !== "next") b.disabled = true;
       actions.append(b);
       return b;
     };
     const end = (m) => {
       actions.replaceChildren();
-      button("つづける", () => finish(m), "next");
+      autoBtn.remove();
+      const next = button("つづける", () => finish(m), "next");
+      if (auto) setTimeout(() => next.isConnected && !next.disabled && next.click(), 900 * (pace() || 0.02));
     };
     if (p.game === "blackjack") {
       const draw = () => {
@@ -948,6 +998,16 @@
           end(m);
         }
       };
+      step = () => {
+        const t = p.round;
+        if (t.done) return false;
+        const hand = t.seats.me.hands.find((h) => !h.done) || t.seats.me.hands[0];
+        p.round = C.tableAct(t, "me", C.bjTotal(hand.cards).total < 17 ? "hit" : "stand");
+        keepRound(p.round);
+        draw();
+        return true;
+      };
+      redraw = draw;
       if (!p.round) keepRound((p.round = C.tableDeal(["me"], { me: p.bet }, random)));
       draw();
     } else if (p.game === "dice") {
@@ -999,6 +1059,20 @@
           end(r.net / p.bet);
         }
       };
+      step = () => {
+        const r = p.round;
+        if (r.done) return false;
+        const keep = C.dealerKeeps(r.dice);
+        if (r.rolls < 3 && !keep.every(Boolean)) {
+          let next = r;
+          keep.forEach((k, i) => next.held[i] !== k && (next = C.diceToggle(next, i)));
+          p.round = C.diceReroll(next, random);
+        } else p.round = C.diceStand(r, random);
+        keepRound(p.round);
+        draw();
+        return true;
+      };
+      redraw = draw;
       if (!p.round) keepRound((p.round = C.diceStart(p.bet, random)));
       draw();
     } else {
@@ -1028,9 +1102,20 @@
           end(m);
         }
       };
+      step = () => {
+        const r = p.round;
+        if (C.chinParentDecides(r.parent.hand) !== null || r.child.done) return false;
+        p.round = { ...r, child: C.chinNext(r.child, random, C.CHILD_THROWS) };
+        keepRound(p.round);
+        draw();
+        return true;
+      };
+      redraw = draw;
       if (!p.round) keepRound((p.round = { parent: C.chinTurn(random), child: C.chinStart() }));
       draw();
     }
+    if (autoBtn.isConnected || !actions.querySelector('[data-sg-game="next"]')) box.append(autoBtn);
+    if (view.quick) play();
   }
   function die(value) {
     const el = node("span", "cs-die");
@@ -1137,7 +1222,9 @@
       show.textContent = "0.00";
       let t0 = 0,
         tick = 0;
-      go.onclick = () => {
+      // Only real presses (not a script's) start and stop it.
+      go.onclick = (e) => {
+        if (!e.isTrusted) return;
         if (!t0) {
           started(item);
           t0 = performance.now();
@@ -1229,7 +1316,8 @@
           const b = node("button", "sg-key", k);
           b.type = "button";
           b.dataset.key = k;
-          b.onclick = () => {
+          b.onclick = (e) => {
+            if (!e.isTrusted) return;
             if (k === "⌫") typed = typed.slice(0, -1);
             else if (k === "−") typed = typed.startsWith("−") ? typed.slice(1) : "−" + typed;
             else if (typed.replace("−", "").length < 5) typed += k;
@@ -1240,7 +1328,7 @@
         const ok = node("button", "sg-game-btn", "こたえる");
         ok.type = "button";
         ok.dataset.sgGame = "answer";
-        ok.onclick = submit;
+        ok.onclick = (e) => e.isTrusted && submit();
         keys.append(ok);
         const t0 = performance.now(),
           seconds = S.RULES.games.math.seconds;
@@ -1254,5 +1342,5 @@
     }
   }
 
-  window.Sugoroku = Object.freeze({ play });
+  window.Sugoroku = Object.freeze({ play, waiting });
 })();

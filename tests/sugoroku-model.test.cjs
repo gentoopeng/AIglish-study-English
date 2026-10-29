@@ -332,3 +332,26 @@ test("an older save gets the new counters, and a roll records its best payout", 
   const out = S.roll({ ...S.newState(), pos: at("normal") - 1 }, S.newCard(seq([0])), 100, seq([0, three]));
   assert.equal(out.state.best, 300);
 });
+
+test("parts of others' lines are stamped, dropped after owedDays and kept to owedMax", () => {
+  const day = 864e5,
+    card = { ...S.newCard(seq([0])), owed: { old: 50, kept: 20 }, owedAt: { old: 0, kept: 0 } };
+  // At day 10: ann's part grows (stamped now), old and kept stay.
+  const now = S.tidyOwed({ ...card, owed: { ...card.owed, ann: 30 } }, card, 10 * day);
+  assert.deepEqual(now.owedAt, { ann: 10 * day, old: 0, kept: 0 });
+  // At day 31 the untouched parts are past 30 days and go; ann's stays.
+  const later = S.tidyOwed(structuredClone(now), now, 31 * day);
+  assert.deepEqual(later.owed, { ann: 30 });
+  // A part without a stamp (an older card) starts counting now.
+  assert.deepEqual(S.tidyOwed({ ...card, owedAt: undefined }, card, 5).owedAt, { old: 5, kept: 5 });
+  // Only the newest owedMax stay.
+  const many = { ...card, owed: {}, owedAt: {} };
+  for (let i = 0; i < S.RULES.owedMax + 5; i++) (many.owed["p" + i] = 1), (many.owedAt["p" + i] = i);
+  const capped = S.tidyOwed(structuredClone(many), many, 1000);
+  assert.equal(Object.keys(capped.owed).length, S.RULES.owedMax);
+  assert.equal("p0" in capped.owed, false);
+  // Collecting takes the stamp too.
+  assert.deepEqual(S.collect(now, "ann").card.owedAt, { old: 0, kept: 0 });
+  assert.equal(S.validCard(now), true);
+  assert.equal(S.validCard({ ...now, owedAt: { ann: "x" } }), false);
+});

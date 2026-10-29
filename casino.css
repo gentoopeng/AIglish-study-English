@@ -242,3 +242,4 @@ html body dialog.casino-screen{position:fixed;inset:0;width:100%;max-width:none;
 @keyframes cs-stamp{0%{opacity:0;transform:translateX(-50%) rotate(-6deg) scale(2.2)}100%{opacity:1;transform:translateX(-50%) rotate(-6deg) scale(1)}}
 @keyframes cs-big-glow{0%{box-shadow:0 0 0 0 rgba(255,214,120,0)}30%{box-shadow:0 0 0 6px rgba(255,214,120,.45),0 0 40px rgba(255,200,100,.55)}100%{box-shadow:0 0 0 0 rgba(255,214,120,0)}}
 .casino-pic .is-bowl{fill:#e4d6b8;stroke:#7a6440;stroke-width:1.2;}.casino-pic .is-bowl-in{fill:#f6efe0;}
+.casino-waiting{position:absolute;top:10px;right:10px;padding:2px 8px;border-radius:999px;background:rgba(214,183,115,.18);border:1px solid rgba(214,183,115,.55);color:#e9d39c;font:600 10px/1.6 system-ui,sans-serif;font-style:normal;}

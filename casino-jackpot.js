@@ -1,5 +1,6 @@
-// The casino's shared jackpots. Every point bet anywhere in the casino (all of it goes through
-// Poker.settle) adds to one running total in shared/casino_jackpot; the jackpots are a part of
+// The casino's shared jackpots. Every point bet against the house in the casino (it all goes
+// through Poker.settle; poker and duels between players do not count, having no house share to
+// pay for it) adds to one running total in shared/casino_jackpot; the jackpots are a part of
 // what was bet since each was last won:
 //   JACKPOT       = 5,000  + 1% of the total since the last JACKPOT
 //   SUPER JACKPOT = 50,000 + 0.5% of the total since the last SUPER JACKPOT

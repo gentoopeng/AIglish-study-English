@@ -64,6 +64,10 @@
     missPay: 1.5,
     // A line made only of the player's own balls pays this many times more.
     soloBonus: 1.5,
+    // A part of someone else's line not collected within owedDays is dropped, and the card keeps
+    // at most owedMax people's parts (the oldest go first), so it cannot grow without end.
+    owedDays: 30,
+    owedMax: 200,
     // Accident wheel: take: multiples of the bet taken on top, back: squares back, start: back to START.
     accident: [{ take: 0 }, { take: 0.5 }, { back: 3 }, { take: 1 }, { start: true }, { take: 1.5 }, { back: 3 }, { take: 2 }, { take: 0.5 }, { start: true }],
     // Wheels after a line. x: multiples of what was bet since the last line.
@@ -124,16 +128,33 @@
       Array.isArray(card.owners) &&
       card.owners.length === CARD * CARD &&
       card.owners.every((o, i) => (i === FREE ? o === "*" : o === "" || ID(o))) &&
-      (card.owed === undefined || validOwed(card.owed))
+      (card.owed === undefined || validOwed(card.owed)) &&
+      (card.owedAt === undefined || (!!card.owedAt && typeof card.owedAt === "object" && !Array.isArray(card.owedAt) && Object.entries(card.owedAt).every(([id, t]) => ID(id) && Number.isFinite(t))))
     );
   }
   const validOwed = (owed) =>
     !!owed && typeof owed === "object" && !Array.isArray(owed) && Object.entries(owed).every(([id, n]) => ID(id) && Number.isInteger(n) && n >= 0 && n <= 1e7);
+  // After a change at time `at`: each part that grew is stamped, parts older than owedDays go,
+  // and only the owedMax newest stay. `before` is the card the change was made on.
+  function tidyOwed(card, before, at) {
+    const owed = { ...(card.owed || {}) },
+      stamp = { ...(card.owedAt || {}) };
+    for (const id of Object.keys(stamp)) if (!(id in owed)) delete stamp[id];
+    for (const [id, n] of Object.entries(owed)) if (n > (before?.owed?.[id] || 0) || !(id in stamp)) stamp[id] = at;
+    const keep = Object.keys(owed)
+      .filter((id) => at - stamp[id] <= RULES.owedDays * 864e5 && owed[id] > 0)
+      .sort((a, b) => stamp[b] - stamp[a])
+      .slice(0, RULES.owedMax);
+    card.owed = Object.fromEntries(keep.map((id) => [id, owed[id]]));
+    card.owedAt = Object.fromEntries(keep.map((id) => [id, stamp[id]]));
+    return card;
+  }
   // This player's part of other players' lines, taken off the card.
   function collect(sharedCard, me) {
     const card = clone(sharedCard),
       amount = card.owed?.[me] || 0;
     if (card.owed) delete card.owed[me];
+    if (card.owedAt) delete card.owedAt[me];
     return { card, amount };
   }
   function newState() {
@@ -379,7 +400,7 @@
     return { state, card, events, gain };
   }
 
-  const api = { RULES, LINES, CARD, FREE, SIZE, kindAt, newState, newCard, valid, validCard, collect, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  const api = { RULES, LINES, CARD, FREE, SIZE, kindAt, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);
