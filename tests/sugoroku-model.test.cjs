@@ -99,10 +99,21 @@ test("a line pays on the player's own stake, then its numbers are drawn afresh a
   assert.equal(line.solo, false);
   // n lines at once: (n + 1)× the bingo prize (3× the bet) and the wheel's bet × 5.
   assert.equal(line.mult, line.count + 1);
-  assert.equal(out.events.find((e) => e.t === "prize").amount, 300 * line.mult);
+  // The prize is shared by the 13 balls on the two lines: ben's 12 wait on the card for him,
+  // amy keeps her 1 and the rounding; the wheel is all amy's.
+  const prize = out.events.find((e) => e.t === "prize");
+  assert.equal(prize.total, 300 * line.mult);
+  assert.deepEqual(prize.shares, { ben: Math.floor((900 * 12) / 13) });
+  assert.equal(prize.amount, 900 - 830);
+  assert.deepEqual(out.card.owed, { ben: 830 });
   const spin = out.events.find((e) => e.t === "wheel" && e.wheel === "bingo");
   assert.equal(spin.amount, 500 * line.mult);
-  assert.equal(out.gain, 800 * line.mult);
+  assert.equal(out.gain, 70 + 500 * line.mult);
+  // ben takes his part when he next plays, once.
+  const got = S.collect(out.card, "ben");
+  assert.equal(got.amount, 830);
+  assert.deepEqual(got.card.owed, {});
+  assert.equal(S.collect(got.card, "ben").amount, 0);
   assert.equal(out.state.stake, 0);
   assert.equal(out.state.bingos, line.count);
   // Every cell of the finished lines is closed again with a number new to the card.
@@ -192,16 +203,21 @@ const slot = (wheel, test) => S.RULES.wheels[wheel].findIndex(test);
 test("the jackpot is a slot of the bingo wheel, the super chance leads to its own wheel and back", () => {
   const jp = lineReady([slot("bingo", (x) => x.jackpot === "jp")]);
   assert.deepEqual(jp.events.find((e) => e.t === "jackpot"), { t: "jackpot", kind: "jp" });
-  assert.equal(jp.gain, 300);
+  // amy's part of the prize: 1 ball of 7 (ben's 6 parts wait on the card).
+  assert.equal(jp.gain, 300 - Math.floor((300 * 6) / 7));
+  // The jackpot waits in the state until the screen pays it.
+  assert.deepEqual(jp.state.jpWait, ["jp"]);
+  assert.equal(jp.state.jps, 1);
   const sjp = lineReady([slot("bingo", (x) => x.next), slot("sjp", (x) => x.jackpot === "sjp")]);
   assert.deepEqual(sjp.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["normal", "bingo", "sjp"]);
   assert.deepEqual(sjp.events.find((e) => e.t === "jackpot"), { t: "jackpot", kind: "sjp" });
   // Back: the bingo wheel again, here landing on × 10.
   const back = lineReady([slot("bingo", (x) => x.next), slot("sjp", (x) => x.back), slot("bingo", (x) => x.x === 10)]);
   assert.deepEqual(back.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["normal", "bingo", "sjp", "bingo"]);
-  assert.equal(back.gain, 300 + 1000);
+  assert.equal(back.gain, 43 + 1000);
+  assert.deepEqual(sjp.state.jpWait, ["sjp"]);
   // A miss is the bingo prize alone.
-  assert.equal(lineReady([slot("bingo", (x) => x.miss)]).gain, 300);
+  assert.equal(lineReady([slot("bingo", (x) => x.miss)]).gain, 43);
 });
 
 test("a mini game waits in state.bonus, blocks rolling and pays its score, 0 when left", () => {
@@ -278,4 +294,41 @@ test("played the plain way by several players on one card, every bet returns a l
     // Without the jackpots, which are paid from the casino's shared pots on top.
     assert.ok(rate > 0.8 && rate < 1, cost + ": " + rate);
   }
+});
+
+test("tapping counts up to the cap, and odd mini-game results score nothing", () => {
+  assert.equal(S.gameScore("tap", 80), 800);
+  assert.equal(S.gameScore("tap", 5000), S.RULES.games.tap.max * 10);
+  assert.equal(S.gameScore("tapex", 1e9), S.RULES.games.tapex.max * 50);
+  assert.equal(S.gameScore("dice", 99), 600);
+  assert.equal(S.gameScore("timer", "x"), 0);
+  assert.equal(S.gameScore("timer", Infinity), 0);
+});
+
+test("a shared card read back is checked before it is used", () => {
+  const card = S.newCard(seq([0]));
+  assert.equal(S.validCard(card), true);
+  assert.equal(S.validCard({ ...card, owed: { ben: 30 } }), true);
+  const bad = [
+    { ...card, cells: card.cells.map((n, i) => (i === 3 ? 101 : n)) },
+    { ...card, cells: card.cells.map((n, i) => (i === 3 ? 2.5 : n)) },
+    { ...card, cells: card.cells.map((n, i) => (i === S.FREE ? 7 : n)) },
+    { ...card, owners: card.owners.map((o, i) => (i === 3 ? "*" : o)) },
+    { ...card, owners: card.owners.map((o, i) => (i === 3 ? "x".repeat(65) : o)) },
+    { ...card, owners: card.owners.map((o, i) => (i === S.FREE ? "" : o)) },
+    { ...card, owed: { ben: -5 } },
+    { ...card, owed: { ben: 1.5 } },
+    { ...card, owed: [] },
+  ];
+  for (const c of bad) assert.equal(S.validCard(c), false);
+});
+
+test("an older save gets the new counters, and a roll records its best payout", () => {
+  const old = { v: 3, pos: 4, stake: 0, laps: 0, rolls: 9, bet: 900, won: 700, balls: 2, pending: null, bonus: [] };
+  const up = S.upgrade(old);
+  assert.deepEqual([up.rolls, up.best, up.jps, up.sjps, up.shared, up.jpWait], [9, 0, 0, 0, 0, []]);
+  assert.deepEqual(S.upgrade({ ...old, jpWait: ["jp", "nope"] }).jpWait, ["jp"]);
+  const three = S.RULES.normal[100].findIndex((x) => x.x === 3);
+  const out = S.roll({ ...S.newState(), pos: at("normal") - 1 }, S.newCard(seq([0])), 100, seq([0, three]));
+  assert.equal(out.state.best, 300);
 });

@@ -15,8 +15,10 @@
 // 20, four mini games, a miss, the jackpot, or the super-jackpot chance, a 5-slot wheel of the
 // super jackpot, the jackpot twice, a bigger tapping game and "back" (the first wheel again).
 // Two lines at once pay (n + 1)× and a line of only this player's balls soloBonus× more (not the
-// jackpots). The finished lines' numbers are then drawn afresh and their balls cleared. The
-// jackpots are shared by the whole casino (see casino-jackpot.js); here they are only events.
+// jackpots). The bingo prize is shared by the balls on the finished lines: each other player's
+// part waits in card.owed[id] until they next play (collect); the wheel and its mini game are
+// the finisher's. The finished lines' numbers are then drawn afresh and their balls cleared.
+// The jackpots are shared by the whole casino (see casino-jackpot.js); here they are only events.
 //
 // Every amount lives in RULES so it can be tuned. `random(n)` gives 0..n-1.
 (function (root) {
@@ -51,7 +53,7 @@
     // The normal wheel: 24 slots; a ball slot gives a ball and nothing else (a ball that misses
     // the card pays missPay).
     normal: {
-      100: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25, 2), ...N(0.75, 2), ...N(0.5, 5), ...N(0.25, 6), ...N(0.1, 2), ...N(0, 1), ...BALL(0, 3)]),
+      100: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25), ...N(0.75, 2), ...N(0.5, 5), ...N(0.25, 7), ...N(0.1, 2), ...N(0, 1), ...BALL(0, 3)]),
     },
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
@@ -76,7 +78,9 @@
     // Mini games, scored in points (multiplied like the line's other prizes):
     // timer – stop at 10 seconds: 1,000 less 5 for every 0.01 s off; tap / tapex – taps in 10
     // seconds × 10 / × 50; dice – the face × 100; math – a sum in 15 seconds, 500 if right.
-    games: { timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10 }, tapex: { seconds: 10, per: 50 }, dice: { per: 100 }, math: { seconds: 15, prize: 500 } },
+    // Taps count up to `max` (12 a second is about as fast as a finger goes; a tapping tool
+    // gains nothing past it).
+    games: { timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 50, max: 120 }, dice: { per: 100 }, math: { seconds: 15, prize: 500 } },
   };
   const SIZE = RULES.board.length,
     CARD = 7,
@@ -107,19 +111,33 @@
     cells.splice(FREE, 0, 0);
     return { cells, owners: cells.map((n) => (n ? "" : "*")) };
   }
+  // The card is shared, so anything read back is checked: numbers 1–100 once each with 0 in the
+  // middle, "*" only there, ids of a sane length, and what is owed whole points.
+  const ID = (id) => typeof id === "string" && id.length > 0 && id.length <= 64 && id !== "*";
   function validCard(card) {
     return (
       !!card &&
       Array.isArray(card.cells) &&
       card.cells.length === CARD * CARD &&
+      card.cells.every((n, i) => (i === FREE ? n === 0 : Number.isInteger(n) && n >= 1 && n <= RULES.numbers)) &&
+      new Set(card.cells).size === CARD * CARD &&
       Array.isArray(card.owners) &&
       card.owners.length === CARD * CARD &&
-      card.owners.every((o) => typeof o === "string") &&
-      new Set(card.cells).size === CARD * CARD
+      card.owners.every((o, i) => (i === FREE ? o === "*" : o === "" || ID(o))) &&
+      (card.owed === undefined || validOwed(card.owed))
     );
   }
+  const validOwed = (owed) =>
+    !!owed && typeof owed === "object" && !Array.isArray(owed) && Object.entries(owed).every(([id, n]) => ID(id) && Number.isInteger(n) && n >= 0 && n <= 1e7);
+  // This player's part of other players' lines, taken off the card.
+  function collect(sharedCard, me) {
+    const card = clone(sharedCard),
+      amount = card.owed?.[me] || 0;
+    if (card.owed) delete card.owed[me];
+    return { card, amount };
+  }
   function newState() {
-    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, pending: null, bonus: [] };
+    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, best: 0, jps: 0, sjps: 0, shared: 0, pending: null, bonus: [], jpWait: [] };
   }
   // A player's own state; an older save (with its own card) keeps its place and counts.
   function valid(state) {
@@ -134,7 +152,8 @@
   }
   function upgrade(state) {
     const { card, marks, lines, cards, ...rest } = state;
-    return { ...newState(), ...rest, v: 3, bingos: Number(rest.bingos) || 0, bonus: Array.isArray(rest.bonus) ? rest.bonus : [] };
+    const count = (k) => (Number.isFinite(rest[k]) && rest[k] >= 0 ? rest[k] : 0);
+    return { ...newState(), ...rest, v: 3, bingos: count("bingos"), best: count("best"), jps: count("jps"), sjps: count("sjps"), shared: count("shared"), bonus: Array.isArray(rest.bonus) ? rest.bonus : [], jpWait: Array.isArray(rest.jpWait) ? rest.jpWait.filter((k) => k === "jp" || k === "sjp") : [] };
   }
   const isOpen = (card, i) => card.owners[i] !== "";
   const reach = (card) => LINES.map((_, i) => i).filter((i) => LINES[i].filter((c) => !isOpen(card, c)).length === 1);
@@ -158,15 +177,17 @@
     events.push({ t: "ball", number, cell, owner: me });
     const lines = LINES.map((_, i) => i).filter((i) => LINES[i].every((c) => isOpen(card, c)));
     if (!lines.length) return 0;
-    const solo = lines.every((line) => LINES[line].every((c) => card.owners[c] === "*" || card.owners[c] === me)),
-      mult = (lines.length > 1 ? lines.length + 1 : 1) * (solo ? RULES.soloBonus : 1),
-      base = bet;
+    const cleared = [...new Set(lines.flatMap((l) => LINES[l]))].filter((c) => c !== FREE),
+      solo = cleared.every((c) => card.owners[c] === me),
+      mult = (lines.length > 1 ? lines.length + 1 : 1) * (solo ? RULES.soloBonus : 1);
+    // Balls per player on the finished lines, for sharing the prize.
+    const balls = {};
+    for (const c of cleared) balls[card.owners[c]] = (balls[card.owners[c]] || 0) + 1;
     state.stake = 0;
     state.bingos += lines.length;
     events.push({ t: "line", lines, cells: [...new Set(lines.flatMap((l) => LINES[l]))], count: lines.length, solo, mult });
-    const gain = spinLine(state, base, mult, random, events);
+    const gain = spinLine(state, card, bet, mult, random, events, me, balls, cleared.length);
     // The finished lines start again: fresh numbers (not already on the card), no balls.
-    const cleared = [...new Set(lines.flatMap((l) => LINES[l]))].filter((c) => c !== FREE);
     const spare = Array.from({ length: RULES.numbers }, (_, i) => i + 1).filter((n) => !card.cells.includes(n));
     const numbers = {};
     for (const c of cleared) {
@@ -178,11 +199,22 @@
     events.push({ t: "reset", numbers });
     return gain;
   }
-  // A line: the bingo prize, then the wheel. A mini game is queued in state.bonus and played on
-  // the screen (settleBonus); a jackpot is only reported.
-  function spinLine(state, bet, mult, random, events) {
-    let gain = money(bet * RULES.bingoPrize * mult);
-    events.push({ t: "prize", amount: gain, mult });
+  // A line: the bingo prize, shared by the balls on it (others' parts go to card.owed, the
+  // rounding stays with the finisher), then the wheel. A mini game is queued in state.bonus and
+  // played on the screen (settleBonus); a jackpot waits in state.jpWait for the screen to pay.
+  function spinLine(state, card, bet, mult, random, events, me, balls, count) {
+    const prize = money(bet * RULES.bingoPrize * mult),
+      shares = {};
+    let given = 0;
+    for (const [id, n] of Object.entries(balls)) {
+      if (id === me) continue;
+      shares[id] = Math.floor((prize * n) / count);
+      given += shares[id];
+      card.owed = card.owed || {};
+      card.owed[id] = Math.min(1e7, (card.owed[id] || 0) + shares[id]);
+    }
+    let gain = prize - given;
+    events.push({ t: "prize", amount: gain, total: prize, shares, mult });
     for (let wheel = "bingo"; wheel; ) {
       const slots = RULES.wheels[wheel],
         { index, slot } = pick(slots, random);
@@ -191,7 +223,13 @@
       wheel = null;
       if (slot.next) wheel = slot.next;
       else if (slot.back) wheel = "bingo";
-      else if (slot.jackpot) events.push({ t: "jackpot", kind: slot.jackpot });
+      else if (slot.jackpot) {
+        state[slot.jackpot === "jp" ? "jps" : "sjps"]++;
+        // Paid by the screen from the casino's pot (CasinoJackpot.win), which may have to wait
+        // for the network; until then it stays here.
+        state.jpWait = (state.jpWait || []).concat([slot.jackpot]);
+        events.push({ t: "jackpot", kind: slot.jackpot });
+      }
       else if (slot.game) {
         state.bonus = (state.bonus || []).concat([{ game: slot.game, mult }]);
         events.push({ t: "bonus", game: slot.game, mult });
@@ -206,8 +244,9 @@
   // Points for a mini game from what was done: seconds stopped at, taps, the face, right or not.
   function gameScore(game, done) {
     const g = RULES.games[game];
-    if (game === "timer") return Math.max(0, g.max - Math.round(Math.abs(Number(done) - g.target) * 100) * g.per);
-    if (game === "tap" || game === "tapex" || game === "dice") return Math.max(0, Math.floor(Number(done) || 0)) * g.per;
+    if (game === "timer") return Number.isFinite(Number(done)) ? Math.max(0, g.max - Math.round(Math.abs(Number(done) - g.target) * 100) * g.per) : 0;
+    if (game === "tap" || game === "tapex") return Math.min(g.max, Math.max(0, Math.floor(Number(done) || 0))) * g.per;
+    if (game === "dice") return Math.min(6, Math.max(0, Math.floor(Number(done) || 0))) * g.per;
     if (game === "math") return done === true ? g.prize : 0;
     return 0;
   }
@@ -220,6 +259,7 @@
       gain = money(score * game.mult);
     state.bonus = rest;
     state.won += gain;
+    state.best = Math.max(state.best || 0, gain);
     return { state, events: [{ t: "bonusResult", game: game.game, score, mult: game.mult, amount: gain }], gain };
   }
   // A sum for the mental-arithmetic game: middle-school level, whole numbers, negatives allowed.
@@ -308,6 +348,7 @@
       }
     }
     state.won += gain;
+    state.best = Math.max(state.best || 0, gain);
     return { state, card, events, gain, cost };
   }
 
@@ -334,10 +375,11 @@
       events.push({ t: "result", outcome: "lose", amount: gain });
     }
     state.won += gain;
+    state.best = Math.max(state.best || 0, gain);
     return { state, card, events, gain };
   }
 
-  const api = { RULES, LINES, CARD, FREE, SIZE, kindAt, newState, newCard, valid, validCard, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  const api = { RULES, LINES, CARD, FREE, SIZE, kindAt, newState, newCard, valid, validCard, collect, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);

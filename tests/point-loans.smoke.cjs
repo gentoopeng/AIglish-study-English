@@ -150,13 +150,35 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(wallet("loan-a"), 500);
     await b.screenshot({ path: "/tmp/point-loans.png" });
 
+    // An accident in すごろくビンゴ past the wallet: the rest is owed to the casino, one 請求 for
+    // all of it, that can only be paid (not declined, no lending to the casino).
+    await a.evaluate(async () => {
+      await window.PointLoans.owe(150, "すごろくビンゴのアクシデント");
+      await window.PointLoans.owe(50, "すごろくビンゴのアクシデント");
+    });
+    assert.equal(wallet("loan-a"), 500);
+    await a.evaluate(() => window.PointLoans.open());
+    await dialogOf(a).locator(".loans-person", { hasText: "カジノ" }).click();
+    await dialogOf(a).getByText("カジノさんから 200pt の請求です").waitFor();
+    assert.equal(await dialogOf(a).locator(".loans-request").count(), 1);
+    assert.equal(await dialogOf(a).locator(".loans-request").getByRole("button", { name: "断る" }).count(), 0);
+    assert.equal(await dialogOf(a).getByRole("button", { name: "貸す", exact: true }).count(), 0);
+    assert.equal(await dialogOf(a).getByRole("button", { name: "返してと請求" }).count(), 0);
+    await dialogOf(a).locator(".loans-request").getByRole("button", { name: "払う" }).click();
+    await dialogOf(a).getByText("貸し借りはありません").waitFor();
+    assert.equal(wallet("loan-a"), 300);
+    // Collecting never adds the casino's "loan" to the wallet.
+    await a.evaluate(() => window.PointLoans.collect());
+    assert.equal(wallet("loan-a"), 300);
+    await a.evaluate(() => window.PointLoans.close());
+
     // The points dialog opens the screen.
     await b.evaluate(() => window.PointLoans.close());
     await b.evaluate(() => window.openStudyPoints());
     await b.getByRole("button", { name: "ポイントの貸し借り" }).click();
     await dialogOf(b).locator(".loans-person", { hasText: "loan-a" }).waitFor();
     assert.deepEqual(errors, []);
-    console.log("PASS: loan out of the lender's wallet with the record, collected once by the borrower, 請求 paid, borrow request declined, matching histories, repay capped at the debt, guest message, opened from the points dialog");
+    console.log("PASS: casino debt from an accident paid through one 請求, loan out of the lender's wallet with the record, collected once by the borrower, 請求 paid, borrow request declined, matching histories, repay capped at the debt, guest message, opened from the points dialog");
   } finally {
     await browser.close();
   }

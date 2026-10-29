@@ -6,8 +6,12 @@
 // multiples, wine for nothing) and only BINGO and the jackpot wheels dim the room.
 //
 // A roll is worked out and saved before anything moves, and its chips are paid at once, so
-// closing half way changes nothing. An event game is saved move by move in state.pending.
+// closing half way changes nothing. An event game is saved move by move in state.pending, and a
+// jackpot waits in state.jpWait until it is paid.
 // For now the game is a preview: practice chips only, and a jackpot is shown but not paid.
+// Speed: 早送り plays the everyday parts quickly (the die, the steps, the normal, event and
+// accident wheels, balls off the reach); a line, its wheels, a jackpot and a reach ball keep
+// their full time. A tap on the board skips to the end of the roll.
 (function () {
   "use strict";
   const S = window.SugorokuModel,
@@ -26,6 +30,7 @@
   const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE" };
   const HOT = new Set(["bingo", "sjp"]);
   const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算" };
+  const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
     "プレ版のため練習チップで遊びます。ポイントは動かず、ジャックポットも演出だけです。",
     "1回100枚でサイコロを振ります（額はみんな同じです）。",
@@ -34,7 +39,10 @@
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "STARTを通るとボールが1つ出ます。",
     "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の1.5倍がもらえます。1列そろえるとビンゴ賞金（300）と、ビンゴルーレット（掛け金×5・×10・×20、10秒ぴったり、連打、サイコロ、暗算、ハズレ、JACKPOT、SUPER JACKPOT CHANCE）。SUPER JACKPOT CHANCEはSUPER JACKPOT・JACKPOT×2・連打EX・もう一回の5つ。自分のボールだけでそろえると賞金とミニゲームが1.5倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
-    "ジャックポットはカジノ全体で賭けられたポイントから貯まります。",
+    "ビンゴ賞金は、その列にボールを置いていた人でボールの数に応じて山分けします。ほかの人の分は、その人が次にすごろくビンゴを開いたときに届きます。ルーレットとミニゲームはそろえた人のものです。",
+    "連打は120回まで数えます。",
+    "ジャックポットはカジノ全体で賭けられたポイントから貯まります（JACKPOT 5,000 + 1%、SUPER JACKPOT 50,000 + 0.5%）。",
+    "「早送り」にすると、ふだんのマスは短く、ビンゴやジャックポットはいつもどおり見られます。盤面をタップするとその回を最後まで飛ばせます。",
   ];
 
   // ---- Saving ----------------------------------------------------------------------------
@@ -76,14 +84,34 @@
   // guest, or a device off the cloud, plays on a card of its own.
   const shared = () => api.uid() !== "GUEST-000" && !!(window.db && window.fbDoc && window.fbRunTransaction) && !window.FirestoreReadGuard?.paused?.();
   const cardRef = () => window.fbDoc(window.db, "shared", "sugoroku_card");
-  const localCardName = () => "aiglish_sugoroku_card_" + (shared() ? "shared" : api.uid());
-  function readCard(data) {
-    const card = data && { cells: data.cells, owners: data.owners };
-    return S.validCard(card) ? { card, people: data.people && typeof data.people === "object" ? data.people : {} } : null;
+  // Once the screen is open it stays on the card it opened with (see view.online).
+  const localCardName = () => "aiglish_sugoroku_card_" + ((view ? view.online : shared()) ? "shared" : api.uid());
+  // Everything on the shared card is read as untrusted: the card itself is checked by the model,
+  // names are cut short, an icon must be a small inline image (it goes into a CSS url()), and the
+  // log keeps only well-formed entries.
+  const ICON = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]{1,16000}$/;
+  const okId = (id) => typeof id === "string" && id.length > 0 && id.length <= 64;
+  function cleanPeople(people) {
+    const out = {};
+    if (people && typeof people === "object" && !Array.isArray(people))
+      for (const [id, p] of Object.entries(people).slice(0, 100))
+        if (okId(id) && p && typeof p === "object") out[id] = { n: String(p.n ?? "").slice(0, 24), i: typeof p.i === "string" && ICON.test(p.i) ? p.i : "" };
+    return out;
   }
-  function keepCard(card, people) {
+  function cleanLog(log) {
+    if (!Array.isArray(log)) return [];
+    return log
+      .filter((e) => e && LOG_NAMES[e.t] && okId(e.id) && Number.isFinite(e.at))
+      .slice(-30)
+      .map((e) => ({ t: e.t, id: e.id, n: String(e.n ?? "").slice(0, 24), c: Math.min(12, Math.max(1, Math.floor(Number(e.c) || 1))), at: e.at }));
+  }
+  function readCard(data) {
+    const card = data && { cells: data.cells, owners: data.owners, ...(data.owed ? { owed: data.owed } : {}) };
+    return S.validCard(card) ? { card, people: cleanPeople(data.people), log: cleanLog(data.log) } : null;
+  }
+  function keepCard(card, people, log) {
     try {
-      localStorage.setItem(localCardName(), JSON.stringify({ ...card, people }));
+      localStorage.setItem(localCardName(), JSON.stringify({ ...card, people, log }));
     } catch {}
   }
   function cachedCard() {
@@ -102,7 +130,7 @@
       } catch (error) {
         console.warn("[sugoroku] card", error);
       }
-    return cachedCard() || { card: S.newCard(random), people: {} };
+    return cachedCard() || { card: S.newCard(random), people: {}, log: [] };
   }
   // This player's name and icon (shrunk to 40px) to show on their balls.
   let me = null;
@@ -138,7 +166,11 @@
     });
   }
   // Runs `change(card)` (a model roll or settle) on the newest card and stores the card it
-  // returns, with this player in people and only people who still have a ball on it.
+  // returns, with this player in people and only people who still have a ball on it. First this
+  // player's part of other players' lines is taken off the card (collected). Lines and jackpots
+  // go into the card's log for everybody.
+  // On the shared card a failed write throws: nothing is paid or saved, and the player is asked
+  // to try again (playing on a card of its own would leave the two apart).
   async function onCard(change) {
     const mine = await person(),
       id = api.uid();
@@ -148,26 +180,35 @@
       if (ids.has(id)) next[id] = mine;
       return next;
     };
-    if (shared())
-      try {
-        const result = await window.fbRunTransaction(window.db, async (tx) => {
-          const snap = await tx.get(cardRef());
-          const now = (snap.exists() && readCard(snap.data())) || { card: S.newCard(random), people: {} };
-          const out = change(now.card);
-          const people = keep(out.card, now.people);
-          if (!snap.exists() || JSON.stringify(out.card) !== JSON.stringify(now.card)) tx.set(cardRef(), { cells: out.card.cells, owners: out.card.owners, people, updatedAt: Date.now() });
-          return { out, before: now, people };
-        });
-        keepCard(result.out.card, result.people);
-        return result;
-      } catch (error) {
-        console.warn("[sugoroku] shared card", error);
+    const apply = (now) => {
+      const got = S.collect(now.card, id),
+        out = change(got.card),
+        at = Date.now(),
+        entries = [];
+      for (const e of out.events) {
+        if (e.t === "line") entries.push({ t: "bingo", id, n: mine.n, c: e.count, at });
+        if (e.t === "jackpot") entries.push({ t: e.kind, id, n: mine.n, c: 1, at });
       }
-    const now = cachedCard() || { card: view.card, people: view.people };
-    const out = change(now.card),
-      people = keep(out.card, now.people);
-    keepCard(out.card, people);
-    return { out, before: now, people };
+      out.state.won += got.amount;
+      out.state.shared = (out.state.shared || 0) + got.amount;
+      return { out, collected: got.amount, people: keep(out.card, now.people), log: entries.length ? (now.log || []).concat(entries).slice(-30) : now.log || [] };
+    };
+    if (view.online) {
+      const result = await window.fbRunTransaction(window.db, async (tx) => {
+        const snap = await tx.get(cardRef());
+        const now = (snap.exists() && readCard(snap.data())) || { card: S.newCard(random), people: {}, log: [] };
+        const done = apply(now);
+        if (!snap.exists() || done.collected || JSON.stringify(done.out.card) !== JSON.stringify(now.card) || done.log !== now.log)
+          tx.set(cardRef(), { cells: done.out.card.cells, owners: done.out.card.owners, owed: done.out.card.owed || {}, people: done.people, log: done.log, updatedAt: Date.now() });
+        return { ...done, before: now };
+      });
+      keepCard(result.out.card, result.people, result.log);
+      return result;
+    }
+    const now = cachedCard() || { card: view.card, people: view.people, log: view.log };
+    const done = apply(now);
+    keepCard(done.out.card, done.people, done.log);
+    return { ...done, before: now };
   }
   // Other players' balls come in while the screen is open.
   function listen() {
@@ -180,28 +221,59 @@
         const found = snap.exists() && readCard(snap.data());
         if (!found || target !== view || !view.body.isConnected) return target.stop?.();
         if (view.busy) return;
+        const news = found.log.filter((e) => e.at > lastLog() && e.id !== api.uid());
         view.card = found.card;
         view.people = found.people;
-        keepCard(found.card, found.people);
+        view.log = found.log;
+        keepCard(found.card, found.people, found.log);
         paintCard();
         hud();
+        // Somebody else's line or jackpot just now.
+        const last = news[news.length - 1];
+        if (last) say((last.n || "だれか") + "さんが " + logText(last), "is-hot");
+        seeLog();
       });
     } catch (error) {
       console.warn("[sugoroku] listen", error);
     }
   }
 
+  // The newest log entry this screen has shown.
+  const lastLog = () => (view?.log || []).reduce((t, e) => Math.max(t, e.at), view?.seen || 0);
+  const seeLog = () => view && (view.seen = lastLog());
+  const logText = (e) => (e.t === "bingo" ? (e.c === 2 ? "DOUBLE BINGO" : e.c === 3 ? "TRIPLE BINGO" : e.c > 3 ? e.c + " BINGO" : "BINGO") : LOG_NAMES[e.t]);
+
   // ---- Screen ----------------------------------------------------------------------------
   let view = null;
+  const QUICK = "aiglish_sugoroku_quick";
+  const quickSaved = () => {
+    try {
+      return localStorage.getItem(QUICK) === "1";
+    } catch {
+      return false;
+    }
+  };
   async function play(body, wallet) {
     api = wallet;
+    // A screen opened before stops here (its listener and its card choice).
+    view?.stop?.();
+    view?.unsub?.();
+    view = null;
     body.replaceChildren(node("p", "cs-hint", "読み込み中…"));
-    const [state, found] = await Promise.all([load(), loadCard()]);
+    const [state, found, mine] = await Promise.all([load(), loadCard(), person()]);
     if (!body.isConnected) return;
-    view = { body, state, card: found.card, people: found.people, cost: S.RULES.costs[0], busy: false, fast: false };
+    // This player's own balls always show their own name and icon.
+    found.people = { ...found.people, [api.uid()]: mine };
+    view = { body, state, card: found.card, people: found.people, log: found.log || [], seen: 0, online: shared(), cost: S.RULES.costs[0], busy: false, fast: false, hot: false, quick: quickSaved() };
+    seeLog();
     draw();
     listen();
-    if (state.bonus?.length) await bonus();
+    if (state.jpWait?.length) {
+      const left = { state };
+      await payJackpots(left);
+      if (view) view.state = left.state;
+    }
+    if (view?.state.bonus?.length) await bonus();
     if (view?.state.pending) game();
   }
   function draw() {
@@ -214,7 +286,11 @@
     help.type = "button";
     help.setAttribute("aria-label", "すごろくビンゴの遊び方");
     help.onclick = rules;
-    pots.append(pot("jp", "JACKPOT"), pot("sjp", "SUPER JACKPOT"), help);
+    const records = node("button", "sg-help sg-records", "記録");
+    records.type = "button";
+    records.setAttribute("aria-label", "すごろくビンゴの記録");
+    records.onclick = book;
+    pots.append(pot("jp", "JACKPOT"), pot("sjp", "SUPER JACKPOT"), records, help);
     view.unsub?.();
     view.unsub = window.CasinoJackpot?.onChange(() => view?.body.isConnected && hud());
     window.CasinoJackpot?.refresh();
@@ -263,7 +339,17 @@
     view.go.type = "button";
     view.go.dataset.sgRoll = "";
     view.go.onclick = roll;
-    controls.append(costs, view.go);
+    view.quickBtn = node("button", "sg-quick", "早送り");
+    view.quickBtn.type = "button";
+    view.quickBtn.setAttribute("aria-pressed", String(view.quick));
+    view.quickBtn.onclick = () => {
+      view.quick = !view.quick;
+      view.quickBtn.setAttribute("aria-pressed", String(view.quick));
+      try {
+        localStorage.setItem(QUICK, view.quick ? "1" : "0");
+      } catch {}
+    };
+    controls.append(costs, view.go, view.quickBtn);
 
     view.layer = node("div", "sg-layer");
     view.layer.hidden = true;
@@ -293,6 +379,47 @@
     box.append(list, close);
     layer.replaceChildren(box);
   }
+  // 記録: this player's own numbers, then the latest lines and jackpots of everybody.
+  function book() {
+    if (view.busy) return;
+    const { state } = view,
+      layer = view.layer;
+    layer.className = "sg-layer";
+    layer.hidden = false;
+    const box = node("div", "sg-sheet sg-book");
+    box.append(node("p", "sg-sheet-title", "記録"));
+    const mine = node("dl", "sg-stats");
+    const net = state.won - state.bet;
+    for (const [k, v] of [
+      ["振った回数", fmt(state.rolls) + "回"],
+      ["賭けた合計", fmt(state.bet) + api.unit()],
+      ["戻った合計", fmt(state.won) + api.unit()],
+      ["収支", (net > 0 ? "+" : net < 0 ? "−" : "±") + fmt(Math.abs(net)) + api.unit()],
+      ["ボール", fmt(state.balls) + "個"],
+      ["ビンゴ", fmt(state.bingos) + "列"],
+      ["1回の最高", fmt(state.best) + api.unit()],
+      ["ほかの人のビンゴの分け前", fmt(state.shared) + api.unit()],
+      ["JACKPOT / SUPER", (state.jps || 0) + "回 / " + (state.sjps || 0) + "回"],
+    ]) {
+      const row = node("div", "");
+      row.append(node("dt", "", k), node("dd", "", v));
+      mine.append(row);
+    }
+    const recent = node("ol", "sg-log");
+    recent.setAttribute("aria-label", "みんなの最近の記録");
+    const when = (at) => new Date(at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    for (const e of view.log.slice().reverse()) {
+      const li = node("li", "is-" + e.t);
+      li.append(node("time", "", when(e.at)), node("span", "", (e.id === api.uid() ? "あなた" : (e.n || "だれか") + "さん") + "　" + logText(e)));
+      recent.append(li);
+    }
+    if (!view.log.length) recent.append(node("li", "sg-log-empty", "まだありません"));
+    const close = node("button", "sg-game-btn", "閉じる");
+    close.type = "button";
+    close.onclick = () => (layer.hidden = true);
+    box.append(mine, node("p", "sg-book-title", "みんなの最近の記録"), recent, close);
+    layer.replaceChildren(box);
+  }
   // Each cell: its number, or the ball of whoever opened it — their icon, or their initial on a
   // colour of their own — with this player's balls ringed in gold.
   function paintCard() {
@@ -319,11 +446,17 @@
     const reaches = S.reach(view.card),
       reach = new Set(reaches.flatMap((line) => S.LINES[line]));
     view.cells.forEach((cell, i) => cell.classList.toggle("is-reach", !view.card.owners[i] && reach.has(i)));
+    // The more lines wait on one number, the warmer the card.
+    view.cardWrap.style.setProperty("--heat", String(Math.min(reaches.length, 6)));
+    view.cardWrap.classList.toggle("is-warm", reaches.length > 0);
+    const wanted = [...new Set(reaches.map((line) => view.card.cells[S.LINES[line].find((c) => !view.card.owners[c])]))].sort((a, b) => a - b);
     view.info.replaceChildren(
       node("span", "", "リーチ "),
       node("b", "", String(reaches.length)),
+      ...(wanted.length ? [node("span", "sg-wanted", "（" + wanted.slice(0, 4).join("・") + (wanted.length > 4 ? "…" : "") + "）")] : []),
       node("span", "", "　ビンゴ "),
       node("b", "", (state.bingos || 0) + "回"),
+      ...(view.online ? [] : [node("span", "sg-alone", api.uid() === "GUEST-000" ? "　自分だけのカード" : "　オフライン：自分だけのカード")]),
     );
     // Out of practice chips: the button fills them up again instead.
     const short = api.balance() < view.cost,
@@ -337,12 +470,12 @@
     const sq = view.squares[pos];
     view.piece.style.transform = "translateX(" + (sq.offsetLeft + sq.offsetWidth / 2) + "px)";
     view.piece.classList.remove("is-hop");
-    if (smooth && !calm() && !view.fast) {
+    if (smooth && pace() === 1) {
       void view.piece.offsetWidth;
       view.piece.classList.add("is-hop");
     }
     const left = sq.offsetLeft - view.track.clientWidth * 0.35;
-    view.track.scrollTo?.({ left, behavior: smooth && !calm() && !view.fast ? "smooth" : "auto" });
+    view.track.scrollTo?.({ left, behavior: smooth && pace() === 1 ? "smooth" : "auto" });
   }
 
   // ---- The die: a cube that tumbles and lands on its number --------------------------------
@@ -364,10 +497,10 @@
       box,
       async roll(value) {
         const [x, y] = FACE[value],
-          quick = calm() || view.fast;
+          quick = !pace();
         // Whole extra turns so it tumbles, then the face for the number.
         turn = [turn[0] - (turn[0] % 360) + 720 + x, turn[1] - (turn[1] % 360) + 720 + y];
-        body.style.transition = quick ? "none" : "transform 1000ms cubic-bezier(.2,.75,.25,1)";
+        body.style.transition = quick ? "none" : "transform " + 1000 * pace() + "ms cubic-bezier(.2,.75,.25,1)";
         box.classList.remove("is-rolling");
         void box.offsetWidth;
         if (!quick) box.classList.add("is-rolling");
@@ -378,13 +511,48 @@
   }
 
   // ---- A roll ----------------------------------------------------------------------------
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, calm() || view?.fast ? Math.min(ms, 20) : ms));
+  // How long things take: skipped (reduced motion, or a tap to skip), a quarter in 早送り outside
+  // the hot moments, or in full.
+  const pace = () => (calm() || view?.fast ? 0 : view?.quick && !view.hot ? 0.25 : 1);
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, pace() ? ms * pace() : Math.min(ms, 20)));
   function pay(out, cost) {
     const money = api.round("sugoroku");
     if (cost) money.stake(cost);
+    if (out.collected > 0) money.pay(out.collected);
     if (out.gain > 0) money.pay(out.gain);
-    // An accident takes more than the bet, but never more than there is (no debt in the preview).
-    else if (out.gain < 0) money.stake(Math.min(-out.gain, api.balance()), "accident");
+    else if (out.gain < 0) {
+      // An accident can take more than there is: with points, the rest is owed to the casino
+      // (a 請求 in ポイントの貸し借り); on practice chips it stops at 0.
+      const take = -out.gain,
+        have = api.balance();
+      money.stake(Math.min(take, have), "accident");
+      if (take > have && api.real())
+        Promise.resolve(window.PointLoans?.owe?.(take - have, "すごろくビンゴのアクシデント")).catch((error) => console.warn("[sugoroku] debt", error));
+    }
+  }
+  // Jackpots waiting in out.state: with points each is taken from the casino's pot and paid (and
+  // stays waiting if the network fails); in the preview it is only shown. The amounts go onto
+  // the jackpot events, in order, for the show.
+  async function payJackpots(out) {
+    const shows = (out.events || []).filter((e) => e.t === "jackpot");
+    while (out.state.jpWait?.length) {
+      const kind = out.state.jpWait[0];
+      let amount = window.CasinoJackpot?.amounts()[kind] || 0;
+      if (api.real()) {
+        try {
+          amount = await window.CasinoJackpot.win(kind, { id: api.uid(), n: (await person()).n });
+        } catch (error) {
+          console.warn("[sugoroku] jackpot", error);
+          say("ジャックポットは通信できたときに受け取ります", "is-loss");
+          return;
+        }
+        api.round("sugoroku-jackpot").pay(amount);
+      }
+      out.state = { ...out.state, jpWait: out.state.jpWait.slice(1) };
+      save(out.state);
+      const show = shows.shift();
+      if (show) show.amount = amount;
+    }
   }
   async function roll() {
     if (!view.busy && api.balance() < view.cost && !api.real() && api.resetPractice) {
@@ -396,19 +564,33 @@
       state = view.state;
     view.busy = true;
     hud();
-    const { out, before, people } = await onCard((card) => S.roll(state, card, cost, random, api.uid()));
+    let result;
+    try {
+      result = await onCard((card) => S.roll(state, card, cost, random, api.uid()));
+    } catch (error) {
+      console.warn("[sugoroku] roll", error);
+      view.busy = false;
+      hud();
+      say("通信できませんでした。もう一度振ってください", "is-loss");
+      return;
+    }
+    const { out, before, people, collected } = result;
+    out.collected = collected;
     save(out.state);
     pay(out, cost);
-    await run(out, { ...state, stake: state.stake + cost }, before, people);
+    await payJackpots(out);
+    if (collected) out.events.unshift({ t: "share", amount: collected });
+    await run(out, { ...state, stake: state.stake + cost }, before, people, result.log);
     if (view?.state.bonus?.length) await bonus();
     if (view?.state.pending) game();
   }
   // Plays events over a copy of the state shown so far, then shows the real new state.
   // `before` is the card the change was made on (it may hold other players' new balls).
-  async function run(out, shown, before, people) {
+  async function run(out, shown, before, people, log) {
     const target = view;
     view.busy = true;
     view.fast = false;
+    view.hot = false;
     view.body.classList.add("is-spinning");
     const live = { ...shown };
     view.state = live;
@@ -423,6 +605,9 @@
       if (target === view) {
         view.state = out.state;
         view.card = out.card;
+        view.log = log || view.log;
+        view.hot = false;
+        seeLog();
         view.people = { ...people, ...(me && me.id === api.uid() ? { [me.id]: me.value } : {}) };
         view.busy = false;
         view.body.classList.remove("is-spinning");
@@ -444,7 +629,12 @@
   async function show(events, live) {
     for (const e of events) {
       if (!view?.body.isConnected) return;
-      if (e.t === "die") {
+      // From a line on, the rest of the roll keeps its full time even in 早送り.
+      if (e.t === "line" || e.t === "jackpot") view.hot = true;
+      if (e.t === "share") {
+        say("ほかの人のビンゴの分け前　+" + fmt(e.amount) + api.unit(), "is-gain");
+        await wait(1100);
+      } else if (e.t === "die") {
         say("");
         await view.die.roll(e.value);
       } else if (e.t === "step") {
@@ -512,7 +702,7 @@
         say({ win: "勝ち　+", push: "引き分け　+", lose: "負け　+" }[e.outcome] + fmt(e.amount) + api.unit(), e.outcome === "win" ? "is-gain" : "");
         await wait(900);
       } else if (e.t === "jackpot") {
-        await jackpot(e.kind);
+        await jackpot(e.kind, e.amount);
       }
     }
   }
@@ -521,10 +711,18 @@
   // number, otherwise it greys out and pays 1.5× ------------------------------------------------
   async function drawBall(e, live) {
     const ball = node("div", "sg-ball", String(e.number));
+    // A ball for a number a line is waiting on: it glows and takes its time, even in 早送り.
+    const reachBefore = S.reach(view.card),
+      onReach = e.cell >= 0 && reachBefore.some((line) => S.LINES[line].includes(e.cell)),
+      hot = view.hot;
+    if (onReach) {
+      view.hot = true;
+      ball.classList.add("is-reach");
+    }
     view.cardWrap.append(ball);
-    say("");
+    say(onReach ? "リーチの番号！" : "", onReach ? "is-hot" : "");
     ball.classList.add("is-in");
-    await wait(1100);
+    await wait(onReach ? 1600 : 1100);
     if (e.miss) {
       ball.classList.add("is-miss");
       say("ハズレ " + e.number + "　×1.5 +" + fmt(e.amount) + api.unit(), "is-gain");
@@ -544,9 +742,12 @@
     paintCard();
     cell.classList.add("is-new");
     setTimeout(() => cell.classList.remove("is-new"), 1300);
-    say(e.number + " にボール", "is-ball");
+    // A new reach is called out.
+    const more = S.reach(view.card).length > reachBefore.length;
+    say(e.number + " にボール" + (more ? "　リーチ！" : ""), more ? "is-hot" : "is-ball");
     hud();
-    await wait(700);
+    await wait(more ? 1000 : 700);
+    view.hot = hot;
   }
 
   // ---- Wheels ----------------------------------------------------------------------------
@@ -629,12 +830,13 @@
       turns = { normal: 4, event: 4, accident: 4, bingo: 5, jp: 6, sjp: 7 }[e.wheel],
       jitter = (random(60) - 30) / 100,
       angle = turns * 360 - ((e.index + 0.5 + jitter * 0.8) * 360) / n;
-    const time = calm() || view.fast ? 0 : { normal: 1700, event: 2000, accident: 2000, bingo: 3000, jp: 3800, sjp: 4600 }[e.wheel];
+    const full = { normal: 1700, event: 2000, accident: 2000, bingo: 3000, jp: 3800, sjp: 4600 }[e.wheel],
+      time = full * pace();
     box.classList.add("is-spinning");
     disc.style.transition = time ? "transform " + time + "ms cubic-bezier(.15,.6,.1,1)" : "none";
     void disc.getBoundingClientRect();
     disc.style.transform = "rotate(" + angle + "deg)";
-    await wait(time + 60);
+    await wait(full + 60);
     box.classList.remove("is-spinning");
     const slot = e.slots[e.index];
     outcome.className = "sg-wheel-out is-" + tone(e.wheel, slot);
@@ -665,15 +867,15 @@
     await wait(hot || slot.x >= 2 || slot.ball ? 1300 : 750);
     layer.hidden = true;
   }
-  async function jackpot(kind) {
-    const amount = window.CasinoJackpot?.amounts()[kind] || 0,
+  async function jackpot(kind, won) {
+    const amount = won ?? (window.CasinoJackpot?.amounts()[kind] || 0),
       word = kind === "sjp" ? "SUPER JACKPOT" : "JACKPOT";
     const layer = view.layer;
     layer.className = "sg-layer is-hot is-hotter is-jackpot";
     layer.hidden = false;
     const box = node("div", "sg-jackpot");
     const value = node("b", "", "0pt");
-    box.append(node("p", "sg-jackpot-word", word), value, node("small", "", "プレ版のため、ジャックポットは演出のみです"));
+    box.append(node("p", "sg-jackpot-word", word), value, ...(api.real() ? [] : [node("small", "", "プレ版のため、ジャックポットは演出のみです")]));
     layer.replaceChildren(box);
     const steps = calm() || view.fast ? 1 : 50;
     for (let i = 1; i <= steps; i++) {
@@ -836,14 +1038,28 @@
     for (let i = 1; i <= 9; i++) el.append(node("i", PIPS[value].includes(i) ? "is-on" : ""));
     return el;
   }
+  // The end of an event game. If the shared card cannot be written, the game stays (its round
+  // is saved) and つづける can be pressed again.
   async function finish(m) {
-    view.layer.hidden = true;
     const state = view.state;
-    const { out, before, people } = await onCard((card) => S.settle(state, card, m, random, api.uid()));
+    let result;
+    try {
+      result = await onCard((card) => S.settle(state, card, m, random, api.uid()));
+    } catch (error) {
+      console.warn("[sugoroku] settle", error);
+      const line = view.layer.querySelector(".sg-game-line");
+      if (line) line.textContent = "通信できませんでした。もう一度「つづける」を押してください";
+      return;
+    }
+    view.layer.hidden = true;
+    const { out, before, people, collected } = result;
+    out.collected = collected;
     save(out.state);
     pay(out, 0);
+    await payJackpots(out);
+    if (collected) out.events.unshift({ t: "share", amount: collected });
     view.busy = false;
-    await run(out, { ...state, pending: null }, before, people);
+    await run(out, { ...state, pending: null }, before, people, result.log);
     if (view?.state.bonus?.length) await bonus();
   }
 
@@ -852,8 +1068,8 @@
   // back scores it 0 instead of trying again.
   const RULE_TEXT = {
     timer: "スタートから心の中で10秒数えて、ちょうど10秒でストップ。3秒で表示が消えます。1,000点から0.01秒ずれるごとに5点減ります。",
-    tap: "10秒間、ボタンをできるだけたくさん押してください。1回10点。",
-    tapex: "10秒間、ボタンをできるだけたくさん押してください。1回50点。",
+    tap: "10秒間、ボタンをできるだけたくさん押してください。1回10点（120回まで）。",
+    tapex: "10秒間、ボタンをできるだけたくさん押してください。1回50点（120回まで）。",
     dice: "サイコロを1回振って、出た目×100点。",
     math: "15秒以内に計算の答えを入れてください。正解で500点。",
   };
@@ -947,16 +1163,22 @@
           line.textContent = n;
           await new Promise((r) => setTimeout(r, calm() ? 10 : 600));
         }
+        // Only real presses count (not ones made by a script), up to the cap.
         let taps = 0;
+        const most = S.RULES.games[item.game].max;
+        const tap = (e) => {
+          if (!e.isTrusted || taps >= most) return;
+          taps++;
+          show.textContent = String(taps);
+        };
         const pad = node("button", "sg-tap", "タップ！");
         pad.type = "button";
         pad.dataset.sgGame = "tap";
         pad.onpointerdown = (e) => {
           e.preventDefault();
-          taps++;
-          show.textContent = String(taps);
+          tap(e);
         };
-        pad.onclick = (e) => e.detail === 0 && (taps++, (show.textContent = String(taps)));
+        pad.onclick = (e) => e.detail === 0 && tap(e);
         go.replaceWith(pad);
         const seconds = S.RULES.games[item.game].seconds,
           t0 = performance.now();

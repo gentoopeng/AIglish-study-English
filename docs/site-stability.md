@@ -1612,3 +1612,69 @@ The user's answer to 10.22.31.00: "逆！！". Showing "大連" alone on the fro
 A 「」 in a Japanese line (history terms and so on) now gives its card as the question it always was in battles: the headword, the year and the line with that term blanked on the front ("蘇我馬子　大臣の官職につき（＿＿）の官職であった…"), the term behind. It shows the question first in either direction, like a year card. English phrase lines (English over Japanese) keep their own two-sided cards.
 
 Tests: `tests/term-questions.test.cjs`, `tests/term-mode.smoke.cjs`.
+
+## すごろくビンゴ: balance, sharing, records and safety (10.22.33.00)
+
+Asked for: everything from the improvement list except the "today's total" display, with the balance and the system kept from breaking.
+
+**Balance.** With the jackpots counted, a roll paid back about 104–108% of its bet. Seeds of 5,000 and 50,000 plus 5% and 2% of every bet came to about 17% on their own. Two changes bring it under 100%:
+
+- The shares are now 1% (JACKPOT) and 0.5% (SUPER JACKPOT). The seeds stay.
+- One ×1.25 slot of the normal wheel became ×0.25. The wheel still has every multiple from ×3 to ×0.
+
+Simulated with the pot fed only by すごろくビンゴ's bets (scratchpad sim5.cjs, 1–4 million rolls):
+
+| Players | Without jackpots | Jackpots | Total |
+| ---: | ---: | ---: | ---: |
+| 1 | 87.6% | 10.6% | about 98% |
+| 5 | 84.5% | 10.9% | about 95.4% |
+| 30 | 84.4% | 11.6% | about 96% |
+
+A JACKPOT comes about once in 1,250–1,300 rolls (typically about 6,000pt). A SUPER JACKPOT comes about once in 8,000–10,000 rolls (typically about 55,000pt). Bets in the other casino games add to the pots on top of this.
+
+**A line is shared.** The bingo prize is split by the balls on the finished lines. Other players' parts wait in `owed` on the shared card and are collected (`SugorokuModel.collect`) the next time they roll, once. The wheel and its mini game stay with the finisher. The total paid is unchanged.
+
+**Tapping.** Taps count up to 120 per game, and only trusted (real) presses count. A tapping tool or a script gains nothing past what a finger can do.
+
+**Jackpot payment.** A jackpot waits in `state.jpWait` until it is paid:
+
+- With points, `CasinoJackpot.win(kind, who)` takes the pot and resets it in one transaction, with this device's unsent bets counted. Two winners at the same moment each get what was there in turn.
+- If the network fails, the jackpot stays waiting and is paid the next time the game opens.
+- In the preview it is only shown, as before.
+
+**Debt.** With points, an accident that takes more than the wallet holds turns the rest into a debt to the casino (`PointLoans.owe`). This is a loan already spent (it is never added to the wallet) with one 請求 for everything owed. On the casino's page the 請求 can only be paid: there is no decline, lend or 請求 button. On practice chips the take stops at 0, as before.
+
+**Failed writes.** Whether a session uses the shared card is decided when the game opens:
+
+- If a write to the shared card fails, nothing is charged or saved, and the player is asked to roll again. The game no longer quietly falls back to a card of its own.
+- If an event game's ending fails to save, the game stays on screen, so つづける can be pressed again.
+- Off the cloud, the status line says the card is the player's own.
+
+**Untrusted data.** Everything read back from the shared card is checked:
+
+- Numbers must be 1–100, once each, with 0 in the middle; "*" may appear only in the middle.
+- Ids must be a sane length.
+- Amounts owed must be whole numbers.
+- Names are cut to 24 characters.
+- An icon must be a small inline image (before this, an icon string went into a CSS `url()` as it was).
+- The log keeps only well-formed entries.
+
+The jackpot totals are read as whole numbers in range. A rules draft and what real protection needs are in docs/casino-firestore-rules.md.
+
+**Reach.** The status line shows the numbers the reach lines wait on. The card glows warmer with more reaches. A ball for a reach number glows and takes its time, and a new reach is called out.
+
+**Records.** The 記録 sheet shows:
+
+- the player's own numbers: rolls, bet, returned, net, balls, lines, best single payout, shares received and jackpots;
+- the latest 30 lines and jackpots of everybody, written into the shared card's log with each line.
+
+Another player's line arriving by snapshot is called out on the screen.
+
+**早送り.** A remembered toggle. The die, the steps and the normal, event and accident wheels take a quarter of the time. A reach ball, a line, its wheels and a jackpot keep their full time.
+
+Tests:
+
+- `tests/sugoroku-model.test.cjs`: sharing, collecting, the tap cap, card checks, counters and jackpot waiting.
+- `tests/sugoroku-shared.smoke.cjs`: shared card, failed write, collection, log, records, 早送り, script taps and the jackpot win transaction.
+- `tests/point-loans.smoke.cjs`: debt to the casino.
+- `tests/sugoroku.smoke.cjs` and `tests/casino.smoke.cjs`: updated.

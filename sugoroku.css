@@ -11,17 +11,20 @@
 .sg-body{position:relative;gap:9px;--gold:#cfae6a;--brass:#a8884a;--ivory:#f0e8d4;--muted:#9a9584;--line:rgba(207,174,106,.38);--felt:#132a23;--wine:#6e2a2c;}
 
 /* Jackpots */
-.sg-pots{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:stretch;}
+.sg-pots{display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:stretch;}
 .sg-pot{position:relative;padding:5px 8px 6px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(180deg,rgba(207,174,106,.12),rgba(207,174,106,.02));text-align:center;overflow:hidden;}
 .sg-pot::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 40%,rgba(255,240,200,.18) 50%,transparent 60%);transform:translateX(-100%);animation:sg-shine 7s ease-in-out infinite;}
 .sg-pot.is-sjp::after{animation-delay:3.5s;}
 @keyframes sg-shine{0%,80%{transform:translateX(-100%);}100%{transform:translateX(100%);}}
 .sg-pot small{display:block;color:var(--gold);font:600 8px/1.2 system-ui,sans-serif;letter-spacing:.22em;}
 .sg-pot b{display:block;color:var(--ivory);font:500 17px/1.2 Georgia,"Yu Mincho",serif;font-variant-numeric:tabular-nums;}
+.sg-help.sg-records{width:auto;padding:0 8px;font:600 12px system-ui,sans-serif;letter-spacing:.06em;}
 .sg-help{width:34px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--gold);font:600 15px Georgia,serif;cursor:pointer;}
 
 /* The card: as large as the screen leaves room for */
 .sg-card-wrap{position:relative;width:min(100%,calc(100dvh - 350px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));min-width:240px;margin:0 auto;}
+/* Reaches warm the card: --heat runs 0–6 with the lines waiting on one number. */
+.sg-card-wrap.is-warm .sg-card{box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 24px rgba(0,0,0,.35),0 0 calc(6px + var(--heat,0) * 4px) rgba(214,170,90,calc(.12 + var(--heat,0) * .07));border-color:rgba(214,183,115,calc(.3 + var(--heat,0) * .1));transition:box-shadow .6s,border-color .6s;}
 .sg-card{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:7px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(160deg,#183429,#0f221c);box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 24px rgba(0,0,0,.35);}
 .sg-cell{position:relative;display:grid;place-items:center;aspect-ratio:1;border-radius:50%;background:rgba(240,232,212,.05);color:rgba(240,232,212,.82);font:500 clamp(11px,3.4vw,15px)/1 Georgia,"Yu Mincho",serif;font-variant-numeric:tabular-nums;transition:background .3s,color .3s;}
 .sg-cell span{position:relative;z-index:1;}
@@ -50,6 +53,7 @@
 .sg-ball.is-in{animation:sg-ball-in 1.05s cubic-bezier(.2,.75,.3,1) both;}
 @keyframes sg-ball-in{0%{transform:translateX(calc(50vw + 60px)) rotate(540deg);}70%{transform:translateX(-6px) rotate(-8deg);}85%{transform:translateX(3px) rotate(3deg);}100%{transform:none;}}
 .sg-ball.is-hit{transition:transform .42s cubic-bezier(.5,0,.7,1),opacity .42s;transform:translate(var(--dx),var(--dy)) scale(.45);opacity:.6;}
+.sg-ball.is-reach{background:radial-gradient(circle at 34% 28%,#fff8e6,#f0d58f 45%,#c79a3e 85%,#8e6c2c);box-shadow:0 0 0 3px rgba(240,213,143,.5),0 0 26px 6px rgba(240,190,90,.55),0 8px 16px rgba(0,0,0,.55);}
 .sg-ball.is-miss{filter:grayscale(1) brightness(.65);transition:filter .3s,opacity .8s .2s;opacity:0;}
 
 /* The die and the track */
@@ -92,9 +96,14 @@
 .sg-body .sg-status{display:block;margin:0;color:var(--muted);font-size:11px;text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sg-body .sg-status span,.sg-body .sg-status b{display:inline;}
 .sg-status b{color:var(--ivory);font-weight:600;}
+.sg-body .sg-status .sg-wanted{color:var(--gold);}
+.sg-body .sg-status .sg-alone{color:#d9a37a;}
 
 /* Controls */
-.sg-controls{display:grid;gap:7px;}
+.sg-controls{display:grid;grid-template-columns:1fr auto;gap:7px;}
+.sg-controls .sg-costs{grid-column:1/-1;}
+.sg-quick{min-width:64px;border:1px solid var(--line);border-radius:14px;background:transparent;color:var(--muted);font:600 12px system-ui,sans-serif;cursor:pointer;}
+.sg-quick[aria-pressed=true]{background:rgba(214,183,115,.16);border-color:var(--gold);color:var(--gold);}
 .sg-costs{display:grid;grid-template-columns:repeat(3,1fr);padding:3px;border:1px solid rgba(240,232,212,.14);border-radius:12px;}
 .sg-costs.is-fixed{display:flex;justify-content:center;align-items:baseline;gap:8px;margin:0;padding:6px;color:var(--muted);font-size:12px;}
 .sg-costs.is-fixed b{color:var(--ivory);font:500 18px Georgia,serif;}
@@ -162,6 +171,16 @@
 .sg-sheet-title{margin:0 0 6px;color:var(--gold);font:600 15px Georgia,"Yu Mincho",serif;text-align:center;}
 .sg-sheet ul{max-height:55dvh;overflow:auto;margin:0 0 12px;padding-left:18px;color:#d9d2c0;font-size:12px;line-height:1.75;}
 .sg-sheet .sg-game-btn{width:100%;}
+.sg-stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin:0 0 10px;}
+.sg-stats div{display:flex;justify-content:space-between;gap:6px;padding:4px 0;border-bottom:1px solid rgba(240,232,212,.08);font-size:11px;}
+.sg-stats div:nth-last-child(-n+3){grid-column:1/-1;}
+.sg-stats dt{color:var(--muted);}
+.sg-stats dd{margin:0;color:var(--ivory);font-variant-numeric:tabular-nums;}
+.sg-book-title{margin:4px 0;color:var(--gold);font-size:12px;}
+.sg-log{max-height:30dvh;overflow:auto;margin:0 0 12px;padding:0;list-style:none;font-size:12px;}
+.sg-log li{display:flex;gap:10px;padding:4px 0;border-bottom:1px solid rgba(240,232,212,.06);color:#d9d2c0;}
+.sg-log time{flex:none;color:var(--muted);font-variant-numeric:tabular-nums;}
+.sg-log li.is-jp span,.sg-log li.is-sjp span{color:var(--gold);font-weight:600;}
 
 /* Event games */
 .sg-game-rule{margin:-4px 0 10px;color:var(--muted);font-size:11px;}
@@ -191,5 +210,6 @@
 .sg-seg.is-game-mini{fill:#1d3a5c;}
 
 @media (prefers-reduced-motion:reduce){
+  .sg-card-wrap.is-warm .sg-card{transition:none;}
   .sg-ball.is-in,.sg-pot::after,.sg-cell.is-reach,.sg-cell.is-new,.sg-cell.is-run,.sg-dice3d .sg-cube,.sg-lamp{animation:none !important;}
 }
