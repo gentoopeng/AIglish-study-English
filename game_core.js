@@ -234,13 +234,16 @@
                     return;
                 }
                 var meanings = w.meanings && w.meanings.length ? w.meanings : [{ id: null, text: w.meaning, status: w.status || 'none', history: w.history || [] }];
-                // A meaning set to 「」の問題だけ gives its 「」 cards here too (the same cards as 用語・年号
-                // モード), rated on the meaning as usual; without a 「」 it stays an ordinary card.
-                var termCards = window.TermQuestions && meanings.some(function(m) { return m && m.blankOnly === true; }) ? window.TermQuestions.questions(w) : [];
+                // As in 用語・年号モード, a meaning written as an English line over a Japanese line (+ A +
+                // 「as」 B / AをBとみなす) is one card of its own (英単語を先に: the English → the Japanese;
+                // 意味を先に: the 「」 blanked → what was hidden), and a meaning set to 「」の問題だけ gives
+                // only its 「」 cards. Either is rated on the meaning as usual; anything else stays an
+                // ordinary card.
+                var termCards = window.TermQuestions ? window.TermQuestions.questions(w) : [];
                 meanings.forEach(function(meaning, meaningIndex) {
                     var meaningStatus = getFlashcardMeaningStatus(meaning, w);
                     if (!flashcardSelectedStatuses[meaningStatus]) return;
-                    var own = meaning.blankOnly === true ? termCards.filter(function(q) { return q.index === meaningIndex && q.kind === 'blank'; }) : [];
+                    var own = termCards.filter(function(q) { return q.index === meaningIndex && q.kind === 'blank' && (meaning.blankOnly === true || q.reverse !== undefined); });
                     if (own.length) {
                         own.forEach(function(q) {
                             var card = q.front !== undefined;

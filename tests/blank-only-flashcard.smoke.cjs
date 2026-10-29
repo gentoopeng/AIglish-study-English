@@ -28,6 +28,8 @@ const { chromium } = require("playwright"),
             { id: "1-0", text: "考える" },
             { id: "1-1", text: "「consideration」\n考慮、思いやり", blankOnly: true, partOfSpeech: "名" },
             { id: "1-2", text: "「considerate」\n思いやりのある" },
+            { id: "1-3", text: "+ A + 「as」 B\nAをBとみなす" },
+            { id: "1-4", text: "「の」は大事" },
           ],
         },
       ];
@@ -44,12 +46,15 @@ const { chromium } = require("playwright"),
       ["1-0", "consider", "考える", false],
       // 「」の問題だけ: the 「」 term is asked, not the headword.
       ["1-1", "consideration", "考慮、思いやり", true],
-      // Without the setting the line stays an ordinary card.
-      ["1-2", "consider", "「considerate」\n思いやりのある", false],
+      // An English line over a Japanese line is its own card without any setting.
+      ["1-2", "considerate", "思いやりのある", true],
+      ["1-3", "consider A as B", "AをBとみなす", true],
+      // A 「」 inside an ordinary explanation, without the setting, stays an ordinary card.
+      ["1-4", "consider", "「の」は大事", false],
     ]);
     // Shown first, the 「」 card's front is the term; a right swipe rates that meaning ○.
     await page.evaluate(() => {
-      const card = flashcardOriginQueue.find((c) => c.termCard);
+      const card = flashcardOriginQueue.find((c) => c.meaningId === "1-1");
       flashcardOriginQueue = [card].concat(flashcardOriginQueue.filter((c) => c !== card));
       flashcardCurrentIndex = 0;
       window.renderFlashcardDeck();
@@ -60,8 +65,21 @@ const { chromium } = require("playwright"),
     await page.evaluate(() => window.swipeFlashcard("right"));
     await page.waitForFunction(() => vocabList.find((w) => w.num === 1)?.meanings[1].status === "ok");
     assert.equal(await page.evaluate(() => vocabList.find((w) => w.num === 1).meanings[0].status || "none"), "none");
+    // 意味を先に: the + A + 「as」 B card hides "as" and asks for it.
+    await page.evaluate(() => {
+      flashcardDirectionMode = "ja2en";
+      const card = flashcardOriginQueue.find((c) => c.meaningId === "1-3");
+      flashcardOriginQueue = [card];
+      flashcardCurrentIndex = 0;
+      window.renderFlashcardDeck();
+    });
+    const asked = await page.locator(".flashcard-face-front").first().innerText(),
+      answer = await page.locator(".flashcard-face-back").first().evaluate((el) => el.innerText || el.textContent);
+    assert.match(asked, /consider A （＿＿） B/);
+    assert.match(asked, /AをBとみなす/);
+    assert.match(answer, /^as(\n|consider)/m);
     assert.deepEqual(errors, []);
-    console.log("PASS: 「」の問題だけ in an ordinary book gives only the 「」 card, rated on its meaning; other meanings stay ordinary cards");
+    console.log("PASS: in an ordinary book an English-over-Japanese meaning and a 「」の問題だけ meaning give their 「」 card (意味を先に hides as), rated on the meaning; other meanings stay ordinary cards");
   } finally {
     await browser.close();
   }
