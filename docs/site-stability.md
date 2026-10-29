@@ -1543,3 +1543,38 @@ As agreed, the bet is now one fixed amount for everybody, 100 (`RULES.costs = [1
 With only 10 rolls in 1,000 practice chips, running out now turns the roll button into "練習チップを1,000枚に戻す" (practice chips only; `resetPractice` passed from casino.js).
 
 Since a ball slot now pays ×0 too, the tests pick a ×0 slot that is not a ball.
+
+## すごろくビンゴ: new bingo wheels and mini games (10.22.29.00)
+
+The bingo rewards were rebuilt as specified.
+
+**A line.** It pays the bingo prize (3× the bet = 300) and spins a 10-slot wheel:
+- bet × 5 / × 10 / × 20
+- the mini games: 10秒ぴったり, 連打, サイコロ, 暗算
+- ハズレ (the prize alone), JACKPOT, and SUPER JACKPOT CHANCE
+
+**SUPER JACKPOT CHANCE** is a 5-slot wheel: SUPER JACKPOT, JACKPOT ×2, 連打EX, and もう一回 (the bingo wheel again).
+
+**Bonuses.** n lines at once ×(n + 1) and the solo ×1.5 apply to the prize, the multiples and the mini-game points, not to the jackpots.
+
+**Mini games** (`RULES.games`, `gameScore`) are played over the board:
+- 10秒ぴったり: the time hides after 3 s; 1,000 less 5 per 0.01 s off.
+- 連打: taps in 10 s × 10 (EX × 50).
+- サイコロ: the face × 100.
+- 暗算: a middle-school sum (`S.sum`, whole answers, negatives and brackets) on an on-screen keypad in 15 s; 500 if right.
+- Each waits in `state.bonus` and blocks rolling. Starting is saved first, so a game left half way scores 0 when reopened.
+
+**Measured.** Fixed bet 100; 2M rolls alone and 400k with five players; mini games played fairly well:
+
+| per roll | alone | 5 players |
+|---|---|---|
+| a ball | 1 in 5 | 1 in 5 |
+| a ball that opens a cell | 1 in 25 | 1 in 25 |
+| a bingo | 1 in 179 | 1 in 181 |
+| a mini game | 1 in 423 | 1 in 424 |
+| SUPER JACKPOT CHANCE | 1 in 1,726 | 1 in 1,674 |
+| JACKPOT | 1 in 1,244 | 1 in 1,231 |
+| SUPER JACKPOT | 1 in 8,000 | 1 in ~10,000 |
+| return without jackpots | 90.8% | 87.6% |
+
+**Before points are used.** The jackpots are now about 10× more frequent than before. Their seeds (5,000 / 50,000) would create points out of nothing at that rate, so they need revisiting before the game moves to real points. In the preview a jackpot is only shown.

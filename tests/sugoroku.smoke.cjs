@@ -171,22 +171,71 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.match(await screen.locator(".sg-cell").nth(10).getAttribute("title"), /^Amyのボール/);
     assert.equal(await screen.locator(".sg-cell.is-mine").count(), 6);
     assert.ok((await screen.locator(".sg-cell.is-reach").count()) >= 1);
-    await fix([0, lastNo - 1]);
+    // Die 1 onto START: the lap ball completes the row; the bingo wheel stops on × 20.
+    const wheelAt = (test) => page.evaluate((src) => window.SugorokuModel.RULES.wheels.bingo.findIndex(Function("x", "return " + src)), test);
+    const before20 = await saved();
+    await fix([0, lastNo - 1, await wheelAt("x.x === 20")]);
     await screen.locator("[data-sg-roll]").click();
     await screen.locator(".sg-layer.is-bingo").waitFor({ state: "attached" });
     await settled();
     await playGame();
     const done = await saved(),
       doneCard = await card();
-    assert.ok(done.bingos >= 1);
-    assert.equal(done.stake, 0);
+    assert.equal(done.bingos, before20.bingos + 1);
+    // A line of only the guest's balls: (bingo prize 300 + × 20 = 2,000) × 1.5, plus START's wheel.
+    assert.ok(done.won - before20.won >= 3450, String(done.won - before20.won));
     // The finished row starts again: no balls, fresh numbers; amy's ball stays.
     assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.ok(!doneCard.cells.slice(0, 7).includes(lastNo));
     assert.equal(doneCard.owners[10], "amy");
     await page.screenshot({ path: "/tmp/sugoroku-after.png", fullPage: true });
+
+    // A mini game: the wheel stops on 10秒ぴったり, played start → stop → on, and paid.
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    const nextNo = await page.evaluate(([name, cardName]) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.pos = 79;
+      localStorage.setItem(name, JSON.stringify(s));
+      const c = JSON.parse(localStorage.getItem(cardName));
+      c.owners = c.owners.map((o, i) => (o === "*" ? o : i >= 7 && i < 13 ? "amy" : ""));
+      localStorage.setItem(cardName, JSON.stringify(c));
+      return c.cells[13];
+    }, [SAVE, CARD]);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").waitFor();
+    await fix([0, nextNo - 1, await wheelAt('x.game === "timer"')]);
+    const beforeMini = await saved();
+    await screen.locator("[data-sg-roll]").click();
+    const mini = screen.locator(".sg-layer.is-mini:not([hidden])");
+    await mini.locator('[data-sg-game="start"]').waitFor();
+    assert.match(await mini.locator(".sg-wheel-title").innerText(), /10秒ぴったり/);
+    assert.deepEqual((await saved()).bonus.map((b) => b.game), ["timer"]);
+    await mini.locator('[data-sg-game="start"]').click();
+    assert.equal((await saved()).bonus[0].started, true);
+    await page.waitForTimeout(300);
+    await mini.locator('[data-sg-game="stop"]').click();
+    assert.match(await mini.locator(".sg-game-line").innerText(), /ずれ \d+\.\d\d秒　→　\d+点/);
+    await mini.locator('[data-sg-game="next"]').click();
+    await settled();
+    const afterMini = await saved();
+    assert.deepEqual(afterMini.bonus, []);
+    // amy's row: no solo bonus; prize 300 plus whatever the timer scored (0 this far off).
+    assert.ok(afterMini.won - beforeMini.won >= 300);
+
+    // A mini game left half way scores 0 when the game is opened again.
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.bonus = [{ game: "tap", mult: 1, started: true }];
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await mini.locator('[data-sg-game="next"]').waitFor();
+    assert.match(await mini.innerText(), /途中でやめたので0点/);
+    await mini.locator('[data-sg-game="next"]').click();
+    assert.deepEqual((await saved()).bonus, []);
     assert.deepEqual(errors, []);
-    console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled, a ball off the card pays 1.5×, other players' balls by name, a line of own balls spins BINGO and starts the row again");
+    console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled, a ball off the card pays 1.5×, other players' balls by name, a line of own balls spins BINGO and starts the row again, a mini game played and paid, a left one scores 0");
   } finally {
     await browser.close();
   }

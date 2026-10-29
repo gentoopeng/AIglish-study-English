@@ -23,8 +23,9 @@
   };
   const SQUARE = { start: "START", normal: "", event: "★", accident: "!" };
   const GAME_NAMES = { blackjack: "ブラックジャック", dice: "ダイスポーカー", chinchiro: "チンチロ", ball: "ボール確定" };
-  const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", jp: "JACKPOT CHANCE", sjp: "SUPER JACKPOT CHANCE" };
-  const HOT = new Set(["bingo", "jp", "sjp"]);
+  const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE" };
+  const HOT = new Set(["bingo", "sjp"]);
+  const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算" };
   const RULES_TEXT = [
     "プレ版のため練習チップで遊びます。ポイントは動かず、ジャックポットも演出だけです。",
     "1回100枚でサイコロを振ります（額はみんな同じです）。",
@@ -32,7 +33,7 @@
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると半分が戻ります。ボール確定はボールと額の1.5倍です。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "STARTを通るとボールが1つ出ます。",
-    "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の1.5倍がもらえます。1列そろえた人は、自分が前のビンゴから使った額をもとにルーレットを回し、JP CHANCEからジャックポットを狙えます。自分のボールだけでそろえると報酬が1.5倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
+    "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の1.5倍がもらえます。1列そろえるとビンゴ賞金（300）と、ビンゴルーレット（掛け金×5・×10・×20、10秒ぴったり、連打、サイコロ、暗算、ハズレ、JACKPOT、SUPER JACKPOT CHANCE）。SUPER JACKPOT CHANCEはSUPER JACKPOT・JACKPOT×2・連打EX・もう一回の5つ。自分のボールだけでそろえると賞金とミニゲームが1.5倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
     "ジャックポットはカジノ全体で賭けられたポイントから貯まります。",
   ];
 
@@ -200,7 +201,8 @@
     view = { body, state, card: found.card, people: found.people, cost: S.RULES.costs[0], busy: false, fast: false };
     draw();
     listen();
-    if (state.pending) game();
+    if (state.bonus?.length) await bonus();
+    if (view?.state.pending) game();
   }
   function draw() {
     const { body, state } = view;
@@ -318,10 +320,10 @@
       reach = new Set(reaches.flatMap((line) => S.LINES[line]));
     view.cells.forEach((cell, i) => cell.classList.toggle("is-reach", !view.card.owners[i] && reach.has(i)));
     view.info.replaceChildren(
-      node("span", "", "ビンゴのもと "),
-      node("b", "", fmt(state.stake) + api.unit()),
-      node("span", "", "　リーチ "),
+      node("span", "", "リーチ "),
       node("b", "", String(reaches.length)),
+      node("span", "", "　ビンゴ "),
+      node("b", "", (state.bingos || 0) + "回"),
     );
     // Out of practice chips: the button fills them up again instead.
     const short = api.balance() < view.cost,
@@ -398,6 +400,7 @@
     save(out.state);
     pay(out, cost);
     await run(out, { ...state, stake: state.stake + cost }, before, people);
+    if (view?.state.bonus?.length) await bonus();
     if (view?.state.pending) game();
   }
   // Plays events over a copy of the state shown so far, then shows the real new state.
@@ -410,7 +413,8 @@
     const live = { ...shown };
     view.state = live;
     view.card = { cells: [...before.card.cells], owners: [...before.card.owners] };
-    view.people = { ...before.people, ...people };
+    // This player's own name and icon stay known even if a finished line just took their balls.
+    view.people = { ...before.people, ...people, ...(me && me.id === api.uid() ? { [me.id]: me.value } : {}) };
     paintCard();
     hud();
     try {
@@ -419,7 +423,7 @@
       if (target === view) {
         view.state = out.state;
         view.card = out.card;
-        view.people = people;
+        view.people = { ...people, ...(me && me.id === api.uid() ? { [me.id]: me.value } : {}) };
         view.busy = false;
         view.body.classList.remove("is-spinning");
         paintCard();
@@ -457,7 +461,6 @@
         setTimeout(() => sq.classList.remove("is-flash"), 600);
         await wait(220);
       } else if (e.t === "wheel") {
-        if (e.wheel === "bingo") live.stake = 0;
         await wheel(e);
       } else if (e.t === "ball") {
         await drawBall(e, live);
@@ -486,6 +489,12 @@
         paintCard();
         hud();
         say("そろった列は新しい番号に", "is-ball");
+        await wait(900);
+      } else if (e.t === "prize") {
+        say("ビンゴ賞金　+" + fmt(e.amount) + api.unit(), "is-gain");
+        await wait(1000);
+      } else if (e.t === "bonus") {
+        say("ミニゲーム：" + MINI[e.game], "is-hot");
         await wait(900);
       } else if (e.t === "take") {
         say("アクシデント　−" + fmt(e.amount) + api.unit(), "is-loss");
@@ -547,18 +556,18 @@
     if (wheel === "accident") return slot.start ? "worst" : slot.back ? "bad" : slot.take >= 1.5 ? "worst" : slot.take ? "bad" : "safe";
     if (slot.ball) return "ball";
     if (slot.next || slot.jackpot) return "jackpot";
-    if (wheel !== "normal") {
-      const top = Math.max(...S.RULES.wheels[wheel].map((s) => s.x || 0));
-      return slot.x >= top * 0.6 ? "gold" : slot.x >= top * 0.3 ? "high" : slot.x >= top * 0.12 ? "mid" : "low";
-    }
+    if (wheel !== "normal") return slot.game ? "game-mini" : slot.miss ? "zero" : slot.back ? "bad" : slot.x >= 20 ? "gold" : slot.x >= 10 ? "champagne" : "high";
     return slot.x >= 3 ? "gold" : slot.x >= 2 ? "champagne" : slot.x >= 1.25 ? "high" : slot.x >= 0.5 ? "mid" : slot.x > 0 ? "low" : "zero";
   }
   function slotLabel(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "BALL" : { blackjack: "BJ", dice: "DICE", chinchiro: "チンチロ" }[slot];
     if (wheel === "accident") return slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
     if (slot.ball) return "●";
-    if (slot.next) return slot.next === "jp" ? "JP" : "SJP";
+    if (slot.next) return "SJP";
     if (slot.jackpot) return slot.jackpot === "jp" ? "JACKPOT" : "SUPER";
+    if (slot.game) return { timer: "10秒", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算" }[slot.game];
+    if (slot.miss) return "ハズレ";
+    if (slot.back) return "もう一回";
     return "×" + slot.x;
   }
   function wheelSvg(e) {
@@ -614,7 +623,7 @@
     box.append(face);
     const outcome = node("p", "sg-wheel-out");
     box.append(outcome);
-    if (e.wheel === "bingo") box.append(node("p", "sg-wheel-base", "前のビンゴから " + fmt(Math.round(e.base)) + api.unit()));
+    if (e.mult > 1 && HOT.has(e.wheel)) box.append(node("p", "sg-wheel-base", "賞金とミニゲームは ×" + e.mult));
     layer.replaceChildren(box);
     const n = e.slots.length,
       turns = { normal: 4, event: 4, accident: 4, bingo: 5, jp: 6, sjp: 7 }[e.wheel],
@@ -641,10 +650,16 @@
                 ? "−" + fmt(Math.round(e.base * slot.take)) + api.unit()
                 : "セーフ"
           : slot.next
-            ? slot.next === "jp" ? "JACKPOT CHANCE" : "SUPER JACKPOT CHANCE"
+            ? "SUPER JACKPOT CHANCE"
             : slot.jackpot
               ? slot.jackpot === "jp" ? "JACKPOT" : "SUPER JACKPOT"
-              : "×" + slot.x + "　+" + fmt(e.amount) + api.unit() + (slot.ball ? "　BALL" : "");
+              : slot.game
+                ? MINI[slot.game] + " チャレンジ"
+                : slot.miss
+                  ? "ハズレ（ビンゴ賞金のみ）"
+                  : slot.back
+                    ? "もう一回！"
+                    : "×" + slot.x + "　+" + fmt(e.amount) + api.unit() + (slot.ball ? "　BALL" : "");
     box.classList.add("is-done");
     if (slot.next || slot.jackpot) layer.classList.add("is-hotter");
     await wait(hot || slot.x >= 2 || slot.ball ? 1300 : 750);
@@ -829,6 +844,192 @@
     pay(out, 0);
     view.busy = false;
     await run(out, { ...state, pending: null }, before, people);
+    if (view?.state.bonus?.length) await bonus();
+  }
+
+  // ---- Mini games after a line ------------------------------------------------------------
+  // Each waits in state.bonus. Starting one is saved first, so leaving half way and coming
+  // back scores it 0 instead of trying again.
+  const RULE_TEXT = {
+    timer: "スタートから心の中で10秒数えて、ちょうど10秒でストップ。3秒で表示が消えます。1,000点から0.01秒ずれるごとに5点減ります。",
+    tap: "10秒間、ボタンをできるだけたくさん押してください。1回10点。",
+    tapex: "10秒間、ボタンをできるだけたくさん押してください。1回50点。",
+    dice: "サイコロを1回振って、出た目×100点。",
+    math: "15秒以内に計算の答えを入れてください。正解で500点。",
+  };
+  async function bonus() {
+    while (view?.state.bonus?.length) {
+      const item = view.state.bonus[0];
+      let done = null;
+      if (item.started) {
+        await miniShell(item, (box, finish) => {
+          box.append(node("p", "sg-game-line", "途中でやめたので0点です。"));
+          finish(null, "つづける");
+        });
+      } else done = await miniShell(item, (box, finish) => miniGame(item, box, finish));
+      const out = S.settleBonus(view.state, done);
+      view.state = out.state;
+      save(out.state);
+      pay(out, 0);
+      hud();
+      if (out.gain) say(MINI[item.game] + "　+" + fmt(out.gain) + api.unit(), "is-gain");
+      api.refresh();
+    }
+  }
+  // The frame every mini game is played in; resolves with what was done.
+  function miniShell(item, build) {
+    return new Promise((resolve) => {
+      const layer = view.layer;
+      layer.className = "sg-layer is-game is-mini";
+      layer.hidden = false;
+      view.busy = true;
+      hud();
+      const box = node("div", "sg-game sg-mini");
+      box.append(node("p", "sg-wheel-title", MINI[item.game] + (item.mult > 1 ? "　×" + item.mult : "")), node("p", "sg-game-rule", RULE_TEXT[item.game]));
+      layer.replaceChildren(box);
+      build(box, (done, label = "つづける") => {
+        const next = node("button", "sg-game-btn", label);
+        next.type = "button";
+        next.dataset.sgGame = "next";
+        next.onclick = () => {
+          layer.hidden = true;
+          view.busy = false;
+          resolve(done);
+        };
+        box.append(next);
+      });
+    });
+  }
+  function started(item) {
+    view.state = { ...view.state, bonus: [{ ...item, started: true }, ...view.state.bonus.slice(1)] };
+    save(view.state);
+  }
+  function miniGame(item, box, finish) {
+    const show = node("p", "sg-mini-big", ""),
+      line = node("p", "sg-game-line", ""),
+      go = node("button", "sg-game-btn", "スタート");
+    go.type = "button";
+    go.dataset.sgGame = "start";
+    box.append(show, line, go);
+    const score = (done) => S.gameScore(item.game, done) * item.mult;
+    const end = (done, text) => {
+      go.remove();
+      line.textContent = text + "　→　" + fmt(score(done)) + "点";
+      finish(done);
+    };
+    if (item.game === "timer") {
+      show.textContent = "0.00";
+      let t0 = 0,
+        tick = 0;
+      go.onclick = () => {
+        if (!t0) {
+          started(item);
+          t0 = performance.now();
+          go.textContent = "ストップ";
+          go.dataset.sgGame = "stop";
+          tick = setInterval(() => {
+            const t = (performance.now() - t0) / 1000;
+            show.textContent = t < 3 ? t.toFixed(2) : "?.??";
+          }, 30);
+          return;
+        }
+        clearInterval(tick);
+        const t = (performance.now() - t0) / 1000;
+        show.textContent = t.toFixed(2);
+        end(t, "ずれ " + Math.abs(t - 10).toFixed(2) + "秒");
+      };
+    } else if (item.game === "tap" || item.game === "tapex") {
+      show.textContent = "0";
+      go.onclick = async () => {
+        started(item);
+        go.disabled = true;
+        for (const n of ["3", "2", "1"]) {
+          line.textContent = n;
+          await new Promise((r) => setTimeout(r, calm() ? 10 : 600));
+        }
+        let taps = 0;
+        const pad = node("button", "sg-tap", "タップ！");
+        pad.type = "button";
+        pad.dataset.sgGame = "tap";
+        pad.onpointerdown = (e) => {
+          e.preventDefault();
+          taps++;
+          show.textContent = String(taps);
+        };
+        pad.onclick = (e) => e.detail === 0 && (taps++, (show.textContent = String(taps)));
+        go.replaceWith(pad);
+        const seconds = S.RULES.games[item.game].seconds,
+          t0 = performance.now();
+        await new Promise((r) => {
+          const tick = setInterval(() => {
+            const left = seconds - (performance.now() - t0) / 1000;
+            line.textContent = "のこり " + Math.max(0, left).toFixed(1) + "秒";
+            if (left <= 0) clearInterval(tick), r();
+          }, 50);
+        });
+        pad.remove();
+        end(taps, taps + "回");
+      };
+    } else if (item.game === "dice") {
+      const cubeBox = cube();
+      show.replaceWith(cubeBox.box);
+      cubeBox.box.classList.add("sg-mini-die");
+      go.textContent = "サイコロを振る";
+      go.dataset.sgGame = "roll";
+      go.onclick = async () => {
+        started(item);
+        go.disabled = true;
+        const face = random(6) + 1;
+        await cubeBox.roll(face);
+        end(face, face + "の目");
+      };
+    } else {
+      const q = S.sum(random);
+      let typed = "",
+        over = false;
+      show.textContent = "？";
+      const keys = node("div", "sg-keys");
+      const answer = node("p", "sg-mini-answer", "");
+      const submit = () => {
+        if (over) return;
+        over = true;
+        keys.remove();
+        const right = typed !== "" && typed !== "−" && Number(typed.replace("−", "-")) === q.answer;
+        end(right, (right ? "正解" : "ざんねん") + "（答え " + q.answer + "）");
+      };
+      go.onclick = () => {
+        started(item);
+        go.remove();
+        show.textContent = q.text + " =";
+        box.insertBefore(answer, line);
+        box.insertBefore(keys, line);
+        for (const k of ["7", "8", "9", "4", "5", "6", "1", "2", "3", "−", "0", "⌫"]) {
+          const b = node("button", "sg-key", k);
+          b.type = "button";
+          b.dataset.key = k;
+          b.onclick = () => {
+            if (k === "⌫") typed = typed.slice(0, -1);
+            else if (k === "−") typed = typed.startsWith("−") ? typed.slice(1) : "−" + typed;
+            else if (typed.replace("−", "").length < 5) typed += k;
+            answer.textContent = typed;
+          };
+          keys.append(b);
+        }
+        const ok = node("button", "sg-game-btn", "こたえる");
+        ok.type = "button";
+        ok.dataset.sgGame = "answer";
+        ok.onclick = submit;
+        keys.append(ok);
+        const t0 = performance.now(),
+          seconds = S.RULES.games.math.seconds;
+        const tick = setInterval(() => {
+          const left = seconds - (performance.now() - t0) / 1000;
+          if (over) return clearInterval(tick);
+          line.textContent = "のこり " + Math.max(0, left).toFixed(1) + "秒";
+          if (left <= 0) clearInterval(tick), submit();
+        }, 100);
+      };
+    }
   }
 
   window.Sugoroku = Object.freeze({ play });
