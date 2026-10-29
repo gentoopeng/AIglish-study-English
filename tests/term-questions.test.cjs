@@ -101,3 +101,19 @@ test("a line set to 「」の問題だけ gives no whole question, but still its
   const word = { num: 1, word: "follow", meanings: [{ id: "1-0", text: "〈指示〉に従う" }, { id: "1-1", text: "「following」\n次の", blankOnly: true }, { id: "1-2", text: "続く", blankOnly: true }] };
   assert.deepEqual(t.questions(word).map((q) => q.key), ["w:1-0", "t:1-1:0", "w:1-2"]);
 });
+
+test("a 「」 card's back keeps the whole sentence, the asked term in its place in 「」", () => {
+  const word = {
+    num: 40,
+    word: "蘇我馬子",
+    meanings: [{ id: "40-0", text: "「大臣」の官職につき「大連」の官職であった物部守屋を滅ぼした人物" }],
+  };
+  const cards = t.questions(word).filter((q) => q.kind === "blank");
+  assert.deepEqual(
+    cards.map((q) => [q.front, q.back]),
+    [
+      ["大臣", "蘇我馬子\n「大臣」の官職につき大連の官職であった物部守屋を滅ぼした人物"],
+      ["大連", "蘇我馬子\n大臣の官職につき「大連」の官職であった物部守屋を滅ぼした人物"],
+    ],
+  );
+});

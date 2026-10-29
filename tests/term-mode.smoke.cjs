@@ -57,13 +57,14 @@ const { chromium } = require("playwright"),
     // 織田信長 has two lines: a whole card for each, as one card per meaning in the normal mode.
     assert.equal(queue.length, 10);
     assert.deepEqual(
-      // A 「」 card: only the term on the front; the headword and the rest of the line behind.
+      // A 「」 card: only the term on the front; behind, the headword and the whole line with that
+      // term in 「」 (so the sentence still reads).
       queue.filter((q) => q[0].startsWith("t:")).map((q) => q[1]).sort(),
       ["本能寺の変", "武田勝頼", "鎌倉幕府", "長篠の戦い"].sort(),
     );
     assert.deepEqual(
       queue.filter((q) => q[0].startsWith("t:")).map((q) => q[2]).sort(),
-      ["源頼朝　1192年\nを開いた", "織田信長　1575年\nでは武田勝頼を破った", "織田信長　1575年\n長篠の戦いではを破った", "織田信長　1582年\nで死亡したとされる人物"].sort(),
+      ["源頼朝　1192年\n「鎌倉幕府」を開いた", "織田信長　1575年\n「長篠の戦い」では武田勝頼を破った", "織田信長　1575年\n長篠の戦いでは「武田勝頼」を破った", "織田信長　1582年\n「本能寺の変」で死亡したとされる人物"].sort(),
     );
     // The whole-entry card follows the chosen direction (英→日 by default: the headword first);
     // blank and year cards always show the question first.
