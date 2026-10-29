@@ -100,18 +100,21 @@ test("a line pays on the player's own stake, then its numbers are drawn afresh a
   // n lines at once: (n + 1)× the bingo prize (3× the bet) and the wheel's bet × 5.
   assert.equal(line.mult, line.count + 1);
   // The prize is shared by the 13 balls on the two lines: ben's 12 wait on the card for him,
-  // amy keeps her 1 and the rounding; the wheel is all amy's.
+  // amy keeps her 1 and the rounding. Of the wheel's × 5 (1,500 here), 30% goes the same way:
+  // ben's 12 parts of 450 make 415, amy keeps 1,085.
   const prize = out.events.find((e) => e.t === "prize");
   assert.equal(prize.total, 300 * line.mult);
   assert.deepEqual(prize.shares, { ben: Math.floor((900 * 12) / 13) });
   assert.equal(prize.amount, 900 - 830);
-  assert.deepEqual(out.card.owed, { ben: 830 });
   const spin = out.events.find((e) => e.t === "wheel" && e.wheel === "bingo");
-  assert.equal(spin.amount, 500 * line.mult);
-  assert.equal(out.gain, 70 + 500 * line.mult);
+  assert.equal(spin.total, 500 * line.mult);
+  assert.deepEqual(spin.shares, { ben: 415 });
+  assert.equal(spin.amount, 1500 - 415);
+  assert.deepEqual(out.card.owed, { ben: 830 + 415 });
+  assert.equal(out.gain, 70 + 1085);
   // ben takes his part when he next plays, once.
   const got = S.collect(out.card, "ben");
-  assert.equal(got.amount, 830);
+  assert.equal(got.amount, 1245);
   assert.deepEqual(got.card.owed, {});
   assert.equal(S.collect(got.card, "ben").amount, 0);
   assert.equal(out.state.stake, 0);
@@ -214,7 +217,8 @@ test("the jackpot is a slot of the bingo wheel, the super chance leads to its ow
   // Back: the bingo wheel again, here landing on × 10.
   const back = lineReady([slot("bingo", (x) => x.next), slot("sjp", (x) => x.back), slot("bingo", (x) => x.x === 10)]);
   assert.deepEqual(back.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["normal", "bingo", "sjp", "bingo"]);
-  assert.equal(back.gain, 43 + 1000);
+  // × 10 = 1,000, of which ben's 6 balls of 7 take 30%: 257.
+  assert.equal(back.gain, 43 + 1000 - 257);
   assert.deepEqual(sjp.state.jpWait, ["sjp"]);
 });
 
