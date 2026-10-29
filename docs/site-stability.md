@@ -1454,3 +1454,24 @@ Now `startFlashcardSession` in an ordinary book handles a meaning with `blankOnl
 - A meaning without the setting, or without a 「」, stays an ordinary card.
 
 Test: `tests/blank-only-flashcard.smoke.cjs`.
+
+## すごろくビンゴ: balls drawn from 1–100 (10.22.24.00)
+
+As asked, a ball no longer always lands on the card.
+
+**The card and the draw**
+- The card holds 48 different numbers from 1–100.
+- A ball is drawn from 1–100 and rolls in on screen. If its number is on the card and still closed, it flies into that square.
+- Otherwise (not on the card, or already open) it greys out and pays 1.5× the bet (`RULES.missPay`), with nothing else.
+
+**Re-tuning**
+- With the miss payout the return went to 115–122%. A normal wheel's ball slot now gives only the ball (it no longer pays the bet back too), and the normal wheels were lowered.
+- 1M-roll simulation: 97.4 / 96.6 / 95.6% for 10 / 50 / 100.
+
+**Cost of the change:** lines are much rarer, so the jackpot chances are rarer too.
+- Bingo comes about every 210 / 170 / 140 rolls and a JACKPOT about every 22,000 / 14,000 / 16,000 rolls.
+- `RULES.numbers`, `missPay` and the ball slots are the levers if this is too slow.
+
+**Tests**
+- The model tests draw exact numbers: hit, off the card, already open, the 1.5× on a missed event ball.
+- The smoke test fixes the next crypto values to check a miss paying 75 on a 50 bet and a hit completing a line.

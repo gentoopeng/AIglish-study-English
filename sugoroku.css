@@ -6,6 +6,7 @@
 .casino-pic .is-sg-piece{fill:#ece4cf;}
 .casino-pic .is-sg-jp{fill:#c4a364;font:600 9px Georgia,serif;letter-spacing:.1em;}
 .casino-screen.is-sugoroku{background:radial-gradient(ellipse 120% 70% at 50% 35%,#16302a 0%,#0d1a17 55%,#080d0c 100%);}
+.casino-screen.is-sugoroku{overflow-x:hidden;}
 .casino-screen.is-sugoroku .cs-bar{margin-bottom:8px;}
 .sg-body{position:relative;gap:9px;--gold:#cfae6a;--brass:#a8884a;--ivory:#f0e8d4;--muted:#9a9584;--line:rgba(207,174,106,.38);--felt:#132a23;--wine:#6e2a2c;}
 
@@ -40,6 +41,14 @@
 .sg-say.is-loss{color:#e8a99a;}
 .sg-say.is-ball{color:var(--gold);letter-spacing:.12em;}
 .sg-say.is-hot{top:42%;bottom:auto;padding:10px 26px;border:1px solid var(--gold);color:var(--gold);font:500 26px/1.2 Georgia,"Yu Mincho",serif;letter-spacing:.2em;box-shadow:0 0 30px rgba(207,174,106,.45);}
+
+/* The ball draw */
+.sg-ball{position:absolute;left:50%;top:50%;z-index:3;display:grid;place-items:center;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;background:radial-gradient(circle at 34% 28%,#ffffff,#f1e9d4 45%,#c9b98f 85%,#9c8a5e);color:#1b2a24;font:700 22px/1 Georgia,serif;font-variant-numeric:tabular-nums;box-shadow:0 8px 16px rgba(0,0,0,.55),inset 0 -4px 8px rgba(0,0,0,.15);pointer-events:none;}
+.sg-ball::before{content:"";position:absolute;inset:9px;border:1.5px solid rgba(160,40,40,.75);border-radius:50%;}
+.sg-ball.is-in{animation:sg-ball-in 1.05s cubic-bezier(.2,.75,.3,1) both;}
+@keyframes sg-ball-in{0%{transform:translateX(calc(50vw + 60px)) rotate(540deg);}70%{transform:translateX(-6px) rotate(-8deg);}85%{transform:translateX(3px) rotate(3deg);}100%{transform:none;}}
+.sg-ball.is-hit{transition:transform .42s cubic-bezier(.5,0,.7,1),opacity .42s;transform:translate(var(--dx),var(--dy)) scale(.45);opacity:.6;}
+.sg-ball.is-miss{filter:grayscale(1) brightness(.65);transition:filter .3s,opacity .8s .2s;opacity:0;}
 
 /* The die and the track */
 .sg-boardrow{display:flex;align-items:center;gap:10px;height:78px;}
@@ -167,5 +176,5 @@
 .sg-game-btn:disabled{filter:grayscale(.6) brightness(.6);}
 
 @media (prefers-reduced-motion:reduce){
-  .sg-pot::after,.sg-cell.is-reach,.sg-cell.is-new,.sg-cell.is-run,.sg-dice3d .sg-cube,.sg-lamp{animation:none !important;}
+  .sg-ball.is-in,.sg-pot::after,.sg-cell.is-reach,.sg-cell.is-new,.sg-cell.is-run,.sg-dice3d .sg-cube,.sg-lamp{animation:none !important;}
 }

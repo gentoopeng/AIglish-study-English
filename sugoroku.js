@@ -28,11 +28,11 @@
   const RULES_TEXT = [
     "プレ版のため練習チップで遊びます。ポイントは動かず、ジャックポットも演出だけです。",
     "1回に使う額（10・50・100）を選んでサイコロを振ります。出る目は同じですが、額が大きいほど通常マスのルーレットに「ボール」が多く入ります。",
-    "通常マス：ルーレットで ×3〜×0 のどれかが額に掛かって戻ります。「●（ボール）」ならボールが出て額がそのまま戻ります。",
+    "通常マス：ルーレットで ×3〜×0 のどれかが額に掛かって戻ります。「●（ボール）」ならボールが出ます。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると半分が戻ります。ボール確定はボールと額の1.5倍です。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "STARTを通るとボールが1つ出ます。",
-    "ボールでカードの番号が開きます。1列そろうと、前のビンゴから使った額をもとにルーレットが回り、JP CHANCEからジャックポットを狙えます。",
+    "ボールは1〜100から抽選です。カードにある番号ならそこが開き、カードにない番号やもう開いている番号なら額の1.5倍がもらえます。1列そろうと、前のビンゴから使った額をもとにルーレットが回り、JP CHANCEからジャックポットを狙えます。",
     "ジャックポットはカジノ全体で賭けられたポイントから貯まります。",
   ];
 
@@ -111,6 +111,7 @@
     });
     view.say = node("p", "sg-say");
     view.say.setAttribute("role", "status");
+    view.cardWrap = cardWrap;
     cardWrap.append(card, view.say);
 
     const board = node("div", "sg-boardrow");
@@ -331,13 +332,7 @@
         if (e.wheel === "bingo") live.stake = 0;
         await wheel(e);
       } else if (e.t === "ball") {
-        live.marks[e.cell] = true;
-        const cell = view.cells[e.cell];
-        cell.classList.add("is-new");
-        setTimeout(() => cell.classList.remove("is-new"), 1300);
-        say("BALL  " + e.number, "is-ball");
-        hud();
-        await wait(900);
+        await drawBall(e, live);
       } else if (e.t === "line") {
         live.lines.push(e.line);
         hud();
@@ -371,6 +366,37 @@
         await wait(1500);
       }
     }
+  }
+
+  // ---- The ball draw: a numbered ball rolls in from the right; on the card it flies into its
+  // number, otherwise it greys out and pays 1.5× ------------------------------------------------
+  async function drawBall(e, live) {
+    const ball = node("div", "sg-ball", String(e.number));
+    view.cardWrap.append(ball);
+    say("");
+    ball.classList.add("is-in");
+    await wait(1100);
+    if (e.miss) {
+      ball.classList.add("is-miss");
+      say("ハズレ " + e.number + "　×1.5 +" + fmt(e.amount) + api.unit(), "is-gain");
+      await wait(900);
+      ball.remove();
+      return;
+    }
+    const cell = view.cells[e.cell],
+      from = ball.getBoundingClientRect(),
+      to = cell.getBoundingClientRect();
+    ball.style.setProperty("--dx", to.left + to.width / 2 - (from.left + from.width / 2) + "px");
+    ball.style.setProperty("--dy", to.top + to.height / 2 - (from.top + from.height / 2) + "px");
+    ball.classList.add("is-hit");
+    await wait(450);
+    ball.remove();
+    live.marks[e.cell] = true;
+    cell.classList.add("is-new");
+    setTimeout(() => cell.classList.remove("is-new"), 1300);
+    say(e.number + " が開いた", "is-ball");
+    hud();
+    await wait(700);
   }
 
   // ---- Wheels ----------------------------------------------------------------------------
