@@ -257,7 +257,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await sg.locator("[data-sg-roll]").waitFor();
     await page.evaluate(() => {
       const S = window.SugorokuModel,
-        q = [0, S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game)],
+        q = [0, S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event)],
         real = crypto.getRandomValues.bind(crypto);
       crypto.getRandomValues = (a) => (q.length ? ((a[0] = q.shift()), a) : real(a));
       // Pressed in the same step, so nothing running in the background takes the fixed draws.

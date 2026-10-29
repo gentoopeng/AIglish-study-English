@@ -51,7 +51,7 @@
   const RULES_TEXT = [
     "ログインしてクラウドにつながっているときはポイントを賭けます。ゲストやオフラインのときは練習チップで、ジャックポットは演出だけです。",
     "1回100（ポイントまたは練習チップ）でサイコロを振ります（額はみんな同じです）。",
-    "通常マス：ルーレットで ×3〜×0 のどれかが額に掛かって戻ります。「●（ボール）」ならボールが出ます。「STOP」「H&L」ならミニゲーム（ストップ・ハイ＆ロー）で、うまくいけば額の1.5〜2.5倍です。",
+    "通常マス：ルーレットで ×10〜×0 のどれかが額に掛かって戻ります。「−×0.5」「−×1」は、額とは別にその分が引かれます。「BJ」「DICE」「チンチロ」なら★マスと同じゲームです。「●（ボール）」ならボールが出ます。「STOP」「H&L」ならミニゲーム（ストップ・ハイ＆ロー）で、うまくいけば額の1.5〜2.5倍です。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると半分が戻ります。ボール確定はボールと額の1.5倍です。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "STARTを通るとボールが1つ出ます。",
@@ -105,19 +105,19 @@
   }
   document.addEventListener("visibilitychange", () => document.hidden && saveCloud());
   addEventListener("pagehide", saveCloud);
-  async function load() {
-    let state = readLocal();
-    if (api.real()) {
-      try {
-        const snap = await window.fbGetDoc(cloudRef());
-        const remote = snap.exists() ? JSON.parse(snap.data().state || "null") : null;
-        if (S.valid(remote) && (!state || remote.rolls > state.rolls)) state = remote;
-        if (S.valid(remote)) cloud.key = gate(remote);
-      } catch (error) {
-        console.warn("[sugoroku] load", error);
-      }
+  // The game as kept in the cloud (from another device), or null.
+  async function loadCloud() {
+    if (!api.real()) return null;
+    try {
+      const snap = await window.fbGetDoc(cloudRef());
+      const remote = snap.exists() ? JSON.parse(snap.data().state || "null") : null;
+      if (!S.valid(remote)) return null;
+      cloud.key = gate(remote);
+      return S.upgrade(remote);
+    } catch (error) {
+      console.warn("[sugoroku] load", error);
+      return null;
     }
-    return state ? S.upgrade(state) : S.newState();
   }
 
   // ---- The shared card ---------------------------------------------------------------------
@@ -179,17 +179,41 @@
   }
   // This player's name and icon (shrunk to 40px) to show on their balls.
   let me = null;
-  async function person() {
-    if (me && me.id === api.uid()) return me.value;
+  // The small icon is kept on this device for the picture it was made from, so opening the game
+  // does not wait for an image to load and shrink again.
+  const iconName = (id) => "aiglish_sugoroku_icon_" + id;
+  const avatarOf = (id) => {
+    try {
+      return localStorage.getItem("core_v4_user_avatar_" + id) || "";
+    } catch {
+      return "";
+    }
+  };
+  const avatarKey = (avatar) => avatar.length + ":" + avatar.slice(0, 48) + avatar.slice(-48);
+  // At once: the name and the icon made before (if the picture has not changed).
+  function personNow() {
     const id = api.uid(),
       name = (typeof myName === "string" && myName) || (id === "GUEST-000" ? "ゲスト" : id);
     let icon = "";
     try {
-      const avatar = localStorage.getItem("core_v4_user_avatar_" + id) || "";
-      if (/^data:image\//.test(avatar) || /^https?:/.test(avatar)) icon = await shrink(avatar, 40);
+      const saved = JSON.parse(localStorage.getItem(iconName(id)) || "null");
+      if (saved && saved.key === avatarKey(avatarOf(id))) icon = saved.i || "";
     } catch {}
-    me = { id, value: { n: String(name).slice(0, 24), i: icon } };
-    return me.value;
+    return { n: String(name).slice(0, 24), i: icon };
+  }
+  async function person() {
+    if (me && me.id === api.uid()) return me.value;
+    const id = api.uid(),
+      value = personNow(),
+      avatar = avatarOf(id);
+    if (!value.i && (/^data:image\//.test(avatar) || /^https?:/.test(avatar))) {
+      value.i = await shrink(avatar, 40);
+      try {
+        localStorage.setItem(iconName(id), JSON.stringify({ key: avatarKey(avatar), i: value.i }));
+      } catch {}
+    }
+    me = { id, value };
+    return value;
   }
   function shrink(src, size) {
     return new Promise((resolve) => {
@@ -207,6 +231,8 @@
         }
       };
       img.onerror = () => resolve("");
+      // A picture that never answers does not hold anything up.
+      setTimeout(() => resolve(""), 3000);
       img.src = src;
     });
   }
@@ -333,14 +359,51 @@
     view?.unsub?.();
     view = null;
     body.replaceChildren(node("p", "cs-hint", "読み込み中…"));
-    const [state, found, mine] = await Promise.all([load(), loadCard(), person()]);
+    // The screen comes up at once from what this device kept (the game, the card as last seen,
+    // the player's icon); the cloud copies come in behind it (the card through its listener).
+    // Only what this device has never seen is waited for.
+    const id = api.uid(),
+      kept = readLocal(),
+      cached = shared() ? cachedCard() : null,
+      cloudGame = loadCloud();
+    const [state, found] = await Promise.all([
+      kept ? S.upgrade(kept) : cloudGame.then((remote) => remote || S.newState()),
+      cached || loadCard(),
+    ]);
     if (!body.isConnected) return;
     // This player's own balls always show their own name and icon.
-    found.people = { ...found.people, [api.uid()]: mine };
+    found.people = { ...found.people, [id]: me && me.id === id ? me.value : personNow() };
     view = { body, state, card: found.card, people: found.people, log: found.log || [], seen: 0, online: shared(), cost: S.RULES.costs[0], busy: false, fast: false, hot: false, quick: quickSaved() };
+    const target = view;
     seeLog();
     draw();
     listen();
+    // A game played further on another device takes over, if nothing is going on here.
+    if (kept)
+      cloudGame.then((remote) => {
+        if (!remote || target !== view || view.busy || remote.rolls <= view.state.rolls || view.state.pending || view.state.bonus?.length) return;
+        view.state = remote;
+        save(remote);
+        hud();
+        place(remote.pos, false);
+      });
+    // Without a listener, the card as last seen is brought up to date once.
+    if (cached && view.online && typeof window.fbOnSnapshot !== "function")
+      loadCard().then((fresh) => {
+        if (target !== view || view.busy) return;
+        view.card = fresh.card;
+        view.people = { ...fresh.people, [id]: view.people[id] };
+        view.log = fresh.log || view.log;
+        keepCard(fresh.card, fresh.people, fresh.log);
+        paintCard();
+        hud();
+      });
+    // The icon, made once and kept.
+    person().then((value) => {
+      if (target !== view) return;
+      view.people = { ...view.people, [id]: value };
+      paintCard();
+    });
     if (state.jpWait?.length) {
       const left = { state };
       await payJackpots(left);
@@ -875,9 +938,10 @@
     if (wheel === "accident") return slot.start ? "worst" : slot.back ? "bad" : slot.take >= 1.5 ? "worst" : slot.take ? "bad" : "safe";
     if (slot.ball) return "ball";
     if (slot.game && wheel === "normal") return "game-mini";
+    if (slot.event) return "game-" + slot.event;
     if (slot.next || slot.jackpot) return "jackpot";
     if (wheel !== "normal") return slot.game ? "game-mini" : slot.miss ? "zero" : slot.back ? "bad" : slot.x >= 20 ? "gold" : slot.x >= 10 ? "champagne" : "high";
-    return slot.x >= 3 ? "gold" : slot.x >= 2 ? "champagne" : slot.x >= 1.25 ? "high" : slot.x >= 0.5 ? "mid" : slot.x > 0 ? "low" : "zero";
+    return slot.x >= 3 ? "gold" : slot.x >= 2 ? "champagne" : slot.x >= 1.25 ? "high" : slot.x >= 0.5 ? "mid" : slot.x > 0 ? "low" : slot.x < 0 ? "worst" : "zero";
   }
   function slotLabel(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "BALL" : { blackjack: "BJ", dice: "DICE", chinchiro: "チンチロ" }[slot];
@@ -886,9 +950,10 @@
     if (slot.next) return "SJP";
     if (slot.jackpot) return slot.jackpot === "jp" ? "JACKPOT" : "SUPER";
     if (slot.game) return { timer: "10秒", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "STOP", hilo: "H&L" }[slot.game];
+    if (slot.event) return { blackjack: "BJ", dice: "DICE", chinchiro: "チンチロ" }[slot.event];
     if (slot.miss) return "ハズレ";
     if (slot.back) return "もう一回";
-    return "×" + slot.x;
+    return slot.x < 0 ? "−×" + -slot.x : "×" + slot.x;
   }
   function wheelSvg(e) {
     const n = e.slots.length,
@@ -923,7 +988,10 @@
       const mid = (a + b) / 2,
         [tx, ty] = at(mid, n > 12 ? 80 : 68),
         label = slotLabel(e.wheel, slot);
-      const text = el("text", { transform: "translate(" + tx + " " + ty + ") rotate(" + mid + ")", class: "sg-seg-text is-" + tone(e.wheel, slot) + (label.length > 4 ? " is-long" : "") + (n > 12 ? " is-many" : "") });
+      // On a crowded wheel (the normal one) each label runs along its slice, from the rim in.
+      const dense = n > 24,
+        [dx, dy] = dense ? at(mid, 74) : [tx, ty];
+      const text = el("text", { transform: "translate(" + dx + " " + dy + ") rotate(" + (dense ? mid - 90 : mid) + ")", class: "sg-seg-text is-" + tone(e.wheel, slot) + (dense ? " is-dense" : (label.length > 4 ? " is-long" : "") + (n > 12 ? " is-many" : "")) });
       text.textContent = label;
       disc.append(text);
     });
@@ -976,14 +1044,18 @@
               ? slot.jackpot === "jp" ? "JACKPOT" : "SUPER JACKPOT"
               : slot.game
                 ? MINI[slot.game] + " チャレンジ"
+                : slot.event
+                  ? GAME_NAMES[slot.event]
+                  : slot.x < 0
+                    ? "−×" + -slot.x + "　−" + fmt(-e.amount) + api.unit()
                 : slot.miss
                   ? "ハズレ（ビンゴ賞金のみ）"
                   : slot.back
                     ? "もう一回！"
                     : "×" + slot.x + "　+" + fmt(e.amount) + api.unit() + (slot.ball ? "　BALL" : "") + (e.total > e.amount ? "（みんなに " + fmt(e.total - e.amount) + "）" : "");
     box.classList.add("is-done");
-    if (slot.next || slot.jackpot) layer.classList.add("is-hotter");
-    await wait(hot || slot.x >= 2 || slot.ball ? 1300 : 750);
+    if (slot.next || slot.jackpot || slot.x >= 5) layer.classList.add("is-hotter");
+    await wait(hot || slot.x >= 2 || slot.x < 0 || slot.ball ? 1300 : 750);
     layer.hidden = true;
   }
   async function jackpot(kind, won) {

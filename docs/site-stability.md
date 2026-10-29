@@ -1809,3 +1809,52 @@ Tests:
 - `tests/sugoroku-model.test.cjs`: the games on the wheel and their pay, and the prize share.
 - `tests/sugoroku.smoke.cjs`: ストップ and ハイ＆ロー played and paid, and 早送り paying ×0.5 without playing.
 - `tests/sugoroku-shared.smoke.cjs`: the new shares.
+
+## すごろくビンゴ: opens at once, more games on normal squares, wider swings (10.22.39.00)
+
+The user found three things: opening the game took long, rolling felt like a chore, and the normal wheel leaned so far to the minus side that a roll rarely felt worth it. They asked for more mini games (チンチロ, ブラックジャック and ダイスポーカー among them), and for bigger wins up to ×10 in exchange for bigger losses.
+
+**Opening.** The screen waited for three things before it showed anything:
+
+- the game's cloud copy;
+- the shared card;
+- the player's icon, loaded and shrunk on every opening (an image that never answered held it up for good).
+
+Now the screen comes up at once from what this device kept: the game, the card as last seen and the icon. The icon is now made once and kept for the picture it came from, and shrinking gives up after 3 seconds. The cloud copies come in behind it:
+
+- The card arrives through its listener, or one read where there is no listener.
+- A game played further on another device takes over when nothing is going on.
+- Only what this device has never seen is waited for.
+
+**A lost-save bug.** A save whose 戻った合計 (`won`) had gone below 0 failed `SugorokuModel.valid` and was thrown away as if broken. An accident could already do this, and the new minus slots make it common. `won` may now be any finite number.
+
+**The normal wheel** has 40 slots:
+
+| Slots | What they do |
+| --- | --- |
+| ×10, ×5, ×2, ×1.5, ×1.25 | win |
+| ×0.75, ×0.5 ×3, ×0.25 ×3 | part of the bet back |
+| ×0 ×15 | nothing back |
+| −×0.5 ×2, −×1 ×2 | take that much more than the bet |
+| 4 ball slots | a ball |
+| ストップ, ハイ＆ロー | the quick games |
+| ブラックジャック, ダイスポーカー, チンチロ | played as on an event square (a win pays and gives a ball, a loss gives back half; おまかせ works) |
+
+A ×5 or ×10 lights the room like a jackpot wheel.
+
+Simulated with the jackpots (sim6/sim7.cjs):
+
+| | Before | Now |
+| --- | ---: | ---: |
+| Return, 1 player | about 100% | about 100% |
+| Return, 5 players | about 98.5% | about 98.3% |
+| Rolls that come out ahead | 37% | 29% (bigger swings) |
+| Players ahead after 30 rolls | 30% | 35% |
+| Players ahead after 100 rolls | 22% | 30% |
+| Players ahead after 300 rolls | 11% | 20% |
+
+Tests:
+
+- `tests/sugoroku-model.test.cjs`: the wheel, the minus slots, event games from a normal square, and a save with negative returns.
+- `tests/sugoroku-shared.smoke.cjs`: opening while every cloud read takes 4 seconds comes up within 2 seconds.
+- `tests/sugoroku.smoke.cjs`: plays the normal squares' games when a random roll lands on one.

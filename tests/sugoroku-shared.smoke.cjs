@@ -116,7 +116,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
 
     // A roll without a ball leaves the card alone, so it does not wait for the cloud at all (it
     // goes through even now): die 1 onto a normal square, its wheel on ×0, one wallet write.
-    const zeroAt = await rule("S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game)");
+    const zeroAt = await rule("S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event)");
     await fix([0, zeroAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
@@ -189,6 +189,20 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await tab.locator(".mode-sugoroku .casino-waiting").waitFor();
     assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 256pt 届いています");
     await page.evaluate(() => (myId = "sg-a"));
+
+    // Opening again with a slow cloud: the screen comes up at once from what this device kept,
+    // without waiting for the cloud's reads.
+    await page.evaluate(() => {
+      const get = window.fbGetDoc;
+      window.__slowGet = get;
+      window.fbGetDoc = (path) => new Promise((resolve) => setTimeout(() => resolve(get(path)), 4000));
+    });
+    const opened = Date.now();
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator("[data-sg-roll]").waitFor();
+    assert.ok(Date.now() - opened < 2000, "opened in " + (Date.now() - opened) + "ms");
+    await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate(() => (window.fbGetDoc = window.__slowGet));
 
     // An accident past the wallet: with 150pt left, a roll onto the accident square whose wheel
     // takes 2× the bet loses 300; the wallet stops at 0 and the other 150 is owed to the casino.

@@ -48,11 +48,11 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const saved = () => page.evaluate((name) => JSON.parse(localStorage.getItem(name)), SAVE);
     const card = () => page.evaluate((name) => JSON.parse(localStorage.getItem(name)), CARD);
     const settled = () => page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning") && (!document.querySelector(".sg-go").disabled || document.querySelector(".sg-layer.is-game:not([hidden])")));
-    // Play an event game through to the end whatever it is.
+    // Play an event game or a normal square's quick game through to the end whatever it is.
     const playGame = async () => {
       const layer = screen.locator(".sg-layer.is-game:not([hidden])");
-      for (let i = 0; i < 12 && (await layer.count()); i++) {
-        for (const name of ["next", "stand", "roll"]) {
+      for (let i = 0; i < 60 && (await layer.count()); i++) {
+        for (const name of ["next", "stand", "roll", "start", "stop", "flip", "high"]) {
           const b = layer.locator('[data-sg-game="' + name + '"]');
           if ((await b.count()) && (await b.isEnabled())) {
             await b.click();
@@ -102,6 +102,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
       s.pending = { game: "dice", bet: 50 };
+      s.bonus = [];
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
@@ -127,6 +128,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
       s.pending = { game: "blackjack", bet: 100 };
+      s.bonus = [];
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
@@ -157,7 +159,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const before = await saved(),
       beforeCard = await card();
     // Die 1 onto START (a ball), START's wheel on its ×0 slot.
-    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game));
+    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event));
     await fix([0, missNo - 1, zeroAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
@@ -203,8 +205,9 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const done = await saved(),
       doneCard = await card();
     assert.equal(done.bingos, before20.bingos + 1);
-    // A line of only the guest's balls: (bingo prize 300 + × 20 = 2,000) × 1.25, plus START's wheel.
-    assert.ok(done.won - before20.won >= 2875, String(done.won - before20.won));
+    // A line of only the guest's balls: (bingo prize 300 + × 20 = 2,000) × 1.25, plus START's
+    // wheel (which can take up to another bet).
+    assert.ok(done.won - before20.won >= 2775, String(done.won - before20.won));
     // The finished row starts again: no balls, fresh numbers; amy's ball stays.
     assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.ok(!doneCard.cells.slice(0, 7).includes(lastNo));
@@ -224,7 +227,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     }, [SAVE, CARD]);
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").waitFor();
-    await fix([0, nextNo - 1, await wheelAt('x.game === "timer"')]);
+    // Then the 7 fresh numbers for the finished row, and START's own wheel on a plain ×0.
+    await fix([0, nextNo - 1, await wheelAt('x.game === "timer"'), 0, 0, 0, 0, 0, 0, 0, zeroAt]);
     const beforeMini = await saved();
     await screen.locator("[data-sg-roll]").click();
     const mini = screen.locator(".sg-layer.is-mini:not([hidden])");
