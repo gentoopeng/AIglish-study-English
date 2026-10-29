@@ -1,8 +1,8 @@
 // Rules for すごろくビンゴ in the casino tab, without any screen. A long game kept per player.
 //
-// A roll costs the chosen bet. The piece goes round a ring of squares and the square decides:
-//   normal   – a wheel of multiples of the bet (×0 to ×3, and ball slots); bigger bets carry
-//              more ball slots, the die itself is the same for every bet
+// A roll costs one fixed bet (one amount, so no bet size is better than another for balls or
+// the jackpots). The piece goes round a ring of squares and the square decides:
+//   normal   – a wheel of multiples of the bet (×0 to ×3, and ball slots)
 //   event    – a four-way wheel: blackjack, dice poker or chinchiro is played once for the bet
 //              (a win also gives a ball, a loss gives back half), or a sure ball (×1.5 back)
 //   accident – a wheel: lose 0–2× the bet more, go back three squares, or go back to START
@@ -45,15 +45,13 @@
   const N = (x, n = 1) => Array(n).fill({ x });
   const BALL = (x = 1, n = 1) => Array(n).fill({ x, ball: true });
   const RULES = {
-    costs: [10, 50, 100],
+    costs: [100],
     // The ring: 80 squares, about 23 rolls a lap. S start, n normal, E event, A accident.
     board: Array.from({ length: 80 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
-    // Normal wheels by bet: 24 slots each; a ball slot gives a ball and nothing else (a ball that
-    // misses the card pays missPay).
+    // The normal wheel: 24 slots; a ball slot gives a ball and nothing else (a ball that misses
+    // the card pays missPay).
     normal: {
-      10: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25, 2), ...N(0.75, 5), ...N(0.5, 5), ...N(0.25, 5), ...N(0.1, 2), ...N(0, 1), ...BALL(0, 1)]),
-      50: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25, 2), ...N(0.75, 4), ...N(0.5, 4), ...N(0.25, 6), ...N(0.1, 2), ...N(0, 1), ...BALL(0, 2)]),
-      100: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25, 2), ...N(0.75, 2), ...N(0.5, 4), ...N(0.25, 6), ...N(0.1, 3), ...N(0, 1), ...BALL(0, 3)]),
+      100: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25, 2), ...N(0.75, 1), ...N(0.5, 5), ...N(0.25, 6), ...N(0.1, 3), ...N(0, 1), ...BALL(0, 3)]),
     },
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],

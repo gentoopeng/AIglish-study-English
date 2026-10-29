@@ -1528,3 +1528,18 @@ Test: `tests/blank-only-flashcard.smoke.cjs`.
 - `tests/sugoroku-model.test.cjs`: shared card, owners, reset, (n + 1)×, solo bonus, several players under 100%.
 - `tests/sugoroku.smoke.cjs`: other players' balls by name, own ring, a solo line resets its row.
 - `tests/casino.smoke.cjs`: a signed-in ball written to the shared card and seen by another player.
+
+## すごろくビンゴ: one fixed bet (10.22.28.00)
+
+Reported: the bet and the game were not tied together and would skew play.
+
+They were. Money returned the same share at every bet, but the shared jackpots are fixed amounts, while ball slots grew only 1 → 2 → 3 for bets 10 → 50 → 100. Per chip spent, a 10 bet reached bingo and the jackpot chance about 7 times as often as a 100 bet.
+
+As agreed, the bet is now one fixed amount for everybody, 100 (`RULES.costs = [100]`):
+- The bet buttons became a "1回 100枚" label, and the 10 and 50 wheels are gone.
+- The normal wheel was lowered one slot (×0.75 → ×0.5).
+- Simulation: about 99% playing alone and 93% with five players.
+
+With only 10 rolls in 1,000 practice chips, running out now turns the roll button into "練習チップを1,000枚に戻す" (practice chips only; `resetPractice` passed from casino.js).
+
+Since a ball slot now pays ×0 too, the tests pick a ×0 slot that is not a ball.

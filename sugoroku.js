@@ -27,7 +27,7 @@
   const HOT = new Set(["bingo", "jp", "sjp"]);
   const RULES_TEXT = [
     "プレ版のため練習チップで遊びます。ポイントは動かず、ジャックポットも演出だけです。",
-    "1回に使う額（10・50・100）を選んでサイコロを振ります。出る目は同じですが、額が大きいほど通常マスのルーレットに「ボール」が多く入ります。",
+    "1回100枚でサイコロを振ります（額はみんな同じです）。",
     "通常マス：ルーレットで ×3〜×0 のどれかが額に掛かって戻ります。「●（ボール）」ならボールが出ます。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると半分が戻ります。ボール確定はボールと額の1.5倍です。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
@@ -197,11 +197,7 @@
     body.replaceChildren(node("p", "cs-hint", "読み込み中…"));
     const [state, found] = await Promise.all([load(), loadCard()]);
     if (!body.isConnected) return;
-    let cost = 10;
-    try {
-      cost = Number(localStorage.getItem("aiglish_sugoroku_cost")) || 10;
-    } catch {}
-    view = { body, state, card: found.card, people: found.people, cost: S.RULES.costs.includes(cost) ? cost : 10, busy: false, fast: false };
+    view = { body, state, card: found.card, people: found.people, cost: S.RULES.costs[0], busy: false, fast: false };
     draw();
     listen();
     if (state.pending) game();
@@ -258,24 +254,9 @@
     view.info = node("p", "sg-status");
 
     const controls = node("div", "sg-controls");
-    const costs = node("div", "sg-costs");
-    costs.setAttribute("role", "radiogroup");
-    costs.setAttribute("aria-label", "1回に使う額");
-    for (const c of S.RULES.costs) {
-      const b = node("button", "sg-cost", fmt(c) + api.unit());
-      b.type = "button";
-      b.setAttribute("role", "radio");
-      b.dataset.cost = c;
-      b.onclick = () => {
-        view.cost = c;
-        try {
-          localStorage.setItem("aiglish_sugoroku_cost", String(c));
-        } catch {}
-        hud();
-      };
-      costs.append(b);
-    }
-    view.costs = costs;
+    // One fixed bet for everybody.
+    const costs = node("p", "sg-costs is-fixed");
+    costs.append(node("span", "", "1回"), node("b", "", fmt(view.cost) + api.unit()));
     view.go = node("button", "sg-go", "サイコロを振る");
     view.go.type = "button";
     view.go.dataset.sgRoll = "";
@@ -342,13 +323,11 @@
       node("span", "", "　リーチ "),
       node("b", "", String(reaches.length)),
     );
-    view.costs.querySelectorAll("button").forEach((b) => {
-      b.setAttribute("aria-checked", String(Number(b.dataset.cost) === view.cost));
-      b.disabled = view.busy;
-    });
-    const short = api.balance() < view.cost;
-    view.go.disabled = view.busy || short || !!state.pending;
-    view.go.textContent = short ? "チップが足りません" : view.busy ? "…" : "サイコロを振る";
+    // Out of practice chips: the button fills them up again instead.
+    const short = api.balance() < view.cost,
+      refill = short && !api.real() && !!api.resetPractice;
+    view.go.disabled = view.busy || (short && !refill) || !!state.pending;
+    view.go.textContent = refill ? "練習チップを" + fmt(api.practiceStart) + "枚に戻す" : short ? "チップが足りません" : view.busy ? "…" : "サイコロを振る";
   }
   // The piece sits on its square; the strip slides so the piece stays a little left of centre.
   function place(pos, smooth = true) {
@@ -406,6 +385,10 @@
     else if (out.gain < 0) money.stake(Math.min(-out.gain, api.balance()), "accident");
   }
   async function roll() {
+    if (!view.busy && api.balance() < view.cost && !api.real() && api.resetPractice) {
+      api.resetPractice();
+      return hud();
+    }
     if (view.busy || view.state.pending || api.balance() < view.cost) return;
     const cost = view.cost,
       state = view.state;
