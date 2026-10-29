@@ -49,6 +49,8 @@ const { chromium } = require("playwright"),
       // An English line over a Japanese line is its own card without any setting.
       ["1-2", "considerate", "思いやりのある", true],
       ["1-3", "consider A as B", "AをBとみなす", true],
+      // 英単語を先に also asks the hidden word: the English with 「as」 blanked → as.
+      ["1-3", "consider A （＿＿） B\nAをBとみなす", "as\nconsider A as B", true],
       // A 「」 inside an ordinary explanation, without the setting, stays an ordinary card.
       ["1-4", "consider", "「の」は大事", false],
     ]);
@@ -68,7 +70,7 @@ const { chromium } = require("playwright"),
     // 意味を先に: the + A + 「as」 B card hides "as" and asks for it.
     await page.evaluate(() => {
       flashcardDirectionMode = "ja2en";
-      const card = flashcardOriginQueue.find((c) => c.meaningId === "1-3");
+      const card = flashcardOriginQueue.find((c) => c.meaningId === "1-3" && c.reverse);
       flashcardOriginQueue = [card];
       flashcardCurrentIndex = 0;
       window.renderFlashcardDeck();
@@ -79,7 +81,7 @@ const { chromium } = require("playwright"),
     assert.match(asked, /AをBとみなす/);
     assert.match(answer, /^as(\n|consider)/m);
     assert.deepEqual(errors, []);
-    console.log("PASS: in an ordinary book an English-over-Japanese meaning and a 「」の問題だけ meaning give their 「」 card (意味を先に hides as), rated on the meaning; other meanings stay ordinary cards");
+    console.log("PASS: in an ordinary book an English-over-Japanese meaning and a 「」の問題だけ meaning give their 「」 card (英単語を先に: the English and the as-blank card; 意味を先に hides as), rated on the meaning; other meanings stay ordinary cards");
   } finally {
     await browser.close();
   }
