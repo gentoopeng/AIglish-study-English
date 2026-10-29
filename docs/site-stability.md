@@ -1604,3 +1604,11 @@ The back was the line with the asked term cut out. That breaks any sentence whos
 The back now shows the headword and the whole line, with the asked term kept in its place in 「」 and any other terms plain: "蘇我馬子 / 大臣の官職につき「大連」の官職であった物部守屋を滅ぼした人物". The front is unchanged.
 
 Test: `tests/term-questions.test.cjs`.
+
+## 「」 cards in a Japanese line: the question first (10.22.32.00)
+
+The user's answer to 10.22.31.00: "逆！！". Showing "大連" alone on the front asked nothing; the card must be the other way round.
+
+A 「」 in a Japanese line (history terms and so on) now gives its card as the question it always was in battles: the headword, the year and the line with that term blanked on the front ("蘇我馬子　大臣の官職につき（＿＿）の官職であった…"), the term behind. It shows the question first in either direction, like a year card. English phrase lines (English over Japanese) keep their own two-sided cards.
+
+Tests: `tests/term-questions.test.cjs`, `tests/term-mode.smoke.cjs`.

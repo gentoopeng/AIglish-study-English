@@ -102,18 +102,19 @@ test("a line set to 「」の問題だけ gives no whole question, but still its
   assert.deepEqual(t.questions(word).map((q) => q.key), ["w:1-0", "t:1-1:0", "w:1-2"]);
 });
 
-test("a 「」 card's back keeps the whole sentence, the asked term in its place in 「」", () => {
+test("a 「」 card asks the line with the term blanked; the term is the answer", () => {
   const word = {
     num: 40,
     word: "蘇我馬子",
     meanings: [{ id: "40-0", text: "「大臣」の官職につき「大連」の官職であった物部守屋を滅ぼした人物" }],
   };
   const cards = t.questions(word).filter((q) => q.kind === "blank");
+  // No card faces of its own: shown as prompt (front) → answer (back), whatever the direction.
   assert.deepEqual(
-    cards.map((q) => [q.front, q.back]),
+    cards.map((q) => [q.front, q.prompt, q.answer]),
     [
-      ["大臣", "蘇我馬子\n「大臣」の官職につき大連の官職であった物部守屋を滅ぼした人物"],
-      ["大連", "蘇我馬子\n大臣の官職につき「大連」の官職であった物部守屋を滅ぼした人物"],
+      [undefined, "蘇我馬子　（＿＿）の官職につき大連の官職であった物部守屋を滅ぼした人物", "大臣"],
+      [undefined, "蘇我馬子　大臣の官職につき（＿＿）の官職であった物部守屋を滅ぼした人物", "大連"],
     ],
   );
 });

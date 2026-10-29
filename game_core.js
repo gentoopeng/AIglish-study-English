@@ -231,10 +231,9 @@
                         var meaning = (w.meanings || []).find(function(m) { return String(m.id) === String(q.mid); });
                         if (!flashcardSelectedStatuses[result ? result.status : getFlashcardMeaningStatus(meaning, w)]) return;
                         // The whole-entry question is the word and its meanings, so it follows the chosen
-                        // direction like any card (英→日: the word first). A 「」 card follows it too: 英単語を
-                        // 先に shows the 「」 term (the English) alone, with the headword and the rest of the
-                        // line behind; 意味を先に the other way round. A year question is typed, so it always
-                        // shows the question first.
+                        // direction like any card (英→日: the word first). A phrase card (English over
+                        // Japanese) follows it too. A 「」 card in a Japanese line (the line with the term
+                        // blanked → the term) and a year question (typed) always show the question first.
                         var whole = q.kind === 'whole', card = q.front !== undefined;
                         var item = { num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.front : q.prompt, ja: whole ? q.prompt : card ? q.back : q.answer, questionFirst: !whole && !card, reverse: card ? q.reverse : undefined, head: w.word, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input };
                         pool.push(item);
