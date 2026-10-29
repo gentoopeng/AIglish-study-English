@@ -1,6 +1,6 @@
 // Requires Playwright, Chromium and a running local HTTP server.
 // Run: node tests/sugoroku-shared.smoke.cjs
-// すごろくビンゴ signed in, on the shared card (a fake cloud): what is read back from the card is
+// すごろくビンゴ signed in, on points and the shared card (a fake cloud): what is read back from the card is
 // checked (a bad icon is dropped, a junk log entry too); the numbers a reach waits on are shown;
 // a failed write charges nothing and asks to roll again; a player's part of someone else's line
 // is collected once; a line is shared by the balls on it and goes in everybody's log; the
@@ -9,8 +9,8 @@
 const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
 const base = process.env.APP_URL || "http://127.0.0.1:8000";
-const SAVE = "aiglish_sugoroku_sg-a_practice",
-  CARD = "shared/sugoroku_card";
+const SAVE = "aiglish_sugoroku_sg-a",
+  CARD = "shared/sugoroku_live";
 (async () => {
   const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
   try {
@@ -35,8 +35,10 @@ const SAVE = "aiglish_sugoroku_sg-a_practice",
       const S = window.SugorokuModel,
         card = S.newCard((n) => n - 1);
       card.owners = card.owners.map((o, i) => (o === "*" ? o : i < 6 ? "sg-b" : ""));
+      localStorage.setItem("core_v4_study_points_sg-a", JSON.stringify({ balance: 2000, revision: 1, publishedRevision: 1 }));
       const store = {
-        "shared/sugoroku_card": {
+        "users/sg-a/learningPoints/main": { balance: 2000, revision: 1 },
+        "shared/sugoroku_live": {
           ...card,
           owed: { "sg-a": 120 },
           people: { "sg-b": { n: "B", i: 'x");background:url(https://example.com/x' } },
@@ -47,12 +49,13 @@ const SAVE = "aiglish_sugoroku_sg-a_practice",
       window.__failCard = false;
       window.db = {};
       window.fbDoc = (_, ...parts) => parts.join("/");
+      window.fbSetDoc = async (path, value) => (store[path] = structuredClone(value));
       window.fbGetDoc = async (path) => ({ exists: () => !!store[path], data: () => structuredClone(store[path]) });
       window.fbRunTransaction = async (_, fn) => {
         const writes = [];
         const result = await fn({
           get: async (path) => {
-            if (window.__failCard && path === "shared/sugoroku_card") throw Error("offline");
+            if (window.__failCard && path === "shared/sugoroku_live") throw Error("offline");
             return { exists: () => !!store[path], data: () => structuredClone(store[path]) };
           },
           set: (path, value, options) => writes.push([path, structuredClone(value), options?.merge]),
@@ -108,8 +111,11 @@ const SAVE = "aiglish_sugoroku_sg-a_practice",
     await screen.locator("[data-sg-roll]").click();
     await settled();
     assert.equal(await chips(), start - 100 + 120);
+    // On points: one wallet write for the roll (the bet less the 120 collected).
+    await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 2020);
+    assert.deepEqual(Object.keys(await page.evaluate(() => window.__store["users/sg-a/learningPoints/main"].poker)).map((k) => k.replace(/:[^:]+:net$/, "")), ["casino:sugoroku"]);
     assert.equal((await saved()).shared, 120);
-    assert.deepEqual(await page.evaluate(() => window.__store["shared/sugoroku_card"].owed), {});
+    assert.deepEqual(await page.evaluate(() => window.__store["shared/sugoroku_live"].owed), {});
 
     // A ball on the row's last number finishes B's row: the prize of 300 is shared by the 7
     // balls (B's 6 parts, 257, wait on the card for B), the bingo wheel's × 5 is all A's, and the
@@ -121,7 +127,7 @@ const SAVE = "aiglish_sugoroku_sg-a_practice",
     await screen.locator("[data-sg-roll]").click();
     await settled();
     assert.equal(await chips(), before - 100 + (300 - 257) + 500);
-    const shared = await page.evaluate(() => window.__store["shared/sugoroku_card"]);
+    const shared = await page.evaluate(() => window.__store["shared/sugoroku_live"]);
     assert.deepEqual(shared.owed, { "sg-b": 257 });
     assert.deepEqual(Object.keys(shared.owedAt), ["sg-b"]);
     assert.deepEqual(shared.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
@@ -174,8 +180,32 @@ const SAVE = "aiglish_sugoroku_sg-a_practice",
       window.switchTab("casino");
     });
     await tab.locator(".mode-sugoroku .casino-waiting").waitFor();
-    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 257枚 届いています");
+    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 257pt 届いています");
     await page.evaluate(() => (myId = "sg-a"));
+
+    // An accident past the wallet: with 150pt left, a roll onto the accident square whose wheel
+    // takes 2× the bet loses 300; the wallet stops at 0 and the other 150 is owed to the casino.
+    await page.evaluate((name) => {
+      const wallet = window.__store["users/sg-a/learningPoints/main"],
+        revision = wallet.revision + 1;
+      Object.assign(wallet, { balance: 150, revision });
+      window.StudyPoints.restore({ balance: 150, revision, publishedRevision: revision });
+      const s = JSON.parse(localStorage.getItem(name));
+      s.pos = 6;
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").waitFor();
+    const twice = await rule("S.RULES.accident.findIndex((x) => x.take === 2)");
+    await fix([0, twice]);
+    await screen.locator("[data-sg-roll]").click();
+    await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 0);
+    await page.waitForFunction(() => window.__store["pointLoans/CASINO__sg-a"]);
+    const debt = await page.evaluate(() => window.__store["pointLoans/CASINO__sg-a"].entries.map((e) => [e.kind, e.from, e.amount, e.status || ""]));
+    assert.deepEqual(debt, [["lend", "CASINO", 150, ""], ["ask-repay", "CASINO", 150, "open"]]);
+    // The game itself is kept in the cloud too, for carrying on from another device.
+    const cloudSave = await page.evaluate(() => JSON.parse(window.__store["users/sg-a/sync/sugoroku"].state));
+    assert.ok(cloudSave.rolls >= 1 && cloudSave.pending === null);
 
     // A jackpot win: the pot is taken with this device's unsent bets in, and starts again from
     // its seed; a second win right after gets the seed and what came in since.

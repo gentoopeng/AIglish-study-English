@@ -91,7 +91,8 @@
     }
   }
   let settling = Promise.resolve();
-  function settle(key, delta) {
+  // `feed`: how much of it was bet in a house game, for the jackpots (by default a loss's size).
+  function settle(key, delta, feed = delta < 0 ? -delta : 0) {
     const account = uid();
     settling = settling.then(async () => {
       if (uid() !== account || settledKeys().includes(key)) return;
@@ -114,7 +115,7 @@
       if (next && uid() === account) window.StudyPoints?.restore?.({ ...next, publishedRevision: next.revision });
       // Points bet against the house (keys "casino:…") feed the casino's shared jackpots. Poker
       // and duels between players have no house share to pay for them, so they do not.
-      if (next && delta < 0 && key.startsWith("casino:") && !key.startsWith("casino:duel:")) window.CasinoJackpot?.add(-delta);
+      if (next && feed > 0 && key.startsWith("casino:") && !key.startsWith("casino:duel:")) window.CasinoJackpot?.add(feed);
     }).catch((error) => console.warn("[poker] points", error));
     return settling;
   }
