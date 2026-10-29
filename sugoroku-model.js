@@ -7,12 +7,16 @@
 //              (a win also gives a ball, a loss gives back half), or a sure ball (×1.5 back)
 //   accident – a wheel: lose 0–2× the bet more, go back three squares, or go back to START
 // Passing START gives a ball, nothing else.
-// A ball is drawn from 1–100. If it is on the 7×7 card (48 numbers from 1–100, the middle free)
-// and still closed it opens there; otherwise it pays 1.5× the bet. A new line spins the
-// bingo wheel on what was bet since the last line; two of its 20 slots lead to the jackpot
-// wheel, whose jackpot and super-jackpot-chance slots are two in 20 each (one in ten), and so on.
-// The jackpots themselves are shared by the whole casino (see casino-jackpot.js); here they are
-// only events for the screen and the caller to pay.
+// The 7×7 bingo card (48 numbers from 1–100, the middle free) is shared by every player and
+// kept apart from each player's own state: { cells, owners }, owners[i] the id of whoever's
+// ball opened cell i ("" closed, "*" the free middle). A ball is drawn from 1–100: on the card
+// and still closed it opens there under the player's name; otherwise it pays 1.5× the bet.
+// A finished line spins the bingo wheel on what this player bet since their last line; two
+// lines at once pay (n + 1)× and a line of only this player's balls pays soloBonus× more.
+// The finished lines' numbers are then drawn afresh and their balls cleared. Two of the bingo
+// wheel's 20 slots lead to the jackpot wheel, whose jackpot and super-jackpot-chance slots are
+// two in 20 each (one in ten), and so on. The jackpots are shared by the whole casino (see
+// casino-jackpot.js); here they are only events for the screen and the caller to pay.
 //
 // Every amount lives in RULES so it can be tuned. `random(n)` gives 0..n-1.
 (function (root) {
@@ -58,11 +62,13 @@
     // already open) pays this many times the bet instead.
     numbers: 100,
     missPay: 1.5,
+    // A line made only of the player's own balls pays this many times more.
+    soloBonus: 1.5,
     // Accident wheel: take: multiples of the bet taken on top, back: squares back, start: back to START.
     accident: [{ take: 0 }, { take: 0.5 }, { back: 3 }, { take: 1 }, { start: true }, { take: 1.5 }, { back: 3 }, { take: 2 }, { take: 0.5 }, { start: true }],
     // Wheels after a line. x: multiples of what was bet since the last line.
     wheels: {
-      bingo: spread([...N(0.02, 4), ...N(0.05, 4), ...N(0.08, 3), ...N(0.1, 3), ...N(0.15, 2), ...N(0.2, 1), ...N(0.3, 1), ...Array(2).fill({ next: "jp" })]),
+      bingo: spread([...N(0.01, 4), ...N(0.03, 4), ...N(0.05, 3), ...N(0.08, 3), ...N(0.1, 2), ...N(0.15, 1), ...N(0.3, 1), ...Array(2).fill({ next: "jp" })]),
       jp: spread([...N(0.2, 4), ...N(0.3, 4), ...N(0.4, 3), ...N(0.5, 3), ...N(0.8, 1), ...N(1, 1), ...Array(2).fill({ jackpot: "jp" }), ...Array(2).fill({ next: "sjp" })]),
       sjp: spread([...N(1, 4), ...N(1.5, 4), ...N(2, 4), ...N(2.5, 3), ...N(3, 2), ...N(5, 1), ...Array(2).fill({ jackpot: "sjp" })]),
     },
@@ -92,78 +98,93 @@
       const j = random(i + 1);
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    const numbers = pool.slice(0, CARD * CARD - 1);
-    numbers.splice(FREE, 0, 0);
-    return { card: numbers, marks: numbers.map((n) => n === 0), lines: [] };
+    const cells = pool.slice(0, CARD * CARD - 1);
+    cells.splice(FREE, 0, 0);
+    return { cells, owners: cells.map((n) => (n ? "" : "*")) };
   }
-  function newState(random) {
-    return { v: 2, pos: 0, ...newCard(random), stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, cards: 0, bingos: 0, pending: null };
+  function validCard(card) {
+    return (
+      !!card &&
+      Array.isArray(card.cells) &&
+      card.cells.length === CARD * CARD &&
+      Array.isArray(card.owners) &&
+      card.owners.length === CARD * CARD &&
+      card.owners.every((o) => typeof o === "string") &&
+      new Set(card.cells).size === CARD * CARD
+    );
   }
+  function newState() {
+    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, pending: null };
+  }
+  // A player's own state; an older save (with its own card) keeps its place and counts.
   function valid(state) {
     return (
       !!state &&
-      state.v === 2 &&
-      Array.isArray(state.card) &&
-      state.card.length === CARD * CARD &&
-      Array.isArray(state.marks) &&
-      state.marks.length === CARD * CARD &&
-      Array.isArray(state.lines) &&
+      (state.v === 3 || state.v === 2) &&
       Number.isInteger(state.pos) &&
       state.pos >= 0 &&
       state.pos < SIZE &&
       ["stake", "laps", "rolls", "bet", "won", "balls"].every((k) => Number.isFinite(state[k]) && state[k] >= 0)
     );
   }
-  const reach = (state) => LINES.map((_, i) => i).filter((i) => !state.lines.includes(i) && LINES[i].filter((c) => !state.marks[c]).length === 1);
+  function upgrade(state) {
+    const { card, marks, lines, cards, ...rest } = state;
+    return { ...newState(), ...rest, v: 3, bingos: Number(rest.bingos) || 0 };
+  }
+  const isOpen = (card, i) => card.owners[i] !== "";
+  const reach = (card) => LINES.map((_, i) => i).filter((i) => LINES[i].filter((c) => !isOpen(card, c)).length === 1);
   const pick = (list, random) => {
     const index = random(list.length);
     return { index, slot: list[index] };
   };
 
-  // A ball is drawn from 1–100. On the card and still closed, it opens that number and any new
-  // lines spin their wheels; otherwise it pays missPay × the bet.
-  function ball(state, random, events, bet) {
+  // A ball is drawn from 1–100. On the card and still closed, it opens that number in the
+  // player's name and any finished lines pay; otherwise it pays missPay × the bet.
+  function ball(state, card, me, random, events, bet) {
     const number = random(RULES.numbers) + 1,
-      cell = state.card.indexOf(number);
+      cell = card.cells.indexOf(number);
     state.balls++;
-    if (cell < 0 || state.marks[cell]) {
+    if (cell < 0 || isOpen(card, cell)) {
       const amount = money(bet * RULES.missPay);
       events.push({ t: "ball", number, cell: -1, miss: true, amount });
       return amount;
     }
-    state.marks[cell] = true;
-    events.push({ t: "ball", number, cell });
-    let gain = 0;
-    const lines = LINES.map((_, i) => i).filter((i) => !state.lines.includes(i) && LINES[i].every((c) => state.marks[c]));
-    if (lines.length) {
-      const base = state.stake / lines.length;
-      state.stake = 0;
-      for (const line of lines) {
-        state.lines.push(line);
-        state.bingos++;
-        events.push({ t: "line", line, cells: LINES[line] });
-        gain += spinLine(base, random, events);
-      }
+    card.owners[cell] = me;
+    events.push({ t: "ball", number, cell, owner: me });
+    const lines = LINES.map((_, i) => i).filter((i) => LINES[i].every((c) => isOpen(card, c)));
+    if (!lines.length) return 0;
+    const solo = lines.every((line) => LINES[line].every((c) => card.owners[c] === "*" || card.owners[c] === me)),
+      mult = (lines.length > 1 ? lines.length + 1 : 1) * (solo ? RULES.soloBonus : 1),
+      base = state.stake;
+    state.stake = 0;
+    state.bingos += lines.length;
+    events.push({ t: "line", lines, cells: [...new Set(lines.flatMap((l) => LINES[l]))], count: lines.length, solo, mult });
+    const gain = spinLine(base, mult, random, events);
+    // The finished lines start again: fresh numbers (not already on the card), no balls.
+    const cleared = [...new Set(lines.flatMap((l) => LINES[l]))].filter((c) => c !== FREE);
+    const spare = Array.from({ length: RULES.numbers }, (_, i) => i + 1).filter((n) => !card.cells.includes(n));
+    const numbers = {};
+    for (const c of cleared) {
+      const n = spare.splice(random(spare.length), 1)[0];
+      card.cells[c] = n;
+      card.owners[c] = "";
+      numbers[c] = n;
     }
-    if (state.marks.every(Boolean)) {
-      state.cards++;
-      Object.assign(state, newCard(random));
-      events.push({ t: "complete", cards: state.cards });
-    }
+    events.push({ t: "reset", numbers });
     return gain;
   }
-  function spinLine(base, random, events) {
+  function spinLine(base, mult, random, events) {
     let gain = 0;
     for (let wheel = "bingo"; wheel; ) {
       const slots = RULES.wheels[wheel],
         { index, slot } = pick(slots, random);
-      const event = { t: "wheel", wheel, slots, index, base };
+      const event = { t: "wheel", wheel, slots, index, base, mult };
       events.push(event);
       wheel = null;
       if (slot.next) wheel = slot.next;
       else if (slot.jackpot) events.push({ t: "jackpot", kind: slot.jackpot });
       else {
-        event.amount = money(base * slot.x);
+        event.amount = money(base * slot.x * mult);
         gain += event.amount;
       }
     }
@@ -173,10 +194,12 @@
   // One roll. Returns the new state, the events in order and what was paid out (gain, which
   // can be below 0 after an accident). On an event square the roll stops with state.pending set;
   // the game is played on the screen and finished with settle().
-  function roll(before, cost, random) {
+  // `card` is the shared card as it is now; the result carries the card as it is after the roll.
+  function roll(before, sharedCard, cost, random, me = "me") {
     if (!RULES.costs.includes(cost)) throw Error("bad cost");
     if (before.pending) throw Error("an event is waiting");
     const state = clone(before),
+      card = clone(sharedCard),
       events = [];
     let gain = 0;
     state.rolls++;
@@ -190,7 +213,7 @@
       if (state.pos === 0) {
         state.laps++;
         events.push({ t: "lap" });
-        gain += ball(state, random, events, cost);
+        gain += ball(state, card, me, random, events, cost);
       }
     }
     const kind = kindAt(state.pos);
@@ -201,7 +224,7 @@
         amount = money(cost * slot.x);
       events.push({ t: "wheel", wheel: "normal", slots, index, base: cost, amount });
       gain += amount;
-      if (slot.ball) gain += ball(state, random, events, cost);
+      if (slot.ball) gain += ball(state, card, me, random, events, cost);
     } else if (kind === "accident") {
       const { index, slot } = pick(RULES.accident, random);
       events.push({ t: "wheel", wheel: "accident", slots: RULES.accident, index, base: cost });
@@ -223,22 +246,23 @@
         const amount = money(cost * RULES.eventPay.sure);
         gain += amount;
         events.push({ t: "sure", amount });
-        gain += ball(state, random, events, cost);
+        gain += ball(state, card, me, random, events, cost);
       } else {
         state.pending = { game: slot, bet: cost };
         events.push({ t: "game", game: slot, bet: cost });
       }
     }
     state.won += gain;
-    return { state, events, gain, cost };
+    return { state, card, events, gain, cost };
   }
 
   // The end of an event game: m is the game's own result as multiples of the bet (1 even money,
   // 1.5 a blackjack, 0 a push, below 0 a loss). A win pays bet × (1 + m) and gives a ball, a
   // push gives the bet back and a loss gives back half.
-  function settle(before, m, random) {
+  function settle(before, sharedCard, m, random, me = "me") {
     if (!before.pending) throw Error("no event");
     const state = clone(before),
+      card = clone(sharedCard),
       events = [],
       bet = state.pending.bet;
     state.pending = null;
@@ -246,7 +270,7 @@
     if (m > 0) {
       gain = money(bet * (1 + m));
       events.push({ t: "result", outcome: "win", amount: gain });
-      gain += ball(state, random, events, bet);
+      gain += ball(state, card, me, random, events, bet);
     } else if (m === 0) {
       gain = money(bet * RULES.eventPay.push);
       events.push({ t: "result", outcome: "push", amount: gain });
@@ -255,10 +279,10 @@
       events.push({ t: "result", outcome: "lose", amount: gain });
     }
     state.won += gain;
-    return { state, events, gain };
+    return { state, card, events, gain };
   }
 
-  const api = { RULES, LINES, CARD, FREE, SIZE, kindAt, newState, newCard, valid, roll, settle, reach };
+  const api = { RULES, LINES, CARD, FREE, SIZE, kindAt, newState, newCard, valid, validCard, upgrade, roll, settle, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);

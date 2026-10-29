@@ -1502,3 +1502,29 @@ When the direction is 英単語を先に, a card whose English line has only par
 This applies in 用語・年号モード and in ordinary books, and both cards are rated on the same meaning. A whole-line 「」 (「consideration」) or a bare English line still gives one card, and 意味を先に is unchanged.
 
 Test: `tests/blank-only-flashcard.smoke.cjs`.
+
+## すごろくビンゴ: one card for everyone, balls by player (10.22.27.00)
+
+**The shared card.** The bingo card is shared by every signed-in player: `shared/sugoroku_card` = { cells, owners, people }.
+- `owners[i]` is the id of whoever's ball opened cell i.
+- `people[id]` is that player's name and a 40px icon shrunk from their avatar, kept only for ids still on the card.
+- Each roll or event settles inside one Firestore transaction on the card, so two players never take the same cell.
+- Other players' balls arrive through `onSnapshot` while the screen is open.
+- A guest or a device off the cloud plays on a card of its own. The player's own progress (place, stake, counts) stays per player; an old save keeps its place and counts through `S.upgrade`.
+
+**Balls.** Each ball shows its owner's icon, or their initial on a colour of their own, with the number on a small badge. The player's own balls have a gold ring.
+
+**A line.**
+- It pays on the completing player's own stake since their last line.
+- n lines at once pay (n + 1)×, and a line made only of the player's own balls pays `soloBonus` (1.5)× more.
+- The finished lines' numbers are then drawn afresh and their balls cleared (`reset` event).
+- A full card no longer happens.
+
+**Balance.** The bingo wheel was lowered a little for the bonuses. Simulation: about 100% playing alone (every line is your own) and 93–95% with five players.
+
+**Jackpots.** Raised to 5,000 + 5% (JACKPOT) and 50,000 + 2% (SUPER JACKPOT) of the casino's bets since each was last won.
+
+**Tests**
+- `tests/sugoroku-model.test.cjs`: shared card, owners, reset, (n + 1)×, solo bonus, several players under 100%.
+- `tests/sugoroku.smoke.cjs`: other players' balls by name, own ring, a solo line resets its row.
+- `tests/casino.smoke.cjs`: a signed-in ball written to the shared card and seen by another player.

@@ -1,13 +1,13 @@
 // The casino's shared jackpots. Every point bet anywhere in the casino (all of it goes through
 // Poker.settle) adds to one running total in shared/casino_jackpot; the jackpots are a part of
 // what was bet since each was last won:
-//   JACKPOT       = 1,000  + 3% of the total since the last JACKPOT
-//   SUPER JACKPOT = 10,000 + 1% of the total since the last SUPER JACKPOT
+//   JACKPOT       = 5,000  + 5% of the total since the last JACKPOT
+//   SUPER JACKPOT = 50,000 + 2% of the total since the last SUPER JACKPOT
 // To keep cloud writes few, this device adds its bets up and sends them about once a minute,
 // and reads the total at most once a minute. Offline, the last total seen is shown.
 (function () {
   "use strict";
-  const RULE = { jp: { seed: 1000, rate: 0.03 }, sjp: { seed: 10000, rate: 0.01 } };
+  const RULE = { jp: { seed: 5000, rate: 0.05 }, sjp: { seed: 50000, rate: 0.02 } };
   const EVERY = 60e3,
     cacheKey = "aiglish_casino_jackpot",
     pendingKey = "aiglish_casino_jackpot_pending";
