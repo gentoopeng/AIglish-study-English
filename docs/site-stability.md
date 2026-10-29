@@ -1779,3 +1779,33 @@ Tests:
   - a ball roll refused when the cloud fails;
   - a roll without a ball going through even then;
   - the shares of a line.
+
+## すごろくビンゴ: quick games on normal squares, more for the roller (10.22.38.00)
+
+The user found that the player who rolls gains too rarely, and asked for mini games on normal squares too, to keep it from getting dull.
+
+A simulation (sim7.cjs, 5 players) showed the problem before this change. 34% of rolls came out ahead, but only 25% of players were ahead after 30 rolls and 14% after 100. Most of what pays came in rare big wins, and the shared lines had moved part of the finisher's prize to the other balls.
+
+- **Two quick games on the normal wheel.** These are a STOP slot and an H&L slot among the 24, so about one roll in fifteen. Both are paid in multiples of the bet.
+  - ストップ: stop a light running along a bar. The gold middle (±5%) pays ×2.5, the silver (±20%) ×1, outside 0. The position comes from the clock, not the screen, and only a real press counts.
+  - ハイ＆ロー: is the next card (A–K) higher or lower? A right guess pays ×1.5, the same card ×1, a wrong one 0.
+  - Skill pays: a player who stops in the gold half the time gets more back than one who plays at random.
+  - In 早送り they are not played and pay ×0.5. Playing is always worth more on average.
+- **The finisher keeps half the bingo prize.** `prizeShare` is 0.5, so half is shared by the balls on the line, the finisher's own included. Before, all of it was shared. The bingo wheel's ×5 / ×10 / ×20 share stays at 30%.
+- **The normal wheel.** It now has ×3, ×2, ×1.5, ×1.25 ×2, ×0.75 ×2, ×0.5 ×3, ×0.25 ×5, ×0.1 ×2, ×0 ×2, three ball slots and the two games.
+- **soloBonus 1.5 → 1.25.** With the finisher's bigger part, a player alone would otherwise get more than 100% back.
+
+Simulated with the jackpots (sim6.cjs; the quick games are played by an average player who stops in the gold a quarter of the time, and ハイ＆ロー is guessed the sensible way):
+
+| | Before | Now |
+| --- | ---: | ---: |
+| Return, 1 player | about 98.4% | about 100% |
+| Return, 5 players | about 95.2% | about 98.5% |
+| Players ahead after 30 rolls | 25% | 30% |
+| Players ahead after 100 rolls | 14% | 22% |
+
+Tests:
+
+- `tests/sugoroku-model.test.cjs`: the games on the wheel and their pay, and the prize share.
+- `tests/sugoroku.smoke.cjs`: ストップ and ハイ＆ロー played and paid, and 早送り paying ×0.5 without playing.
+- `tests/sugoroku-shared.smoke.cjs`: the new shares.

@@ -46,14 +46,15 @@
   }
   const N = (x, n = 1) => Array(n).fill({ x });
   const BALL = (x = 1, n = 1) => Array(n).fill({ x, ball: true });
+  const GAME = (game, n = 1) => Array(n).fill({ x: 0, game });
   const RULES = {
     costs: [100],
     // The ring: 80 squares, about 23 rolls a lap. S start, n normal, E event, A accident.
     board: Array.from({ length: 80 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
     // The normal wheel: 24 slots; a ball slot gives a ball and nothing else (a ball that misses
-    // the card pays missPay).
+    // the card pays missPay); a game slot starts a quick mini game paid in multiples of the bet.
     normal: {
-      100: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25, 2), ...N(0.75, 2), ...N(0.5, 5), ...N(0.25, 6), ...N(0.1, 2), ...N(0, 1), ...BALL(0, 3)]),
+      100: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25, 2), ...N(0.75, 2), ...N(0.5, 3), ...N(0.25, 5), ...N(0.1, 2), ...N(0, 2), ...BALL(0, 3), ...GAME("stop"), ...GAME("hilo")]),
     },
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
@@ -63,7 +64,7 @@
     numbers: 100,
     missPay: 1.5,
     // A line made only of the player's own balls pays this many times more.
-    soloBonus: 1.5,
+    soloBonus: 1.25,
     // A part of someone else's line not collected within owedDays is dropped, and the card keeps
     // at most owedMax people's parts (the oldest go first), so it cannot grow without end.
     owedDays: 30,
@@ -73,6 +74,9 @@
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
     bingoPrize: 3,
+    // Of the bingo prize, this part is shared by the balls on the line (the finisher's own balls
+    // included); the rest is the finisher's.
+    prizeShare: 0.5,
     // Of what the bingo wheel's ×5 / ×10 / ×20 pays, this part goes to the other players with
     // balls on the line, by their balls (the prize above is shared in full the same way).
     wheelShare: 0.3,
@@ -87,7 +91,10 @@
     // seconds × 10 / × 50; dice – the face × 100; math – a sum in 15 seconds, 500 if right.
     // Taps count up to `max` (12 a second is about as fast as a finger goes; a tapping tool
     // gains nothing past it).
-    games: { timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 50, max: 120 }, dice: { per: 100 }, math: { seconds: 15, prize: 500 } },
+    // stop / hilo are the normal squares' quick games, paid in multiples of the bet: stop the
+    // light in the gold (perfect) or silver (good) part of the bar; say whether the next card is
+    // higher or lower. In 早送り they are not played and pay `auto`.
+    games: { stop: { pay: { perfect: 2.5, good: 1, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.5, tie: 1, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 50, max: 120 }, dice: { per: 100 }, math: { seconds: 15, prize: 500 } },
   };
   const SIZE = RULES.board.length,
     CARD = 7,
@@ -243,7 +250,7 @@
       return { kept: amount - given, shares };
     };
     const prize = money(bet * RULES.bingoPrize * mult),
-      split = share(prize, 1);
+      split = share(prize, RULES.prizeShare);
     let gain = split.kept;
     events.push({ t: "prize", amount: gain, total: prize, shares: split.shares, mult });
     for (let wheel = "bingo"; wheel; ) {
@@ -281,6 +288,7 @@
     if (game === "tap" || game === "tapex") return Math.min(g.max, Math.max(0, Math.floor(Number(done) || 0))) * g.per;
     if (game === "dice") return Math.min(6, Math.max(0, Math.floor(Number(done) || 0))) * g.per;
     if (game === "math") return done === true ? g.prize : 0;
+    if (game === "stop" || game === "hilo") return money(RULES.costs[0] * (done === "auto" ? g.auto : g.pay[done] || 0));
     return 0;
   }
   // The first mini game waiting, finished with what was done; done === null when it was left.
@@ -353,6 +361,10 @@
       events.push({ t: "wheel", wheel: "normal", slots, index, base: cost, amount });
       gain += amount;
       if (slot.ball) gain += ball(state, card, me, random, events, cost);
+      if (slot.game) {
+        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: 1 }]);
+        events.push({ t: "bonus", game: slot.game, mult: 1 });
+      }
     } else if (kind === "accident") {
       const { index, slot } = pick(RULES.accident, random);
       events.push({ t: "wheel", wheel: "accident", slots: RULES.accident, index, base: cost });
