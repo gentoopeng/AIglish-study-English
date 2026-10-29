@@ -47,14 +47,22 @@
   const N = (x, n = 1) => Array(n).fill({ x });
   const BALL = (x = 1, n = 1) => Array(n).fill({ x, ball: true });
   const GAME = (game, n = 1) => Array(n).fill({ x: 0, game });
+  const EVENT = (event) => [{ x: 0, event }];
   const RULES = {
     costs: [100],
     // The ring: 80 squares, about 23 rolls a lap. S start, n normal, E event, A accident.
     board: Array.from({ length: 80 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
-    // The normal wheel: 24 slots; a ball slot gives a ball and nothing else (a ball that misses
-    // the card pays missPay); a game slot starts a quick mini game paid in multiples of the bet.
+    // The normal wheel: 40 slots from ×10 down to −×1 (a minus takes that much more than the
+    // bet). A ball slot gives a ball and nothing else (a ball that misses the card pays missPay);
+    // a game slot starts a quick mini game paid in multiples of the bet; an event slot plays
+    // blackjack, dice poker or chinchiro as an event square does.
     normal: {
-      100: spread([...N(3), ...N(2), ...N(1.5), ...N(1.25, 2), ...N(0.75, 2), ...N(0.5, 3), ...N(0.25, 5), ...N(0.1, 2), ...N(0, 2), ...BALL(0, 3), ...GAME("stop"), ...GAME("hilo")]),
+      100: spread([
+        ...N(10), ...N(5), ...N(2), ...N(1.5), ...N(1.25),
+        ...N(0.75), ...N(0.5, 3), ...N(0.25, 3),
+        ...N(0, 15), ...N(-0.5, 2), ...N(-1, 2),
+        ...BALL(0, 4), ...GAME("stop"), ...GAME("hilo"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("chinchiro"),
+      ]),
     },
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
@@ -178,7 +186,9 @@
       Number.isInteger(state.pos) &&
       state.pos >= 0 &&
       state.pos < SIZE &&
-      ["stake", "laps", "rolls", "bet", "won", "balls"].every((k) => Number.isFinite(state[k]) && state[k] >= 0)
+      ["stake", "laps", "rolls", "bet", "balls"].every((k) => Number.isFinite(state[k]) && state[k] >= 0) &&
+      // What came back can be below 0: a minus slot or an accident takes more than the bet.
+      Number.isFinite(state.won)
     );
   }
   function upgrade(state) {
@@ -364,6 +374,10 @@
       if (slot.game) {
         state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: 1 }]);
         events.push({ t: "bonus", game: slot.game, mult: 1 });
+      }
+      if (slot.event) {
+        state.pending = { game: slot.event, bet: cost };
+        events.push({ t: "game", game: slot.event, bet: cost });
       }
     } else if (kind === "accident") {
       const { index, slot } = pick(RULES.accident, random);
