@@ -210,6 +210,13 @@
         var termMode = !!(window.TermProgress && window.TermQuestions && window.TermProgress.enabled(currentTextbook));
         var termStore = termMode ? window.TermProgress.read(currentTextbook) : null;
         // The chosen unit is one run of numbers (units with the same name elsewhere are separate).
+        // 英単語を先に: an English line with part of it in 「」 (+ A + 「as」 B) gives a second card
+        // as well, the English with the 「」 blanked over the Japanese → what was hidden, so the
+        // hidden word is asked in this direction too. Both cards are rated on the same meaning.
+        function hiddenTwin(item, q) {
+            if (flashcardDirectionMode !== 'en2ja' || !q.reverse || q.reverse.front.indexOf(window.TermQuestions.BLANK) < 0) return;
+            pool.push(Object.assign({}, item, { en: q.reverse.front, ja: q.reverse.back, questionFirst: true, reverse: undefined }));
+        }
         var unitNums = unit && typeof vocabList !== 'undefined' && window.VocabOrder ? new Set((window.VocabOrder.findUnit(vocabList, unit) || { nums: [] }).nums) : null;
         if (typeof vocabList !== 'undefined') {
             vocabList.forEach(function(w) {
@@ -229,7 +236,9 @@
                         // line behind; 意味を先に the other way round. A year question is typed, so it always
                         // shows the question first.
                         var whole = q.kind === 'whole', card = q.front !== undefined;
-                        pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.front : q.prompt, ja: whole ? q.prompt : card ? q.back : q.answer, questionFirst: !whole && !card, reverse: card ? q.reverse : undefined, head: w.word, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input });
+                        var item = { num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.front : q.prompt, ja: whole ? q.prompt : card ? q.back : q.answer, questionFirst: !whole && !card, reverse: card ? q.reverse : undefined, head: w.word, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input };
+                        pool.push(item);
+                        hiddenTwin(item, q);
                     });
                     return;
                 }
@@ -247,7 +256,9 @@
                     if (own.length) {
                         own.forEach(function(q) {
                             var card = q.front !== undefined;
-                            pool.push({ num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: card ? q.front : q.prompt, ja: card ? q.back : q.answer, questionFirst: !card, reverse: card ? q.reverse : undefined, head: w.word, meaningId: meaning.id !== undefined && meaning.id !== null ? String(meaning.id) : null, meaningIndex: meaningIndex, partOfSpeech: window.getFlashcardPartOfSpeech(w,meaning), termCard: true });
+                            var item = { num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: card ? q.front : q.prompt, ja: card ? q.back : q.answer, questionFirst: !card, reverse: card ? q.reverse : undefined, head: w.word, meaningId: meaning.id !== undefined && meaning.id !== null ? String(meaning.id) : null, meaningIndex: meaningIndex, partOfSpeech: window.getFlashcardPartOfSpeech(w,meaning), termCard: true };
+                            pool.push(item);
+                            hiddenTwin(item, q);
                         });
                         return;
                     }

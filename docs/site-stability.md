@@ -1490,3 +1490,15 @@ Now `startFlashcardSession` gives such a meaning its card in ordinary books too,
 Other meanings, including a 「」 inside an ordinary explanation without the setting, stay ordinary cards. Every rating still goes to the meaning.
 
 Test: `tests/blank-only-flashcard.smoke.cjs` now covers these cards and the 意味を先に side.
+
+## 英単語を先に also asks the hidden word (10.22.26.00)
+
+Asked: the hidden-word question (+ A + 「as」 B → as) should also come in 英単語を先に, as well as the plain English card.
+
+When the direction is 英単語を先に, a card whose English line has only part of it in 「」 now comes as two cards:
+- The English → the Japanese, as before.
+- "consider A （＿＿） B / AをBとみなす" → "as / consider A as B". This is `hiddenTwin` in `startFlashcardSession`, using the card's `reverse` side as a question-first card.
+
+This applies in 用語・年号モード and in ordinary books, and both cards are rated on the same meaning. A whole-line 「」 (「consideration」) or a bare English line still gives one card, and 意味を先に is unchanged.
+
+Test: `tests/blank-only-flashcard.smoke.cjs`.
