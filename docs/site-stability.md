@@ -1475,3 +1475,18 @@ As asked, a ball no longer always lands on the card.
 **Tests**
 - The model tests draw exact numbers: hit, off the card, already open, the 1.5× on a missed event ball.
 - The smoke test fixes the next crypto values to check a miss paying 75 on a 50 bet and a hit completing a line.
+
+## English-over-Japanese meanings in ordinary word books (10.22.25.00)
+
+Reported after 10.22.23.00: the card asking "as" for consider's "+ A + 「as」 B / AをBとみなす" did not come up.
+
+In an ordinary book only meanings set to 「」の問題だけ got 「」 cards. A meaning written as an English line over a Japanese line still came up as a headword card ("consider" → the explanation). That is the format the guide says becomes its own card with no setting.
+
+Now `startFlashcardSession` gives such a meaning its card in ordinary books too, exactly as 用語・年号モード does:
+- It recognises a `TermQuestions` card that has a `reverse` side.
+- 英単語を先に: "consider A as B" → AをBとみなす.
+- 意味を先に: "consider A （＿＿） B / AをBとみなす" → as.
+
+Other meanings, including a 「」 inside an ordinary explanation without the setting, stay ordinary cards. Every rating still goes to the meaning.
+
+Test: `tests/blank-only-flashcard.smoke.cjs` now covers these cards and the 意味を先に side.
