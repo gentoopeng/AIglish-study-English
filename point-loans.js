@@ -109,6 +109,27 @@
     after(value);
     return got;
   }
+  // The casino as the other side: a loss that goes past the wallet (an accident in すごろくビンゴ)
+  // is a loan from the casino that was spent at once (marked claimed, so it never reaches the
+  // wallet), with one 請求 for everything owed. It is paid back like any other debt.
+  const CASINO = "CASINO",
+    CASINO_NAME = "カジノ";
+  async function owe(amount, note) {
+    ready();
+    const me = uid(),
+      key = L.pairKey(me, CASINO),
+      at = Date.now();
+    await window.fbRunTransaction(window.db, async (tx) => {
+      const snap = await tx.get(pairRef(key)),
+        lend = newId();
+      let record = L.send(snap.exists() ? snap.data() : null, { id: lend, from: CASINO, to: me, amount, kind: "lend", note, at });
+      record.claimed = { ...(record.claimed || {}), [lend]: at };
+      for (const e of record.entries) if (e.status === "open" && e.kind === "ask-repay" && e.from === CASINO) Object.assign(e, { status: "cancelled", resolvedAt: at });
+      record = L.ask(record, { id: newId(), from: CASINO, to: me, amount: Math.min(L.MAX_AMOUNT, L.net(record.entries, CASINO)), kind: "ask-repay", note, at });
+      tx.set(pairRef(key), { ...record, people: [me, CASINO].sort(), names: { ...(record.names || {}), [me]: myNameNow(), [CASINO]: CASINO_NAME } });
+      tx.set(inboxRef(me), { pairs: { [key]: { other: CASINO, name: CASINO_NAME, at } } }, { merge: true });
+    });
+  }
   async function inbox() {
     const snap = await window.fbGetDoc(inboxRef(uid()));
     return snap.exists() ? snap.data().pairs || {} : {};
@@ -270,7 +291,9 @@
         await closeRequest(other, name, e.id);
         redraw();
       });
-      row.append(no, yes);
+      // A 請求 from the casino cannot be declined.
+      if (other !== CASINO) row.append(no);
+      row.append(yes);
       card.append(row);
       body.append(card);
     }
@@ -309,10 +332,13 @@
       });
       actions.append(b);
     };
-    act("貸す", (v, t) => send(other, name, v, "lend", t), !owe);
+    // The casino only takes repayments.
+    if (other !== CASINO) act("貸す", (v, t) => send(other, name, v, "lend", t), !owe);
     act("返す", (v, t) => send(other, name, v, "repay", t), !!owe, !owe);
-    act("借りたいと頼む", (v, t) => ask(other, name, v, "ask-lend", t));
-    act("返してと請求", (v, t) => ask(other, name, v, "ask-repay", t), false, !lent);
+    if (other !== CASINO) {
+      act("借りたいと頼む", (v, t) => ask(other, name, v, "ask-lend", t));
+      act("返してと請求", (v, t) => ask(other, name, v, "ask-repay", t), false, !lent);
+    }
     form.append(amount, quick, note, actions);
     body.append(form);
     // My own open requests can be taken back.
@@ -354,5 +380,5 @@
   }
 
   window.onAppLoaded?.(() => setTimeout(() => collect().catch(() => {}), 1500));
-  window.PointLoans = Object.freeze({ open, person, send, ask, closeRequest, claim, collect, close: closeDialog });
+  window.PointLoans = Object.freeze({ open, person, send, ask, closeRequest, claim, collect, owe, CASINO, close: closeDialog });
 })();

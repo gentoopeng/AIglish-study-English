@@ -229,9 +229,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const keys = await page.evaluate(() => Object.keys(window.__wallet["users/casino-a/learningPoints/main"].poker));
     assert.equal(keys.length, 1);
     assert.match(keys[0], /^casino:blackjack:.+:bet$/);
-    // Points bet in the casino feed the shared jackpots (5% and 2% of the 60pt).
+    // Points bet in the casino feed the shared jackpots (1% and 0.5% of what was bet).
     await page.waitForFunction(() => window.__wallet["shared/casino_jackpot"]?.bet === 60);
-    assert.deepEqual(await page.evaluate(() => window.CasinoJackpot.amounts()), { jp: 5003, sjp: 50001 });
+    assert.deepEqual(await page.evaluate(() => window.CasinoJackpot.amounts()), { jp: 5000, sjp: 50000 });
     // Over the balance, the bet stops at what there is.
     await bj.getByRole("button", { name: "+100" }).click();
     await bj.getByRole("button", { name: "+100" }).click();

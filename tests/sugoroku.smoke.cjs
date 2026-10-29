@@ -175,9 +175,16 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const wheelAt = (test) => page.evaluate((src) => window.SugorokuModel.RULES.wheels.bingo.findIndex(Function("x", "return " + src)), test);
     const before20 = await saved();
     await fix([0, lastNo - 1, await wheelAt("x.x === 20")]);
+    // Every look the wheel layer takes is noted (with reduced motion the bingo wheel is gone again
+    // within a few milliseconds, before START's own wheel).
+    await page.evaluate(() => {
+      window.__layers = [];
+      const layer = document.querySelector(".sg-layer");
+      new MutationObserver(() => window.__layers.push(layer.className)).observe(layer, { attributes: true, attributeFilter: ["class"] });
+    });
     await screen.locator("[data-sg-roll]").click();
-    await screen.locator(".sg-layer.is-bingo").waitFor({ state: "attached" });
     await settled();
+    assert.ok((await page.evaluate(() => window.__layers)).some((c) => c.includes("is-bingo")), "the bingo wheel spun");
     await playGame();
     const done = await saved(),
       doneCard = await card();
@@ -219,8 +226,11 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await settled();
     const afterMini = await saved();
     assert.deepEqual(afterMini.bonus, []);
-    // amy's row: no solo bonus; prize 300 plus whatever the timer scored (0 this far off).
-    assert.ok(afterMini.won - beforeMini.won >= 300);
+    // amy's row: no solo bonus, and the prize of 300 is shared by the balls on it: the guest's
+    // one ball keeps 43, amy's six parts (257) wait on the card for her; plus whatever the timer
+    // scored (0 this far off).
+    assert.ok(afterMini.won - beforeMini.won >= 43);
+    assert.deepEqual((await card()).owed, { amy: 257 });
 
     // A mini game left half way scores 0 when the game is opened again.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
