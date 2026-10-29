@@ -282,7 +282,10 @@
     ["冠", "冠詞"],
     ["間", "間投詞"],
   ];
-  function openEntry() {
+  // `options.after`: a word of the list; the new word goes in right after it (its number + 1,
+  // pushing the following ones down), in the same unit. Without it the word goes at the end.
+  function openEntry(options) {
+    const after = options && options.after && typeof options.after === "object" ? options.after : null;
     const id = owner(),
       book = currentTextbook;
     if (!ready(book, id)) return;
@@ -325,6 +328,17 @@
       d.querySelector("#vocabEntryUnits").append(option);
     }
     number.value = nextShown(original.master);
+    const insert = d.querySelector("#vocabEntryInsert");
+    if (after) {
+      const at = root.VocabOrder.no(after) + 1;
+      number.value = at;
+      manual = true;
+      insert.checked = true;
+      unitInput.value = after.unit || "";
+      d.querySelector("#vocabEntryTitle").textContent = "単語を差し込む";
+      const where = el("p", "#" + root.VocabOrder.no(after) + "「" + after.word + "」の次（#" + at + "）に入ります。後ろの番号は1つずつずれます。", "vocab-entry-where");
+      d.querySelector(".vocab-entry-book").after(where);
+    }
     number.oninput = () => {
       manual = number.value !== "";
     };
@@ -503,14 +517,19 @@
           form.querySelector("#vocabEntryWord").value = "";
           dup.textContent = "";
           form.querySelector("#vocabEntrySub").value = "";
-          manual = false;
-          number.value = nextShown(root.VocabMaster.resolve(book).master);
-          form.querySelector("#vocabEntryInsert").checked = false;
+          manual = !!after;
+          // Inserting goes on right after the word just added.
+          number.value = after ? root.VocabOrder.no(entry) + 1 : nextShown(root.VocabMaster.resolve(book).master);
+          form.querySelector("#vocabEntryInsert").checked = !!after;
           list.replaceChildren();
           addMeaning(false);
           message.textContent =
             "#" + root.VocabOrder.no(entry) + " 「" + entry.word + "」を追加しました。";
           form.querySelector("#vocabEntryWord").focus();
+        } else if (after) {
+          // Inserted between two words: stay where the list is, the new word now in its place.
+          close();
+          root.renderVocabList();
         } else {
           close();
           // Show the newly created word even when the list was filtered or on a later page.
@@ -542,5 +561,5 @@
   root.onAppLoaded?.(updateButton);
   root.addEventListener("learning-data-ready", updateButton);
   root.openVocabWordEntry = openEntry;
-  root.VocabWordEntry = { save, flushPublications, restorePublications };
+  root.VocabWordEntry = { save, flushPublications, restorePublications, canAdd: () => !!(currentTextbook && ready(currentTextbook, owner())) };
 })(typeof window === "undefined" ? globalThis : window);

@@ -2494,6 +2494,13 @@ html body dialog.group-chat-dialog[open]{display:flex;flex-direction:column;over
 .vocab-entry-dialog header { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; }
 .vocab-entry-dialog header h2 { margin: 0; font-size: 21px; }
 .vocab-entry-book { margin: 5px 0 0; color: #b4b0a6; font-size: 12px; overflow-wrap: anywhere; }
+.vocab-entry-where { margin: 4px 0 0; color: #e7cf98; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+/* The small ＋ between word cards (only where words can be added): a hairline with a dot. */
+.vocab-insert { position: relative; display: block; width: 100%; height: 22px; margin: -8px 0 4px; padding: 0; border: 0; background: none; color: rgba(231, 207, 152, 0.7); font: 600 14px/22px system-ui, sans-serif; cursor: pointer; }
+.vocab-insert::before { content: ""; position: absolute; left: 24px; right: 24px; top: 50%; border-top: 1px dashed rgba(231, 207, 152, 0.18); }
+.vocab-insert span { position: relative; display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid rgba(231, 207, 152, 0.35); border-radius: 50%; background: rgba(14, 18, 28, 0.92); font-size: 13px; line-height: 1; }
+.vocab-insert:hover, .vocab-insert:focus-visible { color: #e7cf98; }
+.vocab-insert:hover::before, .vocab-insert:focus-visible::before { border-top-color: rgba(231, 207, 152, 0.5); }
 .vocab-entry-dialog header button { flex: 0 0 auto; background: transparent; color: #ddd6c6; border: 0; font-size: 24px; width: 40px; height: 40px; cursor: pointer; }
 .vocab-entry-dialog input,.vocab-entry-dialog textarea,.vocab-entry-dialog select { font-size: 16px; }
 .vocab-entry-meaning-controls { display: grid; grid-template-columns: minmax(0,1fr) 100px 32px; gap: 6px; align-items: center; }

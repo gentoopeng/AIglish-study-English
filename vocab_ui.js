@@ -1276,8 +1276,17 @@
         if(signature!==vocabPageFilter){vocabPage=0;vocabPageFilter=signature;}
         vocabPage=Math.min(vocabPage,Math.max(0,Math.ceil(filtered.length/vocabPageSize)-1));
         var fragment=document.createDocumentFragment();
+        // Where words can be added, a small ＋ after each card puts a new word right there.
+        var canInsert=!!(window.VocabWordEntry&&window.VocabWordEntry.canAdd&&window.VocabWordEntry.canAdd());
         filtered.slice(vocabPage*vocabPageSize,(vocabPage+1)*vocabPageSize).forEach(function(w) {
             fragment.appendChild(window.createVocabCard(w));
+            if(canInsert){
+                var no=window.VocabOrder?window.VocabOrder.no(w):w.num,add=document.createElement('button');
+                add.type='button';add.className='vocab-insert';add.innerHTML='<span aria-hidden="true">＋</span>';
+                add.title='ここに単語を追加';add.setAttribute('aria-label','#'+no+' '+w.word+' の次に単語を追加');
+                add.onclick=function(){window.openVocabWordEntry({after:w});};
+                fragment.appendChild(add);
+            }
         });
         function pageNavigation(position){
             const nav=document.createElement('nav');nav.className='vocab-pages';nav.setAttribute('aria-label','単語一覧のページ（'+position+'）');

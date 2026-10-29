@@ -1578,3 +1578,19 @@ The bingo rewards were rebuilt as specified.
 | return without jackpots | 90.8% | 87.6% |
 
 **Before points are used.** The jackpots are now about 10× more frequent than before. Their seeds (5,000 / 50,000) would create points out of nothing at that rate, so they need revisiting before the game moves to real points. In the preview a jackpot is only shown.
+
+## Insert a word between two cards (10.22.30.00)
+
+Asked: in an editable word book, a small add button between word cards that adds a word right there.
+
+Where words can be added (`VocabWordEntry.canAdd()`, the same check as the 「＋ 追加」 button), `renderVocabList` puts a small ＋ (a hairline with a 22px dot) after each word card.
+
+It opens the add form with `openVocabWordEntry({ after: word })`:
+- The title reads 単語を差し込む and a line says where the word goes.
+- The number is that word's number + 1, with 差し込む already checked and the same unit filled in.
+- After adding, the list re-renders in place instead of searching for the new word.
+- 続けて追加する goes on inserting right after the word just added.
+
+The existing `VocabOrder.place` moves the later numbers down. Numbers are display numbers, so every record stays with its word.
+
+Test: `tests/vocab-insert.smoke.cjs`.
