@@ -19,7 +19,21 @@
     C = window.CasinoModel;
   const fmt = (n) => Number(n || 0).toLocaleString("ja-JP");
   const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const random = (n) => crypto.getRandomValues(new Uint32Array(1))[0] % n;
+  const draw32 = () => crypto.getRandomValues(new Uint32Array(1))[0];
+  const random = (n) => draw32() % n;
+  // A roll is first worked out on the card as last seen, recording each raw draw; only a roll
+  // that touches the card (a ball) goes to the cloud, where the same draws are played again on
+  // the newest card (so the die and the wheels come out the same). `replay` restarts each time
+  // the transaction runs its function.
+  const recorder = (tape) => (n) => {
+    const v = draw32();
+    tape.push(v);
+    return v % n;
+  };
+  const replay = (tape) => {
+    let i = 0;
+    return (n) => (i < tape.length ? tape[i++] : draw32()) % n;
+  };
   const node = (tag, cls, text) => {
     const el = document.createElement(tag);
     if (cls) el.className = cls;
@@ -40,7 +54,7 @@
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "STARTを通るとボールが1つ出ます。",
     "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の1.5倍がもらえます。1列そろえるとビンゴ賞金（300）と、ビンゴルーレット（掛け金×5・×10・×20、10秒ぴったり、連打、サイコロ、暗算、JACKPOT×2、SUPER JACKPOT CHANCE）。SUPER JACKPOT CHANCEはSUPER JACKPOT×2・JACKPOT・連打EX・もう一回の5つ。自分のボールだけでそろえると賞金とミニゲームが1.5倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
-    "ビンゴ賞金は、その列にボールを置いていた人でボールの数に応じて山分けします。ほかの人の分は、その人が次にすごろくビンゴを開いたときに届きます。ルーレットとミニゲームはそろえた人のものです。",
+    "ビンゴ賞金は、その列にボールを置いていた人でボールの数に応じて山分けします。ビンゴルーレットの×5・×10・×20も、3割を同じように分けます。ほかの人の分は、その人がすごろくビンゴを開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
     "連打は120回まで数えます。",
     "ジャックポットは、カジノでハウス（ディーラー）相手に賭けられたポイントから貯まります（JACKPOT 1,000 + 3%で上限10,000、SUPER JACKPOT 5,000 + 2%で上限100,000。JACKPOTが上限を超えた分はSUPER JACKPOTに回ります）。",
     "「早送り」にすると、ふだんのマスは短く、ビンゴやジャックポットはいつもどおり見られます。★マスのゲームも自動（おまかせ）で進みます。盤面をタップするとその回を最後まで飛ばせます。",
@@ -288,6 +302,7 @@
         const last = news[news.length - 1];
         if (last) say((last.n || "だれか") + "さんが " + logText(last), "is-hot");
         seeLog();
+        if (found.card.owed?.[api.uid()] > 0) setTimeout(collectNow, last ? 1500 : 0);
       });
     } catch (error) {
       console.warn("[sugoroku] listen", error);
@@ -331,6 +346,7 @@
     }
     if (view?.state.bonus?.length) await bonus();
     if (view?.state.pending) game();
+    else await collectNow();
   }
   function draw() {
     const { body, state } = view;
@@ -551,7 +567,15 @@
     let turn = [0, 0];
     return {
       box,
+      // Shaken in the hand from the press until the result is known.
+      shake() {
+        if (pace()) box.classList.add("is-shaking");
+      },
+      stop() {
+        box.classList.remove("is-shaking");
+      },
       async roll(value) {
+        box.classList.remove("is-shaking");
         const [x, y] = FACE[value],
           quick = !pace();
         // Whole extra turns so it tumbles, then the face for the number.
@@ -612,19 +636,29 @@
     }
     if (view.busy || view.state.pending || api.balance() < view.cost) return;
     const cost = view.cost,
-      state = view.state;
+      state = view.state,
+      me = api.uid();
     view.busy = true;
     hud();
+    view.die.shake();
+    // Worked out at once on the card as last seen. Most rolls draw no ball and leave the card
+    // alone, so they need no cloud round trip; a ball (or a part waiting for this player) does.
+    const tape = [],
+      local = S.roll(state, view.card, cost, recorder(tape), me),
+      touches = local.events.some((e) => e.t === "ball") || view.card.owed?.[me] > 0;
     let result;
-    try {
-      result = await onCard((card) => S.roll(state, card, cost, random, api.uid()));
-    } catch (error) {
-      console.warn("[sugoroku] roll", error);
-      view.busy = false;
-      hud();
-      say("通信できませんでした。もう一度振ってください", "is-loss");
-      return;
-    }
+    if (view.online && !touches) result = { out: local, collected: 0, people: view.people, log: view.log, before: { card: view.card, people: view.people, log: view.log } };
+    else
+      try {
+        result = await onCard((card) => S.roll(state, card, cost, replay(tape), me));
+      } catch (error) {
+        console.warn("[sugoroku] roll", error);
+        view.die.stop();
+        view.busy = false;
+        hud();
+        say("通信できませんでした。もう一度振ってください", "is-loss");
+        return;
+      }
     const { out, before, people, collected } = result;
     out.collected = collected;
     save(out.state);
@@ -634,6 +668,37 @@
     await run(out, { ...state, stake: state.stake + cost }, before, people, result.log);
     if (view?.state.bonus?.length) await bonus();
     if (view?.state.pending) game();
+  }
+  // A part of other players' lines waiting for this player is taken as soon as it is seen (on
+  // opening, or when the card changes), not only with the next ball.
+  async function collectNow() {
+    const me = api.uid();
+    if (!view || view.busy || !view.online || !(view.card.owed?.[me] > 0) || view.state.pending || view.state.bonus?.length) return;
+    view.busy = true;
+    hud();
+    let result;
+    try {
+      result = await onCard((card) => ({ state: { ...view.state }, card, events: [], gain: 0 }));
+    } catch (error) {
+      console.warn("[sugoroku] collect", error);
+      view.busy = false;
+      return hud();
+    }
+    const { out, collected } = result;
+    out.collected = collected;
+    view.state = out.state;
+    view.card = out.card;
+    view.people = result.people;
+    view.log = result.log;
+    view.busy = false;
+    save(out.state);
+    if (collected) {
+      pay(out, 0);
+      say("ほかの人のビンゴの分け前　+" + fmt(collected) + api.unit(), "is-gain");
+      api.refresh();
+    }
+    paintCard();
+    hud();
   }
   // Plays events over a copy of the state shown so far, then shows the real new state.
   // `before` is the card the change was made on (it may hold other players' new balls).
@@ -732,7 +797,7 @@
         say("そろった列は新しい番号に", "is-ball");
         await wait(900);
       } else if (e.t === "prize") {
-        say("ビンゴ賞金　+" + fmt(e.amount) + api.unit(), "is-gain");
+        say("ビンゴ賞金　+" + fmt(e.amount) + api.unit() + (e.total > e.amount ? "（みんなに " + fmt(e.total - e.amount) + "）" : ""), "is-gain");
         await wait(1000);
       } else if (e.t === "bonus") {
         say("ミニゲーム：" + MINI[e.game], "is-hot");
@@ -912,7 +977,7 @@
                   ? "ハズレ（ビンゴ賞金のみ）"
                   : slot.back
                     ? "もう一回！"
-                    : "×" + slot.x + "　+" + fmt(e.amount) + api.unit() + (slot.ball ? "　BALL" : "");
+                    : "×" + slot.x + "　+" + fmt(e.amount) + api.unit() + (slot.ball ? "　BALL" : "") + (e.total > e.amount ? "（みんなに " + fmt(e.total - e.amount) + "）" : "");
     box.classList.add("is-done");
     if (slot.next || slot.jackpot) layer.classList.add("is-hotter");
     await wait(hot || slot.x >= 2 || slot.ball ? 1300 : 750);
@@ -1148,10 +1213,16 @@
   // The end of an event game. If the shared card cannot be written, the game stays (its round
   // is saved) and つづける can be pressed again.
   async function finish(m) {
-    const state = view.state;
+    const state = view.state,
+      me = api.uid(),
+      tape = [],
+      local = S.settle(state, view.card, m, recorder(tape), me);
     let result;
     try {
-      result = await onCard((card) => S.settle(state, card, m, random, api.uid()));
+      // A loss or a push draws no ball: no cloud round trip, as for a roll.
+      if (view.online && !local.events.some((e) => e.t === "ball") && !(view.card.owed?.[me] > 0))
+        result = { out: local, collected: 0, people: view.people, log: view.log, before: { card: view.card, people: view.people, log: view.log } };
+      else result = await onCard((card) => S.settle(state, card, m, replay(tape), me));
     } catch (error) {
       console.warn("[sugoroku] settle", error);
       const line = view.layer.querySelector(".sg-game-line");

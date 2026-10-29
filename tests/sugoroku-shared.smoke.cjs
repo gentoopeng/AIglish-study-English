@@ -81,6 +81,12 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await tab.locator(".casino-game.mode-sugoroku").click();
     const screen = page.locator("dialog.casino-screen.is-sugoroku[open]");
     await screen.locator(".sg-card").waitFor();
+    // The 120 waiting for A is taken on opening, in one wallet write, and said so.
+    await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 2120);
+    assert.match(await screen.locator(".sg-say").innerText(), /分け前　\+120pt/);
+    assert.deepEqual(await page.evaluate(() => window.__store["shared/sugoroku_live"].owed), {});
+    assert.equal((await saved()).shared, 120);
+    await page.waitForFunction(() => !document.querySelector(".sg-go").disabled);
     // B's balls show B's initial, not the bad icon.
     const first = screen.locator(".sg-cell").first();
     assert.equal(await first.getAttribute("data-initial"), "B");
@@ -95,40 +101,41 @@ const SAVE = "aiglish_sugoroku_sg-a",
     assert.match(await sheet.locator(".sg-stats").innerText(), /振った回数\s*0回/);
     await sheet.getByRole("button", { name: "閉じる" }).click();
 
-    // The cloud cannot be written: nothing is charged or saved, and the player is asked again.
+    // A roll that draws a ball needs the shared card. When the cloud cannot be written, nothing
+    // is charged or saved, and the player is asked again.
+    const ballAt = await rule("S.RULES.normal[100].findIndex((x) => x.ball)"),
+      fiveAt = await rule("S.RULES.wheels.bingo.findIndex((x) => x.x === 5)");
     const start = await chips();
     await page.evaluate(() => (window.__failCard = true));
+    await fix([0, ballAt, 99]);
     await screen.locator("[data-sg-roll]").click();
     await page.waitForFunction(() => /通信できませんでした/.test(document.querySelector(".sg-say").textContent));
     assert.equal(await chips(), start);
     assert.equal((await saved())?.rolls || 0, 0);
     assert.equal(await screen.locator("[data-sg-roll]").isDisabled(), false);
-    await page.evaluate(() => (window.__failCard = false));
 
-    // Next roll: die 1 onto a normal square, its wheel on ×0. The 120 owed comes in first, once.
+    // A roll without a ball leaves the card alone, so it does not wait for the cloud at all (it
+    // goes through even now): die 1 onto a normal square, its wheel on ×0, one wallet write.
     const zeroAt = await rule("S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball)");
     await fix([0, zeroAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
-    assert.equal(await chips(), start - 100 + 120);
-    // On points: one wallet write for the roll (the bet less the 120 collected).
+    await page.evaluate(() => (window.__failCard = false));
+    assert.equal(await chips(), start - 100);
     await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 2020);
-    assert.deepEqual(Object.keys(await page.evaluate(() => window.__store["users/sg-a/learningPoints/main"].poker)).map((k) => k.replace(/:[^:]+:net$/, "")), ["casino:sugoroku"]);
-    assert.equal((await saved()).shared, 120);
-    assert.deepEqual(await page.evaluate(() => window.__store["shared/sugoroku_live"].owed), {});
+    assert.deepEqual(Object.keys(await page.evaluate(() => window.__store["users/sg-a/learningPoints/main"].poker)).map((k) => k.replace(/:[^:]+:net$/, "")), ["casino:sugoroku", "casino:sugoroku"]);
+    assert.equal((await saved()).rolls, 1);
 
     // A ball on the row's last number finishes B's row: the prize of 300 is shared by the 7
-    // balls (B's 6 parts, 257, wait on the card for B), the bingo wheel's × 5 is all A's, and the
-    // line goes in the log with A's name.
-    const ballAt = await rule("S.RULES.normal[100].findIndex((x) => x.ball)"),
-      fiveAt = await rule("S.RULES.wheels.bingo.findIndex((x) => x.x === 5)");
+    // balls (B's 6 parts, 257, wait on the card for B); of the bingo wheel's × 5 (500), 30% is
+    // shared the same way (B's 128), and the line goes in the log with A's name.
     const before = await chips();
     await fix([0, ballAt, row[6] - 1, fiveAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
-    assert.equal(await chips(), before - 100 + (300 - 257) + 500);
+    assert.equal(await chips(), before - 100 + (300 - 257) + (500 - 128));
     const shared = await page.evaluate(() => window.__store["shared/sugoroku_live"]);
-    assert.deepEqual(shared.owed, { "sg-b": 257 });
+    assert.deepEqual(shared.owed, { "sg-b": 257 + 128 });
     assert.deepEqual(Object.keys(shared.owedAt), ["sg-b"]);
     assert.deepEqual(shared.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.deepEqual(shared.log.map((e) => [e.t, e.id, e.n, e.c]), [["bingo", "sg-b", "B", 2], ["bingo", "sg-a", "A", 1]]);
@@ -180,7 +187,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       window.switchTab("casino");
     });
     await tab.locator(".mode-sugoroku .casino-waiting").waitFor();
-    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 257pt 届いています");
+    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 385pt 届いています");
     await page.evaluate(() => (myId = "sg-a"));
 
     // An accident past the wallet: with 150pt left, a roll onto the accident square whose wheel

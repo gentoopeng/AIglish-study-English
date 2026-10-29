@@ -1751,3 +1751,31 @@ Tests:
 - `tests/sugoroku-model.test.cjs`: the wheels.
 - `tests/sugoroku-shared.smoke.cjs`: the cap, the spill carried into the SUPER JACKPOT, and every pot starting again.
 - `tests/casino.smoke.cjs`, `tests/sugoroku.smoke.cjs`: the new amounts.
+
+## すごろくビンゴ: more for the balls on a line, and rolls without waiting (10.22.37.00)
+
+The user asked for a bigger share of a line for the players whose balls filled it. They also found rolling and the other moves slow.
+
+**Sharing.**
+
+- The bingo prize was already split by the balls on the finished lines.
+- Now 30% of what the bingo wheel's ×5 / ×10 / ×20 pays is split the same way (`RULES.wheelShare`). The finisher keeps the rest, the mini game and any jackpot.
+- The wheel and the message show what went to everybody else (「（みんなに N）」).
+- A waiting part is taken as soon as it is seen: on opening the game, or when the shared card changes while it is open. Before, it waited for the player's next ball.
+- The total paid out is unchanged, so the balance is too.
+
+**Speed.** Every roll used to wait for a transaction on the shared card (a read and a write over the network) before the die moved.
+
+- The die now shakes from the moment of the press.
+- A roll is first worked out on the card as last seen, recording each raw draw. Only a roll that draws a ball, or that finds a part waiting for the player, goes to the cloud. There the same draws are played again on the newest card, so the die and the wheels come out the same (`recorder`/`replay`).
+- About four rolls in five draw no ball, so they no longer wait for the network at all. The end of an event game works the same way: a loss or a push needs no round trip.
+- With the one-write wallet move from 10.22.35.00, an everyday roll costs about one wallet transaction and nothing else.
+
+Tests:
+
+- `tests/sugoroku-model.test.cjs`: the wheel's share.
+- `tests/sugoroku-shared.smoke.cjs`:
+  - a part taken on opening;
+  - a ball roll refused when the cloud fails;
+  - a roll without a ball going through even then;
+  - the shares of a line.

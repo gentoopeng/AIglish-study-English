@@ -15,9 +15,9 @@
 // 20, four mini games, a miss, the jackpot, or the super-jackpot chance, a 5-slot wheel of the
 // super jackpot, the jackpot twice, a bigger tapping game and "back" (the first wheel again).
 // Two lines at once pay (n + 1)× and a line of only this player's balls soloBonus× more (not the
-// jackpots). The bingo prize is shared by the balls on the finished lines: each other player's
-// part waits in card.owed[id] until they next play (collect); the wheel and its mini game are
-// the finisher's. The finished lines' numbers are then drawn afresh and their balls cleared.
+// jackpots). The bingo prize is shared by the balls on the finished lines, and wheelShare of the
+// bingo wheel's multiples too: each other player's part waits in card.owed[id] until they next
+// play (collect). The rest of the wheel, its mini game and any jackpot are the finisher's. The finished lines' numbers are then drawn afresh and their balls cleared.
 // The jackpots are shared by the whole casino (see casino-jackpot.js); here they are only events.
 //
 // Every amount lives in RULES so it can be tuned. `random(n)` gives 0..n-1.
@@ -73,6 +73,9 @@
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
     bingoPrize: 3,
+    // Of what the bingo wheel's ×5 / ×10 / ×20 pays, this part goes to the other players with
+    // balls on the line, by their balls (the prize above is shared in full the same way).
+    wheelShare: 0.3,
     // After a line: x pays the bet × x; game starts a mini game; miss is the bingo prize alone;
     // the super-jackpot chance leads to the second wheel, where back spins the first again.
     wheels: {
@@ -224,18 +227,25 @@
   // rounding stays with the finisher), then the wheel. A mini game is queued in state.bonus and
   // played on the screen (settleBonus); a jackpot waits in state.jpWait for the screen to pay.
   function spinLine(state, card, bet, mult, random, events, me, balls, count) {
+    // `part` of an amount goes to the other players by their balls on the line; returns what
+    // stays with the finisher and the others' shares.
+    const share = (amount, part) => {
+      const shares = {};
+      let given = 0;
+      for (const [id, n] of Object.entries(balls)) {
+        if (id === me) continue;
+        shares[id] = Math.floor((amount * part * n) / count);
+        if (!shares[id]) continue;
+        given += shares[id];
+        card.owed = card.owed || {};
+        card.owed[id] = Math.min(1e7, (card.owed[id] || 0) + shares[id]);
+      }
+      return { kept: amount - given, shares };
+    };
     const prize = money(bet * RULES.bingoPrize * mult),
-      shares = {};
-    let given = 0;
-    for (const [id, n] of Object.entries(balls)) {
-      if (id === me) continue;
-      shares[id] = Math.floor((prize * n) / count);
-      given += shares[id];
-      card.owed = card.owed || {};
-      card.owed[id] = Math.min(1e7, (card.owed[id] || 0) + shares[id]);
-    }
-    let gain = prize - given;
-    events.push({ t: "prize", amount: gain, total: prize, shares, mult });
+      split = share(prize, 1);
+    let gain = split.kept;
+    events.push({ t: "prize", amount: gain, total: prize, shares: split.shares, mult });
     for (let wheel = "bingo"; wheel; ) {
       const slots = RULES.wheels[wheel],
         { index, slot } = pick(slots, random);
@@ -255,8 +265,10 @@
         state.bonus = (state.bonus || []).concat([{ game: slot.game, mult }]);
         events.push({ t: "bonus", game: slot.game, mult });
       } else if (slot.x) {
-        event.amount = money(bet * slot.x * mult);
-        gain += event.amount;
+        const won = money(bet * slot.x * mult),
+          part = share(won, RULES.wheelShare);
+        Object.assign(event, { amount: part.kept, total: won, shares: part.shares });
+        gain += part.kept;
       }
     }
     return gain;

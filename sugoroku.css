@@ -71,6 +71,8 @@
 .sg-face.is-top{transform:rotateX(90deg) translateZ(25px);}
 .sg-face.is-bottom{transform:rotateX(-90deg) translateZ(25px);}
 .sg-shadow{position:absolute;left:8px;right:8px;bottom:-6px;height:6px;border-radius:50%;background:rgba(0,0,0,.45);filter:blur(3px);}
+.sg-dice3d.is-shaking{animation:sg-shake .32s ease-in-out infinite;}
+@keyframes sg-shake{0%,100%{transform:rotate(-10deg) translateY(0);}50%{transform:rotate(10deg) translateY(-4px);}}
 .sg-dice3d.is-rolling .sg-cube{animation:sg-toss 1s cubic-bezier(.3,.7,.4,1);}
 .sg-dice3d.is-rolling .sg-shadow{animation:sg-toss-shadow 1s cubic-bezier(.3,.7,.4,1);}
 @keyframes sg-toss{0%{translate:0 0;}30%{translate:0 -30px;}60%{translate:0 0;}75%{translate:0 -8px;}90%{translate:0 0;}}
@@ -211,5 +213,5 @@
 
 @media (prefers-reduced-motion:reduce){
   .sg-card-wrap.is-warm .sg-card{transition:none;}
-  .sg-ball.is-in,.sg-pot::after,.sg-cell.is-reach,.sg-cell.is-new,.sg-cell.is-run,.sg-dice3d .sg-cube,.sg-lamp{animation:none !important;}
+  .sg-ball.is-in,.sg-pot::after,.sg-cell.is-reach,.sg-cell.is-new,.sg-cell.is-run,.sg-dice3d .sg-cube,.sg-dice3d.is-shaking,.sg-lamp{animation:none !important;}
 }
