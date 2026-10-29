@@ -6,7 +6,8 @@
 const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
 const base = process.env.APP_URL || "http://127.0.0.1:8000";
-const SAVE = "aiglish_sugoroku_GUEST-000_practice";
+const SAVE = "aiglish_sugoroku_GUEST-000_practice",
+  CARD = "aiglish_sugoroku_card_GUEST-000";
 (async () => {
   const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
   try {
@@ -25,8 +26,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
     await page.locator("#nav-casino").click();
     const tab = page.locator("#view-casino.active");
     // The casino's jackpots are always on the tab.
-    assert.equal(await tab.locator("[data-casino-jackpots] .is-jp b").innerText(), "1,000pt");
-    assert.equal(await tab.locator("[data-casino-jackpots] .is-sjp b").innerText(), "10,000pt");
+    assert.equal(await tab.locator("[data-casino-jackpots] .is-jp b").innerText(), "5,000pt");
+    assert.equal(await tab.locator("[data-casino-jackpots] .is-sjp b").innerText(), "50,000pt");
     await tab.locator(".casino-game.mode-sugoroku").click();
     const screen = page.locator("dialog.casino-screen.is-sugoroku[open]");
     await screen.locator(".sg-card").waitFor();
@@ -39,12 +40,13 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
       return go.bottom <= innerHeight && card.top >= 0 && card.width > 230;
     });
     assert.ok(fits, "fits one screen");
-    assert.equal(await screen.locator('[data-pot="jp"] b').innerText(), "1,000pt");
+    assert.equal(await screen.locator('[data-pot="jp"] b').innerText(), "5,000pt");
     const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth || [...document.querySelectorAll(".sg-cell,.sg-cost,.sg-go")].some((el) => el.scrollWidth > el.clientWidth + 1));
     assert.equal(wide, false);
     await page.screenshot({ path: "/tmp/sugoroku.png", fullPage: true });
 
     const saved = () => page.evaluate((name) => JSON.parse(localStorage.getItem(name)), SAVE);
+    const card = () => page.evaluate((name) => JSON.parse(localStorage.getItem(name)), CARD);
     const settled = () => page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning") && (!document.querySelector(".sg-go").disabled || document.querySelector(".sg-layer.is-game:not([hidden])")));
     // Play an event game through to the end whatever it is.
     const playGame = async () => {
@@ -74,14 +76,16 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
     assert.equal(after.bet, 300);
     assert.equal(after.pending, null);
     assert.equal(await page.evaluate(() => window.Casino.balance()), 1000 - 300 + after.won);
-    assert.equal(await screen.locator(".sg-cell.is-on").count(), after.marks.filter(Boolean).length);
+    const afterCard = await card();
+    assert.equal(await screen.locator(".sg-cell.is-on").count(), afterCard.owners.filter((o) => o && o !== "*").length);
+    assert.equal(await screen.locator(".sg-cell.is-mine").count(), afterCard.owners.filter((o) => o === "GUEST-000").length);
     assert.equal(await page.evaluate(() => [...document.querySelectorAll(".sg-sq")].findIndex((s) => s.classList.contains("is-here"))), after.pos);
 
     // Closed and opened again: the same card and place.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").waitFor();
-    assert.deepEqual(await screen.locator(".sg-cell").allInnerTexts(), after.card.map((n) => (n ? String(n) : "FREE")));
+    assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll(".sg-cell")].map((c) => c.title || c.textContent)), afterCard.cells.map((n, i) => (afterCard.owners[i] === "GUEST-000" ? "ゲストのボール（" + n + "）" : n ? String(n) : "FREE")));
 
     // An event game left half way comes back where it was.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
@@ -117,15 +121,17 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
       }, values);
     // A ball off the card: it rolls in, greys out and pays 1.5× the bet (50 → 75).
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
-    const missNo = await page.evaluate((name) => {
+    const missNo = await page.evaluate(([name, cardName]) => {
       const s = JSON.parse(localStorage.getItem(name));
       s.pos = 79;
       localStorage.setItem(name, JSON.stringify(s));
-      return Array.from({ length: 100 }, (_, i) => i + 1).find((n) => !s.card.includes(n));
-    }, SAVE);
+      const c = JSON.parse(localStorage.getItem(cardName));
+      return Array.from({ length: 100 }, (_, i) => i + 1).find((n) => !c.cells.includes(n));
+    }, [SAVE, CARD]);
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").waitFor();
-    const before = await saved();
+    const before = await saved(),
+      beforeCard = await card();
     // Die 1 onto START (a ball), START's wheel on its ×0 slot.
     const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[50].findIndex((x) => x.x === 0));
     await fix([0, missNo - 1, zeroAt]);
@@ -133,33 +139,44 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
     await settled();
     const missed = await saved();
     assert.equal(missed.won - before.won, 75);
-    assert.equal(missed.marks.filter(Boolean).length, before.marks.filter(Boolean).length);
+    assert.deepEqual((await card()).owners, beforeCard.owners);
 
-    // A row one short with everything else open: a ball on that number makes a line and spins BINGO.
+    // Another player's ball shows their initial and name; the top row is the guest's own but its
+    // last cell, so the next ball on that number makes a line of only the guest's balls.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
-    const lastNo = await page.evaluate((name) => {
+    const lastNo = await page.evaluate(([name, cardName]) => {
       const s = JSON.parse(localStorage.getItem(name));
-      s.marks = s.marks.map((_, i) => i !== 6);
-      s.lines = [];
       s.stake = 400;
       s.pos = 79;
       localStorage.setItem(name, JSON.stringify(s));
-      return s.card[6];
-    }, SAVE);
+      const c = JSON.parse(localStorage.getItem(cardName));
+      c.owners = c.owners.map((o, i) => (o === "*" ? o : i < 6 ? "GUEST-000" : i === 10 ? "amy" : ""));
+      c.people = { amy: { n: "Amy", i: "" } };
+      localStorage.setItem(cardName, JSON.stringify(c));
+      return c.cells[6];
+    }, [SAVE, CARD]);
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").waitFor();
+    assert.equal(await screen.locator(".sg-cell").nth(10).getAttribute("data-initial"), "A");
+    assert.match(await screen.locator(".sg-cell").nth(10).getAttribute("title"), /^Amyのボール/);
+    assert.equal(await screen.locator(".sg-cell.is-mine").count(), 6);
     assert.ok((await screen.locator(".sg-cell.is-reach").count()) >= 1);
     await fix([0, lastNo - 1]);
     await screen.locator("[data-sg-roll]").click();
     await screen.locator(".sg-layer.is-bingo").waitFor({ state: "attached" });
     await settled();
     await playGame();
-    const done = await saved();
+    const done = await saved(),
+      doneCard = await card();
     assert.ok(done.bingos >= 1);
-    assert.ok(done.cards >= 1, "the full card started again");
+    assert.equal(done.stake, 0);
+    // The finished row starts again: no balls, fresh numbers; amy's ball stays.
+    assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
+    assert.ok(!doneCard.cells.slice(0, 7).includes(lastNo));
+    assert.equal(doneCard.owners[10], "amy");
     await page.screenshot({ path: "/tmp/sugoroku-after.png", fullPage: true });
     assert.deepEqual(errors, []);
-    console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled, a ball off the card pays 1.5×, a line spins BINGO");
+    console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled, a ball off the card pays 1.5×, other players' balls by name, a line of own balls spins BINGO and starts the row again");
   } finally {
     await browser.close();
   }

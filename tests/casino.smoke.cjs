@@ -229,9 +229,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const keys = await page.evaluate(() => Object.keys(window.__wallet["users/casino-a/learningPoints/main"].poker));
     assert.equal(keys.length, 1);
     assert.match(keys[0], /^casino:blackjack:.+:bet$/);
-    // Points bet in the casino feed the shared jackpots (3% and 1% of the 60pt).
+    // Points bet in the casino feed the shared jackpots (5% and 2% of the 60pt).
     await page.waitForFunction(() => window.__wallet["shared/casino_jackpot"]?.bet === 60);
-    assert.deepEqual(await page.evaluate(() => window.CasinoJackpot.amounts()), { jp: 1001, sjp: 10000 });
+    assert.deepEqual(await page.evaluate(() => window.CasinoJackpot.amounts()), { jp: 5003, sjp: 50001 });
     // Over the balance, the bet stops at what there is.
     await bj.getByRole("button", { name: "+100" }).click();
     await bj.getByRole("button", { name: "+100" }).click();
@@ -249,8 +249,45 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await page.evaluate(() => window.StudyPoints.balance()), 240);
     await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     assert.equal(await tab.locator("[data-casino-balance]").innerText(), "240pt");
+    // Signed in, the bingo card is the shared one: a ball goes on it under this player's name,
+    // and another player opening the game sees it there.
+    await page.evaluate(() => {
+      window.fbGetDoc = async (path) => ({ exists: () => !!window.__wallet[path], data: () => structuredClone(window.__wallet[path]) });
+      localStorage.setItem("aiglish_sugoroku_casino-a_practice", JSON.stringify({ ...window.SugorokuModel.newState(), pos: 0 }));
+    });
+    await tab.locator(".mode-sugoroku").click();
+    await sg.locator("[data-sg-roll]").waitFor();
+    const hitNo = await page.evaluate(() => {
+      const c = JSON.parse(localStorage.getItem("aiglish_sugoroku_card_shared")) || null;
+      return c ? c.cells.find((n, i) => n && !c.owners[i]) : null;
+    });
+    const firstNo = hitNo || (await page.evaluate(() => [...document.querySelectorAll(".sg-cell span")].map((x) => Number(x.textContent)).find(Boolean)));
+    await page.evaluate(([n]) => {
+      const S = window.SugorokuModel,
+        q = [0, S.RULES.normal[10].findIndex((x) => x.ball), n - 1],
+        real = crypto.getRandomValues.bind(crypto);
+      crypto.getRandomValues = (a) => (q.length ? ((a[0] = q.shift()), a) : real(a));
+    }, [firstNo]);
+    await sg.getByRole("radio", { name: "10枚" }).click();
+    await sg.locator("[data-sg-roll]").click();
+    await page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning") && window.__wallet["shared/sugoroku_card"]);
+    const sharedCard = await page.evaluate(() => window.__wallet["shared/sugoroku_card"]);
+    const cellAt = sharedCard.owners.indexOf("casino-a");
+    assert.ok(cellAt >= 0, "the ball is on the shared card");
+    assert.ok(sharedCard.people["casino-a"]);
+    await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate(() => {
+      myId = "casino-b";
+      localStorage.removeItem("aiglish_sugoroku_card_shared");
+    });
+    await tab.locator(".mode-sugoroku").click();
+    await sg.locator("[data-sg-roll]").waitFor();
+    const other = sg.locator(".sg-cell").nth(cellAt);
+    assert.match(await other.getAttribute("title"), /のボール/);
+    assert.equal(await other.evaluate((c) => c.classList.contains("is-on") && !c.classList.contains("is-mine")), true);
+    await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     assert.deepEqual(errors, []);
-    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on practice chips only, bets feed the shared jackpot");
+    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on practice chips only, bets feed the shared jackpot, the すごろくビンゴ card shared between players");
   } finally {
     await browser.close();
   }

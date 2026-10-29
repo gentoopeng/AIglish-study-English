@@ -26,10 +26,12 @@
 .sg-cell{position:relative;display:grid;place-items:center;aspect-ratio:1;border-radius:50%;background:rgba(240,232,212,.05);color:rgba(240,232,212,.82);font:500 clamp(11px,3.4vw,15px)/1 Georgia,"Yu Mincho",serif;font-variant-numeric:tabular-nums;transition:background .3s,color .3s;}
 .sg-cell span{position:relative;z-index:1;}
 .sg-cell.is-free{border-radius:50%;background:radial-gradient(circle at 35% 30%,#e8cf93,#a8884a);color:#2a1f0c;font:700 7px/1 system-ui,sans-serif;letter-spacing:.08em;}
-.sg-cell.is-on:not(.is-free){background:radial-gradient(circle at 35% 30%,#fbf6e8,#d9ceb0 70%,#b9ab86);color:#1b2a24;box-shadow:0 1px 2px rgba(0,0,0,.45);}
+.sg-cell.is-on:not(.is-free){background:radial-gradient(circle at 35% 30%,hsl(var(--hue,40) 45% 72%),hsl(var(--hue,40) 40% 42%) 75%);background-size:cover;background-position:center;color:#fff;font:700 clamp(11px,3.4vw,15px)/1 system-ui,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.5),inset 0 0 0 1.5px rgba(255,255,255,.35);}
+.sg-cell.is-on:not(.has-icon)::before{content:attr(data-initial);font:700 clamp(13px,4vw,18px)/1 system-ui,sans-serif;color:#fff;}
+.sg-cell.is-on:not(.is-free) span{position:absolute;right:-2px;bottom:-3px;min-width:15px;padding:1px 2px;border-radius:7px;background:rgba(10,16,14,.85);color:var(--ivory);font:600 8px/1.2 system-ui,sans-serif;text-align:center;}
+.sg-cell.is-on.is-mine{box-shadow:0 0 0 2px var(--gold),0 1px 3px rgba(0,0,0,.5);}
 .sg-cell.is-reach{box-shadow:0 0 0 1.5px var(--gold);animation:sg-reach 1.6s ease-in-out infinite;}
 @keyframes sg-reach{50%{box-shadow:0 0 0 1.5px var(--gold),0 0 10px rgba(207,174,106,.6);}}
-.sg-cell.is-line:not(.is-free){background:radial-gradient(circle at 35% 30%,#f3dc9f,#c49a48 70%,#8e6c2c);color:#241a08;}
 .sg-cell.is-new{animation:sg-new 1.2s cubic-bezier(.2,1.4,.4,1);}
 @keyframes sg-new{0%{transform:scale(2);opacity:0;}45%{transform:scale(.9);opacity:1;}100%{transform:none;}}
 .sg-cell.is-run{animation:sg-run 1.6s ease-out calc(var(--i,0) * 110ms) both;}

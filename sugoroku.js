@@ -32,7 +32,7 @@
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると半分が戻ります。ボール確定はボールと額の1.5倍です。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "STARTを通るとボールが1つ出ます。",
-    "ボールは1〜100から抽選です。カードにある番号ならそこが開き、カードにない番号やもう開いている番号なら額の1.5倍がもらえます。1列そろうと、前のビンゴから使った額をもとにルーレットが回り、JP CHANCEからジャックポットを狙えます。",
+    "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の1.5倍がもらえます。1列そろえた人は、自分が前のビンゴから使った額をもとにルーレットを回し、JP CHANCEからジャックポットを狙えます。自分のボールだけでそろえると報酬が1.5倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
     "ジャックポットはカジノ全体で賭けられたポイントから貯まります。",
   ];
 
@@ -65,9 +65,129 @@
         console.warn("[sugoroku] load", error);
       }
     }
-    // A save from a smaller board starts the piece again from START.
-    if (state && state.pos >= S.SIZE) state.pos = 0;
-    return state || S.newState(random);
+    return state ? S.upgrade(state) : S.newState();
+  }
+
+  // ---- The shared card ---------------------------------------------------------------------
+  // One card for everybody in shared/sugoroku_card: { cells, owners, people }, people[id] the
+  // name and a small icon for each id whose ball is on it. Every roll reads it and, if a ball
+  // landed, writes it back in one transaction, so two players never take the same cell. A
+  // guest, or a device off the cloud, plays on a card of its own.
+  const shared = () => api.uid() !== "GUEST-000" && !!(window.db && window.fbDoc && window.fbRunTransaction) && !window.FirestoreReadGuard?.paused?.();
+  const cardRef = () => window.fbDoc(window.db, "shared", "sugoroku_card");
+  const localCardName = () => "aiglish_sugoroku_card_" + (shared() ? "shared" : api.uid());
+  function readCard(data) {
+    const card = data && { cells: data.cells, owners: data.owners };
+    return S.validCard(card) ? { card, people: data.people && typeof data.people === "object" ? data.people : {} } : null;
+  }
+  function keepCard(card, people) {
+    try {
+      localStorage.setItem(localCardName(), JSON.stringify({ ...card, people }));
+    } catch {}
+  }
+  function cachedCard() {
+    try {
+      return readCard(JSON.parse(localStorage.getItem(localCardName()) || "null"));
+    } catch {
+      return null;
+    }
+  }
+  async function loadCard() {
+    if (shared())
+      try {
+        const snap = await window.fbGetDoc(cardRef());
+        const found = snap.exists() ? readCard(snap.data()) : null;
+        if (found) return found;
+      } catch (error) {
+        console.warn("[sugoroku] card", error);
+      }
+    return cachedCard() || { card: S.newCard(random), people: {} };
+  }
+  // This player's name and icon (shrunk to 40px) to show on their balls.
+  let me = null;
+  async function person() {
+    if (me && me.id === api.uid()) return me.value;
+    const id = api.uid(),
+      name = (typeof myName === "string" && myName) || (id === "GUEST-000" ? "ゲスト" : id);
+    let icon = "";
+    try {
+      const avatar = localStorage.getItem("core_v4_user_avatar_" + id) || "";
+      if (/^data:image\//.test(avatar) || /^https?:/.test(avatar)) icon = await shrink(avatar, 40);
+    } catch {}
+    me = { id, value: { n: String(name).slice(0, 24), i: icon } };
+    return me.value;
+  }
+  function shrink(src, size) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = canvas.height = size;
+          const side = Math.min(img.naturalWidth, img.naturalHeight);
+          canvas.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+          resolve(canvas.toDataURL("image/jpeg", 0.7));
+        } catch {
+          resolve("");
+        }
+      };
+      img.onerror = () => resolve("");
+      img.src = src;
+    });
+  }
+  // Runs `change(card)` (a model roll or settle) on the newest card and stores the card it
+  // returns, with this player in people and only people who still have a ball on it.
+  async function onCard(change) {
+    const mine = await person(),
+      id = api.uid();
+    const keep = (card, people) => {
+      const ids = new Set(card.owners);
+      const next = Object.fromEntries(Object.entries(people).filter(([k]) => ids.has(k)));
+      if (ids.has(id)) next[id] = mine;
+      return next;
+    };
+    if (shared())
+      try {
+        const result = await window.fbRunTransaction(window.db, async (tx) => {
+          const snap = await tx.get(cardRef());
+          const now = (snap.exists() && readCard(snap.data())) || { card: S.newCard(random), people: {} };
+          const out = change(now.card);
+          const people = keep(out.card, now.people);
+          if (!snap.exists() || JSON.stringify(out.card) !== JSON.stringify(now.card)) tx.set(cardRef(), { cells: out.card.cells, owners: out.card.owners, people, updatedAt: Date.now() });
+          return { out, before: now, people };
+        });
+        keepCard(result.out.card, result.people);
+        return result;
+      } catch (error) {
+        console.warn("[sugoroku] shared card", error);
+      }
+    const now = cachedCard() || { card: view.card, people: view.people };
+    const out = change(now.card),
+      people = keep(out.card, now.people);
+    keepCard(out.card, people);
+    return { out, before: now, people };
+  }
+  // Other players' balls come in while the screen is open.
+  function listen() {
+    view.stop?.();
+    view.stop = null;
+    if (!shared() || typeof window.fbOnSnapshot !== "function") return;
+    const target = view;
+    try {
+      view.stop = window.fbOnSnapshot(cardRef(), (snap) => {
+        const found = snap.exists() && readCard(snap.data());
+        if (!found || target !== view || !view.body.isConnected) return target.stop?.();
+        if (view.busy) return;
+        view.card = found.card;
+        view.people = found.people;
+        keepCard(found.card, found.people);
+        paintCard();
+        hud();
+      });
+    } catch (error) {
+      console.warn("[sugoroku] listen", error);
+    }
   }
 
   // ---- Screen ----------------------------------------------------------------------------
@@ -75,14 +195,15 @@
   async function play(body, wallet) {
     api = wallet;
     body.replaceChildren(node("p", "cs-hint", "読み込み中…"));
-    const state = await load();
+    const [state, found] = await Promise.all([load(), loadCard()]);
     if (!body.isConnected) return;
     let cost = 10;
     try {
       cost = Number(localStorage.getItem("aiglish_sugoroku_cost")) || 10;
     } catch {}
-    view = { body, state, cost: S.RULES.costs.includes(cost) ? cost : 10, busy: false, fast: false };
+    view = { body, state, card: found.card, people: found.people, cost: S.RULES.costs.includes(cost) ? cost : 10, busy: false, fast: false };
     draw();
+    listen();
     if (state.pending) game();
   }
   function draw() {
@@ -103,7 +224,7 @@
     const cardWrap = node("div", "sg-card-wrap");
     const card = node("div", "sg-card");
     card.setAttribute("aria-label", "ビンゴカード");
-    view.cells = state.card.map((n, i) => {
+    view.cells = view.card.cells.map((n, i) => {
       const cell = node("div", "sg-cell" + (i === S.FREE ? " is-free" : ""));
       cell.append(node("span", "", i === S.FREE ? "FREE" : String(n)));
       card.append(cell);
@@ -164,6 +285,7 @@
     view.layer = node("div", "sg-layer");
     view.layer.hidden = true;
     body.replaceChildren(pots, cardWrap, board, view.info, controls, view.layer);
+    paintCard();
     hud();
     place(state.pos, false);
   }
@@ -188,18 +310,32 @@
     box.append(list, close);
     layer.replaceChildren(box);
   }
+  // Each cell: its number, or the ball of whoever opened it — their icon, or their initial on a
+  // colour of their own — with this player's balls ringed in gold.
+  function paintCard() {
+    const id = api.uid();
+    view.cells.forEach((cell, i) => {
+      if (i === S.FREE) return;
+      const owner = view.card.owners[i],
+        who = owner && view.people[owner];
+      cell.classList.toggle("is-on", !!owner);
+      cell.classList.toggle("is-mine", owner === id);
+      cell.style.backgroundImage = who?.i ? 'url("' + who.i + '")' : "";
+      cell.style.setProperty("--hue", hue(owner));
+      cell.title = owner ? (who?.n || "だれか") + "のボール（" + view.card.cells[i] + "）" : "";
+      cell.firstChild.textContent = String(view.card.cells[i]);
+      cell.dataset.initial = owner && !who?.i ? (who?.n || "?").trim().slice(0, 1) : "";
+      cell.classList.toggle("has-icon", !!who?.i);
+    });
+  }
+  const hue = (id) => [...String(id || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
   function hud() {
     const { state } = view;
     const pots = window.CasinoJackpot?.amounts() || { jp: 0, sjp: 0 };
     for (const kind of ["jp", "sjp"]) view.body.querySelector('[data-pot="' + kind + '"] b').textContent = fmt(pots[kind]) + "pt";
-    const reaches = S.reach(state),
-      reach = new Set(reaches.flatMap((line) => S.LINES[line])),
-      done = new Set(state.lines.flatMap((line) => S.LINES[line]));
-    view.cells.forEach((cell, i) => {
-      cell.classList.toggle("is-on", state.marks[i]);
-      cell.classList.toggle("is-reach", !state.marks[i] && reach.has(i));
-      cell.classList.toggle("is-line", done.has(i));
-    });
+    const reaches = S.reach(view.card),
+      reach = new Set(reaches.flatMap((line) => S.LINES[line]));
+    view.cells.forEach((cell, i) => cell.classList.toggle("is-reach", !view.card.owners[i] && reach.has(i)));
     view.info.replaceChildren(
       node("span", "", "ビンゴのもと "),
       node("b", "", fmt(state.stake) + api.unit()),
@@ -272,30 +408,39 @@
   async function roll() {
     if (view.busy || view.state.pending || api.balance() < view.cost) return;
     const cost = view.cost,
-      out = S.roll(view.state, cost, random);
+      state = view.state;
+    view.busy = true;
+    hud();
+    const { out, before, people } = await onCard((card) => S.roll(state, card, cost, random, api.uid()));
     save(out.state);
     pay(out, cost);
-    await run(out, { ...view.state, stake: view.state.stake + cost });
+    await run(out, { ...state, stake: state.stake + cost }, before, people);
     if (view?.state.pending) game();
   }
   // Plays events over a copy of the state shown so far, then shows the real new state.
-  async function run(out, shown) {
+  // `before` is the card the change was made on (it may hold other players' new balls).
+  async function run(out, shown, before, people) {
     const target = view;
     view.busy = true;
     view.fast = false;
     view.body.classList.add("is-spinning");
-    const live = { ...shown, marks: [...shown.marks], lines: [...shown.lines] };
+    const live = { ...shown };
     view.state = live;
+    view.card = { cells: [...before.card.cells], owners: [...before.card.owners] };
+    view.people = { ...before.people, ...people };
+    paintCard();
     hud();
     try {
       await show(out.events, live);
     } finally {
       if (target === view) {
         view.state = out.state;
+        view.card = out.card;
+        view.people = people;
         view.busy = false;
         view.body.classList.remove("is-spinning");
-        if (out.events.some((e) => e.t === "complete")) draw();
-        else hud();
+        paintCard();
+        hud();
         if (out.gain && !out.state.pending) say(out.gain > 0 ? "+" + fmt(out.gain) + api.unit() : "−" + fmt(-out.gain) + api.unit(), out.gain > 0 ? "is-gain" : "is-loss");
         api.refresh();
       }
@@ -334,7 +479,6 @@
       } else if (e.t === "ball") {
         await drawBall(e, live);
       } else if (e.t === "line") {
-        live.lines.push(e.line);
         hud();
         e.cells.forEach((c, i) => {
           const cell = view.cells[c];
@@ -342,8 +486,24 @@
           cell.classList.add("is-run");
           setTimeout(() => cell.classList.remove("is-run"), 1800);
         });
-        say("BINGO", "is-hot");
+        say((e.count === 2 ? "DOUBLE BINGO" : e.count === 3 ? "TRIPLE BINGO" : e.count > 3 ? e.count + " BINGO" : "BINGO") + (e.solo ? "　ひとりで" : ""), "is-hot");
         await wait(1600);
+        if (e.mult > 1) {
+          say("報酬 ×" + e.mult + (e.solo ? "（自分のボールだけ ×" + S.RULES.soloBonus + "）" : "") + (e.count > 1 ? "（" + e.count + "列同時 ×" + (e.count + 1) + "）" : ""), "is-gain");
+          await wait(1300);
+        }
+      } else if (e.t === "reset") {
+        // The finished lines start again: their balls leave and fresh numbers come in.
+        for (const [c, n] of Object.entries(e.numbers)) {
+          view.card.cells[c] = n;
+          view.card.owners[c] = "";
+          view.cells[c].classList.add("is-new");
+          setTimeout(() => view?.cells[c]?.classList.remove("is-new"), 1200);
+        }
+        paintCard();
+        hud();
+        say("そろった列は新しい番号に", "is-ball");
+        await wait(900);
       } else if (e.t === "take") {
         say("アクシデント　−" + fmt(e.amount) + api.unit(), "is-loss");
         await wait(900);
@@ -361,9 +521,6 @@
         await wait(900);
       } else if (e.t === "jackpot") {
         await jackpot(e.kind);
-      } else if (e.t === "complete") {
-        say("カードコンプリート", "is-hot");
-        await wait(1500);
       }
     }
   }
@@ -391,10 +548,11 @@
     ball.classList.add("is-hit");
     await wait(450);
     ball.remove();
-    live.marks[e.cell] = true;
+    view.card.owners[e.cell] = e.owner;
+    paintCard();
     cell.classList.add("is-new");
     setTimeout(() => cell.classList.remove("is-new"), 1300);
-    say(e.number + " が開いた", "is-ball");
+    say(e.number + " にボール", "is-ball");
     hud();
     await wait(700);
   }
@@ -682,11 +840,12 @@
   }
   async function finish(m) {
     view.layer.hidden = true;
-    const out = S.settle(view.state, m, random);
+    const state = view.state;
+    const { out, before, people } = await onCard((card) => S.settle(state, card, m, random, api.uid()));
     save(out.state);
     pay(out, 0);
     view.busy = false;
-    await run(out, { ...view.state, pending: null });
+    await run(out, { ...state, pending: null }, before, people);
   }
 
   window.Sugoroku = Object.freeze({ play });

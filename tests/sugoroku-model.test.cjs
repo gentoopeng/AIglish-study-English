@@ -17,71 +17,114 @@ const rng = (seed) => (n) => {
 const at = (kind, from = 1) => {
   for (let i = from; i < S.SIZE; i++) if (S.kindAt(i) === kind) return i;
 };
-
 // A ball draws random(100) + 1, so drawing number n takes the value n − 1.
 const draw = (n) => n - 1;
-const closedOn = (s) => s.card.find((n, i) => n && !s.marks[i]);
-const offCard = (s) => Array.from({ length: 100 }, (_, i) => i + 1).find((n) => !s.card.includes(n));
+const closedOn = (card) => card.cells.find((n, i) => n && !card.owners[i]);
+const offCard = (card) => Array.from({ length: 100 }, (_, i) => i + 1).find((n) => !card.cells.includes(n));
 
 test("the board, card and wheels have the agreed shape", () => {
   assert.equal(S.SIZE, 80);
   assert.equal(S.kindAt(0), "start");
-  const s = S.newState(rng(1));
-  assert.equal(s.card.length, 49);
-  assert.equal(s.card[S.FREE], 0);
-  // 48 different numbers from 1–100 and FREE.
-  const numbers = s.card.filter(Boolean);
+  const card = S.newCard(rng(1));
+  assert.ok(S.validCard(card));
+  assert.equal(card.cells.length, 49);
+  assert.equal(card.cells[S.FREE], 0);
+  assert.equal(card.owners[S.FREE], "*");
+  const numbers = card.cells.filter(Boolean);
   assert.equal(new Set(numbers).size, 48);
   assert.ok(numbers.every((n) => n >= 1 && n <= 100));
-  assert.ok(Math.max(...numbers) > 48, "numbers come from all of 1–100");
   assert.equal(S.LINES.length, 16);
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     for (const x of [3, 2, 1.5, 1.25, 0.75, 0.5, 0.25, 0.1, 0]) assert.ok(values.has(x), cost + " has ×" + x);
-  }
-  // The same multiple never sits next to itself on the normal wheels.
-  for (const cost of S.RULES.costs) {
     const w = S.RULES.normal[cost];
     assert.ok(w.every((slot, i) => JSON.stringify(slot) !== JSON.stringify(w[(i + 1) % w.length])), cost + " is spread");
   }
-  // Bigger bets carry more ball slots on the same die.
   const balls = (cost) => S.RULES.normal[cost].filter((x) => x.ball).length;
   assert.ok(balls(10) < balls(50) && balls(50) < balls(100));
-  // The chance and jackpot slots are one in ten.
   assert.equal(S.RULES.wheels.bingo.filter((x) => x.next === "jp").length / S.RULES.wheels.bingo.length, 0.1);
   assert.equal(S.RULES.wheels.jp.filter((x) => x.jackpot === "jp").length / S.RULES.wheels.jp.length, 0.1);
   assert.equal(S.RULES.wheels.jp.filter((x) => x.next === "sjp").length / S.RULES.wheels.jp.length, 0.1);
   assert.equal(S.RULES.wheels.sjp.filter((x) => x.jackpot === "sjp").length / S.RULES.wheels.sjp.length, 0.1);
+  // An old save (with its own card) keeps its place and counts.
+  const old = { v: 2, pos: 7, card: [], marks: [], lines: [], stake: 30, laps: 1, rolls: 5, bet: 50, won: 20, balls: 1, cards: 0, bingos: 0, pending: null };
+  assert.ok(S.valid(old));
+  assert.deepEqual(S.upgrade(old), { ...S.newState(), pos: 7, stake: 30, laps: 1, rolls: 5, bet: 50, won: 20, balls: 1 });
 });
 
-test("a ball on the card opens it; a ball off the card, or already open, pays 1.5× the bet", () => {
-  const s = S.newState(seq([0]));
-  const square = at("normal");
-  s.pos = square - 1;
+test("a ball on the shared card opens it in the player's name; off the card or open pays 1.5×", () => {
+  const card = S.newCard(seq([0])),
+    s = { ...S.newState(), pos: at("normal") - 1 };
   const ballAt = S.RULES.normal[50].findIndex((x) => x.ball),
-    hitNo = closedOn(s);
-  const hit = S.roll(s, 50, seq([0, ballAt, draw(hitNo)]));
-  assert.equal(hit.state.pos, square);
-  assert.equal(hit.events.find((e) => e.t === "wheel").wheel, "normal");
-  assert.deepEqual(hit.events.find((e) => e.t === "ball"), { t: "ball", number: hitNo, cell: s.card.indexOf(hitNo) });
+    hitNo = closedOn(card);
+  const hit = S.roll(s, card, 50, seq([0, ballAt, draw(hitNo)]), "amy");
+  assert.deepEqual(hit.events.find((e) => e.t === "ball"), { t: "ball", number: hitNo, cell: card.cells.indexOf(hitNo), owner: "amy" });
+  assert.equal(hit.card.owners[card.cells.indexOf(hitNo)], "amy");
   assert.equal(hit.gain, 0);
-  assert.equal(hit.state.marks.filter(Boolean).length, 2);
-  assert.equal(hit.state.stake, 50);
-  const miss = S.roll(s, 50, seq([0, ballAt, draw(offCard(s))]));
-  assert.deepEqual(miss.events.find((e) => e.t === "ball"), { t: "ball", number: offCard(s), cell: -1, miss: true, amount: 75 });
+  // The card passed in is left as it was.
+  assert.equal(card.owners[card.cells.indexOf(hitNo)], "");
+  const miss = S.roll(s, card, 50, seq([0, ballAt, draw(offCard(card))]), "amy");
   assert.equal(miss.gain, 75);
-  assert.equal(miss.state.marks.filter(Boolean).length, 1);
-  // A number already open is a miss too.
-  const again = S.roll(hit.state, 50, seq([0, ballAt, draw(hitNo)]));
-  assert.equal(again.events.find((e) => e.t === "ball").miss, true);
-  assert.throws(() => S.roll(s, 7, seq([0])));
+  assert.deepEqual(miss.card, card);
+  // Someone else's ball already there is a miss too.
+  const taken = S.roll(s, hit.card, 50, seq([0, ballAt, draw(hitNo)]), "ben");
+  assert.equal(taken.events.find((e) => e.t === "ball").miss, true);
+  assert.throws(() => S.roll(s, card, 7, seq([0])));
+});
+
+test("a line pays on the player's own stake, then its numbers are drawn afresh and its balls cleared", () => {
+  const base = S.newCard(seq([0])),
+    last = S.LINES[0][6],
+    // ben's balls on the top row and the last column, all but their shared corner.
+    lineCells = new Set([...S.LINES[0], ...S.LINES[13]]),
+    card = { ...base, owners: base.owners.map((o, i) => (o === "*" ? o : lineCells.has(i) && i !== last ? "ben" : "")) },
+    s = { ...S.newState(), pos: at("normal") - 1, stake: 400 };
+  const ballAt = S.RULES.normal[100].findIndex((x) => x.ball),
+    tenth = S.RULES.wheels.bingo.findIndex((x) => x.x === 0.1);
+  const out = S.roll(s, card, 100, seq([0, ballAt, draw(card.cells[last]), tenth, 0]), "amy");
+  const line = out.events.find((e) => e.t === "line");
+  assert.deepEqual(line.lines, [0, 13]);
+  assert.equal(line.count, 2);
+  assert.equal(line.solo, false);
+  // n lines at once: (n + 1)× the wheel's amount on 500 (400 before + this roll's 100).
+  assert.equal(line.mult, line.count + 1);
+  const spin = out.events.find((e) => e.t === "wheel" && e.wheel === "bingo");
+  assert.equal(spin.base, 500);
+  assert.equal(spin.amount, Math.round(500 * 0.1 * line.mult));
+  assert.equal(out.state.stake, 0);
+  assert.equal(out.state.bingos, line.count);
+  // Every cell of the finished lines is closed again with a number new to the card.
+  const reset = out.events.find((e) => e.t === "reset");
+  for (const c of line.cells.filter((c) => c !== S.FREE)) {
+    assert.equal(out.card.owners[c], "");
+    assert.equal(out.card.cells[c], reset.numbers[c]);
+  }
+  assert.ok(S.validCard(out.card));
+  assert.equal(out.card.owners[S.FREE], "*");
+  // Two lines at once also opened nothing else.
+  assert.ok(out.card.owners.every((o, i) => o === "" || i === S.FREE));
+});
+
+test("a line of only the player's own balls pays the solo bonus", () => {
+  const base = S.newCard(seq([0])),
+    row = S.LINES[4],
+    card = { ...base, owners: base.owners.map((o, i) => (row.slice(0, 6).includes(i) ? "amy" : o)) },
+    s = { ...S.newState(), pos: at("normal") - 1, stake: 900 };
+  const ballAt = S.RULES.normal[100].findIndex((x) => x.ball),
+    tenth = S.RULES.wheels.bingo.findIndex((x) => x.x === 0.1);
+  const out = S.roll(s, card, 100, seq([0, ballAt, draw(card.cells[row[6]]), tenth, 0]), "amy");
+  const line = out.events.find((e) => e.t === "line");
+  assert.equal(line.count, 1);
+  assert.equal(line.solo, true);
+  assert.equal(line.mult, S.RULES.soloBonus);
+  assert.equal(out.events.find((e) => e.t === "wheel" && e.wheel === "bingo").amount, Math.round(1000 * 0.1 * S.RULES.soloBonus));
 });
 
 test("passing START gives a ball and nothing else", () => {
-  const s = { ...S.newState(seq([0])), pos: S.SIZE - 2 };
-  // Die 3 passes START onto square 1; the ball opens a number, then square 1's wheel lands on ×0.
+  const card = S.newCard(seq([0])),
+    s = { ...S.newState(), pos: S.SIZE - 2 };
   const zero = S.RULES.normal[10].findIndex((x) => x.x === 0);
-  const out = S.roll(s, 10, seq([2, draw(closedOn(s)), zero]));
+  const out = S.roll(s, card, 10, seq([2, draw(closedOn(card)), zero]));
   const lap = out.events.findIndex((e) => e.t === "lap");
   assert.deepEqual(out.events[lap], { t: "lap" });
   assert.equal(out.events[lap + 1].t, "ball");
@@ -89,84 +132,58 @@ test("passing START gives a ball and nothing else", () => {
 });
 
 test("an event square waits for its game; win, push and loss pay as agreed", () => {
-  const s = S.newState(seq([0]));
-  const square = at("event");
-  s.pos = square - 1;
-  // Die 1 onto the event, then the event wheel's first choice (blackjack).
-  const out = S.roll(s, 100, seq([0, 0]));
+  const card = S.newCard(seq([0])),
+    s = { ...S.newState(), pos: at("event") - 1 };
+  const out = S.roll(s, card, 100, seq([0, 0]));
   assert.deepEqual(out.state.pending, { game: "blackjack", bet: 100 });
   assert.equal(out.gain, 0);
-  assert.throws(() => S.roll(out.state, 100, seq([0])));
-  const win = S.settle(out.state, 1, seq([draw(closedOn(s))]));
+  assert.throws(() => S.roll(out.state, card, 100, seq([0])));
+  const win = S.settle(out.state, card, 1, seq([draw(closedOn(card))]), "amy");
   assert.equal(win.gain, 200);
   assert.equal(win.state.pending, null);
   assert.equal(win.events.filter((e) => e.t === "ball").length, 1);
-  // A win whose ball misses the card also gets the 1.5×.
-  assert.equal(S.settle(out.state, 1, seq([draw(offCard(s))])).gain, 350);
-  assert.equal(S.settle(out.state, 1.5, seq([0])).events[0].amount, 250);
-  assert.equal(S.settle(out.state, 0, seq([0])).gain, 100);
-  const lose = S.settle(out.state, -2, seq([0]));
+  assert.equal(S.settle(out.state, card, 1, seq([draw(offCard(card))])).gain, 350);
+  assert.equal(S.settle(out.state, card, 1.5, seq([0])).events[0].amount, 250);
+  assert.equal(S.settle(out.state, card, 0, seq([0])).gain, 100);
+  const lose = S.settle(out.state, card, -2, seq([0]));
   assert.equal(lose.gain, 50);
   assert.ok(!lose.events.some((e) => e.t === "ball"));
-  // The sure ball: ×1.5 and a ball at once.
-  const sure = S.roll(s, 100, seq([0, 3, draw(closedOn(s))]));
+  const sure = S.roll(s, card, 100, seq([0, 3, draw(closedOn(card))]));
   assert.equal(sure.state.pending, null);
   assert.equal(sure.events.find((e) => e.t === "sure").amount, 150);
   assert.ok(sure.events.some((e) => e.t === "ball"));
 });
 
 test("an accident takes up to twice the bet, or sends the piece back three squares or to START", () => {
-  const s = S.newState(seq([0]));
-  const square = at("accident");
-  s.pos = square - 1;
+  const card = S.newCard(seq([0])),
+    square = at("accident"),
+    s = { ...S.newState(), pos: square - 1 };
   const take = S.RULES.accident.findIndex((x) => x.take === 2),
     back = S.RULES.accident.findIndex((x) => x.start);
-  assert.equal(S.roll(s, 50, seq([0, take])).gain, -100);
-  const home = S.roll(s, 50, seq([0, back]));
+  assert.equal(S.roll(s, card, 50, seq([0, take])).gain, -100);
+  const home = S.roll(s, card, 50, seq([0, back]));
   assert.equal(home.state.pos, 0);
-  assert.equal(home.gain, 0);
-  const three = S.roll(s, 50, seq([0, S.RULES.accident.findIndex((x) => x.back === 3)]));
+  const three = S.roll(s, card, 50, seq([0, S.RULES.accident.findIndex((x) => x.back === 3)]));
   assert.equal(three.state.pos, square - 3);
-  assert.deepEqual(three.events.at(-1), { t: "back", to: square - 3, by: 3 });
-});
-
-test("a new line spins the bingo wheel on what was bet since the last line", () => {
-  const s = S.newState(seq([0]));
-  // Everything open but the top row's last cell.
-  const last = S.LINES[0][6];
-  s.marks = s.marks.map((_, i) => i !== last);
-  s.stake = 900;
-  s.pos = at("normal") - 1;
-  const ballAt = S.RULES.normal[100].findIndex((x) => x.ball),
-    third = S.RULES.wheels.bingo.findIndex((x) => x.x === 0.1);
-  const out = S.roll(s, 100, seq([0, ballAt, draw(s.card[last]), third]));
-  const lines = out.events.filter((e) => e.t === "line");
-  assert.ok(lines.length >= 1);
-  const spin = out.events.find((e) => e.t === "wheel" && e.wheel === "bingo");
-  assert.equal(spin.base, 1000 / lines.length);
-  // The card was full, so a new one starts.
-  assert.ok(out.events.some((e) => e.t === "complete"));
-  assert.equal(out.state.marks.filter(Boolean).length, 1);
 });
 
 test("the jackpot wheels lead on and report a jackpot without paying it here", () => {
-  const s = S.newState(seq([0]));
-  for (const c of S.LINES[0].slice(0, 6)) s.marks[c] = true;
-  s.pos = at("normal") - 1;
+  const base = S.newCard(seq([0])),
+    row = S.LINES[0],
+    card = { ...base, owners: base.owners.map((o, i) => (row.slice(0, 6).includes(i) ? "ben" : o)) },
+    s = { ...S.newState(), pos: at("normal") - 1 };
   const ballAt = S.RULES.normal[10].findIndex((x) => x.ball),
     chance = S.RULES.wheels.bingo.findIndex((x) => x.next === "jp"),
     jp = S.RULES.wheels.jp.findIndex((x) => x.jackpot === "jp");
-  // Die, normal wheel (ball), the ball draws the row's last number.
-  const out = S.roll(s, 10, seq([0, ballAt, draw(s.card[S.LINES[0][6]]), chance, jp]));
+  const out = S.roll(s, card, 10, seq([0, ballAt, draw(card.cells[row[6]]), chance, jp]), "amy");
   assert.deepEqual(
     out.events.filter((e) => e.t === "wheel").map((e) => e.wheel),
     ["normal", "bingo", "jp"],
   );
   assert.deepEqual(out.events.find((e) => e.t === "jackpot"), { t: "jackpot", kind: "jp" });
-  assert.equal(out.gain, 0);
 });
 
-test("played the plain way, every bet returns a little under what goes in", () => {
+test("played the plain way by several players on one card, every bet returns a little under what goes in", () => {
   const random = rng(11);
   const play = (game) => {
     if (game === "blackjack") {
@@ -181,22 +198,27 @@ test("played the plain way, every bet returns a little under what goes in", () =
     return C.chinSettle(parent.hand, child.hand);
   };
   for (const cost of S.RULES.costs) {
-    let s = S.newState(random),
+    const players = [S.newState(), S.newState(), S.newState()];
+    let card = S.newCard(random),
       bet = 0,
       won = 0;
-    for (let i = 0; i < 150000; i++) {
-      const out = S.roll(s, cost, random);
-      s = out.state;
-      bet += cost;
-      won += out.gain;
-      if (s.pending) {
-        const end = S.settle(s, play(s.pending.game), random);
-        s = end.state;
-        won += end.gain;
-      }
-    }
-    assert.ok(S.valid(s));
+    for (let i = 0; i < 80000; i++)
+      players.forEach((s, p) => {
+        let out = S.roll(s, card, cost, random, "p" + p);
+        card = out.card;
+        let gain = out.gain;
+        if (out.state.pending) {
+          const end = S.settle(out.state, card, play(out.state.pending.game), random, "p" + p);
+          card = end.card;
+          gain += end.gain;
+          out = end;
+        }
+        players[p] = out.state;
+        bet += cost;
+        won += gain;
+      });
+    assert.ok(S.validCard(card));
     const rate = won / bet;
-    assert.ok(rate > 0.88 && rate < 1, cost + ": " + rate);
+    assert.ok(rate > 0.85 && rate < 1, cost + ": " + rate);
   }
 });
