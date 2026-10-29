@@ -112,8 +112,9 @@
         localStorage.setItem(settledName(), JSON.stringify(keys));
       } catch {}
       if (next && uid() === account) window.StudyPoints?.restore?.({ ...next, publishedRevision: next.revision });
-      // Points put on the table feed the casino's shared jackpots.
-      if (next && delta < 0) window.CasinoJackpot?.add(-delta);
+      // Points bet against the house (keys "casino:…") feed the casino's shared jackpots. Poker
+      // and duels between players have no house share to pay for them, so they do not.
+      if (next && delta < 0 && key.startsWith("casino:") && !key.startsWith("casino:duel:")) window.CasinoJackpot?.add(-delta);
     }).catch((error) => console.warn("[poker] points", error));
     return settling;
   }

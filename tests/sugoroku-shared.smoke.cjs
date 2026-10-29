@@ -123,6 +123,7 @@ const SAVE = "aiglish_sugoroku_sg-a_practice",
     assert.equal(await chips(), before - 100 + (300 - 257) + 500);
     const shared = await page.evaluate(() => window.__store["shared/sugoroku_card"]);
     assert.deepEqual(shared.owed, { "sg-b": 257 });
+    assert.deepEqual(Object.keys(shared.owedAt), ["sg-b"]);
     assert.deepEqual(shared.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.deepEqual(shared.log.map((e) => [e.t, e.id, e.n, e.c]), [["bingo", "sg-b", "B", 2], ["bingo", "sg-a", "A", 1]]);
     assert.equal((await saved()).bingos, 1);
@@ -164,6 +165,17 @@ const SAVE = "aiglish_sugoroku_sg-a_practice",
     await mini.locator('[data-sg-game="next"]').waitFor();
     assert.match(await mini.locator(".sg-game-line").innerText(), /^3回　→　30点/);
     await mini.locator('[data-sg-game="next"]').click();
+
+    // B, opening the casino tab, sees the part waiting on the すごろくビンゴ tile.
+    await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate(() => {
+      myId = "sg-b";
+      window.switchTab("vocab");
+      window.switchTab("casino");
+    });
+    await tab.locator(".mode-sugoroku .casino-waiting").waitFor();
+    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 257枚 届いています");
+    await page.evaluate(() => (myId = "sg-a"));
 
     // A jackpot win: the pot is taken with this device's unsent bets in, and starts again from
     // its seed; a second win right after gets the seed and what came in since.

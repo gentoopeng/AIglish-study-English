@@ -232,6 +232,12 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // Points bet in the casino feed the shared jackpots (1% and 0.5% of what was bet).
     await page.waitForFunction(() => window.__wallet["shared/casino_jackpot"]?.bet === 60);
     assert.deepEqual(await page.evaluate(() => window.CasinoJackpot.amounts()), { jp: 5000, sjp: 50000 });
+    // A poker hand lost to another player (no house share) does not feed them.
+    const pendingBefore = await page.evaluate(() => localStorage.getItem("aiglish_casino_jackpot_pending"));
+    await page.evaluate(() => window.Poker.settle("ROOM1:0:1", -10));
+    assert.equal(await page.evaluate(() => localStorage.getItem("aiglish_casino_jackpot_pending")), pendingBefore);
+    assert.equal(await page.evaluate(() => window.__wallet["users/casino-a/learningPoints/main"].balance), 230);
+    await page.evaluate(() => window.Poker.settle("ROOM1:0:2", 10));
     // Over the balance, the bet stops at what there is.
     await bj.getByRole("button", { name: "+100" }).click();
     await bj.getByRole("button", { name: "+100" }).click();

@@ -122,6 +122,20 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const paid = { win: 100, push: 50, lose: 25 }[outcome];
     assert.ok((await page.evaluate(() => window.Casino.balance())) >= chips + paid, outcome);
 
+    // おまかせ plays a blackjack round by itself and goes on.
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.pending = { game: "blackjack", bet: 100 };
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await game.locator('[data-sg-game="auto"]').click();
+    await page.waitForFunction((name) => JSON.parse(localStorage.getItem(name)).pending === null, SAVE);
+    await settled();
+    const auto = await saved();
+    assert.equal(auto.pending, null);
+
     // The draws are fixed from here: the next values crypto gives go to the die, then the ball.
     const fix = (values) =>
       page.evaluate((values) => {
@@ -217,6 +231,9 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await mini.locator('[data-sg-game="start"]').waitFor();
     assert.match(await mini.locator(".sg-wheel-title").innerText(), /10秒ぴったり/);
     assert.deepEqual((await saved()).bonus.map((b) => b.game), ["timer"]);
+    // A script's press does not start it; a real one does.
+    await mini.locator('[data-sg-game="start"]').evaluate((b) => b.click());
+    assert.equal((await saved()).bonus[0].started, undefined);
     await mini.locator('[data-sg-game="start"]').click();
     assert.equal((await saved()).bonus[0].started, true);
     await page.waitForTimeout(300);

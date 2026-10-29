@@ -29,7 +29,8 @@
   // Settlements still on their way are counted at once, so a fast second bet sees them.
   let pending = 0;
   // すごろくビンゴ is a preview for now: always on practice chips, so it cannot move points.
-  const real = () => game?.id !== "sugoroku" && uid() !== "GUEST-000" && !!window.db && !!window.fbRunTransaction && !!window.Poker?.settle && !window.FirestoreReadGuard?.paused?.();
+  const PREVIEW = new Set(["sugoroku"]);
+  const real = (id = game?.id) => !PREVIEW.has(id) && uid() !== "GUEST-000" && !!window.db && !!window.fbRunTransaction && !!window.Poker?.settle && !window.FirestoreReadGuard?.paused?.();
   const practiceName = () => "aiglish_casino_chips_" + uid();
   function practiceChips() {
     try {
@@ -134,6 +135,17 @@
     box.querySelector(".is-sjp b").textContent = fmt(sjp) + "pt";
   }
   window.CasinoJackpot?.onChange(showJackpots);
+  // すごろくビンゴ: this player's part of other players' lines, waiting to be collected.
+  function showWaiting(host) {
+    Promise.resolve(window.Sugoroku?.waiting?.(uid())).then((amount) => {
+      const tile = host.querySelector(".casino-game.mode-sugoroku");
+      if (!tile) return;
+      let badge = tile.querySelector(".casino-waiting");
+      if (!amount) return badge?.remove();
+      if (!badge) tile.append((badge = node("em", "casino-waiting")));
+      badge.textContent = "分け前 " + fmt(amount) + (real("sugoroku") ? "pt" : "枚") + " 届いています";
+    });
+  }
   function refresh() {
     const host = document.getElementById("view-casino");
     if (host?.childElementCount) {
@@ -143,6 +155,7 @@
       host.querySelector("[data-casino-balance]").textContent = fmt(balance()) + unit();
       const net = todayNet();
       host.querySelector("[data-casino-today]").textContent = net ? "今日 " + signed(net) + unit() : "";
+      showWaiting(host);
       host.querySelector(".casino-note").textContent = real()
         ? "ブラックジャック・ルーレット・ダイスポーカーは1回" + fmt(MAX_BET) + "ptまで賭けられます。"
         : "ゲストやオフラインのときは練習チップで遊べます（ポイントは増減しません）。";
