@@ -99,22 +99,22 @@ test("a line pays on the player's own stake, then its numbers are drawn afresh a
   assert.equal(line.solo, false);
   // n lines at once: (n + 1)× the bingo prize (3× the bet) and the wheel's bet × 5.
   assert.equal(line.mult, line.count + 1);
-  // The prize is shared by the 13 balls on the two lines: ben's 12 wait on the card for him,
-  // amy keeps her 1 and the rounding. Of the wheel's × 5 (1,500 here), 30% goes the same way:
-  // ben's 12 parts of 450 make 415, amy keeps 1,085.
+  // Half the prize is shared by the 13 balls on the two lines: ben's 12 parts of 450 (415) wait
+  // on the card for him, amy keeps the rest. Of the wheel's × 5 (1,500 here), 30% goes the same
+  // way: ben's 12 parts of 450 make 415 again, amy keeps 1,085.
   const prize = out.events.find((e) => e.t === "prize");
   assert.equal(prize.total, 300 * line.mult);
-  assert.deepEqual(prize.shares, { ben: Math.floor((900 * 12) / 13) });
-  assert.equal(prize.amount, 900 - 830);
+  assert.deepEqual(prize.shares, { ben: 415 });
+  assert.equal(prize.amount, 900 - 415);
   const spin = out.events.find((e) => e.t === "wheel" && e.wheel === "bingo");
   assert.equal(spin.total, 500 * line.mult);
   assert.deepEqual(spin.shares, { ben: 415 });
   assert.equal(spin.amount, 1500 - 415);
-  assert.deepEqual(out.card.owed, { ben: 830 + 415 });
-  assert.equal(out.gain, 70 + 1085);
+  assert.deepEqual(out.card.owed, { ben: 415 + 415 });
+  assert.equal(out.gain, 485 + 1085);
   // ben takes his part when he next plays, once.
   const got = S.collect(out.card, "ben");
-  assert.equal(got.amount, 1245);
+  assert.equal(got.amount, 830);
   assert.deepEqual(got.card.owed, {});
   assert.equal(S.collect(got.card, "ben").amount, 0);
   assert.equal(out.state.stake, 0);
@@ -149,7 +149,7 @@ test("a line of only the player's own balls pays the solo bonus", () => {
 test("passing START gives a ball and nothing else", () => {
   const card = S.newCard(seq([0])),
     s = { ...S.newState(), pos: S.SIZE - 2 };
-  const zero = S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball);
+  const zero = S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game);
   const out = S.roll(s, card, 100, seq([2, draw(closedOn(card)), zero]));
   const lap = out.events.findIndex((e) => e.t === "lap");
   assert.deepEqual(out.events[lap], { t: "lap" });
@@ -206,8 +206,8 @@ const slot = (wheel, test) => S.RULES.wheels[wheel].findIndex(test);
 test("the jackpot is a slot of the bingo wheel, the super chance leads to its own wheel and back", () => {
   const jp = lineReady([slot("bingo", (x) => x.jackpot === "jp")]);
   assert.deepEqual(jp.events.find((e) => e.t === "jackpot"), { t: "jackpot", kind: "jp" });
-  // amy's part of the prize: 1 ball of 7 (ben's 6 parts wait on the card).
-  assert.equal(jp.gain, 300 - Math.floor((300 * 6) / 7));
+  // amy's part of the prize: half is shared by the 7 balls, ben's 6 parts (128) wait on the card.
+  assert.equal(jp.gain, 300 - 128);
   // The jackpot waits in the state until the screen pays it.
   assert.deepEqual(jp.state.jpWait, ["jp"]);
   assert.equal(jp.state.jps, 1);
@@ -218,7 +218,7 @@ test("the jackpot is a slot of the bingo wheel, the super chance leads to its ow
   const back = lineReady([slot("bingo", (x) => x.next), slot("sjp", (x) => x.back), slot("bingo", (x) => x.x === 10)]);
   assert.deepEqual(back.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["normal", "bingo", "sjp", "bingo"]);
   // × 10 = 1,000, of which ben's 6 balls of 7 take 30%: 257.
-  assert.equal(back.gain, 43 + 1000 - 257);
+  assert.equal(back.gain, 172 + 1000 - 257);
   assert.deepEqual(sjp.state.jpWait, ["sjp"]);
 });
 
@@ -356,4 +356,17 @@ test("parts of others' lines are stamped, dropped after owedDays and kept to owe
   assert.deepEqual(S.collect(now, "ann").card.owedAt, { old: 0, kept: 0 });
   assert.equal(S.validCard(now), true);
   assert.equal(S.validCard({ ...now, owedAt: { ann: "x" } }), false);
+});
+
+test("the normal wheel has two quick games, paid in multiples of the bet", () => {
+  const w = S.RULES.normal[100];
+  assert.deepEqual(w.filter((x) => x.game).map((x) => x.game).sort(), ["hilo", "stop"]);
+  const at = (game) => w.findIndex((x) => x.game === game);
+  const out = S.roll({ ...S.newState(), pos: 0 }, S.newCard(seq([0])), 100, seq([0, at("stop")]));
+  assert.equal(out.gain, 0);
+  assert.deepEqual(out.state.bonus, [{ game: "stop", mult: 1 }]);
+  assert.deepEqual(out.events.filter((e) => e.t === "bonus"), [{ t: "bonus", game: "stop", mult: 1 }]);
+  assert.deepEqual(["perfect", "good", "miss", "auto", "x"].map((d) => S.gameScore("stop", d)), [250, 100, 0, 50, 0]);
+  assert.deepEqual(["win", "tie", "lose", "auto"].map((d) => S.gameScore("hilo", d)), [150, 100, 0, 50]);
+  assert.equal(S.settleBonus(out.state, "perfect").gain, 250);
 });

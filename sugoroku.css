@@ -215,3 +215,16 @@
   .sg-card-wrap.is-warm .sg-card{transition:none;}
   .sg-ball.is-in,.sg-pot::after,.sg-cell.is-reach,.sg-cell.is-new,.sg-cell.is-run,.sg-dice3d .sg-cube,.sg-dice3d.is-shaking,.sg-lamp{animation:none !important;}
 }
+
+/* The normal squares' quick games */
+.sg-stopbar{position:relative;height:26px;margin:14px 6px;border-radius:13px;background:rgba(240,232,212,.08);border:1px solid var(--line);overflow:hidden;}
+.sg-stopbar b{position:absolute;top:0;bottom:0;}
+.sg-stopbar .is-good{left:30%;right:30%;background:rgba(200,200,210,.22);}
+.sg-stopbar .is-perfect{left:45%;right:45%;background:linear-gradient(180deg,#e8cf93,#a8884a);}
+.sg-stoplight{position:absolute;top:3px;bottom:3px;width:6px;margin-left:-3px;border-radius:3px;background:#fff;box-shadow:0 0 10px 3px rgba(255,255,255,.7);left:0;}
+.sg-stopbar[data-zone=perfect]{box-shadow:0 0 18px rgba(232,207,147,.7);}
+.sg-stopbar[data-zone=miss] .sg-stoplight{background:#9a8f7a;box-shadow:none;}
+.sg-hilo{display:flex;justify-content:center;gap:14px;margin:10px 0;}
+.sg-hilo-card{display:grid;place-items:center;width:62px;height:86px;border-radius:9px;background:linear-gradient(160deg,#1d3a30,#0f221c);border:1px solid var(--line);color:var(--gold);font:700 28px Georgia,serif;}
+.sg-hilo-card.is-open{background:linear-gradient(160deg,#fbf6ea,#e9dfc6);color:#1b2a24;}
+.sg-mini .sg-game-btn[data-sg-game=high],.sg-mini .sg-game-btn[data-sg-game=low]{width:calc(50% - 4px);display:inline-block;margin:0 2px;}

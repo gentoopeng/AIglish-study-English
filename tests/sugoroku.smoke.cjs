@@ -157,7 +157,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const before = await saved(),
       beforeCard = await card();
     // Die 1 onto START (a ball), START's wheel on its ×0 slot.
-    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball));
+    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game));
     await fix([0, missNo - 1, zeroAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
@@ -203,8 +203,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const done = await saved(),
       doneCard = await card();
     assert.equal(done.bingos, before20.bingos + 1);
-    // A line of only the guest's balls: (bingo prize 300 + × 20 = 2,000) × 1.5, plus START's wheel.
-    assert.ok(done.won - before20.won >= 3450, String(done.won - before20.won));
+    // A line of only the guest's balls: (bingo prize 300 + × 20 = 2,000) × 1.25, plus START's wheel.
+    assert.ok(done.won - before20.won >= 2875, String(done.won - before20.won));
     // The finished row starts again: no balls, fresh numbers; amy's ball stays.
     assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.ok(!doneCard.cells.slice(0, 7).includes(lastNo));
@@ -243,11 +243,55 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await settled();
     const afterMini = await saved();
     assert.deepEqual(afterMini.bonus, []);
-    // amy's row: no solo bonus, and the prize of 300 is shared by the balls on it: the guest's
-    // one ball keeps 43, amy's six parts (257) wait on the card for her; plus whatever the timer
-    // scored (0 this far off).
-    assert.ok(afterMini.won - beforeMini.won >= 43);
-    assert.deepEqual((await card()).owed, { amy: 257 });
+    // amy's row: no solo bonus, and half the prize of 300 is shared by the balls on it: amy's six
+    // parts (128) wait on the card for her, the guest keeps 172; plus whatever the timer scored.
+    assert.ok(afterMini.won - beforeMini.won >= 172);
+    assert.deepEqual((await card()).owed, { amy: 128 });
+
+    // The normal squares' quick games. ストップ: stopped at once, the light is at the left end: a
+    // miss, 0. ハイ＆ロー: 5 then 9 and HIGH: a win, 1.5× the bet.
+    const quickGame = async (game, play) => {
+      await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+      await page.evaluate(([name, game]) => {
+        const s = JSON.parse(localStorage.getItem(name));
+        s.bonus = [{ game, mult: 1 }];
+        localStorage.setItem(name, JSON.stringify(s));
+      }, [SAVE, game]);
+      const before = await saved();
+      await tab.locator(".casino-game.mode-sugoroku").click();
+      await play();
+      await mini.locator('[data-sg-game="next"]').click();
+      await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
+      return (await saved()).won - before.won;
+    };
+    const stopWon = await quickGame("stop", async () => {
+      await mini.locator('[data-sg-game="start"]').click();
+      await mini.locator('[data-sg-game="stop"]').click();
+      await mini.locator('[data-sg-game="next"]').waitFor();
+      assert.match(await mini.locator(".sg-game-line").innerText(), /→　(250|100|0)枚/);
+    });
+    assert.ok([0, 100, 250].includes(stopWon), String(stopWon));
+    const hiloWon = await quickGame("hilo", async () => {
+      await fix([4, 8]);
+      await mini.locator('[data-sg-game="flip"]').click();
+      assert.equal(await mini.locator(".sg-hilo-card").first().innerText(), "5");
+      await mini.locator('[data-sg-game="high"]').click();
+      assert.match(await mini.locator(".sg-game-line").innerText(), /当たり　→　150枚/);
+    });
+    assert.equal(hiloWon, 150);
+    // In 早送り a quick game is not played: it pays its fixed half of the bet.
+    await page.evaluate(() => localStorage.setItem("aiglish_sugoroku_quick", "1"));
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.bonus = [{ game: "stop", mult: 1 }];
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    const beforeAuto = await saved();
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
+    assert.equal((await saved()).won - beforeAuto.won, 50);
+    await page.evaluate(() => localStorage.setItem("aiglish_sugoroku_quick", "0"));
 
     // A mini game left half way scores 0 when the game is opened again.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();

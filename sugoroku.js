@@ -44,17 +44,19 @@
   const GAME_NAMES = { blackjack: "ブラックジャック", dice: "ダイスポーカー", chinchiro: "チンチロ", ball: "ボール確定" };
   const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE" };
   const HOT = new Set(["bingo", "sjp"]);
-  const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算" };
+  const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "ストップ", hilo: "ハイ＆ロー" };
+  // The normal squares' quick games, paid in multiples of the bet (not played in 早送り).
+  const QUICK_GAMES = new Set(["stop", "hilo"]);
   const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
     "ログインしてクラウドにつながっているときはポイントを賭けます。ゲストやオフラインのときは練習チップで、ジャックポットは演出だけです。",
     "1回100（ポイントまたは練習チップ）でサイコロを振ります（額はみんな同じです）。",
-    "通常マス：ルーレットで ×3〜×0 のどれかが額に掛かって戻ります。「●（ボール）」ならボールが出ます。",
+    "通常マス：ルーレットで ×3〜×0 のどれかが額に掛かって戻ります。「●（ボール）」ならボールが出ます。「STOP」「H&L」ならミニゲーム（ストップ・ハイ＆ロー）で、うまくいけば額の1.5〜2.5倍です。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると半分が戻ります。ボール確定はボールと額の1.5倍です。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "STARTを通るとボールが1つ出ます。",
-    "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の1.5倍がもらえます。1列そろえるとビンゴ賞金（300）と、ビンゴルーレット（掛け金×5・×10・×20、10秒ぴったり、連打、サイコロ、暗算、JACKPOT×2、SUPER JACKPOT CHANCE）。SUPER JACKPOT CHANCEはSUPER JACKPOT×2・JACKPOT・連打EX・もう一回の5つ。自分のボールだけでそろえると賞金とミニゲームが1.5倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
-    "ビンゴ賞金は、その列にボールを置いていた人でボールの数に応じて山分けします。ビンゴルーレットの×5・×10・×20も、3割を同じように分けます。ほかの人の分は、その人がすごろくビンゴを開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
+    "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の1.5倍がもらえます。1列そろえるとビンゴ賞金（300）と、ビンゴルーレット（掛け金×5・×10・×20、10秒ぴったり、連打、サイコロ、暗算、JACKPOT×2、SUPER JACKPOT CHANCE）。SUPER JACKPOT CHANCEはSUPER JACKPOT×2・JACKPOT・連打EX・もう一回の5つ。自分のボールだけでそろえると賞金とミニゲームが1.25倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
+    "ビンゴ賞金は半分がそろえた人のもので、残りの半分をその列にボールを置いていた人でボールの数に応じて分けます。ビンゴルーレットの×5・×10・×20も、3割を同じように分けます。ほかの人の分は、その人がすごろくビンゴを開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
     "連打は120回まで数えます。",
     "ジャックポットは、カジノでハウス（ディーラー）相手に賭けられたポイントから貯まります（JACKPOT 1,000 + 3%で上限10,000、SUPER JACKPOT 5,000 + 2%で上限100,000。JACKPOTが上限を超えた分はSUPER JACKPOTに回ります）。",
     "「早送り」にすると、ふだんのマスは短く、ビンゴやジャックポットはいつもどおり見られます。★マスのゲームも自動（おまかせ）で進みます。盤面をタップするとその回を最後まで飛ばせます。",
@@ -872,6 +874,7 @@
     if (wheel === "event") return slot === "ball" ? "ball" : "game-" + slot;
     if (wheel === "accident") return slot.start ? "worst" : slot.back ? "bad" : slot.take >= 1.5 ? "worst" : slot.take ? "bad" : "safe";
     if (slot.ball) return "ball";
+    if (slot.game && wheel === "normal") return "game-mini";
     if (slot.next || slot.jackpot) return "jackpot";
     if (wheel !== "normal") return slot.game ? "game-mini" : slot.miss ? "zero" : slot.back ? "bad" : slot.x >= 20 ? "gold" : slot.x >= 10 ? "champagne" : "high";
     return slot.x >= 3 ? "gold" : slot.x >= 2 ? "champagne" : slot.x >= 1.25 ? "high" : slot.x >= 0.5 ? "mid" : slot.x > 0 ? "low" : "zero";
@@ -882,7 +885,7 @@
     if (slot.ball) return "●";
     if (slot.next) return "SJP";
     if (slot.jackpot) return slot.jackpot === "jp" ? "JACKPOT" : "SUPER";
-    if (slot.game) return { timer: "10秒", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算" }[slot.game];
+    if (slot.game) return { timer: "10秒", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "STOP", hilo: "H&L" }[slot.game];
     if (slot.miss) return "ハズレ";
     if (slot.back) return "もう一回";
     return "×" + slot.x;
@@ -1250,12 +1253,16 @@
     tapex: "10秒間、ボタンをできるだけたくさん押してください。1回50点（120回まで）。",
     dice: "サイコロを1回振って、出た目×100点。",
     math: "15秒以内に計算の答えを入れてください。正解で500点。",
+    stop: "左右に動く光を、まん中の金色で止めると額の2.5倍、銀色なら1倍。外れると0。5秒たつと外れです。",
+    hilo: "めくったカード（A〜K）より次のカードが大きいか小さいかを当てます。当たりで額の1.5倍、同じ数なら1倍、外れると0。",
   };
   async function bonus() {
     while (view?.state.bonus?.length) {
       const item = view.state.bonus[0];
       let done = null;
-      if (item.started) {
+      // 早送り: a normal square's quick game is not played; it pays its fixed part.
+      if (view.quick && QUICK_GAMES.has(item.game) && !item.started) done = "auto";
+      else if (item.started) {
         await miniShell(item, (box, finish) => {
           box.append(node("p", "sg-game-line", "途中でやめたので0点です。"));
           finish(null, "つづける");
@@ -1308,7 +1315,8 @@
     const score = (done) => S.gameScore(item.game, done) * item.mult;
     const end = (done, text) => {
       go.remove();
-      line.textContent = text + "　→　" + fmt(score(done)) + "点";
+      // A normal square's quick game pays in chips or points; the bigger games score points.
+      line.textContent = text + "　→　" + fmt(score(done)) + (QUICK_GAMES.has(item.game) ? api.unit() : "点");
       finish(done);
     };
     if (item.game === "timer") {
@@ -1371,6 +1379,81 @@
         });
         pad.remove();
         end(taps, taps + "回");
+      };
+    } else if (item.game === "stop") {
+      // A light runs left and right (once across in 0.7 s); stopped within 5% of the middle is
+      // perfect, within 20% good. Where it is comes from the clock, not from the screen.
+      const bar = node("div", "sg-stopbar"),
+        light = node("i", "sg-stoplight");
+      bar.append(node("b", "is-good"), node("b", "is-perfect"), light);
+      show.replaceWith(bar);
+      let t0 = 0,
+        frame = 0,
+        timer = 0;
+      const at = () => {
+        const phase = ((performance.now() - t0) / 1400) % 1;
+        return phase < 0.5 ? phase * 2 : 2 - phase * 2;
+      };
+      const stop = (p) => {
+        cancelAnimationFrame(frame);
+        clearTimeout(timer);
+        light.style.left = p * 100 + "%";
+        const off = Math.abs(p - 0.5),
+          zone = p < 0 ? "miss" : off <= 0.05 ? "perfect" : off <= 0.2 ? "good" : "miss";
+        bar.dataset.zone = zone;
+        end(zone, { perfect: "ぴったり！", good: "おしい", miss: p < 0 ? "時間切れ" : "はずれ" }[zone]);
+      };
+      go.onclick = (e) => {
+        if (!e.isTrusted) return;
+        if (!t0) {
+          started(item);
+          t0 = performance.now();
+          go.textContent = "ストップ";
+          go.dataset.sgGame = "stop";
+          const tick = () => {
+            light.style.left = at() * 100 + "%";
+            frame = requestAnimationFrame(tick);
+          };
+          tick();
+          timer = setTimeout(() => stop(-1), S.RULES.games.stop.seconds * 1000);
+          return;
+        }
+        stop(at());
+      };
+    } else if (item.game === "hilo") {
+      const face = (n) => ({ 1: "A", 11: "J", 12: "Q", 13: "K" })[n] || String(n);
+      const cards = node("div", "sg-hilo");
+      const first = node("span", "sg-hilo-card", "?"),
+        next = node("span", "sg-hilo-card is-next", "?");
+      cards.append(first, next);
+      show.replaceWith(cards);
+      go.textContent = "カードをめくる";
+      go.dataset.sgGame = "flip";
+      let n = 0;
+      const guess = (high) => (e) => {
+        if (!e.isTrusted || !n) return;
+        const m = random(13) + 1;
+        next.textContent = face(m);
+        next.classList.add("is-open");
+        hi.remove();
+        lo.remove();
+        const outcome = m === n ? "tie" : m > n === high ? "win" : "lose";
+        end(outcome, { win: "当たり", tie: "同じ数", lose: "はずれ" }[outcome]);
+      };
+      const hi = node("button", "sg-game-btn", "HIGH ↑"),
+        lo = node("button", "sg-game-btn", "LOW ↓");
+      for (const [b, high, data] of [[hi, true, "high"], [lo, false, "low"]]) {
+        b.type = "button";
+        b.dataset.sgGame = data;
+        b.onclick = guess(high);
+      }
+      go.onclick = (e) => {
+        if (!e.isTrusted || n) return;
+        started(item);
+        n = random(13) + 1;
+        first.textContent = face(n);
+        first.classList.add("is-open");
+        go.replaceWith(hi, lo);
       };
     } else if (item.game === "dice") {
       const cubeBox = cube();
