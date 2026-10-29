@@ -57,14 +57,13 @@ const { chromium } = require("playwright"),
     // 織田信長 has two lines: a whole card for each, as one card per meaning in the normal mode.
     assert.equal(queue.length, 10);
     assert.deepEqual(
-      // A 「」 card: only the term on the front; behind, the headword and the whole line with that
-      // term in 「」 (so the sentence still reads).
-      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[1]).sort(),
+      // A 「」 card: the headword and the line with that term blanked on the front, the term behind.
+      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[2]).sort(),
       ["本能寺の変", "武田勝頼", "鎌倉幕府", "長篠の戦い"].sort(),
     );
     assert.deepEqual(
-      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[2]).sort(),
-      ["源頼朝　1192年\n「鎌倉幕府」を開いた", "織田信長　1575年\n「長篠の戦い」では武田勝頼を破った", "織田信長　1575年\n長篠の戦いでは「武田勝頼」を破った", "織田信長　1582年\n「本能寺の変」で死亡したとされる人物"].sort(),
+      queue.filter((q) => q[0].startsWith("t:")).map((q) => q[1]).sort(),
+      ["源頼朝　1192年　（＿＿）を開いた", "織田信長　1575年　（＿＿）では武田勝頼を破った", "織田信長　1575年　長篠の戦いでは（＿＿）を破った", "織田信長　1582年　（＿＿）で死亡したとされる人物"].sort(),
     );
     // The whole-entry card follows the chosen direction (英→日 by default: the headword first);
     // blank and year cards always show the question first.
@@ -84,7 +83,7 @@ const { chromium } = require("playwright"),
       flashcardCurrentIndex = flashcardOriginQueue.findIndex((q) => q.termKey === "w:" + q.meaningId && q.en === "織田信長" && q.ja.startsWith("1582"));
       window.renderFlashcardDeck();
       seen.wReverse = document.querySelector("#activeFlashcard .flashcard-face-front").textContent;
-      flashcardCurrentIndex = flashcardOriginQueue.findIndex((q) => q.termKey.startsWith("t:") && q.en === "本能寺の変");
+      flashcardCurrentIndex = flashcardOriginQueue.findIndex((q) => q.termKey.startsWith("t:") && q.ja === "本能寺の変");
       window.renderFlashcardDeck();
       seen.tReverse = document.querySelector("#activeFlashcard .flashcard-face-front").textContent;
       flashcardDirectionMode = "en2ja";
@@ -94,10 +93,9 @@ const { chromium } = require("playwright"),
     });
     assert.match(fronts.w, /織田信長/);
     assert.doesNotMatch(fronts.w, /本能寺/);
-    // A 「」 card follows the direction: 英単語を先に shows the 「」 term alone; 意味を先に shows the
-    // headword and the rest of the line.
-    assert.doesNotMatch(fronts["t:"], /織田信長|源頼朝|（＿＿）/);
-    assert.match(fronts.tReverse, /織田信長　1582年/);
+    // A 「」 card shows the blanked line first in either direction.
+    assert.match(fronts["t:"], /（＿＿）/);
+    assert.match(fronts.tReverse, /織田信長　1582年　（＿＿）で死亡/);
     assert.match(fronts["y:"], /（何年？）/);
     assert.match(fronts.wReverse, /本能寺の変/);
     assert.deepEqual(queue.filter((q) => q[3]).map((q) => q[2]).sort(), ["1192", "1575", "1582"]);

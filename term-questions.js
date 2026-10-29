@@ -42,18 +42,6 @@
     let seen = -1;
     return body.replace(TERM, (all, term) => (++seen === index ? BLANK : term));
   }
-  // The whole line for the back of a 「」 card: the asked term kept in its place in 「」 (taking it
-  // out left sentences like "大臣の官職につきの官職であった…"), the others plain, each line
-  // tidied, empty ones dropped.
-  function inContext(body, index) {
-    let seen = -1;
-    return body
-      .replace(TERM, (all, term) => (++seen === index ? "「" + term + "」" : term))
-      .split("\n")
-      .map((line) => line.replace(/[ 　]{2,}/g, " ").trim())
-      .filter(Boolean)
-      .join("\n");
-  }
   const JAPANESE = /[\u3040-\u30ff\u3400-\u9fff]/;
   // A phrase line in an English book: the English with its 「」 and then the Japanese, either on
   // the next line ("+ A + 「as」 B" / "AをBとみなす") or straight after a leading 「」 (「following」次の).
@@ -154,10 +142,8 @@
           index: p.index,
           prompt: head + (p.year ? "　" + p.year + "年" : "") + "　" + blankOut(p.body, t),
           answer: term,
-          // As a card: only the term on the front; turned over, the headword and, on the next
-          // line, the whole line with that term in 「」. (Battles keep prompt and answer.)
-          front: term,
-          back: head + (p.year ? "　" + p.year + "年" : "") + "\n" + inContext(p.body, t),
+          // As a card too: the line with the term blanked on the front, the term behind (showing
+          // the term alone first asked "大連 → ?" with nothing to answer).
           input: false,
         }),
       );
