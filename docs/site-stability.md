@@ -1701,3 +1701,25 @@ Tests:
 - `tests/sugoroku.smoke.cjs`: おまかせ through a blackjack round, and a script press ignored by the timer.
 - `tests/sugoroku-shared.smoke.cjs`: `owedAt` written, and the casino tab notice for the other player.
 - `tests/casino.smoke.cjs`: a poker hand does not feed the jackpots.
+
+## すごろくビンゴ: from preview to points (10.22.35.00)
+
+Asked for: the full version, with a check that the balance and the rest hold up.
+
+- **On points.** Signed in and online, すごろくビンゴ now stakes points like the other house games (casino.js `PREVIEW` is empty). A guest, or a device off the cloud, still plays on practice chips and a card of its own, where a jackpot is only shown.
+- **A fresh shared card.** The live card is `shared/sugoroku_live`. The preview's `shared/sugoroku_card`, with its practice-chip shares, is left behind, so no practice-chip share is ever paid as points. Saves are separate too: `aiglish_sugoroku_<id>` for points and `…_practice` for chips, so everybody starts the points game fresh.
+- **Fewer cloud writes.** A roll used to move the wallet two or three times: the bet, the payout and a collected share. Each move is a wallet transaction with two writes. Now a roll, an event game's end or a mini game is one move: what came back less the bet (`round().net`). The bet is still counted for the jackpots (`Poker.settle(key, delta, feed)`), and a roll that breaks even writes nothing to the wallet.
+
+  The game's own cloud copy is written at once only when an event game, a mini game or a jackpot starts or ends, so none can be played twice from two devices. Otherwise it is written at most every 30 seconds and when the page is hidden.
+
+  A plain roll is now about 2 writes (it was about 5–7).
+- **Debt.** An accident that takes more than the wallet holds stops the wallet at 0. The rest goes to `PointLoans.owe` as a 請求 from the casino.
+- **Balance.** Unchanged from 10.22.33.00: about 98% back over time for one player and about 95–96% for several, jackpots included.
+
+  For scale, a word earns 2pt a day, so one roll (100pt) is worth about 50 words. A JACKPOT is typically about 6,000pt and a SUPER JACKPOT about 55,000pt.
+- **Still open.** Results are worked out on the player's device, as in the casino's other games. The Firestore rules in docs/casino-firestore-rules.md are not applied yet. Both are needed to stop a determined cheat.
+
+Tests:
+
+- `tests/casino.smoke.cjs`: a roll on points is one wallet move, keyed `casino:sugoroku:…:net`, and its bet feeds the jackpots.
+- `tests/sugoroku-shared.smoke.cjs`: now on points. It checks the wallet after a collected share, an accident past the wallet becoming a casino debt, and the cloud copy.

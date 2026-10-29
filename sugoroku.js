@@ -8,7 +8,8 @@
 // A roll is worked out and saved before anything moves, and its chips are paid at once, so
 // closing half way changes nothing. An event game is saved move by move in state.pending, and a
 // jackpot waits in state.jpWait until it is paid.
-// For now the game is a preview: practice chips only, and a jackpot is shown but not paid.
+// Signed in and online it stakes points (casino.js); a guest or a device off the cloud plays on
+// practice chips and its own card, where a jackpot is shown but not paid.
 // Speed: 早送り plays the everyday parts quickly (the die, the steps, the normal, event and
 // accident wheels, balls off the reach); a line, its wheels, a jackpot and a reach ball keep
 // their full time. A tap on the board skips to the end of the roll.
@@ -32,8 +33,8 @@
   const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算" };
   const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
-    "プレ版のため練習チップで遊びます。ポイントは動かず、ジャックポットも演出だけです。",
-    "1回100枚でサイコロを振ります（額はみんな同じです）。",
+    "ログインしてクラウドにつながっているときはポイントを賭けます。ゲストやオフラインのときは練習チップで、ジャックポットは演出だけです。",
+    "1回100（ポイントまたは練習チップ）でサイコロを振ります（額はみんな同じです）。",
     "通常マス：ルーレットで ×3〜×0 のどれかが額に掛かって戻ります。「●（ボール）」ならボールが出ます。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると半分が戻ります。ボール確定はボールと額の1.5倍です。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
@@ -59,12 +60,35 @@
       return null;
     }
   }
+  // Every save goes to this device at once. The cloud copy (for carrying on from another device)
+  // is written at once when a game, a mini game or a jackpot starts or ends (so none can be
+  // played twice from two devices), and otherwise at most every 30 seconds and when the page is
+  // hidden, to keep cloud writes few.
+  const cloud = { key: null, at: 0, timer: 0, state: null };
+  const gate = (state) => JSON.stringify([state.pending || null, state.bonus || [], state.jpWait || []]);
+  function saveCloud() {
+    clearTimeout(cloud.timer);
+    cloud.timer = 0;
+    const state = cloud.state;
+    if (!state || !api?.real()) return;
+    cloud.state = null;
+    cloud.key = gate(state);
+    cloud.at = Date.now();
+    Promise.resolve()
+      .then(() => window.fbSetDoc(cloudRef(), { state: JSON.stringify(state), rolls: state.rolls, savedAt: Date.now() }))
+      .catch((error) => console.warn("[sugoroku] save", error));
+  }
   function save(state) {
     try {
       localStorage.setItem(saveName(), JSON.stringify(state));
     } catch {}
-    if (api.real()) Promise.resolve(window.fbSetDoc(cloudRef(), { state: JSON.stringify(state), rolls: state.rolls, savedAt: Date.now() })).catch((error) => console.warn("[sugoroku] save", error));
+    if (!api.real()) return;
+    cloud.state = state;
+    if (gate(state) !== cloud.key || Date.now() - cloud.at > 30e3) saveCloud();
+    else if (!cloud.timer) cloud.timer = setTimeout(saveCloud, 30e3);
   }
+  document.addEventListener("visibilitychange", () => document.hidden && saveCloud());
+  addEventListener("pagehide", saveCloud);
   async function load() {
     let state = readLocal();
     if (api.real()) {
@@ -72,6 +96,7 @@
         const snap = await window.fbGetDoc(cloudRef());
         const remote = snap.exists() ? JSON.parse(snap.data().state || "null") : null;
         if (S.valid(remote) && (!state || remote.rolls > state.rolls)) state = remote;
+        if (S.valid(remote)) cloud.key = gate(remote);
       } catch (error) {
         console.warn("[sugoroku] load", error);
       }
@@ -80,14 +105,16 @@
   }
 
   // ---- The shared card ---------------------------------------------------------------------
-  // One card for everybody in shared/sugoroku_card: { cells, owners, people }, people[id] the
+  // One card for everybody in shared/sugoroku_live (the preview's shared/sugoroku_card, with its
+  // practice-chip parts, is left behind): { cells, owners, owed, owedAt, people, log }, people[id] the
   // name and a small icon for each id whose ball is on it. Every roll reads it and, if a ball
   // landed, writes it back in one transaction, so two players never take the same cell. A
   // guest, or a device off the cloud, plays on a card of its own.
   const shared = () => api.uid() !== "GUEST-000" && !!(window.db && window.fbDoc && window.fbRunTransaction) && !window.FirestoreReadGuard?.paused?.();
-  const cardRef = () => window.fbDoc(window.db, "shared", "sugoroku_card");
+  const CARD_DOC = "sugoroku_live";
+  const cardRef = () => window.fbDoc(window.db, "shared", CARD_DOC);
   // Once the screen is open it stays on the card it opened with (see view.online).
-  const localCardName = () => "aiglish_sugoroku_card_" + ((view ? view.online : shared()) ? "shared" : api.uid());
+  const localCardName = () => "aiglish_sugoroku_card_" + ((view ? view.online : shared()) ? "live" : api.uid());
   // Everything on the shared card is read as untrusted: the card itself is checked by the model,
   // names are cut short, an icon must be a small inline image (it goes into a CSS url()), and the
   // log keeps only well-formed entries.
@@ -231,7 +258,7 @@
     if (!id || id === "GUEST-000" || !window.db || !window.fbDoc || !window.fbGetDoc || window.FirestoreReadGuard?.paused?.()) return 0;
     if (peek.id !== id || Date.now() - peek.at > 300e3)
       try {
-        const snap = await window.fbGetDoc(window.fbDoc(window.db, "shared", "sugoroku_card")),
+        const snap = await window.fbGetDoc(cardRef()),
           found = snap.exists() ? readCard(snap.data()) : null;
         peek = { id, at: Date.now(), amount: found?.card.owed?.[id] || 0 };
       } catch (error) {
@@ -491,7 +518,7 @@
     const short = api.balance() < view.cost,
       refill = short && !api.real() && !!api.resetPractice;
     view.go.disabled = view.busy || (short && !refill) || !!state.pending;
-    view.go.textContent = refill ? "練習チップを" + fmt(api.practiceStart) + "枚に戻す" : short ? "チップが足りません" : view.busy ? "…" : "サイコロを振る";
+    view.go.textContent = refill ? "練習チップを" + fmt(api.practiceStart) + "枚に戻す" : short ? (api.real() ? "ポイントが足りません" : "チップが足りません") : view.busy ? "…" : "サイコロを振る";
   }
   // The piece sits on its square; the strip slides so the piece stays a little left of centre.
   function place(pos, smooth = true) {
@@ -544,20 +571,15 @@
   // the hot moments, or in full.
   const pace = () => (calm() || view?.fast ? 0 : view?.quick && !view.hot ? 0.25 : 1);
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, pace() ? ms * pace() : Math.min(ms, 20)));
+  // A roll (or a game's end) moves the wallet once: what came back (with any part of other
+  // players' lines collected) less the bet. An accident can take more than there is: with points
+  // the rest is owed to the casino (a 請求 in ポイントの貸し借り); on practice chips it stops at 0.
   function pay(out, cost) {
-    const money = api.round("sugoroku");
-    if (cost) money.stake(cost);
-    if (out.collected > 0) money.pay(out.collected);
-    if (out.gain > 0) money.pay(out.gain);
-    else if (out.gain < 0) {
-      // An accident can take more than there is: with points, the rest is owed to the casino
-      // (a 請求 in ポイントの貸し借り); on practice chips it stops at 0.
-      const take = -out.gain,
-        have = api.balance();
-      money.stake(Math.min(take, have), "accident");
-      if (take > have && api.real())
-        Promise.resolve(window.PointLoans?.owe?.(take - have, "すごろくビンゴのアクシデント")).catch((error) => console.warn("[sugoroku] debt", error));
-    }
+    const net = (out.collected || 0) + out.gain - cost,
+      have = api.balance();
+    api.round("sugoroku").net(Math.max(net, -have), cost);
+    if (-net > have && api.real())
+      Promise.resolve(window.PointLoans?.owe?.(-net - have, "すごろくビンゴのアクシデント")).catch((error) => console.warn("[sugoroku] debt", error));
   }
   // Jackpots waiting in out.state: with points each is taken from the casino's pot and paid (and
   // stays waiting if the network fails); in the preview it is only shown. The amounts go onto
@@ -904,7 +926,7 @@
     layer.hidden = false;
     const box = node("div", "sg-jackpot");
     const value = node("b", "", "0pt");
-    box.append(node("p", "sg-jackpot-word", word), value, ...(api.real() ? [] : [node("small", "", "プレ版のため、ジャックポットは演出のみです")]));
+    box.append(node("p", "sg-jackpot-word", word), value, ...(api.real() ? [] : [node("small", "", "練習チップのため、ジャックポットは演出のみです")]));
     layer.replaceChildren(box);
     const steps = calm() || view.fast ? 1 : 50;
     for (let i = 1; i <= steps; i++) {

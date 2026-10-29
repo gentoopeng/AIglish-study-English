@@ -28,8 +28,8 @@
   // ---- Wallet ----------------------------------------------------------------------------
   // Settlements still on their way are counted at once, so a fast second bet sees them.
   let pending = 0;
-  // すごろくビンゴ is a preview for now: always on practice chips, so it cannot move points.
-  const PREVIEW = new Set(["sugoroku"]);
+  // A game listed here is a preview: always on practice chips, so it cannot move points.
+  const PREVIEW = new Set();
   const real = (id = game?.id) => !PREVIEW.has(id) && uid() !== "GUEST-000" && !!window.db && !!window.fbRunTransaction && !!window.Poker?.settle && !window.FirestoreReadGuard?.paused?.();
   const practiceName = () => "aiglish_casino_chips_" + uid();
   function practiceChips() {
@@ -63,12 +63,17 @@
       localStorage.setItem(todayName(), JSON.stringify({ day: today(), net: todayNet() + delta }));
     } catch {}
   }
-  function move(key, delta) {
-    if (!delta) return;
+  // `feed`: how much of this counts as a bet for the jackpots (by default what a loss takes).
+  function move(key, delta, feed) {
+    if (!delta) {
+      // Broke even: no wallet write, but the bet still counts for the jackpots.
+      if (feed > 0 && real()) window.CasinoJackpot?.add(feed);
+      return;
+    }
     addToday(delta);
     if (!real()) return setPractice(practiceChips() + delta);
     pending += delta;
-    window.Poker.settle(key, delta).finally(() => {
+    window.Poker.settle(key, delta, feed).finally(() => {
       pending -= delta;
       refresh();
     });
@@ -80,6 +85,9 @@
       // Each part of a round is its own key, so a double or a split after the bet is taken too.
       stake: (bet, part = "bet") => move(key + ":" + part, -bet),
       pay: (amount) => move(key + ":pay", amount),
+      // A whole round in one move (one wallet write): what came back less what was bet, with
+      // the bet counted for the jackpots.
+      net: (delta, bet) => move(key + ":net", delta, bet),
     };
   }
 
