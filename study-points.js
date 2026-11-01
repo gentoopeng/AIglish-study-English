@@ -191,7 +191,7 @@
       if (JSON.stringify(combined) !== JSON.stringify(entry.time))
         entry.fingerprint = undefined;
       entry.time = combined;
-      entry.amount = Math.max(target, policy().timeMinutes(entry.time));
+      entry.amount = Math.max(target, policy().timePoints(entry.time, entry.day));
     }
     value.claims[token] = Math.max(before, entry.amount);
     value.history = history(value.history, { [token]: entry });
@@ -277,7 +277,7 @@
     for (const [day, data] of Object.entries(ledger.days || {})) {
       if (!data.pointTime || !policy().mature(day)) continue;
       const time = policy().mergeTime(data.pointTime),
-        amount = policy().timeMinutes(time);
+        amount = policy().timePoints(time, day);
       if (!amount) continue;
       const entry = {
         source: "time",
@@ -401,7 +401,7 @@
                 item.source === "time"
                   ? policy().mergeTime(old?.time, item.time)
                   : null;
-              const target = time ? policy().timeMinutes(time) : item.amount;
+              const target = time ? policy().timePoints(time, item.day) : item.amount;
               const amount = Math.max(oldAmount, target);
               if (
                 amount > oldAmount ||

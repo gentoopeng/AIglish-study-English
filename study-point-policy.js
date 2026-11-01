@@ -48,6 +48,11 @@
       ) / 60000,
     );
   }
+  // Points for a day's measured study time: 1 a minute up to 2026-11-01, 5 a minute from
+  // 2026-11-02 (Japan time). Days before keep what they gave, so nothing is paid twice.
+  const TIME_RATE_FROM = "2026-11-02";
+  const timeRate = (date) => (String(date) >= TIME_RATE_FROM ? 5 : 1);
+  const timePoints = (records, date) => timeMinutes(records) * timeRate(date);
   function accrueTime(days, device, start, end, removing = false) {
     if (!device || !(end > start) || end - start >= 60000) return;
     let cursor = start;
@@ -80,6 +85,8 @@
     amount,
     mergeTime,
     timeMinutes,
+    timeRate,
+    timePoints,
     accrueTime,
     mature,
   };

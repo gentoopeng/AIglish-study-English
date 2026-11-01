@@ -58,9 +58,9 @@
     // blackjack, dice poker or chinchiro as an event square does.
     normal: {
       100: spread([
-        ...N(10), ...N(5), ...N(2), ...N(1.5), ...N(1.25),
+        ...N(10), ...N(5), ...N(1.5), ...N(1.25),
         ...N(0.75), ...N(0.5, 3), ...N(0.25, 3),
-        ...N(0, 15), ...N(-0.5, 2), ...N(-1, 2),
+        ...N(0, 16), ...N(-0.5, 2), ...N(-1, 2),
         ...BALL(0, 4), ...GAME("stop"), ...GAME("hilo"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("chinchiro"),
       ]),
     },
@@ -70,9 +70,9 @@
     // Balls are drawn from 1–NUMBERS; the card holds 48 of them. A ball not on the card (or
     // already open) pays this many times the bet instead.
     numbers: 100,
-    missPay: 1.5,
+    missPay: 1,
     // A line made only of the player's own balls pays this many times more.
-    soloBonus: 1.25,
+    soloBonus: 1.1,
     // A part of someone else's line not collected within owedDays is dropped, and the card keeps
     // at most owedMax people's parts (the oldest go first), so it cannot grow without end.
     owedDays: 30,
@@ -81,7 +81,9 @@
     accident: [{ take: 0 }, { take: 0.5 }, { back: 3 }, { take: 1 }, { start: true }, { take: 1.5 }, { back: 3 }, { take: 2 }, { take: 0.5 }, { start: true }],
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
-    bingoPrize: 3,
+    bingoPrize: 10,
+    // The bingo wheels' mini games score this many times their points.
+    bingoGameBoost: 3,
     // Of the bingo prize, this part is shared by the balls on the line (the finisher's own balls
     // included); the rest is the finisher's.
     prizeShare: 0.5,
@@ -91,7 +93,7 @@
     // After a line: x pays the bet × x; game starts a mini game; miss is the bingo prize alone;
     // the super-jackpot chance leads to the second wheel, where back spins the first again.
     wheels: {
-      bingo: [{ x: 5 }, { game: "timer" }, { x: 10 }, { game: "tap" }, { jackpot: "jp" }, { game: "dice" }, { x: 20 }, { game: "math" }, { jackpot: "jp" }, { next: "sjp" }],
+      bingo: [{ x: 10 }, { game: "timer" }, { x: 20 }, { game: "tap" }, { jackpot: "jp" }, { game: "dice" }, { x: 50 }, { game: "math" }, { jackpot: "jp" }, { next: "sjp" }],
       sjp: [{ jackpot: "sjp" }, { jackpot: "jp" }, { game: "tapex" }, { jackpot: "sjp" }, { back: true }],
     },
     // Mini games, scored in points (multiplied like the line's other prizes):
@@ -279,7 +281,7 @@
         events.push({ t: "jackpot", kind: slot.jackpot });
       }
       else if (slot.game) {
-        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult }]);
+        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: mult * RULES.bingoGameBoost }]);
         events.push({ t: "bonus", game: slot.game, mult });
       } else if (slot.x) {
         const won = money(bet * slot.x * mult),
