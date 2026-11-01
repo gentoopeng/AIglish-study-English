@@ -199,3 +199,18 @@
 .loans-history time{font-size:11px;color:#c1c6ce;white-space:nowrap;}
 .loans-history small{grid-column:1/-1;font-size:11px;color:#c1c6ce;}
 .study-points-dialog .loans-back{align-self:flex-start;border-color:transparent;background:transparent;color:#e6d29a;padding:8px 0;}
+/* Lending: one form, its action chosen with tabs */
+.loans-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:3px;border:1px solid #d5bf8645;border-radius:12px;}
+.study-points-dialog .loans-tab{min-height:38px;padding:4px 6px;border:0;border-radius:9px;background:transparent;color:#d2c4aa;font-size:13px;font-weight:700;}
+.study-points-dialog .loans-tab[aria-selected=true]{background:#d5bf86;color:#111c2c;}
+.loans-amount{display:flex;align-items:baseline;gap:6px;padding:0 12px;border:1px solid #d5bf8645;border-radius:10px;background:#ffffff08;}
+.loans-amount input[data-loan-amount]{flex:1;min-width:0;border:0;background:transparent;padding:6px 0;}
+.loans-amount span{color:#d2c4aa;font-size:14px;}
+.loans-rates{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
+.loans-rates:empty{display:none;}
+.loans-rates span{color:#d2c4aa;font-size:12px;margin-right:2px;}
+.study-points-dialog .loans-rates button{flex:1 0 auto;min-height:32px;padding:2px 8px;border-radius:999px;font-size:12px;}
+.study-points-dialog .loans-rates button[aria-pressed=true]{border-color:#d5bf86;background:#d5bf862e;color:#f4eddf;font-weight:700;}
+.loans-preview{margin:0;min-height:1.4em;color:#e6d29a;font-size:13px;}
+.study-points-dialog .loans-go{min-height:48px;font-size:15px;}
+.loans-loading{margin-top:4px !important;color:#8f97a3 !important;font-size:11px !important;}

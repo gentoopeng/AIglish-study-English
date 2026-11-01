@@ -69,30 +69,46 @@
       if (detailJobs.get(key) === task) detailJobs.delete(key);
     }
   }
+  // A profile comes up at once from what the user list already has, then is filled again with
+  // the latest copy (and, for this player, the latest ranking) when it arrives.
   async function detail(person) {
     const account = uid(),
       version = cacheVersion;
-    let detailDoc = person.doc || {};
+    if (person.doc?.deleted) return deleted();
+    const dialog = window.openLibraryDialog(
+      "プロフィール",
+      '<div class="people-detail-person"></div><dl class="people-detail-data"></dl><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>',
+    );
+    dialog.querySelector(".library-editor-eyebrow").textContent = "";
+    fill(dialog, person, person.doc || {}, !person.doc);
+    let latest = person.doc || {};
     try {
       if (window.db && window.fbGetDoc) {
-        if (person.id === account) await window.LearningRanking.sync();
-        const snap = await detailSnapshot(person.id);
-        if (uid() !== account || version !== cacheVersion) return;
-        if (snap.exists()) {
-          detailDoc = snap.data();
-        }
+        const [snap] = await Promise.all([
+          detailSnapshot(person.id),
+          person.id === account ? window.LearningRanking.sync() : null,
+        ]);
+        if (uid() !== account || version !== cacheVersion || !dialog.isConnected) return;
+        if (snap.exists()) latest = snap.data();
       }
     } catch (error) {
       console.warn("最新のプロフィールを取得できませんでした", error);
     }
-    if (detailDoc.deleted) {
-      window.openLibraryDialog(
-        "削除済み",
-        '<p>このアカウントは削除されています。</p><button type="button" data-library-close>閉じる</button>',
-      );
-      return;
+    if (!dialog.isConnected) return;
+    if (latest.deleted) {
+      window.closeLibraryDialog?.();
+      return deleted();
     }
-    const doc = detailDoc,
+    fill(dialog, person, latest, false);
+  }
+  function deleted() {
+    window.openLibraryDialog(
+      "削除済み",
+      '<p>このアカウントは削除されています。</p><button type="button" data-library-close>閉じる</button>',
+    );
+  }
+  function fill(dialog, person, doc, loading) {
+    const account = uid(),
       stats = window.StudyTimeModel.readStats(doc),
       time = timestamp(
         doc.lastActiveAt ||
@@ -100,13 +116,12 @@
           doc.updatedAt ||
           person.timestamp,
       );
-    const dialog = window.openLibraryDialog(
-      "プロフィール",
-      '<div class="people-detail-person"></div><dl class="people-detail-data"></dl><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>',
-    );
-    dialog.querySelector(".library-editor-eyebrow").textContent = "";
     const header = dialog.querySelector(".people-detail-person"),
+      list = dialog.querySelector("dl"),
       name = document.createElement("h3");
+    header.replaceChildren();
+    list.replaceChildren();
+    dialog.querySelector(".people-loans")?.remove();
     window.RankingVisuals.name(name, doc.playerName || person.name);
     header.append(
       window.RankingVisuals.avatar(
@@ -119,35 +134,36 @@
       window.LearningRankingModel.fromProfile(doc),
       person.id === account ? window.LearningRanking.snapshot() : null,
     );
+    const later = (value) => (loading ? "…" : value);
     [
       ["ポイント", (person.id === account ? window.StudyPoints?.balance() || 0 : Number(doc.studyPoints) || 0).toLocaleString("ja-JP") + "pt"],
       ["ID", person.id],
       [
         "最終アクティブ",
-        time ? new Date(time).toLocaleString("ja-JP") : "記録なし",
+        later(time ? new Date(time).toLocaleString("ja-JP") : "記録なし"),
       ],
       [
         "合計勉強時間",
-        Math.floor(
+        later(Math.floor(
           window.StudyTimeModel.rankingSeconds(stats, "total", Date.now()) / 60,
-        ) + "分",
+        ) + "分"),
       ],
-      ["理解度の記録", window.LearningRankingModel.wordCount(ranking) + "語"],
-      ["フラッシュ", window.LearningRankingModel.flashCount(ranking) + "回"],
+      ["理解度の記録", later(window.LearningRankingModel.wordCount(ranking) + "語")],
+      ["フラッシュ", later(window.LearningRankingModel.flashCount(ranking) + "回")],
     ].forEach(([label, value]) => {
       const dt = document.createElement("dt"),
         dd = document.createElement("dd");
       dt.textContent = label;
       dd.textContent = value;
-      dialog.querySelector("dl").append(dt, dd);
+      list.append(dt, dd);
     });
     // Lending points starts from the other person's profile.
     if (window.PointLoans && person.id !== account && account !== "GUEST-000") {
       const loans = document.createElement("div");
       loans.className = "people-loans";
-      for (const [text, primary] of [
-        ["貸す", true],
-        ["借りたいと頼む", false],
+      for (const [text, primary, mode] of [
+        ["貸す", true, "lend"],
+        ["借りたいと頼む", false, "borrow"],
       ]) {
         const b = document.createElement("button");
         b.type = "button";
@@ -155,7 +171,7 @@
         if (primary) b.className = "library-editor-primary";
         b.onclick = () => {
           window.closeLibraryDialog?.();
-          window.PointLoans.person(person.id, doc.playerName || person.name);
+          window.PointLoans.person(person.id, doc.playerName || person.name, { mode });
         };
         loans.append(b);
       }

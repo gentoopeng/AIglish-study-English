@@ -66,3 +66,19 @@ test("money to me is unclaimed until marked, and the history is capped", () => {
   for (let i = 0; i < L.MAX_ENTRIES + 5; i++) r = L.send(r, { id: "n" + i, from: "a", to: "b", amount: 1, kind: "lend", at });
   assert.equal(r.entries.length, L.MAX_ENTRIES);
 });
+
+test("a loan can carry interest: the debt is the amount and its interest, repaid like any debt", () => {
+  let r = L.send(null, { id: "1", from: "a", to: "b", amount: 50, kind: "lend", at, rate: 0.1 });
+  assert.deepEqual([r.entries[0].rate, r.entries[0].due], [0.1, 55]);
+  assert.equal(L.owedBy(r.entries, "b"), 55);
+  assert.equal(L.net(r.entries, "a"), 55);
+  r = L.send(r, { id: "2", from: "b", to: "a", amount: 55, kind: "repay", at });
+  assert.equal(L.net(r.entries, "a"), 0);
+  // Rounded to whole points; only the offered rates; a repayment never carries interest.
+  assert.equal(L.dueOf(33, 0.05), 35);
+  assert.throws(() => L.send(null, { id: "1", from: "a", to: "b", amount: 50, kind: "lend", at, rate: 0.15 }), /利子/);
+  const repaid = L.send(L.send(null, { id: "1", from: "a", to: "b", amount: 10, kind: "lend", at }), { id: "2", from: "b", to: "a", amount: 5, kind: "repay", at, rate: 0.3 });
+  assert.equal(repaid.entries[1].due, undefined);
+  // An older record without `due` counts the amount.
+  assert.equal(L.net([{ kind: "lend", from: "a", to: "b", amount: 20 }], "a"), 20);
+});
