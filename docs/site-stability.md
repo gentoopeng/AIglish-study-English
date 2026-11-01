@@ -1858,3 +1858,39 @@ Tests:
 - `tests/sugoroku-model.test.cjs`: the wheel, the minus slots, event games from a normal square, and a save with negative returns.
 - `tests/sugoroku-shared.smoke.cjs`: opening while every cloud read takes 4 seconds comes up within 2 seconds.
 - `tests/sugoroku.smoke.cjs`: plays the normal squares' games when a random roll lands on one.
+
+## Lending: opens at once, interest, a simpler form (10.22.40.00)
+
+The user found the profile and the lending screens slow to open, asked for interest on loans between users, and found the lending screen hard to use.
+
+**Why it was slow.**
+
+- A profile waited for the person's cloud document, and for this player also for a ranking sync, before showing anything.
+- The lending list first collected anything sent to this player: one transaction per changed pair. Then it read the list again and each pair's record one after another.
+- A person's screen claimed incoming points (a transaction) and then read the record before drawing.
+
+**Now:**
+
+- **Profiles.** A profile comes up at once from the user list's copy, with "…" for what is not known yet. The latest copy and the ranking sync are fetched together and fill it in, if it is still open.
+- **The lending list.** It comes up at once from the list kept on this device and the records seen before. The list and every pair's record are read side by side. Collecting runs afterwards, reusing the list just read.
+- **A person's screen.** It comes up from the record as last seen, marked 「最新の記録を確かめています…」. It is drawn again with the cloud's copy, and claims only when something is waiting. Every send, request, answer and claim keeps the record it wrote, so the redraw after an action is immediate.
+- **Measured.** A test makes every cloud read take 3 seconds. The list, a person and a profile all still come up within 1.5 seconds.
+
+**Interest.**
+
+- A loan can carry one-time interest of 0, 5, 10, 20 or 30% (`PointLoansModel.RATES`). The loan entry keeps `rate`, and `due`: the amount plus its interest, rounded to whole points.
+- What is owed counts `due` for a loan, so repayment and 請求 limits include the interest. Older entries without `due` count their amount.
+- A borrow request is answered with 「条件を決めて貸す」: the form opens with the amount filled in, so the lender can choose the interest. It shows 「返してもらう額 110pt（利子 10pt）」 before lending.
+
+**The form.**
+
+- One form, with tabs for 貸す / 返す / 借りる / 請求. 返す needs a debt and 請求 needs a loan; the casino only offers 返す.
+- The amount field shows its unit, with quick amounts including 全部.
+- The interest chips appear for a loan.
+- A line under the form says what will happen: what comes back, what is left, or who decides the interest.
+- One large button names the action.
+
+Tests:
+
+- `tests/point-loans-model.test.cjs`: interest, rounding, the allowed rates, and older entries.
+- `tests/point-loans.smoke.cjs`: the tabs, a loan at 10% against a request and its full repayment, and opening with a slow cloud.

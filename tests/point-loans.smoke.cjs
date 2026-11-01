@@ -90,6 +90,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await dialogOf(a).evaluate((d) => d.classList.contains("study-points-dialog")), true);
     await dialogOf(a).locator("[data-loan-amount]").waitFor();
     assert.ok((await dialogOf(a).locator(".loans-body").evaluate((el) => el.getBoundingClientRect().height)) > 200);
+    // Opened from 貸す, the form is set to lend, with no interest unless one is chosen.
+    assert.equal(await dialogOf(a).getByRole("tab", { name: "貸す" }).getAttribute("aria-selected"), "true");
+    assert.equal(await dialogOf(a).getByRole("button", { name: "利子 なし" }).getAttribute("aria-pressed"), "true");
     await dialogOf(a).locator("[data-loan-amount]").fill("50");
     await dialogOf(a).getByRole("textbox", { name: "ひとこと" }).fill("ポーカー用");
     await dialogOf(a).getByRole("button", { name: "貸す", exact: true }).click();
@@ -110,9 +113,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.match(await dialogOf(b).locator(".loans-person").innerText(), /50pt 借りています/);
     await dialogOf(b).locator(".loans-person").click();
     await dialogOf(b).getByText("loan-aさんから 50pt 借りています").waitFor();
-    assert.equal(await dialogOf(b).getByRole("button", { name: "返してと請求" }).isDisabled(), true);
+    // B has lent nothing, so B cannot 請求.
+    assert.equal(await dialogOf(b).getByRole("tab", { name: "請求" }).isDisabled(), true);
 
     // A asks for 30 back (請求); B pays it from the request.
+    await dialogOf(a).getByRole("tab", { name: "請求" }).click();
     await dialogOf(a).locator("[data-loan-amount]").fill("80");
     await dialogOf(a).getByRole("button", { name: "返してと請求" }).click();
     assert.match(await dialogOf(a).locator(".loans-error").innerText(), /請求できるのは貸している50ptまで/);
@@ -128,6 +133,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(wallet("loan-a"), 480);
 
     // B asks to borrow 100; A declines. Both histories keep everything.
+    await dialogOf(b).getByRole("tab", { name: "借りる" }).click();
     await dialogOf(b).locator("[data-loan-amount]").fill("100");
     await dialogOf(b).getByRole("button", { name: "借りたいと頼む" }).click();
     await dialogOf(b).getByText("100pt 借りたいと頼んでいます（返事待ち）").waitFor();
@@ -142,7 +148,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.deepEqual((await dialogOf(b).locator(".loans-history li span").allInnerTexts()), ["100pt 借りたいと頼んだ・断られた", "30pt 返した", "30pt 請求された・済み", "50pt 借りた"]);
     assert.match(await dialogOf(b).locator(".loans-history").innerText(), /「ポーカー用」/);
     // Repaying the rest: no more than is owed.
+    await dialogOf(b).getByRole("tab", { name: "返す" }).click();
     await dialogOf(b).getByRole("button", { name: "全部（20）" }).click();
+    assert.match(await dialogOf(b).locator(".loans-preview").innerText(), /返したあと 残り 0pt/);
     await dialogOf(b).getByRole("button", { name: "返す", exact: true }).click();
     await dialogOf(b).getByText("貸し借りはありません").waitFor();
     assert.equal(wallet("loan-b"), 500);
@@ -150,13 +158,42 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(wallet("loan-a"), 500);
     await b.screenshot({ path: "/tmp/point-loans.png" });
 
+    // A loan with interest: B asks for 100, A answers the request choosing 10%; B owes 110 and
+    // pays it all back.
+    await b.evaluate(() => window.PointLoans.person("loan-a", "loan-a"));
+    await dialogOf(b).getByRole("tab", { name: "借りる" }).click();
+    await dialogOf(b).locator("[data-loan-amount]").fill("100");
+    await dialogOf(b).getByRole("button", { name: "借りたいと頼む" }).click();
+    await dialogOf(b).getByText("100pt 借りたいと頼んでいます（返事待ち）").waitFor();
+    await a.evaluate(() => window.PointLoans.person("loan-b", "loan-b"));
+    await dialogOf(a).locator(".loans-request").getByRole("button", { name: "条件を決めて貸す" }).click();
+    assert.equal(await dialogOf(a).locator("[data-loan-amount]").inputValue(), "100");
+    await dialogOf(a).getByRole("button", { name: "利子 10%" }).click();
+    assert.match(await dialogOf(a).locator(".loans-preview").innerText(), /返してもらう額 110pt（利子 10pt）/);
+    await dialogOf(a).getByRole("button", { name: "貸す", exact: true }).click();
+    await dialogOf(a).getByText("loan-bさんに 110pt 貸しています").waitFor();
+    assert.match(await dialogOf(a).locator(".loans-history li span").first().innerText(), /100pt 貸した（利子10%・返す額110pt）/);
+    assert.equal(wallet("loan-a"), 400);
+    await b.evaluate(() => window.PointLoans.person("loan-a", "loan-a"));
+    await dialogOf(b).getByText("loan-aさんから 110pt 借りています").waitFor();
+    assert.equal(wallet("loan-b"), 600);
+    await dialogOf(b).getByRole("tab", { name: "返す" }).click();
+    await dialogOf(b).getByRole("button", { name: "全部（110）" }).click();
+    await dialogOf(b).getByRole("button", { name: "返す", exact: true }).click();
+    await dialogOf(b).getByText("貸し借りはありません").waitFor();
+    assert.equal(wallet("loan-b"), 490);
+    await a.evaluate(() => window.PointLoans.collect());
+    assert.equal(wallet("loan-a"), 510);
+    await a.evaluate(() => window.PointLoans.close());
+    await b.evaluate(() => window.PointLoans.close());
+
     // An accident in すごろくビンゴ past the wallet: the rest is owed to the casino, one 請求 for
     // all of it, that can only be paid (not declined, no lending to the casino).
     await a.evaluate(async () => {
       await window.PointLoans.owe(150, "すごろくビンゴのアクシデント");
       await window.PointLoans.owe(50, "すごろくビンゴのアクシデント");
     });
-    assert.equal(wallet("loan-a"), 500);
+    assert.equal(wallet("loan-a"), 510);
     await a.evaluate(() => window.PointLoans.open());
     await dialogOf(a).locator(".loans-person", { hasText: "カジノ" }).click();
     await dialogOf(a).getByText("カジノさんから 200pt の請求です").waitFor();
@@ -166,11 +203,35 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await dialogOf(a).getByRole("button", { name: "返してと請求" }).count(), 0);
     await dialogOf(a).locator(".loans-request").getByRole("button", { name: "払う" }).click();
     await dialogOf(a).getByText("貸し借りはありません").waitFor();
-    assert.equal(wallet("loan-a"), 300);
+    assert.equal(wallet("loan-a"), 310);
     // Collecting never adds the casino's "loan" to the wallet.
     await a.evaluate(() => window.PointLoans.collect());
-    assert.equal(wallet("loan-a"), 300);
+    assert.equal(wallet("loan-a"), 310);
     await a.evaluate(() => window.PointLoans.close());
+
+    // With a slow cloud (every read takes 3 seconds) the list, a person and a profile still come
+    // up at once from what was seen before; the cloud's copies fill them in behind.
+    await a.evaluate(() => {
+      const get = window.fbGetDoc;
+      window.__fastGet = get;
+      window.fbGetDoc = (ref) => new Promise((resolve) => setTimeout(() => resolve(get(ref)), 3000));
+    });
+    let t0 = Date.now();
+    await a.evaluate(() => void window.PointLoans.open());
+    await dialogOf(a).locator(".loans-person", { hasText: "loan-b" }).waitFor({ timeout: 1500 });
+    assert.ok(Date.now() - t0 < 1500, "list in " + (Date.now() - t0) + "ms");
+    t0 = Date.now();
+    await dialogOf(a).locator(".loans-person", { hasText: "loan-b" }).click();
+    await dialogOf(a).getByText("最新の記録を確かめています…").waitFor({ timeout: 1500 });
+    assert.match(await dialogOf(a).locator(".loans-summary").innerText(), /貸し借りはありません/);
+    await dialogOf(a).locator(".loans-loading").waitFor({ state: "detached", timeout: 8000 });
+    await a.evaluate(() => window.PointLoans.close());
+    t0 = Date.now();
+    await a.evaluate(() => void window.People.open("loan-b"));
+    await a.locator(".people-loans").waitFor({ timeout: 1500 });
+    assert.ok(Date.now() - t0 < 1500, "profile in " + (Date.now() - t0) + "ms");
+    await a.evaluate(() => (window.fbGetDoc = window.__fastGet));
+    await a.evaluate(() => window.closeLibraryDialog?.());
 
     // The points dialog opens the screen.
     await b.evaluate(() => window.PointLoans.close());
@@ -178,7 +239,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await b.getByRole("button", { name: "ポイントの貸し借り" }).click();
     await dialogOf(b).locator(".loans-person", { hasText: "loan-a" }).waitFor();
     assert.deepEqual(errors, []);
-    console.log("PASS: casino debt from an accident paid through one 請求, loan out of the lender's wallet with the record, collected once by the borrower, 請求 paid, borrow request declined, matching histories, repay capped at the debt, guest message, opened from the points dialog");
+    console.log("PASS: lists, people and profiles open at once on a slow cloud, a loan with interest against a request, casino debt from an accident paid through one 請求, loan out of the lender's wallet with the record, collected once by the borrower, 請求 paid, borrow request declined, matching histories, repay capped at the debt, guest message, opened from the points dialog");
   } finally {
     await browser.close();
   }
