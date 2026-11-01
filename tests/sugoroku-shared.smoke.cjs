@@ -104,7 +104,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     // A roll that draws a ball needs the shared card. When the cloud cannot be written, nothing
     // is charged or saved, and the player is asked again.
     const ballAt = await rule("S.RULES.normal[100].findIndex((x) => x.ball)"),
-      fiveAt = await rule("S.RULES.wheels.bingo.findIndex((x) => x.x === 5)");
+      fiveAt = await rule("S.RULES.wheels.bingo.findIndex((x) => x.x === 10)");
     const start = await chips();
     await page.evaluate(() => (window.__failCard = true));
     await fix([0, ballAt, 99]);
@@ -126,16 +126,16 @@ const SAVE = "aiglish_sugoroku_sg-a",
     assert.deepEqual(Object.keys(await page.evaluate(() => window.__store["users/sg-a/learningPoints/main"].poker)).map((k) => k.replace(/:[^:]+:net$/, "")), ["casino:sugoroku", "casino:sugoroku"]);
     assert.equal((await saved()).rolls, 1);
 
-    // A ball on the row's last number finishes B's row: half the prize of 300 is shared by the 7
-    // balls (B's 6 parts, 128, wait on the card for B); of the bingo wheel's × 5 (500), 30% is
-    // shared the same way (B's 128 again), and the line goes in the log with A's name.
+    // A ball on the row's last number finishes B's row: half the prize of 1,000 is shared by the
+    // 7 balls (B's 6 parts, 428, wait on the card for B); of the bingo wheel's × 10 (1,000), 30%
+    // is shared the same way (B's 257), and the line goes in the log with A's name.
     const before = await chips();
     await fix([0, ballAt, row[6] - 1, fiveAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
-    assert.equal(await chips(), before - 100 + (300 - 128) + (500 - 128));
+    assert.equal(await chips(), before - 100 + (1000 - 428) + (1000 - 257));
     const shared = await page.evaluate(() => window.__store["shared/sugoroku_live"]);
-    assert.deepEqual(shared.owed, { "sg-b": 128 + 128 });
+    assert.deepEqual(shared.owed, { "sg-b": 428 + 257 });
     assert.deepEqual(Object.keys(shared.owedAt), ["sg-b"]);
     assert.deepEqual(shared.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.deepEqual(shared.log.map((e) => [e.t, e.id, e.n, e.c]), [["bingo", "sg-b", "B", 2], ["bingo", "sg-a", "A", 1]]);
@@ -187,7 +187,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       window.switchTab("casino");
     });
     await tab.locator(".mode-sugoroku .casino-waiting").waitFor();
-    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 256pt 届いています");
+    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 685pt 届いています");
     await page.evaluate(() => (myId = "sg-a"));
 
     // Opening again with a slow cloud: the screen comes up at once from what this device kept,

@@ -30,3 +30,12 @@ test("merging backups cannot resurrect idle minutes or multiply a repeated time 
     5,
   );
 });
+
+test("measured study time pays 5 points a minute from 2026-11-02, 1 before", () => {
+
+  const two = { 0: { d: { ms: 120000, removed: 0 } } };
+  assert.equal(p.timeMinutes(two), 2);
+  assert.equal(p.timePoints(two, "2026-11-01"), 2);
+  assert.equal(p.timePoints(two, "2026-11-02"), 10);
+  assert.equal(p.timePoints(two, "2027-01-15"), 10);
+});

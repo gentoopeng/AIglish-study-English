@@ -1894,3 +1894,44 @@ Tests:
 
 - `tests/point-loans-model.test.cjs`: interest, rounding, the allowed rates, and older entries.
 - `tests/point-loans.smoke.cjs`: the tabs, a loan at 10% against a request and its full repayment, and opening with a slow cloud.
+
+## Study time pays 5pt a minute; bigger bingos (10.22.41.00)
+
+The user found 1pt a minute of study too little, and the bingo payouts too small.
+
+**Study time.** Measured study time now pays 5pt a minute for days from 2026-11-02 (Japan time) on (`StudyPointPolicy.timePoints`).
+
+- Days before keep paying 1pt a minute. A day's time points are a level that is only ever raised, and it is worked out again whenever its records merge on another device. Multiplying every day would have paid all past study time again, five times over.
+- `timeRate(day)` decides by the day the time belongs to, everywhere a time amount is worked out: the day's own collection, merging, and the cloud claim.
+
+**Bingo.**
+
+| | Before | Now |
+| --- | ---: | ---: |
+| Bingo prize | 3× the bet (300) | 10× (1,000) |
+| Bingo wheel multiples | ×5 / ×10 / ×20 | ×10 / ×20 / ×50 |
+| Bingo wheel mini games | their points | 3× their points (`bingoGameBoost`) |
+
+The shares to the other balls on the line are unchanged in proportion: half the prize, and 30% of the wheel's multiples.
+
+To pay for it, everyday play gives back a little less:
+
+- A ball off the card gives the bet back (`missPay` 1.5 → 1).
+- The normal wheel's ×2 slot became ×0.
+- A line of only one's own balls pays ×1.1 (was ×1.25). The bigger prizes would otherwise give a lone player more than 100%.
+
+Simulated with the jackpots (sim6/sim7.cjs):
+
+| | Result |
+| --- | ---: |
+| Return, 1 player | about 98.8% |
+| Return, 5 players | about 97.3% |
+| Players ahead after 30 rolls | 32% |
+| Players ahead after 100 rolls | 30% |
+| Players ahead after 300 rolls | 23% |
+
+Tests:
+
+- `tests/study-point-policy.test.cjs`: the rate by day.
+- `tests/sugoroku-model.test.cjs`: the new payouts, and the plain-play return test now collecting shares and playing the quick games.
+- `tests/sugoroku.smoke.cjs`, `tests/sugoroku-shared.smoke.cjs`: updated amounts.

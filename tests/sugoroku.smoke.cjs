@@ -145,7 +145,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
         window.__queue = values.slice();
         crypto.getRandomValues = (array) => (window.__queue.length ? ((array[0] = window.__queue.shift()), array) : real(array));
       }, values);
-    // A ball off the card: it rolls in, greys out and pays 1.5× the bet (100 → 150).
+    // A ball off the card: it rolls in, greys out and gives the bet back (100).
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     const missNo = await page.evaluate(([name, cardName]) => {
       const s = JSON.parse(localStorage.getItem(name));
@@ -164,7 +164,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await screen.locator("[data-sg-roll]").click();
     await settled();
     const missed = await saved();
-    assert.equal(missed.won - before.won, 150);
+    assert.equal(missed.won - before.won, 100);
     assert.deepEqual((await card()).owners, beforeCard.owners);
 
     // Another player's ball shows their initial and name; the top row is the guest's own but its
@@ -205,9 +205,9 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const done = await saved(),
       doneCard = await card();
     assert.equal(done.bingos, before20.bingos + 1);
-    // A line of only the guest's balls: (bingo prize 300 + × 20 = 2,000) × 1.25, plus START's
+    // A line of only the guest's balls: (bingo prize 1,000 + × 20 = 2,000) × 1.1, plus START's
     // wheel (which can take up to another bet).
-    assert.ok(done.won - before20.won >= 2775, String(done.won - before20.won));
+    assert.ok(done.won - before20.won >= 3200, String(done.won - before20.won));
     // The finished row starts again: no balls, fresh numbers; amy's ball stays.
     assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.ok(!doneCard.cells.slice(0, 7).includes(lastNo));
@@ -247,10 +247,10 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await settled();
     const afterMini = await saved();
     assert.deepEqual(afterMini.bonus, []);
-    // amy's row: no solo bonus, and half the prize of 300 is shared by the balls on it: amy's six
-    // parts (128) wait on the card for her, the guest keeps 172; plus whatever the timer scored.
-    assert.ok(afterMini.won - beforeMini.won >= 172);
-    assert.deepEqual((await card()).owed, { amy: 128 });
+    // amy's row: no solo bonus, and half the prize of 1,000 is shared by the balls on it: amy's
+    // six parts (428) wait on the card for her, the guest keeps 572; plus what the timer scored.
+    assert.ok(afterMini.won - beforeMini.won >= 572);
+    assert.deepEqual((await card()).owed, { amy: 428 });
 
     // The normal squares' quick games. ストップ: stopped at once, the light is at the left end: a
     // miss, 0. ハイ＆ロー: 5 then 9 and HIGH: a win, 1.5× the bet.
