@@ -224,6 +224,40 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate(() => (window.fbGetDoc = window.__slowGet));
 
+    // Another player's ball that comes in while a roll is being shown is not lost: once the
+    // screen is free the card is read again and the ball shows (before, it waited for the next
+    // change to the card).
+    await page.evaluate((name) => {
+      const S = window.SugorokuModel;
+      const s = JSON.parse(localStorage.getItem(name));
+      let p = 1;
+      while (S.kindAt(p + 1) !== "normal") p++;
+      Object.assign(s, { pos: p, pending: null, bonus: [] });
+      localStorage.setItem(name, JSON.stringify(s));
+      window.fbOnSnapshot = (ref, cb) => {
+        const snap = () => ({ exists: () => !!window.__store[ref], data: () => structuredClone(window.__store[ref]) });
+        window.__emit = () => cb(snap());
+        setTimeout(() => cb(snap()), 0);
+        return () => (window.__emit = null);
+      };
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await settled();
+    await fix([0, zeroAt]);
+    const cOn = await page.evaluate(() => {
+      const card = window.__store["shared/sugoroku_live"],
+        at = card.owners.findIndex((o) => o === "");
+      document.querySelector(".sg-go").click();
+      card.owners[at] = "sg-c";
+      card.people = { ...card.people, "sg-c": { n: "C", i: "" } };
+      window.__emit();
+      return at;
+    });
+    await settled();
+    await page.waitForFunction((at) => document.querySelectorAll(".sg-cell")[at]?.getAttribute("data-initial") === "C", cOn, { timeout: 5000 });
+    await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate(() => delete window.fbOnSnapshot);
+
     // An accident past the wallet: with 150pt left, a roll onto the accident square whose wheel
     // takes 2× the bet loses 300; the wallet stops at 0 and the other 150 is owed to the casino.
     await page.evaluate((name) => {
@@ -278,7 +312,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       now: { jp: 3000, sjp: 12000 },
     });
     assert.deepEqual(errors, []);
-    console.log("PASS: shared すごろくビンゴ: untrusted card data checked, reach numbers, a failed write charges nothing, a player's part collected once, a line shared and logged, records, 早送り kept, script taps ignored, a jackpot win takes the pot and starts it again");
+    console.log("PASS: shared すごろくビンゴ: untrusted card data checked, reach numbers, a failed write charges nothing, a player's part collected once, a line shared and logged, records, 早送り kept, script taps ignored, a ball that came in during a roll shows after it, a jackpot win takes the pot and starts it again");
   } finally {
     await browser.close();
   }
