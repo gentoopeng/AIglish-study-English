@@ -229,3 +229,11 @@
 .sg-hilo-card{display:grid;place-items:center;width:62px;height:86px;border-radius:9px;background:linear-gradient(160deg,#1d3a30,#0f221c);border:1px solid var(--line);color:var(--gold);font:700 28px Georgia,serif;}
 .sg-hilo-card.is-open{background:linear-gradient(160deg,#fbf6ea,#e9dfc6);color:#1b2a24;}
 .sg-mini .sg-game-btn[data-sg-game=high],.sg-mini .sg-game-btn[data-sg-game=low]{width:calc(50% - 4px);display:inline-block;margin:0 2px;}
+/* Who else is rolling on the shared card right now. */
+.sg-body .sg-here{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 8px;margin:0;color:var(--muted);font-size:11px;line-height:1.3;}
+.sg-body .sg-here[hidden]{display:none;}
+.sg-here-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80;animation:sg-here-pulse 1.6s ease-in-out infinite;}
+.sg-here-who{display:inline-flex;align-items:center;gap:4px;color:var(--ivory);}
+.sg-here-face{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:hsl(var(--hue,200) 45% 40%) center/cover no-repeat;color:#fff;font-size:9px;font-style:normal;font-weight:700;}
+@keyframes sg-here-pulse{50%{opacity:.4;}}
+@media (prefers-reduced-motion:reduce){.sg-here-dot{animation:none;}}

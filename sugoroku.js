@@ -310,6 +310,8 @@
   }
   // Other players' balls come in while the screen is open.
   function listen() {
+    listenHere();
+    markHere();
     view.stop?.();
     view.stop = null;
     if (!shared() || typeof window.fbOnSnapshot !== "function") return;
@@ -326,6 +328,73 @@
     } catch (error) {
       console.warn("[sugoroku] listen", error);
     }
+  }
+  // Who else is playing: shared/sugoroku_here holds { [id]: { n, at } }. A player is marked
+  // when the screen opens and then with their rolls, at most every 45 seconds, and counts as
+  // playing for two minutes after that. Entries older than a day are cleared by whoever writes.
+  const HERE_DOC = "sugoroku_here",
+    HERE_EVERY = 45e3,
+    HERE_FOR = 120e3;
+  const hereRef = () => window.fbDoc(window.db, "shared", HERE_DOC);
+  function markHere() {
+    if (!view || !view.online || !shared() || typeof window.fbSetDoc !== "function") return;
+    const now = Date.now();
+    if (now - (view.hereAt || 0) < HERE_EVERY) return;
+    view.hereAt = now;
+    const id = api.uid(),
+      mine = { [id]: { n: (view.people[id]?.n || personNow().n || "").slice(0, 24), at: now } };
+    if (typeof window.fbDeleteField === "function")
+      for (const [other, p] of Object.entries(view.here || {})) if (other !== id && now - p.at > 864e5) mine[other] = window.fbDeleteField();
+    Promise.resolve()
+      .then(() => window.fbSetDoc(hereRef(), mine, { merge: true }))
+      .catch((error) => console.warn("[sugoroku] here", error));
+  }
+  function cleanHere(data) {
+    const out = {};
+    if (data && typeof data === "object")
+      for (const [id, p] of Object.entries(data).slice(0, 200))
+        if (okId(id) && p && typeof p === "object" && Number.isFinite(p.at)) out[id] = { n: String(p.n ?? "").slice(0, 24), at: p.at };
+    return out;
+  }
+  function listenHere() {
+    view.stopHere?.();
+    view.stopHere = null;
+    if (!view.online || !shared() || typeof window.fbOnSnapshot !== "function") return;
+    const target = view;
+    try {
+      view.stopHere = window.fbOnSnapshot(hereRef(), (snap) => {
+        if (target !== view || !view.body.isConnected) return target.stopHere?.();
+        view.here = cleanHere(snap.exists() ? snap.data() : null);
+        paintHere();
+      });
+    } catch (error) {
+      console.warn("[sugoroku] listen here", error);
+    }
+    // Someone who stops rolling drops off the list after a while, with no write needed.
+    const tick = setInterval(() => (target === view && view.body.isConnected ? paintHere() : clearInterval(tick)), 20e3);
+  }
+  function paintHere() {
+    if (!view?.hereEl) return;
+    const now = Date.now(),
+      me = api.uid(),
+      others = Object.entries(view.here || {})
+        .filter(([id, p]) => id !== me && now - p.at < HERE_FOR)
+        .sort((a, b) => b[1].at - a[1].at);
+    view.hereEl.hidden = !others.length;
+    view.hereEl.replaceChildren();
+    if (!others.length) return;
+    view.hereEl.append(node("i", "sg-here-dot"), node("span", "", "いっしょにプレイ中　"));
+    for (const [id, p] of others.slice(0, 5)) {
+      const who = node("span", "sg-here-who"),
+        icon = view.people[id]?.i;
+      const face = node("i", "sg-here-face");
+      face.style.setProperty("--hue", hue(id));
+      if (icon) face.style.backgroundImage = 'url("' + icon + '")';
+      else face.textContent = (p.n || "?").trim().slice(0, 1);
+      who.append(face, node("span", "", (p.n || "だれか") + "さん"));
+      view.hereEl.append(who);
+    }
+    if (others.length > 5) view.hereEl.append(node("span", "", "ほか" + (others.length - 5) + "人"));
   }
   // Other players' balls that came in while this screen was busy: the card is read once more
   // when it is free, so they show now instead of with somebody's next ball.
@@ -377,6 +446,7 @@
     api = wallet;
     // A screen opened before stops here (its listener and its card choice).
     view?.stop?.();
+    view?.stopHere?.();
     view?.unsub?.();
     view = null;
     body.replaceChildren(node("p", "cs-hint", "読み込み中…"));
@@ -498,6 +568,9 @@
     cardWrap.onclick = board.onclick;
 
     view.info = node("p", "sg-status");
+    view.hereEl = node("p", "sg-here");
+    view.hereEl.hidden = true;
+    view.hereEl.setAttribute("aria-label", "いっしょにプレイ中の人");
 
     const controls = node("div", "sg-controls");
     // One fixed bet for everybody.
@@ -521,8 +594,9 @@
 
     view.layer = node("div", "sg-layer");
     view.layer.hidden = true;
-    body.replaceChildren(pots, cardWrap, board, view.info, controls, view.layer);
+    body.replaceChildren(pots, view.hereEl, cardWrap, board, view.info, controls, view.layer);
     paintCard();
+    paintHere();
     hud();
     place(state.pos, false);
   }
@@ -736,6 +810,7 @@
       me = api.uid();
     view.busy = true;
     hud();
+    markHere();
     view.die.shake();
     // Worked out at once on the card as last seen. Most rolls draw no ball and leave the card
     // alone, so they need no cloud round trip; a ball (or a part waiting for this player) does.
