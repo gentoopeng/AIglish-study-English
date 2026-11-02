@@ -2110,3 +2110,23 @@ Tests:
 The totals given and taken are shown above. It is one query over the 運営's records (`pointLoans` where `people` contains `ADMIN`, at most 100 records; `PointLoans.adminHistory`).
 
 Test: `tests/admin-players.smoke.cjs` opens the history after a gift and a charge.
+
+## Deleting a player: no step blocks the rest, and newer data is cleaned up (10.22.50.00)
+
+The user found that deleting a player did not seem to work.
+
+**Likely cause.** The deletion looked for the player's group chat lines with one query across every group's messages: a collection-group query filtered on `ownerId`. Such a query needs a collection-group index, which has to be created in the Firebase console, and this project has none. Without it the query fails every time. The deletion stopped there as 「完全削除が未完了」, and running it again failed at the same place.
+
+**Fix.**
+
+- The player's chat lines are found group by group, inside the groups that already list the player (`retainedMemberIds`). A query on one group's messages needs no extra index.
+- Every clean-up runs as its own step. One that fails no longer stops the others: the deletion goes on, names the failed steps, and leaves the account `pending`. Running it again repeats only what is safe to repeat.
+
+**Newer data now cleaned up too.**
+
+- Talks and lending: the player's list of talks (`pointLoanInbox/<id>`) is deleted.
+- In each pair kept for the other side, the player's messages are removed, their notes cleared and their name set to 削除済み. The money history stays for the other player.
+- すごろくビンゴ's shared card: the player's balls, part and name, and their lines in its log, are removed.
+- The casino's jackpot winners: the player's name is shown as 削除済み.
+
+Test: `tests/admin-players.smoke.cjs` now has data in all of these, and checks each after a deletion that was interrupted once and then run again.
