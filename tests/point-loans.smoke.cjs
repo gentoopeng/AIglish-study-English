@@ -16,7 +16,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       docs.set("users/" + id, { playerName: id, studyPoints: 500 });
       docs.set("users/" + id + "/learningPoints/main", { balance: 500, revision: 1, history: {} });
     }
-    async function pageFor(id) {
+    // signIn: how long after the app has loaded the player signs in (a slow login).
+    async function pageFor(id, signIn = 0) {
       const page = await browser.newPage({ viewport: { width: 375, height: 740 } });
       page.on("pageerror", (error) => errors.push(id + ": " + error.message));
       await page.route("https://**/*", (r) => r.abort());
@@ -46,6 +47,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       await page.evaluate(() => window.PointLoans.open());
       await page.getByText("ポイントの貸し借りはログインしたアカウントで使えます。").waitFor();
       await page.evaluate(() => window.PointLoans.close());
+      if (signIn) await page.waitForTimeout(signIn);
       await page.evaluate((id) => {
         myId = id;
         myName = id;
@@ -214,6 +216,15 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await dialogOf(b).getByRole("textbox", { name: "メッセージ" }).count(), 0);
     assert.match(await dialogOf(b).locator(".loans-summary").innerText(), /貸し借りはありません/);
     await b.evaluate(() => window.PointLoans.close());
+    // A player still signing in when the app loaded gets points sent to them without opening
+    // anything: they are collected once the player is signed in.
+    docs.set("users/loan-c", { playerName: "loan-c", studyPoints: 0 });
+    docs.set("users/loan-c/learningPoints/main", { balance: 0, revision: 1, history: {} });
+    await a.evaluate(() => window.PointLoans.grant("loan-c", "loan-c", 300, "ようこそ"));
+    const c = await pageFor("loan-c", 3000);
+    for (let i = 0; i < 40 && wallet("loan-c") !== 300; i++) await c.waitForTimeout(500);
+    assert.equal(wallet("loan-c"), 300);
+    await c.close();
 
     // An accident in すごろくビンゴ past the wallet: the rest is owed to the casino, one 請求 for
     // all of it, that can only be paid (not declined, no lending to the casino).
