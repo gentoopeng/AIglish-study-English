@@ -114,12 +114,18 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const round = (await saved()).pending.round;
     assert.equal(round.held[0], true);
     const chips = await page.evaluate(() => window.Casino.balance());
+    const wonBefore = (await saved()).won;
     await game.locator('[data-sg-game="stand"]').click();
     const outcome = (await saved()).pending.round.outcome;
-    await game.locator('[data-sg-game="next"]').click();
+    // つづける tapped over and over (as on a slow connection) settles the game once.
+    await page.evaluate(() => {
+      const next = document.querySelector('.sg-layer.is-game [data-sg-game="next"]');
+      for (let i = 0; i < 6; i++) next.click();
+    });
     await settled();
     const ended = await saved();
     assert.equal(ended.pending, null);
+    assert.equal((await page.evaluate(() => window.Casino.balance())) - chips, ended.won - wonBefore, "paid once");
     const paid = { win: 100, push: 50, lose: 13 }[outcome];
     assert.ok((await page.evaluate(() => window.Casino.balance())) >= chips + paid, outcome);
 
