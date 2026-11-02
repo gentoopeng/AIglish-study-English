@@ -37,7 +37,7 @@ test("the board, card and wheels have the agreed shape", () => {
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     // From ×10 down to a minus that takes another bet.
-    for (const x of [10, 5, 1.5, 1.25, 0.75, 0.5, 0.25, 0, -0.5, -1]) assert.ok(values.has(x), cost + " has ×" + x);
+    for (const x of [10, 5, 1.5, 1.25, 1, 0.75, 0.5, 0.25, 0, -0.5, -1]) assert.ok(values.has(x), cost + " has ×" + x);
     assert.deepEqual(S.RULES.normal[cost].filter((x) => x.event).map((x) => x.event).sort(), ["blackjack", "chinchiro", "dice"]);
     const w = S.RULES.normal[cost];
     assert.ok(w.every((slot, i) => JSON.stringify(slot) !== JSON.stringify(w[(i + 1) % w.length])), cost + " is spread");
@@ -226,11 +226,11 @@ test("the jackpot is a slot of the bingo wheel, the super chance leads to its ow
 
 test("a mini game waits in state.bonus, blocks rolling and pays its score, 0 when left", () => {
   const out = lineReady([slot("bingo", (x) => x.game === "timer")]);
-  // A bingo wheel's mini game scores bingoGameBoost (3) times its points.
-  assert.deepEqual(out.state.bonus, [{ game: "timer", mult: 3 }]);
+  // A bingo wheel's mini game scores bingoGameBoost (2) times its points.
+  assert.deepEqual(out.state.bonus, [{ game: "timer", mult: 2 }]);
   assert.throws(() => S.roll(out.state, out.card, 100, seq([0])));
-  assert.equal(S.settleBonus(out.state, 10).gain, 3000);
-  assert.equal(S.settleBonus(out.state, 10.03).gain, 2955);
+  assert.equal(S.settleBonus(out.state, 10).gain, 2000);
+  assert.equal(S.settleBonus(out.state, 10.03).gain, 1970);
   assert.equal(S.settleBonus(out.state, 12.5).gain, 0);
   assert.equal(S.settleBonus(out.state, null).gain, 0);
   assert.deepEqual(S.settleBonus(out.state, 10).state.bonus, []);
@@ -241,7 +241,7 @@ test("a mini game waits in state.bonus, blocks rolling and pays its score, 0 whe
   assert.equal(S.gameScore("math", false), 0);
   // Super chance → the bigger tapping game.
   const ex = lineReady([slot("bingo", (x) => x.next), slot("sjp", (x) => x.game === "tapex")]);
-  assert.deepEqual(ex.state.bonus, [{ game: "tapex", mult: 3 }]);
+  assert.deepEqual(ex.state.bonus, [{ game: "tapex", mult: 2 }]);
   // The sums come out whole.
   const random = rng(5);
   for (let i = 0; i < 200; i++) {

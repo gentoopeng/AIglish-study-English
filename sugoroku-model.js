@@ -58,9 +58,9 @@
     // blackjack, dice poker or chinchiro as an event square does.
     normal: {
       100: spread([
-        ...N(10), ...N(5), ...N(1.5), ...N(1.25),
+        ...N(10), ...N(5), ...N(1.5), ...N(1.25), ...N(1),
         ...N(0.75), ...N(0.5, 3), ...N(0.25, 3),
-        ...N(0, 16), ...N(-0.5, 2), ...N(-1, 2),
+        ...N(0, 15), ...N(-0.5, 2), ...N(-1, 2),
         ...BALL(0, 4), ...GAME("stop"), ...GAME("hilo"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("chinchiro"),
       ]),
     },
@@ -83,7 +83,7 @@
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
     bingoPrize: 10,
     // The bingo wheels' mini games score this many times their points.
-    bingoGameBoost: 3,
+    bingoGameBoost: 2,
     // Of the bingo prize, this part is shared by the balls on the line (the finisher's own balls
     // included); the rest is the finisher's.
     prizeShare: 0.5,

@@ -1935,3 +1935,31 @@ Tests:
 - `tests/study-point-policy.test.cjs`: the rate by day.
 - `tests/sugoroku-model.test.cjs`: the new payouts, and the plain-play return test now collecting shares and playing the quick games.
 - `tests/sugoroku.smoke.cjs`, `tests/sugoroku-shared.smoke.cjs`: updated amounts.
+
+## すごろくビンゴ: more back from everyday squares, bigger jackpots (10.22.42.00)
+
+The user sent their record after the change above: 154 rolls, 15,150pt bet, 9,261pt back (61%), no line and no share yet. They asked for more back from everyday play and bigger jackpots.
+
+That result is within what the game allows. Most of what pays comes with lines and jackpots, and a run of 154 rolls has, on average, less than one line. But it showed how little the everyday squares gave back on their own.
+
+- **Normal wheel.** One ×0 became ×1, so the bet comes back.
+- **Bingo wheel.** Its mini games score 2× their points (was 3×).
+- **Jackpots.** The pots start higher and grow from a smaller share:
+  - JACKPOT = 3,000 + 1.5% of the bets since it was won, up to 20,000. It was 1,000 + 3%, up to 10,000.
+  - SUPER JACKPOT = 12,000 + 1%, up to 150,000. It was 5,000 + 2%, up to 100,000.
+
+Simulated with the jackpots (sim6/sim7.cjs):
+
+| | Result |
+| --- | ---: |
+| Return, 5 players | about 99.5–100% |
+| Return, 1 player | about 101% |
+| Typical JACKPOT | about 4,100pt (once in about 770 rolls) |
+| Typical SUPER JACKPOT | about 16,000pt (once in about 4,000 rolls) |
+| Players ahead after 30 rolls | 33% |
+| Players ahead after 100 rolls | 29% |
+| Players ahead after 300 rolls | 23% |
+
+The game now pays back about what it takes over time. Raising it further would let points grow without study.
+
+Tests: the wheel and mini-game boost in `tests/sugoroku-model.test.cjs`; the new pots, cap and spill in `tests/sugoroku-shared.smoke.cjs`, `tests/sugoroku.smoke.cjs` and `tests/casino.smoke.cjs`.
