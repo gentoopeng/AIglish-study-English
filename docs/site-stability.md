@@ -2040,3 +2040,22 @@ The user reported 「undefined is not an object (evaluating 'last[key]') (point-
 **Check.** `tests/point-loans.smoke.cjs` now opens the list with a kept pair whose record was never read. It fails on 10.22.43.00 and passes now.
 
 Points sent from the 運営 were not affected: they are collected when the app starts, apart from drawing the list.
+
+## Fix: points sent to a player were not collected (10.22.46.00)
+
+The user reported that points sent from the 運営 did not arrive.
+
+**Cause.** Points sent to a player (loans, repayments and gifts from the 運営) were collected once, 1.5 seconds after the app loaded. If the player was still signing in at that moment, the collection saw a guest, did nothing, and never ran again.
+
+- A loan or a repayment still arrived when its talk was opened.
+- A gift from the 運営 stayed waiting until the player opened the 運営 talk, which nothing prompts them to do.
+
+**Fix.** Collection now runs:
+
+- as soon as the player is signed in after start (checked every 5 seconds for up to 10 minutes);
+- every 10 minutes;
+- when the app comes back to the front (at most every 2 minutes).
+
+Each run is one read of the player's list, plus a claim only for pairs that changed. Gifts already sent arrive the next time the player opens the app (10.22.46.00 or later).
+
+**Check.** `tests/point-loans.smoke.cjs` has a player sign in 3 seconds after the app loaded, with a gift already waiting. The gift reaches the wallet on its own. On 10.22.45.00 the wallet stays at 0.

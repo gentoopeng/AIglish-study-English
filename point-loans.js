@@ -673,6 +673,25 @@
     }
   }
 
-  window.onAppLoaded?.(() => setTimeout(() => collect().catch(() => {}), 1500));
+  // Points sent to this player (loans, repayments, gifts from the 運営) come in without opening
+  // anything: once the player is signed in after start (the app may still be logging in when it
+  // loads), every 10 minutes, and when the app comes back to the front (at most every 2 minutes).
+  // Each look is one read of the player's list.
+  let lastCollect = 0;
+  function collectSoon(force) {
+    if (uid() === "GUEST-000" || (!force && Date.now() - lastCollect < 120e3)) return;
+    lastCollect = Date.now();
+    collect().catch((error) => console.warn("[loans] collect", error));
+  }
+  window.onAppLoaded?.(() => {
+    const start = Date.now();
+    const first = () => {
+      if (uid() !== "GUEST-000") return collectSoon(true);
+      if (Date.now() - start < 600e3) setTimeout(first, 5000);
+    };
+    setTimeout(first, 1500);
+    setInterval(() => collectSoon(true), 600e3);
+    document.addEventListener("visibilitychange", () => !document.hidden && collectSoon(false));
+  });
   window.PointLoans = Object.freeze({ open, person, send, ask, talk, grant, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
 })();
