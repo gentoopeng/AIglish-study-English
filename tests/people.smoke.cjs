@@ -104,16 +104,21 @@ const { chromium, webkit } = require("playwright"),
         .count(),
       0,
     );
+    // Another player opens as a talk; its プロフィール opens the profile.
     await page.getByRole("button", { name: "最近の人のプロフィール" }).click();
-    assert.equal(await page.locator("dialog[open]").isVisible(), true);
+    const talk = page.locator("dialog.is-talk[open]");
+    await talk.waitFor();
+    await talk.getByRole("button", { name: "プロフィール", exact: true }).click();
+    const profile = page.locator("dialog.library-editor-dialog[open]");
+    assert.equal(await profile.isVisible(), true);
     // The profile no longer shows a goal (目標 was retired).
-    assert.doesNotMatch(
-      await page.locator("dialog[open]").textContent(),
-      /目標|英語を勉強/,
-    );
-    await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    assert.doesNotMatch(await profile.textContent(), /目標|英語を勉強/);
+    await profile.getByRole("button", { name: "閉じる", exact: true }).click();
+    await talk.getByRole("button", { name: "トークを閉じる" }).click();
     await page.getByRole("button", { name: "最近の人のプロフィール" }).click();
-    await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    await talk.getByRole("button", { name: "プロフィール", exact: true }).click();
+    await profile.getByRole("button", { name: "閉じる", exact: true }).click();
+    await talk.getByRole("button", { name: "トークを閉じる" }).click();
     assert.equal(await page.evaluate(() => profileReads), 1);
     await page.evaluate(() => refreshFriendListFromFirebase(false));
     assert.equal(

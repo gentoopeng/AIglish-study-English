@@ -81,7 +81,17 @@ async function edit(id){
  field('ニックネーム','playerName',data.playerName);
  const save=element('button','変更を保存');save.type='submit';const back=element('button','一覧に戻る');back.type='button';back.onclick=refreshList;
  const remove=element('button',data.deleted?'完全削除を再確認':'プレイヤーを完全削除');remove.type='button';remove.className='admin-player-delete';
- form.append(save,back,remove);if(data.deleted){form.querySelectorAll('label').forEach(node=>node.hidden=true);save.hidden=true;}body.append(form);message(data.deleted?'削除済みです。未完了の完全削除を再実行できます。':'学習記録を保持したまま情報を編集します。');
+ form.append(save,back,remove);if(data.deleted){form.querySelectorAll('label').forEach(node=>node.hidden=true);save.hidden=true;}body.append(form);
+ // Points from the 運営: they arrive in the player's wallet the next time the app opens, with a
+ // line in their talk with 運営 (PointLoans.grant).
+ if(!data.deleted&&window.PointLoans?.grant){const gift=element('div');gift.className='admin-player-gift';gift.append(element('h4','ポイントを送る'));
+  const amount=element('input');amount.type='number';amount.min='1';amount.max='100000';amount.step='1';amount.inputMode='numeric';amount.setAttribute('aria-label','送るポイント');
+  const note=element('input');note.type='text';note.maxLength=120;note.placeholder='ひとこと（任意）';note.setAttribute('aria-label','運営からのひとこと');
+  const give=element('button','ポイントを送る');give.type='button';
+  give.onclick=async()=>{if(busy)return;const n=Math.floor(Number(amount.value));if(!(n>=1&&n<=100000)){message('1〜100,000ptで入れてください。');return;}lock(true);message('送信中…');
+   try{guard();await deadline(window.PointLoans.grant(id,data.playerName||id,n,note.value.trim()));amount.value='';note.value='';message((data.playerName||id)+'さんに '+n.toLocaleString('ja-JP')+'pt を送りました。次にアプリを開いたときに届きます。');}
+   catch(error){message('送れませんでした。'+error.message);}finally{lock(false);}};
+  gift.append(amount,note,give);body.append(gift);}message(data.deleted?'削除済みです。未完了の完全削除を再実行できます。':'学習記録を保持したまま情報を編集します。');
  form.onsubmit=async event=>{event.preventDefault();if(busy)return;const name=form.elements.playerName.value.trim();if(!name){message('ニックネームを入力してください。');return;}
  await mutate(id,current=>{if(current.deleted)throw Error('削除済みのプレイヤーは編集できません。');const now=Date.now(),profile=window.UserProfileModel.decode(current.profileCustomizationJson);return {playerName:name,profileCustomizationJson:JSON.stringify({...profile,nickname:name,updatedAt:Math.max(now,Number(profile.updatedAt||0)+1)})};});};
  remove.onclick=()=>{if(busy)return;const confirmation=element('div');confirmation.className='admin-player-confirm';confirmation.append(element('p',(data.playerName||id)+'（'+id+'）を完全削除します。学習記録・バックアップ・共有メモ・本人の公開教材も削除され、元に戻せません。'));

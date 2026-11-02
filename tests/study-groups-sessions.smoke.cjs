@@ -536,10 +536,10 @@ const { chromium, webkit } = require("playwright"),
       .locator(".group-member-list .people-profile-button")
       .first()
       .click();
-    await b
-      .getByRole("heading", { name: "プロフィール", exact: true })
-      .waitFor();
-    await b.getByRole("button", { name: "閉じる", exact: true }).click();
+    // A member opens as a talk over the group; closing both leaves no listener behind.
+    await b.locator("dialog.is-talk[open]").waitFor();
+    await b.getByRole("button", { name: "トークを閉じる" }).click();
+    await b.evaluate(() => window.closeLibraryDialog());
     await b.waitForFunction(() => Object.keys(__listeners).length === 0);
     // Mid-deck durable checkpoint survives a real reload without replaying a swipe.
     await a.evaluate(() => {

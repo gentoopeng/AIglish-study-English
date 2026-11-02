@@ -1963,3 +1963,35 @@ Simulated with the jackpots (sim6/sim7.cjs):
 The game now pays back about what it takes over time. Raising it further would let points grow without study.
 
 Tests: the wheel and mini-game boost in `tests/sugoroku-model.test.cjs`; the new pots, cap and spill in `tests/sugoroku-shared.smoke.cjs`, `tests/sugoroku.smoke.cjs` and `tests/casino.smoke.cjs`.
+
+## A person opens as a talk; points from the 運営 (10.22.43.00)
+
+The user asked for a LINE-like talk screen when opening a user, and for a way for the 運営 to send points.
+
+**Talk.** Opening another player now opens a talk with them (`PointLoans.person`). This applies from the user list, a study group, or the profile's 「トーク」. It has:
+
+- **A header:** back to the list, their icon and name, 「プロフィール」 (the old profile dialog, now `People.open(id, { profile: true })`), and close.
+- **A standing bar:** where the two players stand.
+- **The talk:** messages and every loan, repayment, request and gift, oldest first, with a line for each day. Messages are bubbles (mine green on the right). Points and requests are cards, and a request waiting for my answer carries its buttons (払う / 断る / 条件を決めて貸す).
+- **The line to talk,** with a ＋ that opens the points form from 10.22.40.00 over it.
+
+The talk follows the record live while it is open (`fbOnSnapshot`, or one read where there is none). This player, a guest, or a profile asked for opens the profile as before. The list of talks shows each one's last line.
+
+**Messages** are entries in the pair's record (`PointLoansModel.say`, kind `message`, up to 500 characters). A record holds up to 400 entries. When it is full, the oldest messages go first (at most 150 are kept), then finished requests. A long talk never pushes a debt out of the record, which would have erased it.
+
+**Points from the 運営.**
+
+- 管理者ツール → a player → ポイントを送る (1–100,000pt, with an optional note).
+- This writes a gift (`PointLoansModel.gift`, kind `gift`, owed by nobody) into the record between `ADMIN` (「運営」) and the player, and a line in the player's list of talks (`PointLoans.grant`).
+- The player's device collects it into the wallet once, as with any points sent, and says 「運営から 500pt 届きました」.
+- The talk with 運営 shows the gift with its note. It has no line to type in and no points form.
+
+Tests:
+
+- `tests/point-loans-model.test.cjs`: messages, gifts, trimming that keeps debts.
+- `tests/point-loans.smoke.cjs`:
+  - the talk, bubbles and cards in order;
+  - the ＋ form;
+  - a message seen by the other side and in the list;
+  - a gift collected once.
+- `tests/admin-players.smoke.cjs`: sending points from the admin tool.

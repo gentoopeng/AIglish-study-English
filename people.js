@@ -162,7 +162,8 @@
       const loans = document.createElement("div");
       loans.className = "people-loans";
       for (const [text, primary, mode] of [
-        ["貸す", true, "lend"],
+        ["トーク", true, null],
+        ["貸す", false, "lend"],
         ["借りたいと頼む", false, "borrow"],
       ]) {
         const b = document.createElement("button");
@@ -171,7 +172,7 @@
         if (primary) b.className = "library-editor-primary";
         b.onclick = () => {
           window.closeLibraryDialog?.();
-          window.PointLoans.person(person.id, doc.playerName || person.name, { mode });
+          window.PointLoans.person(person.id, doc.playerName || person.name, mode ? { mode } : undefined);
         };
         loans.append(b);
       }
@@ -242,7 +243,7 @@
     text.className = "people-text";
     name.before(text);
     text.append(name, meta);
-    button.onclick = () => detail(person);
+    button.onclick = () => window.People.open(person.id);
     wrapper.append(button);
     return wrapper;
   }
@@ -410,14 +411,14 @@
       detailJobs.clear();
     },
     list: () => (owner === uid() ? users.map((person) => ({ ...person })) : []),
-    open: (id) =>
-      detail(
-        users.find((person) => person.id === id) || {
-          id,
-          name: id,
-          avatar: "",
-        },
-      ),
+    // Another signed-in player opens as a talk (point-loans.js), with the profile a tap away;
+    // this player, a guest, or { profile: true } opens the profile.
+    open(id, options) {
+      const person = users.find((p) => p.id === id) || { id, name: id, avatar: "" };
+      if (!options?.profile && id !== uid() && uid() !== "GUEST-000" && window.PointLoans?.person)
+        return window.PointLoans.person(id, person.doc?.playerName || person.name);
+      return detail(person);
+    },
     render,
     refresh,
     preview: (id) =>
