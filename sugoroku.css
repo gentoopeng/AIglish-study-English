@@ -237,3 +237,6 @@
 .sg-here-face{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:hsl(var(--hue,200) 45% 40%) center/cover no-repeat;color:#fff;font-size:9px;font-style:normal;font-weight:700;}
 @keyframes sg-here-pulse{50%{opacity:.4;}}
 @media (prefers-reduced-motion:reduce){.sg-here-dot{animation:none;}}
+/* Today's allowance from studying, under the roll button. */
+.sg-body .sg-study{margin:0;color:var(--muted);font-size:11px;text-align:center;}
+.sg-body .sg-study[hidden]{display:none;}

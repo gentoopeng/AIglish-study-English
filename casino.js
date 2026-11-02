@@ -100,6 +100,48 @@
   addEventListener("pagehide", flush);
   window.onAppLoaded?.(() => setTimeout(flush, 3000));
   const balance = () => (real() ? Math.max(0, (window.StudyPoints?.balance() || 0) + pending + unsent()) : practiceChips());
+
+  // ---- Study first ---------------------------------------------------------------------
+  // Points can be bet only after studying: each minute measured today (the study timer, not
+  // time typed in) lets the player bet PER_MINUTE more today, across every game. What was bet
+  // today is counted on this device. Practice chips are not limited.
+  const PER_MINUTE = 100;
+  const studyDay = () => (window.StudyTimeModel ? window.StudyTimeModel.dateKey(Date.now()) : today());
+  function studyMinutes() {
+    try {
+      window.StudyTime?.tick?.();
+      const day = window.StudyTime?.snapshot?.()?.days?.[studyDay()];
+      if (!day) return 0;
+      // Measured time from every device; the old pre-ledger total ("legacy") and edits do not count.
+      const ms = Object.entries(day.sources || {}).reduce((sum, [source, value]) => sum + (source === "legacy" ? 0 : Math.max(0, Number(value) || 0)), 0);
+      return Math.floor(Math.min(86400e3, ms) / 60e3);
+    } catch {
+      return 0;
+    }
+  }
+  const stakedName = () => "aiglish_casino_staked_" + uid();
+  function stakedToday() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(stakedName()) || "null");
+      return saved && saved.day === studyDay() ? Math.max(0, Number(saved.amount) || 0) : 0;
+    } catch {
+      return 0;
+    }
+  }
+  function addStaked(amount) {
+    if (!(amount > 0) || !real()) return;
+    try {
+      localStorage.setItem(stakedName(), JSON.stringify({ day: studyDay(), amount: stakedToday() + amount }));
+    } catch {}
+  }
+  // What can still be bet today (Infinity on practice chips).
+  const allowance = () => (real() ? Math.max(0, studyMinutes() * PER_MINUTE - stakedToday()) : Infinity);
+  // What a bet may be now: the balance, and on points no more than today's allowance.
+  const stakeRoom = () => Math.min(balance(), allowance());
+  // Minutes more to study before `amount` can be bet.
+  const minutesFor = (amount) => Math.max(1, Math.ceil((amount - allowance()) / PER_MINUTE));
+  const studyHint = (amount) => "今日賭けられるのは勉強1分につき" + PER_MINUTE + "ptまでです。あと" + minutesFor(amount) + "分勉強すると賭けられます。";
+  const allowText = () => (real() ? "今日あと " + fmt(allowance()) + "pt 賭けられます（今日の勉強 " + studyMinutes() + "分）" : "");
   const unit = () => (real() ? "pt" : "枚");
   // Today's running total (Japan time), kept apart for points and practice chips.
   const todayName = () => "aiglish_casino_today_" + uid() + (real() ? "" : "_practice");
@@ -118,7 +160,9 @@
     } catch {}
   }
   // `feed`: how much of this counts as a bet for the jackpots (by default what a loss takes).
-  function move(key, delta, feed) {
+  function move(key, delta, feed, counted = false) {
+    // A bet (any money going out, except a loss past the bet) uses up today's allowance.
+    if (!counted && delta < 0 && !key.endsWith(":extra")) addStaked(-delta);
     if (!delta) {
       // Broke even: no wallet write, but the bet still counts for the jackpots.
       if (feed > 0 && real()) window.CasinoJackpot?.add(feed);
@@ -141,7 +185,10 @@
       pay: (amount) => move(key + ":pay", amount),
       // A whole round in one move (one wallet write): what came back less what was bet, with
       // the bet counted for the jackpots.
-      net: (delta, bet) => (game === "sugoroku" && real() ? batchAdd(delta, bet) : move(key + ":net", delta, bet)),
+      net: (delta, bet) => {
+        addStaked(bet);
+        return game === "sugoroku" && real() ? batchAdd(delta, bet) : move(key + ":net", delta, bet, true);
+      },
     };
   }
 
@@ -216,7 +263,7 @@
       host.querySelector("[data-casino-unit]").textContent = real() ? "所持ポイント" : "練習チップ";
       host.querySelector("[data-casino-balance]").textContent = fmt(balance()) + unit();
       const net = todayNet();
-      host.querySelector("[data-casino-today]").textContent = net ? "今日 " + signed(net) + unit() : "";
+      host.querySelector("[data-casino-today]").textContent = [net ? "今日 " + signed(net) + unit() : "", allowText()].filter(Boolean).join("　");
       showWaiting(host);
       host.querySelector(".casino-note").textContent = real()
         ? "ブラックジャック・ルーレット・ダイスポーカーは1回" + fmt(MAX_BET) + "ptまで賭けられます。"
@@ -268,7 +315,7 @@
     document.body.classList.add("casino-open");
     screen.showModal();
     game = { id, body: screen.querySelector(".cs-body") };
-    if (id === "sugoroku") window.Sugoroku.play(game.body, { round, balance, unit, real, refresh, uid, resetPractice: () => (setPractice(PRACTICE_START), refresh()), practiceStart: PRACTICE_START });
+    if (id === "sugoroku") window.Sugoroku.play(game.body, { round, balance, stakeRoom, allowance, studyHint, unit, real, refresh, uid, resetPractice: () => (setPractice(PRACTICE_START), refresh()), practiceStart: PRACTICE_START });
     else ({ blackjack, roulette, dice, chinchiro })[id](game.body);
     refresh();
   }
@@ -312,7 +359,7 @@
     play.type = "button";
     play.dataset.csPlay = "";
     play.onclick = () => {
-      if (bet <= 0 || bet > balance()) return draw();
+      if (bet <= 0 || bet > stakeRoom()) return draw();
       lastBet[id] = bet;
       const pending = onPlay(bet);
       // At a friends' table the bet goes through the cloud first.
@@ -322,6 +369,8 @@
     row.append(node("span", "", "賭ける"), amount, clear);
     bar.append(row, chips, play);
     if (real() && balance() <= 0) bar.append(node("p", "cs-hint", "賭けられるポイントがありません。単語カードや苦手復習でポイントがたまります。"));
+    else if (real() && allowance() <= 0) bar.append(node("p", "cs-hint cs-study", studyHint(10)));
+    else if (real()) bar.append(node("p", "cs-hint cs-study", allowText()));
     if (!real() && balance() <= 0) {
       const reset = node("button", "cs-reset", "練習チップを" + fmt(PRACTICE_START) + "枚に戻す");
       reset.type = "button";
@@ -343,7 +392,7 @@
     draw();
     return bar;
   }
-  const cap = () => Math.min(MAX_BET, balance());
+  const cap = () => Math.min(MAX_BET, stakeRoom());
   function result(text, net, tone) {
     const line = node("p", "cs-result is-" + (tone || (net > 0 ? "win" : net < 0 ? "lose" : "push")));
     line.setAttribute("role", "status");
@@ -454,7 +503,7 @@
       b.dataset.move = move;
       b.append(node("b", "", MOVE_WORDS[move][0]), node("small", "", MOVE_WORDS[move][1]));
       const cost = C.tableCost(t, me, move);
-      b.disabled = cost > balance();
+      b.disabled = cost > stakeRoom();
       b.onclick = async () => {
         const all = [...row.querySelectorAll("button")],
           was = all.map((x) => x.disabled);
@@ -681,7 +730,7 @@
     spin.dataset.csPlay = "";
     spin.onclick = async () => {
       const staked = [...bets.values()].reduce((a, v) => a + v, 0);
-      if (spinning || !staked || staked > balance()) return;
+      if (spinning || !staked || staked > stakeRoom()) return;
       spinning = true;
       body.classList.add("is-spinning");
       board.querySelectorAll(".is-hit").forEach((b) => b.classList.remove("is-hit"));
@@ -709,7 +758,7 @@
       spinning = false;
       body.classList.remove("is-spinning");
       // The same bets stay on the table for another spin, as long as they can still be paid.
-      if ([...bets.values()].reduce((a, v) => a + v, 0) > balance()) bets.clear();
+      if ([...bets.values()].reduce((a, v) => a + v, 0) > stakeRoom()) bets.clear();
       draw();
       refresh();
     };
@@ -725,7 +774,7 @@
         if (amount) b.append(node("i", "cs-stake", fmt(amount)));
       });
       total.textContent = sum ? "賭けた合計 " + fmt(sum) + unit() : "数字や色をタップしてチップを置きます（初めてなら赤か黒）";
-      spin.disabled = spinning || !sum || sum > balance();
+      spin.disabled = spinning || !sum || sum > stakeRoom();
       clear.disabled = spinning || !sum;
     }
     const stage = node("div", "cs-stage");
@@ -1017,6 +1066,7 @@
   async function createDuel(bet, game = "dice") {
     duelReady();
     if (bet > balance()) throw Error("ポイントが足りません。");
+    if (bet > allowance()) throw Error(studyHint(bet));
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = String(1000 + random(9000));
       const made = await window.fbRunTransaction(window.db, async (tx) => {
@@ -1068,6 +1118,7 @@
       if (room.players[uid()]) return null;
       if (Object.keys(room.players).length >= 2) throw Error("このテーブルはもう2人そろっています。");
       if (room.bet > balance()) throw Error(fmt(room.bet) + "pt の勝負に対してポイントが足りません。");
+      if (room.bet > allowance()) throw Error(studyHint(room.bet));
       room.players[uid()] = { name: playerName(), joinedAt: Date.now() };
       room.status = "playing";
       return room;
@@ -1267,7 +1318,7 @@
   function rematchRow(room, body, me) {
     const again = node("button", "cs-primary", room.rematch?.[me] ? "相手を待っています…" : "もう一勝負");
     again.type = "button";
-    again.disabled = !!room.rematch?.[me] || balance() < room.bet;
+    again.disabled = !!room.rematch?.[me] || stakeRoom() < room.bet;
     again.onclick = () =>
       send(again, () =>
         updateDuel(room.code, (fresh) => {
@@ -1286,6 +1337,7 @@
     row.append(again);
     body.append(row);
     if (balance() < room.bet) body.append(node("p", "cs-hint", "もう一勝負するにはポイントが足りません。"));
+    else if (allowance() < room.bet) body.append(node("p", "cs-hint", studyHint(room.bet)));
   }
   // Blackjack one against one: the table's maker deals two hands from one deck, both draw at the
   // same time, and the other's cards past the first stay face down until both have stood.
@@ -1608,7 +1660,7 @@
         };
         const ok = node("button", host ? "" : "cs-primary", "賭けを確定");
         ok.type = "button";
-        ok.disabled = !sum || sum > balance();
+        ok.disabled = !sum || sum > stakeRoom();
         ok.onclick = async () => {
           const bets = Object.fromEntries(group.bets);
           const at = room.round;
@@ -2320,5 +2372,5 @@
   window.onTabChange?.((tab) => {
     if (tab === "casino") mount();
   });
-  window.Casino = Object.freeze({ open, close, mount, balance, flush, _real: real });
+  window.Casino = Object.freeze({ open, close, mount, balance, flush, allowance, stakeRoom, studyHint, addStaked, studyMinutes, _real: real });
 })();

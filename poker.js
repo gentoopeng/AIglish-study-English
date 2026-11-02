@@ -207,9 +207,15 @@
   // Everyday words rather than poker terms, for people new to the game.
   const actionText = { fold: "降りた", check: "様子見", call: "同じだけ出した", raise: "上乗せ", allin: "全部賭けた" };
 
+  // Buying chips with points uses up today's study allowance (Casino.allowance), like a bet.
+  function studyGate(amount) {
+    if (window.Casino?.allowance && window.Casino.allowance() < amount) throw Error(window.Casino.studyHint(amount));
+  }
+  const studySpend = (amount) => window.Casino?.addStaked?.(amount);
   async function createTable(settings) {
     connected();
     if (balance() < settings.buyIn) throw Error("ポイントが足りません（所持 " + fmt(balance()) + "pt）。");
+    studyGate(settings.buyIn);
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = String(1000 + random(9000)),
         keys = await myKeys(code);
@@ -231,7 +237,10 @@
         });
         return true;
       });
-      if (made) return code;
+      if (made) {
+        studySpend(settings.buyIn);
+        return code;
+      }
     }
     throw Error("テーブル番号を作れませんでした。もう一度お試しください。");
   }
@@ -239,7 +248,9 @@
     connected();
     if (!/^\d{4}$/.test(code)) throw Error("4桁のテーブル番号を入力してください。");
     const keys = await myKeys(code);
+    let bought = 0;
     await update(code, (room) => {
+      bought = 0;
       if (room.kind && room.kind !== "poker") throw Error("この番号はポーカーのテーブルではありません。");
       if (room.status === "closed") throw Error("このテーブルは終了しています。");
       if (room.players[uid()]) {
@@ -248,12 +259,15 @@
         return room;
       }
       if (balance() < room.settings.buyIn) throw Error("参加費 " + fmt(room.settings.buyIn) + "pt に対してポイントが足りません。");
+      studyGate(room.settings.buyIn);
       const seat = seatFor(room);
       if (seat < 0) throw Error("満席です。");
       room.players[uid()] = { name: nameOf(), seat, stack: room.settings.buyIn, pub: keys.pub, joinedAt: Date.now() };
+      bought = room.settings.buyIn;
       say(room, nameOf() + " が着席しました");
       return room;
     });
+    studySpend(bought);
     return code;
   }
 
@@ -495,10 +509,16 @@
   }
   async function rebuy() {
     const me = uid();
+    let bought = 0;
     await update(session.code, (room) => {
+      bought = 0;
       const p = room.players[me];
       if (!p || p.stack > 0) return null;
       if ((!room.practice || room.staked) && balance() < room.settings.buyIn) throw Error("ポイントが足りません。");
+      if (!room.practice || room.staked) {
+        studyGate(room.settings.buyIn);
+        bought = room.settings.buyIn;
+      }
       p.stack = room.settings.buyIn;
       say(room, p.name + " がチップを追加しました");
       // Play goes straight on: no new table, and no waiting for the host to press start again.
@@ -507,6 +527,7 @@
       else if (room.status === "waiting" && room.handNo > 0 && ready >= 2) room.status = "playing";
       return room;
     });
+    studySpend(bought);
   }
   async function begin() {
     await update(session.code, (room) => {
@@ -811,6 +832,7 @@
   function practice(settings) {
     const staked = canStake();
     if (staked && balance() < settings.buyIn) throw Error("ポイントが足りません（所持 " + fmt(balance()) + "pt）。");
+    if (staked) studyGate(settings.buyIn);
     const me = uid(),
       players = { [me]: { name: nameOf(), seat: 0, stack: settings.buyIn, joinedAt: Date.now() } };
     for (let i = 0; i < settings.bots; i++)
@@ -832,6 +854,7 @@
       log: [],
       players,
     };
+    if (staked) studySpend(settings.buyIn);
     enter("practice", room);
   }
 

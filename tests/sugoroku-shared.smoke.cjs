@@ -31,6 +31,8 @@ const SAVE = "aiglish_sugoroku_sg-a",
     // owed 120 from an earlier line.
     const row = await page.evaluate(() => {
       myId = "sg-a";
+      // Ten hours studied today, so points can be bet (Casino.allowance).
+      window.StudyTime?.mergeCloud?.({ version: 1, epoch: "study-reset-2.62", days: { [window.StudyTimeModel.dateKey(Date.now())]: { sources: { "test-study": 600 * 60000 } } }, offset: 0, updatedAt: Date.now() });
       myName = "A";
       const S = window.SugorokuModel,
         card = S.newCard((n) => n - 1);
@@ -203,6 +205,8 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate(() => {
       myId = "sg-b";
+      // Ten hours studied today, so points can be bet (Casino.allowance).
+      window.StudyTime?.mergeCloud?.({ version: 1, epoch: "study-reset-2.62", days: { [window.StudyTimeModel.dateKey(Date.now())]: { sources: { "test-study": 600 * 60000 } } }, offset: 0, updatedAt: Date.now() });
       window.switchTab("vocab");
       window.switchTab("casino");
     });
@@ -273,6 +277,19 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate(() => delete window.fbOnSnapshot);
 
+    // Today's allowance nearly used up (less than one roll left): the button asks for study.
+    await page.evaluate(() => {
+      const day = window.StudyTimeModel.dateKey(Date.now());
+      localStorage.setItem("aiglish_casino_staked_sg-a", JSON.stringify({ day, amount: 600 * 100 - 50 }));
+    });
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").waitFor();
+    await page.waitForFunction(() => document.querySelector(".sg-go").textContent === "勉強すると振れます");
+    assert.equal(await screen.locator(".sg-go").isDisabled(), true);
+    assert.match(await screen.locator(".sg-study").innerText(), /あと1分勉強すると賭けられます/);
+    await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate(() => localStorage.removeItem("aiglish_casino_staked_sg-a"));
+
     // An accident past the wallet: with 150pt left, a roll onto the accident square whose wheel
     // takes 2× the bet loses 300; the wallet stops at 0 and the other 150 is owed to the casino.
     await page.evaluate((name) => {
@@ -327,7 +344,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       now: { jp: 3000, sjp: 12000 },
     });
     assert.deepEqual(errors, []);
-    console.log("PASS: shared すごろくビンゴ: untrusted card data checked, reach numbers, a failed write charges nothing, a player's part collected once, a line shared and logged, records, 早送り kept, script taps ignored, a ball that came in during a roll shows after it, who else is playing shown, a jackpot win takes the pot and starts it again");
+    console.log("PASS: shared すごろくビンゴ: untrusted card data checked, reach numbers, a failed write charges nothing, a player's part collected once, a line shared and logged, records, 早送り kept, script taps ignored, a ball that came in during a roll shows after it, who else is playing shown, rolls stop when today's study allowance is used, a jackpot win takes the pot and starts it again");
   } finally {
     await browser.close();
   }

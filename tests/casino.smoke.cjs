@@ -218,6 +218,26 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     });
     assert.equal(await tab.locator("[data-casino-unit]").innerText(), "所持ポイント");
     assert.equal(await tab.locator("[data-casino-balance]").innerText(), "300pt");
+    // Points are bet only after studying: 100pt for each minute measured today. With no study
+    // yet nothing can be bet, and the table says how long to study.
+    const studied = (minutes) =>
+      page.evaluate((m) => {
+        window.StudyTime.mergeCloud({ version: 1, epoch: "study-reset-2.62", days: { [window.StudyTimeModel.dateKey(Date.now())]: { sources: { "test-study": m * 60000 } } }, offset: 0, updatedAt: Date.now() });
+        window.switchTab("vocab");
+        window.switchTab("casino");
+      }, minutes);
+    assert.equal(await tab.locator("[data-casino-today]").innerText(), "今日あと 0pt 賭けられます（今日の勉強 0分）");
+    await tab.locator(".mode-blackjack").click();
+    await bj.waitFor();
+    assert.match(await bj.locator(".cs-study").innerText(), /勉強1分につき100ptまで.*あと1分勉強すると賭けられます/);
+    assert.equal(await bj.getByRole("button", { name: "配る" }).isDisabled(), true);
+    await bj.getByRole("button", { name: "ブラックジャックを閉じる" }).click();
+    // One minute: up to 100pt today.
+    await studied(1);
+    assert.equal(await tab.locator("[data-casino-today]").innerText(), "今日あと 100pt 賭けられます（今日の勉強 1分）");
+    assert.equal(await page.evaluate(() => window.Casino.stakeRoom()), 100);
+    // Ten hours, for the rest of this test.
+    await studied(600);
     await stacked(["Ts", "Td", "7h", "9c"]);
     await tab.locator(".mode-blackjack").click();
     await bj.waitFor();
@@ -228,6 +248,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.evaluate(() => window.__restoreShuffle());
     const keys = await page.evaluate(() => Object.keys(window.__wallet["users/casino-a/learningPoints/main"].poker));
     assert.equal(keys.length, 1);
+    // The 60 bet came off today's allowance.
+    assert.equal(await page.evaluate(() => window.Casino.allowance()), 600 * 100 - 60);
     assert.match(keys[0], /^casino:blackjack:.+:bet$/);
     // Points bet in the casino feed the shared jackpots (1.5% and 1% of what was bet).
     await page.waitForFunction(() => window.__wallet["shared/casino_jackpot"]?.bet === 60);
@@ -318,6 +340,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate(() => {
       myId = "casino-b";
+      // Ten hours studied today, so points can be bet (Casino.allowance).
+      window.StudyTime?.mergeCloud?.({ version: 1, epoch: "study-reset-2.62", days: { [window.StudyTimeModel.dateKey(Date.now())]: { sources: { "test-study": 600 * 60000 } } }, offset: 0, updatedAt: Date.now() });
       localStorage.removeItem("aiglish_sugoroku_card_live");
     });
     await tab.locator(".mode-sugoroku").click();
@@ -327,7 +351,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await other.evaluate((c) => c.classList.contains("is-on") && !c.classList.contains("is-mine")), true);
     await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     assert.deepEqual(errors, []);
-    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on points with its wallet moves added up and written together, bets feed the shared jackpot, casino results in the points history, the すごろくビンゴ card shared between players");
+    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on points with its wallet moves added up and written together, bets feed the shared jackpot, casino results in the points history, points bet only after studying (100pt a minute), the すごろくビンゴ card shared between players");
   } finally {
     await browser.close();
   }

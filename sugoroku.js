@@ -591,10 +591,12 @@
       } catch {}
     };
     controls.append(costs, view.go, view.quickBtn);
+    view.studyEl = node("p", "sg-study");
+    view.studyEl.hidden = true;
 
     view.layer = node("div", "sg-layer");
     view.layer.hidden = true;
-    body.replaceChildren(pots, view.hereEl, cardWrap, board, view.info, controls, view.layer);
+    body.replaceChildren(pots, view.hereEl, cardWrap, board, view.info, controls, view.studyEl, view.layer);
     paintCard();
     paintHere();
     hud();
@@ -702,9 +704,26 @@
     );
     // Out of practice chips: the button fills them up again instead.
     const short = api.balance() < view.cost,
-      refill = short && !api.real() && !!api.resetPractice;
-    view.go.disabled = view.busy || (short && !refill) || !!state.pending;
-    view.go.textContent = refill ? "練習チップを" + fmt(api.practiceStart) + "枚に戻す" : short ? (api.real() ? "ポイントが足りません" : "チップが足りません") : view.busy ? "…" : "サイコロを振る";
+      refill = short && !api.real() && !!api.resetPractice,
+      // On points, today's bets are limited by today's study (see Casino.allowance).
+      study = !short && api.real() && !!api.allowance && api.allowance() < view.cost;
+    view.go.disabled = view.busy || (short && !refill) || study || !!state.pending;
+    view.go.textContent = refill
+      ? "練習チップを" + fmt(api.practiceStart) + "枚に戻す"
+      : short
+        ? api.real()
+          ? "ポイントが足りません"
+          : "チップが足りません"
+        : view.busy
+          ? "…"
+          : study
+            ? "勉強すると振れます"
+            : "サイコロを振る";
+    view.go.title = study ? api.studyHint(view.cost) : "";
+    if (view.studyEl) {
+      view.studyEl.hidden = !api.real() || !api.allowance;
+      if (!view.studyEl.hidden) view.studyEl.textContent = study ? api.studyHint(view.cost) : "今日あと " + fmt(api.allowance()) + "pt（" + Math.floor(api.allowance() / view.cost) + "回）振れます";
+    }
   }
   // The piece sits on its square; the strip slides so the piece stays a little left of centre.
   function place(pos, smooth = true) {
@@ -805,6 +824,7 @@
       return hud();
     }
     if (view.busy || view.state.pending || api.balance() < view.cost) return;
+    if (api.real() && api.allowance && api.allowance() < view.cost) return hud();
     const cost = view.cost,
       state = view.state,
       me = api.uid();
