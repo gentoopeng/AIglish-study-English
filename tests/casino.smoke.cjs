@@ -226,7 +226,17 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
         window.switchTab("vocab");
         window.switchTab("casino");
       }, minutes);
-    assert.equal(await tab.locator("[data-casino-today]").innerText(), "今日あと 0pt 賭けられます（今日の勉強 0分）");
+    assert.equal(await tab.locator("[data-casino-allow]").innerText(), "今日あと 0pt 賭けられます（今日の勉強 0分）");
+    // The line stays inside the balance card, even on a narrow phone.
+    await page.setViewportSize({ width: 320, height: 740 });
+    const fits = await page.evaluate(() => {
+      const card = document.querySelector(".casino-head").getBoundingClientRect(),
+        line = document.querySelector("[data-casino-allow]");
+      const box = line.getBoundingClientRect();
+      return box.right <= card.right + 0.5 && box.left >= card.left - 0.5 && line.scrollWidth <= line.clientWidth + 1;
+    });
+    assert.equal(fits, true);
+    await page.setViewportSize({ width: 375, height: 740 });
     await tab.locator(".mode-blackjack").click();
     await bj.waitFor();
     assert.match(await bj.locator(".cs-study").innerText(), /勉強1分につき100ptまで.*あと1分勉強すると賭けられます/);
@@ -234,7 +244,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await bj.getByRole("button", { name: "ブラックジャックを閉じる" }).click();
     // One minute: up to 100pt today.
     await studied(1);
-    assert.equal(await tab.locator("[data-casino-today]").innerText(), "今日あと 100pt 賭けられます（今日の勉強 1分）");
+    assert.equal(await tab.locator("[data-casino-allow]").innerText(), "今日あと 100pt 賭けられます（今日の勉強 1分）");
     assert.equal(await page.evaluate(() => window.Casino.stakeRoom()), 100);
     // Ten hours, for the rest of this test.
     await studied(600);

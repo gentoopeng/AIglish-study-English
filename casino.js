@@ -221,7 +221,7 @@
       host.innerHTML =
         '<section class="casino" aria-label="カジノ"><header class="casino-head"><span class="casino-chip">' +
         CHIP_SVG +
-        '</span><div><small data-casino-unit></small><strong data-casino-balance></strong></div><p class="casino-today" data-casino-today></p></header><div class="casino-jackpots" data-casino-jackpots><p class="is-jp"><small>JACKPOT</small><b></b></p><p class="is-sjp"><small>SUPER JACKPOT</small><b></b></p></div><div class="casino-games"></div><p class="casino-note"></p></section>';
+        '</span><div><small data-casino-unit></small><strong data-casino-balance></strong></div><p class="casino-today" data-casino-today></p><p class="casino-allow" data-casino-allow></p></header><div class="casino-jackpots" data-casino-jackpots><p class="is-jp"><small>JACKPOT</small><b></b></p><p class="is-sjp"><small>SUPER JACKPOT</small><b></b></p></div><div class="casino-games"></div><p class="casino-note"></p></section>';
       const list = host.querySelector(".casino-games");
       for (const game of GAMES) {
         const button = node("button", "casino-game mode-" + game.id);
@@ -263,7 +263,11 @@
       host.querySelector("[data-casino-unit]").textContent = real() ? "所持ポイント" : "練習チップ";
       host.querySelector("[data-casino-balance]").textContent = fmt(balance()) + unit();
       const net = todayNet();
-      host.querySelector("[data-casino-today]").textContent = [net ? "今日 " + signed(net) + unit() : "", allowText()].filter(Boolean).join("　");
+      host.querySelector("[data-casino-today]").textContent = net ? "今日 " + signed(net) + unit() : "";
+      // Today's study allowance, on its own line under the balance so it never runs off the card.
+      const allow = host.querySelector("[data-casino-allow]");
+      allow.textContent = allowText();
+      allow.classList.toggle("is-empty", real() && allowance() <= 0);
       showWaiting(host);
       host.querySelector(".casino-note").textContent = real()
         ? "ブラックジャック・ルーレット・ダイスポーカーは1回" + fmt(MAX_BET) + "ptまで賭けられます。"

@@ -2293,3 +2293,13 @@ Tests:
   - a 60 bet comes off the allowance.
 - `tests/sugoroku-shared.smoke.cjs`: with less than one roll left, the roll button asks for study.
 - The other casino and poker tests now record ten hours of study before betting.
+
+## Casino tab: the study allowance line no longer runs off the card (10.22.59.00)
+
+The user sent a screenshot from an iPhone: the line 「今日あと 0pt 賭けられます（今日の勉強 0分）」 ran off the right edge of the balance card.
+
+**Cause.** In 10.22.58.00 the allowance text was added to the 「今日 ±N」 line. That line sits beside the balance and does not wrap (`white-space: nowrap`).
+
+**Fix.** The allowance now has its own line (`.casino-allow`), across the full width at the bottom of the balance card. It can wrap on narrow screens. When nothing is left to bet, it is shown in gold.
+
+Test: `tests/casino.smoke.cjs` checks the text of the new line and, at 320px wide, that it stays inside the card and does not overflow.
