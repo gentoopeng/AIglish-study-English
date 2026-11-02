@@ -87,7 +87,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
         window.__gtListeners = {};
         window.fbOnSnapshot = (ref, callback) => {
           const path = pathOf(ref);
-          __gtListeners[path] = callback;
+          // window.__slowListen: the listener brings changes back 3 seconds late.
+          __gtListeners[path] = (snap) => (window.__slowListen ? setTimeout(() => callback(snap), 3000) : callback(snap));
           __gtSubscribe(path).then((value) => callback({ exists: () => !!value, data: () => value }));
           return () => {
             delete __gtListeners[path];
@@ -139,7 +140,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await balanceIs(a, 490);
     await screenOf(b, "roulette").locator(".cs-chip-pick button", { hasText: /^5$/ }).click();
     await screenOf(b, "roulette").locator('.cs-spot[data-on="7"]').click();
+    // Even with the listener 3 seconds late, B's confirmed bet shows as soon as it is written.
+    await b.evaluate(() => (window.__slowListen = true));
     await screenOf(b, "roulette").getByRole("button", { name: "賭けを確定" }).click();
+    await screenOf(b, "roulette").getByText(/賭けを確定しました（5pt）/).waitFor({ timeout: 1500 });
+    await b.evaluate(() => (window.__slowListen = false));
     await balanceIs(b, 495);
     await screenOf(a, "roulette").locator(".cs-group-bets", { hasText: "group-b：5pt" }).waitFor();
     // Only the table's maker spins; the wheel stops on 7 for both.
