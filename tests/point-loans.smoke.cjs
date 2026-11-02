@@ -216,6 +216,17 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await dialogOf(b).getByRole("textbox", { name: "メッセージ" }).count(), 0);
     assert.match(await dialogOf(b).locator(".loans-summary").innerText(), /貸し借りはありません/);
     await b.evaluate(() => window.PointLoans.close());
+    // The 運営 takes 100 back: B's device takes it from the wallet once, and the talk says so.
+    await a.evaluate(() => window.PointLoans.grant("loan-b", "loan-b", 100, "調整", "charge"));
+    await b.evaluate(() => window.PointLoans.collect());
+    await b.evaluate(() => window.PointLoans.collect());
+    assert.equal(wallet("loan-b"), 890);
+    const ledger = await a.evaluate(() => window.PointLoans.adminLedger("loan-b"));
+    assert.deepEqual(ledger.entries.map((e) => [e.kind, e.amount, e.taken]), [["gift", 500, true], ["charge", 100, true]]);
+    assert.equal(ledger.balance, 890);
+    await b.evaluate(() => window.PointLoans.person("ADMIN", "運営"));
+    await dialogOf(b).getByText("100pt 引かれた").waitFor();
+    await b.evaluate(() => window.PointLoans.close());
     // A player still signing in when the app loaded gets points sent to them without opening
     // anything: they are collected once the player is signed in.
     docs.set("users/loan-c", { playerName: "loan-c", studyPoints: 0 });

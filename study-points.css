@@ -255,3 +255,9 @@
 .loans-last{display:block;max-width:100%;color:#9aa3b0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .admin-player-gift{display:flex;flex-direction:column;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid #ffffff1a;}
 .admin-player-gift h4{margin:0;}
+.admin-gift-actions{display:flex;gap:8px;}
+.admin-gift-actions button{flex:1;}
+.admin-gift-list{margin:0;padding:0;list-style:none;max-height:40dvh;overflow:auto;}
+.admin-gift-list li{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid #ffffff14;}
+.admin-gift-list li small{opacity:.75;font-size:11px;}
+.admin-gift-list li:not(.is-taken) small{color:#e6b45c;opacity:1;}

@@ -101,3 +101,10 @@ test("a long talk drops old messages first and never a debt", () => {
   assert.equal(r.entries[r.entries.length - 1].text, "やあ599");
   assert.equal(L.owedBy(r.entries, "b"), 50);
 });
+
+test("the 運営 can take points back: a charge is applied by the player's device, negative", () => {
+  const r = L.gift(L.gift(null, { id: "g", from: "ADMIN", to: "b", amount: 300, at }), { id: "c", from: "ADMIN", to: "b", amount: 50, at, kind: "charge" });
+  assert.deepEqual(L.unclaimed(r, "b").map((e) => L.change(e)), [300, -50]);
+  assert.equal(L.net(r.entries, "b"), 0);
+  assert.throws(() => L.gift(null, { id: "x", from: "ADMIN", to: "b", amount: 5, at, kind: "lend" }), /不明/);
+});
