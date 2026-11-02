@@ -1029,15 +1029,35 @@
     }
     throw Error("テーブル番号を作れませんでした。もう一度お試しください。");
   }
+  // Every write to a table counts up its `rev`. A table written here is drawn at once from what
+  // was written, without waiting for the listener to bring it back (a transaction gets no early
+  // local copy), unless the listener has already shown a later one.
   async function updateDuel(code, change) {
-    return window.fbRunTransaction(window.db, async (tx) => {
+    let written = null;
+    const done = await window.fbRunTransaction(window.db, async (tx) => {
       const snap = await tx.get(duelRef(code));
       if (!snap.exists()) throw Error("テーブルが見つかりません。");
-      const next = change(JSON.parse(JSON.stringify(snap.data())));
+      const data = snap.data(),
+        next = change(JSON.parse(JSON.stringify(data)));
+      written = null;
       if (!next) return false;
+      next.rev = (Number(data.rev) || 0) + 1;
       tx.set(duelRef(code), next);
+      written = next;
       return true;
     });
+    if (written) showWritten(code, written);
+    return done;
+  }
+  function showWritten(code, room) {
+    const newer = (current) => !current || (Number(current.rev) || 0) < room.rev;
+    if (group?.code === code && newer(group.room)) {
+      group.room = JSON.parse(JSON.stringify(room));
+      drawGroup();
+    } else if (duel?.code === code && newer(duel.room)) {
+      duel.room = JSON.parse(JSON.stringify(room));
+      drawDuel();
+    }
   }
   async function joinDuel(code, game = "dice") {
     duelReady();
@@ -1078,6 +1098,8 @@
     duel.unsub = window.fbOnSnapshot(duelRef(code), (snap) => {
       if (duel !== mine) return;
       if (!snap.exists()) return duelLobby(body, game, "テーブルが見つかりません。");
+      // An older copy than one already shown (written here) is passed over.
+      if ((Number(snap.data().rev) || 0) < (Number(duel.room?.rev) || 0)) return;
       duel.room = snap.data();
       drawDuel();
     }, (error) => {
@@ -1445,6 +1467,7 @@
     group.unsub = window.fbOnSnapshot(duelRef(code), (snap) => {
       if (group !== mine) return;
       if (!snap.exists()) return groupLobby(body, gameOf(kind), "テーブルが見つかりません。");
+      if ((Number(snap.data().rev) || 0) < (Number(group.room?.rev) || 0)) return;
       group.room = snap.data();
       drawGroup();
     }, (error) => {

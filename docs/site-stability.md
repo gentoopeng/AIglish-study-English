@@ -2059,3 +2059,18 @@ The user reported that points sent from the 運営 did not arrive.
 Each run is one read of the player's list, plus a claim only for pairs that changed. Gifts already sent arrive the next time the player opens the app (10.22.46.00 or later).
 
 **Check.** `tests/point-loans.smoke.cjs` has a player sign in 3 seconds after the app loaded, with a gift already waiting. The gift reaches the wallet on its own. On 10.22.45.00 the wallet stays at 0.
+
+## Casino tables with friends answer at once (10.22.47.00)
+
+The user found the 一緒に (and タイマン) tables laggy.
+
+**Cause.** Every button at a friends' table writes the table in a transaction: one round trip to read it and one to commit. A transaction gets no early local copy the way a plain write does, so the screen then waited for the listener to bring the table back, a third trip. On a phone that is one to two seconds after each press.
+
+**Fix.**
+
+- Every table write counts up a `rev`.
+- When a transaction commits, the table is drawn at once from what was written (`showWritten`), unless the listener has already shown a later `rev`.
+- The listeners pass over a copy older than the one shown, so a late echo cannot roll the table back.
+- Tables written before this have no `rev` and count as 0.
+
+**Check.** `tests/casino-group.smoke.cjs` makes the listener 3 seconds late. A confirmed roulette bet still shows within 1.5 seconds. On 10.22.46.00 it does not.
