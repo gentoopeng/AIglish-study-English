@@ -2074,3 +2074,27 @@ The user found the 一緒に (and タイマン) tables laggy.
 - Tables written before this have no `rev` and count as 0.
 
 **Check.** `tests/casino-group.smoke.cjs` makes the listener 3 seconds late. A confirmed roulette bet still shows within 1.5 seconds. On 10.22.46.00 it does not.
+
+## The 運営 can add and take back points, and see whether each has arrived (10.22.48.00)
+
+The user said points from the 運営 still had not arrived, and asked to be able to change a player's points.
+
+**Changing points.** 管理者ツール → a player → 「ポイントを操作」.
+
+- 増やす sends a gift. 減らす sends a charge (`PointLoansModel.gift` with kind `charge`).
+- Both go into the record between 運営 and the player (`PointLoans.grant`).
+- The player's own device applies them when it collects: a gift adds, a charge takes away, never below 0. The player is told (「運営から 100pt 引かれました」) and the 運営 talk keeps the line.
+- A wallet is still only ever written by its owner's device. If the administrator wrote it directly, the player's device could later write its own copy over the change.
+
+**Seeing whether it arrived.** The same section shows:
+
+- the player's points as their device last saved them;
+- every gift and charge from the 運営, each marked 反映済み (the player's device has taken it in) or まだ (`PointLoans.adminLedger`).
+
+A gift still marked まだ means the player's device has not collected since it was sent. Collection runs on 10.22.46.00 and later, when the player is signed in. A phone that keeps the app open for days without reloading can still be running an older version.
+
+Tests:
+
+- `tests/point-loans-model.test.cjs`: a charge.
+- `tests/point-loans.smoke.cjs`: a charge taken once; the administrator's view showing both as taken, with the balance.
+- `tests/admin-players.smoke.cjs`: 増やす and 減らす, with the list and its まだ.

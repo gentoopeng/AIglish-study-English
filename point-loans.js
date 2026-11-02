@@ -138,12 +138,13 @@
       remember(key, record);
       if (!due.length) return null;
       got = due.map((e) => ({ amount: e.amount, name: record.names?.[e.from] || e.from, kind: e.kind }));
+      // Money and gifts add; a charge from the 運営 takes away, never below 0.
       const wallet = walletSnap.exists() ? walletSnap.data() : {},
         claimed = { ...(record.claimed || {}) };
       for (const e of due) claimed[e.id] = Date.now();
       tx.set(pairRef(key), { claimed }, { merge: true });
       remember(key, { ...record, claimed });
-      return walletWrite(tx, me, wallet, (Number(wallet.balance) || 0) + due.reduce((a, e) => a + e.amount, 0));
+      return walletWrite(tx, me, wallet, Math.max(0, (Number(wallet.balance) || 0) + due.reduce((a, e) => a + L.change(e), 0)));
     });
     after(value);
     return got;
@@ -188,16 +189,28 @@
   // player, collected into the player's wallet like a loan, owed by nobody.
   const ADMIN = "ADMIN",
     ADMIN_NAME = "運営";
-  async function grant(to, toName, amount, note) {
+  // kind "charge": the 運営 takes `amount` back instead (taken from the wallet when collected).
+  async function grant(to, toName, amount, note, kind = "gift") {
     if (!window.db || !window.fbRunTransaction) throw Error("クラウドにつながっていません。");
     const key = L.pairKey(ADMIN, to),
       at = Date.now();
     await window.fbRunTransaction(window.db, async (tx) => {
       const snap = await tx.get(pairRef(key));
-      const record = L.gift(snap.exists() ? snap.data() : null, { id: newId(), from: ADMIN, to, amount, note, at });
+      const record = L.gift(snap.exists() ? snap.data() : null, { id: newId(), from: ADMIN, to, amount, note, at, kind });
       tx.set(pairRef(key), { ...record, people: [ADMIN, to].sort(), names: { ...(record.names || {}), [ADMIN]: ADMIN_NAME, [to]: String(toName || to).slice(0, 24) } });
       tx.set(inboxRef(to), { pairs: { [key]: { other: ADMIN, name: ADMIN_NAME, at } } }, { merge: true });
     });
+  }
+  // For the administrator's tool: what the 運営 sent a player, each with whether the player's
+  // device has taken it in yet, and the wallet as last written.
+  async function adminLedger(to) {
+    if (!window.db || !window.fbGetDoc) throw Error("クラウドにつながっていません。");
+    const [pair, wallet] = await Promise.all([window.fbGetDoc(pairRef(L.pairKey(ADMIN, to))), window.fbGetDoc(walletRef(to))]);
+    const record = pair.exists() ? pair.data() : { entries: [] };
+    return {
+      balance: wallet.exists() ? Number(wallet.data().balance) || 0 : null,
+      entries: (record.entries || []).filter((e) => e.kind === "gift" || e.kind === "charge").map((e) => ({ ...e, taken: !!record.claimed?.[e.id] })),
+    };
   }
   // The pairs a person has. The last list read is kept on this device so the list screen can
   // come up at once.
@@ -250,7 +263,11 @@
       got.push(...(await claim(key)));
       markSeen(key, pair.at || Date.now());
     }
-    for (const g of got) window.showToast?.((g.kind === "gift" ? g.name + "から " : g.name + "さんから ") + fmt(g.amount) + "pt " + (g.kind === "repay" ? "返ってきました" : "届きました"), "success");
+    for (const g of got)
+      window.showToast?.(
+        (g.kind === "gift" || g.kind === "charge" ? g.name + "から " : g.name + "さんから ") + fmt(g.amount) + "pt " + (g.kind === "repay" ? "返ってきました" : g.kind === "charge" ? "引かれました" : "届きました"),
+        g.kind === "charge" ? "info" : "success",
+      );
     return got;
   }
 
@@ -564,6 +581,7 @@
       const mine = e.from === me,
         amountText = fmt(e.amount) + "pt";
       if (e.kind === "gift") return (mine ? amountText + " 送った" : amountText + " 届いた");
+      if (e.kind === "charge") return amountText + " 引かれた";
       if (e.kind === "lend") return (mine ? amountText + " 貸した" : amountText + " 借りた") + (e.rate ? "（利子" + RATE_TEXT(e.rate) + "・返す額" + fmt(e.due) + "pt）" : "");
       if (e.kind === "repay") return mine ? amountText + " 返した" : amountText + " 返ってきた";
       const what = e.kind === "ask-lend" ? (mine ? amountText + " 借りたいと頼んだ" : amountText + " 借りたいと頼まれた") : mine ? amountText + " 請求した" : amountText + " 請求された";
@@ -588,7 +606,7 @@
           lastDay = day;
         }
         const mine = e.from === me,
-          li = node("li", "talk-row is-" + (mine ? "mine" : "theirs") + " is-" + e.kind + (L.isMoney(e) || e.kind === "gift" ? (mine ? " is-out" : " is-in") : ""));
+          li = node("li", "talk-row is-" + (mine ? "mine" : "theirs") + " is-" + e.kind + (L.isMoney(e) || e.kind === "gift" ? (mine ? " is-out" : " is-in") : e.kind === "charge" ? " is-out" : ""));
         const bubble = node("div", e.kind === "message" ? "talk-bubble" : "talk-card");
         if (e.kind === "message") bubble.textContent = e.text;
         else {
@@ -693,5 +711,5 @@
     setInterval(() => collectSoon(true), 600e3);
     document.addEventListener("visibilitychange", () => !document.hidden && collectSoon(false));
   });
-  window.PointLoans = Object.freeze({ open, person, send, ask, talk, grant, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
+  window.PointLoans = Object.freeze({ open, person, send, ask, talk, grant, adminLedger, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
 })();
