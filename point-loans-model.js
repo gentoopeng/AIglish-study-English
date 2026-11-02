@@ -7,18 +7,28 @@
 //   request  { kind: "ask-lend" | "ask-repay", from, to, amount, status }
 //            ask-lend: `from` asks `to` to lend; ask-repay (請求): `from` asks `to` to pay back.
 //            status: "open" → "done" | "declined" | "cancelled"
+//   gift     { kind: "gift", from, to, amount, note }   points given, owed by nobody (the
+//            運営 sends these)
+//   message  { kind: "message", from, to, text }        a line of talk between the two
+//
+// The record keeps at most MAX_ENTRIES entries. When it is full the oldest messages go first,
+// then finished requests, so what is owed is kept as long as possible.
 //
 // What one owes the other is what moved each way: every point sent counts for the sender, a loan
 // with interest counts for what is due on it.
 (function (root) {
   "use strict";
-  const MAX_ENTRIES = 200,
+  const MAX_ENTRIES = 400,
+    MAX_MESSAGES = 150,
+    MAX_TEXT = 500,
     MAX_AMOUNT = 100000,
     // Interest a lender can ask, once, on the amount lent.
     RATES = [0, 0.05, 0.1, 0.2, 0.3];
   const pairKey = (a, b) => [a, b].sort().join("__");
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const isMoney = (entry) => entry.kind === "lend" || entry.kind === "repay";
+  // Points that reach `to`'s wallet when collected: money and gifts.
+  const arrives = (entry) => isMoney(entry) || entry.kind === "gift";
   // > 0: the other owes `me` that much. < 0: `me` owes the other.
   function net(entries, me) {
     let total = 0;
@@ -36,11 +46,33 @@
     if (n > MAX_AMOUNT) throw Error("1回に動かせるのは" + MAX_AMOUNT.toLocaleString("ja-JP") + "ptまでです。");
     return n;
   }
+  // Drops the oldest of what matters least, so a long talk never pushes a debt out.
+  function trim(entries) {
+    let list = entries;
+    const drop = (test, keep) => {
+      let extra = list.filter(test).length - keep;
+      if (extra > 0) list = list.filter((e) => !(test(e) && extra-- > 0));
+    };
+    drop((e) => e.kind === "message", MAX_MESSAGES);
+    if (list.length > MAX_ENTRIES) drop((e) => e.status && e.status !== "open", Math.max(0, MAX_ENTRIES - (list.length - list.filter((e) => e.status && e.status !== "open").length)));
+    return list.slice(-MAX_ENTRIES);
+  }
   function add(record, entry) {
     const next = record ? clone(record) : { entries: [] };
-    next.entries = (next.entries || []).concat(entry).slice(-MAX_ENTRIES);
+    next.entries = trim((next.entries || []).concat(entry));
     next.updatedAt = entry.at;
     return next;
+  }
+  // A line of talk.
+  function say(record, { id, from, to, text, at }) {
+    const line = String(text || "").trim().slice(0, MAX_TEXT);
+    if (!line) throw Error("メッセージを入れてください。");
+    if (from === to) throw Error("自分には送れません。");
+    return add(record, { id, kind: "message", from, to, text: line, at });
+  }
+  // Points given (by the 運営): they reach `to` when collected and are owed by nobody.
+  function gift(record, { id, from, to, amount, note, at }) {
+    return add(record, { id, kind: "gift", from, to, amount: amountOf(amount), note: String(note || "").slice(0, 120), at });
   }
   const findOpen = (record, id) => (record?.entries || []).find((e) => e.id === id && e.status === "open");
   // Points leave `from` for `to`: a loan, or a repayment that may not go past what is owed.
@@ -88,9 +120,9 @@
     return next;
   }
   // Money sent to `me` that has not been added to my wallet yet.
-  const unclaimed = (record, me) => (record?.entries || []).filter((e) => isMoney(e) && e.to === me && !record.claimed?.[e.id]);
+  const unclaimed = (record, me) => (record?.entries || []).filter((e) => arrives(e) && e.to === me && !record.claimed?.[e.id]);
   const openFor = (record, me) => (record?.entries || []).filter((e) => e.status === "open" && e.to === me);
-  const api = { MAX_ENTRIES, MAX_AMOUNT, RATES, pairKey, net, owedBy, amountOf, dueOf, send, ask, close, unclaimed, openFor, isMoney };
+  const api = { MAX_ENTRIES, MAX_MESSAGES, MAX_TEXT, say, gift, trim, MAX_AMOUNT, RATES, pairKey, net, owedBy, amountOf, dueOf, send, ask, close, unclaimed, openFor, isMoney };
   root.PointLoansModel = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window === "undefined" ? globalThis : window);

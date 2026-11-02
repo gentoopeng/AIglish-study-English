@@ -82,3 +82,22 @@ test("a loan can carry interest: the debt is the amount and its interest, repaid
   // An older record without `due` counts the amount.
   assert.equal(L.net([{ kind: "lend", from: "a", to: "b", amount: 20 }], "a"), 20);
 });
+
+test("talk and gifts live in the same record; a gift is collected but owed by nobody", () => {
+  let r = L.say(null, { id: "m1", from: "a", to: "b", text: "  こんにちは  ", at });
+  assert.equal(r.entries[0].text, "こんにちは");
+  assert.throws(() => L.say(r, { id: "m2", from: "a", to: "b", text: "   ", at }), /メッセージ/);
+  assert.equal(L.say(null, { id: "m", from: "a", to: "b", text: "x".repeat(900), at }).entries[0].text.length, L.MAX_TEXT);
+  r = L.gift(r, { id: "g1", from: "ADMIN", to: "b", amount: 500, note: "がんばったで賞", at });
+  assert.equal(L.net(r.entries, "b"), 0);
+  assert.deepEqual(L.unclaimed(r, "b").map((e) => [e.kind, e.amount]), [["gift", 500]]);
+  assert.throws(() => L.gift(null, { id: "g", from: "ADMIN", to: "b", amount: 0, at }), /1pt以上/);
+});
+
+test("a long talk drops old messages first and never a debt", () => {
+  let r = L.send(null, { id: "loan", from: "a", to: "b", amount: 50, kind: "lend", at });
+  for (let i = 0; i < 600; i++) r = L.say(r, { id: "m" + i, from: i % 2 ? "a" : "b", to: i % 2 ? "b" : "a", text: "やあ" + i, at });
+  assert.equal(r.entries.filter((e) => e.kind === "message").length, L.MAX_MESSAGES);
+  assert.equal(r.entries[r.entries.length - 1].text, "やあ599");
+  assert.equal(L.owedBy(r.entries, "b"), 50);
+});
