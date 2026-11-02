@@ -90,6 +90,41 @@
       return [];
     }
   }
+  // A short record of what the casino and poker did to the wallet, for the points history:
+  // [{ g: game, d: net points, n: how many results, at }], newest last. Results of the same
+  // game within 30 minutes go into one line. It is written in the same wallet transaction, so
+  // it costs no extra write and follows the player to other devices.
+  const LOG_GAMES = { poker: "ポーカー", sugoroku: "すごろくビンゴ", blackjack: "ブラックジャック", roulette: "ルーレット", dice: "ダイスポーカー", chinchiro: "チンチロ", duel: "タイマン" };
+  const logName = () => "aiglish_casino_log_" + uid();
+  function gameOf(key) {
+    const part = key.startsWith("casino:") ? key.split(":")[1] : "poker";
+    return LOG_GAMES[part] ? part : "poker";
+  }
+  function cleanLog(list) {
+    return (Array.isArray(list) ? list : [])
+      .filter((e) => e && LOG_GAMES[e.g] && Number.isFinite(e.d) && Number.isFinite(e.at))
+      .slice(-100)
+      .map((e) => ({ g: e.g, d: Math.round(e.d), n: Math.max(1, Math.floor(Number(e.n) || 1)), at: e.at }));
+  }
+  function addLog(list, game, delta, at) {
+    const next = cleanLog(list),
+      last = next[next.length - 1];
+    if (last && last.g === game && at - last.at < 30 * 60e3) Object.assign(last, { d: last.d + delta, n: last.n + 1, at });
+    else next.push({ g: game, d: delta, n: 1, at });
+    return next.slice(-100);
+  }
+  function casinoLog(id = uid()) {
+    try {
+      return cleanLog(JSON.parse(localStorage.getItem("aiglish_casino_log_" + id) || "[]"));
+    } catch {
+      return [];
+    }
+  }
+  function keepLog(list) {
+    try {
+      localStorage.setItem(logName(), JSON.stringify(cleanLog(list)));
+    } catch {}
+  }
   let settling = Promise.resolve();
   // `feed`: how much of it was bet in a house game, for the jackpots (by default a loss's size).
   function settle(key, delta, feed = delta < 0 ? -delta : 0) {
@@ -104,16 +139,19 @@
           done = wallet.poker && typeof wallet.poker === "object" ? wallet.poker : {};
         if (done[key]) return null;
         const value = { balance: Math.max(0, (Number(wallet.balance) || 0) + delta), revision: (Number(wallet.revision) || 0) + 1 };
-        const kept = Object.fromEntries(Object.entries(done).sort((a, b) => b[1] - a[1]).slice(0, 199));
-        tx.set(walletRef, { ...value, poker: { ...kept, [key]: Date.now() } }, { merge: true });
+        const kept = Object.fromEntries(Object.entries(done).sort((a, b) => b[1] - a[1]).slice(0, 199)),
+          now = Date.now(),
+          log = addLog(wallet.casinoLog, gameOf(key), delta, now);
+        tx.set(walletRef, { ...value, poker: { ...kept, [key]: now }, casinoLog: log }, { merge: true });
         tx.set(window.fbDoc(window.db, "users", account), { studyPoints: value.balance }, { merge: true });
-        return value;
+        return { ...value, log };
       });
+      if (next && uid() === account) keepLog(next.log);
       const keys = settledKeys().concat(key).slice(-200);
       try {
         localStorage.setItem(settledName(), JSON.stringify(keys));
       } catch {}
-      if (next && uid() === account) window.StudyPoints?.restore?.({ ...next, publishedRevision: next.revision });
+      if (next && uid() === account) window.StudyPoints?.restore?.({ balance: next.balance, revision: next.revision, publishedRevision: next.revision });
       // Points bet against the house (keys "casino:…") feed the casino's shared jackpots. Poker
       // and duels between players have no house share to pay for them, so they do not.
       if (next && feed > 0 && key.startsWith("casino:") && !key.startsWith("casino:duel:")) window.CasinoJackpot?.add(feed);
@@ -1147,5 +1185,13 @@
     } catch {}
     if (!seen) window.PokerTutorial?.open({ practice: () => screen?.querySelector("[data-pk-practice]")?.click() });
   }
-  window.Poker = Object.freeze({ open, close, settle, practice, card: cardEl, message, _session: () => session });
+  // The wallet's casino record from the cloud (on the points screen's refresh).
+  async function refreshLog(id = uid()) {
+    if (!window.db || !window.fbGetDoc || id === "GUEST-000") return casinoLog(id);
+    const snap = await window.fbGetDoc(window.fbDoc(window.db, "users", id, "learningPoints", "main"));
+    const log = cleanLog(snap.exists() ? snap.data().casinoLog : []);
+    if (id === uid()) keepLog(log);
+    return log;
+  }
+  window.Poker = Object.freeze({ open, close, settle, practice, card: cardEl, message, casinoLog, refreshLog, LOG_GAMES, _session: () => session });
 })();

@@ -469,6 +469,8 @@
               ...(counted ? { earned: value.earned } : {}),
               // Poker and casino keys stay, so a result is never settled twice.
               ...(wallet.poker && typeof wallet.poker === "object" ? { poker: wallet.poker } : {}),
+              // So does the casino's record for the points history.
+              ...(Array.isArray(wallet.casinoLog) ? { casinoLog: wallet.casinoLog } : {}),
             });
           tx.set(
             window.fbDoc(window.db, "users", id),

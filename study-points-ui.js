@@ -48,10 +48,42 @@
       : "";
     const list = dialog.querySelector("[data-points-history]");
     list.replaceChildren();
-    const entries = Object.entries(value.history);
+    // Points earned by studying and the casino's wins and losses, newest first.
+    const when = (entry) => entry.at || Date.parse(entry.day || "") || 0;
+    const casino = (window.Poker?.casinoLog?.(account) || []).map((entry) => ["casino", { ...entry, casino: true }]);
+    const entries = Object.entries(value.history)
+      .concat(casino)
+      .sort((a, b) => when(b[1]) - when(a[1]));
     if (!entries.length)
-      list.append(node("li", "まだ獲得履歴はありません。", "points-empty"));
+      list.append(node("li", "まだ履歴はありません。", "points-empty"));
+    const stamp = (at) =>
+      new Date(at).toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     for (const [token, entry] of entries) {
+      if (entry.casino) {
+        const row = node("li", undefined, "is-casino"),
+          copy = node("div"),
+          date = node("time", stamp(entry.at));
+        date.dateTime = new Date(entry.at).toISOString();
+        copy.append(
+          node("strong", window.Poker.LOG_GAMES[entry.g]),
+          node("small", "カジノ" + (entry.n > 1 ? " · " + entry.n + "回分" : "")),
+          date,
+        );
+        const amount = node(
+          "span",
+          (entry.d > 0 ? "+" : entry.d < 0 ? "−" : "±") + Math.abs(entry.d).toLocaleString("ja-JP") + "pt",
+          entry.d < 0 ? "is-minus" : "",
+        );
+        row.append(copy, amount);
+        list.append(row);
+        continue;
+      }
       const row = node("li"),
         copy = node("div"),
         title = node("strong", entry.word || "単語 " + entry.num),
@@ -99,6 +131,8 @@
     status.textContent = "更新しています…";
     try {
       const saved = await window.StudyPoints.refresh(id);
+      // The casino's record lives in the same wallet document.
+      await window.Poker?.refreshLog?.(id).catch(() => null);
       if (dialog !== current || owner() !== id) return;
       paint();
       status.textContent = saved
@@ -142,7 +176,7 @@
     };
     const tabs = node("div", undefined, "points-tabs");
     for (const [id, label] of [
-      ["history", "獲得履歴"],
+      ["history", "履歴"],
       ["methods", "獲得方法"],
     ]) {
       const b = node("button", label);
@@ -159,7 +193,7 @@
       tabs.append(b);
     }
     const history = node("section"),
-      label = node("h3", "最近100件"),
+      label = node("h3", "最近の記録"),
       list = node("ol", undefined, "points-history");
     history.dataset.pointsHistoryPanel = "";
     list.dataset.pointsHistory = "";
@@ -191,7 +225,7 @@
       ],
       [
         "実測の勉強時間",
-        "1pt／1分",
+        "5pt／1分",
         "アプリで計測した時間だけが対象。1日分を合算して1分未満は切り捨て。手入力・過去の時間は対象外です。寝落ちの取り消し後、翌日0:06以降の起動・学習終了・保存でポイントに反映します。複数端末の重複を防ぐため、同じ5分区間では実測が多い端末だけを採用します。",
       ],
     ]) {
@@ -214,7 +248,7 @@
       node("h3", "カジノとポーカー"),
       node(
         "p",
-        "カジノのゲームとポーカーは所持ポイントを賭けます。賭けた分は始めたときに引かれ、勝った分は終わったときに戻ります。この増減は獲得履歴には載りません。",
+        "カジノのゲームとポーカーは所持ポイントを賭けます。賭けた分は始めたときに引かれ、勝った分は終わったときに戻ります。この増減も履歴に載ります（同じゲームを30分以内に続けた分は1行にまとめ、何回分かを表示します）。総獲得ポイントには入りません。",
       ),
       node(
         "p",

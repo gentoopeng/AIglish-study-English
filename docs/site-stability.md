@@ -2215,3 +2215,28 @@ Test: `tests/sugoroku-shared.smoke.cjs` checks:
 - a player who rolled just now is listed;
 - a player from five minutes ago is not listed;
 - the player themself is not listed.
+
+## The points history includes the casino (10.22.56.00)
+
+The user asked for the points history to include the casino.
+
+**Before.** The history listed only points earned by studying. Casino and poker wins and losses changed the balance but appeared nowhere.
+
+**Now.** Every casino and poker result that reaches the wallet (`Poker.settle`) is added to a short record, `casinoLog`, in the wallet document (`users/<id>/learningPoints/main`).
+
+- **Format.** `[{ g, d, n, at }]`: the game, the net points, how many results, and the time.
+- **Grouping.** Results of the same game within 30 minutes are added to one line, so a long run of すごろくビンゴ rolls stays one line. The record keeps the newest 100 lines.
+- **No extra writes.** It is written inside the same transaction as the wallet move, so it follows the player to other devices.
+- **On the device.** It is also kept locally (`aiglish_casino_log_<id>`), and 「クラウドから更新」 reads it again.
+- **Not wiped.** StudyPoints' own wallet write (which replaces the document) now keeps `casinoLog`, the same way it keeps `poker`.
+
+**The points screen.**
+
+- The tab 「獲得履歴」 is now 「履歴」.
+- The casino lines are mixed in by time, newest first: the game's name, 「カジノ · N回分」, and the net points, with a loss shown in red.
+- 総獲得ポイント is unchanged (study only).
+- The 「獲得方法」 text now says that the casino appears in the history. It also gives the study-time rate as 5pt per minute (it still said 1pt).
+
+Results from before this change are not in the record.
+
+Test: `tests/casino.smoke.cjs` plays blackjack (−60), two poker hands (−10, +10) and a すごろくビンゴ roll (−100). It checks the wallet's record (three lines; the poker hands make one line of ±0, 2回分) and the rows on the points screen.
