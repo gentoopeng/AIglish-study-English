@@ -265,14 +265,19 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     });
     assert.match(await sg.locator("[data-cs-balance]").innerText(), /pt$/);
     await page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning"));
+    // The roll shows in the balance at once, but its wallet move waits with the others (one
+    // write every 20 seconds at most), here until the game closes.
+    assert.equal(await page.evaluate(() => window.Casino.balance()), 140);
+    assert.equal(await page.evaluate(() => window.__wallet["users/casino-a/learningPoints/main"].balance), 240);
+    assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem("aiglish_sugoroku_casino-a"))).rolls, 1);
+    await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.waitForFunction(() => window.__wallet["users/casino-a/learningPoints/main"].balance === 140);
     assert.equal(await page.evaluate(() => window.StudyPoints.balance()), 140);
     const sgKeys = await page.evaluate(() => Object.keys(window.__wallet["users/casino-a/learningPoints/main"].poker));
     assert.equal(sgKeys.length, keysBefore + 1);
-    assert.ok(sgKeys.some((k) => /^casino:sugoroku:.+:net$/.test(k)));
-    assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem("aiglish_sugoroku_casino-a"))).rolls, 1);
+    assert.ok(sgKeys.some((k) => /^casino:sugoroku:batch:/.test(k)));
+    assert.equal(await page.evaluate(() => localStorage.getItem("aiglish_casino_batch_casino-a")), null);
     await page.waitForFunction(() => Number(localStorage.getItem("aiglish_casino_jackpot_pending")) + (window.__wallet["shared/casino_jackpot"]?.bet || 0) === 160);
-    await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     assert.equal(await tab.locator("[data-casino-balance]").innerText(), "140pt");
     // Signed in, the bingo card is the shared one: a ball goes on it under this player's name,
     // and another player opening the game sees it there.
@@ -311,7 +316,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await other.evaluate((c) => c.classList.contains("is-on") && !c.classList.contains("is-mine")), true);
     await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     assert.deepEqual(errors, []);
-    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on points in one wallet write a roll, bets feed the shared jackpot, the すごろくビンゴ card shared between players");
+    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on points with its wallet moves added up and written together, bets feed the shared jackpot, the すごろくビンゴ card shared between players");
   } finally {
     await browser.close();
   }

@@ -570,6 +570,11 @@
       },
       { once: true },
     );
+    const seen = seenGroup(account, id);
+    if (seen) {
+      present(id, seen, d);
+      d.querySelector("[data-group-status]").textContent = "最新の内容を確かめています…";
+    }
     subscribe(id, d, account);
     publish(true, id);
   }
@@ -585,28 +590,48 @@
           return;
         }
         d.querySelector("[data-group-status]").textContent = "";
-        const group = { id, ...snap.data() };
-        const cached = list.find((item) => item.id === id);
-        if (cached && cached.goalSummary !== goalSummary(group)) {
-          cached.goalSummary = goalSummary(group);
-          remember();
-          render();
-        }
-        const shape = JSON.stringify({
-          ...group,
-          chatRecent: undefined,
-          chatRead: undefined,
-          events: undefined,
-          studying: undefined,
-        });
-        if (d.__studyGroupShape !== shape) {
-          d.__studyGroupShape = shape;
-          draw(group, d);
-        }
-        window.GroupChat?.mount(d, group);
+        keepGroup(account, id, snap.data());
+        present(id, snap.data(), d);
       },
       error,
     );
+  }
+  // The last copy of a group seen on this device, so opening it shows the group at once while
+  // the cloud's copy comes in.
+  const groupCacheName = (account, id) => "aiglish_group_seen_" + account + "_" + id;
+  function keepGroup(account, id, data) {
+    try {
+      localStorage.setItem(groupCacheName(account, id), JSON.stringify(data));
+    } catch {}
+  }
+  function seenGroup(account, id) {
+    try {
+      const data = JSON.parse(localStorage.getItem(groupCacheName(account, id)) || "null");
+      return data && typeof data === "object" && data.members?.[account] ? data : null;
+    } catch {
+      return null;
+    }
+  }
+  function present(id, data, d) {
+    const group = { id, ...data };
+    const cached = list.find((item) => item.id === id);
+    if (cached && cached.goalSummary !== goalSummary(group)) {
+      cached.goalSummary = goalSummary(group);
+      remember();
+      render();
+    }
+    const shape = JSON.stringify({
+      ...group,
+      chatRecent: undefined,
+      chatRead: undefined,
+      events: undefined,
+      studying: undefined,
+    });
+    if (d.__studyGroupShape !== shape) {
+      d.__studyGroupShape = shape;
+      draw(group, d);
+    }
+    window.GroupChat?.mount(d, group);
   }
   function memberAvatar(id, name) {
     const known = window.People?.preview?.(id),

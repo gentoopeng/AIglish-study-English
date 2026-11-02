@@ -56,6 +56,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
         const result = await fn({
           get: async (path) => {
             if (window.__failCard && path === "shared/sugoroku_live") throw Error("offline");
+            if (window.__failWallet && path.endsWith("/learningPoints/main")) throw Error("offline");
             return { exists: () => !!store[path], data: () => structuredClone(store[path]) };
           },
           set: (path, value, options) => writes.push([path, structuredClone(value), options?.merge]),
@@ -82,6 +83,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     const screen = page.locator("dialog.casino-screen.is-sugoroku[open]");
     await screen.locator(".sg-card").waitFor();
     // The 120 waiting for A is taken on opening, in one wallet write, and said so.
+    await page.evaluate(() => window.Casino.flush());
     await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 2120);
     assert.match(await screen.locator(".sg-say").innerText(), /分け前　\+120pt/);
     assert.deepEqual(await page.evaluate(() => window.__store["shared/sugoroku_live"].owed), {});
@@ -122,9 +124,27 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await settled();
     await page.evaluate(() => (window.__failCard = false));
     assert.equal(await chips(), start - 100);
+    await page.evaluate(() => window.Casino.flush());
     await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 2020);
-    assert.deepEqual(Object.keys(await page.evaluate(() => window.__store["users/sg-a/learningPoints/main"].poker)).map((k) => k.replace(/:[^:]+:net$/, "")), ["casino:sugoroku", "casino:sugoroku"]);
+    // Each written batch is one wallet move.
+    assert.deepEqual(Object.keys(await page.evaluate(() => window.__store["users/sg-a/learningPoints/main"].poker)).map((k) => k.replace(/:batch:[^:]+$/, "")), ["casino:sugoroku", "casino:sugoroku"]);
     assert.equal((await saved()).rolls, 1);
+    // A batch the cloud refuses stays on this device and is written later, once.
+    await fix([0, zeroAt]);
+    await screen.locator("[data-sg-roll]").click();
+    await settled();
+    await page.evaluate(async () => {
+      window.__failWallet = true;
+      await window.Casino.flush();
+      window.__failWallet = false;
+    });
+    assert.equal(await page.evaluate(() => window.__store["users/sg-a/learningPoints/main"].balance), 2020);
+    assert.equal(await chips(), start - 200);
+    await page.evaluate(() => window.Casino.flush());
+    await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 1920);
+    await page.evaluate(() => window.Casino.flush());
+    assert.equal(await page.evaluate(() => window.__store["users/sg-a/learningPoints/main"].balance), 1920);
+    assert.equal(await chips(), start - 200);
 
     // A ball on the row's last number finishes B's row: half the prize of 1,000 is shared by the
     // 7 balls (B's 6 parts, 428, wait on the card for B); of the bingo wheel's × 10 (1,000), 30%
@@ -220,6 +240,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     const twice = await rule("S.RULES.accident.findIndex((x) => x.take === 2)");
     await fix([0, twice]);
     await screen.locator("[data-sg-roll]").click();
+    await page.evaluate(() => window.Casino.flush());
     await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 0);
     await page.waitForFunction(() => window.__store["pointLoans/CASINO__sg-a"]);
     const debt = await page.evaluate(() => window.__store["pointLoans/CASINO__sg-a"].entries.map((e) => [e.kind, e.from, e.amount, e.status || ""]));
