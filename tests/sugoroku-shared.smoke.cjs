@@ -195,9 +195,9 @@ const SAVE = "aiglish_sugoroku_sg-a",
       }
     });
     for (let i = 0; i < 3; i++) await pad.click();
-    await mini.locator('[data-sg-game="next"]').waitFor();
+    await mini.locator(".sg-mini.is-over").waitFor();
     assert.match(await mini.locator(".sg-game-line").innerText(), /^3回　→　30点/);
-    await mini.locator('[data-sg-game="next"]').click();
+    await page.waitForFunction(() => !document.querySelector(".sg-layer.is-mini:not([hidden])"));
 
     // B, opening the casino tab, sees the part waiting on the すごろくビンゴ tile.
     await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();

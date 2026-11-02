@@ -115,18 +115,21 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.equal(round.held[0], true);
     const chips = await page.evaluate(() => window.Casino.balance());
     const wonBefore = (await saved()).won;
+    // In すごろくビンゴ the player throws twice in all (one re-roll), the dealer up to three times.
+    assert.equal(round.most, 2);
+    assert.match(await game.locator(".sg-game-line").innerText(), /振り直しはあと1回。ディーラーは2回まで/);
     await game.locator('[data-sg-game="stand"]').click();
     const outcome = (await saved()).pending.round.outcome;
-    // つづける tapped over and over (as on a slow connection) settles the game once.
-    await page.evaluate(() => {
-      const next = document.querySelector('.sg-layer.is-game [data-sg-game="next"]');
-      for (let i = 0; i < 6; i++) next.click();
-    });
+    // The dealer's throws land one by one, then the result shows and the board goes on by
+    // itself: there is no つづける to press.
+    await game.locator(".sg-hand span", { hasText: /ディーラー.*投目/ }).waitFor();
+    assert.equal(await game.locator('[data-sg-game="next"]').count(), 0);
+    await page.waitForFunction((name) => JSON.parse(localStorage.getItem(name)).pending === null, SAVE);
     await settled();
     const ended = await saved();
     assert.equal(ended.pending, null);
     assert.equal((await page.evaluate(() => window.Casino.balance())) - chips, ended.won - wonBefore, "paid once");
-    const paid = { win: 100, push: 50, lose: 13 }[outcome];
+    const paid = { win: 125, push: 50, lose: 13 }[outcome];
     assert.ok((await page.evaluate(() => window.Casino.balance())) >= chips + paid, outcome);
 
     // おまかせ plays a blackjack round by itself and goes on.
@@ -138,11 +141,36 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await game.locator('[data-sg-game="auto"]').click();
+    // (A deal that is already over, a blackjack, has no おまかせ: it just goes on.)
+    if ((await saved()).pending?.round?.done !== true) await game.locator('[data-sg-game="auto"]').click({ timeout: 3000 }).catch(() => {});
     await page.waitForFunction((name) => JSON.parse(localStorage.getItem(name)).pending === null, SAVE);
     await settled();
     const auto = await saved();
     assert.equal(auto.pending, null);
+
+    // チンチロ: the parent's throws are shown one at a time (with the throw number), then the
+    // player throws (at most twice), and the board goes on by itself.
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.pending = { game: "chinchiro", bet: 100 };
+      s.bonus = [];
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await game.locator(".sg-hand span", { hasText: /^親.*投目/ }).waitFor();
+    const parentThrows = (await saved()).pending.round.parent.rolls.length;
+    assert.ok(parentThrows >= 1 && parentThrows <= 3);
+    for (let i = 0; i < 2; i++) {
+      const throwBtn = game.locator('[data-sg-game="roll"]');
+      if (!(await throwBtn.isVisible().catch(() => false))) {
+        await page.waitForTimeout(800);
+        if (!(await throwBtn.isVisible().catch(() => false))) break;
+      }
+      await throwBtn.click();
+    }
+    await page.waitForFunction((name) => JSON.parse(localStorage.getItem(name)).pending === null, SAVE);
+    await settled();
 
     // The draws are fixed from here: the next values crypto gives go to the die, then the ball.
     const fix = (values) =>
@@ -249,8 +277,10 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.waitForTimeout(300);
     await mini.locator('[data-sg-game="stop"]').click();
     assert.match(await mini.locator(".sg-game-line").innerText(), /ずれ \d+\.\d\d秒　→　\d+点/);
-    await mini.locator('[data-sg-game="next"]').click();
+    // The score shows for a moment and the board goes on by itself.
+    assert.equal(await mini.locator('[data-sg-game="next"]').count(), 0);
     await settled();
+    await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
     const afterMini = await saved();
     assert.deepEqual(afterMini.bonus, []);
     // amy's row: no solo bonus, and half the prize of 1,000 is shared by the balls on it: amy's
@@ -270,14 +300,13 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       const before = await saved();
       await tab.locator(".casino-game.mode-sugoroku").click();
       await play();
-      await mini.locator('[data-sg-game="next"]').click();
       await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
       return (await saved()).won - before.won;
     };
     const stopWon = await quickGame("stop", async () => {
       await mini.locator('[data-sg-game="start"]').click();
       await mini.locator('[data-sg-game="stop"]').click();
-      await mini.locator('[data-sg-game="next"]').waitFor();
+      await mini.locator(".sg-mini.is-over").waitFor();
       assert.match(await mini.locator(".sg-game-line").innerText(), /→　(200|75|0)枚/);
     });
     assert.ok([0, 75, 200].includes(stopWon), String(stopWon));
@@ -311,12 +340,12 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await mini.locator('[data-sg-game="next"]').waitFor();
+    await mini.locator(".sg-mini.is-over").waitFor();
     assert.match(await mini.innerText(), /途中でやめたので0点/);
-    await mini.locator('[data-sg-game="next"]').click();
+    await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
     assert.deepEqual((await saved()).bonus, []);
     assert.deepEqual(errors, []);
-    console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled, a ball off the card pays 2×, other players' balls by name, a line of own balls spins BINGO and starts the row again, a mini game played and paid, a left one scores 0");
+    console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled (the dealer's and the parent's throws shown, no つづける), a ball off the card pays 2×, other players' balls by name, a line of own balls spins BINGO and starts the row again, a mini game played and paid, a left one scores 0");
   } finally {
     await browser.close();
   }
