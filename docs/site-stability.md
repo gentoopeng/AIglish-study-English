@@ -2028,3 +2028,15 @@ Tests:
 - `tests/casino.smoke.cjs`: a roll's move waits and is written on closing, as one batch.
 - `tests/sugoroku-shared.smoke.cjs`: a batch refused by the cloud stays and is written once later.
 - Groups, talks and casino tables: `tests/study-groups-sessions.smoke.cjs`, `tests/point-loans.smoke.cjs`, `tests/casino-group.smoke.cjs`.
+
+## Fix: the list of talks stopped with an error (10.22.45.00)
+
+The user reported 「undefined is not an object (evaluating 'last[key]') (point-loans.js:312)」 in 10.22.43.00.
+
+**Cause.** The list's rows marked a talk 「新着」 by comparing its time with `last`, the times this player last looked. In 10.22.43.00 a variable for each row's last line was also named `last`, inside the loop. It hid the outer one, so `last[key]` read the row's last line instead. The first drawing of the list uses the copy kept on the device. Any pair whose record this device had not read yet (as after a restart) had no last line, and `last[key]` threw.
+
+**Fix.** The row's line has its own name, `line`.
+
+**Check.** `tests/point-loans.smoke.cjs` now opens the list with a kept pair whose record was never read. It fails on 10.22.43.00 and passes now.
+
+Points sent from the 運営 were not affected: they are collected when the app starts, apart from drawing the list.
