@@ -49,7 +49,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       window.__failCard = false;
       window.db = {};
       window.fbDoc = (_, ...parts) => parts.join("/");
-      window.fbSetDoc = async (path, value) => (store[path] = structuredClone(value));
+      window.fbSetDoc = async (path, value, options) => (store[path] = options?.merge ? { ...(store[path] || {}), ...structuredClone(value) } : structuredClone(value));
       window.fbGetDoc = async (path) => ({ exists: () => !!store[path], data: () => structuredClone(store[path]) });
       window.fbRunTransaction = async (_, fn) => {
         const writes = [];
@@ -236,9 +236,10 @@ const SAVE = "aiglish_sugoroku_sg-a",
       localStorage.setItem(name, JSON.stringify(s));
       window.fbOnSnapshot = (ref, cb) => {
         const snap = () => ({ exists: () => !!window.__store[ref], data: () => structuredClone(window.__store[ref]) });
-        window.__emit = () => cb(snap());
+        (window.__emits ||= {})[ref] = () => cb(snap());
+        if (ref === "shared/sugoroku_live") window.__emit = () => cb(snap());
         setTimeout(() => cb(snap()), 0);
-        return () => (window.__emit = null);
+        return () => delete window.__emits[ref];
       };
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
@@ -255,6 +256,20 @@ const SAVE = "aiglish_sugoroku_sg-a",
     });
     await settled();
     await page.waitForFunction((at) => document.querySelectorAll(".sg-cell")[at]?.getAttribute("data-initial") === "C", cOn, { timeout: 5000 });
+
+    // Who else is playing: opening the screen marked A as playing. Another player who rolled
+    // just now shows above the card; one who stopped five minutes ago, and A, do not.
+    const mark = await page.evaluate(() => window.__store["shared/sugoroku_here"]?.["sg-a"]);
+    assert.ok(mark && Date.now() - mark.at < 60000, JSON.stringify(mark));
+    assert.equal(await screen.locator(".sg-here").isVisible(), false);
+    await page.evaluate(() => {
+      const here = window.__store["shared/sugoroku_here"];
+      here["sg-c"] = { n: "C", at: Date.now() };
+      here["sg-d"] = { n: "D", at: Date.now() - 300000 };
+      window.__emits["shared/sugoroku_here"]();
+    });
+    await screen.locator(".sg-here").waitFor();
+    assert.equal(await screen.locator(".sg-here").innerText(), "いっしょにプレイ中　\nC\nCさん");
     await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate(() => delete window.fbOnSnapshot);
 
@@ -312,7 +327,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       now: { jp: 3000, sjp: 12000 },
     });
     assert.deepEqual(errors, []);
-    console.log("PASS: shared すごろくビンゴ: untrusted card data checked, reach numbers, a failed write charges nothing, a player's part collected once, a line shared and logged, records, 早送り kept, script taps ignored, a ball that came in during a roll shows after it, a jackpot win takes the pot and starts it again");
+    console.log("PASS: shared すごろくビンゴ: untrusted card data checked, reach numbers, a failed write charges nothing, a player's part collected once, a line shared and logged, records, 早送り kept, script taps ignored, a ball that came in during a roll shows after it, who else is playing shown, a jackpot win takes the pot and starts it again");
   } finally {
     await browser.close();
   }

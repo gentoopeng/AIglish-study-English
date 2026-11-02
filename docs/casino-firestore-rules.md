@@ -4,6 +4,7 @@ The casino keeps two documents that every player writes:
 
 - `shared/casino_jackpot`: `{ bet, jpFrom, sjpFrom, wins[], updatedAt }`
 - `shared/sugoroku_live`: `{ cells[49], owners[49], owed{}, people{}, log[], updatedAt }`
+- `shared/sugoroku_here`: `{ [playerId]: { n, at } }`, who is playing すごろくビンゴ right now
 
 The project's rules are currently open, so any client can write anything there. The app now checks everything it reads back from these documents (`SugorokuModel.validCard`, `cleanPeople`/`cleanLog` in sugoroku.js, `num` in casino-jackpot.js). Bad data is ignored rather than shown, and icons are only accepted as small inline images.
 
@@ -24,6 +25,10 @@ match /shared/casino_jackpot {
          && request.resource.data.jpFrom in [resource.data.jpFrom, request.resource.data.bet]
          && request.resource.data.sjpFrom in [resource.data.sjpFrom, request.resource.data.bet]))
     && (!('wins' in request.resource.data) || request.resource.data.wins.size() <= 20);
+}
+match /shared/sugoroku_here {
+  allow read: if true;
+  allow write: if request.resource.data.size() <= 200;
 }
 match /shared/sugoroku_live {
   allow read: if true;

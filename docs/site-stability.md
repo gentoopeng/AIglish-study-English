@@ -2195,3 +2195,23 @@ Tests:
 
 - `tests/casino-model.test.cjs`: a round with `most: 2` allows only one re-roll, and an old round keeps three throws.
 - `tests/sugoroku.smoke.cjs`: there is no つづける. The dealer's throws show with their number, and a dice-poker win on a 50 bet gives back 125 (the bet plus 1.5 times it). A チンチロ round shows the parent's throws, lets the player throw, and ends by itself. The mini games close by themselves.
+
+## すごろくビンゴ: who else is playing is shown above the card (10.22.55.00)
+
+The user asked what happens when several players play すごろくビンゴ at once, and asked for a sign that others are playing.
+
+**What already happens.** Everyone shares one bingo card. Each player's piece, wallet and wheels are their own. A ball goes onto the shared card in a transaction, so two players never take the same number. Other players' balls come in through the card's listener (since 10.22.53.00 also while a roll is shown). Their BINGOs and jackpots are announced on the screen.
+
+**New.** A small line above the card reads 「いっしょにプレイ中」 and lists, with their icons, the other players who rolled in the last two minutes (up to 5, then 「ほかN人」).
+
+- Kept in a separate document, `shared/sugoroku_here`, as `{ [id]: { n, at } }`. A player is marked when the screen opens, and then with their rolls at most every 45 seconds. That is about 80 writes an hour for one player who keeps rolling, and none while idle.
+- Nobody has to write to leave the list: someone who stops rolling drops off after two minutes. The screen redraws the list every 20 seconds.
+- Entries older than a day are deleted by whoever writes next.
+- Everything read back is checked like the card: ids, names cut to 24 characters, numeric times.
+
+Test: `tests/sugoroku-shared.smoke.cjs` checks:
+
+- opening the screen marks the player;
+- a player who rolled just now is listed;
+- a player from five minutes ago is not listed;
+- the player themself is not listed.
