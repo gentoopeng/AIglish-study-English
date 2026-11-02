@@ -45,7 +45,61 @@
       localStorage.setItem(practiceName(), String(Math.max(0, Math.round(value))));
     } catch {}
   }
-  const balance = () => (real() ? Math.max(0, (window.StudyPoints?.balance() || 0) + pending) : practiceChips());
+  // すごろくビンゴ rolls fast, and a wallet move is a cloud transaction (two writes): its results
+  // are added up on this device (kept in localStorage, so a reload loses nothing) and written as
+  // one move at most every 20 seconds, when the page is hidden, the game closes or the app
+  // starts again. Each batch keeps its key until the wallet has it, so a retry never pays twice.
+  const BATCH_EVERY = 20e3;
+  const batchName = () => "aiglish_casino_batch_" + uid();
+  function batches() {
+    try {
+      const list = JSON.parse(localStorage.getItem(batchName()) || "[]");
+      return Array.isArray(list) ? list.filter((b) => b && typeof b.id === "string" && Number.isFinite(b.delta) && Number.isFinite(b.feed)) : [];
+    } catch {
+      return [];
+    }
+  }
+  function keepBatches(list) {
+    try {
+      if (list.length) localStorage.setItem(batchName(), JSON.stringify(list));
+      else localStorage.removeItem(batchName());
+    } catch {}
+  }
+  const unsent = () => batches().reduce((sum, b) => sum + b.delta, 0);
+  let batchTimer = 0,
+    flushing = null;
+  function batchAdd(delta, feed) {
+    addToday(delta);
+    const list = batches(),
+      last = list[list.length - 1];
+    if (last && !last.sending) Object.assign(last, { delta: last.delta + delta, feed: last.feed + (feed || 0) });
+    else list.push({ id: Date.now().toString(36) + random(1e6).toString(36), delta, feed: feed || 0 });
+    keepBatches(list);
+    if (!batchTimer) batchTimer = setTimeout(flush, BATCH_EVERY);
+  }
+  // Writes the waiting batches, oldest first, one at a time.
+  function flush() {
+    clearTimeout(batchTimer);
+    batchTimer = 0;
+    if (flushing || !batches().length || uid() === "GUEST-000" || !window.db || !window.Poker?.settle || window.FirestoreReadGuard?.paused?.()) return flushing;
+    flushing = (async () => {
+      for (let b = batches()[0]; b; b = batches()[0]) {
+        keepBatches(batches().map((x) => (x.id === b.id ? { ...x, sending: true } : x)));
+        const ok = b.delta ? await window.Poker.settle("casino:sugoroku:batch:" + b.id, b.delta, b.feed) : (b.feed > 0 && window.CasinoJackpot?.add(b.feed), true);
+        if (!ok) break;
+        keepBatches(batches().filter((x) => x.id !== b.id));
+        refresh();
+      }
+    })().finally(() => {
+      flushing = null;
+      if (batches().length && !batchTimer) batchTimer = setTimeout(flush, BATCH_EVERY);
+    });
+    return flushing;
+  }
+  document.addEventListener("visibilitychange", () => document.hidden && flush());
+  addEventListener("pagehide", flush);
+  window.onAppLoaded?.(() => setTimeout(flush, 3000));
+  const balance = () => (real() ? Math.max(0, (window.StudyPoints?.balance() || 0) + pending + unsent()) : practiceChips());
   const unit = () => (real() ? "pt" : "枚");
   // Today's running total (Japan time), kept apart for points and practice chips.
   const todayName = () => "aiglish_casino_today_" + uid() + (real() ? "" : "_practice");
@@ -87,7 +141,7 @@
       pay: (amount) => move(key + ":pay", amount),
       // A whole round in one move (one wallet write): what came back less what was bet, with
       // the bet counted for the jackpots.
-      net: (delta, bet) => move(key + ":net", delta, bet),
+      net: (delta, bet) => (game === "sugoroku" && real() ? batchAdd(delta, bet) : move(key + ":net", delta, bet)),
     };
   }
 
@@ -219,6 +273,7 @@
     refresh();
   }
   function close() {
+    flush();
     leaveDuel();
     leaveGroup();
     if (game?.timer) clearTimeout(game.timer);
@@ -822,6 +877,10 @@
   // each their bet back. Every player only ever moves their own points. The table lives in the
   // poker tables' collection, marked kind "dice", so poker never opens it.
   const duelRef = (code) => window.fbDoc(window.db, "pokerRooms", code);
+  // A table number can be used again once its table is closed, or when a casino table (one with
+  // a kind; poker tables have none and are left alone) was left behind for six hours by players
+  // who shut the app without closing it, so new tables keep finding a free number.
+  const tableFree = (room) => room.status === "closed" || (!!room.kind && !(Date.now() - (Number(room.createdAt) || 0) < 6 * 3600e3));
   const playerName = () => String((typeof myName === "string" && myName) || uid()).slice(0, 24);
   let duel = null;
   // How to play, at the top of each house game: alone against the dealer, together with friends
@@ -962,7 +1021,7 @@
       const code = String(1000 + random(9000));
       const made = await window.fbRunTransaction(window.db, async (tx) => {
         const snap = await tx.get(duelRef(code));
-        if (snap.exists() && snap.data().status !== "closed") return false;
+        if (snap.exists() && !tableFree(snap.data())) return false;
         tx.set(duelRef(code), { kind: duelKind(game), version: 1, code, host: uid(), status: "waiting", createdAt: Date.now(), bet, round: 1, players: { [uid()]: { name: playerName(), joinedAt: Date.now() } }, hands: {}, deal: null, rematch: {} });
         return true;
       });
@@ -1358,7 +1417,7 @@
       const code = String(1000 + random(9000));
       const made = await window.fbRunTransaction(window.db, async (tx) => {
         const snap = await tx.get(duelRef(code));
-        if (snap.exists() && snap.data().status !== "closed") return false;
+        if (snap.exists() && !tableFree(snap.data())) return false;
         tx.set(duelRef(code), { kind, version: 1, code, host: uid(), status: "open", createdAt: Date.now(), round: 1, phase: "betting", players: { [uid()]: { name: playerName(), joinedAt: Date.now() } }, bets: {}, game: null, number: null, history: [] });
         return true;
       });
@@ -2238,5 +2297,5 @@
   window.onTabChange?.((tab) => {
     if (tab === "casino") mount();
   });
-  window.Casino = Object.freeze({ open, close, mount, balance, _real: real });
+  window.Casino = Object.freeze({ open, close, mount, balance, flush, _real: real });
 })();

@@ -95,7 +95,8 @@
   function settle(key, delta, feed = delta < 0 ? -delta : 0) {
     const account = uid();
     settling = settling.then(async () => {
-      if (uid() !== account || settledKeys().includes(key)) return;
+      if (uid() !== account) return false;
+      if (settledKeys().includes(key)) return true;
       const walletRef = window.fbDoc(window.db, "users", account, "learningPoints", "main");
       const next = await window.fbRunTransaction(window.db, async (tx) => {
         const snap = await tx.get(walletRef),
@@ -116,7 +117,12 @@
       // Points bet against the house (keys "casino:…") feed the casino's shared jackpots. Poker
       // and duels between players have no house share to pay for them, so they do not.
       if (next && feed > 0 && key.startsWith("casino:") && !key.startsWith("casino:duel:")) window.CasinoJackpot?.add(feed);
-    }).catch((error) => console.warn("[poker] points", error));
+      return true;
+    }).catch((error) => {
+      console.warn("[poker] points", error);
+      return false;
+    });
+    // Resolves true once this key is in the wallet (now or before), false when it could not be.
     return settling;
   }
   const handKey = (room, no) => room.code + ":" + (room.createdAt || 0) + ":" + no;

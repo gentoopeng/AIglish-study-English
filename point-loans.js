@@ -47,9 +47,33 @@
 
   // ---- Moves -----------------------------------------------------------------------------
   // Pair records as last read or written, so a screen can come up at once and refresh behind.
+  // The last 30 are also kept on this device, so a talk opened after a restart shows at once.
   const records = new Map();
-  const remember = (key, record) => (records.set(uid() + "\n" + key, record), record);
-  const known = (key) => records.get(uid() + "\n" + key) || null;
+  const recordName = (key) => "aiglish_loans_record_" + uid() + "_" + key;
+  const indexName = () => "aiglish_loans_records_" + uid();
+  function remember(key, record) {
+    records.set(uid() + "\n" + key, record);
+    try {
+      const index = JSON.parse(localStorage.getItem(indexName()) || "[]").filter((k) => k !== key);
+      index.push(key);
+      for (const old of index.splice(0, Math.max(0, index.length - 30))) localStorage.removeItem(recordName(old));
+      localStorage.setItem(recordName(key), JSON.stringify(record));
+      localStorage.setItem(indexName(), JSON.stringify(index));
+    } catch {}
+    return record;
+  }
+  function known(key) {
+    const kept = records.get(uid() + "\n" + key);
+    if (kept) return kept;
+    try {
+      const saved = JSON.parse(localStorage.getItem(recordName(key)) || "null");
+      if (saved && Array.isArray(saved.entries)) {
+        records.set(uid() + "\n" + key, saved);
+        return saved;
+      }
+    } catch {}
+    return null;
+  }
   // rate: interest on a loan (one of PointLoansModel.RATES).
   async function send(other, otherName, amount, kind, note, request, rate = 0) {
     ready();

@@ -1995,3 +1995,36 @@ Tests:
   - a message seen by the other side and in the list;
   - a gift collected once.
 - `tests/admin-players.smoke.cjs`: sending points from the admin tool.
+
+## Fewer cloud writes from すごろくビンゴ; talks and groups open from what was seen (10.22.44.00)
+
+The user found talks and groups very slow to load, and could not create a casino table for friends.
+
+**The likely cause: the cloud's daily limits.**
+
+- On points, every すごろくビンゴ roll was a wallet transaction: two writes (the wallet and the profile's point total). With 早送り a player rolls about 40 times a minute, so an hour of play came to several thousand writes. The free plan allows 20,000 writes a day for the whole app.
+- When a limit is hit, every write and read fails with `resource-exhausted`. `FirestoreReadGuard` then pauses all cloud use for five minutes.
+- During the pause, loading stalls or fails and new tables cannot be made. The casino says 「クラウドの利用上限に達しています」.
+
+**Fix.**
+
+- すごろくビンゴ's wallet moves are added up on the device and written as one move at most every 20 seconds, and also when the page is hidden, the game closes or the app starts. They are kept in `aiglish_casino_batch_<id>`.
+- Each batch keeps its key until the wallet has it (`Poker.settle` now resolves `true`/`false`), so a refused write is retried later and never paid twice.
+- The balance shown includes what is waiting.
+- A long session now writes about 3 times a minute instead of about 80.
+
+**Opening faster.**
+
+- A group shows its last copy seen on this device (`aiglish_group_seen_…`) while the cloud's copy comes in, marked 「最新の内容を確かめています…」.
+- The last 30 talk records are kept on the device too (`aiglish_loans_record_…`), so a talk opened after a restart shows at once.
+
+**Casino tables.**
+
+- A table number can be used again when its casino table was left behind for six hours, for example by players who shut the app without closing it. Before, an abandoned table kept its number for good.
+- Poker tables (which have no `kind`) are never reused this way.
+
+Tests:
+
+- `tests/casino.smoke.cjs`: a roll's move waits and is written on closing, as one batch.
+- `tests/sugoroku-shared.smoke.cjs`: a batch refused by the cloud stays and is written once later.
+- Groups, talks and casino tables: `tests/study-groups-sessions.smoke.cjs`, `tests/point-loans.smoke.cjs`, `tests/casino-group.smoke.cjs`.
