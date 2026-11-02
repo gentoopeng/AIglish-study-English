@@ -15,7 +15,7 @@
 // 20, four mini games, a miss, the jackpot, or the super-jackpot chance, a 5-slot wheel of the
 // super jackpot, the jackpot twice, a bigger tapping game and "back" (the first wheel again).
 // Two lines at once pay (n + 1)× and a line of only this player's balls soloBonus× more (not the
-// jackpots). The bingo prize is shared by the balls on the finished lines, and wheelShare of the
+// jackpots, and not the mini games, which pay their points × bingoGameBoost). The bingo prize is shared by the balls on the finished lines, and wheelShare of the
 // bingo wheel's multiples too: each other player's part waits in card.owed[id] until they next
 // play (collect). The rest of the wheel, its mini game and any jackpot are the finisher's. The finished lines' numbers are then drawn afresh and their balls cleared.
 // The jackpots are shared by the whole casino (see casino-jackpot.js); here they are only events.
@@ -98,13 +98,13 @@
     },
     // Mini games, scored in points (multiplied like the line's other prizes):
     // timer – stop at 10 seconds: 1,000 less 5 for every 0.01 s off; tap / tapex – taps in 10
-    // seconds × 10 / × 50; dice – the face × 100; math – a sum in 15 seconds, 500 if right.
+    // seconds × 10 / × 25; dice – the face × 100; math – a sum in 15 seconds, 500 if right.
     // Taps count up to `max` (12 a second is about as fast as a finger goes; a tapping tool
     // gains nothing past it).
     // stop / hilo are the normal squares' quick games, paid in multiples of the bet: stop the
     // light in the gold (perfect) or silver (good) part of the bar; say whether the next card is
     // higher or lower. In 早送り they are not played and pay `auto`.
-    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 1, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 50, max: 120 }, dice: { per: 100 }, math: { seconds: 15, prize: 500 } },
+    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 1, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 25, max: 120 }, dice: { per: 100 }, math: { seconds: 15, prize: 500 } },
   };
   const SIZE = RULES.board.length,
     CARD = 7,
@@ -281,8 +281,9 @@
         events.push({ t: "jackpot", kind: slot.jackpot });
       }
       else if (slot.game) {
-        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: mult * RULES.bingoGameBoost }]);
-        events.push({ t: "bonus", game: slot.game, mult });
+        // A mini game is not multiplied by the lines (or the solo bonus): only by bingoGameBoost.
+        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: RULES.bingoGameBoost }]);
+        events.push({ t: "bonus", game: slot.game, mult: RULES.bingoGameBoost });
       } else if (slot.x) {
         const won = money(bet * slot.x * mult),
           part = share(won, RULES.wheelShare);

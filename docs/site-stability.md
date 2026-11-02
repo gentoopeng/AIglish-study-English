@@ -2240,3 +2240,23 @@ The user asked for the points history to include the casino.
 Results from before this change are not in the record.
 
 Test: `tests/casino.smoke.cjs` plays blackjack (−60), two poker hands (−10, +10) and a すごろくビンゴ roll (−100). It checks the wallet's record (three lines; the poker hands make one line of ±0, 2回分) and the rows on the points screen.
+
+## すごろくビンゴ: mini games are not multiplied by the lines, 連打EX 25 a tap (10.22.57.00)
+
+The user asked what a bingo can pay and whether anything breaks the balance. Two things could pay far more than the rest:
+
+- **連打EX.** On the SUPER JACKPOT CHANCE wheel, 120 taps × 50 × 2 = 12,000. It depends only on tapping speed, so a tapping app on a phone or PC, which sends real taps, could take the full amount every time.
+- **Line multipliers on mini games.** The line multipliers (two lines 3×, three lines 4×, solo 1.1×) also applied to the mini games. 連打EX on a triple line could pay 48,000.
+
+**Changes (as the user chose).**
+
+- A bingo wheel's mini game is multiplied only by `bingoGameBoost` (2), never by the lines or the solo bonus. The lines still multiply the bingo prize and ×10 / ×20 / ×50. They never multiplied the jackpots.
+- 連打EX is now 25 points a tap: at most 120 × 25 × 2 = 6,000.
+
+**Balance.** In simulation (400,000 rolls), すごろくビンゴ returns about 97.5–99.2% with jackpots. It was about 98.5–99.4% before. Simulation noise is about ±1%.
+
+Tests: `tests/sugoroku-model.test.cjs` checks that:
+
+- 70 taps of 連打EX score 1,750;
+- the cap is 120 × 25;
+- a double line landing on a mini game queues it at 2×, not 6×.
