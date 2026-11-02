@@ -330,8 +330,8 @@
           node("span", "loans-standing" + (side ? " is-" + side : ""), n === null ? "…" : n > 0 ? fmt(n) + "pt 貸しています" : n < 0 ? fmt(-n) + "pt 借りています" : "貸し借りはありません"),
         );
         // The last line of the talk, as in a chat list.
-        const last = rec?.entries?.[rec.entries.length - 1];
-        if (last) b.append(node("small", "loans-last", last.kind === "message" ? last.text : last.kind === "gift" ? fmt(last.amount) + "pt 届きました" : fmt(last.amount) + "pt の記録"));
+        const line = rec?.entries?.[rec.entries.length - 1];
+        if (line) b.append(node("small", "loans-last", line.kind === "message" ? line.text : line.kind === "gift" ? fmt(line.amount) + "pt 届きました" : fmt(line.amount) + "pt の記録"));
         if (asks) b.append(node("em", "loans-badge", "返事待ち " + asks));
         else if ((pair.at || 0) > (last[key] || 0)) b.append(node("em", "loans-badge", "新着"));
         b.onclick = () => person(pair.other, name);

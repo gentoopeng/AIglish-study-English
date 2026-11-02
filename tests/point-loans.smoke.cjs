@@ -244,8 +244,17 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       window.__fastGet = get;
       window.fbGetDoc = (ref) => new Promise((resolve) => setTimeout(() => resolve(get(ref)), 3000));
     });
+    // The list kept on the device may name a pair whose record this device has never read (after
+    // a restart): it is drawn with "…" until the record comes in, without an error.
+    await a.evaluate(() => {
+      const kept = JSON.parse(localStorage.getItem("aiglish_loans_inbox_loan-a") || "{}");
+      kept["loan-a__loan-z"] = { other: "loan-z", name: "loan-z", at: Date.now() };
+      localStorage.setItem("aiglish_loans_inbox_loan-a", JSON.stringify(kept));
+    });
     let t0 = Date.now();
     await a.evaluate(() => void window.PointLoans.open());
+    await dialogOf(a).locator(".loans-person", { hasText: "loan-z" }).waitFor({ timeout: 1500 });
+    assert.match(await dialogOf(a).locator(".loans-person", { hasText: "loan-z" }).innerText(), /…/);
     await dialogOf(a).locator(".loans-person", { hasText: "loan-b" }).waitFor({ timeout: 1500 });
     assert.ok(Date.now() - t0 < 1500, "list in " + (Date.now() - t0) + "ms");
     t0 = Date.now();
