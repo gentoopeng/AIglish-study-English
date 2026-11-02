@@ -2148,3 +2148,13 @@ The user found that the die kept shaking for a long time whenever a ball came ou
 **Balance.** The normal wheel is now ×10, ×5, ×1.5, ×1, ×0.25, ×0, −0.5 and −1. In simulation, the return is about 99–101% with the jackpots counted. A bingo comes once in about 225 rolls.
 
 Tests: `tests/sugoroku-model.test.cjs` and `tests/sugoroku.smoke.cjs` check the new payouts, the plain games and the wheel.
+
+## すごろくビンゴ: つづける tapped many times pays a won game once (10.22.52.00)
+
+The user found that after winning a game in すごろくビンゴ (チンチロ and the others), tapping つづける over and over on a slow connection paid the win again and again.
+
+**Cause.** つづける settles the game and then waits for the shared card to be written. While it waited, the game was still marked as waiting to be settled. Each extra tap settled it again from the same state and paid again.
+
+**Fix.** Only one settle runs at a time. The button turns off while it runs, and taps during the wait are ignored. Once the game is settled it is no longer waiting, so a late tap has nothing to pay. If the cloud cannot be reached, the button comes back so the player can try again.
+
+Test: `tests/sugoroku.smoke.cjs` taps つづける six times in a row and checks the chips went up by exactly what the saved record shows. Without the fix it fails.

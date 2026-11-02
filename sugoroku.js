@@ -1309,11 +1309,17 @@
   }
   // The end of an event game. If the shared card cannot be written, the game stays (its round
   // is saved) and つづける can be pressed again.
+  // Only one settle at a time: while the cloud answers, more taps on つづける are ignored, so a
+  // won game cannot be paid twice.
   async function finish(m) {
+    if (view.finishing || !view.state?.pending) return;
     const state = view.state,
       me = api.uid(),
       tape = [],
       local = S.settle(state, view.card, m, recorder(tape), me);
+    const nextBtn = view.layer.querySelector('[data-sg-game="next"]');
+    view.finishing = true;
+    if (nextBtn) nextBtn.disabled = true;
     let result;
     try {
       // A loss or a push draws no ball: no cloud round trip, as for a roll.
@@ -1324,8 +1330,13 @@
       console.warn("[sugoroku] settle", error);
       const line = view.layer.querySelector(".sg-game-line");
       if (line) line.textContent = "通信できませんでした。もう一度「つづける」を押してください";
+      view.finishing = false;
+      if (nextBtn) nextBtn.disabled = false;
       return;
     }
+    // The pending game is gone from here on, so a late tap finds nothing to settle.
+    view.state = result.out.state;
+    view.finishing = false;
     view.layer.hidden = true;
     const { out, before, people, collected } = result;
     out.collected = collected;
