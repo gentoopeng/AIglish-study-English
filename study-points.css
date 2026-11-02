@@ -261,3 +261,7 @@
 .admin-gift-list li{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid #ffffff14;}
 .admin-gift-list li small{opacity:.75;font-size:11px;}
 .admin-gift-list li:not(.is-taken) small{color:#e6b45c;opacity:1;}
+/* The casino's lines in the points history: a loss in a muted red. */
+.points-history li.is-casino > span.is-minus {
+  color: #f08a8a;
+}

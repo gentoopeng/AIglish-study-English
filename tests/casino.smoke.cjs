@@ -279,6 +279,17 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await page.evaluate(() => localStorage.getItem("aiglish_casino_batch_casino-a")), null);
     await page.waitForFunction(() => Number(localStorage.getItem("aiglish_casino_jackpot_pending")) + (window.__wallet["shared/casino_jackpot"]?.bet || 0) === 160);
     assert.equal(await tab.locator("[data-casino-balance]").innerText(), "140pt");
+    // The casino's wins and losses are kept with the wallet, one line per game in a row (the
+    // two poker hands, −10 and +10, make one line of ±0), and show in the points history.
+    const log = await page.evaluate(() => window.__wallet["users/casino-a/learningPoints/main"].casinoLog.map((e) => [e.g, e.d, e.n]));
+    assert.deepEqual(log, [["blackjack", -60, 1], ["poker", 0, 2], ["sugoroku", -100, 1]]);
+    assert.deepEqual(await page.evaluate(() => window.Poker.casinoLog().map((e) => e.g)), ["blackjack", "poker", "sugoroku"]);
+    await page.evaluate(() => window.openStudyPoints());
+    const casinoRows = page.locator(".study-points-dialog .points-history li.is-casino");
+    assert.equal(await casinoRows.count(), 3);
+    assert.match(await casinoRows.first().innerText(), /すごろくビンゴ[\s\S]*カジノ[\s\S]*−100pt/);
+    assert.match(await casinoRows.nth(1).innerText(), /ポーカー[\s\S]*2回分[\s\S]*±0pt/);
+    await page.getByRole("button", { name: "ポイントを閉じる" }).click();
     // Signed in, the bingo card is the shared one: a ball goes on it under this player's name,
     // and another player opening the game sees it there.
     await page.evaluate(() => {
@@ -316,7 +327,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await other.evaluate((c) => c.classList.contains("is-on") && !c.classList.contains("is-mine")), true);
     await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     assert.deepEqual(errors, []);
-    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on points with its wallet moves added up and written together, bets feed the shared jackpot, the すごろくビンゴ card shared between players");
+    console.log("PASS: casino tab (6 tabs fit, chip balance), poker from the casino, blackjack win/bust, roulette red+7, dice hold/re-roll/stand, points bet out once per round, bet capped at the balance, すごろくビンゴ on points with its wallet moves added up and written together, bets feed the shared jackpot, casino results in the points history, the すごろくビンゴ card shared between players");
   } finally {
     await browser.close();
   }
