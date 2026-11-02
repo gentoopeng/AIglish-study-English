@@ -2158,3 +2158,15 @@ The user found that after winning a game in すごろくビンゴ (チンチロ 
 **Fix.** Only one settle runs at a time. The button turns off while it runs, and taps during the wait are ignored. Once the game is settled it is no longer waiting, so a late tap has nothing to pay. If the cloud cannot be reached, the button comes back so the player can try again.
 
 Test: `tests/sugoroku.smoke.cjs` taps つづける six times in a row and checks the chips went up by exactly what the saved record shows. Without the fix it fails.
+
+## すごろくビンゴ: other players' balls no longer go missing during a roll (10.22.53.00)
+
+The user found that balls on the bingo card sometimes did not show, and then appeared later.
+
+**Cause.** The screen listens to the shared card. A change that arrived while a roll or a game was being shown was skipped, so the card would not change under the show. That change was then gone for good. Firestore only sends a card again when it changes, so another player's ball stayed hidden until somebody's next ball. While a player kept rolling, most changes arrived during a show, so this happened often.
+
+The repeated つづける bug fixed in 10.22.52.00 was not the cause. A second settle of the same game drew the same number. It found the player's own ball already there and counted as a miss, so no extra balls were placed.
+
+**Fix.** A change that arrives during a show is marked as waiting. When the screen is free again, the card is read once more and shown. One extra read happens only when a change was skipped.
+
+Test: `tests/sugoroku-shared.smoke.cjs` puts another player's ball on the card while a roll is being shown, and checks that it shows once the roll ends. Without the fix it fails.

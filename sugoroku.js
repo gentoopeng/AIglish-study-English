@@ -318,23 +318,44 @@
       view.stop = window.fbOnSnapshot(cardRef(), (snap) => {
         const found = snap.exists() && readCard(snap.data());
         if (!found || target !== view || !view.body.isConnected) return target.stop?.();
-        if (view.busy) return;
-        const news = found.log.filter((e) => e.at > lastLog() && e.id !== api.uid());
-        view.card = found.card;
-        view.people = found.people;
-        view.log = found.log;
-        keepCard(found.card, found.people, found.log);
-        paintCard();
-        hud();
-        // Somebody else's line or jackpot just now.
-        const last = news[news.length - 1];
-        if (last) say((last.n || "だれか") + "さんが " + logText(last), "is-hot");
-        seeLog();
-        if (found.card.owed?.[api.uid()] > 0) setTimeout(collectNow, last ? 1500 : 0);
+        // While a roll or a game is shown, the card is not swapped under it. The change is not
+        // dropped either: the card is read again as soon as the screen is free (see catchUp).
+        if (view.busy) return void (view.stale = true);
+        showCard(found);
       });
     } catch (error) {
       console.warn("[sugoroku] listen", error);
     }
+  }
+  // Other players' balls that came in while this screen was busy: the card is read once more
+  // when it is free, so they show now instead of with somebody's next ball.
+  function catchUp() {
+    const target = view;
+    if (!target || !target.stale || !target.online || !shared()) return;
+    target.stale = false;
+    window
+      .fbGetDoc(cardRef())
+      .then((snap) => {
+        const found = snap.exists() && readCard(snap.data());
+        if (!found || target !== view || !view.body.isConnected) return;
+        if (view.busy) return void (view.stale = true);
+        showCard(found);
+      })
+      .catch((error) => console.warn("[sugoroku] catch up", error));
+  }
+  function showCard(found) {
+    const news = found.log.filter((e) => e.at > lastLog() && e.id !== api.uid());
+    view.card = found.card;
+    view.people = found.people;
+    view.log = found.log;
+    keepCard(found.card, found.people, found.log);
+    paintCard();
+    hud();
+    // Somebody else's line or jackpot just now.
+    const last = news[news.length - 1];
+    if (last) say((last.n || "だれか") + "さんが " + logText(last), "is-hot");
+    seeLog();
+    if (found.card.owed?.[api.uid()] > 0) setTimeout(collectNow, last ? 1500 : 0);
   }
 
   // The newest log entry this screen has shown.
@@ -373,7 +394,17 @@
     if (!body.isConnected) return;
     // This player's own balls always show their own name and icon.
     found.people = { ...found.people, [id]: me && me.id === id ? me.value : personNow() };
-    view = { body, state, card: found.card, people: found.people, log: found.log || [], seen: 0, online: shared(), cost: S.RULES.costs[0], busy: false, fast: false, hot: false, quick: quickSaved() };
+    view = { body, state, card: found.card, people: found.people, log: found.log || [], seen: 0, online: shared(), cost: S.RULES.costs[0], fast: false, hot: false, quick: quickSaved(), stale: false };
+    // When the screen becomes free, a card change that came in meanwhile is caught up.
+    let busy = false;
+    Object.defineProperty(view, "busy", {
+      get: () => busy,
+      set: (value) => {
+        busy = !!value;
+        if (!busy && view?.stale) setTimeout(catchUp, 0);
+      },
+      enumerable: true,
+    });
     const target = view;
     seeLog();
     draw();
