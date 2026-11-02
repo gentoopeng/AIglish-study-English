@@ -120,7 +120,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await settled();
     const ended = await saved();
     assert.equal(ended.pending, null);
-    const paid = { win: 100, push: 50, lose: 25 }[outcome];
+    const paid = { win: 100, push: 50, lose: 13 }[outcome];
     assert.ok((await page.evaluate(() => window.Casino.balance())) >= chips + paid, outcome);
 
     // おまかせ plays a blackjack round by itself and goes on.
@@ -164,7 +164,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await screen.locator("[data-sg-roll]").click();
     await settled();
     const missed = await saved();
-    assert.equal(missed.won - before.won, 100);
+    assert.equal(missed.won - before.won, 200);
     assert.deepEqual((await card()).owners, beforeCard.owners);
 
     // Another player's ball shows their initial and name; the top row is the guest's own but its
@@ -253,7 +253,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.deepEqual((await card()).owed, { amy: 428 });
 
     // The normal squares' quick games. ストップ: stopped at once, the light is at the left end: a
-    // miss, 0. ハイ＆ロー: 5 then 9 and HIGH: a win, 1.5× the bet.
+    // miss, 0. ハイ＆ロー: 5 then 9 and HIGH: a win, 1.25× the bet.
     const quickGame = async (game, play) => {
       await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
       await page.evaluate(([name, game]) => {
@@ -272,17 +272,17 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       await mini.locator('[data-sg-game="start"]').click();
       await mini.locator('[data-sg-game="stop"]').click();
       await mini.locator('[data-sg-game="next"]').waitFor();
-      assert.match(await mini.locator(".sg-game-line").innerText(), /→　(250|100|0)枚/);
+      assert.match(await mini.locator(".sg-game-line").innerText(), /→　(200|75|0)枚/);
     });
-    assert.ok([0, 100, 250].includes(stopWon), String(stopWon));
+    assert.ok([0, 75, 200].includes(stopWon), String(stopWon));
     const hiloWon = await quickGame("hilo", async () => {
       await fix([4, 8]);
       await mini.locator('[data-sg-game="flip"]').click();
       assert.equal(await mini.locator(".sg-hilo-card").first().innerText(), "5");
       await mini.locator('[data-sg-game="high"]').click();
-      assert.match(await mini.locator(".sg-game-line").innerText(), /当たり　→　150枚/);
+      assert.match(await mini.locator(".sg-game-line").innerText(), /当たり　→　125枚/);
     });
-    assert.equal(hiloWon, 150);
+    assert.equal(hiloWon, 125);
     // In 早送り a quick game is not played: it pays its fixed half of the bet.
     await page.evaluate(() => localStorage.setItem("aiglish_sugoroku_quick", "1"));
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
@@ -310,7 +310,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await mini.locator('[data-sg-game="next"]').click();
     assert.deepEqual((await saved()).bonus, []);
     assert.deepEqual(errors, []);
-    console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled, a ball off the card pays 1.5×, other players' balls by name, a line of own balls spins BINGO and starts the row again, a mini game played and paid, a left one scores 0");
+    console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled, a ball off the card pays 2×, other players' balls by name, a line of own balls spins BINGO and starts the row again, a mini game played and paid, a left one scores 0");
   } finally {
     await browser.close();
   }

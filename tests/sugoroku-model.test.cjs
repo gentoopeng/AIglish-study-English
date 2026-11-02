@@ -37,8 +37,8 @@ test("the board, card and wheels have the agreed shape", () => {
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     // From ×10 down to a minus that takes another bet.
-    for (const x of [10, 5, 1.5, 1.25, 1, 0.75, 0.5, 0.25, 0, -0.5, -1]) assert.ok(values.has(x), cost + " has ×" + x);
-    assert.deepEqual(S.RULES.normal[cost].filter((x) => x.event).map((x) => x.event).sort(), ["blackjack", "chinchiro", "dice"]);
+    for (const x of [10, 5, 1.5, 1, 0.25, 0, -0.5, -1]) assert.ok(values.has(x), cost + " has ×" + x);
+    assert.deepEqual(S.RULES.normal[cost].filter((x) => x.event).map((x) => x.event).sort(), ["blackjack", "blackjack", "chinchiro", "chinchiro", "dice", "dice"]);
     const w = S.RULES.normal[cost];
     assert.ok(w.every((slot, i) => JSON.stringify(slot) !== JSON.stringify(w[(i + 1) % w.length])), cost + " is spread");
   }
@@ -65,7 +65,7 @@ test("the board, card and wheels have the agreed shape", () => {
   assert.deepEqual(S.upgrade(old), { ...S.newState(), pos: 7, stake: 30, laps: 1, rolls: 5, bet: 50, won: 20, balls: 1 });
 });
 
-test("a ball on the shared card opens it in the player's name; off the card or open gives the bet back", () => {
+test("a ball on the shared card opens it in the player's name; off the card or open pays twice the bet", () => {
   const card = S.newCard(seq([0])),
     s = { ...S.newState(), pos: at("normal") - 1 };
   const ballAt = S.RULES.normal[100].findIndex((x) => x.ball),
@@ -77,7 +77,7 @@ test("a ball on the shared card opens it in the player's name; off the card or o
   // The card passed in is left as it was.
   assert.equal(card.owners[card.cells.indexOf(hitNo)], "");
   const miss = S.roll(s, card, 100, seq([0, ballAt, draw(offCard(card))]), "amy");
-  assert.equal(miss.gain, 100);
+  assert.equal(miss.gain, 200);
   assert.deepEqual(miss.card, card);
   // Someone else's ball already there is a miss too.
   const taken = S.roll(s, hit.card, 100, seq([0, ballAt, draw(hitNo)]), "ben");
@@ -170,15 +170,15 @@ test("an event square waits for its game; win, push and loss pay as agreed", () 
   assert.equal(win.gain, 200);
   assert.equal(win.state.pending, null);
   assert.equal(win.events.filter((e) => e.t === "ball").length, 1);
-  assert.equal(S.settle(out.state, card, 1, seq([draw(offCard(card))])).gain, 300);
+  assert.equal(S.settle(out.state, card, 1, seq([draw(offCard(card))])).gain, 400);
   assert.equal(S.settle(out.state, card, 1.5, seq([0])).events[0].amount, 250);
   assert.equal(S.settle(out.state, card, 0, seq([0])).gain, 100);
   const lose = S.settle(out.state, card, -2, seq([0]));
-  assert.equal(lose.gain, 50);
+  assert.equal(lose.gain, 25);
   assert.ok(!lose.events.some((e) => e.t === "ball"));
   const sure = S.roll(s, card, 100, seq([0, 3, draw(closedOn(card))]));
   assert.equal(sure.state.pending, null);
-  assert.equal(sure.events.find((e) => e.t === "sure").amount, 150);
+  assert.equal(sure.events.find((e) => e.t === "sure").amount, 100);
   assert.ok(sure.events.some((e) => e.t === "ball"));
 });
 
@@ -364,17 +364,17 @@ test("parts of others' lines are stamped, dropped after owedDays and kept to owe
   assert.equal(S.validCard({ ...now, owedAt: { ann: "x" } }), false);
 });
 
-test("the normal wheel has two quick games, paid in multiples of the bet", () => {
+test("the normal wheel has two quick games each twice, paid in multiples of the bet", () => {
   const w = S.RULES.normal[100];
-  assert.deepEqual(w.filter((x) => x.game).map((x) => x.game).sort(), ["hilo", "stop"]);
+  assert.deepEqual(w.filter((x) => x.game).map((x) => x.game).sort(), ["hilo", "hilo", "stop", "stop"]);
   const at = (game) => w.findIndex((x) => x.game === game);
   const out = S.roll({ ...S.newState(), pos: 0 }, S.newCard(seq([0])), 100, seq([0, at("stop")]));
   assert.equal(out.gain, 0);
   assert.deepEqual(out.state.bonus, [{ game: "stop", mult: 1 }]);
   assert.deepEqual(out.events.filter((e) => e.t === "bonus"), [{ t: "bonus", game: "stop", mult: 1 }]);
-  assert.deepEqual(["perfect", "good", "miss", "auto", "x"].map((d) => S.gameScore("stop", d)), [250, 100, 0, 50, 0]);
-  assert.deepEqual(["win", "tie", "lose", "auto"].map((d) => S.gameScore("hilo", d)), [150, 100, 0, 50]);
-  assert.equal(S.settleBonus(out.state, "perfect").gain, 250);
+  assert.deepEqual(["perfect", "good", "miss", "auto", "x"].map((d) => S.gameScore("stop", d)), [200, 75, 0, 50, 0]);
+  assert.deepEqual(["win", "tie", "lose", "auto"].map((d) => S.gameScore("hilo", d)), [125, 100, 0, 50]);
+  assert.equal(S.settleBonus(out.state, "perfect").gain, 200);
 });
 
 test("a normal square can take more than the bet, or start an event game", () => {
@@ -384,12 +384,14 @@ test("a normal square can take more than the bet, or start an event game", () =>
   const minus = S.roll(pos, card, 100, seq([0, w.findIndex((x) => x.x === -1)]));
   assert.equal(minus.gain, -100);
   const bj = S.roll(pos, card, 100, seq([0, w.findIndex((x) => x.event === "blackjack")]));
-  assert.deepEqual(bj.state.pending, { game: "blackjack", bet: 100 });
+  assert.deepEqual(bj.state.pending, { game: "blackjack", bet: 100, plain: true });
   assert.equal(bj.gain, 0);
-  // Won like an event square: the bet back and the win, and a ball.
+  // A plain bet: a win pays the bet back and the win, with no ball; a loss pays nothing.
   const won = S.settle(bj.state, card, 1, seq([99]));
   assert.equal(won.events.find((e) => e.t === "result").amount, 200);
+  assert.ok(!won.events.some((e) => e.t === "ball"));
   assert.equal(won.state.pending, null);
+  assert.equal(S.settle(bj.state, card, -1, seq([0])).gain, 0);
 });
 
 test("a save whose returns went below 0 is still a good save", () => {
