@@ -2260,3 +2260,36 @@ Tests: `tests/sugoroku-model.test.cjs` checks that:
 - 70 taps of 連打EX score 1,750;
 - the cap is 120 × 25;
 - a double line landing on a mini game queues it at 2×, not 6×.
+
+## Casino: points can be bet only after studying, 100pt a minute (10.22.58.00)
+
+The user found that points had become steady enough that the casino was taking the place of studying. They chose this rule: points can be bet only after studying, 100pt for each minute studied today.
+
+**The rule.** Each day, the total a player can bet with points is the minutes measured by the study timer today × 100, less what they have already bet today.
+
+- **What counts as study.** Only time measured by the timer, from all devices in the merged study ledger, counts: the day's `sources`, without the old `legacy` total and without edits typed in. Today's time counts at once, although its points are paid the next day.
+- **What uses it up.** Every stake counts:
+  - house games (blackjack, roulette, dice poker, chinchiro);
+  - すごろくビンゴ rolls (100 each);
+  - tables with friends and duels;
+  - poker buy-ins and chip top-ups with points.
+
+  A loss beyond the bet (chinchiro's extra, keys ending in `:extra`) does not count, and neither do payouts.
+- **Practice chips** (guests, offline) are not limited.
+- **The count of today's bets** is kept on the device (`aiglish_casino_staked_<id>`, reset when the date changes). Two devices each keep their own count, so this is a nudge, not a lock.
+
+**On screen.**
+
+- The casino tab shows 「今日あと N pt 賭けられます（今日の勉強 M 分）」.
+- At a table, the bet stops at the allowance. Under the bet, either the allowance is shown, or 「あと N 分勉強すると賭けられます」.
+- すごろくビンゴ shows how many rolls are left. When less than one roll is left, the button reads 「勉強すると振れます」.
+- Duels, friends' tables and poker refuse a stake above the allowance, with the same message.
+
+Tests:
+
+- `tests/casino.smoke.cjs`:
+  - with no study, 配る is disabled and the hint asks for 1 minute;
+  - with 1 minute, the allowance is 100;
+  - a 60 bet comes off the allowance.
+- `tests/sugoroku-shared.smoke.cjs`: with less than one roll left, the roll button asks for study.
+- The other casino and poker tests now record ten hours of study before betting.

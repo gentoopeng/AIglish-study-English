@@ -52,6 +52,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       await page.waitForFunction(() => window.__learningBootReady === true);
       await page.evaluate((id) => {
         myId = id;
+        // Ten hours studied today, so points can be bet (Casino.allowance).
+        window.StudyTime?.mergeCloud?.({ version: 1, epoch: "study-reset-2.62", days: { [window.StudyTimeModel.dateKey(Date.now())]: { sources: { "test-study": 600 * 60000 } } }, offset: 0, updatedAt: Date.now() });
         myName = id;
         localStorage.setItem("core_v4_study_points_" + id, JSON.stringify({ balance: 500, revision: 1, publishedRevision: 1 }));
         window.db = {};
