@@ -212,6 +212,19 @@
       entries: (record.entries || []).filter((e) => e.kind === "gift" || e.kind === "charge").map((e) => ({ ...e, taken: !!record.claimed?.[e.id] })),
     };
   }
+  // For the administrator's tool: everything the 運営 has sent anyone, newest first, each with the
+  // player and whether their device has taken it in. One query over the 運営's records.
+  async function adminHistory(limit = 100) {
+    if (!window.db || !window.fbGetDocs || !window.fbQuery) throw Error("クラウドにつながっていません。");
+    const snap = await window.fbGetDocs(window.fbQuery(window.fbCollection(window.db, "pointLoans"), window.fbWhere("people", "array-contains", ADMIN), window.fbLimit(limit)));
+    return snap.docs
+      .flatMap((doc) => {
+        const record = doc.data(),
+          to = (record.people || []).find((id) => id !== ADMIN) || "";
+        return (record.entries || []).filter((e) => e.kind === "gift" || e.kind === "charge").map((e) => ({ ...e, to, name: record.names?.[to] || to, taken: !!record.claimed?.[e.id] }));
+      })
+      .sort((a, b) => (b.at || 0) - (a.at || 0));
+  }
   // The pairs a person has. The last list read is kept on this device so the list screen can
   // come up at once.
   const inboxName = () => "aiglish_loans_inbox_" + uid();
@@ -711,5 +724,5 @@
     setInterval(() => collectSoon(true), 600e3);
     document.addEventListener("visibilitychange", () => !document.hidden && collectSoon(false));
   });
-  window.PointLoans = Object.freeze({ open, person, send, ask, talk, grant, adminLedger, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
+  window.PointLoans = Object.freeze({ open, person, send, ask, talk, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
 })();
