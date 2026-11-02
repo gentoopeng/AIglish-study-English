@@ -128,6 +128,11 @@ test("a line pays on the player's own stake, then its numbers are drawn afresh a
     assert.equal(out.card.cells[c], reset.numbers[c]);
   }
   assert.ok(S.validCard(out.card));
+  // The same double line landing on a mini game: the game is not multiplied by the lines, only
+  // by bingoGameBoost (2).
+  const timerAt = S.RULES.wheels.bingo.findIndex((x) => x.game === "timer");
+  const mini = S.roll(s, card, 100, seq([0, ballAt, draw(card.cells[last]), timerAt, 0]), "amy");
+  assert.deepEqual(mini.state.bonus, [{ game: "timer", mult: 2 }]);
   assert.equal(out.card.owners[S.FREE], "*");
   // Two lines at once also opened nothing else.
   assert.ok(out.card.owners.every((o, i) => o === "" || i === S.FREE));
@@ -235,7 +240,7 @@ test("a mini game waits in state.bonus, blocks rolling and pays its score, 0 whe
   assert.equal(S.settleBonus(out.state, null).gain, 0);
   assert.deepEqual(S.settleBonus(out.state, 10).state.bonus, []);
   assert.equal(S.gameScore("tap", 70), 700);
-  assert.equal(S.gameScore("tapex", 70), 3500);
+  assert.equal(S.gameScore("tapex", 70), 1750);
   assert.equal(S.gameScore("dice", 4), 400);
   assert.equal(S.gameScore("math", true), 500);
   assert.equal(S.gameScore("math", false), 0);
@@ -307,7 +312,7 @@ test("played the plain way by several players on one card, every bet returns a l
 test("tapping counts up to the cap, and odd mini-game results score nothing", () => {
   assert.equal(S.gameScore("tap", 80), 800);
   assert.equal(S.gameScore("tap", 5000), S.RULES.games.tap.max * 10);
-  assert.equal(S.gameScore("tapex", 1e9), S.RULES.games.tapex.max * 50);
+  assert.equal(S.gameScore("tapex", 1e9), S.RULES.games.tapex.max * 25);
   assert.equal(S.gameScore("dice", 99), 600);
   assert.equal(S.gameScore("timer", "x"), 0);
   assert.equal(S.gameScore("timer", Infinity), 0);
