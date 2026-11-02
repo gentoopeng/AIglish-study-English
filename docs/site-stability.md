@@ -2130,3 +2130,21 @@ The user found that deleting a player did not seem to work.
 - The casino's jackpot winners: the player's name is shown as 削除済み.
 
 Test: `tests/admin-players.smoke.cjs` now has data in all of these, and checks each after a deletion that was interrupted once and then run again.
+
+## すごろくビンゴ: the die lands at once when a ball comes out, a missed ball pays 2×, more games on normal squares (10.22.51.00)
+
+The user found that the die kept shaking for a long time whenever a ball came out. They also asked for a missed ball to pay 200, and for more mini games on the normal wheel.
+
+**The die.** A roll that touches the shared card waits for the cloud's answer, and the whole show used to wait with it. Now the roll is worked out on the device first. The die, the walk and the wheel play right away, up to the ball. The ball and what follows play once the cloud has answered. If the cloud fails, nothing is charged and the piece goes back.
+
+**Payouts.**
+
+- A ball that misses the card (or lands on a taken number) pays 2× the bet: 200.
+- Event squares: a loss gives back a quarter of the bet, and 確定 gives the bet back with a ball.
+- Quick games: ストップ pays 2× (perfect) or 0.75× (good); ハイ＆ロー pays 1.25× on a win.
+
+**More games on the normal wheel.** ストップ and ハイ＆ロー now have two slots each, and ブラックジャック, ダイス and チンチロ also have two each: 10 game slots in all, up from 5. A game started on a normal square is a plain bet: a win pays the bet back plus the win, with no ball, and a loss pays nothing.
+
+**Balance.** The normal wheel is now ×10, ×5, ×1.5, ×1, ×0.25, ×0, −0.5 and −1. In simulation, the return is about 99–101% with the jackpots counted. A bingo comes once in about 225 rolls.
+
+Tests: `tests/sugoroku-model.test.cjs` and `tests/sugoroku.smoke.cjs` check the new payouts, the plain games and the wheel.

@@ -58,19 +58,19 @@
     // blackjack, dice poker or chinchiro as an event square does.
     normal: {
       100: spread([
-        ...N(10), ...N(5), ...N(1.5), ...N(1.25), ...N(1),
-        ...N(0.75), ...N(0.5, 3), ...N(0.25, 3),
-        ...N(0, 15), ...N(-0.5, 2), ...N(-1, 2),
-        ...BALL(0, 4), ...GAME("stop"), ...GAME("hilo"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("chinchiro"),
+        ...N(10), ...N(5), ...N(1.5), ...N(1),
+        ...N(0.25),
+        ...N(0, 18), ...N(-0.5, 2), ...N(-1, 2),
+        ...BALL(0, 3), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
-    eventPay: { lose: 0.5, push: 1, sure: 1.5 },
+    eventPay: { lose: 0.25, push: 1, sure: 1 },
     // Balls are drawn from 1–NUMBERS; the card holds 48 of them. A ball not on the card (or
     // already open) pays this many times the bet instead.
     numbers: 100,
-    missPay: 1,
+    missPay: 2,
     // A line made only of the player's own balls pays this many times more.
     soloBonus: 1.1,
     // A part of someone else's line not collected within owedDays is dropped, and the card keeps
@@ -104,7 +104,7 @@
     // stop / hilo are the normal squares' quick games, paid in multiples of the bet: stop the
     // light in the gold (perfect) or silver (good) part of the bar; say whether the next card is
     // higher or lower. In 早送り they are not played and pay `auto`.
-    games: { stop: { pay: { perfect: 2.5, good: 1, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.5, tie: 1, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 50, max: 120 }, dice: { per: 100 }, math: { seconds: 15, prize: 500 } },
+    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 1, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 50, max: 120 }, dice: { per: 100 }, math: { seconds: 15, prize: 500 } },
   };
   const SIZE = RULES.board.length,
     CARD = 7,
@@ -378,8 +378,9 @@
         events.push({ t: "bonus", game: slot.game, mult: 1 });
       }
       if (slot.event) {
-        state.pending = { game: slot.event, bet: cost };
-        events.push({ t: "game", game: slot.event, bet: cost });
+        // A plain game for the bet: a win pays as the game does, a loss takes the bet, no ball.
+        state.pending = { game: slot.event, bet: cost, plain: true };
+        events.push({ t: "game", game: slot.event, bet: cost, plain: true });
       }
     } else if (kind === "accident") {
       const { index, slot } = pick(RULES.accident, random);
@@ -415,24 +416,26 @@
 
   // The end of an event game: m is the game's own result as multiples of the bet (1 even money,
   // 1.5 a blackjack, 0 a push, below 0 a loss). A win pays bet × (1 + m) and gives a ball, a
-  // push gives the bet back and a loss gives back half.
+  // push gives the bet back and a loss gives back half. A game from a normal square (`plain`)
+  // is a plain bet: no ball, and a loss gives nothing back.
   function settle(before, sharedCard, m, random, me = "me") {
     if (!before.pending) throw Error("no event");
     const state = clone(before),
       card = clone(sharedCard),
       events = [],
-      bet = state.pending.bet;
+      bet = state.pending.bet,
+      plain = state.pending.plain === true;
     state.pending = null;
     let gain;
     if (m > 0) {
       gain = money(bet * (1 + m));
       events.push({ t: "result", outcome: "win", amount: gain });
-      gain += ball(state, card, me, random, events, bet);
+      if (!plain) gain += ball(state, card, me, random, events, bet);
     } else if (m === 0) {
       gain = money(bet * RULES.eventPay.push);
       events.push({ t: "result", outcome: "push", amount: gain });
     } else {
-      gain = money(bet * RULES.eventPay.lose);
+      gain = plain ? 0 : money(bet * RULES.eventPay.lose);
       events.push({ t: "result", outcome: "lose", amount: gain });
     }
     state.won += gain;

@@ -51,11 +51,11 @@
   const RULES_TEXT = [
     "ログインしてクラウドにつながっているときはポイントを賭けます。ゲストやオフラインのときは練習チップで、ジャックポットは演出だけです。",
     "1回100（ポイントまたは練習チップ）でサイコロを振ります（額はみんな同じです）。",
-    "通常マス：ルーレットで ×10〜×0 のどれかが額に掛かって戻ります。「−×0.5」「−×1」は、額とは別にその分が引かれます。「BJ」「DICE」「チンチロ」なら★マスと同じゲームです。「●（ボール）」ならボールが出ます。「STOP」「H&L」ならミニゲーム（ストップ・ハイ＆ロー）で、うまくいけば額の1.5〜2.5倍です。",
-    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると半分が戻ります。ボール確定はボールと額の1.5倍です。",
+    "通常マス：ルーレットで ×10〜×0 のどれかが額に掛かって戻ります。「−×0.5」「−×1」は、額とは別にその分が引かれます。「BJ」「DICE」「チンチロ」ならそのゲームを1回（勝てば配当、負けると賭けた分はなくなり、ボールは出ません）。「●（ボール）」ならボールが出ます。「STOP」「H&L」ならミニゲーム（ストップ・ハイ＆ロー）で、うまくいけば額の1.25〜2倍です。",
+    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると4分の1が戻ります。ボール確定はボールと額そのままです。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "STARTを通るとボールが1つ出ます。",
-    "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額が戻ります。1列そろえるとビンゴ賞金（1,000）と、ビンゴルーレット（掛け金×10・×20・×50、10秒ぴったり、連打、サイコロ、暗算（ミニゲームは点数の2倍）、JACKPOT×2、SUPER JACKPOT CHANCE）。SUPER JACKPOT CHANCEはSUPER JACKPOT×2・JACKPOT・連打EX・もう一回の5つ。自分のボールだけでそろえると賞金とミニゲームが1.1倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
+    "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の2倍がもらえます。1列そろえるとビンゴ賞金（1,000）と、ビンゴルーレット（掛け金×10・×20・×50、10秒ぴったり、連打、サイコロ、暗算（ミニゲームは点数の2倍）、JACKPOT×2、SUPER JACKPOT CHANCE）。SUPER JACKPOT CHANCEはSUPER JACKPOT×2・JACKPOT・連打EX・もう一回の5つ。自分のボールだけでそろえると賞金とミニゲームが1.1倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
     "ビンゴ賞金は半分がそろえた人のもので、残りの半分をその列にボールを置いていた人でボールの数に応じて分けます。ビンゴルーレットの×10・×20・×50も、3割を同じように分けます。ほかの人の分は、その人がすごろくビンゴを開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
     "連打は120回まで数えます。",
     "ジャックポットは、カジノでハウス（ディーラー）相手に賭けられたポイントから貯まります（JACKPOT 3,000 + 1.5%で上限20,000、SUPER JACKPOT 12,000 + 1%で上限150,000。JACKPOTが上限を超えた分はSUPER JACKPOTに回ります）。",
@@ -711,26 +711,44 @@
     const tape = [],
       local = S.roll(state, view.card, cost, recorder(tape), me),
       touches = local.events.some((e) => e.t === "ball") || view.card.owed?.[me] > 0;
-    let result;
+    let result,
+      shownEarly = 0,
+      early = null,
+      liveEarly = { ...state, stake: state.stake + cost };
     if (view.online && !touches) result = { out: local, collected: 0, people: view.people, log: view.log, before: { card: view.card, people: view.people, log: view.log } };
-    else
+    else {
+      // While the cloud answers, what does not depend on the card plays already: the same draws
+      // give the same die, steps and wheels up to the first ball, so the die lands at once.
+      const k = local.events.findIndex((e) => e.t === "ball");
+      shownEarly = k < 0 ? local.events.length : k;
+      view.fast = false;
+      view.hot = false;
+      view.body.classList.add("is-spinning");
+      view.state = liveEarly;
+      early = show(local.events.slice(0, shownEarly), liveEarly);
       try {
         result = await onCard((card) => S.roll(state, card, cost, replay(tape), me));
       } catch (error) {
         console.warn("[sugoroku] roll", error);
+        await early;
         view.die.stop();
+        view.state = state;
         view.busy = false;
+        view.body.classList.remove("is-spinning");
+        place(state.pos, false);
         hud();
         say("通信できませんでした。もう一度振ってください", "is-loss");
         return;
       }
+      await early;
+    }
     const { out, before, people, collected } = result;
     out.collected = collected;
     save(out.state);
     pay(out, cost);
     await payJackpots(out);
-    if (collected) out.events.unshift({ t: "share", amount: collected });
-    await run(out, { ...state, stake: state.stake + cost }, before, people, result.log);
+    if (collected) out.events.push({ t: "share", amount: collected });
+    await run(out, liveEarly, before, people, result.log, shownEarly);
     if (view?.state.bonus?.length) await bonus();
     if (view?.state.pending) game();
   }
@@ -767,11 +785,15 @@
   }
   // Plays events over a copy of the state shown so far, then shows the real new state.
   // `before` is the card the change was made on (it may hold other players' new balls).
-  async function run(out, shown, before, people, log) {
+  // `skip`: how many of the events were already shown while the cloud answered (the tap to skip
+  // and the heat carry on from them).
+  async function run(out, shown, before, people, log, skip = 0) {
     const target = view;
     view.busy = true;
-    view.fast = false;
-    view.hot = false;
+    if (!skip) {
+      view.fast = false;
+      view.hot = false;
+    }
     view.body.classList.add("is-spinning");
     const live = { ...shown };
     view.state = live;
@@ -781,7 +803,7 @@
     paintCard();
     hud();
     try {
-      await show(out.events, live);
+      await show(out.events.slice(skip), live);
     } finally {
       if (target === view) {
         view.state = out.state;
@@ -1091,7 +1113,7 @@
     view.busy = true;
     hud();
     const box = node("div", "sg-game");
-    box.append(node("p", "sg-wheel-title", GAME_NAMES[p.game] + "　" + fmt(p.bet) + api.unit()), node("p", "sg-game-rule", "勝てばボール。負けても半分戻ります。"));
+    box.append(node("p", "sg-wheel-title", GAME_NAMES[p.game] + "　" + fmt(p.bet) + api.unit()), node("p", "sg-game-rule", p.plain ? "普通のマスのゲーム：勝てば配当、負けると賭けた分はなくなります（ボールは出ません）。" : "勝てば配当とボール。負けると4分の1が戻ります。"));
     const table = node("div", "sg-game-table"),
       actions = node("div", "sg-game-actions"),
       line = node("p", "sg-game-line");
@@ -1325,8 +1347,8 @@
     tapex: "10秒間、ボタンをできるだけたくさん押してください。1回50点（120回まで）。",
     dice: "サイコロを1回振って、出た目×100点。",
     math: "15秒以内に計算の答えを入れてください。正解で500点。",
-    stop: "左右に動く光を、まん中の金色で止めると額の2.5倍、銀色なら1倍。外れると0。5秒たつと外れです。",
-    hilo: "めくったカード（A〜K）より次のカードが大きいか小さいかを当てます。当たりで額の1.5倍、同じ数なら1倍、外れると0。",
+    stop: "左右に動く光を、まん中の金色で止めると額の2倍、銀色なら0.75倍。外れると0。5秒たつと外れです。",
+    hilo: "めくったカード（A〜K）より次のカードが大きいか小さいかを当てます。当たりで額の1.25倍、同じ数なら1倍、外れると0。",
   };
   async function bonus() {
     while (view?.state.bonus?.length) {
