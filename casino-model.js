@@ -224,12 +224,15 @@
     return 0;
   }
   const roll = (random) => random(6) + 1;
-  function diceStart(bet, random) {
-    return { game: "dice", bet, dice: Array.from({ length: 5 }, () => roll(random)), rolls: 1, held: [false, false, false, false, false], dealer: null, done: false, outcome: "", net: 0 };
+  // `most`: how many throws the player has in all (3: the first and two re-rolls). すごろくビンゴ
+  // gives the player 2 against the dealer's 3.
+  function diceStart(bet, random, most = 3) {
+    return { game: "dice", bet, dice: Array.from({ length: 5 }, () => roll(random)), rolls: 1, most, held: [false, false, false, false, false], dealer: null, done: false, outcome: "", net: 0 };
   }
-  const diceCanRoll = (round) => !round.done && round.rolls < 3 && round.held.some((h) => !h);
+  const diceMost = (round) => round.most || 3;
+  const diceCanRoll = (round) => !round.done && round.rolls < diceMost(round) && round.held.some((h) => !h);
   function diceToggle(round, i) {
-    if (round.done || round.rolls >= 3) return round;
+    if (round.done || round.rolls >= diceMost(round)) return round;
     const next = clone(round);
     next.held[i] = !next.held[i];
     return next;

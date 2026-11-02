@@ -2170,3 +2170,28 @@ The repeated つづける bug fixed in 10.22.52.00 was not the cause. A second s
 **Fix.** A change that arrives during a show is marked as waiting. When the screen is free again, the card is read once more and shown. One extra read happens only when a change was skipped.
 
 Test: `tests/sugoroku-shared.smoke.cjs` puts another player's ball on the card while a roll is being shown, and checks that it shows once the roll ends. Without the fix it fails.
+
+## すごろくビンゴ: no つづける, the other side's dice shown throw by throw, fewer throws for the player (10.22.54.00)
+
+The user asked whether the つづける button was needed at all. They also found that チンチロ and ダイスポーカー seemed to give the other side absurdly strong hands. They suggested that both sides roll by plain chance and that the player gets fewer throws than the other side, to keep the balance.
+
+**The dice were not rigged.** Both sides already rolled fair dice (`crypto.getRandomValues`, each face 1 in 6). The strong hands came from the rules:
+
+- In ダイスポーカー the dealer throws up to three times and keeps its pairs. In a simulation of 200,000 rounds, the dealer ended with a フルハウス about 33% of the time, フォーダイス 15% and ファイブダイス 3%.
+- In チンチロ the parent throws up to three times. About 10% of the time it makes ゾロ目 or シゴロ and wins at once.
+- Only the dealer's final dice were shown, so a strong hand seemed to come from nowhere.
+
+**Changes.**
+
+- **No つづける.** The result of an event game shows for a moment (1.4 seconds; 0.5 in 早送り), then the board goes on by itself. The same goes for the mini games (1.6 seconds). If the cloud cannot be reached, a 「もう一度送る」 button appears. Only one settle runs at a time, as before.
+- **The other side's throws are shown one by one.** The dealer's dice-poker throws and the parent's チンチロ throws now appear one at a time, each with its number (「2投目」). A round reopened later shows them all at once.
+- **Fewer throws for the player.**
+  - ダイスポーカー: the player now has 2 throws in all (one re-roll), the dealer up to 3. The player's chance of winning falls from about 50% to 36%, so a win pays 1.5 times the bet. `CasinoModel.diceStart` takes the number of throws as `most`. The casino's own dice poker still uses 3, and so do rounds saved before this change.
+  - チンチロ was already 3 throws for the parent and 2 for the player. The screen now says so.
+
+**Balance.** In simulation (sim6, 400,000 rolls), the whole すごろくビンゴ returns about 98.5–99.4%, jackpots included. It was 99.6% before.
+
+Tests:
+
+- `tests/casino-model.test.cjs`: a round with `most: 2` allows only one re-roll, and an old round keeps three throws.
+- `tests/sugoroku.smoke.cjs`: there is no つづける. The dealer's throws show with their number, and a dice-poker win on a 50 bet gives back 125 (the bet plus 1.5 times it). A チンチロ round shows the parent's throws, lets the player throw, and ends by itself. The mini games close by themselves.

@@ -304,3 +304,21 @@ test("over many rounds no game gives away points", () => {
   assert.ok(bj < 0, "blackjack " + bj);
   assert.ok(Math.abs(dice) < 4000 * 10 * 0.2, "dice " + dice);
 });
+
+test("dice poker: a round can give the player fewer throws than the dealer's three", () => {
+  const random = (n) => Math.floor(Math.random() * n);
+  const two = C.diceStart(100, random, 2);
+  assert.equal(two.most, 2);
+  const once = C.diceReroll(two, random);
+  assert.equal(once.rolls, 2);
+  // No second re-roll, and the dice can no longer be held or released.
+  assert.equal(C.diceReroll(once, random), once);
+  assert.equal(C.diceToggle(once, 0), once);
+  // A round saved before `most` existed keeps three throws.
+  const old = { ...C.diceStart(100, random), most: undefined };
+  assert.equal(C.diceReroll(C.diceReroll(old, random), random).rolls, 3);
+  // The dealer still has its first throw and up to two re-rolls.
+  const stood = C.diceStand(once, random);
+  assert.ok(stood.dealerRolls.length >= 1 && stood.dealerRolls.length <= 3);
+  assert.deepEqual(stood.dealerRolls[stood.dealerRolls.length - 1], stood.dealer);
+});

@@ -52,7 +52,7 @@
     "ログインしてクラウドにつながっているときはポイントを賭けます。ゲストやオフラインのときは練習チップで、ジャックポットは演出だけです。",
     "1回100（ポイントまたは練習チップ）でサイコロを振ります（額はみんな同じです）。",
     "通常マス：ルーレットで ×10〜×0 のどれかが額に掛かって戻ります。「−×0.5」「−×1」は、額とは別にその分が引かれます。「BJ」「DICE」「チンチロ」ならそのゲームを1回（勝てば配当、負けると賭けた分はなくなり、ボールは出ません）。「●（ボール）」ならボールが出ます。「STOP」「H&L」ならミニゲーム（ストップ・ハイ＆ロー）で、うまくいけば額の1.25〜2倍です。",
-    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると4分の1が戻ります。ボール確定はボールと額そのままです。",
+    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると4分の1が戻ります。ボール確定はボールと額そのままです。サイコロはどちらも本当に振っていて、相手の目も1投ずつ見えます。ダイスポーカーはあなたが2回（振り直し1回）・ディーラーが3回まで振れるので、勝つと1.5倍です。チンチロは親が3回・あなたが2回まで振れます。結果が出ると、そのまま次に進みます。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "STARTを通るとボールが1つ出ます。",
     "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の2倍がもらえます。1列そろえるとビンゴ賞金（1,000）と、ビンゴルーレット（掛け金×10・×20・×50、10秒ぴったり、連打、サイコロ、暗算（ミニゲームは点数の2倍）、JACKPOT×2、SUPER JACKPOT CHANCE）。SUPER JACKPOT CHANCEはSUPER JACKPOT×2・JACKPOT・連打EX・もう一回の5つ。自分のボールだけでそろえると賞金とミニゲームが1.1倍、2列・3列を同時にそろえると3倍・4倍です。そろった列は新しい番号になり、ボールも消えます。",
@@ -1172,16 +1172,27 @@
       b.type = "button";
       if (data) b.dataset.sgGame = data;
       b.onclick = onClick;
-      // While おまかせ plays, only つづける is pressed (by itself).
-      if (auto && data !== "next") b.disabled = true;
+      // While おまかせ plays, the buttons are its own.
+      if (auto) b.disabled = true;
       actions.append(b);
       return b;
     };
+    // The result shows for a moment and the board goes on by itself (no つづける to press).
+    let ended = false;
     const end = (m) => {
       actions.replaceChildren();
       autoBtn.remove();
-      const next = button("つづける", () => finish(m), "next");
-      if (auto) setTimeout(() => next.isConnected && !next.disabled && next.click(), 900 * (pace() || 0.02));
+      if (ended) return;
+      ended = true;
+      const target = view;
+      setTimeout(() => target === view && view.layer === layer && !layer.hidden && finish(m), view.quick ? 500 : calm() ? 300 : 1400);
+    };
+    // The other side's throws, one at a time, so every die can be seen landing.
+    const reveal = async (count, show) => {
+      for (let i = 1; i <= count; i++) {
+        show(i);
+        if (i < count) await wait(view.quick ? 150 : 550);
+      }
     };
     if (p.game === "blackjack") {
       const draw = () => {
@@ -1248,61 +1259,87 @@
         const me = node("div", "sg-hand");
         me.append(node("span", "", "あなた　" + name(r.dice)), mine);
         table.append(me);
-        if (r.dealer) {
+        const throws = r.dealerRolls || (r.dealer ? [r.dealer] : []),
+          seen = Math.min(shown ?? throws.length, throws.length);
+        if (seen) {
           const dealer = node("div", "sg-hand"),
-            row = node("div", "sg-dice");
-          r.dealer.forEach((v) => row.append(die(v)));
-          dealer.append(node("span", "", "ディーラー　" + name(r.dealer)), row);
+            row = node("div", "sg-dice"),
+            dice = throws[seen - 1];
+          dice.forEach((v) => row.append(die(v)));
+          dealer.append(node("span", "", "ディーラー　" + name(dice) + "（" + seen + "投目）"), row);
           table.prepend(dealer);
         }
         actions.replaceChildren();
+        if (r.done && seen < throws.length) {
+          line.textContent = "ディーラーが振っています…";
+          return;
+        }
         if (!r.done) {
-          line.textContent = "残すダイスをタップ（振り直しはあと" + (3 - r.rolls) + "回）";
+          const most = r.most || 3;
+          line.textContent = "残すダイスをタップ（振り直しはあと" + (most - r.rolls) + "回。ディーラーは2回まで）";
           const again = button("振り直す", () => {
             p.round = C.diceReroll(r, random);
             keepRound(p.round);
             draw();
           }, "reroll");
           again.disabled = r.rolls >= 3 || r.held.every(Boolean);
-          button("これで勝負", () => {
-            p.round = C.diceStand(r, random);
-            keepRound(p.round);
-            draw();
-          }, "stand");
+          button("これで勝負", () => stand(), "stand");
         } else {
-          line.textContent = r.outcome === "win" ? "勝ち" : r.outcome === "push" ? "引き分け" : "負け";
-          end(r.net / p.bet);
+          // The player throws fewer times than the dealer, so a win pays 1.5 times the bet.
+          line.textContent = r.outcome === "win" ? "勝ち（1.5倍）" : r.outcome === "push" ? "引き分け" : "負け";
+          end(r.outcome === "win" ? 1.5 : r.net / p.bet);
         }
+      };
+      // How many of the dealer's throws are on the table (null: all of them, as after a reload).
+      let shown = null;
+      const stand = () => {
+        if (p.round.done) return;
+        p.round = C.diceStand(p.round, random);
+        keepRound(p.round);
+        shown = 0;
+        reveal(p.round.dealerRolls.length, (i) => {
+          shown = i;
+          draw();
+        });
       };
       step = () => {
         const r = p.round;
         if (r.done) return false;
         const keep = C.dealerKeeps(r.dice);
-        if (r.rolls < 3 && !keep.every(Boolean)) {
+        if (r.rolls < (r.most || 3) && !keep.every(Boolean)) {
           let next = r;
           keep.forEach((k, i) => next.held[i] !== k && (next = C.diceToggle(next, i)));
           p.round = C.diceReroll(next, random);
-        } else p.round = C.diceStand(r, random);
-        keepRound(p.round);
-        draw();
+          keepRound(p.round);
+          draw();
+        } else stand();
         return true;
       };
       redraw = draw;
-      if (!p.round) keepRound((p.round = C.diceStart(p.bet, random)));
+      if (!p.round) keepRound((p.round = C.diceStart(p.bet, random, 2)));
       draw();
     } else {
+      // How many of the parent's throws are on the table (null: all of them).
+      let shown = null;
       const draw = () => {
-        const r = p.round;
+        const r = p.round,
+          seen = Math.min(shown ?? r.parent.rolls.length, r.parent.rolls.length),
+          parentDone = seen >= r.parent.rolls.length;
         table.replaceChildren();
-        for (const [who, turn] of [["親", r.parent], ["あなた", r.child]]) {
+        const parent = { rolls: r.parent.rolls.slice(0, seen), hand: parentDone ? r.parent.hand : null };
+        for (const [who, turn] of [["親", parent], ["あなた", r.child]]) {
           const row = node("div", "sg-hand"),
             list = node("div", "sg-dice");
           const last = turn.rolls[turn.rolls.length - 1];
           (last || []).forEach((v) => list.append(die(v)));
-          row.append(node("span", "", who + "　" + (turn.hand ? turn.hand.name : turn.rolls.length ? "役なし" : "")), list);
+          row.append(node("span", "", who + "　" + (turn.hand ? turn.hand.name : turn.rolls.length ? "役なし" : "") + (turn.rolls.length ? "（" + turn.rolls.length + "投目）" : "")), list);
           table.append(row);
         }
         actions.replaceChildren();
+        if (!parentDone) {
+          line.textContent = "親が振っています…（親は3回まで、あなたは2回まで）";
+          return;
+        }
         const early = C.chinParentDecides(r.parent.hand);
         if (early === null && !r.child.done) {
           line.textContent = "あと" + (C.CHILD_THROWS - r.child.rolls.length) + "回振れます";
@@ -1319,6 +1356,8 @@
       };
       step = () => {
         const r = p.round;
+        // おまかせ waits while the parent's throws are still landing.
+        if (shown !== null && shown < r.parent.rolls.length) return true;
         if (C.chinParentDecides(r.parent.hand) !== null || r.child.done) return false;
         p.round = { ...r, child: C.chinNext(r.child, random, C.CHILD_THROWS) };
         keepRound(p.round);
@@ -1326,10 +1365,17 @@
         return true;
       };
       redraw = draw;
-      if (!p.round) keepRound((p.round = { parent: C.chinTurn(random), child: C.chinStart() }));
+      if (!p.round) {
+        keepRound((p.round = { parent: C.chinTurn(random), child: C.chinStart() }));
+        shown = 0;
+        reveal(p.round.parent.rolls.length, (i) => {
+          shown = i;
+          draw();
+        });
+      }
       draw();
     }
-    if (autoBtn.isConnected || !actions.querySelector('[data-sg-game="next"]')) box.append(autoBtn);
+    if (!ended) box.append(autoBtn);
     if (view.quick) play();
   }
   function die(value) {
@@ -1338,19 +1384,18 @@
     for (let i = 1; i <= 9; i++) el.append(node("i", PIPS[value].includes(i) ? "is-on" : ""));
     return el;
   }
-  // The end of an event game. If the shared card cannot be written, the game stays (its round
-  // is saved) and つづける can be pressed again.
-  // Only one settle at a time: while the cloud answers, more taps on つづける are ignored, so a
-  // won game cannot be paid twice.
+  // The end of an event game, a moment after its result shows. If the shared card cannot be
+  // written, the game stays (its round is saved) and a button sends it again. Only one settle
+  // runs at a time, so a won game cannot be paid twice.
   async function finish(m) {
-    if (view.finishing || !view.state?.pending) return;
+    if (!view || view.finishing || !view.state?.pending) return;
     const state = view.state,
       me = api.uid(),
       tape = [],
       local = S.settle(state, view.card, m, recorder(tape), me);
-    const nextBtn = view.layer.querySelector('[data-sg-game="next"]');
+    const retry = view.layer.querySelector('[data-sg-game="retry"]');
     view.finishing = true;
-    if (nextBtn) nextBtn.disabled = true;
+    retry?.remove();
     let result;
     try {
       // A loss or a push draws no ball: no cloud round trip, as for a roll.
@@ -1359,10 +1404,17 @@
       else result = await onCard((card) => S.settle(state, card, m, replay(tape), me));
     } catch (error) {
       console.warn("[sugoroku] settle", error);
-      const line = view.layer.querySelector(".sg-game-line");
-      if (line) line.textContent = "通信できませんでした。もう一度「つづける」を押してください";
+      const line = view.layer.querySelector(".sg-game-line"),
+        actions = view.layer.querySelector(".sg-game-actions");
+      if (line) line.textContent = "通信できませんでした。もう一度送ってください";
       view.finishing = false;
-      if (nextBtn) nextBtn.disabled = false;
+      if (actions) {
+        const again = node("button", "sg-game-btn", "もう一度送る");
+        again.type = "button";
+        again.dataset.sgGame = "retry";
+        again.onclick = () => finish(m);
+        actions.replaceChildren(again);
+      }
       return;
     }
     // The pending game is gone from here on, so a late tap finds nothing to settle.
@@ -1401,7 +1453,7 @@
       else if (item.started) {
         await miniShell(item, (box, finish) => {
           box.append(node("p", "sg-game-line", "途中でやめたので0点です。"));
-          finish(null, "つづける");
+          finish(null);
         });
       } else done = await miniShell(item, (box, finish) => miniGame(item, box, finish));
       const out = S.settleBonus(view.state, done);
@@ -1424,16 +1476,17 @@
       const box = node("div", "sg-game sg-mini");
       box.append(node("p", "sg-wheel-title", MINI[item.game] + (item.mult > 1 ? "　×" + item.mult : "")), node("p", "sg-game-rule", RULE_TEXT[item.game]));
       layer.replaceChildren(box);
-      build(box, (done, label = "つづける") => {
-        const next = node("button", "sg-game-btn", label);
-        next.type = "button";
-        next.dataset.sgGame = "next";
-        next.onclick = () => {
+      // The score shows for a moment, then the board goes on by itself.
+      let over = false;
+      build(box, (done) => {
+        if (over) return;
+        over = true;
+        box.classList.add("is-over");
+        setTimeout(() => {
           layer.hidden = true;
-          view.busy = false;
+          if (view) view.busy = false;
           resolve(done);
-        };
-        box.append(next);
+        }, view.quick ? 600 : calm() ? 300 : 1600);
       });
     });
   }
