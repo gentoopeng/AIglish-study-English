@@ -2098,3 +2098,15 @@ Tests:
 - `tests/point-loans-model.test.cjs`: a charge.
 - `tests/point-loans.smoke.cjs`: a charge taken once; the administrator's view showing both as taken, with the balance.
 - `tests/admin-players.smoke.cjs`: 増やす and 減らす, with the list and its まだ.
+
+## The 運営's send history (10.22.49.00)
+
+管理者ツール now has 「運営からの送信履歴」: everything the 運営 has given or taken back, for every player, newest first. Each line shows:
+
+- the player, the amount (+ or −) and the note;
+- the time;
+- whether the player's device has taken it in (反映済み / まだ).
+
+The totals given and taken are shown above. It is one query over the 運営's records (`pointLoans` where `people` contains `ADMIN`, at most 100 records; `PointLoans.adminHistory`).
+
+Test: `tests/admin-players.smoke.cjs` opens the history after a gift and a charge.

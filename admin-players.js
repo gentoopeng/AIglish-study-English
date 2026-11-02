@@ -48,7 +48,8 @@ async function refresh(){
  const request=++generation,body=dialog.querySelector('[data-body]');body.replaceChildren();const refresh=element('button','一覧を更新');refresh.type='button';refresh.disabled=busy;refresh.onclick=()=>refreshList();
  const books=element('button',bookEditing()?'単語帳の編集モードを終了':'配信中の単語帳を編集する');books.type='button';books.className='admin-books-button';books.onclick=()=>{if(bookEditing()){setBookEditing(false);books.textContent='配信中の単語帳を編集する';return;}setBookEditing(true);dialog.close();window.switchTab?.('vocab');window.showToast?.('管理者モードです。配信中の単語帳の単語を編集できます。','info');};
  const notices=element('button','お知らせを配信');notices.type='button';notices.className='admin-notices-button';notices.onclick=compose;
- body.append(refresh,books,notices);message('プレイヤーを読み込み中…');
+ const sent=element('button','運営からの送信履歴');sent.type='button';sent.className='admin-history-button';sent.onclick=history;
+ body.append(refresh,books,notices,sent);message('プレイヤーを読み込み中…');
  try{guard();const players=[];await deadline(playerList((id,data)=>{if(id!=='GUEST-000')players.push({id,name:data.playerName||id,deleted:!!data.deleted});},()=>authorized&&dialog.open&&generation===request));
  if(request!==generation||!authorized)return;
  for(const player of players){const row=element('button');row.type='button';row.className='admin-player-row';row.append(element('strong',player.name),element('small',player.id+(player.deleted?' · 削除済み':'')));row.onclick=()=>edit(player.id);body.append(row);}
@@ -66,6 +67,24 @@ async function compose(){
  const draw=items=>{list.replaceChildren();for(const n of items){const li=element('li'),drop=element('button','取り下げる');drop.type='button';drop.onclick=async()=>{if(busy)return;lock(true);message('取り下げています…');try{guard();draw(await deadline(window.Notices.remove(n.id)));message('取り下げました。');}catch(error){message(error.message);}finally{lock(false);}};li.append(element('span',n.title),drop);list.append(li);}if(!items.length)list.append(element('li','配信中のお知らせはありません。'));};
  form.onsubmit=async event=>{event.preventDefault();if(busy)return;lock(true);message('配信しています…');try{guard();draw(await deadline(window.Notices.post({title:title.value,body:text.value})));title.value='';text.value='';message('配信しました。ベルのお知らせに届きます。');}catch(error){message(error.message);}finally{lock(false);}};
  message('読み込み中…');try{guard();draw(await deadline(window.Notices.load()));message('タイトルと本文を入れて配信してください。');}catch(error){message(error.message);}
+}
+// Everything the 運営 has given or taken back, for everyone, newest first, with whether each
+// player's device has taken it in yet (PointLoans.adminHistory).
+async function history(){
+ if(busy)return;generation++;const request=generation,body=dialog.querySelector('[data-body]');body.replaceChildren();
+ const back=element('button','一覧に戻る');back.type='button';back.onclick=refreshList;
+ const list=element('ol');list.className='admin-gift-list admin-history-list';list.setAttribute('aria-label','運営からの送信履歴');
+ body.append(element('h3','運営からの送信履歴'),list,back);message('読み込み中…');
+ try{guard();const rows=await deadline(window.PointLoans.adminHistory());if(request!==generation)return;
+  const when=at=>new Date(at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  let given=0,taken=0;
+  for(const e of rows){if(e.kind==='charge')taken+=e.amount;else given+=e.amount;
+   const li=element('li');li.className=(e.kind==='charge'?'is-charge':'is-gift')+(e.taken?' is-taken':'');
+   li.append(element('span',e.name+'　'+(e.kind==='charge'?'−':'+')+e.amount.toLocaleString('ja-JP')+'pt'+(e.note?'「'+e.note+'」':'')),element('small',when(e.at)+'　'+(e.taken?'反映済み':'まだ（本人がアプリを開くと反映）')));
+   list.append(li);}
+  if(!rows.length)list.append(element('li','まだ送信はありません'));
+  message(rows.length?rows.length+'件　増やした合計 '+given.toLocaleString('ja-JP')+'pt・減らした合計 '+taken.toLocaleString('ja-JP')+'pt':'');
+ }catch(error){if(request===generation)message('読み込めませんでした。'+error.message);}
 }
 async function refreshList(){if(busy)return;lock(true);try{await refresh();}finally{lock(false);}}
 async function playerInfo(id){
