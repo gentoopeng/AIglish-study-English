@@ -187,3 +187,37 @@ test("repayments to the casino or the 運営 are never waiting to be collected, 
   assert.equal(L.trim(repays("ADMIN"), {}).length, L.MAX_ENTRIES);
   assert.throws(() => L.trim(repays("b"), {}), /記録がいっぱい/);
 });
+
+test("what is owed does not change when old loans and repayments are cut from a full record", () => {
+  // b borrows 1000 at 10% from a (1100 to repay), then repays 399 times by 1: the record is full.
+  let r = null;
+  const claim = (id) => (r.claimed = { ...(r.claimed || {}), [id]: 1 });
+  r = L.send(r, { id: "l0", from: "a", to: "b", amount: 1000, kind: "lend", at, rate: 0.1 });
+  claim("l0");
+  for (let i = 0; i < 399; i++) {
+    r = L.send(r, { id: "p" + i, from: "b", to: "a", amount: 1, kind: "repay", at });
+    claim("p" + i);
+  }
+  assert.equal(r.entries.length, L.MAX_ENTRIES);
+  assert.equal(L.owedBy(r, "b"), 1100 - 399);
+  const before = L.owedBy(r, "b");
+  // More repayments push the loan (the oldest) out; what b owes is only reduced by what was paid.
+  for (let i = 0; i < 5; i++) {
+    r = L.send(r, { id: "q" + i, from: "b", to: "a", amount: 1, kind: "repay", at });
+    claim("q" + i);
+  }
+  assert.equal(r.entries.length, L.MAX_ENTRIES);
+  assert.ok(!r.entries.some((e) => e.id === "l0"));
+  assert.equal(L.owedBy(r, "b"), before - 5);
+  assert.equal(L.net(r, "a"), before - 5);
+  assert.equal(r.carry.a, -r.carry.b);
+  // The limit on a repayment and on a 請求 follows the carried amount too.
+  assert.throws(() => L.send(r, { id: "x", from: "b", to: "a", amount: before, kind: "repay", at }), /までです/);
+  assert.doesNotThrow(() => L.ask(r, { id: "y", from: "a", to: "b", amount: before - 5, kind: "ask-repay", at }));
+  // Messages and finished requests dropped from the record do not touch `carry`.
+  const talk = L.say({ entries: [], carry: { a: 7, b: -7 } }, { id: "m", from: "a", to: "b", text: "hi", at });
+  assert.deepEqual(talk.carry, { a: 7, b: -7 });
+  // A tampered carry (not whole numbers) is ignored, and entries given as a bare list still work.
+  assert.equal(L.net({ entries: [], carry: { a: "9999", b: 1.5 } }, "a"), 0);
+  assert.equal(L.net([{ kind: "lend", from: "a", to: "b", amount: 5 }], "a"), 5);
+});

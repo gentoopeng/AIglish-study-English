@@ -21,6 +21,11 @@
 //
 // What one owes the other is what moved each way: every point sent counts for the sender, a loan
 // with interest counts for what is due on it.
+//
+// When the record is full and an old loan or repayment has to go, what it was worth is moved into
+// `carry` ({ id: points that person is owed by the other }, the two values are opposite), so what
+// is owed never changes when the history is cut. Pairs that lost entries before `carry` existed
+// cannot be put right.
 (function (root) {
   "use strict";
   const MAX_ENTRIES = 400,
@@ -40,17 +45,22 @@
   const NEVER_COLLECT = ["CASINO", "ADMIN"];
   const waiting = (entry, claimed) => arrives(entry) && !NEVER_COLLECT.includes(entry.to) && !claimed?.[entry.id];
   const change = (entry) => (entry.kind === "charge" ? -entry.amount : entry.amount);
+  // What a loan or repayment is worth in what is owed.
+  const worth = (e) => (e.kind === "lend" && Number.isInteger(e.due) && e.due >= e.amount ? e.due : e.amount);
+  // `src` is a record ({ entries, carry }) or, for older callers, just its entries.
+  const entriesOf = (src) => (Array.isArray(src) ? src : src?.entries || []);
+  // What is stored cannot be trusted: only a whole number counts.
+  const carried = (src, me) => (Array.isArray(src) ? 0 : Number.isInteger(src?.carry?.[me]) ? src.carry[me] : 0);
   // > 0: the other owes `me` that much. < 0: `me` owes the other.
-  function net(entries, me) {
-    let total = 0;
-    for (const e of entries || []) {
+  function net(src, me) {
+    let total = carried(src, me);
+    for (const e of entriesOf(src)) {
       if (!isMoney(e)) continue;
-      const value = e.kind === "lend" && Number.isInteger(e.due) && e.due >= e.amount ? e.due : e.amount;
-      total += e.from === me ? value : e.to === me ? -value : 0;
+      total += e.from === me ? worth(e) : e.to === me ? -worth(e) : 0;
     }
     return total;
   }
-  const owedBy = (entries, me) => Math.max(0, -net(entries, me));
+  const owedBy = (src, me) => Math.max(0, -net(src, me));
   function amountOf(value) {
     const n = Math.floor(Number(value));
     if (!(n >= 1)) throw Error("1pt以上で入れてください。");
@@ -80,7 +90,20 @@
   }
   function add(record, entry) {
     const next = record ? clone(record) : { entries: [] };
-    next.entries = trim((next.entries || []).concat(entry), next.claimed);
+    const all = (next.entries || []).concat(entry);
+    next.entries = trim(all, next.claimed);
+    // Loans and repayments that had to go keep counting through `carry`.
+    const kept = new Set(next.entries),
+      lost = all.filter((e) => !kept.has(e) && isMoney(e));
+    if (lost.length) {
+      const carry = { ...(next.carry || {}) },
+        part = (id) => (Number.isInteger(carry[id]) ? carry[id] : 0);
+      for (const e of lost) {
+        carry[e.from] = part(e.from) + worth(e);
+        carry[e.to] = part(e.to) - worth(e);
+      }
+      next.carry = carry;
+    }
     // `claimed` only needs the ids still in the record.
     if (next.claimed) {
       const ids = new Set(next.entries.map((e) => e.id));
@@ -115,7 +138,7 @@
     amount = amountOf(amount);
     if (from === to) throw Error("自分には送れません。");
     if (kind === "repay") {
-      const owed = owedBy(record?.entries, from);
+      const owed = owedBy(record, from);
       if (!owed) throw Error("返すポイントはありません。");
       if (amount > owed) throw Error("返すのは借りている" + owed.toLocaleString("ja-JP") + "ptまでです。");
     } else if (kind !== "lend" && kind !== "give") throw Error("不明な操作です。");
@@ -135,7 +158,7 @@
     amount = amountOf(amount);
     if (from === to) throw Error("自分には頼めません。");
     if (kind === "ask-repay") {
-      const owed = Math.max(0, net(record?.entries, from));
+      const owed = Math.max(0, net(record, from));
       if (!owed) throw Error("相手に貸しているポイントはありません。");
       if (amount > owed) throw Error("請求できるのは貸している" + owed.toLocaleString("ja-JP") + "ptまでです。");
     } else if (kind !== "ask-lend" && kind !== "ask-give") throw Error("不明な操作です。");

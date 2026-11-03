@@ -2424,3 +2424,18 @@ Tests:
 Tests:
 
 - `tests/point-loans-model.test.cjs`: 401 repayments to the casino, or to the 運営, are trimmed to the limit without a refusal; the same entries sent to a player are refused.
+
+## Points: what is owed no longer changes when old entries are cut (10.22.65.00)
+
+**What could happen.** Found by the Codex review of 10.22.64.00 (the third finding in a row with the same root). Who owes whom was worked out from the entries still in the record. A record is capped at 400 entries, so when an old loan or repayment had to go, the number changed: dropping a repayment raised the debt (a second repayment was needed), dropping a loan erased it.
+
+**Now.** The record has a `carry` field, `{ id: points that person is owed by the other }` (the two values are opposite). Each time the cap removes a loan or repayment, its worth (a loan with interest counts for what is due) is added to `carry`, so what is owed stays the same. Messages, finished requests and collected gives are not money owed and never touch `carry`.
+
+- `net` and `owedBy` take the record (a bare list of entries still works). `send` (the limit on a repayment), `ask` (the limit on a 請求), the casino's 請求 and the screens all pass the record.
+- Only whole numbers in `carry` count, since the database rules are open.
+- `carry` is written by the same transactions that write the record, and every one of them keeps the whole record, so it persists.
+- Pairs that lost entries before this version cannot be put right: the entries are gone.
+
+Tests:
+
+- `tests/point-loans-model.test.cjs`: a full record with a 1,000pt loan at 10% (1,100 to repay) and 399 repayments; five more repayments push the loan out; the amount owed falls by exactly what was paid; the limits on repaying and on a 請求 follow it; a message does not change `carry`; a tampered `carry` is ignored.
