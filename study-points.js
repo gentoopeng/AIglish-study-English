@@ -114,6 +114,9 @@
         : {}),
       timeSent: { ...b.timeSent, ...a.timeSent },
       timeAck: { ...b.timeAck, ...a.timeAck },
+      // The per-day history (StudyPointPolicy.addDaily), and whether past days were filled in.
+      daily: policy()?.mergeDaily ? policy().mergeDaily(b.daily, a.daily) : { ...b.daily, ...a.daily },
+      ...(a.dailyFilled || b.dailyFilled ? { dailyFilled: true } : {}),
     };
     // Confirmed recent receipts from another device also acknowledge an old local intent.
     for (const confirmed of [a, b])
@@ -196,6 +199,9 @@
     value.claims[token] = Math.max(before, entry.amount);
     value.history = history(value.history, { [token]: entry });
     if (id === "GUEST-000") {
+      const gained = Math.max(0, entry.amount - before);
+      if (gained && policy()?.addDaily)
+        value.daily = policy().addDaily(value.daily, entry.day, entry.source || "review", gained, before ? 0 : 1, entry.source === "time" ? policy().timeMinutes(entry.time) : undefined);
       value.balance += Math.max(0, entry.amount - before);
       value.earned = (Number(value.earned) || 0) + Math.max(0, entry.amount - before);
       value.settled[token] = Math.max(
@@ -328,6 +334,8 @@
     const execute = async () => {
       // A failed count is tried again next time; it never holds up the awards themselves.
       await backfillEarned(id).catch((error) => console.warn("総獲得ポイントは次の同期で数えます", error));
+      await backfillDaily(id).catch((error) => console.warn("過去の履歴は次の同期で集めます", error));
+      recordsRead = null;
       const bookHashes = new Map();
       // Small groups keep mobile transactions bounded, including after offline sessions.
       while (id === owner()) {
@@ -387,7 +395,8 @@
             });
           }
           if (id !== owner()) throw Error("アカウントが変更されました。");
-          let delta = 0;
+          let delta = 0,
+            daily = wallet.daily;
           const earned = {};
           for (const shard of shards) {
             validate(shard.data);
@@ -418,6 +427,9 @@
                 };
                 delta += amount - oldAmount;
                 changed = true;
+                // The day's line in the history: what was credited now (never twice, like delta).
+                if (amount > oldAmount)
+                  daily = policy().addDaily(daily, item.day, item.source || "review", amount - oldAmount, oldAmount ? 0 : 1, time ? policy().timeMinutes(time) : undefined);
               }
               const stored = claims[item.num];
               earned[token] = {
@@ -450,6 +462,7 @@
             // Counted only once the past has been added up (backfillEarned), so nothing is lost.
             ...(counted ? { earned: wallet.earned + delta } : {}),
             history: history(earned, wallet.history),
+            daily: policy().cleanDaily(daily),
             acknowledged: Object.fromEntries(
               Object.entries(earned).map(([token, item]) => [
                 token,
@@ -466,6 +479,8 @@
               balance: value.balance,
               revision: value.revision,
               history: value.history,
+              daily: value.daily,
+              ...(wallet.dailyFilled ? { dailyFilled: true } : {}),
               ...(counted ? { earned: value.earned } : {}),
               // Poker and casino keys stay, so a result is never settled twice.
               ...(wallet.poker && typeof wallet.poker === "object" ? { poker: wallet.poker } : {}),
@@ -499,6 +514,7 @@
             delete latest.pending[token];
         }
         latest.history = history(latest.history, result.history);
+        latest.daily = policy().mergeDaily(latest.daily, result.daily);
         if (Number.isSafeInteger(result.earned))
           latest.earned = Math.max(Number(latest.earned) || 0, result.earned);
         if (result.revision >= latest.revision) {
@@ -526,6 +542,56 @@
   // The total earned did not exist at first: added up once from every study award the cloud
   // holds (one record per day, book and 512 words), then kept in the wallet and grown with each
   // award. Daily bonuses from before are not in those records.
+  // The per-day history began later: once per account, every study award the cloud holds (one
+  // record per day, book and 512 words) is added up per day and source and merged in.
+  async function backfillDaily(id = owner()) {
+    if (id !== owner() || id === "GUEST-000" || read(id).dailyFilled || !window.fbGetDocs || !window.fbCollection || !window.fbRunTransaction) return;
+    // Already filled (on another device): take the cloud's record and read nothing more.
+    if (window.fbGetDoc) {
+      const snap = await window.fbGetDoc(window.fbDoc(window.db, "users", id, "learningPoints", "main"));
+      if (id !== owner()) return;
+      const cloud = snap.exists() ? snap.data() : {};
+      if (cloud?.dailyFilled) {
+        const next = read(id);
+        next.daily = policy().mergeDaily(next.daily, cloud.daily);
+        next.dailyFilled = true;
+        return write(id, next);
+      }
+    }
+    const records = await dayRecords(id);
+    if (id !== owner()) return;
+    let past = {};
+    for (const doc of records.docs || []) {
+      const data = doc.data() || {};
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(data.day || "")) continue;
+      for (const claim of Object.values(data.claims || {})) {
+        const amount = typeof claim === "object" ? entryAmount(claim) : level(claim);
+        if (!amount) continue;
+        const time = data.book === "@study-time",
+          source = time ? "time" : (typeof claim === "object" && claim.source) || (amount === 10 ? "review" : amount === 3 ? "quiz" : String(data.book).startsWith("@work/") ? "work" : "card");
+        past = policy().addDaily(past, data.day, source, amount, 1, time && claim.time ? policy().timeMinutes(claim.time) : undefined);
+      }
+    }
+    const filled = await window.fbRunTransaction(window.db, async (tx) => {
+      const ref = window.fbDoc(window.db, "users", id, "learningPoints", "main"),
+        snap = await tx.get(ref),
+        wallet = snap.exists() ? snap.data() : {};
+      const daily = policy().mergeDaily(wallet.daily, past);
+      tx.set(ref, { daily, dailyFilled: true }, { merge: true });
+      return daily;
+    });
+    if (id !== owner()) return;
+    const next = read(id);
+    next.daily = policy().mergeDaily(next.daily, filled);
+    next.dailyFilled = true;
+    write(id, next);
+  }
+  // Every award record of the account, read at most once per sync for both fills below.
+  let recordsRead = null;
+  function dayRecords(id) {
+    if (recordsRead?.id !== id) recordsRead = { id, task: window.fbGetDocs(window.fbCollection(window.db, "users", id, "reviewPointDays")) };
+    return recordsRead.task;
+  }
   async function backfillEarned(id = owner()) {
     if (
       id !== owner() ||
@@ -549,9 +615,7 @@
       const counted = snap.exists() ? snap.data()?.earned : undefined;
       if (Number.isSafeInteger(counted)) return keep(counted);
     }
-    const records = await window.fbGetDocs(
-      window.fbCollection(window.db, "users", id, "reviewPointDays"),
-    );
+    const records = await dayRecords(id);
     if (id !== owner()) return;
     let sum = 0;
     for (const doc of records.docs || [])
@@ -695,6 +759,8 @@
     return next;
   }
   window.StudyPoints = {
+    // The per-day history, newest day first: [[day, { source: { n, p } }], …].
+    daily: (id = owner()) => Object.entries(read(id).daily || {}).sort((a, b) => b[0].localeCompare(a[0])),
     restore,
     award,
     reward,

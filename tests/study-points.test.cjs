@@ -616,3 +616,49 @@ test("total earned: past awards added up once from the day records, then grown w
   assert.equal(b.points.earned(), 43);
   assert.equal(reads, 1);
 });
+
+test("points history per day: every credited award is kept by day and kind, once, past days filled once from the day records", async () => {
+  const remote = new Map([
+    ["users/a/learningPoints/main", { balance: 0, revision: 1 }],
+    // Two past days in the award records (one of them study time, 30 minutes at 5pt).
+    ["users/a/reviewPointDays/r1", { day: "2026-10-01", book: "book", claims: { 1: { amount: 2, source: "card" }, 2: { amount: 2, source: "card" } } }],
+    ["users/a/reviewPointDays/r2", { day: "2026-10-02", book: "@study-time", claims: { minutes: { amount: 150, source: "time" } } }],
+  ]);
+  const a = setup(remote, true),
+    date = a.c.WeakReviewModel.day();
+  let reads = 0;
+  a.c.fbCollection = (_, ...parts) => parts.join("/");
+  a.c.fbGetDocs = async (path) => {
+    reads++;
+    return { docs: [...remote].filter(([k]) => k.startsWith(path + "/")).map(([, v]) => ({ data: () => v })) };
+  };
+  a.points.reward("card", "book", "1", "a", { bookName: "本", word: "one" });
+  a.points.reward("card", "book", "2", "a", { bookName: "本", word: "two" });
+  a.points.reward("card", "book", "2", "a", { bookName: "本", word: "two" });
+  await a.points.flush();
+  const wallet = remote.get("users/a/learningPoints/main");
+  // Today: two words, 4pt; credited once even though word 2 was answered twice.
+  assert.deepEqual(wallet.daily[date], { card: { n: 2, p: 4 } });
+  // The past days, added up from the records in the same sync (one read for both fills).
+  assert.deepEqual(wallet.daily["2026-10-01"], { card: { n: 2, p: 4 } });
+  assert.deepEqual(wallet.daily["2026-10-02"].time.p, 150);
+  assert.equal(wallet.dailyFilled, true);
+  assert.equal(reads, 1);
+  assert.equal(JSON.stringify(a.points.daily()[0]), JSON.stringify([date, { card: { n: 2, p: 4 } }]));
+  // A second sync adds nothing twice and reads nothing again.
+  await a.points.flush();
+  assert.deepEqual(remote.get("users/a/learningPoints/main").daily[date], { card: { n: 2, p: 4 } });
+  assert.equal(reads, 1);
+  // Another device takes the filled record from the cloud.
+  const b = setup(remote, true);
+  b.c.fbCollection = a.c.fbCollection;
+  b.c.fbGetDocs = a.c.fbGetDocs;
+  b.c.fbGetDoc = async (ref) => ({ exists: () => remote.has(ref), data: () => remote.get(ref) });
+  await b.points.flush();
+  assert.equal(reads, 1);
+  assert.equal(JSON.stringify(b.points.daily().map(([day]) => day).slice(-2)), JSON.stringify(["2026-10-02", "2026-10-01"]));
+  // The record keeps up to 400 days, the newest.
+  let many = {};
+  for (let i = 0; i < 420; i++) many = a.c.StudyPointPolicy.addDaily(many, new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10), "card", 2);
+  assert.equal(Object.keys(many).length, 400);
+});

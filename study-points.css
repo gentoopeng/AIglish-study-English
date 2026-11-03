@@ -265,3 +265,29 @@
 .points-history li.is-casino > span.is-minus {
   color: #f08a8a;
 }
+/* The points history, one block per day: a date line with the day's total, then its kinds. */
+.points-history li.points-day {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 10px;
+  padding: 6px 2px 4px;
+  border-bottom: 1px solid rgba(230, 210, 154, 0.25);
+  color: #e6d29a;
+  font-size: 13px;
+  font-weight: 700;
+}
+.points-history li.points-day > span {
+  font-size: 13px;
+}
+.points-history li > span.is-minus {
+  color: #f08a8a;
+}
+.points-history li.points-more-row {
+  display: block;
+  border: 0;
+}
+.points-more {
+  width: 100%;
+  margin-top: 8px;
+}

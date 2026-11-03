@@ -2331,3 +2331,41 @@ Test: `tests/people-recent.smoke.cjs` checks:
 - on the next launch the kept list (2 people) shows while the cloud has not answered yet.
 
 `tests/people.smoke.cjs` (the scan fallback) still passes.
+
+## Points history: every day kept, study time included (10.22.61.00)
+
+The user asked whether points for study time were being paid, and asked for the history to keep everything.
+
+**Study-time points.** They are paid. Measured minutes become points the next day (after 0:06 Japan time), when the app starts, a session ends or a save runs. They pay 5pt a minute from 2026-11-02 and 1pt before that. The trouble was the history:
+
+- It kept only the newest 100 award lines, one per word.
+- A day of word cards fills that in a day or two, and older lines drop off.
+- The study-time line is dated the day before, so it was usually among the first to go.
+
+The points had been added; only the line had disappeared.
+
+**Now.** The wallet document keeps a per-day record, `daily`: `{ "YYYY-MM-DD": { kind: { n, p } } }`.
+
+- **Kinds.** Word cards, battle answers, weak-word review and workbook are counted by words or problems. Study time is counted in minutes. The login bonus and lending (including gifts from 運営 and charges) are recorded as points.
+- **Written with the credit.** Each line is written in the same transaction that credits the points, from the same "credited now" amount, so nothing is counted twice. That transaction is the study award sync, the login-bonus draw, or the lending write.
+- **Merging copies.** Two copies of the record are merged by taking the fuller line for each day and kind.
+- **Length.** The newest 400 days are kept.
+- **Past days.** The record is filled once per account from the award records the cloud already holds (`reviewPointDays`). Those reads are shared with the one-time "total earned" count, and a second device takes the filled record from the cloud. Login bonuses and lending from before this change are not in those records, so they cannot be filled in.
+
+**The points screen.** The history is now one block per day, newest first:
+
+- the date and the day's total;
+- then each kind, for example 「勉強時間 120分 +600pt」 or 「単語カード 48語 +96pt」;
+- the casino lines for that day.
+
+30 days show at first, and 「もっと前を見る」 adds 30 more. The per-word lines are gone: the day totals replace them, and they no longer push anything out.
+
+Tests:
+
+- `tests/study-points.test.cjs`:
+  - today's two words (one answered twice) make 2 words and 4pt;
+  - the past card and study-time days are filled in, with one read for both one-time fills;
+  - a second sync adds nothing twice;
+  - another device reads the filled record instead of the award records;
+  - 400 days are kept.
+- `tests/weak-review.smoke.cjs` and `tests/casino.smoke.cjs` check the new day blocks.
