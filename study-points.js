@@ -278,15 +278,19 @@
   }
   // A day's study time was counted: a notice in the お知らせボックス, one per day (counted again
   // with more minutes, it is the same notice with the new total).
-  function notifyTime(id, entry) {
+  // The title is the day's total; when a day is counted again with more minutes, the notice says
+  // how much was added this time.
+  function notifyTime(id, entry, gained) {
     try {
       const minutes = policy().timeMinutes(entry.time),
         [, month, day] = String(entry.day).split("-").map(Number),
-        rate = policy().timeRate(entry.day);
+        rate = policy().timeRate(entry.day),
+        fmt = (n) => Number(n).toLocaleString("ja-JP"),
+        again = (window.PersonalNotices?.list(id) || []).some((n) => n.id === "time:" + entry.day);
       window.PersonalNotices?.add(id, {
         id: "time:" + entry.day,
-        title: month + "月" + day + "日の勉強時間 +" + Number(entry.amount).toLocaleString("ja-JP") + "pt",
-        body: "勉強時間 " + minutes + "分（1分" + rate + "pt）が、所持ポイントに加わりました。",
+        title: month + "月" + day + "日の勉強時間 合計 " + fmt(entry.amount) + "pt",
+        body: "勉強時間 " + minutes + "分（1分" + rate + "pt）。" + (again ? "あとから +" + fmt(gained) + "pt 加わりました。" : "所持ポイントに加わりました。"),
         amount: entry.amount,
       });
     } catch (error) {
@@ -321,7 +325,7 @@
       if (value.timeSent?.[day] === fingerprint) continue;
       entry.fingerprint = fingerprint;
       const gained = awardTarget(entry, id);
-      if (gained > 0) notifyTime(id, entry);
+      if (gained > 0) notifyTime(id, entry, gained);
       // Keep this marker in the backed-up wallet; receipt transactions still deduplicate after restore.
       const next = read(id);
       next.timeSent = { ...next.timeSent, [day]: fingerprint };

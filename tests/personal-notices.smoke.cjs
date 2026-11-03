@@ -27,7 +27,7 @@ const { chromium } = require("playwright"),
     assert.equal(await badge.isHidden(), true);
     // A notice arrives: the bell shows 1 without anything being opened.
     await page.evaluate(() =>
-      PersonalNotices.add("GUEST-000", { id: "time:2026-11-02", title: "11月2日の勉強時間 +300pt", body: "勉強時間 60分（1分5pt）が、所持ポイントに加わりました。", amount: 300 }),
+      PersonalNotices.add("GUEST-000", { id: "time:2026-11-02", title: "11月2日の勉強時間 合計 300pt", body: "勉強時間 60分（1分5pt）。所持ポイントに加わりました。", amount: 300 }),
     );
     await badge.waitFor({ state: "visible" });
     assert.equal(await badge.innerText(), "1");
@@ -41,7 +41,7 @@ const { chromium } = require("playwright"),
     const box = page.locator("dialog.notices-dialog[open]");
     await box.getByRole("heading", { name: "あなたへ" }).waitFor();
     const own = box.locator("ol[aria-label='あなた宛てのお知らせ'] li");
-    assert.deepEqual(await own.locator(".notice-head strong").allInnerTexts(), ["ほかの人のビンゴの分け前 +120pt", "11月2日の勉強時間 +300pt"]);
+    assert.deepEqual(await own.locator(".notice-head strong").allInnerTexts(), ["ほかの人のビンゴの分け前 +120pt", "11月2日の勉強時間 合計 300pt"]);
     assert.equal(await box.locator("ol[aria-label='あなた宛てのお知らせ'] li.is-new").count(), 2);
     assert.match(await own.nth(1).innerText(), /60分（1分5pt）/);
     // The team's notices stay in their own list below.
@@ -55,12 +55,12 @@ const { chromium } = require("playwright"),
     await box.getByRole("button", { name: "閉じる" }).click();
     // The same day counted again with more minutes is the same notice, new again.
     await page.evaluate(() =>
-      PersonalNotices.add("GUEST-000", { id: "time:2026-11-02", title: "11月2日の勉強時間 +350pt", body: "勉強時間 70分（1分5pt）が、所持ポイントに加わりました。", amount: 350 }),
+      PersonalNotices.add("GUEST-000", { id: "time:2026-11-02", title: "11月2日の勉強時間 合計 350pt", body: "勉強時間 70分（1分5pt）。あとから +50pt 加わりました。", amount: 350 }),
     );
     assert.equal(await badge.innerText(), "1");
     await bell.click();
     assert.equal(await box.locator("ol[aria-label='あなた宛てのお知らせ'] li").count(), 2);
-    assert.deepEqual(await box.locator("ol[aria-label='あなた宛てのお知らせ'] li.is-new .notice-head strong").allInnerTexts(), ["11月2日の勉強時間 +350pt"]);
+    assert.deepEqual(await box.locator("ol[aria-label='あなた宛てのお知らせ'] li.is-new .notice-head strong").allInnerTexts(), ["11月2日の勉強時間 合計 350pt"]);
     await page.screenshot({ path: "/tmp/personal-notices.png" });
     assert.deepEqual(errors, []);
     console.log("PASS: the bell counts notices for this player, the box lists them under あなたへ with new ones marked, opening reads them, a re-counted day is one notice");
