@@ -229,7 +229,7 @@
                         // A question not yet answered in this mode goes by its meaning's rating (what the
                         // word list shows), so ratings from before the mode was turned on still count.
                         var meaning = (w.meanings || []).find(function(m) { return String(m.id) === String(q.mid); });
-                        if (!flashcardSelectedStatuses[result ? result.status : getFlashcardMeaningStatus(meaning, w)]) return;
+                        if (!flashcardSelectedStatuses[result ? result.status : window.TermProgress.fallback(termStore, w.num, q.mid, getFlashcardMeaningStatus(meaning, w))]) return;
                         // The whole-entry question is the word and its meanings, so it follows the chosen
                         // direction like any card (英→日: the word first). A phrase card (English over
                         // Japanese) follows it too. A 「」 card in a Japanese line (the line with the term
