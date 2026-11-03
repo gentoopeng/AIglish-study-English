@@ -32,7 +32,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const screen = page.locator("dialog.casino-screen.is-sugoroku[open]");
     await screen.locator(".sg-card").waitFor();
     assert.equal(await screen.locator(".sg-cell").count(), 49);
-    assert.equal(await screen.locator(".sg-sq").count(), 80);
+    assert.equal(await screen.locator(".sg-sq").count(), 100);
     // The whole game fits the screen: the roll button is in view without scrolling.
     const fits = await page.evaluate(() => {
       const go = document.querySelector(".sg-go").getBoundingClientRect(),
@@ -183,7 +183,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     const missNo = await page.evaluate(([name, cardName]) => {
       const s = JSON.parse(localStorage.getItem(name));
-      s.pos = 79;
+      s.pos = 99;
       localStorage.setItem(name, JSON.stringify(s));
       const c = JSON.parse(localStorage.getItem(cardName));
       return Array.from({ length: 100 }, (_, i) => i + 1).find((n) => !c.cells.includes(n));
@@ -193,13 +193,26 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const before = await saved(),
       beforeCard = await card();
     // Die 1 onto START (a ball), START's wheel on its ×0 slot.
-    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event));
+    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event && !x.kakuhen));
     await fix([0, missNo - 1, zeroAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
     const missed = await saved();
     assert.equal(missed.won - before.won, 200);
     assert.deepEqual((await card()).owners, beforeCard.owners);
+    // Die 1 onto a normal square, the 確変 slot, and the 確変 wheel's ×10: two wheels, 1,000 back.
+    const [kakuAt, tenAt] = await page.evaluate(() => [window.SugorokuModel.RULES.normal[100].findIndex((x) => x.kakuhen), window.SugorokuModel.RULES.kakuhen.findIndex((x) => x.x === 10)]);
+    await fix([0, kakuAt, tenAt]);
+    const kakuBefore = await saved();
+    await screen.locator("[data-sg-roll]").click();
+    await page.locator(".sg-layer.is-kakuhen .sg-wheel-title").waitFor({ state: "attached", timeout: 15000 });
+    assert.equal(await page.locator(".sg-layer.is-kakuhen .sg-wheel-title").textContent(), "確変ルーレット");
+    await settled();
+    assert.equal((await saved()).won - kakuBefore.won, 1000);
+    // (The layer is closed by now; shown again only for a picture of the 確変 wheel.)
+    await page.evaluate(() => { document.querySelector(".sg-layer").hidden = false; });
+    await page.screenshot({ path: "/tmp/sugoroku-kakuhen.png" });
+    await page.evaluate(() => { document.querySelector(".sg-layer").hidden = true; });
 
     // Another player's ball shows their initial and name; the top row is the guest's own but its
     // last cell, so the next ball on that number makes a line of only the guest's balls.
@@ -207,7 +220,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const lastNo = await page.evaluate(([name, cardName]) => {
       const s = JSON.parse(localStorage.getItem(name));
       s.stake = 400;
-      s.pos = 79;
+      s.pos = 99;
       localStorage.setItem(name, JSON.stringify(s));
       const c = JSON.parse(localStorage.getItem(cardName));
       c.owners = c.owners.map((o, i) => (o === "*" ? o : i < 6 ? "GUEST-000" : i === 10 ? "amy" : ""));
@@ -252,7 +265,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     const nextNo = await page.evaluate(([name, cardName]) => {
       const s = JSON.parse(localStorage.getItem(name));
-      s.pos = 79;
+      s.pos = 99;
       localStorage.setItem(name, JSON.stringify(s));
       const c = JSON.parse(localStorage.getItem(cardName));
       c.owners = c.owners.map((o, i) => (o === "*" ? o : i >= 7 && i < 13 ? "amy" : ""));

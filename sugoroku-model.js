@@ -1,18 +1,19 @@
 // Rules for すごろくビンゴ in the casino tab, without any screen. A long game kept per player.
 //
 // A roll costs one fixed bet (one amount, so no bet size is better than another for balls or
-// the jackpots). The piece goes round a ring of squares and the square decides:
-//   normal   – a wheel of multiples of the bet (×0 to ×3, and ball slots)
+// the jackpots). The piece goes round a ring of 100 squares and the square decides:
+//   normal   – a wheel of multiples of the bet (×0.25 to −×1) and ball, game and 確変 slots;
+//              a 確変 slot (1 in 10) spins the 確変 wheel: ×2 to ×10, or two balls in a row
 //   event    – a four-way wheel: blackjack, dice poker or chinchiro is played once for the bet
-//              (a win also gives a ball, a loss gives back half), or a sure ball (×1.5 back)
+//              (a win also gives a ball, a loss gives back a quarter), or a sure ball (the bet back)
 //   accident – a wheel: lose 0–2× the bet more, go back three squares, or go back to START
 // Passing START gives a ball, nothing else.
 // The 7×7 bingo card (48 numbers from 1–100, the middle free) is shared by every player and
 // kept apart from each player's own state: { cells, owners }, owners[i] the id of whoever's
 // ball opened cell i ("" closed, "*" the free middle). A ball is drawn from 1–100: on the card
-// and still closed it opens there under the player's name; otherwise it pays 1.5× the bet.
-// A finished line pays the bingo prize (3× the bet) and spins a 10-slot wheel: the bet × 5 / 10 /
-// 20, four mini games, a miss, the jackpot, or the super-jackpot chance, a 5-slot wheel of the
+// and still closed it opens there under the player's name; otherwise it pays 2× the bet.
+// A finished line pays the bingo prize (10× the bet) and spins a 10-slot wheel: the bet × 10 / 20 /
+// 50, four mini games, the jackpot (twice), or the super-jackpot chance, a 5-slot wheel of the
 // super jackpot, the jackpot twice, a bigger tapping game and "back" (the first wheel again).
 // Two lines at once pay (n + 1)× and a line of only this player's balls soloBonus× more (not the
 // jackpots, and not the mini games, which pay their points × bingoGameBoost). The bingo prize is shared by the balls on the finished lines, and wheelShare of the
@@ -48,22 +49,33 @@
   const BALL = (x = 1, n = 1) => Array(n).fill({ x, ball: true });
   const GAME = (game, n = 1) => Array(n).fill({ x: 0, game });
   const EVENT = (event) => [{ x: 0, event }];
+  const KAKU = (n = 1) => Array(n).fill({ x: 0, kakuhen: true });
   const RULES = {
     costs: [100],
-    // The ring: 80 squares, about 23 rolls a lap. S start, n normal, E event, A accident.
-    board: Array.from({ length: 80 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
-    // The normal wheel: 40 slots from ×10 down to −×1 (a minus takes that much more than the
+    // The ring: 100 squares, about 29 rolls a lap. S start, n normal, E event, A accident.
+    board: Array.from({ length: 100 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
+    // The normal wheel: 40 slots from ×0.25 down to −×1 (the top is the 確変 slots) (a minus takes that much more than the
     // bet). A ball slot gives a ball and nothing else (a ball that misses the card pays missPay);
     // a game slot starts a quick mini game paid in multiples of the bet; an event slot plays
     // blackjack, dice poker or chinchiro as an event square does.
     normal: {
       100: spread([
-        ...N(10), ...N(5), ...N(1.5), ...N(1),
+        // The top of the wheel is a 確変 slot: it starts the 確変 wheel below, which holds the
+        // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
+        ...KAKU(4),
         ...N(0.25),
-        ...N(0, 18), ...N(-0.5, 2), ...N(-1, 2),
-        ...BALL(0, 3), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
+        ...N(0, 19), ...N(-0.5, 2), ...N(-1, 2),
+        ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
+    // The 確変 wheel (after a 確変 slot of the normal wheel): x pays the bet × x; balls draws that
+    // many balls one after another (each as any ball: it opens a number or pays missPay, and a
+    // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
+    // what it paid before the 確変 slots took its top slots.
+    kakuhen: spread([
+      ...N(2), ...N(3), ...N(4), ...N(5, 5), ...N(10, 2),
+      { x: 0, balls: 2 }, { x: 0, balls: 2 },
+    ]),
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
     eventPay: { lose: 0.25, push: 1, sure: 1 },
@@ -374,6 +386,13 @@
       events.push({ t: "wheel", wheel: "normal", slots, index, base: cost, amount });
       gain += amount;
       if (slot.ball) gain += ball(state, card, me, random, events, cost);
+      if (slot.kakuhen) {
+        const k = pick(RULES.kakuhen, random),
+          pay = money(cost * k.slot.x);
+        events.push({ t: "wheel", wheel: "kakuhen", slots: RULES.kakuhen, index: k.index, base: cost, amount: pay });
+        gain += pay;
+        for (let b = 0; b < (k.slot.balls || 0); b++) gain += ball(state, card, me, random, events, cost);
+      }
       if (slot.game) {
         state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: 1 }]);
         events.push({ t: "bonus", game: slot.game, mult: 1 });

@@ -136,6 +136,9 @@
   // carries only from CARRY_FROM on (the day this began): earlier days do not count.
   const PER_MINUTE = 100,
     CARRY_DAYS = 5,
+    // How far back the replay starts: an allowance from the day before the window may still have been
+    // spent by a bet inside it, so the days just before it are replayed too (and their bets kept).
+    REPLAY_DAYS = CARRY_DAYS * 2,
     CARRY_FROM = "2026-11-04";
   // What a day's unused allowance is worth when it is `age` days old.
   const carryWeight = (age) => (age <= 1 ? 1 : age <= CARRY_DAYS ? Math.pow(0.5, age - 1) : 0);
@@ -180,20 +183,21 @@
       const days = stakedDays(),
         day = studyDay();
       days[day] = (days[day] || 0) + amount;
-      const kept = Object.keys(days).sort().slice(-(CARRY_DAYS + 1));
+      const kept = Object.keys(days).sort().slice(-(REPLAY_DAYS + 1));
       localStorage.setItem(stakedName(), JSON.stringify({ days: Object.fromEntries(kept.map((d) => [d, days[d]])) }));
     } catch {}
   }
-  // What is left of each earlier day's own allowance as of today (offsets -5 … -1), worked out day
+  // What is left of each earlier day's own allowance as of today (offsets -REPLAY_DAYS … -1; only the
+  // last CARRY_DAYS are worth anything today), worked out day
   // by day from the oldest: a day gets its own minutes (if it is CARRY_FROM or later), then what was
   // bet that day is taken from the oldest allowance that is still worth something that day.
   function carryLeft(days = studyDays(), bets = stakedDays()) {
     const left = {};
-    for (let day = -CARRY_DAYS; day <= -1; day++) {
+    for (let day = -REPLAY_DAYS; day <= -1; day++) {
       const key = dayKey(day);
       if (key >= CARRY_FROM) left[day] = studyMinutes(key, days) * PER_MINUTE;
       let spend = bets[key] || 0;
-      for (let origin = -CARRY_DAYS; origin <= day && spend > 0; origin++) {
+      for (let origin = -REPLAY_DAYS; origin <= day && spend > 0; origin++) {
         const own = left[origin] || 0,
           worth = carryWeight(day - origin);
         if (!(own > 0) || !(worth > 0)) continue;

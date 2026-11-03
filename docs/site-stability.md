@@ -2696,3 +2696,21 @@ Tests:
 Tests:
 
 - `tests/casino-ranking.smoke.cjs`: seven chips, 3 panels for 基本 and 4 for 記録, both fit on 393x852 and 320x668 without scrolling, and the counts still read from `sugoroku:g/j/s/l`.
+
+## 10.22.81.00 すごろくビンゴ: 1周100マスと「確変」ルーレット
+
+**What the user asked.** Make a lap 100 squares, and, in exchange, add a rare flashy chance to the normal wheel that leads to a 確変 wheel (a run of balls, or the bingo wheels), without breaking the balance. The owner then asked for the flashy chance to come fairly often.
+
+**What changed.**
+- The ring is 100 squares (`RULES.board`). A lap ball now comes about every 29 rolls instead of 23; the lap ball was only about 2% of all balls, so this barely moves the game. The positions of the event and accident squares move for an existing save, but the save format (v3, `pos`) is the same and every `pos` of 0–79 is still valid.
+- In the normal wheel the four top slots (×10, ×5, ×1.5, ×1) are now four 確変 slots (1 in 10 spins). A 確変 slot spins the 確変 wheel (`RULES.kakuhen`, 12 slots): ×2, ×3, ×4, ×5 (five slots), ×10 (two slots) and 2 balls drawn one after another (two slots). Balls are drawn like any ball, so a line made leads to the bingo wheels as usual.
+- The multiples that used to be on the normal wheel moved into the 確変 wheel, so the normal wheel pays what it did: the plain-play return measured by Monte Carlo (3 players, jackpots excluded) is about 0.86 before and after, and the balls drawn per roll are the same (0.146 vs 0.148). A first version with 3 to 10 balls on the 確変 wheel gave the same return but 47% more balls, hence more bingos and jackpot wins (each win puts a fresh seed into the pot), so the 確変 wheel keeps its balls at two, pays more in multiples, and the normal wheel has one ball slot fewer (an Opus review of the balance).
+
+**Screen.** `kakuhen` wheel: the room dims like the bingo wheel, gold/ball colours, labels 確変 and ●×n, 「確変チャンス！」 on the normal wheel and 「ボール n連続！」 on the 確変 wheel.
+
+Tests:
+
+- `tests/sugoroku-model.test.cjs`: 100 squares, four 確変 slots, the 確変 wheel's shape, a ×10 result pays 1,000, a run of two balls draws two balls (and pays 2× for each that misses).
+- `tests/sugoroku.smoke.cjs`: 100 squares, the 確変 wheel comes up on a 確変 slot and its ×10 pays 1,000.
+
+**Also in 10.22.81.00 (a Codex finding on #356).** The betting allowance's carry replayed only the last five days, so once the 2026-11-04 start was more than five days back, a bet five days ago was charged to that day's own allowance instead of the older (six-day-old) one it could still have used first, and the carry was half what it should be. The replay now starts `REPLAY_DAYS` (10) back and the bets of the last eleven days are kept (`casino.js`). Test: `tests/casino-carryover.smoke.cjs` (six and five days ago 100 minutes each, 5,000 bet five days ago: 625 carries, not 312).
