@@ -2561,3 +2561,15 @@ Tests:
 
 - `tests/term-battle.test.cjs`: era questions keep their kind in a pool, with the long prompt, with era choices, in a valid room of version 11 and not of version 10.
 - `tests/study-points.test.cjs`: with the first notice cleared, a day counted again says what was added; the date-dependent tests use a fixed day.
+
+## 年・世紀の入力: the question stays in view while typing (10.22.73.00)
+
+**What the user saw.** On an iPhone, tapping the box of a year (or century) question opened the keyboard, and the phone moved the whole screen up to keep the box above it. The top of the question (the headword and the start of the sentence) went off the top of the screen, so it could not be read while answering.
+
+**Cause.** The answer panel sat in the lower half of the flashcard screen, under where the keyboard comes up. The keyboard covers the lower half, so the page was moved up to keep the box in view.
+
+**Now.** While the box has focus, the panel moves to the top of the flashcard screen (where nothing has to move) and carries the question in it, as the card shows it, with the headword in bold and the year or blank kept whole. A long question scrolls inside it. The panel goes back to the bottom a moment after the box loses focus (so that a tap on 答える, which takes the focus away first, is not lost to the panel moving under the finger), and at once with the next card. After an answer the question stays in the panel with 「正解！」 or the right answer, until the next card.
+
+Tests:
+
+- `tests/term-when.smoke.cjs`: focusing the box puts the panel at the top with the question in it; leaving it moves the panel back after a moment; the question stays with a wrong answer's text; the next card starts with the panel back. (The phone's keyboard itself cannot be run in the test: what is checked is that the box and the question are above the middle of the screen, where the phone has no need to move the page.)
