@@ -76,6 +76,12 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
           }
           throw Error("transaction conflict");
         };
+        // A plain write (the 既読 mark): one document, merged.
+        window.__plainWrites = 0;
+        window.fbSetDoc = async (ref, value, options) => {
+          window.__plainWrites++;
+          await __lnCommit({ reads: {}, writes: [{ path: pathOf(ref), value: JSON.parse(JSON.stringify(value)), merge: options?.merge === true }] });
+        };
       }, id);
       return page;
     }
@@ -202,6 +208,81 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(wallet("loan-a"), 510);
     await a.evaluate(() => window.PointLoans.close());
     await b.evaluate(() => window.PointLoans.close());
+
+    // あげる and もらう, with the 既読 mark. A gives B 40 (nobody owes anything), B opens the talk and
+    // A then sees 既読; A asks B for 40 (もらう) and B answers あげる; neither can be done with the
+    // casino or the 運営.
+    assert.equal(wallet("loan-a"), 510);
+    assert.equal(wallet("loan-b"), 490);
+    await a.evaluate(() => window.PointLoans.person("loan-b", "loan-b"));
+    await dialogOf(a).getByRole("button", { name: "ポイント" }).click();
+    for (const name of ["貸す", "返す", "あげる", "借りる", "請求", "もらう"]) await dialogOf(a).getByRole("tab", { name }).waitFor();
+    await dialogOf(a).getByRole("tab", { name: "あげる" }).click();
+    await dialogOf(a).locator("[data-loan-amount]").fill("40");
+    assert.match(await dialogOf(a).locator(".loans-preview").innerText(), /返してもらえません。あげたあと 所持 470pt/);
+    await dialogOf(a).getByRole("textbox", { name: "ひとこと" }).fill("お祝い");
+    await dialogOf(a).getByRole("button", { name: "あげる", exact: true }).click();
+    await dialogOf(a).locator(".talk-card span", { hasText: "40pt あげた" }).waitFor();
+    assert.match(await dialogOf(a).locator(".loans-summary").innerText(), /貸し借りはありません/);
+    assert.equal(wallet("loan-a"), 470);
+    assert.equal(wallet("loan-b"), 490);
+    // Big amount on the card. B has seen the earlier lines (既読 sits under the last of them), but
+    // not this one yet.
+    assert.equal(await dialogOf(a).locator(".talk-row.is-give .card-amount").innerText(), "40pt");
+    assert.equal(await dialogOf(a).locator(".talk-read").count(), 1);
+    assert.equal(await dialogOf(a).locator(".talk-row.is-give .talk-read").count(), 0);
+    await a.evaluate(() => window.PointLoans.close());
+    // B collects it once, opens the talk, and the 既読 mark is written once.
+    await b.evaluate(() => window.PointLoans.collect());
+    await b.evaluate(() => window.PointLoans.claim("loan-a__loan-b"));
+    assert.equal(wallet("loan-b"), 530);
+    const writes0 = await b.evaluate(() => window.__plainWrites);
+    await b.evaluate(() => window.PointLoans.person("loan-a", "loan-a"));
+    await dialogOf(b).locator(".talk-card span", { hasText: "40pt もらった" }).waitFor();
+    for (let i = 0; i < 40 && !docs.get("loan-a__loan-b".replace(/^/, "pointLoans/"))?.read?.["loan-b"]; i++) await b.waitForTimeout(100);
+    const pair = docs.get("pointLoans/loan-a__loan-b");
+    assert.equal(pair.read["loan-b"], pair.entries.filter((e) => e.from === "loan-a").at(-1).at);
+    assert.equal(wallet("loan-b"), 530);
+    assert.equal(await b.evaluate(() => window.__plainWrites), writes0 + 1);
+    // Looking again writes nothing more, and nothing of what was sent is lost.
+    await b.evaluate(() => window.PointLoans.person("loan-a", "loan-a"));
+    await dialogOf(b).locator(".talk-card span", { hasText: "40pt もらった" }).waitFor();
+    await b.waitForTimeout(300);
+    assert.equal(await b.evaluate(() => window.__plainWrites), writes0 + 1);
+    assert.equal(pair.entries.length, docs.get("pointLoans/loan-a__loan-b").entries.length);
+    // A opens the talk again: 既読 under the give, but not under what is after what B has seen.
+    await b.evaluate(() => window.PointLoans.close());
+    await a.evaluate(() => window.PointLoans.person("loan-b", "loan-b"));
+    await dialogOf(a).locator(".talk-row.is-give .talk-read", { hasText: "既読" }).waitFor();
+    assert.equal(await dialogOf(a).locator(".talk-read").count(), 1);
+    // A asks B for 40 (もらう); B answers あげる.
+    await dialogOf(a).getByRole("button", { name: "ポイント" }).click();
+    await dialogOf(a).getByRole("tab", { name: "もらう" }).click();
+    await dialogOf(a).locator("[data-loan-amount]").fill("40");
+    await dialogOf(a).getByRole("button", { name: "もらいたいと頼む" }).click();
+    await dialogOf(a).locator(".talk-card span", { hasText: "40pt もらいたいと頼んだ・返事待ち" }).waitFor();
+    await dialogOf(a).locator(".loans-request.is-mine").getByRole("button", { name: "取り消す" }).waitFor();
+    await b.evaluate(() => window.PointLoans.person("loan-a", "loan-a"));
+    await dialogOf(b).locator(".talk-card span", { hasText: "40pt もらいたいと頼まれた・返事待ち" }).waitFor();
+    assert.equal(await dialogOf(b).locator(".loans-request").getByRole("button", { name: "断る" }).count(), 1);
+    await dialogOf(b).locator(".loans-request").getByRole("button", { name: "あげる" }).click();
+    await dialogOf(b).locator(".talk-card span", { hasText: "40pt もらいたいと頼まれた・済み" }).waitFor();
+    assert.equal(wallet("loan-b"), 490);
+    // A is asked nothing more, and 40pt arrive in A's wallet once.
+    await a.evaluate(() => window.PointLoans.collect());
+    await a.evaluate(() => window.PointLoans.claim("loan-a__loan-b"));
+    assert.equal(wallet("loan-a"), 510);
+    // The same request cannot be answered twice (B's screen is stale).
+    const stale = docs.get("pointLoans/loan-a__loan-b").entries.find((e) => e.kind === "ask-give");
+    assert.equal(await b.evaluate((id) => window.PointLoans.send("loan-a", "loan-a", 40, "give", "", id).then(() => "paid", (e) => e.message), stale.id), "この頼みはもう終わっています。");
+    assert.equal(wallet("loan-b"), 490);
+    await a.evaluate(() => window.PointLoans.close());
+    await b.evaluate(() => window.PointLoans.close());
+    // Nothing is given to, or asked of, the casino or the 運営.
+    for (const [kind, other] of [["give", "CASINO"], ["give", "ADMIN"]])
+      assert.match(await a.evaluate(([k, o]) => window.PointLoans.send(o, o, 5, k).then(() => "ok", (e) => e.message), [kind, other]), /あげたりもらったり/);
+    assert.match(await a.evaluate(() => window.PointLoans.ask("ADMIN", "運営", 5, "ask-give").then(() => "ok", (e) => e.message)), /あげたりもらったり/);
+    assert.equal(wallet("loan-a"), 510);
 
     // Points from the 運営: they reach B's wallet once, and B's talk with 運営 shows them, with
     // nothing to type (nobody reads it) and nothing to lend.

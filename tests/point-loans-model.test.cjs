@@ -108,3 +108,63 @@ test("the 運営 can take points back: a charge is applied by the player's devic
   assert.equal(L.net(r.entries, "b"), 0);
   assert.throws(() => L.gift(null, { id: "x", from: "ADMIN", to: "b", amount: 5, at, kind: "lend" }), /不明/);
 });
+
+test("giving (あげる) moves points owed by nobody, and is collected by the receiver once", () => {
+  let r = L.send(null, { id: "g1", from: "a", to: "b", amount: 40, kind: "give", note: "お祝い", at });
+  assert.equal(L.net(r.entries, "a"), 0);
+  assert.equal(L.net(r.entries, "b"), 0);
+  assert.equal(L.owedBy(r.entries, "b"), 0);
+  assert.equal(r.entries[0].due, undefined);
+  assert.deepEqual(L.unclaimed(r, "b").map((e) => e.id), ["g1"]);
+  assert.equal(L.unclaimed(r, "a").length, 0);
+  assert.equal(L.change(r.entries[0]), 40);
+  r.claimed = { g1: 5 };
+  assert.equal(L.unclaimed(r, "b").length, 0);
+  // A give never counts as a repayment of a debt, and no interest is added to it.
+  r = L.send(L.send(null, { id: "1", from: "a", to: "b", amount: 50, kind: "lend", at }), { id: "g", from: "b", to: "a", amount: 10, kind: "give", at, rate: 0.3 });
+  assert.equal(L.owedBy(r.entries, "b"), 50);
+  assert.equal(r.entries[1].due, undefined);
+});
+
+test("asking to be given (もらう) is answered by a give of exactly that amount, or declined", () => {
+  let r = L.ask(null, { id: "q", from: "b", to: "a", amount: 30, kind: "ask-give", at });
+  assert.deepEqual(L.openFor(r, "a").map((e) => e.id), ["q"]);
+  assert.throws(() => L.ask(r, { id: "q2", from: "b", to: "a", amount: 5, kind: "ask-give", at }), /返事待ち/);
+  // The request has to be answered by the right move, between the same two, for the same amount.
+  assert.throws(() => L.send(r, { id: "x", from: "a", to: "b", amount: 1, kind: "give", at, request: "q" }), /応えられません/);
+  assert.throws(() => L.send(r, { id: "x", from: "a", to: "b", amount: 30, kind: "lend", at, request: "q" }), /応えられません/);
+  assert.throws(() => L.send(r, { id: "x", from: "b", to: "a", amount: 30, kind: "give", at, request: "q" }), /応えられません/);
+  assert.throws(() => L.send(L.send(null, { id: "1", from: "b", to: "a", amount: 30, kind: "lend", at }), { id: "x", from: "a", to: "b", amount: 30, kind: "repay", at, request: "none" }), /もう終わって/);
+  assert.equal(r.entries[0].status, "open");
+  r = L.send(r, { id: "g", from: "a", to: "b", amount: 30, kind: "give", at: 9, request: "q" });
+  assert.equal(r.entries[0].status, "done");
+  assert.equal(L.openFor(r, "a").length, 0);
+  assert.throws(() => L.send(r, { id: "g2", from: "a", to: "b", amount: 30, kind: "give", at, request: "q" }), /もう終わって/);
+  const declined = L.close(L.ask(null, { id: "q", from: "b", to: "a", amount: 30, kind: "ask-give", at }), { id: "q", by: "a", at: 5 });
+  assert.equal(declined.entries[0].status, "declined");
+  // The older request kinds are still answered only by their own move.
+  const lendAsk = L.ask(null, { id: "l", from: "b", to: "a", amount: 30, kind: "ask-lend", at });
+  assert.throws(() => L.send(lendAsk, { id: "x", from: "a", to: "b", amount: 30, kind: "give", at, request: "l" }), /応えられません/);
+});
+
+test("a full record never drops a give that has not been collected, and keeps `claimed` short", () => {
+  let r = L.send(null, { id: "first-give", from: "a", to: "b", amount: 7, kind: "give", at });
+  for (let i = 0; i < L.MAX_ENTRIES + 20; i++) r = L.send(r, { id: "g" + i, from: "a", to: "b", amount: 1, kind: "give", at });
+  assert.equal(r.entries.length, L.MAX_ENTRIES);
+  // The record stays within its limit. (400 gives all waiting to be collected is not a real case; the
+  // next lines are: collected gives go first, then `claimed` is pruned to the entries that remain.)
+  r = L.send(L.send(null, { id: "lend", from: "a", to: "b", amount: 90, kind: "lend", at }), { id: "x", from: "a", to: "b", amount: 1, kind: "give", at });
+  r.claimed = { lend: 1, x: 1, gone: 1 };
+  r = L.say(r, { id: "m", from: "a", to: "b", text: "hi", at });
+  assert.deepEqual(Object.keys(r.claimed).sort(), ["lend", "x"]);
+  // Collected gives go before debts and uncollected gives when the record is over its limit.
+  let full = L.send(null, { id: "debt", from: "a", to: "b", amount: 90, kind: "lend", at });
+  full = L.send(full, { id: "old", from: "a", to: "b", amount: 5, kind: "give", at });
+  full.claimed = { old: 1 };
+  for (let i = 0; i < L.MAX_ENTRIES - 2; i++) full = L.send(full, { id: "n" + i, from: "a", to: "b", amount: 1, kind: "give", at });
+  full = L.send(full, { id: "last", from: "a", to: "b", amount: 1, kind: "give", at });
+  assert.equal(full.entries.length, L.MAX_ENTRIES);
+  assert.ok(full.entries.some((e) => e.id === "debt"));
+  assert.ok(!full.entries.some((e) => e.id === "old"));
+  assert.ok(full.entries.some((e) => e.id === "last"));
+});

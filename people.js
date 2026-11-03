@@ -184,7 +184,9 @@
       for (const [text, primary, mode] of [
         ["トーク", true, null],
         ["貸す", false, "lend"],
+        ["あげる", false, "give"],
         ["借りたいと頼む", false, "borrow"],
+        ["もらいたいと頼む", false, "ask-give"],
       ]) {
         const b = document.createElement("button");
         b.type = "button";
