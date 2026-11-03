@@ -36,7 +36,9 @@ test("lines without a year or 「」 still give the whole question; empty entrie
     ["whole"],
   );
   assert.deepEqual(t.questions({ num: 2, word: "", meanings: [{ id: "2-0", text: "1192" }] }), []);
-  assert.deepEqual(t.parseLine("１８６８年　明治維新"), { year: "1868", body: "明治維新", terms: [] });
+  const line = t.parseLine("１８６８年　明治維新");
+  assert.deepEqual([line.year, line.body, line.terms, line.when.kind, line.when.label, line.when.value], ["1868", "明治維新", [], "year", "1868年", 1868]);
+  assert.equal(t.parseLine("明治維新").when, null);
   assert.deepEqual(t.parseLine("57 「漢委奴国王」の金印").year, "57");
 });
 
@@ -117,4 +119,44 @@ test("a 「」 card asks the line with the term blanked; the term is the answer"
       [undefined, "蘇我馬子　大臣の官職につき（＿＿）の官職であった物部守屋を滅ぼした人物", "大連"],
     ],
   );
+});
+
+test("a line can start with a century or an era, and each gives its own question", () => {
+  const c = t.parseLine("12世紀 「鎌倉幕府」が成立");
+  assert.deepEqual([c.year, c.when.kind, c.when.label, c.when.answer, c.when.value, c.body], ["", "century", "12世紀", "12", 1101, "「鎌倉幕府」が成立"]);
+  const bc = t.parseLine("紀元前３世紀 ローマの拡大");
+  assert.deepEqual([bc.when.label, bc.when.answer, bc.when.value, bc.when.prefix], ["紀元前3世紀", "3", -299, "紀元前"]);
+  assert.equal(t.parseLine("前3世紀 x").when.label, "紀元前3世紀");
+  const e = t.parseLine("平安時代 摂関政治が行われた");
+  assert.deepEqual([e.when.kind, e.when.label, e.when.value, e.body], ["era", "平安時代", 794, "摂関政治が行われた"]);
+  // Only an era written with 時代 counts; a line that happens to start with an era's name does not.
+  assert.equal(t.parseLine("明治維新で近代化が進んだ").when, null);
+  assert.equal(t.parseLine("明治時代 文明開化").when.label, "明治時代");
+  assert.equal(t.parseLine("0世紀 x").when, null);
+  // A century is asked as its number (typed, like a year); an era is a card (not typed).
+  const qs = t.questions({ num: 1, word: "源頼朝", meanings: [{ id: "1-0", text: "12世紀 「鎌倉幕府」を開いた" }, { id: "1-1", text: "鎌倉時代 初代将軍" }] });
+  assert.deepEqual(qs.map((q) => [q.key, q.kind, q.input]), [["w:1-0", "whole", false], ["c:1-0", "year", true], ["t:1-0:0", "blank", false], ["w:1-1", "whole", false], ["e:1-1", "era", false]]);
+  assert.equal(qs[0].prompt, "12世紀 鎌倉幕府を開いた");
+  assert.equal(qs[1].prompt, "源頼朝：鎌倉幕府を開いた（何世紀？）");
+  assert.deepEqual([qs[1].answer, qs[1].unit, qs[1].prefix], ["12", "世紀", ""]);
+  assert.equal(qs[2].prompt, "源頼朝　12世紀　（＿＿）を開いた");
+  assert.equal(qs[4].prompt, "源頼朝：初代将軍（何時代？）");
+  assert.equal(qs[4].answer, "鎌倉時代");
+  assert.equal(t.questions({ num: 2, word: "x", meanings: [{ id: "2-0", text: "紀元前3世紀 ローマ" }] })[1].prompt, "x：ローマ（紀元前何世紀？）");
+  assert.equal(t.correctYear("１２", qs[1].answer), true);
+  assert.equal(t.correctYear("13", qs[1].answer), false);
+});
+
+test("the box for a 'when' accepts a year, a century or an era and gives the text a line starts with", () => {
+  const w = t.whenText;
+  assert.deepEqual(["1582", "１５８２年", "12世紀", "１２ 世紀", "前3世紀", "紀元前3世紀", "平安", "平安時代", "安土桃山", ""].map(w), ["1582", "1582", "12世紀", "12世紀", "紀元前3世紀", "紀元前3世紀", "平安時代", "平安時代", "安土桃山時代", ""]);
+  assert.deepEqual(["abc", "12世", "13世紀と", "0世紀", "時代", "平安時代の"].map(w), [null, null, null, null, null, null]);
+});
+
+test("a century or an era stays whole when the question is shown", () => {
+  const keep = (text) => t.pieces(text).filter((p) => p.keep).map((p) => p.text);
+  assert.deepEqual(keep("源頼朝：鎌倉幕府を開いた（何世紀？）"), ["源頼朝", "（何世紀？）"]);
+  assert.deepEqual(keep("源頼朝　12世紀　（＿＿）を開いた"), ["源頼朝", "12世紀", "（＿＿）"]);
+  assert.deepEqual(keep("x：ローマ（紀元前何世紀？）"), ["x", "（紀元前何世紀？）"]);
+  assert.ok(keep("鎌倉時代 初代将軍").includes("鎌倉時代"));
 });

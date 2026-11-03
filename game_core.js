@@ -235,7 +235,7 @@
                         // Japanese) follows it too. A 「」 card in a Japanese line (the line with the term
                         // blanked → the term) and a year question (typed) always show the question first.
                         var whole = q.kind === 'whole', card = q.front !== undefined;
-                        var item = { num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.front : q.prompt, ja: whole ? q.prompt : card ? q.back : q.answer, questionFirst: !whole && !card, reverse: card ? q.reverse : undefined, head: w.word, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input };
+                        var item = { num: w.num, shownNo: window.VocabOrder ? window.VocabOrder.no(w) : w.num, en: whole ? q.answer : card ? q.front : q.prompt, ja: whole ? q.prompt : card ? q.back : q.answer, questionFirst: !whole && !card, reverse: card ? q.reverse : undefined, head: w.word, meaningId: q.mid, meaningIndex: q.index, partOfSpeech: '', termKey: q.key, termInput: q.input, termUnit: q.unit || '', termPrefix: q.prefix || '' };
                         pool.push(item);
                         hiddenTwin(item, q);
                     });

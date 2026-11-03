@@ -2486,3 +2486,27 @@ Tests:
 Tests:
 
 - `tests/vocab-reorder.smoke.cjs`: after a move, a word added with its own number removes the undo button and keeps its number.
+
+## 用語・年号モード: centuries and eras at the start of a line (10.22.69.00)
+
+**What the user saw.** A line of a word could start with a year only (1192). History books also use centuries (12世紀, 紀元前3世紀) and eras (平安時代), which could not be asked or put in order.
+
+**Now.** A line may start with one of three "whens"; `TermQuestions.parseLine` returns it as `when` (`year` stays as before, for a year only):
+
+- **Year.** As before: 1582, 1582年, １５８２. A year question (typed digits) and 年代並べ替え.
+- **Century.** `12世紀`, `紀元前3世紀` (also `前3世紀`), one or two digits. A question 「（何世紀？）」/「（紀元前何世紀？）」 answered by typing the number (key `c:<meaning id>`, kind `year`, so the typed answer, the word battle and the flashcard box work as for a year). The flashcard box says 「世紀を入力」 and takes two digits; a wrong answer says 「正解は 12 世紀」.
+- **Era.** One of 縄文・弥生・古墳・飛鳥・奈良・平安・鎌倉・室町・安土桃山・江戸・明治・大正・昭和・平成・令和 followed by `時代`. A card 「（何時代？）」 → the era (key `e:<meaning id>`, kind `era`, rated by the player, not typed; in the word battle it is an ordinary question). The 時代 is required, so a line that only starts with an era's name (明治維新…) is not taken for an era.
+- **Questions.** The whole-entry card shows the line with its "when" in front; a 「」 question shows it after the headword; the question text keeps the "when" and the 「（何…？）」 in one piece.
+- **年代並べ替え.** Events are the lines with a "when". A round uses one kind only (years with years, centuries with centuries, eras with eras: a century and a year inside it cannot be told apart). A century or an era is ordered by when it began; a kind needs three different values to be played. The message when nothing can be played now says 「年・世紀・時代の入った説明が足りません」.
+- **Word list.** The "when" carries the same light marker as a year, coloured by its question's results (keys `y:`, `c:`, `e:`).
+- **Edit box.** The box of a line in the word editor takes 1582, 12世紀 or 平安時代 (「平安」 is said back as 平安時代, 「前3世紀」 as 紀元前3世紀) when it is left; anything else is marked red and the save is refused before anything is changed. It no longer cuts the text to digits as it is typed.
+- **Add form.** The hint says a year, a century or an era can start a line; the cards it makes show before the word is added. (Write it at the start of the line, as for a year.)
+
+Stored text is unchanged: the "when" is the start of the line, as a year always was, so old books read the same.
+
+Tests:
+
+- `tests/term-questions.test.cjs`: parsing a year, a century, a BC century, an era, a name that only starts like an era, "0世紀"; the questions and their keys; typed century answers; the box text (`whenText`); the pieces kept whole.
+- `tests/term-order.test.cjs`: events of the three kinds with their start values and keys; one kind per round; only kinds with three different values are played; a BC century comes before the others.
+- `tests/term-when.smoke.cjs`: the add form's hint and cards; the century card typed (box label, two digits, the right answer shown) and an era card (no box); the word list's markers; the edit box saying 平安 as 平安時代, refusing "abc" without changing anything.
+- `tests/term-mode.smoke.cjs`: the edit box takes 「１５８３年」 and leaves it as 1583 on leaving it.

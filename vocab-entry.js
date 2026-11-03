@@ -302,13 +302,13 @@
       '<header><div><h2 id="vocabEntryTitle">単語を追加</h2><p class="vocab-entry-book"></p></div><button type="button" data-entry-close aria-label="単語の追加を閉じる">×</button></header><form><label for="vocabEntryWord">単語・用語・問題文</label><input id="vocabEntryWord" required autocomplete="off" placeholder="例：follow ／ あはれなり"><p class="vocab-entry-dup" role="status"></p><div class="vocab-entry-meanings"></div><button type="button" class="vocab-entry-add-meaning">＋ 意味を追加</button><details><summary>サブ情報・番号・単元を設定</summary><label for="vocabEntrySub">サブ情報</label><textarea id="vocabEntrySub" rows="3" placeholder="用法・例文・関連知識など（任意）"></textarea><label for="vocabEntryUnit">単元</label><input id="vocabEntryUnit" list="vocabEntryUnits" autocomplete="off" maxlength="60" placeholder="例：第1章 ／ 鎌倉時代（任意）"><datalist id="vocabEntryUnits"></datalist><label for="vocabEntryNumber">単語番号</label><input id="vocabEntryNumber" type="number" min="1" step="1"><label class="vocab-entry-insert"><input type="checkbox" id="vocabEntryInsert">使用中の番号なら差し込む（それ以降の番号を1つずつずらす）</label><p class="library-editor-hint">通常は末尾の次の番号を自動で使います。2と3の間に入れるなら「3」にして差し込みます。理解度などの記録は単語ごとに保たれます。</p></details><p class="vocab-entry-status" role="status"></p><p class="library-editor-error" role="alert"></p><label class="vocab-entry-continue"><input type="checkbox" id="vocabEntryContinue">続けて追加する</label><div class="library-editor-actions"><button type="button" data-entry-close>キャンセル</button><button type="submit" class="library-editor-primary">追加する</button></div></form>';
     d.querySelector(".vocab-entry-book").textContent =
       metadata(book)?.name || "単語帳";
-    // 用語・年号モード: each line can start with a year (digits only) and mark terms with 「」.
+    // 用語・年号モード: each line can start with a year, a century or an era and mark terms with 「」.
     const term = !!root.TermProgress?.enabled(book);
     d.classList.toggle("is-term-mode", term);
     if (term) {
       const hint = el(
         "p",
-        "「」で囲んだ所が問題になります。英語の行の下に日本語を書くと、英語↔日本語のカードに。行の頭に年号を書くと年号の問題も出ます。できるカードは下に出ます。",
+        "「」で囲んだ所が問題になります。英語の行の下に日本語を書くと、英語↔日本語のカードに。行の頭に年（1582）・世紀（12世紀）・時代（平安時代）を書くと、その問題も出ます。できるカードは下に出ます。",
         "library-editor-hint vocab-entry-term-hint",
       );
       d.querySelector(".vocab-entry-meanings").before(hint);

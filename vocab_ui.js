@@ -907,12 +907,18 @@
             if (termMode) {
                 var parsed = window.TermQuestions.parseLine(m.text), textInput = itemRow.querySelector('textarea');
                 var year = document.createElement('input');
-                year.type = 'text'; year.inputMode = 'numeric'; year.pattern = '[0-9]*'; year.maxLength = 4;
-                year.className = 'search-input inline-year-input'; year.placeholder = '年号'; year.autocomplete = 'off';
-                year.setAttribute('aria-label', '説明' + (index + 1) + 'の年号');
-                year.value = parsed.year;
-                year.oninput = function() { year.value = window.TermQuestions.normalizeYear(year.value); };
-                if (parsed.year) textInput.value = parsed.body;
+                year.type = 'text'; year.maxLength = 12;
+                year.className = 'search-input inline-year-input'; year.placeholder = '年・世紀・時代'; year.autocomplete = 'off';
+                year.title = '1582 / 12世紀 / 平安時代 のように入れます';
+                year.setAttribute('aria-label', '説明' + (index + 1) + 'の年・世紀・時代');
+                year.value = parsed.when ? (parsed.when.kind === 'year' ? parsed.year : parsed.when.label) : '';
+                // Said back in the form a line starts with once the box is left ("平安" → "平安時代").
+                year.onchange = function() {
+                    var text = window.TermQuestions.whenText(year.value);
+                    year.classList.toggle('is-invalid', text === null);
+                    if (text !== null) year.value = text;
+                };
+                if (parsed.when) textInput.value = parsed.body;
                 textInput.setAttribute('aria-label', '説明' + (index + 1));
                 itemRow.insertBefore(year, textInput);
                 itemRow.classList.add('is-term-row');
@@ -954,6 +960,13 @@
         var wordInput = document.getElementById('inlineEditWordInput-' + wordNum);
         var subInput = document.getElementById('inlineEditSubInput-' + wordNum);
         var mInputs = document.querySelectorAll('.inline-m-input-' + wordNum);
+        // The boxes for a year, a century or an era are checked before anything is changed.
+        var badWhen = null;
+        mInputs.forEach(function(inp) {
+            var box = inp.parentElement.querySelector('.inline-year-input');
+            if (!badWhen && box && window.TermQuestions && window.TermQuestions.whenText(box.value) === null) badWhen = box;
+        });
+        if (badWhen) { badWhen.classList.add('is-invalid'); badWhen.focus(); alert('年・世紀・時代は「1582」「12世紀」「平安時代」の形で入れてください。'); return; }
         if (wordInput) vocabList[wIdx].word = wordInput.value.trim();
         if (subInput) vocabList[wIdx].sub = subInput.value.trim();
         var linksHolder = document.getElementById('inlineEditLinks-' + wordNum);
@@ -981,7 +994,8 @@
             var txt = window.cleanMeaningText(inp.value);
             // The year box goes back at the start of the line, as in the add form.
             var yearBox = inp.parentElement.querySelector('.inline-year-input');
-            var yearValue = yearBox && window.TermQuestions ? window.TermQuestions.normalizeYear(yearBox.value) : '';
+            var yearValue = yearBox && window.TermQuestions ? window.TermQuestions.whenText(yearBox.value) : '';
+            if (yearValue === null) yearValue = '';
             if (txt && yearValue) txt = yearValue + ' ' + txt;
             if (txt) {
                 var oldM = vocabList[wIdx].meanings[idx];
@@ -1178,7 +1192,9 @@
                 return '<mark class="term-mark' + (tone ? ' is-rated' : '') + '"' + (tone ? ' style="--mark:' + tone.join(',') + '"' : '') + ' data-term-history="' + history + '">' + text + '</mark>';
             };
             var term = -1;
-            return m.text.replace(/^(\s*)([0-9０-９]{1,4})(\s*年?)/, function(all, lead, year, rest) { return lead + mark('y:' + mid, year) + rest; })
+            var whenKey = function(raw) { return (/世紀$/.test(raw) ? 'c:' : /時代$/.test(raw) ? 'e:' : 'y:') + mid; };
+            var found = window.TermQuestions.splitWhen(m.text);
+            return (found ? found.lead + mark(whenKey(found.raw), found.raw) + found.rest + m.text.slice(found.length) : m.text)
                 .replace(/「([^「」]+)」/g, function(all, text) { term++; return mark('t:' + mid + ':' + term, text); });
         }
         // Main meanings first; seldom-used ones (minor) under them, smaller, each still rated on its own.

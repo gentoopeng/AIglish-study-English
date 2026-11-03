@@ -186,7 +186,9 @@ const { chromium } = require("playwright"),
     assert.equal(await page.locator(`.inline-m-input-${nobunaga}`).first().inputValue(), "「本能寺の変」で死亡したとされる人物");
     if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
     await years.first().fill("");
-    await years.first().pressSequentially("１５a83");
+    // The box takes a year, a century or an era; leaving it says a year back as digits only.
+    await years.first().pressSequentially("１５８３年");
+    await years.first().blur();
     assert.equal(await years.first().inputValue(), "1583");
     await page.locator(`#wordCardForm-${nobunaga}`).getByRole("button", { name: "保存する", exact: true }).click();
     assert.equal(await page.locator("dialog.app-alert p").innerText(), "単語情報を更新しました。");

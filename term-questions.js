@@ -1,18 +1,28 @@
 // 用語・年号モード: several questions from one entry.
 //
-// An entry is a headword (織田信長) and description lines. A line may start with a year
-// ("1582 「本能寺の変」で死亡したとされる人物") and may mark terms with 「」. From each entry:
+// An entry is a headword (織田信長) and description lines. A line may start with a "when" (a year,
+// a century or an era: "1582 「本能寺の変」で死亡したとされる人物", "12世紀 …", "平安時代 …") and may
+// mark terms with 「」. From each entry:
 //   whole  — one line shown, answer the headword (one question per line, like one card per
 //            meaning in the normal mode)
-//   year   — a line without its year, answer the year (typed, digits only)
+//   year   — a line without its year, answer the year (typed, digits only); with a century
+//            ("12世紀", "紀元前3世紀") the same, answering the number of the century
+//   era    — a line without its era ("平安時代"), answer the era (a card, rated by the player)
 //   blank  — a line with one 「」 term blanked, answer that term (one question per term)
 // The text is stored as is (the year is just the start of the line), so no save path can drop it.
 // Per-question results live in their own store, so a word's normal understanding record (which
 // whole-word saves replace) is never asked to hold extra keys.
 (function (root) {
   "use strict";
-  const YEAR = /^\s*([0-9０-９]{1,4})\s*年?\s*/,
-    TERM = /「([^「」]+)」/g,
+  // Eras of Japanese history with the year each began (for putting them in order).
+  const ERAS = [["縄文", -14000], ["弥生", -1000], ["古墳", 250], ["飛鳥", 592], ["奈良", 710], ["平安", 794], ["鎌倉", 1185], ["室町", 1336], ["安土桃山", 1573], ["江戸", 1603], ["明治", 1868], ["大正", 1912], ["昭和", 1926], ["平成", 1989], ["令和", 2019]];
+  const ERA_START = new Map(ERAS);
+  // A line starts with a "when": a century (12世紀, 紀元前3世紀), an era (平安時代: the 時代 is
+  // needed, so a line that only starts with 明治維新 is not taken for one) or a year (1582, 1582年).
+  const WHEN_LEAD = new RegExp(
+    "^(\\s*)(?:((?:紀元前|前)?\\s*[0-9０-９]{1,2}\\s*世紀|(?:" + ERAS.map((e) => e[0]).join("|") + ")時代)(\\s*)|([0-9０-９]{1,4})(\\s*年?\\s*))",
+  );
+  const TERM = /「([^「」]+)」/g,
     BLANK = "（＿＿）",
     HISTORY = 20;
   function halfWidth(text) {
@@ -28,15 +38,52 @@
   function plain(text) {
     return String(text || "").replace(TERM, "$1");
   }
+  // What a "when" in the text is: { kind: "year" | "century" | "era", label, value, answer, ... }.
+  // `value` puts events of the same kind in order (the start year of a century or an era).
+  function describe(raw) {
+    const text = halfWidth(raw).replace(/\s+/g, "");
+    if (/世紀$/.test(text)) {
+      const bc = /^(紀元前|前)/.test(text),
+        n = Number(text.replace(/[^0-9]/g, ""));
+      if (!(n >= 1)) return null;
+      return { kind: "century", label: (bc ? "紀元前" : "") + n + "世紀", value: bc ? 1 - n * 100 : (n - 1) * 100 + 1, answer: String(n), unit: "世紀", prefix: bc ? "紀元前" : "", ask: bc ? "紀元前何世紀" : "何世紀" };
+    }
+    if (/時代$/.test(text)) {
+      const name = text.slice(0, -2);
+      return ERA_START.has(name) ? { kind: "era", label: name + "時代", value: ERA_START.get(name), answer: name + "時代", unit: "", prefix: "", ask: "何時代" } : null;
+    }
+    const year = normalizeYear(text);
+    return year === "" ? null : { kind: "year", label: year + "年", value: Number(year), answer: year, unit: "年", prefix: "", ask: "何年" };
+  }
+  // The "when" at the start of a line: the text around it and what it is, or null.
+  function splitWhen(text) {
+    const m = WHEN_LEAD.exec(String(text || ""));
+    if (!m) return null;
+    const raw = m[2] || m[4],
+      when = describe(raw);
+    return when ? { lead: m[1], raw, rest: m[2] ? m[3] : m[5], length: m[0].length, when } : null;
+  }
+  // What a box for the "when" accepts: "1582", "１５８２年", "12世紀", "紀元前3世紀", "平安", "平安時代".
+  // Returns the text as a line starts with it ("1582", "12世紀", "平安時代"), "" for nothing, or null
+  // when it is none of these.
+  function whenText(input) {
+    const text = halfWidth(input).replace(/\s+/g, "");
+    if (!text) return "";
+    const bare = ERA_START.has(text) ? text + "時代" : text,
+      found = splitWhen(bare);
+    if (!found || found.length !== bare.length) return null;
+    return found.when.kind === "year" ? found.when.answer : found.when.label;
+  }
   function parseLine(text) {
     const source = String(text || ""),
-      match = YEAR.exec(source),
-      year = match ? normalizeYear(match[1]) : "",
-      body = (match ? source.slice(match[0].length) : source).trim(),
+      found = splitWhen(source),
+      when = found ? found.when : null,
+      year = when?.kind === "year" ? when.answer : "",
+      body = (found ? source.slice(found.length) : source).trim(),
       terms = [];
-    for (const found of body.matchAll(TERM)) terms.push(found[1].trim());
+    for (const term of body.matchAll(TERM)) terms.push(term[1].trim());
     // Every 「」 keeps its position so question keys, blanks and list markers count the same way.
-    return { year, body, terms };
+    return { year, when, body, terms };
   }
   function blankOut(body, index) {
     let seen = -1;
@@ -67,7 +114,7 @@
         : [{ id: String(word?.num) + "-0", text: word?.meaning || "" }];
     return meanings
       .map((m, index) => ({ mid: String(m.id ?? String(word.num) + "-" + index), index, only: m.blankOnly === true, ...parseLine(m.text) }))
-      .filter((line) => line.body || line.year);
+      .filter((line) => line.body || line.when);
   }
   function questions(word) {
     const head = String(word?.word || "").trim(),
@@ -88,19 +135,32 @@
           kind: "whole",
           mid: p.mid,
           index: p.index,
-          prompt: (p.year ? p.year + "年 " : "") + plain(p.body),
+          prompt: (p.when ? p.when.label + " " : "") + plain(p.body),
           answer: head,
           input: false,
         });
-      if (p.year && p.body)
+      if (p.when && p.body && p.when.kind !== "era")
         list.push({
-          key: "y:" + p.mid,
+          key: (p.when.kind === "year" ? "y:" : "c:") + p.mid,
           kind: "year",
           mid: p.mid,
           index: p.index,
-          prompt: head + "：" + plain(p.body) + "（何年？）",
-          answer: p.year,
+          prompt: head + "：" + plain(p.body) + "（" + p.when.ask + "？）",
+          answer: p.when.answer,
+          unit: p.when.unit,
+          prefix: p.when.prefix,
           input: true,
+        });
+      // An era is a card: the line without it → the era (rated by the player, not typed).
+      if (p.when?.kind === "era" && p.body)
+        list.push({
+          key: "e:" + p.mid,
+          kind: "era",
+          mid: p.mid,
+          index: p.index,
+          prompt: head + "：" + plain(p.body) + "（何時代？）",
+          answer: p.when.label,
+          input: false,
         });
       if (ph) {
         // One card for the line. 英単語を先に: the English in full → the Japanese. 意味を先に: the
@@ -140,7 +200,7 @@
           kind: "blank",
           mid: p.mid,
           index: p.index,
-          prompt: head + (p.year ? "　" + p.year + "年" : "") + "　" + blankOut(p.body, t),
+          prompt: head + (p.when ? "　" + p.when.label : "") + "　" + blankOut(p.body, t),
           answer: term,
           // As a card too: the line with the term blanked on the front, the term behind (showing
           // the term alone first asked "大連 → ?" with nothing to answer).
@@ -179,7 +239,7 @@
   // A question's text split into pieces that must not break across lines: the headword, a year
   // ("1582年"), the blank and "（何年？）" (parts joined by a full-width space or "："), and
   // line breaks between description lines. The rest breaks normally.
-  const KEEP = /([0-9０-９]{1,4}年|（＿＿）|（何年？）)/;
+  const KEEP = new RegExp("((?:紀元前)?[0-9０-９]{1,4}(?:年|世紀)|(?:" + ERAS.map((e) => e[0]).join("|") + ")時代|（＿＿）|（(?:紀元前)?何(?:年|世紀|時代)？）)");
   function pieces(text) {
     const out = [];
     String(text || "")
@@ -195,7 +255,7 @@
       });
     return out;
   }
-  const model = { parseLine, questions, normalizeYear, correctYear, shade, record, plain, pieces, BLANK };
+  const model = { parseLine, questions, normalizeYear, correctYear, shade, record, plain, pieces, splitWhen, whenText, ERAS, BLANK };
   root.TermQuestions = model;
   if (typeof module !== "undefined") module.exports = model;
   if (!root.document) return;
@@ -306,7 +366,7 @@
       card?.classList.add("flipped");
       input.disabled = true;
       panel.dataset.result = right ? "right" : "wrong";
-      panel.querySelector("p").textContent = right ? "正解！" : "正解は " + item.ja + " 年";
+      panel.querySelector("p").textContent = right ? "正解！" : "正解は " + (item.termPrefix || "") + item.ja + " " + (item.termUnit || "年");
       root.AppSounds?.play(right ? "swipe-right" : "swipe-left");
       pending = setTimeout(
         () => {
@@ -328,7 +388,12 @@
     const visible = !!(item?.termInput && document.getElementById("activeFlashcard"));
     box.hidden = !visible;
     if (!visible) return;
-    const input = box.querySelector("input");
+    const input = box.querySelector("input"),
+      century = item.termUnit === "世紀";
+    // A century is typed as its number (one or two digits), a year as up to four.
+    box.querySelector("label").textContent = (item.termPrefix || "") + (century ? "世紀を入力" : "年号を入力");
+    input.maxLength = century ? 2 : 4;
+    input.placeholder = century ? "例：12" : "例：1582";
     input.value = "";
     input.disabled = false;
     delete box.dataset.result;
