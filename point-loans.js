@@ -178,7 +178,7 @@
       let record = L.send(snap.exists() ? snap.data() : null, { id: lend, from: CASINO, to: me, amount, kind: "lend", note, at });
       record.claimed = { ...(record.claimed || {}), [lend]: at };
       for (const e of record.entries) if (e.status === "open" && e.kind === "ask-repay" && e.from === CASINO) Object.assign(e, { status: "cancelled", resolvedAt: at });
-      record = L.ask(record, { id: newId(), from: CASINO, to: me, amount: Math.min(L.MAX_AMOUNT, L.net(record.entries, CASINO)), kind: "ask-repay", note, at });
+      record = L.ask(record, { id: newId(), from: CASINO, to: me, amount: Math.min(L.MAX_AMOUNT, L.net(record, CASINO)), kind: "ask-repay", note, at });
       tx.set(pairRef(key), remember(key, { ...record, people: [me, CASINO].sort(), names: { ...(record.names || {}), [me]: myNameNow(), [CASINO]: CASINO_NAME } }));
       tx.set(inboxRef(me), { pairs: { [key]: { other: CASINO, name: CASINO_NAME, at } } }, { merge: true });
     });
@@ -363,7 +363,7 @@
       for (const [key, pair] of rows) {
         const rec = known(key),
           name = rec?.names?.[pair.other] || pair.name || pair.other,
-          n = rec ? L.net(rec.entries, me) : null,
+          n = rec ? L.net(rec, me) : null,
           asks = rec ? L.openFor(rec, me).length : 0;
         const b = node("button", "loans-person");
         b.type = "button";
@@ -524,8 +524,8 @@
     function drawSheet() {
       if (sheet.hidden) return;
       const rec = current,
-        owe = L.owedBy(rec.entries, me),
-        lent = Math.max(0, L.net(rec.entries, me));
+        owe = L.owedBy(rec, me),
+        lent = Math.max(0, L.net(rec, me));
       sheet.replaceChildren();
       // The casino only takes repayments, the 運営 only gives; 返す needs a debt, 請求 a loan.
       // Each is a button with its icon, like the menu under a LINE talk.
@@ -659,7 +659,7 @@
     function paint() {
       if (dialog !== shown) return;
       const rec = current,
-        n = L.net(rec.entries, me);
+        n = L.net(rec, me);
       // Where we stand, in one line.
       standingBar.className = "loans-summary is-" + (n > 0 ? "lent" : n < 0 ? "owe" : "even");
       standingBar.replaceChildren(node("strong", "", fmt(Math.abs(n)) + "pt"), node("p", "", standing(n, name)));
@@ -710,7 +710,7 @@
                   }
                 : e.kind === "ask-give"
                   ? act(() => send(other, name, e.amount, "give", "", e.id))
-                  : act(() => send(other, name, Math.min(e.amount, L.owedBy(current.entries, me)), "repay", "", e.id));
+                  : act(() => send(other, name, Math.min(e.amount, L.owedBy(current, me)), "repay", "", e.id));
             row.append(yes);
             bubble.classList.add("loans-request");
             bubble.append(row);
