@@ -2725,7 +2725,7 @@ textarea.inline-m-input{min-height:36px;resize:none;overflow:hidden;line-height:
 .word-row-container .word-main-line{padding-right:56px!important;}
 .word-row-container .word-main-line:has(.vocab-word-markers.with-admin){padding-right:148px!important;}
 /* The inline editor's year box in 用語・年号モード */
-.inline-year-input{flex:0 0 72px;width:72px!important;height:36px;margin:0 6px 0 0!important;text-align:center;}
+.inline-year-input{flex:0 0 104px;width:104px!important;height:36px;margin:0 6px 0 0!important;text-align:center;}.inline-year-input.is-invalid{border-color:#ef4444!important;}
 /* Year answer panel: the same frosted dark glass as the card screen's round buttons, one row of
    a number field and an answer button (the field no longer takes the whole width). */
 .term-answer-panel{width:min(88%,360px);gap:8px;padding:12px;border:1px solid rgba(255,255,255,.22);border-radius:22px;background:rgba(15,23,42,.72);box-shadow:0 8px 28px rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}

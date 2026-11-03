@@ -1,4 +1,7 @@
 // 年代並べ替え: in a 用語・年号モード book, put three or four events in order, oldest first.
+// Events are the lines that start with a year, a century or an era; one round uses only one of
+// these (years with years, centuries with centuries, eras with eras), since a century and a year
+// inside it cannot be told apart.
 // Practice only: it reads the year questions' results to show weak events more often and
 // writes no understanding record (the year itself is asked by the year questions).
 (function (root) {
@@ -6,7 +9,9 @@
   const ROUNDS = 10,
     SIZE = 4;
   const plain = (text) => String(text || "").replace(/「([^「」]+)」/g, "$1");
-  // Every line with a year becomes an event.
+  const PREFIX = { year: "y:", century: "c:", era: "e:" };
+  // Every line with a year, a century or an era becomes an event. `year` is the number that puts
+  // events of one kind in order (the year; the year a century or an era began).
   function events(words, parse) {
     const list = [];
     for (const word of words || []) {
@@ -14,8 +19,8 @@
       (word?.meanings || []).forEach((m, index) => {
         const line = parse(m.text),
           mid = String(m.id ?? String(word.num) + "-" + index);
-        if (head && line.year && line.body)
-          list.push({ num: String(word.num), mid, year: Number(line.year), head, text: plain(line.body) });
+        if (head && line.when && line.body)
+          list.push({ num: String(word.num), mid, kind: line.when.kind, label: line.when.label, key: PREFIX[line.when.kind] + mid, year: line.when.value, head, text: plain(line.body) });
       });
     }
     return list;
@@ -23,12 +28,25 @@
   function distinctYears(list) {
     return new Set(list.map((e) => e.year)).size;
   }
+  // The events of each kind that have at least three different values to put in order.
+  function playable(list) {
+    const kinds = new Map();
+    for (const e of list || []) kinds.set(e.kind || "year", [...(kinds.get(e.kind || "year") || []), e]);
+    return [...kinds.values()].filter((group) => distinctYears(group) >= 3);
+  }
   // Picks up to four events with different years; weight favours events whose year was missed.
-  function round(list, random = Math.random, weight = () => 1) {
+  function round(all, random = Math.random, weight = () => 1) {
+    const groups = playable(all);
+    if (!groups.length) return [];
+    // With more than one kind to play, one is chosen by how many events it has.
+    let list = groups[0];
+    if (groups.length > 1) {
+      let at = random() * groups.reduce((n, g) => n + g.length, 0);
+      list = groups.find((g) => (at -= g.length) < 0) || groups[groups.length - 1];
+    }
     const size = Math.min(SIZE, distinctYears(list)),
       picked = [],
       years = new Set();
-    if (size < 3) return [];
     const keyed = list
       .map((event) => ({ event, key: -Math.log(Math.max(random(), 1e-10)) / Math.max(1, weight(event)) }))
       .sort((a, b) => a.key - b.key);
@@ -55,7 +73,7 @@
     const sorted = order.slice().sort((a, b) => a.year - b.year);
     return { right: order.every((e, i) => e === sorted[i]), marks: order.map((e, i) => e === sorted[i]), sorted };
   }
-  const model = { events, round, check, inOrder, distinctYears, ROUNDS };
+  const model = { events, round, check, inOrder, distinctYears, playable, ROUNDS };
   root.TermOrder = model;
   if (typeof module !== "undefined") module.exports = model;
   if (!root.document) return;
@@ -110,11 +128,11 @@
     try {
       const list = events(await load(book), root.TermQuestions.parseLine);
       if (view !== screen) return;
-      if (distinctYears(list) < 3) {
+      if (!playable(list).length) {
         view.dataset.state = "message";
         body().replaceChildren(
-          node("h3", "", "年号の入った説明が足りません"),
-          node("p", "review-description", "違う年号の説明が3つ以上あると並べ替えができます。"),
+          node("h3", "", "年・世紀・時代の入った説明が足りません"),
+          node("p", "review-description", "行の頭に年・世紀・時代が入った説明が、同じ種類で3つ以上（違うもの）あると並べ替えができます。"),
           button("閉じる", close, "review-primary"),
         );
         return;
@@ -122,7 +140,7 @@
       const results = root.TermProgress.read(book);
       // A missed year question makes its event come up more often.
       const weight = (e) => {
-        const status = results[e.num]?.["y:" + e.mid]?.status;
+        const status = results[e.num]?.[e.key || "y:" + e.mid]?.status;
         return status === "bad" ? 4 : status === "so" ? 2 : 1;
       };
       session = { book, list, weight, done: 0, right: 0 };
@@ -180,7 +198,7 @@
     result.sorted.forEach((item) => {
       const li = node("li"),
         row = node("div", "term-order-item " + (picked[result.sorted.indexOf(item)] === item ? "is-right" : "is-wrong"));
-      row.append(node("em", "", item.year + "年"), node("b", "", item.head), node("span", "", item.text));
+      row.append(node("em", "", item.label || item.year + "年"), node("b", "", item.head), node("span", "", item.text));
       li.append(row);
       host.append(li);
     });

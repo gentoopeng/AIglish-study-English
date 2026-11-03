@@ -36,3 +36,36 @@ test("missed years come up more often", () => {
   for (let s = 1; s < 200; s++) if (o.round(list, seeded(s), weight).some((e) => e.year === 1192)) count++;
   assert.ok(count > 190, String(count));
 });
+
+const mixed = [
+  { num: 10, word: "A", meanings: [{ id: "10-0", text: "12世紀 一つ目" }, { id: "10-1", text: "15世紀 二つ目" }, { id: "10-2", text: "紀元前3世紀 三つ目" }, { id: "10-3", text: "平安時代 時代の一" }] },
+  { num: 11, word: "B", meanings: [{ id: "11-0", text: "鎌倉時代 時代の二" }, { id: "11-1", text: "江戸時代 時代の三" }, { id: "11-2", text: "1582 年の一" }, { id: "11-3", text: "20世紀 四つ目" }] },
+];
+test("centuries and eras are events too, put in order by when they began, and a round uses one kind only", () => {
+  const list = o.events(mixed, t.parseLine);
+  assert.deepEqual(list.map((e) => [e.kind, e.label, e.year, e.key]), [
+    ["century", "12世紀", 1101, "c:10-0"],
+    ["century", "15世紀", 1401, "c:10-1"],
+    ["century", "紀元前3世紀", -299, "c:10-2"],
+    ["era", "平安時代", 794, "e:10-3"],
+    ["era", "鎌倉時代", 1185, "e:11-0"],
+    ["era", "江戸時代", 1603, "e:11-1"],
+    ["year", "1582年", 1582, "y:11-2"],
+    ["century", "20世紀", 1901, "c:11-3"],
+  ]);
+  // Centuries (4) and eras (3) can be played; the one year cannot.
+  assert.deepEqual(o.playable(list).map((g) => g[0].kind).sort(), ["century", "era"]);
+  const seen = new Set();
+  for (let s = 1; s < 80; s++) {
+    const r = o.round(list, seeded(s * 1000003));
+    assert.ok(r.length >= 3);
+    assert.equal(new Set(r.map((e) => e.kind)).size, 1);
+    seen.add(r[0].kind);
+    assert.equal(o.inOrder(r), false);
+  }
+  assert.deepEqual([...seen].sort(), ["century", "era"]);
+  // Not enough of any one kind: nothing to play, even with five events in all.
+  assert.deepEqual(o.round(list.filter((e) => e.kind !== "century" && e.year !== 794 && e.year !== 1185), seeded(1)), []);
+  const sorted = o.check(o.round(list.filter((e) => e.kind === "century"), seeded(2))).sorted;
+  assert.deepEqual(sorted.map((e) => e.label).slice(0, 2), ["紀元前3世紀", "12世紀"]);
+});
