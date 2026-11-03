@@ -2714,3 +2714,13 @@ Tests:
 - `tests/sugoroku.smoke.cjs`: 100 squares, the 確変 wheel comes up on a 確変 slot and its ×10 pays 1,000.
 
 **Also in 10.22.81.00 (a Codex finding on #356).** The betting allowance's carry replayed only the last five days, so once the 2026-11-04 start was more than five days back, a bet five days ago was charged to that day's own allowance instead of the older (six-day-old) one it could still have used first, and the carry was half what it should be. The replay now starts `REPLAY_DAYS` (10) back and the bets of the last eleven days are kept (`casino.js`). Test: `tests/casino-carryover.smoke.cjs` (six and five days ago 100 minutes each, 5,000 bet five days ago: 625 carries, not 312).
+
+## 10.22.82.00 すごろくの説明文を確変ルーレットに合わせた（Codexの指摘）
+
+**What the user saw.** The in-game rules (「?」) still said the normal wheel pays ×10 to ×0, though the top slots became 確変 slots and their multiples moved to the 確変 wheel, so the text contradicted the payouts and never said how to reach them.
+
+**Fix.** `RULES_TEXT` in `sugoroku.js` now says ×0.25 to ×0, explains the 確変 slot (about 1 spin in 10) and the 確変 wheel (×2 to ×10, or two balls in a row, then the bingo wheel if a line is made), and that START after a 100-square lap gives a ball.
+
+**Not changed (a Codex finding, kept on purpose).** The betting allowance's carry replays the last 10 days. An allowance 15 days old could in theory still have paid a bet 10 days ago; with, say, 1,440 minutes studied on three separate days and bets of 144,000pt the difference is 35pt. A perfect answer needs the whole history, so the 10-day replay is kept as a close estimate.
+
+Tests: `tests/sugoroku.smoke.cjs` opens the rules and checks they mention 確変.

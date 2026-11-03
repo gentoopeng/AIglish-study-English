@@ -200,6 +200,12 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const missed = await saved();
     assert.equal(missed.won - before.won, 200);
     assert.deepEqual((await card()).owners, beforeCard.owners);
+    // The rules sheet explains the 確変 wheel (and no longer says the normal wheel pays ×10).
+    await page.getByRole("button", { name: "すごろくビンゴの遊び方" }).click();
+    const sheet = await page.locator(".sg-sheet").innerText();
+    assert.match(sheet, /確変ルーレット/);
+    assert.doesNotMatch(sheet, /×10〜×0/);
+    await page.locator(".sg-sheet .sg-game-btn", { hasText: "閉じる" }).click();
     // Die 1 onto a normal square, the 確変 slot, and the 確変 wheel's ×10: two wheels, 1,000 back.
     const [kakuAt, tenAt] = await page.evaluate(() => [window.SugorokuModel.RULES.normal[100].findIndex((x) => x.kakuhen), window.SugorokuModel.RULES.kakuhen.findIndex((x) => x.x === 10)]);
     await fix([0, kakuAt, tenAt]);
