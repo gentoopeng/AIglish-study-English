@@ -74,9 +74,24 @@ const { chromium } = require("playwright"),
     await panel.waitFor({ state: "visible" });
     assert.equal(await panel.locator("label").innerText(), "世紀を入力");
     assert.equal(await page.locator("#termYearInput").getAttribute("maxlength"), "2");
+    // Typing: the panel moves to the top and carries the question, so the phone has no need to move
+    // the page up (and the question off the top) to keep the box above the keyboard.
+    assert.equal(await panel.evaluate((el) => el.classList.contains("is-typing")), false);
+    await page.locator("#termYearInput").focus();
+    assert.equal(await panel.evaluate((el) => el.classList.contains("is-typing")), true);
+    assert.equal(await panel.locator(".term-answer-question").innerText(), "源頼朝：鎌倉幕府を開いた（何世紀？）");
+    assert.ok(await panel.evaluate((el) => el.getBoundingClientRect().top - el.offsetParent.getBoundingClientRect().top < 40));
+    // Leaving the box does not move the panel under a finger at once (a tap on 答える must land).
+    await page.locator("#termYearInput").blur();
+    assert.equal(await panel.evaluate((el) => el.classList.contains("is-typing")), true);
+    await page.waitForFunction(() => !document.querySelector(".term-answer-panel").classList.contains("is-typing"), null, { timeout: 2000 });
+    assert.equal(await panel.locator(".term-answer-question").isHidden(), true);
+    await page.locator("#termYearInput").focus();
     await page.locator("#termYearInput").fill("13");
     await panel.locator("button").click();
     assert.equal(await panel.locator("p").textContent(), "正解は 12 世紀");
+    // The question stays with the answer shown, until the next card.
+    assert.equal(await panel.locator(".term-answer-question").isVisible(), true);
     // An era card is not typed: the box is hidden.
     await page.evaluate(() => {
       clearTimeout(0);
@@ -84,6 +99,7 @@ const { chromium } = require("playwright"),
       window.renderFlashcardDeck();
     });
     assert.equal(await panel.isVisible(), false);
+    assert.equal(await panel.evaluate((el) => el.classList.contains("is-typing")), false);
     await page.evaluate(() => window.closeFlashcard?.() || window.showVocabLibrarySelection?.());
 
     // The word list marks the century and the era, each as its own question.

@@ -3074,3 +3074,9 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 .is-casino-mode .learning-podium{flex:none;height:clamp(170px,26dvh,230px);min-height:0;}
 .casino-rank-note{display:block;margin:2px 8px 0;text-align:left;font-size:10px;line-height:1.6;letter-spacing:0;}
 .casino-rank-note[hidden]{display:none;}
+
+/* Typing a year or a century: the panel goes to the top with the question in it, so the phone does
+   not move the page up (and the question off the top) to keep the box above the keyboard. */
+.term-answer-panel.is-typing{top:10px;bottom:auto;max-height:min(72%,440px);overflow:auto;}
+.term-answer-question{margin:0;padding:2px 6px 8px;border-bottom:1px solid rgba(255,255,255,.16);max-height:30dvh;overflow:auto;color:#fff;font:600 16px/1.7 system-ui,sans-serif;text-align:center;white-space:pre-line;overflow-wrap:anywhere;}
+.term-answer-question[hidden]{display:none;}

@@ -350,9 +350,33 @@
     panel.className = "term-answer-panel";
     panel.hidden = true;
     panel.innerHTML =
-      '<label for="termYearInput">年号を入力</label><div><input id="termYearInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="例：1582"><button type="submit" data-sound="none">答える</button></div><p role="status"></p>';
+      '<section class="term-answer-question" hidden></section><label for="termYearInput">年号を入力</label><div><input id="termYearInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="例：1582"><button type="submit" data-sound="none">答える</button></div><p role="status"></p>';
     const input = panel.querySelector("input");
     input.addEventListener("input", () => (input.value = normalizeYear(input.value)));
+    // While typing, the keyboard covers the lower half of the screen and the phone moves the whole
+    // page up to keep the box in view, which pushes the question off the top. So the panel moves
+    // to the top (where no moving is needed) and carries the question with it.
+    const question = panel.querySelector(".term-answer-question");
+    let leaving = 0;
+    input.addEventListener("focus", () => {
+      clearTimeout(leaving);
+      const item = current();
+      if (item) {
+        show(question, item.en, item.head);
+        question.hidden = false;
+      }
+      panel.classList.add("is-typing");
+    });
+    // Left a moment after, so a tap on 答える (the box loses focus just before it) is not lost to
+    // the panel moving away under the finger.
+    input.addEventListener("blur", () => {
+      clearTimeout(leaving);
+      leaving = setTimeout(() => {
+        if (panel.contains(document.activeElement)) return;
+        panel.classList.remove("is-typing");
+        question.hidden = true;
+      }, 400);
+    });
     panel.addEventListener("submit", (event) => {
       event.preventDefault();
       const item = current();
@@ -387,6 +411,8 @@
     if (!box) return;
     const visible = !!(item?.termInput && document.getElementById("activeFlashcard"));
     box.hidden = !visible;
+    box.classList.remove("is-typing");
+    box.querySelector(".term-answer-question").hidden = true;
     if (!visible) return;
     const input = box.querySelector("input"),
       century = item.termUnit === "世紀";
