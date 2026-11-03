@@ -3065,15 +3065,25 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 .vocab-reorder-step { flex: none; display: grid; place-items: center; width: 40px; height: 44px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 10px; background: transparent; color: #f3e3bd; }
 .vocab-reorder-step:disabled { opacity: 0.25; }
 
-/* ランキング › カジノ: each game's totals in one row of podiums that scrolls sideways. */
-.ranking-podium-grid.is-casino-mode{display:block;overflow:auto;}
-.is-casino-mode .casino-rank-game{min-width:0;margin:0 0 14px;}
-.is-casino-mode .casino-rank-title{margin:0 0 6px 2px;font:600 14px 'Noto Serif JP','Yu Mincho',serif;letter-spacing:1px;color:#f0e2b6;}
-.is-casino-mode .casino-rank-row{display:flex;gap:10px;overflow-x:auto;padding:0 0 8px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
-.is-casino-mode .casino-rank-row>.ranking-mini-panel{flex:0 0 min(80vw,280px);height:auto;max-height:none;display:flex;flex-direction:column;scroll-snap-align:start;}
-.is-casino-mode .learning-podium{flex:none;height:clamp(170px,26dvh,230px);min-height:0;}
-.casino-rank-note{display:block;margin:2px 8px 0;text-align:left;font-size:10px;line-height:1.6;letter-spacing:0;}
+/* ランキング › カジノ: one game at a time, all its panels on one screen (three in a column like 学習;
+   すごろくビンゴ's seven in two columns). */
+.casino-game-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 8px;}
+.casino-game-switch[hidden]{display:none;}
+.casino-game-switch button{min-width:0;padding:7px 4px;border:1px solid #c4b5fd40;border-radius:12px;background:#21172f55;color:#d8cde9;font:600 11px/1.2 system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.casino-game-switch button[aria-pressed=true]{border-color:#e5cf91;background:#e5cf9126;color:#fff;}
+.casino-rank-note{display:block;margin:0 8px;padding:4px 0 0;text-align:center;font-size:9px;line-height:1.5;letter-spacing:0;}
 .casino-rank-note[hidden]{display:none;}
+.ranking-podium-grid.is-casino-wide{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));gap:6px;}
+.ranking-podium-grid.is-casino-wide .ranking-mini-panel{padding:5px 6px;}
+.ranking-podium-grid.is-casino-wide .ranking-mini-panel h3{font-size:10px;margin:0;}
+.ranking-podium-grid.is-casino-wide .ranking-mini-panel .learning-podium{gap:4px;}
+.ranking-podium-grid.is-casino-wide .ranking-mini-panel .podium-avatar,.ranking-podium-grid.is-casino-wide .ranking-mini-panel .place-1 .podium-avatar{width:22px;height:22px;font-size:12px;margin:2px 0;}
+.ranking-podium-grid.is-casino-wide .ranking-mini-panel .podium-name{font-size:8px!important;line-height:1.2!important;max-height:2.4em;margin:1px 0;}
+.ranking-podium-grid.is-casino-wide .ranking-mini-panel .learning-podium-place>strong{font-size:8px;min-height:10px;margin:0 0 2px;}
+.ranking-podium-grid.is-casino-wide .ranking-mini-panel .podium-step{height:14px;font-size:9px;padding:0;}
+.ranking-podium-grid.is-casino-wide .ranking-mini-panel .place-1 .podium-step{height:22px;font-size:11px;padding-top:2px;}
+.ranking-podium-grid.is-casino-wide .ranking-mini-panel .place-3 .podium-step{height:10px;}
+.ranking-podium-grid.is-casino-wide .ranking-mini-self{font-size:8px;line-height:11px;}
 
 /* Typing a year or a century: the panel goes to the top with the question in it, so the phone does
    not move the page up (and the question off the top) to keep the box above the keyboard. */

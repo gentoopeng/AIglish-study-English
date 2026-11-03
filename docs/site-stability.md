@@ -2573,3 +2573,20 @@ Tests:
 Tests:
 
 - `tests/term-when.smoke.cjs`: focusing the box puts the panel at the top with the question in it; leaving it moves the panel back after a moment; the question stays with a wrong answer's text; the next card starts with the panel back. (The phone's keyboard itself cannot be run in the test: what is checked is that the box and the question are above the middle of the screen, where the phone has no need to move the page.)
+
+## ランキング › カジノ: one game at a time, on one screen (10.22.74.00)
+
+**What the user saw.** 10.22.71.00 listed all six games one under the other, each in a row of panels that scrolled sideways, so the ranking had to be scrolled both ways and a game's panels were never seen together.
+
+**Now.** Choosing カジノ shows six buttons (ポーカー, ブラックジャック, ルーレット, ダイスポーカー, チンチロ, すごろくビンゴ) in two rows, and the panels of the chosen game only:
+
+- Five games: the three panels (累計賭け額, 累計得額, プレイ回数) in a column, as the three 学習 panels are, filling the screen.
+- すごろくビンゴ: the seven panels in two columns of four rows (the last row has one panel), with smaller podiums.
+- Nothing scrolls, in the list or the page, at 393×852 and at 320×668. The game chosen is kept while the screen is open; choosing a game reads nothing (every game's totals come with the one read of the update button).
+- The note under the panels is one short line; the hint about sideways scrolling is gone.
+
+Nothing else changes: how the totals are counted, stored and read is as in 10.22.71.00.
+
+Tests:
+
+- `tests/casino-ranking.smoke.cjs`: the six buttons; each game shows 3 (すごろくビンゴ 7) panels; no scroll in the list or the page and every panel inside it, for each game at 393×852 and 320×668; choosing a game does not read; the orders, own row, tampered totals and detail as before.
