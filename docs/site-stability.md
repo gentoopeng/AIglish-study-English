@@ -2414,3 +2414,13 @@ Tests:
   - 400 uncollected gives: the next give and a message are refused and the oldest stays;
   - after the oldest is collected there is room again, and it is the one that goes;
   - the older cap test now collects each loan as it comes.
+
+## Points: repayments to the casino never count as waiting to be collected (10.22.64.00)
+
+**What could happen.** Found by the Codex review of 10.22.63.00. That version refuses a new line when making room would drop points the receiver has not collected. The casino never collects what a player sends it, so on a casino record with 400 entries a player's repayment looked "waiting" for ever, and the next repayment was refused: the player could not pay down the casino debt.
+
+**Now.** Entries sent to the casino or the 運営 are never counted as waiting to be collected (neither collects anything), so a full record still takes them and drops the oldest as before. Entries sent to a player are guarded as in 10.22.63.00.
+
+Tests:
+
+- `tests/point-loans-model.test.cjs`: 401 repayments to the casino, or to the 運営, are trimmed to the limit without a refusal; the same entries sent to a player are refused.

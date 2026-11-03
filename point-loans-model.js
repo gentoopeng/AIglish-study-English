@@ -35,6 +35,10 @@
   // Entries `to`'s device applies to its wallet when it collects: money and gifts add, a charge
   // takes away.
   const arrives = (entry) => isMoney(entry) || entry.kind === "give" || entry.kind === "gift" || entry.kind === "charge";
+  // The casino and the 運営 never collect anything sent to them, so what is sent to them is never
+  // waiting to be collected.
+  const NEVER_COLLECT = ["CASINO", "ADMIN"];
+  const waiting = (entry, claimed) => arrives(entry) && !NEVER_COLLECT.includes(entry.to) && !claimed?.[entry.id];
   const change = (entry) => (entry.kind === "charge" ? -entry.amount : entry.amount);
   // > 0: the other owes `me` that much. < 0: `me` owes the other.
   function net(entries, me) {
@@ -71,7 +75,7 @@
     }
     // What is left over the limit has to go, but never points the receiver has not collected yet:
     // the sender has already paid them, so the new line is refused instead.
-    if (list.length > MAX_ENTRIES && list.slice(0, list.length - MAX_ENTRIES).some((e) => arrives(e) && !claimed?.[e.id])) throw Error("記録がいっぱいです。相手が受け取るまで、新しく送れません。");
+    if (list.length > MAX_ENTRIES && list.slice(0, list.length - MAX_ENTRIES).some((e) => waiting(e, claimed))) throw Error("記録がいっぱいです。相手が受け取るまで、新しく送れません。");
     return list.slice(-MAX_ENTRIES);
   }
   function add(record, entry) {
