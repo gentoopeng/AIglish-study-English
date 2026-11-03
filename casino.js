@@ -85,7 +85,7 @@
     flushing = (async () => {
       for (let b = batches()[0]; b; b = batches()[0]) {
         keepBatches(batches().map((x) => (x.id === b.id ? { ...x, sending: true } : x)));
-        const ok = b.delta ? await window.Poker.settle("casino:sugoroku:batch:" + b.id, b.delta, b.feed) : (b.feed > 0 && window.CasinoJackpot?.add(b.feed), true);
+        const ok = b.delta ? await window.Poker.settle("casino:sugoroku:batch:" + b.id, b.delta, b.feed, { sugoroku: window.Sugoroku?.stats?.(uid()) || null }) : (b.feed > 0 && window.CasinoJackpot?.add(b.feed), true);
         if (!ok) break;
         keepBatches(batches().filter((x) => x.id !== b.id));
         refresh();
@@ -99,6 +99,22 @@
   document.addEventListener("visibilitychange", () => document.hidden && flush());
   addEventListener("pagehide", flush);
   window.onAppLoaded?.(() => setTimeout(flush, 3000));
+  // すごろくビンゴ keeps its lifetime totals in its own save: they are published for the ranking
+  // once at the start (when they changed), without waiting for the next roll.
+  async function publishSugoroku() {
+    if (uid() === "GUEST-000" || !window.Poker?.publishStats || window.FirestoreReadGuard?.paused?.()) return;
+    const snap = window.Sugoroku?.stats?.(uid());
+    if (!snap || snap.p < 1) return;
+    const mark = "aiglish_casino_stats_pub_" + uid(),
+      sig = JSON.stringify(snap);
+    try {
+      if (localStorage.getItem(mark) === sig) return;
+      if (await window.Poker.publishStats(snap)) localStorage.setItem(mark, sig);
+    } catch (error) {
+      console.warn("[casino] stats", error);
+    }
+  }
+  window.onAppLoaded?.(() => setTimeout(publishSugoroku, 4000));
   const balance = () => (real() ? Math.max(0, (window.StudyPoints?.balance() || 0) + pending + unsent()) : practiceChips());
 
   // ---- Study first ---------------------------------------------------------------------
@@ -171,7 +187,9 @@
     addToday(delta);
     if (!real()) return setPractice(practiceChips() + delta);
     pending += delta;
-    window.Poker.settle(key, delta, feed).finally(() => {
+    // A stake (not a loss past the bet) counts for the lifetime totals; a round starts at its ":bet".
+    const stat = !counted && delta < 0 && !key.endsWith(":extra") ? { bet: -delta, play: key.endsWith(":bet") } : null;
+    window.Poker.settle(key, delta, feed, stat).finally(() => {
       pending -= delta;
       refresh();
     });

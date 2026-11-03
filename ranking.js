@@ -103,14 +103,21 @@
     window.RankingVisuals={name,avatar,appearanceOf:doc=>appearanceOf(doc)};
     let rankMode='learning';
     const labels={points:'ポイント',earned:'総獲得ポイント',time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
-    const hasRecord=(entry,key)=>entry[key]>0;
+    // The カジノ ranking: keys like "poker:b" (a game and a total of casino-stats.js).
+    const isCasino=key=>typeof key==='string'&&key.includes(':');
+    const casinoKeys=()=>window.CasinoStats?window.CasinoStats.keys():[];
+    const labelOf=key=>isCasino(key)?window.CasinoStats.label(key):labels[key];
+    const metricTitle=key=>isCasino(key)?labelOf(key).split(' ').pop():labels[key];
+    const casinoValue=(row,key)=>{const v=row[key];if(!Number.isFinite(v))return '—';const k=key.split(':')[1];return k==='b'?v.toLocaleString('ja-JP')+'pt':k==='n'?(v>0?'+':v<0?'-':'')+Math.abs(v).toLocaleString('ja-JP')+'pt':v.toLocaleString('ja-JP')+'回';};
+    // Net can be below zero: a player counts once they have played the game.
+    const hasRecord=(entry,key)=>isCasino(key)&&key.endsWith(':n')?entry[key.split(':')[0]+':p']>0:entry[key]>0;
     const duration=seconds=>{seconds=nonnegative(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;return h?h+'時間'+m+'分':m?m+'分'+s+'秒':s+'秒';};
-    const value=(row,key)=>row[key]===undefined||row[key]===null?'未取得':key==='points'||key==='earned'?nonnegative(row[key]).toLocaleString('ja-JP')+'pt':key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
+    const value=(row,key)=>isCasino(key)?casinoValue(row,key):row[key]===undefined||row[key]===null?'未取得':key==='points'||key==='earned'?nonnegative(row[key]).toLocaleString('ja-JP')+'pt':key==='time'?duration(row.time):nonnegative(row[key]).toLocaleString('ja-JP')+(key==='words'?'語':'回');
     function statsOf(doc){return window.StudyTimeModel.readStats(doc);}
     function appearanceOf(doc){let profile;try{profile=JSON.parse(doc.profileCustomizationJson||'{}');}catch{profile={};}if(!profile||typeof profile!=='object'||Array.isArray(profile))profile={};const value={nameColor:/^#[0-9a-f]{6}$/i.test(profile.nameColor||'')?profile.nameColor:'',frame:typeof profile.frame==='string'?profile.frame:''};return value.nameColor||value.frame?JSON.stringify(value):null;}
-    function row(id,doc,group){const brief=window.RankingQuery.summary(doc),learning=group!=='points',stats=learning&&!brief?statsOf(doc):{},combined=learning&&!brief?fromProfile(doc):null;return {id,name:doc.playerName||doc.name||id,avatar:typeof doc.avatar==='string'&&doc.avatar.length<=48000?doc.avatar:'',appearance:appearanceOf(doc),points:nonnegative(doc.studyPoints),earned:doc.earnedPoints===undefined||doc.earnedPoints===null?undefined:nonnegative(doc.earnedPoints),time:brief?.time??(learning?window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()):null),words:learning?(brief?.words??wordCount(combined)):null,flash:learning?(brief?.flash??flashCount(combined)):null};}
+    function row(id,doc,group){const brief=window.RankingQuery.summary(doc),learning=group!=='points'&&group!=='casino',stats=learning&&!brief?statsOf(doc):{},combined=learning&&!brief?fromProfile(doc):null;return {id,name:doc.playerName||doc.name||id,avatar:typeof doc.avatar==='string'&&doc.avatar.length<=48000?doc.avatar:'',appearance:appearanceOf(doc),points:nonnegative(doc.studyPoints),earned:doc.earnedPoints===undefined||doc.earnedPoints===null?undefined:nonnegative(doc.earnedPoints),time:brief?.time??(learning?window.StudyTimeModel.rankingSeconds(stats,'total',Date.now()):null),words:learning?(brief?.words??wordCount(combined)):null,flash:learning?(brief?.flash??flashCount(combined)):null,...(window.CasinoStats?window.CasinoStats.flat(doc.casinoStatsV1):{})};}
 
-    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record),studyPoints:window.StudyPoints?.balance()||0,earnedPoints:window.StudyPoints?.earned?.()??undefined});}
+    function self(){window.syncRankingMetrics();return row(user,{playerName:myName,avatar:localStorage.getItem('core_v4_user_avatar_'+user)||'',userStats,profileCustomizationJson:localStorage.getItem('core_v4_profile_customization_'+user),learningRankingV2Json:JSON.stringify(record),studyPoints:window.StudyPoints?.balance()||0,earnedPoints:window.StudyPoints?.earned?.()??undefined,casinoStatsV1:window.Poker?.casinoStats?.(user)});}
     function deadline(promise,ms=15000){let timer;return Promise.race([promise,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('通信が完了しませんでした')),ms))]).finally(()=>clearTimeout(timer));}
     async function detail(entry,rank,context){
         const account=owner(),dialog=showDetail(entry,rank,context);
@@ -118,23 +125,26 @@
         return dialog;
     }
     function showDetail(entry,rank,context,existing){
-        const detailKey=Object.keys(labels).find(key=>labels[key]===context)||'time';
-        const dialog=existing||window.openLibraryDialog('学習記録','<div class="ranking-detail"><div class="ranking-detail-person"></div><p class="ranking-detail-place"></p><dl></dl></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
+        const casinoKey=casinoKeys().find(key=>window.CasinoStats.label(key)===context),detailKey=casinoKey||Object.keys(labels).find(key=>labels[key]===context)||'time';
+        const dialog=existing||window.openLibraryDialog(casinoKey?'カジノの記録':'学習記録','<div class="ranking-detail"><div class="ranking-detail-person"></div><p class="ranking-detail-place"></p><dl></dl></div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
         dialog.querySelector('.library-editor-eyebrow').textContent='';
         const person=dialog.querySelector('.ranking-detail-person'),heading=document.createElement('h3');person.replaceChildren();dialog.querySelector('dl').replaceChildren();name(heading,entry.name,entry.appearance);person.append(window.RankingVisuals.avatar(entry.avatar,entry.name,entry.appearance),heading);dialog.querySelector('.ranking-detail-place').textContent=(context||labels[detailKey])+' · '+(rank?rank+'位':hasRecord(entry,detailKey)?'順位未取得':'未計測');
-        Object.keys(labels).forEach(key=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=labels[key];dd.textContent=value(entry,key);dialog.querySelector('dl').append(dt,dd);});return dialog;
+        (casinoKey?casinoKeys().filter(key=>key.split(':')[0]===casinoKey.split(':')[0]):Object.keys(labels)).forEach(key=>{const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=casinoKey?metricTitle(key):labels[key];dd.textContent=value(entry,key);dialog.querySelector('dl').append(dt,dd);});return dialog;
     }
     window.RankingVisuals.detailStudy=function(entry,rank){const known=row(entry.id,{playerName:entry.name,avatar:entry.avatar,userStats:entry.getStats?entry.getStats():{},profileCustomizationJson:entry.appearance});showDetail(known,rank,'今日の勉強時間');const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent='今日の勉強時間';dd.textContent=duration(entry.seconds);const dl=document.querySelector('.ranking-detail dl');dl.prepend(dt,dd);};
     const podiumShapes=new WeakMap();
     function sameShape(left,right){return !!left&&left.length===right.length&&left.every((row,i)=>row.length===right[i].length&&row.every((value,j)=>value===right[i][j]));}
+    // A game's panels sit in one row (scrolling sideways) under the game's name; the other modes put
+    // their panels straight into the host.
+    function panelHost(host,key){if(!isCasino(key))return host;const game=key.split(':')[0];let wrap=host.querySelector('.casino-rank-game[data-game="'+game+'"]');if(!wrap){wrap=document.createElement('div');wrap.className='casino-rank-game';wrap.dataset.game=game;const title=document.createElement('h3');title.className='casino-rank-title';title.textContent=window.CasinoStats.NAMES[game];const line=document.createElement('div');line.className='casino-rank-row';wrap.append(title,line);host.append(wrap);}return wrap.querySelector('.casino-rank-row');}
     function render(){
         const host=document.getElementById('rankingPodium');if(!host)return;ensure();const local=self(),rows=cache.filter(entry=>entry.id!==user);if(user!=='GUEST-000')rows.push(local);
-        const metrics=rankMode==='learning'?['time','words','flash']:['points','earned'];
+        const metrics=rankMode==='learning'?['time','words','flash']:rankMode==='casino'?casinoKeys():['points','earned'];
         host.querySelectorAll('[data-podium-metric]').forEach(section=>{if(!metrics.includes(section.dataset.podiumMetric))section.remove();});
-        host.classList.toggle('is-battle-mode',rankMode==='points');
+        host.classList.toggle('is-battle-mode',rankMode==='points');host.classList.toggle('is-casino-mode',rankMode==='casino');if(rankMode!=='casino')host.querySelectorAll('.casino-rank-game').forEach(wrap=>wrap.remove());const note=document.querySelector('.casino-rank-note');if(note)note.hidden=rankMode!=='casino';
         metrics.forEach(key=>{
             let section=host.querySelector('[data-podium-metric="'+key+'"]');
-            if(!section){section=document.createElement('section');section.className='ranking-mini-panel';section.dataset.podiumMetric=key;const heading=document.createElement('h3');heading.textContent=labels[key];const podium=document.createElement('div');podium.className='learning-podium';const own=document.createElement('button');own.type='button';own.className='ranking-mini-self';section.append(heading,podium,own);host.append(section);}
+            if(!section){section=document.createElement('section');section.className='ranking-mini-panel';section.dataset.podiumMetric=key;const heading=document.createElement('h3');heading.textContent=metricTitle(key);const podium=document.createElement('div');podium.className='learning-podium';const own=document.createElement('button');own.type='button';own.className='ranking-mini-self';section.append(heading,podium,own);panelHost(host,key).append(section);}
             const measured=rows.filter(entry=>hasRecord(entry,key)).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)),top=cacheReady?measured.slice(0,3):[],podium=section.querySelector('.learning-podium');
             const shape=[[user],...top.map(entry=>[entry.id,entry.name,entry.avatar,entry.appearance])];
             if(!sameShape(podiumShapes.get(section),shape)){
@@ -144,8 +154,8 @@
                     const step=document.createElement('span');step.className='podium-step';step.textContent=String(place);column.append(step);podium.append(column);
                 });
             }
-            top.forEach((entry,index)=>{const column=podium.querySelector('[data-place="'+(index+1)+'"]'),amount=column.querySelector('strong'),text=value(entry,key);if(amount.textContent!==text)amount.textContent=text;column.setAttribute('aria-label',labels[key]+' '+(index+1)+'位 '+entry.name+'の詳細');column.onclick=()=>detail(entry,index+1,labels[key]);});
-            const ownRank=cacheReady?measured.findIndex(entry=>entry.id===user)+1:0,own=section.querySelector('.ranking-mini-self'),text=(user==='GUEST-000'?'あなた（ゲスト）':'あなた · '+(ownRank?ownRank+'位':hasRecord(local,key)?'順位未取得':'未計測'))+'　'+value(local,key);if(own.textContent!==text)own.textContent=text;own.onclick=()=>detail(local,ownRank,labels[key]);
+            top.forEach((entry,index)=>{const column=podium.querySelector('[data-place="'+(index+1)+'"]'),amount=column.querySelector('strong'),text=value(entry,key);if(amount.textContent!==text)amount.textContent=text;column.setAttribute('aria-label',labelOf(key)+' '+(index+1)+'位 '+entry.name+'の詳細');column.onclick=()=>detail(entry,index+1,labelOf(key));});
+            const ownRank=cacheReady?measured.findIndex(entry=>entry.id===user)+1:0,own=section.querySelector('.ranking-mini-self'),text=(user==='GUEST-000'?'あなた（ゲスト）':'あなた · '+(ownRank?ownRank+'位':hasRecord(local,key)?'順位未取得':'未計測'))+'　'+value(local,key);if(own.textContent!==text)own.textContent=text;own.onclick=()=>detail(local,ownRank,labelOf(key));
         });
         renderPointsList(host,rows);
     }
@@ -173,7 +183,7 @@
         const task=Promise.resolve().then(async()=>{try{
             const docs=await window.RankingQuery.fetch(group,{signal:controller.signal});
             const list=docs.filter(doc=>doc.id!==id).map(doc=>row(doc.id,doc.data,group));
-            const metrics=group==='learning'?['time','words','flash']:['points'],retained=new Set(metrics.flatMap(key=>list.filter(entry=>hasRecord(entry,key)).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)).slice(0,3)));for(const entry of list)if(!retained.has(entry))entry.avatar='';
+            const metrics=group==='learning'?['time','words','flash']:group==='casino'?casinoKeys():['points'],retained=new Set(metrics.flatMap(key=>list.filter(entry=>hasRecord(entry,key)).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)).slice(0,3)));for(const entry of list)if(!retained.has(entry))entry.avatar='';
             if(active()){groupCaches.set(group,{rows:list,at:Date.now()});selectCache();message.textContent='';render();}
         }catch(error){if(owner()===id&&generation===token&&rankMode===group&&currentActiveTabId==='titles'){message.textContent=controller.signal.reason==='timeout'?'通信に時間がかかっています。更新で再試行できます。':controller.signal.aborted?'':'記録を取得できませんでした。更新で再試行できます。';render();}}
         finally{clearTimeout(timeout);endLoading();const index=window.__tabChangeHandlers?.indexOf(leave);if(index>=0)window.__tabChangeHandlers.splice(index,1);if(generation===token)button.disabled=false;if(inflight?.token===token)inflight=null;}});

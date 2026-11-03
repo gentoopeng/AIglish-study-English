@@ -583,7 +583,7 @@ test("every way of answering a word pays the same 2 points once a day; records a
 });
 test("total earned: past awards added up once from the day records, then grown with each award; poker keys kept", async () => {
   const remote = new Map([
-    ["users/a/learningPoints/main", { balance: 50, revision: 3, poker: { "casino:x:pay": 1 } }],
+    ["users/a/learningPoints/main", { balance: 50, revision: 3, poker: { "casino:x:pay": 1 }, casinoStats: { blackjack: { b: 60, n: -60, p: 1 } } }],
     ["users/a/reviewPointDays/d1", { claims: { 1: { amount: 10, source: "review" }, 2: 3 } }],
     ["users/a/reviewPointDays/d2", { claims: { 7: 10 } }],
   ]);
@@ -603,6 +603,8 @@ test("total earned: past awards added up once from the day records, then grown w
   assert.equal(remote.get("users/a").earnedPoints, 33);
   assert.equal(a.points.earned(), 33);
   assert.deepEqual(remote.get("users/a/learningPoints/main").poker, { "casino:x:pay": 1 });
+  // The casino's lifetime totals are kept by the same full write.
+  assert.deepEqual(remote.get("users/a/learningPoints/main").casinoStats, { blackjack: { b: 60, n: -60, p: 1 } });
   // Counted once: a later award adds only itself, with no second read of the records.
   a.points.award("book", "2", date);
   await a.points.flush();

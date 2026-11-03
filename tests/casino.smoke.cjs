@@ -316,6 +316,17 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const log = await page.evaluate(() => window.__wallet["users/casino-a/learningPoints/main"].casinoLog.map((e) => [e.g, e.d, e.n]));
     assert.deepEqual(log, [["blackjack", -60, 1], ["poker", 0, 2], ["sugoroku", -100, 1]]);
     assert.deepEqual(await page.evaluate(() => window.Poker.casinoLog().map((e) => e.g)), ["blackjack", "poker", "sugoroku"]);
+    // Lifetime totals per game (for the ranking): the blackjack round was one 60pt bet and no payout
+    // (net -60, one play); the poker lines settled here carried no bet; すごろくビンゴ's totals come
+    // from its own save (100 bet, nothing back, one roll). They are in the wallet document, copied
+    // to the player's own document for the ranking, and kept on this device.
+    const stats = await page.evaluate(() => window.__wallet["users/casino-a/learningPoints/main"].casinoStats);
+    assert.deepEqual(stats.blackjack, { b: 60, n: -60, p: 1 });
+    assert.deepEqual(stats.poker, { b: 0, n: 0, p: 0 });
+    assert.deepEqual([stats.sugoroku.b, stats.sugoroku.n, stats.sugoroku.p], [100, -100, 1]);
+    assert.equal(stats.roulette, undefined);
+    assert.deepEqual(await page.evaluate(() => window.__wallet["users/casino-a"].casinoStatsV1), stats);
+    assert.deepEqual(await page.evaluate(() => window.Poker.casinoStats()), stats);
     await page.evaluate(() => window.openStudyPoints());
     const casinoRows = page.locator(".study-points-dialog .points-history li.is-casino");
     assert.equal(await casinoRows.count(), 3);
@@ -348,6 +359,20 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.ok(cellAt >= 0, "the ball is on the shared card");
     assert.ok(sharedCard.people["casino-a"]);
     await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    // A poker hand with its bet counts once, even if it is settled twice (retries).
+    await page.evaluate(async () => {
+      window.Poker.settle("ROOM9:0:1", -40, undefined, { bet: 40, play: true });
+      await window.Poker.settle("ROOM9:0:1", -40, undefined, { bet: 40, play: true });
+    });
+    assert.deepEqual(await page.evaluate(() => window.__wallet["users/casino-a/learningPoints/main"].casinoStats.poker), { b: 40, n: -40, p: 1 });
+    // A group dice table is dice; the タイマン (duel) is not counted at all.
+    await page.evaluate(async () => {
+      await window.Poker.settle("casino:dice-together:ROOM:1:bet", -20, undefined, { bet: 20, play: true });
+      await window.Poker.settle("casino:duel:ROOM:1:bet", -15, undefined, { bet: 15, play: true });
+    });
+    const after = await page.evaluate(() => window.__wallet["users/casino-a/learningPoints/main"].casinoStats);
+    assert.deepEqual(after.dice, { b: 20, n: -20, p: 1 });
+    assert.equal(after.duel, undefined);
     await page.evaluate(() => {
       myId = "casino-b";
       // Ten hours studied today, so points can be bet (Casino.allowance).

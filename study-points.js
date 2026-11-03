@@ -508,6 +508,8 @@
               ...(wallet.poker && typeof wallet.poker === "object" ? { poker: wallet.poker } : {}),
               // So does the casino's record for the points history.
               ...(Array.isArray(wallet.casinoLog) ? { casinoLog: wallet.casinoLog } : {}),
+              // And the lifetime totals of the casino games.
+              ...(wallet.casinoStats && typeof wallet.casinoStats === "object" ? { casinoStats: wallet.casinoStats } : {}),
             });
           tx.set(
             window.fbDoc(window.db, "users", id),

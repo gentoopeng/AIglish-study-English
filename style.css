@@ -3064,3 +3064,13 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 .vocab-reorder-text small { font-size: 11px; color: rgba(255, 255, 255, 0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vocab-reorder-step { flex: none; display: grid; place-items: center; width: 40px; height: 44px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 10px; background: transparent; color: #f3e3bd; }
 .vocab-reorder-step:disabled { opacity: 0.25; }
+
+/* ランキング › カジノ: each game's totals in one row of podiums that scrolls sideways. */
+.ranking-podium-grid.is-casino-mode{display:block;overflow:auto;}
+.is-casino-mode .casino-rank-game{min-width:0;margin:0 0 14px;}
+.is-casino-mode .casino-rank-title{margin:0 0 6px 2px;font:600 14px 'Noto Serif JP','Yu Mincho',serif;letter-spacing:1px;color:#f0e2b6;}
+.is-casino-mode .casino-rank-row{display:flex;gap:10px;overflow-x:auto;padding:0 0 8px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
+.is-casino-mode .casino-rank-row>.ranking-mini-panel{flex:0 0 min(80vw,280px);height:auto;max-height:none;display:flex;flex-direction:column;scroll-snap-align:start;}
+.is-casino-mode .learning-podium{flex:none;height:clamp(170px,26dvh,230px);min-height:0;}
+.casino-rank-note{display:block;margin:2px 8px 0;text-align:left;font-size:10px;line-height:1.6;letter-spacing:0;}
+.casino-rank-note[hidden]{display:none;}
