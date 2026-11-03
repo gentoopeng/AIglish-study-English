@@ -1815,5 +1815,17 @@
     }
   }
 
-  window.Sugoroku = Object.freeze({ play, waiting });
+  // Lifetime totals for the カジノ ranking, from this device's save of real play (never the practice
+  // save): bet, won less bet, rolls, line count, JP, SJP and balls drawn. null with no save.
+  function stats(id) {
+    try {
+      const state = JSON.parse(localStorage.getItem("aiglish_sugoroku_" + id) || "null");
+      if (!S.valid(state)) return null;
+      const n = (v) => (Number.isSafeInteger(v) && v > 0 ? v : 0);
+      return { b: n(state.bet), n: Math.round((Number(state.won) || 0) - n(state.bet)), p: n(state.rolls), g: n(state.bingos), j: n(state.jps), s: n(state.sjps), l: n(state.balls) };
+    } catch {
+      return null;
+    }
+  }
+  window.Sugoroku = Object.freeze({ play, waiting, stats });
 })();

@@ -2521,3 +2521,30 @@ Tests:
 
 - `tests/study-points.test.cjs`: the first notice says the total and that it was added; counting again with more minutes keeps one notice with the new total and says what was added.
 - `tests/personal-notices.smoke.cjs`: the texts shown in the box.
+
+## ランキング: a カジノ sub-tab with lifetime totals per game (10.22.71.00)
+
+**What the user saw.** The ランキング tab had 学習 and ポイント. There was no record of how much a player had bet, won or played in each casino game.
+
+**Now.** A third sub-tab, カジノ, right of ポイント. For each game, one row of podiums that scrolls sideways (the page does not):
+
+- ポーカー, ブラックジャック, ルーレット, ダイスポーカー, チンチロ: 累計賭け額 (points bet), 累計得額 (points back less points bet; below zero too, and ranked as it is), プレイ回数.
+- すごろくビンゴ: the same three, and ビンゴ回数 (lines), JP回数, SJP回数, ボール排出回数.
+- A player is on a game's podiums once they have played it. Tapping a podium opens that player's totals for the game; under each panel the player's own place is shown (from this device).
+
+**How it is counted** (`casino-stats.js`, pure):
+
+- The five games are counted in `Poker.settle`, inside the wallet transaction and after the key check, so a result is counted once even if it is settled again (retries). `net` adds every amount that reaches the wallet; a stake (not the `:extra` loss past the bet) adds to the bet, and the first stake of a round (key ends `:bet`) is a play. Poker adds the pot it was in (`hand.total`) as the bet and one play per hand (leaving or giving up a hand uses the same key, so it counts once). The group dice table (`dice-together`) is dice; タイマン (duel) and the すごろくビンゴ jackpot payouts are not counted. Practice chips never reach the wallet, so they are not counted.
+- すごろくビンゴ keeps its lifetime totals in its own save (bet, won, rolls, balls, bingos, jackpots). `Sugoroku.stats()` reads the save of real play (never the practice one) and the casino passes it to `settle` with each sugoroku batch, and publishes it once at the start when it changed (`Poker.publishStats`); it replaces the entry and never with lower numbers, so an older save cannot take the totals back.
+- Kept in `users/{id}/learningPoints/main.casinoStats` (the copy that counts), copied into `users/{id}.casinoStatsV1` for the ranking to read, and on this device (`aiglish_casino_stats_<id>`). The study points' full wallet write keeps `casinoStats` (as it does `poker` and `casinoLog`).
+- No past results can be counted for the five games: they start with this version. The screen says so (すごろくビンゴ starts from its saved totals, but only once that device has opened the app or played with this version).
+
+**The ranking** reads one more field only (`casinoStatsV1`; no new index, the same one-month filter). The rules are open, so what is read is checked: only known games, whole numbers, a game needs a play, and a total that cannot be true (lost more than was bet, or won more than 100 times the bet plus 1,000,000) is not shown. Mode switches read nothing; the update button reads, as for the other modes.
+
+Tests:
+
+- `tests/casino-stats.test.cjs`: which key is which game; a round's bet, play and net; すごろくビンゴ totals replacing and never lowering; wrong and made-up numbers; the metrics and labels.
+- `tests/casino.smoke.cjs`: a lost blackjack round, the poker lines and すごろくビンゴ in the wallet document, copied to the player's own document and kept on the device; a poker hand settled twice counts once; the group dice table is dice and a duel is not counted.
+- `tests/study-points.test.cjs`: the full wallet write keeps `casinoStats`.
+- `tests/ranking-query.test.cjs`: the casino group reads only its field.
+- `tests/casino-ranking.smoke.cjs`: six games with 3 and 7 panels; the orders (net below zero too); a made-up total not shown; only players who played; own row; detail; sideways scrolling and no sideways scrolling of the page; switching modes does not read.

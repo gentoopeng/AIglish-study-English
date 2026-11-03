@@ -125,9 +125,45 @@
       localStorage.setItem(logName(), JSON.stringify(cleanLog(list)));
     } catch {}
   }
+  // Lifetime totals per game for the カジノ ranking (casino-stats.js): kept in the wallet document
+  // and, for the ranking to read, in the player's own document. The last copy is kept on this
+  // device (for the player's own row).
+  const statsName = (id) => "aiglish_casino_stats_" + id;
+  function casinoStats(id = uid()) {
+    try {
+      return window.CasinoStats.clean(JSON.parse(localStorage.getItem(statsName(id)) || "null"));
+    } catch {
+      return {};
+    }
+  }
+  function keepStats(stats, account) {
+    try {
+      localStorage.setItem(statsName(account), JSON.stringify(window.CasinoStats.clean(stats)));
+    } catch {}
+  }
+  // Sets the lifetime totals of すごろくビンゴ (from its own save) without paying anything. They
+  // never go down: an older save leaves what is kept as it is.
+  async function publishStats(sugoroku) {
+    const account = uid();
+    if (account === "GUEST-000" || !window.db || !window.fbRunTransaction || !window.CasinoStats || !sugoroku) return false;
+    const walletRef = window.fbDoc(window.db, "users", account, "learningPoints", "main");
+    const stats = await window.fbRunTransaction(window.db, async (tx) => {
+      const snap = await tx.get(walletRef),
+        wallet = snap.exists() ? snap.data() : {},
+        next = window.CasinoStats.apply(wallet.casinoStats, { sugoroku });
+      if (JSON.stringify(next) === JSON.stringify(window.CasinoStats.clean(wallet.casinoStats))) return next;
+      tx.set(walletRef, { casinoStats: next }, { merge: true });
+      tx.set(window.fbDoc(window.db, "users", account), { casinoStatsV1: next }, { merge: true });
+      return next;
+    });
+    if (uid() === account) keepStats(stats, account);
+    return true;
+  }
   let settling = Promise.resolve();
   // `feed`: how much of it was bet in a house game, for the jackpots (by default a loss's size).
-  function settle(key, delta, feed = delta < 0 ? -delta : 0) {
+  // `stat`: for the lifetime totals, { bet, play } (what was staked, and whether it starts a play)
+  // and, from すごろくビンゴ, { sugoroku: its own totals }.
+  function settle(key, delta, feed = delta < 0 ? -delta : 0, stat = null) {
     const account = uid();
     settling = settling.then(async () => {
       if (uid() !== account) return false;
@@ -141,12 +177,16 @@
         const value = { balance: Math.max(0, (Number(wallet.balance) || 0) + delta), revision: (Number(wallet.revision) || 0) + 1 };
         const kept = Object.fromEntries(Object.entries(done).sort((a, b) => b[1] - a[1]).slice(0, 199)),
           now = Date.now(),
-          log = addLog(wallet.casinoLog, gameOf(key), delta, now);
-        tx.set(walletRef, { ...value, poker: { ...kept, [key]: now }, casinoLog: log }, { merge: true });
-        tx.set(window.fbDoc(window.db, "users", account), { studyPoints: value.balance }, { merge: true });
-        return { ...value, log };
+          log = addLog(wallet.casinoLog, gameOf(key), delta, now),
+          game = window.CasinoStats?.gameOf(key),
+          counted = !!window.CasinoStats && !!(game || stat?.sugoroku),
+          stats = counted ? window.CasinoStats.apply(wallet.casinoStats, { game, delta, bet: stat?.bet, play: !!stat?.play, sugoroku: stat?.sugoroku }) : null;
+        tx.set(walletRef, { ...value, poker: { ...kept, [key]: now }, casinoLog: log, ...(counted ? { casinoStats: stats } : {}) }, { merge: true });
+        tx.set(window.fbDoc(window.db, "users", account), { studyPoints: value.balance, ...(counted ? { casinoStatsV1: stats } : {}) }, { merge: true });
+        return { ...value, log, stats };
       });
       if (next && uid() === account) keepLog(next.log);
+      if (next?.stats && uid() === account) keepStats(next.stats, account);
       const keys = settledKeys().concat(key).slice(-200);
       try {
         localStorage.setItem(settledName(), JSON.stringify(keys));
@@ -491,7 +531,7 @@
         say(room, (s.room?.players?.[me]?.name || me) + " が席を立ちました");
         return room;
       });
-      if (loss && loss.delta) await settle(loss.key, loss.delta);
+      if (loss && loss.delta) await settle(loss.key, loss.delta, undefined, { bet: -loss.delta, play: true });
     } catch (error) {
       console.warn("[poker] leave", error);
     }
@@ -505,7 +545,7 @@
       hand = room?.hand;
     if (!room?.staked || !hand || hand.street === "done" || !hand.seats.includes(me)) return;
     const lost = hand.total?.[me] || 0;
-    if (lost) settle(handKey(room, hand.no), -lost);
+    if (lost) settle(handKey(room, hand.no), -lost, undefined, { bet: lost, play: true });
   }
   async function rebuy() {
     const me = uid();
@@ -987,7 +1027,7 @@
     view.querySelector(".pk-log").textContent = (room.log || []).slice(-1)[0] || "";
     window.PokerFX?.decorate(view, room, ring, places, me);
     // Points: this hand's result, once.
-    if ((!room.practice || room.staked) && h?.street === "done" && h.result?.net && Object.hasOwn(h.result.net, me)) settle(handKey(room, h.no), h.result.net[me]);
+    if ((!room.practice || room.staked) && h?.street === "done" && h.result?.net && Object.hasOwn(h.result.net, me)) settle(handKey(room, h.no), h.result.net[me], undefined, { bet: h.total?.[me] || 0, play: true });
     renderMine(room);
     renderClock();
   }
@@ -1216,5 +1256,5 @@
     if (id === uid()) keepLog(log);
     return log;
   }
-  window.Poker = Object.freeze({ open, close, settle, practice, card: cardEl, message, casinoLog, refreshLog, LOG_GAMES, _session: () => session });
+  window.Poker = Object.freeze({ open, close, settle, publishStats, casinoStats, practice, card: cardEl, message, casinoLog, refreshLog, LOG_GAMES, _session: () => session });
 })();

@@ -14,3 +14,12 @@ test('daily podium projections preserve legacy ledgers without loading unrelated
 test('daily queries include current study records without login-date assumptions, skip deleted users and never batchGet',async()=>{
  const a=doc('a',{lastLoginAt:{stringValue:'2020-01-01T00:00:00Z'},studyLedgerJson:{stringValue:'current'}}),deleted=doc('deleted',{deleted:{booleanValue:true}});delete a.fields.lastActiveAt;const {ctx,calls}=setup([response([{document:a},{document:deleted}])]);const rows=await ctx.RankingQuery.fetch('daily');assert.equal(rows.length,1);assert.equal(rows[0].data.studyLedgerJson,'current');assert.equal(calls.length,1);
 });
+
+test("the casino ranking reads only the casino totals (and who the player is), nothing of study or points", () => {
+  const fields = m.query("casino", Date.now()).select.fields.map((f) => f.fieldPath);
+  assert.ok(fields.includes("casinoStatsV1") && fields.includes("playerName") && fields.includes("lastLoginAt"));
+  assert.ok(!fields.includes("studyPoints") && !fields.includes("earnedPoints") && !fields.includes("rankingLearningSummaryV1"));
+  // The nested map comes back as a map.
+  const doc = m.fields({ casinoStatsV1: { mapValue: { fields: { poker: { mapValue: { fields: { b: { integerValue: "5" }, n: { integerValue: "-3" }, p: { integerValue: "1" } } } } } } } });
+  assert.deepEqual(doc.casinoStatsV1, { poker: { b: 5, n: -3, p: 1 } });
+});
