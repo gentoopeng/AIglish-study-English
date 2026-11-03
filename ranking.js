@@ -101,11 +101,13 @@
     }
     function avatar(value,label,appearance){const frame=document.createElement('span');frame.className='podium-avatar';const safe=typeof value==='string'&&(/^(https?:\/\/|data:image\/(?:png|jpeg|webp|gif);base64,)/i.test(value));if(safe){const img=document.createElement('img');preview(img,value);img.alt=String(label||'ユーザー')+'のアイコン';img.referrerPolicy='no-referrer';img.onerror=()=>{img.remove();frame.prepend(document.createTextNode(String(label||'人').trim().slice(0,1)));};frame.append(img);}else{frame.textContent=String(label||'人').trim().slice(0,1);}return frame;}
     window.RankingVisuals={name,avatar,appearanceOf:doc=>appearanceOf(doc)};
-    let rankMode='learning';
+    let rankMode='learning',casinoGame='poker';
     const labels={points:'ポイント',earned:'総獲得ポイント',time:'合計勉強時間',words:'理解度を付けた単語数',flash:'フラッシュのスワイプ数'};
     // The カジノ ranking: keys like "poker:b" (a game and a total of casino-stats.js).
     const isCasino=key=>typeof key==='string'&&key.includes(':');
     const casinoKeys=()=>window.CasinoStats?window.CasinoStats.keys():[];
+    // The カジノ ranking shows one game at a time (all its panels fit the screen).
+    const casinoShown=()=>casinoKeys().filter(key=>key.split(':')[0]===casinoGame);
     const labelOf=key=>isCasino(key)?window.CasinoStats.label(key):labels[key];
     const metricTitle=key=>isCasino(key)?labelOf(key).split(' ').pop():labels[key];
     const casinoValue=(row,key)=>{const v=row[key];if(!Number.isFinite(v))return '—';const k=key.split(':')[1];return k==='b'?v.toLocaleString('ja-JP')+'pt':k==='n'?(v>0?'+':v<0?'-':'')+Math.abs(v).toLocaleString('ja-JP')+'pt':v.toLocaleString('ja-JP')+'回';};
@@ -134,17 +136,14 @@
     window.RankingVisuals.detailStudy=function(entry,rank){const known=row(entry.id,{playerName:entry.name,avatar:entry.avatar,userStats:entry.getStats?entry.getStats():{},profileCustomizationJson:entry.appearance});showDetail(known,rank,'今日の勉強時間');const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent='今日の勉強時間';dd.textContent=duration(entry.seconds);const dl=document.querySelector('.ranking-detail dl');dl.prepend(dt,dd);};
     const podiumShapes=new WeakMap();
     function sameShape(left,right){return !!left&&left.length===right.length&&left.every((row,i)=>row.length===right[i].length&&row.every((value,j)=>value===right[i][j]));}
-    // A game's panels sit in one row (scrolling sideways) under the game's name; the other modes put
-    // their panels straight into the host.
-    function panelHost(host,key){if(!isCasino(key))return host;const game=key.split(':')[0];let wrap=host.querySelector('.casino-rank-game[data-game="'+game+'"]');if(!wrap){wrap=document.createElement('div');wrap.className='casino-rank-game';wrap.dataset.game=game;const title=document.createElement('h3');title.className='casino-rank-title';title.textContent=window.CasinoStats.NAMES[game];const line=document.createElement('div');line.className='casino-rank-row';wrap.append(title,line);host.append(wrap);}return wrap.querySelector('.casino-rank-row');}
     function render(){
         const host=document.getElementById('rankingPodium');if(!host)return;ensure();const local=self(),rows=cache.filter(entry=>entry.id!==user);if(user!=='GUEST-000')rows.push(local);
-        const metrics=rankMode==='learning'?['time','words','flash']:rankMode==='casino'?casinoKeys():['points','earned'];
+        const metrics=rankMode==='learning'?['time','words','flash']:rankMode==='casino'?casinoShown():['points','earned'];
         host.querySelectorAll('[data-podium-metric]').forEach(section=>{if(!metrics.includes(section.dataset.podiumMetric))section.remove();});
-        host.classList.toggle('is-battle-mode',rankMode==='points');host.classList.toggle('is-casino-mode',rankMode==='casino');if(rankMode!=='casino')host.querySelectorAll('.casino-rank-game').forEach(wrap=>wrap.remove());const note=document.querySelector('.casino-rank-note');if(note)note.hidden=rankMode!=='casino';
+        host.classList.toggle('is-battle-mode',rankMode==='points');host.classList.toggle('is-casino-wide',rankMode==='casino'&&casinoGame==='sugoroku');const note=document.querySelector('.casino-rank-note'),chips=document.querySelector('.casino-game-switch');if(note)note.hidden=rankMode!=='casino';if(chips){chips.hidden=rankMode!=='casino';chips.querySelectorAll('[data-casino-game]').forEach(chip=>chip.setAttribute('aria-pressed',String(chip.dataset.casinoGame===casinoGame)));}
         metrics.forEach(key=>{
             let section=host.querySelector('[data-podium-metric="'+key+'"]');
-            if(!section){section=document.createElement('section');section.className='ranking-mini-panel';section.dataset.podiumMetric=key;const heading=document.createElement('h3');heading.textContent=metricTitle(key);const podium=document.createElement('div');podium.className='learning-podium';const own=document.createElement('button');own.type='button';own.className='ranking-mini-self';section.append(heading,podium,own);panelHost(host,key).append(section);}
+            if(!section){section=document.createElement('section');section.className='ranking-mini-panel';section.dataset.podiumMetric=key;const heading=document.createElement('h3');heading.textContent=metricTitle(key);const podium=document.createElement('div');podium.className='learning-podium';const own=document.createElement('button');own.type='button';own.className='ranking-mini-self';section.append(heading,podium,own);host.append(section);}
             const measured=rows.filter(entry=>hasRecord(entry,key)).sort((a,b)=>b[key]-a[key]||a.id.localeCompare(b.id)),top=cacheReady?measured.slice(0,3):[],podium=section.querySelector('.learning-podium');
             const shape=[[user],...top.map(entry=>[entry.id,entry.name,entry.avatar,entry.appearance])];
             if(!sameShape(podiumShapes.get(section),shape)){
@@ -193,6 +192,7 @@
     ['renderTitles','renderSeasonTitles','equipTitle','unequipTitle','checkAndRewardTitleBonusXP','updateTitleProgressUI'].forEach(key=>{window[key]=function(){};});
     window.injectCommunityRankingUI=function(){};window.renderCommunityRankPills=function(){};    window.renderLeaderboard=function(force){render();if(typeof currentActiveTabId!=='undefined'&&currentActiveTabId==='titles')return refresh(!!force);};
     document.querySelectorAll('[data-rank-mode]').forEach(button=>button.onclick=()=>{inflight?.controller.abort();rankMode=button.dataset.rankMode;selectCache();document.querySelectorAll('[data-rank-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.rankMode===rankMode)));render();refresh(false);});
+    document.querySelectorAll('[data-casino-game]').forEach(chip=>chip.onclick=()=>{casinoGame=chip.dataset.casinoGame;render();});
     document.getElementById('rankingRefresh').onclick=()=>refresh(true,true);
     window.onTabChange(tab=>{if(tab==='titles'){render();refresh(false);}else if(tab==='vocab'){ensure();scanCurrent();persist();}});
     window.onAppLoaded(()=>{ensure();window.syncRankingMetrics();render();});
