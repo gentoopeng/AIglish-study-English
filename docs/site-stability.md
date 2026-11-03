@@ -2684,3 +2684,15 @@ Tests:
 Tests:
 
 - `tests/point-loans.smoke.cjs`: my waiting request is a block, its 取り消す is under the words, and the amount cannot break (no wrapping).
+
+## 10.22.80.00 カジノランキングの「すごろく」を2タブに分けた
+
+**What the user saw.** In the カジノ ranking, すごろくビンゴ showed seven panels on one screen, each too small to read.
+
+**Cause.** One game with seven numbers (賭け額・得額・プレイ回数・ビンゴ・JP・SJP・ボール) was squeezed into a 2-column grid.
+
+**Fix.** The game chips now have two for it: 「すごろく基本」 (賭け額・得額・プレイ回数, three panels like the other games) and 「すごろく記録」 (ビンゴ回数・JP回数・SJP回数・ボール排出回数, a 2x2 grid). Only the view changes; nothing is read again and the stored numbers are the same.
+
+Tests:
+
+- `tests/casino-ranking.smoke.cjs`: seven chips, 3 panels for 基本 and 4 for 記録, both fit on 393x852 and 320x668 without scrolling, and the counts still read from `sugoroku:g/j/s/l`.

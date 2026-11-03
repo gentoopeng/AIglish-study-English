@@ -3073,7 +3073,7 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 .casino-game-switch button[aria-pressed=true]{border-color:#e5cf91;background:#e5cf9126;color:#fff;}
 .casino-rank-note{display:block;margin:0 8px;padding:4px 0 0;text-align:center;font-size:9px;line-height:1.5;letter-spacing:0;}
 .casino-rank-note[hidden]{display:none;}
-.ranking-podium-grid.is-casino-wide{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));gap:6px;}
+.ranking-podium-grid.is-casino-wide{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:6px;}
 .ranking-podium-grid.is-casino-wide .ranking-mini-panel{padding:5px 6px;}
 .ranking-podium-grid.is-casino-wide .ranking-mini-panel h3{font-size:10px;margin:0;}
 .ranking-podium-grid.is-casino-wide .ranking-mini-panel .learning-podium{gap:4px;}
