@@ -180,3 +180,10 @@ test("a full record never drops a give that has not been collected, and keeps `c
   assert.ok(!full.entries.some((e) => e.id === "old"));
   assert.ok(full.entries.some((e) => e.id === "last"));
 });
+
+test("repayments to the casino or the 運営 are never waiting to be collected, so a full record still takes them", () => {
+  const repays = (to) => Array.from({ length: L.MAX_ENTRIES + 1 }, (_, i) => ({ id: "r" + i, kind: "repay", from: "p", to, amount: 1, at }));
+  assert.equal(L.trim(repays("CASINO"), {}).length, L.MAX_ENTRIES);
+  assert.equal(L.trim(repays("ADMIN"), {}).length, L.MAX_ENTRIES);
+  assert.throws(() => L.trim(repays("b"), {}), /記録がいっぱい/);
+});
