@@ -1,5 +1,5 @@
-// Lending points between users: send or lend, ask to borrow, ask to be paid back (請求), repay,
-// and the history of all of it, per pair of people.
+// Lending points between users: lend, ask to borrow, ask to be paid back (請求), repay, give
+// (あげる) and ask to be given (もらう), and the history of all of it, per pair of people.
 //
 // Cloud: pointLoans/{a__b} holds the pair's entries (the shared history) and which money
 // entries the receiver has already added to their wallet. pointLoanInbox/{id} lists the pairs a
@@ -8,6 +8,9 @@
 // Points move inside one transaction with the record: the sender's wallet goes down with the
 // entry written, and the receiver's goes up when their device marks the entry claimed. Nothing
 // can be paid twice, and no wallet is ever written by anyone but its owner.
+//
+// record.read[id] is the time of the newest line from the other side that `id` has seen (the
+// 既読 under a line); it is the only thing a screen writes outside a transaction.
 (function () {
   "use strict";
   const L = window.PointLoansModel;
@@ -79,8 +82,13 @@
     return null;
   }
   // rate: interest on a loan (one of PointLoansModel.RATES).
+  // Nothing is given to, or asked of, the casino or the 運営: they never collect or answer.
+  const notGiven = (other, kind) => {
+    if ((kind === "give" || kind === "ask-give") && (other === CASINO || other === ADMIN)) throw Error("この相手にはあげたりもらったりできません。");
+  };
   async function send(other, otherName, amount, kind, note, request, rate = 0) {
     ready();
+    notGiven(other, kind);
     const me = uid(),
       key = L.pairKey(me, other),
       at = Date.now();
@@ -102,6 +110,7 @@
   }
   async function ask(other, otherName, amount, kind, note) {
     ready();
+    notGiven(other, kind);
     const me = uid(),
       key = L.pairKey(me, other),
       at = Date.now();
@@ -342,7 +351,7 @@
       return;
     }
     const list = node("ul", "loans-people");
-    body.append(list, node("p", "loans-hint", "相手のプロフィールの「貸す」「借りたいと頼む」から始められます。"));
+    body.append(list, node("p", "loans-hint", "相手のプロフィールの「貸す」「あげる」「借りたいと頼む」「もらいたいと頼む」から始められます。"));
     const me = uid(),
       shown = dialog;
     const draw = (pairs, loading) => {
@@ -365,9 +374,12 @@
         );
         // The last line of the talk, as in a chat list.
         const line = rec?.entries?.[rec.entries.length - 1];
-        if (line) b.append(node("small", "loans-last", line.kind === "message" ? line.text : line.kind === "gift" ? fmt(line.amount) + "pt 届きました" : fmt(line.amount) + "pt の記録"));
+        if (line) b.append(node("small", "loans-last", line.kind === "message" ? line.text : line.kind === "gift" ? fmt(line.amount) + "pt 届きました" : line.kind === "give" ? fmt(line.amount) + "pt " + (line.from === me ? "あげました" : "もらいました") : fmt(line.amount) + "pt の記録"));
+        if (line) b.append(node("time", "loans-time", dayOf(line.at) === dayOf(Date.now()) ? clock(line.at) : dayOf(line.at)));
+        // New lines from the other side since I last looked, as a count (a record not read yet: 新着).
+        const fresher = rec ? rec.entries.filter((e) => e.from !== me && (e.at || 0) > (last[key] || 0)).length : 0;
         if (asks) b.append(node("em", "loans-badge", "返事待ち " + asks));
-        else if ((pair.at || 0) > (last[key] || 0)) b.append(node("em", "loans-badge", "新着"));
+        else if (fresher || (!rec && (pair.at || 0) > (last[key] || 0))) b.append(node("em", "loans-badge", fresher ? "新着 " + fresher : "新着"));
         b.onclick = () => person(pair.other, name);
         const li = node("li");
         li.append(b);
@@ -395,6 +407,27 @@
   // history as bubbles (talk, points and requests; mine on the right) and at the bottom a line
   // to talk, with a ＋ that opens the points form (tabs: 貸す / 返す / 借りる / 請求) over it.
   // It comes up at once from the record as last seen and follows the record while it is open.
+  // Line icons (24x24, drawn in the text colour), one per kind of move or request.
+  const PATHS = {
+    lend: "M7 17L17 7M8 7h9v9",
+    repay: "M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5",
+    give: "M20 12v9H4v-9M2 7h20v5H2zM12 21V7M12 7H7.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7z",
+    borrow: "M12 3v12M7 10l5 5 5-5M4 21h16",
+    claim: "M6 2h9l5 5v15H6zM15 2v5h5M9 13h7M9 17h7",
+    "ask-give": "M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.5-7 10-7 10z",
+    charge: "M5 12h14",
+  };
+  // Which icon a line of the talk gets.
+  const KIND_ICON = { lend: "lend", repay: "repay", give: "give", gift: "give", charge: "charge", "ask-lend": "borrow", "ask-repay": "claim", "ask-give": "ask-give" };
+  function svgIcon(name) {
+    const NS = "http://www.w3.org/2000/svg",
+      svg = document.createElementNS(NS, "svg"),
+      path = document.createElementNS(NS, "path");
+    for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false" })) svg.setAttribute(k, v);
+    path.setAttribute("d", PATHS[name] || "");
+    svg.append(path);
+    return svg;
+  }
   const RATE_TEXT = (rate) => (rate ? Math.round(rate * 100) + "%" : "なし");
   const dayOf = (at) => new Date(at).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short" });
   const clock = (at) => new Date(at).toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit" });
@@ -495,30 +528,40 @@
         lent = Math.max(0, L.net(rec.entries, me));
       sheet.replaceChildren();
       // The casino only takes repayments, the 運営 only gives; 返す needs a debt, 請求 a loan.
+      // Each is a button with its icon, like the menu under a LINE talk.
       const modes = casino
         ? [["repay", "返す", !owe]]
         : admin
           ? []
-          : [["lend", "貸す", false], ["repay", "返す", !owe], ["borrow", "借りる", false], ["claim", "請求", !lent]];
+          : [["lend", "貸す", false], ["repay", "返す", !owe], ["give", "あげる", false], ["borrow", "借りる", false], ["claim", "請求", !lent], ["ask-give", "もらう", false]];
       if (!modes.length) {
         sheet.append(node("p", "loans-hint", "運営から届いたポイントは、自動で所持ポイントに入ります。"));
         return;
       }
-      if (!form.mode || modes.find((m) => m[0] === form.mode)?.[2]) form.mode = (modes.find((m) => !m[2]) || modes[0])[0];
+      // A mode that cannot be used now is dropped; the casino has only one, so it is chosen.
+      if (form.mode && modes.find((m) => m[0] === form.mode)?.[2]) form.mode = null;
+      if (!form.mode && casino && !modes[0][2]) form.mode = modes[0][0];
       const panel = node("div", "loans-form");
       const tabs = node("div", "loans-tabs");
       tabs.setAttribute("role", "tablist");
       for (const [mode, label, off] of modes) {
-        const t = node("button", "loans-tab", label);
+        const t = node("button", "loans-tab");
+        const icon = node("span", "loans-tab-icon");
+        icon.append(svgIcon(mode));
+        t.append(icon, node("span", "loans-tab-label", label));
         t.type = "button";
         t.setAttribute("role", "tab");
         t.setAttribute("aria-selected", String(form.mode === mode));
         t.disabled = off;
         t.onclick = () => {
-          Object.assign(form, { mode, request: null });
+          Object.assign(form, { mode: form.mode === mode ? null : mode, request: null });
           drawSheet();
         };
         tabs.append(t);
+      }
+      if (!form.mode) {
+        sheet.append(tabs, node("p", "loans-hint", "やりたいことを選んでください。"));
+        return;
       }
       const amount = node("input");
       Object.assign(amount, { type: "number", min: 1, step: 1, inputMode: "numeric", placeholder: "0", value: form.amount });
@@ -529,7 +572,7 @@
       const quick = node("div", "loans-quick");
       const all = form.mode === "repay" ? owe : form.mode === "claim" ? lent : 0;
       const line = node("p", "loans-preview");
-      const go = node("button", "loans-primary loans-go", { lend: "貸す", repay: "返す", borrow: "借りたいと頼む", claim: "返してと請求" }[form.mode]);
+      const go = node("button", "loans-primary loans-go", { lend: "貸す", repay: "返す", give: "あげる", borrow: "借りたいと頼む", claim: "返してと請求", "ask-give": "もらいたいと頼む" }[form.mode] || "");
       go.type = "button";
       const preview = () => {
         const v = Math.floor(Number(amount.value));
@@ -538,11 +581,15 @@
             ? "返してもらう額 " + fmt(v + Math.round(v * form.rate)) + "pt" + (form.rate ? "（利子 " + fmt(Math.round(v * form.rate)) + "pt）" : "")
             : form.mode === "repay" && v >= 1
               ? "返したあと 残り " + fmt(Math.max(0, owe - v)) + "pt"
-              : form.mode === "borrow"
-                ? name + "さんに頼みます。利子は貸す人が決めます。"
-                : form.mode === "claim"
-                  ? "貸している " + fmt(lent) + "pt まで請求できます。"
-                  : "";
+              : form.mode === "give" && v >= 1
+                ? "あげたポイントは返してもらえません。あげたあと 所持 " + fmt(Math.max(0, (window.StudyPoints?.balance() || 0) - v)) + "pt"
+                : form.mode === "borrow"
+                  ? name + "さんに頼みます。利子は貸す人が決めます。"
+                  : form.mode === "ask-give"
+                    ? name + "さんに頼みます。あげるかどうかは相手が決めます。"
+                    : form.mode === "claim"
+                      ? "貸している " + fmt(lent) + "pt まで請求できます。"
+                      : "";
         go.disabled = !(v >= 1);
       };
       for (const [label, v] of [["10", 10], ["50", 50], ["100", 100], ["500", 500], ...(all ? [["全部（" + fmt(all) + "）", all]] : [])]) {
@@ -583,25 +630,29 @@
           t = note.value;
         if (form.mode === "lend") await send(other, name, v, "lend", t, form.request, form.rate);
         else if (form.mode === "repay") await send(other, name, v, "repay", t);
+        else if (form.mode === "give") await send(other, name, v, "give", t);
         else if (form.mode === "borrow") await ask(other, name, v, "ask-lend", t);
+        else if (form.mode === "ask-give") await ask(other, name, v, "ask-give", t);
         else await ask(other, name, v, "ask-repay", t);
         Object.assign(form, { amount: "", note: "", rate: 0, request: null });
         toggleSheet(false);
       });
       preview();
       if (form.request) panel.append(node("p", "loans-hint", name + "さんの頼みに応えて貸します。利子を選んでください。"));
-      panel.append(tabs, amountRow, quick, rates, note, line, go);
-      sheet.append(panel);
+      panel.append(amountRow, quick, rates, note, line, go);
+      sheet.append(tabs, panel);
     }
     // The talk: bubbles, oldest first, with a line for each new day.
+    // What a line says (for the screen reader the amount comes first; on screen it is the big
+    // number on the card).
     const label = (e) => {
-      const mine = e.from === me,
-        amountText = fmt(e.amount) + "pt";
-      if (e.kind === "gift") return (mine ? amountText + " 送った" : amountText + " 届いた");
-      if (e.kind === "charge") return amountText + " 引かれた";
-      if (e.kind === "lend") return (mine ? amountText + " 貸した" : amountText + " 借りた") + (e.rate ? "（利子" + RATE_TEXT(e.rate) + "・返す額" + fmt(e.due) + "pt）" : "");
-      if (e.kind === "repay") return mine ? amountText + " 返した" : amountText + " 返ってきた";
-      const what = e.kind === "ask-lend" ? (mine ? amountText + " 借りたいと頼んだ" : amountText + " 借りたいと頼まれた") : mine ? amountText + " 請求した" : amountText + " 請求された";
+      const mine = e.from === me;
+      if (e.kind === "gift") return mine ? "送った" : "届いた";
+      if (e.kind === "charge") return "引かれた";
+      if (e.kind === "lend") return (mine ? "貸した" : "借りた") + (e.rate ? "（利子" + RATE_TEXT(e.rate) + "・返す額" + fmt(e.due) + "pt）" : "");
+      if (e.kind === "repay") return mine ? "返した" : "返ってきた";
+      if (e.kind === "give") return mine ? "あげた" : "もらった";
+      const what = { "ask-lend": mine ? "借りたいと頼んだ" : "借りたいと頼まれた", "ask-give": mine ? "もらいたいと頼んだ" : "もらいたいと頼まれた", "ask-repay": mine ? "請求した" : "請求された" }[e.kind] || "";
       const state = { open: "返事待ち", done: "済み", declined: "断られた", cancelled: "取り消し" }[e.status] || "";
       return what + "・" + (e.status === "declined" && !mine ? "断った" : state);
     };
@@ -616,6 +667,8 @@
       const near = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
       log.replaceChildren();
       let lastDay = "";
+      const readAt = rec.read?.[other] || 0,
+        seenLine = casino || admin ? null : [...rec.entries].reverse().find((e) => e.from === me && (e.at || 0) <= readAt);
       for (const e of rec.entries) {
         const day = dayOf(e.at);
         if (day !== lastDay) {
@@ -623,11 +676,19 @@
           lastDay = day;
         }
         const mine = e.from === me,
-          li = node("li", "talk-row is-" + (mine ? "mine" : "theirs") + " is-" + e.kind + (L.isMoney(e) || e.kind === "gift" ? (mine ? " is-out" : " is-in") : e.kind === "charge" ? " is-out" : ""));
+          li = node("li", "talk-row is-" + (mine ? "mine" : "theirs") + " is-" + e.kind + (L.isMoney(e) || e.kind === "give" || e.kind === "gift" ? (mine ? " is-out" : " is-in") : e.kind === "charge" ? " is-out" : ""));
         const bubble = node("div", e.kind === "message" ? "talk-bubble" : "talk-card");
         if (e.kind === "message") bubble.textContent = e.text;
         else {
-          bubble.append(node("span", "", label(e)));
+          // A card like a LINE Pay one: the kind's icon, the amount big, then what happened.
+          const icon = node("i", "card-icon");
+          icon.append(svgIcon(KIND_ICON[e.kind]));
+          const big = node("strong", "card-amount", fmt(e.amount) + "pt");
+          big.setAttribute("aria-hidden", "true");
+          const words = node("span", "card-words");
+          words.append(node("b", "card-sr", fmt(e.amount) + "pt "), label(e));
+          bubble.append(node("div", "card-head", ""), words);
+          bubble.firstChild.append(icon, big);
           if (e.note) bubble.append(node("small", "", "「" + e.note + "」"));
           // A request waiting for my answer carries the answers.
           if (e.status === "open" && e.to === me) {
@@ -638,7 +699,8 @@
               no.onclick = act(() => closeRequest(other, name, e.id));
               row.append(no);
             }
-            const yes = node("button", "loans-primary", e.kind === "ask-lend" ? "条件を決めて貸す" : "払う");
+            // What each kind of request is answered with.
+            const yes = node("button", "loans-primary", { "ask-lend": "条件を決めて貸す", "ask-give": "あげる", "ask-repay": "払う" }[e.kind] || "答える");
             yes.type = "button";
             yes.onclick =
               e.kind === "ask-lend"
@@ -646,7 +708,9 @@
                     Object.assign(form, { mode: "lend", amount: String(e.amount), request: e.id });
                     toggleSheet(true);
                   }
-                : act(() => send(other, name, Math.min(e.amount, L.owedBy(current.entries, me)), "repay", "", e.id));
+                : e.kind === "ask-give"
+                  ? act(() => send(other, name, e.amount, "give", "", e.id))
+                  : act(() => send(other, name, Math.min(e.amount, L.owedBy(current.entries, me)), "repay", "", e.id));
             row.append(yes);
             bubble.classList.add("loans-request");
             bubble.append(row);
@@ -658,7 +722,11 @@
             bubble.append(undo);
           }
         }
-        li.append(bubble, node("time", "", clock(e.at)));
+        // Under my newest line the other has seen: 既読, then the time, as in LINE.
+        const meta = node("div", "talk-meta");
+        if (mine && e === seenLine) meta.append(node("span", "talk-read", "既読"));
+        meta.append(node("time", "", clock(e.at)));
+        li.append(bubble, meta);
         log.append(li);
       }
       if (!rec.entries.length) log.append(node("li", "loans-empty", fresh ? (casino || admin ? "まだ記録はありません。" : "まだトークはありません。メッセージや「＋」から始められます。") : "読み込んでいます…"));
@@ -677,6 +745,19 @@
       paint();
     };
     const seenNow = () => markSeen(key, current.updatedAt || Date.now());
+    // 既読: tell the other side I have seen their newest line. The time written is the line's
+    // own, never this device's clock, and nothing is written when there is nothing new, so the
+    // write that comes back through the live record ends it.
+    let sentRead = 0;
+    const markRead = () => {
+      if (casino || admin || document.hidden || typeof window.fbSetDoc !== "function") return;
+      const latest = Math.max(0, ...current.entries.filter((e) => e.from === other).map((e) => e.at || 0));
+      if (latest <= Math.max(current.read?.[me] || 0, sentRead)) return;
+      sentRead = latest;
+      Promise.resolve(window.fbSetDoc(pairRef(key), { read: { [me]: latest } }, { merge: true })).catch(() => {
+        sentRead = 0;
+      });
+    };
     try {
       if (typeof window.fbOnSnapshot === "function") {
         // Live while open: the other side's lines and answers come in as they are written.
@@ -688,6 +769,7 @@
               fresh = true;
               seenNow();
               paint();
+              markRead();
               take().catch((error) => (status.textContent = error?.message || ""));
               resolve();
             },
@@ -699,6 +781,7 @@
         fresh = true;
         seenNow();
         paint();
+        markRead();
         await take();
       }
     } catch (error) {

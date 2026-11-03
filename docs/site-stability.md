@@ -2369,3 +2369,35 @@ Tests:
   - another device reads the filled record instead of the award records;
   - 400 days are kept.
 - `tests/weak-review.smoke.cjs` and `tests/casino.smoke.cjs` check the new day blocks.
+
+## Points: giving and receiving, and a talk closer to LINE (10.22.62.00)
+
+**What the user saw.** Points between players could only be lent, repaid, asked for (借りる) or claimed back (請求). There was no way to simply give points, or to ask for them. The points form hid behind text tabs, and there was no sign that the other side had read a line.
+
+**Now.**
+
+- **あげる.** A new entry kind `give`: the points leave the giver's wallet at once, in the same transaction that writes the record, and reach the receiver's wallet once when their device collects them (the same `claimed` mark as a loan). It is owed by nobody: no debt, no interest, and it does not count as a repayment.
+- **もらう.** A new request kind `ask-give`. The one asked sees 「あげる」 and 「断る」. 「あげる」 sends a give for exactly the asked amount and closes the request in the same write.
+- **Requests are matched to the move that answers them.** Before, any open request id closed with any move. Now a lend answers only an ask-lend, a repay only an ask-repay, a give only an ask-give, between the same two people (a give also for the same amount), otherwise 「この頼みには応えられません。」.
+- **Nothing for the casino or the 運営.** A give or ask-give to either is refused (it would never be collected or answered).
+- **Full records.** When a record is over its limit, collected gives and gifts go before the rest, and `claimed` is cut to the ids still in the record, so it no longer grows without end.
+- **The points menu.** The ＋ opens six icon buttons (貸す 返す あげる 借りる 請求 もらう) like a LINE menu; the form for the chosen one opens under them. 返す and 請求 stay greyed out when there is nothing owed or lent. The profile has あげる and もらいたいと頼む too.
+- **Cards.** Points lines are cards with the amount big (the words still read "50pt 貸した" for screen readers).
+- **既読.** `record.read[id]` is the time of the newest line from the other side that `id` has seen. A talk that is open writes it with one merged write, only when a newer line has come and the page is visible; the time written is the line's own, not the device's clock. The write that comes back through the live record ends it, so there is no loop. 既読 shows under my newest line the other has seen.
+- **The list.** Each person shows the last line, its time (or date), and a count of new lines from the other side.
+- **History line.** Gives and receipts are counted in the points history's 「ポイントの貸し借り」 line, as loans and gifts already were.
+
+**Checked, not changed.** `sugoroku.js` and `people.js` do not branch on entry kinds; the admin deletion and the 運営 ledger only read gift/charge in 運営 pairs, so player gives stay out of them.
+
+Tests:
+
+- `tests/point-loans-model.test.cjs`:
+  - a give is owed by nobody and collected once; it is not a repayment and takes no interest;
+  - an ask-give is answered only by a give of the same amount between the same two (wrong kind, direction, amount and unknown ids refused), and can be declined;
+  - a full record keeps debts and drops collected gives first; `claimed` is cut to what remains.
+- `tests/point-loans.smoke.cjs`:
+  - the six buttons; a give from 貸し借りなし with the preview, note and big amount;
+  - the receiver collects it once, and the 既読 mark is written once and not again on a second look;
+  - 既読 shows on the giver's side under the give;
+  - もらう is asked, answered with あげる, and cannot be answered twice from a stale screen;
+  - a give or ask-give to the casino or the 運営 is refused.

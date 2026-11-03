@@ -160,7 +160,7 @@
 /* Lending points: the people, one person's standing, requests and history. */
 .study-points-dialog .points-loans{display:block;width:100%;margin:4px 0 0;}
 .people-loans{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 4px;}
-.people-loans button{min-height:42px;border-radius:12px;}
+.people-loans button{min-height:42px;border-radius:12px;}.people-loans .library-editor-primary{grid-column:1/-1;}
 /* The lending screen sits in the points dialog's frame (.study-points-dialog) and reuses its
    buttons, borders and gold numbers; only the pieces it adds are styled here. */
 .loans-dialog h2{font-size:17px;overflow-wrap:anywhere;padding-right:8px;text-transform:none;letter-spacing:0;}
@@ -200,9 +200,9 @@
 .loans-history small{grid-column:1/-1;font-size:11px;color:#c1c6ce;}
 .study-points-dialog .loans-back{align-self:flex-start;border-color:transparent;background:transparent;color:#e6d29a;padding:8px 0;}
 /* Lending: one form, its action chosen with tabs */
-.loans-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:3px;border:1px solid #d5bf8645;border-radius:12px;}
-.study-points-dialog .loans-tab{min-height:38px;padding:4px 6px;border:0;border-radius:9px;background:transparent;color:#d2c4aa;font-size:13px;font-weight:700;}
-.study-points-dialog .loans-tab[aria-selected=true]{background:#d5bf86;color:#111c2c;}
+.loans-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0;border:0;}
+.study-points-dialog .loans-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:62px;padding:6px 4px;border:1px solid #ffffff14;border-radius:14px;background:#ffffff0a;color:#d2c4aa;font-size:12px;font-weight:700;}.loans-tab-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#06c75522;color:#06c755;}.loans-tab-icon svg{width:20px;height:20px;}.loans-tab:disabled{opacity:.4;}.loans-tab:disabled .loans-tab-icon{background:#ffffff14;color:#9aa3b0;}
+.study-points-dialog .loans-tab[aria-selected=true]{border-color:#06c755;background:#06c75524;color:#f4eddf;}.loans-tab[aria-selected=true] .loans-tab-icon{background:#06c755;color:#062611;}.talk-sheet .loans-form{margin-top:10px;}
 .loans-amount{display:flex;align-items:baseline;gap:6px;padding:0 12px;border:1px solid #d5bf8645;border-radius:10px;background:#ffffff08;}
 .loans-amount input[data-loan-amount]{flex:1;min-width:0;border:0;background:transparent;padding:6px 0;}
 .loans-amount span{color:#d2c4aa;font-size:14px;}
@@ -291,3 +291,19 @@
   width: 100%;
   margin-top: 8px;
 }
+
+/* Points as a card (like LINE Pay): the icon and the amount big, then what happened. */
+.talk-card .card-head{display:flex;align-items:center;gap:8px;}
+.talk-card .card-icon{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:50%;background:#ffffff14;color:#c1c6ce;}.talk-card .card-icon svg{width:18px;height:18px;}
+.talk-card .card-amount{font-size:24px;line-height:1.1;letter-spacing:.01em;}
+.talk-row.is-in .talk-card .card-amount{color:#e6d29a;}.talk-row.is-out .talk-card .card-amount{color:#f1b4b4;}
+.study-points-dialog .talk-card .card-words{margin-top:2px;font-size:12px;font-weight:400;color:#c1c6ce;}
+.talk-card .card-sr{font-size:0;font-weight:400;}
+.talk-row.is-give .talk-card,.talk-row.is-ask-give .talk-card{border-color:#e68fb0aa;background:#e68fb01a;}
+.talk-card{min-width:150px;}
+/* 既読 and the time under a line. */
+.study-points-dialog .talk-log .talk-meta{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:0;}
+.talk-row.is-mine .talk-meta{align-items:flex-end;}
+.talk-read{font-size:10px;color:#9aa3b0;line-height:1.3;}
+/* The list: name and time on one line, the last line and the badge below. */
+.loans-person .loans-time{position:absolute;right:14px;top:34px;font-size:10px;color:#9aa3b0;}

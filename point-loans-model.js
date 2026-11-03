@@ -7,6 +7,9 @@
 //   request  { kind: "ask-lend" | "ask-repay", from, to, amount, status }
 //            ask-lend: `from` asks `to` to lend; ask-repay (請求): `from` asks `to` to pay back.
 //            status: "open" → "done" | "declined" | "cancelled"
+//   give     { kind: "give", from, to, amount, note, request }   points one player gives the
+//            other (あげる): owed by nobody. request: the ask-give it answers, if any
+//   ask-give { kind: "ask-give", from, to, amount, status }  `from` asks `to` to give (もらう)
 //   gift     { kind: "gift", from, to, amount, note }   points given, owed by nobody (the
 //            運営 sends these)
 //   charge   { kind: "charge", from, to, amount, note } points the 運営 takes back; taken from
@@ -31,7 +34,7 @@
   const isMoney = (entry) => entry.kind === "lend" || entry.kind === "repay";
   // Entries `to`'s device applies to its wallet when it collects: money and gifts add, a charge
   // takes away.
-  const arrives = (entry) => isMoney(entry) || entry.kind === "gift" || entry.kind === "charge";
+  const arrives = (entry) => isMoney(entry) || entry.kind === "give" || entry.kind === "gift" || entry.kind === "charge";
   const change = (entry) => (entry.kind === "charge" ? -entry.amount : entry.amount);
   // > 0: the other owes `me` that much. < 0: `me` owes the other.
   function net(entries, me) {
@@ -51,7 +54,9 @@
     return n;
   }
   // Drops the oldest of what matters least, so a long talk never pushes a debt out.
-  function trim(entries) {
+  // `claimed`: ids the receiver has already taken in; a give or gift not yet taken in is never
+  // dropped to make room, or the sender would be charged for points that never arrive.
+  function trim(entries, claimed) {
     let list = entries;
     const drop = (test, keep) => {
       let extra = list.filter(test).length - keep;
@@ -59,11 +64,21 @@
     };
     drop((e) => e.kind === "message", MAX_MESSAGES);
     if (list.length > MAX_ENTRIES) drop((e) => e.status && e.status !== "open", Math.max(0, MAX_ENTRIES - (list.length - list.filter((e) => e.status && e.status !== "open").length)));
+    if (list.length > MAX_ENTRIES) {
+      const over = list.length - MAX_ENTRIES,
+        done = (e) => (e.kind === "give" || e.kind === "gift") && !!claimed?.[e.id];
+      drop(done, Math.max(0, list.filter(done).length - over));
+    }
     return list.slice(-MAX_ENTRIES);
   }
   function add(record, entry) {
     const next = record ? clone(record) : { entries: [] };
-    next.entries = trim((next.entries || []).concat(entry));
+    next.entries = trim((next.entries || []).concat(entry), next.claimed);
+    // `claimed` only needs the ids still in the record.
+    if (next.claimed) {
+      const ids = new Set(next.entries.map((e) => e.id));
+      next.claimed = Object.fromEntries(Object.entries(next.claimed).filter(([id]) => ids.has(id)));
+    }
     next.updatedAt = entry.at;
     return next;
   }
@@ -87,6 +102,8 @@
     if (!RATES.includes(rate)) throw Error("利子は" + RATES.map((r) => r * 100 + "%").join("・") + "から選んでください。");
     return amount + Math.round(amount * rate);
   }
+  // What each kind of move may answer.
+  const ANSWERS = { lend: "ask-lend", repay: "ask-repay", give: "ask-give" };
   function send(record, { id, from, to, amount, kind, note, at, request, rate = 0 }) {
     amount = amountOf(amount);
     if (from === to) throw Error("自分には送れません。");
@@ -94,12 +111,15 @@
       const owed = owedBy(record?.entries, from);
       if (!owed) throw Error("返すポイントはありません。");
       if (amount > owed) throw Error("返すのは借りている" + owed.toLocaleString("ja-JP") + "ptまでです。");
-    } else if (kind !== "lend") throw Error("不明な操作です。");
+    } else if (kind !== "lend" && kind !== "give") throw Error("不明な操作です。");
     const interest = kind === "lend" && rate ? { rate, due: dueOf(amount, rate) } : {};
     let next = add(record, { id, kind, from, to, amount, ...interest, note: String(note || "").slice(0, 60), at, request: request || null });
     if (request) {
       const asked = findOpen(next, request);
       if (!asked) throw Error("この頼みはもう終わっています。");
+      // The move has to be the answer to that request: right kind, between the same two, and a
+      // give for exactly the asked amount.
+      if (asked.kind !== ANSWERS[kind] || asked.from !== to || asked.to !== from || (kind === "give" && asked.amount !== amount)) throw Error("この頼みには応えられません。");
       Object.assign(asked, { status: "done", resolvedAt: at });
     }
     return next;
@@ -111,7 +131,7 @@
       const owed = Math.max(0, net(record?.entries, from));
       if (!owed) throw Error("相手に貸しているポイントはありません。");
       if (amount > owed) throw Error("請求できるのは貸している" + owed.toLocaleString("ja-JP") + "ptまでです。");
-    } else if (kind !== "ask-lend") throw Error("不明な操作です。");
+    } else if (kind !== "ask-lend" && kind !== "ask-give") throw Error("不明な操作です。");
     if ((record?.entries || []).some((e) => e.status === "open" && e.kind === kind && e.from === from)) throw Error("同じ頼みがまだ返事待ちです。");
     return add(record, { id, kind, from, to, amount, note: String(note || "").slice(0, 60), at, status: "open" });
   }
