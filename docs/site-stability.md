@@ -2476,3 +2476,13 @@ Tests:
 - `tests/study-points.test.cjs`: a counted study day adds one notice with the day, minutes and points; counting again adds none; with more minutes it is the same notice with the new total; another account has none.
 - `tests/personal-notices.smoke.cjs`: the bell badge, the 「あなたへ」 list with new ones marked, read once opened, a re-counted day shown again as new.
 - `tests/sugoroku-shared.smoke.cjs`: the 120pt share taken on opening makes one notice.
+
+## Reorder: undo is only for the same set of words (10.22.68.00)
+
+**What could happen.** Found by the Codex review of 10.22.66.00. After a move, adding a word (with a number of its own) and then pressing 「元に戻す」 restored the numbers from before the move and deleted the number of the word that was not in that snapshot, so the new word could change its shown number, or share one with another.
+
+**Now.** The undo keeps the set of words the book had when the move was made. If a word has been added or taken out since, the 「元に戻す」 button is not shown, and pressing it (from an old screen) says 「単語が追加・削除されたため、元に戻せません。」 without changing anything. Nothing about the other words or the added word's number is touched.
+
+Tests:
+
+- `tests/vocab-reorder.smoke.cjs`: after a move, a word added with its own number removes the undo button and keeps its number.

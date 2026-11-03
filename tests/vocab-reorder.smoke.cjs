@@ -109,6 +109,17 @@ const { chromium } = require("playwright"),
     await page.locator("#vocabLibraryBooks .textbook-list-item").filter({ hasText: "並び替えテスト" }).click();
     await page.locator("#vocabAddWord").waitFor({ state: "visible" });
     assert.equal(await order(), "two:1 four:2 one:3 five:4 three:5");
+    // A word added after a move: the move can no longer be undone (it would take that word's number),
+    // and the added word keeps the number it has.
+    await button.click();
+    await row("two").locator(".is-down").click();
+    await page.getByRole("button", { name: "元に戻す" }).waitFor();
+    await page.evaluate(() => {
+      vocabList.push({ num: 99, no: 3, word: "added", meaning: "追加", meanings: [{ id: "99-0", text: "追加", status: "none", history: [] }] });
+      renderVocabList();
+    });
+    assert.equal(await page.getByRole("button", { name: "元に戻す" }).count(), 0);
+    assert.equal(await page.evaluate(() => VocabOrder.no(vocabList.find((w) => w.num === 99))), 3);
     assert.deepEqual(errors, []);
     console.log("PASS: reorder mode with ▲▼, drag, keys and undo; numbers only handed on; rating and note stay; order saved");
   } finally {
