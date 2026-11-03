@@ -68,14 +68,22 @@
       else delete w.no;
     });
     const moved = words.find((w) => String(w.num) === String(num));
-    undo = before;
+    undo = { before, words: wordSet() };
     message = "「" + moved.word + "」を " + shownNo(moved) + " 番に動かしました。";
     save();
   }
+  // The words of the book as they were when a move was made: an undo is only for that same set
+  // (a word added or taken out since would otherwise be given a number that is no longer free).
+  const wordSet = () => list().map((w) => String(w.num)).sort().join("\n");
+  const undoable = () => !!undo && undo.words === wordSet();
   function revert() {
-    if (!undo) return;
+    if (!undoable()) {
+      undo = null;
+      message = "単語が追加・削除されたため、元に戻せません。";
+      return root.renderVocabList();
+    }
     list().forEach((w) => {
-      const had = undo.get(String(w.num));
+      const had = undo.before.get(String(w.num));
       if (had === undefined) delete w.no;
       else w.no = had;
     });
@@ -108,6 +116,7 @@
 
   function render(container, shown) {
     container.replaceChildren();
+    if (undo && !undoable()) undo = null;
     const bar = node("div", "vocab-reorder-bar");
     bar.append(node("p", "vocab-reorder-hint", "左の「⋮⋮」をつかんで動かすか、▲▼で1つずつ動かせます。"));
     if (undo) {
