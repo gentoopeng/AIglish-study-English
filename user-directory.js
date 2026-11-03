@@ -23,5 +23,34 @@ function scan(visit,isCurrent=()=>true){
  });
  queue=task.catch(()=>{});return task;
 }
-window.UserDirectory={scan};
+// Players active since `since` (ms), read with only the fields a list needs, plus the given
+// ids (friends) that were quiet longer. One query per 50 players instead of every whole user
+// document; null when the project's REST endpoint is not known (then use scan).
+const LIST_FIELDS=['playerName','userName','name','avatar','profileCustomizationJson','deleted','lastActiveAt','lastLoginAt','updatedAt','learningRankingV2Json','studyLedgerJson','userStatsJson','statistics','user_stats','stats','userStats'];
+async function recent(since,ids=[],{signal}={}){
+ const project=window.db?.app?.options?.projectId,decode=window.RankingQuery?.fields;
+ if(!/^[a-z0-9-]+$/.test(project||'')||!decode||typeof fetch!=='function')return null;
+ const base='https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents';
+ const request=async(path,body)=>{const response=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});const data=await response.json();if(!response.ok||!Array.isArray(data)){const error=Error(data.error?.message||'ユーザーを取得できませんでした。');error.code=response.status===429?'resource-exhausted':data.error?.status;throw error;}return data;};
+ const read=window.FirestoreReadGuard?.wrap?.(request)||request;
+ const select={fields:LIST_FIELDS.map(fieldPath=>({fieldPath}))},from=new Date(since).toISOString(),found=new Map();
+ let cursor;
+ do{
+  const structuredQuery={from:[{collectionId:'users'}],select,where:{fieldFilter:{field:{fieldPath:'lastActiveAt'},op:'GREATER_THAN_OR_EQUAL',value:{stringValue:from}}},orderBy:[{field:{fieldPath:'lastActiveAt'},direction:'ASCENDING'},{field:{fieldPath:'__name__'},direction:'ASCENDING'}],limit:50};
+  if(cursor)structuredQuery.startAt={values:[cursor.fields.lastActiveAt,{referenceValue:cursor.name}],before:false};
+  const page=(await read(':runQuery',{structuredQuery})).filter(item=>item.document).map(item=>item.document);
+  for(const document of page){const id=document.name.split('/').pop(),data=decode(document.fields);window.ProfileIdentityCache?.remember(id,data);found.set(id,data);}
+  cursor=page[page.length-1];
+  if(page.length<50)break;
+ }while(!signal?.aborted);
+ const missing=[...new Set(ids)].filter(id=>id&&!found.has(id)&&/^[^/]{1,128}$/.test(id));
+ if(missing.length&&!signal?.aborted){
+  const root='projects/'+project+'/databases/(default)/documents/users/';
+  const extras=await read(':batchGet',{documents:missing.map(id=>root+encodeURIComponent(id)),mask:{fieldPaths:LIST_FIELDS}});
+  for(const item of extras)if(item.found){const id=decodeURIComponent(item.found.name.split('/').pop()),data=decode(item.found.fields);window.ProfileIdentityCache?.remember(id,data);found.set(id,data);}
+ }
+ if(signal?.aborted)throw new DOMException('中止しました','AbortError');
+ return [...found].map(([id,data])=>({id,data}));
+}
+window.UserDirectory={scan,recent};
 })();

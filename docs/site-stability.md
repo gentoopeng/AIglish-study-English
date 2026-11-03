@@ -2303,3 +2303,31 @@ The user sent a screenshot from an iPhone: the line 「今日あと 0pt 賭け�
 **Fix.** The allowance now has its own line (`.casino-allow`), across the full width at the bottom of the balance card. It can wrap on narrow screens. When nothing is left to bet, it is shown in gold.
 
 Test: `tests/casino.smoke.cjs` checks the text of the new line and, at 320px wide, that it stays inside the card and does not overflow.
+
+## Users tab: loads fast, shows at once, and never stays stuck (10.22.60.00)
+
+The user found that the users tab was slow to load and asked for other awkward parts of the UI to be fixed.
+
+**Why it was slow.**
+
+1. The list read every user document in full, 10 at a time, one page after another. That included every saved field, even though the tab shows only a name, a photo, when the user was last active and today's study time. It also read players who had not been seen for months.
+2. Nothing was kept between launches, so every launch started from 「読み込み中…」 and waited for the whole scan.
+3. A bug could stop loading for the rest of the session. If the tab was opened before the cloud was ready (offline, or before sign-in finished), the load ended without waiting. It then cleared its "loading" flag *before* the flag had been set. The flag stayed set, and every later load returned the finished one, including the 更新 button.
+
+**Fixes.**
+
+- **Projected query.** `UserDirectory.recent()` reads players active in the last 7 days with one REST `runQuery`, the same way the ranking does. It filters on `lastActiveAt` and fetches 50 a page. It selects only the fields the list needs: name, photo, profile look, active times, the deleted flag, and the study-time ledger for 「今日 N分」.
+- **Quiet friends.** Friends who were quiet for longer come in one `batchGet`, with the same fields.
+- **Fallback.** Without the REST endpoint, the old scan is still used.
+- **Kept on the device.** The list is saved (`aiglish_people_list_<id>`, photos dropped if the copy grows past 1.5 MB). The tab shows it at once on the next launch, with 「更新しています…」 while the fresh list loads. An admin deletion clears the saved copy.
+- **The loading flag** is now cleared when the load has really finished, so a load that ended early no longer blocks the next one.
+- **No more endless 「読み込み中…」.** A guest now sees 「ログインすると、ほかのユーザーが表示されます。」. A device off the cloud is told to use 更新 once it is connected.
+
+Test: `tests/people-recent.smoke.cjs` checks:
+
+- a guest is told to sign in;
+- after signing in, the list loads with one projected query (the filter, 50 a page, no heavy fields), and the quiet friend comes from one batch read;
+- the old scan is not used;
+- on the next launch the kept list (2 people) shows while the cloud has not answered yet.
+
+`tests/people.smoke.cjs` (the scan fallback) still passes.
