@@ -2457,3 +2457,22 @@ Tests:
 
 - `tests/vocab-order.test.cjs`: `move` up, down, to the first place and in place; numbers with gaps; the input is not changed; a default number leaves no field; unknown word or place is refused.
 - `tests/vocab-reorder.smoke.cjs`: the mode and the cards coming back; ▲▼ disabled at the ends; one place down and up; focus stays; undo; drag with the mouse; dropping in place; keys; the rating and note on a moved word; the order is still there after a reload.
+
+## お知らせボックス: points that come in from elsewhere are told there (10.22.67.00)
+
+**What the user saw.** A share of someone else's line in すごろくビンゴ was only shown for a moment on the game's screen, and a day's study time (counted after 0:06 the next day) appeared only as a changed number and a line in the points history. Nothing said it had come, or when.
+
+**Now.** The お知らせボックス has a 「あなたへ」 list above 「運営から」 for notices for this player. `personal-notices.js` keeps them in this device's storage per account (`aiglish_personal_notices_<id>`, the read time in `aiglish_personal_notices_seen_<id>`), newest first, at most 50. A notice with an id that is already there replaces it.
+
+- **Bingo shares.** `pay()` in `sugoroku.js`, which every roll and the share taken on opening go through, adds 「ほかの人のビンゴの分け前 +Npt」 when real points (not practice chips) came in from other players' lines.
+- **Study time.** `collectTime()` in `study-points.js` adds 「M月D日の勉強時間 +Npt」 (minutes and the rate in the text) when a day's points are counted for the first time or counted again with more. The id is `time:<day>`, so a day is one notice with its latest total.
+- **Bell.** The badge counts the new notices with the team's and the login bonus (`personal-notices-changed` makes it redraw at once). Opening the box marks them read; the new ones keep their mark for that look.
+
+**Kept on this device only.** The notices are not in the cloud: a second device does not show them, and they are not backed up. The points themselves are unchanged (wallet, history and ranking work as before).
+
+Tests:
+
+- `tests/personal-notices.test.cjs`: per account, newest first, unread until seen, replace by id, capped at 50, bad input refused, damaged storage read as empty.
+- `tests/study-points.test.cjs`: a counted study day adds one notice with the day, minutes and points; counting again adds none; with more minutes it is the same notice with the new total; another account has none.
+- `tests/personal-notices.smoke.cjs`: the bell badge, the 「あなたへ」 list with new ones marked, read once opened, a re-counted day shown again as new.
+- `tests/sugoroku-shared.smoke.cjs`: the 120pt share taken on opening makes one notice.

@@ -88,6 +88,11 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await page.evaluate(() => window.Casino.flush());
     await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 2120);
     assert.match(await screen.locator(".sg-say").innerText(), /分け前　\+120pt/);
+    // ... and the お知らせボックス has a notice for it, once.
+    assert.deepEqual(
+      await page.evaluate(() => PersonalNotices.list("sg-a").map((n) => [n.title, n.amount])),
+      [["ほかの人のビンゴの分け前 +120pt", 120]],
+    );
     assert.deepEqual(await page.evaluate(() => window.__store["shared/sugoroku_live"].owed), {});
     assert.equal((await saved()).shared, 120);
     await page.waitForFunction(() => !document.querySelector(".sg-go").disabled);

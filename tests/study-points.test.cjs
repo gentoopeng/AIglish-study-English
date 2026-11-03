@@ -39,6 +39,7 @@ function setup(remote = new Map(), even = false) {
   for (const file of [
     "weak-review-model.js",
     "study-point-policy.js",
+    "personal-notices.js",
     "study-points.js",
   ])
     vm.runInNewContext(fs.readFileSync(file, "utf8"), c);
@@ -661,4 +662,33 @@ test("points history per day: every credited award is kept by day and kind, once
   let many = {};
   for (let i = 0; i < 420; i++) many = a.c.StudyPointPolicy.addDaily(many, new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10), "card", 2);
   assert.equal(Object.keys(many).length, 400);
+});
+
+test("a day's study time that is counted puts one notice in the お知らせボックス, with the new total if it is counted again", async () => {
+  const a = setup(),
+    p = a.c.StudyPointPolicy,
+    day = p.day(Date.now() - 2 * 86400000),
+    start = p.dayStart(day),
+    days = {};
+  a.c.StudyTime = { snapshot: () => ({ days }) };
+  for (let i = 0; i < 600; i++) p.accrueTime(days, "phone", start + i * 1000, start + (i + 1) * 1000);
+  await a.points.collectTime();
+  let notices = a.c.PersonalNotices.list("a");
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].id, "time:" + day);
+  assert.equal(notices[0].amount, 10);
+  const [, month, date] = day.split("-").map(Number);
+  assert.equal(notices[0].title, month + "月" + date + "日の勉強時間 +10pt");
+  assert.match(notices[0].body, /10分（1分1pt）/);
+  assert.equal(a.c.PersonalNotices.unread("a"), 1);
+  // Counted again with nothing new: no second notice. With more minutes: the same notice, new total.
+  await a.points.collectTime();
+  assert.equal(a.c.PersonalNotices.list("a").length, 1);
+  for (let i = 600; i < 900; i++) p.accrueTime(days, "phone", start + i * 1000, start + (i + 1) * 1000);
+  await a.points.collectTime();
+  notices = a.c.PersonalNotices.list("a");
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].amount, 15);
+  // Another account's notices are its own.
+  assert.equal(a.c.PersonalNotices.list("b").length, 0);
 });
