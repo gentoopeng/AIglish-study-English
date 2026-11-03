@@ -80,18 +80,21 @@ const { chromium } = require("playwright"),
     assert.equal(await t.allowance(), 0);
     assert.match(await t.page.evaluate(() => window.Casino.studyHint(100)), /次の日に持ち越せて、2日前の分からは半分ずつに減ります/);
     // Yesterday's bets also took the oldest first: 1,200 bet yesterday used up what was worth
-    // 200 (five days old) and 400 (three days old) that day and 600 of the two-day-old 1,000, so
-    // 400 of it is left (worth 200 now), and yesterday's own 1,000 is whole: 1,200 carry.
+    // 62.5 (the 10 minutes of six days ago, five days old then), 200 (five days old, 4 then) and
+    // 400 (three days old) that day and 537.5 of the two-day-old 1,000, so 462.5 of it is left
+    // (worth 231 now), and yesterday's own 1,000 is whole: 1,231 carry.
     await t.staked({ "-1": 1200 });
-    assert.equal(await t.allowance(), 1500);
+    assert.equal(await t.allowance(), 1531);
     // Older forms of the record (one day, { day, amount }) still read.
     await t.page.evaluate(async () => localStorage.setItem("aiglish_casino_staked_co-a", JSON.stringify({ day: window.StudyTimeModel.dateKey(Date.now()), amount: 50 })));
     assert.equal(await t.allowance(), 2050);
-    // Bets are kept by day, the last six days.
-    await t.page.evaluate(() => localStorage.setItem("aiglish_casino_staked_co-a", JSON.stringify({ days: { "2020-01-01": 5, "2020-01-02": 5, "2020-01-03": 5, "2020-01-04": 5, "2020-01-05": 5, "2020-01-06": 5 } })));
+    // Bets are kept by day, the last eleven days (the five that count and the five replayed before them).
+    const old = {};
+    for (let d = 1; d <= 12; d++) old["2020-01-" + String(d).padStart(2, "0")] = 5;
+    await t.page.evaluate((days) => localStorage.setItem("aiglish_casino_staked_co-a", JSON.stringify({ days })), old);
     await t.page.evaluate(() => window.Casino.addStaked(70));
     const saved = await t.page.evaluate(() => JSON.parse(localStorage.getItem("aiglish_casino_staked_co-a")));
-    assert.deepEqual(Object.keys(saved.days).sort(), ["2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05", "2020-01-06", "2026-11-20"]);
+    assert.deepEqual(Object.keys(saved.days).sort(), [...Object.keys(old).slice(2), "2026-11-20"]);
     assert.equal(saved.days["2026-11-20"], 70);
     await t.page.close();
 
@@ -106,6 +109,15 @@ const { chromium } = require("playwright"),
     // Nothing bet: today's own 100, and the carry: 100 (yesterday) + 50 + 25 + 12.5 + 6.25 = 193.75, whole: 193.
     assert.equal(await run.allowance(), 100 + 193);
     await run.page.close();
+
+    // A bet five days ago is paid first from the allowance of six days ago (it was still worth
+    // something then), so five days ago's own allowance is whole: 10,000 / 16 = 625 carry (not 312).
+    const early = await boot("2026-11-20T03:00:00Z");
+    await early.studied(-6, 100);
+    await early.studied(-5, 100);
+    await early.staked({ "-5": 5000 });
+    assert.equal(await early.allowance(), 625);
+    await early.page.close();
 
     // Before this began: the study of 2026-11-03 and earlier is not carried. On the 4th, yesterday
     // (the 3rd, with 140 minutes) gives nothing; on the 5th, the 4th carries and the 3rd does not.

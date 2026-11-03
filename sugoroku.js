@@ -42,8 +42,8 @@
   };
   const SQUARE = { start: "START", normal: "", event: "★", accident: "!" };
   const GAME_NAMES = { blackjack: "ブラックジャック", dice: "ダイスポーカー", chinchiro: "チンチロ", ball: "ボール確定" };
-  const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE" };
-  const HOT = new Set(["bingo", "sjp"]);
+  const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "確変ルーレット" };
+  const HOT = new Set(["bingo", "sjp", "kakuhen"]);
   const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "ストップ", hilo: "ハイ＆ロー" };
   // The normal squares' quick games, paid in multiples of the bet (not played in 早送り).
   const QUICK_GAMES = new Set(["stop", "hilo"]);
@@ -1097,6 +1097,8 @@
   function tone(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "ball" : "game-" + slot;
     if (wheel === "accident") return slot.start ? "worst" : slot.back ? "bad" : slot.take >= 1.5 ? "worst" : slot.take ? "bad" : "safe";
+    if (slot.kakuhen) return "jackpot";
+    if (wheel === "kakuhen") return slot.balls ? "ball" : slot.x >= 10 ? "gold" : slot.x >= 5 ? "champagne" : slot.x >= 3 ? "high" : "mid";
     if (slot.ball) return "ball";
     if (slot.game && wheel === "normal") return "game-mini";
     if (slot.event) return "game-" + slot.event;
@@ -1107,6 +1109,8 @@
   function slotLabel(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "BALL" : { blackjack: "BJ", dice: "DICE", chinchiro: "チンチロ" }[slot];
     if (wheel === "accident") return slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
+    if (slot.kakuhen) return "確変";
+    if (slot.balls) return "●×" + slot.balls;
     if (slot.ball) return "●";
     if (slot.next) return "SJP";
     if (slot.jackpot) return slot.jackpot === "jp" ? "JACKPOT" : "SUPER";
@@ -1175,10 +1179,10 @@
     if (e.mult > 1 && HOT.has(e.wheel)) box.append(node("p", "sg-wheel-base", "賞金とミニゲームは ×" + e.mult));
     layer.replaceChildren(box);
     const n = e.slots.length,
-      turns = { normal: 4, event: 4, accident: 4, bingo: 5, jp: 6, sjp: 7 }[e.wheel],
+      turns = { normal: 4, event: 4, accident: 4, bingo: 5, jp: 6, sjp: 7, kakuhen: 5 }[e.wheel],
       jitter = (random(60) - 30) / 100,
       angle = turns * 360 - ((e.index + 0.5 + jitter * 0.8) * 360) / n;
-    const full = { normal: 1700, event: 2000, accident: 2000, bingo: 3000, jp: 3800, sjp: 4600 }[e.wheel],
+    const full = { normal: 1700, event: 2000, accident: 2000, bingo: 3000, jp: 3800, sjp: 4600, kakuhen: 3200 }[e.wheel],
       time = full * pace();
     box.classList.add("is-spinning");
     disc.style.transition = time ? "transform " + time + "ms cubic-bezier(.15,.6,.1,1)" : "none";
@@ -1199,6 +1203,10 @@
               : slot.take
                 ? "−" + fmt(Math.round(e.base * slot.take)) + api.unit()
                 : "セーフ"
+          : slot.kakuhen
+            ? "確変チャンス！"
+          : slot.balls
+            ? "ボール " + slot.balls + "連続！"
           : slot.next
             ? "SUPER JACKPOT CHANCE"
             : slot.jackpot
@@ -1215,8 +1223,8 @@
                     ? "もう一回！"
                     : "×" + slot.x + "　+" + fmt(e.amount) + api.unit() + (slot.ball ? "　BALL" : "") + (e.total > e.amount ? "（みんなに " + fmt(e.total - e.amount) + "）" : "");
     box.classList.add("is-done");
-    if (slot.next || slot.jackpot || slot.x >= 5) layer.classList.add("is-hotter");
-    await wait(hot || slot.x >= 2 || slot.x < 0 || slot.ball ? 1300 : 750);
+    if (slot.next || slot.jackpot || slot.kakuhen || slot.balls || slot.x >= 5) layer.classList.add("is-hotter");
+    await wait(hot || slot.kakuhen || slot.x >= 2 || slot.x < 0 || slot.ball ? 1300 : 750);
     layer.hidden = true;
   }
   async function jackpot(kind, won) {
