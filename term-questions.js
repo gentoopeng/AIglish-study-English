@@ -372,7 +372,9 @@
     input.addEventListener("blur", () => {
       clearTimeout(leaving);
       leaving = setTimeout(() => {
-        if (panel.contains(document.activeElement)) return;
+        // Still in the panel, or an answer is on show (a tap on 答える does not always focus it):
+        // the question stays until the next card.
+        if (panel.contains(document.activeElement) || panel.dataset.result) return;
         panel.classList.remove("is-typing");
         question.hidden = true;
       }, 400);
