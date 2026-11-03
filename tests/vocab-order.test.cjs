@@ -81,3 +81,27 @@ test("the same unit name in two places makes two units, and a unit's name and ra
   assert.deepEqual(o.units(o.editUnit(words, list[1].key, { name: "" }).words).map((u) => u.name), ["第1章", "第2章", "まとめ"]);
   assert.throws(() => o.editUnit(words, "none@9", { name: "x", from: 1, to: 1 }), /見つかりません/);
 });
+
+test("move puts a word at a place in the order and shifts only the numbers between", () => {
+  const words = [1, 2, 3, 4, 5].map((n) => ({ num: n }));
+  const order = (list) => list.map((w) => w.num + ":" + o.no(w)).join(" ");
+  assert.equal(order(o.move(words, 4, 1)), "1:1 4:2 2:3 3:4 5:5");
+  assert.equal(order(o.move(words, 2, 3)), "1:1 3:2 4:3 2:4 5:5");
+  assert.equal(order(o.move(words, 5, 0)), "5:1 1:2 2:3 3:4 4:5");
+  assert.equal(order(o.move(words, 3, 2)), "1:1 2:2 3:3 4:4 5:5");
+  // Words with a number set by `no` keep their gaps: the same numbers, handed on.
+  const gaps = [{ num: 1, no: 10 }, { num: 2, no: 20 }, { num: 3, no: 35 }];
+  assert.equal(order(o.move(gaps, 3, 0)), "3:10 1:20 2:35");
+  assert.deepEqual(o.move(gaps, 1, 2).map((w) => o.no(w)), [10, 20, 35]);
+  // Identity and other fields stay; nothing is changed in the input; a default number leaves no field.
+  const input = [{ num: 1, word: "a" }, { num: 2, word: "b" }];
+  const moved = o.move(input, 2, 0);
+  assert.deepEqual(input, [{ num: 1, word: "a" }, { num: 2, word: "b" }]);
+  assert.deepEqual(moved.map((w) => w.word), ["b", "a"]);
+  assert.equal(moved[0].no, 1);
+  assert.equal(moved[1].no, 2);
+  assert.equal("no" in o.move(o.move(input, 2, 0), 2, 1)[1], false);
+  assert.throws(() => o.move(words, 9, 0), /見つかりません/);
+  assert.throws(() => o.move(words, 1, 5), /移動先/);
+  assert.throws(() => o.move(words, 1, -1), /移動先/);
+});

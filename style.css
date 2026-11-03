@@ -3041,3 +3041,26 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 
 /* The headword in a 用語・年号モード card, bold against the rest. */
 .term-text b.term-head{font-weight:900;}
+
+/* 並び替え: one short row per word, with a grip to drag and ▲▼ to move one place. */
+.vocab-reorder-toggle.is-on { background: rgba(231, 207, 152, 0.22); border-color: rgba(231, 207, 152, 0.7); color: #fff; }
+.vocab-reorder-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 6px; }
+.vocab-reorder-hint { margin: 0; font-size: 12px; color: rgba(255, 255, 255, 0.72); }
+.vocab-reorder-undo { flex: none; min-height: 34px; padding: 4px 12px; border: 1px solid rgba(231, 207, 152, 0.5); border-radius: 999px; background: transparent; color: #f3e3bd; font-size: 12px; font-weight: 700; }
+.vocab-reorder-status { min-height: 18px; margin: 0 0 6px; font-size: 12px; color: #e7cf98; }
+.vocab-reorder-empty { margin: 24px 0; text-align: center; font-size: 13px; color: rgba(255, 255, 255, 0.7); }
+.vocab-reorder-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.vocab-reorder-row { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 12px; background: rgba(255, 255, 255, 0.05); }
+.vocab-reorder-row.is-dragging { opacity: 0.55; border-color: rgba(231, 207, 152, 0.8); }
+.vocab-reorder-row.is-drop-before::before, .vocab-reorder-row.is-drop-after::after { content: ""; position: absolute; left: 6px; right: 6px; height: 3px; border-radius: 2px; background: #e7cf98; }
+.vocab-reorder-row.is-drop-before::before { top: -5px; }
+.vocab-reorder-row.is-drop-after::after { bottom: -5px; }
+.vocab-reorder-list.is-sorting { user-select: none; -webkit-user-select: none; }
+.vocab-reorder-grip { flex: none; display: grid; place-items: center; width: 40px; height: 44px; padding: 0; border: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.8); cursor: grab; touch-action: none; }
+.vocab-reorder-list.is-sorting .vocab-reorder-grip { cursor: grabbing; }
+.vocab-reorder-no { flex: none; min-width: 34px; font-size: 11px; font-weight: 700; color: rgba(255, 255, 255, 0.7); }
+.vocab-reorder-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.vocab-reorder-text b { font-size: 15px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vocab-reorder-text small { font-size: 11px; color: rgba(255, 255, 255, 0.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vocab-reorder-step { flex: none; display: grid; place-items: center; width: 40px; height: 44px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 10px; background: transparent; color: #f3e3bd; }
+.vocab-reorder-step:disabled { opacity: 0.25; }
