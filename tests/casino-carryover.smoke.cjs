@@ -8,40 +8,45 @@ const { chromium } = require("playwright"),
 (async () => {
   const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
   try {
-    const page = await browser.newPage({ viewport: { width: 375, height: 740 } }),
-      errors = [];
-    page.setDefaultTimeout(10000);
-    page.on("pageerror", (e) => errors.push(e.message));
-    await page.route("https://**/*", (r) => r.abort());
-    await page.addInitScript(() => {
-      localStorage.setItem("b3_tutorial_done", "1");
-      localStorage.setItem("aiglish_sound_settings", JSON.stringify({ enabled: false }));
-    });
-    await page.goto("http://127.0.0.1:8000");
-    await page.getByRole("button", { name: "ゲストで試す" }).click();
-    await page.waitForFunction(() => window.__learningBootReady === true && window.Casino);
-    await page.evaluate(() => {
-      myId = "co-a";
-      localStorage.setItem("core_v4_study_points_co-a", JSON.stringify({ balance: 5000, revision: 1, publishedRevision: 1 }));
-      window.db = {};
-      window.fbDoc = (_, ...parts) => parts.join("/");
-      window.fbRunTransaction = async () => null;
-    });
-    const day = (offset) => page.evaluate((o) => window.StudyTimeModel.dateKey(Date.now() + o * 86400e3), offset);
-    const studied = async (offset, minutes) => {
-      const date = await day(offset);
-      await page.evaluate(
-        ([d, m]) => window.StudyTime.mergeCloud({ version: 1, epoch: "study-reset-2.62", days: { [d]: { sources: { "test-study": m * 60000 } } }, offset: 0, updatedAt: Date.now() }),
-        [date, minutes],
-      );
-    };
-    const staked = async (record) => page.evaluate((r) => localStorage.setItem("aiglish_casino_staked_co-a", JSON.stringify(r)), record);
-    const show = () => page.evaluate(() => (window.switchTab("vocab"), window.switchTab("casino")));
-    const allowance = () => page.evaluate(() => window.Casino.allowance());
-    const text = async () => {
-      await show();
-      return page.locator("[data-casino-allow]").innerText();
-    };
+    const errors = [];
+    // A page with a signed-in player and the helpers to set up the study record and the bets.
+    async function boot() {
+      const page = await browser.newPage({ viewport: { width: 375, height: 740 } });
+      page.setDefaultTimeout(10000);
+      page.on("pageerror", (e) => errors.push(e.message));
+      await page.route("https://**/*", (r) => r.abort());
+      await page.addInitScript(() => {
+        localStorage.setItem("b3_tutorial_done", "1");
+        localStorage.setItem("aiglish_sound_settings", JSON.stringify({ enabled: false }));
+      });
+      await page.goto("http://127.0.0.1:8000");
+      await page.getByRole("button", { name: "ゲストで試す" }).click();
+      await page.waitForFunction(() => window.__learningBootReady === true && window.Casino);
+      await page.evaluate(() => {
+        myId = "co-a";
+        localStorage.setItem("core_v4_study_points_co-a", JSON.stringify({ balance: 5000, revision: 1, publishedRevision: 1 }));
+        window.db = {};
+        window.fbDoc = (_, ...parts) => parts.join("/");
+        window.fbRunTransaction = async () => null;
+      });
+      const day = (offset) => page.evaluate((o) => window.StudyTimeModel.dateKey(Date.now() + o * 86400e3), offset);
+      const studied = async (offset, minutes) => {
+        const date = await day(offset);
+        await page.evaluate(
+          ([d, m]) => window.StudyTime.mergeCloud({ version: 1, epoch: "study-reset-2.62", days: { [d]: { sources: { "test-study": m * 60000 } } }, offset: 0, updatedAt: Date.now() }),
+          [date, minutes],
+        );
+      };
+      const staked = (record) => page.evaluate((r) => localStorage.setItem("aiglish_casino_staked_co-a", JSON.stringify(r)), record);
+      const show = () => page.evaluate(() => (window.switchTab("vocab"), window.switchTab("casino")));
+      const allowance = () => page.evaluate(() => window.Casino.allowance());
+      const text = async () => {
+        await show();
+        return page.locator("[data-casino-allow]").innerText();
+      };
+      return { page, day, studied, staked, allowance, text };
+    }
+    const { page, day, studied, staked, allowance, text } = await boot();
 
     // The day before yesterday studied 10 minutes, yesterday none, today 3: nothing carried into
     // today (what carried into yesterday ended with it).
@@ -79,7 +84,24 @@ const { chromium } = require("playwright"),
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("aiglish_casino_staked_co-a")));
     assert.deepEqual(Object.keys(saved.days).sort(), ["2020-01-02", "2020-01-03", "2020-01-04", await day(0)].sort());
     assert.equal(saved.days[await day(0)], 70);
-    // Practice chips have no allowance to carry.
+    // A run of days that each carry on (1 minute studied and 100 bet, every day) stays whole past
+    // the days looked back over, from what was kept when each day was worked out; and the day is
+    // kept for the next. Without anything kept it is not made up (nothing carries).
+    const chain = await boot();
+    for (const offset of [-3, -2, -1, 0]) await chain.studied(offset, 1);
+    await chain.staked({ days: { [await chain.day(-3)]: 100, [await chain.day(-2)]: 100, [await chain.day(-1)]: 100 } });
+    assert.equal(await chain.allowance(), 100);
+    await chain.staked({ days: { [await chain.day(-3)]: 100, [await chain.day(-2)]: 100, [await chain.day(-1)]: 100 }, carried: { [await chain.day(-3)]: 100 } });
+    assert.equal(await chain.allowance(), 200);
+    assert.equal(await chain.text(), "今日あと 200pt 賭けられます（今日の勉強 1分・昨日の使い残し 100pt を含む）");
+    const kept = await chain.page.evaluate(() => JSON.parse(localStorage.getItem("aiglish_casino_staked_co-a")));
+    assert.equal(kept.carried[await chain.day(0)], 100);
+    // Bets made after this keep what was kept, and it is not lowered by a smaller sum later.
+    await chain.page.evaluate(() => window.Casino.addStaked(30));
+    const after = await chain.page.evaluate(() => JSON.parse(localStorage.getItem("aiglish_casino_staked_co-a")));
+    assert.deepEqual([after.days[Object.keys(after.days).sort().at(-1)], after.carried[Object.keys(after.carried).sort().at(-1)]], [30, 100]);
+    assert.equal(await chain.allowance(), 170);
+    await chain.page.close();
     assert.deepEqual(errors, []);
     console.log("PASS: the unused part of a day's betting allowance carries into the next day and ends there (carried part used first, the day before that ended, old record form, four days kept)");
   } finally {

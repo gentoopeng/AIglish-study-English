@@ -2620,3 +2620,29 @@ Tests:
 Tests:
 
 - `tests/casino-carryover.smoke.cjs`: the day before yesterday's leftover does not reach today; yesterday's does; yesterday's bets use what had carried into it first; the carried part is used first today; the text with and without 「昨日の使い残し」; used up: no more, and the hint; the older record form; four days kept.
+
+## Settings screens: tidier, and each on one screen (10.22.77.00)
+
+**What the user saw.** The settings were crowded: the app's 設定 dialog was a tall stack of separate cards, with the Gemini key at the bottom, and needed scrolling even on a tall phone (804px for 852px of screen, 854px of content); the card study settings had numbered titles (①②③) and a book picker that repeated the dialog's title; the add-word form grew past a phone screen as soon as its extra settings were opened.
+
+**Now.** On a phone 390×740, none of the three scrolls.
+
+- **設定 (the app's).** Three groups with a small title each: サウンド (BGM and 効果音 in one card, with a line between them; the track beside its label), 単語の読み上げ (the pronunciation switch, 自動で読む, 速さ, 発音 with 試す, ハンズフリー), and AI取り込み (the Gemini key and its save button on one line). 658px, from 804px. Every control keeps its id. The 「アイコンに未読数」 card, which was meant to be hidden where the phone cannot show a badge, is hidden there now (a style was overriding `hidden`).
+- **カード学習設定.** No numbering. In a column: 最初に出す面 (two buttons), 出題範囲 (two numbers and 〜), 単元 (when the book has units), 出す理解度 (○△×ー and what is chosen), then カードを開始する and 戻る. The book is the dialog's title, so the 教材 picker is kept for the code but not shown there. 466px, from 587px.
+- **単語を追加.** Smaller fields and chips (the parts of speech on one row), tighter spacing, and 単元 beside 単語番号 in the extra settings. 380px from 537px closed; with the extra settings open 633px (from 966px), and with a second meaning open the form is just within the screen.
+
+Tests:
+
+- `tests/settings-fit.smoke.cjs`: at 390×740 the app settings (three groups, every id, the key beside its button), the card study settings (no ①②③, the fields, the book's title, the direction buttons), and the add-word form (also with the extra settings open, 単元 beside 単語番号, and a second meaning) fit without scrolling.
+
+## Two review fixes: a zero-net batch kept until published, and carrying on past three days (10.22.77.00)
+
+**Found by the Codex reviews of 10.22.75.00 and 10.22.76.00.**
+
+- **A zero-net batch is kept until published.** A batch of すごろくビンゴ rolls that nets to exactly zero is removed after its totals are published (`Poker.publishStats`); if that write fails (offline), it stays and is tried again, and its share for the jackpots is added once, after it succeeds. Before, it was removed even when the publish failed, so the rolls stayed out of the ranking until a later write. A batch with no save of すごろくビンゴ to publish is removed as before.
+- **The carry-over keeps a run of days whole.** The betting allowance carries what was left of yesterday's own allowance, after yesterday had spent what had carried into it first. A player who studies a minute and bets 100 every day therefore keeps 100 carrying on every day. The calculation looked back only three days and took what carried into the oldest day as zero, which made such a run collapse to nothing. What had carried into a day is now kept on this device when it is worked out (`aiglish_casino_staked_<id>`, `carried`, the last four days), never lowered (the study record can still be arriving from another device), and used as the base of the look back. A run stays whole as long as the app is used on the days; where days were skipped it is rebuilt from what is kept and the study record, never made up.
+
+Tests:
+
+- `tests/casino.smoke.cjs`: a zero-net batch stays while the write fails, and goes once it works.
+- `tests/casino-carryover.smoke.cjs`: a run of days each studied 1 minute and bet 100: nothing is made up without what was kept; with the base kept, 100 carries into today (the text says so), today's is kept and not lowered by a later bet.

@@ -3090,3 +3090,70 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 .term-answer-panel.is-typing{top:10px;bottom:auto;max-height:min(72%,440px);overflow:auto;}
 .term-answer-question{margin:0;padding:2px 6px 8px;border-bottom:1px solid rgba(255,255,255,.16);max-height:30dvh;overflow:auto;color:#fff;font:600 16px/1.7 system-ui,sans-serif;text-align:center;white-space:pre-line;overflow-wrap:anywhere;}
 .term-answer-question[hidden]{display:none;}
+
+/* 設定: three groups (サウンド, 単語の読み上げ, AI取り込み), each a tight card, so the whole dialog fits a phone screen. */
+#settingsDialog{padding:16px 16px 14px;}
+#settingsDialog .menu-dialog-heading{margin-bottom:6px;}
+#settingsDialog .settings-group-title{margin:10px 2px 6px;font:700 11px/1 system-ui,sans-serif;letter-spacing:.14em;color:var(--text-sub);}
+#settingsDialog .sidebar-sounds{gap:8px;padding:10px 12px;margin-bottom:0;border-radius:14px;}
+#settingsDialog .settings-card+.settings-group-title{margin-top:10px;}
+#settingsDialog .settings-part{display:grid;gap:7px;}
+#settingsDialog .settings-part+.settings-part{padding-top:9px;border-top:1px solid var(--border);}
+#settingsDialog .sound-volume{grid-template-columns:3.2em minmax(0,1fr) 38px;gap:8px;}
+#settingsDialog .music-track-row{grid-template-columns:3.2em minmax(0,1fr);}
+#settingsDialog .music-track-select{padding:6px 8px;font-size:12px;}
+#settingsDialog .sidebar-pronounce .pronounce-accent{grid-template-columns:3.2em minmax(0,1fr) auto;}
+#settingsDialog .sidebar-pronounce .handsfree-delay{grid-template-columns:auto minmax(0,1fr);}
+#settingsDialog .sidebar-pronounce .handsfree-delay label{font-size:11px;}
+#settingsDialog .settings-api{padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:rgba(15,23,42,.35);}
+#settingsDialog .settings-api-label{display:block;margin:0 0 6px;font:700 11px/1 system-ui,sans-serif;color:var(--accent);}
+#settingsDialog .settings-api-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
+#settingsDialog .settings-api-row .search-input{height:34px;margin:0;font-size:12px;}
+#settingsDialog .settings-api-row .modern-btn{width:auto;height:34px;padding:0 12px;font-size:12px;white-space:nowrap;}
+#settingsDialog #settingsSaveStatus{margin:6px 0 0;}#settingsDialog #settingsSaveStatus:empty{display:none;}
+
+#settingsDialog [hidden]{display:none!important;}
+/* カード学習設定: one tidy column of fields (no numbering), the book's name is the dialog's title. */
+.flashcard-setup{margin-top:10px;}
+.flashcard-setup-card{display:grid;gap:12px;padding:14px;border:1px solid var(--cosmic-purple-light);border-radius:14px;background:rgba(7,11,25,.9);text-align:left;}
+.flashcard-setup-title{display:flex;align-items:center;justify-content:center;gap:6px;margin:0;font-size:14px;color:#fff;}
+.flashcard-setup-field{display:grid;gap:6px;margin:0;}
+.flashcard-setup-field>span{font:700 11px/1 system-ui,sans-serif;letter-spacing:.08em;color:var(--cosmic-cyan);}
+.book-flashcard-dialog .flashcard-setup-source{display:none;}
+.flashcard-setup-seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.flashcard-setup-seg .pill-btn{width:100%;justify-content:center;white-space:nowrap;padding:8px 4px;font-size:12px;}
+.flashcard-setup-range{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;color:var(--text-sub);}
+.flashcard-setup-range input{margin:0;height:40px;text-align:center;}
+.flashcard-setup .flashcard-status-filters{margin:0;}
+.flashcard-setup .flashcard-status-filter-summary{margin:0;}
+.flashcard-setup-start{height:46px;font-size:16px;border-color:transparent!important;background:#c6b790!important;color:#18202d!important;}
+.flashcard-setup-back{margin:0 auto;background:none;border:none;box-shadow:none;}
+
+/* 単語を追加: tighter, so the form (with the extra settings open, or two meanings) fits a phone screen. */
+html body dialog.vocab-entry-dialog{padding:14px 14px 10px;}
+html body dialog.vocab-entry-dialog header h2{font-size:18px;}
+html body dialog.vocab-entry-dialog .vocab-entry-book{margin:2px 0 0;font-size:11px;}
+html body dialog.vocab-entry-dialog header button{width:34px;height:34px;}
+html body dialog.vocab-entry-dialog label{font-size:12px;margin:8px 0 4px;}
+html body dialog.vocab-entry-dialog input:not([type=checkbox]),html body dialog.vocab-entry-dialog select{min-height:42px;font-size:16px;padding:8px 12px;border-radius:10px;}
+html body dialog.vocab-entry-dialog textarea{min-height:44px;font-size:16px;padding:8px 12px;border-radius:10px;}
+html body dialog.vocab-entry-dialog textarea#vocabEntrySub{min-height:52px;}
+html body dialog.vocab-entry-dialog .vocab-entry-dup{margin:2px 0 0;}
+html body dialog.vocab-entry-dialog .vocab-entry-meaning{padding:6px 0;}
+html body dialog.vocab-entry-dialog .vocab-entry-meaning-head{grid-template-columns:18px minmax(0,1fr) 32px;gap:4px;}
+html body dialog.vocab-entry-dialog .vocab-entry-meaning-no{padding-top:10px;}
+html body dialog.vocab-entry-dialog textarea.vocab-entry-meaning-text{min-height:42px;}
+html body dialog.vocab-entry-dialog .vocab-entry-remove{width:32px;height:42px;}
+html body dialog.vocab-entry-dialog .vocab-entry-tools{margin:6px 0 0 22px;gap:4px;}
+html body dialog.vocab-entry-dialog .vocab-entry-pos{gap:4px;flex-wrap:nowrap;}
+html body dialog.vocab-entry-dialog .vocab-entry-chip{min-width:32px;min-height:32px;padding:0 6px;font-size:13px;}
+html body dialog.vocab-entry-dialog .vocab-entry-preview{margin:6px 0 0 22px;}
+html body dialog.vocab-entry-dialog .vocab-entry-add-meaning{margin:0 0 6px;min-height:32px;padding:4px 0;font-size:13px;}
+html body dialog.vocab-entry-dialog details{padding-top:8px;}
+html body dialog.vocab-entry-dialog .vocab-entry-pair{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:8px;}
+html body dialog.vocab-entry-dialog .vocab-entry-pair>div{min-width:0;}
+html body dialog.vocab-entry-dialog .vocab-entry-insert{margin:6px 0 0;font-size:11px;}
+html body dialog.vocab-entry-dialog details .library-editor-hint{margin:4px 0 0;font-size:11px;line-height:1.5;}
+html body dialog.vocab-entry-dialog .vocab-entry-continue{margin:8px 0 0;}
+html body dialog.vocab-entry-dialog .library-editor-actions{padding:8px 0 2px;margin-top:8px;bottom:-10px;}
+html body dialog.vocab-entry-dialog .library-editor-actions button{min-height:46px;font-size:15px;}

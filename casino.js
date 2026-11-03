@@ -85,10 +85,15 @@
     flushing = (async () => {
       for (let b = batches()[0]; b; b = batches()[0]) {
         keepBatches(batches().map((x) => (x.id === b.id ? { ...x, sending: true } : x)));
-        // A batch that nets to zero pays nothing, but its rolls still count for the ranking.
-        const ok = b.delta
-          ? await window.Poker.settle("casino:sugoroku:batch:" + b.id, b.delta, b.feed, { sugoroku: window.Sugoroku?.stats?.(uid()) || null })
-          : (b.feed > 0 && window.CasinoJackpot?.add(b.feed), await Promise.resolve(window.Poker.publishStats?.(window.Sugoroku?.stats?.(uid()))).catch(() => false), true);
+        // A batch that nets to zero pays nothing, but its rolls still count for the ranking: it stays
+        // until the totals are published (and its share for the jackpots is added once, after).
+        let ok;
+        if (b.delta) ok = await window.Poker.settle("casino:sugoroku:batch:" + b.id, b.delta, b.feed, { sugoroku: window.Sugoroku?.stats?.(uid()) || null });
+        else {
+          const snap = window.Sugoroku?.stats?.(uid()) || null;
+          ok = snap ? await Promise.resolve(window.Poker.publishStats?.(snap)).then((done) => done !== false, () => false) : true;
+          if (ok && b.feed > 0) window.CasinoJackpot?.add(b.feed);
+        }
         if (!ok) break;
         keepBatches(batches().filter((x) => x.id !== b.id));
         refresh();
@@ -143,39 +148,60 @@
     }
   }
   const stakedName = () => "aiglish_casino_staked_" + uid();
-  // What was bet on each of the last days: { "2026-11-03": 300, … } (the older form kept only one
-  // day, { day, amount }).
-  function stakedDays() {
-    const days = {};
+  // What was bet on each of the last days, and what had carried into each day when it was worked
+  // out: { days: { "2026-11-03": 300, … }, carried: { "2026-11-03": 100, … } }. (The older form kept
+  // only one day, { day, amount }.)
+  function stakeStore() {
+    const store = { days: {}, carried: {} };
     try {
       const saved = JSON.parse(localStorage.getItem(stakedName()) || "null");
       if (saved && typeof saved === "object") {
-        if (saved.days && typeof saved.days === "object") for (const [day, amount] of Object.entries(saved.days)) days[day] = Math.max(0, Number(amount) || 0);
-        else if (typeof saved.day === "string") days[saved.day] = Math.max(0, Number(saved.amount) || 0);
+        if (saved.days && typeof saved.days === "object") for (const [day, amount] of Object.entries(saved.days)) store.days[day] = Math.max(0, Number(amount) || 0);
+        else if (typeof saved.day === "string") store.days[saved.day] = Math.max(0, Number(saved.amount) || 0);
+        if (saved.carried && typeof saved.carried === "object") for (const [day, amount] of Object.entries(saved.carried)) store.carried[day] = Math.max(0, Number(amount) || 0);
       }
     } catch {}
-    return days;
+    return store;
   }
-  const stakedOn = (day) => stakedDays()[day] || 0;
+  function keepStakeStore(store) {
+    const kept = [...new Set([...Object.keys(store.days), ...Object.keys(store.carried)])].sort().slice(-KEEP_DAYS),
+      pick = (from) => Object.fromEntries(kept.filter((d) => from[d] !== undefined).map((d) => [d, from[d]]));
+    localStorage.setItem(stakedName(), JSON.stringify({ days: pick(store.days), carried: pick(store.carried) }));
+  }
+  const stakedOn = (day, store = stakeStore()) => store.days[day] || 0;
   const stakedToday = () => stakedOn(studyDay());
   function addStaked(amount) {
     if (!(amount > 0) || !real()) return;
     try {
-      const days = stakedDays(),
+      const store = stakeStore(),
         day = studyDay();
-      days[day] = (days[day] || 0) + amount;
-      const kept = Object.keys(days).sort().slice(-KEEP_DAYS);
-      localStorage.setItem(stakedName(), JSON.stringify({ days: Object.fromEntries(kept.map((d) => [d, days[d]])) }));
+      store.days[day] = (store.days[day] || 0) + amount;
+      keepStakeStore(store);
     } catch {}
   }
   // What carries into the day `offset` days from today: what is left of the day before's own
-  // allowance. That day spent what had carried into it first, then its own minutes. Looks back
-  // three days at most (what carried before that has ended).
-  function carriedInto(offset = 0, depth = 3) {
-    if (depth <= 0) return 0;
-    const before = offset - 1,
-      earned = studyMinutes(dayKey(before)) * PER_MINUTE;
-    return Math.max(0, earned - Math.max(0, stakedOn(dayKey(before)) - carriedInto(before, depth - 1)));
+  // allowance. That day spent what had carried into it first, then its own minutes. What had
+  // carried into a day is kept when it is worked out, and never lowered (the study record can
+  // still be arriving from another device), so a run of days that each carry on stays whole past
+  // the days looked back over (three, from what is kept).
+  function carryIn(offset, store, depth) {
+    const saved = store.carried[dayKey(offset)] || 0;
+    if (depth <= 0) return saved;
+    const day = dayKey(offset - 1),
+      computed = Math.max(0, studyMinutes(day) * PER_MINUTE - Math.max(0, (store.days[day] || 0) - carryIn(offset - 1, store, depth - 1)));
+    return Math.max(saved, computed);
+  }
+  function carriedInto() {
+    const store = stakeStore(),
+      value = carryIn(0, store, 3),
+      key = studyDay();
+    if (value > (store.carried[key] || 0)) {
+      store.carried[key] = value;
+      try {
+        keepStakeStore(store);
+      } catch {}
+    }
+    return value;
   }
   // The part of that which today has not used yet (it is used first).
   const carriedLeft = () => (real() ? Math.max(0, carriedInto() - stakedToday()) : 0);
