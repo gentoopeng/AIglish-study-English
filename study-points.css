@@ -307,3 +307,10 @@
 .talk-read{font-size:10px;color:#9aa3b0;line-height:1.3;}
 /* The list: name and time on one line, the last line and the badge below. */
 .loans-person .loans-time{position:absolute;right:14px;top:34px;font-size:10px;color:#9aa3b0;}
+
+/* A request of mine in the talk (a card): the amount stays on one line and the undo button sits under
+   the words, not beside them (beside them the card was too narrow and broke 500pt into 50 and 0pt). */
+.talk-card .card-amount{white-space:nowrap;flex:none;}
+.talk-card.loans-request.is-mine{display:block;}
+.talk-card.loans-request.is-mine>button{display:block;margin:8px 0 0 auto;white-space:nowrap;}
+.talk-card .loans-actions button{white-space:nowrap;}

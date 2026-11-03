@@ -2646,3 +2646,41 @@ Tests:
 
 - `tests/casino.smoke.cjs`: a zero-net batch stays while the write fails, and goes once it works.
 - `tests/casino-carryover.smoke.cjs`: a run of days each studied 1 minute and bet 100: nothing is made up without what was kept; with the base kept, 100 carries into today (the text says so), today's is kept and not lowered by a later bet.
+
+## Betting allowance: the carry-over fades, and starts from 2026-11-04 (10.22.78.00)
+
+**What the user saw.** With 10.22.76.00 and 10.22.77.00 the casino said 「今日あと 13,700pt 賭けられます（…昨日の使い残し 12,800pt を含む）」. That 12,800pt was yesterday's whole unused allowance: 140 minutes studied × 100pt, less a little bet. It was far more than was meant. (It came from the study done the day before the update.)
+
+**Now.**
+
+- **It fades.** What is not used of a day's allowance (its own minutes × 100) carries on worth less each day: all of it the next day, then half (2 days old), a quarter (3), an eighth (4), a sixteenth (5), and nothing from 6 days on. Whole points, rounded down.
+- **The oldest first.** What is bet takes the oldest allowance that is still worth something first (it fades soonest). It is worked out day by day over the last five days from the study record and the bets of each day (kept on this device, the last six days), so no state is kept between days, and the result does not depend on when the app was open.
+- **Only from 2026-11-04.** A day's allowance carries only if the day is 2026-11-04 or later. Study done before this began (the day before, with its 140 minutes) is not carried. Today's own allowance is counted every day as before.
+- The casino tab says 「今日あと Npt 賭けられます（今日の勉強 M分・持ち越し Kpt を含む）」 (K: the carried part not yet used today), and the hint when it is used up says that what is left carries on and halves from two days on.
+- Replaces the carry of 10.22.76.00 (one day) and the kept `carried` values of 10.22.77.00 (which are no longer written or read).
+
+Tests:
+
+- `tests/casino-carryover.smoke.cjs` (the clock is fixed): all of yesterday, half of two days ago, a quarter, a sixteenth, nothing from six days; bets take the oldest first, today's and yesterday's; a run of days each with 1 minute studied and 100 bet; on 2026-11-04 the 140 minutes of the day before carry nothing, on the 5th the 4th carries and the 3rd does not; the older record forms; six days kept.
+
+## Settings on a short phone, with the badge card shown (10.22.78.00)
+
+**Found by the Codex review of 10.22.77.00.** The 「アイコンに未読数」 card is shown where the phone can show an app badge (an installed app). The fit of 10.22.77.00 was checked at 390×740, where the settings with that card are 656px (within 692px), but on a phone 667px high they were 671px against 619px, so they scrolled; the add-word form with its extra settings open was 12px over.
+
+**Now.** Below 700px of height, the app settings (dialog, group titles, cards, rows, the badge note, the key row) and the add-word form (padding, labels, the sub-info box, buttons) are tighter: the settings are 547px at 375×667, and the form with its extra settings open 636px of the 649px there is. (A phone 568px high, the oldest small ones, still scrolls.)
+
+Tests:
+
+- `tests/settings-fit.smoke.cjs`: at 375×667, with the badge card shown (asserted visible), the app settings, the card study settings and the add-word form with its extra settings fit without scrolling.
+
+## The talk: my open request no longer breaks its amount (10.22.79.00)
+
+**What the user saw.** In the points talk, a request of mine that was waiting for an answer (「もらいたいと頼んだ・返事待ち」, 「借りたいと頼んだ」, 「請求した」) showed its amount broken in two lines, "50" and "0pt" for 500pt, with the 「取り消す」 button squeezed to two lines beside it.
+
+**Cause.** The old style of a waiting request of mine (`.loans-request.is-mine`, from before the talk had cards) lays its content out in a row. In a card that put the 取り消す button beside the words, which left too little width, and the amount broke where it could.
+
+**Now.** The card of such a request is a block: the amount and its icon on one line (the amount never breaks), the words under them, and 取り消す under the words at the right (also on one line). The answer buttons of a request waiting for my answer (断る, 貸す, 払う, あげる) stay in their own row and do not break either.
+
+Tests:
+
+- `tests/point-loans.smoke.cjs`: my waiting request is a block, its 取り消す is under the words, and the amount cannot break (no wrapping).
