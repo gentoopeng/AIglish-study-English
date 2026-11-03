@@ -2605,3 +2605,18 @@ Tests:
 - `tests/casino-stats.test.cjs`: a loss past the bet is shown, a boundless one is not; jackpot payouts add to `jw`, survive a newer snapshot, never go back with an older one, are bounded; the jackpot key.
 - `tests/casino.smoke.cjs`: a jackpot paid with its own key goes to `jw`, not to the plays.
 - `tests/term-when.smoke.cjs`: with the focus taken out of the panel, the question and the panel stay while the answer is shown.
+
+## Betting allowance: what is not used carries into the next day (10.22.76.00)
+
+**What the user saw.** Points can be bet only after studying: 100pt for each minute measured that day, for all the casino games together. What was not used was gone when the day changed.
+
+**Now.** What is left of a day's allowance carries into the next day and ends there:
+
+- Each day has its own allowance (the minutes measured that day × 100). What carries into today is what was left of **yesterday's own** allowance, after yesterday spent what had carried into it first (so a day's leftover is never carried twice, and the day before yesterday's leftover ends with yesterday).
+- Today's allowance is that carry plus today's own, less what was bet today (the carried part is used first). The casino tab says 「今日あと Npt 賭けられます（今日の勉強 M分・昨日の使い残し Kpt を含む）」, with the carried part still unused (the part after 「・」 is left out when there is none). The hint when it is used up says that yesterday's leftover can be used until the end of today.
+- Bets are kept per day on this device (`aiglish_casino_staked_<id>`: `{ days: { "YYYY-MM-DD": amount } }`, the last four days); the older form (one day, `{ day, amount }`) is still read. The study minutes of past days come from the study ledger. Looking back is three days at most.
+- Practice chips have no allowance, as before. Nothing changes for the amount a game accepts (`stakeRoom`, `allowance` keep their names); only what `allowance()` returns is larger when something carries.
+
+Tests:
+
+- `tests/casino-carryover.smoke.cjs`: the day before yesterday's leftover does not reach today; yesterday's does; yesterday's bets use what had carried into it first; the carried part is used first today; the text with and without 「昨日の使い残し」; used up: no more, and the hint; the older record form; four days kept.
