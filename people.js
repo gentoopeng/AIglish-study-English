@@ -36,10 +36,30 @@
   let owner = "",
     users = [],
     loadedAt = 0,
+    shownFromCache = false,
     pending = null,
     cacheVersion = 0,
     deletedIds = new Set();
   const uid = () => myId || "GUEST-000";
+  // The list as last loaded is kept on the device, so the tab shows it at once on the next
+  // launch while a fresh copy loads behind it. Photos are dropped from the copy if it gets big.
+  const listName = (id) => "aiglish_people_list_" + id;
+  function keepList(id, list, removed) {
+    try {
+      let text = JSON.stringify({ at: Date.now(), users: list, deleted: [...removed] });
+      if (text.length > 1500000) text = JSON.stringify({ at: Date.now(), users: list.map((p) => ({ ...p, avatar: "" })), deleted: [...removed] });
+      localStorage.setItem(listName(id), text);
+    } catch {}
+  }
+  function keptList(id) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(listName(id)) || "null");
+      if (!saved || !Array.isArray(saved.users)) return null;
+      return { users: saved.users.filter((p) => p && typeof p.id === "string"), deleted: new Set(Array.isArray(saved.deleted) ? saved.deleted : []) };
+    } catch {
+      return null;
+    }
+  }
   const detailCache = new Map(),
     detailJobs = new Map();
   async function detailSnapshot(id) {
@@ -247,9 +267,22 @@
     wrapper.append(button);
     return wrapper;
   }
+  // A different account (or the first look) starts from that account's list kept on the device.
+  function ensureOwner() {
+    if (owner === uid()) return;
+    owner = uid();
+    const kept = owner === "GUEST-000" ? null : keptList(owner);
+    users = kept ? kept.users : [];
+    loadedAt = 0;
+    deletedIds = kept ? kept.deleted : new Set();
+    shownFromCache = !!kept;
+    detailCache.clear();
+    detailJobs.clear();
+  }
   function render() {
     const host = document.getElementById("friendListContainer");
     if (!host) return;
+    ensureOwner();
     host.replaceChildren();
     const query = (document.getElementById("usersSearch")?.value || "").trim().toLowerCase();
     const all = users
@@ -257,7 +290,7 @@
       .sort((a, b) => b.timestamp - a.timestamp || a.id.localeCompare(b.id));
     const list = query ? all.filter((person) => String(person.name).toLowerCase().includes(query)) : all;
     const count = document.getElementById("usersCount");
-    if (count) count.textContent = loadedAt ? all.length + "人" : "";
+    if (count) count.textContent = loadedAt || shownFromCache ? all.length + "人" : "";
     // Online first, then everyone active this week (friends included even when quiet).
     const now = Date.now(),
       groups = [
@@ -280,7 +313,17 @@
     if (!list.length) {
       const hint = document.createElement("p");
       hint.className = "people-hint";
-      hint.textContent = query && all.length ? "「" + query + "」に一致するユーザーはいません。" : loadedAt ? "ユーザーがいません。" : "読み込み中…";
+      // A guest, or a device off the cloud, never gets a list: say so instead of 読み込み中 forever.
+      hint.textContent =
+        query && all.length
+          ? "「" + query + "」に一致するユーザーはいません。"
+          : loadedAt || shownFromCache
+            ? "ユーザーがいません。"
+            : uid() === "GUEST-000"
+              ? "ログインすると、ほかのユーザーが表示されます。"
+              : !window.db
+                ? "オフラインのため読み込めません。つながったら右上の更新で読み込めます。"
+                : "読み込み中…";
       host.append(hint);
     }
   }
@@ -290,14 +333,7 @@
     if (force) {
       detailCache.clear();
     }
-    if (owner !== uid()) {
-      owner = uid();
-      users = [];
-      loadedAt = 0;
-      deletedIds = new Set();
-      detailCache.clear();
-      detailJobs.clear();
-    }
+    ensureOwner();
     if (!force && Date.now() - loadedAt < 900000) {
       render();
       return;
@@ -310,8 +346,9 @@
         if (!window.db || !window.fbGetDocs) return;
         const list = [],
           removed = new Set();
-        await window.UserDirectory.scan(
-          (id, data) => {
+        const status = document.getElementById("usersStatus");
+        if (status && users.length) status.textContent = "更新しています…";
+        const visit = (id, data) => {
             if (data.deleted) {
               removed.add(id);
               return;
@@ -346,17 +383,36 @@
                 lastActiveAt: time,
               },
             });
-          },
-          () =>
-            version === cacheVersion &&
-            uid() === account &&
-            currentActiveTabId === "community" &&
-            document.visibilityState === "visible",
-        );
+          };
+        const current = () =>
+          version === cacheVersion &&
+          uid() === account &&
+          currentActiveTabId === "community" &&
+          document.visibilityState === "visible";
+        // Only players active this week (and friends) are listed, so only they are read, with
+        // just the fields the list shows. Without the REST endpoint, every user is scanned.
+        const controller = new AbortController(),
+          timer = setTimeout(() => controller.abort(), 15000);
+        let rows = null;
+        try {
+          rows = await window.UserDirectory.recent?.(
+            Date.now() - WEEK,
+            (myFriendList || []).map((friend) => friend.code),
+            { signal: controller.signal },
+          );
+        } finally {
+          clearTimeout(timer);
+        }
+        if (rows) {
+          for (const row of rows) visit(row.id, row.data);
+        } else await window.UserDirectory.scan(visit, current);
+        if (status) status.textContent = "";
         if (uid() === account && version === cacheVersion) {
           users = list;
           deletedIds = removed;
           loadedAt = Date.now();
+          shownFromCache = false;
+          keepList(account, list, removed);
           let changed = false;
           for (const friend of myFriendList || []) {
             const person = list.find((item) => item.id === friend.code);
@@ -385,11 +441,16 @@
         const status = document.getElementById("usersStatus");
         if (status)
           status.textContent = "取得できませんでした。更新で再試行できます。";
-      } finally {
-        if (version === cacheVersion) pending = null;
       }
     })();
-    return pending;
+    // Cleared once the load has really finished. (Clearing it inside the load ran before this
+    // assignment when the load ended without waiting, e.g. before the cloud was ready, and left
+    // a finished load in place that blocked every later one, the 更新 button included.)
+    const job = pending;
+    job.finally(() => {
+      if (pending === job) pending = null;
+    });
+    return job;
   }
   window.refreshUsersFromButton = async (button) => {
     if (button.disabled) return;
@@ -407,6 +468,10 @@
       pending = null;
       users = [];
       loadedAt = 0;
+      shownFromCache = false;
+      try {
+        localStorage.removeItem(listName(uid()));
+      } catch {}
       detailCache.clear();
       detailJobs.clear();
     },
