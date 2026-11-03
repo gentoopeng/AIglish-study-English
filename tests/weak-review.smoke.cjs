@@ -231,12 +231,11 @@ const { chromium, webkit } = require("playwright"),
     assert.equal(await page.locator("#headerStudyPoints").innerText(), "2pt");
     await page.locator("#headerStudyPoints").click();
     await page.getByRole("dialog", { name: "ポイント", exact: true }).waitFor();
-    assert.equal(await page.locator(".points-history li").count(), 1);
-    assert.match(await page.locator(".points-history").innerText(), /word1/);
-    assert.match(
-      await page.locator(".points-history").innerText(),
-      /復習テスト/,
-    );
+    // The history is one block per day: the date with the day's total, then each kind.
+    assert.equal(await page.locator(".points-history li.points-day").count(), 1);
+    assert.match(await page.locator(".points-history li.points-day").innerText(), /計 \+2pt/);
+    assert.equal(await page.locator(".points-history li.is-card").count(), 1);
+    assert.match(await page.locator(".points-history li.is-card").innerText(), /単語カード[\s\S]*1語[\s\S]*\+2pt/);
     if (process.env.SCREENSHOT)
       await page.screenshot({
         path: process.env.SCREENSHOT.replace(/\.png$/, "-points.png"),

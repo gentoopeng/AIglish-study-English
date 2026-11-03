@@ -48,76 +48,70 @@
       : "";
     const list = dialog.querySelector("[data-points-history]");
     list.replaceChildren();
-    // Points earned by studying and the casino's wins and losses, newest first.
-    const when = (entry) => entry.at || Date.parse(entry.day || "") || 0;
-    const casino = (window.Poker?.casinoLog?.(account) || []).map((entry) => ["casino", { ...entry, casino: true }]);
-    const entries = Object.entries(value.history)
-      .concat(casino)
-      .sort((a, b) => when(b[1]) - when(a[1]));
-    if (!entries.length)
-      list.append(node("li", "まだ履歴はありません。", "points-empty"));
-    const stamp = (at) =>
-      new Date(at).toLocaleString("ja-JP", {
-        timeZone: "Asia/Tokyo",
-        month: "numeric",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    for (const [token, entry] of entries) {
-      if (entry.casino) {
-        const row = node("li", undefined, "is-casino"),
-          copy = node("div"),
-          date = node("time", stamp(entry.at));
-        date.dateTime = new Date(entry.at).toISOString();
-        copy.append(
-          node("strong", window.Poker.LOG_GAMES[entry.g]),
-          node("small", "カジノ" + (entry.n > 1 ? " · " + entry.n + "回分" : "")),
-          date,
-        );
-        const amount = node(
-          "span",
-          (entry.d > 0 ? "+" : entry.d < 0 ? "−" : "±") + Math.abs(entry.d).toLocaleString("ja-JP") + "pt",
-          entry.d < 0 ? "is-minus" : "",
-        );
-        row.append(copy, amount);
-        list.append(row);
-        continue;
+    // Every day's points, newest day first: study by kind (from the per-day record kept with the
+    // wallet, topped up from the recent detail), the login bonus, lending, and the casino.
+    const P = window.StudyPointPolicy;
+    let fromDetail = {};
+    for (const entry of Object.values(value.history))
+      fromDetail = P.addDaily(fromDetail, entry.day, entry.source || "review", entry.amount, 1, entry.source === "time" ? Math.round(entry.amount / P.timeRate(entry.day)) : undefined);
+    const days = new Map(Object.entries(P.mergeDaily(fromDetail, value.daily)).map(([day, row]) => [day, { study: row, casino: [] }]));
+    // Newest casino line first, like the days.
+    for (const entry of (window.Poker?.casinoLog?.(account) || []).slice().reverse()) {
+      const day = P.day(entry.at);
+      if (!days.has(day)) days.set(day, { study: {}, casino: [] });
+      days.get(day).casino.push(entry);
+    }
+    const order = [...days.keys()].sort().reverse();
+    if (!order.length) list.append(node("li", "まだ履歴はありません。", "points-empty"));
+    const signed = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n).toLocaleString("ja-JP") + "pt";
+    const LABELS = {
+      time: ["勉強時間", (n) => n + "分"],
+      card: ["単語カード", (n) => n + "語"],
+      quiz: ["単語バトルの正解", (n) => n + "語"],
+      review: ["苦手復習", (n) => n + "語"],
+      work: ["ワークの学習記録", (n) => n + "問"],
+      bonus: ["ログインボーナス", () => ""],
+      loan: ["ポイントの貸し借り", () => ""],
+    };
+    const line = (title, detail, points, extra = "") => {
+      const row = node("li", undefined, extra),
+        copy = node("div");
+      copy.append(node("strong", title));
+      if (detail) copy.append(node("small", detail));
+      row.append(copy, node("span", signed(points), points < 0 ? "is-minus" : ""));
+      return row;
+    };
+    const shown = Math.min(order.length, dialog._daysShown || 30);
+    for (const day of order.slice(0, shown)) {
+      const { study, casino } = days.get(day),
+        rows = [];
+      // Study time first: it is the main thing studied for.
+      for (const source of ["time", ...P.DAILY_SOURCES.filter((name) => name !== "time")]) {
+        const item = study[source];
+        if (!item || !item.p) continue;
+        const [title, count] = LABELS[source];
+        rows.push(line(title, count(item.n), item.p, "is-" + source));
       }
-      const row = node("li"),
-        copy = node("div"),
-        title = node("strong", entry.word || "単語 " + entry.num),
-        detail = node(
-          "small",
-          {
-            card: "単語カード",
-            quiz: "単語バトルの正解",
-            review: "苦手復習",
-            work: "ワークの学習記録",
-            time: "勉強時間",
-          }[entry.source || "review"] +
-            " · " +
-            entry.bookName +
-            (entry.source === "time" ? "" : " · #" + entry.num),
-        ),
-        date = node(
-          "time",
-          entry.at
-            ? new Date(entry.at).toLocaleString("ja-JP", {
-                timeZone: "Asia/Tokyo",
-                month: "numeric",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : entry.day,
-        );
-      date.dateTime = entry.at ? new Date(entry.at).toISOString() : entry.day;
-      copy.append(title, detail, date);
-      const amount = node("span", "+" + entry.amount + "pt");
-      if (value.pending[token]) amount.append(node("small", "同期待ち"));
-      row.append(copy, amount);
-      list.append(row);
+      for (const entry of casino)
+        rows.push(line(window.Poker.LOG_GAMES[entry.g], "カジノ" + (entry.n > 1 ? " · " + entry.n + "回分" : ""), entry.d, "is-casino"));
+      if (!rows.length) continue;
+      const total = Object.values(study).reduce((a, item) => a + item.p, 0) + casino.reduce((a, e) => a + e.d, 0),
+        head = node("li", undefined, "points-day"),
+        date = node("time", new Date(P.dayStart(day)).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", weekday: "short" }));
+      date.dateTime = day;
+      head.append(date, node("span", "計 " + signed(total), total < 0 ? "is-minus" : ""));
+      list.append(head, ...rows);
+    }
+    if (order.length > shown) {
+      const more = node("button", "もっと前を見る（あと" + (order.length - shown) + "日）", "points-more");
+      more.type = "button";
+      more.onclick = () => {
+        dialog._daysShown = shown + 30;
+        paint();
+      };
+      const item = node("li", undefined, "points-more-row");
+      item.append(more);
+      list.append(item);
     }
   }
   async function refresh() {
@@ -193,7 +187,7 @@
       tabs.append(b);
     }
     const history = node("section"),
-      label = node("h3", "最近の記録"),
+      label = node("h3", "日ごとの記録"),
       list = node("ol", undefined, "points-history");
     history.dataset.pointsHistoryPanel = "";
     list.dataset.pointsHistory = "";

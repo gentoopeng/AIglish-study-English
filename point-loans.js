@@ -30,7 +30,11 @@
     if (window.FirestoreReadGuard?.paused?.()) throw Error("クラウドの利用上限に達しています。時間をおいてお試しください。");
   }
   function walletWrite(tx, id, wallet, balance) {
-    const value = { balance, revision: (Number(wallet.revision) || 0) + 1 };
+    const value = { balance, revision: (Number(wallet.revision) || 0) + 1 },
+      moved = balance - (Number(wallet.balance) || 0),
+      P = window.StudyPointPolicy;
+    // Lending, paying back, gifts and charges: the day's line in the points history.
+    if (moved && P?.addDaily) value.daily = P.addDaily(wallet.daily, P.day(), "loan", moved);
     tx.set(walletRef(id), value, { merge: true });
     tx.set(window.fbDoc(window.db, "users", id), { studyPoints: balance }, { merge: true });
     return value;

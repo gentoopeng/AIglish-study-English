@@ -98,6 +98,8 @@
           revision: (Number(wallet.revision) || 0) + 1,
           // The bonus counts toward the total earned once that total exists.
           ...(Number.isSafeInteger(wallet.earned) ? { earned: wallet.earned + prize } : {}),
+          // A line in the points history for the day.
+          ...(window.StudyPointPolicy?.addDaily ? { daily: window.StudyPointPolicy.addDaily(wallet.daily, day, "bonus", prize) } : {}),
         };
       tx.set(bonusRef(me), { day, prize, segment, at: Date.now() });
       tx.set(walletRef(me), value, { merge: true });

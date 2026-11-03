@@ -77,7 +77,52 @@
       now >= start + 86400000 + 360000
     );
   }
+  // The points history kept per day: { "YYYY-MM-DD": { source: { n, p } } }, n how many
+  // (words, problems, minutes for time) and p the points (negative for lending out). Written in
+  // the same transactions that move the points; the newest DAILY_DAYS days are kept.
+  const DAILY_SOURCES = ["card", "quiz", "review", "work", "time", "bonus", "loan"],
+    DAILY_DAYS = 400;
+  function cleanDaily(daily) {
+    const out = {};
+    if (!daily || typeof daily !== "object" || Array.isArray(daily)) return out;
+    for (const dayKey of Object.keys(daily).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().slice(-DAILY_DAYS)) {
+      const row = daily[dayKey];
+      if (!row || typeof row !== "object") continue;
+      for (const source of DAILY_SOURCES) {
+        const item = row[source];
+        if (!item || !Number.isFinite(Number(item.p))) continue;
+        (out[dayKey] = out[dayKey] || {})[source] = { n: Math.max(0, Math.floor(Number(item.n) || 0)), p: Math.round(Number(item.p)) };
+      }
+    }
+    return out;
+  }
+  // Adds to one day's line (for a credit made in a transaction); `minutes` sets n for time.
+  function addDaily(daily, dayKey, source, points, count = 1, minutes) {
+    const out = cleanDaily(daily);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey) || !DAILY_SOURCES.includes(source)) return out;
+    const row = (out[dayKey] = out[dayKey] || {}),
+      item = (row[source] = row[source] || { n: 0, p: 0 });
+    item.p += Math.round(points);
+    item.n = minutes !== undefined ? Math.max(item.n, Math.floor(minutes)) : item.n + count;
+    return cleanDaily(out);
+  }
+  // Two copies of the record (two devices, or the cloud and this device): for each day and
+  // source the fuller one (more counted, then the larger amount) wins.
+  function mergeDaily(...sources) {
+    const out = {};
+    for (const source of sources)
+      for (const [dayKey, row] of Object.entries(cleanDaily(source)))
+        for (const [name, item] of Object.entries(row)) {
+          const old = out[dayKey]?.[name];
+          if (!old || item.n > old.n || (item.n === old.n && Math.abs(item.p) > Math.abs(old.p))) (out[dayKey] = out[dayKey] || {})[name] = item;
+        }
+    return cleanDaily(out);
+  }
   const api = {
+    cleanDaily,
+    addDaily,
+    mergeDaily,
+    DAILY_SOURCES,
     rates,
     allowed,
     day,
