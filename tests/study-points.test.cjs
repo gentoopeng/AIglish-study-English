@@ -678,8 +678,8 @@ test("a day's study time that is counted puts one notice in the お知らせボ�
   assert.equal(notices[0].id, "time:" + day);
   assert.equal(notices[0].amount, 10);
   const [, month, date] = day.split("-").map(Number);
-  assert.equal(notices[0].title, month + "月" + date + "日の勉強時間 +10pt");
-  assert.match(notices[0].body, /10分（1分1pt）/);
+  assert.equal(notices[0].title, month + "月" + date + "日の勉強時間 合計 10pt");
+  assert.match(notices[0].body, /10分（1分1pt）。所持ポイントに加わりました。/);
   assert.equal(a.c.PersonalNotices.unread("a"), 1);
   // Counted again with nothing new: no second notice. With more minutes: the same notice, new total.
   await a.points.collectTime();
@@ -689,6 +689,9 @@ test("a day's study time that is counted puts one notice in the お知らせボ�
   notices = a.c.PersonalNotices.list("a");
   assert.equal(notices.length, 1);
   assert.equal(notices[0].amount, 15);
+  // The title is still the day's total; the body says what this time added.
+  assert.equal(notices[0].title, month + "月" + date + "日の勉強時間 合計 15pt");
+  assert.match(notices[0].body, /15分（1分1pt）。あとから \+5pt 加わりました。/);
   // Another account's notices are its own.
   assert.equal(a.c.PersonalNotices.list("b").length, 0);
 });

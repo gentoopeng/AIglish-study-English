@@ -2510,3 +2510,14 @@ Tests:
 - `tests/term-order.test.cjs`: events of the three kinds with their start values and keys; one kind per round; only kinds with three different values are played; a BC century comes before the others.
 - `tests/term-when.smoke.cjs`: the add form's hint and cards; the century card typed (box label, two digits, the right answer shown) and an era card (no box); the word list's markers; the edit box saying 平安 as 平安時代, refusing "abc" without changing anything.
 - `tests/term-mode.smoke.cjs`: the edit box takes 「１５８３年」 and leaves it as 1583 on leaving it.
+
+## お知らせボックス: a re-counted study day is labelled as the day's total (10.22.70.00)
+
+**What the user saw.** Found by the Codex review of 10.22.67.00. When a day's study time was counted again with more minutes, its notice was replaced with the new total under the title 「…の勉強時間 +350pt」, as if 350pt had just come in, when only the difference (for example 50pt) had been added.
+
+**Now.** The title is always the day's total: 「M月D日の勉強時間 合計 350pt」. The first time the body says 「勉強時間 70分（1分5pt）。所持ポイントに加わりました。」; when the same day is counted again it says 「…。あとから +50pt 加わりました。」 with the difference that was credited this time. The notice is still one per day.
+
+Tests:
+
+- `tests/study-points.test.cjs`: the first notice says the total and that it was added; counting again with more minutes keeps one notice with the new total and says what was added.
+- `tests/personal-notices.smoke.cjs`: the texts shown in the box.
