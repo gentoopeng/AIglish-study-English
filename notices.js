@@ -1,4 +1,6 @@
-// The お知らせボックス (the bell at the top right): today's login bonus and the notices from the
+// The お知らせボックス (the bell at the top right): today's login bonus, notices for this player
+// (points that came in from something elsewhere: a share of another player's line in
+// すごろくビンゴ, a day's study time counted; see personal-notices.js) and the notices from the
 // team, newest first. The badge counts what has not been seen on this device.
 //
 // Cloud: shared/notices holds { items: [...] }, the latest 30 notices, read once when the app
@@ -62,7 +64,7 @@
   function badge() {
     const button = document.getElementById("headerNotices");
     if (!button) return;
-    const count = M.unread(notices, store.get(seenKey)) + (bonusWaiting() ? 1 : 0),
+    const count = M.unread(notices, store.get(seenKey)) + (bonusWaiting() ? 1 : 0) + (window.PersonalNotices?.unread(uid()) || 0),
       mark = button.querySelector(".notice-badge");
     mark.hidden = !count;
     mark.textContent = count > 9 ? "9+" : String(count);
@@ -193,9 +195,27 @@
   async function open() {
     spinning = false;
     const body = frame("お知らせ");
+    // What was already seen before this look decides which lines are marked new.
+    const ownSeen = window.PersonalNotices?.seen(uid()) || 0;
     const draw = () => {
       const seenAt = Number(store.get(seenKey)) || 0;
       body.replaceChildren(bonusCard());
+      // For this player: points that came in, newest first; new ones are marked until the box is
+      // closed (they count as read once it has been opened).
+      const mine = window.PersonalNotices?.list(uid()) || [];
+      if (mine.length) {
+        const own = node("ol", "notice-list notice-own");
+        own.setAttribute("aria-label", "あなた宛てのお知らせ");
+        for (const n of mine) {
+          const li = node("li", n.at > ownSeen ? "is-new" : "");
+          const head = node("p", "notice-head");
+          head.append(node("strong", "", n.title), node("time", "", when(n.at)));
+          li.append(head);
+          if (n.body) li.append(node("p", "notice-text", n.body));
+          own.append(li);
+        }
+        body.append(node("h3", "", "あなたへ"), own);
+      }
       const list = node("ol", "notice-list");
       list.setAttribute("aria-label", "運営からのお知らせ");
       for (const n of notices) {
@@ -216,6 +236,7 @@
     // Seen once opened; the "new" marks stay for this look.
     const newest = notices.reduce((a, n) => Math.max(a, n.at || 0), 0);
     if (newest) store.set(seenKey, String(Math.max(newest, Number(store.get(seenKey)) || 0)));
+    window.PersonalNotices?.markSeen(uid());
     badge();
   }
 
@@ -389,6 +410,7 @@
   }
   window.onAppLoaded?.(() => setTimeout(startup, 1500));
   window.addEventListener("focus", badge);
+  window.addEventListener("personal-notices-changed", badge);
   badge();
   window.Notices = Object.freeze({ open, close, load, claim, post, remove, badge, list: () => notices.slice() });
 })();

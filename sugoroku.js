@@ -790,6 +790,19 @@
   function pay(out, cost) {
     const net = (out.collected || 0) + out.gain - cost,
       have = api.balance();
+    // A part of other players' lines, with points: a notice in the お知らせボックス.
+    if (out.collected > 0 && api.real()) {
+      try {
+        window.PersonalNotices?.add(api.uid(), {
+          id: "sugoroku:" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          title: "ほかの人のビンゴの分け前 +" + fmt(out.collected) + "pt",
+          body: "すごろくビンゴで、ほかの人のラインの分け前が届きました。",
+          amount: out.collected,
+        });
+      } catch (error) {
+        console.warn("[sugoroku] notice", error);
+      }
+    }
     api.round("sugoroku").net(Math.max(net, -have), cost);
     if (-net > have && api.real())
       Promise.resolve(window.PointLoans?.owe?.(-net - have, "すごろくビンゴのアクシデント")).catch((error) => console.warn("[sugoroku] debt", error));
