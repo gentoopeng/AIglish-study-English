@@ -92,6 +92,12 @@ const { chromium } = require("playwright"),
     assert.equal(await panel.locator("p").textContent(), "正解は 12 世紀");
     // The question stays with the answer shown, until the next card.
     assert.equal(await panel.locator(".term-answer-question").isVisible(), true);
+    // On a phone a tap on 答える does not focus the button, so focus is outside the panel: the
+    // question stays and the panel does not move away while the answer is on show.
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.waitForTimeout(700);
+    assert.equal(await panel.locator(".term-answer-question").isVisible(), true);
+    assert.equal(await panel.evaluate((el) => el.classList.contains("is-typing")), true);
     // An era card is not typed: the box is hidden.
     await page.evaluate(() => {
       clearTimeout(0);

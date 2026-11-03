@@ -2590,3 +2590,18 @@ Nothing else changes: how the totals are counted, stored and read is as in 10.22
 Tests:
 
 - `tests/casino-ranking.smoke.cjs`: the six buttons; each game shows 3 (すごろくビンゴ 7) panels; no scroll in the list or the page and every panel inside it, for each game at 393×852 and 320×668; choosing a game does not read; the orders, own row, tampered totals and detail as before.
+
+## Review fixes for the カジノ ranking and the typing panel (10.22.75.00)
+
+**Found by the Codex reviews of 10.22.71.00 and 10.22.73.00.**
+
+- **A loss past the bet is true.** The ranking hid a game's whole record when its net was below minus the bet. But an accident in すごろくビンゴ or the 「:extra」 loss in チンチロ takes more than the stake, so real records were hidden. The bound is now the same both ways: a net further than 100 times the bet plus 1,000,000 from zero is not shown.
+- **Jackpots count in すごろくビンゴ's net.** A jackpot is paid on its own (key `casino:sugoroku-jackpot:…:pay`) and is not in the save's `won`. `Poker.settle` adds it to a field `jw` of the すごろくビンゴ entry of `casinoStats`; a snapshot from the save keeps `jw` and never lowers anything; the ranking shows `n + jw` (bounded like the rest). `jw` is not a panel of its own.
+- **A zero-net batch still counts.** A batch of すごろくビンゴ rolls that nets to exactly zero was dropped without a write, so its rolls were missing from the ranking until the next one. It now publishes the totals (`Poker.publishStats`, which writes only if something changed).
+- **The question stays while an answer is on show.** On a phone a tap on 答える does not focus the button, so the box lost focus with nothing in the panel focused, and 0.4 seconds later the question was hidden and the panel moved back down while the result was still shown. The panel now stays as it is while an answer is on show (`data-result` is set), until the next card.
+
+Tests:
+
+- `tests/casino-stats.test.cjs`: a loss past the bet is shown, a boundless one is not; jackpot payouts add to `jw`, survive a newer snapshot, never go back with an older one, are bounded; the jackpot key.
+- `tests/casino.smoke.cjs`: a jackpot paid with its own key goes to `jw`, not to the plays.
+- `tests/term-when.smoke.cjs`: with the focus taken out of the panel, the question and the panel stay while the answer is shown.

@@ -85,7 +85,10 @@
     flushing = (async () => {
       for (let b = batches()[0]; b; b = batches()[0]) {
         keepBatches(batches().map((x) => (x.id === b.id ? { ...x, sending: true } : x)));
-        const ok = b.delta ? await window.Poker.settle("casino:sugoroku:batch:" + b.id, b.delta, b.feed, { sugoroku: window.Sugoroku?.stats?.(uid()) || null }) : (b.feed > 0 && window.CasinoJackpot?.add(b.feed), true);
+        // A batch that nets to zero pays nothing, but its rolls still count for the ranking.
+        const ok = b.delta
+          ? await window.Poker.settle("casino:sugoroku:batch:" + b.id, b.delta, b.feed, { sugoroku: window.Sugoroku?.stats?.(uid()) || null })
+          : (b.feed > 0 && window.CasinoJackpot?.add(b.feed), await Promise.resolve(window.Poker.publishStats?.(window.Sugoroku?.stats?.(uid()))).catch(() => false), true);
         if (!ok) break;
         keepBatches(batches().filter((x) => x.id !== b.id));
         refresh();

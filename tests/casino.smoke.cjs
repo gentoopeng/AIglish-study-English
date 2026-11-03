@@ -373,6 +373,12 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const after = await page.evaluate(() => window.__wallet["users/casino-a/learningPoints/main"].casinoStats);
     assert.deepEqual(after.dice, { b: 20, n: -20, p: 1 });
     assert.equal(after.duel, undefined);
+    // A jackpot paid on its own (key of its own) goes to すごろくビンゴ's jackpot winnings, not to its
+    // plays; the roll totals from its save stay.
+    await page.evaluate(() => window.Poker.settle("casino:sugoroku-jackpot:T1:pay", 500));
+    const withJackpot = await page.evaluate(() => window.__wallet["users/casino-a/learningPoints/main"].casinoStats.sugoroku);
+    // (The save then had its five rolls from above and one more: six plays, 100 bet.)
+    assert.deepEqual([withJackpot.jw, withJackpot.p, withJackpot.b], [500, 6, 100]);
     await page.evaluate(() => {
       myId = "casino-b";
       // Ten hours studied today, so points can be bet (Casino.allowance).
