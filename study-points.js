@@ -286,7 +286,9 @@
         [, month, day] = String(entry.day).split("-").map(Number),
         rate = policy().timeRate(entry.day),
         fmt = (n) => Number(n).toLocaleString("ja-JP"),
-        again = (window.PersonalNotices?.list(id) || []).some((n) => n.id === "time:" + entry.day);
+        // Counted again when part of the day was already credited (on this or another device):
+        // what is added now is less than the day's total. Not decided by the notices kept here.
+        again = gained < entry.amount;
       window.PersonalNotices?.add(id, {
         id: "time:" + entry.day,
         title: month + "月" + day + "日の勉強時間 合計 " + fmt(entry.amount) + "pt",

@@ -2548,3 +2548,16 @@ Tests:
 - `tests/study-points.test.cjs`: the full wallet write keeps `casinoStats`.
 - `tests/ranking-query.test.cjs`: the casino group reads only its field.
 - `tests/casino-ranking.smoke.cjs`: six games with 3 and 7 panels; the orders (net below zero too); a made-up total not shown; only players who played; own row; detail; sideways scrolling and no sideways scrolling of the page; switching modes does not read.
+
+## Two review fixes: era questions in a duel, and "counted again" for study time (10.22.72.00)
+
+**Found by the Codex reviews of 10.22.69.00 and 10.22.70.00.**
+
+- **Era questions in a word duel.** The new `era` question kind (「平安時代」 as an answer) was not in the duel model's kinds, so an era question was treated as an ordinary one: its prompt was cut at 160 characters instead of 400 (the 「（何時代？）」 at its end could go) and its choices were not taken from other eras first. `era` is now one of the kinds, with the room checks of the others (a room of version 11; older versions refuse it). Only a few eras can be answers, but the choices fall back to other terms when the book has too few, as for a 「」 term.
+- **"Counted again" for study time.** The notice for a day's study time said 「あとから +Npt 加わりました」 only when the first notice was still in this device's list. It now follows the credit: counted again exactly when what is added now is less than the day's total (part of it was credited before, on this or another device, and whether or not a notice is still kept).
+- **Tests that depended on the date.** Four study-points tests took "two days ago" for a day to count; after 2026-11-02 that day was paid at the new 5pt a minute and they failed on the old amounts. They use a fixed day in October.
+
+Tests:
+
+- `tests/term-battle.test.cjs`: era questions keep their kind in a pool, with the long prompt, with era choices, in a valid room of version 11 and not of version 10.
+- `tests/study-points.test.cjs`: with the first notice cleared, a day counted again says what was added; the date-dependent tests use a fixed day.

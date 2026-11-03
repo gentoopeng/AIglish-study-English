@@ -4,8 +4,9 @@
     durations = [30000, 60000, 120000, 180000],
     maxAnswers = 1200;
   // 用語・年号モード questions carry a kind: "whole" (answer the headword), "blank" (answer the
-  // 「」 term) or "year" (type the year). Answers only need to be distinct within their kind.
-  const kinds = ["whole", "blank", "year"];
+  // 「」 term), "year" (type the year or the century) or "era" (answer the era, 平安時代 …).
+  // Answers only need to be distinct within their kind.
+  const kinds = ["whole", "blank", "year", "era"];
   function entryOf(word) {
     const kind = kinds.includes(word.kind) ? word.kind : "",
       meaning = String(word.meanings?.[0]?.text || word.meaning || "")

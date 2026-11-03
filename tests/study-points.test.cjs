@@ -5,6 +5,9 @@ const { test } = require("node:test"),
   { webcrypto } = require("node:crypto");
 // Most tests check settlement with distinct tiers (the pre-10.21.61.00 rates, still valid for
 // old records); `even` uses the shipped rates, where every way of answering pays the same.
+// A day well in the past and before the study-time rate changed (1pt a minute, until 2026-11-01):
+// the tests do not depend on today's date.
+const OLD_DAY = Date.parse("2026-10-20T03:00:00Z");
 const TIERS = { card: 1, work: 1, quiz: 3, review: 10 };
 function setup(remote = new Map(), even = false) {
   const values = new Map(),
@@ -315,7 +318,7 @@ test("an upgrade earned while a lower-tier transaction is in flight remains pend
 test("measured time waits until after midnight rollback, ignores old/manual totals, and merges simultaneous devices conservatively", async () => {
   const a = setup(),
     p = a.c.StudyPointPolicy,
-    day = p.day(Date.now() - 2 * 86400000),
+    day = p.day(OLD_DAY),
     start = p.dayStart(day),
     days = {};
   for (let i = 0; i < 600; i++)
@@ -418,7 +421,7 @@ test("a lost response during a tier upgrade can be retried without duplicate cre
 test("time data is retained through a failed save and backup restoration, without reissuing settled points", async () => {
   const a = setup(),
     p = a.c.StudyPointPolicy,
-    day = p.day(Date.now() - 2 * 86400000),
+    day = p.day(OLD_DAY),
     days = {},
     start = p.dayStart(day);
   for (let i = 0; i < 125; i++)
@@ -442,7 +445,7 @@ test("time data is retained through a failed save and backup restoration, withou
 test("a smaller local time total still contributes new slots after a larger remote total was acknowledged", async () => {
   const a = setup(),
     p = a.c.StudyPointPolicy,
-    day = p.day(Date.now() - 2 * 86400000),
+    day = p.day(OLD_DAY),
     days = {},
     start = p.dayStart(day);
   for (let i = 0; i < 600; i++)
@@ -669,7 +672,7 @@ test("points history per day: every credited award is kept by day and kind, once
 test("a day's study time that is counted puts one notice in the お知らせボックス, with the new total if it is counted again", async () => {
   const a = setup(),
     p = a.c.StudyPointPolicy,
-    day = p.day(Date.now() - 2 * 86400000),
+    day = p.day(OLD_DAY),
     start = p.dayStart(day),
     days = {};
   a.c.StudyTime = { snapshot: () => ({ days }) };
@@ -694,6 +697,15 @@ test("a day's study time that is counted puts one notice in the お知らせボ�
   // The title is still the day's total; the body says what this time added.
   assert.equal(notices[0].title, month + "月" + date + "日の勉強時間 合計 15pt");
   assert.match(notices[0].body, /15分（1分1pt）。あとから \+5pt 加わりました。/);
+  // "Counted again" follows the credit, not the notices kept on this device: with the first notice
+  // gone (cleared, or another device counted it) the notice still says what was added.
+  a.c.localStorage.setItem("aiglish_personal_notices_a", "[]");
+  for (let i = 900; i < 1200; i++) p.accrueTime(days, "phone", start + i * 1000, start + (i + 1) * 1000);
+  await a.points.collectTime();
+  notices = a.c.PersonalNotices.list("a");
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].amount, 20);
+  assert.match(notices[0].body, /20分（1分1pt）。あとから \+5pt 加わりました。/);
   // Another account's notices are its own.
   assert.equal(a.c.PersonalNotices.list("b").length, 0);
 });
