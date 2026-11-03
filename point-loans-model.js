@@ -69,6 +69,9 @@
         done = (e) => (e.kind === "give" || e.kind === "gift") && !!claimed?.[e.id];
       drop(done, Math.max(0, list.filter(done).length - over));
     }
+    // What is left over the limit has to go, but never points the receiver has not collected yet:
+    // the sender has already paid them, so the new line is refused instead.
+    if (list.length > MAX_ENTRIES && list.slice(0, list.length - MAX_ENTRIES).some((e) => arrives(e) && !claimed?.[e.id])) throw Error("記録がいっぱいです。相手が受け取るまで、新しく送れません。");
     return list.slice(-MAX_ENTRIES);
   }
   function add(record, entry) {
