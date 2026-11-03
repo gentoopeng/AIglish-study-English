@@ -359,6 +359,22 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.ok(cellAt >= 0, "the ball is on the shared card");
     assert.ok(sharedCard.people["casino-a"]);
     await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    // A batch of すごろくビンゴ rolls that nets to zero pays nothing but stays until its totals are
+    // published (here the write fails once), then goes; its jackpot share is added once, after.
+    await page.evaluate(() => {
+      localStorage.setItem("aiglish_casino_batch_casino-a", JSON.stringify([{ id: "zero1", delta: 0, feed: 10 }]));
+      window.__realTx = window.fbRunTransaction;
+      window.fbRunTransaction = async () => {
+        throw Error("offline");
+      };
+    });
+    await page.evaluate(() => window.Casino.flush());
+    assert.match(await page.evaluate(() => localStorage.getItem("aiglish_casino_batch_casino-a") || ""), /zero1/);
+    await page.evaluate(() => {
+      window.fbRunTransaction = window.__realTx;
+    });
+    await page.evaluate(() => window.Casino.flush());
+    await page.waitForFunction(() => localStorage.getItem("aiglish_casino_batch_casino-a") === null);
     // A poker hand with its bet counts once, even if it is settled twice (retries).
     await page.evaluate(async () => {
       window.Poker.settle("ROOM9:0:1", -40, undefined, { bet: 40, play: true });
