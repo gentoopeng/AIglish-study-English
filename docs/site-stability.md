@@ -2724,3 +2724,16 @@ Tests:
 **Not changed (a Codex finding, kept on purpose).** The betting allowance's carry replays the last 10 days. An allowance 15 days old could in theory still have paid a bet 10 days ago; with, say, 1,440 minutes studied on three separate days and bets of 144,000pt the difference is 35pt. A perfect answer needs the whole history, so the 10-day replay is kept as a close estimate.
 
 Tests: `tests/sugoroku.smoke.cjs` opens the rules and checks they mention 確変.
+
+## 10.22.83.00 用語・年号モード: 1つの問題に○を付けると、同じ行のほかの問題が出なくなる
+
+**What the user saw.** In 用語・年号モード flashcards, the 「」 blank questions did not come up, and the same questions kept coming back. (The lines start with a year.)
+
+**Cause.** One line makes up to three questions (the whole entry, the year, each 「」). A question not answered yet goes by its meaning's rating, but answering any one of them (the year, ○) set that meaning's rating to ○. With ○ left out of the filter, the line's other questions, never answered, were hidden as well, so only the questions answered × (which have their own record) stayed, again and again.
+
+**Fix.** Before the first answer to a meaning in this mode, its rating is kept as `m:<meaning id>` (`{ base }`) in the term progress (`TermProgress.noteBase`, called by the swipe wrapper). A question without a record of its own goes by that kept rating (`TermProgress.fallback`), in 単語カード (`game_core.js`) and in the duel lobby (`duel-lobby.js`). Records made before this change have no kept rating and behave as before. The extra key is not a question, and every reader looks questions up by key.
+
+Tests:
+
+- `tests/term-sibling-status.smoke.cjs` (new): with ○ left out, a ○ on word 1's year question hides only that question; its whole question and 「」 blank are still asked; the kept rating is stored.
+- `tests/term-flashcard-filter.smoke.cjs`, `term-mode`, `term-battle`, `term-when` still pass.

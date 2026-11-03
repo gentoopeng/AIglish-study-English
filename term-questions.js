@@ -284,6 +284,27 @@
     localStorage.setItem(key(book), JSON.stringify(next));
     return next;
   }
+  // A meaning's rating from before it was first answered in this mode, kept as "m:<meaning id>"
+  // ({ base }). A question not answered yet goes by it (not by the meaning's rating now, which an
+  // answer to a sibling question changes: a ○ on the year question would hide the line's other
+  // questions from every filter without ○, and they would never be asked).
+  const BASE = "m:";
+  const ownRecord = (words, mid) =>
+    Object.keys(words || {}).some((k) => k === "w" || k === "w:" + mid || k === "y:" + mid || k === "c:" + mid || k === "e:" + mid || k.startsWith("t:" + mid + ":"));
+  // The rating a question without a record of its own goes by: the kept one, else the meaning's.
+  function fallback(store, num, mid, meaningStatus) {
+    const base = store?.[String(num)]?.[BASE + mid]?.base;
+    return ["ok", "so", "bad", "none"].includes(base) ? base : meaningStatus;
+  }
+  // Keeps the meaning's rating before its first answer in this mode (not once it has answers).
+  function noteBase(book, num, mid, meaningStatus) {
+    if (mid === undefined || mid === null || root.LibraryState?.isDeleted?.("book", book, owner())) return;
+    const store = read(book),
+      words = store[String(num)];
+    if (words?.[BASE + String(mid)] || ownRecord(words, String(mid))) return;
+    const next = { ...store, [String(num)]: { ...(words || {}), [BASE + String(mid)]: { base: ["ok", "so", "bad"].includes(meaningStatus) ? meaningStatus : "none" } } };
+    localStorage.setItem(key(book), JSON.stringify(next));
+  }
   // Shows a question's text in an element with pieces() kept whole (no innerHTML of the text).
   // head (optional): the headword, shown in bold wherever it stands as a word.
   function show(node, text, head) {
@@ -328,7 +349,7 @@
     if (skipped || (!right && previous === "ok")) return save(book, num, questionKey, "bad");
     return read(book);
   }
-  root.TermProgress = Object.freeze({ read, save, key, enabled, battle });
+  root.TermProgress = Object.freeze({ read, save, key, enabled, battle, fallback, noteBase });
 
   // Flashcards: record each generated question's own result, and type the year for year questions.
   function current() {
@@ -444,6 +465,9 @@
           status = { right: "ok", left: "bad", up: "so" }[direction];
         if (item?.termKey && status && typeof currentTextbook === "string")
           try {
+            const word = typeof vocabList !== "undefined" ? vocabList.find((v) => String(v.num) === String(item.num)) : null,
+              meaning = (word?.meanings || []).find((m) => String(m.id) === String(item.meaningId));
+            noteBase(currentTextbook, item.num, item.meaningId, meaning?.status || (word && !(word.meanings || []).length ? word.status : "none"));
             save(currentTextbook, item.num, item.termKey, status);
           } catch (error) {
             console.warn("問題ごとの記録を保存できませんでした", error);

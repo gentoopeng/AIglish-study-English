@@ -413,8 +413,14 @@ ${eventHtml()}
               status =
                 record?.status ||
                 (compatible
-                  ? saved?.meanings?.[String(q.mid)]?.status ||
-                    (word.meanings.length === 1 ? saved?.status : null)
+                  ? window.TermProgress.fallback(
+                      terms,
+                      word.num,
+                      q.mid,
+                      saved?.meanings?.[String(q.mid)]?.status ||
+                        (word.meanings.length === 1 ? saved?.status : null) ||
+                        "none",
+                    )
                   : null) ||
                 "none";
             if (mode === "status" && !statuses.includes(status)) continue;
