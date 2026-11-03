@@ -50,6 +50,27 @@
     }
     return sort(copies);
   }
+  // Move the word with identity `num` to place `toIndex` (0 = first) in the order of the book, as
+  // when a row is dragged. Only the numbers between the old and the new place change hands: the
+  // words in between keep the numbers they had, shifted one place, so a book whose numbers have
+  // gaps (a printed book's numbers) keeps exactly the same set of numbers. Returns a new sorted
+  // array of copies.
+  function move(words, num, toIndex) {
+    const sorted = sort(words),
+      from = sorted.findIndex((w) => Number(w.num) === Number(num)),
+      to = Math.trunc(Number(toIndex));
+    if (from < 0) throw Error("移動する単語が見つかりません。");
+    if (!Number.isFinite(to) || to < 0 || to >= sorted.length) throw Error("移動先が正しくありません。");
+    const copies = sorted.map((w) => ({ ...w }));
+    if (to === from) return copies;
+    const low = Math.min(from, to),
+      high = Math.max(from, to),
+      numbers = copies.slice(low, high + 1).map(no),
+      order = copies.slice(low, high + 1);
+    order.splice(to - low, 0, ...order.splice(from - low, 1));
+    order.forEach((w, i) => setNo(w, numbers[i]));
+    return sort(copies);
+  }
   function cleanUnit(value) {
     return String(value || "")
       .replace(/\s+/g, " ")
@@ -112,7 +133,7 @@
     });
     return { words: copies, changed };
   }
-  const model = { no, sort, maxNo, place, units, findUnit, editUnit, assignUnit, cleanUnit, UNIT_LIMIT };
+  const model = { no, sort, maxNo, place, move, units, findUnit, editUnit, assignUnit, cleanUnit, UNIT_LIMIT };
   root.VocabOrder = model;
   if (typeof module !== "undefined") module.exports = model;
 })(typeof window === "undefined" ? globalThis : window);

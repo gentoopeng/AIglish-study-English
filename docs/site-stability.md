@@ -2439,3 +2439,21 @@ Tests:
 Tests:
 
 - `tests/point-loans-model.test.cjs`: a full record with a 1,000pt loan at 10% (1,100 to repay) and 399 repayments; five more repayments push the loan out; the amount owed falls by exactly what was paid; the limits on repaying and on a 請求 follow it; a message does not change `carry`; a tampered `carry` is ignored.
+
+## Word book: reorder by dragging or with ▲▼ (10.22.66.00)
+
+**What the user saw.** The only way to move a word was to open it, type a new number and save, with a confirmation when the number was taken. Moving a word far, or several words, took many steps.
+
+**Now.** The word list has a 「並び替え」 button (for whoever may edit the book). The list becomes one short row per word: a grip, the number, the word and its first meaning, ▲ and ▼.
+
+- **Drag.** The grip is held with a finger or the mouse; a line shows where the word will go, and the list scrolls when the finger is near the top or bottom edge. Dropping where the word already is changes nothing.
+- **▲▼ and keys.** One place at a time; ArrowUp and ArrowDown on the grip do the same. The same button keeps the focus for the next move.
+- **Undo.** The last move can be undone; each move is saved at once (the same save as the number box).
+- **Filters stay.** The range, the unit, the search and the rating filters still apply, and a move jumps over the hidden words.
+- **Numbers.** `VocabOrder.move(words, num, toIndex)` hands the display numbers (`no`) on: the words between the old and the new place shift one place and take the numbers next to them. A book whose numbers have gaps (a printed book's numbers) keeps the same set of numbers. The identity number `num`, and so records, notes, ratings, stickies and battle references, never changes.
+- The number box in the word's editor still works as before.
+
+Tests:
+
+- `tests/vocab-order.test.cjs`: `move` up, down, to the first place and in place; numbers with gaps; the input is not changed; a default number leaves no field; unknown word or place is refused.
+- `tests/vocab-reorder.smoke.cjs`: the mode and the cards coming back; ▲▼ disabled at the ends; one place down and up; focus stays; undo; drag with the mouse; dropping in place; keys; the rating and note on a moved word; the order is still there after a reload.
