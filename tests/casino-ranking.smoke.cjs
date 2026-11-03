@@ -68,7 +68,7 @@ const { chromium } = require("playwright"),
     assert.ok(fields.includes("casinoStatsV1") && !fields.includes("rankingLearningSummaryV1") && !fields.includes("studyPoints"));
 
     // One game at a time: buttons for six games, poker first, with its three panels.
-    assert.deepEqual(await page.locator("[data-casino-game]").allInnerTexts(), ["ポーカー", "ブラックジャック", "ルーレット", "ダイスポーカー", "チンチロ", "すごろくビンゴ"]);
+    assert.deepEqual(await page.locator("[data-casino-game]").allInnerTexts(), ["ポーカー", "ブラックジャック", "ルーレット", "ダイスポーカー", "チンチロ", "すごろく基本", "すごろく記録"]);
     assert.equal(await page.locator(".casino-game-switch").isVisible(), true);
     assert.equal(await page.locator('[data-casino-game="poker"]').getAttribute("aria-pressed"), "true");
     const panelsOf = () => page.locator("#rankingPodium .ranking-mini-panel h3").allInnerTexts();
@@ -87,7 +87,7 @@ const { chromium } = require("playwright"),
           limit: Math.round(limit),
         };
       });
-    const gameNames = { blackjack: "ブラックジャック", roulette: "ルーレット", dice: "ダイスポーカー", chinchiro: "チンチロ", sugoroku: "すごろくビンゴ" };
+    const gameNames = { blackjack: "ブラックジャック", roulette: "ルーレット", dice: "ダイスポーカー", chinchiro: "チンチロ", sugoroku: "すごろく", "sugoroku-bingo": "すごろく記録" };
     for (const viewport of [{ width: 393, height: 852 }, { width: 320, height: 668 }]) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(250);
@@ -97,14 +97,16 @@ const { chromium } = require("playwright"),
         // (The podiums rise when they first appear: measured after that.)
         await page.waitForTimeout(900);
         const result = await fits();
-        assert.equal(result.count, game === "sugoroku" ? 7 : 3, game);
+        assert.equal(result.count, game === "sugoroku-bingo" ? 4 : 3, game);
         assert.deepEqual([result.host, result.page, result.inside], [true, true, true], game + " " + viewport.width + "x" + viewport.height + " " + JSON.stringify(result));
       }
     }
     await page.setViewportSize({ width: 393, height: 852 });
     await page.waitForTimeout(250);
     await page.locator('[data-casino-game="sugoroku"]').click();
-    assert.deepEqual(await panelsOf(), ["累計賭け額", "累計得額", "プレイ回数", "ビンゴ回数", "JP回数", "SJP回数", "ボール排出回数"]);
+    assert.deepEqual(await panelsOf(), ["累計賭け額", "累計得額", "プレイ回数"]);
+    await page.locator('[data-casino-game="sugoroku-bingo"]').click();
+    assert.deepEqual(await panelsOf(), ["ビンゴ回数", "JP回数", "SJP回数", "ボール排出回数"]);
     await page.screenshot({ path: "/tmp/casino-ranking-sugoroku.png" });
     await page.locator('[data-casino-game="poker"]').click();
     assert.equal(requests.length, 1, "choosing a game does not read");
@@ -120,7 +122,7 @@ const { chromium } = require("playwright"),
     assert.deepEqual(await places("dice:b"), ["—", "シー 50pt", "—"]);
     await page.locator('[data-casino-game="chinchiro"]').click();
     assert.deepEqual(await places("chinchiro:b"), ["—", "—", "—"]);
-    await page.locator('[data-casino-game="sugoroku"]').click();
+    await page.locator('[data-casino-game="sugoroku-bingo"]').click();
     // すごろくビンゴ's own counts: SJP only ビー, balls エー then ビー.
     assert.deepEqual(await places("sugoroku:s"), ["—", "ビー 1回", "—"]);
     assert.deepEqual(await places("sugoroku:l"), ["ビー 40回", "エー 90回", "—"]);

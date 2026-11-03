@@ -107,7 +107,8 @@
     const isCasino=key=>typeof key==='string'&&key.includes(':');
     const casinoKeys=()=>window.CasinoStats?window.CasinoStats.keys():[];
     // The カジノ ranking shows one game at a time (all its panels fit the screen).
-    const casinoShown=()=>casinoKeys().filter(key=>key.split(':')[0]===casinoGame);
+    // すごろくビンゴ has two tabs: "sugoroku" (bets, net, plays) and "sugoroku-bingo" (bingos, JP, SJP, balls).
+    const casinoShown=()=>{const game=casinoGame.split('-')[0],bingo=casinoGame==='sugoroku-bingo';return casinoKeys().filter(key=>{const [g,k]=key.split(':');return g===game&&(game!=='sugoroku'||(bingo===['g','j','s','l'].includes(k)));});};
     const labelOf=key=>isCasino(key)?window.CasinoStats.label(key):labels[key];
     const metricTitle=key=>isCasino(key)?labelOf(key).split(' ').pop():labels[key];
     const casinoValue=(row,key)=>{const v=row[key];if(!Number.isFinite(v))return '—';const k=key.split(':')[1];return k==='b'?v.toLocaleString('ja-JP')+'pt':k==='n'?(v>0?'+':v<0?'-':'')+Math.abs(v).toLocaleString('ja-JP')+'pt':v.toLocaleString('ja-JP')+'回';};
@@ -140,7 +141,7 @@
         const host=document.getElementById('rankingPodium');if(!host)return;ensure();const local=self(),rows=cache.filter(entry=>entry.id!==user);if(user!=='GUEST-000')rows.push(local);
         const metrics=rankMode==='learning'?['time','words','flash']:rankMode==='casino'?casinoShown():['points','earned'];
         host.querySelectorAll('[data-podium-metric]').forEach(section=>{if(!metrics.includes(section.dataset.podiumMetric))section.remove();});
-        host.classList.toggle('is-battle-mode',rankMode==='points');host.classList.toggle('is-casino-wide',rankMode==='casino'&&casinoGame==='sugoroku');const note=document.querySelector('.casino-rank-note'),chips=document.querySelector('.casino-game-switch');if(note)note.hidden=rankMode!=='casino';if(chips){chips.hidden=rankMode!=='casino';chips.querySelectorAll('[data-casino-game]').forEach(chip=>chip.setAttribute('aria-pressed',String(chip.dataset.casinoGame===casinoGame)));}
+        host.classList.toggle('is-battle-mode',rankMode==='points');host.classList.toggle('is-casino-wide',rankMode==='casino'&&casinoGame==='sugoroku-bingo');const note=document.querySelector('.casino-rank-note'),chips=document.querySelector('.casino-game-switch');if(note)note.hidden=rankMode!=='casino';if(chips){chips.hidden=rankMode!=='casino';chips.querySelectorAll('[data-casino-game]').forEach(chip=>chip.setAttribute('aria-pressed',String(chip.dataset.casinoGame===casinoGame)));}
         metrics.forEach(key=>{
             let section=host.querySelector('[data-podium-metric="'+key+'"]');
             if(!section){section=document.createElement('section');section.className='ranking-mini-panel';section.dataset.podiumMetric=key;const heading=document.createElement('h3');heading.textContent=metricTitle(key);const podium=document.createElement('div');podium.className='learning-podium';const own=document.createElement('button');own.type='button';own.className='ranking-mini-self';section.append(heading,podium,own);host.append(section);}
