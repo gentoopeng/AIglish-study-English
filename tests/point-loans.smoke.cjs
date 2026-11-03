@@ -142,6 +142,15 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await dialogOf(a).locator("[data-loan-amount]").fill("30");
     await dialogOf(a).getByRole("button", { name: "返してと請求" }).click();
     await dialogOf(a).getByText("30pt 請求した・返事待ち").waitFor();
+    // My open request is a card with its 取り消す under the words (not beside them, where the card was
+    // too narrow and broke the amount), and the amount never breaks.
+    const mine = await dialogOf(a).locator(".talk-card.loans-request.is-mine").last().evaluate((card) => {
+      const words = card.querySelector(".card-words").getBoundingClientRect(),
+        undo = card.querySelector("button").getBoundingClientRect(),
+        amount = getComputedStyle(card.querySelector(".card-amount"));
+      return { below: undo.top >= words.bottom - 1, nowrap: amount.whiteSpace, block: getComputedStyle(card).display };
+    });
+    assert.deepEqual(mine, { below: true, nowrap: "nowrap", block: "block" });
     await b.evaluate(() => window.PointLoans.person("loan-a", "loan-a"));
     await dialogOf(b).getByText("30pt 請求された・返事待ち").waitFor();
     await dialogOf(b).locator(".loans-request").getByRole("button", { name: "払う" }).click();

@@ -79,8 +79,27 @@ const { chromium } = require("playwright"),
     ok(await fits(".vocab-entry-dialog"), "add word with the extra settings");
     await page.getByRole("button", { name: "＋ 意味を追加" }).click();
     ok(await fits(".vocab-entry-dialog"), "add word with a second meaning");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+
+    // A shorter phone (375x667), with the 「アイコンに未読数」 card shown as in an installed app: the app
+    // settings, the card study settings and the add-word form (with its extra settings) still fit.
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.evaluate(() => window.openSettingsDialog());
+    await page.locator("#settingsDialog[open]").waitFor();
+    assert.equal(await page.locator("#appBadgeSettings").isVisible(), true, "the badge card is shown");
+    ok(await fits("#settingsDialog"), "settings on a short phone with the badge card");
+    await page.evaluate(() => document.getElementById("settingsDialog").close());
+    await page.evaluate((b) => window.openBookFlashcardSettings(b), book);
+    await page.locator("dialog.book-flashcard-dialog[open]").waitFor();
+    ok(await fits("dialog.book-flashcard-dialog"), "card settings on a short phone");
+    await page.getByRole("button", { name: "戻る" }).click();
+    await page.locator("#vocabAddWord").click();
+    await page.locator(".vocab-entry-dialog").waitFor();
+    await page.getByText("サブ情報・番号・単元を設定", { exact: true }).click();
+    ok(await fits(".vocab-entry-dialog"), "add word with the extra settings on a short phone");
     assert.deepEqual(errors, []);
-    console.log("PASS: settings fit one screen without scrolling: the app settings (three groups), a book's card study settings (no numbering), and the add-word form (also with its extra settings and a second meaning)");
+    console.log("PASS: settings fit one screen without scrolling: the app settings (three groups), a book's card study settings (no numbering), and the add-word form (also with its extra settings and a second meaning); on a shorter phone (375x667) too, with the badge card shown");
   } finally {
     await browser.close();
   }

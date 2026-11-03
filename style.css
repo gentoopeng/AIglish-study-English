@@ -3157,3 +3157,31 @@ html body dialog.vocab-entry-dialog details .library-editor-hint{margin:4px 0 0;
 html body dialog.vocab-entry-dialog .vocab-entry-continue{margin:8px 0 0;}
 html body dialog.vocab-entry-dialog .library-editor-actions{padding:8px 0 2px;margin-top:8px;bottom:-10px;}
 html body dialog.vocab-entry-dialog .library-editor-actions button{min-height:46px;font-size:15px;}
+
+/* 設定 on a short phone (667px high and the like), also with the 「アイコンに未読数」 card shown (an installed app): tighter. */
+@media (max-height:700px){
+#settingsDialog{padding:12px 14px 10px;}
+#settingsDialog .menu-dialog-heading{margin-bottom:2px;}
+#settingsDialog .menu-dialog-heading h2{font-size:16px;}
+#settingsDialog .menu-dialog-heading button{width:30px;height:30px;font-size:20px;}
+#settingsDialog .settings-group-title{margin:6px 2px 4px;}
+#settingsDialog .sidebar-sounds{gap:5px;padding:7px 11px;}
+#settingsDialog .settings-part{gap:5px;}
+#settingsDialog .settings-part+.settings-part{padding-top:6px;}
+#settingsDialog .music-track-select,#settingsDialog .sidebar-pronounce select{padding:4px 8px;}
+#settingsDialog .settings-api{padding:7px 11px;}
+#settingsDialog .settings-api-label{margin-bottom:4px;}
+#settingsDialog .settings-api-row .search-input,#settingsDialog .settings-api-row .modern-btn{height:32px;}
+#settingsDialog #appBadgeStatus{margin:0;font-size:11px;line-height:1.4;}
+}
+
+/* 単語を追加 on a short phone (667px high and the like): tighter still. */
+@media (max-height:700px){
+html body dialog.vocab-entry-dialog{padding:10px 12px 8px;}
+html body dialog.vocab-entry-dialog header h2{font-size:17px;}
+html body dialog.vocab-entry-dialog label{margin:5px 0 3px;}
+html body dialog.vocab-entry-dialog textarea#vocabEntrySub{min-height:40px;}
+html body dialog.vocab-entry-dialog input:not([type=checkbox]),html body dialog.vocab-entry-dialog select{min-height:40px;}
+html body dialog.vocab-entry-dialog details{padding-top:6px;}
+html body dialog.vocab-entry-dialog .library-editor-actions button{min-height:42px;}
+}

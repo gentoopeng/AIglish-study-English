@@ -1,16 +1,18 @@
 // Requires Playwright, Chromium and a running local HTTP server.
 // Run: node tests/casino-carryover.smoke.cjs
-// What is left of a day's betting allowance (100pt for each minute studied that day) carries into
-// the next day and ends there: the day before spent what had carried in first, and the day before
-// that no longer counts.
+// What is left of a day's betting allowance (100pt for each minute studied that day) carries on,
+// worth less each day: all of it the next day, then half, a quarter, an eighth, a sixteenth, and
+// gone after five days. Bets take the oldest first. Days before 2026-11-04 (before this began) do not
+// carry. The clock is fixed, so the days are the same on any day.
 const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
 (async () => {
   const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
   try {
     const errors = [];
-    // A page with a signed-in player and the helpers to set up the study record and the bets.
-    async function boot() {
+    // A page, on a fixed day (noon in Japan), with a signed-in player and the helpers to set up the
+    // study record and the bets.
+    async function boot(now) {
       const page = await browser.newPage({ viewport: { width: 375, height: 740 } });
       page.setDefaultTimeout(10000);
       page.on("pageerror", (e) => errors.push(e.message));
@@ -22,9 +24,10 @@ const { chromium } = require("playwright"),
       await page.goto("http://127.0.0.1:8000");
       await page.getByRole("button", { name: "ゲストで試す" }).click();
       await page.waitForFunction(() => window.__learningBootReady === true && window.Casino);
+      await page.clock.setFixedTime(new Date(now));
       await page.evaluate(() => {
         myId = "co-a";
-        localStorage.setItem("core_v4_study_points_co-a", JSON.stringify({ balance: 5000, revision: 1, publishedRevision: 1 }));
+        localStorage.setItem("core_v4_study_points_co-a", JSON.stringify({ balance: 50000, revision: 1, publishedRevision: 1 }));
         window.db = {};
         window.fbDoc = (_, ...parts) => parts.join("/");
         window.fbRunTransaction = async () => null;
@@ -32,78 +35,95 @@ const { chromium } = require("playwright"),
       const day = (offset) => page.evaluate((o) => window.StudyTimeModel.dateKey(Date.now() + o * 86400e3), offset);
       const studied = async (offset, minutes) => {
         const date = await day(offset);
-        await page.evaluate(
-          ([d, m]) => window.StudyTime.mergeCloud({ version: 1, epoch: "study-reset-2.62", days: { [d]: { sources: { "test-study": m * 60000 } } }, offset: 0, updatedAt: Date.now() }),
-          [date, minutes],
-        );
+        await page.evaluate(([d, m]) => window.StudyTime.mergeCloud({ version: 1, epoch: "study-reset-2.62", days: { [d]: { sources: { "test-study": m * 60000 } } }, offset: 0, updatedAt: Date.now() }), [date, minutes]);
       };
-      const staked = (record) => page.evaluate((r) => localStorage.setItem("aiglish_casino_staked_co-a", JSON.stringify(r)), record);
-      const show = () => page.evaluate(() => (window.switchTab("vocab"), window.switchTab("casino")));
+      const staked = async (bets) => {
+        const days = {};
+        for (const [offset, amount] of Object.entries(bets)) days[await day(Number(offset))] = amount;
+        await page.evaluate((d) => localStorage.setItem("aiglish_casino_staked_co-a", JSON.stringify({ days: d })), days);
+      };
       const allowance = () => page.evaluate(() => window.Casino.allowance());
       const text = async () => {
-        await show();
+        await page.evaluate(() => (window.switchTab("vocab"), window.switchTab("casino")));
         return page.locator("[data-casino-allow]").innerText();
       };
       return { page, day, studied, staked, allowance, text };
     }
-    const { page, day, studied, staked, allowance, text } = await boot();
 
-    // The day before yesterday studied 10 minutes, yesterday none, today 3: nothing carried into
-    // today (what carried into yesterday ended with it).
-    await studied(-2, 10);
-    await studied(0, 3);
-    assert.equal(await allowance(), 300);
-    assert.equal(await text(), "今日あと 300pt 賭けられます（今日の勉強 3分）");
-    // Yesterday 10 minutes and nothing bet: 1,000pt carry in.
-    await studied(-1, 10);
-    assert.equal(await allowance(), 1300);
-    assert.equal(await text(), "今日あと 1,300pt 賭けられます（今日の勉強 3分・昨日の使い残し 1,000pt を含む）");
-    // Yesterday 400 bet: it came out of what carried into yesterday first, so its own 1,000 stays.
-    await staked({ days: { [await day(-1)]: 400 } });
-    assert.equal(await allowance(), 1300);
-    // Yesterday 1,500 bet: 1,000 from the day before, then 500 of its own: 500 carry.
-    await staked({ days: { [await day(-1)]: 1500 } });
-    assert.equal(await allowance(), 800);
-    // Today the carried part is used first: 100 bet leaves 400 of it, 700 bet uses it up.
-    await staked({ days: { [await day(-1)]: 1500, [await day(0)]: 100 } });
-    assert.equal(await allowance(), 700);
-    assert.equal(await text(), "今日あと 700pt 賭けられます（今日の勉強 3分・昨日の使い残し 400pt を含む）");
-    await staked({ days: { [await day(-1)]: 1500, [await day(0)]: 700 } });
-    assert.equal(await allowance(), 100);
-    assert.equal(await text(), "今日あと 100pt 賭けられます（今日の勉強 3分）");
-    // Over what there is, nothing can be bet, and the hint says what carries.
-    await staked({ days: { [await day(-1)]: 1500, [await day(0)]: 5000 } });
-    assert.equal(await allowance(), 0);
-    assert.match(await page.evaluate(() => window.Casino.studyHint(100)), /昨日の使い残しは今日の終わりまで使えます/);
-    // The older form of the record (one day, { day, amount }) still reads.
-    await staked({ day: await day(0), amount: 50 });
-    assert.equal(await allowance(), 1250);
-    // Bets are counted by day and only the last four days are kept.
-    await staked({ days: { "2020-01-01": 5, "2020-01-02": 5, "2020-01-03": 5, "2020-01-04": 5 } });
-    await page.evaluate(() => window.Casino.addStaked(70));
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("aiglish_casino_staked_co-a")));
-    assert.deepEqual(Object.keys(saved.days).sort(), ["2020-01-02", "2020-01-03", "2020-01-04", await day(0)].sort());
-    assert.equal(saved.days[await day(0)], 70);
-    // A run of days that each carry on (1 minute studied and 100 bet, every day) stays whole past
-    // the days looked back over, from what was kept when each day was worked out; and the day is
-    // kept for the next. Without anything kept it is not made up (nothing carries).
-    const chain = await boot();
-    for (const offset of [-3, -2, -1, 0]) await chain.studied(offset, 1);
-    await chain.staked({ days: { [await chain.day(-3)]: 100, [await chain.day(-2)]: 100, [await chain.day(-1)]: 100 } });
-    assert.equal(await chain.allowance(), 100);
-    await chain.staked({ days: { [await chain.day(-3)]: 100, [await chain.day(-2)]: 100, [await chain.day(-1)]: 100 }, carried: { [await chain.day(-3)]: 100 } });
-    assert.equal(await chain.allowance(), 200);
-    assert.equal(await chain.text(), "今日あと 200pt 賭けられます（今日の勉強 1分・昨日の使い残し 100pt を含む）");
-    const kept = await chain.page.evaluate(() => JSON.parse(localStorage.getItem("aiglish_casino_staked_co-a")));
-    assert.equal(kept.carried[await chain.day(0)], 100);
-    // Bets made after this keep what was kept, and it is not lowered by a smaller sum later.
-    await chain.page.evaluate(() => window.Casino.addStaked(30));
-    const after = await chain.page.evaluate(() => JSON.parse(localStorage.getItem("aiglish_casino_staked_co-a")));
-    assert.deepEqual([after.days[Object.keys(after.days).sort().at(-1)], after.carried[Object.keys(after.carried).sort().at(-1)]], [30, 100]);
-    assert.equal(await chain.allowance(), 170);
-    await chain.page.close();
+    // The 20th of November. Today 3 minutes (300pt) of its own.
+    const t = await boot("2026-11-20T03:00:00Z");
+    assert.equal(await t.day(0), "2026-11-20");
+    await t.studied(0, 3);
+    assert.equal(await t.allowance(), 300);
+    assert.equal(await t.text(), "今日あと 300pt 賭けられます（今日の勉強 3分）");
+    // Yesterday 10 minutes, nothing bet: all 1,000pt carry into today.
+    await t.studied(-1, 10);
+    assert.equal(await t.allowance(), 1300);
+    assert.equal(await t.text(), "今日あと 1,300pt 賭けられます（今日の勉強 3分・持ち越し 1,000pt を含む）");
+    // Two days ago 10 minutes: half of it (500) is worth carrying today.
+    await t.studied(-2, 10);
+    assert.equal(await t.allowance(), 1800);
+    // Three days ago 8 minutes: a quarter (200).
+    await t.studied(-3, 8);
+    assert.equal(await t.allowance(), 2000);
+    // Five days ago 16 minutes: a sixteenth (100). Six days ago: gone.
+    await t.studied(-5, 16);
+    await t.studied(-6, 10);
+    assert.equal(await t.allowance(), 2100);
+    assert.equal(await t.text(), "今日あと 2,100pt 賭けられます（今日の勉強 3分・持ち越し 1,800pt を含む）");
+    // What is bet today uses the carried part first: 500 bet leaves 1,300 of it.
+    await t.staked({ 0: 500 });
+    assert.equal(await t.allowance(), 1600);
+    assert.equal(await t.text(), "今日あと 1,600pt 賭けられます（今日の勉強 3分・持ち越し 1,300pt を含む）");
+    // Over everything: nothing more, and the hint says how it carries.
+    await t.staked({ 0: 99999 });
+    assert.equal(await t.allowance(), 0);
+    assert.match(await t.page.evaluate(() => window.Casino.studyHint(100)), /次の日に持ち越せて、2日前の分からは半分ずつに減ります/);
+    // Yesterday's bets also took the oldest first: 1,200 bet yesterday used up what was worth
+    // 200 (five days old) and 400 (three days old) that day and 600 of the two-day-old 1,000, so
+    // 400 of it is left (worth 200 now), and yesterday's own 1,000 is whole: 1,200 carry.
+    await t.staked({ "-1": 1200 });
+    assert.equal(await t.allowance(), 1500);
+    // Older forms of the record (one day, { day, amount }) still read.
+    await t.page.evaluate(async () => localStorage.setItem("aiglish_casino_staked_co-a", JSON.stringify({ day: window.StudyTimeModel.dateKey(Date.now()), amount: 50 })));
+    assert.equal(await t.allowance(), 2050);
+    // Bets are kept by day, the last six days.
+    await t.page.evaluate(() => localStorage.setItem("aiglish_casino_staked_co-a", JSON.stringify({ days: { "2020-01-01": 5, "2020-01-02": 5, "2020-01-03": 5, "2020-01-04": 5, "2020-01-05": 5, "2020-01-06": 5 } })));
+    await t.page.evaluate(() => window.Casino.addStaked(70));
+    const saved = await t.page.evaluate(() => JSON.parse(localStorage.getItem("aiglish_casino_staked_co-a")));
+    assert.deepEqual(Object.keys(saved.days).sort(), ["2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05", "2020-01-06", "2026-11-20"]);
+    assert.equal(saved.days["2026-11-20"], 70);
+    await t.page.close();
+
+    // A run of days that each studied 1 minute and bet 100 (the oldest first): what was worth most
+    // is kept, so 100 carries from yesterday and from the days before in halves.
+    const run = await boot("2026-11-20T03:00:00Z");
+    for (const offset of [-5, -4, -3, -2, -1, 0]) await run.studied(offset, 1);
+    await run.staked({ "-5": 100, "-4": 100, "-3": 100, "-2": 100, "-1": 100 });
+    // Each day spent its own 100 (nothing older was left): the last of them leaves nothing.
+    assert.equal(await run.allowance(), 100);
+    await run.staked({});
+    // Nothing bet: today's own 100, and the carry: 100 (yesterday) + 50 + 25 + 12.5 + 6.25 = 193.75, whole: 193.
+    assert.equal(await run.allowance(), 100 + 193);
+    await run.page.close();
+
+    // Before this began: the study of 2026-11-03 and earlier is not carried. On the 4th, yesterday
+    // (the 3rd, with 140 minutes) gives nothing; on the 5th, the 4th carries and the 3rd does not.
+    const fourth = await boot("2026-11-04T03:00:00Z");
+    await fourth.studied(-1, 140);
+    await fourth.studied(0, 9);
+    assert.equal(await fourth.day(-1), "2026-11-03");
+    assert.equal(await fourth.allowance(), 900);
+    assert.equal(await fourth.text(), "今日あと 900pt 賭けられます（今日の勉強 9分）");
+    await fourth.page.close();
+    const fifth = await boot("2026-11-05T03:00:00Z");
+    await fifth.studied(-2, 140);
+    await fifth.studied(-1, 10);
+    await fifth.studied(0, 2);
+    assert.equal(await fifth.allowance(), 1000 + 200);
+    await fifth.page.close();
     assert.deepEqual(errors, []);
-    console.log("PASS: the unused part of a day's betting allowance carries into the next day and ends there (carried part used first, the day before that ended, old record form, four days kept)");
+    console.log("PASS: the unused part of a day's betting allowance carries on at full value the next day, then halves each day and is gone after five; bets take the oldest first; days before 2026-11-04 do not carry");
   } finally {
     await browser.close();
   }

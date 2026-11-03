@@ -128,91 +128,102 @@
   // ---- Study first ---------------------------------------------------------------------
   // Points can be bet only after studying: each minute measured today (the study timer, not
   // time typed in) lets the player bet PER_MINUTE more today, across every game. What was bet
-  // each day is counted on this device. What was not used of a day's allowance (its own minutes)
-  // carries over and can be used the next day too, and ends there. Practice chips are not limited.
+  // each day is counted on this device. Practice chips are not limited.
+  //
+  // What is not used of a day's allowance (its own minutes) carries on to the following days, worth
+  // less each day: all of it the next day, half the day after, then a quarter, an eighth, a sixteenth,
+  // and gone after five days. Spending takes the oldest (least valuable) first. A day's allowance
+  // carries only from CARRY_FROM on (the day this began): earlier days do not count.
   const PER_MINUTE = 100,
-    KEEP_DAYS = 4;
+    CARRY_DAYS = 5,
+    CARRY_FROM = "2026-11-04";
+  // What a day's unused allowance is worth when it is `age` days old.
+  const carryWeight = (age) => (age <= 1 ? 1 : age <= CARRY_DAYS ? Math.pow(0.5, age - 1) : 0);
   // The study day `offset` days from today (-1: yesterday).
   const dayKey = (offset = 0) => (window.StudyTimeModel ? window.StudyTimeModel.dateKey(Date.now() + offset * 86400e3) : new Date(Date.now() + 9 * 3600e3 + offset * 86400e3).toISOString().slice(0, 10));
   const studyDay = () => dayKey(0);
-  function studyMinutes(date = studyDay()) {
+  // The study record's days (measured time from every device), read once for a calculation.
+  function studyDays() {
     try {
       window.StudyTime?.tick?.();
-      const day = window.StudyTime?.snapshot?.()?.days?.[date];
-      if (!day) return 0;
-      // Measured time from every device; the old pre-ledger total ("legacy") and edits do not count.
-      const ms = Object.entries(day.sources || {}).reduce((sum, [source, value]) => sum + (source === "legacy" ? 0 : Math.max(0, Number(value) || 0)), 0);
-      return Math.floor(Math.min(86400e3, ms) / 60e3);
+      return window.StudyTime?.snapshot?.()?.days || {};
     } catch {
-      return 0;
+      return {};
     }
   }
+  function minutesOf(day) {
+    if (!day) return 0;
+    // The old pre-ledger total ("legacy") and edits do not count.
+    const ms = Object.entries(day.sources || {}).reduce((sum, [source, value]) => sum + (source === "legacy" ? 0 : Math.max(0, Number(value) || 0)), 0);
+    return Math.floor(Math.min(86400e3, ms) / 60e3);
+  }
+  const studyMinutes = (date = studyDay(), days = studyDays()) => minutesOf(days[date]);
   const stakedName = () => "aiglish_casino_staked_" + uid();
-  // What was bet on each of the last days, and what had carried into each day when it was worked
-  // out: { days: { "2026-11-03": 300, … }, carried: { "2026-11-03": 100, … } }. (The older form kept
-  // only one day, { day, amount }.)
-  function stakeStore() {
-    const store = { days: {}, carried: {} };
+  // What was bet on each of the last days: { "2026-11-03": 300, … } (older forms: { day, amount },
+  // and { days, carried }, of which only the days are used).
+  function stakedDays() {
+    const days = {};
     try {
       const saved = JSON.parse(localStorage.getItem(stakedName()) || "null");
       if (saved && typeof saved === "object") {
-        if (saved.days && typeof saved.days === "object") for (const [day, amount] of Object.entries(saved.days)) store.days[day] = Math.max(0, Number(amount) || 0);
-        else if (typeof saved.day === "string") store.days[saved.day] = Math.max(0, Number(saved.amount) || 0);
-        if (saved.carried && typeof saved.carried === "object") for (const [day, amount] of Object.entries(saved.carried)) store.carried[day] = Math.max(0, Number(amount) || 0);
+        if (saved.days && typeof saved.days === "object") for (const [day, amount] of Object.entries(saved.days)) days[day] = Math.max(0, Number(amount) || 0);
+        else if (typeof saved.day === "string") days[saved.day] = Math.max(0, Number(saved.amount) || 0);
       }
     } catch {}
-    return store;
+    return days;
   }
-  function keepStakeStore(store) {
-    const kept = [...new Set([...Object.keys(store.days), ...Object.keys(store.carried)])].sort().slice(-KEEP_DAYS),
-      pick = (from) => Object.fromEntries(kept.filter((d) => from[d] !== undefined).map((d) => [d, from[d]]));
-    localStorage.setItem(stakedName(), JSON.stringify({ days: pick(store.days), carried: pick(store.carried) }));
-  }
-  const stakedOn = (day, store = stakeStore()) => store.days[day] || 0;
+  const stakedOn = (day, days = stakedDays()) => days[day] || 0;
   const stakedToday = () => stakedOn(studyDay());
   function addStaked(amount) {
     if (!(amount > 0) || !real()) return;
     try {
-      const store = stakeStore(),
+      const days = stakedDays(),
         day = studyDay();
-      store.days[day] = (store.days[day] || 0) + amount;
-      keepStakeStore(store);
+      days[day] = (days[day] || 0) + amount;
+      const kept = Object.keys(days).sort().slice(-(CARRY_DAYS + 1));
+      localStorage.setItem(stakedName(), JSON.stringify({ days: Object.fromEntries(kept.map((d) => [d, days[d]])) }));
     } catch {}
   }
-  // What carries into the day `offset` days from today: what is left of the day before's own
-  // allowance. That day spent what had carried into it first, then its own minutes. What had
-  // carried into a day is kept when it is worked out, and never lowered (the study record can
-  // still be arriving from another device), so a run of days that each carry on stays whole past
-  // the days looked back over (three, from what is kept).
-  function carryIn(offset, store, depth) {
-    const saved = store.carried[dayKey(offset)] || 0;
-    if (depth <= 0) return saved;
-    const day = dayKey(offset - 1),
-      computed = Math.max(0, studyMinutes(day) * PER_MINUTE - Math.max(0, (store.days[day] || 0) - carryIn(offset - 1, store, depth - 1)));
-    return Math.max(saved, computed);
-  }
-  function carriedInto() {
-    const store = stakeStore(),
-      value = carryIn(0, store, 3),
-      key = studyDay();
-    if (value > (store.carried[key] || 0)) {
-      store.carried[key] = value;
-      try {
-        keepStakeStore(store);
-      } catch {}
+  // What is left of each earlier day's own allowance as of today (offsets -5 … -1), worked out day
+  // by day from the oldest: a day gets its own minutes (if it is CARRY_FROM or later), then what was
+  // bet that day is taken from the oldest allowance that is still worth something that day.
+  function carryLeft(days = studyDays(), bets = stakedDays()) {
+    const left = {};
+    for (let day = -CARRY_DAYS; day <= -1; day++) {
+      const key = dayKey(day);
+      if (key >= CARRY_FROM) left[day] = studyMinutes(key, days) * PER_MINUTE;
+      let spend = bets[key] || 0;
+      for (let origin = -CARRY_DAYS; origin <= day && spend > 0; origin++) {
+        const own = left[origin] || 0,
+          worth = carryWeight(day - origin);
+        if (!(own > 0) || !(worth > 0)) continue;
+        const take = Math.min(spend, own * worth);
+        left[origin] = own - take / worth;
+        spend -= take;
+      }
     }
-    return value;
+    return left;
+  }
+  // What carries into today: the earlier days' leftovers, each worth what its age gives.
+  function carriedInto(days = studyDays(), bets = stakedDays()) {
+    const left = carryLeft(days, bets);
+    return Math.floor(Object.entries(left).reduce((sum, [origin, own]) => sum + own * carryWeight(-Number(origin)), 0) + 1e-9);
   }
   // The part of that which today has not used yet (it is used first).
   const carriedLeft = () => (real() ? Math.max(0, carriedInto() - stakedToday()) : 0);
   // What can still be bet today (Infinity on practice chips).
-  const allowance = () => (real() ? Math.max(0, carriedInto() + studyMinutes() * PER_MINUTE - stakedToday()) : Infinity);
+  const allowance = () => {
+    if (!real()) return Infinity;
+    const days = studyDays(),
+      bets = stakedDays();
+    return Math.max(0, carriedInto(days, bets) + studyMinutes(studyDay(), days) * PER_MINUTE - stakedOn(studyDay(), bets));
+  };
   // What a bet may be now: the balance, and on points no more than today's allowance.
   const stakeRoom = () => Math.min(balance(), allowance());
   // Minutes more to study before `amount` can be bet.
   const minutesFor = (amount) => Math.max(1, Math.ceil((amount - allowance()) / PER_MINUTE));
-  const studyHint = (amount) => "今日賭けられるのは勉強1分につき" + PER_MINUTE + "ptまでです（昨日の使い残しは今日の終わりまで使えます）。あと" + minutesFor(amount) + "分勉強すると賭けられます。";
-  const allowText = () => (real() ? "今日あと " + fmt(allowance()) + "pt 賭けられます（今日の勉強 " + studyMinutes() + "分" + (carriedLeft() > 0 ? "・昨日の使い残し " + fmt(carriedLeft()) + "pt を含む" : "") + "）" : "");
+  const studyHint = (amount) => "今日賭けられるのは勉強1分につき" + PER_MINUTE + "ptまでです（使い残しは次の日に持ち越せて、2日前の分からは半分ずつに減ります）。あと" + minutesFor(amount) + "分勉強すると賭けられます。";
+  const allowText = () => (real() ? "今日あと " + fmt(allowance()) + "pt 賭けられます（今日の勉強 " + studyMinutes() + "分" + (carriedLeft() > 0 ? "・持ち越し " + fmt(carriedLeft()) + "pt を含む" : "") + "）" : "");
   const unit = () => (real() ? "pt" : "枚");
   // Today's running total (Japan time), kept apart for points and practice chips.
   const todayName = () => "aiglish_casino_today_" + uid() + (real() ? "" : "_practice");
