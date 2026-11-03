@@ -63,7 +63,11 @@ test("money to me is unclaimed until marked, and the history is capped", () => {
   assert.deepEqual(L.unclaimed(r, "a"), []);
   r.claimed = { 1: true };
   assert.deepEqual(L.unclaimed(r, "b"), []);
-  for (let i = 0; i < L.MAX_ENTRIES + 5; i++) r = L.send(r, { id: "n" + i, from: "a", to: "b", amount: 1, kind: "lend", at });
+  // Each is collected as it comes, so the oldest can go once the record is full.
+  for (let i = 0; i < L.MAX_ENTRIES + 5; i++) {
+    r = L.send(r, { id: "n" + i, from: "a", to: "b", amount: 1, kind: "lend", at });
+    r.claimed = { ...r.claimed, ["n" + i]: true };
+  }
   assert.equal(r.entries.length, L.MAX_ENTRIES);
 });
 
@@ -148,11 +152,19 @@ test("asking to be given (もらう) is answered by a give of exactly that amoun
 });
 
 test("a full record never drops a give that has not been collected, and keeps `claimed` short", () => {
-  let r = L.send(null, { id: "first-give", from: "a", to: "b", amount: 7, kind: "give", at });
-  for (let i = 0; i < L.MAX_ENTRIES + 20; i++) r = L.send(r, { id: "g" + i, from: "a", to: "b", amount: 1, kind: "give", at });
+  // 400 gives waiting to be collected: the next one is refused (nothing is paid), not the oldest dropped.
+  let r = null;
+  for (let i = 0; i < L.MAX_ENTRIES; i++) r = L.send(r, { id: "g" + i, from: "a", to: "b", amount: 1, kind: "give", at });
   assert.equal(r.entries.length, L.MAX_ENTRIES);
-  // The record stays within its limit. (400 gives all waiting to be collected is not a real case; the
-  // next lines are: collected gives go first, then `claimed` is pruned to the entries that remain.)
+  assert.throws(() => L.send(r, { id: "extra", from: "a", to: "b", amount: 1, kind: "give", at }), /記録がいっぱい/);
+  assert.throws(() => L.say(r, { id: "m", from: "a", to: "b", text: "hi", at }), /記録がいっぱい/);
+  assert.equal(r.entries[0].id, "g0");
+  // Once the oldest is collected there is room again, and that one goes.
+  r.claimed = { g0: 1 };
+  r = L.send(r, { id: "extra", from: "a", to: "b", amount: 1, kind: "give", at });
+  assert.equal(r.entries.length, L.MAX_ENTRIES);
+  assert.equal(r.entries[0].id, "g1");
+  assert.deepEqual(r.claimed, {});
   r = L.send(L.send(null, { id: "lend", from: "a", to: "b", amount: 90, kind: "lend", at }), { id: "x", from: "a", to: "b", amount: 1, kind: "give", at });
   r.claimed = { lend: 1, x: 1, gone: 1 };
   r = L.say(r, { id: "m", from: "a", to: "b", text: "hi", at });

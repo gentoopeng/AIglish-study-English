@@ -2401,3 +2401,16 @@ Tests:
   - 既読 shows on the giver's side under the give;
   - もらう is asked, answered with あげる, and cannot be answered twice from a stale screen;
   - a give or ask-give to the casino or the 運営 is refused.
+
+## Points: a full record refuses a new transfer instead of dropping uncollected points (10.22.63.00)
+
+**What could happen.** Found by the Codex review of 10.22.62.00. When a pair's record already held 400 entries that were all points waiting to be collected (a give, a loan, a repayment, a gift), adding one more cut the oldest entry off the record. The sender had already paid for it, so the receiver could never collect those points.
+
+**Now.** When making room would drop points the receiver has not collected, the new line is refused with 「記録がいっぱいです。相手が受け取るまで、新しく送れません。」 and nothing is written (the refusal comes before the sender's wallet is touched, inside the same transaction). Once the receiver's device collects, the oldest collected entry goes as before. Messages and finished requests still go first.
+
+Tests:
+
+- `tests/point-loans-model.test.cjs`:
+  - 400 uncollected gives: the next give and a message are refused and the oldest stays;
+  - after the oldest is collected there is room again, and it is the one that goes;
+  - the older cap test now collects each loan as it comes.
