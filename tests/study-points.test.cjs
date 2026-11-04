@@ -248,20 +248,21 @@ test("a bounded history never drops pending awards or resets the accumulated bal
 test("daily content tiers replace each other rather than stack; resets, meanings and sessions do not multiply rewards", async () => {
   const a = setup();
   assert.equal(a.points.reward("card", "book", "1"), 1);
-  assert.equal(a.points.reward("card", "book", "1"), 0);
+  // A flashcard answer earns every time (a repeat has a token of its own); the others once a day.
+  assert.equal(a.points.reward("card", "book", "1"), 1);
   assert.equal(a.points.reward("quiz", "book", "1"), 2);
-  assert.equal(a.points.balance(), 3);
+  assert.equal(a.points.balance(), 4);
   await a.points.flush();
   assert.equal(a.points.reward("review", "book", "1"), 7);
   assert.equal(a.points.reward("quiz", "book", "1"), 0);
-  assert.equal(a.points.balance(), 10);
+  assert.equal(a.points.balance(), 11);
   await a.points.flush();
-  assert.equal(a.points.balance(), 10);
+  assert.equal(a.points.balance(), 11);
   assert.equal(Object.values(a.points.read().history)[0].amount, 10);
   assert.equal(a.points.reward("work", "workbook", "2(1)"), 1);
   assert.equal(a.points.reward("work", "workbook", "2(2)"), 1);
   await a.points.flush();
-  assert.equal(a.points.balance(), 12);
+  assert.equal(a.points.balance(), 13);
 });
 test("mixed-source offline awards, backup restore and remote higher tiers settle only their differences", async () => {
   const a = setup();
@@ -643,17 +644,17 @@ test("points history per day: every credited award is kept by day and kind, once
   a.points.reward("card", "book", "2", "a", { bookName: "本", word: "two" });
   await a.points.flush();
   const wallet = remote.get("users/a/learningPoints/main");
-  // Today: two words, 4pt; credited once even though word 2 was answered twice.
-  assert.deepEqual(wallet.daily[date], { card: { n: 2, p: 4 } });
+  // Today: three answers (word 2 twice: a flashcard answer earns each time), 6pt, each credited once.
+  assert.deepEqual(wallet.daily[date], { card: { n: 3, p: 6 } });
   // The past days, added up from the records in the same sync (one read for both fills).
   assert.deepEqual(wallet.daily["2026-10-01"], { card: { n: 2, p: 4 } });
   assert.deepEqual(wallet.daily["2026-10-02"].time.p, 150);
   assert.equal(wallet.dailyFilled, true);
   assert.equal(reads, 1);
-  assert.equal(JSON.stringify(a.points.daily()[0]), JSON.stringify([date, { card: { n: 2, p: 4 } }]));
+  assert.equal(JSON.stringify(a.points.daily()[0]), JSON.stringify([date, { card: { n: 3, p: 6 } }]));
   // A second sync adds nothing twice and reads nothing again.
   await a.points.flush();
-  assert.deepEqual(remote.get("users/a/learningPoints/main").daily[date], { card: { n: 2, p: 4 } });
+  assert.deepEqual(remote.get("users/a/learningPoints/main").daily[date], { card: { n: 3, p: 6 } });
   assert.equal(reads, 1);
   // Another device takes the filled record from the cloud.
   const b = setup(remote, true);
@@ -708,4 +709,54 @@ test("a day's study time that is counted puts one notice in the お知らせボ�
   assert.match(notices[0].body, /20分（1分1pt）。あとから \+5pt 加わりました。/);
   // Another account's notices are its own.
   assert.equal(a.c.PersonalNotices.list("b").length, 0);
+});
+test("a flashcard answer earns every time, up to 10 for one word a day; two devices claim separate tokens; past repeats are dropped", async () => {
+  const remote = new Map(),
+    a = setup(remote, true),
+    b = setup(remote, true);
+  a.values.set("aiglish_study_device", "aaaaaa-1");
+  b.values.set("aiglish_study_device", "bbbbbb-2");
+  const date = a.c.WeakReviewModel.day();
+  // Ten paid answers of one word, then nothing more that day.
+  const paid = [];
+  for (let i = 0; i < 12; i++) paid.push(a.points.reward("card", "book", "7", "a", { word: "seven" }));
+  assert.deepEqual(paid, [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0]);
+  assert.equal(a.points.balance(), 20);
+  // The first answer keeps the plain token; repeats carry the device and a count.
+  const tokens = Object.keys(a.points.read().claims).map((t) => JSON.parse(t)[2]).sort();
+  assert.equal(tokens.length, 10);
+  assert.ok(tokens.includes("7") && tokens.includes("7#aaaaaa-2") && tokens.includes("7#aaaaaa-10"));
+  // A word the battle already paid today still earns on a card (as a repeat, with a token of its own),
+  // and a card answered first still blocks a battle that day.
+  assert.equal(a.points.reward("quiz", "book", "8"), 2);
+  assert.equal(a.points.reward("card", "book", "8"), 2);
+  assert.equal(a.points.reward("card", "book", "8"), 2);
+  assert.equal(a.points.reward("card", "book", "11"), 2);
+  assert.equal(a.points.reward("quiz", "book", "11"), 0);
+  // Two devices that both answered word 9 offline: both are credited, neither twice.
+  a.points.reward("card", "book", "9");
+  a.points.reward("card", "book", "9");
+  b.points.reward("card", "book", "9");
+  b.points.reward("card", "book", "9");
+  await a.points.flush();
+  await b.points.flush();
+  const shards = [...remote].filter(([k]) => k.startsWith("users/a/reviewPointDays/"));
+  const nine = shards.flatMap(([, v]) => Object.keys(v.claims || {})).filter((k) => k.startsWith("9"));
+  assert.deepEqual(nine.sort(), ["9", "9#aaaaaa-2", "9#bbbbbb-2"]);
+  // A repeat of a past day is dropped locally at the next award (the cloud keeps it).
+  const yesterday = a.c.WeakReviewModel.day(Date.now() - 86400000),
+    repeat = JSON.stringify([yesterday, "book", "7#aaaaaa-2"]),
+    plain = JSON.stringify([yesterday, "book", "7"]),
+    state = a.points.read();
+  state.claims[repeat] = 2;
+  state.settled[repeat] = 2;
+  state.claims[plain] = 2;
+  state.settled[plain] = 2;
+  a.values.set(a.points.key("a"), JSON.stringify(state));
+  a.points.reward("card", "book", "10");
+  const after = a.points.read();
+  assert.equal(after.claims[repeat], undefined);
+  assert.equal(after.settled[repeat], undefined);
+  assert.equal(after.claims[plain], 2, "a plain token stays for its 8 days");
+  assert.ok(date);
 });

@@ -66,7 +66,7 @@
     const signed = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n).toLocaleString("ja-JP") + "pt";
     const LABELS = {
       time: ["勉強時間", (n) => n + "分"],
-      card: ["単語カード", (n) => n + "語"],
+      card: ["単語カード", (n) => n + "回"],
       quiz: ["単語バトルの正解", (n) => n + "語"],
       review: ["苦手復習", (n) => n + "語"],
       work: ["ワークの学習記録", (n) => n + "問"],

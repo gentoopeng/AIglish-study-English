@@ -235,7 +235,7 @@ const { chromium, webkit } = require("playwright"),
     assert.equal(await page.locator(".points-history li.points-day").count(), 1);
     assert.match(await page.locator(".points-history li.points-day").innerText(), /計 \+2pt/);
     assert.equal(await page.locator(".points-history li.is-card").count(), 1);
-    assert.match(await page.locator(".points-history li.is-card").innerText(), /単語カード[\s\S]*1語[\s\S]*\+2pt/);
+    assert.match(await page.locator(".points-history li.is-card").innerText(), /単語カード[\s\S]*1回[\s\S]*\+2pt/);
     if (process.env.SCREENSHOT)
       await page.screenshot({
         path: process.env.SCREENSHOT.replace(/\.png$/, "-points.png"),

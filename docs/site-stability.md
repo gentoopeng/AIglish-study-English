@@ -2753,3 +2753,16 @@ Tests: `tests/term-sibling-status.smoke.cjs` — a ○ meaning lowered to × by 
 **Fix.** `TermProgress.noteBaseFor` returns the rating the question inherits, and `TermProgress.battle` takes it as `inherited` and treats it as the previous rating when the question has no record of its own: a wrong answer then records ×.
 
 Tests: `tests/term-sibling-status.smoke.cjs` — an inherited ○ question answered wrong in a battle becomes ×; `tests/term-battle.smoke.cjs` still passes.
+
+## 10.22.86.00 単語カードは答えるたびにポイント／すごろくの「確変」の表示をやめて ×0 の枠に見せる
+
+**What the owner asked.** (1) Review matters, so a flashcard answer should earn every time, not once per word a day. (2) In すごろくビンゴ, do not write 確変; the bonus slots should read ×0 and play a 激アツ effect when the wheel stops on one.
+
+**Points.** `study-points.js`: for the `card` source only, the first answer of a word in a day keeps its plain token `[day, book, num]` (so a battle or review done before it still blocks nothing, and a card answered first still blocks them, as before); each repeat gets its own token `num#<device>-<k>` (device = first six characters of `aiglish_study_device`, so two devices never claim the same token). Limits, so the day's records stay small and swipe-back-swipe cannot farm: 10 paid answers of one word a day and 500 paid repeats a day in all (over the limit pays 0, no error). Past days' repeat tokens are dropped locally at the next award (the cloud keeps them, and its idempotence is by token). The daily history counts answers, so its label reads 「n回」. Battle, review and work are unchanged (once per word a day). An Opus review of the design found: no double credit in retries/offline/two devices, a device tag needed, and a cap needed (casino bets use the study-time allowance, not points, so betting is not raised; points, earned and the rankings are).
+
+**すごろくビンゴ.** The four hidden slots are drawn and labelled ×0, same colour as a real ×0 slot. When the wheel stops on one, the result reads ×0 for a moment, then the room goes gold and shakes (激アツ！！) and the 激アツルーレット (×2 to ×10, or two balls in a row) spins. The word 確変 no longer appears on screen (the rules text and the usage guide say 激アツ). Odds, pay and balance are unchanged.
+
+Tests:
+
+- `tests/study-points.test.cjs`: a card answer earns every time (10 for one word, then 0); the plain token and `#device-k` tokens; a card after a battle earns, a battle after a card does not; two devices offline each get their repeats credited once; past repeats are dropped; the existing tier / history tests follow the new rule.
+- `tests/sugoroku.smoke.cjs`: the title and rules say 激アツ and not 確変.
