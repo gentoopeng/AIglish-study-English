@@ -264,8 +264,10 @@
       base = String(num);
     // The plain token counts as one of the word's card answers only if a card answer made it (a
     // battle or review may have): when another way of answering took it, the card has all of its own.
+    // When the history no longer says (it keeps the latest 100), it is not counted: the card may then
+    // get one answer more than the limit, never one less.
     const baseToken = receipt(book, base, date),
-      byCard = !used(base) || (value.history[baseToken]?.source ?? "card") === "card",
+      byCard = !used(base) || value.history[baseToken]?.source === "card",
       most = CARD_PER_WORD + (byCard ? 0 : 1);
     let n = base,
       k = 1;
