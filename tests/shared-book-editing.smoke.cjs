@@ -86,11 +86,25 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await page.locator("#adminBookEditingBanner").count(), 0);
     assert.equal(await page.locator("#vocabListContainer .card-edit-btn").count(), 0);
 
+    // A user opening the distributed book sees an 編集 button (the same pill as ＋ 追加 is for their own books) instead of nothing.
+    await page.locator("#vocabLibraryBooks .textbook-list-item", { hasText: "配信単語" }).click();
+    await page.waitForFunction(() => currentTextbook === "shared-1" && !window.__vocabSelectionRequest);
+    assert.equal(await page.locator("#vocabEditBook").isVisible(), true);
+    assert.equal(await page.locator("#vocabAddWord").isVisible(), false);
+    // The menu has the same buttons for every book: 編集 first, then the list / delete ones.
+    await page.evaluate(() => window.showVocabLibrarySelection());
+    await page.getByRole("button", { name: "配信単語の管理", exact: true }).click();
+    assert.deepEqual(await page.locator(".library-editor-actions-stack button").allInnerTexts(), ["ロード画面クイズの設定", "編集", "自分の一覧から外す", "単語帳を完全削除", "閉じる"]);
+    await page.getByRole("button", { name: "閉じる", exact: true }).click();
+
     // A user: copy into their own books, with the understanding, the original leaving the list.
     await page.evaluate(() => window.showVocabLibrarySelection());
     await page.getByRole("button", { name: "配信単語の管理", exact: true }).click();
-    await page.getByRole("button", { name: "自分用にコピーして編集" }).click();
-    await page.getByRole("button", { name: "コピーする" }).click();
+    await page.getByRole("button", { name: "編集", exact: true }).click();
+    // The original stays listed unless asked to leave; here it leaves.
+    assert.equal(await page.locator("#libraryCopyHide").isChecked(), false);
+    await page.locator("#libraryCopyHide").check();
+    await page.getByRole("button", { name: "編集する" }).click();
     await page.waitForFunction(() => /^personal_/.test(currentTextbook) && vocabList.length === 2 && !window.__vocabSelectionRequest);
     const copy = await page.evaluate(() => ({
       name: textbooksPool.find((b) => b.id === currentTextbook).name,

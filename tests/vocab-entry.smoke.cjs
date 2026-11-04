@@ -140,6 +140,10 @@ const { chromium, webkit } = require("playwright"),
       .fill("答え");
     await page.getByText("サブ情報・番号・単元を設定", { exact: true }).click();
     await page.locator("#vocabEntryNumber").fill("1");
+    // The ＋ at the top is the between-words form (inserting after the last word); without 差し込む a used number is refused.
+    assert.equal(await page.locator("#vocabEntryInsert").isChecked(), true);
+    assert.match(await page.locator(".vocab-entry-where").innerText(), /の次（#\d+）に入ります/);
+    await page.locator("#vocabEntryInsert").uncheck();
     await page.getByRole("button", { name: "追加する", exact: true }).click();
     assert.match(
       await page.locator(".vocab-entry-dialog [role=alert]").innerText(),
