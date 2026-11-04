@@ -2824,3 +2824,16 @@ Tests: `tests/copy-follow.smoke.cjs` — an unloaded copy is left alone (no word
 **What the user saw.** Nothing yet; found in review of 10.22.91.00. When a public book's owner emptied it and the copy had none of the player's own words left, the merge produced an empty list, but `setCopyMaster` stored it as `emptyConfirmed: false`, which `VocabMaster.resolve` does not take as a valid empty draft. The copy could resolve to an old backup, and the base and `sourceSyncedAt` had already moved on, so it was never retried.
 
 **Fix.** `setCopyMaster` stores an empty list as `emptyConfirmed: true` and tells `VocabMaster.confirmEmpty` (an empty list the original chose, not a failed load). Test: `tests/copy-follow.smoke.cjs` — a second public copy with only unedited words, emptied by its owner, resolves to an empty confirmed list and its `sourceSyncedAt` moves on.
+
+## 10.22.93.00 カジノのランキング: 名前が見えない／選択ボタンを小さく1行に／下の文章を消した
+
+**What the user saw.** In ランキング › カジノ, a player's name under the avatar was invisible; the game buttons were big, in three rows (すごろく基本 and すごろく記録 each wrapped to a row of their own), and two lines of text sat under the podiums.
+
+**Cause.** A name set in a very dark colour (the profile's name colour) was drawn dark on the dark ranking; its text stroke (`.2px` from the page) was too thin to show. Three rows of big buttons also left the podiums little room.
+
+**Fix.**
+- `ranking.js` `name()`: a dark colour gets a wider light stroke and a light halo, a light colour a dark shadow, so any name colour reads.
+- The game buttons are one slim rounded bar of seven small buttons: ポーカー, BJ, ルーレット, ダイス, チンチロ, and すごろく + 記録 joined as one pair (full names stay in `aria-label`). The gold-lined pill marks the chosen one; the font and paddings scale with the width (also at 320px).
+- The footer lines (「表彰台をタップして…」 and the 累計 note) are hidden in カジノ and the note's element is removed; the podiums get the room.
+
+Tests: `tests/casino-ranking.smoke.cjs` — the seven buttons are on one row, none cut off, the bar is under 40px, at 393 and 320px wide; no footer in カジノ (it is back in ポイント); a name in a dark colour carries the halo.
