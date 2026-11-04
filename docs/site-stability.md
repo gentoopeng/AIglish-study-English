@@ -2745,3 +2745,11 @@ Tests:
 **Fix.** The battle (`word-duel.js`) keeps the meaning's rating first (`TermProgress.noteBaseFor`, read from the learning data) when an answer can lower it (a wrong or skipped answer).
 
 Tests: `tests/term-sibling-status.smoke.cjs` — a ○ meaning lowered to × by a wrong battle answer keeps `{ base: "ok" }` and the fallback stays ○.
+
+## 10.22.85.00 用語・年号モード: 引き継いだ○の問題を対戦で間違えたら×にする（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.22.84.00. A question with no record of its own goes by its meaning's rating (○). A wrong battle answer on it was only recorded when the question had its own ○ record, so it stayed ○ (inherited) and a filter that leaves ○ out hid the question the player had just missed.
+
+**Fix.** `TermProgress.noteBaseFor` returns the rating the question inherits, and `TermProgress.battle` takes it as `inherited` and treats it as the previous rating when the question has no record of its own: a wrong answer then records ×.
+
+Tests: `tests/term-sibling-status.smoke.cjs` — an inherited ○ question answered wrong in a battle becomes ×; `tests/term-battle.smoke.cjs` still passes.

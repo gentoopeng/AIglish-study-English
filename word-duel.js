@@ -1316,8 +1316,9 @@
     window.StartupMonitor?.event?.("duel:answer");
     try {
       // The meaning's rating before this answer can lower it: the line's other questions go by it.
+      let inherited;
       if (q.ref.term && (!right || skipped))
-        window.TermProgress?.noteBaseFor(q.ref.book || target.book, q.ref);
+        inherited = window.TermProgress?.noteBaseFor(q.ref.book || target.book, q.ref);
       // A battle only lowers a ○; 「わからない」 is the player's own "I don't know" and records ×.
       window.WordDuelProgress.apply(
         q.ref.book || target.book,
@@ -1333,6 +1334,7 @@
           q.ref.term,
           right,
           skipped,
+          inherited,
         );
       if (right)
         window.StudyPoints?.reward(
