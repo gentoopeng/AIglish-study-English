@@ -59,6 +59,17 @@ const { chromium } = require("playwright"),
       return { now, base: window.TermProgress.read("terms")[2]["m:2-0"], fallback: window.TermProgress.fallback(window.TermProgress.read("terms"), 2, "2-0", now) };
     });
     assert.deepEqual(result, { now: "bad", base: { base: "ok" }, fallback: "ok" });
+    // The question itself had no record: it inherited ○, and the wrong answer makes it × (it must
+    // not stay ○ and be hidden from a filter that leaves ○ out).
+    const lowered = await page.evaluate(() => {
+      const ref = { num: "3", mid: "3-0", count: 1, sig: window.buildWordSignature(vocabList.find((w) => String(w.num) === "3")), term: "y:3-0" };
+      window.WordDuelProgress.apply("terms", ref, "ok", "GUEST-000");
+      const inherited = window.TermProgress.noteBaseFor("terms", ref);
+      window.WordDuelProgress.apply("terms", ref, false, "GUEST-000", { onlyDowngrade: true });
+      window.TermProgress.battle("terms", 3, "y:3-0", false, false, inherited);
+      return [inherited, window.TermProgress.read("terms")[3]["y:3-0"].status];
+    });
+    assert.deepEqual(lowered, ["ok", "bad"]);
     assert.deepEqual(errors, []);
     console.log("PASS: a ○ on a line's year question does not hide its other questions (they follow the rating from before the first answer)");
   } finally {

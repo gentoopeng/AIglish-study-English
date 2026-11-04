@@ -307,9 +307,12 @@
   }
   // The same from a battle's reference ({ num, mid, count }): the meaning's rating in the learning
   // data, taken before the battle's answer lowers it.
+  // Returns the rating a question without a record of its own goes by.
   function noteBaseFor(book, ref) {
-    const before = root.LearningData?.read?.(book)?.[ref.num] || {};
-    noteBase(book, ref.num, ref.mid, before.meanings?.[ref.mid]?.status || (ref.count === 1 ? before.status : undefined));
+    const before = root.LearningData?.read?.(book)?.[ref.num] || {},
+      rated = before.meanings?.[ref.mid]?.status || (ref.count === 1 ? before.status : undefined);
+    noteBase(book, ref.num, ref.mid, rated);
+    return fallback(read(book), ref.num, ref.mid, ["ok", "so", "bad"].includes(rated) ? rated : "none");
   }
   // Shows a question's text in an element with pieces() kept whole (no innerHTML of the text).
   // head (optional): the headword, shown in bold wherever it stands as a word.
@@ -350,8 +353,9 @@
   }
   // Battles only record a drop, as for whole words: a question rated ○ answered wrong becomes ×.
   // 「わからない」 is the player's own "I don't know" and records ×.
-  function battle(book, num, questionKey, right, skipped) {
-    const previous = read(book)[String(num)]?.[questionKey]?.status;
+  // `inherited`: the rating of a question with no record of its own (its meaning's, from before).
+  function battle(book, num, questionKey, right, skipped, inherited) {
+    const previous = read(book)[String(num)]?.[questionKey]?.status || inherited;
     if (skipped || (!right && previous === "ok")) return save(book, num, questionKey, "bad");
     return read(book);
   }
