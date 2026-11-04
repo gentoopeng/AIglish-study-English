@@ -2787,3 +2787,9 @@ Tests:
 **Fix.** The plain receipt counts as one of the card's 10 only if a card answer made it (the points history says which, and a missing record counts as a card); otherwise the card has all 10 of its own (`cardNum` in `study-points.js`). Test: `tests/study-points.test.cjs` (a word taken by a battle first: the card pays 10 times, then 0).
 
 **Not changed (a Codex finding, kept on purpose).** The 500 repeats a day is counted on each device from its own record. It is there to keep a device's storage small (and to stop swipe-back-swipe farming); counting across devices exactly would need a cloud read for every answer. Two devices can therefore pay up to 500 each.
+
+## 10.22.89.00 単語カードのポイント: 履歴から消えた記録でも、カードの回数を少なく数えない（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.22.88.00. Whether the plain receipt of a word came from a card answer is read from the points history, which keeps only the latest 100 entries (with heavy card use that is quickly full). A receipt taken by a battle or review that had fallen out of it was counted as a card answer, so the card paid 9 times, not 10.
+
+**Fix.** A receipt counts as a card answer only if the history says so (`cardNum` in `study-points.js`). When it no longer says, the card may get one answer more than the limit, never one less. The limit is a soft one (it is there to keep storage small), so one over is harmless. Test: `tests/study-points.test.cjs` still passes (a battle first, card 10 times; a card first, 10).
