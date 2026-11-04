@@ -109,7 +109,8 @@ test("both changed one word: each part goes to whoever changed it, and the origi
   const out = F.merge({ base, theirs, mine, identity: true, makeWord: same });
   assert.equal(out.report.mixed, 1);
   const word = out.words[0];
-  assert.equal(word.meaning, "リンゴ");
+  // The word's own meaning is made of the mixed rows (as the editor makes it), so a search on it finds the player's text.
+  assert.equal(word.meaning, "①リンゴ②自分で書いた");
   assert.equal(word.sub, "fruit");
   assert.deepEqual(word.meanings.map((m) => m.text), ["リンゴ", "自分で書いた"]);
   // Both changed the same row: the original's.
@@ -131,4 +132,17 @@ test("an older base that holds no parts: both changed one word, the original's w
   assert.equal(out.report.mixed, 1);
   // The base now holds the parts, so the next time it is told part by part.
   assert.ok(out.base.pf[1]);
+});
+
+test("both added a meaning row to the same word: both rows stay, with their own ids", () => {
+  const w3 = (num, rowsText) => ({ num, word: "set", meaning: rowsText.join(""), sub: "", meanings: rowsText.map((x, i) => ({ id: num + "-" + i, text: x })) });
+  const base = F.baseOf([w3(1, ["置く"])]),
+    out = F.merge({ base, theirs: [w3(1, ["置く", "原本で足した"])], mine: [w3(1, ["置く", "自分で足した"])], identity: true, makeWord: same });
+  const rowsOut = out.words[0].meanings;
+  assert.deepEqual(rowsOut.map((m) => m.text), ["置く", "原本で足した", "自分で足した"]);
+  assert.equal(new Set(rowsOut.map((m) => m.id)).size, 3, "ids are different");
+  assert.equal(out.words[0].meaning, "①置く②原本で足した③自分で足した");
+  // The same row added by both is not doubled.
+  const same3 = F.merge({ base, theirs: [w3(1, ["置く", "同じ"])], mine: [w3(1, ["置く", "同じ"])], identity: true, makeWord: same });
+  assert.deepEqual(same3.words[0].meanings.map((m) => m.text), ["置く", "同じ"]);
 });

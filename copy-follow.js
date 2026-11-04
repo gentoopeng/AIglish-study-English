@@ -87,10 +87,13 @@
       const inBase = i < was.t.length;
       if (i < theirRows.length) {
         const changed = !inBase || now.t[i] !== was.t[i];
+        // A row both sides added at this place (beyond the base): both stay, the original's first.
+        const both = !inBase && !!mineRows[i] && mineHash[i] !== now.t[i];
         if (changed || !mineRows[i]) {
           // The original's row (the original changed it, or it is new). A row of the base that the player deleted and the
           // original did not touch stays deleted.
-          if (changed) list.push({ ...theirRows[i], id: mineRows[i]?.id ?? theirRows[i].id });
+          if (changed) list.push({ ...theirRows[i], id: both ? undefined : mineRows[i]?.id ?? theirRows[i].id });
+          if (both) list.push(mineRows[i]);
         } else list.push(mineRows[i]);
       } else if (mineRows[i]) {
         // The original no longer has this row: it goes unless the player changed it (or it is their own).
@@ -98,8 +101,18 @@
       }
     }
     if (list.length) {
-      out.meanings = list.map((row, i) => ({ ...row, id: row.id ?? String(out.num) + "-" + i }));
-      // The first row also stands as the word's own meaning when neither side wrote it separately.
+      // A row without an id (one taken from the original beside the player's own) gets a free one.
+      const used = new Set(list.map((row) => row.id).filter((id) => id !== undefined));
+      out.meanings = list.map((row, i) => {
+        if (row.id !== undefined) return row;
+        let k = i;
+        while (used.has(String(out.num) + "-" + k)) k++;
+        used.add(String(out.num) + "-" + k);
+        return { ...row, id: String(out.num) + "-" + k };
+      });
+      // The word's own meaning is made of its rows (the editor does the same), so it follows the mix:
+      // the one row's text, or the rows one after another, numbered.
+      out.meaning = out.meanings.length === 1 ? String(out.meanings[0].text ?? "") : out.meanings.map((m, k) => (k < 20 ? String.fromCharCode(0x2460 + k) : "(" + (k + 1) + ")") + String(m.text ?? "").split("\n").join(" ")).join("");
     }
     return out;
   }

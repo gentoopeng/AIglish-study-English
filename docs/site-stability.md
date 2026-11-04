@@ -2856,3 +2856,11 @@ Tests: `tests/vocab-entry.smoke.cjs` (the top ＋ shows the insert note and 差�
 **How.** `copy-follow.js` keeps, besides the fingerprint of each word of the original, a short hash of each part (`pf`: headword, first meaning, sub line, unit, and each meaning row). A word only the original changed is replaced; one only the player changed stays; one both changed is mixed part by part (`mixWords`): a part the original changed is the original's, any other part is the player's, and where both changed the same part the original's wins. A meaning row is matched by its place; a row the original added comes in, a row it dropped goes unless the player changed it, the player's own extra rows stay. The player's order (`no`) and links stay with the word. A base made before this has no parts: a word both changed is then taken whole from the original (it fills the parts in at the same time, so the next time it is mixed by part). `report.mixed` counts them.
 
 Tests: `tests/copy-follow.test.cjs` (a sub line and a meaning row by the player and a meaning by the original are both kept; both changed one row: the original's; a row added by the original comes in; an older base: the original's word whole; the older expectations follow the new rule), `tests/copy-follow.smoke.cjs` (a distributed copy and a public copy: the player's sub line stays beside the original's new meaning; the same meaning changed by both: the original's).
+
+## 10.22.96.00 自分用の単語帳の折衷: 全体の「意味」を行に合わせる／同時に足した行を両方残す（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.22.95.00.
+- For a word with several meaning rows the word's own `meaning` text is made of its rows (①…②…); the mix copied the original's whole text even when the rows kept the player's edit, so the search (which reads `meaning`) could miss the player's text. The mixed word's `meaning` is now made from the mixed rows the same way the editor makes it.
+- When the copy and the original each added a meaning row at the same place, the original's replaced the player's. Both stay now (the original's first; the same row added by both is not doubled), each with an id of its own.
+
+Tests: `tests/copy-follow.test.cjs` — the mixed word's `meaning` follows its rows; both added rows stay with different ids.
