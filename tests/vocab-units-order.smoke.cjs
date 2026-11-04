@@ -53,6 +53,8 @@ const { chromium } = require("playwright"),
     await page.getByText("サブ情報・番号・単元を設定", { exact: true }).click();
     assert.equal(await page.locator("#vocabEntryNumber").inputValue(), "5");
     await page.locator("#vocabEntryNumber").fill("3");
+    // (The ＋ at the top is the insert form, 差し込む ticked: unticked, a used number is refused.)
+    await page.locator("#vocabEntryInsert").uncheck();
     await page.getByRole("button", { name: "追加する", exact: true }).click();
     assert.match(await page.locator(".vocab-entry-dialog [role=alert]").innerText(), /差し込む/);
     await page.locator("#vocabEntryInsert").check();

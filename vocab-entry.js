@@ -285,12 +285,17 @@
   // `options.after`: a word of the list; the new word goes in right after it (its number + 1,
   // pushing the following ones down), in the same unit. Without it the word goes at the end.
   function openEntry(options) {
-    const after = options && options.after && typeof options.after === "object" ? options.after : null;
     const id = owner(),
       book = currentTextbook;
     if (!ready(book, id)) return;
     const original = root.VocabMaster.resolve(book);
     if (!original) return;
+    // The ＋ between two words inserts after that word. The ＋ at the top is the same form with the
+    // last word as the one it follows (so a word added there lands at the end), not another one.
+    const chosen = options && options.after && typeof options.after === "object" ? options.after : null,
+      fromTop = !chosen,
+      last = fromTop && original.master.length ? root.VocabOrder.sort(original.master).at(-1) : null,
+      after = chosen || last;
     close();
     const d = (dialog = el(
       "dialog",
@@ -336,8 +341,12 @@
       insert.checked = true;
       unitInput.value = after.unit || "";
       d.querySelector("#vocabEntryTitle").textContent = "単語を差し込む";
-      const where = el("p", "#" + root.VocabOrder.no(after) + "「" + after.word + "」の次（#" + at + "）に入ります。後ろの番号は1つずつずれます。", "vocab-entry-where");
-      d.querySelector(".vocab-entry-book").after(where);
+      // On the line of the book's name, so the form is no taller than the plain one.
+      const where = el("span", "", "vocab-entry-where");
+      // Only a word with others behind it shifts them: at the end there is nothing to say about that.
+      const hasNext = root.VocabOrder.sort(original.master).at(-1) !== after;
+      where.textContent = "#" + root.VocabOrder.no(after) + "「" + after.word + "」の次（#" + at + "）に入ります。" + (hasNext ? "後ろの番号は1つずつずれます。" : "");
+      d.querySelector(".vocab-entry-book").append(" ・ ", where);
     }
     number.oninput = () => {
       manual = number.value !== "";
@@ -525,8 +534,11 @@
           addMeaning(false);
           message.textContent =
             "#" + root.VocabOrder.no(entry) + " 「" + entry.word + "」を追加しました。";
+          // The note names the word the next one follows: the one just added.
+          const note = d.querySelector(".vocab-entry-where");
+          if (note) note.textContent = "#" + root.VocabOrder.no(entry) + "「" + entry.word + "」の次（#" + (root.VocabOrder.no(entry) + 1) + "）に入ります。" + (fromTop ? "" : "後ろの番号は1つずつずれます。");
           form.querySelector("#vocabEntryWord").focus();
-        } else if (after) {
+        } else if (after && !fromTop) {
           // Inserted between two words: stay where the list is, the new word now in its place.
           close();
           root.renderVocabList();
@@ -551,6 +563,12 @@
     const button = document.getElementById("vocabAddWord");
     if (!button) return;
     button.hidden = !(currentTextbook && ready(currentTextbook, owner()));
+    // A distributed book you may not change: the same kind of button, to edit it as your own copy.
+    const edit = document.getElementById("vocabEditBook");
+    if (edit) {
+      const shared = !!currentTextbook && !root.isPersonalTextbook?.(currentTextbook) && !root.canEditCurrentTextbook?.() && typeof textbooksPool !== "undefined" && textbooksPool.some((b) => b && b.id === currentTextbook);
+      edit.hidden = !shared;
+    }
   }
   const render = root.renderVocabList;
   root.renderVocabList = function () {

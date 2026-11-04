@@ -2837,3 +2837,14 @@ Tests: `tests/copy-follow.smoke.cjs` — an unloaded copy is left alone (no word
 - The footer lines (「表彰台をタップして…」 and the 累計 note) are hidden in カジノ and the note's element is removed; the podiums get the room.
 
 Tests: `tests/casino-ranking.smoke.cjs` — the seven buttons are on one row, none cut off, the bar is under 40px, at 393 and 320px wide; no footer in カジノ (it is back in ポイント); a name in a dark colour carries the halo.
+
+## 10.22.94.00 単語の追加を1つに／「…」メニューを揃える／配信された本にも「編集」
+
+**What the owner asked.** The ＋ at the top right and the ＋ between words looked different; distributed books and added books had different "…" menus and settings; and a plain edit button was wanted so a user can edit a distributed book for themselves. (When both changed the same word, merge them, the distributed one first: see 10.22.95.00.)
+
+**Changes.**
+- `vocab-entry.js`: the ＋ at the top is the between-words form with the last word as the one it follows (same title 「単語を差し込む」, the note 「#N「…」の次（#M）に入ります」, 差し込む pre-ticked, unit taken from that word); a word added there still lands at the end and the list still jumps to it. In 続けて追加する the note now names the word just added (it kept the first anchor before).
+- `library.js`: one 編集 button for every book in the "…" menu (own book: its editor, as 名前・表紙を編集 / 単語を追加 before; distributed book: edit as your own copy: the copy you already made is opened, else the dialog 「編集」 makes it, the original staying listed unless the box is ticked), then 一覧から外す, 単語帳を完全削除 (one label for both kinds), plus the admin's own buttons. The word list has the same 編集 pill (`#vocabEditBook`, next to ＋ 追加) on a distributed book a user may not change.
+- The copy keeps following the original (10.22.90.00): words the user did not change come in on their own.
+
+Tests: `tests/vocab-entry.smoke.cjs` (the top ＋ shows the insert note and 差し込む ticked; unticked, a used number is refused), `tests/shared-book-editing.smoke.cjs` (a distributed book shows 編集 and no ＋ 追加; the menu buttons are the same list; 編集 → 編集する makes the copy), `tests/library-management.smoke.cjs` (the new labels).

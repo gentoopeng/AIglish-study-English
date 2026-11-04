@@ -537,10 +537,10 @@
     function openCopyBook(bookId) {
         var book = textbooksPool.find(function(item) { return item.id === bookId; });
         if (!book) return;
-        var modal = open('自分用にコピーして編集', '<p class="library-editor-hint"></p>' +
-            '<label class="library-term-mode"><input type="checkbox" id="libraryCopyHide" checked>元の単語帳を一覧から外す<small>あとから「非表示の単語帳」で戻せます。</small></label>' +
-            '<p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryCopyConfirm" class="library-editor-primary">コピーする</button></div>');
-        modal.querySelector('.library-editor-hint').textContent = '「' + book.name + '」の単語と、これまでの理解度を自分の単語帳にコピーします。コピーした単語帳は自由に編集できます（元の単語帳は変わりません）。';
+        var modal = open('編集', '<p class="library-editor-hint"></p>' +
+            '<label class="library-term-mode"><input type="checkbox" id="libraryCopyHide">元の単語帳を一覧から外す<small>あとから「非表示の単語帳」で戻せます。</small></label>' +
+            '<p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryCopyConfirm" class="library-editor-primary">編集する</button></div>');
+        modal.querySelector('.library-editor-hint').textContent = '配信されている「' + book.name + '」を、自分だけの単語帳にして編集します（単語と、これまでの理解度をコピーします）。元の単語帳は変わりません。元の単語帳が直されたときは、あなたが直していない単語が自動で入ります。両方で同じ単語を直したときは、配信された内容を優先して混ぜます。';
         var confirmButton = modal.querySelector('#libraryCopyConfirm');
         confirmButton.onclick = async function() {
             if (confirmButton.disabled) return;
@@ -554,11 +554,24 @@
             } catch (error) {
                 modal.querySelector('.library-editor-error').textContent = error.message;
                 confirmButton.disabled = false;
-                confirmButton.textContent = 'コピーする';
+                confirmButton.textContent = '編集する';
             }
         };
     }
     window.openCopyLibraryBook = openCopyBook;
+    // 編集, the same button for every book. Your own book opens its editor; a distributed book is edited
+    // as your own copy (the one you already made, or a new one), which keeps following the original.
+    window.editLibraryBook = function(bookId) {
+        if (window.isPersonalTextbook(bookId)) { window.openLibraryBookEditor(bookId); return; }
+        var made = readLibrary().books.find(function(item) { return item.personal && item.copiedFrom === bookId; });
+        if (made) {
+            close();
+            window.showToast?.('「' + made.name + '」を開きました。単語を自由に編集できます。', 'ok');
+            window.selectVocabLibraryBook(made.id);
+            return;
+        }
+        openCopyBook(bookId);
+    };
 
     // Admin editing mode: a word book the admin copied for themselves (to change it freely, or to
     // turn on 用語・年号モード) goes back to the distributed book everyone uses. The distributed
@@ -682,13 +695,12 @@
         if (!book) return;
         var own = window.isPersonalTextbook(bookId);
         var modal = open(book.name, '<div class="library-editor-actions library-editor-actions-stack">' +
-            (own ? '<button type="button" id="libraryEditBook">名前・表紙を編集 / 単語を追加</button>' : '<button type="button" id="libraryCopyBook">自分用にコピーして編集</button>') +
+            '<button type="button" id="libraryEditBook">編集</button>' +
             (own && window.__adminBookEditing === true && window.isAdmin === true ? '<button type="button" id="libraryPushShared">全員に配信・反映</button>' : '') +
             (!own && window.__adminBookEditing === true && window.isAdmin === true ? '<button type="button" id="librarySharedTermMode">' + (book.termMode === true ? '用語・年号モードをオフにする' : '用語・年号モードにする') + '</button>' : '') +
             (readLibrary().hidden.indexOf(bookId) >= 0 ? '<button type="button" id="libraryRestoreBook">一覧に戻す</button>' : '') +
-            '<button type="button" id="libraryRemoveBook" class="library-editor-danger">' + '自分の一覧から外す' + '</button>' + '<button type="button" id="libraryEraseBook" class="library-editor-danger">' + (own ? '単語帳を完全削除' : '自分の単語帳データを完全削除') + '</button>' + '<button type="button" data-library-close>閉じる</button></div>');
-        if (own) modal.querySelector('#libraryEditBook').onclick = function() { window.openLibraryBookEditor(bookId); };
-        else modal.querySelector('#libraryCopyBook').onclick = function() { openCopyBook(bookId); };
+            '<button type="button" id="libraryRemoveBook" class="library-editor-danger">' + '自分の一覧から外す' + '</button>' + '<button type="button" id="libraryEraseBook" class="library-editor-danger">' + '単語帳を完全削除' + '</button>' + '<button type="button" data-library-close>閉じる</button></div>');
+        modal.querySelector('#libraryEditBook').onclick = function() { window.editLibraryBook(bookId); };
         var push = modal.querySelector('#libraryPushShared');
         if (push) push.onclick = function() { openPushShared(bookId); };
         var termSwitch = modal.querySelector('#librarySharedTermMode');
