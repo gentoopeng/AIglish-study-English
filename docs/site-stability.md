@@ -2737,3 +2737,11 @@ Tests:
 
 - `tests/term-sibling-status.smoke.cjs` (new): with ○ left out, a ○ on word 1's year question hides only that question; its whole question and 「」 blank are still asked; the kept rating is stored.
 - `tests/term-flashcard-filter.smoke.cjs`, `term-mode`, `term-battle`, `term-when` still pass.
+
+## 10.22.84.00 用語・年号モード: 対戦の最初の間違いでも、答える前の理解度を控える（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.22.83.00. If a battle was the first thing to touch a meaning rated ○ and the answer was wrong, the battle lowered the meaning to × before any rating was kept, so the line's other (unanswered) questions were counted as × and dropped from a ○ filter.
+
+**Fix.** The battle (`word-duel.js`) keeps the meaning's rating first (`TermProgress.noteBaseFor`, read from the learning data) when an answer can lower it (a wrong or skipped answer).
+
+Tests: `tests/term-sibling-status.smoke.cjs` — a ○ meaning lowered to × by a wrong battle answer keeps `{ base: "ok" }` and the fallback stays ○.
