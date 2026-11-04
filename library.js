@@ -540,7 +540,7 @@
         var modal = open('編集', '<p class="library-editor-hint"></p>' +
             '<label class="library-term-mode"><input type="checkbox" id="libraryCopyHide">元の単語帳を一覧から外す<small>あとから「非表示の単語帳」で戻せます。</small></label>' +
             '<p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="libraryCopyConfirm" class="library-editor-primary">編集する</button></div>');
-        modal.querySelector('.library-editor-hint').textContent = '配信されている「' + book.name + '」を、自分だけの単語帳にして編集します（単語と、これまでの理解度をコピーします）。元の単語帳は変わりません。元の単語帳が直されたときは、あなたが直していない単語が自動で入ります。両方で同じ単語を直したときは、配信された内容を優先して混ぜます。';
+        modal.querySelector('.library-editor-hint').textContent = '配信されている「' + book.name + '」を、自分だけの単語帳にして編集します（単語と、これまでの理解度をコピーします）。元の単語帳は変わりません。元の単語帳が直されたときは、あなたが直していない単語が自動で入ります。両方で同じ単語を直したときは、直した部分ごとに混ぜ、同じ部分なら配信された内容を優先します。';
         var confirmButton = modal.querySelector('#libraryCopyConfirm');
         confirmButton.onclick = async function() {
             if (confirmButton.disabled) return;

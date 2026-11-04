@@ -21,7 +21,7 @@ test("a changed word replaces the copy's, a new word is added, a dropped word is
     after = [w(1, "a", "あ！"), w(2, "b", "び"), w(4, "d", "で")];
   const out = F.merge({ base, theirs: after, mine: before, identity: true, makeWord: same });
   assert.equal(text(out.words), "1:a=あ！ | 2:b=び | 4:d=で");
-  assert.deepEqual(out.report, { replaced: 1, added: 1, removed: 1, kept: 0 });
+  assert.deepEqual(out.report, { replaced: 1, added: 1, removed: 1, kept: 0, mixed: 0 });
   assert.equal(out.changed, true);
   // The base is now the new original: a second run changes nothing.
   const again = F.merge({ base: out.base, theirs: after, mine: out.words, identity: true, makeWord: same });
@@ -29,20 +29,21 @@ test("a changed word replaces the copy's, a new word is added, a dropped word is
   assert.equal(text(again.words), text(out.words));
 });
 
-test("what the player changed, added or deleted stays theirs", () => {
+test("what the player changed, added or deleted stays theirs, except a part the original changed too", () => {
   const before = [w(1, "a", "あ"), w(2, "b", "び"), w(3, "c", "し")],
     base = F.baseOf(before),
     // The player rewrote word 1, deleted word 2, and added word 9 of their own.
     mine = [w(1, "a", "わたしの意味"), w(3, "c", "し"), w(9, "mine", "自分の")],
     after = [w(1, "a", "原本の新しい意味"), w(2, "b", "びー"), w(3, "c", "しー")];
   const out = F.merge({ base, theirs: after, mine, identity: true, makeWord: same });
-  // Word 1: both changed: the player's stays. Word 2: deleted by the player: not brought back.
+  // Word 1: both changed the meaning: the original's wins. Word 2: deleted by the player: not brought back.
   // Word 3: only the original changed: replaced. Word 9: untouched.
-  assert.equal(text(out.words), "1:a=わたしの意味 | 3:c=しー | 9:mine=自分の");
-  assert.deepEqual(out.report, { replaced: 1, added: 0, removed: 0, kept: 2 });
+  assert.equal(text(out.words), "1:a=原本の新しい意味 | 3:c=しー | 9:mine=自分の");
+  assert.deepEqual(out.report, { replaced: 1, added: 0, removed: 0, kept: 1, mixed: 1 });
   // A word the original drops but the player changed stays.
-  const dropped = F.merge({ base: out.base, theirs: [w(3, "c", "しー")], mine: out.words, identity: true, makeWord: same });
-  assert.equal(text(dropped.words), "1:a=わたしの意味 | 3:c=しー | 9:mine=自分の");
+  const edited = out.words.map((x) => (x.num === 1 ? { ...x, meaning: "また自分で直した", meanings: [{ id: "1-0", text: "また自分で直した" }] } : x));
+  const dropped = F.merge({ base: out.base, theirs: [w(3, "c", "しー")], mine: edited, identity: true, makeWord: same });
+  assert.equal(text(dropped.words), "1:a=また自分で直した | 3:c=しー | 9:mine=自分の");
   assert.equal(dropped.report.removed, 0);
 });
 
@@ -82,8 +83,9 @@ test("a copy that numbers its words afresh follows through the map", () => {
   mine[1] = { ...mine[1], meaning: "自分", meanings: [{ id: "2-0", text: "自分" }] };
   const after = [w(10, "a", "あ2"), w(20, "b", "び2"), w(40, "d", "で")];
   const out = F.merge({ base, theirs: after, mine, identity: false, makeWord: same });
-  assert.equal(text(out.words), "1:a=あ2 | 2:b=自分 | 4:d=で");
-  assert.deepEqual(out.report, { replaced: 1, added: 1, removed: 1, kept: 1 });
+  // Word 2 was changed by both (the same part): the original's.
+  assert.equal(text(out.words), "1:a=あ2 | 2:b=び2 | 4:d=で");
+  assert.deepEqual(out.report, { replaced: 1, added: 1, removed: 1, kept: 0, mixed: 1 });
   assert.equal(out.base.map[40], "4");
   // Ids of a replaced word follow the copy's number.
   assert.equal(out.words[0].meanings[0].id, "1-0");
@@ -95,4 +97,38 @@ test("with nothing changed in the original the copy is left exactly as it is", (
     out = F.merge({ base: F.baseOf(original), theirs: original, mine, identity: true, makeWord: same });
   assert.equal(out.changed, false);
   assert.equal(text(out.words), text(mine));
+});
+
+test("both changed one word: each part goes to whoever changed it, and the original's wins where both did", () => {
+  const w3 = (num, word, meaning, sub, rowsText) => ({ num, word, meaning, sub, meanings: rowsText.map((x, i) => ({ id: num + "-" + i, text: x })) });
+  const before = [w3(1, "apple", "りんご", "", ["りんご", "赤い果物"])],
+    base = F.baseOf(before);
+  // The player added a sub line and changed the second meaning row; the original changed the first meaning.
+  const mine = [w3(1, "apple", "りんご", "fruit", ["りんご", "自分で書いた"])],
+    theirs = [w3(1, "apple", "リンゴ", "", ["リンゴ", "赤い果物"])];
+  const out = F.merge({ base, theirs, mine, identity: true, makeWord: same });
+  assert.equal(out.report.mixed, 1);
+  const word = out.words[0];
+  assert.equal(word.meaning, "リンゴ");
+  assert.equal(word.sub, "fruit");
+  assert.deepEqual(word.meanings.map((m) => m.text), ["リンゴ", "自分で書いた"]);
+  // Both changed the same row: the original's.
+  const same2 = F.merge({ base, theirs: [w3(1, "apple", "りんご", "", ["りんご", "原本の新しい説明"])], mine, identity: true, makeWord: same });
+  assert.deepEqual(same2.words[0].meanings.map((m) => m.text), ["りんご", "原本の新しい説明"]);
+  assert.equal(same2.words[0].sub, "fruit");
+  // The original adds a row; the player's own sub line stays.
+  const added = F.merge({ base, theirs: [w3(1, "apple", "りんご", "", ["りんご", "赤い果物", "原本で足した行"])], mine: [w3(1, "apple", "りんご", "fruit", ["りんご", "赤い果物"])], identity: true, makeWord: same });
+  assert.deepEqual(added.words[0].meanings.map((m) => m.text), ["りんご", "赤い果物", "原本で足した行"]);
+  assert.equal(added.words[0].sub, "fruit");
+});
+
+test("an older base that holds no parts: both changed one word, the original's word is taken whole", () => {
+  const before = [w(1, "a", "あ")],
+    base = F.baseOf(before);
+  delete base.pf;
+  const out = F.merge({ base, theirs: [w(1, "a", "あ（原本）")], mine: [w(1, "a", "あ（自分）")], identity: true, makeWord: same });
+  assert.equal(text(out.words), "1:a=あ（原本）");
+  assert.equal(out.report.mixed, 1);
+  // The base now holds the parts, so the next time it is told part by part.
+  assert.ok(out.base.pf[1]);
 });

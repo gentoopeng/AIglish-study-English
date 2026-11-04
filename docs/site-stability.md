@@ -2848,3 +2848,11 @@ Tests: `tests/casino-ranking.smoke.cjs` — the seven buttons are on one row, no
 - The copy keeps following the original (10.22.90.00): words the user did not change come in on their own.
 
 Tests: `tests/vocab-entry.smoke.cjs` (the top ＋ shows the insert note and 差し込む ticked; unticked, a used number is refused), `tests/shared-book-editing.smoke.cjs` (a distributed book shows 編集 and no ＋ 追加; the menu buttons are the same list; 編集 → 編集する makes the copy), `tests/library-management.smoke.cjs` (the new labels).
+
+## 10.22.95.00 自分用の単語帳: 両方が直した単語は、部分ごとに混ぜる（配信を優先）
+
+**What the owner asked.** When a copy and its original both changed a word, merge them (折衷), the distributed one first. (Before this, the player's word was kept whole, and the original's change was dropped.)
+
+**How.** `copy-follow.js` keeps, besides the fingerprint of each word of the original, a short hash of each part (`pf`: headword, first meaning, sub line, unit, and each meaning row). A word only the original changed is replaced; one only the player changed stays; one both changed is mixed part by part (`mixWords`): a part the original changed is the original's, any other part is the player's, and where both changed the same part the original's wins. A meaning row is matched by its place; a row the original added comes in, a row it dropped goes unless the player changed it, the player's own extra rows stay. The player's order (`no`) and links stay with the word. A base made before this has no parts: a word both changed is then taken whole from the original (it fills the parts in at the same time, so the next time it is mixed by part). `report.mixed` counts them.
+
+Tests: `tests/copy-follow.test.cjs` (a sub line and a meaning row by the player and a meaning by the original are both kept; both changed one row: the original's; a row added by the original comes in; an older base: the original's word whole; the older expectations follow the new rule), `tests/copy-follow.smoke.cjs` (a distributed copy and a public copy: the player's sub line stays beside the original's new meaning; the same meaning changed by both: the original's).
