@@ -230,7 +230,8 @@
   }
   // A flashcard answer earns every time (review is the point of it), up to these limits so a day's
   // records stay small: CARD_PER_WORD paid answers of one word in a day (the first included) and
-  // CARD_REPEATS_PER_DAY paid repeats in all. The first answer of a word keeps its plain token (so
+  // CARD_REPEATS_PER_DAY paid repeats in all, counted on this device (what the cap protects is this
+  // device's storage; an exact count across devices would need the cloud read for every answer). The first answer of a word keeps its plain token (so
   // an earlier battle or review of the word blocks nothing, and a card first still blocks them);
   // each repeat gets "<num>#<device>-<k>", a token of its own that this device alone makes, so two
   // devices never claim the same one.
@@ -261,10 +262,15 @@
         return value.claims[token] || value.settled[token] || value.pending[token];
       },
       base = String(num);
+    // The plain token counts as one of the word's card answers only if a card answer made it (a
+    // battle or review may have): when another way of answering took it, the card has all of its own.
+    const baseToken = receipt(book, base, date),
+      byCard = !used(base) || (value.history[baseToken]?.source ?? "card") === "card",
+      most = CARD_PER_WORD + (byCard ? 0 : 1);
     let n = base,
       k = 1;
     while (used(n)) {
-      if (++k > CARD_PER_WORD) return null;
+      if (++k > most) return null;
       n = base + "#" + cardDevice() + "-" + k;
     }
     if (n !== base) {
