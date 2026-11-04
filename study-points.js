@@ -218,7 +218,7 @@
     );
     for (const item of Object.keys(value.claims)) {
       try {
-        if (JSON.parse(item)[0] < cutoff && !value.pending[item]) {
+        if (!value.pending[item] && (JSON.parse(item)[0] < cutoff || (JSON.parse(item)[0] < entry.day && isRepeat(item)))) {
           delete value.claims[item];
           delete value.settled[item];
         }
@@ -227,6 +227,51 @@
     write(id, value);
     window.queueBackgroundSave?.();
     return Math.max(0, entry.amount - before);
+  }
+  // A flashcard answer earns every time (review is the point of it), up to these limits so a day's
+  // records stay small: CARD_PER_WORD paid answers of one word in a day (the first included) and
+  // CARD_REPEATS_PER_DAY paid repeats in all. The first answer of a word keeps its plain token (so
+  // an earlier battle or review of the word blocks nothing, and a card first still blocks them);
+  // each repeat gets "<num>#<device>-<k>", a token of its own that this device alone makes, so two
+  // devices never claim the same one.
+  const CARD_PER_WORD = 10,
+    CARD_REPEATS_PER_DAY = 500;
+  function cardDevice() {
+    let device = "";
+    try {
+      device = localStorage.getItem("aiglish_study_device") || "";
+      if (!device) {
+        device = crypto.randomUUID();
+        localStorage.setItem("aiglish_study_device", device);
+      }
+    } catch {}
+    return String(device).replace(/[^0-9a-zA-Z]/g, "").slice(0, 6) || "x";
+  }
+  const isRepeat = (token) => {
+    try {
+      return String(JSON.parse(token)[2]).includes("#");
+    } catch {
+      return false;
+    }
+  };
+  // The token's num for this answer, or null when the day's limit is reached.
+  function cardNum(value, book, num, date) {
+    const used = (n) => {
+        const token = receipt(book, n, date);
+        return value.claims[token] || value.settled[token] || value.pending[token];
+      },
+      base = String(num);
+    let n = base,
+      k = 1;
+    while (used(n)) {
+      if (++k > CARD_PER_WORD) return null;
+      n = base + "#" + cardDevice() + "-" + k;
+    }
+    if (n !== base) {
+      const today = Object.keys(value.claims).filter((t) => t.startsWith('["' + date + '"') && isRepeat(t)).length;
+      if (today >= CARD_REPEATS_PER_DAY) return null;
+    }
+    return n;
   }
   function reward(source, book, num, id = owner(), metadata = {}) {
     const date = (policy()?.day || window.WeakReviewModel.day)();
@@ -246,6 +291,11 @@
       throw Error("学習の記録先を確認してください。");
     const amount = (policy()?.rates || { review: 2 })[source];
     if (!amount) throw Error("ポイントの獲得方法を確認してください。");
+    if (source === "card") {
+      const n = cardNum(read(id), book, num, date);
+      if (n === null) return 0;
+      num = n;
+    }
     return awardTarget(
       {
         source,

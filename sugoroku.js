@@ -42,7 +42,7 @@
   };
   const SQUARE = { start: "START", normal: "", event: "★", accident: "!" };
   const GAME_NAMES = { blackjack: "ブラックジャック", dice: "ダイスポーカー", chinchiro: "チンチロ", ball: "ボール確定" };
-  const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "確変ルーレット" };
+  const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "激アツルーレット" };
   const HOT = new Set(["bingo", "sjp", "kakuhen"]);
   const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "ストップ", hilo: "ハイ＆ロー" };
   // The normal squares' quick games, paid in multiples of the bet (not played in 早送り).
@@ -51,7 +51,7 @@
   const RULES_TEXT = [
     "ログインしてクラウドにつながっているときはポイントを賭けます。ゲストやオフラインのときは練習チップで、ジャックポットは演出だけです。",
     "1回100（ポイントまたは練習チップ）でサイコロを振ります（額はみんな同じです）。",
-    "通常マス：ルーレットで ×0.25〜×0 のどれかが額に掛かって戻ります。ルーレットの上の「確変」の枠（10回に1回ほど）に入ると「確変ルーレット」になり、×2〜×10、またはボール2個連続のどれかです（ボールでビンゴが完成すると、そのままビンゴのルーレットへ進みます）。「−×0.5」「−×1」は、額とは別にその分が引かれます。「BJ」「DICE」「チンチロ」ならそのゲームを1回（勝てば配当、負けると賭けた分はなくなり、ボールは出ません）。「●（ボール）」ならボールが出ます。「STOP」「H&L」ならミニゲーム（ストップ・ハイ＆ロー）で、うまくいけば額の1.25〜2倍です。",
+    "通常マス：ルーレットで ×0.25〜×0 のどれかが額に掛かって戻ります。「×0」と書いてある枠のうち一部（10回に1回ほど）は、止まると激アツ演出が入り「激アツルーレット」が回ります。×2〜×10、またはボール2個連続のどれかです（ボールでビンゴが完成すると、そのままビンゴのルーレットへ進みます）。「−×0.5」「−×1」は、額とは別にその分が引かれます。「BJ」「DICE」「チンチロ」ならそのゲームを1回（勝てば配当、負けると賭けた分はなくなり、ボールは出ません）。「●（ボール）」ならボールが出ます。「STOP」「H&L」ならミニゲーム（ストップ・ハイ＆ロー）で、うまくいけば額の1.25〜2倍です。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると4分の1が戻ります。ボール確定はボールと額そのままです。サイコロはどちらも本当に振っていて、相手の目も1投ずつ見えます。ダイスポーカーはあなたが2回（振り直し1回）・ディーラーが3回まで振れるので、勝つと1.5倍です。チンチロは親が3回・あなたが2回まで振れます。結果が出ると、そのまま次に進みます。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "1周（100マス）してSTARTを通るとボールが1つ出ます。",
@@ -1097,7 +1097,7 @@
   function tone(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "ball" : "game-" + slot;
     if (wheel === "accident") return slot.start ? "worst" : slot.back ? "bad" : slot.take >= 1.5 ? "worst" : slot.take ? "bad" : "safe";
-    if (slot.kakuhen) return "jackpot";
+    if (slot.kakuhen) return "zero";
     if (wheel === "kakuhen") return slot.balls ? "ball" : slot.x >= 10 ? "gold" : slot.x >= 5 ? "champagne" : slot.x >= 3 ? "high" : "mid";
     if (slot.ball) return "ball";
     if (slot.game && wheel === "normal") return "game-mini";
@@ -1109,7 +1109,8 @@
   function slotLabel(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "BALL" : { blackjack: "BJ", dice: "DICE", chinchiro: "チンチロ" }[slot];
     if (wheel === "accident") return slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
-    if (slot.kakuhen) return "確変";
+    // Looks like any ×0 slot: the player finds out when the 激アツ effect starts.
+    if (slot.kakuhen) return "×0";
     if (slot.balls) return "●×" + slot.balls;
     if (slot.ball) return "●";
     if (slot.next) return "SJP";
@@ -1203,8 +1204,6 @@
               : slot.take
                 ? "−" + fmt(Math.round(e.base * slot.take)) + api.unit()
                 : "セーフ"
-          : slot.kakuhen
-            ? "確変チャンス！"
           : slot.balls
             ? "ボール " + slot.balls + "連続！"
           : slot.next
@@ -1223,8 +1222,20 @@
                     ? "もう一回！"
                     : "×" + slot.x + "　+" + fmt(e.amount) + api.unit() + (slot.ball ? "　BALL" : "") + (e.total > e.amount ? "（みんなに " + fmt(e.total - e.amount) + "）" : "");
     box.classList.add("is-done");
-    if (slot.next || slot.jackpot || slot.kakuhen || slot.balls || slot.x >= 5) layer.classList.add("is-hotter");
-    await wait(hot || slot.kakuhen || slot.x >= 2 || slot.x < 0 || slot.ball ? 1300 : 750);
+    if (slot.next || slot.jackpot || slot.balls || slot.x >= 5) layer.classList.add("is-hotter");
+    // A hidden 激アツ slot: it reads ×0 for a moment, then the room goes gold and shakes.
+    if (slot.kakuhen) {
+      await wait(900);
+      layer.classList.add("is-hot", "is-hotter");
+      box.classList.add("is-surge");
+      outcome.className = "sg-wheel-out is-gold";
+      outcome.textContent = "激アツ！！";
+      window.AppSounds?.play("swipe-right");
+      await wait(1700);
+      layer.hidden = true;
+      return;
+    }
+    await wait(hot || slot.x >= 2 || slot.x < 0 || slot.ball ? 1300 : 750);
     layer.hidden = true;
   }
   async function jackpot(kind, won) {
