@@ -69,7 +69,9 @@
         var draftKey = window.__manualVocabLocalKey(id), old = null;
         try { old = JSON.parse(localStorage.getItem(draftKey) || 'null'); } catch (e) {}
         var progress = (old && old.progress) || (window.LearningData ? window.LearningData.read(id) : {}) || {};
-        var draft = { master: master, emptyConfirmed: false, progress: progress, savedAt: new Date().toISOString() };
+        // An empty list is a state the original chose (an emptied public book), not a failed load.
+        var draft = { master: master, emptyConfirmed: !master.length, progress: progress, savedAt: new Date().toISOString() };
+        if (!master.length && window.VocabMaster && window.VocabMaster.confirmEmpty) window.VocabMaster.confirmEmpty(id);
         localStorage.setItem(draftKey, JSON.stringify(draft));
         window.__manualVocabDrafts[id] = draft;
         window.__dirtyManualVocabDrafts = window.__dirtyManualVocabDrafts || {};

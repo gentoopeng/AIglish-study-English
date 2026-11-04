@@ -2818,3 +2818,9 @@ Tests:
 - A public update that added words linked to other new words lost the links (the numbers were not given out yet). Links of made words are now put on after the merge, from the final map; a word that already has the player's own links keeps them.
 
 Tests: `tests/copy-follow.smoke.cjs` — an unloaded copy is left alone (no words, no base, its time unchanged); a new word's link points at the copy's number; an emptied public book removes only unedited words.
+
+## 10.22.92.00 自分用にした単語帳: 空にされたコピーを「空で確定」にする（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.22.91.00. When a public book's owner emptied it and the copy had none of the player's own words left, the merge produced an empty list, but `setCopyMaster` stored it as `emptyConfirmed: false`, which `VocabMaster.resolve` does not take as a valid empty draft. The copy could resolve to an old backup, and the base and `sourceSyncedAt` had already moved on, so it was never retried.
+
+**Fix.** `setCopyMaster` stores an empty list as `emptyConfirmed: true` and tells `VocabMaster.confirmEmpty` (an empty list the original chose, not a failed load). Test: `tests/copy-follow.smoke.cjs` — a second public copy with only unedited words, emptied by its owner, resolves to an empty confirmed list and its `sourceSyncedAt` moves on.

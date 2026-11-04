@@ -160,6 +160,27 @@ const { chromium } = require("playwright"),
       await window.__followPublicCopies();
     }, id);
     assert.equal(await words(id), "2:b=自分");
+
+    // A copy with nothing of the player's own: emptied by its owner, it stays empty (not the old words
+    // from a backup) and is not asked again.
+    await page.evaluate(() => {
+      window.__pub2 = { ownerId: "other-user", name: "もうひとつの公開本", updatedAt: "2026-11-01T00:00:00.000Z", masterJson: JSON.stringify([{ num: 1, word: "p", meaning: "ぴー" }, { num: 2, word: "q", meaning: "きゅー" }]) };
+      window.fbGetDocs = async (ref) => (ref[1] !== "publicTextbooks" ? { forEach: () => {} } : { forEach: (cb) => cb({ id: "pub-2", data: () => structuredClone(__pub2) }) });
+      window.fbGetDoc = async (ref) => (__reads.push(ref.join("/")), { exists: () => ref[1] === "publicTextbooks" && ref.at(-1) === "pub-2", data: () => structuredClone(__pub2) });
+      window.showVocabLibrarySelection();
+    });
+    await page.getByRole("button", { name: "みんなの単語帳", exact: true }).click();
+    await page.getByRole("button", { name: "自分用に追加" }).click();
+    await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    const id2 = await page.evaluate(() => JSON.parse(localStorage.getItem("core_v4_personal_library_public-follower")).books.find((b) => b.copiedFromPublic === "pub-2").id);
+    assert.equal(await words(id2), "1:p=ぴー | 2:q=きゅー");
+    await page.evaluate(async (b) => {
+      window.__pub2 = { ...__pub2, updatedAt: "2026-11-04T00:00:00.000Z", masterJson: "[]" };
+      localStorage.removeItem("aiglish_copy_checked_public-follower_" + b);
+      await window.__followPublicCopies();
+    }, id2);
+    assert.deepEqual(await page.evaluate((b) => { const d = window.VocabMaster.resolve(b); return d && [d.master.length, d.emptyConfirmed]; }, id2), [0, true]);
+    assert.equal(await page.evaluate((b) => JSON.parse(localStorage.getItem("core_v4_personal_library_public-follower")).books.find((x) => x.id === b).sourceSyncedAt, id2), "2026-11-04T00:00:00.000Z");
     assert.deepEqual(errors, []);
     console.log("PASS: a copy of a distributed book and a copy of a public book follow their originals word by word, keep the player's own words, add and drop the rest, and check at most once every few hours");
   } finally {
