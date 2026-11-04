@@ -2793,3 +2793,19 @@ Tests:
 **What the user saw.** Nothing yet; found in review of 10.22.88.00. Whether the plain receipt of a word came from a card answer is read from the points history, which keeps only the latest 100 entries (with heavy card use that is quickly full). A receipt taken by a battle or review that had fallen out of it was counted as a card answer, so the card paid 9 times, not 10.
 
 **Fix.** A receipt counts as a card answer only if the history says so (`cardNum` in `study-points.js`). When it no longer says, the card may get one answer more than the limit, never one less. The limit is a soft one (it is there to keep storage small), so one over is harmless. Test: `tests/study-points.test.cjs` still passes (a battle first, card 10 times; a card first, 10).
+
+## 10.22.90.00 自分用にした単語帳が、原本の変更を単語ごとに自動で取り込む
+
+**What the owner asked.** When the original of a book I made my own (a distributed book, or a public book from みんなの単語帳) changes, the changes should be saved into my copy automatically; replace only the words the original changed and keep the words I changed myself.
+
+**How it works.** `copy-follow.js` (pure) keeps, for each copy, a base: a fingerprint of every word of the original as the copy last caught up (`fp`, by the original's number) and, for a copy that numbers its words afresh, where each sits in the copy (`map`). It is kept in `aiglish_copy_base_<owner>_<book>` (on the device; it goes into the full save like the other keys; deleted with the book). A change of the original is then told word by word: a word the original changed is replaced only if the player has not changed it; a new word is added; a dropped word is dropped only if the player has not changed it. Words the player changed, added or deleted stay theirs. A replaced word keeps its number, so ratings, notes and sticky notes stay.
+- Distributed book copies (`library.js` `followSharedBooks`): as before, on the next start after the admin's change (the shared index's `updatedAt`). A copy with no base yet: one behind its original takes the original whole once (as it always did), one up to date gets a base from the original and keeps all its words.
+- Copies of a public book (new `followPublicCopies`): the copy remembers the public book (`copiedFromPublic`, `sourceSyncedAt`); at most every 6 hours it reads the public document once and merges the same way. Copies made before this have no link and are not followed.
+- New copies get their base when they are made (`copyBook`, "自分用に追加").
+- Safety found by an Opus review before shipping: a copy made now carries `followBase: 1` on its catalog record (which does sync across devices), so on another device where the base has not arrived it keeps all its words and starts a new base instead of being replaced whole (only copies made before this, without the mark, are replaced once when behind); what a follow finds out (`sourceSyncedAt`, the mode) is put on the catalog as it is at the end, not the copy read before the network waits (which would overwrite a rename or hide made meanwhile); the open book is skipped while a game is on and captured first otherwise; the words are stored before the base moves on (a full storage retries next time); a new word of the original whose number the player already uses goes to a number of its own; a replaced word keeps the player's order (`no`) and links.
+
+Tests:
+
+- `tests/copy-follow.test.cjs` (new): fingerprints, replace / add / drop, the player's own words stay (changed, deleted, added, a number clash), a copy that numbers afresh, nothing changed.
+- `tests/copy-follow.smoke.cjs` (new): a distributed copy and a public copy follow their originals word by word and keep the player's edit; the public book is read once and not again within the hours.
+- `tests/shared-book-follow.smoke.cjs`, `shared-book-editing`, `library-management` still pass.
