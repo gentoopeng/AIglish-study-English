@@ -2766,3 +2766,16 @@ Tests:
 
 - `tests/study-points.test.cjs`: a card answer earns every time (10 for one word, then 0); the plain token and `#device-k` tokens; a card after a battle earns, a battle after a card does not; two devices offline each get their repeats credited once; past repeats are dropped; the existing tier / history tests follow the new rule.
 - `tests/sugoroku.smoke.cjs`: the title and rules say 激アツ and not 確変.
+
+## 10.22.87.00 すごろくのボーナス枠を 40回に1回ほどにし、「激アツ」の文字をやめた
+
+**What the owner said.** The bonus slot came up too often, and the word 激アツ on screen was uncool.
+
+**Odds.** One hidden slot in 40 (2.5%, about once in 40 normal-square spins) instead of four (10%). To keep the game's balance the 12-slot bonus wheel pays more: ×10, ×12, ×15, ×20, ×25 (two), ×30, ×40 (two), and five balls in a row (three slots). Monte Carlo (3 players, jackpots excluded, 900,000 rolls each): return 0.856–0.859 (before this change 0.86), balls per roll 0.144 (0.146 before), so bingos and jackpots stay at their old rate. The other ×0 slots became 19 plain and 3 "blank" ones (same pay, a second kind so no two equal slots stand side by side).
+
+**Words.** The bonus wheel is titled BONUS and the effect reads CHANCE (the screen's other wheels are in English too: EVENT, ACCIDENT, BINGO). 確変 and 激アツ appear nowhere on screen; the rules text and the usage guide describe it as a ×0 slot that lights the room gold, then the BONUS wheel.
+
+Tests:
+
+- `tests/sugoroku-model.test.cjs`: one bonus slot in the normal wheel, the bonus wheel holds ×10 and ×40 and a five-ball run (five balls are drawn), a ×10 result pays 1,000.
+- `tests/sugoroku.smoke.cjs`: the BONUS wheel comes up and pays 1,000; the rules text says BONUS and neither 確変 nor 激アツ.
