@@ -731,6 +731,11 @@ test("a flashcard answer earns every time, up to 10 for one word a day; two devi
   assert.equal(a.points.reward("quiz", "book", "8"), 2);
   assert.equal(a.points.reward("card", "book", "8"), 2);
   assert.equal(a.points.reward("card", "book", "8"), 2);
+  // The battle took the plain token, so the card keeps all 10 of its own (not 9): two were paid
+  // above, eight more are, then nothing.
+  const more = [];
+  for (let i = 0; i < 10; i++) more.push(a.points.reward("card", "book", "8"));
+  assert.deepEqual(more, [2, 2, 2, 2, 2, 2, 2, 2, 0, 0]);
   assert.equal(a.points.reward("card", "book", "11"), 2);
   assert.equal(a.points.reward("quiz", "book", "11"), 0);
   // Two devices that both answered word 9 offline: both are credited, neither twice.

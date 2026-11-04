@@ -2779,3 +2779,11 @@ Tests:
 
 - `tests/sugoroku-model.test.cjs`: one bonus slot in the normal wheel, the bonus wheel holds ×10 and ×40 and a five-ball run (five balls are drawn), a ×10 result pays 1,000.
 - `tests/sugoroku.smoke.cjs`: the BONUS wheel comes up and pays 1,000; the rules text says BONUS and neither 確変 nor 激アツ.
+
+## 10.22.88.00 単語カードのポイント: 先にバトルで取った単語でも、カードは10回入る（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.22.86.00. When a battle or review had already taken a word's plain receipt that day, the card started at the second slot and could pay only 9 times (the cap counted that receipt as a card answer).
+
+**Fix.** The plain receipt counts as one of the card's 10 only if a card answer made it (the points history says which, and a missing record counts as a card); otherwise the card has all 10 of its own (`cardNum` in `study-points.js`). Test: `tests/study-points.test.cjs` (a word taken by a battle first: the card pays 10 times, then 0).
+
+**Not changed (a Codex finding, kept on purpose).** The 500 repeats a day is counted on each device from its own record. It is there to keep a device's storage small (and to stop swipe-back-swipe farming); counting across devices exactly would need a cloud read for every answer. Two devices can therefore pay up to 500 each.
