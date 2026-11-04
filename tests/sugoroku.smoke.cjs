@@ -203,8 +203,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     // The rules sheet explains the 確変 wheel (and no longer says the normal wheel pays ×10).
     await page.getByRole("button", { name: "すごろくビンゴの遊び方" }).click();
     const sheet = await page.locator(".sg-sheet").innerText();
-    assert.match(sheet, /激アツルーレット/);
-    assert.doesNotMatch(sheet, /確変/);
+    assert.match(sheet, /BONUS/);
+    assert.doesNotMatch(sheet, /確変|激アツ/);
     assert.doesNotMatch(sheet, /×10〜×0/);
     await page.locator(".sg-sheet .sg-game-btn", { hasText: "閉じる" }).click();
     // Die 1 onto a normal square, the hidden ×0 (激アツ) slot, and the 激アツ wheel's ×10: two wheels, 1,000 back.
@@ -213,7 +213,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const kakuBefore = await saved();
     await screen.locator("[data-sg-roll]").click();
     await page.locator(".sg-layer.is-kakuhen .sg-wheel-title").waitFor({ state: "attached", timeout: 15000 });
-    assert.equal(await page.locator(".sg-layer.is-kakuhen .sg-wheel-title").textContent(), "激アツルーレット");
+    assert.equal(await page.locator(".sg-layer.is-kakuhen .sg-wheel-title").textContent(), "BONUS");
     await settled();
     assert.equal((await saved()).won - kakuBefore.won, 1000);
     // (The layer is closed by now; shown again only for a picture of the 確変 wheel.)

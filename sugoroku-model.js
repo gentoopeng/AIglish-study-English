@@ -49,6 +49,7 @@
   const BALL = (x = 1, n = 1) => Array(n).fill({ x, ball: true });
   const GAME = (game, n = 1) => Array(n).fill({ x: 0, game });
   const EVENT = (event) => [{ x: 0, event }];
+  // (A second kind of ×0 so the wheel can be laid out without equal slots side by side.)
   const KAKU = (n = 1) => Array(n).fill({ x: 0, kakuhen: true });
   const RULES = {
     costs: [100],
@@ -62,9 +63,9 @@
       100: spread([
         // The top of the wheel is a 確変 slot: it starts the 確変 wheel below, which holds the
         // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
-        ...KAKU(4),
+        ...KAKU(1),
         ...N(0.25),
-        ...N(0, 19), ...N(-0.5, 2), ...N(-1, 2),
+        ...N(0, 19), ...Array(3).fill({ x: 0, blank: true }), ...N(-0.5, 2), ...N(-1, 2),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -73,8 +74,8 @@
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
     // what it paid before the 確変 slots took its top slots.
     kakuhen: spread([
-      ...N(2), ...N(3), ...N(4), ...N(5, 5), ...N(10, 2),
-      { x: 0, balls: 2 }, { x: 0, balls: 2 },
+      ...N(10), ...N(12), ...N(15), ...N(20), ...N(25, 2), ...N(30), ...N(40), ...N(40),
+      { x: 0, balls: 5 }, { x: 0, balls: 5 }, { x: 0, balls: 5 },
     ]),
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
