@@ -48,6 +48,17 @@ const { chromium } = require("playwright"),
     await page.evaluate(() => window.quitFlashcardSession());
     // The year question is ○ and out; the whole question and the blank are still asked.
     assert.deepEqual((await open()).filter((k) => k.startsWith("1:")), ["1:t:1-0:0", "1:w"]);
+    // A battle's wrong answer lowers a meaning rated ○ to ×: the rating from before it is kept first,
+    // so the line's other questions still count as ○.
+    const result = await page.evaluate(() => {
+      const ref = { num: "2", mid: "2-0", count: 1, sig: window.buildWordSignature(vocabList.find((w) => String(w.num) === "2")), term: "y:2-0" };
+      window.WordDuelProgress.apply("terms", ref, "ok", "GUEST-000");
+      window.TermProgress.noteBaseFor("terms", ref);
+      window.WordDuelProgress.apply("terms", ref, false, "GUEST-000", { onlyDowngrade: true });
+      const now = window.LearningData.read("terms")["2"].meanings["2-0"].status;
+      return { now, base: window.TermProgress.read("terms")[2]["m:2-0"], fallback: window.TermProgress.fallback(window.TermProgress.read("terms"), 2, "2-0", now) };
+    });
+    assert.deepEqual(result, { now: "bad", base: { base: "ok" }, fallback: "ok" });
     assert.deepEqual(errors, []);
     console.log("PASS: a ○ on a line's year question does not hide its other questions (they follow the rating from before the first answer)");
   } finally {

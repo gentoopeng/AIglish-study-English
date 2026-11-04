@@ -305,6 +305,12 @@
     const next = { ...store, [String(num)]: { ...(words || {}), [BASE + String(mid)]: { base: ["ok", "so", "bad"].includes(meaningStatus) ? meaningStatus : "none" } } };
     localStorage.setItem(key(book), JSON.stringify(next));
   }
+  // The same from a battle's reference ({ num, mid, count }): the meaning's rating in the learning
+  // data, taken before the battle's answer lowers it.
+  function noteBaseFor(book, ref) {
+    const before = root.LearningData?.read?.(book)?.[ref.num] || {};
+    noteBase(book, ref.num, ref.mid, before.meanings?.[ref.mid]?.status || (ref.count === 1 ? before.status : undefined));
+  }
   // Shows a question's text in an element with pieces() kept whole (no innerHTML of the text).
   // head (optional): the headword, shown in bold wherever it stands as a word.
   function show(node, text, head) {
@@ -349,7 +355,7 @@
     if (skipped || (!right && previous === "ok")) return save(book, num, questionKey, "bad");
     return read(book);
   }
-  root.TermProgress = Object.freeze({ read, save, key, enabled, battle, fallback, noteBase });
+  root.TermProgress = Object.freeze({ read, save, key, enabled, battle, fallback, noteBase, noteBaseFor });
 
   // Flashcards: record each generated question's own result, and type the year for year questions.
   function current() {
