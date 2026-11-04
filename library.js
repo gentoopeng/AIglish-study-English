@@ -77,12 +77,57 @@
         window.__manualVocabDraftRevisions[id] = (window.__manualVocabDraftRevisions[id] || 0) + 1;
         window.__dirtyManualVocabDrafts[id] = window.__manualVocabDraftRevisions[id];
     }
+    // What a copy knows of its original (a fingerprint of each word as it was when the copy last
+    // caught up, see copy-follow.js). It stays on the device and goes into the full save like any key.
+    var copyBaseKey = function(owner, id) { return 'aiglish_copy_base_' + owner + '_' + id; };
+    function readCopyBase(owner, id) {
+        try { var base = JSON.parse(localStorage.getItem(copyBaseKey(owner, id)) || 'null'); return base && base.fp && typeof base.fp === 'object' ? base : null; } catch (e) { return null; }
+    }
+    function writeCopyBase(owner, id, base) { try { localStorage.setItem(copyBaseKey(owner, id), JSON.stringify(base)); } catch (e) {} }
+    // The words of a copy as the player has them now (their edits included).
+    function copyMaster(id) {
+        var draft = window.VocabMaster && window.VocabMaster.resolve(id);
+        return draft && Array.isArray(draft.master) ? window.stripVocabProgressFromWords(draft.master) : null;
+    }
+    var tidyUnit = function(unit) { return window.VocabOrder && window.VocabOrder.cleanUnit ? window.VocabOrder.cleanUnit(unit) : unit; };
+    // A word of the original as a copy that keeps its numbers stores it: the same word, on `num` (a number of its
+    // own when the player's word has the original's number).
+    function identityWord(word, num) {
+        var copy = Object.assign({}, word);
+        if (String(num) !== String(word.num)) {
+            copy.num = typeof word.num === 'number' ? Number(num) : String(num);
+            copy.meanings = (Array.isArray(word.meanings) ? word.meanings : []).map(function(meaning, index) { return Object.assign({}, meaning, { id: num + '-' + index }); });
+        }
+        return copy;
+    }
+    // A replaced word keeps what is the player's own: its place in the order and its links.
+    function keepOwn(word, old) {
+        if (!old) return word;
+        if (old.no !== undefined) word.no = old.no; else delete word.no;
+        if (old.links) word.links = old.links;
+        return word;
+    }
+    // What a follow found out (a source's mark and time, a mode), put on the catalog as it is NOW:
+    // the one read before the network waits would overwrite whatever the player changed meanwhile.
+    function applyCatalogNotes(owner, notes) {
+        if (!Object.keys(notes).length || userId() !== owner) return false;
+        var latest = readLibrary(), touched = false;
+        latest.books.forEach(function(book) {
+            var fields = notes[book.id];
+            if (!fields) return;
+            Object.keys(fields).forEach(function(name) { if (fields[name] === null) delete book[name]; else book[name] = fields[name]; });
+            touched = true;
+        });
+        if (touched) persist(latest);
+        return touched;
+    }
     var following = false;
     async function followSharedBooks(shared) {
         if (following || !window.db || !window.fbGetDoc) return;
         following = true;
         try {
-            var owner = userId(), data = readLibrary(), changed = false, reopen = false;
+            var owner = userId(), data = readLibrary(), reopen = false, upd = {};
+            var note = function(id, fields) { upd[id] = Object.assign(upd[id] || {}, fields); };
             var plainName = function(name) { return String(name || '').replace(/（自分用）$/, ''); };
             for (var i = 0; i < data.books.length && owner !== 'GUEST-000'; i++) {
                 var copy = data.books[i];
@@ -91,22 +136,42 @@
                 var source = shared.find(function(b) { return b.id === copy.copiedFrom; }) ||
                     (!copy.copiedFrom && /（自分用）$/.test(copy.name || '') ? shared.find(function(b) { return b.name === plainName(copy.name); }) : null);
                 if (!source) continue;
-                if (copy.copiedFrom !== source.id) { copy.copiedFrom = source.id; changed = true; }
-                if (!!copy.termMode !== (source.termMode === true)) { if (source.termMode === true) copy.termMode = true; else delete copy.termMode; changed = true; }
+                if (copy.copiedFrom !== source.id) note(copy.id, { copiedFrom: source.id });
+                if (!!copy.termMode !== (source.termMode === true)) note(copy.id, { termMode: source.termMode === true ? true : null });
                 var at = Date.parse(source.updatedAt || '') || 0;
-                if (!at || at <= (Date.parse(copy.sourceSyncedAt || '') || 0)) continue;
-                var snap = await window.fbGetDoc(window.fbDoc(window.db, 'shared', 'vocab_' + source.id));
-                if (userId() !== owner) return;
-                var words = snap.exists() && Array.isArray(snap.data().custom_words) ? window.stripVocabProgressFromWords(snap.data().custom_words) : null;
-                if (!words || !words.length) continue;
-                setCopyMaster(copy.id, words);
-                copy.sourceSyncedAt = source.updatedAt;
-                changed = true;
-                if (currentTextbook === copy.id) reopen = true;
+                var base = readCopyBase(owner, copy.id);
+                // A copy that has no base yet reads its original once to make one.
+                if (!at || (base && at <= (Date.parse(copy.sourceSyncedAt || '') || 0))) continue;
+                // The open book is not changed under the player's hands in a game; it waits for the next start.
+                var open = currentTextbook === copy.id;
+                if (open && document.body.classList.contains('in-game-active')) continue;
+                try {
+                    var snap = await window.fbGetDoc(window.fbDoc(window.db, 'shared', 'vocab_' + source.id));
+                    if (userId() !== owner) return;
+                    var words = snap.exists() && Array.isArray(snap.data().custom_words) ? window.stripVocabProgressFromWords(snap.data().custom_words) : null;
+                    if (!words || !words.length) continue;
+                    if (open && typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+                    var mine = copyMaster(copy.id);
+                    if (!base || !mine) {
+                        // Without a base there is nothing to compare with. Only a copy made before bases were kept
+                        // (it has no followBase mark) that is behind its original takes the original whole, once, as it
+                        // always did. Any other copy keeps all of its words (a base made on another device may not
+                        // have reached this one) and just starts over from the original as it is now.
+                        if (!mine || (!copy.followBase && at > (Date.parse(copy.sourceSyncedAt || '') || 0))) { setCopyMaster(copy.id, words); if (open) reopen = true; }
+                        writeCopyBase(owner, copy.id, window.CopyFollow.baseOf(words, null, tidyUnit));
+                    } else {
+                        // Only what the original changed reaches the copy; what the player changed stays theirs.
+                        var merged = window.CopyFollow.merge({ base: base, theirs: words, mine: mine, identity: true, cleanUnit: tidyUnit, makeWord: function(word, num, old) { return keepOwn(identityWord(word, num), old); } });
+                        // The words first: if they cannot be stored, the base stays and the next start tries again.
+                        if (merged.changed) { setCopyMaster(copy.id, merged.words); if (open) reopen = true; }
+                        writeCopyBase(owner, copy.id, merged.base);
+                    }
+                    note(copy.id, { sourceSyncedAt: source.updatedAt, followBase: 1 });
+                } catch (error) { console.warn('自分用の単語帳への反映を次回に再試行します', error); }
             }
             // The distributed book that is open catches up with the admin's changes.
             if (currentTextbook && !window.isPersonalTextbook(currentTextbook) && await refreshSharedMaster(currentTextbook) && userId() === owner) reopen = true;
-            if (changed && userId() === owner) persist(data);
+            var changed = applyCatalogNotes(owner, upd);
             if (!changed && !reopen) return;
             if (reopen && !document.body.classList.contains('in-game-active') && typeof window.loadCurrentTextbookData === 'function') {
                 await window.loadCurrentTextbookData();
@@ -440,6 +505,8 @@
         var id = 'personal_' + crypto.randomUUID();
         var record = { id: id, name: (book.name + '（自分用）').slice(0, 80), cover: book.cover || '📔', coverType: book.coverType === 'image' ? 'image' : 'text', personal: true, visibility: 'private', copiedFrom: bookId };
         if (book.termMode) record.termMode = true;
+        record.followBase = 1;
+        if (book.updatedAt) record.sourceSyncedAt = book.updatedAt;
         await publish(record, master, null);
         if (userId() !== owner) throw new Error('ユーザーが切り替わりました。単語帳一覧から開き直してください。');
         var progress = window.LearningData ? window.LearningData.read(bookId) : {};
@@ -449,6 +516,7 @@
         localStorage.setItem(window.getVocabProgressStorageKey(id), progressRaw);
         if (window.LearningData && window.LearningData.recoveryKey) localStorage.setItem(window.LearningData.recoveryKey(id), progressRaw);
         textbooksCacheMap[id] = master;
+        writeCopyBase(owner, id, window.CopyFollow.baseOf(window.stripVocabProgressFromWords(source), null, tidyUnit));
         var draft = { master: master, emptyConfirmed: false, progress: progress || {}, savedAt: new Date().toISOString() };
         localStorage.setItem(window.__manualVocabLocalKey(id), JSON.stringify(draft));
         window.__manualVocabDrafts[id] = draft;
@@ -713,13 +781,14 @@
                         var clean = ordered.map(function(word, index) {
                             return {num:index+1,...(window.VocabOrder&&window.VocabOrder.cleanUnit(word.unit)?{unit:window.VocabOrder.cleanUnit(word.unit)}:{}),word:word.word,meaning:word.meaning,sub:typeof word.sub==='string'?word.sub:'',meanings:(Array.isArray(word.meanings)&&word.meanings.length?word.meanings:[{text:word.meaning}]).map(function(meaning, i){return {id:(index+1)+'-'+i,text:String(meaning.text||''),partOfSpeech:String(meaning.partOfSpeech||meaning.pos||word.partOfSpeech||word.pos||''),...(meaning.minor===true?{minor:true}:{}),...(meaning.blankOnly===true?{blankOnly:true}:{})};}),...(Array.isArray(word.links)&&word.links.some(function(l){return renumbered.has(String(l.num));})?{links:word.links.filter(function(l){return renumbered.has(String(l.num));}).map(function(l){return {num:String(renumbered.get(String(l.num))),kind:l.kind};})}:{})};
                         });
+                        writeCopyBase(userId(), id, window.CopyFollow.baseOf(ordered, function(word, index) { return index + 1; }, tidyUnit));
                         var draft = {master:clean,progress:{},savedAt:new Date().toISOString()};
                         localStorage.setItem('core_v4_custom_words_' + userId() + '_' + id, JSON.stringify(clean));
                         localStorage.setItem('core_v4_cache_' + id, JSON.stringify(clean));
                         localStorage.setItem(window.__manualVocabLocalKey(id), JSON.stringify(draft));
                         textbooksCacheMap[id] = clean; window.__manualVocabDrafts[id] = draft;
                         var ownLibrary = readLibrary();
-                        ownLibrary.books.push({id:id,name:data.name,cover:data.coverType==='image'&&/^data:image\/(jpeg|png|webp);base64,/.test(data.cover||'')?data.cover:'📘',coverType:data.coverType==='image'&&/^data:image\/(jpeg|png|webp);base64,/.test(data.cover||'')?'image':'text',personal:true,visibility:'private'});
+                        ownLibrary.books.push({id:id,copiedFromPublic:doc.id,followBase:1,sourceSyncedAt:data.updatedAt||'',name:data.name,cover:data.coverType==='image'&&/^data:image\/(jpeg|png|webp);base64,/.test(data.cover||'')?data.cover:'📘',coverType:data.coverType==='image'&&/^data:image\/(jpeg|png|webp);base64,/.test(data.cover||'')?'image':'text',personal:true,visibility:'private'});
                         window.__dirtyManualVocabDrafts=window.__dirtyManualVocabDrafts||{};window.__dirtyManualVocabDrafts[id]=draft.savedAt;persist(ownLibrary); add.textContent = '追加済み'; add.disabled = true;
                     } catch (error) { list.textContent = '追加できませんでした。' + error.message; }
                 };
@@ -728,6 +797,65 @@
             if (!list.children.length) list.textContent = '公開された単語帳はまだありません。';
         } catch (error) { list.textContent = error.message; }
     };
+    // A copy made from a public word book ("自分用に追加") follows the public one the same way: its
+    // owner's changes reach the copy, the player's own changes stay. The public book is looked at
+    // once every few hours at most (one read for each copy).
+    var CHECK_EVERY = 6 * 3600e3;
+    async function followPublicCopies() {
+        var owner = userId();
+        if (owner === 'GUEST-000' || !window.db || !window.fbGetDoc || !window.CopyFollow) return;
+        var data = readLibrary(), reopen = false, upd = {};
+        for (var i = 0; i < data.books.length; i++) {
+            var copy = data.books[i];
+            if (!copy.personal || !copy.copiedFromPublic) continue;
+            var stamp = 'aiglish_copy_checked_' + owner + '_' + copy.id;
+            if (Date.now() - (Number(localStorage.getItem(stamp)) || 0) < CHECK_EVERY) continue;
+            // The open book is not changed under the player's hands in a game; it waits for the next check.
+            var open = currentTextbook === copy.id;
+            if (open && document.body.classList.contains('in-game-active')) continue;
+            try {
+                var snap = await window.fbGetDoc(publicRef(copy.copiedFromPublic));
+                if (userId() !== owner) return;
+                try { localStorage.setItem(stamp, String(Date.now())); } catch (e) {}
+                if (!snap.exists()) continue;
+                var pub = snap.data() || {}, at = Date.parse(pub.updatedAt || '') || 0;
+                if (!at || at <= (Date.parse(copy.sourceSyncedAt || '') || 0)) continue;
+                var theirs = null;
+                try { theirs = JSON.parse(pub.masterJson); } catch (e) {}
+                if (!Array.isArray(theirs) || !theirs.length || !theirs.every(function(word) { return word && Number.isInteger(Number(word.num)) && Number(word.num) > 0 && typeof word.word === 'string' && typeof word.meaning === 'string'; })) continue;
+                var base = readCopyBase(owner, copy.id);
+                if (open && typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
+                var mine = copyMaster(copy.id);
+                // Without the base (it has not reached this device) there is nothing to compare with: nothing is changed.
+                if (!base || !mine) continue;
+                var places = base.map || {};
+                var merged = window.CopyFollow.merge({
+                    base: base, theirs: window.stripVocabProgressFromWords(theirs), mine: mine, identity: false, cleanUnit: tidyUnit,
+                    makeWord: function(word, num, old) {
+                        var n = Number(num), unit = tidyUnit(word.unit);
+                        var links = Array.isArray(word.links) ? word.links.filter(function(l) { return places[String(l.num)] !== undefined; }).map(function(l) { return { num: String(places[String(l.num)]), kind: l.kind }; }) : [];
+                        return keepOwn(Object.assign({ num: n }, unit ? { unit: unit } : {}, {
+                            word: word.word, meaning: word.meaning, sub: typeof word.sub === 'string' ? word.sub : '',
+                            meanings: (Array.isArray(word.meanings) && word.meanings.length ? word.meanings : [{ text: word.meaning }]).map(function(meaning, index) {
+                                return Object.assign({ id: n + '-' + index, text: String(meaning.text || ''), partOfSpeech: String(meaning.partOfSpeech || meaning.pos || word.partOfSpeech || word.pos || '') }, meaning.minor === true ? { minor: true } : {}, meaning.blankOnly === true ? { blankOnly: true } : {});
+                            })
+                        }, links.length ? { links: links } : {}), old);
+                    }
+                });
+                // The words first: if they cannot be stored, the base stays and the next check tries again.
+                if (merged.changed) { setCopyMaster(copy.id, merged.words); if (open) reopen = true; }
+                writeCopyBase(owner, copy.id, merged.base);
+                upd[copy.id] = { sourceSyncedAt: pub.updatedAt };
+            } catch (error) { console.warn('公開された単語帳の変更を次回に再試行します', error); }
+        }
+        applyCatalogNotes(owner, upd);
+        if (reopen && !document.body.classList.contains('in-game-active') && typeof window.loadCurrentTextbookData === 'function') {
+            await window.loadCurrentTextbookData();
+            window.renderVocabList?.();
+        }
+    }
+    window.__followPublicCopies = followPublicCopies;
+    window.onAppLoaded(function() { setTimeout(function() { followPublicCopies().catch(function(error) { console.warn('公開された単語帳の変更を次回に反映します', error); }); }, 8000); });
     var render = window.renderVocabLibrarySelection;
     window.renderVocabLibrarySelection = function() { refreshPool(); var hidden = document.getElementById('libraryHiddenBooksButton'); if(hidden){var data=readLibrary();hidden.hidden=!data.books.concat(sharedBooks).some(function(book){return data.hidden.indexOf(book.id)>=0;});} return render.apply(this, arguments); };
     window.onAppLoaded(function() { refreshPool(); window.renderVocabLibrarySelection(); });

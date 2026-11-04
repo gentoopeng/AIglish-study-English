@@ -1,0 +1,98 @@
+const { test } = require("node:test"),
+  assert = require("node:assert/strict"),
+  F = require("../copy-follow.js");
+
+const w = (num, word, meaning, extra = {}) => ({ num, word, meaning, sub: "", meanings: [{ id: num + "-0", text: meaning }], ...extra });
+const same = (t, num) => ({ ...t, num, meanings: (t.meanings || []).map((m, i) => ({ ...m, id: num + "-" + i })) });
+const text = (words) => words.map((x) => x.num + ":" + x.word + "=" + x.meaning).join(" | ");
+
+test("a fingerprint changes with the content of a word and not with its number or progress", () => {
+  const a = w(1, "apple", "りんご");
+  assert.equal(F.fingerprint(a), F.fingerprint({ ...a, num: 9, status: "ok", history: ["ok"], links: [{ num: "2", kind: "syn" }] }));
+  assert.notEqual(F.fingerprint(a), F.fingerprint(w(1, "apple", "林檎")));
+  assert.notEqual(F.fingerprint(a), F.fingerprint({ ...a, sub: "fruit" }));
+  assert.notEqual(F.fingerprint(a), F.fingerprint({ ...a, meanings: [{ id: "1-0", text: "りんご", minor: true }] }));
+  assert.notEqual(F.fingerprint(a), F.fingerprint({ ...a, unit: "Unit 1" }));
+});
+
+test("a changed word replaces the copy's, a new word is added, a dropped word is dropped (same numbers)", () => {
+  const before = [w(1, "a", "あ"), w(2, "b", "び"), w(3, "c", "し")],
+    base = F.baseOf(before),
+    after = [w(1, "a", "あ！"), w(2, "b", "び"), w(4, "d", "で")];
+  const out = F.merge({ base, theirs: after, mine: before, identity: true, makeWord: same });
+  assert.equal(text(out.words), "1:a=あ！ | 2:b=び | 4:d=で");
+  assert.deepEqual(out.report, { replaced: 1, added: 1, removed: 1, kept: 0 });
+  assert.equal(out.changed, true);
+  // The base is now the new original: a second run changes nothing.
+  const again = F.merge({ base: out.base, theirs: after, mine: out.words, identity: true, makeWord: same });
+  assert.equal(again.changed, false);
+  assert.equal(text(again.words), text(out.words));
+});
+
+test("what the player changed, added or deleted stays theirs", () => {
+  const before = [w(1, "a", "あ"), w(2, "b", "び"), w(3, "c", "し")],
+    base = F.baseOf(before),
+    // The player rewrote word 1, deleted word 2, and added word 9 of their own.
+    mine = [w(1, "a", "わたしの意味"), w(3, "c", "し"), w(9, "mine", "自分の")],
+    after = [w(1, "a", "原本の新しい意味"), w(2, "b", "びー"), w(3, "c", "しー")];
+  const out = F.merge({ base, theirs: after, mine, identity: true, makeWord: same });
+  // Word 1: both changed: the player's stays. Word 2: deleted by the player: not brought back.
+  // Word 3: only the original changed: replaced. Word 9: untouched.
+  assert.equal(text(out.words), "1:a=わたしの意味 | 3:c=しー | 9:mine=自分の");
+  assert.deepEqual(out.report, { replaced: 1, added: 0, removed: 0, kept: 2 });
+  // A word the original drops but the player changed stays.
+  const dropped = F.merge({ base: out.base, theirs: [w(3, "c", "しー")], mine: out.words, identity: true, makeWord: same });
+  assert.equal(text(dropped.words), "1:a=わたしの意味 | 3:c=しー | 9:mine=自分の");
+  assert.equal(dropped.report.removed, 0);
+});
+
+test("a new word of the original whose number the player already uses goes to a number of its own", () => {
+  const base = F.baseOf([w(1, "a", "あ")]),
+    mine = [w(1, "a", "あ"), w(2, "mine", "自分で足した")],
+    out = F.merge({ base, theirs: [w(1, "a", "あ"), w(2, "new", "原本で足した")], mine, identity: true, makeWord: same });
+  assert.equal(text(out.words), "1:a=あ | 2:mine=自分で足した | 3:new=原本で足した");
+  assert.equal(out.report.added, 1);
+  assert.equal(out.base.map[2], "3");
+  // Later the original changes that word: it is replaced where it was put, the player's own word 2 is not touched.
+  const next = F.merge({ base: out.base, theirs: [w(1, "a", "あ"), w(2, "new", "また変えた")], mine: out.words, identity: true, makeWord: same });
+  assert.equal(text(next.words), "1:a=あ | 2:mine=自分で足した | 3:new=また変えた");
+  // The same word already there (the player added it too) is not added twice.
+  const dup = F.merge({ base: F.baseOf([w(1, "a", "あ")]), theirs: [w(1, "a", "あ"), w(2, "x", "同じ")], mine: [w(1, "a", "あ"), w(2, "x", "同じ")], identity: true, makeWord: same });
+  assert.equal(text(dup.words), "1:a=あ | 2:x=同じ");
+  assert.equal(dup.report.added, 0);
+});
+
+test("a replaced word is given the copy's word it replaces, to keep its own order and links", () => {
+  const base = F.baseOf([w(1, "a", "あ")]),
+    mine = [w(1, "a", "あ", { no: 5, links: [{ num: "2", kind: "syn" }] })],
+    out = F.merge({ base, theirs: [w(1, "a", "あ２")], mine, identity: true, makeWord: (t, num, m) => ({ ...same(t, num), ...(m?.no !== undefined ? { no: m.no } : {}), ...(m?.links ? { links: m.links } : {}) }) });
+  assert.equal(out.words[0].meaning, "あ２");
+  assert.equal(out.words[0].no, 5);
+  assert.deepEqual(out.words[0].links, [{ num: "2", kind: "syn" }]);
+});
+
+test("a copy that numbers its words afresh follows through the map", () => {
+  // The original has gaps (10, 20, 30); the copy numbered them 1, 2, 3.
+  const original = [w(10, "a", "あ"), w(20, "b", "び"), w(30, "c", "し")],
+    place = (_, i) => i + 1,
+    base = F.baseOf(original, place),
+    mine = original.map((x, i) => same(x, i + 1));
+  assert.deepEqual(base.map, { 10: "1", 20: "2", 30: "3" });
+  // The player edits copy word 2; the original changes 10, 20 and adds 40, drops 30.
+  mine[1] = { ...mine[1], meaning: "自分", meanings: [{ id: "2-0", text: "自分" }] };
+  const after = [w(10, "a", "あ2"), w(20, "b", "び2"), w(40, "d", "で")];
+  const out = F.merge({ base, theirs: after, mine, identity: false, makeWord: same });
+  assert.equal(text(out.words), "1:a=あ2 | 2:b=自分 | 4:d=で");
+  assert.deepEqual(out.report, { replaced: 1, added: 1, removed: 1, kept: 1 });
+  assert.equal(out.base.map[40], "4");
+  // Ids of a replaced word follow the copy's number.
+  assert.equal(out.words[0].meanings[0].id, "1-0");
+});
+
+test("with nothing changed in the original the copy is left exactly as it is", () => {
+  const original = [w(1, "a", "あ"), w(2, "b", "び")],
+    mine = [w(1, "a", "あ"), w(2, "edited", "直した"), w(5, "own", "自分")],
+    out = F.merge({ base: F.baseOf(original), theirs: original, mine, identity: true, makeWord: same });
+  assert.equal(out.changed, false);
+  assert.equal(text(out.words), text(mine));
+});
