@@ -21,7 +21,7 @@ const { chromium } = require("playwright"),
       recent = new Date(now - 1000).toISOString(),
       user = (id, name, stats, extra = {}) => ({ id, data: { playerName: name, lastActiveAt: recent, lastLoginAt: recent, studyPoints: 100, ...(stats ? { casinoStatsV1: stats } : {}), ...extra } });
     const rows = [
-      user("a", "エー", { poker: { b: 1000, n: -400, p: 8 }, blackjack: { b: 500, n: 900, p: 5 }, sugoroku: { b: 2000, n: 500, p: 20, g: 4, j: 1, s: 0, l: 90 } }),
+      user("a", "エー", { poker: { b: 1000, n: -400, p: 8 }, blackjack: { b: 500, n: 900, p: 5 }, sugoroku: { b: 2000, n: 500, p: 20, g: 4, j: 1, s: 0, l: 90 } }, { profileCustomizationJson: JSON.stringify({ nameColor: "#0d1b2a" }) }),
       user("b", "ビー", { poker: { b: 300, n: 250, p: 3 }, roulette: { b: 100, n: -100, p: 1 }, sugoroku: { b: 900, n: -300, p: 9, g: 1, j: 0, s: 1, l: 40 } }),
       // A made-up poker total (won far more than could be) is not shown; the dice one is fine.
       user("c", "シー", { poker: { b: 100, n: 99999999, p: 3 }, dice: { b: 50, n: 10, p: 2 } }),
@@ -60,7 +60,8 @@ const { chromium } = require("playwright"),
     await page.locator("[data-rank-mode=casino]").click();
     assert.equal(await page.locator("[data-rank-mode=casino]").getAttribute("aria-pressed"), "true");
     assert.equal(requests.length, 0, "a mode switch does not fetch");
-    assert.equal(await page.locator(".casino-rank-note").isVisible(), true);
+    // No footer text under the podiums in カジノ.
+    assert.equal(await page.locator(".ranking-hint").isHidden(), true);
     await page.locator("#rankingRefresh").click();
     await page.locator('[data-podium-metric="poker:b"] .place-1 .podium-name').waitFor();
     // Only the one projected field is read for this ranking.
@@ -68,7 +69,7 @@ const { chromium } = require("playwright"),
     assert.ok(fields.includes("casinoStatsV1") && !fields.includes("rankingLearningSummaryV1") && !fields.includes("studyPoints"));
 
     // One game at a time: buttons for six games, poker first, with its three panels.
-    assert.deepEqual(await page.locator("[data-casino-game]").allInnerTexts(), ["ポーカー", "ブラックジャック", "ルーレット", "ダイスポーカー", "チンチロ", "すごろく基本", "すごろく記録"]);
+    assert.deepEqual(await page.locator("[data-casino-game]").allInnerTexts(), ["ポーカー", "BJ", "ルーレット", "ダイス", "チンチロ", "すごろく", "記録"]);
     assert.equal(await page.locator(".casino-game-switch").isVisible(), true);
     assert.equal(await page.locator('[data-casino-game="poker"]').getAttribute("aria-pressed"), "true");
     const panelsOf = () => page.locator("#rankingPodium .ranking-mini-panel h3").allInnerTexts();
@@ -99,6 +100,14 @@ const { chromium } = require("playwright"),
         const result = await fits();
         assert.equal(result.count, game === "sugoroku-bingo" ? 4 : 3, game);
         assert.deepEqual([result.host, result.page, result.inside], [true, true, true], game + " " + viewport.width + "x" + viewport.height + " " + JSON.stringify(result));
+        // The seven buttons sit on one row and none is cut off.
+        const row = await page.evaluate(() => {
+          const boxes = [...document.querySelectorAll(".casino-game-switch button")].map((b) => b.getBoundingClientRect()),
+            bar = document.querySelector(".casino-game-switch").getBoundingClientRect();
+          return { rows: new Set(boxes.map((b) => Math.round(b.top))).size, inside: boxes.every((b) => b.left >= bar.left - 1 && b.right <= bar.right + 1), cut: [...document.querySelectorAll(".casino-game-switch button")].some((b) => b.scrollWidth > b.clientWidth + 1), height: Math.round(bar.height) };
+        });
+        assert.deepEqual([row.rows, row.inside, row.cut], [1, true, false], game + " " + viewport.width + " " + JSON.stringify(row));
+        assert.ok(row.height <= 40, "the switch is slim: " + row.height);
       }
     }
     await page.setViewportSize({ width: 393, height: 852 });
@@ -147,11 +156,18 @@ const { chromium } = require("playwright"),
     // Back to ポイント: the casino rows and note are gone; to カジノ again: from the kept result.
     await page.locator("[data-rank-mode=points]").click();
     assert.equal(await page.locator(".casino-game-switch").isHidden(), true);
-    assert.equal(await page.locator(".casino-rank-note").isHidden(), true);
+    assert.equal(await page.locator(".ranking-hint").isVisible(), true);
     assert.deepEqual(await panelsOf(), ["ポイント", "総獲得ポイント"]);
     await page.locator("[data-rank-mode=casino]").click();
     await page.locator('[data-podium-metric="poker:b"] .place-1 .podium-name').waitFor();
     assert.equal(requests.length, 1, "switching back uses the kept result");
+    // A name set in a very dark colour still gets a light halo (it would vanish on the dark ranking).
+    await page.locator('[data-casino-game="poker"]').click();
+    const halo = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('[data-podium-metric="poker:b"] .podium-name')].find((e) => e.textContent === "エー");
+      return el && { color: el.style.color, shadow: el.style.textShadow, width: el.style.webkitTextStrokeWidth };
+    });
+    assert.ok(halo && halo.shadow.includes("235, 240, 255") && halo.width === "0.6px", JSON.stringify(halo));
     assert.deepEqual(errors, []);
     console.log("PASS: カジノ ranking, one game at a time on one screen without scrolling (393x852 and 320x668) (bet, won less bet below zero too, plays; bingos, JP, SJP and balls for すごろくビンゴ), one projected field, made-up totals not shown, own row from this device, detail");
   } finally {

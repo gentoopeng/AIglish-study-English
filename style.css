@@ -3067,12 +3067,14 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 
 /* ランキング › カジノ: one game at a time, all its panels on one screen (three in a column like 学習;
    すごろくビンゴ's seven in two columns). */
-.casino-game-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 8px;}
+.casino-game-switch{display:flex;align-items:center;justify-content:space-between;gap:clamp(1px,.8vw,4px);margin:0 0 8px;padding:3px;border:1px solid #c4b5fd26;border-radius:999px;background:linear-gradient(180deg,#21172f66,#150f2266);}
 .casino-game-switch[hidden]{display:none;}
-.casino-game-switch button{min-width:0;padding:7px 4px;border:1px solid #c4b5fd40;border-radius:12px;background:#21172f55;color:#d8cde9;font:600 11px/1.2 system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.casino-game-switch button[aria-pressed=true]{border-color:#e5cf91;background:#e5cf9126;color:#fff;}
-.casino-rank-note{display:block;margin:0 8px;padding:4px 0 0;text-align:center;font-size:9px;line-height:1.5;letter-spacing:0;}
-.casino-rank-note[hidden]{display:none;}
+.casino-game-switch button{flex:1 1 auto;min-width:0;padding:5px clamp(2px,1.3vw,8px);border:1px solid transparent;border-radius:999px;background:transparent;color:#cfc4e2;font:600 clamp(7.5px,2.55vw,10.5px)/1.2 'Noto Serif JP','Yu Mincho',serif;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:clip;transition:background .15s,color .15s,border-color .15s;}
+.casino-game-switch button[aria-pressed=true]{border-color:#e5cf9188;background:linear-gradient(180deg,#e5cf9133,#e5cf9118);color:#fff3cf;box-shadow:0 0 8px #e5cf9122;}
+/* すごろく and 記録 are one game: joined, with a thin line between them. */
+.casino-game-pair{display:flex;flex:0 1 auto;gap:0;margin-left:2px;padding-left:3px;border-left:1px solid #e5cf9144;}
+.casino-game-pair button{flex:0 1 auto;}
+.ranking-hint[hidden]{display:none;}
 .ranking-podium-grid.is-casino-wide{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:6px;}
 .ranking-podium-grid.is-casino-wide .ranking-mini-panel{padding:5px 6px;}
 .ranking-podium-grid.is-casino-wide .ranking-mini-panel h3{font-size:10px;margin:0;}
