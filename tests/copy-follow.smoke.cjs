@@ -40,10 +40,17 @@ const { chromium } = require("playwright"),
       window.fbGetDoc = async (ref) => (__reads.push(ref.path), { exists: () => __docs.has(ref.path), data: () => structuredClone(__docs.get(ref.path) || {}) });
       window.fbSetDoc = async (ref, data, o) => __docs.set(ref.path, o?.merge ? { ...(__docs.get(ref.path) || {}), ...data } : data);
       window.fbRunTransaction = async (_, fn) => fn({ get: window.fbGetDoc, set: () => {} });
-      const wait = async (check) => { for (let i = 0; i < 100 && !check(); i++) await new Promise((r) => setTimeout(r, 50)); };
+      // Waits (up to 20 s on a busy machine) and asks for a follow again now and then: one already running
+      // is not joined by a second.
+      const wait = async (check) => {
+        for (let i = 0; i < 400 && !check(); i++) {
+          await new Promise((r) => setTimeout(r, 50));
+          if (i % 40 === 39 && !check()) window.syncTextbooksIndexFromFirestore();
+        }
+      };
       window.__waitFor = wait;
       await window.syncTextbooksIndexFromFirestore();
-      await wait(() => localStorage.getItem("aiglish_copy_base_follower_personal_a"));
+      await wait(() => JSON.parse(localStorage.getItem("core_v4_personal_library_follower")).books[0].followBase);
     });
     // Up to date and no base yet: the base is made from the original, the copy is left as it is.
     assert.equal(await words("personal_a"), "1:a=あ | 2:b=自分の意味 | 3:c=し");
@@ -53,7 +60,7 @@ const { chromium } = require("playwright"),
       __docs.set("shared/vocab_shared-1", { custom_words: [{ num: 1, word: "a", meaning: "あ２" }, { num: 2, word: "b", meaning: "び２" }, { num: 4, word: "d", meaning: "で" }] });
       __docs.get("shared/textbooks_index").textbooks[0].updatedAt = "2026-11-02T03:00:00.000Z";
       await window.syncTextbooksIndexFromFirestore();
-      await window.__waitFor(() => JSON.parse(localStorage.getItem("core_v4_cache_personal_a")).some((w) => w.num === 4));
+      await window.__waitFor(() => JSON.parse(localStorage.getItem("core_v4_cache_personal_a")).some((w) => w.num === 4) && JSON.parse(localStorage.getItem("core_v4_personal_library_follower")).books.find((b) => b.id === "personal_a").sourceSyncedAt === "2026-11-02T03:00:00.000Z");
     });
     // 1: replaced; 2: the player's own stays; 3: dropped (the player had not changed it); 4: added.
     assert.equal(await words("personal_a"), "1:a=あ２ | 2:b=自分の意味 | 4:d=で");
@@ -70,7 +77,7 @@ const { chromium } = require("playwright"),
       __docs.get("shared/textbooks_index").textbooks.push({ id: "shared-2", name: "別の配信", updatedAt: "2026-11-02T03:00:00.000Z" });
       __docs.set("shared/vocab_shared-2", { custom_words: [{ num: 1, word: "x", meaning: "原本の意味" }, { num: 2, word: "y", meaning: "わい" }, { num: 3, word: "z", meaning: "ぜっと" }] });
       await window.syncTextbooksIndexFromFirestore();
-      await window.__waitFor(() => localStorage.getItem("aiglish_copy_base_follower_personal_b"));
+      await window.__waitFor(() => JSON.parse(localStorage.getItem("core_v4_personal_library_follower")).books.find((b) => b.id === "personal_b").sourceSyncedAt === "2026-11-02T03:00:00.000Z");
     });
     assert.equal(await words("personal_b"), "1:x=自分で直した | 2:y=わい");
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("core_v4_personal_library_follower")).books.find((b) => b.id === "personal_b").sourceSyncedAt), "2026-11-02T03:00:00.000Z");
@@ -89,6 +96,21 @@ const { chromium } = require("playwright"),
     });
     // The original's word 3 (z, already new at the start: part of the base) stays out; word 4 comes in.
     assert.equal(await words("personal_b"), "1:x=自分で直した | 2:y=わい | 3:mine=自分で足した | 4:w=だぶりゅ");
+
+    // A copy whose words are not on this device (synced from another one, not loaded yet) is not touched,
+    // whatever its marks say.
+    await page.evaluate(async () => {
+      const lib = JSON.parse(localStorage.getItem("core_v4_personal_library_follower"));
+      lib.books.push({ id: "personal_c", name: "まだ読み込まれていないコピー", cover: "📔", coverType: "text", personal: true, visibility: "private", copiedFrom: "shared-3", followBase: 1, sourceSyncedAt: "2026-10-01T00:00:00.000Z" });
+      localStorage.setItem("core_v4_personal_library_follower", JSON.stringify(lib));
+      __docs.get("shared/textbooks_index").textbooks.push({ id: "shared-3", name: "さらに別の配信", updatedAt: "2026-11-02T03:00:00.000Z" });
+      __docs.set("shared/vocab_shared-3", { custom_words: [{ num: 1, word: "q", meaning: "きゅー" }] });
+      __reads = [];
+      await window.syncTextbooksIndexFromFirestore();
+      await new Promise((r) => setTimeout(r, 600));
+    });
+    assert.equal(await page.evaluate(() => localStorage.getItem("core_v4_cache_personal_c") + "|" + localStorage.getItem("aiglish_copy_base_follower_personal_c")), "null|null");
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("core_v4_personal_library_follower")).books.find((b) => b.id === "personal_c").sourceSyncedAt), "2026-10-01T00:00:00.000Z");
 
     // ---- A copy made from the public catalogue ---------------------------------------------------
     await page.evaluate(() => {
@@ -119,16 +141,25 @@ const { chromium } = require("playwright"),
     }, id);
     // The owner changes 10 and 20, drops 30 and adds 40.
     await page.evaluate(async (b) => {
-      window.__pub = { ...__pub, updatedAt: "2026-11-03T00:00:00.000Z", masterJson: JSON.stringify([{ num: 10, word: "a", meaning: "あ２" }, { num: 20, word: "b", meaning: "び２" }, { num: 40, word: "d", meaning: "で" }]) };
+      window.__pub = { ...__pub, updatedAt: "2026-11-03T00:00:00.000Z", masterJson: JSON.stringify([{ num: 10, word: "a", meaning: "あ２" }, { num: 20, word: "b", meaning: "び２" }, { num: 40, word: "d", meaning: "で", links: [{ num: "20", kind: "syn" }] }]) };
       __reads = [];
       localStorage.removeItem("aiglish_copy_checked_public-follower_" + b);
       await window.__followPublicCopies();
     }, id);
     assert.equal(await words(id), "1:a=あ２ | 2:b=自分 | 4:d=で");
+    // The new word's link to the original's 20 points at the copy's 2 (given out in the same merge or before it).
+    assert.deepEqual(await page.evaluate((b) => window.VocabMaster.resolve(b).master.find((w) => w.num === 4).links, id), [{ num: "2", kind: "syn" }]);
     assert.equal(await page.evaluate(() => __reads.filter((r) => r.includes("publicTextbooks")).length), 1);
     // Looked at again within a few hours: no read at all.
     await page.evaluate(async () => { __reads = []; await window.__followPublicCopies(); });
     assert.equal(await page.evaluate(() => __reads.length), 0);
+    // The owner empties the public book: the words the player did not change go, theirs stays.
+    await page.evaluate(async (b) => {
+      window.__pub = { ...__pub, updatedAt: "2026-11-04T00:00:00.000Z", masterJson: "[]" };
+      localStorage.removeItem("aiglish_copy_checked_public-follower_" + b);
+      await window.__followPublicCopies();
+    }, id);
+    assert.equal(await words(id), "2:b=自分");
     assert.deepEqual(errors, []);
     console.log("PASS: a copy of a distributed book and a copy of a public book follow their originals word by word, keep the player's own words, add and drop the rest, and check at most once every few hours");
   } finally {

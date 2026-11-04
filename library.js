@@ -152,12 +152,14 @@
                     if (!words || !words.length) continue;
                     if (open && typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
                     var mine = copyMaster(copy.id);
-                    if (!base || !mine) {
+                    // A copy whose words are not on this device yet (synced from another one, not loaded) is not touched.
+                    if (!mine) continue;
+                    if (!base) {
                         // Without a base there is nothing to compare with. Only a copy made before bases were kept
                         // (it has no followBase mark) that is behind its original takes the original whole, once, as it
                         // always did. Any other copy keeps all of its words (a base made on another device may not
                         // have reached this one) and just starts over from the original as it is now.
-                        if (!mine || (!copy.followBase && at > (Date.parse(copy.sourceSyncedAt || '') || 0))) { setCopyMaster(copy.id, words); if (open) reopen = true; }
+                        if (!copy.followBase && at > (Date.parse(copy.sourceSyncedAt || '') || 0)) { setCopyMaster(copy.id, words); if (open) reopen = true; }
                         writeCopyBase(owner, copy.id, window.CopyFollow.baseOf(words, null, tidyUnit));
                     } else {
                         // Only what the original changed reaches the copy; what the player changed stays theirs.
@@ -822,25 +824,33 @@
                 if (!at || at <= (Date.parse(copy.sourceSyncedAt || '') || 0)) continue;
                 var theirs = null;
                 try { theirs = JSON.parse(pub.masterJson); } catch (e) {}
-                if (!Array.isArray(theirs) || !theirs.length || !theirs.every(function(word) { return word && Number.isInteger(Number(word.num)) && Number(word.num) > 0 && typeof word.word === 'string' && typeof word.meaning === 'string'; })) continue;
+                if (!Array.isArray(theirs) || !theirs.every(function(word) { return word && Number.isInteger(Number(word.num)) && Number(word.num) > 0 && typeof word.word === 'string' && typeof word.meaning === 'string'; })) continue;
                 var base = readCopyBase(owner, copy.id);
                 if (open && typeof window.__captureManualVocabDraft === 'function') window.__captureManualVocabDraft();
                 var mine = copyMaster(copy.id);
                 // Without the base (it has not reached this device) there is nothing to compare with: nothing is changed.
                 if (!base || !mine) continue;
-                var places = base.map || {};
+                // Links point at the copy's numbers, which a new word only has once the merge has given them out:
+                // they are put on after it, from what each made word's original linked to.
+                var made = {};
                 var merged = window.CopyFollow.merge({
                     base: base, theirs: window.stripVocabProgressFromWords(theirs), mine: mine, identity: false, cleanUnit: tidyUnit,
                     makeWord: function(word, num, old) {
                         var n = Number(num), unit = tidyUnit(word.unit);
-                        var links = Array.isArray(word.links) ? word.links.filter(function(l) { return places[String(l.num)] !== undefined; }).map(function(l) { return { num: String(places[String(l.num)]), kind: l.kind }; }) : [];
+                        made[String(n)] = { links: Array.isArray(word.links) ? word.links : [], own: !!(old && old.links) };
                         return keepOwn(Object.assign({ num: n }, unit ? { unit: unit } : {}, {
                             word: word.word, meaning: word.meaning, sub: typeof word.sub === 'string' ? word.sub : '',
                             meanings: (Array.isArray(word.meanings) && word.meanings.length ? word.meanings : [{ text: word.meaning }]).map(function(meaning, index) {
                                 return Object.assign({ id: n + '-' + index, text: String(meaning.text || ''), partOfSpeech: String(meaning.partOfSpeech || meaning.pos || word.partOfSpeech || word.pos || '') }, meaning.minor === true ? { minor: true } : {}, meaning.blankOnly === true ? { blankOnly: true } : {});
                             })
-                        }, links.length ? { links: links } : {}), old);
+                        }), old);
                     }
+                });
+                merged.words.forEach(function(word) {
+                    var info = made[String(word.num)];
+                    if (!info || info.own) return;
+                    var links = info.links.filter(function(l) { return merged.base.map[String(l.num)] !== undefined; }).map(function(l) { return { num: String(merged.base.map[String(l.num)]), kind: l.kind }; });
+                    if (links.length) word.links = links; else delete word.links;
                 });
                 // The words first: if they cannot be stored, the base stays and the next check tries again.
                 if (merged.changed) { setCopyMaster(copy.id, merged.words); if (open) reopen = true; }
@@ -854,8 +864,14 @@
             window.renderVocabList?.();
         }
     }
-    window.__followPublicCopies = followPublicCopies;
-    window.onAppLoaded(function() { setTimeout(function() { followPublicCopies().catch(function(error) { console.warn('公開された単語帳の変更を次回に反映します', error); }); }, 8000); });
+    // One check at a time (the start-up check and any other never run side by side on the same copies).
+    var publicQueue = Promise.resolve();
+    function followPublicInTurn() {
+        publicQueue = publicQueue.then(followPublicCopies, followPublicCopies);
+        return publicQueue;
+    }
+    window.__followPublicCopies = followPublicInTurn;
+    window.onAppLoaded(function() { setTimeout(function() { followPublicInTurn().catch(function(error) { console.warn('公開された単語帳の変更を次回に反映します', error); }); }, 8000); });
     var render = window.renderVocabLibrarySelection;
     window.renderVocabLibrarySelection = function() { refreshPool(); var hidden = document.getElementById('libraryHiddenBooksButton'); if(hidden){var data=readLibrary();hidden.hidden=!data.books.concat(sharedBooks).some(function(book){return data.hidden.indexOf(book.id)>=0;});} return render.apply(this, arguments); };
     window.onAppLoaded(function() { refreshPool(); window.renderVocabLibrarySelection(); });
