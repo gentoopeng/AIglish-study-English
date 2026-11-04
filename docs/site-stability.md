@@ -2809,3 +2809,12 @@ Tests:
 - `tests/copy-follow.test.cjs` (new): fingerprints, replace / add / drop, the player's own words stay (changed, deleted, added, a number clash), a copy that numbers afresh, nothing changed.
 - `tests/copy-follow.smoke.cjs` (new): a distributed copy and a public copy follow their originals word by word and keep the player's edit; the public book is read once and not again within the hours.
 - `tests/shared-book-follow.smoke.cjs`, `shared-book-editing`, `library-management` still pass.
+
+## 10.22.91.00 自分用にした単語帳の追従: 読み込まれていないコピーに触らない／空の公開本／新しい単語へのリンク（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.22.90.00.
+- A copy synced from another device whose words are not loaded here yet (`copyMaster()` is null) was replaced whole by the original even with `followBase` set, which a later save could use to overwrite the player's edits. Now such a copy is not touched at all (no base, no mark moved) until its words are on this device.
+- A public book whose owner replaced its words with an empty list was skipped, so copies kept all their old words. An empty list is now applied: the words the player did not change go, theirs stay.
+- A public update that added words linked to other new words lost the links (the numbers were not given out yet). Links of made words are now put on after the merge, from the final map; a word that already has the player's own links keeps them.
+
+Tests: `tests/copy-follow.smoke.cjs` — an unloaded copy is left alone (no words, no base, its time unchanged); a new word's link points at the copy's number; an emptied public book removes only unedited words.
