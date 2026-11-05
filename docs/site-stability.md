@@ -2942,3 +2942,9 @@ Tests: the whole suite (the guide is only checked for opening in `tests/compact-
 - Usage guide: Codex (review of 10.23.02.00) was right that the card reward is also capped at 10 answers per word per day (`CARD_PER_WORD`) besides 500 a day; the guide now says both.
 
 Tests: the whole suite (no test reads these texts).
+
+## 10.23.05.00 ガイド: 単語カードの上限は「この端末で」と書いた（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.23.04.00. The guide said a word earns points up to 10 times a day (500 in all), but both limits are counted per device (`StudyPoints.cardNum()` uses the device-local ledger), so another device counts on its own. The cross-device cap was left as it is on purpose (documented under 10.22.x: it protects storage).
+
+**Fix.** `usage-guide-content.js` says 「この端末では、…」. No code change.
