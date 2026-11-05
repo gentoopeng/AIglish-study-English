@@ -2915,3 +2915,13 @@ Tests: `tests/sugoroku-model.test.cjs` (×0.5 is on the wheel; the bonus wheel h
 - Another player's bingo / jackpot in the shared log becomes 「〇〇さんが DOUBLE BINGO」 (at most 5 per time, own entries skipped). The first visit only records the latest log time, so old entries are not replayed.
 
 Tests: `tests/sugoroku-shared.smoke.cjs` (exactly one reach notice; another player's bingo gives one notice).
+
+## 10.23.02.00 使い方ガイドを短く書き直した
+
+**What the owner said.** 「使い方ガイドを読みやすく、簡潔にしてください。全体的にほんとにいらない情報が多すぎる」
+
+**Before.** 18 sections, about 60,000 characters: internal mechanics (storage, sync intervals, cache), repeated points, old-version wording, and one 2,500-character bullet for すごろくビンゴ.
+
+**Now.** `usage-guide-content.js` has 18 short sections (about 9,000 characters): what a player does, in plain words. Sections: 単語帳, 単語カード, ワーク, 長文リーダー, 単語バトル, バトルのイベント (still read from `WordDuelModel.eventCatalog`), 勉強時間, ランキング, ポイント, お知らせ (including the すごろくビンゴ リーチ / ビンゴ notices), ユーザー・グループ, ポーカー, カジノ, すごろくビンゴ, プロフィール・設定, 保存・バックアップ, 管理者ツール. Tips shortened.
+
+Tests: the whole suite (the guide is only checked for opening in `tests/compact-sidebar.smoke.cjs`).
