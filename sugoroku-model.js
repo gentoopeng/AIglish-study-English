@@ -65,8 +65,8 @@
         // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
         ...KAKU(1),
         ...N(5), ...N(1.5), ...N(1),
-        ...N(0.25),
-        ...N(0, 19), ...N(-0.5, 2), ...N(-1, 2),
+        ...N(0.5, 4), ...N(0.25),
+        ...N(0, 15), ...N(-0.5, 2), ...N(-1, 2),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -75,7 +75,7 @@
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
     // what it paid before the 確変 slots took its top slots.
     kakuhen: spread([
-      ...N(5), ...N(8), ...N(10), ...N(12), ...N(15, 2), ...N(18), ...N(20), ...N(25),
+      ...N(5), ...N(6), ...N(8), ...N(9), ...N(11), ...N(13), ...N(15), ...N(17), ...N(19),
       { x: 0, balls: 5 }, { x: 0, balls: 5 }, { x: 0, balls: 5 },
     ]),
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
