@@ -2864,3 +2864,13 @@ Tests: `tests/copy-follow.test.cjs` (a sub line and a meaning row by the player 
 - When the copy and the original each added a meaning row at the same place, the original's replaced the player's. Both stay now (the original's first; the same row added by both is not doubled), each with an id of its own.
 
 Tests: `tests/copy-follow.test.cjs` — the mixed word's `meaning` follows its rows; both added rows stay with different ids.
+
+## 10.22.97.00 すごろく: 通常ルーレットに「×1以上」の枠を戻した（当たりが見えなくなっていた）
+
+**What the user saw.** 「意味わからんくらい確率減ってない？」 The normal wheel was almost all ×0 (23 of 40 slots read ×0), and no slot that was shown paid the bet back or more.
+
+**Cause.** In 10.22.87.00 (the bonus slot made rarer: 1 in 40) the four top slots (×10, ×5, ×1.5, ×1) were all taken into the one hidden bonus slot. The return and the balls per roll were kept, but 0 of the 40 slots shown paid ×1 or more, and the bonus came about once in 40 spins: the average was right, the chance of a win was not.
+
+**Fix.** ×5, ×1.5 and ×1 are on the normal wheel again (3 slots of 40 that pay the bet back or more, besides the games and events), and the bonus wheel pays less for it: ×5, ×8, ×10, ×12, ×15 (two), ×18, ×20, ×25 and five balls in a row (three slots). The hidden bonus slot is still 1 in 40. Monte Carlo (3 players, jackpots excluded, 900,000 rolls each): return 0.854–0.862 (0.86 at the start), balls per roll 0.144 (0.146).
+
+Tests: `tests/sugoroku-model.test.cjs` — the normal wheel has ×5, ×1.5, ×1 and at least three slots paying ×1 or more beside the hidden one; the bonus wheel holds ×10 and ×25 and a five-ball run.

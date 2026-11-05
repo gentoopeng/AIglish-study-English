@@ -38,9 +38,11 @@ test("the board, card and wheels have the agreed shape", () => {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     // From ×0.25 down to a minus that takes another bet; the top of the wheel is the 確変 slots,
     // and the 確変 wheel holds ×10 / ×5 and the ball runs.
-    for (const x of [0.25, 0, -0.5, -1]) assert.ok(values.has(x), cost + " has ×" + x);
+    for (const x of [5, 1.5, 1, 0.25, 0, -0.5, -1]) assert.ok(values.has(x), cost + " has ×" + x);
+    // Some of what is on the wheel really pays the bet back or more (not only the hidden bonus slot).
+    assert.ok(S.RULES.normal[cost].filter((slot) => !slot.kakuhen && slot.x >= 1).length >= 3, "a few slots pay ×1 or more");
     assert.equal(S.RULES.normal[cost].filter((slot) => slot.kakuhen).length, 1);
-    for (const x of [10, 40]) assert.ok(S.RULES.kakuhen.some((slot) => slot.x === x), "確変 has ×" + x);
+    for (const x of [10, 25]) assert.ok(S.RULES.kakuhen.some((slot) => slot.x === x), "確変 has ×" + x);
     assert.ok(S.RULES.kakuhen.some((slot) => slot.balls === 5), "確変 has a ball run");
     assert.deepEqual(S.RULES.normal[cost].filter((x) => x.event).map((x) => x.event).sort(), ["blackjack", "blackjack", "chinchiro", "chinchiro", "dice", "dice"]);
     const w = S.RULES.normal[cost];
@@ -376,7 +378,7 @@ test("a 確変 slot spins the 確変 wheel, which pays a multiple or draws a run
 test("the 確変 wheel keeps the normal wheel's pay: the top slots moved into it", () => {
   // Before the 確変 slots the top of the normal wheel paid ×10, ×5, ×1.5 and ×1 once in 40 each.
   const pay = S.RULES.kakuhen.reduce((n, slot) => n + (slot.x || 0), 0) / S.RULES.kakuhen.length;
-  assert.ok(pay > 12 && pay < 25, "multiples on the 確変 wheel average " + pay);
+  assert.ok(pay > 8 && pay < 16, "multiples on the 確変 wheel average " + pay);
   assert.equal(S.RULES.kakuhen.length, 12);
   assert.ok(S.RULES.kakuhen.every((slot, i, w) => JSON.stringify(slot) !== JSON.stringify(w[(i + 1) % w.length])), "確変 is spread");
 });
