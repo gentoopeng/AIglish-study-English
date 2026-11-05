@@ -457,8 +457,12 @@
         sign = reaches.length + ":" + wanted.join(","),
         signKey = "aiglish_sugoroku_reach_" + me;
       if (localStorage.getItem(signKey) !== sign) {
+        const before = localStorage.getItem(signKey);
         localStorage.setItem(signKey, sign);
-        if (reaches.length)
+        if (!reaches.length) {
+          // The old "N lines" notice must not stay: replace it (same id) once the reaches are gone.
+          if (before && !before.startsWith("0:")) window.PersonalNotices.add(me, { id: "sugoroku:reach", title: "いまリーチ中のラインはありません", body: "すごろくビンゴ", amount: 0 });
+        } else
           window.PersonalNotices.add(me, { id: "sugoroku:reach", title: "いま " + reaches.length + " 本リーチ中", body: "あと1つで揃う番号：" + wanted.slice(0, 8).join("・") + (wanted.length > 8 ? "…" : ""), amount: 0 });
       }
     } catch (error) {

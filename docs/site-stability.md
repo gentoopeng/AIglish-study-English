@@ -2925,3 +2925,9 @@ Tests: `tests/sugoroku-shared.smoke.cjs` (exactly one reach notice; another play
 **Now.** `usage-guide-content.js` has 18 short sections (about 9,000 characters): what a player does, in plain words. Sections: 単語帳, 単語カード, ワーク, 長文リーダー, 単語バトル, バトルのイベント (still read from `WordDuelModel.eventCatalog`), 勉強時間, ランキング, ポイント, お知らせ (including the すごろくビンゴ リーチ / ビンゴ notices), ユーザー・グループ, ポーカー, カジノ, すごろくビンゴ, プロフィール・設定, 保存・バックアップ, 管理者ツール. Tips shortened.
 
 Tests: the whole suite (the guide is only checked for opening in `tests/compact-sidebar.smoke.cjs`).
+
+## 10.23.03.00 すごろく: リーチが無くなったあとも「N 本リーチ中」の通知が残っていた（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.23.01.00. When a roll completed the last reach, no new notice was written, so the old 「いま N 本リーチ中」 stayed in the お知らせ box.
+
+**Fix.** `notify()` in `sugoroku.js`: when the reaches go from some to none, the same notice (id `sugoroku:reach`) is replaced by 「いまリーチ中のラインはありません」. Nothing is written if there were none before.
