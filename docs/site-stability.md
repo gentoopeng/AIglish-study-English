@@ -2889,3 +2889,9 @@ Tests: `tests/sugoroku-model.test.cjs` — the normal wheel has ×5, ×1.5, ×1 
 - Texts: the rules in the game and the usage guide say the new rules.
 
 Tests: `tests/casino-model.test.cjs` (ties are draws; three child throws; a child wins and loses about as often; dice poker with the same strategy for both sides wins about as often as it loses), `tests/sugoroku-model.test.cjs` (a lost event game pays nothing), `tests/sugoroku.smoke.cjs` (three throws each, no 1.5×).
+
+## 10.22.99.00 チンチロの説明に、古い「親の勝ち」が残っていた（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.22.98.00. The casino's チンチロ rules (`CHIN_RULES` in `casino.js`) still said the child throws twice and that the same point goes to the parent, and the usage guide still said 「同じ目は親の勝ちです」 right after saying a tie is a draw.
+
+**Fix.** Both say: parent and child throw up to three times, the same point (or no hand against no hand) is a draw and the bet comes back. Test: `tests/casino.smoke.cjs` reads the open チンチロ screen's rules text.
