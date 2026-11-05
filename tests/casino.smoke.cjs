@@ -190,6 +190,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const cc = page.locator("dialog.casino-screen.is-chinchiro[open]");
     await cc.waitFor();
     assert.deepEqual(await cc.locator(".cs-mode button").allInnerTexts(), ["ひとりで", "一緒に", "タイマン"]);
+    // The rules text says the even rules (three throws each, a tie is a draw), not the old parent-wins ones.
+    const rulesText = await cc.textContent();
+    assert.match(rulesText, /親（ディーラー）も子（あなた）も3回まで/);
+    assert.match(rulesText, /同じ目（目なし同士も）は引き分け/);
+    assert.doesNotMatch(rulesText, /子（あなた）は2回|同じ目（目なし同士も）は親の勝ち/);
     await cc.getByRole("button", { name: "勝負する" }).click();
     assert.match(await cc.locator(".cs-chin-side").first().innerText(), /4の目/);
     await cc.locator("[data-chin-roll]").click();
