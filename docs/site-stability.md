@@ -2931,3 +2931,14 @@ Tests: the whole suite (the guide is only checked for opening in `tests/compact-
 **What the user saw.** Nothing yet; found in review of 10.23.01.00. When a roll completed the last reach, no new notice was written, so the old 「いま N 本リーチ中」 stayed in the お知らせ box.
 
 **Fix.** `notify()` in `sugoroku.js`: when the reaches go from some to none, the same notice (id `sugoroku:reach`) is replaced by 「いまリーチ中のラインはありません」. Nothing is written if there were none before.
+
+## 10.23.04.00 アプリ内の長い説明を短くした／ガイドの単語カードの上限を正した（Codexの指摘）
+
+**What the owner said.** 「AI特有の無駄な文や記述を消してください」「いらない情報が多すぎる」
+
+**Now.**
+- すごろくビンゴのルール (`RULES_TEXT` in `sugoroku.js`): 12 long lines became 9 short ones (the ×0〜×5 wheel, ★ and ！ squares, the shared card, how the prize is split). Jackpot formulas, the 120-tap note and the autoplay detail are gone.
+- 「編集」ダイアログ (`openCopyBook` in `library.js`): the hint is two sentences (it is a personal copy; the original does not change; words the player did not change follow the original).
+- Usage guide: Codex (review of 10.23.02.00) was right that the card reward is also capped at 10 answers per word per day (`CARD_PER_WORD`) besides 500 a day; the guide now says both.
+
+Tests: the whole suite (no test reads these texts).
