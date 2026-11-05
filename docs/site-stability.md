@@ -2895,3 +2895,13 @@ Tests: `tests/casino-model.test.cjs` (ties are draws; three child throws; a chil
 **What the user saw.** Nothing yet; found in review of 10.22.98.00. The casino's チンチロ rules (`CHIN_RULES` in `casino.js`) still said the child throws twice and that the same point goes to the parent, and the usage guide still said 「同じ目は親の勝ちです」 right after saying a tie is a draw.
 
 **Fix.** Both say: parent and child throw up to three times, the same point (or no hand against no hand) is a draw and the bet comes back. Test: `tests/casino.smoke.cjs` reads the open チンチロ screen's rules text.
+
+## 10.23.00.00 すごろく: 「何も戻らない」が増えていたので、×0 を減らして ×0.5 の枠を足した
+
+**What the user saw.** 「体感当たりにくくなった気がする ×0おおすぎん？」
+
+**What the numbers said** (plain play, 3 players, jackpots excluded, 600,000 rolls: the share of rolls that returned nothing at all). Before today's changes (10.22.56-): 58.8% nothing, 10.2% a little back, 31.0% the bet or more. After the even dice rules (no 1/4 refund on a lost event game) and the bonus slot moved out of the wheel: 64.2% nothing, 5.8% a little back, 29.9% the bet or more. The return rate was higher, not lower (0.92 → 0.93): the money had moved into the rare bonus.
+
+**Fix.** On the normal wheel 4 of the ×0 slots became ×0.5 (×0 is 15 of 40 now, 20 of 40 with the hidden bonus slot counted before). To keep the return, the bonus wheel pays less: ×5, ×6, ×8, ×9, ×11, ×13, ×15, ×17, ×19 and five balls in a row (three slots); it is still 1 in 40. Measured now: 56.4% nothing, 13.6% a little back, 29.9% the bet or more; return 0.930 (as before this change), balls per roll 0.155.
+
+Tests: `tests/sugoroku-model.test.cjs` (×0.5 is on the wheel; the bonus wheel holds ×5, ×11, ×19 and a five-ball run; ×11 pays 1,100), `tests/sugoroku.smoke.cjs` (the bonus wheel's ×11 pays 1,100).
