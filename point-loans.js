@@ -138,6 +138,22 @@
     });
     remember(key, written);
   }
+  // The borrower accepts a loan offered with interest; the points reach them when they are collected.
+  async function acceptOffer(other, otherName, id) {
+    ready();
+    const me = uid(),
+      key = L.pairKey(me, other),
+      at = Date.now();
+    const written = await window.fbRunTransaction(window.db, async (tx) => {
+      const snap = await tx.get(pairRef(key));
+      if (!snap.exists()) throw Error("記録が見つかりません。");
+      const record = shell(L.accept(snap.data(), { id, by: me, at }), me, other, otherName);
+      tx.set(pairRef(key), record);
+      touch(tx, me, other, otherName, key, at);
+      return record;
+    });
+    remember(key, written);
+  }
   // Adds what was sent to me into my wallet, once.
   async function claim(key) {
     const me = uid();
@@ -150,7 +166,8 @@
         due = L.unclaimed(record, me);
       remember(key, record);
       if (!due.length) return null;
-      got = due.map((e) => ({ amount: e.amount, name: record.names?.[e.from] || e.from, kind: e.kind }));
+      // (refund: my own loan offer came back, refused or taken back.)
+      got = due.map((e) => (e.from === me && e.to !== me ? { amount: e.amount, name: record.names?.[e.to] || e.to, kind: e.kind, refund: true } : { amount: e.amount, name: record.names?.[e.from] || e.from, kind: e.kind }));
       // Money and gifts add; a charge from the 運営 takes away, never below 0.
       const wallet = walletSnap.exists() ? walletSnap.data() : {},
         claimed = { ...(record.claimed || {}) };
@@ -291,7 +308,9 @@
     }
     for (const g of got)
       window.showToast?.(
-        (g.kind === "gift" || g.kind === "charge" ? g.name + "から " : g.name + "さんから ") + fmt(g.amount) + "pt " + (g.kind === "repay" ? "返ってきました" : g.kind === "charge" ? "引かれました" : "届きました"),
+        g.refund
+          ? g.name + "さんに出した利子つきの貸し出しが戻りました　" + fmt(g.amount) + "pt"
+          : (g.kind === "gift" || g.kind === "charge" ? g.name + "から " : g.name + "さんから ") + fmt(g.amount) + "pt " + (g.kind === "repay" ? "返ってきました" : g.kind === "charge" ? "引かれました" : "届きました"),
         g.kind === "charge" ? "info" : "success",
       );
     return got;
@@ -418,7 +437,7 @@
     charge: "M5 12h14",
   };
   // Which icon a line of the talk gets.
-  const KIND_ICON = { lend: "lend", repay: "repay", give: "give", gift: "give", charge: "charge", "ask-lend": "borrow", "ask-repay": "claim", "ask-give": "ask-give" };
+  const KIND_ICON = { lend: "lend", "lend-offer": "lend", repay: "repay", give: "give", gift: "give", charge: "charge", "ask-lend": "borrow", "ask-repay": "claim", "ask-give": "ask-give" };
   function svgIcon(name) {
     const NS = "http://www.w3.org/2000/svg",
       svg = document.createElementNS(NS, "svg"),
@@ -578,7 +597,7 @@
         const v = Math.floor(Number(amount.value));
         line.textContent =
           form.mode === "lend" && v >= 1
-            ? "返してもらう額 " + fmt(v + Math.round(v * form.rate)) + "pt" + (form.rate ? "（利子 " + fmt(Math.round(v * form.rate)) + "pt）" : "")
+            ? "返してもらう額 " + fmt(v + Math.round((v * Math.round(form.rate * 100)) / 100)) + "pt" + (form.rate ? "（利子 " + fmt(Math.round((v * Math.round(form.rate * 100)) / 100)) + "pt）　相手が受けると成立します。断られると戻ります" : "")
             : form.mode === "repay" && v >= 1
               ? "返したあと 残り " + fmt(Math.max(0, owe - v)) + "pt"
               : form.mode === "give" && v >= 1
@@ -601,7 +620,7 @@
         };
         quick.append(q);
       }
-      // Interest, for a loan only.
+      // Interest, for a loan only: quick choices, or any whole percent up to 100.
       const rates = node("div", "loans-rates");
       if (form.mode === "lend") {
         rates.append(node("span", "", "利子"));
@@ -616,6 +635,17 @@
           };
           rates.append(r);
         }
+        const own = node("input");
+        Object.assign(own, { type: "number", min: 0, max: L.MAX_RATE * 100, step: 1, inputMode: "numeric", placeholder: "自由", value: L.RATES.includes(form.rate) ? "" : String(Math.round(form.rate * 100)) });
+        own.setAttribute("aria-label", "利子を自由に入れる（%）");
+        own.dataset.loanRate = "";
+        own.oninput = () => {
+          const n = Number(own.value);
+          form.rate = own.value !== "" && Number.isInteger(n) && n >= 0 && n <= L.MAX_RATE * 100 ? n / 100 : form.rate;
+          rates.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.getAttribute("aria-label") === "利子 " + RATE_TEXT(form.rate))));
+          preview();
+        };
+        rates.append(own, node("span", "", "%"));
       }
       const note = node("input");
       Object.assign(note, { type: "text", maxLength: 60, placeholder: "ひとこと（任意）", value: form.note });
@@ -638,7 +668,7 @@
         toggleSheet(false);
       });
       preview();
-      if (form.request) panel.append(node("p", "loans-hint", name + "さんの頼みに応えて貸します。利子を選んでください。"));
+      if (form.request) panel.append(node("p", "loans-hint", name + "さんの頼みに応えて貸します。利子は自由に決められますが、相手が受けたときだけ成立します。"));
       panel.append(amountRow, quick, rates, note, line, go);
       sheet.append(tabs, panel);
     }
@@ -649,7 +679,11 @@
       const mine = e.from === me;
       if (e.kind === "gift") return mine ? "送った" : "届いた";
       if (e.kind === "charge") return "引かれた";
-      if (e.kind === "lend") return (mine ? "貸した" : "借りた") + (e.rate ? "（利子" + RATE_TEXT(e.rate) + "・返す額" + fmt(e.due) + "pt）" : "");
+      if (e.kind === "lend-offer") return (mine ? "貸したい" : "貸してくれる") + "（利子" + RATE_TEXT(e.rate) + "・返す額" + fmt(e.due) + "pt）・" + ({ open: mine ? "返事待ち" : "受けるか決めてください", done: "成立", declined: mine ? "断られた" : "断った", cancelled: "取り消し" }[e.status] || "");
+      if (e.kind === "lend") {
+        const terms = e.rate ? "（利子" + RATE_TEXT(e.rate) + "・返す額" + fmt(e.due) + "pt）" : "";
+        return (mine ? "貸した" : "借りた") + terms;
+      }
       if (e.kind === "repay") return mine ? "返した" : "返ってきた";
       if (e.kind === "give") return mine ? "あげた" : "もらった";
       const what = { "ask-lend": mine ? "借りたいと頼んだ" : "借りたいと頼まれた", "ask-give": mine ? "もらいたいと頼んだ" : "もらいたいと頼まれた", "ask-repay": mine ? "請求した" : "請求された" }[e.kind] || "";
@@ -700,10 +734,16 @@
               row.append(no);
             }
             // What each kind of request is answered with.
-            const yes = node("button", "loans-primary", { "ask-lend": "条件を決めて貸す", "ask-give": "あげる", "ask-repay": "払う" }[e.kind] || "答える");
+            const yes = node("button", "loans-primary", { "lend-offer": "この条件で借りる", "ask-lend": "条件を決めて貸す", "ask-give": "あげる", "ask-repay": "払う" }[e.kind] || "答える");
             yes.type = "button";
             yes.onclick =
-              e.kind === "ask-lend"
+              e.kind === "lend-offer"
+                ? act(async () => {
+                    await acceptOffer(other, name, e.id);
+                    current = known(key) || current;
+                    await take();
+                  })
+                : e.kind === "ask-lend"
                 ? () => {
                     Object.assign(form, { mode: "lend", amount: String(e.amount), request: e.id });
                     toggleSheet(true);
@@ -717,7 +757,12 @@
           } else if (e.status === "open" && mine) {
             const undo = node("button", "", "取り消す");
             undo.type = "button";
-            undo.onclick = act(() => closeRequest(other, name, e.id));
+            // (A loan offer taken back: its points come back to my wallet at once.)
+            undo.onclick = act(async () => {
+              await closeRequest(other, name, e.id);
+              current = known(key) || current;
+              await take();
+            });
             bubble.classList.add("loans-request", "is-mine");
             bubble.append(undo);
           }
@@ -740,7 +785,7 @@
     const take = async () => {
       if (!L.unclaimed(current, me).length) return;
       const got = await claim(key);
-      got.forEach((g) => window.showToast?.(fmt(g.amount) + "pt 受け取りました", "success"));
+      got.forEach((g) => window.showToast?.(g.refund ? "利子つきの貸し出しが戻りました　" + fmt(g.amount) + "pt" : fmt(g.amount) + "pt 受け取りました", "success"));
       current = known(key) || current;
       paint();
     };

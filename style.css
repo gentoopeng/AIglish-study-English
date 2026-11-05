@@ -3187,3 +3187,11 @@ html body dialog.vocab-entry-dialog input:not([type=checkbox]),html body dialog.
 html body dialog.vocab-entry-dialog details{padding-top:6px;}
 html body dialog.vocab-entry-dialog .library-editor-actions button{min-height:42px;}
 }
+
+/* Ranking titles open the full list. */
+.ranking-mini-title{cursor:pointer;}
+.ranking-mini-title::after{content:" ›";opacity:.6;}
+.ranking-all{list-style:none;margin:0;padding:0;max-height:60dvh;overflow:auto;overscroll-behavior:contain;}
+.ranking-all button{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:10px;width:100%;padding:10px 0;color:var(--text-main);background:transparent;border:0;border-bottom:1px solid var(--border);text-align:left;cursor:pointer;}
+.ranking-all button.is-self{color:#e5cf91;}.ranking-all button>span:nth-child(2){overflow-wrap:anywhere;}.ranking-all strong{font-variant-numeric:tabular-nums;}
+.ranking-all-empty{margin:8px 0;color:var(--text-sub);font-size:13px;}
