@@ -74,13 +74,20 @@ test("money to me is unclaimed until marked, and the history is capped", () => {
 test("a loan can carry interest: the debt is the amount and its interest, repaid like any debt", () => {
   let r = L.send(null, { id: "1", from: "a", to: "b", amount: 50, kind: "lend", at, rate: 0.1 });
   assert.deepEqual([r.entries[0].rate, r.entries[0].due], [0.1, 55]);
+  // Nothing is owed until the borrower accepts.
+  assert.equal(L.owedBy(r.entries, "b"), 0);
+  r = L.accept(r, { id: "1", by: "b", at });
   assert.equal(L.owedBy(r.entries, "b"), 55);
   assert.equal(L.net(r.entries, "a"), 55);
   r = L.send(r, { id: "2", from: "b", to: "a", amount: 55, kind: "repay", at });
   assert.equal(L.net(r.entries, "a"), 0);
-  // Rounded to whole points; only the offered rates; a repayment never carries interest.
+  // Rounded to whole points; any whole percent up to 100; a repayment never carries interest.
   assert.equal(L.dueOf(33, 0.05), 35);
-  assert.throws(() => L.send(null, { id: "1", from: "a", to: "b", amount: 50, kind: "lend", at, rate: 0.15 }), /利子/);
+  assert.equal(L.dueOf(100, 0.15), 115);
+  assert.equal(L.dueOf(100, 1), 200);
+  assert.throws(() => L.dueOf(100, 1.01), /利子/);
+  assert.throws(() => L.dueOf(100, 0.155), /利子/);
+  assert.throws(() => L.dueOf(100, -0.1), /利子/);
   const repaid = L.send(L.send(null, { id: "1", from: "a", to: "b", amount: 10, kind: "lend", at }), { id: "2", from: "b", to: "a", amount: 5, kind: "repay", at, rate: 0.3 });
   assert.equal(repaid.entries[1].due, undefined);
   // An older record without `due` counts the amount.
@@ -189,17 +196,18 @@ test("repayments to the casino or the 運営 are never waiting to be collected, 
 });
 
 test("what is owed does not change when old loans and repayments are cut from a full record", () => {
-  // b borrows 1000 at 10% from a (1100 to repay), then repays 399 times by 1: the record is full.
+  // b borrows 1000 at 10% from a (1100 to repay), then repays 398 times by 1: the record is full.
   let r = null;
   const claim = (id) => (r.claimed = { ...(r.claimed || {}), [id]: 1 });
   r = L.send(r, { id: "l0", from: "a", to: "b", amount: 1000, kind: "lend", at, rate: 0.1 });
-  claim("l0");
-  for (let i = 0; i < 399; i++) {
+  r = L.accept(r, { id: "l0", by: "b", at });
+  claim("l0-ok");
+  for (let i = 0; i < 398; i++) {
     r = L.send(r, { id: "p" + i, from: "b", to: "a", amount: 1, kind: "repay", at });
     claim("p" + i);
   }
   assert.equal(r.entries.length, L.MAX_ENTRIES);
-  assert.equal(L.owedBy(r, "b"), 1100 - 399);
+  assert.equal(L.owedBy(r, "b"), 1100 - 398);
   const before = L.owedBy(r, "b");
   // More repayments push the loan (the oldest) out; what b owes is only reduced by what was paid.
   for (let i = 0; i < 5; i++) {
@@ -207,7 +215,7 @@ test("what is owed does not change when old loans and repayments are cut from a 
     claim("q" + i);
   }
   assert.equal(r.entries.length, L.MAX_ENTRIES);
-  assert.ok(!r.entries.some((e) => e.id === "l0"));
+  assert.ok(!r.entries.some((e) => e.id === "l0-ok"));
   assert.equal(L.owedBy(r, "b"), before - 5);
   assert.equal(L.net(r, "a"), before - 5);
   assert.equal(r.carry.a, -r.carry.b);
@@ -220,4 +228,43 @@ test("what is owed does not change when old loans and repayments are cut from a 
   // A tampered carry (not whole numbers) is ignored, and entries given as a bare list still work.
   assert.equal(L.net({ entries: [], carry: { a: "9999", b: 1.5 } }, "a"), 0);
   assert.equal(L.net([{ kind: "lend", from: "a", to: "b", amount: 5 }], "a"), 5);
+});
+
+test("a loan with interest is only an offer until the borrower accepts; a refused one goes back to the lender", () => {
+  let r = L.send(null, { id: "o1", from: "a", to: "b", amount: 100, kind: "lend", at, rate: 0.25 });
+  const offer = r.entries[0];
+  assert.deepEqual([offer.kind, offer.status, offer.rate, offer.due], ["lend-offer", "open", 0.25, 125]);
+  // Open: nothing owed, nothing for b to collect, and a's points are held (so it is never cut off the record).
+  assert.deepEqual([L.net(r, "a"), L.unclaimed(r, "b").length, L.unclaimed(r, "a").length], [0, 0, 0]);
+  assert.deepEqual(L.openFor(r, "b").map((e) => e.id), ["o1"]);
+  // The lender cannot accept their own offer.
+  assert.throws(() => L.accept(r, { id: "o1", by: "a", at }), /答えられません/);
+  // Declined: still nothing owed; a (not b) takes the 100 back, once.
+  const no = L.close(r, { id: "o1", by: "b", at });
+  assert.equal(no.entries[0].status, "declined");
+  assert.deepEqual([L.net(no, "a"), L.unclaimed(no, "b").length, L.unclaimed(no, "a").map((e) => e.amount)], [0, 0, [100]]);
+  assert.equal(L.unclaimed({ ...no, claimed: { o1: 1 } }, "a").length, 0);
+  // Taken back by the lender: the same.
+  const back = L.close(r, { id: "o1", by: "a", at });
+  assert.deepEqual([back.entries[0].status, L.unclaimed(back, "a").length], ["cancelled", 1]);
+  // It cannot be answered twice.
+  assert.throws(() => L.accept(no, { id: "o1", by: "b", at }), /終わって/);
+  assert.throws(() => L.close(L.accept(r, { id: "o1", by: "b", at }), { id: "o1", by: "b", at }), /終わって/);
+  // Accepted: owed with interest, and b collects the 100 that was lent.
+  const yes = L.accept(r, { id: "o1", by: "b", at });
+  assert.deepEqual([L.net(yes, "a"), L.owedBy(yes, "b"), L.unclaimed(yes, "b").map((e) => e.amount), L.unclaimed(yes, "a").length], [125, 125, [100], 0]);
+  // (The accepted offer becomes a real loan entry; the offer itself only says 成立.)
+  assert.deepEqual(yes.entries.map((e) => [e.kind, e.status]), [["lend-offer", "done"], ["lend", undefined]]);
+  // A loan without interest is settled at once (no status).
+  const plain = L.send(null, { id: "p1", from: "a", to: "b", amount: 40, kind: "lend", at });
+  assert.deepEqual([plain.entries[0].kind, plain.entries[0].status, L.net(plain, "a"), L.unclaimed(plain, "b").length], ["lend", undefined, 40, 1]);
+});
+
+test("a loan offer or a refused one is never cut off a full record before its points are settled", () => {
+  let r = L.send(null, { id: "o1", from: "a", to: "b", amount: 10, kind: "lend", at, rate: 0.1 });
+  for (let i = 0; i < L.MAX_ENTRIES - 1; i++) r = L.say(r, { id: "m" + i, from: "b", to: "a", text: "x", at });
+  r = L.send(r, { id: "later", from: "b", to: "a", amount: 1, kind: "give", at });
+  assert.ok(r.entries.some((e) => e.id === "o1"));
+  const no = L.close(r, { id: "o1", by: "b", at });
+  assert.ok(no.entries.some((e) => e.id === "o1"), "a refused offer stays until the lender has the points back");
 });

@@ -99,7 +99,9 @@ const { chromium } = require("playwright"),
         await page.waitForTimeout(900);
         const result = await fits();
         assert.equal(result.count, game === "sugoroku-bingo" ? 4 : 3, game);
-        assert.deepEqual([result.host, result.page, result.inside], [true, true, true], game + " " + viewport.width + "x" + viewport.height + " " + JSON.stringify(result));
+        // 記録 has four panels stacked one under another and scrolls inside its own list (the page does not move).
+        if (game === "sugoroku-bingo") assert.deepEqual([result.page, await page.evaluate(() => document.getElementById("rankingPodium").scrollHeight > document.getElementById("rankingPodium").clientHeight)], [true, true], game + " " + JSON.stringify(result));
+        else assert.deepEqual([result.host, result.page, result.inside], [true, true, true], game + " " + viewport.width + "x" + viewport.height + " " + JSON.stringify(result));
         // The seven buttons sit on one row and none is cut off.
         const row = await page.evaluate(() => {
           const boxes = [...document.querySelectorAll(".casino-game-switch button")].map((b) => b.getBoundingClientRect()),
@@ -110,6 +112,18 @@ const { chromium } = require("playwright"),
         assert.ok(row.height <= 40, "the switch is slim: " + row.height);
       }
     }
+    // A title opens the whole list, 1st place down (4th and below too); a row opens that person's record.
+    await page.locator('[data-casino-game="poker"]').click();
+    await page.locator("#rankingPodium .ranking-mini-title").first().click();
+    await page.locator(".ranking-all li").first().waitFor();
+    const allPlaces = await page.locator(".ranking-all li button > span:first-child").allInnerTexts();
+    assert.equal(allPlaces[0], "1位");
+    assert.deepEqual(allPlaces, allPlaces.map((_, i) => i + 1 + "位"));
+    await page.locator(".ranking-all li button").first().click();
+    await page.locator(".ranking-detail").waitFor();
+    await page.evaluate(() => window.closeLibraryDialog?.());
+    await page.evaluate(() => window.closeLibraryDialog?.());
+    await page.locator("dialog[open]").waitFor({ state: "detached" });
     await page.setViewportSize({ width: 393, height: 852 });
     await page.waitForTimeout(250);
     await page.locator('[data-casino-game="sugoroku"]').click();

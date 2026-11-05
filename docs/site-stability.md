@@ -2948,3 +2948,18 @@ Tests: the whole suite (no test reads these texts).
 **What the user saw.** Nothing yet; found in review of 10.23.04.00. The guide said a word earns points up to 10 times a day (500 in all), but both limits are counted per device (`StudyPoints.cardNum()` uses the device-local ledger), so another device counts on its own. The cross-device cap was left as it is on purpose (documented under 10.22.x: it protects storage).
 
 **Fix.** `usage-guide-content.js` says 「この端末では、…」. No code change.
+
+## 10.24.00.00 ランキングのタイトルから全順位／貸す利子は自由設定で相手が受けて成立／プロフィールの貸し借りを削除
+
+**What the owner said.** 「ランキングの4位以下も見れるように（タイトルを押したら）」「双六ビンゴ2個目のランキングが2行になってるのも嫌だ」「トークでポイントを貸した時に強制的に利子つけれるとやばくない？」「利子も自由設定できるように」「プロフィール開いた時のポイント貸し借り系は消す」
+
+**Ranking** (`ranking.js`, `style.css`): every podium title (学習 / ポイント / カジノ panels) is a button that opens the whole list, 1st place down, 4th and below too (up to 200); a row opens that person's record. すごろくビンゴの「記録」 shows its four podiums one under another in the scrolling list (like the points ranking) instead of a 2×2 grid.
+
+**Interest** (`point-loans-model.js`, `point-loans.js`):
+- Before: a lender picked 5/10/20/30% and the borrower owed it at once, without being asked.
+- Now: the lender can type any whole percent 0-100 (quick buttons stay). A loan WITH interest is an offer: a new entry kind `lend-offer` (`status: "open"`), so an old copy of the app, which does not know the kind, never treats it as a loan (found in the Opus review: with the same kind an old app would have let the borrower collect before accepting). The lender's points are taken out at once (held); nothing is owed and the borrower cannot collect. The borrower sees 「貸してくれる（利子…・返す額…）」 with 「断る」 / 「この条件で借りる」. On accept (`accept()`) the offer is `done` and a real `lend` entry (`<id>-ok`, same amount, rate, due) is added, owed and collected like any loan. On decline or when the lender takes it back, the lender's device puts the points back (`unclaimed()` includes a refused offer for the lender; `claimed[id]` makes it once; the lender's own 取り消す takes them back at once; toast 「…戻りました」). A loan without interest is instant as before. Old records (rate/due without an offer) count as before.
+- `trim()` / `waiting()` never cut an open offer or an unrefunded refused one off the record. Known, left as is: an old app that trims a full record could drop a refused offer before the lender has the points back (needs 400 entries in one pair).
+
+**Profile** (`people.js`): the 貸す/あげる/トーク buttons are gone from the profile. Tapping a user in the list still opens the talk.
+
+Tests: `tests/point-loans-model.test.cjs` (offer rules, free percent, refund once, trim), `tests/point-loans.smoke.cjs` (offer, free percent, accept, decline and cancel give the points back, no buttons in the profile), `tests/casino-ranking.smoke.cjs` (title opens the full list; 記録 scrolls).

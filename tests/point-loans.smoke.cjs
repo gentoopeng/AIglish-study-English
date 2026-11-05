@@ -90,9 +90,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const wallet = (id) => docs.get("users/" + id + "/learningPoints/main").balance;
     const dialogOf = (page) => page.locator("dialog.loans-dialog[open]");
 
-    // From B's profile, A chooses 貸す: the talk with B opens with the points form set to lend.
+    // The profile has no lending buttons any more; A opens the talk with B (as a tap on B in the list does) and picks 貸す.
     await a.evaluate(() => window.People.open("loan-b", { profile: true }));
-    await a.locator(".people-loans").getByRole("button", { name: "貸す", exact: true }).click();
+    assert.equal(await a.locator(".people-loans").count(), 0);
+    await a.evaluate(() => window.closeLibraryDialog?.());
+    await a.evaluate(() => window.PointLoans.person("loan-b", "loan-b", { mode: "lend" }));
     await dialogOf(a).getByRole("heading", { name: "loan-bさん" }).waitFor();
     // A talk screen in the points dialog's frame, tall enough to read.
     assert.equal(await dialogOf(a).evaluate((d) => d.classList.contains("study-points-dialog") && d.classList.contains("is-talk")), true);
@@ -200,11 +202,22 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await dialogOf(a).locator("[data-loan-amount]").inputValue(), "100");
     await dialogOf(a).getByRole("button", { name: "利子 10%" }).click();
     assert.match(await dialogOf(a).locator(".loans-preview").innerText(), /返してもらう額 110pt（利子 10pt）/);
+    // Any whole percent can be typed: 15% is 115; the quick button for 10% lets go.
+    await dialogOf(a).locator("[data-loan-rate]").fill("15");
+    assert.match(await dialogOf(a).locator(".loans-preview").innerText(), /返してもらう額 115pt（利子 15pt）/);
+    assert.equal(await dialogOf(a).getByRole("button", { name: "利子 10%" }).getAttribute("aria-pressed"), "false");
+    await dialogOf(a).getByRole("button", { name: "利子 10%" }).click();
     await dialogOf(a).getByRole("button", { name: "貸す", exact: true }).click();
-    await dialogOf(a).getByText("loan-bさんに 110pt 貸しています").waitFor();
-    assert.match(await dialogOf(a).locator(".talk-card span").last().innerText(), /100pt 貸した（利子10%・返す額110pt）/);
+    // It is an offer: nothing is owed, A's 100 is held, B has not received anything.
+    await dialogOf(a).locator(".talk-card span", { hasText: "貸したい（利子10%・返す額110pt）・返事待ち" }).waitFor();
+    assert.match(await dialogOf(a).locator(".loans-summary").innerText(), /貸し借りはありません/);
     assert.equal(wallet("loan-a"), 400);
+    assert.equal(wallet("loan-b"), 500);
     await b.evaluate(() => window.PointLoans.person("loan-a", "loan-a"));
+    await dialogOf(b).locator(".talk-card span", { hasText: "貸してくれる（利子10%・返す額110pt）・受けるか決めてください" }).waitFor();
+    assert.equal(wallet("loan-b"), 500);
+    // B accepts: now B owes 110 and has the 100.
+    await dialogOf(b).locator(".loans-request").getByRole("button", { name: "この条件で借りる" }).click();
     await dialogOf(b).getByText("loan-aさんから 110pt 借りています").waitFor();
     assert.equal(wallet("loan-b"), 600);
     await dialogOf(b).getByRole("button", { name: "ポイント" }).click();
@@ -215,6 +228,36 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(wallet("loan-b"), 490);
     await a.evaluate(() => window.PointLoans.collect());
     assert.equal(wallet("loan-a"), 510);
+    await a.evaluate(() => window.PointLoans.close());
+    await b.evaluate(() => window.PointLoans.close());
+
+    // Interest cannot be forced: an offer B refuses goes back to A, and so does one A takes back.
+    await a.evaluate(() => window.PointLoans.person("loan-b", "loan-b", { mode: "lend" }));
+    await dialogOf(a).locator("[data-loan-amount]").fill("50");
+    await dialogOf(a).locator("[data-loan-rate]").fill("40");
+    await dialogOf(a).getByRole("button", { name: "貸す", exact: true }).click();
+    await dialogOf(a).locator(".talk-card span", { hasText: "貸したい（利子40%・返す額70pt）・返事待ち" }).waitFor();
+    assert.equal(wallet("loan-a"), 460);
+    await b.evaluate(() => window.PointLoans.person("loan-a", "loan-a"));
+    await dialogOf(b).locator(".loans-request").getByRole("button", { name: "断る" }).click();
+    await dialogOf(b).locator(".talk-card span", { hasText: "断った" }).waitFor();
+    assert.match(await dialogOf(b).locator(".loans-summary").innerText(), /貸し借りはありません/);
+    assert.equal(wallet("loan-b"), 490);
+    // A opens the talk again and takes the 50 back, once.
+    await a.evaluate(() => window.PointLoans.person("loan-b", "loan-b"));
+    await dialogOf(a).locator(".talk-card span", { hasText: "断られた" }).waitFor({ timeout: 5000 }).catch(async (e) => { console.log("A SEES:", await dialogOf(a).innerText()); throw e; });
+    await a.waitForFunction(() => window.StudyPoints.balance() === 510, null, { timeout: 8000 });
+    assert.equal(wallet("loan-a"), 510);
+    // Taken back by the lender.
+    await dialogOf(a).getByRole("button", { name: "ポイント" }).click();
+    await dialogOf(a).getByRole("tab", { name: "貸す" }).click();
+    await dialogOf(a).locator("[data-loan-amount]").fill("30");
+    await dialogOf(a).getByRole("button", { name: "利子 5%" }).click();
+    await dialogOf(a).getByRole("button", { name: "貸す", exact: true }).click();
+    await dialogOf(a).getByRole("button", { name: "取り消す" }).click();
+    await a.waitForFunction(() => window.StudyPoints.balance() === 510, null, { timeout: 8000 });
+    assert.equal(wallet("loan-a"), 510);
+    assert.match(await dialogOf(a).locator(".loans-summary").innerText(), /貸し借りはありません/);
     await a.evaluate(() => window.PointLoans.close());
     await b.evaluate(() => window.PointLoans.close());
 
@@ -377,7 +420,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await a.evaluate(() => window.PointLoans.close());
     t0 = Date.now();
     await a.evaluate(() => void window.People.open("loan-b", { profile: true }));
-    await a.locator(".people-loans").waitFor({ timeout: 1500 });
+    await a.locator(".ranking-detail, .people-profile, dialog[open] dl").first().waitFor({ timeout: 1500 });
     assert.ok(Date.now() - t0 < 1500, "profile in " + (Date.now() - t0) + "ms");
     await a.evaluate(() => (window.fbGetDoc = window.__fastGet));
     await a.evaluate(() => window.closeLibraryDialog?.());
