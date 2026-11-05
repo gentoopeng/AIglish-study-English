@@ -2905,3 +2905,13 @@ Tests: `tests/casino-model.test.cjs` (ties are draws; three child throws; a chil
 **Fix.** On the normal wheel 4 of the ×0 slots became ×0.5 (×0 is 15 of 40 now, 20 of 40 with the hidden bonus slot counted before). To keep the return, the bonus wheel pays less: ×5, ×6, ×8, ×9, ×11, ×13, ×15, ×17, ×19 and five balls in a row (three slots); it is still 1 in 40. Measured now: 56.4% nothing, 13.6% a little back, 29.9% the bet or more; return 0.930 (as before this change), balls per roll 0.155.
 
 Tests: `tests/sugoroku-model.test.cjs` (×0.5 is on the wheel; the bonus wheel holds ×5, ×11, ×19 and a five-ball run; ×11 pays 1,100), `tests/sugoroku.smoke.cjs` (the bonus wheel's ×11 pays 1,100).
+
+## 10.23.01.00 すごろくビンゴのリーチとビンゴを「あなたへ」のお知らせに出す
+
+**What the owner said.** 「リーチやビンゴなどをお知らせに出してください。今何リーチ中とか、〜がビンゴとか」
+
+**Now.** In the shared すごろくビンゴ (`sugoroku.js`, `notify()`), while the card is open or after a roll:
+- 「いま N 本リーチ中」 with the numbers still needed. One notice that replaces itself (id `sugoroku:reach`); it is written only when the reach count or the needed numbers change (stamp in localStorage), so it does not repeat.
+- Another player's bingo / jackpot in the shared log becomes 「〇〇さんが DOUBLE BINGO」 (at most 5 per time, own entries skipped). The first visit only records the latest log time, so old entries are not replayed.
+
+Tests: `tests/sugoroku-shared.smoke.cjs` (exactly one reach notice; another player's bingo gives one notice).

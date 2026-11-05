@@ -424,6 +424,7 @@
     const last = news[news.length - 1];
     if (last) say((last.n || "だれか") + "さんが " + logText(last), "is-hot");
     seeLog();
+    notify();
     if (found.card.owed?.[api.uid()] > 0) setTimeout(collectNow, last ? 1500 : 0);
   }
 
@@ -431,6 +432,39 @@
   const lastLog = () => (view?.log || []).reduce((t, e) => Math.max(t, e.at), view?.seen || 0);
   const seeLog = () => view && (view.seen = lastLog());
   const logText = (e) => (e.t === "bingo" ? (e.c === 2 ? "DOUBLE BINGO" : e.c === 3 ? "TRIPLE BINGO" : e.c > 3 ? e.c + " BINGO" : "BINGO") : LOG_NAMES[e.t]);
+
+  // ---- Notices ---------------------------------------------------------------------------
+  // What happens on the shared card goes into the お知らせボックス, once each: another player's BINGO or
+  // jackpot, and how many lines are one number from done (one notice that is replaced as it changes).
+  // Only with points on the shared card; practice chips and a card of your own say nothing.
+  function notify() {
+    if (!view || view.busy || !view.online || !api.real() || !window.PersonalNotices) return;
+    const me = api.uid();
+    try {
+      const last = (view.log || []).reduce((t, e) => Math.max(t, e.at), 0),
+        key = "aiglish_sugoroku_noticed_" + me,
+        seen = localStorage.getItem(key);
+      // The first time: what is already in the log is old news.
+      if (seen === null) localStorage.setItem(key, String(last));
+      else {
+        const news = (view.log || []).filter((e) => e.at > Number(seen) && e.id !== me).slice(-5);
+        for (const e of news)
+          window.PersonalNotices.add(me, { id: "sugoroku-log:" + e.id + ":" + e.at, title: (e.n || "だれか") + "さんが " + logText(e), body: "すごろくビンゴ", amount: 0 });
+        if (last > Number(seen)) localStorage.setItem(key, String(last));
+      }
+      const reaches = S.reach(view.card),
+        wanted = [...new Set(reaches.map((line) => view.card.cells[S.LINES[line].find((c) => !view.card.owners[c])]))].sort((a, b) => a - b),
+        sign = reaches.length + ":" + wanted.join(","),
+        signKey = "aiglish_sugoroku_reach_" + me;
+      if (localStorage.getItem(signKey) !== sign) {
+        localStorage.setItem(signKey, sign);
+        if (reaches.length)
+          window.PersonalNotices.add(me, { id: "sugoroku:reach", title: "いま " + reaches.length + " 本リーチ中", body: "あと1つで揃う番号：" + wanted.slice(0, 8).join("・") + (wanted.length > 8 ? "…" : ""), amount: 0 });
+      }
+    } catch (error) {
+      console.warn("[sugoroku] notice", error);
+    }
+  }
 
   // ---- Screen ----------------------------------------------------------------------------
   let view = null;
@@ -471,6 +505,7 @@
       get: () => busy,
       set: (value) => {
         busy = !!value;
+        if (!busy) setTimeout(notify, 0);
         if (!busy && view?.stale) setTimeout(catchUp, 0);
       },
       enumerable: true,
@@ -479,6 +514,7 @@
     seeLog();
     draw();
     listen();
+    setTimeout(notify, 0);
     // A game played further on another device takes over, if nothing is going on here.
     if (kept)
       cloudGame.then((remote) => {

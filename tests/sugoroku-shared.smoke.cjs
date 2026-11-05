@@ -89,10 +89,10 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 2120);
     assert.match(await screen.locator(".sg-say").innerText(), /分け前　\+120pt/);
     // ... and the お知らせボックス has a notice for it, once.
-    assert.deepEqual(
-      await page.evaluate(() => PersonalNotices.list("sg-a").map((n) => [n.title, n.amount])),
-      [["ほかの人のビンゴの分け前 +120pt", 120]],
-    );
+    const notes = await page.evaluate(() => PersonalNotices.list("sg-a").map((n) => [n.title, n.amount]));
+    assert.deepEqual(notes.filter(([title]) => !/リーチ/.test(title)), [["ほかの人のビンゴの分け前 +120pt", 120]]);
+    // ... and how many lines are one number from done, as one notice (replaced when it changes).
+    assert.equal(notes.filter(([title]) => /^いま \d+ 本リーチ中$/.test(title)).length, 1);
     assert.deepEqual(await page.evaluate(() => window.__store["shared/sugoroku_live"].owed), {});
     assert.equal((await saved()).shared, 120);
     await page.waitForFunction(() => !document.querySelector(".sg-go").disabled);
@@ -265,6 +265,16 @@ const SAVE = "aiglish_sugoroku_sg-a",
     });
     await settled();
     await page.waitForFunction((at) => document.querySelectorAll(".sg-cell")[at]?.getAttribute("data-initial") === "C", cOn, { timeout: 5000 });
+
+    // Another player's BINGO on the shared card goes into the お知らせボックス, once.
+    await page.evaluate(() => {
+      const card = window.__store["shared/sugoroku_live"];
+      card.log = [...(card.log || []), { t: "bingo", id: "sg-c", n: "C", c: 2, at: Date.now() }];
+      window.__emit();
+      window.__emit();
+    });
+    await page.waitForFunction(() => PersonalNotices.list("sg-a").some((n) => n.title === "Cさんが DOUBLE BINGO"), null, { timeout: 5000 });
+    assert.equal(await page.evaluate(() => PersonalNotices.list("sg-a").filter((n) => n.title === "Cさんが DOUBLE BINGO").length), 1);
 
     // Who else is playing: opening the screen marked A as playing. Another player who rolled
     // just now shows above the card; one who stopped five minutes ago, and A, do not.
