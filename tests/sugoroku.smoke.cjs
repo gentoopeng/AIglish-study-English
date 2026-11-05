@@ -115,9 +115,9 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.equal(round.held[0], true);
     const chips = await page.evaluate(() => window.Casino.balance());
     const wonBefore = (await saved()).won;
-    // In すごろくビンゴ the player throws twice in all (one re-roll), the dealer up to three times.
-    assert.equal(round.most, 2);
-    assert.match(await game.locator(".sg-game-line").innerText(), /振り直しはあと1回。ディーラーは2回まで/);
+    // In すごろくビンゴ the player throws as often as the dealer: three throws in all (two re-rolls).
+    assert.equal(round.most, 3);
+    assert.match(await game.locator(".sg-game-line").innerText(), /振り直しはあと2回。ディーラーは2回まで/);
     await game.locator('[data-sg-game="stand"]').click();
     const outcome = (await saved()).pending.round.outcome;
     // The dealer's throws land one by one, then the result shows and the board goes on by
@@ -129,7 +129,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const ended = await saved();
     assert.equal(ended.pending, null);
     assert.equal((await page.evaluate(() => window.Casino.balance())) - chips, ended.won - wonBefore, "paid once");
-    const paid = { win: 125, push: 50, lose: 13 }[outcome];
+    const paid = { win: 100, push: 50, lose: 0 }[outcome];
     assert.ok((await page.evaluate(() => window.Casino.balance())) >= chips + paid, outcome);
 
     // おまかせ plays a blackjack round by itself and goes on.
@@ -149,7 +149,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.equal(auto.pending, null);
 
     // チンチロ: the parent's throws are shown one at a time (with the throw number), then the
-    // player throws (at most twice), and the board goes on by itself.
+    // player throws (at most three times, as the parent), and the board goes on by itself.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
@@ -161,7 +161,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await game.locator(".sg-hand span", { hasText: /^親.*投目/ }).waitFor();
     const parentThrows = (await saved()).pending.round.parent.rolls.length;
     assert.ok(parentThrows >= 1 && parentThrows <= 3);
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 3; i++) {
       const throwBtn = game.locator('[data-sg-game="roll"]');
       if (!(await throwBtn.isVisible().catch(() => false))) {
         await page.waitForTimeout(800);

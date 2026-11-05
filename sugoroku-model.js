@@ -5,7 +5,7 @@
 //   normal   – a wheel of multiples of the bet (×0.25 to −×1) and ball, game and 確変 slots;
 //              a 確変 slot (1 in 10) spins the 確変 wheel: ×2 to ×10, or two balls in a row
 //   event    – a four-way wheel: blackjack, dice poker or chinchiro is played once for the bet
-//              (a win also gives a ball, a loss gives back a quarter), or a sure ball (the bet back)
+//              (a win also gives a ball, a loss gives nothing back), or a sure ball (the bet back)
 //   accident – a wheel: lose 0–2× the bet more, go back three squares, or go back to START
 // Passing START gives a ball, nothing else.
 // The 7×7 bingo card (48 numbers from 1–100, the middle free) is shared by every player and
@@ -80,7 +80,7 @@
     ]),
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
-    eventPay: { lose: 0.25, push: 1, sure: 1 },
+    eventPay: { lose: 0, push: 1, sure: 1 },
     // Balls are drawn from 1–NUMBERS; the card holds 48 of them. A ball not on the card (or
     // already open) pays this many times the bet instead.
     numbers: 100,

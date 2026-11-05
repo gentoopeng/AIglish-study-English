@@ -187,28 +187,31 @@ test("chinchiro rolls up to three times, and settles against the parent", () => 
   // Otherwise points compare, and the child's own big or bad hands count.
   assert.equal(C.chinSettle(H([3, 3, 4]), H([5, 5, 6])), 1);
   assert.equal(C.chinSettle(H([3, 3, 4]), H([5, 5, 2])), -1);
-  assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 1, 4])), -1, "the same point goes to the parent");
+  assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 1, 4])), 0, "the same point is a draw");
   assert.equal(C.chinSettle(none.hand, H([2, 2, 1])), 1);
-  assert.equal(C.chinSettle(none.hand, none.hand), -1);
+  assert.equal(C.chinSettle(none.hand, none.hand), 0, "no hand against no hand is a draw");
   assert.equal(C.chinSettle(H([3, 3, 4]), H([2, 2, 2])), 3);
   assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 2, 3])), -2);
   assert.equal(C.chinSettle(H([3, 3, 4]), none.hand), -1);
   assert.equal(C.chinVs(H([6, 6, 6]), H([4, 5, 6])), 1);
   assert.equal(C.chinVs(H([2, 2, 3]), H([1, 1, 3])), 0);
   assert.equal(C.chinTurn(rng(3)).done, true);
-  // A child throws at most twice: two throws of 1-3-5 (no hand) end the turn as 目なし.
+  // A child throws at most three times, as the parent: three throws of 1-3-5 (no hand) end the turn as 目なし.
+  assert.equal(C.CHILD_THROWS, 3);
   let k = 0;
   const noHand = () => [0, 2, 4][k++ % 3];
-  let c = C.chinNext(C.chinNext(C.chinStart(), noHand, C.CHILD_THROWS), noHand, C.CHILD_THROWS);
+  let c = C.chinNext(C.chinNext(C.chinNext(C.chinStart(), noHand, C.CHILD_THROWS), noHand, C.CHILD_THROWS), noHand, C.CHILD_THROWS);
   assert.equal(c.done, true);
-  assert.equal(c.rolls.length, 2);
+  assert.equal(c.rolls.length, 3);
   assert.equal(c.hand.name, "目なし");
 });
 
-test("against the computer parent a child wins about 4 times in 10", () => {
+test("against the computer parent a child wins about as often as the parent does", () => {
   const random = rng(77);
-  let wins = 0;
-  const N = 60000;
+  let wins = 0,
+    losses = 0,
+    net = 0;
+  const N = 120000;
   for (let i = 0; i < N; i++) {
     const parent = C.chinTurn(random).hand;
     let m = C.chinParentDecides(parent);
@@ -218,8 +221,34 @@ test("against the computer parent a child wins about 4 times in 10", () => {
       m = C.chinSettle(parent, child.hand);
     }
     if (m > 0) wins++;
+    else if (m < 0) losses++;
+    net += m;
   }
-  assert.ok(Math.abs(wins / N - 0.4) < 0.025, "win rate " + (wins / N).toFixed(3));
+  // Even: about 44% to 45% each (the rest are draws); only the parent's decisive hand being settled first
+  // leaves it a small edge (a few percent of the bet).
+  assert.ok(Math.abs(wins / N - losses / N) < 0.02, "win " + (wins / N).toFixed(3) + " lose " + (losses / N).toFixed(3));
+  assert.ok(wins / N > 0.42 && wins / N < 0.47, "win rate " + (wins / N).toFixed(3));
+  assert.ok(net / N > -0.05 && net / N < 0.01, "net per bet " + (net / N).toFixed(3));
+});
+
+test("dice poker is even: the same strategy for both sides, the same number of throws, wins about as often as it loses", () => {
+  const random = rng(31);
+  let wins = 0,
+    losses = 0;
+  const N = 60000;
+  for (let i = 0; i < N; i++) {
+    let round = C.diceStart(1, random);
+    while (C.diceCanRoll(round)) {
+      const keep = C.dealerKeeps(round.dice);
+      if (keep.every(Boolean)) break;
+      keep.forEach((k, at) => round.held[at] !== k && (round = C.diceToggle(round, at)));
+      round = C.diceReroll(round, random);
+    }
+    const end = C.diceStand(round, random);
+    if (end.outcome === "win") wins++;
+    else if (end.outcome === "lose") losses++;
+  }
+  assert.ok(Math.abs(wins - losses) / N < 0.02, "win " + wins + " lose " + losses);
 });
 
 test("roulette pays by the spot and zero loses outside bets", () => {

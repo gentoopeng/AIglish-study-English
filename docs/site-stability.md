@@ -2874,3 +2874,18 @@ Tests: `tests/copy-follow.test.cjs` — the mixed word's `meaning` follows its r
 **Fix.** ×5, ×1.5 and ×1 are on the normal wheel again (3 slots of 40 that pay the bet back or more, besides the games and events), and the bonus wheel pays less for it: ×5, ×8, ×10, ×12, ×15 (two), ×18, ×20, ×25 and five balls in a row (three slots). The hidden bonus slot is still 1 in 40. Monte Carlo (3 players, jackpots excluded, 900,000 rolls each): return 0.854–0.862 (0.86 at the start), balls per roll 0.144 (0.146).
 
 Tests: `tests/sugoroku-model.test.cjs` — the normal wheel has ×5, ×1.5, ×1 and at least three slots paying ×1 or more beside the hidden one; the bonus wheel holds ×10 and ×25 and a five-ball run.
+
+## 10.22.98.00 チンチロとダイスポーカーを公平なルールに
+
+**What the owner said.** 「ダイス系の確率おかしい」「普通に確率通りにしてほしい」 (the dice themselves are fair: 3,000,000 throws, each face 16.7%, checked; the rules around them were not).
+
+**What was uneven.**
+- チンチロ: the parent threw up to 3 times, a child only 2, and ties went to the parent: a child won about 39% and lost 61% (casino and すごろくビンゴ alike).
+- ダイスポーカー in すごろくビンゴ: the player threw twice (one re-roll) against the dealer's three, with a win paying 1.5× to make up. (The casino's own ダイスポーカー already gave both sides three throws: the same strategy wins 49.6% and loses 49.7%.)
+
+**Now.**
+- `casino-model.js`: `CHILD_THROWS` is 3 (as the parent). A tie (the same point, or no hand against no hand) is a draw; the hands pay the same whichever side makes them. Measured with the shipped rules: a child wins 44.4%, loses 45.2%, draws 10.5% (net −2.5% of the bet: the parent's decisive hand is settled first, as at a real table).
+- すごろくビンゴ: its ダイスポーカー gives the player three throws like the dealer and pays the bet (not 1.5×); its チンチロ follows the casino's rule. The 「負けると4分の1が戻る」 on an EVENT square (made to offset the uneven games) is gone: a lost game gives nothing back (`eventPay.lose` 0). Monte Carlo with a sensible strategy for every game (3 players, jackpots excluded, 900,000 rolls each): return 0.920 before, 0.930 now (0.940 if the refund were kept); balls per roll 0.1533 → 0.1554.
+- Texts: the rules in the game and the usage guide say the new rules.
+
+Tests: `tests/casino-model.test.cjs` (ties are draws; three child throws; a child wins and loses about as often; dice poker with the same strategy for both sides wins about as often as it loses), `tests/sugoroku-model.test.cjs` (a lost event game pays nothing), `tests/sugoroku.smoke.cjs` (three throws each, no 1.5×).

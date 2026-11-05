@@ -52,7 +52,7 @@
     "ログインしてクラウドにつながっているときはポイントを賭けます。ゲストやオフラインのときは練習チップで、ジャックポットは演出だけです。",
     "1回100（ポイントまたは練習チップ）でサイコロを振ります（額はみんな同じです）。",
     "通常マス：ルーレットで ×5〜×0 のどれかが額に掛かって戻ります。「×0」と書いてある枠のうち1つ（40回に1回ほど）は、止まると画面が金色に光って揺れ、「BONUS」ルーレットが回ります。×5〜×25の大きな配当、またはボール5個連続のどれかです（ボールでビンゴが完成すると、そのままビンゴのルーレットへ進みます）。「−×0.5」「−×1」は、額とは別にその分が引かれます。「BJ」「DICE」「チンチロ」ならそのゲームを1回（勝てば配当、負けると賭けた分はなくなり、ボールは出ません）。「●（ボール）」ならボールが出ます。「STOP」「H&L」ならミニゲーム（ストップ・ハイ＆ロー）で、うまくいけば額の1.25〜2倍です。",
-    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると4分の1が戻ります。ボール確定はボールと額そのままです。サイコロはどちらも本当に振っていて、相手の目も1投ずつ見えます。ダイスポーカーはあなたが2回（振り直し1回）・ディーラーが3回まで振れるので、勝つと1.5倍です。チンチロは親が3回・あなたが2回まで振れます。結果が出ると、そのまま次に進みます。",
+    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。ゲームに勝つと配当とボール、引き分けは額が戻り、負けると賭けた分はなくなります。ボール確定はボールと額そのままです。サイコロはどちらも本当に振っていて、相手の目も1投ずつ見えます。ダイスポーカーはあなたもディーラーも3回まで（振り直し2回）振れて、勝つと賭けた額と同じだけ増えます。チンチロは親もあなたも3回まで振れて、同じ点は引き分けです。結果が出ると、そのまま次に進みます。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "1周（100マス）してSTARTを通るとボールが1つ出ます。",
     "ビンゴカードはみんなで共通です。ボールは1〜100から抽選で、カードにあってまだ誰のボールもない番号ならそこに自分のボール（アイコン）が入ります。カードにない番号や、もうボールのある番号なら額の2倍がもらえます。1列そろえるとビンゴ賞金（1,000）と、ビンゴルーレット（掛け金×10・×20・×50、10秒ぴったり、連打、サイコロ、暗算（ミニゲームは点数の2倍）、JACKPOT×2、SUPER JACKPOT CHANCE）。SUPER JACKPOT CHANCEはSUPER JACKPOT×2・JACKPOT・連打EX・もう一回の5つ。自分のボールだけでそろえると賞金が1.1倍、2列・3列を同時にそろえると賞金と×10〜×50が3倍・4倍です（ミニゲームとジャックポットには掛かりません）。そろった列は新しい番号になり、ボールも消えます。",
@@ -1271,7 +1271,7 @@
     view.busy = true;
     hud();
     const box = node("div", "sg-game");
-    box.append(node("p", "sg-wheel-title", GAME_NAMES[p.game] + "　" + fmt(p.bet) + api.unit()), node("p", "sg-game-rule", p.plain ? "普通のマスのゲーム：勝てば配当、負けると賭けた分はなくなります（ボールは出ません）。" : "勝てば配当とボール。負けると4分の1が戻ります。"));
+    box.append(node("p", "sg-wheel-title", GAME_NAMES[p.game] + "　" + fmt(p.bet) + api.unit()), node("p", "sg-game-rule", p.plain ? "普通のマスのゲーム：勝てば配当、負けると賭けた分はなくなります（ボールは出ません）。" : "勝てば配当とボール。負けると賭けた分はなくなります。"));
     const table = node("div", "sg-game-table"),
       actions = node("div", "sg-game-actions"),
       line = node("p", "sg-game-line");
@@ -1412,9 +1412,9 @@
           again.disabled = r.rolls >= 3 || r.held.every(Boolean);
           button("これで勝負", () => stand(), "stand");
         } else {
-          // The player throws fewer times than the dealer, so a win pays 1.5 times the bet.
-          line.textContent = r.outcome === "win" ? "勝ち（1.5倍）" : r.outcome === "push" ? "引き分け" : "負け";
-          end(r.outcome === "win" ? 1.5 : r.net / p.bet);
+          // Fair: the same number of throws as the dealer, the same hands, a win pays the bet.
+          line.textContent = r.outcome === "win" ? "勝ち" : r.outcome === "push" ? "引き分け" : "負け";
+          end(r.net / p.bet);
         }
       };
       // How many of the dealer's throws are on the table (null: all of them, as after a reload).
@@ -1443,7 +1443,7 @@
         return true;
       };
       redraw = draw;
-      if (!p.round) keepRound((p.round = C.diceStart(p.bet, random, 2)));
+      if (!p.round) keepRound((p.round = C.diceStart(p.bet, random)));
       draw();
     } else {
       // How many of the parent's throws are on the table (null: all of them).
@@ -1464,7 +1464,7 @@
         }
         actions.replaceChildren();
         if (!parentDone) {
-          line.textContent = "親が振っています…（親は3回まで、あなたは2回まで）";
+          line.textContent = "親が振っています…（親もあなたも3回まで）";
           return;
         }
         const early = C.chinParentDecides(r.parent.hand);
