@@ -291,9 +291,9 @@
   // ピンゾロ (1-1-1, 5×) > ゾロ目 (three the same, 3×) > シゴロ (4-5-6, 2×) > a point (two the
   // same: the third die is the point, 6 high) > 目なし (no hand in three rolls) > ヒフミ (1-2-3,
   // pays 2×). The parent (the dealer) rolls first; a decisive parent hand settles at once.
-  // The house keeps an edge the way real tables do: the parent throws up to three times but a
-  // child only twice, ties go to the parent, and a parent with no hand still has to be beaten.
-  // A child wins about 4 times in 10.
+  // Fair to both: the parent and the child throw up to three times each, a tie is a draw, and the
+  // hands pay the same whichever side makes them. (The parent's decisive hand is settled first, the
+  // one small edge left to the parent; a child wins about as often as the parent does.)
   function chinHand(dice) {
     const d = dice.slice().sort((a, b) => a - b),
       key = d.join("");
@@ -308,7 +308,7 @@
   const NO_HAND = { rank: 0, name: "目なし", mult: 1 };
   const chinThrow = (random) => [roll(random), roll(random), roll(random)];
   const PARENT_THROWS = 3,
-    CHILD_THROWS = 2;
+    CHILD_THROWS = 3;
   // One more throw for a turn: { rolls: [[a, b, c] …], hand, done }, up to `most` throws.
   function chinNext(turn, random, most = PARENT_THROWS) {
     if (turn.done) return turn;
@@ -336,9 +336,9 @@
     if (early !== null) return early;
     if (child.rank >= 80) return child.mult;
     if (child.rank === -10) return -2;
-    if (child.rank === 0) return -1;
-    // The same point, or no hand against no hand, goes to the parent.
-    return child.rank > parent.rank ? 1 : -1;
+    // The stronger point wins; the same point (or no hand against no hand) is a draw. A child with no
+    // hand against a parent with a point is lower, so it loses.
+    return child.rank > parent.rank ? 1 : child.rank < parent.rank ? -1 : 0;
   }
   // One against one: simply the stronger hand, the same hand a tie.
   const chinVs = (a, b) => Math.sign(a.rank - b.rank);

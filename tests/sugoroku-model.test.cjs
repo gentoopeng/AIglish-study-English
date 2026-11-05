@@ -185,7 +185,7 @@ test("an event square waits for its game; win, push and loss pay as agreed", () 
   assert.equal(S.settle(out.state, card, 1.5, seq([0])).events[0].amount, 250);
   assert.equal(S.settle(out.state, card, 0, seq([0])).gain, 100);
   const lose = S.settle(out.state, card, -2, seq([0]));
-  assert.equal(lose.gain, 25);
+  assert.equal(lose.gain, 0, "a lost event game gives nothing back (the games are even now)");
   assert.ok(!lose.events.some((e) => e.t === "ball"));
   const sure = S.roll(s, card, 100, seq([0, 3, draw(closedOn(card))]));
   assert.equal(sure.state.pending, null);
