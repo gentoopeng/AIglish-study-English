@@ -3069,3 +3069,11 @@ Tests: `tests/sugoroku-model.test.cjs` (トリプルダイス, the wheel without
 - Monte Carlo (3 players, 300,000 rolls each, same bet for all): return without jackpots 0.916 / 0.918 / 0.914 at 50 / 100 / 200; jackpot rolls per 1,000 rolls 0.54 / 1.05 / 1.78, i.e. about the same per point bet (0.0108 / 0.0105 / 0.0089).
 
 Tests: `tests/sugoroku-model.test.cjs` (every payout scales, the bingo prize follows the balls' bets, mini-game scores, the jackpot share per bet, an old waiting game), `tests/sugoroku.smoke.cjs` (three buttons, 100 by default, a roll at 200 takes 200 and a ×5 slot pays 1,000).
+
+## 10.31.00.00 すごろくビンゴ: クラウドとの照合が終わる前にサイコロを振れないようにした（Codexの指摘）
+
+**What the user saw.** Nothing yet; found by the Codex review of #390. With a local save on this device and an item just bought on another, a roll could start before the cloud copy (`cloudGame`) came back. The takeover was skipped because the screen was busy, and the roll saved a stale state whose `rev` could equal the purchase's, so the bought item was lost.
+
+**Now** (`sugoroku.js`): while the cloud copy is being compared (`view.syncing`), the roll button stays off; it is released as soon as the load ends (also when it fails or returns nothing).
+
+Tests: `tests/sugoroku.smoke.cjs`, `tests/casino.smoke.cjs` (the existing flows still roll after the load).
