@@ -499,9 +499,13 @@
   async function start() {
     return update(session.code, (room) => {
       if (room.host !== uid() || room.status !== "waiting") return null;
-      if (Object.keys(room.players).filter((id) => !room.players[id].left).length < 3) throw Error("3人以上そろってから始められます。");
+      // Whoever left while waiting is not at the table; the seats close up.
+      for (const id of Object.keys(room.players)) if (room.players[id].left) delete room.players[id];
+      const seated = seatOrder(room);
+      if (seated.length < 3) throw Error("3人以上そろってから始められます。");
+      seated.forEach((id, i) => (room.players[id].seat = i));
       // The table is as large as the people sitting at it.
-      room.settings.seats = Object.keys(room.players).length;
+      room.settings.seats = seated.length;
       room.status = "playing";
       room.startedAt = Date.now();
       return room;
@@ -515,7 +519,9 @@
       try {
         if (host && room.status === "waiting") await update(code, (r) => ((r.status = "closed"), r));
         else if (host && room.status === "playing") await update(code, (r) => ((r.status = "closed"), (r.abandoned = true), r));
-        else if (room.status === "playing" || room.status === "waiting") await update(code, (r) => (r.players[uid()] && (r.players[uid()].left = true), r));
+        // Before the start the seat is simply given up; during the game the dealer plays on for the player.
+        else if (room.status === "waiting") await update(code, (r) => (r.status === "waiting" ? (delete r.players[uid()], r) : null));
+        else if (room.status === "playing") await update(code, (r) => (r.players[uid()] && (r.players[uid()].left = true), r));
       } catch (error) {
         console.warn("[daifugo] leave", error);
       }

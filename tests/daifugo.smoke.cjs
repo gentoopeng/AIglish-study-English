@@ -237,6 +237,13 @@ const { chromium } = require("playwright"),
     await screenA.locator(".df-code").waitFor();
     const code2 = (await screenA.locator(".df-code").innerText()).trim();
     assert.notEqual(code2, code);
+    // Somebody who leaves while the table is waiting is no longer at the table.
+    await b.evaluate(() => window.Daifugo.open());
+    await b.locator("dialog.df-screen[open] .df-join input").fill(code2);
+    await b.locator("dialog.df-screen[open] .df-waiting").waitFor();
+    await b.getByRole("button", { name: "テーブルを出る" }).click();
+    await a.waitForFunction(() => Object.keys(window.DaifugoTable.view().room.players).length === 1);
+    assert.deepEqual(Object.keys(docs.get("pokerRooms/" + code2).players), ["df-a"]);
     for (const page of [b, c]) {
       await page.evaluate(() => window.Daifugo.open());
       await page.locator("dialog.df-screen[open] .df-join input").fill(code2);
