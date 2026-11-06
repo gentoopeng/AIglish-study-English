@@ -520,8 +520,15 @@
         if (host && room.status === "waiting") await update(code, (r) => ((r.status = "closed"), r));
         else if (host && room.status === "playing") await update(code, (r) => ((r.status = "closed"), (r.abandoned = true), r));
         // Before the start the seat is simply given up; during the game the dealer plays on for the player.
-        else if (room.status === "waiting") await update(code, (r) => (r.status === "waiting" ? (delete r.players[uid()], r) : null));
-        else if (room.status === "playing") await update(code, (r) => (r.players[uid()] && (r.players[uid()].left = true), r));
+        // (Decided inside the transaction: the table may have started a moment ago.)
+        else
+          await update(code, (r) => {
+            if (!r.players[uid()]) return null;
+            if (r.status === "waiting") delete r.players[uid()];
+            else if (r.status === "playing") r.players[uid()].left = true;
+            else return null;
+            return r;
+          });
       } catch (error) {
         console.warn("[daifugo] leave", error);
       }

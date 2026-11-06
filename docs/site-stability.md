@@ -2989,3 +2989,9 @@ Tests: `tests/daifugo-model.test.cjs` (every rule above, the payouts add up to 0
 **Fix.** `leave()` on a waiting table deletes the player's entry; `start()` also drops anyone still marked `left` and closes the seats up (0, 1, 2 …). Test: `tests/daifugo.smoke.cjs` (a player who joins and leaves is gone from the document; the game then starts with the three who stayed).
 
 **Not changed (Codex also said the first deal should start from the spade-3 holder).** The rule book's 「スペードの席」 is the first seat (each seat has a suit), not the holder of the spade 3. The first game starts from the first seat (the player who made the table); later games from the 大貧民 of the game before. The wording in `docs/daifugo-rules.md` is clearer now.
+
+## 10.25.02.00 大富豪: 開始の瞬間に抜けた人が「いる」ままになっていた（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.25.01.00. If a player pressed 「テーブルを出る」 at the very moment the host started the table, the leave step (decided from the screen's last copy of the table, which still said waiting) found the table already playing and did nothing, so the player stayed "present" and the dealer waited the full think time on each of their turns.
+
+**Fix.** `leave()` decides inside the transaction: waiting → the seat is given up; playing → the player is marked left (the dealer plays on for them quickly); otherwise nothing.
