@@ -1,0 +1,162 @@
+/* 大富豪: a felt table in the app's navy and ivory. */
+html body dialog.df-screen{box-sizing:border-box;overflow-x:hidden;position:fixed;inset:0;width:100%;max-width:none;height:100dvh;max-height:none;margin:0;padding:calc(10px + env(safe-area-inset-top)) 12px calc(10px + env(safe-area-inset-bottom));border:0;border-radius:0;background:radial-gradient(ellipse at 50% 0%,#14233b 0%,#0a111d 60%,#05080f 100%);color:#eee8da;overflow:auto;-webkit-overflow-scrolling:touch;font-family:system-ui,-apple-system,"Hiragino Sans",sans-serif;}
+.df-screen::backdrop{background:#05080f;}
+.df-open{overflow:hidden;}
+.df-close{position:absolute;top:calc(8px + env(safe-area-inset-top));right:10px;z-index:30;width:34px;height:34px;border:1px solid rgba(213,201,172,.3);border-radius:50%;background:rgba(15,22,36,.75);color:#eee8da;font-size:18px;line-height:1;cursor:pointer;}
+.df-view{min-height:100%;}
+
+/* Lobby, waiting room, results */
+.df-lobby{max-width:440px;margin:0 auto;padding:14px 2px 24px;}
+.df-kicker{margin:0 0 4px;color:#999386;font:600 9px/1.2 system-ui,sans-serif;letter-spacing:.24em;}
+.df-lobby h2{margin:0;color:#f0ece3;font:700 28px/1.25 Georgia,"Yu Mincho",serif;}
+.df-sub{margin:4px 0 16px;color:#a9a393;font-size:13px;}
+.df-panel{margin-bottom:12px;padding:14px;border:1px solid rgba(213,201,172,.22);border-radius:16px;background:linear-gradient(150deg,rgba(27,35,49,.85),rgba(15,22,36,.9));}
+.df-panel h3{margin:0 0 8px;color:#f0ece3;font:700 15px/1.4 Georgia,"Yu Mincho",serif;}
+.df-label{margin:10px 0 4px;color:#a9a393;font-size:11px;letter-spacing:.06em;}
+.df-note{margin:6px 2px 0;color:#9a9486;font-size:11.5px;line-height:1.7;}
+.df-preview{color:#c6b790;}
+.df-field{display:flex;align-items:center;gap:8px;margin:6px 0;color:#cfc8b8;font-size:13px;}
+.df-lobby .df-field{justify-content:space-between;}
+.df-lobby .df-field input{width:110px;height:40px;padding:0 10px;border:1px solid rgba(213,201,172,.3);border-radius:10px;background:rgba(8,12,20,.6);color:#f0ece3;font:700 16px system-ui,sans-serif;text-align:right;}
+.df-field em{font-style:normal;color:#999386;}
+.df-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;}
+.df-chips button{min-height:36px;padding:0 13px;border:1px solid rgba(213,201,172,.3);border-radius:999px;background:rgba(15,23,42,.5);color:#d8d1c0;font:600 13px system-ui,sans-serif;cursor:pointer;}
+.df-chips button[aria-pressed="true"]{background:#c6b790;border-color:transparent;color:#18202d;}
+.df-primary,.df-ghost{min-height:44px;padding:0 18px;border-radius:12px;font:700 14px system-ui,sans-serif;cursor:pointer;}
+.df-primary{border:0;background:linear-gradient(180deg,#d9c99d,#bda977);color:#18202d;box-shadow:0 4px 14px rgba(198,183,144,.25);}
+.df-ghost{border:1px solid rgba(213,201,172,.35);background:rgba(15,23,42,.5);color:#eee8da;}
+.df-primary:disabled,.df-ghost:disabled{opacity:.4;cursor:default;box-shadow:none;}
+.df-panel .df-primary{width:100%;margin-top:8px;}
+.df-lobby>.df-primary,.df-lobby>.df-ghost{width:100%;margin-top:10px;}
+.df-join{display:flex;gap:10px;}.df-join input{flex:1;min-width:0;height:44px;border:1px solid rgba(213,201,172,.3);border-radius:10px;background:rgba(8,12,20,.6);color:#f0ece3;font:700 20px system-ui,sans-serif;text-align:center;letter-spacing:.4em;}
+.df-join .df-primary{width:96px;margin:0;}
+.df-status{min-height:1.4em;margin:8px 0 0;color:#fca5a5;font-size:12px;text-align:center;}
+.df-rules{margin-top:12px;border:1px solid rgba(213,201,172,.18);border-radius:12px;padding:8px 12px;background:rgba(10,16,28,.5);}
+.df-rules summary{cursor:pointer;color:#c6b790;font-size:13px;font-weight:600;}
+.df-rules ul{margin:8px 0 0;padding-left:18px;color:#b9b3a3;font-size:12px;line-height:1.75;}
+.df-credit{margin:6px 0 0;color:#807b6f;font-size:10.5px;}
+.df-code{margin:14px 0 2px;text-align:center;color:#f3e7bf;font:800 52px/1.1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-shadow:0 0 24px rgba(214,196,141,.45);}
+.df-waiting .df-sub{text-align:center;}
+.df-seats-list{list-style:none;margin:14px 0 8px;padding:0;display:grid;gap:8px;}
+.df-seats-list li{display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 12px;border:1px solid rgba(213,201,172,.2);border-radius:14px;background:rgba(18,27,42,.7);}
+.df-seats-list li.is-empty{border-style:dashed;color:#6f6a5f;}
+.df-seat-name{font-size:14px;font-weight:600;}
+
+.df-avatar{position:relative;display:inline-flex;flex:0 0 auto;width:var(--size,36px);height:var(--size,36px);}
+.df-avatar .podium-avatar{width:100%!important;height:100%!important;margin:0!important;font-size:calc(var(--size,36px)*.45)!important;}
+.df-cpu{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:#22304a;font-size:calc(var(--size,36px)*.5);}
+
+/* Cards */
+.df-card{position:relative;flex:0 0 auto;width:54px;height:78px;margin:0;padding:0;border:1px solid #cfc7b2;border-radius:8px;background:linear-gradient(160deg,#fffdf6,#efe8d5);color:#1b1f2a;box-shadow:0 2px 6px rgba(0,0,0,.45);font-family:Georgia,"Times New Roman",serif;-webkit-tap-highlight-color:transparent;user-select:none;}
+.df-card.suit-H,.df-card.suit-D{color:#c0262d;}
+.df-corner{position:absolute;top:4px;left:5px;display:flex;flex-direction:column;align-items:center;font:700 15px/1 Georgia,serif;}
+.df-corner small{font-size:12px;line-height:1;margin-top:1px;}
+.df-corner.is-low{top:auto;left:auto;right:5px;bottom:4px;transform:rotate(180deg);}
+.df-pip{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;font-size:30px;opacity:.9;}
+.df-card.is-joker{background:linear-gradient(160deg,#fff7e0,#f1dfb0);color:#6b21a8;}
+.df-card.is-joker .df-corner{font-size:7px;letter-spacing:.04em;writing-mode:vertical-rl;top:5px;}
+.df-card.is-joker .df-corner.is-low{writing-mode:vertical-rl;}
+.df-star{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;font-size:30px;background:linear-gradient(135deg,#e11d48,#f59e0b,#16a34a,#2563eb,#9333ea);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3));}
+.df-card.is-back{background:repeating-linear-gradient(45deg,#1d3b66 0 4px,#254a7e 4px 8px);border-color:#c6b790;}
+.df-card.is-back::after{content:"";position:absolute;inset:4px;border:1px solid rgba(240,225,170,.55);border-radius:5px;}
+
+/* Table */
+.df-table-view{box-sizing:border-box;width:100%;position:relative;display:flex;flex-direction:column;gap:6px;max-width:520px;height:100%;min-height:calc(100dvh - 28px);margin:0 auto;}
+.df-bar{display:flex;align-items:center;gap:8px;padding-right:44px;min-height:34px;}
+.df-info{display:flex;flex-direction:column;line-height:1.2;}
+.df-info strong{font:700 15px Georgia,"Yu Mincho",serif;color:#f0ece3;}.df-info small{color:#a9a393;font-size:11px;}
+.df-state{display:flex;gap:6px;flex:1;flex-wrap:wrap;}
+.df-chip{padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.04em;}
+.df-chip.is-rev{background:linear-gradient(90deg,#be123c,#f97316);color:#fff;animation:df-pulse 1.4s ease-in-out infinite;}
+.df-chip.is-lock{background:rgba(198,183,144,.18);border:1px solid #c6b790;color:#f3e7bf;}
+.df-help{width:30px;height:30px;border:1px solid rgba(213,201,172,.3);border-radius:50%;background:rgba(15,22,36,.7);color:#eee8da;font-weight:700;cursor:pointer;}
+.df-rules-sheet{position:absolute;z-index:12;top:40px;left:0;right:0;max-height:60%;overflow:auto;}
+.df-rules-sheet .df-rules{background:rgba(8,13,24,.96);margin:0;}
+
+.df-felt{box-sizing:border-box;min-width:0;position:relative;flex:1 1 auto;min-height:210px;border-radius:26px;overflow:hidden;background:radial-gradient(ellipse at 50% 42%,#1f6a55 0%,#154a3e 58%,#0d2e29 100%);border:4px solid #2a2117;box-shadow:inset 0 0 40px rgba(0,0,0,.55),0 8px 24px rgba(0,0,0,.45);transition:filter .6s,background .6s;}
+.df-felt::before{content:"";position:absolute;inset:7px;border-radius:20px;border:1px solid rgba(240,225,170,.18);pointer-events:none;}
+.is-revolution .df-felt{background:radial-gradient(ellipse at 50% 42%,#6a1f3a 0%,#4a1530 58%,#2a0c20 100%);box-shadow:inset 0 0 50px rgba(0,0,0,.6),0 0 30px rgba(244,63,94,.35);}
+.df-seat{position:absolute;display:flex;flex-direction:column;align-items:center;gap:3px;width:34%;max-width:130px;text-align:center;transition:transform .25s;}
+.df-seat.pos-l{left:1%;top:30%;}.df-seat.pos-r{right:1%;top:30%;}
+.df-seat.pos-t{left:50%;top:3%;transform:translateX(-50%);}
+.df-seat.pos-tl{left:4%;top:3%;}.df-seat.pos-tr{right:4%;top:3%;}
+.df-seat-head{display:flex;align-items:center;gap:6px;max-width:100%;padding:3px 8px 3px 4px;border-radius:999px;background:rgba(8,14,26,.62);border:1px solid rgba(240,225,170,.18);}
+.df-seat.is-turn .df-seat-head{border-color:#f3d675;box-shadow:0 0 0 2px rgba(243,214,117,.35),0 0 18px rgba(243,214,117,.45);animation:df-glow 1.2s ease-in-out infinite;}
+.df-seat-label{display:flex;flex-direction:column;min-width:0;text-align:left;line-height:1.2;}
+.df-seat-label b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:64px;font-size:11px;color:#f0ece3;}
+.df-seat-label small{font-size:10px;color:#f3d675;}.df-seat-label small.is-pass{color:#9fb4d6;}
+.df-seat.is-out{opacity:.75;}.df-seat.is-left{opacity:.5;}
+.df-fan{position:relative;height:30px;width:70px;}
+.df-mini{position:absolute;left:50%;bottom:0;width:20px;height:28px;margin-left:-10px;border:1px solid #c6b790;border-radius:4px;background:repeating-linear-gradient(45deg,#1d3b66 0 3px,#254a7e 3px 6px);transform:translateX(calc(var(--i)*9px)) rotate(calc(var(--i)*7deg));transform-origin:50% 120%;box-shadow:0 1px 3px rgba(0,0,0,.5);}
+.df-count{font-size:10.5px;color:#d7d0bd;font-weight:600;}
+.df-timer{display:block;width:92%;height:4px;border-radius:2px;background:linear-gradient(90deg,#f3d675 calc(var(--p,1)*100%),rgba(255,255,255,.14) 0);}
+.df-timer.is-low{background:linear-gradient(90deg,#f87171 calc(var(--p,1)*100%),rgba(255,255,255,.14) 0);}
+
+.df-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-44%);display:flex;flex-direction:column;align-items:center;gap:6px;width:70%;}
+.df-played{position:relative;display:flex;justify-content:center;align-items:flex-end;min-height:96px;width:100%;}
+.df-card.is-field{width:56px;height:80px;margin:0 -8px;transform:translateX(calc(var(--k)*2px)) rotate(calc(var(--k)*5deg));}
+.df-card.is-field.is-new{animation:df-throw .42s cubic-bezier(.2,.8,.25,1);}
+.df-field-note{margin:0;padding:2px 10px;border-radius:999px;background:rgba(8,14,26,.55);color:#e8e0c8;font-size:11.5px;}
+.df-field-empty{margin:0;color:rgba(255,255,255,.55);font-size:12.5px;text-align:center;}
+.df-dealing{margin:40px 0;color:#a9a393;text-align:center;}
+
+.df-fx{position:absolute;inset:0;pointer-events:none;display:grid;place-items:center;z-index:6;}
+.df-fx-item{grid-area:1/1;padding:6px 22px;border-radius:14px;background:rgba(5,9,18,.7);border:2px solid #f3d675;color:#fff3c4;font:800 30px/1.2 Georgia,"Yu Mincho",serif;letter-spacing:.08em;text-shadow:0 0 18px rgba(243,214,117,.7);animation:df-banner 1.6s ease both;white-space:nowrap;}
+.df-fx-item.is-rev{border-color:#fb7185;color:#ffe4e6;font-size:40px;text-shadow:0 0 22px rgba(244,63,94,.9);animation:df-banner-big 1.7s ease both;}
+.df-fx-item.is-cut{border-color:#7dd3fc;color:#e0f2fe;text-shadow:0 0 18px rgba(56,189,248,.8);}
+.df-fx-item.is-bad{border-color:#f87171;color:#fee2e2;font-size:22px;text-shadow:none;}
+.df-fx-item.is-out{font-size:24px;}
+
+.df-me{position:relative;display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:14px;background:rgba(14,22,36,.7);border:1px solid rgba(213,201,172,.16);}
+.df-me.is-turn{border-color:#f3d675;box-shadow:0 0 16px rgba(243,214,117,.3);}
+.df-me-label{display:flex;flex-direction:column;line-height:1.25;flex:1;min-width:0;}
+.df-me-label b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.df-me-label small{font-size:11px;color:#a9a393;}.df-me-label small.is-go{color:#f3d675;font-weight:700;}
+.df-me .df-timer{position:absolute;left:10px;right:10px;bottom:2px;width:auto;}
+
+.df-hand{box-sizing:border-box;min-width:0;max-width:100%;display:flex;align-items:flex-end;padding:20px 8px 6px;overflow-x:auto;overflow-y:visible;min-height:108px;scrollbar-width:none;overscroll-behavior:contain;}
+.df-hand::-webkit-scrollbar{display:none;}
+.df-hand .df-card{margin-left:calc(var(--step,40px) - 54px);cursor:pointer;transition:transform .16s,box-shadow .16s,filter .16s;}
+.df-hand .df-card:first-child{margin-left:0;}
+.df-hand .df-card:active{transform:translateY(-6px);}
+.df-hand .df-card.is-picked{transform:translateY(-18px);box-shadow:0 0 0 2px #f3d675,0 8px 16px rgba(0,0,0,.55);z-index:3;}
+.df-hand .df-card.is-dim{filter:brightness(.62) saturate(.7);}
+.df-hand .df-card.is-got{box-shadow:0 0 0 2px #7dd3fc,0 0 14px rgba(125,211,252,.7);animation:df-glow-blue 1.6s ease-in-out 3;}
+.df-msg{min-height:1.5em;margin:0;text-align:center;color:#c9c3b2;font-size:12px;line-height:1.5;}
+.df-actions{display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;}
+.df-actions:empty{display:none;}
+.df-actions .df-primary:only-child{grid-column:1/-1;}
+.df-actions .df-primary,.df-actions .df-ghost{min-height:46px;padding:0 8px;font-size:13.5px;}
+
+/* Results */
+.df-result{position:absolute;inset:0;z-index:20;display:grid;place-items:center;padding:12px;background:rgba(4,8,16,.72);backdrop-filter:blur(3px);animation:df-fade .3s ease;}
+.df-result-card{width:100%;max-width:400px;padding:16px;border:1px solid rgba(213,201,172,.3);border-radius:18px;background:linear-gradient(150deg,rgba(27,35,49,.96),rgba(12,18,30,.98));box-shadow:0 18px 50px rgba(0,0,0,.6);}
+.df-result-card h3{margin:0 0 10px;font:700 18px Georgia,"Yu Mincho",serif;color:#f3e7bf;text-align:center;}
+.df-ranking{list-style:none;margin:0;padding:0;display:grid;gap:6px;}
+.df-rank-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(213,201,172,.12);animation:df-rise .5s ease both;animation-delay:var(--d,0s);}
+.df-rank-row.is-first{background:linear-gradient(90deg,rgba(243,214,117,.22),rgba(243,214,117,.05));border-color:rgba(243,214,117,.5);}
+.df-rank-row.is-me{outline:2px solid rgba(125,211,252,.6);}
+.df-rank-no{width:26px;text-align:center;font-size:18px;}
+.df-rank-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;font-weight:600;}
+.df-rank-row em{font-style:normal;font-size:11px;color:#c6b790;}
+.df-rank-row strong{font-size:12.5px;color:#f3e7bf;min-width:44px;text-align:right;}
+.df-next{margin:10px 0 0;text-align:center;color:#c6b790;font-size:12.5px;font-weight:600;}
+.df-net{margin:14px 0 6px;text-align:center;font:800 40px/1.1 Georgia,serif;color:#cfc8b8;}
+.df-net.is-plus{color:#86efac;text-shadow:0 0 22px rgba(74,222,128,.5);}.df-net.is-minus{color:#fca5a5;}
+.df-pays{list-style:none;margin:8px 0;padding:0;display:grid;gap:6px;}
+.df-pays li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:9px 12px;border-radius:12px;background:rgba(255,255,255,.04);font-size:13px;}
+.df-pays li.is-me{background:rgba(125,211,252,.1);}
+.df-pays small{grid-column:1/-1;color:#9a9486;font-size:11px;}.df-pays small.is-done{color:#86efac;}
+
+@keyframes df-throw{from{opacity:.2;transform:translateY(130px) scale(.7) rotate(-12deg);}to{opacity:1;}}
+@keyframes df-banner{0%{opacity:0;transform:scale(.6);}15%{opacity:1;transform:scale(1.08);}30%{transform:scale(1);}80%{opacity:1;}100%{opacity:0;transform:scale(1.15);}}
+@keyframes df-banner-big{0%{opacity:0;transform:scale(.4) rotate(-8deg);}18%{opacity:1;transform:scale(1.2) rotate(2deg);}35%{transform:scale(1);}80%{opacity:1;}100%{opacity:0;transform:scale(1.3);}}
+@keyframes df-glow{50%{box-shadow:0 0 0 3px rgba(243,214,117,.5),0 0 24px rgba(243,214,117,.7);}}
+@keyframes df-glow-blue{50%{box-shadow:0 0 0 3px rgba(125,211,252,.9),0 0 22px rgba(125,211,252,.9);}}
+@keyframes df-pulse{50%{filter:brightness(1.25);}}
+@keyframes df-fade{from{opacity:0;}}
+@keyframes df-rise{from{opacity:0;transform:translateY(14px);}}
+@media (max-height:640px){
+  .df-card{width:46px;height:66px;}.df-hand{min-height:90px;padding-top:16px;}.df-hand .df-card{margin-left:calc(var(--step,34px) - 46px);}
+  .df-corner{font-size:13px;}.df-pip{font-size:24px;}.df-card.is-field{width:48px;height:68px;}.df-felt{min-height:170px;}
+}
+@media (prefers-reduced-motion:reduce){.df-card.is-field.is-new,.df-fx-item,.df-chip.is-rev,.df-seat.is-turn .df-seat-head,.df-rank-row,.df-hand .df-card.is-got{animation:none;}}

@@ -116,6 +116,9 @@
   const flows = (play, field) =>
     // 8切り (a set of 8s, a joker standing in for one included; never a stair), JK pair, 6 cards, 最強階段, スペ3返し
     (play.kind === "set" && play.rank === 8) || (play.kind === "set" && play.rank === JOKER_RANK && play.n === 2) || (play.kind === "set" && play.n >= 6) || (play.kind === "stair" && play.top) || isSpade3Return(field, play);
+  // What to call the play that cleared the field.
+  const flowName = (play, field) =>
+    isSpade3Return(field, play) ? "スペ3返し" : play.kind === "stair" ? "最強階段" : play.rank === 8 ? "8切り" : play.rank === JOKER_RANK ? "ジョーカーのペア" : "シックスカード";
   // The play that goes on the field for these cards, or null: the strongest valid reading.
   function resolve(state, cards) {
     let best = null;
@@ -281,7 +284,7 @@
       return next;
     }
     if (flows(found, wasField)) {
-      flow(next, id, found.kind === "set" && found.rank === 8 ? "8切り" : "場が流れた");
+      flow(next, id, flowName(found, wasField));
       return next;
     }
     if (othersPassed(next, id) && activeIds(next).includes(id)) {

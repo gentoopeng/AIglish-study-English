@@ -292,8 +292,11 @@
   };
   PICTURES.sugoroku =
     '<svg viewBox="0 0 64 48" aria-hidden="true"><rect x="10" y="4" width="40" height="40" rx="4" class="is-sg-ring"/><rect x="18" y="12" width="24" height="24" rx="2" class="is-card"/><g class="is-sg-mark"><circle cx="24" cy="18" r="3"/><circle cx="30" cy="24" r="3"/><circle cx="36" cy="30" r="3"/></g><circle cx="14" cy="8" r="3.4" class="is-sg-piece"/><text x="44" y="46" class="is-sg-jp">JP</text></svg>';
+  PICTURES.daifugo =
+    '<svg viewBox="0 0 64 48" aria-hidden="true"><rect x="9" y="8" width="20" height="30" rx="3" transform="rotate(-14 19 23)" class="is-card"/><rect x="22" y="6" width="20" height="30" rx="3" transform="rotate(-2 32 21)" class="is-card"/><rect x="35" y="8" width="20" height="30" rx="3" transform="rotate(12 45 23)" class="is-card"/><path d="M13 7l3 5 4-3-1 6h-12l-1-6 4 3z" transform="translate(20 -5) scale(.9)" fill="currentColor" opacity=".9"/></svg>';
   const GAMES = [
     { id: "poker", name: "ポーカー", line: "みんなやコンピュータと", level: "じっくり" },
+    { id: "daifugo", name: "大富豪", line: "順位でポイントをやり取り", level: "じっくり" },
     { id: "sugoroku", name: "すごろくビンゴ", line: "マスを埋めてジャックポット", level: "じっくり" },
     { id: "blackjack", name: "ブラックジャック", line: "21に近いほうが勝ち", level: "ふつう" },
     { id: "roulette", name: "ルーレット", line: "止まる数字を当てる", level: "かんたん" },
@@ -317,7 +320,7 @@
         button.dataset.game = game.id;
         button.innerHTML = '<span class="casino-pic">' + PICTURES[game.id] + "</span>";
         button.append(node("em", "casino-level is-" + (game.level === "かんたん" ? "easy" : game.level === "ふつう" ? "mid" : "deep"), game.level), node("b", "", game.name), node("small", "", game.line));
-        button.onclick = () => (game.id === "poker" ? window.Poker?.open() : open(game.id));
+        button.onclick = () => (game.id === "poker" ? window.Poker?.open() : game.id === "daifugo" ? window.Daifugo?.open() : open(game.id));
         list.append(button);
       }
     }
