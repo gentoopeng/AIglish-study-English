@@ -42,7 +42,14 @@
   };
   const SQUARE = { start: "START", normal: "", event: "★", accident: "!" };
   const GAME_NAMES = { blackjack: "ブラックジャック", dice: "ダイスポーカー", chinchiro: "チンチロ", ball: "ボール確定" };
-  const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "BONUS", special: "SPECIAL BALL" };
+  const ITEM_INFO = {
+    dice2: { n: "ダブルダイス", d: "サイコロを2個振って、合計だけ進みます" },
+    exact: { n: "ぴったり", d: "出目を1〜6から選べます" },
+    guard: { n: "ガード", d: "この回から3回、アクシデントのマスが無効になります" },
+    ball: { n: "ボール券", d: "この回、ボールを1個出します" },
+    x2: { n: "倍がけ", d: "通常マスのルーレットの増減が2倍になります（ほかのマスでは使われません）" },
+  };
+  const WHEEL_NAMES = { item: "ITEM ROULETTE", event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "BONUS", special: "SPECIAL BALL" };
   const HOT = new Set(["bingo", "sjp", "kakuhen", "special"]);
   const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "ストップ", hilo: "ハイ＆ロー" };
   // The normal squares' quick games, paid in multiples of the bet (not played in 早送り).
@@ -56,6 +63,7 @@
     "100マスで1周してSTARTを通ると、ボールが1つ出ます。",
     "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選で、開いていない番号なら自分のボールが入ります。すでに開いている番号は額の2倍がもらえます。★の数字（特別な数字）が出ると、スペシャルルーレットが回ります。1列そろうとビンゴ賞金とビンゴルーレット。そろった列のボールは戻ります。",
     "ビンゴ賞金の7割と、ルーレットの倍率の5割は、その列にボールを置いていた人でボールの数に応じて分けます（そろえた人のボールも数えます）。ほかの人の分は、その人が開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
+    "通常マスの「ITEM」で、アイテムルーレットが回ります。アイテムは3個まで持て、ショップでも買えます。振る前に押して使います。ダブルダイス（サイコロ2個）・ぴったり（出目を選ぶ）・ガード（3回アクシデント無効）・ボール券（ボール1個）・倍がけ（通常マスの増減が2倍）。持ちきれないときは、値段の半分がもらえます。",
     "ジャックポットは、カジノでディーラー相手に賭けられたポイントから貯まります。",
     "「早送り」にすると、ふだんのマスは短く進みます。★マスは自動で進み、盤面をタップするとその回を飛ばせます。",
     "ほかの人のビンゴの分け前は、30日受け取らないと消えます。",
@@ -74,11 +82,11 @@
     }
   }
   // Every save goes to this device at once. The cloud copy (for carrying on from another device)
-  // is written at once when a game, a mini game or a jackpot starts or ends (so none can be
+  // is written at once when a game, a mini game, a jackpot or an item comes or goes (so none can be
   // played twice from two devices), and otherwise at most every 30 seconds and when the page is
   // hidden, to keep cloud writes few.
   const cloud = { key: null, at: 0, timer: 0, state: null };
-  const gate = (state) => JSON.stringify([state.pending || null, state.bonus || [], state.jpWait || []]);
+  const gate = (state) => JSON.stringify([state.pending || null, state.bonus || [], state.jpWait || [], state.items || []]);
   function saveCloud() {
     clearTimeout(cloud.timer);
     cloud.timer = 0;
@@ -559,7 +567,7 @@
     // A game played further on another device takes over, if nothing is going on here.
     if (kept)
       cloudGame.then((remote) => {
-        if (!remote || target !== view || view.busy || remote.rolls <= view.state.rolls || view.state.pending || view.state.bonus?.length) return;
+        if (!remote || target !== view || view.busy || S.revOf(remote) <= S.revOf(view.state) || view.state.pending || view.state.bonus?.length) return;
         view.state = remote;
         save(remote);
         hud();
@@ -668,6 +676,10 @@
     board.onclick = () => view.busy && (view.fast = true);
     cardWrap.onclick = board.onclick;
 
+    view.armed = { ids: [], face: 0 };
+    view.itemBar = node("div", "sg-items");
+    view.facePick = node("div", "sg-faces");
+    view.facePick.hidden = true;
     view.info = node("p", "sg-status");
     view.hereEl = node("p", "sg-here");
     view.hereEl.hidden = true;
@@ -697,7 +709,7 @@
 
     view.layer = node("div", "sg-layer");
     view.layer.hidden = true;
-    body.replaceChildren(pots, view.hereEl, cardWrap, board, view.info, controls, view.studyEl, view.layer);
+    body.replaceChildren(pots, view.hereEl, cardWrap, board, view.info, view.itemBar, view.facePick, controls, view.studyEl, view.layer);
     paintCard();
     paintHere();
     hud();
@@ -799,6 +811,107 @@
       cell.classList.toggle("has-icon", !!who?.i);
     });
   }
+  // The bag: up to three items (tap one to use it on the next roll), and the shop.
+  function paintItems() {
+    if (!view.itemBar) return;
+    const held = S.itemsOf(view.state);
+    view.armed.ids = view.armed.ids.filter((id) => held.includes(id));
+    if (!view.armed.ids.includes("exact")) view.armed.face = 0;
+    const locked = view.busy || !!view.state.pending;
+    view.itemBar.replaceChildren();
+    for (let i = 0; i < S.RULES.itemMax; i++) {
+      const id = held[i],
+        b = node("button", "sg-item" + (id ? "" : " is-empty"), id ? ITEM_INFO[id].n : "—");
+      b.type = "button";
+      b.disabled = !id || locked;
+      if (id) {
+        b.dataset.item = id;
+        b.title = ITEM_INFO[id].d;
+        // (Two of a kind: only the first lights up.)
+        b.setAttribute("aria-pressed", String(view.armed.ids.includes(id) && held.indexOf(id) === i));
+        b.onclick = () => arm(id);
+      }
+      view.itemBar.append(b);
+    }
+    const shop = node("button", "sg-shop", "ショップ");
+    shop.type = "button";
+    shop.disabled = view.busy;
+    shop.onclick = () => openShop();
+    view.itemBar.append(shop);
+    view.facePick.hidden = !view.armed.ids.includes("exact");
+    view.facePick.replaceChildren();
+    if (!view.facePick.hidden)
+      for (let f = 1; f <= 6; f++) {
+        const b = node("button", "", String(f));
+        b.type = "button";
+        b.disabled = locked;
+        b.setAttribute("aria-pressed", String(view.armed.face === f));
+        b.setAttribute("aria-label", "出目 " + f);
+        b.onclick = () => {
+          view.armed.face = f;
+          hud();
+        };
+        view.facePick.append(b);
+      }
+  }
+  function arm(id) {
+    if (view.busy || view.state.pending) return;
+    const ids = view.armed.ids;
+    if (ids.includes(id)) view.armed.ids = ids.filter((x) => x !== id);
+    else {
+      // The two kinds of dice do not go together.
+      view.armed.ids = [...ids.filter((x) => !(id === "dice2" && x === "exact") && !(id === "exact" && x === "dice2")), id];
+    }
+    hud();
+  }
+  const useNow = () => ({ items: view.armed.ids.slice(), ...(view.armed.ids.includes("exact") ? { face: view.armed.face } : {}) });
+  function openShop(note = "") {
+    if (view.busy) return;
+    const layer = view.layer;
+    layer.className = "sg-layer";
+    layer.hidden = false;
+    const box = node("div", "sg-sheet sg-shopbox");
+    box.append(node("p", "sg-sheet-title", "アイテムショップ"));
+    const held = S.itemsOf(view.state);
+    box.append(node("p", "sg-shop-have", "持っているもの " + held.length + "/" + S.RULES.itemMax + "　所持 " + fmt(api.balance()) + api.unit()));
+    const list = node("ul", "sg-shop-list");
+    for (const [id, info] of Object.entries(ITEM_INFO)) {
+      const price = S.RULES.items[id].price,
+        li = node("li", "");
+      const text = node("span", "sg-shop-text");
+      text.append(node("b", "", info.n), node("small", "", info.d));
+      const buy = node("button", "sg-game-btn", fmt(price) + api.unit());
+      buy.type = "button";
+      buy.dataset.buy = id;
+      buy.disabled = held.length >= S.RULES.itemMax || api.balance() < price;
+      buy.onclick = () => buyItem(id);
+      li.append(text, buy);
+      list.append(li);
+    }
+    const out = node("p", "sg-shop-note", typeof note === "string" ? note : "");
+    const close = node("button", "sg-game-btn", "閉じる");
+    close.type = "button";
+    close.onclick = () => (layer.hidden = true);
+    box.append(list, out, close);
+    layer.replaceChildren(box);
+  }
+  function buyItem(id) {
+    if (view.busy) return;
+    const price = S.RULES.items[id].price;
+    if (api.balance() < price) return openShop("足りません");
+    let bought;
+    try {
+      bought = S.buy(view.state, id);
+    } catch {
+      return openShop("いっぱいです");
+    }
+    api.round("sugoroku-shop").net(-price, 0);
+    view.state = bought.state;
+    save(bought.state);
+    api.refresh();
+    hud();
+    openShop(ITEM_INFO[id].n + " を買いました");
+  }
   const hue = (id) => [...String(id || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
   function hud() {
     const { state } = view;
@@ -833,7 +946,9 @@
       refill = short && !api.real() && !!api.resetPractice,
       // On points, today's bets are limited by today's study (see Casino.allowance).
       study = !short && api.real() && !!api.allowance && api.allowance() < view.cost;
-    view.go.disabled = view.busy || (short && !refill) || study || !!state.pending;
+    paintItems();
+    const needFace = view.armed.ids.includes("exact") && !view.armed.face;
+    view.go.disabled = view.busy || (short && !refill) || study || !!state.pending || needFace;
     view.go.textContent = refill
       ? "練習チップを" + fmt(api.practiceStart) + "枚に戻す"
       : short
@@ -844,7 +959,9 @@
           ? "…"
           : study
             ? "勉強すると振れます"
-            : "サイコロを振る";
+            : needFace
+              ? "出目を選んでください"
+              : "サイコロを振る";
     view.go.title = study ? api.studyHint(view.cost) : "";
     if (view.studyEl) {
       view.studyEl.hidden = !api.real() || !api.allowance;
@@ -967,6 +1084,8 @@
     const cost = view.cost,
       state = view.state,
       me = api.uid();
+    const use = useNow();
+    view.armed = { ids: [], face: 0 };
     view.busy = true;
     hud();
     markHere();
@@ -974,7 +1093,7 @@
     // Worked out at once on the card as last seen. Most rolls draw no ball and leave the card
     // alone, so they need no cloud round trip; a ball (or a part waiting for this player) does.
     const tape = [],
-      local = S.roll(state, view.card, cost, recorder(tape), me),
+      local = S.roll(state, view.card, cost, recorder(tape), me, use),
       touches = local.events.some((e) => e.t === "ball") || view.card.owed?.[me] > 0;
     let result,
       shownEarly = 0,
@@ -992,7 +1111,7 @@
       view.state = liveEarly;
       early = show(local.events.slice(0, shownEarly), liveEarly);
       try {
-        result = await onCard((card) => S.roll(state, card, cost, replay(tape), me));
+        result = await onCard((card) => S.roll(state, card, cost, replay(tape), me, use));
       } catch (error) {
         console.warn("[sugoroku] roll", error);
         await early;
@@ -1102,9 +1221,25 @@
       if (e.t === "share") {
         say("ほかの人のビンゴの分け前　+" + fmt(e.amount) + api.unit(), "is-gain");
         await wait(1100);
+      } else if (e.t === "item") {
+        say(ITEM_INFO[e.id].n + "！", "is-hot");
+        await wait(800);
+      } else if (e.t === "itemGet") {
+        say(e.full ? ITEM_INFO[e.id].n + "　持ちきれないので +" + fmt(e.amount) + api.unit() : ITEM_INFO[e.id].n + " をゲット！", e.full ? "is-gain" : "is-hot");
+        await wait(1200);
+      } else if (e.t === "guarded") {
+        say("ガードで、アクシデントは無効", "is-gain");
+        await wait(1000);
       } else if (e.t === "die") {
         say("");
-        await view.die.roll(e.value);
+        if (e.values) {
+          // Two dice: one after the other, then their sum.
+          await view.die.roll(e.values[0]);
+          say(e.values[0] + " + " + e.values[1], "is-ball");
+          await view.die.roll(e.values[1]);
+          say(e.values[0] + " + " + e.values[1] + " = " + e.value, "is-gain");
+          await wait(500);
+        } else await view.die.roll(e.value);
       } else if (e.t === "step") {
         live.pos = e.to;
         place(e.to);
@@ -1231,6 +1366,8 @@
     if (wheel === "event") return slot === "ball" ? "ball" : "game-" + slot;
     if (wheel === "accident") return slot.start ? "worst" : slot.back ? "bad" : slot.take >= 1.5 ? "worst" : slot.take ? "bad" : "safe";
     if (slot.kakuhen) return "zero";
+    if (wheel === "item") return slot.item === "ball" ? "gold" : slot.item === "exact" ? "champagne" : "high";
+    if (slot.item === true) return "gold";
     if (wheel === "special") return slot.balls ? "ball" : slot.x >= 30 ? "gold" : slot.x >= 15 ? "champagne" : "high";
     if (wheel === "kakuhen") return slot.balls ? "ball" : slot.x >= 10 ? "gold" : slot.x >= 5 ? "champagne" : slot.x >= 3 ? "high" : "mid";
     if (slot.ball) return "ball";
@@ -1245,6 +1382,8 @@
     if (wheel === "accident") return slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
     // Looks like any ×0 slot: the player finds out when the bonus effect starts.
     if (slot.kakuhen) return "×0";
+    if (wheel === "item") return ITEM_INFO[slot.item].n;
+    if (slot.item === true) return "ITEM";
     if (slot.balls) return "●×" + slot.balls;
     if (slot.ball) return "●";
     if (slot.next) return "SJP";
@@ -1314,10 +1453,10 @@
     if (e.mult > 1 && HOT.has(e.wheel)) box.append(node("p", "sg-wheel-base", "賞金とミニゲームは ×" + e.mult));
     layer.replaceChildren(box);
     const n = e.slots.length,
-      turns = { normal: 4, event: 4, accident: 4, bingo: 5, jp: 6, sjp: 7, kakuhen: 5, special: 5 }[e.wheel],
+      turns = { normal: 4, event: 4, accident: 4, bingo: 5, jp: 6, sjp: 7, kakuhen: 5, special: 5, item: 4 }[e.wheel],
       jitter = (random(60) - 30) / 100,
       angle = turns * 360 - ((e.index + 0.5 + jitter * 0.8) * 360) / n;
-    const full = { normal: 1700, event: 2000, accident: 2000, bingo: 3000, jp: 3800, sjp: 4600, kakuhen: 3200, special: 3200 }[e.wheel],
+    const full = { normal: 1700, event: 2000, accident: 2000, bingo: 3000, jp: 3800, sjp: 4600, kakuhen: 3200, special: 3200, item: 2200 }[e.wheel],
       time = full * pace();
     box.classList.add("is-spinning");
     disc.style.transition = time ? "transform " + time + "ms cubic-bezier(.15,.6,.1,1)" : "none";
@@ -1338,6 +1477,10 @@
               : slot.take
                 ? "−" + fmt(Math.round(e.base * slot.take)) + api.unit()
                 : "セーフ"
+          : e.wheel === "item"
+            ? ITEM_INFO[slot.item].n
+          : slot.item === true
+            ? "ITEM チャンス"
           : slot.balls
             ? "ボール " + slot.balls + "連続！"
           : slot.next

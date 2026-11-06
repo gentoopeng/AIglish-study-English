@@ -342,7 +342,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // and another player opening the game sees it there.
     await page.evaluate(() => {
       window.fbGetDoc = async (path) => ({ exists: () => !!window.__wallet[path], data: () => structuredClone(window.__wallet[path]) });
-      localStorage.setItem("aiglish_sugoroku_casino-a", JSON.stringify({ ...window.SugorokuModel.newState(), rolls: 5, pos: 0 }));
+      localStorage.setItem("aiglish_sugoroku_casino-a", JSON.stringify({ ...window.SugorokuModel.newState(), rolls: 5, rev: 5, pos: 0 }));
     });
     await tab.locator(".mode-sugoroku").click();
     await sg.locator("[data-sg-roll]").waitFor();

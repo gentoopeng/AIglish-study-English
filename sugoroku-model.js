@@ -8,6 +8,10 @@
 //              (a win also gives a ball, a loss gives nothing back), or a sure ball (the bet back)
 //   accident – a wheel: lose 0–2× the bet more, go back three squares, or go back to START
 // Passing START gives a ball, nothing else.
+// Items: a slot of the normal wheel spins the item wheel and a player holds up to itemMax of them
+// (they can also be bought: RULES.items[id].price). One is used before a roll (roll()'s `use`):
+// ダブルダイス throws two dice, ぴったり picks the face, ガード cancels accident squares for this and the
+// next two rolls, ボール券 draws a ball, 倍がけ doubles what the normal wheel pays or takes.
 // The bingo cards: two 7×7 cards (98 numbers) shared by every player and kept apart from each
 // player's own state: { v: 2, cells, owners, special }, cells[0..48] the first card and
 // cells[49..97] the second, owners[i] the id of whoever's ball opened cell i ("" closed). A ball is
@@ -52,6 +56,9 @@
   const EVENT = (event) => [{ x: 0, event }];
   // (A second kind of ×0 so the wheel can be laid out without equal slots side by side.)
   const KAKU = (n = 1) => Array(n).fill({ x: 0, kakuhen: true });
+  // A normal-wheel slot that spins the item wheel.
+  const ITEM = (n = 1) => Array(n).fill({ x: 0, item: true });
+  const GET = (item, n = 1) => Array(n).fill({ item });
   const RULES = {
     costs: [100],
     // The ring: 100 squares, about 29 rolls a lap. S start, n normal, E event, A accident.
@@ -67,11 +74,22 @@
         ...KAKU(1),
         // High risk, high return: a bad slot takes −2 to −5 times the bet, a good one gives 3 to 7 times.
         ...N(-5, 4), ...N(-2, 3), ...N(-1, 2),
-        ...N(0, 7),
+        ...N(0, 5), ...ITEM(2),
         ...N(0.5, 2), ...N(1, 2), ...N(2, 2), ...N(3), ...N(5, 3), ...N(7),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
+    // Items: at most itemMax held. `price` in points (or chips), and half of it is paid when the item
+    // wheel gives one that does not fit. The item wheel decides which one comes.
+    itemMax: 3,
+    items: {
+      dice2: { name: "ダブルダイス", price: 150 },
+      exact: { name: "ぴったり", price: 250 },
+      guard: { name: "ガード", price: 100 },
+      ball: { name: "ボール券", price: 400 },
+      x2: { name: "倍がけ", price: 80 },
+    },
+    itemWheel: spread([...GET("dice2", 3), ...GET("exact", 2), ...GET("guard", 2), ...GET("ball"), ...GET("x2", 2)]),
     // The 確変 wheel (after a 確変 slot of the normal wheel): x pays the bet × x; balls draws that
     // many balls one after another (each as any ball: it opens a number or pays missPay, and a
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
@@ -204,8 +222,13 @@
     if (card.owedAt) delete card.owedAt[me];
     return { card, amount };
   }
+  // The items a state holds: known ones only, at most itemMax.
+  const isItem = (id) => typeof id === "string" && Object.prototype.hasOwnProperty.call(RULES.items, id);
+  const itemsOf = (state) => (Array.isArray(state?.items) ? state.items.filter(isItem).slice(0, RULES.itemMax) : []);
+  // Which copy of a game is further on: counts a roll and a purchase (a save from before has only its rolls).
+  const revOf = (state) => (Number.isFinite(state?.rev) && state.rev >= 0 ? state.rev : Number(state?.rolls) || 0);
   function newState() {
-    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, best: 0, jps: 0, sjps: 0, shared: 0, pending: null, bonus: [], jpWait: [] };
+    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, best: 0, jps: 0, sjps: 0, shared: 0, pending: null, bonus: [], jpWait: [], items: [], guard: 0, rev: 0 };
   }
   // A player's own state; an older save (with its own card) keeps its place and counts.
   function valid(state) {
@@ -223,7 +246,7 @@
   function upgrade(state) {
     const { card, marks, lines, cards, ...rest } = state;
     const count = (k) => (Number.isFinite(rest[k]) && rest[k] >= 0 ? rest[k] : 0);
-    return { ...newState(), ...rest, v: 3, bingos: count("bingos"), best: count("best"), jps: count("jps"), sjps: count("sjps"), shared: count("shared"), bonus: Array.isArray(rest.bonus) ? rest.bonus : [], jpWait: Array.isArray(rest.jpWait) ? rest.jpWait.filter((k) => k === "jp" || k === "sjp") : [] };
+    return { ...newState(), ...rest, v: 3, bingos: count("bingos"), best: count("best"), jps: count("jps"), sjps: count("sjps"), shared: count("shared"), bonus: Array.isArray(rest.bonus) ? rest.bonus : [], items: itemsOf(rest), guard: Math.min(3, count("guard")), rev: revOf(rest), jpWait: Array.isArray(rest.jpWait) ? rest.jpWait.filter((k) => k === "jp" || k === "sjp") : [] };
   }
   const isOpen = (card, i) => card.owners[i] !== "";
   const reach = (card) => LINES.map((_, i) => i).filter((i) => LINES[i].filter((c) => !isOpen(card, c)).length === 1);
@@ -389,18 +412,50 @@
   // can be below 0 after an accident). On an event square the roll stops with state.pending set;
   // the game is played on the screen and finished with settle().
   // `card` is the shared card as it is now; the result carries the card as it is after the roll.
-  function roll(before, sharedCard, cost, random, me = "me") {
+  // `use`: { items: [ids to use before this roll], face: 1-6 for ぴったり }.
+  function roll(before, sharedCard, cost, random, me = "me", use = {}) {
     if (!RULES.costs.includes(cost)) throw Error("bad cost");
     if (before.pending || before.bonus?.length) throw Error("a game is waiting");
     const state = clone(before),
       card = clone(sharedCard),
       events = [];
     let gain = 0;
+    state.rev = revOf(before) + 1;
     state.rolls++;
     state.bet += cost;
     state.stake += cost;
-    const die = random(6) + 1;
-    events.push({ t: "die", value: die });
+    // The items used for this roll leave the bag (each of the five once, and not two kinds of dice).
+    state.items = itemsOf(state);
+    const picked = {};
+    for (const id of Array.isArray(use?.items) ? use.items : []) {
+      const at = state.items.indexOf(id);
+      if (at < 0 || picked[id]) throw Error("no such item");
+      picked[id] = true;
+      state.items.splice(at, 1);
+    }
+    if (picked.dice2 && picked.exact) throw Error("two kinds of dice");
+    if (picked.exact && !(Number.isInteger(use.face) && use.face >= 1 && use.face <= 6)) throw Error("bad face");
+    let die;
+    if (picked.exact) {
+      die = use.face;
+      events.push({ t: "item", id: "exact" });
+      events.push({ t: "die", value: die, exact: true });
+    } else if (picked.dice2) {
+      const a = random(6) + 1,
+        b = random(6) + 1;
+      die = a + b;
+      events.push({ t: "item", id: "dice2" });
+      events.push({ t: "die", value: die, values: [a, b] });
+    } else {
+      die = random(6) + 1;
+      events.push({ t: "die", value: die });
+    }
+    // ガード: this roll and the next two are safe from accident squares.
+    if (picked.guard) {
+      state.guard = 3;
+      events.push({ t: "item", id: "guard" });
+    }
+    const guarded = state.guard > 0;
     for (let s = 0; s < die; s++) {
       state.pos = (state.pos + 1) % SIZE;
       events.push({ t: "step", to: state.pos });
@@ -414,10 +469,17 @@
     events.push({ t: "land", square: state.pos, kind });
     if (kind === "normal" || kind === "start") {
       const slots = RULES.normal[cost],
-        { index, slot } = pick(slots, random),
-        amount = money(cost * slot.x);
+        { index, slot } = pick(slots, random);
+      // 倍がけ doubles what this wheel pays or takes (it is used up on a normal square only).
+      const double = picked.x2 === true,
+        amount = money(cost * slot.x * (double ? 2 : 1));
+      if (double) {
+        events.push({ t: "item", id: "x2" });
+        picked.x2 = "used";
+      }
       events.push({ t: "wheel", wheel: "normal", slots, index, base: cost, amount });
       gain += amount;
+      if (slot.item) gain += spinItem(state, random, events);
       if (slot.ball) gain += ball(state, card, me, random, events, cost);
       if (slot.kakuhen) {
         const k = pick(RULES.kakuhen, random),
@@ -435,6 +497,8 @@
         state.pending = { game: slot.event, bet: cost, plain: true };
         events.push({ t: "game", game: slot.event, bet: cost, plain: true });
       }
+    } else if (kind === "accident" && guarded) {
+      events.push({ t: "guarded" });
     } else if (kind === "accident") {
       const { index, slot } = pick(RULES.accident, random);
       events.push({ t: "wheel", wheel: "accident", slots: RULES.accident, index, base: cost });
@@ -462,9 +526,38 @@
         events.push({ t: "game", game: slot, bet: cost });
       }
     }
+    // ボール券: a ball for this roll.
+    if (picked.ball) {
+      events.push({ t: "item", id: "ball" });
+      gain += ball(state, card, me, random, events, cost);
+    }
+    // An unused 倍がけ stays in the bag.
+    if (picked.x2 === true) state.items.push("x2");
+    if (state.guard > 0) state.guard--;
     state.won += gain;
     state.best = Math.max(state.best || 0, gain);
     return { state, card, events, gain, cost };
+  }
+  // The item wheel: one item for the bag, or, with the bag full, half its price in cash.
+  function spinItem(state, random, events) {
+    const slots = RULES.itemWheel,
+      { index, slot } = pick(slots, random);
+    events.push({ t: "wheel", wheel: "item", slots, index, base: 0 });
+    if (state.items.length < RULES.itemMax) {
+      state.items.push(slot.item);
+      events.push({ t: "itemGet", id: slot.item });
+      return 0;
+    }
+    const sold = Math.floor(RULES.items[slot.item].price / 2);
+    events.push({ t: "itemGet", id: slot.item, full: true, amount: sold });
+    return sold;
+  }
+  // Buying an item (the screen takes the price from the wallet): the bag must have room.
+  function buy(before, id) {
+    if (!isItem(id)) throw Error("no such item");
+    const have = itemsOf(before);
+    if (have.length >= RULES.itemMax) throw Error("full");
+    return { state: { ...clone(before), items: [...have, id], rev: revOf(before) + 1 }, price: RULES.items[id].price };
   }
 
   // The end of an event game: m is the game's own result as multiples of the bet (1 even money,
@@ -496,7 +589,7 @@
     return { state, card, events, gain };
   }
 
-  const api = { RULES, LINES, CARD, CARDS, CELLS, SIZE, kindAt, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  const api = { RULES, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, buy, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);
