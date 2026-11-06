@@ -160,7 +160,7 @@ const { chromium } = require("playwright"),
       if (!(await move(a))) await a.waitForTimeout(120);
     }
     await screenA.locator(".df-end").waitFor({ timeout: 60000 });
-    assert.match(await screenA.innerText(), /練習なので、ポイントは動きません/);
+    assert.match(await screenA.innerText(), /練習なのでポイントは動きません/);
     assert.equal(docs.get("users/df-a/learningPoints/main").balance, 500, "a practice game moves no points");
     await screenA.getByRole("button", { name: "閉じる", exact: true }).click();
     await screenA.waitFor({ state: "detached" });
@@ -168,7 +168,7 @@ const { chromium } = require("playwright"),
     // ---- A table of three ---------------------------------------------------------------
     await a.evaluate(() => window.Daifugo.open());
     await screenA.locator("[type=number]").fill("100");
-    await screenA.getByRole("button", { name: "最大人数 3人" }).click();
+    await screenA.getByRole("button", { name: "最大人数 3" }).click();
     await screenA.getByRole("button", { name: "テーブルを作る" }).click();
     await screenA.locator(".df-code").waitFor();
     const code = (await screenA.locator(".df-code").innerText()).trim();
@@ -231,8 +231,8 @@ const { chromium } = require("playwright"),
     const before = Object.fromEntries(players.map((id) => [id, bal(id)]));
     await a.evaluate(() => window.Daifugo.open());
     await screenA.locator("[type=number]").fill("40");
-    await screenA.getByRole("button", { name: "最大人数 3人" }).click();
-    await screenA.getByRole("button", { name: "4ゲーム（1セット）" }).click();
+    await screenA.getByRole("button", { name: "最大人数 3" }).click();
+    await screenA.getByRole("button", { name: "4回（1セット）" }).click();
     await screenA.getByRole("button", { name: "テーブルを作る" }).click();
     await screenA.locator(".df-code").waitFor();
     const code2 = (await screenA.locator(".df-code").innerText()).trim();

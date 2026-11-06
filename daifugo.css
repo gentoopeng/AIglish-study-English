@@ -160,3 +160,63 @@ html body dialog.df-screen{box-sizing:border-box;overflow-x:hidden;position:fixe
   .df-corner{font-size:13px;}.df-pip{font-size:24px;}.df-card.is-field{width:48px;height:68px;}.df-felt{min-height:170px;}
 }
 @media (prefers-reduced-motion:reduce){.df-card.is-field.is-new,.df-fx-item,.df-chip.is-rev,.df-seat.is-turn .df-seat-head,.df-rank-row,.df-hand .df-card.is-got{animation:none;}}
+
+/* ---- Second pass: fewer words, more care ---- */
+.df-lobby{position:relative;}
+.df-hero{display:flex;align-items:center;gap:10px;margin:2px 0 14px;padding-right:44px;}
+.df-hero h2{margin:0;flex:1;font:800 30px/1 Georgia,"Yu Mincho",serif;letter-spacing:.06em;color:#f6ecc6;text-shadow:0 2px 14px rgba(214,196,141,.35);}
+.df-crown{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:linear-gradient(145deg,#e7d79d,#a98f4e);color:#2a2110;font-size:26px;line-height:1;box-shadow:0 6px 18px rgba(198,183,144,.35),inset 0 1px 0 rgba(255,255,255,.5);}
+.df-hero .df-help{width:34px;height:34px;}
+.df-panel{position:relative;padding:14px 14px 16px;border:1px solid rgba(213,201,172,.2);border-radius:20px;background:linear-gradient(160deg,rgba(30,40,58,.9),rgba(12,18,30,.95));box-shadow:0 10px 28px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.05);}
+.df-panel.is-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.df-panel.is-row h3{margin:0;flex:1 1 auto;white-space:nowrap;}
+.df-panel.is-row .df-primary{width:auto;margin:0;min-width:96px;}
+.df-panel h3{font:700 14px/1.3 system-ui,sans-serif;letter-spacing:.08em;color:#cdbf94;text-transform:none;}
+.df-seg{display:inline-flex;padding:3px;border-radius:999px;background:rgba(5,9,18,.6);border:1px solid rgba(213,201,172,.16);}
+.df-seg button{min-width:44px;min-height:34px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:#a9a393;font:700 13px system-ui,sans-serif;cursor:pointer;transition:background .15s,color .15s;}
+.df-seg button[aria-pressed="true"]{background:linear-gradient(180deg,#e2d29b,#bda977);color:#1b2130;box-shadow:0 2px 8px rgba(0,0,0,.35);}
+.df-opt{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;}
+.df-opt>span{color:#a9a393;font-size:12px;letter-spacing:.08em;}
+.df-stake{display:flex;align-items:center;justify-content:center;gap:8px;margin:6px 0 4px;}
+.df-stake input{width:150px;height:56px;border:0;border-bottom:2px solid rgba(213,201,172,.4);border-radius:0;background:transparent;color:#fff3c4;font:800 40px/1 Georgia,serif;text-align:center;text-shadow:0 0 18px rgba(243,214,117,.35);-moz-appearance:textfield;}
+.df-stake input::-webkit-outer-spin-button,.df-stake input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.df-stake em{font-style:normal;color:#a9a393;font-size:14px;margin-left:-4px;margin-right:4px;}
+.df-stake button{width:40px;height:40px;border:1px solid rgba(213,201,172,.3);border-radius:50%;background:rgba(15,23,42,.6);color:#eee8da;font:700 20px/1 system-ui,sans-serif;cursor:pointer;}
+.df-quick{display:flex;justify-content:center;gap:6px;margin-bottom:6px;}
+.df-quick button{min-height:30px;padding:0 11px;border:1px solid rgba(213,201,172,.22);border-radius:999px;background:transparent;color:#bdb6a4;font:600 12px system-ui,sans-serif;cursor:pointer;}
+.df-caption{display:flex;justify-content:center;flex-wrap:wrap;gap:4px 8px;margin:0 0 6px;}
+.df-caption span{padding:2px 9px;border-radius:999px;background:rgba(198,183,144,.1);color:#d8cb9f;font-size:11px;}
+.df-panel>.df-primary{width:100%;margin-top:12px;}
+.df-join{display:flex;gap:8px;flex:0 0 auto;}
+.df-join input{width:130px;height:44px;font-size:22px;letter-spacing:.35em;text-indent:.35em;}
+.df-join .df-primary{width:auto;min-width:72px;}
+.df-code{margin:6px 0 4px;font-size:64px;text-shadow:0 0 30px rgba(214,196,141,.5);}
+.df-tags{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin:0 0 12px;}
+.df-tags span{padding:3px 11px;border-radius:999px;border:1px solid rgba(213,201,172,.25);color:#d8cb9f;font-size:12px;}
+.df-waiting .df-seats-list{margin-top:6px;}
+.df-waiting>.df-primary,.df-waiting>.df-ghost,.df-end>.df-primary,.df-end>.df-ghost{width:100%;margin-top:10px;}
+.df-rules-sheet{position:fixed;z-index:60;left:14px;right:14px;top:calc(60px + env(safe-area-inset-top));bottom:auto;max-width:480px;margin:0 auto;max-height:70dvh;padding:14px 16px 16px;border:1px solid rgba(213,201,172,.3);border-radius:18px;background:rgba(8,13,24,.97);box-shadow:0 20px 60px rgba(0,0,0,.7);overflow:auto;}
+.df-rules-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;color:#f3e7bf;font:700 15px Georgia,"Yu Mincho",serif;}
+.df-rules-head button{width:28px;height:28px;border:1px solid rgba(213,201,172,.3);border-radius:50%;background:transparent;color:#eee8da;cursor:pointer;}
+.df-rules-sheet ol{margin:0;padding-left:20px;color:#c9c3b2;font-size:12.5px;line-height:1.8;}
+.df-rules-sheet li::marker{color:#c6b790;}
+/* Table: calmer chrome */
+.df-bar{padding-right:46px;}
+.df-info strong{letter-spacing:.1em;}
+.df-help{flex:0 0 auto;}
+.df-count{position:absolute;right:-2px;top:-2px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#f3d675;color:#241a05;font:800 11px/20px system-ui,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.5);}
+.df-seat{position:absolute;}
+.df-seat>.df-fan{margin-top:2px;}
+.df-seat{align-items:center;}
+.df-seat .df-fan{position:relative;}
+.df-me{background:linear-gradient(90deg,rgba(24,34,52,.85),rgba(14,22,36,.7));}
+.df-msg:empty{display:none;}
+.df-msg{min-height:0;color:#e8c9a0;}
+.df-field-empty{font-size:13px;letter-spacing:.1em;color:rgba(255,255,255,.5);}
+.df-felt{box-shadow:inset 0 0 50px rgba(0,0,0,.6),0 12px 30px rgba(0,0,0,.5),0 0 0 1px rgba(240,225,170,.08);}
+.df-felt::after{content:"♠\FE0E ♥\FE0E ♦\FE0E ♣\FE0E";position:absolute;left:0;right:0;bottom:14px;text-align:center;color:rgba(240,225,170,.12);font-size:20px;letter-spacing:.6em;pointer-events:none;}
+.df-end .df-hero{justify-content:center;padding-right:0;}
+.df-end .df-hero h2{flex:0 0 auto;}
+.df-panel.is-row{flex-wrap:nowrap;}
+.df-panel.is-row .df-seg button{min-width:34px;padding:0 10px;}
+.df-panel.is-row .df-primary{min-width:84px;padding:0 12px;}
