@@ -230,6 +230,73 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.ok((await page.evaluate(() => window.__layers2)).some((c) => c.includes("is-special")), "the special wheel spun");
     assert.equal((await saved()).won - specialBefore.won, 1000);
     assert.deepEqual((await card()).owners, beforeCard.owners, "the special number opens no cell");
+    // Items: three bag slots and a shop. ダブルダイス is bought for 150 chips, used on the next roll
+    // (two dice, the sum moves the piece) and gone afterwards; ぴったり needs a face before the roll.
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      Object.assign(s, { pos: 21, items: [], guard: 0 });
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").first().waitFor();
+    assert.equal(await screen.locator(".sg-item").count(), 3);
+    const chipsBefore = await page.evaluate(() => window.Casino.balance());
+    await screen.getByRole("button", { name: "ショップ", exact: true }).click();
+    const shop = screen.locator(".sg-shopbox");
+    assert.equal(await shop.locator("[data-buy]").count(), 5);
+    await shop.locator('[data-buy="dice2"]').click();
+    assert.equal(await page.evaluate(() => window.Casino.balance()), chipsBefore - 150);
+    assert.deepEqual((await saved()).items, ["dice2"]);
+    await shop.getByRole("button", { name: "閉じる" }).click();
+    await screen.locator('.sg-item[data-item="dice2"]').click();
+    assert.equal(await screen.locator('.sg-item[data-item="dice2"]').getAttribute("aria-pressed"), "true");
+    const posBefore = (await saved()).pos;
+    await fix([2, 3, zeroAt]);
+    await screen.locator("[data-sg-roll]").click();
+    await settled();
+    const doubled = await saved();
+    assert.equal(doubled.pos, posBefore + 7, "dice 3 + 4");
+    assert.deepEqual(doubled.items, []);
+    // ぴったり: the roll waits for a face.
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      Object.assign(s, { pos: 21, items: ["exact"] });
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator('.sg-item[data-item="exact"]').click();
+    assert.equal(await screen.locator("[data-sg-roll]").isDisabled(), true);
+    await screen.getByRole("button", { name: "出目 5" }).click();
+    assert.equal(await screen.locator("[data-sg-roll]").isDisabled(), false);
+    await fix([0, zeroAt]);
+    await screen.locator("[data-sg-roll]").click();
+    await settled();
+    assert.equal((await saved()).pos, 26, "exactly 5");
+    // The item slot of the normal wheel spins the item wheel and the bag gets the item.
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      Object.assign(s, { pos: 20, items: [] });
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    const [itemAt, guardAt] = await page.evaluate(() => [window.SugorokuModel.RULES.normal[100].findIndex((x) => x.item), window.SugorokuModel.RULES.itemWheel.findIndex((x) => x.item === "guard")]);
+    await fix([0, itemAt, guardAt]);
+    await screen.locator("[data-sg-roll]").click();
+    await settled();
+    assert.deepEqual((await saved()).items, ["guard"]);
+    assert.equal(await screen.locator('.sg-item[data-item="guard"]').count(), 1);
+    // (Back to a square before a normal one, with an empty bag, for what follows.)
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      Object.assign(s, { pos: 20, items: [] });
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").first().waitFor();
     // The rules sheet explains the 確変 wheel (and no longer says the normal wheel pays ×10).
     await page.getByRole("button", { name: "すごろくビンゴの遊び方" }).click();
     const sheet = await page.locator(".sg-sheet").innerText();
