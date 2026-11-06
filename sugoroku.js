@@ -597,14 +597,23 @@
     listen();
     setTimeout(notify, 0);
     // A game played further on another device takes over, if nothing is going on here.
-    if (kept)
+    if (kept) {
+      // Until the cloud copy has been compared, no roll starts (it could throw away a purchase made elsewhere).
+      view.syncing = true;
+      const done = () => {
+        if (target !== view) return;
+        view.syncing = false;
+        hud();
+      };
+      cloudGame.then(done, done);
       cloudGame.then((remote) => {
         if (!remote || target !== view || view.busy || S.revOf(remote) <= S.revOf(view.state) || view.state.pending || view.state.bonus?.length) return;
         view.state = remote;
         save(remote);
         hud();
         place(remote.pos, false);
-      });
+      }, () => {});
+    }
     // Without a listener, the card as last seen is brought up to date once.
     if (cached && view.online && typeof window.fbOnSnapshot !== "function")
       loadCard().then((fresh) => {
@@ -1003,7 +1012,7 @@
     }
     paintItems();
     const needFace = view.armed.ids.includes("exact") && !view.armed.face;
-    view.go.disabled = view.busy || (short && !refill) || study || !!state.pending || needFace;
+    view.go.disabled = view.busy || !!view.syncing || (short && !refill) || study || !!state.pending || needFace;
     view.go.textContent = refill
       ? "練習チップを" + fmt(api.practiceStart) + "枚に戻す"
       : short
