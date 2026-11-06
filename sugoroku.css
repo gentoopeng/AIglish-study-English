@@ -246,3 +246,15 @@
 .sg-wheel.is-surge .sg-wheel-out{font-size:30px;letter-spacing:.2em;text-shadow:0 0 18px rgba(255,214,120,.9);}
 @keyframes sg-surge{0%,100%{transform:translate(0,0) scale(1);}20%{transform:translate(-4px,2px) scale(1.03);}40%{transform:translate(4px,-3px) scale(1.05);}60%{transform:translate(-3px,-2px) scale(1.03);}80%{transform:translate(3px,3px) scale(1.04);}}
 @media (prefers-reduced-motion:reduce){.sg-wheel.is-surge{animation:none;}}
+
+/* Two cards: swipe between them. */
+.sg-cards-slider{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain;border-radius:14px;}
+.sg-cards-slider::-webkit-scrollbar{display:none;}
+.sg-cards-slider .sg-card{flex:0 0 100%;box-sizing:border-box;scroll-snap-align:center;scroll-snap-stop:always;}
+.sg-card-tabs{display:flex;align-items:center;gap:6px;margin:0 0 5px;}
+.sg-card-tabs button{position:relative;min-height:26px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:rgba(10,18,16,.6);color:rgba(240,232,212,.7);font:600 11px/1 system-ui,sans-serif;cursor:pointer;}
+.sg-card-tabs button[aria-pressed="true"]{background:rgba(214,183,115,.18);border-color:var(--gold);color:var(--gold);}
+.sg-card-tabs button.has-reach{box-shadow:0 0 0 1px rgba(214,183,115,.5);}
+.sg-tab-reach{margin-right:5px;font-style:normal;color:#ffdf8a;font-size:10px;}.sg-tab-reach:empty{display:none;}
+.sg-special{margin-left:auto;padding:3px 10px;border-radius:999px;background:linear-gradient(90deg,#7c2d12,#b45309);color:#ffe9b8;font:700 11px/1.2 system-ui,sans-serif;letter-spacing:.06em;}
+.sg-ball.is-special{background:radial-gradient(circle at 35% 30%,#fff3b8,#e0a41c 70%);color:#3a2504;box-shadow:0 0 20px rgba(255,200,60,.9);}

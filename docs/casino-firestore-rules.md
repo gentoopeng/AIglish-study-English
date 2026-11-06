@@ -3,7 +3,7 @@
 The casino keeps two documents that every player writes:
 
 - `shared/casino_jackpot`: `{ bet, jpFrom, sjpFrom, wins[], updatedAt }`
-- `shared/sugoroku_live`: `{ cells[49], owners[49], owed{}, people{}, log[], updatedAt }`
+- `shared/sugoroku_live2`: `{ v: 2, cells[98], owners[98], special, owed{}, owedAt{}, people{}, log[], updatedAt }` (the two-card game; `shared/sugoroku_live` with 49 cells is the game before, read once to make it)
 - `shared/sugoroku_here`: `{ [playerId]: { n, at } }`, who is playing すごろくビンゴ right now
 
 The project's rules are currently open, so any client can write anything there. The app now checks everything it reads back from these documents (`SugorokuModel.validCard`, `cleanPeople`/`cleanLog` in sugoroku.js, `num` in casino-jackpot.js). Bad data is ignored rather than shown, and icons are only accepted as small inline images.
@@ -30,10 +30,12 @@ match /shared/sugoroku_here {
   allow read: if true;
   allow write: if request.resource.data.size() <= 200;
 }
-match /shared/sugoroku_live {
+match /shared/sugoroku_live2 {
   allow read: if true;
-  allow write: if request.resource.data.cells is list && request.resource.data.cells.size() == 49
-    && request.resource.data.owners is list && request.resource.data.owners.size() == 49
+  allow write: if request.resource.data.v == 2
+    && request.resource.data.cells is list && request.resource.data.cells.size() == 98
+    && request.resource.data.owners is list && request.resource.data.owners.size() == 98
+    && request.resource.data.special is int
     && (!('owed' in request.resource.data) || (request.resource.data.owed is map && request.resource.data.owed.size() <= 200))
     && (!('people' in request.resource.data) || (request.resource.data.people is map && request.resource.data.people.size() <= 100))
     && (!('log' in request.resource.data) || (request.resource.data.log is list && request.resource.data.log.size() <= 30));

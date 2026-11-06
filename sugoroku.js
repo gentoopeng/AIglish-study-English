@@ -42,20 +42,20 @@
   };
   const SQUARE = { start: "START", normal: "", event: "★", accident: "!" };
   const GAME_NAMES = { blackjack: "ブラックジャック", dice: "ダイスポーカー", chinchiro: "チンチロ", ball: "ボール確定" };
-  const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "BONUS" };
-  const HOT = new Set(["bingo", "sjp", "kakuhen"]);
+  const WHEEL_NAMES = { event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "BONUS", special: "SPECIAL BALL" };
+  const HOT = new Set(["bingo", "sjp", "kakuhen", "special"]);
   const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "ストップ", hilo: "ハイ＆ロー" };
   // The normal squares' quick games, paid in multiples of the bet (not played in 早送り).
   const QUICK_GAMES = new Set(["stop", "hilo"]);
   const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
     "ログインしているときはポイント、ゲストやオフラインのときは練習チップで遊びます。1回100で、額はみんな同じです。",
-    "通常マス：ルーレットで ×0〜×5 が額に掛かって戻ります。「−×」は額とは別にその分が引かれます。「BJ」「DICE」「チンチロ」はそのゲームを1回（勝てば配当、負けると賭けた分はなくなります）、「●」はボール、「STOP」「H&L」はミニゲームです。たまに「BONUS」ルーレットが当たり、大きな配当やボール5個連続が出ます。",
+    "通常マス：ルーレットで −×5 〜 ×7 が額に掛かって戻ります（−は額とは別に引かれ、足りない分はカジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回（勝てば配当、負けると賭けた分はなくなります）、「●」はボール、「STOP」「H&L」はミニゲームです。たまに「BONUS」ルーレットが当たり、大きな配当やボール5個連続が出ます。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。勝てば配当とボール、引き分けは額が戻ります。サイコロは本当に振っていて、相手の目も見えます。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
     "100マスで1周してSTARTを通ると、ボールが1つ出ます。",
-    "ビンゴカードはみんなで共通です。ボールは1〜100の抽選で、カードにあって空いている番号ならそこに自分のボールが入ります。それ以外は額の2倍がもらえます。1列そろうとビンゴ賞金（1,000）とビンゴルーレットです。そろった列は新しい番号になります。",
-    "ビンゴ賞金は半分がそろえた人、残りの半分はその列にボールを置いていた人で分けます。ほかの人の分は、その人が開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
+    "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選で、開いていない番号なら自分のボールが入ります。すでに開いている番号は額の2倍がもらえます。★の数字（特別な数字）が出ると、スペシャルルーレットが回ります。1列そろうとビンゴ賞金とビンゴルーレット。そろった列のボールは戻ります。",
+    "ビンゴ賞金の7割と、ルーレットの倍率の5割は、その列にボールを置いていた人でボールの数に応じて分けます（そろえた人のボールも数えます）。ほかの人の分は、その人が開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
     "ジャックポットは、カジノでディーラー相手に賭けられたポイントから貯まります。",
     "「早送り」にすると、ふだんのマスは短く進みます。★マスは自動で進み、盤面をタップするとその回を飛ばせます。",
     "ほかの人のビンゴの分け前は、30日受け取らないと消えます。",
@@ -124,8 +124,13 @@
   // landed, writes it back in one transaction, so two players never take the same cell. A
   // guest, or a device off the cloud, plays on a card of its own.
   const shared = () => api.uid() !== "GUEST-000" && !!(window.db && window.fbDoc && window.fbRunTransaction) && !window.FirestoreReadGuard?.paused?.();
-  const CARD_DOC = "sugoroku_live";
+  // The two-card game lives in its own document: a copy of the game from before (an open tab on the
+  // old code) keeps writing its 49-cell card to `sugoroku_live` and never touches this one. The first
+  // roll after the change makes this document from that one (see legacyCard).
+  const CARD_DOC = "sugoroku_live2",
+    LEGACY_DOC = "sugoroku_live";
   const cardRef = () => window.fbDoc(window.db, "shared", CARD_DOC);
+  const legacyRef = () => window.fbDoc(window.db, "shared", LEGACY_DOC);
   // Once the screen is open it stays on the card it opened with (see view.online).
   const localCardName = () => "aiglish_sugoroku_card_" + ((view ? view.online : shared()) ? "live" : api.uid());
   // Everything on the shared card is read as untrusted: the card itself is checked by the model,
@@ -148,8 +153,24 @@
       .map((e) => ({ t: e.t, id: e.id, n: String(e.n ?? "").slice(0, 24), c: Math.min(12, Math.max(1, Math.floor(Number(e.c) || 1))), at: e.at }));
   }
   function readCard(data) {
-    const card = data && { cells: data.cells, owners: data.owners, ...(data.owed ? { owed: data.owed } : {}), ...(data.owedAt ? { owedAt: data.owedAt } : {}) };
+    if (!data) return null;
+    const card = { v: data.v, cells: data.cells, owners: data.owners, special: data.special, ...(data.owed ? { owed: data.owed } : {}), ...(data.owedAt ? { owedAt: data.owedAt } : {}) };
     return S.validCard(card) ? { card, people: cleanPeople(data.people), log: cleanLog(data.log) } : null;
+  }
+  // The game from before the second card: new cards, but what was owed there (only the whole-point
+  // parts that are sane), the people and the log come across.
+  function legacyCard(data) {
+    if (!data || typeof data !== "object") return null;
+    const fresh = S.newCard(random);
+    const owed = {},
+      owedAt = {};
+    if (data.owed && typeof data.owed === "object" && !Array.isArray(data.owed))
+      for (const [id, n] of Object.entries(data.owed).slice(0, 200))
+        if (okId(id) && Number.isInteger(n) && n > 0 && n <= 1e7) {
+          owed[id] = n;
+          owedAt[id] = Number.isFinite(data.owedAt?.[id]) ? data.owedAt[id] : Date.now();
+        }
+    return { card: { ...fresh, owed, owedAt }, people: cleanPeople(data.people), log: cleanLog(data.log) };
   }
   function keepCard(card, people, log) {
     try {
@@ -169,6 +190,18 @@
         const snap = await window.fbGetDoc(cardRef());
         const found = snap.exists() ? readCard(snap.data()) : null;
         if (found) return found;
+        // Not made yet: made now from the game before, so every device shows the same cards.
+        if (!snap.exists() && typeof window.fbRunTransaction === "function") {
+          const made = await window.fbRunTransaction(window.db, async (tx) => {
+            const again = await tx.get(cardRef());
+            if (again.exists()) return readCard(again.data());
+            const old = await tx.get(legacyRef()),
+              now = (old.exists() && legacyCard(old.data())) || { card: S.newCard(random), people: {}, log: [] };
+            tx.set(cardRef(), { v: 2, cells: now.card.cells, owners: now.card.owners, special: now.card.special, owed: now.card.owed || {}, owedAt: now.card.owedAt || {}, people: now.people, log: now.log, updatedAt: Date.now() });
+            return now;
+          });
+          if (made) return made;
+        }
       } catch (error) {
         console.warn("[sugoroku] card", error);
       }
@@ -266,10 +299,15 @@
       const attempt = () =>
         window.fbRunTransaction(window.db, async (tx) => {
           const snap = await tx.get(cardRef());
-          const now = (snap.exists() && readCard(snap.data())) || { card: S.newCard(random), people: {}, log: [] };
+          let now = snap.exists() ? readCard(snap.data()) : null;
+          if (!now) {
+            // The first roll of the two-card game: the cards are made from the game before.
+            const old = snap.exists() ? null : await tx.get(legacyRef());
+            now = (old?.exists() && legacyCard(old.data())) || { card: S.newCard(random), people: {}, log: [] };
+          }
           const done = apply(now);
           if (!snap.exists() || done.collected || JSON.stringify(done.out.card) !== JSON.stringify(now.card) || done.log !== now.log)
-            tx.set(cardRef(), { cells: done.out.card.cells, owners: done.out.card.owners, owed: done.out.card.owed || {}, owedAt: done.out.card.owedAt || {}, people: done.people, log: done.log, updatedAt: Date.now() });
+            tx.set(cardRef(), { v: 2, cells: done.out.card.cells, owners: done.out.card.owners, special: done.out.card.special, owed: done.out.card.owed || {}, owedAt: done.out.card.owedAt || {}, people: done.people, log: done.log, updatedAt: Date.now() });
           return { ...done, before: now };
         });
       // Many players at once can crowd the one card: one more try after a moment before giving up.
@@ -297,8 +335,9 @@
     if (!id || id === "GUEST-000" || !window.db || !window.fbDoc || !window.fbGetDoc || window.FirestoreReadGuard?.paused?.()) return 0;
     if (peek.id !== id || Date.now() - peek.at > 300e3)
       try {
-        const snap = await window.fbGetDoc(cardRef()),
-          found = snap.exists() ? readCard(snap.data()) : null;
+        const snap = await window.fbGetDoc(cardRef());
+        // (Before the first roll of the two-card game, what is owed is still on the document before.)
+        const found = snap.exists() ? readCard(snap.data()) : legacyCard((await window.fbGetDoc(legacyRef())).data?.());
         peek = { id, at: Date.now(), amount: found?.card.owed?.[id] || 0 };
       } catch (error) {
         console.warn("[sugoroku] waiting", error);
@@ -315,8 +354,9 @@
     const target = view;
     try {
       view.stop = window.fbOnSnapshot(cardRef(), (snap) => {
+        if (target !== view || !view.body.isConnected) return target.stop?.();
         const found = snap.exists() && readCard(snap.data());
-        if (!found || target !== view || !view.body.isConnected) return target.stop?.();
+        if (!found) return;
         // While a roll or a game is shown, the card is not swapped under it. The change is not
         // dropped either: the card is read again as soon as the screen is free (see catchUp).
         if (view.busy) return void (view.stale = true);
@@ -571,18 +611,42 @@
     window.CasinoJackpot?.refresh();
 
     const cardWrap = node("div", "sg-card-wrap");
-    const card = node("div", "sg-card");
-    card.setAttribute("aria-label", "ビンゴカード");
-    view.cells = view.card.cells.map((n, i) => {
-      const cell = node("div", "sg-cell" + (i === S.FREE ? " is-free" : ""));
-      cell.append(node("span", "", i === S.FREE ? "FREE" : String(n)));
-      card.append(cell);
-      return cell;
+    // Two cards side by side: swipe (or press the tabs) to turn between them.
+    const slider = node("div", "sg-cards-slider");
+    view.slider = slider;
+    view.cells = [];
+    const per = S.CARD * S.CARD;
+    for (let b = 0; b < S.CARDS; b++) {
+      const card = node("div", "sg-card");
+      card.setAttribute("aria-label", "ビンゴカード" + (b + 1));
+      for (let i = 0; i < per; i++) {
+        const cell = node("div", "sg-cell");
+        cell.append(node("span", "", String(view.card.cells[b * per + i])));
+        card.append(cell);
+        view.cells[b * per + i] = cell;
+      }
+      slider.append(card);
+    }
+    const tabs = node("div", "sg-card-tabs");
+    view.tabs = [];
+    for (let b = 0; b < S.CARDS; b++) {
+      const tab = node("button");
+      tab.type = "button";
+      tab.append(node("i", "sg-tab-reach", ""), node("span", "", "カード" + (b + 1)));
+      tab.onclick = () => turnTo(b, true);
+      tabs.append(tab);
+      view.tabs.push(tab);
+    }
+    view.special = node("span", "sg-special");
+    tabs.append(view.special);
+    slider.addEventListener("scroll", () => {
+      clearTimeout(view.scrollTimer);
+      view.scrollTimer = setTimeout(syncTabs, 90);
     });
     view.say = node("p", "sg-say");
     view.say.setAttribute("role", "status");
     view.cardWrap = cardWrap;
-    cardWrap.append(card, view.say);
+    cardWrap.append(tabs, slider, view.say);
 
     const board = node("div", "sg-boardrow");
     view.die = cube();
@@ -701,12 +765,28 @@
     box.append(mine, node("p", "sg-book-title", "みんなの最近の記録"), recent, close);
     layer.replaceChildren(box);
   }
+  // Which card is in view, and turning to one (by the tabs, a swipe, or the ball that just landed).
+  const cardOf = (cell) => Math.floor(cell / (S.CARD * S.CARD));
+  function currentCard() {
+    const w = view.slider?.clientWidth || 1;
+    return Math.max(0, Math.min(S.CARDS - 1, Math.round((view.slider?.scrollLeft || 0) / w)));
+  }
+  function syncTabs() {
+    if (!view?.tabs) return;
+    const now = currentCard();
+    view.tabs.forEach((tab, b) => tab.setAttribute("aria-pressed", String(b === now)));
+  }
+  function turnTo(b, smooth) {
+    if (!view?.slider || currentCard() === b) return syncTabs();
+    const w = view.slider.clientWidth;
+    view.slider.scrollTo({ left: b * w, behavior: smooth && !calm() ? "smooth" : "auto" });
+    view.tabs?.forEach((tab, i) => tab.setAttribute("aria-pressed", String(i === b)));
+  }
   // Each cell: its number, or the ball of whoever opened it — their icon, or their initial on a
   // colour of their own — with this player's balls ringed in gold.
   function paintCard() {
     const id = api.uid();
     view.cells.forEach((cell, i) => {
-      if (i === S.FREE) return;
       const owner = view.card.owners[i],
         who = owner && view.people[owner];
       cell.classList.toggle("is-on", !!owner);
@@ -727,6 +807,15 @@
     const reaches = S.reach(view.card),
       reach = new Set(reaches.flatMap((line) => S.LINES[line]));
     view.cells.forEach((cell, i) => cell.classList.toggle("is-reach", !view.card.owners[i] && reach.has(i)));
+    // Reaches per card on the tabs (the card not in view may be the one waiting), and the special number.
+    const perCard = Array(S.CARDS).fill(0);
+    for (const line of reaches) perCard[cardOf(S.LINES[line][0])]++;
+    view.tabs?.forEach((tab, b) => {
+      tab.firstChild.textContent = perCard[b] ? "リーチ" + perCard[b] : "";
+      tab.classList.toggle("has-reach", perCard[b] > 0);
+    });
+    syncTabs();
+    if (view.special) view.special.textContent = "★ " + view.card.special;
     // The more lines wait on one number, the warmer the card.
     view.cardWrap.style.setProperty("--heat", String(Math.min(reaches.length, 6)));
     view.cardWrap.classList.toggle("is-warm", reaches.length > 0);
@@ -973,7 +1062,7 @@
     view.body.classList.add("is-spinning");
     const live = { ...shown };
     view.state = live;
-    view.card = { cells: [...before.card.cells], owners: [...before.card.owners] };
+    view.card = { ...before.card, cells: [...before.card.cells], owners: [...before.card.owners] };
     // This player's own name and icon stay known even if a finished line just took their balls.
     view.people = { ...before.people, ...people, ...(me && me.id === api.uid() ? { [me.id]: me.value } : {}) };
     paintCard();
@@ -1034,6 +1123,7 @@
       } else if (e.t === "ball") {
         await drawBall(e, live);
       } else if (e.t === "line") {
+        turnTo(cardOf(e.cells[0]), true);
         hud();
         e.cells.forEach((c, i) => {
           const cell = view.cells[c];
@@ -1048,16 +1138,15 @@
           await wait(1300);
         }
       } else if (e.t === "reset") {
-        // The finished lines start again: their balls leave and fresh numbers come in.
-        for (const [c, n] of Object.entries(e.numbers)) {
-          view.card.cells[c] = n;
+        // The finished lines start again: their balls leave (the numbers stay).
+        for (const c of e.cells) {
           view.card.owners[c] = "";
           view.cells[c].classList.add("is-new");
           setTimeout(() => view?.cells[c]?.classList.remove("is-new"), 1200);
         }
         paintCard();
         hud();
-        say("そろった列は新しい番号に", "is-ball");
+        say("そろった列のボールが戻る", "is-ball");
         await wait(900);
       } else if (e.t === "prize") {
         say("ビンゴ賞金　+" + fmt(e.amount) + api.unit() + (e.total > e.amount ? "（みんなに " + fmt(e.total - e.amount) + "）" : ""), "is-gain");
@@ -1087,7 +1176,7 @@
   }
 
   // ---- The ball draw: a numbered ball rolls in from the right; on the card it flies into its
-  // number, otherwise it greys out and pays 1.5× ------------------------------------------------
+  // number, otherwise it greys out and pays 2× ------------------------------------------------
   async function drawBall(e, live) {
     const ball = node("div", "sg-ball", String(e.number));
     // A ball for a number a line is waiting on: it glows and takes its time, even in 早送り.
@@ -1099,12 +1188,19 @@
       ball.classList.add("is-reach");
     }
     view.cardWrap.append(ball);
-    say(onReach ? "リーチの番号！" : "", onReach ? "is-hot" : "");
+    if (e.cell >= 0) turnTo(cardOf(e.cell), true);
+    if (e.special) ball.classList.add("is-special");
+    say(e.special ? "SPECIAL BALL ★" : onReach ? "リーチの番号！" : "", e.special ? "is-hot" : onReach ? "is-hot" : "");
     ball.classList.add("is-in");
     await wait(onReach ? 1600 : 1100);
+    if (e.special) {
+      await wait(500);
+      ball.remove();
+      return;
+    }
     if (e.miss) {
       ball.classList.add("is-miss");
-      say("ハズレ " + e.number + "　×1.5 +" + fmt(e.amount) + api.unit(), "is-gain");
+      say("もう開いている " + e.number + "　×2 +" + fmt(e.amount) + api.unit(), "is-gain");
       await wait(900);
       ball.remove();
       return;
@@ -1135,6 +1231,7 @@
     if (wheel === "event") return slot === "ball" ? "ball" : "game-" + slot;
     if (wheel === "accident") return slot.start ? "worst" : slot.back ? "bad" : slot.take >= 1.5 ? "worst" : slot.take ? "bad" : "safe";
     if (slot.kakuhen) return "zero";
+    if (wheel === "special") return slot.balls ? "ball" : slot.x >= 30 ? "gold" : slot.x >= 15 ? "champagne" : "high";
     if (wheel === "kakuhen") return slot.balls ? "ball" : slot.x >= 10 ? "gold" : slot.x >= 5 ? "champagne" : slot.x >= 3 ? "high" : "mid";
     if (slot.ball) return "ball";
     if (slot.game && wheel === "normal") return "game-mini";
@@ -1217,10 +1314,10 @@
     if (e.mult > 1 && HOT.has(e.wheel)) box.append(node("p", "sg-wheel-base", "賞金とミニゲームは ×" + e.mult));
     layer.replaceChildren(box);
     const n = e.slots.length,
-      turns = { normal: 4, event: 4, accident: 4, bingo: 5, jp: 6, sjp: 7, kakuhen: 5 }[e.wheel],
+      turns = { normal: 4, event: 4, accident: 4, bingo: 5, jp: 6, sjp: 7, kakuhen: 5, special: 5 }[e.wheel],
       jitter = (random(60) - 30) / 100,
       angle = turns * 360 - ((e.index + 0.5 + jitter * 0.8) * 360) / n;
-    const full = { normal: 1700, event: 2000, accident: 2000, bingo: 3000, jp: 3800, sjp: 4600, kakuhen: 3200 }[e.wheel],
+    const full = { normal: 1700, event: 2000, accident: 2000, bingo: 3000, jp: 3800, sjp: 4600, kakuhen: 3200, special: 3200 }[e.wheel],
       time = full * pace();
     box.classList.add("is-spinning");
     disc.style.transition = time ? "transform " + time + "ms cubic-bezier(.15,.6,.1,1)" : "none";

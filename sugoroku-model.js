@@ -8,17 +8,18 @@
 //              (a win also gives a ball, a loss gives nothing back), or a sure ball (the bet back)
 //   accident – a wheel: lose 0–2× the bet more, go back three squares, or go back to START
 // Passing START gives a ball, nothing else.
-// The 7×7 bingo card (48 numbers from 1–100, the middle free) is shared by every player and
-// kept apart from each player's own state: { cells, owners }, owners[i] the id of whoever's
-// ball opened cell i ("" closed, "*" the free middle). A ball is drawn from 1–100: on the card
-// and still closed it opens there under the player's name; otherwise it pays 2× the bet.
-// A finished line pays the bingo prize (10× the bet) and spins a 10-slot wheel: the bet × 10 / 20 /
+// The bingo cards: two 7×7 cards (98 numbers) shared by every player and kept apart from each
+// player's own state: { v: 2, cells, owners, special }, cells[0..48] the first card and
+// cells[49..97] the second, owners[i] the id of whoever's ball opened cell i ("" closed). A ball is
+// drawn from 1–99: the 98 numbers on the cards cover all but one, the special number, so a ball
+// opens a number unless that one is already open (then it pays 2× the bet); the special number
+// spins the special wheel. A finished line pays the bingo prize (5× the bet) and spins a 10-slot wheel: the bet × 10 / 20 /
 // 50, four mini games, the jackpot (twice), or the super-jackpot chance, a 5-slot wheel of the
 // super jackpot, the jackpot twice, a bigger tapping game and "back" (the first wheel again).
 // Two lines at once pay (n + 1)× and a line of only this player's balls soloBonus× more (not the
 // jackpots, and not the mini games, which pay their points × bingoGameBoost). The bingo prize is shared by the balls on the finished lines, and wheelShare of the
 // bingo wheel's multiples too: each other player's part waits in card.owed[id] until they next
-// play (collect). The rest of the wheel, its mini game and any jackpot are the finisher's. The finished lines' numbers are then drawn afresh and their balls cleared.
+// play (collect). The rest of the wheel, its mini game and any jackpot are the finisher's. The finished lines' balls are then cleared (the numbers stay).
 // The jackpots are shared by the whole casino (see casino-jackpot.js); here they are only events.
 //
 // Every amount lives in RULES so it can be tuned. `random(n)` gives 0..n-1.
@@ -55,7 +56,7 @@
     costs: [100],
     // The ring: 100 squares, about 29 rolls a lap. S start, n normal, E event, A accident.
     board: Array.from({ length: 100 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
-    // The normal wheel: 40 slots from ×0.25 down to −×1 (the top is the 確変 slots) (a minus takes that much more than the
+    // The normal wheel: 40 slots from ×7 down to −×5 (one is a 確変 slot) (a minus takes that much more than the
     // bet). A ball slot gives a ball and nothing else (a ball that misses the card pays missPay);
     // a game slot starts a quick mini game paid in multiples of the bet; an event slot plays
     // blackjack, dice poker or chinchiro as an event square does.
@@ -64,9 +65,10 @@
         // The top of the wheel is a 確変 slot: it starts the 確変 wheel below, which holds the
         // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
         ...KAKU(1),
-        ...N(5), ...N(1.5), ...N(1),
-        ...N(0.5, 4), ...N(0.25),
-        ...N(0, 15), ...N(-0.5, 2), ...N(-1, 2),
+        // High risk, high return: a bad slot takes −2 to −5 times the bet, a good one gives 3 to 7 times.
+        ...N(-5, 4), ...N(-2, 3), ...N(-1, 2),
+        ...N(0, 7),
+        ...N(0.5, 2), ...N(1, 2), ...N(2, 2), ...N(3), ...N(5, 3), ...N(7),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -81,9 +83,9 @@
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
     eventPay: { lose: 0, push: 1, sure: 1 },
-    // Balls are drawn from 1–NUMBERS; the card holds 48 of them. A ball not on the card (or
-    // already open) pays this many times the bet instead.
-    numbers: 100,
+    // Balls are drawn from 1–NUMBERS; the two cards hold all but the special one. A ball on a
+    // number that is already open pays this many times the bet instead.
+    numbers: 99,
     missPay: 2,
     // A line made only of the player's own balls pays this many times more.
     soloBonus: 1.1,
@@ -95,19 +97,21 @@
     accident: [{ take: 0 }, { take: 0.5 }, { back: 3 }, { take: 1 }, { start: true }, { take: 1.5 }, { back: 3 }, { take: 2 }, { take: 0.5 }, { start: true }],
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
-    bingoPrize: 10,
+    bingoPrize: 5,
     // The bingo wheels' mini games score this many times their points.
     bingoGameBoost: 2,
     // Of the bingo prize, this part is shared by the balls on the line (the finisher's own balls
     // included); the rest is the finisher's.
-    prizeShare: 0.5,
+    prizeShare: 0.7,
     // Of what the bingo wheel's ×5 / ×10 / ×20 pays, this part goes to the other players with
     // balls on the line, by their balls (the prize above is shared in full the same way).
-    wheelShare: 0.3,
+    wheelShare: 0.5,
     // After a line: x pays the bet × x; game starts a mini game; miss is the bingo prize alone;
     // the super-jackpot chance leads to the second wheel, where back spins the first again.
     wheels: {
-      bingo: [{ x: 10 }, { game: "timer" }, { x: 20 }, { game: "tap" }, { jackpot: "jp" }, { game: "dice" }, { x: 50 }, { game: "math" }, { jackpot: "jp" }, { next: "sjp" }],
+      // The special number: one wheel (the bet × x, or three more balls).
+      special: spread([{ x: 10 }, { x: 10 }, { x: 15 }, { x: 20 }, { x: 20 }, { x: 30 }, { x: 50 }, { x: 0, balls: 3 }, { x: 0, balls: 3 }, { x: 40 }]),
+      bingo: [{ x: 8 }, { game: "timer" }, { x: 15 }, { game: "tap" }, { jackpot: "jp" }, { game: "dice" }, { x: 35 }, { game: "math" }, { x: 25 }, { next: "sjp" }],
       sjp: [{ jackpot: "sjp" }, { jackpot: "jp" }, { game: "tapex" }, { jackpot: "sjp" }, { back: true }],
     },
     // Mini games, scored in points (multiplied like the line's other prizes):
@@ -122,46 +126,55 @@
   };
   const SIZE = RULES.board.length,
     CARD = 7,
-    FREE = 24;
+    CARDS = 2,
+    CELLS = CARD * CARD * CARDS;
   const KIND = { S: "start", n: "normal", E: "event", A: "accident" };
   const kindAt = (i) => KIND[RULES.board[i]];
+  // 16 lines on each card (7 rows, 7 columns, 2 diagonals): 32 in all, cells numbered card by card.
   const LINES = (() => {
     const lines = [],
       seq = [0, 1, 2, 3, 4, 5, 6];
-    for (let i = 0; i < CARD; i++) {
-      lines.push(seq.map((j) => i * CARD + j));
-      lines.push(seq.map((j) => j * CARD + i));
+    for (let card = 0; card < CARDS; card++) {
+      const at = (r, c) => card * CARD * CARD + r * CARD + c;
+      for (let i = 0; i < CARD; i++) {
+        lines.push(seq.map((j) => at(i, j)));
+        lines.push(seq.map((j) => at(j, i)));
+      }
+      lines.push(seq.map((j) => at(j, j)), seq.map((j) => at(j, CARD - 1 - j)));
     }
-    lines.push(seq.map((j) => j * CARD + j), seq.map((j) => j * CARD + (CARD - 1 - j)));
     return lines;
   })();
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const money = (n) => Math.round(n);
 
-  // A fresh card: 48 different numbers from 1–100 in random places, the middle free.
+  // Fresh cards: the numbers 1–99 in random places, one of them (the special number) on neither card.
   function newCard(random) {
     const pool = Array.from({ length: RULES.numbers }, (_, i) => i + 1);
     for (let i = pool.length - 1; i > 0; i--) {
       const j = random(i + 1);
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    const cells = pool.slice(0, CARD * CARD - 1);
-    cells.splice(FREE, 0, 0);
-    return { cells, owners: cells.map((n) => (n ? "" : "*")) };
+    return { v: 2, cells: pool.slice(1, CELLS + 1), owners: Array(CELLS).fill(""), special: pool[0] };
   }
-  // The card is shared, so anything read back is checked: numbers 1–100 once each with 0 in the
-  // middle, "*" only there, ids of a sane length, and what is owed whole points.
-  const ID = (id) => typeof id === "string" && id.length > 0 && id.length <= 64 && id !== "*";
+  // The card is shared, so anything read back is checked: the 98 numbers once each from 1–99 and a
+  // special number that is not among them, ids of a sane length, and what is owed whole points.
+  // (A card from before the second card, with 49 cells, is not valid: a new one takes its place.)
+  const ID = (id) => typeof id === "string" && id.length > 0 && id.length <= 64;
   function validCard(card) {
     return (
       !!card &&
+      card.v === 2 &&
       Array.isArray(card.cells) &&
-      card.cells.length === CARD * CARD &&
-      card.cells.every((n, i) => (i === FREE ? n === 0 : Number.isInteger(n) && n >= 1 && n <= RULES.numbers)) &&
-      new Set(card.cells).size === CARD * CARD &&
+      card.cells.length === CELLS &&
+      card.cells.every((n) => Number.isInteger(n) && n >= 1 && n <= RULES.numbers) &&
+      new Set(card.cells).size === CELLS &&
+      Number.isInteger(card.special) &&
+      card.special >= 1 &&
+      card.special <= RULES.numbers &&
+      !card.cells.includes(card.special) &&
       Array.isArray(card.owners) &&
-      card.owners.length === CARD * CARD &&
-      card.owners.every((o, i) => (i === FREE ? o === "*" : o === "" || ID(o))) &&
+      card.owners.length === CELLS &&
+      card.owners.every((o) => o === "" || ID(o)) &&
       (card.owed === undefined || validOwed(card.owed)) &&
       (card.owedAt === undefined || (!!card.owedAt && typeof card.owedAt === "object" && !Array.isArray(card.owedAt) && Object.entries(card.owedAt).every(([id, t]) => ID(id) && Number.isFinite(t))))
     );
@@ -219,13 +232,18 @@
     return { index, slot: list[index] };
   };
 
-  // A ball is drawn from 1–100. On the card and still closed, it opens that number in the
-  // player's name and any finished lines pay; otherwise it pays missPay × the bet.
+  // A ball is drawn from 1–99. The special number spins the special wheel; any other number is on
+  // a card: closed, it opens in the player's name and any finished lines pay; already open, it
+  // pays missPay × the bet.
   function ball(state, card, me, random, events, bet) {
-    const number = random(RULES.numbers) + 1,
-      cell = card.cells.indexOf(number);
+    const number = random(RULES.numbers) + 1;
     state.balls++;
-    if (cell < 0 || isOpen(card, cell)) {
+    if (number === card.special) {
+      events.push({ t: "ball", number, cell: -1, special: true });
+      return spinSpecial(state, card, me, random, events, bet);
+    }
+    const cell = card.cells.indexOf(number);
+    if (isOpen(card, cell)) {
       const amount = money(bet * RULES.missPay);
       events.push({ t: "ball", number, cell: -1, miss: true, amount });
       return amount;
@@ -234,7 +252,7 @@
     events.push({ t: "ball", number, cell, owner: me });
     const lines = LINES.map((_, i) => i).filter((i) => LINES[i].every((c) => isOpen(card, c)));
     if (!lines.length) return 0;
-    const cleared = [...new Set(lines.flatMap((l) => LINES[l]))].filter((c) => c !== FREE),
+    const cleared = [...new Set(lines.flatMap((l) => LINES[l]))],
       solo = cleared.every((c) => card.owners[c] === me),
       mult = (lines.length > 1 ? lines.length + 1 : 1) * (solo ? RULES.soloBonus : 1);
     // Balls per player on the finished lines, for sharing the prize.
@@ -242,18 +260,31 @@
     for (const c of cleared) balls[card.owners[c]] = (balls[card.owners[c]] || 0) + 1;
     state.stake = 0;
     state.bingos += lines.length;
-    events.push({ t: "line", lines, cells: [...new Set(lines.flatMap((l) => LINES[l]))], count: lines.length, solo, mult });
+    events.push({ t: "line", lines, cells: [...cleared], count: lines.length, solo, mult });
     const gain = spinLine(state, card, bet, mult, random, events, me, balls, cleared.length);
-    // The finished lines start again: fresh numbers (not already on the card), no balls.
-    const spare = Array.from({ length: RULES.numbers }, (_, i) => i + 1).filter((n) => !card.cells.includes(n));
-    const numbers = {};
-    for (const c of cleared) {
-      const n = spare.splice(random(spare.length), 1)[0];
-      card.cells[c] = n;
-      card.owners[c] = "";
-      numbers[c] = n;
+    // The finished lines start again: their balls leave (the numbers stay).
+    for (const c of cleared) card.owners[c] = "";
+    events.push({ t: "reset", cells: [...cleared] });
+    return gain;
+  }
+  // The special number: its own wheel. x pays the bet × x, balls draws that many more balls, a
+  // jackpot waits for the screen to pay it (as after a line).
+  function spinSpecial(state, card, me, random, events, bet) {
+    const slots = RULES.wheels.special,
+      { index, slot } = pick(slots, random);
+    const event = { t: "wheel", wheel: "special", slots, index, base: bet };
+    events.push(event);
+    let gain = 0;
+    if (slot.x) {
+      gain += money(bet * slot.x);
+      event.amount = gain;
     }
-    events.push({ t: "reset", numbers });
+    if (slot.jackpot) {
+      state[slot.jackpot === "jp" ? "jps" : "sjps"]++;
+      state.jpWait = (state.jpWait || []).concat([slot.jackpot]);
+      events.push({ t: "jackpot", kind: slot.jackpot });
+    }
+    for (let b = 0; b < (slot.balls || 0); b++) gain += ball(state, card, me, random, events, bet);
     return gain;
   }
   // A line: the bingo prize, shared by the balls on it (others' parts go to card.owed, the
@@ -465,7 +496,7 @@
     return { state, card, events, gain };
   }
 
-  const api = { RULES, LINES, CARD, FREE, SIZE, kindAt, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  const api = { RULES, LINES, CARD, CARDS, CELLS, SIZE, kindAt, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);
