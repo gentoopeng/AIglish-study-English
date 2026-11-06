@@ -43,12 +43,34 @@
   const SQUARE = { start: "START", normal: "", event: "★", accident: "!" };
   const GAME_NAMES = { blackjack: "ブラックジャック", dice: "ダイスポーカー", chinchiro: "チンチロ", ball: "ボール確定" };
   const ITEM_INFO = {
-    dice2: { n: "ダブルダイス", d: "サイコロを2個振って、合計だけ進みます" },
-    exact: { n: "ぴったり", d: "出目を1〜6から選べます" },
-    guard: { n: "ガード", d: "この回から3回、アクシデントのマスが無効になります" },
-    ball: { n: "ボール券", d: "この回、ボールを1個出します" },
-    x2: { n: "倍がけ", d: "通常マスのルーレットの増減が2倍になります（ほかのマスでは使われません）" },
+    dice2: { n: "ダブルダイス", d: "サイコロを2個振って、合計だけ進みます", img: "die", dice: 2 },
+    dice3: { n: "トリプルダイス", d: "サイコロを3個振って、合計だけ進みます", img: "die", dice: 3 },
+    exact: { n: "ぴったり", d: "出目を1〜6から選べます", img: "die-gold" },
+    guard: { n: "ガード", d: "この回から3回、アクシデントのマスが無効になります", img: "shield" },
+    x2: { n: "倍がけ", d: "通常マスのルーレットの増減が2倍になります（ほかのマスでは使われません）", img: "potion" },
+    // (No longer given or sold; one already in a bag can still be used.)
+    ball: { n: "ボール券", d: "この回、ボールを1個出します", img: "" },
   };
+  // An item's picture: the dice are stacked (two or three of the same die, a little turned).
+  function itemIcon(id) {
+    const info = ITEM_INFO[id],
+      icon = node("span", "sg-ico is-" + id);
+    icon.setAttribute("aria-hidden", "true");
+    if (!info.img) {
+      icon.textContent = "●";
+      return icon;
+    }
+    for (let i = 0; i < (info.dice || 1); i++) {
+      const img = node("img");
+      img.src = "assets/sugoroku/" + info.img + ".png";
+      img.alt = "";
+      img.decoding = "async";
+      img.draggable = false;
+      img.className = "n" + i;
+      icon.append(img);
+    }
+    return icon;
+  }
   const WHEEL_NAMES = { item: "ITEM ROULETTE", event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "BONUS", special: "SPECIAL BALL" };
   const HOT = new Set(["bingo", "sjp", "kakuhen", "special"]);
   const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "ストップ", hilo: "ハイ＆ロー" };
@@ -63,7 +85,7 @@
     "100マスで1周してSTARTを通ると、ボールが1つ出ます。",
     "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選で、開いていない番号なら自分のボールが入ります。すでに開いている番号は額の2倍がもらえます。★の数字（特別な数字）が出ると、スペシャルルーレットが回ります。1列そろうとビンゴ賞金とビンゴルーレット。そろった列のボールは戻ります。",
     "ビンゴ賞金の7割と、ルーレットの倍率の5割は、その列にボールを置いていた人でボールの数に応じて分けます（そろえた人のボールも数えます）。ほかの人の分は、その人が開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
-    "通常マスの「ITEM」で、アイテムルーレットが回ります。アイテムは3個まで持て、ショップでも買えます。振る前に押して使います。ダブルダイス（サイコロ2個）・ぴったり（出目を選ぶ）・ガード（3回アクシデント無効）・ボール券（ボール1個）・倍がけ（通常マスの増減が2倍）。持ちきれないときは、値段の半分がもらえます。",
+    "通常マスの「ITEM」で、アイテムルーレットが回ります。アイテムは3個まで持て、ショップでも買えます。振る前に押して使います。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（3回アクシデント無効）・倍がけ（通常マスの増減が2倍）。持ちきれないときは、値段の半分がもらえます。",
     "ジャックポットは、カジノでディーラー相手に賭けられたポイントから貯まります。",
     "「早送り」にすると、ふだんのマスは短く進みます。★マスは自動で進み、盤面をタップするとその回を飛ばせます。",
     "ほかの人のビンゴの分け前は、30日受け取らないと消えます。",
@@ -821,8 +843,10 @@
     view.itemBar.replaceChildren();
     for (let i = 0; i < S.RULES.itemMax; i++) {
       const id = held[i],
-        b = node("button", "sg-item" + (id ? "" : " is-empty"), id ? ITEM_INFO[id].n : "—");
+        b = node("button", "sg-item" + (id ? "" : " is-empty"));
       b.type = "button";
+      if (id) b.append(itemIcon(id), node("span", "", ITEM_INFO[id].n));
+      else b.textContent = "—";
       b.disabled = !id || locked;
       if (id) {
         b.dataset.item = id;
@@ -876,6 +900,7 @@
     box.append(node("p", "sg-shop-have", "持っているもの " + held.length + "/" + S.RULES.itemMax + "　所持 " + fmt(api.balance()) + api.unit()));
     const list = node("ul", "sg-shop-list");
     for (const [id, info] of Object.entries(ITEM_INFO)) {
+      if (S.RULES.items[id].retired) continue;
       const price = S.RULES.items[id].price,
         li = node("li", "");
       const text = node("span", "sg-shop-text");
@@ -885,7 +910,7 @@
       buy.dataset.buy = id;
       buy.disabled = held.length >= S.RULES.itemMax || api.balance() < price;
       buy.onclick = () => buyItem(id);
-      li.append(text, buy);
+      li.append(itemIcon(id), text, buy);
       list.append(li);
     }
     const out = node("p", "sg-shop-note", typeof note === "string" ? note : "");
@@ -1233,11 +1258,11 @@
       } else if (e.t === "die") {
         say("");
         if (e.values) {
-          // Two dice: one after the other, then their sum.
-          await view.die.roll(e.values[0]);
-          say(e.values[0] + " + " + e.values[1], "is-ball");
-          await view.die.roll(e.values[1]);
-          say(e.values[0] + " + " + e.values[1] + " = " + e.value, "is-gain");
+          // Two or three dice: one after the other, then their sum.
+          for (let i = 0; i < e.values.length; i++) {
+            await view.die.roll(e.values[i]);
+            say(e.values.slice(0, i + 1).join(" + ") + (i === e.values.length - 1 ? " = " + e.value : ""), i === e.values.length - 1 ? "is-gain" : "is-ball");
+          }
           await wait(500);
         } else await view.die.roll(e.value);
       } else if (e.t === "step") {

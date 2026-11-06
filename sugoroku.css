@@ -261,7 +261,7 @@
 
 /* Items: the bag, the face picker and the shop. */
 .sg-items{display:flex;gap:5px;margin:2px 0 4px;}
-.sg-item,.sg-shop{flex:1 1 0;min-width:0;min-height:30px;padding:0 4px;border:1px solid var(--line);border-radius:10px;background:rgba(10,18,16,.6);color:var(--ivory);font:600 11px/1 system-ui,sans-serif;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sg-item,.sg-shop{flex:1 1 0;min-width:0;min-height:30px;padding:0 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border:1px solid var(--line);border-radius:10px;background:rgba(10,18,16,.6);color:var(--ivory);font:600 11px/1 system-ui,sans-serif;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sg-item.is-empty{color:rgba(240,232,212,.3);border-style:dashed;cursor:default;}
 .sg-item[aria-pressed="true"]{border-color:var(--gold);background:rgba(214,183,115,.22);color:var(--gold);box-shadow:0 0 10px rgba(214,183,115,.35);}
 .sg-item:disabled:not(.is-empty){opacity:.55;}
@@ -276,3 +276,19 @@
 .sg-sheet .sg-shop-list{padding-left:0;max-height:none;}
 .sg-sheet .sg-shop-list .sg-game-btn{width:auto;flex:0 0 auto;min-width:84px;min-height:38px;padding:0 12px;margin:0;}
 .sg-shop-note{min-height:1.4em;margin:0 0 6px;color:var(--gold);font-size:12px;text-align:center;}
+
+/* Item pictures (assets/sugoroku): the dice are stacked, a little turned. */
+.sg-ico{position:relative;display:inline-block;flex:0 0 auto;width:30px;height:30px;}
+.sg-ico img{position:absolute;width:100%;height:100%;object-fit:contain;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
+.sg-ico.is-dice2 img,.sg-ico.is-dice3 img{width:66%;height:66%;}
+.sg-ico.is-dice2 .n0{left:0;bottom:0;transform:rotate(-12deg);}
+.sg-ico.is-dice2 .n1{right:0;top:0;transform:rotate(10deg);}
+.sg-ico.is-dice3 .n0{left:0;bottom:0;transform:rotate(-14deg);}
+.sg-ico.is-dice3 .n1{right:0;bottom:2%;transform:rotate(12deg);z-index:1;}
+.sg-ico.is-dice3 .n2{left:17%;top:0;transform:rotate(-4deg);z-index:2;}
+.sg-item .sg-ico{width:26px;height:26px;}
+.sg-item>span:last-child{font-size:9px;line-height:1;letter-spacing:-.02em;}
+.sg-shop-list .sg-ico{width:44px;height:44px;}
+.sg-ico:not(:has(img)){display:grid;place-items:center;color:var(--gold);}
+.sg-shop-list .sg-ico{flex:0 0 44px;}
+.sg-shop-text{flex:1 1 0;}
