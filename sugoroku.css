@@ -292,3 +292,9 @@
 .sg-ico:not(:has(img)){display:grid;place-items:center;color:var(--gold);}
 .sg-shop-list .sg-ico{flex:0 0 44px;}
 .sg-shop-text{flex:1 1 0;}
+
+/* The bet: three choices. */
+.sg-costs.is-choice{grid-template-columns:repeat(3,1fr);gap:4px;}
+.sg-costs.is-choice button{min-height:32px;border:0;border-radius:9px;background:transparent;color:rgba(240,232,212,.65);font:600 14px Georgia,serif;cursor:pointer;}
+.sg-costs.is-choice button[aria-pressed="true"]{background:rgba(214,183,115,.2);color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
+.sg-costs.is-choice button:disabled:not([aria-pressed="true"]){opacity:.5;}
