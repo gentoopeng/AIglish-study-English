@@ -3056,3 +3056,16 @@ Tests: `tests/sugoroku-model.test.cjs` (the item wheel, a full bag, every item's
 - ボール券 is no longer on the item wheel or in the shop (`RULES.items.ball.retired`); one that a player already holds can still be used. Without it an item is worth about 50 points on average (before 59), so the return stays about 0.92.
 
 Tests: `tests/sugoroku-model.test.cjs` (トリプルダイス, the wheel without ボール券, a retired item cannot be bought), `tests/sugoroku.smoke.cjs` (the shop lists five items).
+
+## 10.30.00.00 すごろくビンゴ: 賭け額を50・100・200から選べるようにした（改良3/3）
+
+**What the owner said.** 「100pt固定じゃなくする → バランスがかなり変わりそうだから要検討」（ご提案の方向で、50・100・200にした。500は、ジャックポットの確率との釣り合いが取りにくいので見送り）
+
+**Now** (`sugoroku-model.js`, `sugoroku.js`, `sugoroku.css`):
+- `RULES.costs = [50, 100, 200]`; three buttons under the board choose the bet of the next roll (kept in `aiglish_sugoroku_cost`, 100 by default; off while a roll or an event game is going on). The normal wheel and everything else already paid multiples of the bet.
+- A line is worth the bets of its balls: the shared card keeps `bets[98]` (the bet of the roll that opened each cell; zero again when the line resets), and the line's base is their average rounded to 50 / 100 / 200 (a ball with no bet counts as 100). So laying cheap balls and finishing with a 200 roll does not pay a 200 prize.
+- The bingo wheel is made for that base (`bingoWheel(base)`): the eight other slots twice, and `round(2 × base / 100)` places each for the jackpot and for the super-jackpot chance (1 / 2 / 4). The other slots' multiples and the mini games' boost are scaled by (wheel size / 20), so what a point of bet is worth outside the jackpot is the same at every size.
+- Mini games: a game waiting in `state.bonus` carries the bet (`bet`) and its own `mult`; `gameScore(game, done, bet)` scales the points by bet / 100. A game saved before this change has no `bet` and scores as for 100. The bet buttons are off while a game is waiting.
+- Monte Carlo (3 players, 300,000 rolls each, same bet for all): return without jackpots 0.916 / 0.918 / 0.914 at 50 / 100 / 200; jackpot rolls per 1,000 rolls 0.54 / 1.05 / 1.78, i.e. about the same per point bet (0.0108 / 0.0105 / 0.0089).
+
+Tests: `tests/sugoroku-model.test.cjs` (every payout scales, the bingo prize follows the balls' bets, mini-game scores, the jackpot share per bet, an old waiting game), `tests/sugoroku.smoke.cjs` (three buttons, 100 by default, a roll at 200 takes 200 and a ×5 slot pays 1,000).

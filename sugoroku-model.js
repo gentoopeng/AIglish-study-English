@@ -1,7 +1,6 @@
 // Rules for すごろくビンゴ in the casino tab, without any screen. A long game kept per player.
 //
-// A roll costs one fixed bet (one amount, so no bet size is better than another for balls or
-// the jackpots). The piece goes round a ring of 100 squares and the square decides:
+// A roll costs a bet of 50, 100 or 200 (every payout is a multiple of it, and the jackpot chance on the bingo wheel grows with it, so no size is better value than another). The piece goes round a ring of 100 squares and the square decides:
 //   normal   – a wheel of multiples of the bet (×0.25 to −×1) and ball, game and 確変 slots;
 //              a 確変 slot (1 in 10) spins the 確変 wheel: ×2 to ×10, or two balls in a row
 //   event    – a four-way wheel: blackjack, dice poker or chinchiro is played once for the bet
@@ -61,7 +60,9 @@
   const ITEM = (n = 1) => Array(n).fill({ x: 0, item: true });
   const GET = (item, n = 1) => Array(n).fill({ item });
   const RULES = {
-    costs: [100],
+    // The bet of a roll: 50, 100 or 200. Every payout is a multiple of it, so nothing is better value at one
+    // size than another; the bingo wheel's jackpot slots grow with it (bingoWheel) for the same reason.
+    costs: [50, 100, 200],
     // The ring: 100 squares, about 29 rolls a lap. S start, n normal, E event, A accident.
     board: Array.from({ length: 100 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
     // The normal wheel: 40 slots from ×7 down to −×5 (one is a 確変 slot) (a minus takes that much more than the
@@ -69,6 +70,7 @@
     // a game slot starts a quick mini game paid in multiples of the bet; an event slot plays
     // blackjack, dice poker or chinchiro as an event square does.
     normal: {
+      // (The same wheel for every bet: it pays multiples of the bet.)
       100: spread([
         // The top of the wheel is a 確変 slot: it starts the 確変 wheel below, which holds the
         // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
@@ -132,7 +134,7 @@
     wheels: {
       // The special number: one wheel (the bet × x, or three more balls).
       special: spread([{ x: 10 }, { x: 10 }, { x: 15 }, { x: 20 }, { x: 20 }, { x: 30 }, { x: 50 }, { x: 0, balls: 3 }, { x: 0, balls: 3 }, { x: 40 }]),
-      bingo: [{ x: 8 }, { game: "timer" }, { x: 15 }, { game: "tap" }, { jackpot: "jp" }, { game: "dice" }, { x: 35 }, { game: "math" }, { x: 25 }, { next: "sjp" }],
+      bingo: null, // (see bingoWheel: made for the bet)
       sjp: [{ jackpot: "sjp" }, { jackpot: "jp" }, { game: "tapex" }, { jackpot: "sjp" }, { back: true }],
     },
     // Mini games, scored in points (multiplied like the line's other prizes):
@@ -143,8 +145,27 @@
     // stop / hilo are the normal squares' quick games, paid in multiples of the bet: stop the
     // light in the gold (perfect) or silver (good) part of the bar; say whether the next card is
     // higher or lower. In 早送り they are not played and pay `auto`.
+    // The slots of the bingo wheel besides the jackpot and the super chance (each twice on the wheel).
+    wheelParts: { others: [{ x: 8 }, { game: "timer" }, { x: 15 }, { game: "tap" }, { game: "dice" }, { x: 35 }, { game: "math" }, { x: 25 }] },
     games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 1, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 25, max: 120 }, dice: { per: 100 }, math: { seconds: 15, prize: 500 } },
   };
+  RULES.normal[50] = RULES.normal[200] = RULES.normal[100];
+  // The bingo wheel for a bet (the average bet of the balls on the line): the jackpot and the
+  // super-jackpot chance take as many places as the bet is a multiple of 100 (a half, one, or two
+  // of the 20 places of each), and the other slots pay `scale` times more or less, so one point
+  // of bet is worth about the same at every size.
+  function bingoWheel(cost) {
+    const k = cost / 100,
+      count = Math.max(1, Math.round(2 * k)),
+      others = RULES.wheelParts.others,
+      size = others.length * 2 + count * 2,
+      scale = size / 20,
+      list = [];
+    for (let i = 0; i < 2; i++) for (const o of others) list.push(o.x ? { x: Math.round(o.x * scale * 10) / 10 } : { ...o, boost: Math.round(RULES.bingoGameBoost * scale * 100) / 100 });
+    for (let i = 0; i < count; i++) list.push({ jackpot: "jp" }, { next: "sjp" });
+    return spread(list);
+  }
+  RULES.wheels.bingo = bingoWheel(100);
   const SIZE = RULES.board.length,
     CARD = 7,
     CARDS = 2,
@@ -189,6 +210,7 @@
       card.cells.length === CELLS &&
       card.cells.every((n) => Number.isInteger(n) && n >= 1 && n <= RULES.numbers) &&
       new Set(card.cells).size === CELLS &&
+      (card.bets === undefined || (Array.isArray(card.bets) && card.bets.length === CELLS && card.bets.every((n) => Number.isFinite(n) && n >= 0 && n <= 1000))) &&
       Number.isInteger(card.special) &&
       card.special >= 1 &&
       card.special <= RULES.numbers &&
@@ -275,6 +297,8 @@
       return amount;
     }
     card.owners[cell] = me;
+    card.bets = Array.isArray(card.bets) && card.bets.length === CELLS ? card.bets : Array(CELLS).fill(0);
+    card.bets[cell] = bet;
     events.push({ t: "ball", number, cell, owner: me });
     const lines = LINES.map((_, i) => i).filter((i) => LINES[i].every((c) => isOpen(card, c)));
     if (!lines.length) return 0;
@@ -287,9 +311,15 @@
     state.stake = 0;
     state.bingos += lines.length;
     events.push({ t: "line", lines, cells: [...cleared], count: lines.length, solo, mult });
-    const gain = spinLine(state, card, bet, mult, random, events, me, balls, cleared.length);
+    // The line is worth what its balls were bet at (a ball with no bet recorded counts as 100).
+    const bets = cleared.map((c) => card.bets[c] || 100),
+      base = Math.min(200, Math.max(50, Math.round(bets.reduce((a, b) => a + b, 0) / bets.length / 50) * 50));
+    const gain = spinLine(state, card, base, mult, random, events, me, balls, cleared.length);
     // The finished lines start again: their balls leave (the numbers stay).
-    for (const c of cleared) card.owners[c] = "";
+    for (const c of cleared) {
+      card.owners[c] = "";
+      card.bets[c] = 0;
+    }
     events.push({ t: "reset", cells: [...cleared] });
     return gain;
   }
@@ -337,7 +367,7 @@
     let gain = split.kept;
     events.push({ t: "prize", amount: gain, total: prize, shares: split.shares, mult });
     for (let wheel = "bingo"; wheel; ) {
-      const slots = RULES.wheels[wheel],
+      const slots = wheel === "bingo" ? bingoWheel(bet) : RULES.wheels[wheel],
         { index, slot } = pick(slots, random);
       const event = { t: "wheel", wheel, slots, index, base: bet, mult };
       events.push(event);
@@ -353,8 +383,8 @@
       }
       else if (slot.game) {
         // A mini game is not multiplied by the lines (or the solo bonus): only by bingoGameBoost.
-        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: RULES.bingoGameBoost }]);
-        events.push({ t: "bonus", game: slot.game, mult: RULES.bingoGameBoost });
+        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: slot.boost ?? RULES.bingoGameBoost, bet }]);
+        events.push({ t: "bonus", game: slot.game, mult: slot.boost ?? RULES.bingoGameBoost });
       } else if (slot.x) {
         const won = money(bet * slot.x * mult),
           part = share(won, RULES.wheelShare);
@@ -366,13 +396,15 @@
   }
 
   // Points for a mini game from what was done: seconds stopped at, taps, the face, right or not.
-  function gameScore(game, done) {
-    const g = RULES.games[game];
-    if (game === "timer") return Number.isFinite(Number(done)) ? Math.max(0, g.max - Math.round(Math.abs(Number(done) - g.target) * 100) * g.per) : 0;
-    if (game === "tap" || game === "tapex") return Math.min(g.max, Math.max(0, Math.floor(Number(done) || 0))) * g.per;
-    if (game === "dice") return Math.min(6, Math.max(0, Math.floor(Number(done) || 0))) * g.per;
-    if (game === "math") return done === true ? g.prize : 0;
-    if (game === "stop" || game === "hilo") return money(RULES.costs[0] * (done === "auto" ? g.auto : g.pay[done] || 0));
+  // `bet`: the bet of the roll that started the game (every score is a multiple of the bet / 100).
+  function gameScore(game, done, bet = 100) {
+    const g = RULES.games[game],
+      scale = bet / 100;
+    if (game === "timer") return Number.isFinite(Number(done)) ? money(Math.max(0, g.max - Math.round(Math.abs(Number(done) - g.target) * 100) * g.per) * scale) : 0;
+    if (game === "tap" || game === "tapex") return money(Math.min(g.max, Math.max(0, Math.floor(Number(done) || 0))) * g.per * scale);
+    if (game === "dice") return money(Math.min(6, Math.max(0, Math.floor(Number(done) || 0))) * g.per * scale);
+    if (game === "math") return done === true ? money(g.prize * scale) : 0;
+    if (game === "stop" || game === "hilo") return money(bet * (done === "auto" ? g.auto : g.pay[done] || 0));
     return 0;
   }
   // The first mini game waiting, finished with what was done; done === null when it was left.
@@ -380,7 +412,7 @@
     if (!before.bonus?.length) throw Error("no bonus");
     const state = clone(before),
       [game, ...rest] = state.bonus,
-      score = done === null ? 0 : gameScore(game.game, done),
+      score = done === null ? 0 : gameScore(game.game, done, game.bet || 100),
       gain = money(score * game.mult);
     state.bonus = rest;
     state.won += gain;
@@ -493,7 +525,7 @@
         for (let b = 0; b < (k.slot.balls || 0); b++) gain += ball(state, card, me, random, events, cost);
       }
       if (slot.game) {
-        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: 1 }]);
+        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: 1, bet: cost }]);
         events.push({ t: "bonus", game: slot.game, mult: 1 });
       }
       if (slot.event) {
@@ -593,7 +625,7 @@
     return { state, card, events, gain };
   }
 
-  const api = { RULES, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, buy, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  const api = { RULES, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, buy, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);
