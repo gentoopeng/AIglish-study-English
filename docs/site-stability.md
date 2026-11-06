@@ -2981,3 +2981,11 @@ Tests: `tests/daifugo-model.test.cjs` (every rule above, the payouts add up to 0
 **Review (Opus) and what was changed because of it.** The settlement does not trust the shared document: each device keeps what it agreed to when it sat down (the stake and when the table was made, in `aiglish_df_due_<uid>`), takes the order the table ended in the first time it sees it, works out who pays whom itself (`DaifugoTable.payments`), makes the payment ids itself, and pays a table only once. The dealer plays by the settings it started with and the public keys it saw then, ignores a move stamped in the future, writes to the table before it saves its own state, and a reloaded dealer is the dealer again. A finished table cannot be taken over for a day.
 
 **Known limits (they are in the guide).** Anyone at the table can still write to the shared document (the Firestore rules are open), so a player who wants to cheat can post moves for another player, and the dealer can fake a result; a player who never opens the app again is never made to pay. Points are not moved when the dealer leaves in the middle of a game. This is a game among friends: like the poker table, it rests on the dealer's device.
+
+## 10.25.01.00 大富豪: 待っている間に抜けた人が名簿に残っていた（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.25.00.00. A player who left a waiting table stayed in `room.players` marked `left`; the start button counted only the others, but the seat order (`seatOrder`) included the one who had left, so the dealer played a hand for them and they were ranked and paid.
+
+**Fix.** `leave()` on a waiting table deletes the player's entry; `start()` also drops anyone still marked `left` and closes the seats up (0, 1, 2 …). Test: `tests/daifugo.smoke.cjs` (a player who joins and leaves is gone from the document; the game then starts with the three who stayed).
+
+**Not changed (Codex also said the first deal should start from the spade-3 holder).** The rule book's 「スペードの席」 is the first seat (each seat has a suit), not the holder of the spade 3. The first game starts from the first seat (the player who made the table); later games from the 大貧民 of the game before. The wording in `docs/daifugo-rules.md` is clearer now.
