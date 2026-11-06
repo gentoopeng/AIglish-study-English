@@ -144,25 +144,43 @@
 
   // ---- Lobby ----------------------------------------------------------------------------
   const RULES = [
-    "3〜5人で遊びます。手札を先になくした人が「大富豪」、最後に残った人が「大貧民」です。",
-    "強さは 3 が一番弱く、2 が一番強く、ジョーカーは最強です。場と同じ枚数で、強いカードだけ出せます。パスもできます。",
-    "同じ数字は2枚・3枚・4枚と出せます。同じマークで数字が続く3枚以上は「階段」です。ジョーカーは何にでもなります。",
-    "4枚同じ数字で「革命」。強さがひっくり返ります。8を出すと場が流れ（8切り）、ジョーカー1枚にはスペードの3だけが勝てます（スペ3返し）。",
-    "同じマークが続けて出ると「縛り」になり、場が流れるまでそのマークしか出せません。",
-    "上がりの1枚が 2・8・ジョーカー・スペードの3だと「反則上がり」で最下位側になります（革命中は 3 も）。",
-    "2ゲーム目からは、大貧民が一番強い2枚を大富豪へ、貧民が1枚を富豪へ渡し、代わりに好きなカードを受け取ります。",
-    "賭けは終わってから精算します。最下位が1位へ賭け額、下から2番目が上から2番目へ半分を払います。足りない分はカジノからの借金になります。",
+    "手札を先になくした人が大富豪、最後に残った人が大貧民です。",
+    "強さは 3 が最弱、2 が最強、ジョーカーは別格。場と同じ枚数で、強いカードだけ出せます。",
+    "同じ数字は2〜4枚まとめて、同じマークで続く3枚以上は階段。ジョーカーは何にでもなります。",
+    "4枚そろえると革命（強さが逆転）。8を出すと場が流れ、ジョーカーにはスペ3だけが勝てます。",
+    "同じマークが続くと縛り。上がりの1枚が 2・8・ジョーカー・スペ3だと反則上がりです。",
+    "精算は終わってから。最下位が1位へ賭け額、下から2番目が上から2番目へ半分。足りない分はカジノから借ります。",
   ];
-  function rulesBlock() {
-    const details = node("details", "df-rules");
-    details.append(node("summary", "", "遊び方・ルール"));
-    const list = node("ul");
+  function rulesSheet() {
+    const sheet = node("div", "df-rules-sheet");
+    const head = node("div", "df-rules-head");
+    head.append(node("b", "", "ルール"));
+    const x = node("button", "", "×");
+    x.type = "button";
+    x.setAttribute("aria-label", "ルールを閉じる");
+    x.onclick = () => toggleRules();
+    head.append(x);
+    const list = node("ol");
     for (const line of RULES) list.append(node("li", "", line));
-    details.append(list, node("p", "df-credit", "ルールは日本大富豪連盟の公式ルールブックに沿っています。"));
-    return details;
+    sheet.append(head, list);
+    return sheet;
   }
-  const chips = (values, current, onPick, label) => {
-    const row = node("div", "df-chips");
+  function toggleRules() {
+    ui.rules = !ui.rules;
+    ui.sig = "";
+    render(T.view());
+  }
+  const helpButton = () => {
+    const help = node("button", "df-help", "?");
+    help.type = "button";
+    help.setAttribute("aria-label", "ルールを見る");
+    help.onclick = () => toggleRules();
+    return help;
+  };
+  // A row of choices, one pressed.
+  const seg = (values, current, onPick, label) => {
+    const row = node("div", "df-seg");
+    row.setAttribute("role", "group");
     for (const [value, text] of values) {
       const b = node("button", "", text);
       b.type = "button";
@@ -178,21 +196,26 @@
   };
   function payPreview(n, stake) {
     const names = D.NAMES[n],
-      order = names.map((_, i) => "#" + i),
-      lines = D.payouts(order, stake).map((p) => names[order.indexOf(p.from)] + " → " + names[order.indexOf(p.to)] + "　" + fmt(p.amount) + "pt");
-    return lines.join("　／　");
+      order = names.map((_, i) => "#" + i);
+    return D.payouts(order, stake).map((p) => names[order.indexOf(p.from)] + " → " + names[order.indexOf(p.to)] + " " + fmt(p.amount));
   }
   function lobby(view) {
     const l = ui.lobby;
+    const again = () => ((ui.sig = ""), render(T.view()));
     const box = node("div", "df-lobby");
-    box.append(node("p", "df-kicker", "DAIFUGO"), node("h2", "", "大富豪"), node("p", "df-sub", "3〜5人で遊ぶ、ポイントを賭けられるカードゲーム"));
+    const hero = node("div", "df-hero");
+    const crown = node("span", "df-crown", "♛");
+    crown.setAttribute("aria-hidden", "true");
+    hero.append(crown, node("h2", "", "大富豪"), helpButton());
+    box.append(hero);
+    if (ui.rules) box.append(rulesSheet());
 
-    // Practice
-    const practice = node("section", "df-panel");
-    practice.append(node("h3", "", "ひとりで練習"), node("p", "df-note", "コンピュータが相手です。ポイントは動きません。"));
-    practice.append(chips([[3, "3人"], [4, "4人"], [5, "5人"]], l.practice, (v) => ((l.practice = v), (ui.sig = ""), render(T.view())), "人数"));
-    const go = node("button", "df-primary", "練習をはじめる");
+    // Practice: one line.
+    const practice = node("section", "df-panel is-row");
+    practice.append(node("h3", "", "ひとりで練習"), seg([[3, "3"], [4, "4"], [5, "5"]], l.practice, (v) => ((l.practice = v), again()), "人数"));
+    const go = node("button", "df-primary", "はじめる");
     go.type = "button";
+    go.setAttribute("aria-label", "練習をはじめる");
     go.onclick = () => {
       sound("confirm");
       ui.sig = "";
@@ -200,40 +223,57 @@
     };
     practice.append(go);
 
-    // Make a table
+    // A table
     const make = node("section", "df-panel");
     make.append(node("h3", "", "テーブルを作る"));
-    const stakeRow = node("label", "df-field");
-    stakeRow.append(node("span", "", "賭け額（最下位が1位へ払う額）"));
+    const stakeRow = node("div", "df-stake");
+    const minus = node("button", "", "−"),
+      plus = node("button", "", "+");
+    for (const b of [minus, plus]) b.type = "button";
+    minus.setAttribute("aria-label", "賭け額を減らす");
+    plus.setAttribute("aria-label", "賭け額を増やす");
     const stake = node("input");
     Object.assign(stake, { type: "number", min: 1, max: 100000, step: 1, inputMode: "numeric", value: String(l.stake) });
     stake.setAttribute("aria-label", "賭け額");
-    stakeRow.append(stake, node("em", "", "pt"));
-    const preview = node("p", "df-note df-preview");
-    const showPreview = () => (preview.textContent = payPreview(l.seats, Math.max(1, Math.floor(Number(stake.value)) || 1)) + "　足りない分はカジノからの借金");
+    const unit = node("em", "", "pt");
+    stakeRow.append(minus, stake, unit, plus);
+    const caption = node("p", "df-caption");
+    const showCaption = () => caption.replaceChildren(...payPreview(l.seats, l.stake).map((t) => node("span", "", t)));
+    const setStake = (v) => {
+      l.stake = Math.max(1, Math.min(100000, Math.floor(Number(v)) || 1));
+      stake.value = String(l.stake);
+      showCaption();
+    };
     stake.oninput = () => {
       l.stake = Math.max(1, Math.min(100000, Math.floor(Number(stake.value)) || 1));
-      showPreview();
+      showCaption();
     };
-    const quick = node("div", "df-chips");
+    const step = () => (l.stake >= 1000 ? 100 : l.stake >= 100 ? 50 : 10);
+    minus.onclick = () => setStake(l.stake - step());
+    plus.onclick = () => setStake(l.stake + step());
+    const quick = node("div", "df-quick");
     for (const v of [10, 50, 100, 500, 1000]) {
       const b = node("button", "", String(v));
       b.type = "button";
       b.onclick = () => {
         sound("tap");
-        l.stake = v;
-        stake.value = String(v);
-        showPreview();
+        setStake(v);
       };
       quick.append(b);
     }
-    const again = () => ((ui.sig = ""), render(T.view()));
-    make.append(stakeRow, quick, preview);
-    make.append(node("p", "df-label", "人数（最大）"), chips([[3, "3人"], [4, "4人"], [5, "5人"]], l.seats, (v) => ((l.seats = v), again()), "最大人数"));
-    make.append(node("p", "df-label", "ゲーム数"), chips([[1, "1ゲーム"], [4, "4ゲーム（1セット）"]], l.games, (v) => ((l.games = v), again()), "ゲーム数"));
-    make.append(node("p", "df-label", "持ち時間"), chips(T.THINK.map((s) => [s, s + "秒"]), l.think, (v) => ((l.think = v), again()), "持ち時間"));
-    make.append(node("p", "df-label", "都落ち"), chips([[false, "なし"], [true, "あり"]], l.miyakoochi, (v) => ((l.miyakoochi = v), again()), "都落ち"));
-    showPreview();
+    showCaption();
+    make.append(stakeRow, quick, caption);
+    const opt = (label, control) => {
+      const row = node("div", "df-opt");
+      row.append(node("span", "", label), control);
+      return row;
+    };
+    make.append(
+      opt("人数", seg([[3, "3"], [4, "4"], [5, "5"]], l.seats, (v) => ((l.seats = v), again()), "最大人数")),
+      opt("ゲーム", seg([[1, "1回"], [4, "4回（1セット）"]], l.games, (v) => ((l.games = v), again()), "ゲーム数")),
+      opt("時間", seg(T.THINK.map((s) => [s, s + "秒"]), l.think, (v) => ((l.think = v), again()), "持ち時間")),
+      opt("都落ち", seg([[false, "なし"], [true, "あり"]], l.miyakoochi, (v) => ((l.miyakoochi = v), again()), "都落ち")),
+    );
     const create = node("button", "df-primary", "テーブルを作る");
     create.type = "button";
     create.onclick = async () => {
@@ -247,13 +287,13 @@
     };
     make.append(create);
 
-    // Join
-    const join = node("section", "df-panel");
-    join.append(node("h3", "", "テーブルに入る"));
-    const row = node("div", "df-join");
+    // Join: four digits go in by themselves.
+    const join = node("section", "df-panel is-row");
+    join.append(node("h3", "", "番号で入る"));
     const code = node("input");
     Object.assign(code, { type: "text", inputMode: "numeric", maxLength: 4, placeholder: "0000", autocomplete: "off" });
     code.setAttribute("aria-label", "テーブル番号");
+    const wrap = node("div", "df-join");
     const enter = node("button", "df-primary", "入る");
     enter.type = "button";
     const doJoin = async () => {
@@ -270,9 +310,9 @@
       if (code.value.length === 4) doJoin();
     };
     enter.onclick = doJoin;
-    row.append(code, enter);
-    join.append(row);
-    box.append(practice, make, join, node("p", "df-status", ui.status), rulesBlock());
+    wrap.append(code, enter);
+    join.append(wrap);
+    box.append(practice, make, join, node("p", "df-status", ui.status));
     view.append(box);
   }
 
@@ -280,25 +320,30 @@
   function waiting(view, v) {
     const { room } = v;
     const box = node("div", "df-lobby df-waiting");
-    box.append(node("p", "df-kicker", "TABLE"), node("h2", "", "テーブル " + room.code));
+    const s = room.settings;
+    const hero = node("div", "df-hero");
+    hero.append(node("span", "df-crown", "♛"), node("h2", "", "テーブル"), helpButton());
+    box.append(hero);
+    if (ui.rules) box.append(rulesSheet());
     const big = node("p", "df-code", room.code);
     big.setAttribute("aria-label", "テーブル番号 " + room.code);
-    box.append(big, node("p", "df-sub", "この番号を友だちに伝えてください"));
-    const s = room.settings;
-    box.append(node("p", "df-note", "賭け額 " + fmt(s.stake) + "pt　/　" + (s.games === 4 ? "4ゲーム（1セット）" : "1ゲーム") + "　/　持ち時間 " + s.think + "秒　/　都落ち" + (s.miyakoochi ? "あり" : "なし")));
+    box.append(big);
+    const tags = node("p", "df-tags");
+    for (const t of [fmt(s.stake) + "pt", s.games === 4 ? "4回（1セット）" : "1回", s.think + "秒", s.miyakoochi ? "都落ちあり" : ""]) if (t) tags.append(node("span", "", t));
+    box.append(tags);
     const seats = node("ul", "df-seats-list");
     const order = T.seatOrder(room);
     for (let i = 0; i < s.seats; i++) {
       const id = order[i],
         p = id && room.players[id];
       const li = node("li", p ? "is-taken" : "is-empty");
-      if (p) li.append(avatarEl(p, 40), node("span", "df-seat-name", p.name + (id === room.host ? "（親）" : "") + (id === v.me ? "（あなた）" : "")));
+      if (p) li.append(avatarEl(p, 40), node("span", "df-seat-name", p.name + (id === room.host ? "　♛" : "")));
       else li.append(node("span", "df-seat-empty", "空席"));
       seats.append(li);
     }
-    box.append(seats, node("p", "df-note", payPreview(Math.max(3, order.length), s.stake) + "　足りない分はカジノからの借金になります。"));
+    box.append(seats);
     if (v.host) {
-      const start = node("button", "df-primary", order.length < 3 ? "3人そろうと始められます" : order.length + "人で始める");
+      const start = node("button", "df-primary", order.length < 3 ? "3人から始められます" : order.length + "人で始める");
       start.type = "button";
       start.disabled = order.length < 3;
       start.onclick = async () => {
@@ -310,11 +355,11 @@
         }
       };
       box.append(start);
-    } else box.append(node("p", "df-note", "親が始めるのを待っています…"));
+    }
     const out = node("button", "df-ghost", "テーブルを出る");
     out.type = "button";
     out.onclick = leave;
-    box.append(out, node("p", "df-status", ui.status), rulesBlock());
+    box.append(out, node("p", "df-status", ui.status));
     view.append(box);
   }
 
@@ -328,7 +373,8 @@
     if (!play) return "";
     if (play.kind === "stair") return "階段 " + play.n + "枚";
     if (play.rank === D.JOKER_RANK) return play.n === 1 ? "ジョーカー" : "ジョーカーのペア";
-    return ({ 1: "", 2: "ペア", 3: "トリプル", 4: "4枚（革命）" }[play.n] || play.n + "枚") + (play.n === 1 ? "" : "");
+    if (play.n === 1) return "";
+    return { 2: "ペア", 3: "トリプル", 4: "4枚（革命）" }[play.n] || play.n + "枚";
   }
   function table(view, v) {
     const { room } = v,
@@ -359,26 +405,13 @@
     const bar = node("div", "df-bar");
     const info = node("div", "df-info");
     const games = room.settings.games;
-    info.append(node("strong", "", "大富豪"), node("small", "", (games > 1 ? "第" + room.gNo + "/" + games + "ゲーム" : "1ゲーム") + (room.settings.practice ? "　練習" : "　" + fmt(room.settings.stake) + "pt")));
+    info.append(node("strong", "", "大富豪"), node("small", "", [games > 1 ? room.gNo + "/" + games : "", room.settings.practice ? "練習" : fmt(room.settings.stake) + "pt"].filter(Boolean).join("　")));
     const chipsRow = node("div", "df-state");
     if (g.rev) chipsRow.append(node("span", "df-chip is-rev", "革命中"));
     if (g.lock) chipsRow.append(node("span", "df-chip is-lock", "縛り " + g.lock.map((s) => SUIT_MARK[s]).join("")));
-    const help = node("button", "df-help", "?");
-    help.type = "button";
-    help.setAttribute("aria-label", "ルールを見る");
-    help.onclick = () => {
-      ui.rules = !ui.rules;
-      ui.sig = "";
-      render(T.view());
-    };
-    bar.append(info, chipsRow, help);
+    bar.append(info, chipsRow, helpButton());
     box.append(bar);
-    if (ui.rules) {
-      const sheet = node("div", "df-rules-sheet");
-      sheet.append(rulesBlock());
-      sheet.firstChild.open = true;
-      box.append(sheet);
-    }
+    if (ui.rules) box.append(rulesSheet());
 
     // ---- Felt: the others, the field
     const felt = node("div", "df-felt");
@@ -400,7 +433,9 @@
       head.append(label);
       seat.append(head);
       if (!out) {
-        seat.append(backFan(g.counts[id]), node("span", "df-count", g.counts[id] + "枚"));
+        const fan = backFan(g.counts[id]);
+        fan.append(node("span", "df-count", String(g.counts[id])));
+        seat.append(fan);
         if (g.turn === id && g.phase === "play") seat.append(node("i", "df-timer"));
       }
       felt.append(seat);
@@ -420,7 +455,7 @@
       field.append(stack);
       const by = room.players[g.field.by]?.name || "";
       field.append(node("p", "df-field-note", by + "　" + playText(g.field.play)));
-    } else field.append(node("p", "df-field-empty", g.phase === "play" ? (g.turn === me ? "あなたから出します" : (room.players[g.turn]?.name || "") + " から出します") : ""));
+    } else field.append(node("p", "df-field-empty", g.phase === "play" ? (g.turn === me ? "あなたから" : (room.players[g.turn]?.name || "") + " から") : ""));
     felt.append(field);
     const fx = node("div", "df-fx");
     felt.append(fx);
@@ -431,10 +466,10 @@
     const meBar = node("div", "df-me" + (myTurn ? " is-turn" : ""));
     meBar.append(avatarEl(room.players[me], 34));
     const meLabel = node("div", "df-me-label");
-    meLabel.append(node("b", "", (room.players[me]?.name || "") + "（あなた）"));
+    meLabel.append(node("b", "", room.players[me]?.name || ""));
     const myOut = g.legal.includes(me) || g.illegal.includes(me) || g.fallen === me;
-    const sub = myOut ? (g.illegal.includes(me) ? "反則上がり" : g.fallen === me ? "都落ち" : rankLabel(g, me)) : g.passed.includes(me) ? "パス中（場が流れるまで出せません）" : myTurn ? "あなたの番です" : g.phase === "exchange" ? "カード交換" : (room.players[g.turn]?.name || "") + " の番";
-    meLabel.append(node("small", myTurn ? "is-go" : "", sub));
+    const sub = myOut ? (g.illegal.includes(me) ? "反則上がり" : g.fallen === me ? "都落ち" : rankLabel(g, me)) : g.passed.includes(me) ? "パス中" : myTurn ? "あなたの番" : g.phase === "exchange" ? "カード交換" : "";
+    if (sub) meLabel.append(node("small", myTurn ? "is-go" : "", sub));
     meBar.append(meLabel);
     if (myTurn) meBar.append(node("i", "df-timer"));
     box.append(meBar);
@@ -466,7 +501,7 @@
     const msg = node("p", "df-msg");
     if (exchangeNeed) {
       const lowName = room.players[exchangeNeed.low]?.name || "";
-      msg.textContent = lowName + " さんに渡すカードを " + exchangeNeed.count + " 枚選んでください（一番強いカードが代わりに届きます）";
+      msg.textContent = lowName + " に渡す " + exchangeNeed.count + " 枚を選ぶ";
       const give = node("button", "df-primary", "渡す（" + ui.selected.length + "/" + exchangeNeed.count + "）");
       give.type = "button";
       give.disabled = ui.selected.length !== exchangeNeed.count;
@@ -478,7 +513,7 @@
       };
       actions.append(give);
     } else if (g.phase === "exchange") {
-      msg.textContent = g.ex?.pairs.some((p) => p.low === me) ? "強いカードが渡されます。上の人がカードを選ぶまで待っています…" : "カードを交換しています…";
+      msg.textContent = "カード交換中…";
     } else if (g.phase === "play" && mine && !myOut) {
       const pass = node("button", "df-ghost", "パス");
       pass.type = "button";
@@ -523,9 +558,9 @@
       };
       actions.append(pass, tip, play);
       const rej = room.rej?.[me];
-      msg.textContent = reason || (rej && rej.seq !== ui.rejSeen ? rej.text : "") || (myTurn ? (ui.selected.length ? "" : g.field ? "場より強いカードを選んでください" : "出すカードを選んでください") : "");
+      msg.textContent = reason || (rej && rej.seq !== ui.rejSeen ? rej.text : "") || "";
       if (rej) ui.rejSeen = rej.seq;
-    } else if (g.phase === "play" && myOut) msg.textContent = "上がりました。ほかの人が終わるまで見ていましょう";
+    } else if (g.phase === "play" && myOut) msg.textContent = "上がり！";
     box.append(msg, actions);
 
     // ---- Results of a game
@@ -596,7 +631,7 @@
   function gameResult(room, g, me) {
     const sheet = node("div", "df-result");
     const card = node("div", "df-result-card");
-    card.append(node("h3", "", "ゲーム " + room.gNo + " の結果"));
+    card.append(node("h3", "", "結果 " + room.gNo + (room.settings.games > 1 ? "/" + room.settings.games : "")));
     const list = node("ol", "df-ranking");
     (g.ranking || []).forEach((id, i) => {
       const p = room.players[id] || {};
@@ -613,7 +648,7 @@
       const totals = room.totals || {};
       card.append(node("p", "df-note", "合計：" + (g.ids.slice().sort((a, b) => (totals[b] || 0) - (totals[a] || 0)).map((id) => (room.players[id]?.name || "") + " " + (totals[id] || 0) + "点").join("　"))));
     }
-    card.append(node("p", "df-next", last ? "まもなく最終結果" : ""));
+    card.append(node("p", "df-next", ""));
     sheet.append(card);
     return sheet;
   }
@@ -622,9 +657,10 @@
       me = v.me;
     const box = node("div", "df-lobby df-end");
     if (room.status === "closed") {
-      box.append(node("h2", "", "テーブルが閉じられました"), node("p", "df-sub", room.abandoned ? "ゲームの途中で終わったので、ポイントは動いていません。" : ""));
+      box.append(node("h2", "", "テーブルは終了しました"), node("p", "df-sub", room.abandoned ? "途中で終わったのでポイントは動きません" : ""));
     } else {
-      box.append(node("p", "df-kicker", "RESULT"), node("h2", "", "最終結果"));
+      box.append(node("div", "df-hero", ""));
+      box.firstChild.append(node("span", "df-crown", "♛"), node("h2", "", "最終結果"));
       const order = room.final?.order || [];
       const list = node("ol", "df-ranking is-final");
       order.forEach((id, i) => {
@@ -646,11 +682,11 @@
           const li = node("li", p.from === me || p.to === me ? "is-me" : "");
           const done = T.paid(p.id)?.ok;
           li.append(node("span", "", (room.players[p.from]?.name || "") + " → " + (room.players[p.to]?.name || "")), node("strong", "", fmt(p.amount) + "pt"));
-          li.append(node("small", done ? "is-done" : "", p.from === me ? (done ? "支払い済み" : "支払い中…") : p.to === me ? "受け取りは自動です" : ""));
+          li.append(node("small", done ? "is-done" : "", p.from === me ? (done ? "支払い済み" : "支払い中…") : ""));
           ul.append(li);
         }
-        box.append(ul, node("p", "df-note", "足りないポイントはカジノからの借金になります。相手の端末が支払うまで、受け取りが遅れることがあります。"));
-      } else box.append(node("p", "df-note", room.settings.practice ? "練習なので、ポイントは動きません。" : "ポイントのやり取りはありません。"));
+        box.append(ul);
+      } else box.append(node("p", "df-note", room.settings.practice ? "練習なのでポイントは動きません" : ""));
     }
     const again = node("button", "df-primary", room.settings.practice ? "もう一度練習" : "ロビーに戻る");
     again.type = "button";

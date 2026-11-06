@@ -2995,3 +2995,15 @@ Tests: `tests/daifugo-model.test.cjs` (every rule above, the payouts add up to 0
 **What the user saw.** Nothing yet; found in review of 10.25.01.00. If a player pressed 「テーブルを出る」 at the very moment the host started the table, the leave step (decided from the screen's last copy of the table, which still said waiting) found the table already playing and did nothing, so the player stayed "present" and the dealer waited the full think time on each of their turns.
 
 **Fix.** `leave()` decides inside the transaction: waiting → the seat is given up; playing → the player is marked left (the dealer plays on for them quickly); otherwise nothing.
+
+## 10.26.00.00 大富豪の画面を整え、文言を減らした
+
+**What the owner said.** 「UIが終わってます。おしゃれにしてください。いらない文言が多い」
+
+**Now** (`daifugo.js`, `daifugo.css`; the game and the points are not touched):
+- Lobby: a crown mark and the name; 「ひとりで練習」 is one line (3/4/5 and a button); the stake is a large number with − / + and quick values, with the payout shown as two small tags; the options are rows of pill choices (人数 / ゲーム / 時間 / 都落ち); joining is one line with the four digits. The rule list and the long notes are gone from the page: the rules are behind the ? button (six short lines).
+- Waiting room: the table number large, the settings as small tags, the seats; no notes.
+- Table: the card count is a badge on the fan (no 「13枚」 text), the player's own bar shows only the name and 「あなたの番」, the hints under the hand are gone (only a reason when a play is refused, and the exchange); the field says 「名前　ペア」 and no longer 「1枚」.
+- Results: 「結果 1/4」 and the ranking; the final screen lists the payments and says 「支払い済み」; no explanations.
+
+Tests: `tests/daifugo.smoke.cjs` (the same flows through the new screens).
