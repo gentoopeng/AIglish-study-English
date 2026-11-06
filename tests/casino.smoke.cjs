@@ -286,7 +286,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.evaluate(() => {
       window.fbSetDoc = async (path, value) => (window.__wallet[path] = structuredClone(value));
       // The shared card is already there (a new one would take draws of its own).
-      window.__wallet["shared/sugoroku_live"] = { ...window.SugorokuModel.newCard((n) => n - 1), people: {}, log: [] };
+      window.__wallet["shared/sugoroku_live2"] = { ...window.SugorokuModel.newCard((n) => n - 1), people: {}, log: [] };
     });
     const keysBefore = await page.evaluate(() => Object.keys(window.__wallet["users/casino-a/learningPoints/main"].poker).length);
     await tab.locator(".mode-sugoroku").click();
@@ -358,8 +358,8 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       crypto.getRandomValues = (a) => (q.length ? ((a[0] = q.shift()), a) : real(a));
     }, [firstNo]);
     await sg.locator("[data-sg-roll]").click();
-    await page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning") && window.__wallet["shared/sugoroku_live"]);
-    const sharedCard = await page.evaluate(() => window.__wallet["shared/sugoroku_live"]);
+    await page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning") && window.__wallet["shared/sugoroku_live2"]);
+    const sharedCard = await page.evaluate(() => window.__wallet["shared/sugoroku_live2"]);
     const cellAt = sharedCard.owners.indexOf("casino-a");
     assert.ok(cellAt >= 0, "the ball is on the shared card");
     assert.ok(sharedCard.people["casino-a"]);

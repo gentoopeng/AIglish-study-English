@@ -10,7 +10,7 @@ const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
 const base = process.env.APP_URL || "http://127.0.0.1:8000";
 const SAVE = "aiglish_sugoroku_sg-a",
-  CARD = "shared/sugoroku_live";
+  CARD = "shared/sugoroku_live2";
 (async () => {
   const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
   try {
@@ -36,11 +36,11 @@ const SAVE = "aiglish_sugoroku_sg-a",
       myName = "A";
       const S = window.SugorokuModel,
         card = S.newCard((n) => n - 1);
-      card.owners = card.owners.map((o, i) => (o === "*" ? o : i < 6 ? "sg-b" : ""));
+      card.owners = card.owners.map((o, i) => (i < 6 ? "sg-b" : ""));
       localStorage.setItem("core_v4_study_points_sg-a", JSON.stringify({ balance: 2000, revision: 1, publishedRevision: 1 }));
       const store = {
         "users/sg-a/learningPoints/main": { balance: 2000, revision: 1 },
-        "shared/sugoroku_live": {
+        "shared/sugoroku_live2": {
           ...card,
           owed: { "sg-a": 120 },
           people: { "sg-b": { n: "B", i: 'x");background:url(https://example.com/x' } },
@@ -57,7 +57,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
         const writes = [];
         const result = await fn({
           get: async (path) => {
-            if (window.__failCard && path === "shared/sugoroku_live") throw Error("offline");
+            if (window.__failCard && path === "shared/sugoroku_live2") throw Error("offline");
             if (window.__failWallet && path.endsWith("/learningPoints/main")) throw Error("offline");
             return { exists: () => !!store[path], data: () => structuredClone(store[path]) };
           },
@@ -83,7 +83,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     const tab = page.locator("#view-casino.active");
     await tab.locator(".casino-game.mode-sugoroku").click();
     const screen = page.locator("dialog.casino-screen.is-sugoroku[open]");
-    await screen.locator(".sg-card").waitFor();
+    await screen.locator(".sg-card").first().waitFor();
     // The 120 waiting for A is taken on opening, in one wallet write, and said so.
     await page.evaluate(() => window.Casino.flush());
     await page.waitForFunction(() => window.__store["users/sg-a/learningPoints/main"].balance === 2120);
@@ -93,7 +93,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     assert.deepEqual(notes.filter(([title]) => !/リーチ/.test(title)), [["ほかの人のビンゴの分け前 +120pt", 120]]);
     // ... and how many lines are one number from done, as one notice (replaced when it changes).
     assert.equal(notes.filter(([title]) => /^いま \d+ 本リーチ中$/.test(title)).length, 1);
-    assert.deepEqual(await page.evaluate(() => window.__store["shared/sugoroku_live"].owed), {});
+    assert.deepEqual(await page.evaluate(() => window.__store["shared/sugoroku_live2"].owed), {});
     assert.equal((await saved()).shared, 120);
     await page.waitForFunction(() => !document.querySelector(".sg-go").disabled);
     // B's balls show B's initial, not the bad icon.
@@ -113,7 +113,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     // A roll that draws a ball needs the shared card. When the cloud cannot be written, nothing
     // is charged or saved, and the player is asked again.
     const ballAt = await rule("S.RULES.normal[100].findIndex((x) => x.ball)"),
-      fiveAt = await rule("S.RULES.wheels.bingo.findIndex((x) => x.x === 10)");
+      fiveAt = await rule("S.RULES.wheels.bingo.findIndex((x) => x.x === 8)");
     const start = await chips();
     await page.evaluate(() => (window.__failCard = true));
     await fix([0, ballAt, 99]);
@@ -153,16 +153,16 @@ const SAVE = "aiglish_sugoroku_sg-a",
     assert.equal(await page.evaluate(() => window.__store["users/sg-a/learningPoints/main"].balance), 1920);
     assert.equal(await chips(), start - 200);
 
-    // A ball on the row's last number finishes B's row: half the prize of 1,000 is shared by the
-    // 7 balls (B's 6 parts, 428, wait on the card for B); of the bingo wheel's × 10 (1,000), 30%
-    // is shared the same way (B's 257), and the line goes in the log with A's name.
+    // A ball on the row's last number finishes B's row: 70% of the prize of 500 is shared by the
+    // 7 balls (B's 6 parts, 300, wait on the card for B); of the bingo wheel's × 8 (800), 50%
+    // is shared the same way (B's 342), and the line goes in the log with A's name.
     const before = await chips();
     await fix([0, ballAt, row[6] - 1, fiveAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
-    assert.equal(await chips(), before - 100 + (1000 - 428) + (1000 - 257));
-    const shared = await page.evaluate(() => window.__store["shared/sugoroku_live"]);
-    assert.deepEqual(shared.owed, { "sg-b": 428 + 257 });
+    assert.equal(await chips(), before - 100 + (500 - 300) + (800 - 342));
+    const shared = await page.evaluate(() => window.__store["shared/sugoroku_live2"]);
+    assert.deepEqual(shared.owed, { "sg-b": 300 + 342 });
     assert.deepEqual(Object.keys(shared.owedAt), ["sg-b"]);
     assert.deepEqual(shared.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.deepEqual(shared.log.map((e) => [e.t, e.id, e.n, e.c]), [["bingo", "sg-b", "B", 2], ["bingo", "sg-a", "A", 1]]);
@@ -179,7 +179,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     assert.equal(await quick.getAttribute("aria-pressed"), "true");
     await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await screen.locator(".sg-card").waitFor();
+    await screen.locator(".sg-card").first().waitFor();
     assert.equal(await screen.getByRole("button", { name: "早送り" }).getAttribute("aria-pressed"), "true");
 
     // The tapping game: taps made by a script do not count, real ones do.
@@ -216,7 +216,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       window.switchTab("casino");
     });
     await tab.locator(".mode-sugoroku .casino-waiting").waitFor();
-    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 685pt 届いています");
+    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 642pt 届いています");
     await page.evaluate(() => (myId = "sg-a"));
 
     // Opening again with a slow cloud: the screen comes up at once from what this device kept,
@@ -246,7 +246,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       window.fbOnSnapshot = (ref, cb) => {
         const snap = () => ({ exists: () => !!window.__store[ref], data: () => structuredClone(window.__store[ref]) });
         (window.__emits ||= {})[ref] = () => cb(snap());
-        if (ref === "shared/sugoroku_live") window.__emit = () => cb(snap());
+        if (ref === "shared/sugoroku_live2") window.__emit = () => cb(snap());
         setTimeout(() => cb(snap()), 0);
         return () => delete window.__emits[ref];
       };
@@ -255,7 +255,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await settled();
     await fix([0, zeroAt]);
     const cOn = await page.evaluate(() => {
-      const card = window.__store["shared/sugoroku_live"],
+      const card = window.__store["shared/sugoroku_live2"],
         at = card.owners.findIndex((o) => o === "");
       document.querySelector(".sg-go").click();
       card.owners[at] = "sg-c";
@@ -268,7 +268,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
 
     // Another player's BINGO on the shared card goes into the お知らせボックス, once.
     await page.evaluate(() => {
-      const card = window.__store["shared/sugoroku_live"];
+      const card = window.__store["shared/sugoroku_live2"];
       card.log = [...(card.log || []), { t: "bingo", id: "sg-c", n: "C", c: 2, at: Date.now() }];
       window.__emit();
       window.__emit();
@@ -298,7 +298,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       localStorage.setItem("aiglish_casino_staked_sg-a", JSON.stringify({ day, amount: 600 * 100 - 50 }));
     });
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await screen.locator(".sg-card").waitFor();
+    await screen.locator(".sg-card").first().waitFor();
     await page.waitForFunction(() => document.querySelector(".sg-go").textContent === "勉強すると振れます");
     assert.equal(await screen.locator(".sg-go").isDisabled(), true);
     assert.match(await screen.locator(".sg-study").innerText(), /あと1分勉強すると賭けられます/);
@@ -317,7 +317,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await screen.locator(".sg-card").waitFor();
+    await screen.locator(".sg-card").first().waitFor();
     const twice = await rule("S.RULES.accident.findIndex((x) => x.take === 2)");
     await fix([0, twice]);
     await screen.locator("[data-sg-roll]").click();
@@ -329,6 +329,46 @@ const SAVE = "aiglish_sugoroku_sg-a",
     // The game itself is kept in the cloud too, for carrying on from another device.
     const cloudSave = await page.evaluate(() => JSON.parse(window.__store["users/sg-a/sync/sugoroku"].state));
     assert.ok(cloudSave.rolls >= 1 && cloudSave.pending === null);
+
+    // The game from before the second card (shared/sugoroku_live, 49 cells): opening the screen makes the
+    // two-card document from it (the same cards on every device); what was owed on the old one is kept
+    // (only the sane parts) and taken by its owner on the first roll with a ball. An old copy of the
+    // game keeps writing to the old document and never touches the new one.
+    await page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning"));
+    await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const wallet = window.__store["users/sg-a/learningPoints/main"],
+        revision = wallet.revision + 1;
+      Object.assign(wallet, { balance: 1000, revision });
+      window.StudyPoints.restore({ balance: 1000, revision, publishedRevision: revision });
+      const s = JSON.parse(localStorage.getItem(name));
+      Object.assign(s, { pos: 1, pending: null, bonus: [] });
+      localStorage.setItem(name, JSON.stringify(s));
+      const cells = Array.from({ length: 49 }, (_, i) => (i === 24 ? 0 : i + 1));
+      // The game from before lives in the old document; the two-card document is made from it.
+      window.__store["shared/sugoroku_live"] = { cells, owners: cells.map((n) => (n ? "" : "*")), owed: { "sg-a": 77, "sg-bad": -5 }, owedAt: { "sg-a": Date.now() }, people: {}, log: [], updatedAt: Date.now() };
+      delete window.__store["shared/sugoroku_live2"];
+      localStorage.removeItem("aiglish_sugoroku_card_live");
+    }, SAVE);
+    const sharedBefore = (await saved()).shared;
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").first().waitFor();
+    assert.equal(await screen.locator(".sg-cell").count(), 98);
+    const made = await page.evaluate(() => window.__store["shared/sugoroku_live2"]);
+    assert.equal(made.v, 2, "the new document exists as soon as the screen is open");
+    // (A's 77 was taken on opening, as any part waiting for A is; the bad part (-5) did not come across.)
+    assert.deepEqual(made.owed, {}, "only the sane part of what was owed came across, and A took it");
+    await page.evaluate(() => (window.__store["shared/sugoroku_live"].cells = window.__store["shared/sugoroku_live"].cells.map(() => 0)));
+    await fix([0, ballAt, 5]);
+    await screen.locator("[data-sg-roll]").click();
+    await settled();
+    const renewed = await page.evaluate(() => window.__store["shared/sugoroku_live2"]);
+    assert.equal(renewed.v, 2);
+    assert.equal(renewed.cells.length, 98);
+    assert.ok(Number.isInteger(renewed.special) && !renewed.cells.includes(renewed.special));
+    assert.deepEqual(renewed.owed, {});
+    assert.equal((await saved()).shared - sharedBefore, 77);
+    await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
 
     // A jackpot win: the pot is taken with this device's unsent bets in, and starts again from
     // its seed. 1,400,000 bet: the JACKPOT would be 24,000 but stops at 20,000, and the 4,000 past

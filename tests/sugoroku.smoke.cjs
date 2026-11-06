@@ -30,8 +30,12 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.equal(await tab.locator("[data-casino-jackpots] .is-sjp b").innerText(), "12,000pt");
     await tab.locator(".casino-game.mode-sugoroku").click();
     const screen = page.locator("dialog.casino-screen.is-sugoroku[open]");
-    await screen.locator(".sg-card").waitFor();
-    assert.equal(await screen.locator(".sg-cell").count(), 49);
+    await screen.locator(".sg-card").first().waitFor();
+    // Two cards of 49 cells, side by side (swipe), with a tab for each and the special number.
+    assert.equal(await screen.locator(".sg-cell").count(), 98);
+    assert.equal(await screen.locator(".sg-card").count(), 2);
+    assert.equal(await screen.locator(".sg-card-tabs button").count(), 2);
+    assert.match(await screen.locator(".sg-special").innerText(), /^★ \d+$/);
     assert.equal(await screen.locator(".sg-sq").count(), 100);
     // The whole game fits the screen: the roll button is in view without scrolling.
     const fits = await page.evaluate(() => {
@@ -93,9 +97,9 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     // Closed and opened again: the same card and place.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await screen.locator(".sg-card").waitFor();
+    await screen.locator(".sg-card").first().waitFor();
     const guestName = await page.evaluate(() => myName);
-    assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll(".sg-cell")].map((c) => c.title || c.textContent)), afterCard.cells.map((n, i) => (afterCard.owners[i] === "GUEST-000" ? guestName + "のボール（" + n + "）" : n ? String(n) : "FREE")));
+    assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll(".sg-cell")].map((c) => c.title || c.textContent)), afterCard.cells.map((n, i) => (afterCard.owners[i] === "GUEST-000" ? guestName + "のボール（" + n + "）" : String(n))));
 
     // An event game left half way comes back where it was.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
@@ -179,17 +183,20 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
         window.__queue = values.slice();
         crypto.getRandomValues = (array) => (window.__queue.length ? ((array[0] = window.__queue.shift()), array) : real(array));
       }, values);
-    // A ball off the card: it rolls in, greys out and gives the bet back (100).
+    // A ball on a number that is already open: it rolls in, greys out and gives twice the bet back (200).
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     const missNo = await page.evaluate(([name, cardName]) => {
       const s = JSON.parse(localStorage.getItem(name));
       s.pos = 99;
       localStorage.setItem(name, JSON.stringify(s));
       const c = JSON.parse(localStorage.getItem(cardName));
-      return Array.from({ length: 100 }, (_, i) => i + 1).find((n) => !c.cells.includes(n));
+      c.owners[0] = "amy";
+      c.people = { amy: { n: "Amy", i: "" } };
+      localStorage.setItem(cardName, JSON.stringify(c));
+      return c.cells[0];
     }, [SAVE, CARD]);
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await screen.locator(".sg-card").waitFor();
+    await screen.locator(".sg-card").first().waitFor();
     const before = await saved(),
       beforeCard = await card();
     // Die 1 onto START (a ball), START's wheel on its ×0 slot.
@@ -200,6 +207,29 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const missed = await saved();
     assert.equal(missed.won - before.won, 200);
     assert.deepEqual((await card()).owners, beforeCard.owners);
+    // The special number: the ball is gold, the SPECIAL BALL wheel spins and pays its multiple (×10 here).
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    const specialNo = await page.evaluate(([name, cardName]) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.pos = 99;
+      localStorage.setItem(name, JSON.stringify(s));
+      return JSON.parse(localStorage.getItem(cardName)).special;
+    }, [SAVE, CARD]);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").first().waitFor();
+    const tenSpecial = await page.evaluate(() => window.SugorokuModel.RULES.wheels.special.findIndex((x) => x.x === 10));
+    const specialBefore = await saved();
+    await fix([0, specialNo - 1, tenSpecial, zeroAt]);
+    await page.evaluate(() => {
+      window.__layers2 = [];
+      const layer = document.querySelector(".sg-layer");
+      new MutationObserver(() => window.__layers2.push(layer.className)).observe(layer, { attributes: true, attributeFilter: ["class"] });
+    });
+    await screen.locator("[data-sg-roll]").click();
+    await settled();
+    assert.ok((await page.evaluate(() => window.__layers2)).some((c) => c.includes("is-special")), "the special wheel spun");
+    assert.equal((await saved()).won - specialBefore.won, 1000);
+    assert.deepEqual((await card()).owners, beforeCard.owners, "the special number opens no cell");
     // The rules sheet explains the 確変 wheel (and no longer says the normal wheel pays ×10).
     await page.getByRole("button", { name: "すごろくビンゴの遊び方" }).click();
     const sheet = await page.locator(".sg-sheet").innerText();
@@ -230,21 +260,21 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       s.pos = 99;
       localStorage.setItem(name, JSON.stringify(s));
       const c = JSON.parse(localStorage.getItem(cardName));
-      c.owners = c.owners.map((o, i) => (o === "*" ? o : i < 6 ? "GUEST-000" : i === 10 ? "amy" : ""));
+      c.owners = c.owners.map((o, i) => (i < 6 ? "GUEST-000" : i === 10 ? "amy" : ""));
       c.people = { amy: { n: "Amy", i: "" } };
       localStorage.setItem(cardName, JSON.stringify(c));
       return c.cells[6];
     }, [SAVE, CARD]);
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await screen.locator(".sg-card").waitFor();
+    await screen.locator(".sg-card").first().waitFor();
     assert.equal(await screen.locator(".sg-cell").nth(10).getAttribute("data-initial"), "A");
     assert.match(await screen.locator(".sg-cell").nth(10).getAttribute("title"), /^Amyのボール/);
     assert.equal(await screen.locator(".sg-cell.is-mine").count(), 6);
     assert.ok((await screen.locator(".sg-cell.is-reach").count()) >= 1);
-    // Die 1 onto START: the lap ball completes the row; the bingo wheel stops on × 20.
+    // Die 1 onto START: the lap ball completes the row; the bingo wheel stops on × 15.
     const wheelAt = (test) => page.evaluate((src) => window.SugorokuModel.RULES.wheels.bingo.findIndex(Function("x", "return " + src)), test);
     const before20 = await saved();
-    await fix([0, lastNo - 1, await wheelAt("x.x === 20")]);
+    await fix([0, lastNo - 1, await wheelAt("x.x === 15")]);
     // Every look the wheel layer takes is noted (with reduced motion the bingo wheel is gone again
     // within a few milliseconds, before START's own wheel).
     await page.evaluate(() => {
@@ -259,12 +289,12 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const done = await saved(),
       doneCard = await card();
     assert.equal(done.bingos, before20.bingos + 1);
-    // A line of only the guest's balls: (bingo prize 1,000 + × 20 = 2,000) × 1.1, plus START's
-    // wheel (which can take up to another bet).
-    assert.ok(done.won - before20.won >= 3200, String(done.won - before20.won));
-    // The finished row starts again: no balls, fresh numbers; amy's ball stays.
+    // A line of only the guest's balls: (bingo prize 500 + × 15 = 1,500 → 2,000) × 1.1, plus START's
+    // wheel (which can take up to five bets more).
+    assert.ok(done.won - before20.won >= 2200 - 500, String(done.won - before20.won));
+    // The finished row starts again: no balls, the same numbers; amy's ball stays.
     assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
-    assert.ok(!doneCard.cells.slice(0, 7).includes(lastNo));
+    assert.ok(doneCard.cells.slice(0, 7).includes(lastNo));
     assert.equal(doneCard.owners[10], "amy");
     await page.screenshot({ path: "/tmp/sugoroku-after.png", fullPage: true });
 
@@ -275,14 +305,14 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       s.pos = 99;
       localStorage.setItem(name, JSON.stringify(s));
       const c = JSON.parse(localStorage.getItem(cardName));
-      c.owners = c.owners.map((o, i) => (o === "*" ? o : i >= 7 && i < 13 ? "amy" : ""));
+      c.owners = c.owners.map((o, i) => (i >= 7 && i < 13 ? "amy" : ""));
       localStorage.setItem(cardName, JSON.stringify(c));
       return c.cells[13];
     }, [SAVE, CARD]);
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await screen.locator(".sg-card").waitFor();
-    // Then the 7 fresh numbers for the finished row, and START's own wheel on a plain ×0.
-    await fix([0, nextNo - 1, await wheelAt('x.game === "timer"'), 0, 0, 0, 0, 0, 0, 0, zeroAt]);
+    await screen.locator(".sg-card").first().waitFor();
+    // Then START's own wheel on a plain ×0.
+    await fix([0, nextNo - 1, await wheelAt('x.game === "timer"'), zeroAt]);
     const beforeMini = await saved();
     await screen.locator("[data-sg-roll]").click();
     const mini = screen.locator(".sg-layer.is-mini:not([hidden])");
@@ -303,10 +333,10 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
     const afterMini = await saved();
     assert.deepEqual(afterMini.bonus, []);
-    // amy's row: no solo bonus, and half the prize of 1,000 is shared by the balls on it: amy's
-    // six parts (428) wait on the card for her, the guest keeps 572; plus what the timer scored.
-    assert.ok(afterMini.won - beforeMini.won >= 572);
-    assert.deepEqual((await card()).owed, { amy: 428 });
+    // amy's row: no solo bonus, and 70% of the prize of 500 is shared by the balls on it: amy's
+    // six parts (300) wait on the card for her, the guest keeps 200; plus what the timer scored.
+    assert.ok(afterMini.won - beforeMini.won >= 200);
+    assert.deepEqual((await card()).owed, { amy: 300 });
 
     // The normal squares' quick games. ストップ: stopped at once, the light is at the left end: a
     // miss, 0. ハイ＆ロー: 5 then 9 and HIGH: a win, 1.25× the bet.

@@ -3013,3 +3013,21 @@ Tests: `tests/daifugo.smoke.cjs` (the same flows through the new screens).
 **What the user saw.** Nothing yet; found in review of 10.26.00.00. The practice and join rows were set not to wrap, so on a phone narrower than about 340px their buttons ran past the panel.
 
 **Fix.** `daifugo.css`: the rows wrap again (one line when there is room, as on a 393px phone; the button drops below on 320px). Checked on 320x568 and 393x852.
+
+## 10.27.00.00 すごろくビンゴ: カードを2枚にして外れをなくし、当たり外れを大きくした（改良1/3）
+
+**What the owner said.** 「ボールの外れが多すぎる → ビンゴカードを2枚にしてスワイプで切り替え。1〜99を全部埋めるように49+49と、あまりの1は特別な数字（出た瞬間に何か起こる。ルーレットで決めればいい）。すでに出た数字は今までどおり200pt」「当たり外れが地味 → ハイリスクハイリターンにして均衡をとる」「ビンゴしたときの他の人への配当が少なすぎる → 7割」。アイテム（2回目）と賭け額（3回目）はあとの回。
+
+**Why the balls missed.** The card held 48 of 100 numbers, so 52% of balls fell on no cell and only paid twice the bet.
+
+**Now** (`sugoroku-model.js`, `sugoroku.js`, `sugoroku.css`):
+- Two 7×7 cards (98 cells, no free cell), numbers 1-99 in random places; the 99th number is the special one (`card.special`, shown as ★ n). Balls draw 1-99: a closed cell opens; a number already open pays 2× the bet; the special number spins the special wheel (×10 … ×50 of the bet, or three more balls) and opens no cell. When a line is made its balls are removed and the numbers stay.
+- The shared document is now `shared/sugoroku_live2` = `{ v: 2, cells[98], owners[98], special, owed, owedAt, people, log }`. It is made (in one transaction, when the first player opens the screen or rolls) from the old `shared/sugoroku_live`: new cards, and the old document's sane `owed`/`owedAt` parts, people and log. A new document, not a changed one, because an old copy of the app (a tab opened before the update) would read the new format as invalid and overwrite it with a 49-cell card, losing what is owed (found in the Opus review); old copies keep using the old document and never touch the new one. The admin tool's player deletion clears both documents.
+- Screen: both cards side by side (scroll-snap swipe) with tabs that show the reaches on each card, the special number, the view turns to the card a ball lands on; the rules text is shorter.
+- High risk, high return: the normal wheel is −5× (4 slots of 40), −2× (3), −1× (2), 0 (7), +0.5 (2), +1 (2), +2 (2), +3, +5 (3), +7.
+- Others on the line: 70% of the bingo prize (was 50%) and 50% of the bingo wheel's multiples (was 30%) go to the players whose balls are on the line.
+- Re-tuned by Monte Carlo (300,000 rolls, 3 and 5 players; `scratchpad` scripts, not kept in the repo): with two cards a bingo came about every 115 rolls (twice as often), which pushed the return to 0.994. Bingo prize 10→5, bingo wheel ×10/20/50 → ×8/15/25/35 (and one jackpot slot instead of two, so the JP rate stays about 1.0 per 1,000 rolls), special wheel without a jackpot. Return without jackpots 0.90-0.92 (was 0.93); with the jackpots paid from the pots it is about 1.0 as before.
+
+Tests: `tests/sugoroku-model.test.cjs` (cards, special number, line and shares, wheels, validation, 80,000-roll return between 0.8 and 1), `tests/sugoroku.smoke.cjs` (98 cells, two tabs, ★ number, the special wheel pays ×10, an open number pays 2×), `tests/sugoroku-shared.smoke.cjs` (an old 49-cell card is replaced and its owed part collected).
+
+**Known and kept.** A roll on the new normal wheel can lose up to 5 bets on top of the bet (−5× on 4 of 40 slots, as asked). If the wallet is short the rest is a casino loan, as for an accident (the rules text says so). Players still on an old copy of the app share nothing with the new card until they reload; the balls they place there stay on the old document.
