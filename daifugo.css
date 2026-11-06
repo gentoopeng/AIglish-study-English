@@ -217,6 +217,5 @@ html body dialog.df-screen{box-sizing:border-box;overflow-x:hidden;position:fixe
 .df-felt::after{content:"♠\FE0E ♥\FE0E ♦\FE0E ♣\FE0E";position:absolute;left:0;right:0;bottom:14px;text-align:center;color:rgba(240,225,170,.12);font-size:20px;letter-spacing:.6em;pointer-events:none;}
 .df-end .df-hero{justify-content:center;padding-right:0;}
 .df-end .df-hero h2{flex:0 0 auto;}
-.df-panel.is-row{flex-wrap:nowrap;}
 .df-panel.is-row .df-seg button{min-width:34px;padding:0 10px;}
 .df-panel.is-row .df-primary{min-width:84px;padding:0 12px;}

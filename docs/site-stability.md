@@ -3007,3 +3007,9 @@ Tests: `tests/daifugo-model.test.cjs` (every rule above, the payouts add up to 0
 - Results: 「結果 1/4」 and the ranking; the final screen lists the payments and says 「支払い済み」; no explanations.
 
 Tests: `tests/daifugo.smoke.cjs` (the same flows through the new screens).
+
+## 10.26.01.00 大富豪のロビーが狭い画面ではみ出していた（Codexの指摘）
+
+**What the user saw.** Nothing yet; found in review of 10.26.00.00. The practice and join rows were set not to wrap, so on a phone narrower than about 340px their buttons ran past the panel.
+
+**Fix.** `daifugo.css`: the rows wrap again (one line when there is room, as on a 393px phone; the button drops below on 320px). Checked on 320x568 and 393x852.
