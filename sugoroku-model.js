@@ -10,8 +10,9 @@
 // Passing START gives a ball, nothing else.
 // Items: a slot of the normal wheel spins the item wheel and a player holds up to itemMax of them
 // (they can also be bought: RULES.items[id].price). One is used before a roll (roll()'s `use`):
-// ダブルダイス throws two dice, ぴったり picks the face, ガード cancels accident squares for this and the
-// next two rolls, ボール券 draws a ball, 倍がけ doubles what the normal wheel pays or takes.
+// ダブルダイス / トリプルダイス throw two / three dice, ぴったり picks the face, ガード cancels accident squares
+// for this and the next two rolls, 倍がけ doubles what the normal wheel pays or takes (ボール券, which drew
+// a ball, is no longer given or sold).
 // The bingo cards: two 7×7 cards (98 numbers) shared by every player and kept apart from each
 // player's own state: { v: 2, cells, owners, special }, cells[0..48] the first card and
 // cells[49..97] the second, owners[i] the id of whoever's ball opened cell i ("" closed). A ball is
@@ -84,12 +85,14 @@
     itemMax: 3,
     items: {
       dice2: { name: "ダブルダイス", price: 150 },
+      dice3: { name: "トリプルダイス", price: 250 },
       exact: { name: "ぴったり", price: 250 },
       guard: { name: "ガード", price: 100 },
-      ball: { name: "ボール券", price: 400 },
       x2: { name: "倍がけ", price: 80 },
+      // No longer given or sold; one already in a bag can still be used.
+      ball: { name: "ボール券", price: 400, retired: true },
     },
-    itemWheel: spread([...GET("dice2", 3), ...GET("exact", 2), ...GET("guard", 2), ...GET("ball"), ...GET("x2", 2)]),
+    itemWheel: spread([...GET("dice2", 3), ...GET("dice3"), ...GET("exact", 2), ...GET("guard", 2), ...GET("x2", 2)]),
     // The 確変 wheel (after a 確変 slot of the normal wheel): x pays the bet × x; balls draws that
     // many balls one after another (each as any ball: it opens a number or pays missPay, and a
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
@@ -433,19 +436,20 @@
       picked[id] = true;
       state.items.splice(at, 1);
     }
-    if (picked.dice2 && picked.exact) throw Error("two kinds of dice");
+    if ((picked.dice2 ? 1 : 0) + (picked.dice3 ? 1 : 0) + (picked.exact ? 1 : 0) > 1) throw Error("two kinds of dice");
     if (picked.exact && !(Number.isInteger(use.face) && use.face >= 1 && use.face <= 6)) throw Error("bad face");
     let die;
     if (picked.exact) {
       die = use.face;
       events.push({ t: "item", id: "exact" });
       events.push({ t: "die", value: die, exact: true });
-    } else if (picked.dice2) {
-      const a = random(6) + 1,
-        b = random(6) + 1;
-      die = a + b;
-      events.push({ t: "item", id: "dice2" });
-      events.push({ t: "die", value: die, values: [a, b] });
+    } else if (picked.dice2 || picked.dice3) {
+      // Two or three dice: the sum moves the piece.
+      const count = picked.dice3 ? 3 : 2,
+        values = Array.from({ length: count }, () => random(6) + 1);
+      die = values.reduce((n, v) => n + v, 0);
+      events.push({ t: "item", id: picked.dice3 ? "dice3" : "dice2" });
+      events.push({ t: "die", value: die, values });
     } else {
       die = random(6) + 1;
       events.push({ t: "die", value: die });
@@ -554,7 +558,7 @@
   }
   // Buying an item (the screen takes the price from the wallet): the bag must have room.
   function buy(before, id) {
-    if (!isItem(id)) throw Error("no such item");
+    if (!isItem(id) || RULES.items[id].retired) throw Error("no such item");
     const have = itemsOf(before);
     if (have.length >= RULES.itemMax) throw Error("full");
     return { state: { ...clone(before), items: [...have, id], rev: revOf(before) + 1 }, price: RULES.items[id].price };

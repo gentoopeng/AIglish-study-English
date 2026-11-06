@@ -484,7 +484,11 @@ test("items: the item wheel fills the bag (3 at most, a full bag pays half the p
     card = S.newCard(seq([0])),
     from = { ...S.newState(), pos: at("normal") - 1 };
   const pickItem = (id) => S.RULES.itemWheel.findIndex((x) => x.item === id);
-  assert.deepEqual(Object.keys(S.RULES.items).sort(), ["ball", "dice2", "exact", "guard", "x2"]);
+  assert.deepEqual(Object.keys(S.RULES.items).sort(), ["ball", "dice2", "dice3", "exact", "guard", "x2"]);
+  // ボール券 is no longer given or sold (one already held can still be used).
+  assert.ok(S.RULES.items.ball.retired);
+  assert.ok(!S.RULES.itemWheel.some((x) => x.item === "ball"));
+  assert.deepEqual(S.RULES.itemWheel.map((x) => x.item).sort(), ["dice2", "dice2", "dice2", "dice3", "exact", "exact", "guard", "guard", "x2", "x2"]);
   assert.equal(S.RULES.itemWheel.length, 10);
   // A normal slot with an item: the item wheel spins and the bag gets the item.
   const got = S.roll(from, card, 100, seq([0, itemAt, pickItem("guard")]));
@@ -494,15 +498,20 @@ test("items: the item wheel fills the bag (3 at most, a full bag pays half the p
   assert.equal(got.gain, 0);
   // A full bag: half the price, in cash.
   const full = { ...from, items: ["dice2", "dice2", "exact"] };
-  const sold = S.roll(full, card, 100, seq([0, itemAt, pickItem("ball")]));
+  const sold = S.roll(full, card, 100, seq([0, itemAt, pickItem("dice3")]));
   assert.deepEqual(sold.state.items, ["dice2", "dice2", "exact"]);
-  assert.equal(sold.gain, S.RULES.items.ball.price / 2);
+  assert.equal(sold.gain, S.RULES.items.dice3.price / 2);
   assert.equal(sold.events.find((e) => e.t === "itemGet").full, true);
   // ダブルダイス: two dice, the sum moves the piece.
   const two = S.roll({ ...from, pos: 0, items: ["dice2"] }, card, 100, seq([3, 4, zeroAt]), "amy", { items: ["dice2"] });
   assert.equal(two.state.pos, 9);
   assert.deepEqual(two.events.find((e) => e.t === "die"), { t: "die", value: 9, values: [4, 5] });
   assert.deepEqual(two.state.items, []);
+  // トリプルダイス: three dice.
+  const three = S.roll({ ...from, pos: 0, items: ["dice3"] }, card, 100, seq([0, 1, 2, zeroAt]), "amy", { items: ["dice3"] });
+  assert.equal(three.state.pos, 6);
+  assert.deepEqual(three.events.find((e) => e.t === "die"), { t: "die", value: 6, values: [1, 2, 3] });
+  assert.throws(() => S.roll({ ...from, items: ["dice2", "dice3"] }, card, 100, seq([0]), "amy", { items: ["dice2", "dice3"] }), /two kinds/);
   // ぴったり: the face is chosen.
   const exact = S.roll({ ...from, pos: 0, items: ["exact"] }, card, 100, seq([0, zeroAt]), "amy", { items: ["exact"], face: 5 });
   assert.equal(exact.state.pos, 5);
@@ -534,9 +543,10 @@ test("items: the item wheel fills the bag (3 at most, a full bag pays half the p
   assert.equal(S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, minus]), "amy", { items: ["x2"] }).gain, -1000);
   const kept = S.roll({ ...from, pos: at("event") - 1, items: ["x2"] }, card, 100, seq([0, 0]), "amy", { items: ["x2"] });
   assert.deepEqual(kept.state.items, ["x2"]);
-  // Buying: the price is returned; a full bag refuses; an unknown item too.
-  const bought = S.buy({ ...S.newState(), items: ["guard"] }, "ball");
-  assert.deepEqual([bought.state.items, bought.price], [["guard", "ball"], 400]);
+  // Buying: the price is returned; a full bag refuses; an unknown or retired item too.
+  const bought = S.buy({ ...S.newState(), items: ["guard"] }, "dice3");
+  assert.deepEqual([bought.state.items, bought.price], [["guard", "dice3"], 250]);
+  assert.throws(() => S.buy(S.newState(), "ball"), /no such item/);
   assert.throws(() => S.buy({ ...S.newState(), items: ["guard", "guard", "guard"] }, "x2"), /full/);
   assert.throws(() => S.buy(S.newState(), "nope"));
   // Names every object has are not items; a purchase and a roll both count for which copy is further on.

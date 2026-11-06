@@ -3045,3 +3045,14 @@ Tests: `tests/sugoroku-model.test.cjs` (cards, special number, line and shares, 
 Tests: `tests/sugoroku-model.test.cjs` (the item wheel, a full bag, every item's effect, refused uses, buying, old saves), `tests/sugoroku.smoke.cjs` (three bag slots, the shop buys for 150 and the bag is saved, ダブルダイス moves 3+4, ぴったり waits for a face and moves exactly 5, an ITEM slot fills the bag).
 
 **Review (Opus) and what was changed because of it.** (1) A bought item is not lost when another device takes over: which copy of the game is "further on" is now `revOf(state)` (a counter raised by every roll and every purchase; an old save counts its rolls), not only the number of rolls. (2) Built-in names (`constructor`, `__proto__`…) are no longer accepted as items (`hasOwnProperty`). (3) Two of a kind in the bag: only the first lights up; the shop button is off while a roll runs. **Known limits:** the same item can still be used on two devices that were both open before it was used (the last save wins, as with a game waiting in the same way); a full bag paying half the price adds about 1-2% to the return when players hold items without using them; shop purchases are not bets (no allowance, no jackpot feed).
+
+## 10.29.00.00 すごろくビンゴのアイテム: 絵を付け、トリプルダイスを足し、ボール券をやめた
+
+**What the owner said.** 「この画像を使ってください。ボール確定のアイテムはなしで、ダブルサイコロ、トリプルサイコロはいい感じにサイコロを重ねて」
+
+**Now** (`sugoroku-model.js`, `sugoroku.js`, `sugoroku.css`, `assets/sugoroku/`):
+- The four pictures of the owner's image were cut out of the one sheet (transparent, 192px, `die.png`, `die-gold.png`, `shield.png`, `potion.png`): the white die is ダブルダイス (two of them, a little turned and overlapping) and トリプルダイス (three, piled up), the gold die is ぴったり, the shield is ガード, the potion is 倍がけ. They show in the bag, the shop (larger) and nowhere else.
+- New item トリプルダイス (three dice, the sum moves the piece; 250). Item wheel: ダブルダイス ×3, トリプルダイス ×1, ぴったり ×2, ガード ×2, 倍がけ ×2 of 10 slots.
+- ボール券 is no longer on the item wheel or in the shop (`RULES.items.ball.retired`); one that a player already holds can still be used. Without it an item is worth about 50 points on average (before 59), so the return stays about 0.92.
+
+Tests: `tests/sugoroku-model.test.cjs` (トリプルダイス, the wheel without ボール券, a retired item cannot be bought), `tests/sugoroku.smoke.cjs` (the shop lists five items).
