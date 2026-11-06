@@ -430,6 +430,28 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await b.evaluate(() => window.openStudyPoints());
     await b.getByRole("button", { name: "ポイントの貸し借り" }).click();
     await dialogOf(b).locator(".loans-person", { hasText: "loan-a" }).waitFor();
+    // A settlement (大富豪): the wallet is short, so the rest is borrowed from the casino; once only.
+    await b.evaluate(() => window.PointLoans.close());
+    const aBefore = wallet("loan-a"),
+      bBefore = wallet("loan-b");
+    const lentBy = () => docs.get("pointLoans/CASINO__loan-a").entries.filter((e) => e.kind === "lend").reduce((sum, e) => sum + e.amount, 0);
+    const lentBefore = lentBy();
+    const paid = await a.evaluate((n) => window.PointLoans.pay("loan-b", "loan-b", n, "大富豪の精算", "df-test-1"), aBefore + 190);
+    assert.deepEqual(paid, { paid: aBefore, borrowed: 190, again: false });
+    assert.equal(wallet("loan-a"), 0);
+    assert.equal(await a.evaluate(() => window.StudyPoints.balance()), 0);
+    const casinoPair = docs.get("pointLoans/CASINO__loan-a");
+    assert.equal(lentBy() - lentBefore, 190);
+    assert.equal(casinoPair.entries.filter((e) => e.status === "open").map((e) => e.kind).join(), "ask-repay", "one 請求 for everything owed");
+    await b.evaluate(() => window.PointLoans.collect());
+    assert.equal(wallet("loan-b"), bBefore + aBefore + 190);
+    const again = await a.evaluate(() => window.PointLoans.pay("loan-b", "loan-b", 5, "大富豪の精算", "df-test-1"));
+    assert.equal(again.again, true);
+    assert.equal(wallet("loan-a"), 0);
+    await b.evaluate(() => window.PointLoans.collect());
+    assert.equal(wallet("loan-b"), bBefore + aBefore + 190);
+    // With enough in the wallet nothing is borrowed.
+    await a.evaluate(() => window.PointLoans.pay("loan-b", "loan-b", 10, "x", "df-test-2")).catch((e) => assert.match(String(e), /足りな|ポイント/));
     assert.deepEqual(errors, []);
     console.log("PASS: a talk (lines, points and requests as bubbles), points from the 運営, lists, people and profiles open at once on a slow cloud, a loan with interest against a request, casino debt from an accident paid through one 請求, loan out of the lender's wallet with the record, collected once by the borrower, 請求 paid, borrow request declined, matching histories, repay capped at the debt, guest message, opened from the points dialog");
   } finally {

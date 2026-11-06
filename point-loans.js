@@ -200,6 +200,49 @@
       tx.set(inboxRef(me), { pairs: { [key]: { other: CASINO, name: CASINO_NAME, at } } }, { merge: true });
     });
   }
+  // Pays `other` exactly `amount` (a settlement after a game, 大富豪): out of the wallet, and when the
+  // wallet is short the rest is borrowed from the casino, as in すごろくビンゴ (a loan spent at once, with
+  // one 請求 for everything owed). The payment is a "give" in the pair's record, which `other` collects
+  // like any gift. `id` makes it happen once: a second call with the same id changes nothing.
+  // Returns { paid: from the wallet, borrowed: from the casino, again: it had been paid before }.
+  async function pay(other, otherName, amount, note, id) {
+    ready();
+    notGiven(other, "give");
+    if (!id) throw Error("支払いの番号がありません。");
+    const me = uid(),
+      key = L.pairKey(me, other),
+      casinoKey = L.pairKey(me, CASINO),
+      at = Date.now(),
+      n = L.amountOf(amount);
+    let result = null;
+    const value = await window.fbRunTransaction(window.db, async (tx) => {
+      const [walletSnap, pairSnap, casinoSnap] = [await tx.get(walletRef(me)), await tx.get(pairRef(key)), await tx.get(pairRef(casinoKey))];
+      const wallet = walletSnap.exists() ? walletSnap.data() : {},
+        have = Number(wallet.balance) || 0,
+        record = pairSnap.exists() ? pairSnap.data() : null;
+      if ((record?.entries || []).some((e) => e.id === id)) {
+        result = { paid: 0, borrowed: 0, again: true };
+        return null;
+      }
+      const short = Math.max(0, n - Math.max(0, have));
+      if (short) {
+        const lend = id + "-casino";
+        let debt = L.send(casinoSnap.exists() ? casinoSnap.data() : null, { id: lend, from: CASINO, to: me, amount: short, kind: "lend", note, at });
+        debt.claimed = { ...(debt.claimed || {}), [lend]: at };
+        for (const e of debt.entries) if (e.status === "open" && e.kind === "ask-repay" && e.from === CASINO) Object.assign(e, { status: "cancelled", resolvedAt: at });
+        debt = L.ask(debt, { id: id + "-ask", from: CASINO, to: me, amount: Math.min(L.MAX_AMOUNT, L.net(debt, CASINO)), kind: "ask-repay", note, at });
+        tx.set(pairRef(casinoKey), remember(casinoKey, { ...debt, people: [me, CASINO].sort(), names: { ...(debt.names || {}), [me]: myNameNow(), [CASINO]: CASINO_NAME } }));
+        tx.set(inboxRef(me), { pairs: { [casinoKey]: { other: CASINO, name: CASINO_NAME, at } } }, { merge: true });
+      }
+      const next = shell(L.send(record, { id, from: me, to: other, amount: n, kind: "give", note, at }), me, other, otherName);
+      tx.set(pairRef(key), next);
+      touch(tx, me, other, otherName, key, at);
+      result = { paid: n - short, borrowed: short, again: false };
+      return walletWrite(tx, me, wallet, Math.max(0, have - (n - short)));
+    });
+    after(value);
+    return result;
+  }
   // A line of talk to `other`; both see it in the pair's record.
   async function talk(other, otherName, text) {
     ready();
@@ -856,5 +899,5 @@
     setInterval(() => collectSoon(true), 600e3);
     document.addEventListener("visibilitychange", () => !document.hidden && collectSoon(false));
   });
-  window.PointLoans = Object.freeze({ open, person, send, ask, talk, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
+  window.PointLoans = Object.freeze({ open, person, send, ask, talk, pay, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
 })();
