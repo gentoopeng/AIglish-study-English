@@ -46,8 +46,8 @@ test("the board, card and wheels have the agreed shape", () => {
     // Some of what is on the wheel really pays the bet back or more (not only the hidden bonus slot).
     assert.ok(S.RULES.normal[cost].filter((slot) => !slot.kakuhen && slot.x >= 1).length >= 3, "a few slots pay ×1 or more");
     assert.equal(S.RULES.normal[cost].filter((slot) => slot.kakuhen).length, 1);
-    for (const x of [4, 10, 15]) assert.ok(S.RULES.kakuhen.some((slot) => slot.x === x), "確変 has ×" + x);
-    assert.ok(S.RULES.kakuhen.some((slot) => slot.balls === 5), "確変 has a ball run");
+    for (const x of [8, 20, 30]) assert.ok(S.RULES.kakuhen.some((slot) => slot.x === x), "確変 has ×" + x);
+    assert.ok(S.RULES.kakuhen.some((slot) => slot.balls === 10), "確変 has a ball run");
     assert.deepEqual(S.RULES.normal[cost].filter((x) => x.event).map((x) => x.event).sort(), ["blackjack", "blackjack", "chinchiro", "chinchiro", "dice", "dice"]);
     const w = S.RULES.normal[cost];
     assert.ok(w.every((slot, i) => JSON.stringify(slot) !== JSON.stringify(w[(i + 1) % w.length])), cost + " is spread");
@@ -387,36 +387,42 @@ test("an older save gets the new counters, and a roll records its best payout", 
   assert.deepEqual([up.rolls, up.best, up.jps, up.sjps, up.shared, up.jpWait], [9, 0, 0, 0, 0, []]);
   assert.deepEqual(S.upgrade({ ...old, jpWait: ["jp", "nope"] }).jpWait, ["jp"]);
   const kakuhen = S.RULES.normal[100].findIndex((x) => x.kakuhen),
-    ten = S.RULES.kakuhen.findIndex((x) => x.x === 10);
-  const out = S.roll({ ...S.newState(), pos: at("normal") - 1 }, S.newCard(seq([0])), 100, seq([0, kakuhen, ten]));
-  assert.equal(out.state.best, 1000);
+    ten = S.RULES.kakuhen.findIndex((x) => x.x === 20);
+  const out = S.roll({ ...S.newState(), pos: at("normal") - 1 }, S.newCard(seq([0])), 100, seq([0, kakuhen, 0, ten]));
+  assert.equal(out.state.best, 2000);
 });
 
 test("a 確変 slot spins the 確変 wheel, which pays a multiple or draws a run of balls", () => {
   const kakuhen = S.RULES.normal[100].findIndex((x) => x.kakuhen),
     from = { ...S.newState(), pos: at("normal") - 1 };
   const wheels = (out) => out.events.filter((e) => e.t === "wheel").map((e) => e.wheel);
-  // A multiple: ×10 pays 1,000 and draws nothing.
-  const ten = S.RULES.kakuhen.findIndex((x) => x.x === 10);
-  let out = S.roll(from, S.newCard(seq([0])), 100, seq([0, kakuhen, ten]));
+  // A multiple: ×20 pays 2,000 and draws nothing (the hidden slot starts it on a draw of 0 out of 2).
+  const ten = S.RULES.kakuhen.findIndex((x) => x.x === 20);
+  let out = S.roll(from, S.newCard(seq([0])), 100, seq([0, kakuhen, 0, ten]));
   assert.deepEqual(wheels(out), ["normal", "kakuhen"]);
-  assert.equal(out.events.find((e) => e.wheel === "kakuhen").amount, 1000);
-  assert.equal(out.gain, 1000);
+  assert.equal(out.events.find((e) => e.wheel === "kakuhen").amount, 2000);
+  assert.equal(out.gain, 2000);
   assert.equal(out.events.filter((e) => e.t === "ball").length, 0);
-  // A run of five balls: five balls are drawn one after another (open numbers pay missPay).
-  const run = S.RULES.kakuhen.findIndex((x) => x.balls === 5),
-    card = [0, 1, 2, 3, 4].reduce((c, i) => withOpen(c, i), S.newCard(seq([0])));
-  out = S.roll(from, card, 100, seq([0, kakuhen, run, ...card.cells.slice(0, 5).map(draw)]));
+  // A run of ten balls: ten balls are drawn one after another (open numbers pay missPay).
+  const run = S.RULES.kakuhen.findIndex((x) => x.balls === 10),
+    card = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].reduce((c, i) => withOpen(c, i), S.newCard(seq([0])));
+  out = S.roll(from, card, 100, seq([0, kakuhen, 0, run, ...card.cells.slice(0, 10).map(draw)]));
   assert.deepEqual(wheels(out), ["normal", "kakuhen"]);
-  assert.equal(out.events.filter((e) => e.t === "ball").length, 5);
-  assert.equal(out.state.balls, 5);
-  assert.equal(out.gain, 5 * 100 * S.RULES.missPay);
+  assert.equal(out.events.filter((e) => e.t === "ball").length, 10);
+  assert.equal(out.state.balls, 10);
+  assert.equal(out.gain, 10 * 100 * S.RULES.missPay);
+  // The hidden slot starts the bonus only when the second draw is 0 (1 in chanceOdds); otherwise it pays ×0 and nothing else.
+  out = S.roll(from, S.newCard(seq([0])), 100, seq([0, kakuhen, 1]));
+  assert.deepEqual(wheels(out), ["normal"]);
+  assert.equal(out.events.find((e) => e.wheel === "normal").chance, false);
+  assert.equal(out.gain, 0);
+  assert.equal(S.RULES.chanceOdds, 2);
 });
 
 test("the 確変 wheel keeps the normal wheel's pay: the top slots moved into it", () => {
   // Before the 確変 slots the top of the normal wheel paid ×10, ×5, ×1.5 and ×1 once in 40 each.
   const pay = S.RULES.kakuhen.reduce((n, slot) => n + (slot.x || 0), 0) / S.RULES.kakuhen.length;
-  assert.ok(pay > 6 && pay < 14, "multiples on the 確変 wheel average " + pay);
+  assert.ok(pay > 12 && pay < 28, "multiples on the 確変 wheel average " + pay);
   assert.equal(S.RULES.kakuhen.length, 12);
   assert.ok(S.RULES.kakuhen.every((slot, i, w) => JSON.stringify(slot) !== JSON.stringify(w[(i + 1) % w.length])), "確変 is spread");
 });

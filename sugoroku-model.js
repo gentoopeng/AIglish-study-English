@@ -103,9 +103,12 @@
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
     // what it paid before the 確変 slots took its top slots.
     kakuhen: spread([
-      ...N(4), ...N(5), ...N(6), ...N(7), ...N(9), ...N(10), ...N(12), ...N(14), ...N(15),
-      { x: 0, balls: 5 }, { x: 0, balls: 5 }, { x: 0, balls: 5 },
+      ...N(8), ...N(10), ...N(12), ...N(14), ...N(18), ...N(20), ...N(24), ...N(28), ...N(30),
+      { x: 0, balls: 10 }, { x: 0, balls: 10 }, { x: 0, balls: 10 },
     ]),
+    // The hidden 確変 slot starts the 確変 wheel only 1 time in chanceOdds (otherwise it reads and pays ×0 like
+    // the plain ×0 slots), so the CHANCE is rare and big.
+    chanceOdds: 2,
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
     eventPay: { lose: 0, push: 1, sure: 1 },
@@ -543,12 +546,14 @@
     if (kind === "normal" || kind === "start") {
       const slots = RULES.normal[cost],
         { index, slot } = pick(slots, random);
-      const amount = money(cost * slot.x);
-      events.push({ t: "wheel", wheel: "normal", slots, index, base: cost, amount });
+      const amount = money(cost * slot.x),
+        spin = { t: "wheel", wheel: "normal", slots, index, base: cost, amount };
+      events.push(spin);
       gain += amount;
       if (slot.item) gain += spinItem(state, random, events, cost);
       if (slot.ball) gain += ball(state, card, me, random, events, cost);
-      if (slot.kakuhen) {
+      if (slot.kakuhen) spin.chance = random(RULES.chanceOdds) === 0;
+      if (slot.kakuhen && spin.chance) {
         const k = pick(RULES.kakuhen, random),
           pay = money(cost * k.slot.x);
         events.push({ t: "wheel", wheel: "kakuhen", slots: RULES.kakuhen, index: k.index, base: cost, amount: pay });
