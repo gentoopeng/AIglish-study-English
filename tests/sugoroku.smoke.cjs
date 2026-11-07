@@ -314,7 +314,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
-      Object.assign(s, { pos: 21, items: [], guard: 0 });
+      Object.assign(s, { pos: 21, items: [] });
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
@@ -325,7 +325,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
-      Object.assign(s, { items: ["dice2"], guard: 2 });
+      Object.assign(s, { items: ["dice2", "guard"] });
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
@@ -334,8 +334,9 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     // The bag shows the picture and the count only (no name), on one line; the name is the label.
     assert.equal((await screen.locator('.sg-item[data-item="dice2"]').innerText()).trim(), "×1");
     assert.equal(await screen.locator('.sg-item[data-item="dice2"]').getAttribute("aria-label"), "ダブルダイス ×1");
-    // ガード in effect: a line says so with the rolls left.
-    assert.match(await screen.locator(".sg-guard:not([hidden])").innerText(), /ガード中 あと2回/);
+    // A ガード in the bag is only shown (it is spent on a minus, when asked), and no longer pressed before a roll.
+    assert.equal(await screen.locator('.sg-item[data-item="guard"]').getAttribute("aria-pressed"), null);
+    assert.equal(await screen.locator(".sg-guard").count(), 0);
     // The bag's pictures stay small (a style lost once left them as big as the board).
     for (const img of await screen.locator(".sg-item .sg-ico img").all()) {
       const box = await img.boundingBox();
@@ -350,7 +351,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await settled();
     const doubled = await saved();
     assert.equal(doubled.pos, posBefore + 7, "dice 3 + 4");
-    assert.deepEqual(doubled.items, []);
+    assert.deepEqual(doubled.items, ["guard"], "the ダブルダイス is used; the ガード stays");
     // ぴったり: the roll waits for a face.
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
@@ -367,8 +368,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await screen.locator("[data-sg-roll]").click();
     await settled();
     assert.equal((await saved()).pos, 26, "exactly 5");
-    // The three ways of moving do not go together: choosing one lets go of the others, and a roll with ガード
-    // and 倍がけ besides is not stuck.
+    // The three ways of moving do not go together: choosing one lets go of the others, and a roll with 倍がけ
+    // besides (and a ガード in the bag) is not stuck.
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
       Object.assign(s, { pos: 30, items: ["dice2", "dice3", "exact", "guard", "x2"] });
@@ -382,13 +383,13 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await screen.locator('.sg-item[data-item="dice3"]').click();
     await screen.locator('.sg-item[data-item="guard"]').click();
     await screen.locator('.sg-item[data-item="x2"]').click();
-    assert.deepEqual(await pressed(), ["dice3", "guard", "x2"]);
+    assert.deepEqual(await pressed(), ["dice3", "x2"], "ガード cannot be pressed before a roll");
     await fix([0, 1, 2, zeroAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
     const mixed = await saved();
     assert.equal(mixed.pos, 30 + 6, "dice 1 + 2 + 3");
-    assert.deepEqual(mixed.items, ["dice2", "exact"], "only the three used are gone");
+    assert.deepEqual(mixed.items, ["dice2", "exact", "guard"], "only the two used are gone; the ガード is kept");
     // The item slot of the normal wheel spins the item wheel and the bag gets the item.
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
@@ -609,12 +610,37 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.match(await mini.innerText(), /途中でやめたので0点/);
     await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
     assert.deepEqual((await saved()).bonus, []);
+    // ガード: when a minus comes and one is held, the wheel's result is shown and the player is asked (once).
+    const guardGame = async (choice) => {
+      await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
+      await page.evaluate((name) => {
+        const s = JSON.parse(localStorage.getItem(name)),
+          M = window.SugorokuModel,
+          at = M.RULES.board.indexOf("n", 1);
+        Object.assign(s, { pos: at - 1, items: ["guard", "guard"], pending: null, bonus: [], hell: 0 });
+        localStorage.setItem(name, JSON.stringify(s));
+      }, SAVE);
+      await tab.locator(".casino-game.mode-sugoroku").click();
+      await screen.locator(".sg-card").first().waitFor();
+      const minus = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === -5));
+      await fix([0, minus]);
+      const before = await saved();
+      await screen.locator("[data-sg-roll]").click();
+      await screen.locator('[data-sg-game="guard-' + choice + '"]').waitFor({ timeout: 15000 });
+      assert.match(await screen.locator(".sg-ask-what").innerText(), /−500/);
+      await screen.locator('[data-sg-game="guard-' + choice + '"]').click();
+      await settled();
+      const after = await saved();
+      return { won: after.won - before.won, items: after.items };
+    };
+    assert.deepEqual(await guardGame("yes"), { won: 0, items: ["guard"] }, "ガード spent: no minus, one left");
+    assert.deepEqual(await guardGame("no"), { won: -500, items: ["guard", "guard"] }, "not spent: the minus is paid");
     // The super accident square is on the board once (the red !!); ヘルモード turns the squares round and shows how long is left.
     await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
     const counts = () => page.evaluate(() => Object.fromEntries(["normal", "accident", "event", "super"].map((k) => [k, document.querySelectorAll(".sg-sq.is-" + k).length])));
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
-      Object.assign(s, { hell: 0, pending: null, bonus: [], items: [], guard: 0 });
+      Object.assign(s, { hell: 0, pending: null, bonus: [], items: [] });
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
@@ -651,7 +677,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
       await page.evaluate((name) => {
         const s = JSON.parse(localStorage.getItem(name));
-        Object.assign(s, { items: ["dice2", "dice3", "exact", "guard", "x2"], guard: 2, bonus: [], pending: null });
+        Object.assign(s, { items: ["dice2", "dice3", "exact", "guard", "x2"], bonus: [], pending: null });
         localStorage.setItem(name, JSON.stringify(s));
       }, SAVE);
       await tab.locator(".casino-game.mode-sugoroku").click();
@@ -660,9 +686,11 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       await page.waitForFunction(() => { const d = document.querySelector("dialog.casino-screen.is-sugoroku"); return d.scrollHeight <= d.clientHeight; }, null, { timeout: 5000 }).catch(() => {});
       const fit = await page.evaluate(() => {
         const d = document.querySelector("dialog.casino-screen.is-sugoroku");
-        return { scroll: d.scrollHeight, client: d.clientHeight, go: document.querySelector(".sg-go").getBoundingClientRect().bottom, wrap: document.querySelector(".sg-card-wrap").offsetWidth };
+        const card = document.querySelector(".sg-card");
+        return { scroll: d.scrollHeight, client: d.clientHeight, go: document.querySelector(".sg-go").getBoundingClientRect().bottom, wrap: document.querySelector(".sg-card-wrap").offsetWidth, cardScroll: card.scrollWidth, cardW: card.clientWidth };
       });
       assert.ok(fit.scroll <= fit.client && fit.go <= h && fit.wrap >= 150, "fits " + w + "x" + h + ": " + JSON.stringify(fit));
+      assert.ok(fit.cardScroll <= fit.cardW + 2, "the 7 columns fit the card, not cut off: " + JSON.stringify(fit));
     }
     assert.deepEqual(errors, []);
     console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled (the dealer's and the parent's throws shown, no つづける), a ball off the card pays 2×, other players' balls by name, a line of own balls spins BINGO and starts the row again, a mini game played and paid, a left one scores 0");
