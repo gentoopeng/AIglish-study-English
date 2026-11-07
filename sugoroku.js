@@ -692,6 +692,11 @@
       const kind = S.kindAt(i),
         sq = node("div", "sg-sq is-" + kind);
       sq.append(node("small", "", String(i)), node("b", "", SQUARE[kind]));
+      sq.setAttribute("role", "button");
+      sq.tabIndex = 0;
+      sq.setAttribute("aria-label", i + "番のマス");
+      sq.onclick = () => squareTip(i);
+      sq.onkeydown = (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), squareTip(i));
       lane.append(sq);
       return sq;
     });
@@ -1003,6 +1008,22 @@
     }
   }
   // The piece sits on its square; the strip slides so the piece stays a little left of centre.
+  // Tapping a square tells how many squares it is from the piece, and what kind it is (not during a roll:
+  // a tap there skips to the end of it).
+  const KIND_NAMES = { start: "START（ボールが1個出ます）", normal: "通常マス", event: "★イベントマス", accident: "！アクシデントマス" };
+  function squareTip(i) {
+    if (!view || view.busy) return;
+    const sq = view.squares[i],
+      away = (i - view.state.pos + S.SIZE) % S.SIZE;
+    view.tip?.remove();
+    clearTimeout(view.tipTimer);
+    const tip = node("div", "sg-tip");
+    tip.append(node("b", "", away ? "あと" + away + "マス" : "いまここ"), node("small", "", KIND_NAMES[S.kindAt(i)]));
+    tip.style.left = sq.offsetLeft + sq.offsetWidth / 2 + "px";
+    view.lane.append(tip);
+    view.tip = tip;
+    view.tipTimer = setTimeout(() => tip.remove(), 2600);
+  }
   function place(pos, smooth = true) {
     view.squares.forEach((sq, i) => sq.classList.toggle("is-here", i === pos));
     const sq = view.squares[pos];
@@ -2225,7 +2246,7 @@
       const state = JSON.parse(localStorage.getItem("aiglish_sugoroku_" + id) || "null");
       if (!S.valid(state)) return null;
       const n = (v) => (Number.isSafeInteger(v) && v > 0 ? v : 0);
-      return { b: n(state.bet), n: Math.round((Number(state.won) || 0) - n(state.bet)), p: n(state.rolls), g: n(state.bingos), j: n(state.jps), s: n(state.sjps), l: n(state.balls) };
+      return { b: n(state.bet), n: Math.round((Number(state.won) || 0) - n(state.bet)), p: n(state.rolls), g: n(state.bingos), j: n(state.jps), s: n(state.sjps), l: n(state.balls), r: n(state.laps) };
     } catch {
       return null;
     }

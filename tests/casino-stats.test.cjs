@@ -30,12 +30,12 @@ test("a round is a bet (and a play) then a payout: net is the sum, the bet is on
 
 test("sugoroku totals replace its entry, never with lower ones, and a stranger's numbers are made whole", () => {
   let s = C.apply({}, { sugoroku: { b: 1000, n: -300, p: 10, g: 2, j: 1, s: 0, l: 55 } });
-  assert.deepEqual(s.sugoroku, { b: 1000, n: -300, p: 10, g: 2, j: 1, s: 0, l: 55, jw: 0 });
+  assert.deepEqual(s.sugoroku, { b: 1000, n: -300, p: 10, g: 2, j: 1, s: 0, l: 55, r: 0, jw: 0 });
   // An older save (fewer rolls) does not take the totals back.
   s = C.apply(s, { sugoroku: { b: 500, n: 50, p: 5, g: 1, j: 0, s: 0, l: 20 } });
   assert.equal(s.sugoroku.p, 10);
   s = C.apply(s, { sugoroku: { b: 1100, n: -250, p: 11, g: 3, j: 1, s: 1, l: 60 } });
-  assert.deepEqual(s.sugoroku, { b: 1100, n: -250, p: 11, g: 3, j: 1, s: 1, l: 60, jw: 0 });
+  assert.deepEqual(s.sugoroku, { b: 1100, n: -250, p: 11, g: 3, j: 1, s: 1, l: 60, r: 0, jw: 0 });
   s = C.apply(s, { sugoroku: { b: "9", n: 1.5, p: NaN, g: -4, j: null } });
   assert.equal(s.sugoroku.p, 11);
   // The five games' totals are not touched by it, and it is not touched by them.
@@ -54,21 +54,22 @@ test("totals read back are only what can be true; unknown games and wrong number
     roulette: { b: 100, n: -101, p: 3 }, // a loss past the bet (an extra loss, an accident) is true
     chinchiro: { b: 100, n: -2000000, p: 3 }, // but not without bound
     dice: { b: 0, n: 0, p: 0 }, // never played
-    sugoroku: { b: 500, n: 300, p: 4, g: 2, j: 1, s: 0, l: 31 },
+    sugoroku: { b: 500, n: 300, p: 4, g: 2, j: 1, s: 0, l: 31, r: 3 },
   });
   assert.deepEqual(Object.keys(flat).filter((k) => k.startsWith("roulette") || k.startsWith("chinchiro")), ["roulette:b", "roulette:n", "roulette:p"]);
   assert.equal(flat["roulette:n"], -101);
-  assert.deepEqual(Object.keys(flat).filter((k) => !k.startsWith("roulette")), ["poker:b", "poker:n", "poker:p", "sugoroku:b", "sugoroku:n", "sugoroku:p", "sugoroku:g", "sugoroku:j", "sugoroku:s", "sugoroku:l"]);
+  assert.deepEqual(Object.keys(flat).filter((k) => !k.startsWith("roulette")), ["poker:b", "poker:n", "poker:p", "sugoroku:b", "sugoroku:n", "sugoroku:p", "sugoroku:g", "sugoroku:j", "sugoroku:s", "sugoroku:l", "sugoroku:r"]);
   assert.equal(flat["poker:n"], -400);
   assert.equal(flat["sugoroku:l"], 31);
+  assert.equal(flat["sugoroku:r"], 3);
   assert.deepEqual(C.flat(null), {});
   assert.deepEqual(C.flat("x"), {});
 });
 
 test("the metrics and labels a ranking shows", () => {
-  assert.equal(C.keys().length, 5 * 3 + 7);
+  assert.equal(C.keys().length, 5 * 3 + 8);
   assert.deepEqual(C.metricsOf("poker").map((m) => m[1]), ["累計賭け額", "累計得額", "プレイ回数"]);
-  assert.deepEqual(C.metricsOf("sugoroku").map((m) => m[1]), ["累計賭け額", "累計得額", "プレイ回数", "ビンゴ回数", "JP回数", "SJP回数", "ボール排出回数"]);
+  assert.deepEqual(C.metricsOf("sugoroku").map((m) => m[1]), ["累計賭け額", "累計得額", "プレイ回数", "ビンゴ回数", "JP回数", "SJP回数", "ボール排出回数", "周回数"]);
   assert.equal(C.label("chinchiro:n"), "チンチロ 累計得額");
   assert.equal(C.label("sugoroku:s"), "すごろくビンゴ SJP回数");
   assert.equal(C.label("nobody:b"), "");
