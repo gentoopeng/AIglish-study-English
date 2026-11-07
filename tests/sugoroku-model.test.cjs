@@ -46,8 +46,8 @@ test("the board, card and wheels have the agreed shape", () => {
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     assert.equal(S.RULES.accident.filter((x) => x.take === 0).length, 1, "one SAFE on the accident wheel");
-    // High risk, high return: from −5 times the bet to +8; the 確変 wheel holds the biggest multiples and the ball runs.
-    for (const x of [8, 5, 4, 3, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
+    // High risk, high return: from −5 times the bet to +13; the 確変 wheel holds the biggest multiples and the ball runs.
+    for (const x of [13, 11, 8, 7, 5, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
     assert.equal(S.RULES.normal[cost].filter((slot) => slot.item).length, 5, "five item slots (they pay ×1 and an item)");
     // Some of what is on the wheel really pays the bet back or more (not only the hidden bonus slot).
     assert.ok(S.RULES.normal[cost].filter((slot) => !slot.kakuhen && slot.x >= 1).length >= 3, "a few slots pay ×1 or more");
@@ -698,6 +698,13 @@ test("the super accident square: −10 to −30 times, balls off, bag emptied, s
     assert.deepEqual(g.card.owners.slice(0, 3), ["amy", "ben", "amy"]);
     assert.equal(g.events.filter((e) => e.t === "guarded").length, 1);
   }
+  // The accident wheel has one slot of its own that leads to the super accident wheel (two wheels in a row).
+  assert.equal(S.RULES.accident.filter((x) => x.super).length, 1);
+  const viaWheel = S.roll({ ...S.newState(), pos: at("accident") - 1 }, base, 100, seq([0, S.RULES.accident.findIndex((x) => x.super), slotAt((x) => x.take === 10)]), "amy");
+  assert.deepEqual(viaWheel.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["accident", "super"]);
+  assert.equal(viaWheel.gain, -1000);
+  const guardedVia = S.roll({ ...S.newState(), pos: at("accident") - 1, guard: 2 }, base, 100, seq([0, S.RULES.accident.findIndex((x) => x.super), slotAt((x) => x.take === 10)]), "amy");
+  assert.equal(guardedVia.gain, 0, "ガード works on the super wheel reached from the accident wheel too");
   // An old save has no hell.
   assert.equal(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0 }).hell, 0);
   assert.equal(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, hell: 99999 }).hell, 3 * S.SIZE);
