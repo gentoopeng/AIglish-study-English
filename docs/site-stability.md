@@ -3244,3 +3244,13 @@ Tests: `tests/sugoroku-model.test.cjs`, `tests/sugoroku.smoke.cjs` (×40 = 4,000
 **After this release the game is closed** (there is no `shared/sugoroku_status` yet): the operator opens it from the admin tools when ready.
 
 Tests: `tests/casino.smoke.cjs` (the notice while closed, then open; the reset is taken once, also for one player), `tests/sugoroku-shared.smoke.cjs` (opened status), `tests/admin-players.smoke.cjs` (the buttons write the documents).
+
+## 10.48.00.00 ポイント履歴のカジノを、ゲームごと・日ごとに1行にまとめた
+
+**What the owner said.** 「ポイントの履歴からカジノの双六ビンゴって項目があるけど、列挙されるのではなく重なって表記されてほしい」
+
+**Cause.** The casino lines of the history were joined only when the same game was played again within 30 minutes of the last line (`Poker.addLog`), so a day of すごろくビンゴ with pauses or other games in between made a long list of lines.
+
+**Now** (`study-points-ui.js`): when the history is drawn, the casino lines of a day are added up per game: one line each, with the plays (「カジノ · N回分」) and the points together (the newest game stays on top). The record itself is unchanged. The explanation in the points dialog says so.
+
+Tests: `tests/casino.smoke.cjs` (すごろくビンゴ lines split by a ルーレット line become one line of 7 plays, −280pt).
