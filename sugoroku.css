@@ -204,6 +204,8 @@
 /* Mini games after a line */
 .sg-mini-big{margin:6px 0;color:var(--gold);font:500 44px/1.1 Georgia,serif;font-variant-numeric:tabular-nums;}
 .sg-mini-die{margin:10px auto;}
+.sg-mini-dice{display:flex;justify-content:center;gap:14px;}
+.sg-mini-dice .sg-mini-die{margin:10px 0;}
 .sg-mini-answer{min-height:1.3em;margin:0 0 8px;color:var(--ivory);font:500 28px/1.2 Georgia,serif;font-variant-numeric:tabular-nums;}
 .sg-tap{width:100%;min-height:120px;margin:8px 0;border:0;border-radius:18px;background:radial-gradient(circle at 50% 35%,#f0d58f,#b08d48 70%,#8e6c2c);color:#1f1608;font:800 26px system-ui,sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none;cursor:pointer;}
 .sg-tap:active{transform:scale(.97);}
@@ -260,8 +262,8 @@
 .sg-ball.is-special{background:radial-gradient(circle at 35% 30%,#fff3b8,#e0a41c 70%);color:#3a2504;box-shadow:0 0 20px rgba(255,200,60,.9);}
 
 /* Items: the bag, the face picker and the shop. */
-.sg-items{display:flex;gap:5px;margin:2px 0 4px;}
-.sg-item,.sg-shop{flex:1 1 0;min-width:0;min-height:30px;padding:0 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border:1px solid var(--line);border-radius:10px;background:rgba(10,18,16,.6);color:var(--ivory);font:600 11px/1 system-ui,sans-serif;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sg-items{display:flex;flex-wrap:wrap;gap:5px;margin:2px 0 4px;}
+.sg-item,.sg-shop{flex:1 1 30%;min-width:0;min-height:30px;padding:0 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border:1px solid var(--line);border-radius:10px;background:rgba(10,18,16,.6);color:var(--ivory);font:600 11px/1 system-ui,sans-serif;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sg-item.is-empty{color:rgba(240,232,212,.3);border-style:dashed;cursor:default;}
 .sg-item[aria-pressed="true"]{border-color:var(--gold);background:rgba(214,183,115,.22);color:var(--gold);box-shadow:0 0 10px rgba(214,183,115,.35);}
 .sg-item:disabled:not(.is-empty){opacity:.55;}
