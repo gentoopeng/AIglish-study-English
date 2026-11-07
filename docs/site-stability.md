@@ -3264,3 +3264,16 @@ Tests: `tests/casino.smoke.cjs` (すごろくビンゴ lines split by a ルー�
 **Now** (`sugoroku.js`, `casino.js`): while the game is not open (`shared/sugoroku_status` missing or `open` not true) it opens as a **test version**: the `PREVIEW` set of `casino.js` (a game in it is on practice chips, so it cannot move points) gets the game through `api.preview(true)`, the screen shows 「テスト版（調整中）　練習チップで遊べます。ポイントは動きません。」, and the bingo card is the device's own (`testMode` makes `shared()` false), so nothing is read from or written to the shared card, the jackpot or the notices. Practice chips are the same 1,000 as the guest's. Opening the game again judges the account afresh; closing it takes the game out of `PREVIEW`. When the operator opens the game, points play as before. The tester mark (「この端末だけ…」) still plays for points while it is closed.
 
 Tests: `tests/casino.smoke.cjs` (the banner, chips, and no change to the wallet or the shared card in the test version; no banner and points once opened).
+
+## 10.50.00.00 アイテムを同時に使うと止まる不具合を直し、アイテムの値段を上げ、通常ルーレットのプラスを下げた
+
+**What the owner said.** 「アイテムを同時に使うと進まなくなります／アイテムの値段が安すぎます（ぴったりとかを使うとほぼ確定で★にいけちゃう）／通常ルーレットの+も高い気がする」
+
+**Cause of the stuck game.** The rules refuse any two of ダブルダイス, トリプルダイス and ぴったり at once (`two kinds of dice`), but the screen only kept ダブルダイス and ぴったり apart. Choosing トリプルダイス with ぴったり (or ダブルとトリプル) made the roll throw after the game had been set busy, and it never came back.
+
+**Now.**
+- `sugoroku.js`: choosing one of the three ways of moving lets go of the other two; and a roll that the rules refuse is stopped before anything is spent or locked, with the message 「そのアイテムの組み合わせでは振れません。選び直してください」.
+- `sugoroku-model.js` prices: ダブルダイス 40, トリプルダイス 80, ぴったり 300, ガード 150, 倍がけ 200 (were 20 / 30 / 120 / 80 / 100). ★ squares come every 9 squares, so ぴったり reaches one 2 times in 3.
+- The normal wheel's good slots are lower: the top is ×5 (the ×7 is gone), ×4 twice, ×3, ×2 twice, ×1 three times, ×0.5 three times; the bad ones are −5 three times (was four), −2 twice (was three), −1 twice; ×0 six times. Return without jackpots: 0.9131 (3 players, 400,000 rolls; was 0.9118).
+
+Tests: `tests/sugoroku-model.test.cjs` (two ways of moving are refused; with ガード and 倍がけ it rolls; the x2 cap on a ×60 bonus), `tests/sugoroku.smoke.cjs` (choosing three ways of moving keeps the last; a roll with ガード and 倍がけ moves).

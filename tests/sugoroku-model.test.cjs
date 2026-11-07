@@ -41,7 +41,7 @@ test("the board, card and wheels have the agreed shape", () => {
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     // High risk, high return: from −5 times the bet to +7; the 確変 wheel holds the biggest multiples and the ball runs.
-    for (const x of [7, 5, 3, 2, 1, 0.5, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
+    for (const x of [5, 4, 3, 2, 1, 0.5, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
     assert.equal(S.RULES.normal[cost].filter((slot) => slot.item).length, 2, "two item slots");
     // Some of what is on the wheel really pays the bet back or more (not only the hidden bonus slot).
     assert.ok(S.RULES.normal[cost].filter((slot) => !slot.kakuhen && slot.x >= 1).length >= 3, "a few slots pay ×1 or more");
@@ -552,12 +552,13 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
   assert.equal(S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, minus]), "amy", { items: ["x2"] }).gain, -1000);
   const onEvent = S.roll({ ...from, pos: at("event") - 1, items: ["x2"] }, card, 100, seq([0, 0]), "amy", { items: ["x2"] });
   assert.deepEqual(onEvent.state.items, [], "used up even when nothing was paid yet");
-  // The extra is capped: a roll that pays 1,500 gains at most 10 × the bet more.
-  const big = w.findIndex((x) => x.x === 7);
-  assert.equal(S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, big]), "amy", { items: ["x2"] }).gain, 1400);
+  // The extra is capped at 10 × the bet: a kakuhen run that pays 6,000 gains 1,000 more, not 6,000.
+  const run = S.RULES.normal[100].findIndex((x) => x.kakuhen),
+    sixty = S.RULES.kakuhen.findIndex((x) => x.x === 60);
+  assert.equal(S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, run, 0, sixty]), "amy", { items: ["x2"] }).gain, 6000 + 1000);
   // Buying: the price is returned; only the very top count refuses; an unknown item too.
   const bought = S.buy({ ...S.newState(), items: ["guard"] }, "dice3");
-  assert.deepEqual([bought.state.items, bought.price], [["guard", "dice3"], 30]);
+  assert.deepEqual([bought.state.items, bought.price], [["guard", "dice3"], 80]);
   assert.throws(() => S.buy(S.newState(), "ball"), /no such item/);
   assert.deepEqual(S.buy({ ...S.newState(), items: ["guard", "guard", "guard"] }, "x2").state.items, ["guard", "guard", "guard", "x2"], "more than three is fine");
   assert.throws(() => S.buy({ ...S.newState(), items: Array(S.RULES.itemMax).fill("guard") }, "x2"), /full/);
@@ -603,4 +604,13 @@ test("the split after a bingo: the prize and the wheel by player, what only the 
   assert.deepEqual(game.games, ["timer"]);
   // No line, nothing to show.
   assert.equal(S.bingoSplit(S.roll({ ...S.newState(), pos: at("normal") - 1 }, S.newCard(seq([0])), 100, seq([0, 0])).events, "amy"), null);
+});
+
+test("two ways of moving at once are refused by the rules (the screen offers only one of ダブル, トリプル, ぴったり)", () => {
+  const card = S.newCard(seq([0])), from = { ...S.newState(), items: ["dice2", "dice3", "exact"] };
+  for (const items of [["dice2", "dice3"], ["dice2", "exact"], ["dice3", "exact"]])
+    assert.throws(() => S.roll(from, card, 100, seq([0]), "amy", { items, face: 3 }), /two kinds/, items.join("+"));
+  // Any one of them goes with ガード and 倍がけ.
+  const ok = S.roll({ ...from, items: ["dice3", "guard", "x2"] }, card, 100, seq([0, 1, 2, 0]), "amy", { items: ["dice3", "guard", "x2"] });
+  assert.equal(ok.state.items.length, 0);
 });
