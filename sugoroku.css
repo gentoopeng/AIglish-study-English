@@ -283,8 +283,15 @@
 .sg-ico.is-dice3 .n0{left:0;bottom:0;transform:rotate(-14deg);}
 .sg-ico.is-dice3 .n1{right:0;bottom:2%;transform:rotate(12deg);z-index:1;}
 .sg-ico.is-dice3 .n2{left:17%;top:0;transform:rotate(-4deg);z-index:2;}
-.sg-item .sg-ico{width:26px;height:26px;}
-.sg-item>span:last-child{font-size:9px;line-height:1;letter-spacing:-.02em;}
+.sg-item{flex-direction:row;gap:6px;flex-wrap:nowrap;white-space:nowrap;}
+.sg-item .sg-ico{width:28px;height:28px;}
+.sg-item>span:last-child{font-size:13px;line-height:1;font-weight:700;}
+.sg-item.is-empty{font-size:11px;}
+/* ガード発動中 */
+.sg-guard{display:flex;align-items:center;justify-content:center;gap:6px;margin:0 0 4px;padding:4px 10px;border:1px solid #8fd0e8;border-radius:999px;background:rgba(80,160,200,.16);color:#bfe6f5;font:700 12px/1.2 system-ui,sans-serif;white-space:nowrap;}
+.sg-guard[hidden]{display:none;}
+.sg-guard .sg-ico{width:20px;height:20px;}
+.is-guarded .sg-track{box-shadow:0 0 0 2px rgba(143,208,232,.7),0 0 14px rgba(143,208,232,.35);}
 .sg-ico:not(:has(img)){display:grid;place-items:center;color:var(--gold);}
 
 /* The bet: three choices. */

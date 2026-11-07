@@ -48,11 +48,11 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth || [...document.querySelectorAll(".sg-cell,.sg-cost,.sg-go")].some((el) => el.scrollWidth > el.clientWidth + 1));
     assert.equal(wide, false);
     await page.screenshot({ path: "/tmp/sugoroku.png", fullPage: true });
-    // The long notice of an item won (name, then the points on a second line) stays inside the board at phone width.
+    // The long notice of an item won (the name and the points, on one line) stays inside the board at phone width.
     const notice = await page.evaluate(() => {
       const el = document.querySelector(".sg-say");
       el.className = "sg-say is-hot";
-      el.textContent = "トリプルダイス をゲット！\n+100pt";
+      el.textContent = "トリプルダイス　+100pt";
       el.style.opacity = "1";
       el.style.animation = "none";
       const r = el.getBoundingClientRect(),
@@ -166,7 +166,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const paid = { win: 100, push: 50, lose: 0 }[outcome];
     assert.ok((await page.evaluate(() => window.Casino.balance())) >= chips + paid, outcome);
 
-    // おまかせ plays a blackjack round by itself and goes on.
+    // No おまかせ: a blackjack round is played by hand (the casino's table and buttons), and goes on by itself at the end.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
@@ -175,8 +175,10 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
-    // (A deal that is already over, a blackjack, has no おまかせ: it just goes on.)
-    if ((await saved()).pending?.round?.done !== true) await game.locator('[data-sg-game="auto"]').click({ timeout: 3000 }).catch(() => {});
+    await game.locator(".cs-felt.cs-bj").waitFor();
+    assert.equal(await game.locator('[data-sg-game="auto"]').count(), 0, "no おまかせ button");
+    // (A deal that is already over, a blackjack, just goes on.)
+    for (let i = 0; i < 12 && (await game.locator('[data-sg-game="stand"]').count()); i++) await game.locator('[data-sg-game="stand"]').click();
     await page.waitForFunction((name) => JSON.parse(localStorage.getItem(name)).pending === null, SAVE);
     await settled();
     const auto = await saved();
@@ -324,12 +326,17 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
-      Object.assign(s, { items: ["dice2"] });
+      Object.assign(s, { items: ["dice2"], guard: 2 });
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").first().waitFor();
     assert.equal(await screen.locator('.sg-item[data-item="dice2"]').count(), 1);
+    // The bag shows the picture and the count only (no name), on one line; the name is the label.
+    assert.equal((await screen.locator('.sg-item[data-item="dice2"]').innerText()).trim(), "×1");
+    assert.equal(await screen.locator('.sg-item[data-item="dice2"]').getAttribute("aria-label"), "ダブルダイス ×1");
+    // ガード in effect: a line says so with the rolls left.
+    assert.match(await screen.locator(".sg-guard:not([hidden])").innerText(), /ガード発動中　あと2回/);
     // The bag's pictures stay small (a style lost once left them as big as the board).
     for (const img of await screen.locator(".sg-item .sg-ico img").all()) {
       const box = await img.boundingBox();
@@ -566,22 +573,30 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       assert.match(await mini.locator(".sg-game-line").innerText(), /正解/);
     });
     assert.equal(mathWon, 300);
-    // In 早送り a quick game is not played: it pays its fixed half of the bet.
+    // In 早送り a quick game is still played by hand (no automatic half-pay).
     await page.evaluate(() => localStorage.setItem("aiglish_sugoroku_quick", "1"));
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
-      s.bonus = [{ game: "stop", mult: 1 }];
+      s.bonus = [{ game: "hilo", mult: 1 }];
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
-    const beforeAuto = await saved();
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
-    assert.equal((await saved()).won - beforeAuto.won, 50);
+    await mini.locator('[data-sg-game="flip"]').waitFor();
+    assert.equal((await saved()).bonus.length, 1, "waits for the player");
+    assert.equal(await mini.locator('[data-sg-game="auto"]').count(), 0);
     await page.evaluate(() => localStorage.setItem("aiglish_sugoroku_quick", "0"));
+    // ハイ＆ロー pays 10 times on the same number (ぴったり).
+    assert.equal(await page.evaluate(() => window.SugorokuModel.gameScore("hilo", "tie", 100)), 1000);
+    // Leave it: it scores 0 when opened again.
+    await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.bonus = [];
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
 
     // A mini game left half way scores 0 when the game is opened again.
-    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
       s.bonus = [{ game: "tap", mult: 1, started: true }];
