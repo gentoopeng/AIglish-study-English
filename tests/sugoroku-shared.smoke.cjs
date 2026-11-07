@@ -76,7 +76,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
         window.__queue = values.slice();
         crypto.getRandomValues = (array) => (window.__queue.length ? ((array[0] = window.__queue.shift()), array) : real(array));
       }, values);
-    const settled = () => page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning") && !document.querySelector(".sg-go").disabled);
+    const settled = () => page.waitForFunction(() => (document.querySelector('[data-sg-split="close"]')?.click(), !document.querySelector(".cs-body.is-spinning") && !document.querySelector(".sg-go").disabled));
     const rule = (src) => page.evaluate((src) => Function("S", "return " + src)(window.SugorokuModel), src);
 
     await page.locator("#nav-casino").click();
@@ -159,6 +159,13 @@ const SAVE = "aiglish_sugoroku_sg-a",
     const before = await chips();
     await fix([0, ballAt, row[6] - 1, fiveAt]);
     await screen.locator("[data-sg-roll]").click();
+    // The pop-up after the bingo: A (the finisher) and B, with the balls and each part.
+    const split = screen.locator(".sg-split");
+    await split.waitFor({ timeout: 20000 });
+    const rows = (await split.locator(".sg-split-row").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim());
+    assert.match(rows[1], /^あなた 1個 100 \d+ [\d,]+/);
+    assert.match(rows[2], /個 600 514 1,114/);
+    assert.match(await split.innerText(), /ほかの人の分は、その人が次に遊んだときに届きます/);
     await settled();
     assert.equal(await chips(), before - 100 + (700 - 600) + (1200 - 514));
     const shared = await page.evaluate(() => window.__store["shared/sugoroku_live2"]);

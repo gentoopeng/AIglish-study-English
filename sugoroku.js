@@ -78,7 +78,7 @@
   const RULES_TEXT = [
     "ログインしているときはポイント、ゲストやオフラインのときは練習チップで遊びます。1回の賭けは100です。",
     "通常マス：ルーレットで −×5 〜 ×7 が額に掛かって戻ります（−は額とは別に引かれ、足りない分はカジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回（勝てば配当、負けると賭けた分はなくなります）、「●」はボール、「STOP」「H&L」はミニゲームです。たまに「BONUS」ルーレットが当たり、大きな配当やボール5個連続が出ます。",
-    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。始める前に、結果ごとに戻る額の一覧が出ます。勝てば配当とボール、引き分けは額が戻ります。サイコロは本当に振っていて、相手の目も見えます。",
+    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。勝てば配当とボール、引き分けは額が戻ります。サイコロは本当に振っていて、相手の目も見えます。",
     "！（アクシデント）：額の2〜6倍が引かれるか、3マス戻るか、STARTに戻ります。額の1〜6倍がもらえる枠もあります。",
     "100マスで1周してSTARTを通ると、ボールが1つ出ます。",
     "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選で、開いていない番号なら自分のボールが入ります。すでに開いている番号は額の1.5倍がもらえます。★の数字（特別な数字）が出ると、スペシャルルーレットが回ります。1列そろうとビンゴ賞金とビンゴルーレット。そろった列のボールは戻ります。",
@@ -1206,6 +1206,42 @@
   // `before` is the card the change was made on (it may hold other players' new balls).
   // `skip`: how many of the events were already shown while the cloud answered (the tap to skip
   // and the heat carry on from them).
+  // After a bingo: who got what, so the amounts on the wheel and the amount that came in do not look different.
+  function splitSheet(events, balls, names) {
+    const me = api.uid(),
+      split = S.bingoSplit(events, me);
+    // Nothing to explain when the whole thing is the player's own.
+    if (!split || split.rows.every((r) => r.id === me)) return Promise.resolve();
+    const layer = view.layer;
+    layer.className = "sg-layer";
+    layer.hidden = false;
+    const box = node("div", "sg-sheet sg-split");
+    box.append(node("p", "sg-sheet-title", "ビンゴの分け前"));
+    box.append(node("p", "sg-game-rule", "ビンゴ賞金 " + fmt(split.prize) + api.unit() + (split.wheel ? "　ルーレット " + fmt(split.wheel) + api.unit() : "") + "（そろった列のボールの賭け額に応じて分けます）"));
+    const head = node("div", "sg-split-row is-head");
+    for (const t of ["", "ボール", "賞金", "ルーレット", "合計"]) head.append(node("span", "", t));
+    box.append(head);
+    for (const r of split.rows) {
+      const row = node("div", "sg-split-row" + (r.id === me ? " is-me" : ""));
+      row.append(node("span", "", r.id === me ? "あなた" : (names[r.id] || "だれか") + "さん"), node("span", "", (balls[r.id] || 0) + "個"), node("span", "", fmt(r.prize)), node("span", "", fmt(r.wheel)), node("b", "", fmt(r.total) + api.unit()));
+      box.append(row);
+    }
+    const notes = [];
+    if (split.rows.some((r) => r.id !== me)) notes.push("ほかの人の分は、その人が次に遊んだときに届きます。");
+    if (split.games.length || split.jackpots.length) notes.push("ミニゲームとジャックポットは、そろえたあなただけのものです。");
+    for (const t of notes) box.append(node("p", "sg-game-rule", t));
+    return new Promise((resolve) => {
+      const close = node("button", "sg-game-btn", "閉じる");
+      close.type = "button";
+      close.dataset.sgSplit = "close";
+      close.onclick = () => {
+        layer.hidden = true;
+        resolve();
+      };
+      box.append(close);
+      layer.replaceChildren(box);
+    });
+  }
   async function run(out, shown, before, people, log, skip = 0) {
     const target = view;
     view.busy = true;
@@ -1221,8 +1257,11 @@
     view.people = { ...before.people, ...people, ...(me && me.id === api.uid() ? { [me.id]: me.value } : {}) };
     paintCard();
     hud();
+    view.lineBalls = null;
+    view.lineNames = null;
     try {
       await show(out.events.slice(skip), live);
+      if (target === view && view.lineBalls && !view.quick) await splitSheet(out.events.slice(skip), view.lineBalls, view.lineNames || {});
     } finally {
       if (target === view) {
         view.state = out.state;
@@ -1296,6 +1335,11 @@
       } else if (e.t === "ball") {
         await drawBall(e, live);
       } else if (e.t === "line") {
+        // Who had balls on it (counted before they leave), for the pop-up after the roll.
+        const owners = {};
+        for (const c of e.cells) owners[view.card.owners[c]] = (owners[view.card.owners[c]] || 0) + 1;
+        view.lineBalls = owners;
+        view.lineNames = { ...view.lineNames, ...Object.fromEntries(Object.keys(owners).map((id) => [id, view.people[id]?.n || ""])) };
         turnTo(cardOf(e.cells[0]), true);
         hud();
         e.cells.forEach((c, i) => {
@@ -1583,43 +1627,7 @@
     view.state = { ...view.state, pending: { ...view.state.pending, round } };
     save(view.state);
   }
-  const PAY_NAMES = {
-    blackjack: "ブラックジャック（最初の2枚で21）",
-    pinzoro: "ピンゾロ（1・1・1）",
-    zoro: "ゾロ目",
-    shigoro: "シゴロ（4・5・6）",
-    win: "勝ち",
-    push: "引き分け",
-    lose: "負け",
-  };
-  // Before an event game starts: what each way it can end gives back, in points (the bet was already taken).
   function game() {
-    const p = view.state.pending,
-      layer = view.layer;
-    // A round already begun (the game was left and opened again), and 早送り, go straight to the table.
-    if (p.round || view.quick) return gameTable();
-    layer.className = "sg-layer is-game";
-    layer.hidden = false;
-    view.busy = true;
-    hud();
-    const box = node("div", "sg-game sg-paybox");
-    box.append(node("p", "sg-wheel-title", GAME_NAMES[p.game] + "　" + fmt(p.bet) + api.unit()));
-    box.append(node("p", "sg-game-rule", "賭けた" + fmt(p.bet) + api.unit() + "は先に引かれています。結果ごとに、次の額が戻ります。"));
-    const list = node("ul", "sg-paylist");
-    for (const row of S.payTable(p.game, p.bet, p.plain === true)) {
-      const li = node("li", "is-" + (row.net > 0 ? "win" : row.net < 0 ? "lose" : "push"));
-      li.append(node("span", "", PAY_NAMES[row.key]), node("b", "", fmt(row.back) + api.unit()), node("small", "", (row.net > 0 ? "+" : row.net < 0 ? "−" : "±") + fmt(Math.abs(row.net))));
-      list.append(li);
-    }
-    box.append(list, node("p", "sg-game-rule", p.plain ? "普通のマスのゲームなので、ボールは出ません。" : "勝つとボールが1個出ます（引き分け・負けは出ません）。"));
-    const begin = node("button", "sg-game-btn", "ゲームを始める");
-    begin.type = "button";
-    begin.dataset.sgGame = "begin";
-    begin.onclick = () => view?.layer === layer && !layer.hidden && gameTable();
-    box.append(begin);
-    layer.replaceChildren(box);
-  }
-  function gameTable() {
     const p = view.state.pending,
       layer = view.layer;
     layer.className = "sg-layer is-game";
