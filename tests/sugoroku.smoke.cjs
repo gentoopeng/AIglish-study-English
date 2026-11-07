@@ -401,6 +401,10 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const [itemAt, guardAt] = await page.evaluate(() => [window.SugorokuModel.RULES.normal[100].findIndex((x) => x.item), window.SugorokuModel.RULES.itemWheel.findIndex((x) => x.item === "guard")]);
     await fix([0, itemAt, guardAt]);
     await screen.locator("[data-sg-roll]").click();
+    // The ITEM roulette shows pictures (one or more per slice), not the item names.
+    await screen.locator(".sg-wheel svg image").first().waitFor({ state: "attached", timeout: 15000 });
+    assert.ok((await screen.locator(".sg-wheel svg image").count()) >= 11, "a picture on every slice");
+    assert.equal(await screen.locator(".sg-wheel svg text:has-text('ダブルダイス')").count(), 0, "no item names on the wheel");
     await settled();
     assert.deepEqual((await saved()).items, ["guard"]);
     assert.equal(await screen.locator('.sg-item[data-item="guard"]').count(), 1);
@@ -420,15 +424,15 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.doesNotMatch(sheet, /確変|激アツ/);
     assert.doesNotMatch(sheet, /×10〜×0/);
     await page.locator(".sg-sheet .sg-game-btn", { hasText: "閉じる" }).click();
-    // Die 1 onto a normal square, the hidden ×0 slot, and the bonus wheel's ×40 (the hidden slot starts it on a draw of 0): two wheels, 4,000 back.
-    const [kakuAt, tenAt] = await page.evaluate(() => [window.SugorokuModel.RULES.normal[100].findIndex((x) => x.kakuhen), window.SugorokuModel.RULES.kakuhen.findIndex((x) => x.x === 40)]);
+    // Die 1 onto a normal square, the hidden ×0 slot, and the bonus wheel's ×41 (the hidden slot starts it on a draw of 0): two wheels, 4,100 back.
+    const [kakuAt, tenAt] = await page.evaluate(() => [window.SugorokuModel.RULES.normal[100].findIndex((x) => x.kakuhen), window.SugorokuModel.RULES.kakuhen.findIndex((x) => x.x === 41)]);
     await fix([0, kakuAt, 0, tenAt]);
     const kakuBefore = await saved();
     await screen.locator("[data-sg-roll]").click();
     await page.locator(".sg-layer.is-kakuhen .sg-wheel-title").waitFor({ state: "attached", timeout: 15000 });
     assert.equal(await page.locator(".sg-layer.is-kakuhen .sg-wheel-title").textContent(), "BONUS");
     await settled();
-    assert.equal((await saved()).won - kakuBefore.won, 4000);
+    assert.equal((await saved()).won - kakuBefore.won, 4100);
     // (The layer is closed by now; shown again only for a picture of the 確変 wheel.)
     await page.evaluate(() => { document.querySelector(".sg-layer").hidden = false; });
     await page.screenshot({ path: "/tmp/sugoroku-kakuhen.png" });

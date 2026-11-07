@@ -103,8 +103,8 @@
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
     // what it paid before the 確変 slots took its top slots.
     kakuhen: spread([
-      ...N(16), ...N(20), ...N(24), ...N(28), ...N(36), ...N(40), ...N(48), ...N(56), ...N(60),
-      { x: 0, balls: 15 }, { x: 0, balls: 15 }, { x: 0, balls: 15 },
+      ...N(21), ...N(25), ...N(29), ...N(33), ...N(41), ...N(45), ...N(53), ...N(61), ...N(65),
+      { x: 0, balls: 8 }, { x: 0, balls: 8 }, { x: 0, balls: 8 },
     ]),
     // The hidden 確変 slot starts the 確変 wheel only 1 time in chanceOdds (otherwise it reads and pays ×0 like
     // the plain ×0 slots): about 1 in 24 of the landings that read ×0, and 1 in about 200 rolls. Rare and big.
@@ -139,7 +139,7 @@
     // the super-jackpot chance leads to the second wheel, where back spins the first again.
     wheels: {
       // The special number: one wheel (the bet × x, or three more balls).
-      special: spread([{ x: 10 }, { x: 10 }, { x: 15 }, { x: 20 }, { x: 20 }, { x: 30 }, { x: 50 }, { x: 0, balls: 3 }, { x: 0, balls: 3 }, { x: 40 }]),
+      special: spread([{ x: 10 }, { x: 10 }, { x: 15 }, { x: 20 }, { x: 20 }, { x: 30 }, { x: 50 }, { x: 0, balls: 6 }, { x: 0, balls: 6 }, { x: 40 }]),
       bingo: null, // (see bingoWheel: made for the bet)
       sjp: [{ jackpot: "sjp" }, { jackpot: "jp" }, { game: "tapex" }, { jackpot: "sjp" }, { back: true }],
     },
