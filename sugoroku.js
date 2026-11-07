@@ -78,7 +78,7 @@
   const QUICK_GAMES = new Set(["stop", "hilo"]);
   const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
-    "ログインしているときはポイント、ゲストやオフラインのときは練習チップで遊びます。1回の賭けは50・100・200から選べます。払い戻しは賭け額に比例し、ジャックポットの当たりやすさも賭け額に合わせて変わります。",
+    "ログインしているときはポイント、ゲストやオフラインのときは練習チップで遊びます。1回の賭けは100です。",
     "通常マス：ルーレットで −×5 〜 ×7 が額に掛かって戻ります（−は額とは別に引かれ、足りない分はカジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回（勝てば配当、負けると賭けた分はなくなります）、「●」はボール、「STOP」「H&L」はミニゲームです。たまに「BONUS」ルーレットが当たり、大きな配当やボール5個連続が出ます。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。勝てば配当とボール、引き分けは額が戻ります。サイコロは本当に振っていて、相手の目も見えます。",
     "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
@@ -539,17 +539,7 @@
 
   // ---- Screen ----------------------------------------------------------------------------
   let view = null;
-  const QUICK = "aiglish_sugoroku_quick",
-    COST_KEY = "aiglish_sugoroku_cost";
-  // The bet chosen last time (100 until one is chosen).
-  const savedCost = () => {
-    try {
-      const value = Number(localStorage.getItem(COST_KEY));
-      return S.RULES.costs.includes(value) ? value : 100;
-    } catch {
-      return 100;
-    }
-  };
+  const QUICK = "aiglish_sugoroku_quick";
   const quickSaved = () => {
     try {
       return localStorage.getItem(QUICK) === "1";
@@ -579,7 +569,7 @@
     if (!body.isConnected) return;
     // This player's own balls always show their own name and icon.
     found.people = { ...found.people, [id]: me && me.id === id ? me.value : personNow() };
-    view = { body, state, card: found.card, people: found.people, log: found.log || [], seen: 0, online: shared(), cost: savedCost(), fast: false, hot: false, quick: quickSaved(), stale: false };
+    view = { body, state, card: found.card, people: found.people, log: found.log || [], seen: 0, online: shared(), cost: S.RULES.costs[0], fast: false, hot: false, quick: quickSaved(), stale: false };
     // When the screen becomes free, a card change that came in meanwhile is caught up.
     let busy = false;
     Object.defineProperty(view, "busy", {
@@ -727,25 +717,9 @@
     view.hereEl.setAttribute("aria-label", "いっしょにプレイ中の人");
 
     const controls = node("div", "sg-controls");
-    // The bet of a roll: 50, 100 or 200 (kept for next time).
-    const costs = node("div", "sg-costs is-choice");
-    costs.setAttribute("role", "group");
-    costs.setAttribute("aria-label", "1回の賭け");
-    view.costBtns = S.RULES.costs.map((value) => {
-      const b = node("button", "", fmt(value) + api.unit());
-      b.type = "button";
-      b.dataset.cost = String(value);
-      b.onclick = () => {
-        if (view.busy || view.state.pending || view.cost === value) return;
-        view.cost = value;
-        try {
-          localStorage.setItem(COST_KEY, String(value));
-        } catch {}
-        hud();
-      };
-      costs.append(b);
-      return b;
-    });
+    // One fixed bet for everybody.
+    const costs = node("p", "sg-costs is-fixed");
+    costs.append(node("span", "", "1回"), node("b", "", fmt(view.cost) + api.unit()));
     view.go = node("button", "sg-go", "サイコロを振る");
     view.go.type = "button";
     view.go.dataset.sgRoll = "";
@@ -1006,10 +980,6 @@
       refill = short && !api.real() && !!api.resetPractice,
       // On points, today's bets are limited by today's study (see Casino.allowance).
       study = !short && api.real() && !!api.allowance && api.allowance() < view.cost;
-    for (const b of view.costBtns || []) {
-      b.setAttribute("aria-pressed", String(Number(b.dataset.cost) === view.cost));
-      b.disabled = view.busy || !!state.pending || !!state.bonus?.length;
-    }
     paintItems();
     const needFace = view.armed.ids.includes("exact") && !view.armed.face;
     view.go.disabled = view.busy || !!view.syncing || (short && !refill) || study || !!state.pending || needFace;
