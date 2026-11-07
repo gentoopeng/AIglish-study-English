@@ -177,15 +177,46 @@
   }
   const stakedOn = (day, days = stakedDays()) => days[day] || 0;
   const stakedToday = () => stakedOn(studyDay());
-  function addStaked(amount) {
-    if (!(amount > 0) || !real()) return;
+  function saveStaked(days) {
     try {
-      const days = stakedDays(),
-        day = studyDay();
-      days[day] = (days[day] || 0) + amount;
       const kept = Object.keys(days).sort().slice(-(REPLAY_DAYS + 1));
       localStorage.setItem(stakedName(), JSON.stringify({ days: Object.fromEntries(kept.map((d) => [d, days[d]])) }));
     } catch {}
+  }
+  function addStaked(amount) {
+    if (!(amount > 0) || !real()) return;
+    const days = stakedDays(),
+      day = studyDay();
+    days[day] = (days[day] || 0) + amount;
+    saveStaked(days);
+  }
+  // The operator can put what was bet on a day back to 0 (shared/casino_reset: { all: { at, day },
+  // players: { id: { at, day } } }). This device takes each entry it has not taken yet, at most every five minutes.
+  const resetSeenName = () => "aiglish_casino_reset_seen_" + uid();
+  let resetRead = 0;
+  async function applyAdminReset() {
+    if (!real() || !window.db || !window.fbDoc || !window.fbGetDoc || Date.now() - resetRead < 300e3) return;
+    resetRead = Date.now();
+    try {
+      const snap = await window.fbGetDoc(window.fbDoc(window.db, "shared", "casino_reset")),
+        data = snap.exists() ? snap.data() : null;
+      if (!data) return;
+      let seen = 0;
+      try {
+        seen = Number(localStorage.getItem(resetSeenName())) || 0;
+      } catch {}
+      const fresh = [data.all, data.players?.[uid()]].filter((e) => e && Number.isFinite(e.at) && e.at > seen && typeof e.day === "string");
+      if (!fresh.length) return;
+      const days = stakedDays();
+      for (const e of fresh) delete days[e.day];
+      saveStaked(days);
+      try {
+        localStorage.setItem(resetSeenName(), String(Math.max(...fresh.map((e) => e.at))));
+      } catch {}
+      refresh();
+    } catch (error) {
+      console.warn("[casino] reset", error);
+    }
   }
   // What is left of each earlier day's own allowance as of today (offsets -REPLAY_DAYS … -1; only the
   // last CARRY_DAYS are worth anything today), worked out day
@@ -308,6 +339,7 @@
   function mount() {
     const host = document.getElementById("view-casino");
     if (!host) return;
+    applyAdminReset();
     if (!host.childElementCount) {
       host.innerHTML =
         '<section class="casino" aria-label="カジノ"><header class="casino-head"><span class="casino-chip">' +
@@ -2467,5 +2499,5 @@
   window.onTabChange?.((tab) => {
     if (tab === "casino") mount();
   });
-  window.Casino = Object.freeze({ open, close, mount, balance, flush, allowance, stakeRoom, studyHint, addStaked, studyMinutes, _real: real });
+  window.Casino = Object.freeze({ open, close, mount, balance, flush, allowance, stakeRoom, studyHint, addStaked, studyMinutes, _real: real, _applyReset: () => ((resetRead = 0), applyAdminReset()) });
 })();

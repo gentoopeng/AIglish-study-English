@@ -544,6 +544,31 @@
       return false;
     }
   };
+  // The operator opens and closes the game for points play (shared/sugoroku_status: { open }); it is closed
+  // until opened, and on a device marked as a tester from the admin tools. Practice chips are never closed.
+  async function gateOpen() {
+    if (!api.real()) return true;
+    try {
+      if (localStorage.getItem("aiglish_sugoroku_tester") === "1") return true;
+    } catch {}
+    // (An "open" answer is kept for five minutes, so opening the game again does not wait for the network.)
+    const cacheName = "aiglish_sugoroku_open";
+    try {
+      if (Date.now() - Number(localStorage.getItem(cacheName)) < 300e3) return true;
+    } catch {}
+    try {
+      const snap = await window.fbGetDoc(window.fbDoc(window.db, "shared", "sugoroku_status")),
+        open = snap.exists() && snap.data().open === true;
+      try {
+        if (open) localStorage.setItem(cacheName, String(Date.now()));
+        else localStorage.removeItem(cacheName);
+      } catch {}
+      return open;
+    } catch (error) {
+      console.warn("[sugoroku] status", error);
+      return false;
+    }
+  }
   async function play(body, wallet) {
     api = wallet;
     // A screen opened before stops here (its listener and its card choice).
@@ -552,6 +577,11 @@
     view?.unsub?.();
     view = null;
     body.replaceChildren(node("p", "cs-hint", "読み込み中…"));
+    if (!(await gateOpen())) {
+      if (body.isConnected) body.replaceChildren(node("p", "cs-hint", "すごろくビンゴはいま調整中です。もうしばらくお待ちください。"));
+      return;
+    }
+    if (!body.isConnected) return;
     // The screen comes up at once from what this device kept (the game, the card as last seen,
     // the player's icon); the cloud copies come in behind it (the card through its listener).
     // Only what this device has never seen is waited for.

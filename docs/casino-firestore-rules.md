@@ -41,3 +41,11 @@ match /shared/sugoroku_live2 {
     && (!('log' in request.resource.data) || (request.resource.data.log is list && request.resource.data.log.size() <= 30));
 }
 ```
+
+## shared/sugoroku_status
+
+`{ open, at }`: whether すごろくビンゴ may be played for points (`open: true`). Missing or false: a notice 「調整中」 is shown instead of the board (practice chips are not affected). Every signed-in player reads it; the operator's tools write it.
+
+## shared/casino_reset
+
+`{ all: { at, day }, players: { <id>: { at, day } } }`: the operator's "put the bets of a day back to 0". A device that has not taken an entry yet (its `at` is newer than the last one taken) clears that day (`day`, the study day as `YYYY-MM-DD`) from the bets it keeps for the study allowance. Every signed-in player reads it; the operator's tools write it.
