@@ -660,7 +660,21 @@
     return { state, card, events, gain };
   }
 
-  const api = { RULES, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, buy, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  // What an event game pays back for each way it can end (the bet was taken when the die was rolled, so
+  // `back` is what returns and `net` is back less the bet), for the screen's table before the game starts.
+  // m is the game's own result as multiples of the bet; a loss, however big, takes the bet only.
+  const PAY_ROWS = {
+    blackjack: [["blackjack", 1.5], ["win", 1], ["push", 0], ["lose", -1]],
+    dice: [["win", 1], ["push", 0], ["lose", -1]],
+    chinchiro: [["pinzoro", 5], ["zoro", 3], ["shigoro", 2], ["win", 1], ["push", 0], ["lose", -1]],
+  };
+  function payTable(game, bet, plain) {
+    return (PAY_ROWS[game] || []).map(([key, m]) => {
+      const back = m > 0 ? money(bet * (1 + m)) : m === 0 ? money(bet * RULES.eventPay.push) : plain ? 0 : money(bet * RULES.eventPay.lose);
+      return { key, m, back, net: back - bet, ball: m > 0 && !plain };
+    });
+  }
+  const api = { RULES, payTable, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, buy, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);

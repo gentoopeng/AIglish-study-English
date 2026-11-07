@@ -578,3 +578,21 @@ test("a line of balls laid at 100 pays the bingo prize on 100; a game saved with
   assert.equal(S.settleBonus({ ...S.newState(), bonus: [{ game: "timer", mult: 1 }] }, 10).gain, 1000);
   assert.equal(S.gameScore("stop", "perfect", 100), 200);
 });
+
+test("the table shown before an event game: what each result gives back, from the bet", () => {
+  const rows = (game, bet, plain) => S.payTable(game, bet, plain).map((r) => [r.key, r.back, r.net]);
+  assert.deepEqual(rows("blackjack", 100, false), [["blackjack", 250, 150], ["win", 200, 100], ["push", 100, 0], ["lose", 0, -100]]);
+  assert.deepEqual(rows("dice", 50, true), [["win", 100, 50], ["push", 50, 0], ["lose", 0, -50]]);
+  assert.deepEqual(rows("chinchiro", 100, true).map((r) => r[1]), [600, 400, 300, 200, 100, 0]);
+  // Only a win on the event square gives a ball.
+  assert.deepEqual(S.payTable("blackjack", 100, false).map((r) => r.ball), [true, true, false, false]);
+  assert.ok(S.payTable("blackjack", 100, true).every((r) => !r.ball));
+  assert.deepEqual(S.payTable("nope", 100, false), []);
+  // The table agrees with what settle() really pays for the same results.
+  const card = S.newCard(seq([0])), s = { ...S.newState(), pos: at("event") - 1 };
+  const out = S.roll(s, card, 100, seq([0, 0]));
+  for (const row of S.payTable("blackjack", 100, false)) {
+    const done = S.settle(out.state, card, row.m, seq([draw(card.cells[0])]));
+    assert.equal(done.events.find((e) => e.t === "result").amount, row.back);
+  }
+});
