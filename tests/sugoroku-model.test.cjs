@@ -46,8 +46,8 @@ test("the board, card and wheels have the agreed shape", () => {
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     assert.equal(S.RULES.accident.filter((x) => x.take === 0).length, 1, "one SAFE on the accident wheel");
-    // High risk, high return: from −5 times the bet to +13; the 確変 wheel holds the biggest multiples and the ball runs.
-    for (const x of [13, 11, 8, 7, 5, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
+    // High risk, high return: from −5 times the bet to +21; the 確変 wheel holds the biggest multiples and the ball runs.
+    for (const x of [21, 12, 6, 5, 4, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
     assert.equal(S.RULES.normal[cost].filter((slot) => slot.item).length, 5, "five item slots (they pay ×1 and an item)");
     // Some of what is on the wheel really pays the bet back or more (not only the hidden bonus slot).
     assert.ok(S.RULES.normal[cost].filter((slot) => !slot.kakuhen && slot.x >= 1).length >= 3, "a few slots pay ×1 or more");
