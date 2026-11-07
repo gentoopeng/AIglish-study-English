@@ -87,7 +87,7 @@
     // Every spin of the item wheel also pays this many times the bet.
     itemCash: 1,
     // ガード keeps accident squares off for this many rolls (the one it is used on and the next ones).
-    guardRolls: 5,
+    guardRolls: 3,
     // 倍がけ doubles what a roll pays or takes, by at most this many times the bet.
     x2Cap: 10,
     items: {
@@ -546,9 +546,12 @@
     if (kind === "normal" || kind === "start") {
       const slots = RULES.normal[cost],
         { index, slot } = pick(slots, random);
-      const amount = money(cost * slot.x),
+      // ガード: a minus slot of the normal wheel pays nothing (the plus slots stay).
+      const blocked = guarded && slot.x < 0,
+        amount = blocked ? 0 : money(cost * slot.x),
         spin = { t: "wheel", wheel: "normal", slots, index, base: cost, amount };
       events.push(spin);
+      if (blocked) events.push({ t: "guarded" });
       gain += amount;
       if (slot.item) gain += spinItem(state, random, events, cost);
       if (slot.ball) gain += ball(state, card, me, random, events, cost);
