@@ -10,9 +10,7 @@
 // jackpot waits in state.jpWait until it is paid.
 // Signed in and online it stakes points (casino.js); a guest or a device off the cloud plays on
 // practice chips and its own card, where a jackpot is shown but not paid.
-// Speed: 早送り plays the everyday parts quickly (the die, the steps, the normal, event and
-// accident wheels, balls off the reach); a line, its wheels, a jackpot and a reach ball keep
-// their full time. A tap on the board skips to the end of the roll.
+// Speed: a tap on the board skips to the end of the roll (there is no 早送り button).
 (function () {
   "use strict";
   const S = window.SugorokuModel,
@@ -85,7 +83,7 @@
     "1列そろうと、ビンゴ賞金（700）とビンゴルーレット。賞金とルーレットの倍率の5割は、その列のボールの持ち主に、置いたときの賭け額に応じて配られます。ほかの人の分は、その人が次に遊んだときに届き、30日で消えます。ミニゲームとジャックポットは、そろえた人のものです。そろった列のボールは戻ります。",
     "アイテム：「ITEM」のルーレットで1個（「2個」の枠もあります）もらえ、100ptも入ります。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（3回、ルーレットとアクシデントのマイナスが無効）・倍がけ（この回の増減が2倍）。",
     "ジャックポットは、カジノの賭けから貯まります。",
-    "「早送り」で、ふだんのマスが短く進みます。盤面をタップすると、その回を飛ばせます（ゲームは自分で遊びます）。",
+    "盤面をタップすると、その回の演出を飛ばせます。",
   ];
 
   // ---- Saving ----------------------------------------------------------------------------
@@ -538,14 +536,6 @@
 
   // ---- Screen ----------------------------------------------------------------------------
   let view = null;
-  const QUICK = "aiglish_sugoroku_quick";
-  const quickSaved = () => {
-    try {
-      return localStorage.getItem(QUICK) === "1";
-    } catch {
-      return false;
-    }
-  };
   // The operator opens and closes the game for points play (shared/sugoroku_status: { open }); it is closed
   // until opened, and on a device marked as a tester from the admin tools. Practice chips are never closed.
   async function gateOpen() {
@@ -601,7 +591,7 @@
     if (!body.isConnected) return;
     // This player's own balls always show their own name and icon.
     found.people = { ...found.people, [id]: me && me.id === id ? me.value : personNow() };
-    view = { body, state, card: found.card, people: found.people, log: found.log || [], seen: 0, online: shared(), cost: S.RULES.costs[0], fast: false, hot: false, quick: quickSaved(), stale: false };
+    view = { body, state, card: found.card, people: found.people, log: found.log || [], seen: 0, online: shared(), cost: S.RULES.costs[0], fast: false, hot: false, stale: false };
     // When the screen becomes free, a card change that came in meanwhile is caught up.
     let busy = false;
     Object.defineProperty(view, "busy", {
@@ -663,6 +653,40 @@
     if (view?.state.pending) game();
     else await collectNow();
   }
+  // One screen, exactly: the card takes the height the other parts leave (they change: the guard line,
+  // the bag, the study hint, who else plays), so its width is measured and set again whenever the
+  // layout changes. (The CSS width is only the first guess.)
+  let fitFrame = 0;
+  function fitCard(again = 0) {
+    cancelAnimationFrame(fitFrame);
+    const target = view;
+    fitFrame = requestAnimationFrame(() => {
+      if (!target || target !== view || !view.body?.isConnected) return;
+      const dlg = view.body.closest("dialog"),
+        wrap = view.cardWrap,
+        card = wrap?.querySelector(".sg-card");
+      if (!dlg || !wrap || !card || !card.offsetWidth) return;
+      // Short screens (about 600px or less) tighten the gaps first.
+      dlg.classList.toggle("is-tight", dlg.clientHeight < 620);
+      const last = [...view.body.children].filter((el) => !el.hidden && el.offsetParent !== null && el !== view.layer).pop();
+      if (!last) return;
+      const top = dlg.getBoundingClientRect().top - dlg.scrollTop,
+        pad = parseFloat(getComputedStyle(dlg).paddingBottom) || 0,
+        bottom = last.getBoundingClientRect().bottom - top + pad,
+        room = dlg.clientHeight - bottom,
+        ratio = card.offsetHeight / card.offsetWidth || 1,
+        max = view.body.clientWidth,
+        next = Math.max(150, Math.min(max, wrap.offsetWidth + room / ratio));
+      if (Math.abs(next - wrap.offsetWidth) >= 1) {
+        wrap.style.minWidth = "0";
+        wrap.style.width = Math.floor(next) + "px";
+        // The new width can change other heights a little (line breaks, the tight mode): measure again.
+        if (again < 3) fitCard(again + 1);
+      }
+    });
+  }
+  window.addEventListener("resize", () => view && fitCard());
+  window.addEventListener("orientationchange", () => view && fitCard());
   function draw() {
     const { body, state } = view;
     body.classList.add("sg-body");
@@ -764,17 +788,7 @@
     view.go.type = "button";
     view.go.dataset.sgRoll = "";
     view.go.onclick = roll;
-    view.quickBtn = node("button", "sg-quick", "早送り");
-    view.quickBtn.type = "button";
-    view.quickBtn.setAttribute("aria-pressed", String(view.quick));
-    view.quickBtn.onclick = () => {
-      view.quick = !view.quick;
-      view.quickBtn.setAttribute("aria-pressed", String(view.quick));
-      try {
-        localStorage.setItem(QUICK, view.quick ? "1" : "0");
-      } catch {}
-    };
-    controls.append(costs, view.go, view.quickBtn);
+    controls.append(costs, view.go);
     view.studyEl = node("p", "sg-study");
     view.studyEl.hidden = true;
 
@@ -931,6 +945,7 @@
         };
         view.facePick.append(b);
       }
+    fitCard();
   }
   function arm(id) {
     if (view.busy || view.state.pending) return;
@@ -979,6 +994,7 @@
       // On points, today's bets are limited by today's study (see Casino.allowance).
       study = !short && api.real() && !!api.allowance && api.allowance() < view.cost;
     paintItems();
+    fitCard();
     const needFace = view.armed.ids.includes("exact") && !view.armed.face;
     view.go.disabled = view.busy || !!view.syncing || (short && !refill) || study || !!state.pending || needFace;
     view.go.textContent = refill
@@ -1071,9 +1087,8 @@
   }
 
   // ---- A roll ----------------------------------------------------------------------------
-  // How long things take: skipped (reduced motion, or a tap to skip), a quarter in 早送り outside
-  // the hot moments, or in full.
-  const pace = () => (calm() || view?.fast ? 0 : view?.quick && !view.hot ? 0.25 : 1);
+  // How long things take: skipped (reduced motion, or a tap to skip), or in full.
+  const pace = () => (calm() || view?.fast ? 0 : 1);
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, pace() ? ms * pace() : Math.min(ms, 20)));
   // A roll (or a game's end) moves the wallet once: what came back (with any part of other
   // players' lines collected) less the bet. An accident can take more than there is: with points
@@ -1283,7 +1298,7 @@
     view.lineNames = null;
     try {
       await show(out.events.slice(skip), live);
-      if (target === view && view.lineBalls && !view.quick) await splitSheet(out.events.slice(skip), view.lineBalls, view.lineNames || {});
+      if (target === view && view.lineBalls) await splitSheet(out.events.slice(skip), view.lineBalls, view.lineNames || {});
     } finally {
       if (target === view) {
         view.state = out.state;
@@ -1312,8 +1327,7 @@
   async function show(events, live) {
     for (const e of events) {
       if (!view?.body.isConnected) return;
-      // From a line on, the rest of the roll keeps its full time even in 早送り.
-      if (e.t === "line" || e.t === "jackpot") view.hot = true;
+            if (e.t === "line" || e.t === "jackpot") view.hot = true;
       if (e.t === "share") {
         say("ほかの人のビンゴの分け前　+" + fmt(e.amount) + api.unit(), "is-gain");
         await wait(1100);
@@ -1422,7 +1436,7 @@
   // number, otherwise it greys out and pays 2× ------------------------------------------------
   async function drawBall(e, live) {
     const ball = node("div", "sg-ball", String(e.number));
-    // A ball for a number a line is waiting on: it glows and takes its time, even in 早送り.
+    // A ball for a number a line is waiting on: it glows and takes its time.
     const reachBefore = S.reach(view.card),
       onReach = e.cell >= 0 && reachBefore.some((line) => S.LINES[line].includes(e.cell)),
       hot = view.hot;
@@ -1680,7 +1694,7 @@
       line = node("p", "sg-game-line");
     box.append(table, line, actions);
     layer.replaceChildren(box);
-    // (No おまかせ: every game is played by hand, in 早送り too.)
+    // (No おまかせ: every game is played by hand.)
     const button = (text, onClick, data) => {
       const b = node("button", "sg-game-btn", text);
       b.type = "button";
@@ -1697,7 +1711,7 @@
       if (ended) return;
       ended = true;
       const target = view;
-      setTimeout(() => target === view && view.layer === layer && !layer.hidden && finish(m), view.quick ? 500 : calm() ? 300 : 1400);
+      setTimeout(() => target === view && view.layer === layer && !layer.hidden && finish(m), calm() ? 300 : 1400);
     };
     // The tables are the casino's own (casino.js, via window.CasinoUI): same felt, cards, dice and
     // bowl, same buttons and wording; only the money differs (the game pays through the card).
@@ -1944,7 +1958,7 @@
           layer.hidden = true;
           if (view) view.busy = false;
           resolve(done);
-        }, view.quick ? 600 : calm() ? 300 : 1600);
+        }, calm() ? 300 : 1600);
       });
     });
   }
