@@ -150,7 +150,9 @@
   // name and a small icon for each id whose ball is on it. Every roll reads it and, if a ball
   // landed, writes it back in one transaction, so two players never take the same cell. A
   // guest, or a device off the cloud, plays on a card of its own.
-  const shared = () => api.uid() !== "GUEST-000" && !!(window.db && window.fbDoc && window.fbRunTransaction) && !window.FirestoreReadGuard?.paused?.();
+  // While the game is closed it opens as a test version: practice chips, a card of its own, nothing shared or paid.
+  let testMode = false;
+  const shared = () => !testMode && api.uid() !== "GUEST-000" && !!(window.db && window.fbDoc && window.fbRunTransaction) && !window.FirestoreReadGuard?.paused?.();
   // The two-card game lives in its own document: a copy of the game from before (an open tab on the
   // old code) keeps writing its 49-cell card to `sugoroku_live` and never touches this one. The first
   // roll after the change makes this document from that one (see legacyCard).
@@ -577,9 +579,12 @@
     view?.unsub?.();
     view = null;
     body.replaceChildren(node("p", "cs-hint", "読み込み中…"));
+    // (The last visit's test version is forgotten first, so the account is judged as it is.)
+    testMode = false;
+    api.preview?.(false);
     if (!(await gateOpen())) {
-      if (body.isConnected) body.replaceChildren(node("p", "cs-hint", "すごろくビンゴはいま調整中です。もうしばらくお待ちください。"));
-      return;
+      testMode = true;
+      api.preview?.(true);
     }
     if (!body.isConnected) return;
     // The screen comes up at once from what this device kept (the game, the card as last seen,
@@ -611,6 +616,7 @@
     const target = view;
     seeLog();
     draw();
+    if (testMode) body.prepend(node("p", "sg-testbanner", "テスト版（調整中）　練習チップで遊べます。ポイントは動きません。"));
     listen();
     setTimeout(notify, 0);
     // A game played further on another device takes over, if nothing is going on here.
