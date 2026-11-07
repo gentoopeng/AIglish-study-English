@@ -536,7 +536,7 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
   // An item that is not in the bag cannot be used; neither can one twice.
   assert.throws(() => S.roll(from, card, 100, seq([0]), "amy", { items: ["guard"] }));
   assert.throws(() => S.roll({ ...from, items: ["guard", "guard"] }, card, 100, seq([0]), "amy", { items: ["guard", "guard"] }));
-  // ガード: for this roll and the next four the bad slots of an accident square do nothing (the good ones still pay).
+  // ガード: for this roll and the next two the bad slots of an accident square do nothing (the good ones still pay).
   const accident = at("accident"),
     safe = S.roll({ ...from, pos: accident - 1, items: ["guard"] }, card, 100, seq([0, 0]), "amy", { items: ["guard"] });
   assert.deepEqual(safe.events.filter((e) => e.t === "guarded").length, 1);
@@ -550,6 +550,20 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
   const later = S.roll({ ...safe.state, pos: accident - 1 }, card, 100, seq([0, 0]), "amy");
   assert.equal(later.events.filter((e) => e.t === "guarded").length, 1);
   assert.equal(later.state.guard, S.RULES.guardRolls - 2);
+  // ガード also covers the normal wheel: a minus slot pays nothing; a plus slot still pays.
+  const normal = at("normal"),
+    nw = S.RULES.normal[100],
+    minusAt = nw.findIndex((x) => x.x === -5),
+    plusAt = nw.findIndex((x) => x.x === 5);
+  const blockedMinus = S.roll({ ...from, pos: normal - 1, guard: 2 }, card, 100, seq([0, minusAt]), "amy");
+  assert.equal(blockedMinus.gain, 0);
+  assert.equal(blockedMinus.events.filter((e) => e.t === "guarded").length, 1);
+  assert.equal(blockedMinus.events.find((e) => e.t === "wheel" && e.wheel === "normal").amount, 0);
+  const openMinus = S.roll({ ...from, pos: normal - 1, guard: 0 }, card, 100, seq([0, minusAt]), "amy");
+  assert.equal(openMinus.gain, -500);
+  const keptPlus = S.roll({ ...from, pos: normal - 1, guard: 2 }, card, 100, seq([0, plusAt]), "amy");
+  assert.equal(keptPlus.gain, 500);
+  assert.equal(keptPlus.events.filter((e) => e.t === "guarded").length, 0);
   // 倍がけ: what the roll pays or takes counts twice (on any square), by at most x2Cap times the bet; it is used up.
   const plus = w.findIndex((x) => x.x === 5);
   const doubled = S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, plus]), "amy", { items: ["x2"] });
