@@ -517,11 +517,10 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
   assert.deepEqual(got.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["normal", "item"]);
   assert.deepEqual(got.events.find((e) => e.t === "itemGet"), { t: "itemGet", id: "guard", amount: 100 });
   assert.equal(got.gain, 100, "the item and 100 besides");
-  // The 「2個」 slot: two items (each from the other slots), and the 100 only once.
+  // The 「2個」 slot: the two items it shows (ガード and 倍がけ), and the 100 only once.
   const twiceAt = S.RULES.itemWheel.findIndex((x) => x.twice);
-  const twin = S.roll(from, card, 100, seq([0, itemAt, twiceAt, pickItem("guard"), pickItem("x2")]));
-  assert.equal(twin.state.items.length, 2);
-  assert.ok(twin.state.items.every((id) => S.RULES.items[id]), "real items");
+  const twin = S.roll(from, card, 100, seq([0, itemAt, twiceAt]));
+  assert.deepEqual(twin.state.items, ["guard", "x2"], "the two items the slot shows");
   assert.deepEqual(twin.events.filter((e) => e.t === "itemGet").map((e) => [e.twice, e.amount]), [[true, 100], [true, 0]]);
   assert.equal(twin.gain, 100);
   // Items are kept as a count: a fourth one still goes in.

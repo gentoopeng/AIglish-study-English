@@ -95,7 +95,7 @@
       guard: { name: "ガード" },
       x2: { name: "倍がけ" },
     },
-    itemWheel: spread([...GET("dice2", 4), ...GET("dice3"), ...GET("exact"), ...GET("guard", 2), ...GET("x2", 2), { twice: true }]),
+    itemWheel: spread([...GET("dice2", 4), ...GET("dice3"), ...GET("exact"), ...GET("guard", 2), ...GET("x2", 2), { twice: true, items: ["guard", "x2"] }]),
     // The 確変 wheel (after a 確変 slot of the normal wheel): x pays the bet × x; balls draws that
     // many balls one after another (each as any ball: it opens a number or pays missPay, and a
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
@@ -685,9 +685,8 @@
       { index, slot } = pick(slots, random),
       cash = money(cost * RULES.itemCash);
     events.push({ t: "wheel", wheel: "item", slots, index, base: 0 });
-    // The 「2個」 slot gives two items, each drawn from the other slots of the wheel.
-    const plain = slots.filter((x) => x.item),
-      got = slot.twice ? [plain[random(plain.length)].item, plain[random(plain.length)].item] : [slot.item];
+    // The 「2個」 slot gives the two items it shows (ガード and 倍がけ).
+    const got = slot.twice ? slot.items : [slot.item];
     got.forEach((id, k) => {
       const entry = { t: "itemGet", id, amount: k ? 0 : cash };
       if (state.items.length < RULES.itemMax) state.items.push(id);

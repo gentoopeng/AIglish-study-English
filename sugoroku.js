@@ -82,7 +82,7 @@
     "STARTを通るとボールが1個出ます。",
     "ビンゴカードは2枚で全員共通（左右にスワイプ）。ボールは1〜99の抽選で、空いた番号なら自分のボールが入り、開いた番号なら1.5倍がもらえます。★の数字はスペシャルルーレット。",
     "1列そろうと、ビンゴ賞金（700）とビンゴルーレット。賞金とルーレットの倍率の5割は、その列のボールの持ち主に、置いたときの賭け額に応じて配られます。ほかの人の分は次に遊んだときに届き、30日で消えます。ミニゲームとジャックポットはそろえた人のもの。",
-    "アイテム：ITEMのルーレットで1個（「2個」の枠も）と100pt。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・倍がけ（この回の増減が2倍）は振る前に押します。ガードは、マイナスが出たときに1回だけ使えます。",
+    "アイテム：ITEMのルーレットで1個（ガードと倍がけの2個の枠も）と100pt。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・倍がけ（この回の増減が2倍）は振る前に押します。ガードは、マイナスが出たときに1回だけ使えます。",
     "ジャックポットは、カジノの賭けから貯まります。",
     "盤面をタップすると、演出を飛ばせます。",
   ];
@@ -1633,7 +1633,7 @@
       text.textContent = label;
       // The ITEM roulette shows each item's picture (dice stacked as in the bag), not its name.
       if (e.wheel === "item") {
-        const pics = slot.twice ? ["die-gold", "potion"] : Array(ITEM_INFO[slot.item].dice || 1).fill(ITEM_INFO[slot.item].img),
+        const pics = slot.twice ? slot.items.map((id) => ITEM_INFO[id].img) : Array(ITEM_INFO[slot.item].dice || 1).fill(ITEM_INFO[slot.item].img),
           size = pics.length > 2 ? 21 : pics.length > 1 ? 24 : 32,
           group = el("g", { transform: "translate(" + tx + " " + ty + ") rotate(" + mid + ")", class: "sg-seg-pic" });
         group.append(el("title", {}));
@@ -1706,7 +1706,7 @@
                 ? "−" + fmt(Math.round(e.base * slot.take)) + api.unit()
                 : "セーフ"
           : e.wheel === "item"
-            ? slot.twice ? "アイテム2個！" : ITEM_INFO[slot.item].n
+            ? slot.twice ? slot.items.map((id) => ITEM_INFO[id].n).join("と") + "！" : ITEM_INFO[slot.item].n
           : slot.item === true
             ? "ITEM チャンス"
           : slot.balls
