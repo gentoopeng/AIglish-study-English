@@ -3201,3 +3201,13 @@ Tests: the whole suite.
 - Laps: `state.laps` (every pass over START) already existed in the save, so the count is the lifetime one, not only from now. `Sugoroku.stats` sends it as `r`; `casino-stats.js` has 周回数 as a new metric of すごろくビンゴ; the second ranking tab (「すごろく記録」: ビンゴ回数, JP回数, SJP回数, ボール排出回数) now has 周回数 as a fifth panel (the tab stacks its panels and scrolls inside, so five fit). A player shows up there once their next すごろくビンゴ roll has published the new total.
 
 Tests: `tests/casino-stats.test.cjs` (r is kept, cleaned and flat-listed), `tests/casino-ranking.smoke.cjs` (five panels), `tests/sugoroku.smoke.cjs` (the track scrolls, 「あと7マス」 / 「いまここ」).
+
+## 10.44.00.00 ぴったりとガードの値段を上げ、ぴったりが出る回数を減らした
+
+**What the owner said.** 「ぴったりサイコロ強すぎると思う。25ptは安すぎない？」
+
+**Checked** (Monte Carlo, 100-point bets, a fresh card each roll). In 10.36 ぴったり was valued at +10 points using a poor choice of face. Choosing the best face of six (the average over all 100 squares; ★ event squares are worth the most, ！ accident squares the least): about +42 points counting cash only, about +82 with a ball valued at 120 points and about +119 at 233 points; so 25 points was far too cheap. ガード changed with the new accident wheel (−6 … −2 and +1 … +6): cancelling the bad slots for five rolls is worth about +70 points (it was about 19), against a price of 30.
+
+**Now** (`sugoroku-model.js`): ぴったり costs 120 (was 25) and is 1 slot of 10 on the item wheel (was 2; ダブルダイス has 4); ガード costs 80 (was 30). Prices are now ダブルダイス 20, トリプルダイス 30, ぴったり 120, ガード 80, 倍がけ 100. ダブルダイス / トリプルダイス stay cheap because they are worth about 9 and 16 points.
+
+Tests: `tests/sugoroku-model.test.cjs` (the item wheel's slots).
