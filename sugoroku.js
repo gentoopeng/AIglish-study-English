@@ -75,14 +75,14 @@
   const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
     "賭けは1回100。ログイン中はポイント、ゲストとオフラインは練習チップです。",
-    "通常マス：ルーレット（−5〜+21倍）。BJ・DICE・チンチロはそのゲームを1回、●はボール、STOP・H&Lはミニゲーム。たまにBONUS。足りないポイントは借金になります。",
+    "通常マス：ルーレット（−10〜+29倍）。BJ・DICE・チンチロはそのゲームを1回、●はボール、STOP・H&Lはミニゲーム。たまにBONUS。足りないポイントは借金になります。",
     "★：ブラックジャック・ダイスポーカー・チンチロ・確定ボールのどれか。カジノと同じルールで、勝つと配当とボール、引き分けは賭けが戻ります。",
     "！：2〜6倍が引かれる、3マス戻る、STARTに戻るなど。",
     "！！：盤面に1つ。踏むと大事故かも。ヘルモードは3周の間、通常マスが！に、！と★が通常マスに入れ替わります。",
     "STARTを通るとボールが1個出ます。",
     "ビンゴカードは2枚で全員共通（左右にスワイプ）。ボールは1〜99の抽選で、空いた番号なら自分のボールが入り、開いた番号なら1.5倍がもらえます。★の数字はスペシャルルーレット。",
     "1列そろうと、ビンゴ賞金（700）とビンゴルーレット。賞金とルーレットの倍率の5割は、その列のボールの持ち主に、置いたときの賭け額に応じて配られます。ほかの人の分は次に遊んだときに届き、30日で消えます。ミニゲームとジャックポットはそろえた人のもの。",
-    "アイテム：ITEMのルーレットで1個（ガードと倍がけの2個の枠も）と100pt。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・倍がけ（この回の増減が2倍）は振る前に押します。ガードは、マイナスが出たときに1回だけ使えます。",
+    "アイテム：ITEMのルーレットで1個（ガードと倍がけの2個の枠も）と100pt。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・倍がけ（この回の増減と、その回で始まるゲームの結果が2倍）は振る前に押します。ガードは、マイナスが出たときに1回だけ使えます。",
     "ジャックポットは、カジノの賭けから貯まります。",
     "盤面をタップすると、演出を飛ばせます。",
   ];
@@ -1400,7 +1400,7 @@
         say(ITEM_INFO[e.id].n + (e.full ? "（持ちきれません）" : "") + (e.amount ? "　+" + fmt(e.amount) + api.unit() : ""), e.full ? "is-gain" : "is-hot");
         await wait(e.twice ? 900 : 1200);
       } else if (e.t === "x2") {
-        say("倍がけ　" + (e.amount >= 0 ? "+" : "−") + fmt(Math.abs(e.amount)) + api.unit(), e.amount >= 0 ? "is-gain" : "is-hot");
+        say(e.later ? "倍がけ　ゲームの結果が2倍" : "倍がけ　" + (e.amount >= 0 ? "+" : "−") + fmt(Math.abs(e.amount)) + api.unit(), e.amount >= 0 ? "is-gain" : "is-hot");
         await wait(1000);
       } else if (e.t === "guarded") {
         say("ガードで、マイナスは無効", "is-gain");
@@ -1779,7 +1779,7 @@
     view.busy = true;
     hud();
     const box = node("div", "sg-game");
-    box.append(node("p", "sg-wheel-title", GAME_NAMES[p.game] + "　" + fmt(p.bet) + api.unit()), node("p", "sg-game-rule", p.plain ? "勝てば配当（ボールなし）。負けは賭け分がなくなります。" : "勝てば配当とボール。負けは賭け分がなくなります。"));
+    box.append(node("p", "sg-wheel-title", GAME_NAMES[p.game] + "　" + fmt(p.bet) + api.unit() + (p.x2 ? "　倍がけ×2" : "")), node("p", "sg-game-rule", p.plain ? "勝てば配当（ボールなし）。負けは賭け分がなくなります。" : "勝てば配当とボール。負けは賭け分がなくなります。"));
     const table = node("div", "sg-game-table"),
       actions = node("div", "sg-game-actions"),
       line = node("p", "sg-game-line");
@@ -2037,7 +2037,7 @@
       view.busy = true;
       hud();
       const box = node("div", "sg-game sg-mini");
-      box.append(node("p", "sg-wheel-title", MINI[item.game] + (item.mult > 1 ? "　×" + item.mult : "")), node("p", "sg-game-rule", RULE_TEXT[item.game]));
+      box.append(node("p", "sg-wheel-title", MINI[item.game] + (item.mult > 1 ? "　×" + item.mult : "") + (item.x2 ? "　倍がけ×2" : "")), node("p", "sg-game-rule", RULE_TEXT[item.game]));
       layer.replaceChildren(box);
       // The score shows for a moment, then the board goes on by itself.
       let over = false;
@@ -2064,7 +2064,7 @@
     go.type = "button";
     go.dataset.sgGame = "start";
     box.append(show, line, go);
-    const score = (done) => S.gameScore(item.game, done, item.bet || 100) * item.mult;
+    const score = (done) => S.bonusGain(item, S.gameScore(item.game, done, item.bet || 100));
     const end = (done, text) => {
       go.remove();
       // A normal square's quick game pays in chips or points; the bigger games score points.
@@ -2236,7 +2236,7 @@
       ];
       show.textContent = "むずかしさを選んでください";
       const picks = LEVELS.map(([level, label]) => {
-        const b = node("button", "sg-game-btn", label + "　" + fmt(S.gameScore("math", level, item.bet || 100) * item.mult) + "点");
+        const b = node("button", "sg-game-btn", label + "　" + fmt(S.bonusGain(item, S.gameScore("math", level, item.bet || 100))) + "点");
         b.type = "button";
         b.dataset.sgGame = "level-" + level;
         b.onclick = (e) => e.isTrusted && begin(level);
