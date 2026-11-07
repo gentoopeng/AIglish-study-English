@@ -77,7 +77,7 @@
         // High risk, high return: a bad slot takes −1 to −5 times the bet, a good one gives up to 5 times.
         ...N(-5, 3), ...N(-2, 2), ...N(-1, 2),
         ...N(0, 6), ...ITEM(5),
-        ...N(3, 2), ...N(4, 3), ...N(5), ...N(8, 2), ...N(8),
+        ...N(5, 2), ...N(7, 3), ...N(8), ...N(11, 2), ...N(13),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -123,8 +123,8 @@
     owedDays: 30,
     owedMax: 200,
     // Accident wheel: take: multiples of the bet taken on top (0: safe), back: squares back, start: back to START.
-    accident: [{ take: 6 }, { take: 4 }, { take: 3 }, { take: 2 }, { take: 3 }, { back: 3 }, { take: 2 }, { start: true }, { take: 3 }, { take: 0 }],
-    // The super accident square (one on the board): −10 to −30 times the bet, the player's own balls off the card,
+    accident: [{ take: 6 }, { take: 4 }, { take: 3 }, { take: 2 }, { take: 3 }, { back: 3 }, { take: 2 }, { start: true }, { take: 3 }, { take: 0 }, { super: true }],
+    // The super accident (the square on the board, and one slot of the accident wheel): −10 to −30 times the bet, the player's own balls off the card,
     // the bag emptied, nothing (SAFE), the 確変 wheel (LUCKY), or ヘルモード for hellLaps times round the board (state.hell counts the squares left).
     superAccident: spread([{ take: 10 }, { take: 15 }, { take: 20 }, { take: 25 }, { take: 30 }, { resetBalls: true }, { resetItems: true }, { take: 0 }, { lucky: true }, { hell: true }]),
     hellLaps: 3,
@@ -582,7 +582,10 @@
     } else if (kind === "accident") {
       const { index, slot } = pick(RULES.accident, random);
       events.push({ t: "wheel", wheel: "accident", slots: RULES.accident, index, base: cost });
-      if (guarded && (slot.start || slot.back || slot.take)) {
+      if (slot.super) {
+        // The accident wheel's own way to the super accident wheel.
+        gain += spinSuper(state, card, me, random, events, cost, guarded);
+      } else if (guarded && (slot.start || slot.back || slot.take)) {
         // ガード: the bad slots do nothing.
         events.push({ t: "guarded" });
       } else if (slot.start) {
@@ -597,33 +600,7 @@
         events.push({ t: "take", amount });
       }
     } else if (kind === "super") {
-      const { index, slot } = pick(RULES.superAccident, random);
-      events.push({ t: "wheel", wheel: "super", slots: RULES.superAccident, index, base: cost });
-      const bad = slot.take || slot.resetBalls || slot.resetItems || slot.hell;
-      if (guarded && bad) {
-        // ガード: the bad slots do nothing here either.
-        events.push({ t: "guarded" });
-      } else if (slot.take) {
-        const amount = money(cost * slot.take);
-        gain -= amount;
-        events.push({ t: "take", amount });
-      } else if (slot.resetBalls) {
-        const cells = [];
-        card.owners.forEach((owner, c) => owner === me && cells.push(c));
-        for (const c of cells) {
-          card.owners[c] = "";
-          if (Array.isArray(card.bets)) card.bets[c] = 0;
-        }
-        events.push({ t: "reset", cells, own: true });
-      } else if (slot.resetItems) {
-        events.push({ t: "itemsLost", count: itemsOf(state).length });
-        state.items = [];
-      } else if (slot.lucky) {
-        gain += spinKakuhen(state, card, me, random, events, cost);
-      } else if (slot.hell) {
-        state.hell = RULES.hellLaps * SIZE;
-        events.push({ t: "hell", laps: RULES.hellLaps });
-      }
+      gain += spinSuper(state, card, me, random, events, cost, guarded);
     } else {
       const { index, slot } = pick(RULES.events, random);
       events.push({ t: "wheel", wheel: "event", slots: RULES.events, index, base: cost });
@@ -648,6 +625,38 @@
     state.won += gain;
     state.best = Math.max(state.best || 0, gain);
     return { state, card, events, gain, cost };
+  }
+  // The super accident wheel (10 slots). `guarded`: the bad slots do nothing. Returns what it paid (below 0: took).
+  function spinSuper(state, card, me, random, events, cost, guarded) {
+    let gain = 0;
+    const { index, slot } = pick(RULES.superAccident, random);
+    events.push({ t: "wheel", wheel: "super", slots: RULES.superAccident, index, base: cost });
+    const bad = slot.take || slot.resetBalls || slot.resetItems || slot.hell;
+    if (guarded && bad) {
+      // ガード: the bad slots do nothing here either.
+      events.push({ t: "guarded" });
+    } else if (slot.take) {
+      const amount = money(cost * slot.take);
+      gain -= amount;
+      events.push({ t: "take", amount });
+    } else if (slot.resetBalls) {
+      const cells = [];
+      card.owners.forEach((owner, c) => owner === me && cells.push(c));
+      for (const c of cells) {
+        card.owners[c] = "";
+        if (Array.isArray(card.bets)) card.bets[c] = 0;
+      }
+      events.push({ t: "reset", cells, own: true });
+    } else if (slot.resetItems) {
+      events.push({ t: "itemsLost", count: itemsOf(state).length });
+      state.items = [];
+    } else if (slot.lucky) {
+      gain += spinKakuhen(state, card, me, random, events, cost);
+    } else if (slot.hell) {
+      state.hell = RULES.hellLaps * SIZE;
+      events.push({ t: "hell", laps: RULES.hellLaps });
+    }
+    return gain;
   }
   // The 確変 wheel: the bet × x, or a run of balls. (Started by the hidden slot of the normal wheel, or by LUCKY.)
   function spinKakuhen(state, card, me, random, events, cost) {

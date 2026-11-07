@@ -75,10 +75,10 @@
   const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
     "1回の賭けは100。ログイン中はポイント、ゲストとオフラインは練習チップで遊びます。",
-    "通常マス：ルーレット（−5倍〜+8倍。マイナスで足りない分は、カジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回、「●」はボール、「STOP」「H&L」はミニゲーム。たまに「BONUS」が出ます。",
+    "通常マス：ルーレット（−5倍〜+13倍。マイナスで足りない分は、カジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回、「●」はボール、「STOP」「H&L」はミニゲーム。たまに「BONUS」が出ます。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・確定ボールのどれか。カジノと同じルールで、勝つと配当とボール、引き分けは賭けが戻ります。負けは、ダブルやヒフミなら賭けの2倍など、カジノと同じ倍率で払います。",
     "！（アクシデント）：2〜6倍が引かれる、3マス戻る、STARTに戻る。何も起きない枠もあります。",
-    "！！（スーパーアクシデント）：盤面に1つだけ。10項目のルーレットで、−10〜−30倍、自分のボールが全部消える、アイテムが全部消える、何も起きない、ラッキー（ボーナスルーレット）、ヘルモードのどれか。ヘルモードは盤面を3周するまで、通常マスが！に、！が通常マスに、★が通常マスに入れ替わります。",
+    "！！（スーパーアクシデント）：盤面に1つだけ（！のマスのルーレットにも1項目あります）。10項目のルーレットで、−10〜−30倍、自分のボールが全部消える、アイテムが全部消える、何も起きない、ラッキー（ボーナスルーレット）、ヘルモードのどれか。ヘルモードは盤面を3周するまで、通常マスが！に、！が通常マスに、★が通常マスに入れ替わります。",
     "STARTを通ると、ボールが1個出ます。",
     "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選。開いていない番号なら自分のボールが入り、開いている番号は1.5倍がもらえます。★の数字はスペシャルルーレットです。",
     "1列そろうと、ビンゴ賞金（700）とビンゴルーレット。賞金とルーレットの倍率の5割は、その列のボールの持ち主に、置いたときの賭け額に応じて配られます。ほかの人の分は、その人が次に遊んだときに届き、30日で消えます。ミニゲームとジャックポットは、そろえた人のものです。そろった列のボールは戻ります。",
@@ -1519,7 +1519,7 @@
   function tone(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "ball" : "game-" + slot;
     if (wheel === "super") return slot.lucky ? "gold" : slot.hell ? "worst" : slot.take >= 20 ? "worst" : slot.take || slot.resetBalls || slot.resetItems ? "bad" : "safe";
-    if (wheel === "accident") return slot.give ? (slot.give >= 5 ? "gold" : "high") : slot.start ? "worst" : slot.back ? "bad" : slot.take >= 4 ? "worst" : slot.take ? "bad" : "safe";
+    if (wheel === "accident") return slot.super ? "worst" : slot.give ? (slot.give >= 5 ? "gold" : "high") : slot.start ? "worst" : slot.back ? "bad" : slot.take >= 4 ? "worst" : slot.take ? "bad" : "safe";
     if (slot.kakuhen) return "zero";
     if (wheel === "item") return slot.twice ? "gold" : slot.item === "ball" ? "gold" : slot.item === "exact" ? "champagne" : "high";
     if (slot.item === true) return "gold";
@@ -1535,7 +1535,7 @@
   function slotLabel(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "BALL" : { blackjack: "BJ", dice: "DICE", chinchiro: "チンチロ" }[slot];
     if (wheel === "super") return slot.lucky ? "LUCKY" : slot.hell ? "HELL" : slot.resetBalls ? "ボール消" : slot.resetItems ? "アイテム消" : slot.take ? "−×" + slot.take : "SAFE";
-    if (wheel === "accident") return slot.give ? "+×" + slot.give : slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
+    if (wheel === "accident") return slot.super ? "!!" : slot.give ? "+×" + slot.give : slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
     // Looks like any ×0 slot: the player finds out when the bonus effect starts.
     if (slot.kakuhen) return "×0";
     if (wheel === "item") return slot.twice ? "2個" : ITEM_INFO[slot.item].n;
@@ -1653,7 +1653,9 @@
                     ? "−" + fmt(Math.round(e.base * slot.take)) + api.unit()
                     : "セーフ"
         : e.wheel === "accident"
-          ? slot.start
+          ? slot.super
+            ? "スーパーアクシデント！"
+            : slot.start
             ? "STARTに戻る"
             : slot.back
               ? slot.back + "マス戻る"
