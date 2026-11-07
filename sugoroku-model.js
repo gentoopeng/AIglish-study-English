@@ -313,12 +313,11 @@
     state.stake = 0;
     state.bingos += lines.length;
     events.push({ t: "line", lines, cells: [...cleared], count: lines.length, solo, mult });
-    // The line is worth the average bet of its balls, but never more than the finishing roll's own
-    // bet (so cheap balls finished by a big roll do not pay big). The wheel is the one nearest to it.
+    // What the balls share is worth the average bet of the balls on the line; what the finisher
+    // keeps is worth the finishing roll's own bet. So everyone is paid by their own bet.
     const total = cleared.reduce((a, c) => a + weight(c), 0),
-      base = Math.min(bet, total / cleared.length),
-      grid = RULES.costs.reduce((best, c) => (Math.abs(c - base) < Math.abs(best - base) ? c : best));
-    const gain = spinLine(state, card, base, grid, mult, random, events, me, balls, total);
+      avg = total / cleared.length;
+    const gain = spinLine(state, card, bet, avg, mult, random, events, me, balls, total);
     // The finished lines start again: their balls leave (the numbers stay).
     for (const c of cleared) {
       card.owners[c] = "";
@@ -350,24 +349,28 @@
   // A line: the bingo prize, shared by the balls on it (others' parts go to card.owed, the
   // rounding stays with the finisher), then the wheel. A mini game is queued in state.bonus and
   // played on the screen (settleBonus); a jackpot waits in state.jpWait for the screen to pay.
-  function spinLine(state, card, bet, grid, mult, random, events, me, balls, count) {
-    // `part` of an amount goes to the other players by their balls on the line; returns what
-    // stays with the finisher and the others' shares.
-    const share = (amount, part) => {
-      const shares = {};
+  function spinLine(state, card, bet, avg, mult, random, events, me, balls, count) {
+    const grid = RULES.costs.reduce((best, c) => (Math.abs(c - bet) < Math.abs(best - bet) ? c : best));
+    // `unit` is what one bet of 1 is worth for the balls (the average) and for the finisher (the roll's bet):
+    // the shared `part` of the amount goes to the players by their balls' bets, the rest is the finisher's.
+    // Returns what stays with the finisher and the others' shares.
+    const share = (x, part) => {
+      const pool = money(avg * x * part),
+        shares = {},
+        bonus = money(bet * x * (1 - part));
       let given = 0;
       for (const [id, n] of Object.entries(balls)) {
         if (id === me) continue;
-        shares[id] = Math.floor((amount * part * n) / count);
+        shares[id] = Math.floor((pool * n) / count);
         if (!shares[id]) continue;
         given += shares[id];
         card.owed = card.owed || {};
         card.owed[id] = Math.min(1e7, (card.owed[id] || 0) + shares[id]);
       }
-      return { kept: amount - given, shares };
+      return { kept: pool - given + bonus, total: pool + bonus, shares };
     };
-    const prize = money(bet * RULES.bingoPrize * mult),
-      split = share(prize, RULES.prizeShare);
+    const split = share(RULES.bingoPrize * mult, RULES.prizeShare),
+      prize = split.total;
     let gain = split.kept;
     events.push({ t: "prize", amount: gain, total: prize, shares: split.shares, mult });
     for (let wheel = "bingo"; wheel; ) {
@@ -390,9 +393,8 @@
         state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: slot.boost ?? RULES.bingoGameBoost, bet: grid }]);
         events.push({ t: "bonus", game: slot.game, mult: slot.boost ?? RULES.bingoGameBoost });
       } else if (slot.x) {
-        const won = money(bet * slot.x * mult),
-          part = share(won, RULES.wheelShare);
-        Object.assign(event, { amount: part.kept, total: won, shares: part.shares });
+        const part = share(slot.x * mult, RULES.wheelShare);
+        Object.assign(event, { amount: part.kept, total: part.total, shares: part.shares });
         gain += part.kept;
       }
     }

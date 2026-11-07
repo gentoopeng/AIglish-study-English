@@ -3087,3 +3087,13 @@ Tests: `tests/sugoroku.smoke.cjs`, `tests/casino.smoke.cjs` (the existing flows 
 **Now** (`sugoroku-model.js`): the shared parts are split by the bets of the balls (a ball with no bet recorded counts as 100), so a ball earns by its own bet whoever else is on the line. The line's base is the average bet, but never more than the finishing roll's own bet (so cheap balls finished by a big roll do not pay big); the wheel is the one nearest to it (50 / 100 / 200). Monte Carlo (same bet for all, 200,000 rolls): return without jackpots 0.913 / 0.908 at 50 / 200.
 
 Tests: `tests/sugoroku-model.test.cjs` (a line worth the average, cheap balls finished by a bigger roll, bob's share = his balls' bets / all bets).
+
+## 10.33.00.00 すごろくビンゴ: 揃えた人の取り分を、その人のサイコロの賭け額で決めるようにした
+
+**What the owner said.** 「当たりそうなときだけ高くすればよくなるやん」「低い配当でビンゴしまくればルーレット回しまくれるやん」
+
+**Checked.** Raising the bet only when lines are close does not pay (3 players, 900,000 rolls, the others at 100, without jackpots: flat 100 → 0.93, 200 only with 3+ reaches → 0.88). But a player who differs from the table was paid unevenly: in 10.32 the finisher's side of the line was capped at the average of the balls, so a bet above the table's was partly wasted (200 → 0.88 against a table of 100) and a bet below it was not (50 → 0.95).
+
+**Now** (`sugoroku-model.js`, `spinLine`): the part the balls share (`prizeShare` of the prize, `wheelShare` of the wheel's ×) is worth the average bet of the balls and is split by the balls' bets; the part the finisher keeps is worth the finishing roll's own bet; the bingo wheel is the one for that roll's bet. So every payout follows its own bet. Result (same test, others at 100): 50 → 0.96–0.98, 100 → 0.93, 200 → 0.91–0.93. 50 is still a few points ahead when the table bets more; the cause is not found yet (all stay below 1, and a table betting alike is level at about 0.91).
+
+Tests: `tests/sugoroku-model.test.cjs` (balls' part by the average, the finisher's part by her own roll, bob's share by his balls' bets, cheap balls finished by a roll of 200).
