@@ -49,7 +49,9 @@ async function refresh(){
  const books=element('button',bookEditing()?'単語帳の編集モードを終了':'配信中の単語帳を編集する');books.type='button';books.className='admin-books-button';books.onclick=()=>{if(bookEditing()){setBookEditing(false);books.textContent='配信中の単語帳を編集する';return;}setBookEditing(true);dialog.close();window.switchTab?.('vocab');window.showToast?.('管理者モードです。配信中の単語帳の単語を編集できます。','info');};
  const notices=element('button','お知らせを配信');notices.type='button';notices.className='admin-notices-button';notices.onclick=compose;
  const sent=element('button','運営からの送信履歴');sent.type='button';sent.className='admin-history-button';sent.onclick=history;
- body.append(refresh,books,notices,sent);message('プレイヤーを読み込み中…');
+ const bingo=element('button','すごろくビンゴのボールをリセット');bingo.type='button';bingo.className='admin-sugoroku-button';let armed=false;
+ bingo.onclick=async()=>{if(busy)return;if(!armed){armed=true;bingo.textContent='もう一度押すと、全員のボールが消えます';return;}armed=false;bingo.textContent='すごろくビンゴのボールをリセット';lock(true);message('リセットしています…');try{guard();await deadline(window.fbRunTransaction(window.db,async tx=>{const ref=window.fbDoc(window.db,'shared','sugoroku_live2'),snap=await tx.get(ref);if(!snap.exists())return;const c=snap.data();if(Array.isArray(c.owners))c.owners=c.owners.map(()=>'');if(Array.isArray(c.bets))c.bets=c.bets.map(()=>0);c.people={};c.updatedAt=Date.now();tx.set(ref,c);}));message('ボールをリセットしました。もらえる分け前は残っています。');}catch(error){message(error.message);}finally{lock(false);}};
+ body.append(refresh,books,notices,sent,bingo);message('プレイヤーを読み込み中…');
  try{guard();const players=[];await deadline(playerList((id,data)=>{if(id!=='GUEST-000')players.push({id,name:data.playerName||id,deleted:!!data.deleted});},()=>authorized&&dialog.open&&generation===request));
  if(request!==generation||!authorized)return;
  for(const player of players){const row=element('button');row.type='button';row.className='admin-player-row';row.append(element('strong',player.name),element('small',player.id+(player.deleted?' · 削除済み':'')));row.onclick=()=>edit(player.id);body.append(row);}

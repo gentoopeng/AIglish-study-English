@@ -568,23 +568,3 @@ test("a line of balls laid at 100 pays the bingo prize on 100; a game saved with
   assert.equal(S.settleBonus({ ...S.newState(), bonus: [{ game: "timer", mult: 1 }] }, 10).gain, 1000);
   assert.equal(S.gameScore("stop", "perfect", 100), 200);
 });
-
-test("resetting the shared card: only when full enough and not again within the hour; owed parts stay", () => {
-  const card = S.newCard(seq([0])),
-    half = { ...card, owners: card.owners.map((o, i) => (i < 40 ? "amy" : "")), owed: { bob: 120 } },
-    full = { ...card, owners: card.owners.map((o, i) => (i < 70 ? "amy" : "")), bets: card.owners.map(() => 100), owed: { bob: 120 } };
-  const now = 1e9;
-  assert.equal(S.resetState(half, now).ok, false);
-  assert.throws(() => S.resetCard(half, now), /not full/);
-  assert.equal(S.resetState(full, now, 0).ok, true);
-  const next = S.resetCard(full, now, 0);
-  assert.ok(next.owners.every((o) => o === ""));
-  assert.ok(next.bets.every((b) => b === 0));
-  assert.deepEqual(next.cells, full.cells);
-  assert.deepEqual(next.owed, { bob: 120 });
-  assert.ok(S.validCard(next));
-  assert.equal(S.resetState(full, now, now - 60e3).ok, false);
-  assert.ok(S.resetState(full, now, now - 60e3).wait > 0);
-  assert.throws(() => S.resetCard(full, now, now - 60e3), /too soon/);
-  assert.equal(S.resetState(full, now, now - S.RULES.resetEvery).ok, true);
-});

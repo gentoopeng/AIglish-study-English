@@ -3125,3 +3125,13 @@ Tests: `tests/sugoroku-model.test.cjs` (the item list without it; unknown ids in
 **Wiping the card** (`resetState`, `resetCard`, `sugoroku.js` `resetBalls`, a panel in 記録): any player can clear every ball of the shared card when it is at least `resetOpen` = 65% full and not within `resetEvery` = 1 hour of the last wipe; the numbers and `owed` stay, nothing is refunded. The time of the last wipe is in its own document `shared/sugoroku_reset` (an old tab that rewrites the card cannot undo the wait), read inside the same transaction that clears the card. Offline and on a card of one's own it is not offered. It is a valve, not a cure: in the simulation, wiping whenever allowed at 50% made lines far rarer (one per 2,500 rolls) and cut the return by about 30 points, because lines and the 200-point misses both come from balls piling up; at 65% it is allowed about 3% of the time. `admin-players.js` also clears a deleted player's `bets` now.
 
 Tests: `tests/sugoroku-model.test.cjs` (x2 on any square and its cap, ガード 5 rolls, prices, the wipe's conditions), `tests/casino.smoke.cjs` (the wipe through the 記録 sheet).
+
+## 10.37.00.00 すごろくビンゴ: ボールのリセットを、プレイヤーのボタンから運営の操作に変えた
+
+**What the owner said.** 「そうじゃなくて運営がリセットできるようにってこと。変更前のやつが残ってるから」
+
+**Cause.** 10.36 gave every player a button in 記録 that wiped the shared card. The owner wanted the operator to clear the balls left over from before the changes, not players.
+
+**Now** (`admin-players.js`): the player's button, `resetBalls`, `shared/sugoroku_reset` and `S.resetState/resetCard` are removed. The admin tools have 「すごろくビンゴのボールをリセット」: two presses clear `owners`, `bets` and `people` of `shared/sugoroku_live2` in one transaction; the numbers, `owed`, and the log stay.
+
+Tests: `tests/admin-players.smoke.cjs` (two presses; owners, bets cleared; cells and owed kept).
