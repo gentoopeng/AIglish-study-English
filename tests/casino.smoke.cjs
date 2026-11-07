@@ -364,6 +364,22 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.match(await casinoRows.first().innerText(), /すごろくビンゴ[\s\S]*カジノ[\s\S]*−100pt/);
     assert.match(await casinoRows.nth(1).innerText(), /ポーカー[\s\S]*2回分[\s\S]*±0pt/);
     await page.getByRole("button", { name: "ポイントを閉じる" }).click();
+    // The same game on the same day is one line, however the lines were split in the record
+    // (here more すごろくビンゴ lines with a ルーレット line between): 7 plays, −100 − 300 + 120.
+    await page.evaluate(() => {
+      const key = "aiglish_casino_log_casino-a",
+        log = JSON.parse(localStorage.getItem(key) || "[]"),
+        now = Date.now();
+      window.__logBefore = JSON.stringify(log);
+      log.push({ g: "sugoroku", d: -300, n: 4, at: now - 3000 }, { g: "roulette", d: 50, n: 1, at: now - 2000 }, { g: "sugoroku", d: 120, n: 2, at: now - 1000 });
+      localStorage.setItem(key, JSON.stringify(log));
+      window.openStudyPoints();
+    });
+    assert.equal(await casinoRows.count(), 4);
+    assert.match(await casinoRows.filter({ hasText: "すごろくビンゴ" }).first().innerText(), /7回分[\s\S]*−280pt/);
+    assert.equal(await casinoRows.filter({ hasText: "すごろくビンゴ" }).count(), 1);
+    await page.getByRole("button", { name: "ポイントを閉じる" }).click();
+    await page.evaluate(() => localStorage.setItem("aiglish_casino_log_casino-a", window.__logBefore));
     // Signed in, the bingo card is the shared one: a ball goes on it under this player's name,
     // and another player opening the game sees it there.
     await page.evaluate(() => {

@@ -59,7 +59,10 @@
     for (const entry of (window.Poker?.casinoLog?.(account) || []).slice().reverse()) {
       const day = P.day(entry.at);
       if (!days.has(day)) days.set(day, { study: {}, casino: [] });
-      days.get(day).casino.push(entry);
+      // One line per game and day (the first met is the newest): the points and the plays add up.
+      const same = days.get(day).casino.find((e) => e.g === entry.g);
+      if (same) Object.assign(same, { d: same.d + entry.d, n: same.n + entry.n });
+      else days.get(day).casino.push({ ...entry });
     }
     const order = [...days.keys()].sort().reverse();
     if (!order.length) list.append(node("li", "まだ履歴はありません。", "points-empty"));
@@ -242,7 +245,7 @@
       node("h3", "カジノとポーカー"),
       node(
         "p",
-        "カジノとポーカーは所持ポイントを賭けます。賭けられるのは、その日アプリで測った勉強時間1分につき100ptまでです（手入力は数えません）。賭けた分は始めたときに引かれ、勝った分は終わったときに戻ります。履歴には、同じゲームを30分以内に続けた分を1行にまとめて載せます。総獲得ポイントには入りません。",
+        "カジノとポーカーは所持ポイントを賭けます。賭けられるのは、その日アプリで測った勉強時間1分につき100ptまでです（手入力は数えません）。賭けた分は始めたときに引かれ、勝った分は終わったときに戻ります。履歴には、同じゲームは1日ごとに1行にまとめて載せます（何回分かも出ます）。総獲得ポイントには入りません。",
       ),
       node(
         "p",
