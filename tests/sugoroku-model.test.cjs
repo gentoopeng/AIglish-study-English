@@ -46,8 +46,8 @@ test("the board, card and wheels have the agreed shape", () => {
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     assert.equal(S.RULES.accident.filter((x) => x.take === 0).length, 1, "one SAFE on the accident wheel");
-    // High risk, high return: from −5 times the bet to +21; the 確変 wheel holds the biggest multiples and the ball runs.
-    for (const x of [21, 12, 6, 5, 4, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
+    // High risk, high return: from −10 times the bet to +29; the 確変 wheel holds the biggest multiples and the ball runs.
+    for (const x of [29, 14, 8, 6, 5, 0, -3, -4, -5, -6, -8, -10]) assert.ok(values.has(x), cost + " has ×" + x);
     assert.equal(S.RULES.normal[cost].filter((slot) => slot.item).length, 5, "five item slots (they pay ×1 and an item)");
     // Some of what is on the wheel really pays the bet back or more (not only the hidden bonus slot).
     assert.ok(S.RULES.normal[cost].filter((slot) => !slot.kakuhen && slot.x >= 1).length >= 3, "a few slots pay ×1 or more");
@@ -481,8 +481,8 @@ test("a normal square can take more than the bet, or start an event game", () =>
   const w = S.RULES.normal[100],
     pos = { ...S.newState(), pos: at("normal") - 1 },
     card = S.newCard(seq([0]));
-  const minus = S.roll(pos, card, 100, seq([0, w.findIndex((x) => x.x === -1)]));
-  assert.equal(minus.gain, -100);
+  const minus = S.roll(pos, card, 100, seq([0, w.findIndex((x) => x.x === -3)]));
+  assert.equal(minus.gain, -300);
   const bj = S.roll(pos, card, 100, seq([0, w.findIndex((x) => x.event === "blackjack")]));
   assert.deepEqual(bj.state.pending, { game: "blackjack", bet: 100, plain: true });
   assert.equal(bj.gain, 0);
@@ -609,6 +609,22 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
   const run = S.RULES.normal[100].findIndex((x) => x.kakuhen),
     sixty = S.RULES.kakuhen.findIndex((x) => x.x === 61);
   assert.equal(S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, run, 0, sixty]), "amy", { items: ["x2"] }).gain, 6100 + 1000);
+  // 倍がけ also doubles the result of the game the roll starts: a mini game's pay (settleBonus) and an event game's net (settle).
+  const gameAt = w.findIndex((x) => x.game === "stop"),
+    eventAt = w.findIndex((x) => x.event === "dice");
+  const withGame = S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, gameAt]), "amy", { items: ["x2"] });
+  assert.equal(withGame.state.bonus[0].x2, true);
+  assert.equal(withGame.events.find((e) => e.t === "x2").later, true);
+  assert.equal(S.settleBonus(withGame.state, "perfect").gain, 200 + 200, "stop perfect pays ×2 of the bet, doubled");
+  assert.equal(S.settleBonus(S.roll(from, card, 100, seq([0, gameAt])).state, "perfect").gain, 200, "without 倍がけ");
+  assert.equal(S.bonusGain({ mult: 1, bet: 100, x2: true }, 5000), 5000 + 1000, "the extra is capped at x2Cap × the bet");
+  const withEvent = S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, eventAt]), "amy", { items: ["x2"] });
+  assert.equal(withEvent.state.pending.x2, true);
+  const won2 = S.settle(withEvent.state, card, 1, seq([0]));
+  assert.equal(won2.gain, 200 + 100, "a win pays 200 and the doubled net adds 100 more");
+  assert.equal(won2.events.find((e) => e.t === "x2").amount, 100);
+  const lost2 = S.settle(withEvent.state, card, -1, seq([0]));
+  assert.equal(lost2.gain, -100, "a loss of ×1 pays 0 back (net −100), doubled: −100 more");
   // Names every object has are not items; a roll counts for which copy of a game is further on.
   assert.deepEqual(S.itemsOf({ items: ["constructor", "__proto__", "toString", "guard"] }), ["guard"]);
   assert.equal(S.revOf({ rolls: 7 }), 7);

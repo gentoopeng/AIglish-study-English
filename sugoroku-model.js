@@ -74,10 +74,10 @@
         // The top of the wheel is a 確変 slot: it starts the 確変 wheel below, which holds the
         // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
         ...KAKU(1),
-        // High risk, high return: a bad slot takes −1 to −5 times the bet, a good one gives up to 5 times.
-        ...N(-5, 3), ...N(-2, 2), ...N(-1, 2),
+        // High risk, high return: a bad slot takes 3 to 10 times the bet, a good one gives up to 30 times.
+        ...N(-10), ...N(-8), ...N(-6), ...N(-5, 2), ...N(-4), ...N(-3),
         ...N(0, 6), ...ITEM(5),
-        ...N(4, 2), ...N(5, 3), ...N(6), ...N(12, 2), ...N(21),
+        ...N(5, 2), ...N(6, 3), ...N(8), ...N(14, 2), ...N(29),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -429,13 +429,18 @@
     if (game === "stop" || game === "hilo") return money(bet * (done === "auto" ? g.auto : g.pay[done] || 0));
     return 0;
   }
+  // What a mini game pays for a score: × its multiple, and doubled when 倍がけ was used on the roll (by at most x2Cap × the bet).
+  function bonusGain(game, score) {
+    const base = money(score * game.mult);
+    return game.x2 ? base + Math.min(base, money(RULES.x2Cap * (game.bet || 100))) : base;
+  }
   // The first mini game waiting, finished with what was done; done === null when it was left.
   function settleBonus(before, done) {
     if (!before.bonus?.length) throw Error("no bonus");
     const state = clone(before),
       [game, ...rest] = state.bonus,
       score = done === null ? 0 : gameScore(game.game, done, game.bet || 100),
-      gain = money(score * game.mult);
+      gain = bonusGain(game, score);
     state.bonus = rest;
     state.won += gain;
     state.best = Math.max(state.best || 0, gain);
@@ -581,12 +586,13 @@
       if (slot.kakuhen) spin.chance = random(RULES.chanceOdds) === 0;
       if (slot.kakuhen && spin.chance) gain += spinKakuhen(state, card, me, random, events, cost);
       if (slot.game) {
-        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: 1, bet: cost }]);
+        // 倍がけ used on this roll doubles the game's result (settleBonus), not only this roll's pay.
+        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: 1, bet: cost, ...(picked.x2 ? { x2: true } : {}) }]);
         events.push({ t: "bonus", game: slot.game, mult: 1 });
       }
       if (slot.event) {
         // A plain game for the bet: a win pays as the game does, a loss takes the bet, no ball.
-        state.pending = { game: slot.event, bet: cost, plain: true };
+        state.pending = { game: slot.event, bet: cost, plain: true, ...(picked.x2 ? { x2: true } : {}) };
         events.push({ t: "game", game: slot.event, bet: cost, plain: true });
       }
     } else if (kind === "accident") {
@@ -622,7 +628,7 @@
         events.push({ t: "sure", amount });
         gain += ball(state, card, me, random, events, cost);
       } else {
-        state.pending = { game: slot, bet: cost };
+        state.pending = { game: slot, bet: cost, ...(picked.x2 ? { x2: true } : {}) };
         events.push({ t: "game", game: slot, bet: cost });
       }
     }
@@ -630,7 +636,7 @@
     // others, a jackpot, or an event game settled afterwards) counts twice, by at most x2Cap times the bet.
     if (picked.x2) {
       const extra = Math.max(-RULES.x2Cap * cost, Math.min(RULES.x2Cap * cost, gain));
-      events.push({ t: "item", id: "x2" }, { t: "x2", amount: extra });
+      events.push({ t: "item", id: "x2" }, { t: "x2", amount: extra, ...(state.pending?.x2 || state.bonus?.some((b) => b.x2) ? { later: true } : {}) });
       gain += extra;
     }
     state.won += gain;
@@ -706,21 +712,31 @@
       card = clone(sharedCard),
       events = [],
       bet = state.pending.bet,
-      plain = state.pending.plain === true;
+      plain = state.pending.plain === true,
+      x2 = state.pending.x2 === true;
     state.pending = null;
-    let gain;
+    let gain, gameNet;
     if (m > 0) {
       gain = money(bet * (1 + m));
+      gameNet = gain - bet;
       events.push({ t: "result", outcome: "win", amount: gain, net: gain - bet });
       if (!plain) gain += ball(state, card, me, random, events, bet);
     } else if (m === 0) {
       gain = money(bet * RULES.eventPay.push);
+      gameNet = gain - bet;
       events.push({ t: "result", outcome: "push", amount: gain, net: gain - bet });
     } else {
       // A loss costs the bet and, as in the casino, what the game loses beyond it (a double, a ヒフミ ×2, a
       // parent's ゾロ目 ×3): the bet is already paid, so a loss of ×2 pays back −1 × the bet.
       gain = money(bet * (1 + m));
+      gameNet = gain - bet;
       events.push({ t: "result", outcome: "lose", amount: gain, net: gain - bet });
+    }
+    // 倍がけ used on the roll that started the game: the game's own result (what it paid or took besides the bet) counts twice.
+    if (x2) {
+      const extra = Math.max(-RULES.x2Cap * bet, Math.min(RULES.x2Cap * bet, gameNet));
+      gain += extra;
+      events.push({ t: "x2", amount: extra });
     }
     state.won += gain;
     state.best = Math.max(state.best || 0, gain);
@@ -764,7 +780,7 @@
       jackpots: events.filter((e) => e.t === "jackpot").map((e) => e.kind),
     };
   }
-  const api = { RULES, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, kindNow, itemsOf, revOf, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  const api = { RULES, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, kindNow, itemsOf, revOf, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, bonusGain, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);
