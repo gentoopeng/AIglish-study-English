@@ -77,7 +77,7 @@
   const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
     "1回の賭けは100。ログイン中はポイント、ゲストとオフラインは練習チップで遊びます。",
-    "通常マス：ルーレット（−5倍〜+7倍。マイナスで足りない分は、カジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回、「●」はボール、「STOP」「H&L」はミニゲーム。たまに「BONUS」が出ます。",
+    "通常マス：ルーレット（−5倍〜+5倍。マイナスで足りない分は、カジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回、「●」はボール、「STOP」「H&L」はミニゲーム。たまに「BONUS」が出ます。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・確定ボールのどれか。勝つと配当とボール、引き分けは賭けが戻ります。",
     "！（アクシデント）：2〜6倍が引かれる、3マス戻る、STARTに戻る。+1〜+6倍がもらえる枠もあります。",
     "STARTを通ると、ボールが1個出ます。",
@@ -934,8 +934,9 @@
     const ids = view.armed.ids;
     if (ids.includes(id)) view.armed.ids = ids.filter((x) => x !== id);
     else {
-      // The two kinds of dice do not go together.
-      view.armed.ids = [...ids.filter((x) => !(id === "dice2" && x === "exact") && !(id === "exact" && x === "dice2")), id];
+      // The three ways of moving (ダブル, トリプル, ぴったり) do not go together: choosing one drops the others.
+      const MOVES = ["dice2", "dice3", "exact"];
+      view.armed.ids = [...ids.filter((x) => !(MOVES.includes(id) && MOVES.includes(x))), id];
     }
     hud();
   }
@@ -1176,16 +1177,25 @@
       state = view.state,
       me = api.uid();
     const use = useNow();
+    // Worked out at once on the card as last seen. Most rolls draw no ball and leave the card
+    // alone, so they need no cloud round trip; a ball (or a part waiting for this player) does.
+    // (A roll the rules refuse, e.g. two ways of moving, stops here and nothing is spent.)
+    const tape = [];
+    let local;
+    try {
+      local = S.roll(state, view.card, cost, recorder(tape), me, use);
+    } catch (error) {
+      console.warn("[sugoroku] roll refused", error);
+      view.armed = { ids: [], face: 0 };
+      hud();
+      return say("そのアイテムの組み合わせでは振れません。選び直してください", "is-loss");
+    }
     view.armed = { ids: [], face: 0 };
     view.busy = true;
     hud();
     markHere();
     view.die.shake();
-    // Worked out at once on the card as last seen. Most rolls draw no ball and leave the card
-    // alone, so they need no cloud round trip; a ball (or a part waiting for this player) does.
-    const tape = [],
-      local = S.roll(state, view.card, cost, recorder(tape), me, use),
-      touches = local.events.some((e) => e.t === "ball") || view.card.owed?.[me] > 0;
+    const touches = local.events.some((e) => e.t === "ball") || view.card.owed?.[me] > 0;
     let result,
       shownEarly = 0,
       early = null,

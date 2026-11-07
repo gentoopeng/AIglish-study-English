@@ -74,10 +74,10 @@
         // The top of the wheel is a 確変 slot: it starts the 確変 wheel below, which holds the
         // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
         ...KAKU(1),
-        // High risk, high return: a bad slot takes −2 to −5 times the bet, a good one gives 3 to 7 times.
-        ...N(-5, 4), ...N(-2, 3), ...N(-1, 2),
-        ...N(0, 5), ...ITEM(2),
-        ...N(0.5, 2), ...N(1, 2), ...N(2, 2), ...N(3), ...N(5, 2), ...N(4), ...N(7),
+        // High risk, high return: a bad slot takes −1 to −5 times the bet, a good one gives up to 5 times.
+        ...N(-5, 3), ...N(-2, 2), ...N(-1, 2),
+        ...N(0, 6), ...ITEM(2),
+        ...N(0.5, 3), ...N(1, 3), ...N(2, 2), ...N(3), ...N(4, 2), ...N(5),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -91,11 +91,11 @@
     // 倍がけ doubles what a roll pays or takes, by at most this many times the bet.
     x2Cap: 10,
     items: {
-      dice2: { name: "ダブルダイス", price: 20 },
-      dice3: { name: "トリプルダイス", price: 30 },
-      exact: { name: "ぴったり", price: 120 },
-      guard: { name: "ガード", price: 80 },
-      x2: { name: "倍がけ", price: 100 },
+      dice2: { name: "ダブルダイス", price: 40 },
+      dice3: { name: "トリプルダイス", price: 80 },
+      exact: { name: "ぴったり", price: 300 },
+      guard: { name: "ガード", price: 150 },
+      x2: { name: "倍がけ", price: 200 },
     },
     itemWheel: spread([...GET("dice2", 4), ...GET("dice3"), ...GET("exact"), ...GET("guard", 2), ...GET("x2", 2)]),
     // The 確変 wheel (after a 確変 slot of the normal wheel): x pays the bet × x; balls draws that
