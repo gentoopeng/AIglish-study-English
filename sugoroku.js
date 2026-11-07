@@ -46,7 +46,7 @@
     dice2: { n: "ダブルダイス", d: "サイコロを2個振って、合計だけ進みます", img: "die", dice: 2 },
     dice3: { n: "トリプルダイス", d: "サイコロを3個振って、合計だけ進みます", img: "die", dice: 3 },
     exact: { n: "ぴったり", d: "出目を1〜6から選べます", img: "die-gold" },
-    guard: { n: "ガード", d: "この回から5回、アクシデントのマスが無効になります", img: "shield" },
+    guard: { n: "ガード", d: "この回から5回、アクシデントのマイナスが無効になります（プラスは入ります）", img: "shield" },
     x2: { n: "倍がけ", d: "この回の払い戻しと支払いが2倍になります（増減とも最大で賭け額の10倍まで）", img: "potion" },
   };
   // An item's picture: the dice are stacked (two or three of the same die, a little turned).
@@ -79,11 +79,11 @@
     "ログインしているときはポイント、ゲストやオフラインのときは練習チップで遊びます。1回の賭けは100です。",
     "通常マス：ルーレットで −×5 〜 ×7 が額に掛かって戻ります（−は額とは別に引かれ、足りない分はカジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回（勝てば配当、負けると賭けた分はなくなります）、「●」はボール、「STOP」「H&L」はミニゲームです。たまに「BONUS」ルーレットが当たり、大きな配当やボール5個連続が出ます。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・ボール確定のどれか。勝てば配当とボール、引き分けは額が戻ります。サイコロは本当に振っていて、相手の目も見えます。",
-    "！（アクシデント）：額の0〜2倍が引かれるか、3マス戻るか、STARTに戻ります。",
+    "！（アクシデント）：額の2〜6倍が引かれるか、3マス戻るか、STARTに戻ります。額の1〜6倍がもらえる枠もあります。",
     "100マスで1周してSTARTを通ると、ボールが1つ出ます。",
-    "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選で、開いていない番号なら自分のボールが入ります。すでに開いている番号は額の2倍がもらえます。★の数字（特別な数字）が出ると、スペシャルルーレットが回ります。1列そろうとビンゴ賞金とビンゴルーレット。そろった列のボールは戻ります。",
-    "ビンゴ賞金の7割と、ルーレットの倍率の5割は、その列にボールを置いていた人でボールの数に応じて分けます（そろえた人のボールも数えます）。ほかの人の分は、その人が開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
-    "通常マスの「ITEM」で、アイテムルーレットが回ります。アイテムは3個まで持て、ショップでも買えます。振る前に押して使います。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（5回アクシデント無効）・倍がけ（この回の増減が2倍）。持ちきれないときは、値段の半分がもらえます。",
+    "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選で、開いていない番号なら自分のボールが入ります。すでに開いている番号は額の1.5倍がもらえます。★の数字（特別な数字）が出ると、スペシャルルーレットが回ります。1列そろうとビンゴ賞金とビンゴルーレット。そろった列のボールは戻ります。",
+    "ビンゴ賞金の7割と、ルーレットの倍率の5割は、その列にボールを置いていた人でボールを置いたときの賭け額に応じて分けます（そろえた人のボールも数えます）。ほかの人の分は、その人が開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
+    "通常マスの「ITEM」で、アイテムルーレットが回ります。アイテムは「×個数」でためられ、ショップでも買えます。ルーレットが回るたびに、アイテムに加えて額と同じだけのポイントも入ります。振る前に押して使います。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（5回マイナスの枠が無効）・倍がけ（この回の増減が2倍）。",
     "ジャックポットは、カジノでディーラー相手に賭けられたポイントから貯まります。",
     "「早送り」にすると、ふだんのマスは短く進みます。★マスは自動で進み、盤面をタップするとその回を飛ばせます。",
     "ほかの人のビンゴの分け前は、30日受け取らないと消えます。",
@@ -840,28 +840,32 @@
       cell.classList.toggle("has-icon", !!who?.i);
     });
   }
-  // The bag: up to three items (tap one to use it on the next roll), and the shop.
+  // The bag: each kind held with a count ×n (tap one to use it on the next roll), and the shop.
   function paintItems() {
     if (!view.itemBar) return;
-    const held = S.itemsOf(view.state);
-    view.armed.ids = view.armed.ids.filter((id) => held.includes(id));
+    const held = S.itemsOf(view.state),
+      counts = {};
+    for (const id of held) counts[id] = (counts[id] || 0) + 1;
+    view.armed.ids = view.armed.ids.filter((id) => counts[id]);
     if (!view.armed.ids.includes("exact")) view.armed.face = 0;
     const locked = view.busy || !!view.state.pending;
     view.itemBar.replaceChildren();
-    for (let i = 0; i < S.RULES.itemMax; i++) {
-      const id = held[i],
-        b = node("button", "sg-item" + (id ? "" : " is-empty"));
+    const kinds = Object.keys(ITEM_INFO).filter((id) => counts[id]);
+    if (!kinds.length) {
+      const none = node("button", "sg-item is-empty", "アイテムなし");
+      none.type = "button";
+      none.disabled = true;
+      view.itemBar.append(none);
+    }
+    for (const id of kinds) {
+      const b = node("button", "sg-item");
       b.type = "button";
-      if (id) b.append(itemIcon(id), node("span", "", ITEM_INFO[id].n));
-      else b.textContent = "—";
-      b.disabled = !id || locked;
-      if (id) {
-        b.dataset.item = id;
-        b.title = ITEM_INFO[id].d;
-        // (Two of a kind: only the first lights up.)
-        b.setAttribute("aria-pressed", String(view.armed.ids.includes(id) && held.indexOf(id) === i));
-        b.onclick = () => arm(id);
-      }
+      b.append(itemIcon(id), node("span", "", ITEM_INFO[id].n + " ×" + counts[id]));
+      b.disabled = locked;
+      b.dataset.item = id;
+      b.title = ITEM_INFO[id].d;
+      b.setAttribute("aria-pressed", String(view.armed.ids.includes(id)));
+      b.onclick = () => arm(id);
       view.itemBar.append(b);
     }
     const shop = node("button", "sg-shop", "ショップ");
@@ -904,7 +908,7 @@
     const box = node("div", "sg-sheet sg-shopbox");
     box.append(node("p", "sg-sheet-title", "アイテムショップ"));
     const held = S.itemsOf(view.state);
-    box.append(node("p", "sg-shop-have", "持っているもの " + held.length + "/" + S.RULES.itemMax + "　所持 " + fmt(api.balance()) + api.unit()));
+    box.append(node("p", "sg-shop-have", "持っているもの " + held.length + "個　所持 " + fmt(api.balance()) + api.unit()));
     const list = node("ul", "sg-shop-list");
     for (const [id, info] of Object.entries(ITEM_INFO)) {
       const price = S.RULES.items[id].price,
@@ -1256,13 +1260,13 @@
         say(ITEM_INFO[e.id].n + "！", "is-hot");
         await wait(800);
       } else if (e.t === "itemGet") {
-        say(e.full ? ITEM_INFO[e.id].n + "　持ちきれないので +" + fmt(e.amount) + api.unit() : ITEM_INFO[e.id].n + " をゲット！", e.full ? "is-gain" : "is-hot");
+        say((e.full ? ITEM_INFO[e.id].n + "は持ちきれません　" : ITEM_INFO[e.id].n + " をゲット！　") + "+" + fmt(e.amount) + api.unit(), e.full ? "is-gain" : "is-hot");
         await wait(1200);
       } else if (e.t === "x2") {
         say("倍がけ　" + (e.amount >= 0 ? "+" : "−") + fmt(Math.abs(e.amount)) + api.unit(), e.amount >= 0 ? "is-gain" : "is-hot");
         await wait(1000);
       } else if (e.t === "guarded") {
-        say("ガードで、アクシデントは無効", "is-gain");
+        say("ガードで、マイナスは無効", "is-gain");
         await wait(1000);
       } else if (e.t === "die") {
         say("");
@@ -1322,6 +1326,9 @@
         await wait(1000);
       } else if (e.t === "bonus") {
         say("ミニゲーム：" + MINI[e.game], "is-hot");
+        await wait(900);
+      } else if (e.t === "give") {
+        say("アクシデント　+" + fmt(e.amount) + api.unit(), "is-gain");
         await wait(900);
       } else if (e.t === "take") {
         say("アクシデント　−" + fmt(e.amount) + api.unit(), "is-loss");
@@ -1398,7 +1405,7 @@
   // The colour says what a slot is worth before the label is read.
   function tone(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "ball" : "game-" + slot;
-    if (wheel === "accident") return slot.start ? "worst" : slot.back ? "bad" : slot.take >= 1.5 ? "worst" : slot.take ? "bad" : "safe";
+    if (wheel === "accident") return slot.give ? (slot.give >= 5 ? "gold" : "high") : slot.start ? "worst" : slot.back ? "bad" : slot.take >= 4 ? "worst" : slot.take ? "bad" : "safe";
     if (slot.kakuhen) return "zero";
     if (wheel === "item") return slot.item === "ball" ? "gold" : slot.item === "exact" ? "champagne" : "high";
     if (slot.item === true) return "gold";
@@ -1413,7 +1420,7 @@
   }
   function slotLabel(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "BALL" : { blackjack: "BJ", dice: "DICE", chinchiro: "チンチロ" }[slot];
-    if (wheel === "accident") return slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
+    if (wheel === "accident") return slot.give ? "+×" + slot.give : slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
     // Looks like any ×0 slot: the player finds out when the bonus effect starts.
     if (slot.kakuhen) return "×0";
     if (wheel === "item") return ITEM_INFO[slot.item].n;
@@ -1877,8 +1884,8 @@
     timer: "スタートから心の中で10秒数えて、ちょうど10秒でストップ。3秒で表示が消えます。1,000点から0.01秒ずれるごとに5点減ります。",
     tap: "10秒間、ボタンをできるだけたくさん押してください。1回10点（120回まで）。",
     tapex: "10秒間、ボタンをできるだけたくさん押してください。1回25点（120回まで）。",
-    dice: "サイコロを1回振って、出た目×100点。",
-    math: "15秒以内に計算の答えを入れてください。正解で500点。",
+    dice: "サイコロを3個振って、出た目の合計×50点。",
+    math: "むずかしさを3つから選び、制限時間以内に計算の答えを入れてください。正解で、かんたん300点・ふつう600点・むずかしい1,200点（20秒）。",
     stop: "左右に動く光を、まん中の金色で止めると額の2倍、銀色なら0.75倍。外れると0。5秒たつと外れです。",
     hilo: "めくったカード（A〜K）より次のカードが大きいか小さいかを当てます。当たりで額の1.25倍、同じ数なら1倍、外れると0。",
   };
@@ -2083,36 +2090,57 @@
         go.replaceWith(hi, lo);
       };
     } else if (item.game === "dice") {
-      const cubeBox = cube();
-      show.replaceWith(cubeBox.box);
-      cubeBox.box.classList.add("sg-mini-die");
+      // Three dice; the sum is the score.
+      const count = S.RULES.games.dice.count,
+        cubes = Array.from({ length: count }, () => cube()),
+        tray = node("div", "sg-mini-dice");
+      for (const c of cubes) {
+        c.box.classList.add("sg-mini-die");
+        tray.append(c.box);
+      }
+      show.replaceWith(tray);
       go.textContent = "サイコロを振る";
       go.dataset.sgGame = "roll";
       go.onclick = async () => {
         started(item);
         go.disabled = true;
-        const face = random(6) + 1;
-        await cubeBox.roll(face);
-        end(face, face + "の目");
+        const faces = cubes.map(() => random(6) + 1);
+        await Promise.all(cubes.map((c, i) => c.roll(faces[i])));
+        const total = faces.reduce((n, v) => n + v, 0);
+        end(total, faces.join(" + ") + " = " + total);
       };
     } else {
-      const q = S.sum(random);
-      let typed = "",
-        over = false;
-      show.textContent = "？";
-      const keys = node("div", "sg-keys");
-      const answer = node("p", "sg-mini-answer", "");
-      const submit = () => {
-        if (over) return;
-        over = true;
-        keys.remove();
-        const right = typed !== "" && typed !== "−" && Number(typed.replace("−", "-")) === q.answer;
-        end(right, (right ? "正解" : "ざんねん") + "（答え " + q.answer + "）");
-      };
-      go.onclick = () => {
+      // Mental arithmetic: the level is chosen first (easy 300 / normal 600 / hard 1,200 points).
+      const LEVELS = [
+        ["easy", "かんたん"],
+        ["normal", "ふつう"],
+        ["hard", "むずかしい"],
+      ];
+      show.textContent = "むずかしさを選んでください";
+      const picks = LEVELS.map(([level, label]) => {
+        const b = node("button", "sg-game-btn", label + "　" + fmt(S.gameScore("math", level, item.bet || 100) * item.mult) + "点");
+        b.type = "button";
+        b.dataset.sgGame = "level-" + level;
+        b.onclick = (e) => e.isTrusted && begin(level);
+        return b;
+      });
+      go.replaceWith(...picks);
+      const begin = (level) => {
+        const q = S.sum(random, level);
+        let typed = "",
+          over = false;
         started(item);
-        go.remove();
+        for (const b of picks) b.remove();
         show.textContent = q.text + " =";
+        const keys = node("div", "sg-keys");
+        const answer = node("p", "sg-mini-answer", "");
+        const submit = () => {
+          if (over) return;
+          over = true;
+          keys.remove();
+          const right = typed !== "" && typed !== "−" && Number(typed.replace("−", "-")) === q.answer;
+          end(right ? level : false, (right ? "正解" : "ざんねん") + "（答え " + q.answer + "）");
+        };
         box.insertBefore(answer, line);
         box.insertBefore(keys, line);
         for (const k of ["7", "8", "9", "4", "5", "6", "1", "2", "3", "−", "0", "⌫"]) {
@@ -2134,7 +2162,7 @@
         ok.onclick = (e) => e.isTrusted && submit();
         keys.append(ok);
         const t0 = performance.now(),
-          seconds = S.RULES.games.math.seconds;
+          seconds = S.RULES.games.math[level].seconds;
         const tick = setInterval(() => {
           const left = seconds - (performance.now() - t0) / 1000;
           if (over) return clearInterval(tick);

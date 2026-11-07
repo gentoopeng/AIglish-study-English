@@ -3135,3 +3135,17 @@ Tests: `tests/sugoroku-model.test.cjs` (x2 on any square and its cap, ガード 
 **Now** (`admin-players.js`): the player's button, `resetBalls`, `shared/sugoroku_reset` and `S.resetState/resetCard` are removed. The admin tools have 「すごろくビンゴのボールをリセット」: two presses clear `owners`, `bets` and `people` of `shared/sugoroku_live2` in one transaction; the numbers, `owed`, and the log stay.
 
 Tests: `tests/admin-players.smoke.cjs` (two presses; owners, bets cleared; cells and owed kept).
+
+## 10.38.00.00 すごろくビンゴ: アクシデントの振れ幅、ビンゴの報酬、アイテムの数え方、ミニゲームを変えた
+
+**What the owner said.** 「アクシデントルーレットの−が弱い、もっと強くする代わりに+も大きくすべき／ビンゴの報酬も弱い／ビンゴルーレットのダイスは3ダイスくらいでいい／計算も難易度選択（3つ）／アイテムルーレットはかなり−よりだから+100ptに加えて／袋が満タンとかじゃなくて×○（個）で表記」
+
+**Now** (`sugoroku-model.js`, `sugoroku.js`, `sugoroku.css`):
+- **Accident wheel** (10 slots): −6 / −4 / −3 / −2 times the bet, +1 / +3 / +6 times the bet, 3 squares back, back to START, nothing. The average stays about −50 as before, so only the spread grew. ガード now cancels the bad slots only (the wheel still spins and a + slot pays).
+- **Bingo**: the prize is 8 × the bet (was 5); the bingo wheel's multiples are ×12 / ×20 / ×32 / ×50 (were ×8 / ×15 / ×25 / ×35). To keep the whole game at about 0.92 back (3 players, 300,000 rolls, without jackpots): a ball on an open number pays 1.5 × the bet (was 2), the 確変 wheel is ×4 … ×15 (was ×5 … ×19), and one normal-wheel ×5 slot is ×4.
+- **Bingo wheel mini games**: サイコロ throws three dice and scores the sum × 50 (3 to 18, so 150 to 900; a saved game with one die scores as the sum it has). 暗算 asks for the level first: かんたん (one step, two-digit numbers, 300 points, 15 s), ふつう (as before, 600, 15 s), むずかしい (bigger numbers, 2–3 steps, 1,200, 20 s); a game saved before the levels, answered right, still pays 500.
+- **Items**: kept as a count (×n, `itemMax` = 99), not three slots; every spin of the item wheel pays 100 (`itemCash` × the bet) besides the item; no more "full bag pays half the price" (at the top count the item is skipped and the 100 still pays). The bag shows 「ダブルダイス ×2」; the shop says 「持っているもの N個」.
+
+Measured (3 players, 300,000 rolls, 100 bets): return without jackpots 0.9175 (the accident wheel +0.009, bingo +0.05, the item cash +0.04, offset by the lower miss pay, 確変 and one normal slot).
+
+Tests: `tests/sugoroku-model.test.cjs` (new wheel numbers, guard with a + slot, items ×n and the 100, math levels and the dice sum), `tests/sugoroku.smoke.cjs` (three dice, the math level buttons and a right answer).

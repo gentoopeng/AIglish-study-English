@@ -77,13 +77,15 @@
         // High risk, high return: a bad slot takes −2 to −5 times the bet, a good one gives 3 to 7 times.
         ...N(-5, 4), ...N(-2, 3), ...N(-1, 2),
         ...N(0, 5), ...ITEM(2),
-        ...N(0.5, 2), ...N(1, 2), ...N(2, 2), ...N(3), ...N(5, 3), ...N(7),
+        ...N(0.5, 2), ...N(1, 2), ...N(2, 2), ...N(3), ...N(5, 2), ...N(4), ...N(7),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
-    // Items: at most itemMax held. `price` in points (or chips), and half of it is paid when the item
-    // wheel gives one that does not fit. The item wheel decides which one comes.
-    itemMax: 3,
+    // Items: held as a count of each (itemMax in all). `price` in points (or chips). The item wheel decides
+    // which one comes, and pays itemCash × the bet besides.
+    itemMax: 99,
+    // Every spin of the item wheel also pays this many times the bet.
+    itemCash: 1,
     // ガード keeps accident squares off for this many rolls (the one it is used on and the next ones).
     guardRolls: 5,
     // 倍がけ doubles what a roll pays or takes, by at most this many times the bet.
@@ -101,7 +103,7 @@
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
     // what it paid before the 確変 slots took its top slots.
     kakuhen: spread([
-      ...N(5), ...N(6), ...N(8), ...N(9), ...N(11), ...N(13), ...N(15), ...N(17), ...N(19),
+      ...N(4), ...N(5), ...N(6), ...N(7), ...N(9), ...N(10), ...N(12), ...N(14), ...N(15),
       { x: 0, balls: 5 }, { x: 0, balls: 5 }, { x: 0, balls: 5 },
     ]),
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
@@ -110,18 +112,18 @@
     // Balls are drawn from 1–NUMBERS; the two cards hold all but the special one. A ball on a
     // number that is already open pays this many times the bet instead.
     numbers: 99,
-    missPay: 2,
+    missPay: 1.5,
     // A line made only of the player's own balls pays this many times more.
     soloBonus: 1.1,
     // A part of someone else's line not collected within owedDays is dropped, and the card keeps
     // at most owedMax people's parts (the oldest go first), so it cannot grow without end.
     owedDays: 30,
     owedMax: 200,
-    // Accident wheel: take: multiples of the bet taken on top, back: squares back, start: back to START.
-    accident: [{ take: 0 }, { take: 0.5 }, { back: 3 }, { take: 1 }, { start: true }, { take: 1.5 }, { back: 3 }, { take: 2 }, { take: 0.5 }, { start: true }],
+    // Accident wheel: take: multiples of the bet taken on top, give: multiples of the bet paid, back: squares back, start: back to START.
+    accident: [{ take: 6 }, { take: 4 }, { take: 3 }, { take: 2 }, { give: 1 }, { give: 3 }, { give: 6 }, { back: 3 }, { start: true }, { take: 0 }],
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
-    bingoPrize: 5,
+    bingoPrize: 8,
     // The bingo wheels' mini games score this many times their points.
     bingoGameBoost: 2,
     // Of the bingo prize, this part is shared by the balls on the line (the finisher's own balls
@@ -140,15 +142,15 @@
     },
     // Mini games, scored in points (multiplied like the line's other prizes):
     // timer – stop at 10 seconds: 1,000 less 5 for every 0.01 s off; tap / tapex – taps in 10
-    // seconds × 10 / × 25; dice – the face × 100; math – a sum in 15 seconds, 500 if right.
+    // seconds × 10 / × 25; dice – three dice, the sum × 50; math – a sum of the chosen level (easy 300 / normal 600 / hard 1,200).
     // Taps count up to `max` (12 a second is about as fast as a finger goes; a tapping tool
     // gains nothing past it).
     // stop / hilo are the normal squares' quick games, paid in multiples of the bet: stop the
     // light in the gold (perfect) or silver (good) part of the bar; say whether the next card is
     // higher or lower. In 早送り they are not played and pay `auto`.
     // The slots of the bingo wheel besides the jackpot and the super chance (each twice on the wheel).
-    wheelParts: { others: [{ x: 8 }, { game: "timer" }, { x: 15 }, { game: "tap" }, { game: "dice" }, { x: 35 }, { game: "math" }, { x: 25 }] },
-    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 1, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 25, max: 120 }, dice: { per: 100 }, math: { seconds: 15, prize: 500 } },
+    wheelParts: { others: [{ x: 12 }, { game: "timer" }, { x: 20 }, { game: "tap" }, { game: "dice" }, { x: 50 }, { game: "math" }, { x: 32 }] },
+    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 1, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 25, max: 120 }, dice: { count: 3, per: 50 }, math: { easy: { seconds: 15, prize: 300 }, normal: { seconds: 15, prize: 600 }, hard: { seconds: 20, prize: 1200 } } },
   };
   RULES.normal[50] = RULES.normal[200] = RULES.normal[100];
   // The bingo wheel for a bet (the average bet of the balls on the line): the jackpot and the
@@ -409,8 +411,9 @@
       scale = bet / 100;
     if (game === "timer") return Number.isFinite(Number(done)) ? money(Math.max(0, g.max - Math.round(Math.abs(Number(done) - g.target) * 100) * g.per) * scale) : 0;
     if (game === "tap" || game === "tapex") return money(Math.min(g.max, Math.max(0, Math.floor(Number(done) || 0))) * g.per * scale);
-    if (game === "dice") return money(Math.min(6, Math.max(0, Math.floor(Number(done) || 0))) * g.per * scale);
-    if (game === "math") return done === true ? money(g.prize * scale) : 0;
+    // dice: the sum of the three dice (3 to 18); math: the level that was answered right (true = the old 500).
+    if (game === "dice") return money(Math.min(6 * g.count, Math.max(0, Math.floor(Number(done) || 0))) * g.per * scale);
+    if (game === "math") return done === true ? money(500 * scale) : Object.prototype.hasOwnProperty.call(g, done) ? money(g[done].prize * scale) : 0;
     if (game === "stop" || game === "hilo") return money(bet * (done === "auto" ? g.auto : g.pay[done] || 0));
     return 0;
   }
@@ -426,9 +429,36 @@
     state.best = Math.max(state.best || 0, gain);
     return { state, events: [{ t: "bonusResult", game: game.game, score, mult: game.mult, amount: gain }], gain };
   }
-  // A sum for the mental-arithmetic game: middle-school level, whole numbers, negatives allowed.
-  function sum(random) {
+  // A sum for the mental-arithmetic game, by level. easy: one step with two-digit numbers; normal: middle-school
+  // level, whole numbers, negatives allowed; hard: bigger numbers and two or three steps.
+  function sum(random, level = "normal") {
     const n = (lo, hi) => lo + random(hi - lo + 1);
+    if (level === "easy") {
+      const kind = random(3);
+      if (kind === 0) {
+        const a = n(11, 69), b = n(11, 69);
+        return { text: a + " + " + b, answer: a + b };
+      }
+      if (kind === 1) {
+        const a = n(3, 12), b = n(3, 12);
+        return { text: a + " × " + b, answer: a * b };
+      }
+      const a = n(40, 99), b = n(11, 39);
+      return { text: a + " − " + b, answer: a - b };
+    }
+    if (level === "hard") {
+      const kind = random(3);
+      if (kind === 0) {
+        const a = n(12, 40), b = n(3, 9), c = n(12, 60), d = n(2, 9);
+        return { text: a + " × " + b + " − " + c + " × " + d, answer: a * b - c * d };
+      }
+      if (kind === 1) {
+        const a = n(15, 80), b = n(15, 80), c = n(3, 12), d = n(11, 40);
+        return { text: "(" + a + " − " + b + ") × " + c + " + " + d, answer: (a - b) * c + d };
+      }
+      const a = n(11, 25), b = n(11, 25), c = n(2, 9), d = n(2, 9);
+      return { text: a + " × " + b + " − " + c + " × " + d + " × " + d, answer: a * b - c * d * d };
+    }
     const kind = random(5);
     if (kind === 0) {
       const a = n(2, 30), b = n(2, 30), c = n(2, 9), plus = random(2);
@@ -516,7 +546,7 @@
       const amount = money(cost * slot.x);
       events.push({ t: "wheel", wheel: "normal", slots, index, base: cost, amount });
       gain += amount;
-      if (slot.item) gain += spinItem(state, random, events);
+      if (slot.item) gain += spinItem(state, random, events, cost);
       if (slot.ball) gain += ball(state, card, me, random, events, cost);
       if (slot.kakuhen) {
         const k = pick(RULES.kakuhen, random),
@@ -534,12 +564,18 @@
         state.pending = { game: slot.event, bet: cost, plain: true };
         events.push({ t: "game", game: slot.event, bet: cost, plain: true });
       }
-    } else if (kind === "accident" && guarded) {
-      events.push({ t: "guarded" });
     } else if (kind === "accident") {
       const { index, slot } = pick(RULES.accident, random);
       events.push({ t: "wheel", wheel: "accident", slots: RULES.accident, index, base: cost });
-      if (slot.start) {
+      if (slot.give) {
+        // A good slot pays whether or not the roll is guarded.
+        const amount = money(cost * slot.give);
+        gain += amount;
+        events.push({ t: "give", amount });
+      } else if (guarded && (slot.start || slot.back || slot.take)) {
+        // ガード: the bad slots do nothing.
+        events.push({ t: "guarded" });
+      } else if (slot.start) {
         state.pos = 0;
         events.push({ t: "back", to: 0 });
       } else if (slot.back) {
@@ -575,19 +611,17 @@
     state.best = Math.max(state.best || 0, gain);
     return { state, card, events, gain, cost };
   }
-  // The item wheel: one item for the bag, or, with the bag full, half its price in cash.
-  function spinItem(state, random, events) {
+  // The item wheel: the item goes into the bag (counted ×n; a full bag gets none) and itemCash × the bet is paid besides.
+  function spinItem(state, random, events, cost) {
     const slots = RULES.itemWheel,
-      { index, slot } = pick(slots, random);
+      { index, slot } = pick(slots, random),
+      cash = money(cost * RULES.itemCash);
     events.push({ t: "wheel", wheel: "item", slots, index, base: 0 });
     if (state.items.length < RULES.itemMax) {
       state.items.push(slot.item);
-      events.push({ t: "itemGet", id: slot.item });
-      return 0;
-    }
-    const sold = Math.floor(RULES.items[slot.item].price / 2);
-    events.push({ t: "itemGet", id: slot.item, full: true, amount: sold });
-    return sold;
+      events.push({ t: "itemGet", id: slot.item, amount: cash });
+    } else events.push({ t: "itemGet", id: slot.item, full: true, amount: cash });
+    return cash;
   }
   // Buying an item (the screen takes the price from the wallet): the bag must have room.
   function buy(before, id) {
