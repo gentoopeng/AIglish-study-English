@@ -279,7 +279,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const before = await saved(),
       beforeCard = await card();
     // Die 1 onto START (a ball), START's wheel on its ×0 slot.
-    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event && !x.kakuhen));
+    const zeroAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event && !x.kakuhen && !x.item));
     await fix([0, missNo - 1, zeroAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
@@ -477,8 +477,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       doneCard = await card();
     assert.equal(done.bingos, before20.bingos + 1);
     // A line of only the guest's balls: (bingo prize 700 + × 20 = 2,000 → 2,700) × 1.1, plus START's
-    // wheel (which can take up to five bets more).
-    assert.ok(done.won - before20.won >= 2970 - 500, String(done.won - before20.won));
+    // wheel (which can take up to ten bets more).
+    assert.ok(done.won - before20.won >= 2970 - 1000, String(done.won - before20.won));
     // The finished row starts again: no balls, the same numbers; amy's ball stays.
     assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.ok(doneCard.cells.slice(0, 7).includes(lastNo));

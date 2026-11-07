@@ -46,8 +46,8 @@ test("the board, card and wheels have the agreed shape", () => {
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     assert.equal(S.RULES.accident.filter((x) => x.take === 0).length, 1, "one SAFE on the accident wheel");
-    // High risk, high return: from −10 times the bet to +29; the 確変 wheel holds the biggest multiples and the ball runs.
-    for (const x of [29, 14, 8, 6, 5, 0, -3, -4, -5, -6, -8, -10]) assert.ok(values.has(x), cost + " has ×" + x);
+    // High risk, high return: from −10 times the bet to +18; the 確変 wheel holds the biggest multiples and the ball runs.
+    for (const x of [18, 12, 9, 7, 5, 3, 0, -3, -4, -5, -6, -8, -10]) assert.ok(values.has(x), cost + " has ×" + x);
     assert.equal(S.RULES.normal[cost].filter((slot) => slot.item).length, 5, "five item slots (they pay ×1 and an item)");
     // Some of what is on the wheel really pays the bet back or more (not only the hidden bonus slot).
     assert.ok(S.RULES.normal[cost].filter((slot) => !slot.kakuhen && slot.x >= 1).length >= 3, "a few slots pay ×1 or more");
@@ -201,7 +201,7 @@ test("a line of only the player's own balls pays the solo bonus", () => {
 test("passing START gives a ball and nothing else", () => {
   const card = S.newCard(seq([0])),
     s = { ...S.newState(), pos: S.SIZE - 2 };
-  const zero = S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event);
+  const zero = S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event && !x.item && !x.kakuhen);
   const out = S.roll(s, card, 100, seq([2, draw(closedOn(card)), zero]));
   const lap = out.events.findIndex((e) => e.t === "lap");
   assert.deepEqual(out.events[lap], { t: "lap" });
@@ -667,11 +667,12 @@ test("the split after a bingo: the prize and the wheel by player, what only the 
 });
 
 test("two ways of moving at once are refused by the rules (the screen offers only one of ダブル, トリプル, ぴったり)", () => {
-  const card = S.newCard(seq([0])), from = { ...S.newState(), items: ["dice2", "dice3", "exact"] };
+  const card = S.newCard(seq([0])), from = { ...S.newState(), items: ["dice2", "dice3", "exact"] },
+    zero = S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event && !x.item && !x.kakuhen);
   for (const items of [["dice2", "dice3"], ["dice2", "exact"], ["dice3", "exact"]])
     assert.throws(() => S.roll(from, card, 100, seq([0]), "amy", { items, face: 3 }), /two kinds/, items.join("+"));
   // Any one of them goes with 倍がけ (and a ガード in the bag stays).
-  const ok = S.roll({ ...from, items: ["dice3", "guard", "x2"] }, card, 100, seq([0, 1, 2, 0]), "amy", { items: ["dice3", "x2"] });
+  const ok = S.roll({ ...from, items: ["dice3", "guard", "x2"] }, card, 100, seq([0, 1, 2, zero]), "amy", { items: ["dice3", "x2"] });
   assert.deepEqual(ok.state.items, ["guard"]);
 });
 
