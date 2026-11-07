@@ -83,7 +83,7 @@
     "STARTを通ると、ボールが1個出ます。",
     "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選。開いていない番号なら自分のボールが入り、開いている番号は1.5倍がもらえます。★の数字はスペシャルルーレットです。",
     "1列そろうと、ビンゴ賞金（700）とビンゴルーレット。賞金とルーレットの倍率の5割は、その列のボールの持ち主に、置いたときの賭け額に応じて配られます。ほかの人の分は、その人が次に遊んだときに届き、30日で消えます。ミニゲームとジャックポットは、そろえた人のものです。そろった列のボールは戻ります。",
-    "アイテム：「ITEM」のルーレットで1個もらえ、100ptも入ります。ショップでも買えます。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（5回、マイナスの枠が無効）・倍がけ（この回の増減が2倍）。",
+    "アイテム：「ITEM」のルーレットで1個もらえ、100ptも入ります。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（5回、マイナスの枠が無効）・倍がけ（この回の増減が2倍）。",
     "ジャックポットは、カジノの賭けから貯まります。",
     "「早送り」で、ふだんのマスが短く進みます。盤面をタップすると、その回を飛ばせます。",
   ];
@@ -880,7 +880,7 @@
       cell.classList.toggle("has-icon", !!who?.i);
     });
   }
-  // The bag: each kind held with a count ×n (tap one to use it on the next roll), and the shop.
+  // The bag: each kind held with a count ×n (tap one to use it on the next roll).
   function paintItems() {
     if (!view.itemBar) return;
     const held = S.itemsOf(view.state),
@@ -908,11 +908,6 @@
       b.onclick = () => arm(id);
       view.itemBar.append(b);
     }
-    const shop = node("button", "sg-shop", "ショップ");
-    shop.type = "button";
-    shop.disabled = view.busy;
-    shop.onclick = () => openShop();
-    view.itemBar.append(shop);
     view.facePick.hidden = !view.armed.ids.includes("exact");
     view.facePick.replaceChildren();
     if (!view.facePick.hidden)
@@ -941,53 +936,6 @@
     hud();
   }
   const useNow = () => ({ items: view.armed.ids.slice(), ...(view.armed.ids.includes("exact") ? { face: view.armed.face } : {}) });
-  function openShop(note = "") {
-    if (view.busy) return;
-    const layer = view.layer;
-    layer.className = "sg-layer";
-    layer.hidden = false;
-    const box = node("div", "sg-sheet sg-shopbox");
-    box.append(node("p", "sg-sheet-title", "アイテムショップ"));
-    const held = S.itemsOf(view.state);
-    box.append(node("p", "sg-shop-have", "持っているもの " + held.length + "個　所持 " + fmt(api.balance()) + api.unit()));
-    const list = node("ul", "sg-shop-list");
-    for (const [id, info] of Object.entries(ITEM_INFO)) {
-      const price = S.RULES.items[id].price,
-        li = node("li", "");
-      const text = node("span", "sg-shop-text");
-      text.append(node("b", "", info.n), node("small", "", info.d));
-      const buy = node("button", "sg-game-btn", fmt(price) + api.unit());
-      buy.type = "button";
-      buy.dataset.buy = id;
-      buy.disabled = held.length >= S.RULES.itemMax || api.balance() < price;
-      buy.onclick = () => buyItem(id);
-      li.append(itemIcon(id), text, buy);
-      list.append(li);
-    }
-    const out = node("p", "sg-shop-note", typeof note === "string" ? note : "");
-    const close = node("button", "sg-game-btn", "閉じる");
-    close.type = "button";
-    close.onclick = () => (layer.hidden = true);
-    box.append(list, out, close);
-    layer.replaceChildren(box);
-  }
-  function buyItem(id) {
-    if (view.busy) return;
-    const price = S.RULES.items[id].price;
-    if (api.balance() < price) return openShop("足りません");
-    let bought;
-    try {
-      bought = S.buy(view.state, id);
-    } catch {
-      return openShop("いっぱいです");
-    }
-    api.round("sugoroku-shop").net(-price, 0);
-    view.state = bought.state;
-    save(bought.state);
-    api.refresh();
-    hud();
-    openShop(ITEM_INFO[id].n + " を買いました");
-  }
   const hue = (id) => [...String(id || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
   function hud() {
     const { state } = view;
