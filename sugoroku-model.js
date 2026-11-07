@@ -660,21 +660,44 @@
     return { state, card, events, gain };
   }
 
-  // What an event game pays back for each way it can end (the bet was taken when the die was rolled, so
-  // `back` is what returns and `net` is back less the bet), for the screen's table before the game starts.
-  // m is the game's own result as multiples of the bet; a loss, however big, takes the bet only.
-  const PAY_ROWS = {
-    blackjack: [["blackjack", 1.5], ["win", 1], ["push", 0], ["lose", -1]],
-    dice: [["win", 1], ["push", 0], ["lose", -1]],
-    chinchiro: [["pinzoro", 5], ["zoro", 3], ["shigoro", 2], ["win", 1], ["push", 0], ["lose", -1]],
-  };
-  function payTable(game, bet, plain) {
-    return (PAY_ROWS[game] || []).map(([key, m]) => {
-      const back = m > 0 ? money(bet * (1 + m)) : m === 0 ? money(bet * RULES.eventPay.push) : plain ? 0 : money(bet * RULES.eventPay.lose);
-      return { key, m, back, net: back - bet, ball: m > 0 && !plain };
-    });
+  // Who got what from the lines of one roll, for the pop-up that follows a bingo: the prize and the wheel's
+  // multiples (what the finisher keeps is under `me`, the others' parts by id), and the things only the
+  // finisher gets (mini games, jackpots). null when the roll made no line.
+  function bingoSplit(events, me) {
+    const lines = events.filter((e) => e.t === "line");
+    if (!lines.length) return null;
+    const rows = {},
+      add = (id, key, n) => {
+        if (!n) return;
+        rows[id] = rows[id] || { id, prize: 0, wheel: 0, total: 0 };
+        rows[id][key] += n;
+        rows[id].total += n;
+      };
+    let prize = 0,
+      wheel = 0;
+    for (const e of events) {
+      if (e.t === "prize") {
+        prize += e.total;
+        add(me, "prize", e.amount);
+        for (const [id, n] of Object.entries(e.shares || {})) add(id, "prize", n);
+      } else if (e.t === "wheel" && e.wheel === "bingo" && Number.isFinite(e.total)) {
+        wheel += e.total;
+        add(me, "wheel", e.amount);
+        for (const [id, n] of Object.entries(e.shares || {})) add(id, "wheel", n);
+      }
+    }
+    return {
+      count: lines.reduce((n, e) => n + e.count, 0),
+      mult: lines[0].mult,
+      solo: lines.every((e) => e.solo),
+      prize,
+      wheel,
+      rows: Object.values(rows).sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : b.total - a.total)),
+      games: events.filter((e) => e.t === "bonus").map((e) => e.game),
+      jackpots: events.filter((e) => e.t === "jackpot").map((e) => e.kind),
+    };
   }
-  const api = { RULES, payTable, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, buy, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  const api = { RULES, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, buy, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);

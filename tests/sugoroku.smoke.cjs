@@ -51,12 +51,13 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
 
     const saved = () => page.evaluate((name) => JSON.parse(localStorage.getItem(name)), SAVE);
     const card = () => page.evaluate((name) => JSON.parse(localStorage.getItem(name)), CARD);
-    const settled = () => page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning") && (!document.querySelector(".sg-go").disabled || document.querySelector(".sg-layer.is-game:not([hidden])")));
+    // (The pop-up that follows a bingo with other players' balls is closed on the way.)
+    const settled = () => page.waitForFunction(() => (document.querySelector('[data-sg-split="close"]')?.click(), !document.querySelector(".cs-body.is-spinning") && (!document.querySelector(".sg-go").disabled || document.querySelector(".sg-layer.is-game:not([hidden])"))));
     // Play an event game or a normal square's quick game through to the end whatever it is.
     const playGame = async () => {
       const layer = screen.locator(".sg-layer.is-game:not([hidden])");
       for (let i = 0; i < 60 && (await layer.count()); i++) {
-        for (const name of ["begin", "next", "stand", "roll", "start", "stop", "flip", "high"]) {
+        for (const name of ["next", "stand", "roll", "start", "stop", "flip", "high"]) {
           const b = layer.locator('[data-sg-game="' + name + '"]');
           if ((await b.count()) && (await b.isEnabled())) {
             await b.click();
@@ -112,10 +113,6 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
     const game = screen.locator(".sg-layer.is-game:not([hidden])");
-    // A new event game first shows what each result gives back (the bet of 50 was taken already).
-    assert.deepEqual(await game.locator(".sg-paylist li").allInnerTexts().then((rows) => rows.map((r) => r.replace(/\s+/g, " "))), ["勝ち 100pt +50", "引き分け 50pt ±0", "負け 0pt −50"].map((t) => t.replace("pt", "枚")));
-    assert.match(await game.innerText(), /勝つとボールが1個出ます/);
-    await game.locator('[data-sg-game="begin"]').click();
     await game.locator(".sg-die-btn").first().waitFor();
     assert.equal(await game.locator(".sg-die-btn").count(), 5);
     await game.locator(".sg-die-btn").first().click();
@@ -150,7 +147,6 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await game.locator('[data-sg-game="begin"]').click();
     // (A deal that is already over, a blackjack, has no おまかせ: it just goes on.)
     if ((await saved()).pending?.round?.done !== true) await game.locator('[data-sg-game="auto"]').click({ timeout: 3000 }).catch(() => {});
     await page.waitForFunction((name) => JSON.parse(localStorage.getItem(name)).pending === null, SAVE);
@@ -168,8 +164,6 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
-    assert.equal(await game.locator(".sg-paylist li").count(), 6, "pinzoro, zoro, shigoro, a win, a draw and a loss");
-    await game.locator('[data-sg-game="begin"]').click();
     await game.locator(".sg-hand span", { hasText: /^親.*投目/ }).waitFor();
     const parentThrows = (await saved()).pending.round.parent.rolls.length;
     assert.ok(parentThrows >= 1 && parentThrows <= 3);
@@ -390,6 +384,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await fix([0, nextNo - 1, await wheelAt('x.game === "timer"'), zeroAt]);
     const beforeMini = await saved();
     await screen.locator("[data-sg-roll]").click();
+    // amy's balls share the line: the split pop-up comes first (amy's six balls, 100 each, and the guest's one).
+    await screen.locator('[data-sg-split="close"]').click({ timeout: 20000 });
     const mini = screen.locator(".sg-layer.is-mini:not([hidden])");
     await mini.locator('[data-sg-game="start"]').waitFor();
     assert.match(await mini.locator(".sg-wheel-title").innerText(), /10秒ぴったり/);

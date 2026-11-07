@@ -579,20 +579,22 @@ test("a line of balls laid at 100 pays the bingo prize on 100; a game saved with
   assert.equal(S.gameScore("stop", "perfect", 100), 200);
 });
 
-test("the table shown before an event game: what each result gives back, from the bet", () => {
-  const rows = (game, bet, plain) => S.payTable(game, bet, plain).map((r) => [r.key, r.back, r.net]);
-  assert.deepEqual(rows("blackjack", 100, false), [["blackjack", 250, 150], ["win", 200, 100], ["push", 100, 0], ["lose", 0, -100]]);
-  assert.deepEqual(rows("dice", 50, true), [["win", 100, 50], ["push", 50, 0], ["lose", 0, -50]]);
-  assert.deepEqual(rows("chinchiro", 100, true).map((r) => r[1]), [600, 400, 300, 200, 100, 0]);
-  // Only a win on the event square gives a ball.
-  assert.deepEqual(S.payTable("blackjack", 100, false).map((r) => r.ball), [true, true, false, false]);
-  assert.ok(S.payTable("blackjack", 100, true).every((r) => !r.ball));
-  assert.deepEqual(S.payTable("nope", 100, false), []);
-  // The table agrees with what settle() really pays for the same results.
-  const card = S.newCard(seq([0])), s = { ...S.newState(), pos: at("event") - 1 };
-  const out = S.roll(s, card, 100, seq([0, 0]));
-  for (const row of S.payTable("blackjack", 100, false)) {
-    const done = S.settle(out.state, card, row.m, seq([draw(card.cells[0])]));
-    assert.equal(done.events.find((e) => e.t === "result").amount, row.back);
-  }
+test("the split after a bingo: the prize and the wheel by player, what only the finisher gets", () => {
+  const out = lineReady([slot("bingo", (x) => x.x === 12)]);
+  const split = S.bingoSplit(out.events, "amy");
+  assert.equal(split.count, 1);
+  assert.equal(split.prize, 700);
+  assert.equal(split.wheel, 1200);
+  // amy first, then the others; ben's 6 balls of 7: 600 of the prize and 514 of the wheel.
+  assert.deepEqual(split.rows.map((r) => [r.id, r.prize, r.wheel, r.total]), [["amy", 100, 1200 - 514, 100 + 1200 - 514], ["ben", 600, 514, 1114]]);
+  assert.equal(split.rows.reduce((n, r) => n + r.total, 0), split.prize + split.wheel, "everything on the wheel goes to someone");
+  assert.deepEqual([split.games, split.jackpots], [[], []]);
+  // A jackpot or a mini game is the finisher's alone, and listed.
+  const jp = S.bingoSplit(lineReady([slot("bingo", (x) => x.jackpot === "jp")]).events, "amy");
+  assert.deepEqual(jp.jackpots, ["jp"]);
+  assert.equal(jp.wheel, 0);
+  const game = S.bingoSplit(lineReady([slot("bingo", (x) => x.game === "timer")]).events, "amy");
+  assert.deepEqual(game.games, ["timer"]);
+  // No line, nothing to show.
+  assert.equal(S.bingoSplit(S.roll({ ...S.newState(), pos: at("normal") - 1 }, S.newCard(seq([0])), 100, seq([0, 0])).events, "amy"), null);
 });
