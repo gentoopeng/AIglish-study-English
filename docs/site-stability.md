@@ -3179,3 +3179,14 @@ Tests: `tests/sugoroku-model.test.cjs` (the table and settle agree), `tests/sugo
 **Now** (`sugoroku-model.js` `bingoSplit`, `sugoroku.js` `splitSheet`, `sugoroku.css`): the list before blackjack / dice poker / chinchiro is removed (`payTable`, its pop-up, its test). After a roll that made a line, when someone besides the finisher had a ball on it, a pop-up 「ビンゴの分け前」 shows the prize and the wheel's multiple and, per player, the balls on the line, the part of the prize, the part of the wheel and the total (あなた first), and notes that the others' parts arrive when they next play and that mini games and jackpots are the finisher's alone. It is skipped in 早送り and when everything was the player's own. The single-ball slot's brighter look from 10.40 stays.
 
 Tests: `tests/sugoroku-model.test.cjs` (`bingoSplit` adds up to prize + wheel), `tests/sugoroku-shared.smoke.cjs` (the pop-up's rows and note), `tests/sugoroku.smoke.cjs` (it comes before the mini game).
+
+## 10.42.00.00 いらない文言を短くした（すごろくビンゴのルール、使い方ガイド、ポイント・ポーカー・ワークなどの説明）
+
+**What the owner said.** 「いらない文言は直しまくってください」
+
+**Now.** Only the wording changed; no rule or number did.
+- `sugoroku.js` the rules sheet: 11 items → 10, each shorter, and the numbers brought up to date (1.5× for an open number, the prize 700, items ×n with 100 more, the other players' parts of a bingo kept 30 days — said once). `usage-guide-content.js` the すごろくビンゴ section: 9 items, shorter, with the new bingo split, the math levels and the three dice mentioned once.
+- `study-points-ui.js` (the bet limit, the study-time points, the word points), `poker-tutorial.js` (the end of a hand, the blinds, the four moves), `reader.js` (the busy message), `workbook.js` (the line format, the delete note), `save-system.js` (the auto-save note), `usage-guide.js` (the login steps): sentences that said a thing twice or described what the screen already shows are cut.
+- `tests/sugoroku.smoke.cjs`: practice chips stop at 0, so the balance is compared with `max(0, …)` (the bigger accident slots can take more than is left).
+
+Tests: the whole suite.

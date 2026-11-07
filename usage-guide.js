@@ -1,7 +1,7 @@
 // The usage guide overlay: its quick start, the sections (from usage-guide-content.js), and the
 // sidebar entry. Moved out of app.js, where it was injected by a patch; styles are in usage-guide.css.
 window.__USAGE_GUIDE_STEPS = [
-    { icon: 'user-check', head: 'アカウントを作る／ログインする', desc: '初めての方は「新規作成」で表示名と4桁の暗証番号を決めます。表示されたIDは次回のログインに使うので、メモしておいてください。2回目からはIDと暗証番号でログインします。' },
+    { icon: 'user-check', head: 'アカウントを作る／ログインする', desc: '初めての方は「新規作成」で表示名と4桁の暗証番号を決めます。表示されたIDは次回のログインに使うので、メモしてください。2回目からはIDと暗証番号でログインします。' },
     { icon: 'book-marked', head: '単語帳で単語を覚える', desc: '単語をタップして意味を確認し、右の4つのボタンで理解度を付けます。○は覚えた、△はあいまい、×はまだ、ーは付け直しです。' },
     { icon: 'zap', head: 'フラッシュ単語で定着させる', desc: '単語帳一覧の「›」からフラッシュ単語を開始できます。' }
 ];

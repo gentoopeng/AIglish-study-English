@@ -82,7 +82,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.equal(after.rolls, 4);
     assert.equal(after.bet, 400);
     assert.equal(after.pending, null);
-    assert.equal(await page.evaluate(() => window.Casino.balance()), start - 400 + after.won);
+    // (Practice chips stop at 0: the bigger accident slots can take more than is left.)
+    assert.equal(await page.evaluate(() => window.Casino.balance()), Math.max(0, start - 400 + after.won));
     const afterCard = await card();
     assert.equal(await screen.locator(".sg-cell.is-on").count(), afterCard.owners.filter((o) => o && o !== "*").length);
     assert.equal(await screen.locator(".sg-cell.is-mine").count(), afterCard.owners.filter((o) => o === "GUEST-000").length);

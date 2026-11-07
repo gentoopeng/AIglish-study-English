@@ -499,7 +499,7 @@ function openSavePanel() {
         '<button class="sv-tab" id="svTabLoad">ロード</button>' +
       '</div>' +
       '<div class="sv-body" id="svBody"></div>' +
-      '<div class="sv-note">オートセーブは3分ごと・データ変更時・画面を閉じる時に自動で保存されます。<br>セーブデータは端末とクラウドの両方に保存されるので、機種変更しても引き継げます。</div>' +
+      '<div class="sv-note">オートセーブは3分ごと・データ変更時・画面を閉じる時に行います。<br>端末とクラウドの両方に保存するので、機種変更しても引き継げます。</div>' +
     '</div>';
   document.body.appendChild(m);
   m.querySelector('#svCloseBtn').addEventListener('click', closeSavePanel);

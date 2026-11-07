@@ -154,7 +154,7 @@ const { chromium, webkit } = require("playwright"),
       /ワークの学習記録/,
     );
     await page.getByRole("button", { name: "獲得方法", exact: true }).click();
-    assert.match(await page.locator(".points-methods").innerText(), /どの方法で答えても1単語2pt/);
+    assert.match(await page.locator(".points-methods").innerText(), /方法を問わず、1単語2pt/);
     assert.equal(
       await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth,
