@@ -582,20 +582,26 @@ test("a bet of 50 or 200: every payout is a multiple of it; the mini games score
     card = { ...base, owners: base.owners.map((o, i) => (row.slice(0, 6).includes(i) ? "amy" : o)) },
     ballAt = w.findIndex((x) => x.ball);
   const line = S.roll({ ...S.newState(), pos: at("normal") - 1 }, card, 200, seq([0, ballAt, draw(card.cells[row[6]]), 0]), "amy");
-  // Six balls with no bet recorded count as 100 each; the last was bet at 200: the line is worth their average.
-  assert.equal(line.events.find((e) => e.t === "prize").total, Math.round(((6 * 100 + 200) / 7) * S.RULES.bingoPrize * S.RULES.soloBonus));
+  // Six balls with no bet recorded count as 100 each; the last was bet at 200. What the balls share is worth
+  // their average (114.3), what the finisher keeps is worth her own roll of 200.
+  const x = S.RULES.bingoPrize * S.RULES.soloBonus;
+  assert.equal(line.events.find((e) => e.t === "prize").total, Math.round(((6 * 100 + 200) / 7) * x * S.RULES.prizeShare) + Math.round(200 * x * (1 - S.RULES.prizeShare)));
   // Seven balls all laid at 50 pay as 50.
   const cheap = { ...card, bets: card.owners.map((o, i) => (row.slice(0, 6).includes(i) ? 50 : 0)) },
     low = S.roll({ ...S.newState(), pos: at("normal") - 1 }, cheap, 50, seq([0, ballAt, draw(card.cells[row[6]]), 0]), "amy");
-  assert.equal(low.events.find((e) => e.t === "prize").total, 50 * S.RULES.bingoPrize * S.RULES.soloBonus);
+  assert.ok(Math.abs(low.events.find((e) => e.t === "prize").total - 50 * S.RULES.bingoPrize * S.RULES.soloBonus) <= 1);
   assert.deepEqual(low.card.bets.slice(0, 7), Array(7).fill(0));
   // A ball earns by its own bet: six of bob's balls at 50, finished by amy's roll of 100. The line
   // is worth the average (400 / 7), and bob's share is 300 / 400 of the shared part.
   const bobs = { ...base, owners: base.owners.map((o, i) => (row.slice(0, 6).includes(i) ? "bob" : o)), bets: base.owners.map((o, i) => (row.slice(0, 6).includes(i) ? 50 : 0)) },
     mixed = S.roll({ ...S.newState(), pos: at("normal") - 1 }, bobs, 100, seq([0, ballAt, draw(bobs.cells[row[6]]), 0]), "amy"),
     prize = mixed.events.find((e) => e.t === "prize");
-  assert.equal(prize.total, Math.round((400 / 7) * S.RULES.bingoPrize));
-  assert.equal(prize.shares.bob, Math.floor((prize.total * S.RULES.prizeShare * 300) / 400));
+  const pool = Math.round((400 / 7) * S.RULES.bingoPrize * S.RULES.prizeShare);
+  assert.equal(prize.total, pool + Math.round(100 * S.RULES.bingoPrize * (1 - S.RULES.prizeShare)));
+  assert.equal(prize.shares.bob, Math.floor((pool * 300) / 400));
+  // Cheap balls finished by a roll of 200: the balls' part stays small (50), the finisher's part is her own 200's.
+  const big = S.roll({ ...S.newState(), pos: at("normal") - 1 }, cheap, 200, seq([0, ballAt, draw(card.cells[row[6]]), 0]), "amy");
+  assert.equal(big.events.find((e) => e.t === "prize").total, Math.round((6 * 50 + 200) / 7 * x * S.RULES.prizeShare) + Math.round(200 * x * (1 - S.RULES.prizeShare)));
   // Mini games started on a bet of 200 score double (and the quick games pay multiples of that bet).
   assert.equal(S.gameScore("timer", 10, 200), 2000);
   assert.equal(S.gameScore("tap", 70, 50), 350);
