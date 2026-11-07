@@ -776,25 +776,26 @@
     view.facePick = node("div", "sg-faces");
     view.facePick.hidden = true;
     view.info = node("p", "sg-status");
+    // The status line and, while ガード lasts, its badge share one row (no extra height).
+    view.statusRow = node("div", "sg-statusrow");
+    view.statusRow.append(view.info, view.guardEl);
     view.hereEl = node("p", "sg-here");
     view.hereEl.hidden = true;
     view.hereEl.setAttribute("aria-label", "いっしょにプレイ中の人");
 
     const controls = node("div", "sg-controls");
     // One fixed bet for everybody.
-    const costs = node("p", "sg-costs is-fixed");
-    costs.append(node("span", "", "1回"), node("b", "", fmt(view.cost) + api.unit()));
     view.go = node("button", "sg-go", "サイコロを振る");
     view.go.type = "button";
     view.go.dataset.sgRoll = "";
     view.go.onclick = roll;
-    controls.append(costs, view.go);
+    controls.append(view.go);
     view.studyEl = node("p", "sg-study");
     view.studyEl.hidden = true;
 
     view.layer = node("div", "sg-layer");
     view.layer.hidden = true;
-    body.replaceChildren(pots, view.hereEl, cardWrap, board, view.info, view.guardEl, view.itemBar, view.facePick, controls, view.studyEl, view.layer);
+    body.replaceChildren(pots, view.hereEl, cardWrap, board, view.statusRow, view.itemBar, view.facePick, controls, view.studyEl, view.layer);
     paintCard();
     paintHere();
     hud();
@@ -908,16 +909,12 @@
     // ガード: while it lasts, a line says so (with the rolls left) and the board shows a shield border.
     const guardLeft = Math.max(0, Number(view.state.guard) || 0);
     view.guardEl.hidden = !guardLeft;
-    view.guardEl.replaceChildren(...(guardLeft ? [itemIcon("guard"), node("span", "", "ガード発動中　あと" + guardLeft + "回")] : []));
+    view.guardEl.replaceChildren(...(guardLeft ? [itemIcon("guard"), node("span", "", "ガード中 あと" + guardLeft + "回")] : []));
     view.body.classList.toggle("is-guarded", guardLeft > 0);
     view.itemBar.replaceChildren();
     const kinds = Object.keys(ITEM_INFO).filter((id) => counts[id]);
-    if (!kinds.length) {
-      const none = node("button", "sg-item is-empty", "アイテムなし");
-      none.type = "button";
-      none.disabled = true;
-      view.itemBar.append(none);
-    }
+    // No items: no row at all (the card gets the room).
+    view.itemBar.hidden = !kinds.length;
     for (const id of kinds) {
       const b = node("button", "sg-item");
       b.type = "button";

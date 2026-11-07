@@ -206,9 +206,17 @@ const SAVE = "aiglish_sugoroku_sg-a",
         b.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       }
     });
+    // (The score shows only for a moment before the board goes on, so it is recorded as it appears.)
+    await page.evaluate(() => {
+      window.__scores = [];
+      new MutationObserver(() => {
+        const line = document.querySelector(".sg-mini.is-over .sg-game-line");
+        if (line && !window.__scores.includes(line.textContent)) window.__scores.push(line.textContent);
+      }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
+    });
     for (let i = 0; i < 3; i++) await pad.click();
-    await mini.locator(".sg-mini.is-over").waitFor();
-    assert.match(await mini.locator(".sg-game-line").innerText(), /^3回　→　30点/);
+    await page.waitForFunction(() => window.__scores.length > 0);
+    assert.match(await page.evaluate(() => window.__scores[0]), /^3回　→　30点/);
     await page.waitForFunction(() => !document.querySelector(".sg-layer.is-mini:not([hidden])"));
 
     // B, opening the casino tab, sees the part waiting on the すごろくビンゴ tile.

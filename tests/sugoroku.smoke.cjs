@@ -96,8 +96,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.match(await screen.locator(".sg-tip").innerText(), /いまここ/);
     assert.equal(await screen.locator(".sg-tip").count(), 1, "one note at a time");
     // Rolls at 100 chips: chips always = 1000 − bets + what came back.
-    assert.equal(await screen.locator(".sg-costs button").count(), 0, "one fixed bet, nothing to choose");
-    assert.match(await screen.locator(".sg-costs").innerText(), /1回\s*100枚/);
+    assert.equal(await screen.locator(".sg-costs").count(), 0, "no bet box: one fixed bet, nothing to choose");
     const start = await page.evaluate(() => window.Casino.balance());
     for (let i = 0; i < 4; i++) {
       await screen.locator("[data-sg-roll]").click();
@@ -320,7 +319,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").first().waitFor();
-    assert.equal(await screen.locator(".sg-item.is-empty").count(), 1, "no items yet");
+    assert.equal(await screen.locator(".sg-items").isVisible(), false, "no items yet: no row for the bag");
     assert.equal(await screen.getByRole("button", { name: "ショップ" }).count(), 0, "items are not sold");
     // One ダブルダイス in the bag (as if the item wheel had given it).
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
@@ -336,7 +335,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.equal((await screen.locator('.sg-item[data-item="dice2"]').innerText()).trim(), "×1");
     assert.equal(await screen.locator('.sg-item[data-item="dice2"]').getAttribute("aria-label"), "ダブルダイス ×1");
     // ガード in effect: a line says so with the rolls left.
-    assert.match(await screen.locator(".sg-guard:not([hidden])").innerText(), /ガード発動中　あと2回/);
+    assert.match(await screen.locator(".sg-guard:not([hidden])").innerText(), /ガード中 あと2回/);
     // The bag's pictures stay small (a style lost once left them as big as the board).
     for (const img of await screen.locator(".sg-item .sg-ico img").all()) {
       const box = await img.boundingBox();
