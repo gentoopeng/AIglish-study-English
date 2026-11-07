@@ -153,16 +153,16 @@ const SAVE = "aiglish_sugoroku_sg-a",
     assert.equal(await page.evaluate(() => window.__store["users/sg-a/learningPoints/main"].balance), 1920);
     assert.equal(await chips(), start - 200);
 
-    // A ball on the row's last number finishes B's row: 70% of the prize of 800 is shared by the
-    // 7 balls (B's 6 parts, 480, wait on the card for B); of the bingo wheel's × 12 (1,200), 50%
+    // A ball on the row's last number finishes B's row: the prize of 700 is shared by the
+    // 7 balls (B's 6 parts, 600, wait on the card for B); of the bingo wheel's × 12 (1,200), 50%
     // is shared the same way (B's 514), and the line goes in the log with A's name.
     const before = await chips();
     await fix([0, ballAt, row[6] - 1, fiveAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
-    assert.equal(await chips(), before - 100 + (800 - 480) + (1200 - 514));
+    assert.equal(await chips(), before - 100 + (700 - 600) + (1200 - 514));
     const shared = await page.evaluate(() => window.__store["shared/sugoroku_live2"]);
-    assert.deepEqual(shared.owed, { "sg-b": 480 + 514 });
+    assert.deepEqual(shared.owed, { "sg-b": 600 + 514 });
     assert.deepEqual(Object.keys(shared.owedAt), ["sg-b"]);
     assert.deepEqual(shared.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.deepEqual(shared.log.map((e) => [e.t, e.id, e.n, e.c]), [["bingo", "sg-b", "B", 2], ["bingo", "sg-a", "A", 1]]);
@@ -216,7 +216,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
       window.switchTab("casino");
     });
     await tab.locator(".mode-sugoroku .casino-waiting").waitFor();
-    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 994pt 届いています");
+    assert.equal(await tab.locator(".mode-sugoroku .casino-waiting").innerText(), "分け前 1,114pt 届いています");
     await page.evaluate(() => (myId = "sg-a"));
 
     // Opening again with a slow cloud: the screen comes up at once from what this device kept,

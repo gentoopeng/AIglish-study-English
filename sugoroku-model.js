@@ -123,12 +123,12 @@
     accident: [{ take: 6 }, { take: 4 }, { take: 3 }, { take: 2 }, { give: 1 }, { give: 3 }, { give: 6 }, { back: 3 }, { start: true }, { take: 0 }],
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
-    bingoPrize: 8,
+    bingoPrize: 7,
     // The bingo wheels' mini games score this many times their points.
     bingoGameBoost: 2,
     // Of the bingo prize, this part is shared by the balls on the line (the finisher's own balls
     // included); the rest is the finisher's.
-    prizeShare: 0.7,
+    prizeShare: 1,
     // Of what the bingo wheel's ×5 / ×10 / ×20 pays, this part goes to the other players with
     // balls on the line, by their balls (the prize above is shared in full the same way).
     wheelShare: 0.5,
