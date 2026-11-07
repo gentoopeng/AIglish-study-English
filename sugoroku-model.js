@@ -86,8 +86,6 @@
     itemMax: 99,
     // Every spin of the item wheel also pays this many times the bet.
     itemCash: 1,
-    // ガード keeps accident squares off for this many rolls (the one it is used on and the next ones).
-    guardRolls: 3,
     // 倍がけ doubles what a roll pays or takes, by at most this many times the bet.
     x2Cap: 10,
     items: {
@@ -270,7 +268,7 @@
   // Which copy of a game is further on: counts a roll and a purchase (a save from before has only its rolls).
   const revOf = (state) => (Number.isFinite(state?.rev) && state.rev >= 0 ? state.rev : Number(state?.rolls) || 0);
   function newState() {
-    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, best: 0, jps: 0, sjps: 0, shared: 0, pending: null, bonus: [], jpWait: [], items: [], guard: 0, hell: 0, rev: 0 };
+    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, best: 0, jps: 0, sjps: 0, shared: 0, pending: null, bonus: [], jpWait: [], items: [], hell: 0, rev: 0 };
   }
   // A player's own state; an older save (with its own card) keeps its place and counts.
   function valid(state) {
@@ -288,7 +286,7 @@
   function upgrade(state) {
     const { card, marks, lines, cards, ...rest } = state;
     const count = (k) => (Number.isFinite(rest[k]) && rest[k] >= 0 ? rest[k] : 0);
-    return { ...newState(), ...rest, v: 3, bingos: count("bingos"), best: count("best"), jps: count("jps"), sjps: count("sjps"), shared: count("shared"), bonus: Array.isArray(rest.bonus) ? rest.bonus : [], items: itemsOf(rest), guard: Math.min(RULES.guardRolls, count("guard")), hell: Math.min(RULES.hellLaps * SIZE, count("hell")), rev: revOf(rest), jpWait: Array.isArray(rest.jpWait) ? rest.jpWait.filter((k) => k === "jp" || k === "sjp") : [] };
+    return { ...newState(), ...rest, v: 3, bingos: count("bingos"), best: count("best"), jps: count("jps"), sjps: count("sjps"), shared: count("shared"), bonus: Array.isArray(rest.bonus) ? rest.bonus : [], items: itemsOf({ items: [...itemsOf(rest), ...(count("guard") > 0 ? ["guard"] : [])] }), hell: Math.min(RULES.hellLaps * SIZE, count("hell")), rev: revOf(rest), jpWait: Array.isArray(rest.jpWait) ? rest.jpWait.filter((k) => k === "jp" || k === "sjp") : [] };
   }
   const isOpen = (card, i) => card.owners[i] !== "";
   const reach = (card) => LINES.map((_, i) => i).filter((i) => LINES[i].filter((c) => !isOpen(card, c)).length === 1);
@@ -515,7 +513,8 @@
     const picked = {};
     for (const id of Array.isArray(use?.items) ? use.items : []) {
       const at = state.items.indexOf(id);
-      if (at < 0 || picked[id]) throw Error("no such item");
+      // (ガード is not used before a roll: it is spent on a minus with use.guard, below.)
+      if (at < 0 || picked[id] || id === "guard") throw Error("no such item");
       picked[id] = true;
       state.items.splice(at, 1);
     }
@@ -537,12 +536,22 @@
       die = random(6) + 1;
       events.push({ t: "die", value: die });
     }
-    // ガード: this roll and the next two are safe from accident squares.
-    if (picked.guard) {
-      state.guard = RULES.guardRolls;
-      events.push({ t: "item", id: "guard" });
-    }
-    const guarded = state.guard > 0;
+    // ガード: spent on the first minus of the roll (a minus slot, an accident, a super accident slot), once,
+    // when the player says so (use.guard): the minus does nothing and one ガード leaves the bag. A roll with no
+    // minus keeps it. Every minus is announced with a `minus` event, so the player can be asked.
+    if (use?.guard === true && !state.items.includes("guard")) throw Error("no such item");
+    const gate = {
+      seen: false,
+      open: () => !gate.seen && use?.guard === true && state.items.includes("guard"),
+      note(kind, info, blocked) {
+        gate.seen = true;
+        events.push({ t: "minus", kind, ...info });
+        if (blocked) {
+          state.items.splice(state.items.indexOf("guard"), 1);
+          events.push({ t: "guarded" });
+        }
+      },
+    };
     for (let s = 0; s < die; s++) {
       state.pos = (state.pos + 1) % SIZE;
       events.push({ t: "step", to: state.pos });
@@ -559,12 +568,13 @@
     if (kind === "normal" || kind === "start") {
       const slots = RULES.normal[cost],
         { index, slot } = pick(slots, random);
-      // ガード: a minus slot of the normal wheel pays nothing (the plus slots stay).
-      const blocked = guarded && slot.x < 0,
+      // A minus slot: the player may spend a ガード on it (it then pays nothing).
+      const minus = slot.x < 0,
+        blocked = minus && gate.open(),
         amount = blocked ? 0 : money(cost * slot.x),
         spin = { t: "wheel", wheel: "normal", slots, index, base: cost, amount };
       events.push(spin);
-      if (blocked) events.push({ t: "guarded" });
+      if (minus && !gate.seen) gate.note("roulette", { amount: money(cost * -slot.x) }, blocked);
       gain += amount;
       if (slot.item) gain += spinItem(state, random, events, cost);
       if (slot.ball) gain += ball(state, card, me, random, events, cost);
@@ -582,12 +592,14 @@
     } else if (kind === "accident") {
       const { index, slot } = pick(RULES.accident, random);
       events.push({ t: "wheel", wheel: "accident", slots: RULES.accident, index, base: cost });
+      const bad = slot.start || slot.back || slot.take;
+      const blocked = !slot.super && bad && gate.open();
+      if (!slot.super && bad) gate.note("accident", slot.take ? { amount: money(cost * slot.take) } : slot.back ? { back: slot.back } : { start: true }, blocked);
       if (slot.super) {
         // The accident wheel's own way to the super accident wheel.
-        gain += spinSuper(state, card, me, random, events, cost, guarded);
-      } else if (guarded && (slot.start || slot.back || slot.take)) {
-        // ガード: the bad slots do nothing.
-        events.push({ t: "guarded" });
+        gain += spinSuper(state, card, me, random, events, cost, gate);
+      } else if (blocked) {
+        // (ガード spent: nothing happens.)
       } else if (slot.start) {
         state.pos = 0;
         events.push({ t: "back", to: 0 });
@@ -600,7 +612,7 @@
         events.push({ t: "take", amount });
       }
     } else if (kind === "super") {
-      gain += spinSuper(state, card, me, random, events, cost, guarded);
+      gain += spinSuper(state, card, me, random, events, cost, gate);
     } else {
       const { index, slot } = pick(RULES.events, random);
       events.push({ t: "wheel", wheel: "event", slots: RULES.events, index, base: cost });
@@ -621,21 +633,21 @@
       events.push({ t: "item", id: "x2" }, { t: "x2", amount: extra });
       gain += extra;
     }
-    if (state.guard > 0) state.guard--;
     state.won += gain;
     state.best = Math.max(state.best || 0, gain);
     return { state, card, events, gain, cost };
   }
-  // The super accident wheel (10 slots). `guarded`: the bad slots do nothing. Returns what it paid (below 0: took).
-  function spinSuper(state, card, me, random, events, cost, guarded) {
+  // The super accident wheel (10 slots). `gate`: a ガード may be spent on a bad slot. Returns what it paid (below 0: took).
+  function spinSuper(state, card, me, random, events, cost, gate) {
     let gain = 0;
     const { index, slot } = pick(RULES.superAccident, random);
     events.push({ t: "wheel", wheel: "super", slots: RULES.superAccident, index, base: cost });
     const bad = slot.take || slot.resetBalls || slot.resetItems || slot.hell;
-    if (guarded && bad) {
-      // ガード: the bad slots do nothing here either.
-      events.push({ t: "guarded" });
-    } else if (slot.take) {
+    if (bad && !gate.seen) {
+      gate.note("super", slot.take ? { amount: money(cost * slot.take) } : slot.resetBalls ? { balls: true } : slot.resetItems ? { items: true } : { hell: true }, gate.open());
+      if (events[events.length - 1].t === "guarded") return 0;
+    }
+    if (slot.take) {
       const amount = money(cost * slot.take);
       gain -= amount;
       events.push({ t: "take", amount });

@@ -41,11 +41,11 @@
   const SQUARE = { start: "START", normal: "", event: "★", accident: "!", super: "!!" };
   const GAME_NAMES = { blackjack: "ブラックジャック", dice: "ダイスポーカー", chinchiro: "チンチロ", ball: "ボール確定" };
   const ITEM_INFO = {
-    dice2: { n: "ダブルダイス", d: "サイコロを2個振って、合計だけ進みます", img: "die", dice: 2 },
-    dice3: { n: "トリプルダイス", d: "サイコロを3個振って、合計だけ進みます", img: "die", dice: 3 },
-    exact: { n: "ぴったり", d: "出目を1〜6から選べます", img: "die-gold" },
-    guard: { n: "ガード", d: "この回から3回、ルーレットとアクシデント（スーパーも）のマイナスが無効になります（プラスは入ります）", img: "shield" },
-    x2: { n: "倍がけ", d: "この回の払い戻しと支払いが2倍になります（増減とも最大で賭け額の10倍まで）", img: "potion" },
+    dice2: { n: "ダブルダイス", d: "サイコロ2個の合計だけ進む", img: "die", dice: 2 },
+    dice3: { n: "トリプルダイス", d: "サイコロ3個の合計だけ進む", img: "die", dice: 3 },
+    exact: { n: "ぴったり", d: "出目を選べる", img: "die-gold" },
+    guard: { n: "ガード", d: "マイナスを1回だけ防ぐ", img: "shield" },
+    x2: { n: "倍がけ", d: "この回の増減が2倍（最大で賭け額の10倍まで）", img: "potion" },
   };
   // An item's picture: the dice are stacked (two or three of the same die, a little turned).
   function itemIcon(id) {
@@ -74,17 +74,17 @@
   const QUICK_GAMES = new Set(["stop", "hilo"]);
   const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
-    "1回の賭けは100。ログイン中はポイント、ゲストとオフラインは練習チップで遊びます。",
-    "通常マス：ルーレット（−5倍〜+21倍。マイナスで足りない分は、カジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回、「●」はボール、「STOP」「H&L」はミニゲーム。たまに「BONUS」が出ます。",
-    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・確定ボールのどれか。カジノと同じルールで、勝つと配当とボール、引き分けは賭けが戻ります。負けは、ダブルやヒフミなら賭けの2倍など、カジノと同じ倍率で払います。",
-    "！（アクシデント）：2〜6倍が引かれる、3マス戻る、STARTに戻る。何も起きない枠もあります。",
-    "！！（スーパーアクシデント）：盤面に1つだけ（！のマスのルーレットにも1項目あります）。10項目のルーレットで、−10〜−30倍、自分のボールが全部消える、アイテムが全部消える、何も起きない、ラッキー（ボーナスルーレット）、ヘルモードのどれか。ヘルモードは盤面を3周するまで、通常マスが！に、！が通常マスに、★が通常マスに入れ替わります。",
-    "STARTを通ると、ボールが1個出ます。",
-    "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選。開いていない番号なら自分のボールが入り、開いている番号は1.5倍がもらえます。★の数字はスペシャルルーレットです。",
-    "1列そろうと、ビンゴ賞金（700）とビンゴルーレット。賞金とルーレットの倍率の5割は、その列のボールの持ち主に、置いたときの賭け額に応じて配られます。ほかの人の分は、その人が次に遊んだときに届き、30日で消えます。ミニゲームとジャックポットは、そろえた人のものです。そろった列のボールは戻ります。",
-    "アイテム：「ITEM」のルーレットで1個（「2個」の枠もあります）もらえ、100ptも入ります。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（3回、ルーレットとアクシデントのマイナスが無効。スーパーアクシデントの悪い枠も防ぎます）・倍がけ（この回の増減が2倍）。",
+    "賭けは1回100。ログイン中はポイント、ゲストとオフラインは練習チップです。",
+    "通常マス：ルーレット（−5〜+21倍）。BJ・DICE・チンチロはそのゲームを1回、●はボール、STOP・H&Lはミニゲーム。たまにBONUS。足りないポイントは借金になります。",
+    "★：ブラックジャック・ダイスポーカー・チンチロ・確定ボールのどれか。カジノと同じルールで、勝つと配当とボール、引き分けは賭けが戻ります。",
+    "！：2〜6倍が引かれる、3マス戻る、STARTに戻るなど。",
+    "！！：盤面に1つ。踏むと大事故かも。ヘルモードは3周の間、通常マスが！に、！と★が通常マスに入れ替わります。",
+    "STARTを通るとボールが1個出ます。",
+    "ビンゴカードは2枚で全員共通（左右にスワイプ）。ボールは1〜99の抽選で、空いた番号なら自分のボールが入り、開いた番号なら1.5倍がもらえます。★の数字はスペシャルルーレット。",
+    "1列そろうと、ビンゴ賞金（700）とビンゴルーレット。賞金とルーレットの倍率の5割は、その列のボールの持ち主に、置いたときの賭け額に応じて配られます。ほかの人の分は次に遊んだときに届き、30日で消えます。ミニゲームとジャックポットはそろえた人のもの。",
+    "アイテム：ITEMのルーレットで1個（「2個」の枠も）と100pt。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・倍がけ（この回の増減が2倍）は振る前に押します。ガードは、マイナスが出たときに1回だけ使えます。",
     "ジャックポットは、カジノの賭けから貯まります。",
-    "盤面をタップすると、その回の演出を飛ばせます。",
+    "盤面をタップすると、演出を飛ばせます。",
   ];
 
   // ---- Saving ----------------------------------------------------------------------------
@@ -607,7 +607,7 @@
     const target = view;
     seeLog();
     draw();
-    if (testMode) body.prepend(node("p", "sg-testbanner", "テスト版（調整中）　練習チップで遊べます。ポイントは動きません。"));
+    if (testMode) body.prepend(node("p", "sg-testbanner", "テスト版：練習チップで遊びます。ポイントは動きません。"));
     listen();
     setTimeout(notify, 0);
     // A game played further on another device takes over, if nothing is going on here.
@@ -671,7 +671,7 @@
       sq.lastChild.textContent = SQUARE[kind];
     });
   }
-  // One screen, exactly: the card takes the height the other parts leave (they change: the guard line,
+  // One screen, exactly: the card takes the height the other parts leave (they change: the hell badge,
   // the bag, the study hint, who else plays), so its width is measured and set again whenever the
   // layout changes. (The CSS width is only the first guess.)
   let fitFrame = 0;
@@ -692,7 +692,7 @@
         pad = parseFloat(getComputedStyle(dlg).paddingBottom) || 0,
         bottom = last.getBoundingClientRect().bottom - top + pad,
         room = dlg.clientHeight - bottom,
-        ratio = card.offsetHeight / card.offsetWidth || 1,
+        ratio = 1, // the card is square (7 × 7 round cells)
         max = view.body.clientWidth,
         next = Math.max(150, Math.min(max, wrap.offsetWidth + room / ratio));
       if (Math.abs(next - wrap.offsetWidth) >= 1) {
@@ -790,8 +790,6 @@
 
     view.armed = { ids: [], face: 0 };
     view.itemBar = node("div", "sg-items");
-    view.guardEl = node("p", "sg-guard");
-    view.guardEl.hidden = true;
     view.facePick = node("div", "sg-faces");
     view.facePick.hidden = true;
     view.info = node("p", "sg-status");
@@ -799,7 +797,7 @@
     view.statusRow = node("div", "sg-statusrow");
     view.hellEl = node("p", "sg-hell");
     view.hellEl.hidden = true;
-    view.statusRow.append(view.info, view.guardEl, view.hellEl);
+    view.statusRow.append(view.info, view.hellEl);
     view.hereEl = node("p", "sg-here");
     view.hereEl.hidden = true;
     view.hereEl.setAttribute("aria-label", "いっしょにプレイ中の人");
@@ -927,11 +925,6 @@
     view.armed.ids = view.armed.ids.filter((id) => counts[id]);
     if (!view.armed.ids.includes("exact")) view.armed.face = 0;
     const locked = view.busy || !!view.state.pending;
-    // ガード: while it lasts, a line says so (with the rolls left) and the board shows a shield border.
-    const guardLeft = Math.max(0, Number(view.state.guard) || 0);
-    view.guardEl.hidden = !guardLeft;
-    view.guardEl.replaceChildren(...(guardLeft ? [itemIcon("guard"), node("span", "", "ガード中 あと" + guardLeft + "回")] : []));
-    view.body.classList.toggle("is-guarded", guardLeft > 0);
     view.itemBar.replaceChildren();
     const kinds = Object.keys(ITEM_INFO).filter((id) => counts[id]);
     // No items: no row at all (the card gets the room).
@@ -944,8 +937,14 @@
       b.disabled = locked;
       b.dataset.item = id;
       b.title = ITEM_INFO[id].d;
-      b.setAttribute("aria-pressed", String(view.armed.ids.includes(id)));
-      b.onclick = () => arm(id);
+      if (id === "guard") {
+        // ガード is spent on a minus (asked when one comes), not chosen before the roll.
+        b.classList.add("is-passive");
+        b.onclick = () => say("ガードは、マイナスが出たときに使えます", "is-ball");
+      } else {
+        b.setAttribute("aria-pressed", String(view.armed.ids.includes(id)));
+        b.onclick = () => arm(id);
+      }
       view.itemBar.append(b);
     }
     view.facePick.hidden = !view.armed.ids.includes("exact");
@@ -1004,7 +1003,7 @@
       ...(wanted.length ? [node("span", "sg-wanted", "（" + wanted.slice(0, 4).join("・") + (wanted.length > 4 ? "…" : "") + "）")] : []),
       node("span", "", "　ビンゴ "),
       node("b", "", (state.bingos || 0) + "回"),
-      ...(view.online ? [] : [node("span", "sg-alone", api.uid() === "GUEST-000" ? "　自分だけのカード" : "　オフライン：自分だけのカード")]),
+      ...(view.online ? [] : [node("span", "sg-alone", "　自分だけのカード")]),
     );
     // Out of practice chips: the button fills them up again instead.
     const short = api.balance() < view.cost,
@@ -1038,7 +1037,7 @@
   // The piece sits on its square; the strip slides so the piece stays a little left of centre.
   // Tapping a square tells how many squares it is from the piece, and what kind it is (not during a roll:
   // a tap there skips to the end of it).
-  const KIND_NAMES = { start: "START（ボールが1個出ます）", normal: "通常マス", event: "★イベントマス", accident: "！アクシデントマス", super: "！！スーパーアクシデントマス（−10〜−30倍・ボールとアイテムのリセット・ラッキー・ヘルモード）" };
+  const KIND_NAMES = { start: "START（ボールが1個出ます）", normal: "通常マス", event: "★イベントマス", accident: "！アクシデントマス", super: "！！マス" };
   function squareTip(i) {
     if (!view || view.busy) return;
     const sq = view.squares[i],
@@ -1156,6 +1155,31 @@
       if (show) show.amount = amount;
     }
   }
+  // The question when a minus comes and a ガード is in the bag: use it (once) or not.
+  function askGuard(minus) {
+    return new Promise((resolve) => {
+      const layer = view.layer;
+      layer.className = "sg-layer is-game is-ask";
+      layer.hidden = false;
+      const what = minus.amount ? "−" + fmt(minus.amount) + api.unit() : minus.back ? minus.back + "マス戻る" : minus.start ? "STARTに戻る" : minus.balls ? "自分のボールが全部消える" : minus.items ? "アイテムが全部消える" : "ヘルモード";
+      const box = node("div", "sg-game");
+      box.append(node("p", "sg-wheel-title", "ガードを使う？"), node("p", "sg-ask-what", what));
+      const row = node("div", "sg-game-actions"),
+        yes = node("button", "sg-game-btn", "使う（残り" + S.itemsOf(view.state).filter((id) => id === "guard").length + "個）"),
+        no = node("button", "sg-game-btn", "使わない");
+      for (const [b, data, value] of [[yes, "guard-yes", true], [no, "guard-no", false]]) {
+        b.type = "button";
+        b.dataset.sgGame = data;
+        b.onclick = () => {
+          layer.hidden = true;
+          resolve(value);
+        };
+        row.append(b);
+      }
+      box.append(row);
+      layer.replaceChildren(box);
+    });
+  }
   async function roll() {
     if (!view.busy && api.balance() < view.cost && !api.real() && api.resetPractice) {
       api.resetPractice();
@@ -1185,22 +1209,41 @@
     hud();
     markHere();
     view.die.shake();
+    let preCount = 0,
+      liveEarly = { ...state, stake: state.stake + cost };
+    // A minus came and a ガード is held: the roll is shown up to the wheel's result, then the player chooses.
+    // (Choosing "use" works the same roll out again with the same draws: everything before the minus is the same.)
+    const minusAt = S.itemsOf(state).includes("guard") ? local.events.findIndex((e) => e.t === "minus") : -1;
+    if (minusAt >= 0) {
+      const ballFirst = local.events.slice(0, minusAt).some((e) => e.t === "ball");
+      preCount = ballFirst ? 0 : minusAt;
+      if (preCount) {
+        view.fast = false;
+        view.hot = false;
+        view.body.classList.add("is-spinning");
+        view.state = liveEarly;
+        await show(local.events.slice(0, preCount), liveEarly);
+      }
+      if (await askGuard(local.events[minusAt])) {
+        use.guard = true;
+        local = S.roll(state, view.card, cost, replay(tape), me, use);
+      }
+    }
     const touches = local.events.some((e) => e.t === "ball") || view.card.owed?.[me] > 0;
     let result,
-      shownEarly = 0,
-      early = null,
-      liveEarly = { ...state, stake: state.stake + cost };
+      shownEarly = preCount,
+      early = null;
     if (view.online && !touches) result = { out: local, collected: 0, people: view.people, log: view.log, before: { card: view.card, people: view.people, log: view.log } };
     else {
       // While the cloud answers, what does not depend on the card plays already: the same draws
       // give the same die, steps and wheels up to the first ball, so the die lands at once.
       const k = local.events.findIndex((e) => e.t === "ball");
-      shownEarly = k < 0 ? local.events.length : k;
+      shownEarly = Math.max(preCount, k < 0 ? local.events.length : k);
       view.fast = false;
       view.hot = false;
       view.body.classList.add("is-spinning");
       view.state = liveEarly;
-      early = show(local.events.slice(0, shownEarly), liveEarly);
+      early = show(local.events.slice(preCount, shownEarly), liveEarly);
       try {
         result = await onCard((card) => S.roll(state, card, cost, replay(tape), me, use));
       } catch (error) {
@@ -1736,7 +1779,7 @@
     view.busy = true;
     hud();
     const box = node("div", "sg-game");
-    box.append(node("p", "sg-wheel-title", GAME_NAMES[p.game] + "　" + fmt(p.bet) + api.unit()), node("p", "sg-game-rule", p.plain ? "普通のマスのゲーム：勝てば配当、負けると賭けた分はなくなります（ボールは出ません）。" : "勝てば配当とボール。負けると賭けた分はなくなります。"));
+    box.append(node("p", "sg-wheel-title", GAME_NAMES[p.game] + "　" + fmt(p.bet) + api.unit()), node("p", "sg-game-rule", p.plain ? "勝てば配当（ボールなし）。負けは賭け分がなくなります。" : "勝てば配当とボール。負けは賭け分がなくなります。"));
     const table = node("div", "sg-game-table"),
       actions = node("div", "sg-game-actions"),
       line = node("p", "sg-game-line");
@@ -1958,13 +2001,13 @@
   // Each waits in state.bonus. Starting one is saved first, so leaving half way and coming
   // back scores it 0 instead of trying again.
   const RULE_TEXT = {
-    timer: "スタートから心の中で10秒数えて、ちょうど10秒でストップ。3秒で表示が消えます。1,000点から0.01秒ずれるごとに5点減ります。",
-    tap: "10秒間、ボタンをできるだけたくさん押してください。1回10点（120回まで）。",
-    tapex: "10秒間、ボタンをできるだけたくさん押してください。1回25点（120回まで）。",
-    dice: "サイコロを3個振って、出た目の合計×50点。",
-    math: "むずかしさを3つから選び、制限時間以内に計算の答えを入れてください。正解で、かんたん300点・ふつう600点・むずかしい1,200点（20秒）。",
-    stop: "左右に動く光を、まん中の金色で止めると額の2倍、銀色なら0.75倍。外れると0。5秒たつと外れです。",
-    hilo: "めくったカード（A〜K）より\n次のカードが大きいか小さいかを当てます。\n当たり ×1.25　ぴったり（同じ数）×10　はずれ 0",
+    timer: "心の中で10秒数えて、ちょうどでストップ。表示は3秒で消えます。1,000点から、0.01秒ずれるごとに5点減ります。",
+    tap: "10秒間、できるだけ連打。1回10点（120回まで）。",
+    tapex: "10秒間、できるだけ連打。1回25点（120回まで）。",
+    dice: "サイコロ3個の合計×50点。",
+    math: "むずかしさを選んで、時間内に答えます。正解で、かんたん300点・ふつう600点・むずかしい1,200点。",
+    stop: "動く光を、まん中の金色で止めると2倍、銀色なら0.75倍。外れは0。5秒で外れです。",
+    hilo: "めくったカード（A〜K）より\n次が大きいか小さいかを当てます。\n当たり ×1.25　同じ数 ×10　はずれ 0",
   };
   async function bonus() {
     while (view?.state.bonus?.length) {
