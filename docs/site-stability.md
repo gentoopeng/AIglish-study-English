@@ -3285,3 +3285,13 @@ Tests: `tests/sugoroku-model.test.cjs` (two ways of moving are refused; with ガ
 **Now** (`sugoroku.js`, `sugoroku-model.js`, `sugoroku.css`): the ショップ button, the shop sheet, buying (`buyItem`, `S.buy`, the `sugoroku-shop` round that took the price from the wallet), the `price` of every item and the shop's styles are removed. Items come only from the ITEM roulette (one item and 100 points each time). The rules sheet and the usage guide no longer mention buying.
 
 Tests: `tests/sugoroku-model.test.cjs` (the buying checks are gone), `tests/sugoroku.smoke.cjs` (no ショップ button; the bag is given an item by the save instead).
+
+## 10.52.00.00 アイテムの絵が盤面いっぱいに大きく出る表示崩れを直した
+
+**What the owner saw.** A screenshot of すごろくビンゴ (the test version) with three huge dice pictures covering the bingo card, and the bag's chips pushed out of place.
+
+**Cause.** 10.51 removed the shop's styles with a pattern that cut a line from the first `.sg-shop` it found to the end of that line. That also cut the main rule of the bag's chips (`.sg-item,.sg-shop{…}`, leaving `.sg-item,` joined to the next rule) and left half a selector (`.sg-sheet .sg-sheet `) that swallowed the next rule, the base rule of the item pictures (`.sg-ico{position:relative;…}`). The pictures are laid out as absolute, so with no positioned parent they filled the whole screen.
+
+**Now** (`sugoroku.css`): rebuilt from the file before 10.51 with only the shop's own rules taken out (the bag's chip rule is `.sg-item{…}` again, the picture rule is back).
+
+Tests: `tests/sugoroku.smoke.cjs` measures every picture in the bag (40 pixels at most; it fails on the broken file with a picture of 312×473) and the height of a chip.
