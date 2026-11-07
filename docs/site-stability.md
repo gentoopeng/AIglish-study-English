@@ -3307,3 +3307,11 @@ Tests: `tests/sugoroku.smoke.cjs` measures every picture in the bag (40 pixels a
 - シミュレーション（子の勝ち44.7%、負け44.4%、1回あたり約0）では、チンチロの胴元の取り分はほぼ0になった（以前は親が先に決めるぶん、親に少し有利だった）。
 
 Tests: `tests/casino-model.test.cjs` (the new settle; a simulation that is even), `tests/sugoroku-model.test.cjs` (a loss of ×2 / ×3 comes back −100 / −200 and the result's `net`), `tests/sugoroku.smoke.cjs` (the child throws against a シゴロ, a ゾロ目 wins ×3, a ヒフミ loses −100 more; ダブル/スプリット; two hands), `tests/casino.smoke.cjs`, `tests/casino-group.smoke.cjs`.
+
+## 10.54.00.00 すごろくビンゴのブラックジャック・ダイスポーカー・チンチロをカジノと同じ画面にした
+
+**What the owner said.** 「ゲームのUIとかルールは準拠してってことね」（10.53でルールは合わせたが、画面は簡易版のままだった）。
+
+**Now** (`casino.js`, `sugoroku.js`): `casino.js` の卓の描画（`bjFelt`・`bjActions`・`bjResultLine`・`diceFelt`・`chinSide`・`chinWords`・`result`・`rules`、遊び方の文章 `BJ_RULES`/`DICE_RULES`/`CHIN_RULES`）を `window.CasinoUI` として出し、すごろくビンゴのイベントゲームがそれをそのまま使う。カードの配り方、ダイスのキープ表示とおすすめ、チンチロのどんぶり、結果の表示、遊び方の説明がカジノと同じになった。お金はカジノの財布ではなくすごろくのカードで精算する（ブラックジャックのダブル／スプリットの追加分は `bjActions` の `free` で財布の残高チェックを外し、結果から引く）。ディーラー・親の出目は1回で表示（カジノと同じ）。`data-sg-game` は残してあるので、おまかせ・早送りは今まで通り動く。
+
+Tests: `tests/sugoroku.smoke.cjs`（カジノの卓の部品を使っているか、ダイスのキープ、チンチロの親表示、スプリットで手が2つ）。

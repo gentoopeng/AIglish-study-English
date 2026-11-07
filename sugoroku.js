@@ -1694,135 +1694,130 @@
       const target = view;
       setTimeout(() => target === view && view.layer === layer && !layer.hidden && finish(m), view.quick ? 500 : calm() ? 300 : 1400);
     };
-    // The other side's throws, one at a time, so every die can be seen landing.
-    const reveal = async (count, show) => {
-      for (let i = 1; i <= count; i++) {
-        show(i);
-        if (i < count) await wait(view.quick ? 150 : 550);
-      }
+    // The tables are the casino's own (casino.js, via window.CasinoUI): same felt, cards, dice and
+    // bowl, same buttons and wording; only the money differs (the game pays through the card).
+    const UI = window.CasinoUI;
+    table.classList.add("cs-body");
+    const put = (...nodes) => table.replaceChildren(...nodes);
+    const rulesBox = (name, lines) => UI.rules(name, lines);
+    // The casino's action buttons carry the game's data-sg-game, so the same tests can press them.
+    const move = (text, sub, data, onClick, primary) => {
+      const b = node("button", primary ? "cs-primary" : "");
+      b.type = "button";
+      b.dataset.sgGame = data;
+      b.append(node("b", "", text));
+      if (sub) b.append(node("small", "", sub));
+      b.onclick = onClick;
+      if (auto) b.disabled = true;
+      return b;
+    };
+    const out = (text, net) => {
+      const r = UI.result(text, net);
+      r.style.setProperty("--d", "0.4s");
+      table.append(r);
+      line.textContent = "";
     };
     if (p.game === "blackjack") {
+      const seen = {};
       const draw = () => {
         const t = p.round;
-        table.replaceChildren();
-        const mine = t.seats.me,
-          hands = mine.hands;
-        const rows = [["ディーラー", t.dealer, !t.done, false]].concat(hands.map((h, i) => ["あなた" + (hands.length > 1 ? "　" + (i + 1) + "つ目" + (h.doubled ? "（ダブル）" : "") : h.doubled ? "（ダブル）" : ""), h.cards, false, !t.done && i === mine.active]));
-        for (const [who, cards, hide, active] of rows) {
-          const row = node("div", "sg-hand" + (active && hands.length > 1 ? " is-active" : ""));
-          row.append(node("span", "", who + "　" + (hide ? "" : C.bjTotal(cards).total)));
-          const list = node("div", "sg-cards");
-          for (const c of cards) list.append(window.Poker.card(c));
-          if (hide && cards.length === 1) list.append(window.Poker.card(null));
-          row.append(list);
-          table.append(row);
-        }
+        const felt = UI.bjFelt(t, "me", () => "あなた", seen);
+        put(felt);
         actions.replaceChildren();
         line.textContent = "";
         if (!t.done) {
-          const act = (move) => () => {
-            p.round = C.tableAct(p.round, "me", move);
-            keepRound(p.round);
-            draw();
-          };
-          button("もう1枚", act("hit"), "hit");
-          button("これで勝負", act("stand"), "stand");
-          // As at the casino's table: a double on a hand's first two cards, a split of a pair (the extra
-          // bet is taken from what the game pays in the end, like any loss beyond the bet).
-          if (C.tableCan(t, "me", "double")) button("ダブル", act("double"), "double");
-          if (C.tableCan(t, "me", "split")) button("スプリット", act("split"), "split");
+          const box2 = UI.bjActions(
+            t,
+            "me",
+            (m) => {
+              p.round = { ...C.tableAct(p.round, "me", m), dealtAt: t.dealtAt };
+              keepRound(p.round);
+              draw();
+            },
+            true,
+          );
+          box2.querySelectorAll("button[data-move]").forEach((b) => {
+            b.dataset.sgGame = b.dataset.move === "hit" || b.dataset.move === "stand" || b.dataset.move === "double" || b.dataset.move === "split" ? b.dataset.move : "";
+            if (auto) b.disabled = true;
+          });
+          table.append(box2);
+          table.append(rulesBox("ブラックジャックの遊び方", UI.BJ_RULES));
         } else {
-          const out = C.tableOutcome(t, "me"),
-            m = out.net / p.bet;
-          line.textContent = m > 0 ? "勝ち" : m === 0 ? "引き分け" : "負け";
-          end(m);
+          const o = C.tableOutcome(t, "me");
+          table.append(UI.bjResultLine(o), rulesBox("ブラックジャックの遊び方", UI.BJ_RULES));
+          end(o.net / p.bet);
         }
       };
       step = () => {
         const t = p.round;
         if (t.done) return false;
         const hand = t.seats.me.hands.find((h) => !h.done) || t.seats.me.hands[0];
-        p.round = C.tableAct(t, "me", C.bjTotal(hand.cards).total < 17 ? "hit" : "stand");
+        p.round = { ...C.tableAct(t, "me", C.bjTotal(hand.cards).total < 17 ? "hit" : "stand"), dealtAt: t.dealtAt };
         keepRound(p.round);
         draw();
         return true;
       };
       redraw = draw;
-      if (!p.round) keepRound((p.round = C.tableDeal(["me"], { me: p.bet }, random)));
+      if (!p.round) keepRound((p.round = { ...C.tableDeal(["me"], { me: p.bet }, random), dealtAt: Date.now() }));
       draw();
     } else if (p.game === "dice") {
+      let rolled = null;
       const draw = () => {
         const r = p.round;
-        table.replaceChildren();
-        const mine = node("div", "sg-dice");
-        r.dice.forEach((v, i) => {
-          const b = node("button", "sg-die-btn" + (r.held[i] ? " is-held" : ""));
-          b.type = "button";
-          b.setAttribute("aria-pressed", String(r.held[i]));
-          b.setAttribute("aria-label", v + "の目" + (r.held[i] ? "（残す）" : ""));
-          b.append(die(v));
-          b.onclick = () => {
-            if (r.done) return;
-            p.round = C.diceToggle(r, i);
-            keepRound(p.round);
-            draw();
-          };
-          mine.append(b);
+        const { felt, suggest } = UI.diceFelt(r, rolled, (i) => {
+          if (r.done) return;
+          p.round = C.diceToggle(r, i);
+          keepRound(p.round);
+          rolled = null;
+          draw();
         });
-        const name = (dice) => C.DICE_NAMES[C.diceScore(dice)[0]];
-        const me = node("div", "sg-hand");
-        me.append(node("span", "", "あなた　" + name(r.dice)), mine);
-        table.append(me);
-        const throws = r.dealerRolls || (r.dealer ? [r.dealer] : []),
-          seen = Math.min(shown ?? throws.length, throws.length);
-        if (seen) {
-          const dealer = node("div", "sg-hand"),
-            row = node("div", "sg-dice"),
-            dice = throws[seen - 1];
-          dice.forEach((v) => row.append(die(v)));
-          dealer.append(node("span", "", "ディーラー　" + name(dice) + "（" + seen + "投目）"), row);
-          table.prepend(dealer);
-        }
+        rolled = null;
+        put(felt);
         actions.replaceChildren();
-        if (r.done && seen < throws.length) {
-          line.textContent = "ディーラーが振っています…";
-          return;
-        }
         if (!r.done) {
-          const most = r.most || 3;
-          line.textContent = "残すダイスをタップ（振り直しはあと" + (most - r.rolls) + "回。ディーラーは2回まで）";
-          const again = button("振り直す", () => {
+          const left = 3 - r.rolls;
+          const row = node("div", "cs-actions");
+          const again = move(left ? "振り直す（あと" + left + "回）" : "もう振れません", "", "reroll", () => {
+            rolled = r.held.map((h) => !h);
             p.round = C.diceReroll(r, random);
             keepRound(p.round);
             draw();
-          }, "reroll");
-          again.disabled = r.rolls >= 3 || r.held.every(Boolean);
-          button("これで勝負", () => stand(), "stand");
+          });
+          again.disabled = !C.diceCanRoll(r) || auto;
+          row.append(again, move("これで勝負", "", "stand", () => stand(), true));
+          table.append(row);
+          if (left && suggest?.some((k, i) => k && !r.held[i])) {
+            const keep = node("button", "cs-advice-btn", "おすすめのダイスをキープ");
+            keep.type = "button";
+            keep.onclick = () => {
+              p.round = { ...r, held: suggest.slice() };
+              keepRound(p.round);
+              draw();
+            };
+            table.append(keep);
+          }
+          table.append(node("p", "cs-hint", left ? (suggest?.every(Boolean) ? "もう役ができています。このまま勝負できます" : "光っているダイスを残すのがおすすめ。タップで選べます") : "これで勝負しましょう"));
+          table.append(rulesBox("ダイスポーカーの遊び方", UI.DICE_RULES));
         } else {
-          // Fair: the same number of throws as the dealer, the same hands, a win pays the bet.
-          line.textContent = r.outcome === "win" ? "勝ち" : r.outcome === "push" ? "引き分け" : "負け";
+          const words = { win: "あなたの勝ち", lose: "ディーラーの勝ち", push: "引き分け（賭けは戻ります）" };
+          out(words[r.outcome], r.net);
           end(r.net / p.bet);
         }
       };
-      // How many of the dealer's throws are on the table (null: all of them, as after a reload).
-      let shown = null;
       const stand = () => {
         if (p.round.done) return;
         p.round = C.diceStand(p.round, random);
         keepRound(p.round);
-        shown = 0;
-        reveal(p.round.dealerRolls.length, (i) => {
-          shown = i;
-          draw();
-        });
+        draw();
       };
       step = () => {
         const r = p.round;
         if (r.done) return false;
         const keep = C.dealerKeeps(r.dice);
-        if (r.rolls < (r.most || 3) && !keep.every(Boolean)) {
+        if (r.rolls < 3 && !keep.every(Boolean)) {
           let next = r;
           keep.forEach((k, i) => next.held[i] !== k && (next = C.diceToggle(next, i)));
+          rolled = next.held.map((h) => !h);
           p.round = C.diceReroll(next, random);
           keepRound(p.round);
           draw();
@@ -1831,61 +1826,47 @@
       };
       redraw = draw;
       if (!p.round) keepRound((p.round = C.diceStart(p.bet, random)));
+      rolled = [true, true, true, true, true];
       draw();
     } else {
-      // How many of the parent's throws are on the table (null: all of them).
-      let shown = null;
+      let first = true,
+        rolledNow = false;
       const draw = () => {
-        const r = p.round,
-          seen = Math.min(shown ?? r.parent.rolls.length, r.parent.rolls.length),
-          parentDone = seen >= r.parent.rolls.length;
-        table.replaceChildren();
-        const parent = { rolls: r.parent.rolls.slice(0, seen), hand: parentDone ? r.parent.hand : null };
-        for (const [who, turn] of [["親", parent], ["あなた", r.child]]) {
-          const row = node("div", "sg-hand"),
-            list = node("div", "sg-dice");
-          const last = turn.rolls[turn.rolls.length - 1];
-          (last || []).forEach((v) => list.append(die(v)));
-          row.append(node("span", "", who + "　" + (turn.hand ? turn.hand.name : turn.rolls.length ? "役なし" : "") + (turn.rolls.length ? "（" + turn.rolls.length + "投目）" : "")), list);
-          table.append(row);
-        }
+        const r = p.round;
+        const felt = node("div", "cs-felt cs-chin");
+        felt.append(UI.chinSide("親（ディーラー）", r.parent, false, first), UI.chinSide("あなた", r.child, false, rolledNow));
+        first = false;
+        rolledNow = false;
+        put(felt);
         actions.replaceChildren();
-        if (!parentDone) {
-          line.textContent = "親が振っています…（親もあなたも3回まで）";
-          return;
-        }
         if (!r.child.done) {
-          line.textContent = "親は「" + r.parent.hand.name + "」。あと" + (C.CHILD_THROWS - r.child.rolls.length) + "回振れます";
-          button("サイコロを振る", () => {
+          const left = C.CHILD_THROWS - r.child.rolls.length;
+          const row = node("div", "cs-actions");
+          row.append(move(r.child.rolls.length ? "もう一度振る（あと" + left + "回）" : "サイコロを振る", "", "roll", () => {
             p.round = { ...r, child: C.chinNext(r.child, random, C.CHILD_THROWS) };
             keepRound(p.round);
+            rolledNow = true;
             draw();
-          }, "roll");
+          }, true));
+          table.append(node("p", "cs-hint", "親は「" + r.parent.hand.name + "」。" + (r.child.rolls.length ? "役ができるまで、あと" + left + "回振れます" : "あなたの番です（" + C.CHILD_THROWS + "回まで）")), row);
         } else {
           const m = C.chinSettle(r.parent.hand, r.child.hand);
-          line.textContent = m > 0 ? "勝ち" + (m > 1 ? "（" + m + "倍）" : "") : m === 0 ? "引き分け" : "負け" + (m < -1 ? "（" + -m + "倍）" : "");
+          out("親は「" + r.parent.hand.name + "」、あなたは「" + r.child.hand.name + "」。" + UI.chinWords(m), m * p.bet);
           end(m);
         }
+        table.append(rulesBox("チンチロの遊び方", UI.CHIN_RULES));
       };
       step = () => {
         const r = p.round;
-        // おまかせ waits while the parent's throws are still landing.
-        if (shown !== null && shown < r.parent.rolls.length) return true;
         if (r.child.done) return false;
         p.round = { ...r, child: C.chinNext(r.child, random, C.CHILD_THROWS) };
         keepRound(p.round);
+        rolledNow = true;
         draw();
         return true;
       };
       redraw = draw;
-      if (!p.round) {
-        keepRound((p.round = { parent: C.chinTurn(random), child: C.chinStart() }));
-        shown = 0;
-        reveal(p.round.parent.rolls.length, (i) => {
-          shown = i;
-          draw();
-        });
-      }
+      if (!p.round) keepRound((p.round = { parent: C.chinTurn(random), child: C.chinStart() }));
       draw();
     }
     if (!ended) box.append(autoBtn);
