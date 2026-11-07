@@ -3315,3 +3315,11 @@ Tests: `tests/casino-model.test.cjs` (the new settle; a simulation that is even)
 **Now** (`casino.js`, `sugoroku.js`): `casino.js` の卓の描画（`bjFelt`・`bjActions`・`bjResultLine`・`diceFelt`・`chinSide`・`chinWords`・`result`・`rules`、遊び方の文章 `BJ_RULES`/`DICE_RULES`/`CHIN_RULES`）を `window.CasinoUI` として出し、すごろくビンゴのイベントゲームがそれをそのまま使う。カードの配り方、ダイスのキープ表示とおすすめ、チンチロのどんぶり、結果の表示、遊び方の説明がカジノと同じになった。お金はカジノの財布ではなくすごろくのカードで精算する（ブラックジャックのダブル／スプリットの追加分は `bjActions` の `free` で財布の残高チェックを外し、結果から引く）。ディーラー・親の出目は1回で表示（カジノと同じ）。`data-sg-game` は残してあるので、おまかせ・早送りは今まで通り動く。
 
 Tests: `tests/sugoroku.smoke.cjs`（カジノの卓の部品を使っているか、ダイスのキープ、チンチロの親表示、スプリットで手が2つ）。
+
+## 10.55.00.00 すごろくビンゴの通常ルーレット：×1の枠3つをITEMに替えた（ITEMが2つ→5つ）
+
+**What the owner said.** 「ルーレットのアイテム項目が少ない気がする／×1の代わりにしてほしい」
+
+**Now** (`sugoroku-model.js` `RULES.normal`): ×1 の3枠を ITEM に替えた（ITEM 2枠 → 5枠、全体の枠数は同じ）。ITEM は元から「アイテム1個＋賭け額の1倍（`itemCash`）」を払うので、現金の戻りは ×1 だった頃と同じで、アイテムが1個ふえる分だけ得になる。シミュレーション（30万回）で、アイテムの価値を除いた戻り率は 0.906 → 0.905 で変わらず。アイテムの価値（1個あたり賭け額の0.1〜1.2倍、平均で約0.4倍）を入れると、全体は 3/42 × 0.4 ≒ +3% ほど上がる。
+
+Tests: `tests/sugoroku-model.test.cjs`（ITEM 5枠、×1の枠はなくなった）。
