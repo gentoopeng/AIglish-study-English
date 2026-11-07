@@ -77,7 +77,7 @@
         // High risk, high return: a bad slot takes −1 to −5 times the bet, a good one gives up to 5 times.
         ...N(-5, 3), ...N(-2, 2), ...N(-1, 2),
         ...N(0, 6), ...ITEM(5),
-        ...N(0.5, 3), ...N(2, 2), ...N(3), ...N(4, 2), ...N(5),
+        ...N(1.5, 2), ...N(2, 3), ...N(3), ...N(4, 2), ...N(5),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -97,7 +97,7 @@
       guard: { name: "ガード" },
       x2: { name: "倍がけ" },
     },
-    itemWheel: spread([...GET("dice2", 4), ...GET("dice3"), ...GET("exact"), ...GET("guard", 2), ...GET("x2", 2)]),
+    itemWheel: spread([...GET("dice2", 4), ...GET("dice3"), ...GET("exact"), ...GET("guard", 2), ...GET("x2", 2), { twice: true }]),
     // The 確変 wheel (after a 確変 slot of the normal wheel): x pays the bet × x; balls draws that
     // many balls one after another (each as any ball: it opens a number or pays missPay, and a
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
@@ -122,8 +122,8 @@
     // at most owedMax people's parts (the oldest go first), so it cannot grow without end.
     owedDays: 30,
     owedMax: 200,
-    // Accident wheel: take: multiples of the bet taken on top, give: multiples of the bet paid, back: squares back, start: back to START.
-    accident: [{ take: 6 }, { take: 4 }, { take: 3 }, { take: 2 }, { give: 1 }, { give: 3 }, { give: 6 }, { back: 3 }, { start: true }, { take: 0 }],
+    // Accident wheel: take: multiples of the bet taken on top (0: safe), back: squares back, start: back to START.
+    accident: [{ take: 6 }, { take: 4 }, { take: 3 }, { take: 2 }, { take: 0 }, { back: 3 }, { take: 0 }, { start: true }, { take: 0 }, { take: 0 }],
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
     bingoPrize: 7,
@@ -153,7 +153,7 @@
     // higher or lower. In 早送り they are not played and pay `auto`.
     // The slots of the bingo wheel besides the jackpot and the super chance (each twice on the wheel).
     wheelParts: { others: [{ x: 12 }, { game: "timer" }, { x: 20 }, { game: "tap" }, { game: "dice" }, { x: 50 }, { game: "math" }, { x: 32 }] },
-    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 1, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 25, max: 120 }, dice: { count: 3, per: 50 }, math: { easy: { seconds: 15, prize: 300 }, normal: { seconds: 15, prize: 600 }, hard: { seconds: 20, prize: 1200 } } },
+    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 10, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 25, max: 120 }, dice: { count: 3, per: 50 }, math: { easy: { seconds: 15, prize: 300 }, normal: { seconds: 15, prize: 600 }, hard: { seconds: 20, prize: 1200 } } },
   };
   RULES.normal[50] = RULES.normal[200] = RULES.normal[100];
   // The bingo wheel for a bet (the average bet of the balls on the line): the jackpot and the
@@ -575,12 +575,7 @@
     } else if (kind === "accident") {
       const { index, slot } = pick(RULES.accident, random);
       events.push({ t: "wheel", wheel: "accident", slots: RULES.accident, index, base: cost });
-      if (slot.give) {
-        // A good slot pays whether or not the roll is guarded.
-        const amount = money(cost * slot.give);
-        gain += amount;
-        events.push({ t: "give", amount });
-      } else if (guarded && (slot.start || slot.back || slot.take)) {
+      if (guarded && (slot.start || slot.back || slot.take)) {
         // ガード: the bad slots do nothing.
         events.push({ t: "guarded" });
       } else if (slot.start) {
@@ -625,10 +620,16 @@
       { index, slot } = pick(slots, random),
       cash = money(cost * RULES.itemCash);
     events.push({ t: "wheel", wheel: "item", slots, index, base: 0 });
-    if (state.items.length < RULES.itemMax) {
-      state.items.push(slot.item);
-      events.push({ t: "itemGet", id: slot.item, amount: cash });
-    } else events.push({ t: "itemGet", id: slot.item, full: true, amount: cash });
+    // The 「2個」 slot gives two items, each drawn from the other slots of the wheel.
+    const plain = slots.filter((x) => x.item),
+      got = slot.twice ? [plain[random(plain.length)].item, plain[random(plain.length)].item] : [slot.item];
+    got.forEach((id, k) => {
+      const entry = { t: "itemGet", id, amount: k ? 0 : cash };
+      if (state.items.length < RULES.itemMax) state.items.push(id);
+      else entry.full = true;
+      if (slot.twice) entry.twice = true;
+      events.push(entry);
+    });
     return cash;
   }
   // The end of an event game: m is the game's own result as multiples of the bet (1 even money,

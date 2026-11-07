@@ -72,20 +72,20 @@
   const WHEEL_NAMES = { item: "ITEM ROULETTE", event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "BONUS", special: "SPECIAL BALL" };
   const HOT = new Set(["bingo", "sjp", "kakuhen", "special"]);
   const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "ストップ", hilo: "ハイ＆ロー" };
-  // The normal squares' quick games, paid in multiples of the bet (not played in 早送り).
+  // The normal squares' quick games (paid in multiples of the bet, in the wallet's unit).
   const QUICK_GAMES = new Set(["stop", "hilo"]);
   const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
     "1回の賭けは100。ログイン中はポイント、ゲストとオフラインは練習チップで遊びます。",
     "通常マス：ルーレット（−5倍〜+5倍。マイナスで足りない分は、カジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回、「●」はボール、「STOP」「H&L」はミニゲーム。たまに「BONUS」が出ます。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・確定ボールのどれか。カジノと同じルールで、勝つと配当とボール、引き分けは賭けが戻ります。負けは、ダブルやヒフミなら賭けの2倍など、カジノと同じ倍率で払います。",
-    "！（アクシデント）：2〜6倍が引かれる、3マス戻る、STARTに戻る。+1〜+6倍がもらえる枠もあります。",
+    "！（アクシデント）：2〜6倍が引かれる、3マス戻る、STARTに戻る。何も起きない枠もあります。",
     "STARTを通ると、ボールが1個出ます。",
     "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選。開いていない番号なら自分のボールが入り、開いている番号は1.5倍がもらえます。★の数字はスペシャルルーレットです。",
     "1列そろうと、ビンゴ賞金（700）とビンゴルーレット。賞金とルーレットの倍率の5割は、その列のボールの持ち主に、置いたときの賭け額に応じて配られます。ほかの人の分は、その人が次に遊んだときに届き、30日で消えます。ミニゲームとジャックポットは、そろえた人のものです。そろった列のボールは戻ります。",
-    "アイテム：「ITEM」のルーレットで1個もらえ、100ptも入ります。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（3回、ルーレットとアクシデントのマイナスが無効）・倍がけ（この回の増減が2倍）。",
+    "アイテム：「ITEM」のルーレットで1個（「2個」の枠もあります）もらえ、100ptも入ります。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（3回、ルーレットとアクシデントのマイナスが無効）・倍がけ（この回の増減が2倍）。",
     "ジャックポットは、カジノの賭けから貯まります。",
-    "「早送り」で、ふだんのマスが短く進みます。盤面をタップすると、その回を飛ばせます。",
+    "「早送り」で、ふだんのマスが短く進みます。盤面をタップすると、その回を飛ばせます（ゲームは自分で遊びます）。",
   ];
 
   // ---- Saving ----------------------------------------------------------------------------
@@ -747,6 +747,8 @@
 
     view.armed = { ids: [], face: 0 };
     view.itemBar = node("div", "sg-items");
+    view.guardEl = node("p", "sg-guard");
+    view.guardEl.hidden = true;
     view.facePick = node("div", "sg-faces");
     view.facePick.hidden = true;
     view.info = node("p", "sg-status");
@@ -778,7 +780,7 @@
 
     view.layer = node("div", "sg-layer");
     view.layer.hidden = true;
-    body.replaceChildren(pots, view.hereEl, cardWrap, board, view.info, view.itemBar, view.facePick, controls, view.studyEl, view.layer);
+    body.replaceChildren(pots, view.hereEl, cardWrap, board, view.info, view.guardEl, view.itemBar, view.facePick, controls, view.studyEl, view.layer);
     paintCard();
     paintHere();
     hud();
@@ -889,6 +891,11 @@
     view.armed.ids = view.armed.ids.filter((id) => counts[id]);
     if (!view.armed.ids.includes("exact")) view.armed.face = 0;
     const locked = view.busy || !!view.state.pending;
+    // ガード: while it lasts, a line says so (with the rolls left) and the board shows a shield border.
+    const guardLeft = Math.max(0, Number(view.state.guard) || 0);
+    view.guardEl.hidden = !guardLeft;
+    view.guardEl.replaceChildren(...(guardLeft ? [itemIcon("guard"), node("span", "", "ガード発動中　あと" + guardLeft + "回")] : []));
+    view.body.classList.toggle("is-guarded", guardLeft > 0);
     view.itemBar.replaceChildren();
     const kinds = Object.keys(ITEM_INFO).filter((id) => counts[id]);
     if (!kinds.length) {
@@ -900,7 +907,8 @@
     for (const id of kinds) {
       const b = node("button", "sg-item");
       b.type = "button";
-      b.append(itemIcon(id), node("span", "", ITEM_INFO[id].n + " ×" + counts[id]));
+      b.append(itemIcon(id), node("span", "", "×" + counts[id]));
+      b.setAttribute("aria-label", ITEM_INFO[id].n + " ×" + counts[id]);
       b.disabled = locked;
       b.dataset.item = id;
       b.title = ITEM_INFO[id].d;
@@ -1313,8 +1321,8 @@
         say(ITEM_INFO[e.id].n + "！", "is-hot");
         await wait(800);
       } else if (e.t === "itemGet") {
-        say((e.full ? ITEM_INFO[e.id].n + "は持ちきれません\n" : ITEM_INFO[e.id].n + " をゲット！\n") + "+" + fmt(e.amount) + api.unit(), e.full ? "is-gain" : "is-hot");
-        await wait(1200);
+        say(ITEM_INFO[e.id].n + (e.full ? "（持ちきれません）" : "") + (e.amount ? "　+" + fmt(e.amount) + api.unit() : ""), e.full ? "is-gain" : "is-hot");
+        await wait(e.twice ? 900 : 1200);
       } else if (e.t === "x2") {
         say("倍がけ　" + (e.amount >= 0 ? "+" : "−") + fmt(Math.abs(e.amount)) + api.unit(), e.amount >= 0 ? "is-gain" : "is-hot");
         await wait(1000);
@@ -1466,7 +1474,7 @@
     if (wheel === "event") return slot === "ball" ? "ball" : "game-" + slot;
     if (wheel === "accident") return slot.give ? (slot.give >= 5 ? "gold" : "high") : slot.start ? "worst" : slot.back ? "bad" : slot.take >= 4 ? "worst" : slot.take ? "bad" : "safe";
     if (slot.kakuhen) return "zero";
-    if (wheel === "item") return slot.item === "ball" ? "gold" : slot.item === "exact" ? "champagne" : "high";
+    if (wheel === "item") return slot.twice ? "gold" : slot.item === "ball" ? "gold" : slot.item === "exact" ? "champagne" : "high";
     if (slot.item === true) return "gold";
     if (wheel === "special") return slot.balls ? "ball" : slot.x >= 30 ? "gold" : slot.x >= 15 ? "champagne" : "high";
     if (wheel === "kakuhen") return slot.balls ? "ball" : slot.x >= 10 ? "gold" : slot.x >= 5 ? "champagne" : slot.x >= 3 ? "high" : "mid";
@@ -1482,7 +1490,7 @@
     if (wheel === "accident") return slot.give ? "+×" + slot.give : slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
     // Looks like any ×0 slot: the player finds out when the bonus effect starts.
     if (slot.kakuhen) return "×0";
-    if (wheel === "item") return ITEM_INFO[slot.item].n;
+    if (wheel === "item") return slot.twice ? "2個" : ITEM_INFO[slot.item].n;
     if (slot.item === true) return "ITEM";
     if (slot.balls) return "●×" + slot.balls;
     if (slot.ball) return "●×1";
@@ -1578,7 +1586,7 @@
                 ? "−" + fmt(Math.round(e.base * slot.take)) + api.unit()
                 : "セーフ"
           : e.wheel === "item"
-            ? ITEM_INFO[slot.item].n
+            ? slot.twice ? "アイテム2個！" : ITEM_INFO[slot.item].n
           : slot.item === true
             ? "ITEM チャンス"
           : slot.balls
@@ -1657,30 +1665,13 @@
       line = node("p", "sg-game-line");
     box.append(table, line, actions);
     layer.replaceChildren(box);
-    // おまかせ plays the round with a plain strategy (blackjack: draw below 17; dice poker: keep
-    // what the dealer would; chinchiro: throw until done) and goes on by itself. In 早送り it
-    // starts on its own. Each game sets `step` (one move; false when the round is over) and `redraw`.
-    let auto = false,
-      step = null,
-      redraw = null;
-    const autoBtn = node("button", "sg-game-btn sg-auto", "おまかせ");
-    autoBtn.type = "button";
-    autoBtn.dataset.sgGame = "auto";
-    const play = async () => {
-      if (auto || !step) return;
-      auto = true;
-      autoBtn.disabled = true;
-      redraw();
-      while (view?.layer === layer && !layer.hidden && step()) await wait(400);
-    };
-    autoBtn.onclick = play;
+    // (No おまかせ: every game is played by hand, in 早送り too.)
     const button = (text, onClick, data) => {
       const b = node("button", "sg-game-btn", text);
       b.type = "button";
       if (data) b.dataset.sgGame = data;
       b.onclick = onClick;
       // While おまかせ plays, the buttons are its own.
-      if (auto) b.disabled = true;
       actions.append(b);
       return b;
     };
@@ -1688,7 +1679,6 @@
     let ended = false;
     const end = (m) => {
       actions.replaceChildren();
-      autoBtn.remove();
       if (ended) return;
       ended = true;
       const target = view;
@@ -1708,7 +1698,6 @@
       b.append(node("b", "", text));
       if (sub) b.append(node("small", "", sub));
       b.onclick = onClick;
-      if (auto) b.disabled = true;
       return b;
     };
     const out = (text, net) => {
@@ -1738,8 +1727,7 @@
           );
           box2.querySelectorAll("button[data-move]").forEach((b) => {
             b.dataset.sgGame = b.dataset.move === "hit" || b.dataset.move === "stand" || b.dataset.move === "double" || b.dataset.move === "split" ? b.dataset.move : "";
-            if (auto) b.disabled = true;
-          });
+                });
           table.append(box2);
           table.append(rulesBox("ブラックジャックの遊び方", UI.BJ_RULES));
         } else {
@@ -1748,16 +1736,6 @@
           end(o.net / p.bet);
         }
       };
-      step = () => {
-        const t = p.round;
-        if (t.done) return false;
-        const hand = t.seats.me.hands.find((h) => !h.done) || t.seats.me.hands[0];
-        p.round = { ...C.tableAct(t, "me", C.bjTotal(hand.cards).total < 17 ? "hit" : "stand"), dealtAt: t.dealtAt };
-        keepRound(p.round);
-        draw();
-        return true;
-      };
-      redraw = draw;
       if (!p.round) keepRound((p.round = { ...C.tableDeal(["me"], { me: p.bet }, random), dealtAt: Date.now() }));
       draw();
     } else if (p.game === "dice") {
@@ -1783,7 +1761,7 @@
             keepRound(p.round);
             draw();
           });
-          again.disabled = !C.diceCanRoll(r) || auto;
+          again.disabled = !C.diceCanRoll(r);
           row.append(again, move("これで勝負", "", "stand", () => stand(), true));
           table.append(row);
           if (left && suggest?.some((k, i) => k && !r.held[i])) {
@@ -1810,21 +1788,6 @@
         keepRound(p.round);
         draw();
       };
-      step = () => {
-        const r = p.round;
-        if (r.done) return false;
-        const keep = C.dealerKeeps(r.dice);
-        if (r.rolls < 3 && !keep.every(Boolean)) {
-          let next = r;
-          keep.forEach((k, i) => next.held[i] !== k && (next = C.diceToggle(next, i)));
-          rolled = next.held.map((h) => !h);
-          p.round = C.diceReroll(next, random);
-          keepRound(p.round);
-          draw();
-        } else stand();
-        return true;
-      };
-      redraw = draw;
       if (!p.round) keepRound((p.round = C.diceStart(p.bet, random)));
       rolled = [true, true, true, true, true];
       draw();
@@ -1856,21 +1819,9 @@
         }
         table.append(rulesBox("チンチロの遊び方", UI.CHIN_RULES));
       };
-      step = () => {
-        const r = p.round;
-        if (r.child.done) return false;
-        p.round = { ...r, child: C.chinNext(r.child, random, C.CHILD_THROWS) };
-        keepRound(p.round);
-        rolledNow = true;
-        draw();
-        return true;
-      };
-      redraw = draw;
       if (!p.round) keepRound((p.round = { parent: C.chinTurn(random), child: C.chinStart() }));
       draw();
     }
-    if (!ended) box.append(autoBtn);
-    if (view.quick) play();
   }
   function die(value) {
     const el = node("span", "cs-die");
@@ -1936,15 +1887,13 @@
     dice: "サイコロを3個振って、出た目の合計×50点。",
     math: "むずかしさを3つから選び、制限時間以内に計算の答えを入れてください。正解で、かんたん300点・ふつう600点・むずかしい1,200点（20秒）。",
     stop: "左右に動く光を、まん中の金色で止めると額の2倍、銀色なら0.75倍。外れると0。5秒たつと外れです。",
-    hilo: "めくったカード（A〜K）より次のカードが大きいか小さいかを当てます。当たりで額の1.25倍、同じ数なら1倍、外れると0。",
+    hilo: "めくったカード（A〜K）より次のカードが大きいか小さいかを当てます。当たりで額の1.25倍、同じ数（ぴったり）なら10倍、外れると0。",
   };
   async function bonus() {
     while (view?.state.bonus?.length) {
       const item = view.state.bonus[0];
       let done = null;
-      // 早送り: a normal square's quick game is not played; it pays its fixed part.
-      if (view.quick && QUICK_GAMES.has(item.game) && !item.started) done = "auto";
-      else if (item.started) {
+      if (item.started) {
         await miniShell(item, (box, finish) => {
           box.append(node("p", "sg-game-line", "途中でやめたので0点です。"));
           finish(null);
@@ -2121,7 +2070,7 @@
         hi.remove();
         lo.remove();
         const outcome = m === n ? "tie" : m > n === high ? "win" : "lose";
-        end(outcome, { win: "当たり", tie: "同じ数", lose: "はずれ" }[outcome]);
+        end(outcome, { win: "当たり", tie: "ぴったり！×10", lose: "はずれ" }[outcome]);
       };
       const hi = node("button", "sg-game-btn", "HIGH ↑"),
         lo = node("button", "sg-game-btn", "LOW ↓");

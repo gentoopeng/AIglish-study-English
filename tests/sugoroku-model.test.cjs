@@ -41,7 +41,7 @@ test("the board, card and wheels have the agreed shape", () => {
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     // High risk, high return: from −5 times the bet to +7; the 確変 wheel holds the biggest multiples and the ball runs.
-    for (const x of [5, 4, 3, 2, 0.5, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
+    for (const x of [5, 4, 3, 2, 1.5, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
     assert.equal(S.RULES.normal[cost].filter((slot) => slot.item).length, 5, "five item slots (they pay ×1 and an item)");
     // Some of what is on the wheel really pays the bet back or more (not only the hidden bonus slot).
     assert.ok(S.RULES.normal[cost].filter((slot) => !slot.kakuhen && slot.x >= 1).length >= 3, "a few slots pay ×1 or more");
@@ -467,7 +467,7 @@ test("the normal wheel has two quick games each twice, paid in multiples of the 
   assert.deepEqual(out.state.bonus, [{ game: "stop", mult: 1, bet: 100 }]);
   assert.deepEqual(out.events.filter((e) => e.t === "bonus"), [{ t: "bonus", game: "stop", mult: 1 }]);
   assert.deepEqual(["perfect", "good", "miss", "auto", "x"].map((d) => S.gameScore("stop", d)), [200, 75, 0, 50, 0]);
-  assert.deepEqual(["win", "tie", "lose", "auto"].map((d) => S.gameScore("hilo", d)), [125, 100, 0, 50]);
+  assert.deepEqual(["win", "tie", "lose", "auto"].map((d) => S.gameScore("hilo", d)), [125, 1000, 0, 50]);
   assert.equal(S.settleBonus(out.state, "perfect").gain, 200);
 });
 
@@ -501,14 +501,23 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
     from = { ...S.newState(), pos: at("normal") - 1 };
   const pickItem = (id) => S.RULES.itemWheel.findIndex((x) => x.item === id);
   assert.deepEqual(Object.keys(S.RULES.items).sort(), ["dice2", "dice3", "exact", "guard", "x2"]);
-  assert.deepEqual(S.RULES.itemWheel.map((x) => x.item).sort(), ["dice2", "dice2", "dice2", "dice2", "dice3", "exact", "guard", "guard", "x2", "x2"]);
-  assert.equal(S.RULES.itemWheel.length, 10);
+  assert.deepEqual(S.RULES.itemWheel.filter((x) => x.item).map((x) => x.item).sort(), ["dice2", "dice2", "dice2", "dice2", "dice3", "exact", "guard", "guard", "x2", "x2"]);
+  assert.equal(S.RULES.itemWheel.filter((x) => x.twice).length, 1, "one slot gives two items");
+  assert.equal(S.RULES.itemWheel.length, 11);
+  assert.ok(S.RULES.accident.every((x) => !x.give), "the accident wheel pays nothing");
   // A normal slot with an item: the item wheel spins and the bag gets the item.
   const got = S.roll(from, card, 100, seq([0, itemAt, pickItem("guard")]));
   assert.deepEqual(got.state.items, ["guard"]);
   assert.deepEqual(got.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["normal", "item"]);
   assert.deepEqual(got.events.find((e) => e.t === "itemGet"), { t: "itemGet", id: "guard", amount: 100 });
   assert.equal(got.gain, 100, "the item and 100 besides");
+  // The 「2個」 slot: two items (each from the other slots), and the 100 only once.
+  const twiceAt = S.RULES.itemWheel.findIndex((x) => x.twice);
+  const twin = S.roll(from, card, 100, seq([0, itemAt, twiceAt, pickItem("guard"), pickItem("x2")]));
+  assert.equal(twin.state.items.length, 2);
+  assert.ok(twin.state.items.every((id) => S.RULES.items[id]), "real items");
+  assert.deepEqual(twin.events.filter((e) => e.t === "itemGet").map((e) => [e.twice, e.amount]), [[true, 100], [true, 0]]);
+  assert.equal(twin.gain, 100);
   // Items are kept as a count: a fourth one still goes in.
   const many = S.roll({ ...from, items: ["dice2", "dice2", "exact"] }, card, 100, seq([0, itemAt, pickItem("dice3")]));
   assert.deepEqual(many.state.items, ["dice2", "dice2", "exact", "dice3"]);
@@ -543,10 +552,10 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
   assert.equal(safe.gain, 0);
   assert.equal(safe.state.guard, S.RULES.guardRolls - 1);
   assert.ok(safe.events.some((e) => e.t === "wheel" && e.wheel === "accident"), "the wheel still spins");
-  const goodAt = S.RULES.accident.findIndex((x) => x.give === 6);
-  const pays = S.roll({ ...from, pos: accident - 1, items: ["guard"] }, card, 100, seq([0, goodAt]), "amy", { items: ["guard"] });
-  assert.equal(pays.gain, 600);
-  assert.equal(pays.events.filter((e) => e.t === "guarded").length, 0);
+  const safeAt = S.RULES.accident.findIndex((x) => x.take === 0);
+  const calm = S.roll({ ...from, pos: accident - 1, items: ["guard"] }, card, 100, seq([0, safeAt]), "amy", { items: ["guard"] });
+  assert.equal(calm.gain, 0);
+  assert.equal(calm.events.filter((e) => e.t === "guarded").length, 0, "a safe slot is not a blocked one");
   const later = S.roll({ ...safe.state, pos: accident - 1 }, card, 100, seq([0, 0]), "amy");
   assert.equal(later.events.filter((e) => e.t === "guarded").length, 1);
   assert.equal(later.state.guard, S.RULES.guardRolls - 2);
