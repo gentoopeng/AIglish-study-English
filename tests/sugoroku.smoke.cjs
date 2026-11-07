@@ -609,6 +609,42 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.match(await mini.innerText(), /途中でやめたので0点/);
     await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
     assert.deepEqual((await saved()).bonus, []);
+    // The super accident square is on the board once (the red !!); ヘルモード turns the squares round and shows how long is left.
+    await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
+    const counts = () => page.evaluate(() => Object.fromEntries(["normal", "accident", "event", "super"].map((k) => [k, document.querySelectorAll(".sg-sq.is-" + k).length])));
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      Object.assign(s, { hell: 0, pending: null, bonus: [], items: [], guard: 0 });
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").first().waitFor();
+    const calmCounts = await counts();
+    assert.equal(calmCounts.super, 1);
+    assert.equal(await screen.locator(".sg-sq.is-super b").innerText(), "!!");
+    assert.equal(await screen.locator(".sg-hell").isVisible(), false);
+    await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.hell = 150;
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").first().waitFor();
+    const hellCounts = await counts();
+    assert.equal(hellCounts.super, 1);
+    assert.equal(hellCounts.accident, calmCounts.normal, "normal squares are ! now");
+    assert.equal(hellCounts.normal, calmCounts.accident + calmCounts.event, "! and ★ squares are normal now");
+    assert.equal(hellCounts.event, 0);
+    assert.match(await screen.locator(".sg-hell").innerText(), /ヘルモード あと2周/);
+    await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.hell = 0;
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").first().waitFor();
     // One screen exactly, at small phone sizes too, with the bag full, ガード on and ぴったり's faces open.
     for (const [w, h] of [[320, 568], [360, 640], [375, 667], [390, 844]]) {
       await page.setViewportSize({ width: w, height: h });

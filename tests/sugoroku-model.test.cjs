@@ -26,6 +26,11 @@ const withOpen = (card, i = 0) => ({ ...card, owners: card.owners.map((o, k) => 
 test("the board, card and wheels have the agreed shape", () => {
   assert.equal(S.SIZE, 100);
   assert.equal(S.kindAt(0), "start");
+  // One super accident square; ヘルモード turns normal / accident / event round (START and the super square stay).
+  assert.equal(Array.from({ length: S.SIZE }, (_, i) => S.kindAt(i)).filter((k) => k === "super").length, 1);
+  assert.equal(S.kindNow(S.SIZE - 1, 0), S.kindAt(S.SIZE - 1));
+  const kinds = Array.from({ length: S.SIZE }, (_, i) => [S.kindAt(i), S.kindNow(i, 5)]);
+  assert.ok(kinds.every(([a, b]) => ({ normal: "accident", accident: "normal", event: "normal", start: "start", super: "super" })[a] === b));
   const card = S.newCard(rng(1));
   assert.ok(S.validCard(card));
   // Two 7×7 cards (98 numbers), no free cell; the 99th number is the special one, on neither card.
@@ -40,8 +45,9 @@ test("the board, card and wheels have the agreed shape", () => {
   assert.equal(S.validCard({ cells: Array.from({ length: 49 }, (_, i) => i + 1), owners: Array(49).fill("") }), false);
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
-    // High risk, high return: from −5 times the bet to +7; the 確変 wheel holds the biggest multiples and the ball runs.
-    for (const x of [5, 4, 3, 2, 1.5, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
+    assert.equal(S.RULES.accident.filter((x) => x.take === 0).length, 1, "one SAFE on the accident wheel");
+    // High risk, high return: from −5 times the bet to +8; the 確変 wheel holds the biggest multiples and the ball runs.
+    for (const x of [8, 5, 4, 3, 0, -1, -2, -5]) assert.ok(values.has(x), cost + " has ×" + x);
     assert.equal(S.RULES.normal[cost].filter((slot) => slot.item).length, 5, "five item slots (they pay ×1 and an item)");
     // Some of what is on the wheel really pays the bet back or more (not only the hidden bonus slot).
     assert.ok(S.RULES.normal[cost].filter((slot) => !slot.kakuhen && slot.x >= 1).length >= 3, "a few slots pay ×1 or more");
@@ -54,14 +60,14 @@ test("the board, card and wheels have the agreed shape", () => {
   }
   // One bet: 100.
   assert.deepEqual(S.RULES.costs, [100]);
-  // The bingo wheel (for a bet of 100): ×12 / ×20 / ×32 / ×50, four mini games (each twice), the jackpot and the super chance twice.
+  // The bingo wheel (for a bet of 100): ×12 / ×20 / ×32 / ×50, four mini games (each twice), the jackpot and the super chance three times each.
   const bingo = S.RULES.wheels.bingo;
-  assert.equal(bingo.length, 20);
+  assert.equal(bingo.length, 22);
   assert.deepEqual(bingo.filter((x) => x.x).map((x) => x.x).sort((a, b) => a - b), [12, 12, 20, 20, 32, 32, 50, 50]);
   assert.deepEqual(bingo.filter((x) => x.game).map((x) => x.game).sort(), ["dice", "dice", "math", "math", "tap", "tap", "timer", "timer"]);
   assert.equal(bingo.filter((x) => x.miss).length, 0);
-  assert.equal(bingo.filter((x) => x.jackpot === "jp").length, 2);
-  assert.equal(bingo.filter((x) => x.next === "sjp").length, 2);
+  assert.equal(bingo.filter((x) => x.jackpot === "jp").length, 3);
+  assert.equal(bingo.filter((x) => x.next === "sjp").length, 3);
   // The super chance: the super jackpot twice, the jackpot, the bigger tapping game, back.
   const sjp = S.RULES.wheels.sjp;
   assert.equal(sjp.length, 5);
@@ -635,4 +641,64 @@ test("two ways of moving at once are refused by the rules (the screen offers onl
   // Any one of them goes with ガード and 倍がけ.
   const ok = S.roll({ ...from, items: ["dice3", "guard", "x2"] }, card, 100, seq([0, 1, 2, 0]), "amy", { items: ["dice3", "guard", "x2"] });
   assert.equal(ok.state.items.length, 0);
+});
+
+test("the super accident square: −10 to −30 times, balls off, bag emptied, safe, lucky, ヘルモード", () => {
+  const wheel = S.RULES.superAccident,
+    sq = at("super"),
+    slotAt = (test) => wheel.findIndex(test);
+  assert.equal(wheel.length, 10);
+  assert.deepEqual(wheel.filter((x) => x.take).map((x) => x.take).sort((a, b) => a - b), [10, 15, 20, 25, 30]);
+  const base = S.newCard(seq([0])),
+    from = { ...S.newState(), pos: sq - 1 };
+  const roll = (state, card, index, extra = [], me = "amy", use) => S.roll(state, card, 100, seq([0, index, ...extra]), me, use);
+  // −×30: 3,000 taken.
+  const big = roll(from, base, slotAt((x) => x.take === 30));
+  assert.equal(big.gain, -3000);
+  assert.equal(big.events.find((e) => e.t === "wheel").wheel, "super");
+  // SAFE: nothing.
+  assert.equal(roll(from, base, slotAt((x) => x.take === 0 && !x.lucky)).gain, 0);
+  // Balls off the card: the player's own only (ben's stay), with their bets.
+  const owned = { ...base, owners: base.owners.map((o, k) => (k === 0 ? "amy" : k === 1 ? "ben" : k === 2 ? "amy" : o)), bets: base.owners.map((_, k) => (k < 3 ? 100 : 0)) };
+  const cleared = roll(from, owned, slotAt((x) => x.resetBalls));
+  assert.deepEqual(cleared.card.owners.slice(0, 3), ["", "ben", ""]);
+  assert.deepEqual(cleared.card.bets.slice(0, 3), [0, 100, 0]);
+  assert.deepEqual(cleared.events.find((e) => e.t === "reset"), { t: "reset", cells: [0, 2], own: true });
+  // Bag emptied (ガード is not in the bag and stays).
+  const lost = roll({ ...from, items: ["dice2", "x2", "x2"] }, base, slotAt((x) => x.resetItems));
+  assert.deepEqual(lost.state.items, []);
+  assert.equal(lost.events.find((e) => e.t === "itemsLost").count, 3);
+  // LUCKY: the 確変 wheel spins (here ×41).
+  const ten = S.RULES.kakuhen.findIndex((x) => x.x === 41);
+  const lucky = roll(from, base, slotAt((x) => x.lucky), [ten]);
+  assert.deepEqual(lucky.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["super", "kakuhen"]);
+  assert.equal(lucky.gain, 4100);
+  // ヘルモード: three times round the board; normal squares act as accidents until it ends.
+  const hell = roll(from, base, slotAt((x) => x.hell));
+  assert.equal(hell.state.hell, 3 * S.SIZE);
+  assert.ok(hell.events.some((e) => e.t === "hell"));
+  const normal = at("normal"),
+    inHell = S.roll({ ...S.newState(), pos: normal - 1, hell: 50 }, base, 100, seq([0, 0]), "amy");
+  assert.equal(inHell.events.find((e) => e.t === "land").kind, "accident", "a normal square is an accident in ヘルモード");
+  assert.equal(inHell.events.find((e) => e.t === "wheel").wheel, "accident");
+  assert.equal(inHell.state.hell, 49, "one square moved");
+  const accident = at("accident"),
+    swapped = S.roll({ ...S.newState(), pos: accident - 1, hell: 50 }, base, 100, seq([0, 0]), "amy");
+  assert.equal(swapped.events.find((e) => e.t === "wheel").wheel, "normal", "an accident square is a normal one");
+  const end = S.roll({ ...S.newState(), pos: normal - 1, hell: 1 }, base, 100, seq([0, 0]), "amy");
+  assert.ok(end.events.some((e) => e.t === "hellEnd"));
+  assert.equal(end.state.hell, 0);
+  assert.equal(end.events.find((e) => e.t === "land").kind, "normal", "the last square is already a normal one");
+  // ガード stops every bad slot (but not SAFE or LUCKY).
+  for (const test of [(x) => x.take === 20, (x) => x.resetBalls, (x) => x.resetItems, (x) => x.hell]) {
+    const g = roll({ ...from, guard: 2, items: ["x2"] }, owned, slotAt(test));
+    assert.equal(g.gain, 0);
+    assert.equal(g.state.hell, 0);
+    assert.deepEqual(g.state.items, ["x2"]);
+    assert.deepEqual(g.card.owners.slice(0, 3), ["amy", "ben", "amy"]);
+    assert.equal(g.events.filter((e) => e.t === "guarded").length, 1);
+  }
+  // An old save has no hell.
+  assert.equal(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0 }).hell, 0);
+  assert.equal(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, hell: 99999 }).hell, 3 * S.SIZE);
 });

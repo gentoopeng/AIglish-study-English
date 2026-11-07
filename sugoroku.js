@@ -38,13 +38,13 @@
     if (text !== undefined) el.textContent = text;
     return el;
   };
-  const SQUARE = { start: "START", normal: "", event: "★", accident: "!" };
+  const SQUARE = { start: "START", normal: "", event: "★", accident: "!", super: "!!" };
   const GAME_NAMES = { blackjack: "ブラックジャック", dice: "ダイスポーカー", chinchiro: "チンチロ", ball: "ボール確定" };
   const ITEM_INFO = {
     dice2: { n: "ダブルダイス", d: "サイコロを2個振って、合計だけ進みます", img: "die", dice: 2 },
     dice3: { n: "トリプルダイス", d: "サイコロを3個振って、合計だけ進みます", img: "die", dice: 3 },
     exact: { n: "ぴったり", d: "出目を1〜6から選べます", img: "die-gold" },
-    guard: { n: "ガード", d: "この回から3回、ルーレットとアクシデントのマイナスが無効になります（プラスは入ります）", img: "shield" },
+    guard: { n: "ガード", d: "この回から3回、ルーレットとアクシデント（スーパーも）のマイナスが無効になります（プラスは入ります）", img: "shield" },
     x2: { n: "倍がけ", d: "この回の払い戻しと支払いが2倍になります（増減とも最大で賭け額の10倍まで）", img: "potion" },
   };
   // An item's picture: the dice are stacked (two or three of the same die, a little turned).
@@ -67,7 +67,7 @@
     }
     return icon;
   }
-  const WHEEL_NAMES = { item: "ITEM ROULETTE", event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "BONUS", special: "SPECIAL BALL" };
+  const WHEEL_NAMES = { item: "ITEM ROULETTE", event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "BONUS", special: "SPECIAL BALL", super: "SUPER ACCIDENT" };
   const HOT = new Set(["bingo", "sjp", "kakuhen", "special"]);
   const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "ストップ", hilo: "ハイ＆ロー" };
   // The normal squares' quick games (paid in multiples of the bet, in the wallet's unit).
@@ -75,13 +75,14 @@
   const LOG_NAMES = { bingo: "BINGO", jp: "JACKPOT", sjp: "SUPER JACKPOT" };
   const RULES_TEXT = [
     "1回の賭けは100。ログイン中はポイント、ゲストとオフラインは練習チップで遊びます。",
-    "通常マス：ルーレット（−5倍〜+5倍。マイナスで足りない分は、カジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回、「●」はボール、「STOP」「H&L」はミニゲーム。たまに「BONUS」が出ます。",
+    "通常マス：ルーレット（−5倍〜+8倍。マイナスで足りない分は、カジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回、「●」はボール、「STOP」「H&L」はミニゲーム。たまに「BONUS」が出ます。",
     "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・確定ボールのどれか。カジノと同じルールで、勝つと配当とボール、引き分けは賭けが戻ります。負けは、ダブルやヒフミなら賭けの2倍など、カジノと同じ倍率で払います。",
     "！（アクシデント）：2〜6倍が引かれる、3マス戻る、STARTに戻る。何も起きない枠もあります。",
+    "！！（スーパーアクシデント）：盤面に1つだけ。10項目のルーレットで、−10〜−30倍、自分のボールが全部消える、アイテムが全部消える、何も起きない、ラッキー（ボーナスルーレット）、ヘルモードのどれか。ヘルモードは盤面を3周するまで、通常マスが！に、！が通常マスに、★が通常マスに入れ替わります。",
     "STARTを通ると、ボールが1個出ます。",
     "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選。開いていない番号なら自分のボールが入り、開いている番号は1.5倍がもらえます。★の数字はスペシャルルーレットです。",
     "1列そろうと、ビンゴ賞金（700）とビンゴルーレット。賞金とルーレットの倍率の5割は、その列のボールの持ち主に、置いたときの賭け額に応じて配られます。ほかの人の分は、その人が次に遊んだときに届き、30日で消えます。ミニゲームとジャックポットは、そろえた人のものです。そろった列のボールは戻ります。",
-    "アイテム：「ITEM」のルーレットで1個（「2個」の枠もあります）もらえ、100ptも入ります。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（3回、ルーレットとアクシデントのマイナスが無効）・倍がけ（この回の増減が2倍）。",
+    "アイテム：「ITEM」のルーレットで1個（「2個」の枠もあります）もらえ、100ptも入ります。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（3回、ルーレットとアクシデントのマイナスが無効。スーパーアクシデントの悪い枠も防ぎます）・倍がけ（この回の増減が2倍）。",
     "ジャックポットは、カジノの賭けから貯まります。",
     "盤面をタップすると、その回の演出を飛ばせます。",
   ];
@@ -653,6 +654,23 @@
     if (view?.state.pending) game();
     else await collectNow();
   }
+  // ヘルモード turns the squares round (normal → !, ! → normal, ★ → normal): redrawn when it starts and ends.
+  function paintKinds() {
+    const hell = Math.max(0, Number(view.state.hell) || 0);
+    view.body.classList.toggle("is-hell", hell > 0);
+    if (view.hellEl) {
+      view.hellEl.hidden = !hell;
+      view.hellEl.textContent = hell ? "ヘルモード あと" + Math.ceil(hell / S.SIZE) + "周" : "";
+    }
+    const key = hell > 0 ? "hell" : "";
+    if (view.hellKinds === key) return;
+    view.hellKinds = key;
+    view.squares.forEach((sq, i) => {
+      const kind = S.kindNow(i, hell);
+      sq.className = sq.className.replace(/\bis-(start|normal|event|accident|super)\b/, "is-" + kind);
+      sq.lastChild.textContent = SQUARE[kind];
+    });
+  }
   // One screen, exactly: the card takes the height the other parts leave (they change: the guard line,
   // the bag, the study hint, who else plays), so its width is measured and set again whenever the
   // layout changes. (The CSS width is only the first guess.)
@@ -740,6 +758,7 @@
       view.scrollTimer = setTimeout(syncTabs, 90);
     });
     view.say = node("p", "sg-say");
+    view.hellKinds = "";
     view.say.setAttribute("role", "status");
     view.cardWrap = cardWrap;
     cardWrap.append(tabs, slider, view.say);
@@ -778,7 +797,9 @@
     view.info = node("p", "sg-status");
     // The status line and, while ガード lasts, its badge share one row (no extra height).
     view.statusRow = node("div", "sg-statusrow");
-    view.statusRow.append(view.info, view.guardEl);
+    view.hellEl = node("p", "sg-hell");
+    view.hellEl.hidden = true;
+    view.statusRow.append(view.info, view.guardEl, view.hellEl);
     view.hereEl = node("p", "sg-here");
     view.hereEl.hidden = true;
     view.hereEl.setAttribute("aria-label", "いっしょにプレイ中の人");
@@ -991,6 +1012,7 @@
       // On points, today's bets are limited by today's study (see Casino.allowance).
       study = !short && api.real() && !!api.allowance && api.allowance() < view.cost;
     paintItems();
+    paintKinds();
     fitCard();
     const needFace = view.armed.ids.includes("exact") && !view.armed.face;
     view.go.disabled = view.busy || !!view.syncing || (short && !refill) || study || !!state.pending || needFace;
@@ -1016,7 +1038,7 @@
   // The piece sits on its square; the strip slides so the piece stays a little left of centre.
   // Tapping a square tells how many squares it is from the piece, and what kind it is (not during a roll:
   // a tap there skips to the end of it).
-  const KIND_NAMES = { start: "START（ボールが1個出ます）", normal: "通常マス", event: "★イベントマス", accident: "！アクシデントマス" };
+  const KIND_NAMES = { start: "START（ボールが1個出ます）", normal: "通常マス", event: "★イベントマス", accident: "！アクシデントマス", super: "！！スーパーアクシデントマス（−10〜−30倍・ボールとアイテムのリセット・ラッキー・ヘルモード）" };
   function squareTip(i) {
     if (!view || view.busy) return;
     const sq = view.squares[i],
@@ -1024,7 +1046,7 @@
     view.tip?.remove();
     clearTimeout(view.tipTimer);
     const tip = node("div", "sg-tip");
-    tip.append(node("b", "", away ? "あと" + away + "マス" : "いまここ"), node("small", "", KIND_NAMES[S.kindAt(i)]));
+    tip.append(node("b", "", away ? "あと" + away + "マス" : "いまここ"), node("small", "", KIND_NAMES[S.kindNow(i, view.state.hell)] + (view.state.hell > 0 && S.kindNow(i, view.state.hell) !== S.kindAt(i) ? "（ヘルモード中）" : "")));
     tip.style.left = sq.offsetLeft + sq.offsetWidth / 2 + "px";
     view.lane.append(tip);
     view.tip = tip;
@@ -1387,6 +1409,19 @@
           say("報酬 ×" + e.mult + (e.solo ? "（自分のボールだけ ×" + S.RULES.soloBonus + "）" : "") + (e.count > 1 ? "（" + e.count + "列同時 ×" + (e.count + 1) + "）" : ""), "is-gain");
           await wait(1300);
         }
+      } else if (e.t === "itemsLost") {
+        say(e.count ? "アイテムがぜんぶなくなった" : "アイテムはなかった", "is-loss");
+        await wait(1000);
+      } else if (e.t === "hell") {
+        view.state = { ...view.state, hell: S.RULES.hellLaps * S.SIZE };
+        paintKinds();
+        say("ヘルモード　" + e.laps + "周", "is-hot");
+        await wait(1400);
+      } else if (e.t === "hellEnd") {
+        view.state = { ...view.state, hell: 0 };
+        paintKinds();
+        say("ヘルモード終了", "is-gain");
+        await wait(1000);
       } else if (e.t === "reset") {
         // The finished lines start again: their balls leave (the numbers stay).
         for (const c of e.cells) {
@@ -1396,7 +1431,7 @@
         }
         paintCard();
         hud();
-        say("そろった列のボールが戻る", "is-ball");
+        say(e.own ? (e.cells.length ? "自分のボールがぜんぶ消えた" : "自分のボールはなかった") : "そろった列のボールが戻る", e.own ? "is-loss" : "is-ball");
         await wait(900);
       } else if (e.t === "prize") {
         say("ビンゴ賞金　+" + fmt(e.amount) + api.unit() + (e.total > e.amount ? "（みんなに " + fmt(e.total - e.amount) + "）" : ""), "is-gain");
@@ -1483,6 +1518,7 @@
   // The colour says what a slot is worth before the label is read.
   function tone(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "ball" : "game-" + slot;
+    if (wheel === "super") return slot.lucky ? "gold" : slot.hell ? "worst" : slot.take >= 20 ? "worst" : slot.take || slot.resetBalls || slot.resetItems ? "bad" : "safe";
     if (wheel === "accident") return slot.give ? (slot.give >= 5 ? "gold" : "high") : slot.start ? "worst" : slot.back ? "bad" : slot.take >= 4 ? "worst" : slot.take ? "bad" : "safe";
     if (slot.kakuhen) return "zero";
     if (wheel === "item") return slot.twice ? "gold" : slot.item === "ball" ? "gold" : slot.item === "exact" ? "champagne" : "high";
@@ -1498,6 +1534,7 @@
   }
   function slotLabel(wheel, slot) {
     if (wheel === "event") return slot === "ball" ? "BALL" : { blackjack: "BJ", dice: "DICE", chinchiro: "チンチロ" }[slot];
+    if (wheel === "super") return slot.lucky ? "LUCKY" : slot.hell ? "HELL" : slot.resetBalls ? "ボール消" : slot.resetItems ? "アイテム消" : slot.take ? "−×" + slot.take : "SAFE";
     if (wheel === "accident") return slot.give ? "+×" + slot.give : slot.start ? "START" : slot.back ? "−" + slot.back + "マス" : slot.take ? "−×" + slot.take : "SAFE";
     // Looks like any ×0 slot: the player finds out when the bonus effect starts.
     if (slot.kakuhen) return "×0";
@@ -1587,10 +1624,10 @@
     if (e.mult > 1 && HOT.has(e.wheel)) box.append(node("p", "sg-wheel-base", "賞金とミニゲームは ×" + e.mult));
     layer.replaceChildren(box);
     const n = e.slots.length,
-      turns = { normal: 4, event: 4, accident: 4, bingo: 5, jp: 6, sjp: 7, kakuhen: 5, special: 5, item: 4 }[e.wheel],
+      turns = { normal: 4, event: 4, accident: 4, super: 5, bingo: 5, jp: 6, sjp: 7, kakuhen: 5, special: 5, item: 4 }[e.wheel],
       jitter = (random(60) - 30) / 100,
       angle = turns * 360 - ((e.index + 0.5 + jitter * 0.8) * 360) / n;
-    const full = { normal: 1700, event: 2000, accident: 2000, bingo: 3000, jp: 3800, sjp: 4600, kakuhen: 3200, special: 3200, item: 2200 }[e.wheel],
+    const full = { normal: 1700, event: 2000, accident: 2000, super: 2600, bingo: 3000, jp: 3800, sjp: 4600, kakuhen: 3200, special: 3200, item: 2200 }[e.wheel],
       time = full * pace();
     box.classList.add("is-spinning");
     disc.style.transition = time ? "transform " + time + "ms cubic-bezier(.15,.6,.1,1)" : "none";
@@ -1603,6 +1640,18 @@
     outcome.textContent =
       e.wheel === "event"
         ? GAME_NAMES[slot]
+        : e.wheel === "super"
+          ? slot.lucky
+            ? "LUCKY！ボーナスルーレット"
+            : slot.hell
+              ? "ヘルモード！"
+              : slot.resetBalls
+                ? "ボールリセット"
+                : slot.resetItems
+                  ? "アイテムリセット"
+                  : slot.take
+                    ? "−" + fmt(Math.round(e.base * slot.take)) + api.unit()
+                    : "セーフ"
         : e.wheel === "accident"
           ? slot.start
             ? "STARTに戻る"
