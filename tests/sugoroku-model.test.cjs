@@ -487,7 +487,7 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
     from = { ...S.newState(), pos: at("normal") - 1 };
   const pickItem = (id) => S.RULES.itemWheel.findIndex((x) => x.item === id);
   assert.deepEqual(Object.keys(S.RULES.items).sort(), ["dice2", "dice3", "exact", "guard", "x2"]);
-  assert.deepEqual(S.RULES.itemWheel.map((x) => x.item).sort(), ["dice2", "dice2", "dice2", "dice3", "exact", "exact", "guard", "guard", "x2", "x2"]);
+  assert.deepEqual(S.RULES.itemWheel.map((x) => x.item).sort(), ["dice2", "dice2", "dice2", "dice2", "dice3", "exact", "guard", "guard", "x2", "x2"]);
   assert.equal(S.RULES.itemWheel.length, 10);
   // A normal slot with an item: the item wheel spins and the bag gets the item.
   const got = S.roll(from, card, 100, seq([0, itemAt, pickItem("guard")]));

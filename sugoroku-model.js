@@ -93,11 +93,11 @@
     items: {
       dice2: { name: "ダブルダイス", price: 20 },
       dice3: { name: "トリプルダイス", price: 30 },
-      exact: { name: "ぴったり", price: 25 },
-      guard: { name: "ガード", price: 30 },
+      exact: { name: "ぴったり", price: 120 },
+      guard: { name: "ガード", price: 80 },
       x2: { name: "倍がけ", price: 100 },
     },
-    itemWheel: spread([...GET("dice2", 3), ...GET("dice3"), ...GET("exact", 2), ...GET("guard", 2), ...GET("x2", 2)]),
+    itemWheel: spread([...GET("dice2", 4), ...GET("dice3"), ...GET("exact"), ...GET("guard", 2), ...GET("x2", 2)]),
     // The 確変 wheel (after a 確変 slot of the normal wheel): x pays the bet × x; balls draws that
     // many balls one after another (each as any ball: it opens a number or pays missPay, and a
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
