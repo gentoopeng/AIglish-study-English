@@ -324,21 +324,16 @@
     while (!turn.done) turn = chinNext(turn, random);
     return turn;
   }
-  // When the parent's hand alone decides: the child's multiple of the bet (+ wins, − loses), else null.
-  function chinParentDecides(parent) {
-    if (parent.rank >= 80) return -parent.mult;
-    if (parent.rank === -10) return 2;
-    return null;
-  }
-  // The child against the parent: multiples of the bet for the child.
+  // The child against the parent, both having thrown: multiples of the bet for the child (+ wins, − loses,
+  // 0 a draw). The stronger hand wins (ピンゾロ > ゾロ目 > シゴロ > a point > 目なし > ヒフミ) and the same
+  // hand is a draw. The winner is paid by the stronger of the two sides' multiples: a child's ピンゾロ,
+  // ゾロ目 or シゴロ pays ×5, ×3 or ×2; a parent's, the same from the child; the ヒフミ of either side
+  // costs that side ×2 (a child beating a parent's ヒフミ wins at least ×2). Otherwise ×1.
   function chinSettle(parent, child) {
-    const early = chinParentDecides(parent);
-    if (early !== null) return early;
-    if (child.rank >= 80) return child.mult;
-    if (child.rank === -10) return -2;
-    // The stronger point wins; the same point (or no hand against no hand) is a draw. A child with no
-    // hand against a parent with a point is lower, so it loses.
-    return child.rank > parent.rank ? 1 : child.rank < parent.rank ? -1 : 0;
+    if (child.rank === parent.rank) return 0;
+    const big = (h) => (h.rank >= 80 ? h.mult : 1);
+    if (child.rank > parent.rank) return Math.max(big(child), parent.rank === -10 ? 2 : 1);
+    return -Math.max(big(parent), child.rank === -10 ? 2 : 1);
   }
   // One against one: simply the stronger hand, the same hand a tie.
   const chinVs = (a, b) => Math.sign(a.rank - b.rank);
@@ -348,7 +343,6 @@
     chinNext,
     chinStart,
     chinTurn,
-    chinParentDecides,
     CHILD_THROWS,
     chinSettle,
     chinVs,

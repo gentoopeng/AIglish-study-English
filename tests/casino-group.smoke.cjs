@@ -290,7 +290,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       await sc.locator(".cs-result").waitFor();
     }
     const cg = room().game;
-    const expect = (id) => a.evaluate(([parent, hand]) => (window.CasinoModel.chinParentDecides(parent) ?? window.CasinoModel.chinSettle(parent, hand)), [cg.parent.hand, cg.hands[id]?.hand || null]);
+    const expect = (id) => a.evaluate(([parent, hand]) => window.CasinoModel.chinSettle(parent, hand), [cg.parent.hand, cg.hands[id]?.hand || null]);
     for (const [page, id, start] of [[a, "group-a", w.a], [b, "group-b", w.b]]) {
       const m = await expect(id);
       await balanceIs(page, m >= 0 ? start + m * 10 : start - Math.min(-m, 5) * 10);

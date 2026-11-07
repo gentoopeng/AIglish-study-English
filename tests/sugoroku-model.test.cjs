@@ -217,9 +217,17 @@ test("an event square waits for its game; win, push and loss pay as agreed", () 
   assert.equal(S.settle(out.state, withOpen(card), 1, seq([draw(card.cells[0])])).gain, 200 + 150);
   assert.equal(S.settle(out.state, card, 1.5, seq([0])).events[0].amount, 250);
   assert.equal(S.settle(out.state, card, 0, seq([0])).gain, 100);
-  const lose = S.settle(out.state, card, -2, seq([0]));
-  assert.equal(lose.gain, 0, "a lost event game gives nothing back (the games are even now)");
+  // A loss costs what the game loses, as at the casino: ×1 takes the bet (nothing comes back), ×2 (a double, a
+  // ヒフミ) takes the bet and as much again (−100 comes back), a parent's ゾロ目 ×3 takes three times the bet.
+  const lose1 = S.settle(out.state, card, -1, seq([0])),
+    lose = S.settle(out.state, card, -2, seq([0])),
+    lose3 = S.settle(out.state, card, -3, seq([0]));
+  assert.deepEqual([lose1.gain, lose.gain, lose3.gain], [0, -100, -200]);
+  assert.deepEqual([lose1.events[0].net, lose.events[0].net, lose3.events[0].net], [-100, -200, -300], "the result says what was lost in all, the bet included");
+  assert.equal(S.settle(out.state, card, 1, seq([draw(closedOn(card))]), "amy").events[0].net, 100);
   assert.ok(!lose.events.some((e) => e.t === "ball"));
+  // A plain game (a normal square's) loses the same.
+  assert.equal(S.settle({ ...out.state, pending: { ...out.state.pending, plain: true } }, card, -2, seq([0])).gain, -100);
   const sure = S.roll(s, card, 100, seq([0, 3, draw(closedOn(card))]));
   assert.equal(sure.state.pending, null);
   assert.equal(sure.events.find((e) => e.t === "sure").amount, 100);

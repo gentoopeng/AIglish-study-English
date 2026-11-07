@@ -2193,9 +2193,9 @@
   const CHIN_RULES = [
     "3つのサイコロをどんぶりに振り、役ができるまで振り直せます。親（ディーラー）も子（あなた）も3回までです。",
     "強い順：ピンゾロ（1・1・1）＞ゾロ目（3つ同じ）＞シゴロ（4・5・6）＞目（2つ同じで、残り1つが目。6が強い）＞目なし＞ヒフミ（1・2・3）。",
-    "親が先に振ります。親がシゴロ・ゾロ目・ピンゾロなら親の勝ち、ヒフミなら子の勝ちで、すぐ決まります。",
-    "それ以外は子が振り、目の大きいほうが勝ちです。同じ目（目なし同士も）は引き分けで、賭けは戻ります。子のシゴロは2倍、ゾロ目は3倍、ピンゾロは5倍もらえ、ヒフミは2倍払います。",
-    "負けたときは役によって賭けの2〜5倍を払うことがあります（所持ポイントの分まで）。",
+    "親が先に振り、そのあと子も振ります。親が強い役でも、子は振れます。",
+    "役の強いほうが勝ち、同じ役（目なし同士も）は引き分けで、賭けは戻ります。勝ったほうが、シゴロなら2倍、ゾロ目なら3倍、ピンゾロなら5倍もらえます（親が勝つと、子がその分を払います）。",
+    "ヒフミを出すと2倍払います（相手がもっと強い役なら、その倍率）。親のヒフミに勝つと、少なくとも2倍もらえます。払う分は、所持ポイントまでです。",
   ];
   // How loud a hand's stamp is: the rarer the hand, the brighter.
   const chinTone = (hand) => (hand.rank >= 100 ? "is-legend" : hand.rank >= 90 ? "is-zoro" : hand.rank === 80 ? "is-shigoro" : hand.rank < 0 ? "is-hifumi" : hand.rank === 0 ? "is-none" : "is-me");
@@ -2256,12 +2256,11 @@
       return refresh();
     }
     const { parent, child } = state;
-    const early = C.chinParentDecides(parent.hand);
-    felt.append(chinSide("親（ディーラー）", parent, false, !state.shown), chinSide("あなた", early !== null ? null : child, false, state.rolled));
+    felt.append(chinSide("親（ディーラー）", parent, false, !state.shown), chinSide("あなた", child, false, state.rolled));
     state.shown = true;
     state.rolled = false;
     body.append(felt);
-    if (early === null && !child.done) {
+    if (!child.done) {
       const go = node("button", "cs-primary", child.rolls.length ? "もう一度振る（あと" + (C.CHILD_THROWS - child.rolls.length) + "回）" : "サイコロを振る");
       go.type = "button";
       go.dataset.chinRoll = "";
@@ -2275,13 +2274,13 @@
       body.append(node("p", "cs-hint", "親は「" + parent.hand.name + "」。" + (child.rolls.length ? "役ができるまで、あと" + (C.CHILD_THROWS - child.rolls.length) + "回振れます" : "あなたの番です（" + C.CHILD_THROWS + "回まで）")), row);
       return refresh();
     }
-    const m = early !== null ? early : C.chinSettle(parent.hand, child.hand);
+    const m = C.chinSettle(parent.hand, child.hand);
     if (!state.paid) {
       state.paid = true;
       chinMoney(m, state.bet, state.money.pay, (n) => n > 0 && state.money.stake(n, "extra"));
       if (m >= 3) bigWin(child.hand?.name === "ピンゾロ" ? "PINZORO" : "ZOROME", m * state.bet, child.hand?.name || "", 900);
     }
-    const out = result((early !== null ? "親が「" + parent.hand.name + "」：" : "") + chinWords(m), m * state.bet);
+    const out = result("親は「" + parent.hand.name + "」、あなたは「" + child.hand.name + "」。" + chinWords(m), m * state.bet);
     out.style.setProperty("--d", "0.6s");
     body.append(out, betBar("chinchiro", "もう一度", start));
     refresh();
@@ -2335,24 +2334,23 @@
       body.append(rules("チンチロの遊び方", CHIN_RULES), hint, actions);
       return;
     }
-    const early = C.chinParentDecides(g.parent.hand),
-      inGame = g.order.includes(me);
+    const inGame = g.order.includes(me);
     const local = "aiglish_casino_chin_" + uid() + "_" + room.code + "_" + room.createdAt + "_" + room.round;
     let mine = g.hands[me] || null;
-    if (!mine && inGame && early === null) {
+    if (!mine && inGame) {
       try {
         mine = JSON.parse(localStorage.getItem(local) || "null");
       } catch {}
       mine = mine || C.chinStart();
     }
-    if (inGame) felt.append(chinSide("あなた", early !== null ? null : mine, false, group.chinRolled));
+    if (inGame) felt.append(chinSide("あなた", mine, false, group.chinRolled));
     group.chinRolled = false;
     body.append(felt);
     // The others, once they have finished.
     const others = node("ul", "cs-group-bets cs-group-dice");
-    for (const id of g.order) if (id !== me) others.append(node("li", "", nameOf(room, id) + "：" + (early !== null ? "—" : g.hands[id] ? g.hands[id].hand.name : "振っています…")));
+    for (const id of g.order) if (id !== me) others.append(node("li", "", nameOf(room, id) + "：" + (g.hands[id] ? g.hands[id].hand.name : "振っています…")));
     if (others.childElementCount) body.append(others);
-    if (inGame && early === null && !g.hands[me]) {
+    if (inGame && !g.hands[me]) {
       // A finished hand goes to the table; if that does not get through, it is sent again.
       const submit = () =>
         updateDuel(room.code, (fresh) => {
@@ -2385,14 +2383,14 @@
       body.append(hint, actions);
       return;
     }
-    if (inGame && (early !== null || mine?.done)) {
-      const m = early !== null ? early : C.chinSettle(g.parent.hand, mine.hand);
+    if (inGame && mine?.done) {
+      const m = C.chinSettle(g.parent.hand, mine.hand);
       if (m > 0 || m === 0) groupMove(room, "pay", bet + Math.max(0, m) * bet);
       else {
         groupMove(room, "settled", 0);
         if (m < -1) groupMove(room, "extra", -Math.min((-m - 1) * bet, balance()));
       }
-      const out = result((early !== null ? "親が「" + g.parent.hand.name + "」：" : "") + chinWords(m), m * bet);
+      const out = result("親は「" + g.parent.hand.name + "」、あなたは「" + mine.hand.name + "」。" + chinWords(m), m * bet);
       out.style.setProperty("--d", "0.6s");
       body.append(out);
     }

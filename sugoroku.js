@@ -78,7 +78,7 @@
   const RULES_TEXT = [
     "1回の賭けは100。ログイン中はポイント、ゲストとオフラインは練習チップで遊びます。",
     "通常マス：ルーレット（−5倍〜+5倍。マイナスで足りない分は、カジノからの借金になります）。「BJ」「DICE」「チンチロ」はそのゲームを1回、「●」はボール、「STOP」「H&L」はミニゲーム。たまに「BONUS」が出ます。",
-    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・確定ボールのどれか。勝つと配当とボール、引き分けは賭けが戻ります。",
+    "★（EVENT）：ブラックジャック・ダイスポーカー・チンチロ・確定ボールのどれか。カジノと同じルールで、勝つと配当とボール、引き分けは賭けが戻ります。負けは、ダブルやヒフミなら賭けの2倍など、カジノと同じ倍率で払います。",
     "！（アクシデント）：2〜6倍が引かれる、3マス戻る、STARTに戻る。+1〜+6倍がもらえる枠もあります。",
     "STARTを通ると、ボールが1個出ます。",
     "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選。開いていない番号なら自分のボールが入り、開いている番号は1.5倍がもらえます。★の数字はスペシャルルーレットです。",
@@ -1401,7 +1401,8 @@
         say("ボール確定　+" + fmt(e.amount) + api.unit(), "is-gain");
         await wait(800);
       } else if (e.t === "result") {
-        say({ win: "勝ち　+", push: "引き分け　+", lose: "負け　+" }[e.outcome] + fmt(e.amount) + api.unit(), e.outcome === "win" ? "is-gain" : "");
+        // What the game gave and took, the bet included: 勝ち +200, 引き分け ±0, 負け −200.
+        say({ win: "勝ち　+", push: "引き分け　±", lose: "負け　−" }[e.outcome] + fmt(Math.abs(e.net ?? e.amount)) + api.unit(), e.outcome === "win" ? "is-gain" : e.outcome === "lose" ? "is-loss" : "");
         await wait(900);
       } else if (e.t === "jackpot") {
         await jackpot(e.kind, e.amount);
@@ -1704,8 +1705,11 @@
       const draw = () => {
         const t = p.round;
         table.replaceChildren();
-        for (const [who, cards, hide] of [["ディーラー", t.dealer, !t.done], ["あなた", t.seats.me.hands[0].cards, false]]) {
-          const row = node("div", "sg-hand");
+        const mine = t.seats.me,
+          hands = mine.hands;
+        const rows = [["ディーラー", t.dealer, !t.done, false]].concat(hands.map((h, i) => ["あなた" + (hands.length > 1 ? "　" + (i + 1) + "つ目" + (h.doubled ? "（ダブル）" : "") : h.doubled ? "（ダブル）" : ""), h.cards, false, !t.done && i === mine.active]));
+        for (const [who, cards, hide, active] of rows) {
+          const row = node("div", "sg-hand" + (active && hands.length > 1 ? " is-active" : ""));
           row.append(node("span", "", who + "　" + (hide ? "" : C.bjTotal(cards).total)));
           const list = node("div", "sg-cards");
           for (const c of cards) list.append(window.Poker.card(c));
@@ -1723,6 +1727,10 @@
           };
           button("もう1枚", act("hit"), "hit");
           button("これで勝負", act("stand"), "stand");
+          // As at the casino's table: a double on a hand's first two cards, a split of a pair (the extra
+          // bet is taken from what the game pays in the end, like any loss beyond the bet).
+          if (C.tableCan(t, "me", "double")) button("ダブル", act("double"), "double");
+          if (C.tableCan(t, "me", "split")) button("スプリット", act("split"), "split");
         } else {
           const out = C.tableOutcome(t, "me"),
             m = out.net / p.bet;
@@ -1846,17 +1854,16 @@
           line.textContent = "親が振っています…（親もあなたも3回まで）";
           return;
         }
-        const early = C.chinParentDecides(r.parent.hand);
-        if (early === null && !r.child.done) {
-          line.textContent = "あと" + (C.CHILD_THROWS - r.child.rolls.length) + "回振れます";
+        if (!r.child.done) {
+          line.textContent = "親は「" + r.parent.hand.name + "」。あと" + (C.CHILD_THROWS - r.child.rolls.length) + "回振れます";
           button("サイコロを振る", () => {
             p.round = { ...r, child: C.chinNext(r.child, random, C.CHILD_THROWS) };
             keepRound(p.round);
             draw();
           }, "roll");
         } else {
-          const m = early !== null ? early : C.chinSettle(r.parent.hand, r.child.hand);
-          line.textContent = (early !== null ? "親が「" + r.parent.hand.name + "」　" : "") + (m > 0 ? "勝ち" + (m > 1 ? "（" + m + "倍）" : "") : "負け");
+          const m = C.chinSettle(r.parent.hand, r.child.hand);
+          line.textContent = m > 0 ? "勝ち" + (m > 1 ? "（" + m + "倍）" : "") : m === 0 ? "引き分け" : "負け" + (m < -1 ? "（" + -m + "倍）" : "");
           end(m);
         }
       };
@@ -1864,7 +1871,7 @@
         const r = p.round;
         // おまかせ waits while the parent's throws are still landing.
         if (shown !== null && shown < r.parent.rolls.length) return true;
-        if (C.chinParentDecides(r.parent.hand) !== null || r.child.done) return false;
+        if (r.child.done) return false;
         p.round = { ...r, child: C.chinNext(r.child, random, C.CHILD_THROWS) };
         keepRound(p.round);
         draw();

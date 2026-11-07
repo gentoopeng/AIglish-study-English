@@ -190,10 +190,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const cc = page.locator("dialog.casino-screen.is-chinchiro[open]");
     await cc.waitFor();
     assert.deepEqual(await cc.locator(".cs-mode button").allInnerTexts(), ["ひとりで", "一緒に", "タイマン"]);
-    // The rules text says the even rules (three throws each, a tie is a draw), not the old parent-wins ones.
+    // The rules text says the even rules (three throws each, both throw, a tie is a draw), not the old parent-wins ones.
     const rulesText = await cc.textContent();
     assert.match(rulesText, /親（ディーラー）も子（あなた）も3回まで/);
-    assert.match(rulesText, /同じ目（目なし同士も）は引き分け/);
+    assert.match(rulesText, /親が先に振り、そのあと子も振ります/);
+    assert.match(rulesText, /同じ役（目なし同士も）は引き分け/);
     assert.doesNotMatch(rulesText, /子（あなた）は2回|同じ目（目なし同士も）は親の勝ち/);
     await cc.getByRole("button", { name: "勝負する" }).click();
     assert.match(await cc.locator(".cs-chin-side").first().innerText(), /4の目/);
@@ -297,7 +298,14 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.match(await testGame.locator(".sg-testbanner").innerText(), /テスト版[\s\S]*練習チップ/);
     assert.match(await testGame.locator("[data-cs-balance]").innerText(), /枚$/);
     const walletBefore = await page.evaluate(() => JSON.stringify(window.__wallet["users/casino-a/learningPoints/main"]));
-    await testGame.locator("[data-sg-roll]").click();
+    // (A roll that lands on a plain ×0 slot, so no game or wheel stays on the screen.)
+    await page.evaluate(() => {
+      const S = window.SugorokuModel,
+        q = [0, S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event && !x.kakuhen && !x.item)],
+        real = crypto.getRandomValues.bind(crypto);
+      crypto.getRandomValues = (a) => (q.length ? ((a[0] = q.shift()), a) : real(a));
+      document.querySelector("[data-sg-roll]").click();
+    });
     await page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning"));
     assert.equal(await page.evaluate(() => JSON.stringify(window.__wallet["users/casino-a/learningPoints/main"])), walletBefore, "no points move in the test version");
     assert.equal(await page.evaluate(() => JSON.stringify(window.__wallet["shared/sugoroku_live2"]).includes("casino-a")), false);

@@ -305,3 +305,5 @@
 .sg-tip small{font-size:10px;color:var(--muted);}
 
 .sg-testbanner{margin:0 0 6px;padding:5px 10px;border:1px dashed var(--gold);border-radius:9px;color:var(--gold);font-size:11px;text-align:center;}
+
+.sg-hand.is-active{box-shadow:0 0 0 1.5px var(--gold);border-radius:10px;}
