@@ -364,6 +364,40 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.ok(cellAt >= 0, "the ball is on the shared card");
     assert.ok(sharedCard.people["casino-a"]);
     await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    // Wiping the shared card: refused while it is under 65% full; at 70 of 98 balls the 記録 sheet offers it,
+    // two presses clear every ball (and note the time in its own document), then it waits an hour.
+    await tab.locator(".mode-sugoroku").click();
+    await sg.locator(".sg-records").click();
+    assert.equal(await sg.locator(".sg-reset .sg-game-btn").isDisabled(), true, "too few balls");
+    await sg.locator(".sg-layer button", { hasText: /^閉じる$/ }).click();
+    await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate(() => {
+      const card = window.__wallet["shared/sugoroku_live2"];
+      window.__cardBeforeWipe = structuredClone(card);
+      card.owners = card.owners.map((o, i) => (i < 70 ? "friend-1" : o));
+      card.bets = card.owners.map((o) => (o ? 100 : 0));
+      card.owed = { "friend-1": 55 };
+      window.__wallet["shared/sugoroku_live2"] = card;
+    });
+    await tab.locator(".mode-sugoroku").click();
+    await sg.locator(".sg-records").click();
+    const wipe = sg.locator(".sg-reset .sg-game-btn");
+    await page.waitForFunction(() => document.querySelector(".sg-reset .sg-game-btn") && !document.querySelector(".sg-reset .sg-game-btn").disabled);
+    await wipe.click();
+    assert.match(await wipe.innerText(), /もう一度押すと/);
+    await wipe.click();
+    await page.waitForFunction(() => window.__wallet["shared/sugoroku_reset"]);
+    const wiped = await page.evaluate(() => ({ card: window.__wallet["shared/sugoroku_live2"], meta: window.__wallet["shared/sugoroku_reset"] }));
+    assert.ok(wiped.card.owners.every((o) => o === ""), "every ball is gone");
+    assert.ok(wiped.card.bets.every((b) => b === 0));
+    assert.deepEqual(wiped.card.owed, { "friend-1": 55 }, "what is owed stays");
+    assert.equal(wiped.meta.by, "casino-a");
+    await sg.locator(".sg-layer button", { hasText: /^閉じる$/ }).click().catch(() => {});
+    await sg.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate(() => {
+      window.__wallet["shared/sugoroku_live2"] = window.__cardBeforeWipe;
+      delete window.__wallet["shared/sugoroku_reset"];
+    });
     // A batch of すごろくビンゴ rolls that nets to zero pays nothing but stays until its totals are
     // published (here the write fails once), then goes; its jackpot share is added once, after.
     await page.evaluate(() => {

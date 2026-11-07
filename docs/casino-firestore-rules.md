@@ -41,3 +41,7 @@ match /shared/sugoroku_live2 {
     && (!('log' in request.resource.data) || (request.resource.data.log is list && request.resource.data.log.size() <= 30));
 }
 ```
+
+## shared/sugoroku_reset
+
+When the すごろくビンゴ card was last wiped by a player (`{ at, by, n }`: time in ms, player id, name). Every signed-in player may read it, and write it in the same transaction that clears `shared/sugoroku_live2` (the card may be wiped only when it is at least 65% full and not within an hour of `at`; this is checked by the app, so the rules only need the same access as `shared/sugoroku_live2`).

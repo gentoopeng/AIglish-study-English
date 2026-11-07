@@ -231,7 +231,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.ok((await page.evaluate(() => window.__layers2)).some((c) => c.includes("is-special")), "the special wheel spun");
     assert.equal((await saved()).won - specialBefore.won, 1000);
     assert.deepEqual((await card()).owners, beforeCard.owners, "the special number opens no cell");
-    // Items: three bag slots and a shop. ダブルダイス is bought for 150 chips, used on the next roll
+    // Items: three bag slots and a shop. ダブルダイス is bought for 20 chips, used on the next roll
     // (two dice, the sum moves the piece) and gone afterwards; ぴったり needs a face before the roll.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate((name) => {
@@ -247,7 +247,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const shop = screen.locator(".sg-shopbox");
     assert.equal(await shop.locator("[data-buy]").count(), 5);
     await shop.locator('[data-buy="dice2"]').click();
-    assert.equal(await page.evaluate(() => window.Casino.balance()), chipsBefore - 150);
+    assert.equal(await page.evaluate(() => window.Casino.balance()), chipsBefore - 20);
     assert.deepEqual((await saved()).items, ["dice2"]);
     await shop.getByRole("button", { name: "閉じる" }).click();
     await screen.locator('.sg-item[data-item="dice2"]').click();

@@ -46,8 +46,8 @@
     dice2: { n: "ダブルダイス", d: "サイコロを2個振って、合計だけ進みます", img: "die", dice: 2 },
     dice3: { n: "トリプルダイス", d: "サイコロを3個振って、合計だけ進みます", img: "die", dice: 3 },
     exact: { n: "ぴったり", d: "出目を1〜6から選べます", img: "die-gold" },
-    guard: { n: "ガード", d: "この回から3回、アクシデントのマスが無効になります", img: "shield" },
-    x2: { n: "倍がけ", d: "通常マスのルーレットの増減が2倍になります（ほかのマスでは使われません）", img: "potion" },
+    guard: { n: "ガード", d: "この回から5回、アクシデントのマスが無効になります", img: "shield" },
+    x2: { n: "倍がけ", d: "この回の払い戻しと支払いが2倍になります（増減とも最大で賭け額の10倍まで）", img: "potion" },
   };
   // An item's picture: the dice are stacked (two or three of the same die, a little turned).
   function itemIcon(id) {
@@ -83,7 +83,7 @@
     "100マスで1周してSTARTを通ると、ボールが1つ出ます。",
     "ビンゴカードは2枚で、みんなで共通です（左右にスワイプ）。ボールは1〜99の抽選で、開いていない番号なら自分のボールが入ります。すでに開いている番号は額の2倍がもらえます。★の数字（特別な数字）が出ると、スペシャルルーレットが回ります。1列そろうとビンゴ賞金とビンゴルーレット。そろった列のボールは戻ります。",
     "ビンゴ賞金の7割と、ルーレットの倍率の5割は、その列にボールを置いていた人でボールの数に応じて分けます（そろえた人のボールも数えます）。ほかの人の分は、その人が開いたときに届きます。ミニゲームとジャックポットはそろえた人のものです。",
-    "通常マスの「ITEM」で、アイテムルーレットが回ります。アイテムは3個まで持て、ショップでも買えます。振る前に押して使います。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（3回アクシデント無効）・倍がけ（通常マスの増減が2倍）。持ちきれないときは、値段の半分がもらえます。",
+    "通常マスの「ITEM」で、アイテムルーレットが回ります。アイテムは3個まで持て、ショップでも買えます。振る前に押して使います。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・ガード（5回アクシデント無効）・倍がけ（この回の増減が2倍）。持ちきれないときは、値段の半分がもらえます。",
     "ジャックポットは、カジノでディーラー相手に賭けられたポイントから貯まります。",
     "「早送り」にすると、ふだんのマスは短く進みます。★マスは自動で進み、盤面をタップするとその回を飛ばせます。",
     "ほかの人のビンゴの分け前は、30日受け取らないと消えます。",
@@ -159,6 +159,9 @@
     LEGACY_DOC = "sugoroku_live";
   const cardRef = () => window.fbDoc(window.db, "shared", CARD_DOC);
   const legacyRef = () => window.fbDoc(window.db, "shared", LEGACY_DOC);
+  // When the card was last wiped (resetBalls): { at, by, n }. In a document of its own so that a tab
+  // with the old code, which rewrites the card document, cannot undo the wait.
+  const resetRef = () => window.fbDoc(window.db, "shared", "sugoroku_reset");
   // Once the screen is open it stays on the card it opened with (see view.online).
   const localCardName = () => "aiglish_sugoroku_card_" + ((view ? view.online : shared()) ? "live" : api.uid());
   // Everything on the shared card is read as untrusted: the card itself is checked by the model,
@@ -765,6 +768,23 @@
     box.append(list, close);
     layer.replaceChildren(box);
   }
+  // Wipes every ball off the shared card, in one transaction that checks again on the latest card and
+  // the last wipe. Returns the card as it is left.
+  async function resetBalls() {
+    const mine = await person(),
+      id = api.uid();
+    return window.fbRunTransaction(window.db, async (tx) => {
+      const snap = await tx.get(cardRef()),
+        meta = await tx.get(resetRef()),
+        now = snap.exists() ? readCard(snap.data()) : null;
+      if (!now) throw Error("no card");
+      const at = Date.now(),
+        next = S.resetCard(now.card, at, meta.exists() ? Number(meta.data().at) || 0 : 0);
+      tx.set(cardRef(), { v: 2, cells: next.cells, owners: next.owners, special: next.special, bets: next.bets, owed: next.owed || {}, owedAt: next.owedAt || {}, people: {}, log: now.log, updatedAt: at });
+      tx.set(resetRef(), { at, by: id, n: mine.n });
+      return { card: next, log: now.log };
+    });
+  }
   // 記録: this player's own numbers, then the latest lines and jackpots of everybody.
   function book() {
     if (view.busy) return;
@@ -803,8 +823,70 @@
     const close = node("button", "sg-game-btn", "閉じる");
     close.type = "button";
     close.onclick = () => (layer.hidden = true);
-    box.append(mine, node("p", "sg-book-title", "みんなの最近の記録"), recent, close);
+    box.append(mine, node("p", "sg-book-title", "みんなの最近の記録"), recent);
+    if (view.online) box.append(resetPanel(layer));
+    box.append(close);
     layer.replaceChildren(box);
+  }
+  // The button that wipes the shared card: only when it is full enough and not wiped in the last hour.
+  function resetPanel(layer) {
+    const wrap = node("div", "sg-reset"),
+      info = node("p", "sg-reset-info", "確認中…"),
+      btn = node("button", "sg-game-btn", "カードのボールを全部消す");
+    btn.type = "button";
+    btn.disabled = true;
+    wrap.append(node("p", "sg-book-title", "カードのリセット"), info, btn);
+    let last = 0,
+      armed = false;
+    const paint = () => {
+      const st = S.resetState(view.card, Date.now(), last),
+        percent = Math.round((st.open / S.CELLS) * 100);
+      armed = armed && st.ok;
+      btn.disabled = !st.ok || view.busy;
+      btn.textContent = armed ? "もう一度押すと、全員のボールが消えます" : "カードのボールを全部消す";
+      info.textContent = st.ok
+        ? "いま " + percent + "% 埋まっています。押すと全員のボールが消え（番号と、もらえる分け前は残ります）、返金はありません。"
+        : st.wait
+          ? "つぎにできるのは " + Math.ceil(st.wait / 60e3) + " 分後です。"
+          : "いま " + percent + "% 埋まっています。" + Math.round(S.RULES.resetOpen * 100) + "% を超えると押せます。";
+    };
+    paint();
+    window.fbGetDoc(resetRef()).then(
+      (snap) => {
+        last = snap.exists() ? Number(snap.data().at) || 0 : 0;
+        if (wrap.isConnected) paint();
+      },
+      () => {}
+    );
+    btn.onclick = async () => {
+      if (view.busy) return;
+      if (!armed) {
+        armed = true;
+        return paint();
+      }
+      view.busy = true;
+      btn.disabled = true;
+      try {
+        const done = await resetBalls();
+        view.card = done.card;
+        view.people = {};
+        view.log = done.log || view.log;
+        keepCard(done.card, view.people, view.log);
+        last = Date.now();
+        paintCard();
+        layer.hidden = true;
+        say("カードのボールを全部消しました", "is-hot");
+      } catch (error) {
+        armed = false;
+        info.textContent = /too soon|not full/.test(String(error?.message)) ? "いまは押せませんでした（ほかの人が先にリセットしたか、まだ足りません）。" : "うまくいきませんでした。もう一度ためしてください。";
+        console.warn("[sugoroku] reset", error);
+      } finally {
+        view.busy = false;
+        if (wrap.isConnected) paint();
+        hud();
+      }
+    };
+    return wrap;
   }
   // Which card is in view, and turning to one (by the tabs, a swipe, or the ball that just landed).
   const cardOf = (cell) => Math.floor(cell / (S.CARD * S.CARD));
@@ -1258,6 +1340,9 @@
       } else if (e.t === "itemGet") {
         say(e.full ? ITEM_INFO[e.id].n + "　持ちきれないので +" + fmt(e.amount) + api.unit() : ITEM_INFO[e.id].n + " をゲット！", e.full ? "is-gain" : "is-hot");
         await wait(1200);
+      } else if (e.t === "x2") {
+        say("倍がけ　" + (e.amount >= 0 ? "+" : "−") + fmt(Math.abs(e.amount)) + api.unit(), e.amount >= 0 ? "is-gain" : "is-hot");
+        await wait(1000);
       } else if (e.t === "guarded") {
         say("ガードで、アクシデントは無効", "is-gain");
         await wait(1000);
