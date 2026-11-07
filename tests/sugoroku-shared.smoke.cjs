@@ -127,7 +127,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
 
     // A roll without a ball leaves the card alone, so it does not wait for the cloud at all (it
     // goes through even now): die 1 onto a normal square, its wheel on ×0, one wallet write.
-    const zeroAt = await rule("S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event)");
+    const zeroAt = await rule("S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event && !x.kakuhen && !x.item)");
     await fix([0, zeroAt]);
     await screen.locator("[data-sg-roll]").click();
     await settled();
