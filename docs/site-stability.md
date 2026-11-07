@@ -3295,3 +3295,15 @@ Tests: `tests/sugoroku-model.test.cjs` (the buying checks are gone), `tests/sugo
 **Now** (`sugoroku.css`): rebuilt from the file before 10.51 with only the shop's own rules taken out (the bag's chip rule is `.sg-item{…}` again, the picture rule is back).
 
 Tests: `tests/sugoroku.smoke.cjs` measures every picture in the bag (40 pixels at most; it fails on the broken file with a picture of 312×473) and the height of a chip.
+
+## 10.53.00.00 すごろくビンゴのブラックジャック・ダイスポーカー・チンチロをカジノと同じルールにした（チンチロは親が決めても子が振る）
+
+**What the owner said.** 「ミニゲームのダイスポーカーとかチンチロとかブラックジャックは他のやつと同様のルールにしてください。今は簡易版だけど通常通りにしたい／相手が456で終わるんじゃなくて、こっちも振りたい（ゾロ目とか出るかもだし）／ヒフミとか出した時には、こっちも−100じゃなくて−200になるように」（チンチロは、カジノのも双六のも両方変える、と答えた）
+
+**Now.**
+- すごろくビンゴ (`sugoroku.js`): ブラックジャックにカジノと同じ「ダブル」と「スプリット」が付き（手が2つになったら両方の手を表示し、遊んでいる手を枠で示す）。チンチロは親の出目に関わらず子が必ず振る。ダイスポーカーは元からカジノと同じ（3回振る、ディーラーは同じ数だけ振る）。
+- 負けの精算 (`sugoroku-model.js` `settle`): 負けは `bet × (1 + m)` が戻る（ダブルの負け、ヒフミ、親のゾロ目などの倍率ぶん、賭けた額に加えて取られる）。賭け額は振ったときに引き済みなので、倍率2の負けは −100 が戻る（合計 −200）、3倍の負けは −200（合計 −300）。ポイントが足りない分は、これまでの「賭け額を超える負け」と同じ扱い。結果の表示は、賭けを含めた増減（勝ち +200 / 引き分け ±0 / 負け −200）。
+- チンチロ (`casino-model.js` `chinSettle`, `casino.js`): `chinParentDecides`（親のシゴロ・ゾロ目・ピンゾロ・ヒフミで即決着）をやめた。親も子も振り、役の強いほうが勝つ（ピンゾロ > ゾロ目 > シゴロ > 目 > 目なし > ヒフミ。同じ役は引き分け）。勝ったほうが、2つの役のうち大きい倍率で払われる（子のゾロ目がシゴロの親に勝てば ×3。親のピンゾロには子のシゴロでも −5）。ヒフミを出した側は ×2（相手がもっと強ければその倍率）、親のヒフミに勝つと少なくとも ×2。カジノの「ひとりで」「一緒に」のチンチロに同じルールを使う（「タイマン」は元から1対1の比べっこ）。説明文も直した。
+- シミュレーション（子の勝ち44.7%、負け44.4%、1回あたり約0）では、チンチロの胴元の取り分はほぼ0になった（以前は親が先に決めるぶん、親に少し有利だった）。
+
+Tests: `tests/casino-model.test.cjs` (the new settle; a simulation that is even), `tests/sugoroku-model.test.cjs` (a loss of ×2 / ×3 comes back −100 / −200 and the result's `net`), `tests/sugoroku.smoke.cjs` (the child throws against a シゴロ, a ゾロ目 wins ×3, a ヒフミ loses −100 more; ダブル/スプリット; two hands), `tests/casino.smoke.cjs`, `tests/casino-group.smoke.cjs`.

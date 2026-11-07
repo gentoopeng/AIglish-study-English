@@ -178,13 +178,9 @@ test("chinchiro rolls up to three times, and settles against the parent", () => 
   const none = C.chinNext(C.chinNext(C.chinNext(C.chinStart(), () => [0, 2, 4][i++ % 3]), () => [1, 3, 5][i++ % 3]), () => [0, 2, 4][i++ % 3]);
   assert.equal(none.hand.name, "目なし");
   const H = (d) => C.chinHand(d);
-  // A decisive parent settles at once.
-  assert.equal(C.chinParentDecides(H([1, 1, 1])), -5);
-  assert.equal(C.chinParentDecides(H([4, 5, 6])), -2);
-  assert.equal(C.chinParentDecides(H([1, 2, 3])), 2);
-  assert.equal(C.chinParentDecides(none.hand), null, "a parent with no hand still has to be beaten");
-  assert.equal(C.chinParentDecides(H([3, 3, 4])), null);
-  // Otherwise points compare, and the child's own big or bad hands count.
+  // Both always throw, and the stronger hand wins (ピンゾロ > ゾロ目 > シゴロ > a point > 目なし > ヒフミ);
+  // the same hand is a draw. The winner is paid by the bigger multiple of the two hands, and the ヒフミ of
+  // either side costs that side ×2.
   assert.equal(C.chinSettle(H([3, 3, 4]), H([5, 5, 6])), 1);
   assert.equal(C.chinSettle(H([3, 3, 4]), H([5, 5, 2])), -1);
   assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 1, 4])), 0, "the same point is a draw");
@@ -193,6 +189,20 @@ test("chinchiro rolls up to three times, and settles against the parent", () => 
   assert.equal(C.chinSettle(H([3, 3, 4]), H([2, 2, 2])), 3);
   assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 2, 3])), -2);
   assert.equal(C.chinSettle(H([3, 3, 4]), none.hand), -1);
+  // A strong parent no longer ends it: the child throws too, and can win or draw.
+  assert.equal(C.chinSettle(H([4, 5, 6]), H([2, 2, 2])), 3, "a child's ゾロ目 beats the parent's シゴロ");
+  assert.equal(C.chinSettle(H([4, 5, 6]), H([4, 6, 5])), 0, "シゴロ against シゴロ is a draw");
+  assert.equal(C.chinSettle(H([4, 5, 6]), H([3, 3, 4])), -2, "a point loses to シゴロ by 2");
+  assert.equal(C.chinSettle(H([1, 1, 1]), H([4, 5, 6])), -5, "a parent's ピンゾロ is paid ×5 even against シゴロ");
+  assert.equal(C.chinSettle(H([1, 1, 1]), H([1, 1, 1])), 0);
+  assert.equal(C.chinSettle(H([2, 2, 2]), H([3, 3, 3])), 3, "the higher ゾロ目 wins");
+  assert.equal(C.chinSettle(H([1, 1, 1]), H([1, 2, 3])), -5, "ヒフミ against ピンゾロ pays the bigger one");
+  assert.equal(C.chinSettle(H([3, 3, 4]), H([1, 2, 3])), -2);
+  assert.equal(C.chinSettle(H([1, 2, 3]), H([3, 3, 4])), 2, "any hand beats a parent's ヒフミ, at least ×2");
+  assert.equal(C.chinSettle(H([1, 2, 3]), none.hand), 2);
+  assert.equal(C.chinSettle(H([1, 2, 3]), H([4, 5, 6])), 2);
+  assert.equal(C.chinSettle(H([1, 2, 3]), H([3, 3, 3])), 3);
+  assert.equal(C.chinSettle(H([1, 2, 3]), H([2, 1, 3])), 0, "ヒフミ against ヒフミ is a draw");
   assert.equal(C.chinVs(H([6, 6, 6]), H([4, 5, 6])), 1);
   assert.equal(C.chinVs(H([2, 2, 3]), H([1, 1, 3])), 0);
   assert.equal(C.chinTurn(rng(3)).done, true);
@@ -214,21 +224,18 @@ test("against the computer parent a child wins about as often as the parent does
   const N = 120000;
   for (let i = 0; i < N; i++) {
     const parent = C.chinTurn(random).hand;
-    let m = C.chinParentDecides(parent);
-    if (m === null) {
-      let child = C.chinStart();
-      while (!child.done) child = C.chinNext(child, random, C.CHILD_THROWS);
-      m = C.chinSettle(parent, child.hand);
-    }
+    let child = C.chinStart();
+    while (!child.done) child = C.chinNext(child, random, C.CHILD_THROWS);
+    const m = C.chinSettle(parent, child.hand);
     if (m > 0) wins++;
     else if (m < 0) losses++;
     net += m;
   }
-  // Even: about 44% to 45% each (the rest are draws); only the parent's decisive hand being settled first
-  // leaves it a small edge (a few percent of the bet).
-  assert.ok(Math.abs(wins / N - losses / N) < 0.02, "win " + (wins / N).toFixed(3) + " lose " + (losses / N).toFixed(3));
+  // Even: both sides throw and are paid the same way, so about 44% to 45% each (the rest are draws) and
+  // nothing left over for either side.
+  assert.ok(Math.abs(wins / N - losses / N) < 0.01, "win " + (wins / N).toFixed(3) + " lose " + (losses / N).toFixed(3));
   assert.ok(wins / N > 0.42 && wins / N < 0.47, "win rate " + (wins / N).toFixed(3));
-  assert.ok(net / N > -0.05 && net / N < 0.01, "net per bet " + (net / N).toFixed(3));
+  assert.ok(Math.abs(net / N) < 0.02, "net per bet " + (net / N).toFixed(3));
 });
 
 test("dice poker is even: the same strategy for both sides, the same number of throws, wins about as often as it loses", () => {

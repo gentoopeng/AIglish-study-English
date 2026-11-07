@@ -643,14 +643,16 @@
     let gain;
     if (m > 0) {
       gain = money(bet * (1 + m));
-      events.push({ t: "result", outcome: "win", amount: gain });
+      events.push({ t: "result", outcome: "win", amount: gain, net: gain - bet });
       if (!plain) gain += ball(state, card, me, random, events, bet);
     } else if (m === 0) {
       gain = money(bet * RULES.eventPay.push);
-      events.push({ t: "result", outcome: "push", amount: gain });
+      events.push({ t: "result", outcome: "push", amount: gain, net: gain - bet });
     } else {
-      gain = plain ? 0 : money(bet * RULES.eventPay.lose);
-      events.push({ t: "result", outcome: "lose", amount: gain });
+      // A loss costs the bet and, as in the casino, what the game loses beyond it (a double, a ヒフミ ×2, a
+      // parent's ゾロ目 ×3): the bet is already paid, so a loss of ×2 pays back −1 × the bet.
+      gain = money(bet * (1 + m));
+      events.push({ t: "result", outcome: "lose", amount: gain, net: gain - bet });
     }
     state.won += gain;
     state.best = Math.max(state.best || 0, gain);

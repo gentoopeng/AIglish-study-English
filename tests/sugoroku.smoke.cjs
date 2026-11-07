@@ -187,6 +187,54 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.waitForFunction((name) => JSON.parse(localStorage.getItem(name)).pending === null, SAVE);
     await settled();
 
+    // チンチロ as at the casino: the parent's シゴロ does not end it, the child throws too (and a ゾロ目 wins ×3);
+    // a ヒフミ loses ×2: the bet and as much again.
+    const chinGame = async (parentDice, childDraws) => {
+      await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+      await page.evaluate(([name, parentDice]) => {
+        const s = JSON.parse(localStorage.getItem(name)),
+          C = window.CasinoModel;
+        s.pending = { game: "chinchiro", bet: 100, round: { parent: { rolls: [parentDice], hand: C.chinHand(parentDice), done: true }, child: C.chinStart() } };
+        s.bonus = [];
+        localStorage.setItem(name, JSON.stringify(s));
+      }, [SAVE, parentDice]);
+      const before = (await saved()).won;
+      await tab.locator(".casino-game.mode-sugoroku").click();
+      await game.locator('[data-sg-game="roll"]').waitFor();
+      assert.match(await game.locator(".sg-game-line").innerText(), /あと3回振れます/);
+      await page.evaluate((draws) => {
+        const real = window.__realRandom || (window.__realRandom = crypto.getRandomValues.bind(crypto)),
+          queue = draws.slice();
+        crypto.getRandomValues = (array) => (queue.length ? ((array[0] = queue.shift()), array) : real(array));
+      }, childDraws);
+      await game.locator('[data-sg-game="roll"]').click();
+      await page.waitForFunction((name) => JSON.parse(localStorage.getItem(name)).pending === null, SAVE);
+      await settled();
+      return (await saved()).won - before;
+    };
+    assert.equal(await chinGame([4, 5, 6], [2, 2, 2]), 400, "a child's 3-3-3 against シゴロ: ×3, 400 back");
+    assert.equal(await chinGame([3, 3, 4], [0, 1, 2]), -100, "a child's ヒフミ: ×2 lost, the bet (already paid) and 100 more");
+    assert.equal(await chinGame([4, 5, 6], [3, 3, 4]), -100, "a point against シゴロ loses ×2 as well (the parent's シゴロ)");
+
+    // ブラックジャック as at the casino: ダブル on the first two cards, スプリット on a pair (two hands, each played).
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.pending = { game: "blackjack", bet: 100, round: { deck: ["2c", "9d", "4h", "3c", "Td", "9s"], dealer: ["6h"], order: ["me"], turn: "me", done: false, seats: { me: { active: 0, hands: [{ cards: ["8h", "8d"], bet: 100, doubled: false, split: false, done: false }] } } } };
+      s.bonus = [];
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await game.locator('[data-sg-game="hit"]').waitFor();
+    assert.equal(await game.locator('[data-sg-game="double"]').count(), 1, "ダブル on the first two cards");
+    await game.locator('[data-sg-game="split"]').click();
+    assert.equal(await game.locator(".sg-hand").count(), 3, "the dealer and the two hands");
+    assert.equal(await game.locator('[data-sg-game="split"]').count(), 0, "no split of 8+9");
+    await game.locator('[data-sg-game="stand"]').click();
+    await game.locator('[data-sg-game="stand"]').click();
+    await page.waitForFunction((name) => JSON.parse(localStorage.getItem(name)).pending === null, SAVE);
+    await settled();
+
     // The draws are fixed from here: the next values crypto gives go to the die, then the ball.
     const fix = (values) =>
       page.evaluate((values) => {
