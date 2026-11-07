@@ -45,7 +45,7 @@
 .sg-say.is-gain{color:#b9e0c3;}
 .sg-say.is-loss{color:#e8a99a;}
 .sg-say.is-ball{color:var(--gold);letter-spacing:.12em;}
-.sg-say.is-hot{top:42%;bottom:auto;padding:10px 26px;border:1px solid var(--gold);color:var(--gold);font:500 26px/1.2 Georgia,"Yu Mincho",serif;letter-spacing:.2em;box-shadow:0 0 30px rgba(207,174,106,.45);}
+.sg-say.is-hot{top:42%;bottom:auto;padding:10px 26px;border:1px solid var(--gold);color:var(--gold);font:500 clamp(17px,5.4vw,26px)/1.3 Georgia,"Yu Mincho",serif;letter-spacing:.1em;box-shadow:0 0 30px rgba(207,174,106,.45);white-space:pre-line;text-align:center;max-width:calc(100% - 24px);box-sizing:border-box;border-radius:22px;}
 
 /* The ball draw */
 .sg-ball{position:absolute;left:50%;top:50%;z-index:3;display:grid;place-items:center;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;background:radial-gradient(circle at 34% 28%,#ffffff,#f1e9d4 45%,#c9b98f 85%,#9c8a5e);color:#1b2a24;font:700 22px/1 Georgia,serif;font-variant-numeric:tabular-nums;box-shadow:0 8px 16px rgba(0,0,0,.55),inset 0 -4px 8px rgba(0,0,0,.15);pointer-events:none;}

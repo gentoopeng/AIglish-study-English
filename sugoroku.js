@@ -1313,7 +1313,7 @@
         say(ITEM_INFO[e.id].n + "！", "is-hot");
         await wait(800);
       } else if (e.t === "itemGet") {
-        say((e.full ? ITEM_INFO[e.id].n + "は持ちきれません　" : ITEM_INFO[e.id].n + " をゲット！　") + "+" + fmt(e.amount) + api.unit(), e.full ? "is-gain" : "is-hot");
+        say((e.full ? ITEM_INFO[e.id].n + "は持ちきれません\n" : ITEM_INFO[e.id].n + " をゲット！\n") + "+" + fmt(e.amount) + api.unit(), e.full ? "is-gain" : "is-hot");
         await wait(1200);
       } else if (e.t === "x2") {
         say("倍がけ　" + (e.amount >= 0 ? "+" : "−") + fmt(Math.abs(e.amount)) + api.unit(), e.amount >= 0 ? "is-gain" : "is-hot");
