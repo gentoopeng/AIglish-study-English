@@ -48,6 +48,24 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth || [...document.querySelectorAll(".sg-cell,.sg-cost,.sg-go")].some((el) => el.scrollWidth > el.clientWidth + 1));
     assert.equal(wide, false);
     await page.screenshot({ path: "/tmp/sugoroku.png", fullPage: true });
+    // The long notice of an item won (name, then the points on a second line) stays inside the board at phone width.
+    const notice = await page.evaluate(() => {
+      const el = document.querySelector(".sg-say");
+      el.className = "sg-say is-hot";
+      el.textContent = "トリプルダイス をゲット！\n+100pt";
+      el.style.opacity = "1";
+      el.style.animation = "none";
+      const r = el.getBoundingClientRect(),
+        box = el.parentElement.getBoundingClientRect();
+      return { left: r.left - box.left, right: box.right - r.right, lines: el.getClientRects().length, overflow: el.scrollWidth > el.clientWidth };
+    });
+    assert.ok(notice.left >= 0 && notice.right >= 0 && !notice.overflow, "the item notice fits the board: " + JSON.stringify(notice));
+    await page.evaluate(() => {
+      const el = document.querySelector(".sg-say");
+      el.className = "sg-say";
+      el.textContent = "";
+      el.style.opacity = el.style.animation = "";
+    });
 
     const saved = () => page.evaluate((name) => JSON.parse(localStorage.getItem(name)), SAVE);
     const card = () => page.evaluate((name) => JSON.parse(localStorage.getItem(name)), CARD);
