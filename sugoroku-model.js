@@ -305,16 +305,20 @@
     const cleared = [...new Set(lines.flatMap((l) => LINES[l]))],
       solo = cleared.every((c) => card.owners[c] === me),
       mult = (lines.length > 1 ? lines.length + 1 : 1) * (solo ? RULES.soloBonus : 1);
-    // Balls per player on the finished lines, for sharing the prize.
-    const balls = {};
-    for (const c of cleared) balls[card.owners[c]] = (balls[card.owners[c]] || 0) + 1;
+    // What each player's balls on the finished lines were bet at (a ball with no bet recorded
+    // counts as 100): the prize is shared by these, so a ball earns by its own bet.
+    const weight = (c) => card.bets[c] || 100,
+      balls = {};
+    for (const c of cleared) balls[card.owners[c]] = (balls[card.owners[c]] || 0) + weight(c);
     state.stake = 0;
     state.bingos += lines.length;
     events.push({ t: "line", lines, cells: [...cleared], count: lines.length, solo, mult });
-    // The line is worth what its balls were bet at (a ball with no bet recorded counts as 100).
-    const bets = cleared.map((c) => card.bets[c] || 100),
-      base = Math.min(200, Math.max(50, Math.round(bets.reduce((a, b) => a + b, 0) / bets.length / 50) * 50));
-    const gain = spinLine(state, card, base, mult, random, events, me, balls, cleared.length);
+    // The line is worth the average bet of its balls, but never more than the finishing roll's own
+    // bet (so cheap balls finished by a big roll do not pay big). The wheel is the one nearest to it.
+    const total = cleared.reduce((a, c) => a + weight(c), 0),
+      base = Math.min(bet, total / cleared.length),
+      grid = RULES.costs.reduce((best, c) => (Math.abs(c - base) < Math.abs(best - base) ? c : best));
+    const gain = spinLine(state, card, base, grid, mult, random, events, me, balls, total);
     // The finished lines start again: their balls leave (the numbers stay).
     for (const c of cleared) {
       card.owners[c] = "";
@@ -346,7 +350,7 @@
   // A line: the bingo prize, shared by the balls on it (others' parts go to card.owed, the
   // rounding stays with the finisher), then the wheel. A mini game is queued in state.bonus and
   // played on the screen (settleBonus); a jackpot waits in state.jpWait for the screen to pay.
-  function spinLine(state, card, bet, mult, random, events, me, balls, count) {
+  function spinLine(state, card, bet, grid, mult, random, events, me, balls, count) {
     // `part` of an amount goes to the other players by their balls on the line; returns what
     // stays with the finisher and the others' shares.
     const share = (amount, part) => {
@@ -367,7 +371,7 @@
     let gain = split.kept;
     events.push({ t: "prize", amount: gain, total: prize, shares: split.shares, mult });
     for (let wheel = "bingo"; wheel; ) {
-      const slots = wheel === "bingo" ? bingoWheel(bet) : RULES.wheels[wheel],
+      const slots = wheel === "bingo" ? bingoWheel(grid) : RULES.wheels[wheel],
         { index, slot } = pick(slots, random);
       const event = { t: "wheel", wheel, slots, index, base: bet, mult };
       events.push(event);
@@ -383,7 +387,7 @@
       }
       else if (slot.game) {
         // A mini game is not multiplied by the lines (or the solo bonus): only by bingoGameBoost.
-        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: slot.boost ?? RULES.bingoGameBoost, bet }]);
+        state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: slot.boost ?? RULES.bingoGameBoost, bet: grid }]);
         events.push({ t: "bonus", game: slot.game, mult: slot.boost ?? RULES.bingoGameBoost });
       } else if (slot.x) {
         const won = money(bet * slot.x * mult),

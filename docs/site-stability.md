@@ -3077,3 +3077,13 @@ Tests: `tests/sugoroku-model.test.cjs` (every payout scales, the bingo prize fol
 **Now** (`sugoroku.js`): while the cloud copy is being compared (`view.syncing`), the roll button stays off; it is released as soon as the load ends (also when it fails or returns nothing).
 
 Tests: `tests/sugoroku.smoke.cjs`, `tests/casino.smoke.cjs` (the existing flows still roll after the load).
+
+## 10.32.00.00 すごろくビンゴ: ボールの分け前を、そのボールの賭け額に比例させた
+
+**What the owner said.** 「ラインの賭け額の平均になるなら、他の人が低い賭けでやって自分が100でやっていたら損するだけ」
+
+**Cause.** In 10.30 the line's base was the average bet of its balls, but the shared part of the prize and of the wheel was still split by the number of balls. A player who laid balls at 100 next to someone's balls at 50 got the same share per ball from a smaller prize.
+
+**Now** (`sugoroku-model.js`): the shared parts are split by the bets of the balls (a ball with no bet recorded counts as 100), so a ball earns by its own bet whoever else is on the line. The line's base is the average bet, but never more than the finishing roll's own bet (so cheap balls finished by a big roll do not pay big); the wheel is the one nearest to it (50 / 100 / 200). Monte Carlo (same bet for all, 200,000 rolls): return without jackpots 0.913 / 0.908 at 50 / 200.
+
+Tests: `tests/sugoroku-model.test.cjs` (a line worth the average, cheap balls finished by a bigger roll, bob's share = his balls' bets / all bets).
