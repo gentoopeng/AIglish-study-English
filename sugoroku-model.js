@@ -109,10 +109,6 @@
     eventPay: { lose: 0, push: 1, sure: 1 },
     // Balls are drawn from 1–NUMBERS; the two cards hold all but the special one. A ball on a
     // number that is already open pays this many times the bet instead.
-    // Wiping the whole shared card (resetCard): only when it is at least resetOpen full, and not again
-    // within resetEvery ms of the last wipe (kept in its own document, so an old tab cannot undo it).
-    resetOpen: 0.65,
-    resetEvery: 60 * 60e3,
     numbers: 99,
     missPay: 2,
     // A line made only of the player's own balls pays this many times more.
@@ -279,21 +275,7 @@
     return { ...newState(), ...rest, v: 3, bingos: count("bingos"), best: count("best"), jps: count("jps"), sjps: count("sjps"), shared: count("shared"), bonus: Array.isArray(rest.bonus) ? rest.bonus : [], items: itemsOf(rest), guard: Math.min(RULES.guardRolls, count("guard")), rev: revOf(rest), jpWait: Array.isArray(rest.jpWait) ? rest.jpWait.filter((k) => k === "jp" || k === "sjp") : [] };
   }
   const isOpen = (card, i) => card.owners[i] !== "";
-  const openCount = (card) => card.owners.filter((o) => o !== "").length;
   const reach = (card) => LINES.map((_, i) => i).filter((i) => LINES[i].filter((c) => !isOpen(card, c)).length === 1);
-  // Whether the card may be wiped now (`last`: when it was last wiped), and why not.
-  function resetState(card, now, last = 0) {
-    const open = openCount(card),
-      need = Math.ceil(CELLS * RULES.resetOpen),
-      wait = Math.max(0, (Number(last) || 0) + RULES.resetEvery - now);
-    return { ok: open >= need && wait === 0, open, need, wait };
-  }
-  // The card with every ball taken off (the numbers stay; what is owed to players stays).
-  function resetCard(card, now, last = 0) {
-    const st = resetState(card, now, last);
-    if (!st.ok) throw Error(st.wait ? "too soon" : "not full enough");
-    return { ...clone(card), owners: Array(CELLS).fill(""), bets: Array(CELLS).fill(0) };
-  }
   const pick = (list, random) => {
     const index = random(list.length);
     return { index, slot: list[index] };
@@ -644,7 +626,7 @@
     return { state, card, events, gain };
   }
 
-  const api = { RULES, resetState, resetCard, openCount, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, buy, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  const api = { RULES, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, buy, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);

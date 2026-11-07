@@ -159,9 +159,6 @@
     LEGACY_DOC = "sugoroku_live";
   const cardRef = () => window.fbDoc(window.db, "shared", CARD_DOC);
   const legacyRef = () => window.fbDoc(window.db, "shared", LEGACY_DOC);
-  // When the card was last wiped (resetBalls): { at, by, n }. In a document of its own so that a tab
-  // with the old code, which rewrites the card document, cannot undo the wait.
-  const resetRef = () => window.fbDoc(window.db, "shared", "sugoroku_reset");
   // Once the screen is open it stays on the card it opened with (see view.online).
   const localCardName = () => "aiglish_sugoroku_card_" + ((view ? view.online : shared()) ? "live" : api.uid());
   // Everything on the shared card is read as untrusted: the card itself is checked by the model,
@@ -768,23 +765,6 @@
     box.append(list, close);
     layer.replaceChildren(box);
   }
-  // Wipes every ball off the shared card, in one transaction that checks again on the latest card and
-  // the last wipe. Returns the card as it is left.
-  async function resetBalls() {
-    const mine = await person(),
-      id = api.uid();
-    return window.fbRunTransaction(window.db, async (tx) => {
-      const snap = await tx.get(cardRef()),
-        meta = await tx.get(resetRef()),
-        now = snap.exists() ? readCard(snap.data()) : null;
-      if (!now) throw Error("no card");
-      const at = Date.now(),
-        next = S.resetCard(now.card, at, meta.exists() ? Number(meta.data().at) || 0 : 0);
-      tx.set(cardRef(), { v: 2, cells: next.cells, owners: next.owners, special: next.special, bets: next.bets, owed: next.owed || {}, owedAt: next.owedAt || {}, people: {}, log: now.log, updatedAt: at });
-      tx.set(resetRef(), { at, by: id, n: mine.n });
-      return { card: next, log: now.log };
-    });
-  }
   // 記録: this player's own numbers, then the latest lines and jackpots of everybody.
   function book() {
     if (view.busy) return;
@@ -823,70 +803,8 @@
     const close = node("button", "sg-game-btn", "閉じる");
     close.type = "button";
     close.onclick = () => (layer.hidden = true);
-    box.append(mine, node("p", "sg-book-title", "みんなの最近の記録"), recent);
-    if (view.online) box.append(resetPanel(layer));
-    box.append(close);
+    box.append(mine, node("p", "sg-book-title", "みんなの最近の記録"), recent, close);
     layer.replaceChildren(box);
-  }
-  // The button that wipes the shared card: only when it is full enough and not wiped in the last hour.
-  function resetPanel(layer) {
-    const wrap = node("div", "sg-reset"),
-      info = node("p", "sg-reset-info", "確認中…"),
-      btn = node("button", "sg-game-btn", "カードのボールを全部消す");
-    btn.type = "button";
-    btn.disabled = true;
-    wrap.append(node("p", "sg-book-title", "カードのリセット"), info, btn);
-    let last = 0,
-      armed = false;
-    const paint = () => {
-      const st = S.resetState(view.card, Date.now(), last),
-        percent = Math.round((st.open / S.CELLS) * 100);
-      armed = armed && st.ok;
-      btn.disabled = !st.ok || view.busy;
-      btn.textContent = armed ? "もう一度押すと、全員のボールが消えます" : "カードのボールを全部消す";
-      info.textContent = st.ok
-        ? "いま " + percent + "% 埋まっています。押すと全員のボールが消え（番号と、もらえる分け前は残ります）、返金はありません。"
-        : st.wait
-          ? "つぎにできるのは " + Math.ceil(st.wait / 60e3) + " 分後です。"
-          : "いま " + percent + "% 埋まっています。" + Math.round(S.RULES.resetOpen * 100) + "% を超えると押せます。";
-    };
-    paint();
-    window.fbGetDoc(resetRef()).then(
-      (snap) => {
-        last = snap.exists() ? Number(snap.data().at) || 0 : 0;
-        if (wrap.isConnected) paint();
-      },
-      () => {}
-    );
-    btn.onclick = async () => {
-      if (view.busy) return;
-      if (!armed) {
-        armed = true;
-        return paint();
-      }
-      view.busy = true;
-      btn.disabled = true;
-      try {
-        const done = await resetBalls();
-        view.card = done.card;
-        view.people = {};
-        view.log = done.log || view.log;
-        keepCard(done.card, view.people, view.log);
-        last = Date.now();
-        paintCard();
-        layer.hidden = true;
-        say("カードのボールを全部消しました", "is-hot");
-      } catch (error) {
-        armed = false;
-        info.textContent = /too soon|not full/.test(String(error?.message)) ? "いまは押せませんでした（ほかの人が先にリセットしたか、まだ足りません）。" : "うまくいきませんでした。もう一度ためしてください。";
-        console.warn("[sugoroku] reset", error);
-      } finally {
-        view.busy = false;
-        if (wrap.isConnected) paint();
-        hud();
-      }
-    };
-    return wrap;
   }
   // Which card is in view, and turning to one (by the tabs, a swipe, or the ball that just landed).
   const cardOf = (cell) => Math.floor(cell / (S.CARD * S.CARD));
