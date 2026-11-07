@@ -3097,3 +3097,11 @@ Tests: `tests/sugoroku-model.test.cjs` (a line worth the average, cheap balls fi
 **Now** (`sugoroku-model.js`, `spinLine`): the part the balls share (`prizeShare` of the prize, `wheelShare` of the wheel's ×) is worth the average bet of the balls and is split by the balls' bets; the part the finisher keeps is worth the finishing roll's own bet; the bingo wheel is the one for that roll's bet. So every payout follows its own bet. Result (same test, others at 100): 50 → 0.96–0.98, 100 → 0.93, 200 → 0.91–0.93. 50 is still a few points ahead when the table bets more; the cause is not found yet (all stay below 1, and a table betting alike is level at about 0.91).
 
 Tests: `tests/sugoroku-model.test.cjs` (balls' part by the average, the finisher's part by her own roll, bob's share by his balls' bets, cheap balls finished by a roll of 200).
+
+## 10.34.00.00 すごろくビンゴ: 賭け額を100だけに戻した
+
+**What the owner said.** 「だったら100のみでいいわ」（賭け額を選べるようにすると、平均や取り分の食い違いが次々に出て、釣り合いを取りきれなかったため）
+
+**Now** (`sugoroku-model.js`, `sugoroku.js`, `sugoroku.css`): `RULES.costs = [100]`; the three buttons and the saved choice (`aiglish_sugoroku_cost`) are gone, and the screen shows the fixed "1回 100" again. The shared card may still carry `bets`, and the shares are still split by them (all 100 now), so nothing needs to be migrated; a game saved with a bet of 50 or 200 can still be settled. The usage guide and the rules text no longer mention a choice.
+
+Tests: `tests/sugoroku-model.test.cjs`, `tests/sugoroku.smoke.cjs` (no bet buttons, "1回 100枚", the line prize on 100).

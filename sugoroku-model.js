@@ -1,6 +1,6 @@
 // Rules for すごろくビンゴ in the casino tab, without any screen. A long game kept per player.
 //
-// A roll costs a bet of 50, 100 or 200 (every payout is a multiple of it, and the jackpot chance on the bingo wheel grows with it, so no size is better value than another). The piece goes round a ring of 100 squares and the square decides:
+// A roll costs a bet of 100 (every payout is a multiple of it). The piece goes round a ring of 100 squares and the square decides:
 //   normal   – a wheel of multiples of the bet (×0.25 to −×1) and ball, game and 確変 slots;
 //              a 確変 slot (1 in 10) spins the 確変 wheel: ×2 to ×10, or two balls in a row
 //   event    – a four-way wheel: blackjack, dice poker or chinchiro is played once for the bet
@@ -62,7 +62,7 @@
   const RULES = {
     // The bet of a roll: 50, 100 or 200. Every payout is a multiple of it, so nothing is better value at one
     // size than another; the bingo wheel's jackpot slots grow with it (bingoWheel) for the same reason.
-    costs: [50, 100, 200],
+    costs: [100],
     // The ring: 100 squares, about 29 rolls a lap. S start, n normal, E event, A accident.
     board: Array.from({ length: 100 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
     // The normal wheel: 40 slots from ×7 down to −×5 (one is a 確変 slot) (a minus takes that much more than the

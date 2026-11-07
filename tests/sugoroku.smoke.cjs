@@ -69,8 +69,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     };
 
     // Rolls at 100 chips: chips always = 1000 − bets + what came back.
-    assert.deepEqual(await screen.locator(".sg-costs button").allInnerTexts(), ["50枚", "100枚", "200枚"]);
-    assert.equal(await screen.locator('.sg-costs button[data-cost="100"]').getAttribute("aria-pressed"), "true", "100 until another is chosen");
+    assert.equal(await screen.locator(".sg-costs button").count(), 0, "one fixed bet, nothing to choose");
+    assert.match(await screen.locator(".sg-costs").innerText(), /1回\s*100枚/);
     const start = await page.evaluate(() => window.Casino.balance());
     for (let i = 0; i < 4; i++) {
       await screen.locator("[data-sg-roll]").click();
@@ -231,29 +231,6 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.ok((await page.evaluate(() => window.__layers2)).some((c) => c.includes("is-special")), "the special wheel spun");
     assert.equal((await saved()).won - specialBefore.won, 1000);
     assert.deepEqual((await card()).owners, beforeCard.owners, "the special number opens no cell");
-    // A bet of 200: chosen with its button (and kept for next time); the roll takes 200 and a plus slot pays 5×.
-    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
-    await page.evaluate((name) => {
-      const s = JSON.parse(localStorage.getItem(name));
-      Object.assign(s, { pos: 20, items: [], pending: null, bonus: [] });
-      localStorage.setItem(name, JSON.stringify(s));
-    }, SAVE);
-    await tab.locator(".casino-game.mode-sugoroku").click();
-    await screen.locator(".sg-card").first().waitFor();
-    await screen.locator('.sg-costs button[data-cost="200"]').click();
-    assert.equal(await screen.locator('.sg-costs button[data-cost="200"]').getAttribute("aria-pressed"), "true");
-    assert.equal(await page.evaluate(() => localStorage.getItem("aiglish_sugoroku_cost")), "200");
-    const fiveAt = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === 5));
-    const b200 = await saved(),
-      chips200 = await page.evaluate(() => window.Casino.balance());
-    await fix([0, fiveAt]);
-    await screen.locator("[data-sg-roll]").click();
-    await settled();
-    const a200 = await saved();
-    assert.equal(a200.bet - b200.bet, 200);
-    assert.equal(a200.won - b200.won, 1000, "5 × 200");
-    assert.equal(await page.evaluate(() => window.Casino.balance()), chips200 - 200 + 1000);
-    await screen.locator('.sg-costs button[data-cost="100"]').click();
     // Items: three bag slots and a shop. ダブルダイス is bought for 150 chips, used on the next roll
     // (two dice, the sum moves the piece) and gone afterwards; ぴったり needs a face before the roll.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
