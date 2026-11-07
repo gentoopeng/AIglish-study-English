@@ -517,28 +517,32 @@ test("items: the item wheel fills the bag (3 at most, a full bag pays half the p
   // An item that is not in the bag cannot be used; neither can one twice.
   assert.throws(() => S.roll(from, card, 100, seq([0]), "amy", { items: ["guard"] }));
   assert.throws(() => S.roll({ ...from, items: ["guard", "guard"] }, card, 100, seq([0]), "amy", { items: ["guard", "guard"] }));
-  // ガード: for this roll and the next two an accident square does nothing.
+  // ガード: for this roll and the next four an accident square does nothing.
   const accident = at("accident"),
     safe = S.roll({ ...from, pos: accident - 1, items: ["guard"] }, card, 100, seq([0, 0]), "amy", { items: ["guard"] });
   assert.deepEqual(safe.events.filter((e) => e.t === "guarded").length, 1);
   assert.equal(safe.gain, 0);
-  assert.equal(safe.state.guard, 2);
+  assert.equal(safe.state.guard, S.RULES.guardRolls - 1);
   assert.ok(!safe.events.some((e) => e.t === "wheel" && e.wheel === "accident"));
   const later = S.roll({ ...safe.state, pos: accident - 1 }, card, 100, seq([0, 0]), "amy");
   assert.equal(later.events.filter((e) => e.t === "guarded").length, 1);
-  assert.equal(later.state.guard, 1);
-  // 倍がけ: what the normal wheel pays is doubled; on another kind of square it stays in the bag.
+  assert.equal(later.state.guard, S.RULES.guardRolls - 2);
+  // 倍がけ: what the roll pays or takes counts twice (on any square), by at most x2Cap times the bet; it is used up.
   const plus = w.findIndex((x) => x.x === 5);
   const doubled = S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, plus]), "amy", { items: ["x2"] });
   assert.equal(doubled.gain, 1000);
   assert.deepEqual(doubled.state.items, []);
+  assert.deepEqual(doubled.events.find((e) => e.t === "x2"), { t: "x2", amount: 500 });
   const minus = w.findIndex((x) => x.x === -5);
   assert.equal(S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, minus]), "amy", { items: ["x2"] }).gain, -1000);
-  const kept = S.roll({ ...from, pos: at("event") - 1, items: ["x2"] }, card, 100, seq([0, 0]), "amy", { items: ["x2"] });
-  assert.deepEqual(kept.state.items, ["x2"]);
+  const onEvent = S.roll({ ...from, pos: at("event") - 1, items: ["x2"] }, card, 100, seq([0, 0]), "amy", { items: ["x2"] });
+  assert.deepEqual(onEvent.state.items, [], "used up even when nothing was paid yet");
+  // The extra is capped: a roll that pays 1,500 gains at most 10 × the bet more.
+  const big = w.findIndex((x) => x.x === 7);
+  assert.equal(S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, big]), "amy", { items: ["x2"] }).gain, 1400);
   // Buying: the price is returned; a full bag refuses; an unknown item too.
   const bought = S.buy({ ...S.newState(), items: ["guard"] }, "dice3");
-  assert.deepEqual([bought.state.items, bought.price], [["guard", "dice3"], 250]);
+  assert.deepEqual([bought.state.items, bought.price], [["guard", "dice3"], 30]);
   assert.throws(() => S.buy(S.newState(), "ball"), /no such item/);
   assert.throws(() => S.buy({ ...S.newState(), items: ["guard", "guard", "guard"] }, "x2"), /full/);
   assert.throws(() => S.buy(S.newState(), "nope"));
@@ -563,4 +567,24 @@ test("a line of balls laid at 100 pays the bingo prize on 100; a game saved with
   assert.equal(line.events.find((e) => e.t === "prize").total, 100 * S.RULES.bingoPrize * S.RULES.soloBonus);
   assert.equal(S.settleBonus({ ...S.newState(), bonus: [{ game: "timer", mult: 1 }] }, 10).gain, 1000);
   assert.equal(S.gameScore("stop", "perfect", 100), 200);
+});
+
+test("resetting the shared card: only when full enough and not again within the hour; owed parts stay", () => {
+  const card = S.newCard(seq([0])),
+    half = { ...card, owners: card.owners.map((o, i) => (i < 40 ? "amy" : "")), owed: { bob: 120 } },
+    full = { ...card, owners: card.owners.map((o, i) => (i < 70 ? "amy" : "")), bets: card.owners.map(() => 100), owed: { bob: 120 } };
+  const now = 1e9;
+  assert.equal(S.resetState(half, now).ok, false);
+  assert.throws(() => S.resetCard(half, now), /not full/);
+  assert.equal(S.resetState(full, now, 0).ok, true);
+  const next = S.resetCard(full, now, 0);
+  assert.ok(next.owners.every((o) => o === ""));
+  assert.ok(next.bets.every((b) => b === 0));
+  assert.deepEqual(next.cells, full.cells);
+  assert.deepEqual(next.owed, { bob: 120 });
+  assert.ok(S.validCard(next));
+  assert.equal(S.resetState(full, now, now - 60e3).ok, false);
+  assert.ok(S.resetState(full, now, now - 60e3).wait > 0);
+  assert.throws(() => S.resetCard(full, now, now - 60e3), /too soon/);
+  assert.equal(S.resetState(full, now, now - S.RULES.resetEvery).ok, true);
 });

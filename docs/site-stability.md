@@ -3113,3 +3113,15 @@ Tests: `tests/sugoroku-model.test.cjs`, `tests/sugoroku.smoke.cjs` (no bet butto
 **Now** (`sugoroku-model.js`, `sugoroku.js`): the retired item ボール券 (not on the item wheel or in the shop since 10.29) is removed: its entry in `RULES.items`, its use in `roll()`, its picture/description entry and the `retired` checks. An item id the game does not know is dropped from a bag as before, so a ボール券 still held in a bag from 10.28 simply disappears. The casino rule texts were read and left as they are (short and accurate).
 
 Tests: `tests/sugoroku-model.test.cjs` (the item list without it; unknown ids in a bag), `tests/sugoroku.smoke.cjs`.
+
+## 10.36.00.00 すごろくビンゴ: アイテムを強くして値段を下げ、カードのボールを全部消せるようにした
+
+**What the owner said.** 「アイテムのポイントバランスとか大丈夫か確認してほしい／双六のボールのリセットをできるようにしてほしい／全体的なバランスを確認してほしい／この双六のよくない点を挙げてください」（リセットは「カード全体」、アイテムは「効果を強くする」を選んだ）
+
+**Checked** (Monte Carlo, 100-point bets, a fresh card per roll; a ball is worth about 233 points, almost all of it the 200 a ball on an open cell pays). What one item was worth when used: ダブルダイス +9, トリプルダイス +16, ぴったり +10, ガード (3 rolls) +11.5, 倍がけ +8.5 points, against prices of 150 / 250 / 250 / 100 / 80, and a full bag paid back half the price in cash. So the best play was to keep the bag full and never use anything. The whole game (3 players, 90,000 rolls): about 0.92 back without jackpots (about 1.0 with them); 59% of the balls land on open cells; one line per 144 rolls (all players together); 100-roll sessions swing about ±5,600 points (33% lose more than 2,000).
+
+**Items** (`sugoroku-model.js`): 倍がけ now counts the whole roll's pay or take twice on any square (by at most `x2Cap` = 10 × the bet; not what is owed to others, jackpots, or an event game settled later; an `x2` event shows the extra); ガード lasts `guardRolls` = 5 rolls (a saved state keeps up to 5); prices are 20 / 30 / 25 / 30 / 100 (a full bag pays half). The dice items stay small on purpose: their only value is the squares they move (about 2.3 points a square, a lap's ball).
+
+**Wiping the card** (`resetState`, `resetCard`, `sugoroku.js` `resetBalls`, a panel in 記録): any player can clear every ball of the shared card when it is at least `resetOpen` = 65% full and not within `resetEvery` = 1 hour of the last wipe; the numbers and `owed` stay, nothing is refunded. The time of the last wipe is in its own document `shared/sugoroku_reset` (an old tab that rewrites the card cannot undo the wait), read inside the same transaction that clears the card. Offline and on a card of one's own it is not offered. It is a valve, not a cure: in the simulation, wiping whenever allowed at 50% made lines far rarer (one per 2,500 rolls) and cut the return by about 30 points, because lines and the 200-point misses both come from balls piling up; at 65% it is allowed about 3% of the time. `admin-players.js` also clears a deleted player's `bets` now.
+
+Tests: `tests/sugoroku-model.test.cjs` (x2 on any square and its cap, ガード 5 rolls, prices, the wipe's conditions), `tests/casino.smoke.cjs` (the wipe through the 記録 sheet).
