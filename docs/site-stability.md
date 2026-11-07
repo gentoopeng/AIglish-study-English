@@ -3221,3 +3221,13 @@ Tests: `tests/sugoroku-model.test.cjs` (the item wheel's slots).
 **Now** (`sugoroku-model.js`, `sugoroku.js`): the hidden slot starts the 確変 wheel on a draw of 0 out of `chanceOdds` = 2; otherwise it pays ×0 like the plain ones and the event says `chance: false` (the screen shows no CHANCE then). CHANCE is now once in about 100 rolls. To keep the return, the 確変 wheel pays double: ×8 … ×30 (was ×4 … ×15) and the ball runs are 10 balls (was 5). Return without jackpots: 0.9118 (3 players, 300,000 rolls; was 0.9078).
 
 Tests: `tests/sugoroku-model.test.cjs` (the extra draw; a draw of 1 pays ×0 with `chance: false`; ×20 and ten balls), `tests/sugoroku.smoke.cjs`.
+
+## 10.46.00.00 CHANCE（確変）を、×0に乗ったうち25回に1回くらいにした
+
+**What the owner said.** 「ただ0の時の1/25くらいでいいと思ってる」（隠しの枠が目立ちすぎないように。見分けられるようにするのは面白くないので、見た目は変えない）
+
+**Checked.** After 10.45 the hidden slot started the bonus on 1 draw in 2, so of the landings that read ×0 (6 of 40 slots) it was 1 in 12.
+
+**Now** (`sugoroku-model.js`): `chanceOdds` = 4, so 1 in 24 of the landings that read ×0 (about 1 in 200 rolls). To keep the return, the 確変 wheel pays ×16 … ×60 (was ×8 … ×30) and the ball runs are 15 balls (was 10). Return without jackpots: 0.9116 (3 players, 400,000 rolls). The look of the slot is unchanged.
+
+Tests: `tests/sugoroku-model.test.cjs`, `tests/sugoroku.smoke.cjs` (×40 = 4,000 back; fifteen balls).

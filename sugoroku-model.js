@@ -103,12 +103,12 @@
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
     // what it paid before the 確変 slots took its top slots.
     kakuhen: spread([
-      ...N(8), ...N(10), ...N(12), ...N(14), ...N(18), ...N(20), ...N(24), ...N(28), ...N(30),
-      { x: 0, balls: 10 }, { x: 0, balls: 10 }, { x: 0, balls: 10 },
+      ...N(16), ...N(20), ...N(24), ...N(28), ...N(36), ...N(40), ...N(48), ...N(56), ...N(60),
+      { x: 0, balls: 15 }, { x: 0, balls: 15 }, { x: 0, balls: 15 },
     ]),
     // The hidden 確変 slot starts the 確変 wheel only 1 time in chanceOdds (otherwise it reads and pays ×0 like
-    // the plain ×0 slots), so the CHANCE is rare and big.
-    chanceOdds: 2,
+    // the plain ×0 slots): about 1 in 24 of the landings that read ×0, and 1 in about 200 rolls. Rare and big.
+    chanceOdds: 4,
     // The event wheel's four choices, and what each result pays back as multiples of the bet.
     events: ["blackjack", "dice", "chinchiro", "ball"],
     eventPay: { lose: 0, push: 1, sure: 1 },
