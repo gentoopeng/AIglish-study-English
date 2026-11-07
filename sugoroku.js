@@ -48,8 +48,6 @@
     exact: { n: "ぴったり", d: "出目を1〜6から選べます", img: "die-gold" },
     guard: { n: "ガード", d: "この回から3回、アクシデントのマスが無効になります", img: "shield" },
     x2: { n: "倍がけ", d: "通常マスのルーレットの増減が2倍になります（ほかのマスでは使われません）", img: "potion" },
-    // (No longer given or sold; one already in a bag can still be used.)
-    ball: { n: "ボール券", d: "この回、ボールを1個出します", img: "" },
   };
   // An item's picture: the dice are stacked (two or three of the same die, a little turned).
   function itemIcon(id) {
@@ -909,7 +907,6 @@
     box.append(node("p", "sg-shop-have", "持っているもの " + held.length + "/" + S.RULES.itemMax + "　所持 " + fmt(api.balance()) + api.unit()));
     const list = node("ul", "sg-shop-list");
     for (const [id, info] of Object.entries(ITEM_INFO)) {
-      if (S.RULES.items[id].retired) continue;
       const price = S.RULES.items[id].price,
         li = node("li", "");
       const text = node("span", "sg-shop-text");

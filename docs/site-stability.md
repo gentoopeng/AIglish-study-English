@@ -3105,3 +3105,11 @@ Tests: `tests/sugoroku-model.test.cjs` (balls' part by the average, the finisher
 **Now** (`sugoroku-model.js`, `sugoroku.js`, `sugoroku.css`): `RULES.costs = [100]`; the three buttons and the saved choice (`aiglish_sugoroku_cost`) are gone, and the screen shows the fixed "1回 100" again. The shared card may still carry `bets`, and the shares are still split by them (all 100 now), so nothing needs to be migrated; a game saved with a bet of 50 or 200 can still be settled. The usage guide and the rules text no longer mention a choice.
 
 Tests: `tests/sugoroku-model.test.cjs`, `tests/sugoroku.smoke.cjs` (no bet buttons, "1回 100枚", the line prize on 100).
+
+## 10.35.00.00 すごろくビンゴ: 使われなくなったボール券のコードを消した
+
+**What the owner said.** 「画面の改良といらない文言やコードの削除」（お昼寝前の依頼の続き）
+
+**Now** (`sugoroku-model.js`, `sugoroku.js`): the retired item ボール券 (not on the item wheel or in the shop since 10.29) is removed: its entry in `RULES.items`, its use in `roll()`, its picture/description entry and the `retired` checks. An item id the game does not know is dropped from a bag as before, so a ボール券 still held in a bag from 10.28 simply disappears. The casino rule texts were read and left as they are (short and accurate).
+
+Tests: `tests/sugoroku-model.test.cjs` (the item list without it; unknown ids in a bag), `tests/sugoroku.smoke.cjs`.

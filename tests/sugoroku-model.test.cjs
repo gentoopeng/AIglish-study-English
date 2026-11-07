@@ -477,17 +477,14 @@ test("a save whose returns went below 0 is still a good save", () => {
   assert.equal(S.valid({ ...S.newState(), won: NaN }), false);
 });
 
-test("items: the item wheel fills the bag (3 at most, a full bag pays half the price); ダブルダイス, ぴったり, ガード, ボール券, 倍がけ", () => {
+test("items: the item wheel fills the bag (3 at most, a full bag pays half the price); ダブルダイス, ぴったり, ガード, 倍がけ", () => {
   const w = S.RULES.normal[100],
     itemAt = w.findIndex((x) => x.item),
     zeroAt = w.findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event && !x.kakuhen && !x.item),
     card = S.newCard(seq([0])),
     from = { ...S.newState(), pos: at("normal") - 1 };
   const pickItem = (id) => S.RULES.itemWheel.findIndex((x) => x.item === id);
-  assert.deepEqual(Object.keys(S.RULES.items).sort(), ["ball", "dice2", "dice3", "exact", "guard", "x2"]);
-  // ボール券 is no longer given or sold (one already held can still be used).
-  assert.ok(S.RULES.items.ball.retired);
-  assert.ok(!S.RULES.itemWheel.some((x) => x.item === "ball"));
+  assert.deepEqual(Object.keys(S.RULES.items).sort(), ["dice2", "dice3", "exact", "guard", "x2"]);
   assert.deepEqual(S.RULES.itemWheel.map((x) => x.item).sort(), ["dice2", "dice2", "dice2", "dice3", "exact", "exact", "guard", "guard", "x2", "x2"]);
   assert.equal(S.RULES.itemWheel.length, 10);
   // A normal slot with an item: the item wheel spins and the bag gets the item.
@@ -530,10 +527,6 @@ test("items: the item wheel fills the bag (3 at most, a full bag pays half the p
   const later = S.roll({ ...safe.state, pos: accident - 1 }, card, 100, seq([0, 0]), "amy");
   assert.equal(later.events.filter((e) => e.t === "guarded").length, 1);
   assert.equal(later.state.guard, 1);
-  // ボール券: a ball for this roll.
-  const ticket = S.roll({ ...from, items: ["ball"] }, card, 100, seq([0, zeroAt, draw(closedOn(card))]), "amy", { items: ["ball"] });
-  assert.equal(ticket.events.filter((e) => e.t === "ball").length, 1);
-  assert.equal(ticket.state.balls, 1);
   // 倍がけ: what the normal wheel pays is doubled; on another kind of square it stays in the bag.
   const plus = w.findIndex((x) => x.x === 5);
   const doubled = S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, plus]), "amy", { items: ["x2"] });
@@ -543,7 +536,7 @@ test("items: the item wheel fills the bag (3 at most, a full bag pays half the p
   assert.equal(S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, minus]), "amy", { items: ["x2"] }).gain, -1000);
   const kept = S.roll({ ...from, pos: at("event") - 1, items: ["x2"] }, card, 100, seq([0, 0]), "amy", { items: ["x2"] });
   assert.deepEqual(kept.state.items, ["x2"]);
-  // Buying: the price is returned; a full bag refuses; an unknown or retired item too.
+  // Buying: the price is returned; a full bag refuses; an unknown item too.
   const bought = S.buy({ ...S.newState(), items: ["guard"] }, "dice3");
   assert.deepEqual([bought.state.items, bought.price], [["guard", "dice3"], 250]);
   assert.throws(() => S.buy(S.newState(), "ball"), /no such item/);
@@ -551,13 +544,13 @@ test("items: the item wheel fills the bag (3 at most, a full bag pays half the p
   assert.throws(() => S.buy(S.newState(), "nope"));
   // Names every object has are not items; a purchase and a roll both count for which copy is further on.
   assert.throws(() => S.buy(S.newState(), "constructor"));
-  assert.deepEqual(S.itemsOf({ items: ["constructor", "__proto__", "toString", "ball"] }), ["ball"]);
+  assert.deepEqual(S.itemsOf({ items: ["constructor", "__proto__", "toString", "guard"] }), ["guard"]);
   assert.equal(S.revOf({ rolls: 7 }), 7);
   assert.equal(S.buy({ ...S.newState(), rolls: 7, rev: undefined }, "guard").state.rev, 8);
   assert.equal(S.roll({ ...S.newState(), rolls: 7, rev: undefined, pos: at("normal") - 1 }, card, 100, seq([0, zeroAt])).state.rev, 8);
   // An old save has no items; a bad one is cleaned.
   assert.deepEqual(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0 }).items, []);
-  assert.deepEqual(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, items: ["guard", "nope", "ball", "x2", "x2"], guard: 9 }).items, ["guard", "ball", "x2"]);
+  assert.deepEqual(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, items: ["guard", "nope", "dice2", "x2", "x2"], guard: 9 }).items, ["guard", "dice2", "x2"]);
 });
 
 test("a line of balls laid at 100 pays the bingo prize on 100; a game saved with no bet scores for 100", () => {

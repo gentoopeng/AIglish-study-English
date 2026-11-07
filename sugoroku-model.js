@@ -10,8 +10,7 @@
 // Items: a slot of the normal wheel spins the item wheel and a player holds up to itemMax of them
 // (they can also be bought: RULES.items[id].price). One is used before a roll (roll()'s `use`):
 // ダブルダイス / トリプルダイス throw two / three dice, ぴったり picks the face, ガード cancels accident squares
-// for this and the next two rolls, 倍がけ doubles what the normal wheel pays or takes (ボール券, which drew
-// a ball, is no longer given or sold).
+// for this and the next two rolls, 倍がけ doubles what the normal wheel pays or takes.
 // The bingo cards: two 7×7 cards (98 numbers) shared by every player and kept apart from each
 // player's own state: { v: 2, cells, owners, special }, cells[0..48] the first card and
 // cells[49..97] the second, owners[i] the id of whoever's ball opened cell i ("" closed). A ball is
@@ -91,8 +90,6 @@
       exact: { name: "ぴったり", price: 250 },
       guard: { name: "ガード", price: 100 },
       x2: { name: "倍がけ", price: 80 },
-      // No longer given or sold; one already in a bag can still be used.
-      ball: { name: "ボール券", price: 400, retired: true },
     },
     itemWheel: spread([...GET("dice2", 3), ...GET("dice3"), ...GET("exact", 2), ...GET("guard", 2), ...GET("x2", 2)]),
     // The 確変 wheel (after a 確変 slot of the normal wheel): x pays the bet × x; balls draws that
@@ -568,11 +565,6 @@
         events.push({ t: "game", game: slot, bet: cost });
       }
     }
-    // ボール券: a ball for this roll.
-    if (picked.ball) {
-      events.push({ t: "item", id: "ball" });
-      gain += ball(state, card, me, random, events, cost);
-    }
     // An unused 倍がけ stays in the bag.
     if (picked.x2 === true) state.items.push("x2");
     if (state.guard > 0) state.guard--;
@@ -596,7 +588,7 @@
   }
   // Buying an item (the screen takes the price from the wallet): the bag must have room.
   function buy(before, id) {
-    if (!isItem(id) || RULES.items[id].retired) throw Error("no such item");
+    if (!isItem(id)) throw Error("no such item");
     const have = itemsOf(before);
     if (have.length >= RULES.itemMax) throw Error("full");
     return { state: { ...clone(before), items: [...have, id], rev: revOf(before) + 1 }, price: RULES.items[id].price };
