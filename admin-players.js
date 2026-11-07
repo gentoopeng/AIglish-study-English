@@ -44,6 +44,13 @@ async function playerList(visit,isCurrent){
  const rows=await adminRequest(base+':runQuery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({structuredQuery:query})});if(!Array.isArray(rows))throw Error('一覧を取得できませんでした。');const docs=rows.filter(row=>row.document).map(row=>row.document);for(const doc of docs){if(!isCurrent())return;visit(doc.name.split('/').pop(),window.RankingQuery.fields(doc.fields));}if(docs.length<25)return;cursor=docs.at(-1).name;
  }while(isCurrent());
 }
+// The casino's study allowance: what a player has bet on a day is kept on their device; shared/casino_reset says
+// which day to put back to 0 (everybody, or one player) and each device takes it the next time it opens the casino.
+async function resetStaked(target){guard();const day=window.StudyTimeModel?.dateKey?window.StudyTimeModel.dateKey(Date.now()):new Date(Date.now()+9*36e5).toISOString().slice(0,10);
+ await deadline(window.fbRunTransaction(window.db,async tx=>{const ref=window.fbDoc(window.db,'shared','casino_reset'),snap=await tx.get(ref),c=snap.exists()?snap.data():{},entry={at:Date.now(),day};if(target)c.players={...(c.players||{}),[target]:entry};else c.all=entry;tx.set(ref,c);}));}
+// Two presses: the first asks, the second does it.
+function confirmButton(label,ask,run,done){const button=element('button',label);button.type='button';let armed=false;
+ button.onclick=async()=>{if(busy)return;if(!armed){armed=true;button.textContent=ask;return;}armed=false;button.textContent=label;lock(true);message('実行しています…');try{await run();message(done);}catch(error){message(error.message);}finally{lock(false);}};return button;}
 async function refresh(){
  const request=++generation,body=dialog.querySelector('[data-body]');body.replaceChildren();const refresh=element('button','一覧を更新');refresh.type='button';refresh.disabled=busy;refresh.onclick=()=>refreshList();
  const books=element('button',bookEditing()?'単語帳の編集モードを終了':'配信中の単語帳を編集する');books.type='button';books.className='admin-books-button';books.onclick=()=>{if(bookEditing()){setBookEditing(false);books.textContent='配信中の単語帳を編集する';return;}setBookEditing(true);dialog.close();window.switchTab?.('vocab');window.showToast?.('管理者モードです。配信中の単語帳の単語を編集できます。','info');};
@@ -51,7 +58,12 @@ async function refresh(){
  const sent=element('button','運営からの送信履歴');sent.type='button';sent.className='admin-history-button';sent.onclick=history;
  const bingo=element('button','すごろくビンゴのボールをリセット');bingo.type='button';bingo.className='admin-sugoroku-button';let armed=false;
  bingo.onclick=async()=>{if(busy)return;if(!armed){armed=true;bingo.textContent='もう一度押すと、全員のボールが消えます';return;}armed=false;bingo.textContent='すごろくビンゴのボールをリセット';lock(true);message('リセットしています…');try{guard();await deadline(window.fbRunTransaction(window.db,async tx=>{const ref=window.fbDoc(window.db,'shared','sugoroku_live2'),snap=await tx.get(ref);if(!snap.exists())return;const c=snap.data();if(Array.isArray(c.owners))c.owners=c.owners.map(()=>'');if(Array.isArray(c.bets))c.bets=c.bets.map(()=>0);c.people={};c.updatedAt=Date.now();tx.set(ref,c);}));message('ボールをリセットしました。もらえる分け前は残っています。');}catch(error){message(error.message);}finally{lock(false);}};
- body.append(refresh,books,notices,sent,bingo);message('プレイヤーを読み込み中…');
+ const gate=element('button','すごろくビンゴの公開を切り替える');gate.type='button';gate.className='admin-sugoroku-gate';
+ gate.onclick=async()=>{if(busy)return;lock(true);message('確認しています…');try{guard();let now=false;await deadline(window.fbRunTransaction(window.db,async tx=>{const ref=window.fbDoc(window.db,'shared','sugoroku_status'),snap=await tx.get(ref);now=!(snap.exists()&&snap.data().open===true);tx.set(ref,{open:now,at:Date.now()});}));message(now?'すごろくビンゴを開放しました（ポイントで遊べます）。':'すごろくビンゴを閉じました（調整中と表示されます）。');}catch(error){message(error.message);}finally{lock(false);}};
+ const tester=element('button','この端末だけ、閉じていても遊べるようにする');tester.type='button';tester.className='admin-sugoroku-tester';
+ tester.onclick=()=>{try{const on=localStorage.getItem('aiglish_sugoroku_tester')!=='1';on?localStorage.setItem('aiglish_sugoroku_tester','1'):localStorage.removeItem('aiglish_sugoroku_tester');message(on?'この端末では、閉じていても遊べます。':'この端末のテスト用の設定を外しました。');}catch{message('この端末では設定できませんでした。');}};
+ const staked=confirmButton('全員の今日の賭け済み額を0に戻す','もう一度押すと、全員の今日の賭け済み額が0に戻ります',()=>resetStaked(null),'戻しました。各端末が、次にカジノを開いたときに反映します。');staked.className='admin-casino-reset';
+ body.append(refresh,books,notices,sent,bingo,gate,tester,staked);message('プレイヤーを読み込み中…');
  try{guard();const players=[];await deadline(playerList((id,data)=>{if(id!=='GUEST-000')players.push({id,name:data.playerName||id,deleted:!!data.deleted});},()=>authorized&&dialog.open&&generation===request));
  if(request!==generation||!authorized)return;
  for(const player of players){const row=element('button');row.type='button';row.className='admin-player-row';row.append(element('strong',player.name),element('small',player.id+(player.deleted?' · 削除済み':'')));row.onclick=()=>edit(player.id);body.append(row);}
@@ -102,7 +114,8 @@ async function edit(id){
  field('ニックネーム','playerName',data.playerName);
  const save=element('button','変更を保存');save.type='submit';const back=element('button','一覧に戻る');back.type='button';back.onclick=refreshList;
  const remove=element('button',data.deleted?'完全削除を再確認':'プレイヤーを完全削除');remove.type='button';remove.className='admin-player-delete';
- form.append(save,back,remove);if(data.deleted){form.querySelectorAll('label').forEach(node=>node.hidden=true);save.hidden=true;}body.append(form);
+ const playerStaked=confirmButton('このプレイヤーの今日の賭け済み額を0に戻す','もう一度押すと、このプレイヤーの今日の賭け済み額が0に戻ります',()=>resetStaked(id),'戻しました。このプレイヤーの端末が、次にカジノを開いたときに反映します。');playerStaked.className='admin-casino-reset-player';
+ form.append(save,back,playerStaked,remove);if(data.deleted){playerStaked.hidden=true;form.querySelectorAll('label').forEach(node=>node.hidden=true);save.hidden=true;}body.append(form);
  // Points from the 運営: add or take back. The player's own device applies it to their wallet
  // (nobody else ever writes a wallet) the next time the app is open; the list says what that
  // device has taken in yet, from the record between 運営 and the player (PointLoans.grant).

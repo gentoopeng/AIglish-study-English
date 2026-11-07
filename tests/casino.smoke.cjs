@@ -285,9 +285,35 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // back), and its bet feeds the jackpots. Die 1 onto a normal square, its wheel on ×0.
     await page.evaluate(() => {
       window.fbSetDoc = async (path, value) => (window.__wallet[path] = structuredClone(value));
+      window.fbGetDoc = async (path) => ({ exists: () => !!window.__wallet[path], data: () => structuredClone(window.__wallet[path]) });
       // The shared card is already there (a new one would take draws of its own).
       window.__wallet["shared/sugoroku_live2"] = { ...window.SugorokuModel.newCard((n) => n - 1), people: {}, log: [] };
     });
+    // On points the game is closed until the operator opens it (shared/sugoroku_status): a notice, no board.
+    await tab.locator(".mode-sugoroku").click();
+    await page.locator("dialog.casino-screen.is-sugoroku[open] .cs-hint").waitFor();
+    assert.match(await page.locator("dialog.casino-screen.is-sugoroku[open]").innerText(), /調整中/);
+    assert.equal(await page.locator("dialog.casino-screen.is-sugoroku[open] [data-sg-roll]").count(), 0);
+    await page.locator("dialog.casino-screen.is-sugoroku[open] .cs-close").click();
+    await page.locator("dialog.casino-screen.is-sugoroku[open]").waitFor({ state: "detached" });
+    await page.evaluate(() => (window.__wallet["shared/sugoroku_status"] = { open: true }));
+    // The operator can put today's bets back to 0 (shared/casino_reset): the allowance comes back once, on every device.
+    const today = await page.evaluate(() => window.StudyTimeModel.dateKey(Date.now()));
+    await page.evaluate((d) => {
+      localStorage.setItem("aiglish_casino_staked_casino-a", JSON.stringify({ days: { [d]: 700 } }));
+      window.__wallet["shared/casino_reset"] = { all: { at: Date.now(), day: d } };
+    }, today);
+    const roomBefore = await page.evaluate(() => window.Casino.allowance());
+    await page.evaluate(() => window.Casino._applyReset());
+    assert.equal((await page.evaluate(() => window.Casino.allowance())) - roomBefore, 700, "today's 700 bet is given back");
+    await page.evaluate((d) => localStorage.setItem("aiglish_casino_staked_casino-a", JSON.stringify({ days: { [d]: 300 } })), today);
+    const roomUsed = await page.evaluate(() => window.Casino.allowance());
+    await page.evaluate(() => window.Casino._applyReset());
+    assert.equal(await page.evaluate(() => window.Casino.allowance()), roomUsed, "the same reset is not taken twice");
+    await page.evaluate((d) => (window.__wallet["shared/casino_reset"] = { all: { at: Date.now() - 5000, day: d }, players: { "casino-a": { at: Date.now() + 1000, day: d } } }), today);
+    await page.evaluate(() => window.Casino._applyReset());
+    assert.equal((await page.evaluate(() => window.Casino.allowance())) - roomUsed, 300, "a reset for this player alone also counts");
+    await page.evaluate((d) => localStorage.removeItem("aiglish_casino_staked_casino-a"), today);
     const keysBefore = await page.evaluate(() => Object.keys(window.__wallet["users/casino-a/learningPoints/main"].poker).length);
     await tab.locator(".mode-sugoroku").click();
     const sg = page.locator("dialog.casino-screen.is-sugoroku[open]");

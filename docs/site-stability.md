@@ -3231,3 +3231,16 @@ Tests: `tests/sugoroku-model.test.cjs` (the extra draw; a draw of 1 pays ×0 wit
 **Now** (`sugoroku-model.js`): `chanceOdds` = 4, so 1 in 24 of the landings that read ×0 (about 1 in 200 rolls). To keep the return, the 確変 wheel pays ×16 … ×60 (was ×8 … ×30) and the ball runs are 15 balls (was 10). Return without jackpots: 0.9116 (3 players, 400,000 rolls). The look of the slot is unchanged.
 
 Tests: `tests/sugoroku-model.test.cjs`, `tests/sugoroku.smoke.cjs` (×40 = 4,000 back; fifteen balls).
+
+## 10.47.00.00 すごろくビンゴを一時的に「調整中」にでき、今日の賭け済み額を運営が0に戻せる
+
+**What the owner said.** 「一回テスト版にしてほしい／変更している時にプレイして異常に−や＋になったプレイヤーがいるので、勉強時間に応じてのカジノ回数をリセットするやつを追加してほしい」（答え：双六ビンゴを一時的に遊べなくする／今日の賭け済み額を0に戻す）
+
+**Now.**
+- すごろくビンゴ (`sugoroku.js` `gateOpen`): for points play the game is **closed until the operator opens it**: it shows 「調整中」 instead of the board. The state is `shared/sugoroku_status` `{ open }` (missing or a failed read = closed); an "open" answer is kept on the device for five minutes so opening the game does not wait for the network. Practice chips (guest, offline) are never closed. A device marked as a tester (`aiglish_sugoroku_tester`) plays while it is closed.
+- Admin tools (`admin-players.js`): 「すごろくビンゴの公開を切り替える」 (open / close), 「この端末だけ、閉じていても遊べるようにする」 (the tester mark), 「全員の今日の賭け済み額を0に戻す」 and, in a player's page, 「このプレイヤーの今日の賭け済み額を0に戻す」 (two presses each).
+- The bets of a day are kept on each player's device (`aiglish_casino_staked_<id>`), so the operator cannot clear them directly: the tool writes `shared/casino_reset` (`all` / `players[id]` = `{ at, day }`) and `casino.js` (`applyAdminReset`, at the most every five minutes, when the casino tab opens) clears that day on the device once for each newer entry. The study allowance of that day comes back; the carry-over of earlier days is not touched.
+
+**After this release the game is closed** (there is no `shared/sugoroku_status` yet): the operator opens it from the admin tools when ready.
+
+Tests: `tests/casino.smoke.cjs` (the notice while closed, then open; the reset is taken once, also for one player), `tests/sugoroku-shared.smoke.cjs` (opened status), `tests/admin-players.smoke.cjs` (the buttons write the documents).

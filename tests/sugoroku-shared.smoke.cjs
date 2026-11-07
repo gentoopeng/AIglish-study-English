@@ -48,6 +48,8 @@ const SAVE = "aiglish_sugoroku_sg-a",
         },
       };
       window.__store = store;
+      store["shared/sugoroku_status"] = { open: true }; // (the operator has opened the game)
+      localStorage.setItem("aiglish_sugoroku_open", String(Date.now())); // (and this device has been told)
       window.__failCard = false;
       window.db = {};
       window.fbDoc = (_, ...parts) => parts.join("/");
