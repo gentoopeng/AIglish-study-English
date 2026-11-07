@@ -552,6 +552,20 @@
     return box;
   };
 
+  const BJ_RULES = [
+    "カードの合計を21に近づけます。21を超えたら負けです。絵札は10、Aは1か11で数えます。",
+    "ディーラーは最初1枚だけ。みんなが終わってから、17以上になるまで1枚ずつ引きます。",
+    "ヒットでもう1枚、スタンドでそこで勝負。勝つと賭けた分がもらえ、最初の2枚で21（ブラックジャック）なら1.5倍です。",
+    "ダブル：賭けを2倍にして、あと1枚だけ引きます。",
+    "スプリット：同じ数の2枚を2つの手に分けて、それぞれ勝負します（賭けがもう1つ分かかります）。Aを分けたときは1枚ずつです。",
+  ];
+  const DICE_RULES = [
+    "5つのダイスを振り、残したいダイスをタップして「キープ」します。",
+    "キープしていないダイスを、あと2回まで振り直せます。",
+    "「これで勝負」のあとディーラーも同じように振り、強い役のほうが勝ちです。",
+    "勝つと賭けた分がもらえ、同じ役と目なら引き分けです。",
+    "役の強さ：" + C.DICE_NAMES.slice(1).reverse().join(" ＞ "),
+  ];
   // ---- Blackjack -------------------------------------------------------------------------
   // ---- Blackjack: one table view for alone and together -----------------------------------
   // Cards come out one at a time in the order they were dealt (round the table, then the dealer),
@@ -621,7 +635,7 @@
     return felt;
   }
   // The buttons for my turn, with the usual move marked and why.
-  function bjActions(t, me, onMove) {
+  function bjActions(t, me, onMove, free = false) {
     const box = node("div", "cs-bj-actions");
     const row = node("div", "cs-actions cs-moves");
     const buttons = {};
@@ -632,7 +646,8 @@
       b.dataset.move = move;
       b.append(node("b", "", MOVE_WORDS[move][0]), node("small", "", MOVE_WORDS[move][1]));
       const cost = C.tableCost(t, me, move);
-      b.disabled = cost > stakeRoom();
+      // (`free`: the extra bet is not taken from the wallet now, as in すごろくビンゴ, where it comes out of the result.)
+      b.disabled = !free && cost > stakeRoom();
       b.onclick = async () => {
         const all = [...row.querySelectorAll("button")],
           was = all.map((x) => x.disabled);
@@ -682,13 +697,7 @@
         modeSwitch(body, "dealer", "blackjack"),
         table,
         betBar("blackjack", "配る", start),
-        rules("ブラックジャックの遊び方", [
-          "カードの合計を21に近づけます。21を超えたら負けです。絵札は10、Aは1か11で数えます。",
-          "ディーラーは最初1枚だけ。みんなが終わってから、17以上になるまで1枚ずつ引きます。",
-          "ヒットでもう1枚、スタンドでそこで勝負。勝つと賭けた分がもらえ、最初の2枚で21（ブラックジャック）なら1.5倍です。",
-          "ダブル：賭けを2倍にして、あと1枚だけ引きます。",
-          "スプリット：同じ数の2枚を2つの手に分けて、それぞれ勝負します（賭けがもう1つ分かかります）。Aを分けたときは1枚ずつです。",
-        ]),
+        rules("ブラックジャックの遊び方", BJ_RULES),
       );
       return refresh();
     }
@@ -941,8 +950,8 @@
     const category = C.diceScore(dice)[0];
     return C.DICE_NAMES[category] + "（" + C.DICE_PLAIN[category] + "）";
   };
-  function dice(body, state = null, rolled = null) {
-    body.replaceChildren();
+  // The dice poker table (the dealer's five dice and mine): also used by すごろくビンゴ's event game.
+  function diceFelt(state, rolled, onToggle) {
     const felt = node("div", "cs-felt cs-dice-table");
     const dealer = node("div", "cs-hand is-dealer");
     const dealerLine = node("p", "cs-hand-label");
@@ -974,16 +983,21 @@
         b.append(face, node("small", "", state.held[i] && !state.done ? "キープ" : ""));
         b.disabled = state.done || state.rolls >= 3;
         if (suggest?.[i] && !state.held[i]) b.classList.add("is-suggested");
-        b.onclick = () => {
-          const next = C.diceToggle(state, i);
-          next.money = state.money;
-          dice(body, next, null);
-        };
+        b.onclick = () => onToggle(i);
         myDice.append(b);
       });
     } else for (let i = 0; i < 5; i++) myDice.append(node("span", "cs-die is-empty"));
     me.append(myLine, myDice);
     felt.append(dealer, me);
+    return { felt, suggest };
+  }
+  function dice(body, state = null, rolled = null) {
+    body.replaceChildren();
+    const { felt, suggest } = diceFelt(state, rolled, (i) => {
+      const next = C.diceToggle(state, i);
+      next.money = state.money;
+      dice(body, next, null);
+    });
     body.append(felt);
     const start = (bet) => {
       const money = round("dice");
@@ -996,13 +1010,7 @@
       body.append(
         modeSwitch(body, "dealer", "dice"),
         betBar("dice", "ダイスを振る", start),
-        rules("ダイスポーカーの遊び方", [
-          "5つのダイスを振り、残したいダイスをタップして「キープ」します。",
-          "キープしていないダイスを、あと2回まで振り直せます。",
-          "「これで勝負」のあとディーラーも同じように振り、強い役のほうが勝ちです。",
-          "勝つと賭けた分がもらえ、同じ役と目なら引き分けです。",
-          "役の強さ：" + C.DICE_NAMES.slice(1).reverse().join(" ＞ "),
-        ]),
+        rules("ダイスポーカーの遊び方", DICE_RULES),
       );
       return refresh();
     }
@@ -2499,5 +2507,6 @@
   window.onTabChange?.((tab) => {
     if (tab === "casino") mount();
   });
+  window.CasinoUI = Object.freeze({ bjFelt, bjActions, bjResultLine, diceFelt, chinSide, chinWords, result, die, rules, handName, BJ_RULES, DICE_RULES, CHIN_RULES });
   window.Casino = Object.freeze({ open, close, mount, balance, flush, allowance, stakeRoom, studyHint, addStaked, studyMinutes, _real: real, _applyReset: () => ((resetRead = 0), applyAdminReset()) });
 })();

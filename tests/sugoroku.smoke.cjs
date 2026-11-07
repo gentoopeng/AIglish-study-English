@@ -122,22 +122,23 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
     const game = screen.locator(".sg-layer.is-game:not([hidden])");
-    await game.locator(".sg-die-btn").first().waitFor();
-    assert.equal(await game.locator(".sg-die-btn").count(), 5);
-    await game.locator(".sg-die-btn").first().click();
-    assert.equal(await game.locator(".sg-die-btn").first().getAttribute("aria-pressed"), "true");
+    await game.locator(".cs-die-btn").first().waitFor();
+    assert.equal(await game.locator(".cs-die-btn").count(), 5);
+    await game.locator(".cs-die-btn").first().click();
+    assert.equal(await game.locator(".cs-die-btn").first().getAttribute("aria-pressed"), "true");
     const round = (await saved()).pending.round;
     assert.equal(round.held[0], true);
     const chips = await page.evaluate(() => window.Casino.balance());
     const wonBefore = (await saved()).won;
     // In すごろくビンゴ the player throws as often as the dealer: three throws in all (two re-rolls).
     assert.equal(round.most, 3);
-    assert.match(await game.locator(".sg-game-line").innerText(), /振り直しはあと2回。ディーラーは2回まで/);
+    assert.match(await game.locator("button[data-sg-game=reroll]").innerText(), /あと2回/);
+    assert.ok((await game.locator(".cs-felt.cs-dice-table").count()) === 1, "the casino's own dice table");
     await game.locator('[data-sg-game="stand"]').click();
     const outcome = (await saved()).pending.round.outcome;
     // The dealer's throws land one by one, then the result shows and the board goes on by
     // itself: there is no つづける to press.
-    await game.locator(".sg-hand span", { hasText: /ディーラー.*投目/ }).waitFor();
+    await game.locator(".cs-hand.is-dealer .cs-die:not(.is-empty)").first().waitFor();
     assert.equal(await game.locator('[data-sg-game="next"]').count(), 0);
     await page.waitForFunction((name) => JSON.parse(localStorage.getItem(name)).pending === null, SAVE);
     await settled();
@@ -173,7 +174,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
-    await game.locator(".sg-hand span", { hasText: /^親.*投目/ }).waitFor();
+    await game.locator(".cs-felt.cs-chin .cs-chin-side").first().waitFor();
     const parentThrows = (await saved()).pending.round.parent.rolls.length;
     assert.ok(parentThrows >= 1 && parentThrows <= 3);
     for (let i = 0; i < 3; i++) {
@@ -201,7 +202,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       const before = (await saved()).won;
       await tab.locator(".casino-game.mode-sugoroku").click();
       await game.locator('[data-sg-game="roll"]').waitFor();
-      assert.match(await game.locator(".sg-game-line").innerText(), /あと3回振れます/);
+      assert.match(await game.locator(".cs-hint").first().innerText(), /あなたの番です（3回まで）/);
       await page.evaluate((draws) => {
         const real = window.__realRandom || (window.__realRandom = crypto.getRandomValues.bind(crypto)),
           queue = draws.slice();
@@ -228,7 +229,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await game.locator('[data-sg-game="hit"]').waitFor();
     assert.equal(await game.locator('[data-sg-game="double"]').count(), 1, "ダブル on the first two cards");
     await game.locator('[data-sg-game="split"]').click();
-    assert.equal(await game.locator(".sg-hand").count(), 3, "the dealer and the two hands");
+    assert.equal(await game.locator(".cs-seat-hand").count(), 2, "the two hands");
     assert.equal(await game.locator('[data-sg-game="split"]').count(), 0, "no split of 8+9");
     await game.locator('[data-sg-game="stand"]').click();
     await game.locator('[data-sg-game="stand"]').click();
