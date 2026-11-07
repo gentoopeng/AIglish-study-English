@@ -69,6 +69,14 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       await settled();
     };
 
+    // The map scrolls by hand, and a tapped square says how far it is from the piece.
+    assert.equal(await screen.locator(".sg-track").evaluate((el) => getComputedStyle(el).overflowX), "auto");
+    const here = (await saved())?.pos ?? 0;
+    await screen.locator(".sg-sq").nth((here + 7) % 100).click();
+    assert.match(await screen.locator(".sg-tip").innerText(), /あと7マス/);
+    await screen.locator(".sg-sq").nth(here).click();
+    assert.match(await screen.locator(".sg-tip").innerText(), /いまここ/);
+    assert.equal(await screen.locator(".sg-tip").count(), 1, "one note at a time");
     // Rolls at 100 chips: chips always = 1000 − bets + what came back.
     assert.equal(await screen.locator(".sg-costs button").count(), 0, "one fixed bet, nothing to choose");
     assert.match(await screen.locator(".sg-costs").innerText(), /1回\s*100枚/);

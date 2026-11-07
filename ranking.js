@@ -108,7 +108,7 @@
     const casinoKeys=()=>window.CasinoStats?window.CasinoStats.keys():[];
     // The カジノ ranking shows one game at a time (all its panels fit the screen).
     // すごろくビンゴ has two tabs: "sugoroku" (bets, net, plays) and "sugoroku-bingo" (bingos, JP, SJP, balls).
-    const casinoShown=()=>{const game=casinoGame.split('-')[0],bingo=casinoGame==='sugoroku-bingo';return casinoKeys().filter(key=>{const [g,k]=key.split(':');return g===game&&(game!=='sugoroku'||(bingo===['g','j','s','l'].includes(k)));});};
+    const casinoShown=()=>{const game=casinoGame.split('-')[0],bingo=casinoGame==='sugoroku-bingo';return casinoKeys().filter(key=>{const [g,k]=key.split(':');return g===game&&(game!=='sugoroku'||(bingo===['g','j','s','l','r'].includes(k)));});};
     const labelOf=key=>isCasino(key)?window.CasinoStats.label(key):labels[key];
     const metricTitle=key=>isCasino(key)?labelOf(key).split(' ').pop():labels[key];
     const casinoValue=(row,key)=>{const v=row[key];if(!Number.isFinite(v))return '—';const k=key.split(':')[1];return k==='b'?v.toLocaleString('ja-JP')+'pt':k==='n'?(v>0?'+':v<0?'-':'')+Math.abs(v).toLocaleString('ja-JP')+'pt':v.toLocaleString('ja-JP')+'回';};

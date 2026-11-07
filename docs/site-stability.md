@@ -3190,3 +3190,14 @@ Tests: `tests/sugoroku-model.test.cjs` (`bingoSplit` adds up to prize + wheel), 
 - `tests/sugoroku.smoke.cjs`: practice chips stop at 0, so the balance is compared with `max(0, …)` (the bigger accident slots can take more than is left).
 
 Tests: the whole suite.
+
+## 10.43.00.00 すごろくビンゴ: マップをスクロールでき、マスを押すと「あと何マス」が出る。周回数をランキングに入れた
+
+**What the owner said.** 「双六のマップをスクロールして他のマスが見れるように／マスを押した時に後何マスかわかるように／周回数を今からカウントでいいのでカウントして、ランキングにも反映させて（双六2の方から）」
+
+**Now** (`sugoroku.js`, `sugoroku.css`, `casino-stats.js`, `ranking.js`):
+- The track was `overflow:hidden` and moved only by the game (`place`). It is now `overflow-x:auto` (swipe sideways, no scroll bar); the game still brings the piece back into view after a roll.
+- Tapping a square (or Enter) shows a note over it: 「あと7マス」 or 「いまここ」, and the kind (START / 通常 / ★イベント / ！アクシデント). One note at a time, gone after 2.6 s; not during a roll (a tap there still skips it).
+- Laps: `state.laps` (every pass over START) already existed in the save, so the count is the lifetime one, not only from now. `Sugoroku.stats` sends it as `r`; `casino-stats.js` has 周回数 as a new metric of すごろくビンゴ; the second ranking tab (「すごろく記録」: ビンゴ回数, JP回数, SJP回数, ボール排出回数) now has 周回数 as a fifth panel (the tab stacks its panels and scrolls inside, so five fit). A player shows up there once their next すごろくビンゴ roll has published the new total.
+
+Tests: `tests/casino-stats.test.cjs` (r is kept, cleaned and flat-listed), `tests/casino-ranking.smoke.cjs` (five panels), `tests/sugoroku.smoke.cjs` (the track scrolls, 「あと7マス」 / 「いまここ」).

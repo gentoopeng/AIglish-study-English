@@ -2,7 +2,7 @@
 //
 // stats = { game: { b, n, p } }
 //   b  total bet (points), n  total won less bet (may be negative), p  plays
-// and, for すごろくビンゴ only, g bingos, j JP wins, s SJP wins, l balls drawn, and jw: what
+// and, for すごろくビンゴ only, g bingos, j JP wins, s SJP wins, l balls drawn, r laps of the ring, and jw: what
 // jackpots paid (they are paid apart from the rolls, so they are not in its own n; a ranking
 // shows n + jw).
 // The five other games are counted as each result is paid (once per key, inside the wallet
@@ -14,7 +14,7 @@
     ALL = [...GAMES, "sugoroku"],
     NAMES = { poker: "ポーカー", blackjack: "ブラックジャック", roulette: "ルーレット", dice: "ダイスポーカー", chinchiro: "チンチロ", sugoroku: "すごろくビンゴ" },
     COMMON = [["b", "累計賭け額"], ["n", "累計得額"], ["p", "プレイ回数"]],
-    EXTRA = [["g", "ビンゴ回数"], ["j", "JP回数"], ["s", "SJP回数"], ["l", "ボール排出回数"]],
+    EXTRA = [["g", "ビンゴ回数"], ["j", "JP回数"], ["s", "SJP回数"], ["l", "ボール排出回数"], ["r", "周回数"]],
     CAP = 1e12;
   const metricsOf = (game) => (game === "sugoroku" ? [...COMMON, ...EXTRA] : COMMON);
   const whole = (v) => (Number.isSafeInteger(v) ? v : 0);

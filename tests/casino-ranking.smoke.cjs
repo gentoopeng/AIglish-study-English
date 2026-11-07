@@ -98,8 +98,8 @@ const { chromium } = require("playwright"),
         // (The podiums rise when they first appear: measured after that.)
         await page.waitForTimeout(900);
         const result = await fits();
-        assert.equal(result.count, game === "sugoroku-bingo" ? 4 : 3, game);
-        // 記録 has four panels stacked one under another and scrolls inside its own list (the page does not move).
+        assert.equal(result.count, game === "sugoroku-bingo" ? 5 : 3, game);
+        // 記録 has five panels stacked one under another and scrolls inside its own list (the page does not move).
         if (game === "sugoroku-bingo") assert.deepEqual([result.page, await page.evaluate(() => document.getElementById("rankingPodium").scrollHeight > document.getElementById("rankingPodium").clientHeight)], [true, true], game + " " + JSON.stringify(result));
         else assert.deepEqual([result.host, result.page, result.inside], [true, true, true], game + " " + viewport.width + "x" + viewport.height + " " + JSON.stringify(result));
         // The seven buttons sit on one row and none is cut off.
@@ -129,7 +129,7 @@ const { chromium } = require("playwright"),
     await page.locator('[data-casino-game="sugoroku"]').click();
     assert.deepEqual(await panelsOf(), ["累計賭け額", "累計得額", "プレイ回数"]);
     await page.locator('[data-casino-game="sugoroku-bingo"]').click();
-    assert.deepEqual(await panelsOf(), ["ビンゴ回数", "JP回数", "SJP回数", "ボール排出回数"]);
+    assert.deepEqual(await panelsOf(), ["ビンゴ回数", "JP回数", "SJP回数", "ボール排出回数", "周回数"]);
     await page.screenshot({ path: "/tmp/casino-ranking-sugoroku.png" });
     await page.locator('[data-casino-game="poker"]').click();
     assert.equal(requests.length, 1, "choosing a game does not read");
