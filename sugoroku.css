@@ -184,7 +184,7 @@
 .sg-log li.is-jp span,.sg-log li.is-sjp span{color:var(--gold);font-weight:600;}
 
 /* Event games */
-.sg-game-rule{margin:-4px 0 10px;color:var(--muted);font-size:11px;}
+.sg-game-rule{margin:-4px 0 10px;color:var(--muted);font-size:11px;white-space:pre-line;text-wrap:balance;line-break:strict;}
 .sg-game-table{display:grid;gap:12px;padding:12px;border-radius:12px;background:var(--felt);box-shadow:inset 0 0 0 1px rgba(207,174,106,.2);}
 .sg-hand{display:grid;gap:6px;justify-items:center;}
 .sg-hand>span{color:var(--ivory);font-size:12px;}
