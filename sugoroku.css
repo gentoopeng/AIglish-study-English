@@ -314,3 +314,5 @@
 .sg-tip{position:absolute;bottom:50px;transform:translateX(-50%);display:flex;align-items:baseline;gap:6px;padding:4px 9px;border:1px solid var(--gold);border-radius:9px;background:rgba(10,18,16,.94);color:var(--ivory);white-space:nowrap;text-align:center;z-index:3;pointer-events:none;}
 .sg-tip b{font:700 13px Georgia,serif;color:var(--gold);}
 .sg-tip small{font-size:10px;color:var(--muted);}
+
+.sg-testbanner{margin:0 0 6px;padding:5px 10px;border:1px dashed var(--gold);border-radius:9px;color:var(--gold);font-size:11px;text-align:center;}

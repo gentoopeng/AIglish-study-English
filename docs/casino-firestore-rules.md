@@ -44,7 +44,7 @@ match /shared/sugoroku_live2 {
 
 ## shared/sugoroku_status
 
-`{ open, at }`: whether すごろくビンゴ may be played for points (`open: true`). Missing or false: a notice 「調整中」 is shown instead of the board (practice chips are not affected). Every signed-in player reads it; the operator's tools write it.
+`{ open, at }`: whether すごろくビンゴ may be played for points (`open: true`). Missing or false: the game opens as a test version (a 「テスト版」 banner, practice chips, a card of its own; nothing is paid or shared). Every signed-in player reads it; the operator's tools write it.
 
 ## shared/casino_reset
 

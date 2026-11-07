@@ -442,11 +442,13 @@
     document.body.classList.add("casino-open");
     screen.showModal();
     game = { id, body: screen.querySelector(".cs-body") };
-    if (id === "sugoroku") window.Sugoroku.play(game.body, { round, balance, stakeRoom, allowance, studyHint, unit, real, refresh, uid, resetPractice: () => (setPractice(PRACTICE_START), refresh()), practiceStart: PRACTICE_START });
+    if (id === "sugoroku") window.Sugoroku.play(game.body, { round, balance, stakeRoom, allowance, studyHint, unit, real, refresh, uid, resetPractice: () => (setPractice(PRACTICE_START), refresh()), practiceStart: PRACTICE_START, preview: (on) => (on ? PREVIEW.add("sugoroku") : PREVIEW.delete("sugoroku"), refresh()) });
     else ({ blackjack, roulette, dice, chinchiro })[id](game.body);
     refresh();
   }
   function close() {
+    // (A game opened as a preview is back to normal once it is closed.)
+    if (game?.id) PREVIEW.delete(game.id);
     flush();
     leaveDuel();
     leaveGroup();

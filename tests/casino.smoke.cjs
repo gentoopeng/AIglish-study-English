@@ -289,14 +289,26 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       // The shared card is already there (a new one would take draws of its own).
       window.__wallet["shared/sugoroku_live2"] = { ...window.SugorokuModel.newCard((n) => n - 1), people: {}, log: [] };
     });
-    // On points the game is closed until the operator opens it (shared/sugoroku_status): a notice, no board.
+    // On points the game is a test version until the operator opens it (shared/sugoroku_status): practice chips,
+    // a banner, a card of its own. Nothing is read from or written to the shared card.
     await tab.locator(".mode-sugoroku").click();
-    await page.locator("dialog.casino-screen.is-sugoroku[open] .cs-hint").waitFor();
-    assert.match(await page.locator("dialog.casino-screen.is-sugoroku[open]").innerText(), /調整中/);
-    assert.equal(await page.locator("dialog.casino-screen.is-sugoroku[open] [data-sg-roll]").count(), 0);
+    const testGame = page.locator("dialog.casino-screen.is-sugoroku[open]");
+    await testGame.locator("[data-sg-roll]").waitFor();
+    assert.match(await testGame.locator(".sg-testbanner").innerText(), /テスト版[\s\S]*練習チップ/);
+    assert.match(await testGame.locator("[data-cs-balance]").innerText(), /枚$/);
+    const walletBefore = await page.evaluate(() => JSON.stringify(window.__wallet["users/casino-a/learningPoints/main"]));
+    await testGame.locator("[data-sg-roll]").click();
+    await page.waitForFunction(() => !document.querySelector(".cs-body.is-spinning"));
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__wallet["users/casino-a/learningPoints/main"])), walletBefore, "no points move in the test version");
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__wallet["shared/sugoroku_live2"]).includes("casino-a")), false);
     await page.locator("dialog.casino-screen.is-sugoroku[open] .cs-close").click();
     await page.locator("dialog.casino-screen.is-sugoroku[open]").waitFor({ state: "detached" });
     await page.evaluate(() => (window.__wallet["shared/sugoroku_status"] = { open: true }));
+    await tab.locator(".mode-sugoroku").click();
+    assert.equal(await page.locator("dialog.casino-screen.is-sugoroku[open] .sg-testbanner").count(), 0, "open: no banner");
+    assert.match(await page.locator("dialog.casino-screen.is-sugoroku[open] [data-cs-balance]").innerText(), /pt$/);
+    await page.locator("dialog.casino-screen.is-sugoroku[open] .cs-close").click();
+    await page.locator("dialog.casino-screen.is-sugoroku[open]").waitFor({ state: "detached" });
     // The operator can put today's bets back to 0 (shared/casino_reset): the allowance comes back once, on every device.
     const today = await page.evaluate(() => window.StudyTimeModel.dateKey(Date.now()));
     await page.evaluate((d) => {

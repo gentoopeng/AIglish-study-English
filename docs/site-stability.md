@@ -3254,3 +3254,13 @@ Tests: `tests/casino.smoke.cjs` (the notice while closed, then open; the reset i
 **Now** (`study-points-ui.js`): when the history is drawn, the casino lines of a day are added up per game: one line each, with the plays (「カジノ · N回分」) and the points together (the newest game stays on top). The record itself is unchanged. The explanation in the points dialog says so.
 
 Tests: `tests/casino.smoke.cjs` (すごろくビンゴ lines split by a ルーレット line become one line of 7 plays, −280pt).
+
+## 10.49.00.00 閉じているすごろくビンゴを「テスト版」として遊べるようにした
+
+**What the owner said.** 「テスト版でできるようにしてください」
+
+**Cause.** 10.47 closed the game with only a notice, so nobody could try the changes.
+
+**Now** (`sugoroku.js`, `casino.js`): while the game is not open (`shared/sugoroku_status` missing or `open` not true) it opens as a **test version**: the `PREVIEW` set of `casino.js` (a game in it is on practice chips, so it cannot move points) gets the game through `api.preview(true)`, the screen shows 「テスト版（調整中）　練習チップで遊べます。ポイントは動きません。」, and the bingo card is the device's own (`testMode` makes `shared()` false), so nothing is read from or written to the shared card, the jackpot or the notices. Practice chips are the same 1,000 as the guest's. Opening the game again judges the account afresh; closing it takes the game out of `PREVIEW`. When the operator opens the game, points play as before. The tester mark (「この端末だけ…」) still plays for points while it is closed.
+
+Tests: `tests/casino.smoke.cjs` (the banner, chips, and no change to the wallet or the shared card in the test version; no banner and points once opened).
