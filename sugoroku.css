@@ -266,13 +266,14 @@
 
 /* Items: the bag, and the face picker. */
 .sg-items{display:flex;flex-wrap:wrap;gap:5px;margin:2px 0 4px;}
-.sg-item,.sg-item.is-empty{color:rgba(240,232,212,.3);border-style:dashed;cursor:default;}
+.sg-item{flex:1 1 30%;min-width:0;min-height:30px;padding:0 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border:1px solid var(--line);border-radius:10px;background:rgba(10,18,16,.6);color:var(--ivory);font:600 11px/1 system-ui,sans-serif;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sg-item.is-empty{color:rgba(240,232,212,.3);border-style:dashed;cursor:default;}
 .sg-item[aria-pressed="true"]{border-color:var(--gold);background:rgba(214,183,115,.22);color:var(--gold);box-shadow:0 0 10px rgba(214,183,115,.35);}
 .sg-item:disabled:not(.is-empty){opacity:.55;}
 .sg-faces{display:flex;gap:5px;margin:0 0 4px;}
 .sg-faces button{flex:1;min-height:30px;border:1px solid var(--line);border-radius:8px;background:rgba(10,18,16,.6);color:var(--ivory);font:700 14px Georgia,serif;cursor:pointer;}
 .sg-faces button[aria-pressed="true"]{border-color:var(--gold);background:rgba(214,183,115,.25);color:var(--gold);}
-.sg-sheet .sg-sheet 
+
 /* Item pictures (assets/sugoroku): the dice are stacked, a little turned. */
 .sg-ico{position:relative;display:inline-block;flex:0 0 auto;width:30px;height:30px;}
 .sg-ico img{position:absolute;width:100%;height:100%;object-fit:contain;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}

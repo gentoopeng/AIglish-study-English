@@ -263,6 +263,12 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").first().waitFor();
     assert.equal(await screen.locator('.sg-item[data-item="dice2"]').count(), 1);
+    // The bag's pictures stay small (a style lost once left them as big as the board).
+    for (const img of await screen.locator(".sg-item .sg-ico img").all()) {
+      const box = await img.boundingBox();
+      assert.ok(box.width <= 40 && box.height <= 40, "item picture " + box.width + "x" + box.height);
+    }
+    assert.ok((await screen.locator(".sg-item").first().boundingBox()).height <= 60, "item chip stays small");
     await screen.locator('.sg-item[data-item="dice2"]').click();
     assert.equal(await screen.locator('.sg-item[data-item="dice2"]').getAttribute("aria-pressed"), "true");
     const posBefore = (await saved()).pos;
