@@ -1608,7 +1608,8 @@
     box.classList.add("is-done");
     if (slot.next || slot.jackpot || slot.balls || slot.ball || slot.x >= 5) layer.classList.add("is-hotter");
     // A hidden bonus slot: it reads ×0 for a moment, then the room goes gold and shakes.
-    if (slot.kakuhen) {
+    // (A hidden slot that did not start the bonus reads and pays ×0, like any other ×0.)
+    if (slot.kakuhen && e.chance !== false) {
       await wait(900);
       layer.classList.add("is-hot", "is-hotter");
       box.classList.add("is-surge");

@@ -3211,3 +3211,13 @@ Tests: `tests/casino-stats.test.cjs` (r is kept, cleaned and flat-listed), `test
 **Now** (`sugoroku-model.js`): ぴったり costs 120 (was 25) and is 1 slot of 10 on the item wheel (was 2; ダブルダイス has 4); ガード costs 80 (was 30). Prices are now ダブルダイス 20, トリプルダイス 30, ぴったり 120, ガード 80, 倍がけ 100. ダブルダイス / トリプルダイス stay cheap because they are worth about 9 and 16 points.
 
 Tests: `tests/sugoroku-model.test.cjs` (the item wheel's slots).
+
+## 10.45.00.00 CHANCE（確変）を半分の頻度にして、そのぶん当たりを倍にした
+
+**What the owner said.** 「Chanceの確率高すぎん？w」（前の問い合わせ「×0に乗ると確定でチャンスになる」も、頻度の感じ方の話だった）
+
+**Checked.** The hidden 確変 slot is one of 40 on the normal wheel and a normal square is 80% of the board: CHANCE came once in 50 rolls (20 in 1,000), and it carried 0.139 of the 0.908 the game gives back. A plain ×0 slot never starts it (6 slots read ×0, 1 of them is the hidden one, so 1 in 6 of the ×0 landings).
+
+**Now** (`sugoroku-model.js`, `sugoroku.js`): the hidden slot starts the 確変 wheel on a draw of 0 out of `chanceOdds` = 2; otherwise it pays ×0 like the plain ones and the event says `chance: false` (the screen shows no CHANCE then). CHANCE is now once in about 100 rolls. To keep the return, the 確変 wheel pays double: ×8 … ×30 (was ×4 … ×15) and the ball runs are 10 balls (was 5). Return without jackpots: 0.9118 (3 players, 300,000 rolls; was 0.9078).
+
+Tests: `tests/sugoroku-model.test.cjs` (the extra draw; a draw of 1 pays ×0 with `chance: false`; ×20 and ten balls), `tests/sugoroku.smoke.cjs`.
