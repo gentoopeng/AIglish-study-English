@@ -250,7 +250,7 @@
             '<label id="workbookRangeLabel" for="workbookFrom">ページ範囲</label><div class="workbook-range-fields"><input id="workbookFrom" type="number" min="1" max="100000" required value="1" aria-label="範囲の開始"><span>〜</span><input id="workbookTo" type="number" min="1" max="100000" required value="20" aria-label="範囲の終了"></div>' +
             ruleFields('workbookReview', settings) +
             '<details><summary class="library-editor-hint">問題のインポート・テスト日（任意）</summary><label for="workbookImport">問題を登録</label><textarea id="workbookImport" rows="4" placeholder="2(1):小問1の問題文と必要な条件:答え:補足\n2(2):小問2の問題文:答え:補足"></textarea>' +
-            '<p class="library-editor-hint">1行に「番号:問題文:答え:補足」。小問は「2(2):問題文:答え:補足」（問2の小問2）。「2の(2)」も使えます。小問ごとに理解度・メモ・復習を記録します。同じ番号・小問は内容を更新し、学習記録は保持します。問題文・答えは空欄でも使えます。JSONバックアップにも対応。<button type="button" id="workbookCopyPrompt" class="library-prompt-copy">写真から抽出するAI用プロンプトをコピー</button>公開されるのは教材の内容だけです。</p>' +
+            '<p class="library-editor-hint">1行に「番号:問題文:答え:補足」。小問は「2(2):問題文:答え:補足」（問2の小問2。「2の(2)」も可）。同じ番号・小問は内容を更新し、学習記録は残ります。問題文・答えは空欄でも可。JSONバックアップにも対応。<button type="button" id="workbookCopyPrompt" class="library-prompt-copy">写真から抽出するAI用プロンプトをコピー</button>公開されるのは教材の内容だけです。</p>' +
             '<label for="workbookTestDate">テスト日</label><input id="workbookTestDate" type="date"><p class="library-editor-hint">自動の復習予定をテスト前に収まるよう調整します。</p></details>' + actions(previous ? '変更を保存' : 'ワークを作る') + '</form>');
         const form = modal.querySelector('form');
         let photo = previous ? previous.photo || '' : '', photoReady = Promise.resolve();
@@ -571,7 +571,7 @@
             const blob = new Blob([JSON.stringify(work.units, null, 2)], {type: 'application/json'}), url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'workbook-backup.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
         };
         modal.querySelector('#workbookDelete').onclick = () => {
-            const owner = uid(); const confirmDialog = dialog('「' + work.name + '」を完全削除しますか？', '<p class="library-editor-hint">このワークの問題と学習記録を、保存済みセーブからも完全に削除します。公開している場合は公開一覧からも取り消します。他の人のコピーは残ります。</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="workbookConfirmDelete" class="library-editor-danger">完全削除する</button></div>');
+            const owner = uid(); const confirmDialog = dialog('「' + work.name + '」を完全削除しますか？', '<p class="library-editor-hint">このワークの問題と学習記録を、保存済みセーブからも完全に削除します。公開中は公開一覧からも取り消します（他の人のコピーは残ります）。</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" id="workbookConfirmDelete" class="library-editor-danger">完全削除する</button></div>');
             confirmDialog.querySelector('#workbookConfirmDelete').onclick = async function () {
                 if (this.disabled) return; this.disabled = true;
                 try {

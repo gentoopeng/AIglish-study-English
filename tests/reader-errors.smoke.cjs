@@ -43,7 +43,7 @@ const { chromium } = require("playwright"),
     const notice = page.locator(".reader-error-notice");
     await notice.waitFor({ timeout: 20000 });
     assert.deepEqual(calls, ["gemini-2.5-flash", "gemini-2.5-flash", "gemini-flash-latest", "gemini-flash-latest"]);
-    assert.match(await notice.innerText(), /AI（Gemini）が混み合っています[\s\S]*アプリやAPIキーの問題ではありません[\s\S]*エラーコード 503/);
+    assert.match(await notice.innerText(), /AI（Gemini）が混み合っています[\s\S]*アプリやAPIキーの問題ではないので[\s\S]*エラーコード 503/);
     assert.equal(await page.locator("dialog.app-alert").count(), 0);
     assert.equal(await page.locator("#summary-abstract-card").isVisible(), false);
     // Retrying once the newer model answers: the busy one is skipped over.

@@ -123,7 +123,7 @@
             return { title: 'APIキーが使えません', detail: 'メニューの「設定」にあるGemini APIキーが正しいか確認してください。キーを作り直したときは、新しいキーを保存し直してください。' + code };
         if (status === 429) return { title: 'AIの利用回数の上限に達しました', detail: 'Geminiの無料枠には、1分あたり・1日あたりの回数に上限があります。1分ほど待つか、時間をおいてからもう一度お試しください。' + code };
         if (status === 503 || status === 502 || status === 504)
-            return { title: 'AI（Gemini）が混み合っています', detail: 'Google側で利用が集中していて、一時的に応答できない状態です。アプリやAPIキーの問題ではありません。1〜2分ほど待ってから、もう一度お試しください。' + code };
+            return { title: 'AI（Gemini）が混み合っています', detail: 'Google側が混み合っていて、一時的に応答できません。アプリやAPIキーの問題ではないので、1〜2分待ってから、もう一度お試しください。' + code };
         if (status >= 500) return { title: 'AI（Gemini）側でエラーが起きました', detail: 'Google側の一時的な問題です。少し待ってから、もう一度お試しください。' + code };
         if (status === 404) return { title: 'AIのモデルが見つかりません', detail: 'Google側でモデルの名前が変わった可能性があります。ページを再読み込みしてから、もう一度お試しください。' + code };
         if (status === 400) return { title: 'AIがこの英文を受け付けませんでした', detail: '英文が長すぎるか、読めない文字が含まれている可能性があります。短く区切って試してください。' + code };
