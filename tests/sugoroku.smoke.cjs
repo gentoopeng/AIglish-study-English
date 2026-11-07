@@ -357,9 +357,9 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const done = await saved(),
       doneCard = await card();
     assert.equal(done.bingos, before20.bingos + 1);
-    // A line of only the guest's balls: (bingo prize 800 + × 20 = 2,000 → 2,800) × 1.1, plus START's
+    // A line of only the guest's balls: (bingo prize 700 + × 20 = 2,000 → 2,700) × 1.1, plus START's
     // wheel (which can take up to five bets more).
-    assert.ok(done.won - before20.won >= 3080 - 500, String(done.won - before20.won));
+    assert.ok(done.won - before20.won >= 2970 - 500, String(done.won - before20.won));
     // The finished row starts again: no balls, the same numbers; amy's ball stays.
     assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.ok(doneCard.cells.slice(0, 7).includes(lastNo));
@@ -401,10 +401,10 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
     const afterMini = await saved();
     assert.deepEqual(afterMini.bonus, []);
-    // amy's row: no solo bonus, and 70% of the prize of 800 is shared by the balls on it: amy's
-    // six parts (480) wait on the card for her, the guest keeps 320; plus what the timer scored.
-    assert.ok(afterMini.won - beforeMini.won >= 320);
-    assert.deepEqual((await card()).owed, { amy: 480 });
+    // amy's row: no solo bonus, and the prize of 700 is shared by the balls on it, 100 each: amy's
+    // six parts (600) wait on the card for her, the guest keeps 100; plus what the timer scored.
+    assert.ok(afterMini.won - beforeMini.won >= 100);
+    assert.deepEqual((await card()).owed, { amy: 600 });
 
     // The normal squares' quick games. ストップ: stopped at once, the light is at the left end: a
     // miss, 0. ハイ＆ロー: 5 then 9 and HIGH: a win, 1.25× the bet.

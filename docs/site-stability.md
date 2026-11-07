@@ -3149,3 +3149,11 @@ Tests: `tests/admin-players.smoke.cjs` (two presses; owners, bets cleared; cells
 Measured (3 players, 300,000 rolls, 100 bets): return without jackpots 0.9175 (the accident wheel +0.009, bingo +0.05, the item cash +0.04, offset by the lower miss pay, 確変 and one normal slot).
 
 Tests: `tests/sugoroku-model.test.cjs` (new wheel numbers, guard with a + slot, items ×n and the 100, math levels and the dice sum), `tests/sugoroku.smoke.cjs` (three dice, the math level buttons and a right answer).
+
+## 10.39.00.00 すごろくビンゴ: ビンゴ賞金を700（ボール1個につき100）にし、全額をボールで分けるようにした
+
+**What the owner said.** 「ビンゴ賞金700にすればちょうど1個につき100ptだから良さそう」
+
+**Now** (`sugoroku-model.js`): `bingoPrize` = 7 (was 8) and `prizeShare` = 1 (was 0.7), so the prize of a line (7 balls at 100 each) is 700 and every ball gets 100; the finisher keeps no extra share of the prize (the wheel's × multiples are still shared 50% by the balls, and mini games, jackpots stay with the finisher). Several lines at once still multiply it by (lines + 1), and a line of one's own balls by 1.1. Return without jackpots: 0.9078 (3 players, 300,000 rolls; was 0.9175).
+
+Tests: `tests/sugoroku-model.test.cjs`, `tests/sugoroku.smoke.cjs`, `tests/sugoroku-shared.smoke.cjs` (100 for each ball).

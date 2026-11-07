@@ -73,8 +73,8 @@ test("the board, card and wheels have the agreed shape", () => {
   const special = S.RULES.wheels.special;
   assert.ok(special.length >= 8 && special.every((x) => x.x > 0 || x.balls === 3));
   assert.ok(!special.some((x) => x.jackpot));
-  // More of the bingo money goes to the other players on the line.
-  assert.deepEqual([S.RULES.prizeShare, S.RULES.wheelShare], [0.7, 0.5]);
+  // The whole prize goes to the balls on the line; half of the wheel's multiple does.
+  assert.deepEqual([S.RULES.bingoPrize, S.RULES.prizeShare, S.RULES.wheelShare], [7, 1, 0.5], "the prize is 7 × the bet, 100 for each of the 7 balls");
   // An old save (with its own card) keeps its place and counts.
   const old = { v: 2, pos: 7, card: [], marks: [], lines: [], stake: 30, laps: 1, rolls: 5, bet: 50, won: 20, balls: 1, cards: 0, bingos: 0, pending: null };
   assert.ok(S.valid(old));
@@ -137,22 +137,22 @@ test("a line pays on the player's own stake, then its balls are cleared (the num
   assert.deepEqual(line.lines, [0, 13]);
   assert.equal(line.count, 2);
   assert.equal(line.solo, false);
-  // n lines at once: (n + 1)× the bingo prize (8× the bet) and the wheel's bet × 12.
+  // n lines at once: (n + 1)× the bingo prize (7× the bet) and the wheel's bet × 12.
   assert.equal(line.mult, line.count + 1);
-  // 70% of the prize (2,400 here) is shared by the 13 balls on the two lines: ben's 12 parts wait on
+  // All of the prize (2,100 here) is shared by the 13 balls on the two lines: ben's 12 parts wait on
   // the card for him, amy keeps the rest. Of the wheel's × 12 (3,600), 50% goes the same way.
   const prize = out.events.find((e) => e.t === "prize"),
-    prizeBen = Math.floor((2400 * S.RULES.prizeShare * 12) / 13),
+    prizeBen = Math.floor((2100 * S.RULES.prizeShare * 12) / 13),
     wheelBen = Math.floor((3600 * S.RULES.wheelShare * 12) / 13);
-  assert.equal(prize.total, 800 * line.mult);
+  assert.equal(prize.total, 700 * line.mult);
   assert.deepEqual(prize.shares, { ben: prizeBen });
-  assert.equal(prize.amount, 2400 - prizeBen);
+  assert.equal(prize.amount, 2100 - prizeBen);
   const spin = out.events.find((e) => e.t === "wheel" && e.wheel === "bingo");
   assert.equal(spin.total, 1200 * line.mult);
   assert.deepEqual(spin.shares, { ben: wheelBen });
   assert.equal(spin.amount, 3600 - wheelBen);
   assert.deepEqual(out.card.owed, { ben: prizeBen + wheelBen });
-  assert.equal(out.gain, 2400 - prizeBen + 3600 - wheelBen);
+  assert.equal(out.gain, 2100 - prizeBen + 3600 - wheelBen);
   // ben takes his part when he next plays, once.
   const got = S.collect(out.card, "ben");
   assert.equal(got.amount, prizeBen + wheelBen);
@@ -252,9 +252,9 @@ const slot = (wheel, test) => S.RULES.wheels[wheel].findIndex(test);
 test("the jackpot is a slot of the bingo wheel, the super chance leads to its own wheel and back", () => {
   const jp = lineReady([slot("bingo", (x) => x.jackpot === "jp")]);
   assert.deepEqual(jp.events.find((e) => e.t === "jackpot"), { t: "jackpot", kind: "jp" });
-  // amy's part of the prize (800): 70% is shared by the 7 balls, ben's 6 parts wait on the card.
-  const ben = Math.floor((800 * S.RULES.prizeShare * 6) / 7);
-  assert.equal(jp.gain, 800 - ben);
+  // amy's part of the prize (700): all of it is shared by the 7 balls (100 each), ben's 6 parts wait on the card.
+  const ben = Math.floor((700 * S.RULES.prizeShare * 6) / 7);
+  assert.equal(jp.gain, 700 - ben);
   // The jackpot waits in the state until the screen pays it.
   assert.deepEqual(jp.state.jpWait, ["jp"]);
   assert.equal(jp.state.jps, 1);
@@ -265,7 +265,7 @@ test("the jackpot is a slot of the bingo wheel, the super chance leads to its ow
   const back = lineReady([slot("bingo", (x) => x.next), slot("sjp", (x) => x.back), slot("bingo", (x) => x.x === 12)]);
   assert.deepEqual(back.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["normal", "bingo", "sjp", "bingo"]);
   // × 12 = 1,200, of which ben's 6 balls of 7 take 50%.
-  assert.equal(back.gain, 800 - ben + 1200 - Math.floor((1200 * S.RULES.wheelShare * 6) / 7));
+  assert.equal(back.gain, 700 - ben + 1200 - Math.floor((1200 * S.RULES.wheelShare * 6) / 7));
   assert.deepEqual(sjp.state.jpWait, ["sjp"]);
 });
 
