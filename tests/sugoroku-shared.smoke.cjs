@@ -4,7 +4,7 @@
 // checked (a bad icon is dropped, a junk log entry too); the numbers a reach waits on are shown;
 // a failed write charges nothing and asks to roll again; a player's part of someone else's line
 // is collected once; a line is shared by the balls on it and goes in everybody's log; the
-// records sheet; 早送り is remembered; a script's taps do not count; and a jackpot win takes the
+// records sheet; no 早送り button; a script's taps do not count; and a jackpot win takes the
 // pot in one transaction and starts it again.
 const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
@@ -181,15 +181,11 @@ const SAVE = "aiglish_sugoroku_sg-a",
     assert.match(await sheet.locator(".sg-stats").innerText(), /ビンゴ\s*1列/);
     await sheet.getByRole("button", { name: "閉じる" }).click();
 
-    // 早送り is a toggle kept for next time.
-    const quick = screen.getByRole("button", { name: "早送り" });
-    assert.equal(await quick.getAttribute("aria-pressed"), "false");
-    await quick.click();
-    assert.equal(await quick.getAttribute("aria-pressed"), "true");
+    // There is no 早送り button any more.
+    assert.equal(await screen.getByRole("button", { name: "早送り" }).count(), 0);
     await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").first().waitFor();
-    assert.equal(await screen.getByRole("button", { name: "早送り" }).getAttribute("aria-pressed"), "true");
 
     // The tapping game: taps made by a script do not count, real ones do.
     await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();

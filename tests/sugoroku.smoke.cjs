@@ -577,8 +577,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       assert.match(await mini.locator(".sg-game-line").innerText(), /正解/);
     });
     assert.equal(mathWon, 300);
-    // In 早送り a quick game is still played by hand (no automatic half-pay).
-    await page.evaluate(() => localStorage.setItem("aiglish_sugoroku_quick", "1"));
+    // A quick game is played by hand (no automatic half-pay, no 早送り button).
+    assert.equal(await screen.getByRole("button", { name: "早送り" }).count(), 0);
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
@@ -589,7 +589,6 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await mini.locator('[data-sg-game="flip"]').waitFor();
     assert.equal((await saved()).bonus.length, 1, "waits for the player");
     assert.equal(await mini.locator('[data-sg-game="auto"]').count(), 0);
-    await page.evaluate(() => localStorage.setItem("aiglish_sugoroku_quick", "0"));
     // ハイ＆ロー pays 10 times on the same number (ぴったり).
     assert.equal(await page.evaluate(() => window.SugorokuModel.gameScore("hilo", "tie", 100)), 1000);
     // Leave it: it scores 0 when opened again.
@@ -611,6 +610,25 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.match(await mini.innerText(), /途中でやめたので0点/);
     await page.waitForFunction((name) => !JSON.parse(localStorage.getItem(name)).bonus.length, SAVE);
     assert.deepEqual((await saved()).bonus, []);
+    // One screen exactly, at small phone sizes too, with the bag full, ガード on and ぴったり's faces open.
+    for (const [w, h] of [[320, 568], [360, 640], [375, 667], [390, 844]]) {
+      await page.setViewportSize({ width: w, height: h });
+      await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
+      await page.evaluate((name) => {
+        const s = JSON.parse(localStorage.getItem(name));
+        Object.assign(s, { items: ["dice2", "dice3", "exact", "guard", "x2"], guard: 2, bonus: [], pending: null });
+        localStorage.setItem(name, JSON.stringify(s));
+      }, SAVE);
+      await tab.locator(".casino-game.mode-sugoroku").click();
+      await screen.locator(".sg-card").first().waitFor();
+      await screen.locator('.sg-item[data-item="exact"]').click();
+      await page.waitForFunction(() => { const d = document.querySelector("dialog.casino-screen.is-sugoroku"); return d.scrollHeight <= d.clientHeight; }, null, { timeout: 5000 }).catch(() => {});
+      const fit = await page.evaluate(() => {
+        const d = document.querySelector("dialog.casino-screen.is-sugoroku");
+        return { scroll: d.scrollHeight, client: d.clientHeight, go: document.querySelector(".sg-go").getBoundingClientRect().bottom, wrap: document.querySelector(".sg-card-wrap").offsetWidth };
+      });
+      assert.ok(fit.scroll <= fit.client && fit.go <= h && fit.wrap >= 150, "fits " + w + "x" + h + ": " + JSON.stringify(fit));
+    }
     assert.deepEqual(errors, []);
     console.log("PASS: すごろくビンゴ card/track/jackpots, rolls pay and save, resume, an event game kept and settled (the dealer's and the parent's throws shown, no つづける), a ball off the card pays 2×, other players' balls by name, a line of own balls spins BINGO and starts the row again, a mini game played and paid, a left one scores 0");
   } finally {
