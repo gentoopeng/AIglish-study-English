@@ -556,18 +556,9 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
   const run = S.RULES.normal[100].findIndex((x) => x.kakuhen),
     sixty = S.RULES.kakuhen.findIndex((x) => x.x === 60);
   assert.equal(S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, run, 0, sixty]), "amy", { items: ["x2"] }).gain, 6000 + 1000);
-  // Buying: the price is returned; only the very top count refuses; an unknown item too.
-  const bought = S.buy({ ...S.newState(), items: ["guard"] }, "dice3");
-  assert.deepEqual([bought.state.items, bought.price], [["guard", "dice3"], 80]);
-  assert.throws(() => S.buy(S.newState(), "ball"), /no such item/);
-  assert.deepEqual(S.buy({ ...S.newState(), items: ["guard", "guard", "guard"] }, "x2").state.items, ["guard", "guard", "guard", "x2"], "more than three is fine");
-  assert.throws(() => S.buy({ ...S.newState(), items: Array(S.RULES.itemMax).fill("guard") }, "x2"), /full/);
-  assert.throws(() => S.buy(S.newState(), "nope"));
-  // Names every object has are not items; a purchase and a roll both count for which copy is further on.
-  assert.throws(() => S.buy(S.newState(), "constructor"));
+  // Names every object has are not items; a roll counts for which copy of a game is further on.
   assert.deepEqual(S.itemsOf({ items: ["constructor", "__proto__", "toString", "guard"] }), ["guard"]);
   assert.equal(S.revOf({ rolls: 7 }), 7);
-  assert.equal(S.buy({ ...S.newState(), rolls: 7, rev: undefined }, "guard").state.rev, 8);
   assert.equal(S.roll({ ...S.newState(), rolls: 7, rev: undefined, pos: at("normal") - 1 }, card, 100, seq([0, zeroAt])).state.rev, 8);
   // An old save has no items; a bad one is cleaned.
   assert.deepEqual(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0 }).items, []);

@@ -8,7 +8,7 @@
 //   accident – a wheel: lose 0–2× the bet more, go back three squares, or go back to START
 // Passing START gives a ball, nothing else.
 // Items: a slot of the normal wheel spins the item wheel and a player holds up to itemMax of them
-// (they can also be bought: RULES.items[id].price). One is used before a roll (roll()'s `use`):
+// One is used before a roll (roll()'s `use`):
 // ダブルダイス / トリプルダイス throw two / three dice, ぴったり picks the face, ガード cancels accident squares
 // for this and the next two rolls, 倍がけ doubles what the normal wheel pays or takes.
 // The bingo cards: two 7×7 cards (98 numbers) shared by every player and kept apart from each
@@ -81,7 +81,7 @@
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
-    // Items: held as a count of each (itemMax in all). `price` in points (or chips). The item wheel decides
+    // Items: held as a count of each (itemMax in all). They are not sold. The item wheel decides
     // which one comes, and pays itemCash × the bet besides.
     itemMax: 99,
     // Every spin of the item wheel also pays this many times the bet.
@@ -91,11 +91,11 @@
     // 倍がけ doubles what a roll pays or takes, by at most this many times the bet.
     x2Cap: 10,
     items: {
-      dice2: { name: "ダブルダイス", price: 40 },
-      dice3: { name: "トリプルダイス", price: 80 },
-      exact: { name: "ぴったり", price: 300 },
-      guard: { name: "ガード", price: 150 },
-      x2: { name: "倍がけ", price: 200 },
+      dice2: { name: "ダブルダイス" },
+      dice3: { name: "トリプルダイス" },
+      exact: { name: "ぴったり" },
+      guard: { name: "ガード" },
+      x2: { name: "倍がけ" },
     },
     itemWheel: spread([...GET("dice2", 4), ...GET("dice3"), ...GET("exact"), ...GET("guard", 2), ...GET("x2", 2)]),
     // The 確変 wheel (after a 確変 slot of the normal wheel): x pays the bet × x; balls draws that
@@ -628,14 +628,6 @@
     } else events.push({ t: "itemGet", id: slot.item, full: true, amount: cash });
     return cash;
   }
-  // Buying an item (the screen takes the price from the wallet): the bag must have room.
-  function buy(before, id) {
-    if (!isItem(id)) throw Error("no such item");
-    const have = itemsOf(before);
-    if (have.length >= RULES.itemMax) throw Error("full");
-    return { state: { ...clone(before), items: [...have, id], rev: revOf(before) + 1 }, price: RULES.items[id].price };
-  }
-
   // The end of an event game: m is the game's own result as multiples of the bet (1 even money,
   // 1.5 a blackjack, 0 a push, below 0 a loss). A win pays bet × (1 + m) and gives a ball, a
   // push gives the bet back and a loss gives back half. A game from a normal square (`plain`)
@@ -702,7 +694,7 @@
       jackpots: events.filter((e) => e.t === "jackpot").map((e) => e.kind),
     };
   }
-  const api = { RULES, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, buy, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  const api = { RULES, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);

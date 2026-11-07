@@ -241,7 +241,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.ok((await page.evaluate(() => window.__layers2)).some((c) => c.includes("is-special")), "the special wheel spun");
     assert.equal((await saved()).won - specialBefore.won, 1000);
     assert.deepEqual((await card()).owners, beforeCard.owners, "the special number opens no cell");
-    // Items: three bag slots and a shop. ダブルダイス is bought for 40 chips, used on the next roll
+    // Items: kept as a count and not sold. ダブルダイス is used on the next roll
     // (two dice, the sum moves the piece) and gone afterwards; ぴったり needs a face before the roll.
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate((name) => {
@@ -252,14 +252,17 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").first().waitFor();
     assert.equal(await screen.locator(".sg-item.is-empty").count(), 1, "no items yet");
-    const chipsBefore = await page.evaluate(() => window.Casino.balance());
-    await screen.getByRole("button", { name: "ショップ", exact: true }).click();
-    const shop = screen.locator(".sg-shopbox");
-    assert.equal(await shop.locator("[data-buy]").count(), 5);
-    await shop.locator('[data-buy="dice2"]').click();
-    assert.equal(await page.evaluate(() => window.Casino.balance()), chipsBefore - 40);
-    assert.deepEqual((await saved()).items, ["dice2"]);
-    await shop.getByRole("button", { name: "閉じる" }).click();
+    assert.equal(await screen.getByRole("button", { name: "ショップ" }).count(), 0, "items are not sold");
+    // One ダブルダイス in the bag (as if the item wheel had given it).
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      Object.assign(s, { items: ["dice2"] });
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-card").first().waitFor();
+    assert.equal(await screen.locator('.sg-item[data-item="dice2"]').count(), 1);
     await screen.locator('.sg-item[data-item="dice2"]').click();
     assert.equal(await screen.locator('.sg-item[data-item="dice2"]').getAttribute("aria-pressed"), "true");
     const posBefore = (await saved()).pos;

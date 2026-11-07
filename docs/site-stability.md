@@ -3277,3 +3277,11 @@ Tests: `tests/casino.smoke.cjs` (the banner, chips, and no change to the wallet 
 - The normal wheel's good slots are lower: the top is ×5 (the ×7 is gone), ×4 twice, ×3, ×2 twice, ×1 three times, ×0.5 three times; the bad ones are −5 three times (was four), −2 twice (was three), −1 twice; ×0 six times. Return without jackpots: 0.9131 (3 players, 400,000 rolls; was 0.9118).
 
 Tests: `tests/sugoroku-model.test.cjs` (two ways of moving are refused; with ガード and 倍がけ it rolls; the x2 cap on a ×60 bonus), `tests/sugoroku.smoke.cjs` (choosing three ways of moving keeps the last; a roll with ガード and 倍がけ moves).
+
+## 10.51.00.00 アイテムの販売（ショップ）をなくした
+
+**What the owner said.** 「アイテムの販売は無しでいきましょう」
+
+**Now** (`sugoroku.js`, `sugoroku-model.js`, `sugoroku.css`): the ショップ button, the shop sheet, buying (`buyItem`, `S.buy`, the `sugoroku-shop` round that took the price from the wallet), the `price` of every item and the shop's styles are removed. Items come only from the ITEM roulette (one item and 100 points each time). The rules sheet and the usage guide no longer mention buying.
+
+Tests: `tests/sugoroku-model.test.cjs` (the buying checks are gone), `tests/sugoroku.smoke.cjs` (no ショップ button; the bag is given an item by the save instead).
