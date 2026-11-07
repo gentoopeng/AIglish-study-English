@@ -63,7 +63,7 @@
     // size than another; the bingo wheel's jackpot slots grow with it (bingoWheel) for the same reason.
     costs: [100],
     // The ring: 100 squares, about 29 rolls a lap. S start, n normal, E event, A accident.
-    board: Array.from({ length: 100 }, (_, i) => (i === 0 ? "S" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
+    board: Array.from({ length: 100 }, (_, i) => (i === 0 ? "S" : i === 50 ? "X" : i % 9 === 4 ? "E" : i % 10 === 7 ? "A" : "n")).join(""),
     // The normal wheel: 40 slots from ×7 down to −×5 (one is a 確変 slot) (a minus takes that much more than the
     // bet). A ball slot gives a ball and nothing else (a ball that misses the card pays missPay);
     // a game slot starts a quick mini game paid in multiples of the bet; an event slot plays
@@ -77,7 +77,7 @@
         // High risk, high return: a bad slot takes −1 to −5 times the bet, a good one gives up to 5 times.
         ...N(-5, 3), ...N(-2, 2), ...N(-1, 2),
         ...N(0, 6), ...ITEM(5),
-        ...N(1.5, 2), ...N(2, 3), ...N(3), ...N(4, 2), ...N(5),
+        ...N(3, 2), ...N(4, 3), ...N(5), ...N(8, 2), ...N(8),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -123,7 +123,11 @@
     owedDays: 30,
     owedMax: 200,
     // Accident wheel: take: multiples of the bet taken on top (0: safe), back: squares back, start: back to START.
-    accident: [{ take: 6 }, { take: 4 }, { take: 3 }, { take: 2 }, { take: 0 }, { back: 3 }, { take: 0 }, { start: true }, { take: 0 }, { take: 0 }],
+    accident: [{ take: 6 }, { take: 4 }, { take: 3 }, { take: 2 }, { take: 3 }, { back: 3 }, { take: 2 }, { start: true }, { take: 3 }, { take: 0 }],
+    // The super accident square (one on the board): −10 to −30 times the bet, the player's own balls off the card,
+    // the bag emptied, nothing (SAFE), the 確変 wheel (LUCKY), or ヘルモード for hellLaps times round the board (state.hell counts the squares left).
+    superAccident: spread([{ take: 10 }, { take: 15 }, { take: 20 }, { take: 25 }, { take: 30 }, { resetBalls: true }, { resetItems: true }, { take: 0 }, { lucky: true }, { hell: true }]),
+    hellLaps: 3,
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
     bingoPrize: 7,
@@ -162,10 +166,13 @@
   // of bet is worth about the same at every size.
   function bingoWheel(cost) {
     const k = cost / 100,
-      count = Math.max(1, Math.round(2 * k)),
+      // The jackpot and the super chance have 3 places each at a bet of 100 (the other slots keep their size,
+      // so they are a little less likely: the JACKPOTs come up about 1.4 times as often as with 2 each).
+      count = Math.max(1, Math.round(3 * k)),
       others = RULES.wheelParts.others,
       size = others.length * 2 + count * 2,
-      scale = size / 20,
+      // What the other slots pay is scaled as if the jackpots had 2 places each at a bet of 100.
+      scale = (others.length * 2 + Math.max(1, Math.round(2 * k)) * 2) / 20,
       list = [];
     for (let i = 0; i < 2; i++) for (const o of others) list.push(o.x ? { x: Math.round(o.x * scale * 10) / 10 } : { ...o, boost: Math.round(RULES.bingoGameBoost * scale * 100) / 100 });
     for (let i = 0; i < count; i++) list.push({ jackpot: "jp" }, { next: "sjp" });
@@ -176,8 +183,12 @@
     CARD = 7,
     CARDS = 2,
     CELLS = CARD * CARD * CARDS;
-  const KIND = { S: "start", n: "normal", E: "event", A: "accident" };
+  const KIND = { S: "start", n: "normal", E: "event", A: "accident", X: "super" };
   const kindAt = (i) => KIND[RULES.board[i]];
+  // ヘルモード: the squares' kinds are turned round (normal → accident, accident → normal, event → normal);
+  // START and the super accident square stay what they are.
+  const HELL_KIND = { normal: "accident", accident: "normal", event: "normal" };
+  const kindNow = (i, hell) => (hell > 0 ? HELL_KIND[kindAt(i)] || kindAt(i) : kindAt(i));
   // 16 lines on each card (7 rows, 7 columns, 2 diagonals): 32 in all, cells numbered card by card.
   const LINES = (() => {
     const lines = [],
@@ -259,7 +270,7 @@
   // Which copy of a game is further on: counts a roll and a purchase (a save from before has only its rolls).
   const revOf = (state) => (Number.isFinite(state?.rev) && state.rev >= 0 ? state.rev : Number(state?.rolls) || 0);
   function newState() {
-    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, best: 0, jps: 0, sjps: 0, shared: 0, pending: null, bonus: [], jpWait: [], items: [], guard: 0, rev: 0 };
+    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, best: 0, jps: 0, sjps: 0, shared: 0, pending: null, bonus: [], jpWait: [], items: [], guard: 0, hell: 0, rev: 0 };
   }
   // A player's own state; an older save (with its own card) keeps its place and counts.
   function valid(state) {
@@ -277,7 +288,7 @@
   function upgrade(state) {
     const { card, marks, lines, cards, ...rest } = state;
     const count = (k) => (Number.isFinite(rest[k]) && rest[k] >= 0 ? rest[k] : 0);
-    return { ...newState(), ...rest, v: 3, bingos: count("bingos"), best: count("best"), jps: count("jps"), sjps: count("sjps"), shared: count("shared"), bonus: Array.isArray(rest.bonus) ? rest.bonus : [], items: itemsOf(rest), guard: Math.min(RULES.guardRolls, count("guard")), rev: revOf(rest), jpWait: Array.isArray(rest.jpWait) ? rest.jpWait.filter((k) => k === "jp" || k === "sjp") : [] };
+    return { ...newState(), ...rest, v: 3, bingos: count("bingos"), best: count("best"), jps: count("jps"), sjps: count("sjps"), shared: count("shared"), bonus: Array.isArray(rest.bonus) ? rest.bonus : [], items: itemsOf(rest), guard: Math.min(RULES.guardRolls, count("guard")), hell: Math.min(RULES.hellLaps * SIZE, count("hell")), rev: revOf(rest), jpWait: Array.isArray(rest.jpWait) ? rest.jpWait.filter((k) => k === "jp" || k === "sjp") : [] };
   }
   const isOpen = (card, i) => card.owners[i] !== "";
   const reach = (card) => LINES.map((_, i) => i).filter((i) => LINES[i].filter((c) => !isOpen(card, c)).length === 1);
@@ -535,14 +546,16 @@
     for (let s = 0; s < die; s++) {
       state.pos = (state.pos + 1) % SIZE;
       events.push({ t: "step", to: state.pos });
+      // ヘルモード lasts hellLaps times round the board in squares moved (so a trip back does not make it longer).
+      if (state.hell > 0 && --state.hell === 0) events.push({ t: "hellEnd" });
       if (state.pos === 0) {
         state.laps++;
         events.push({ t: "lap" });
         gain += ball(state, card, me, random, events, cost);
       }
     }
-    const kind = kindAt(state.pos);
-    events.push({ t: "land", square: state.pos, kind });
+    const kind = kindNow(state.pos, state.hell);
+    events.push({ t: "land", square: state.pos, kind, hell: state.hell > 0 || undefined });
     if (kind === "normal" || kind === "start") {
       const slots = RULES.normal[cost],
         { index, slot } = pick(slots, random);
@@ -556,13 +569,7 @@
       if (slot.item) gain += spinItem(state, random, events, cost);
       if (slot.ball) gain += ball(state, card, me, random, events, cost);
       if (slot.kakuhen) spin.chance = random(RULES.chanceOdds) === 0;
-      if (slot.kakuhen && spin.chance) {
-        const k = pick(RULES.kakuhen, random),
-          pay = money(cost * k.slot.x);
-        events.push({ t: "wheel", wheel: "kakuhen", slots: RULES.kakuhen, index: k.index, base: cost, amount: pay });
-        gain += pay;
-        for (let b = 0; b < (k.slot.balls || 0); b++) gain += ball(state, card, me, random, events, cost);
-      }
+      if (slot.kakuhen && spin.chance) gain += spinKakuhen(state, card, me, random, events, cost);
       if (slot.game) {
         state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: 1, bet: cost }]);
         events.push({ t: "bonus", game: slot.game, mult: 1 });
@@ -589,6 +596,34 @@
         gain -= amount;
         events.push({ t: "take", amount });
       }
+    } else if (kind === "super") {
+      const { index, slot } = pick(RULES.superAccident, random);
+      events.push({ t: "wheel", wheel: "super", slots: RULES.superAccident, index, base: cost });
+      const bad = slot.take || slot.resetBalls || slot.resetItems || slot.hell;
+      if (guarded && bad) {
+        // ガード: the bad slots do nothing here either.
+        events.push({ t: "guarded" });
+      } else if (slot.take) {
+        const amount = money(cost * slot.take);
+        gain -= amount;
+        events.push({ t: "take", amount });
+      } else if (slot.resetBalls) {
+        const cells = [];
+        card.owners.forEach((owner, c) => owner === me && cells.push(c));
+        for (const c of cells) {
+          card.owners[c] = "";
+          if (Array.isArray(card.bets)) card.bets[c] = 0;
+        }
+        events.push({ t: "reset", cells, own: true });
+      } else if (slot.resetItems) {
+        events.push({ t: "itemsLost", count: itemsOf(state).length });
+        state.items = [];
+      } else if (slot.lucky) {
+        gain += spinKakuhen(state, card, me, random, events, cost);
+      } else if (slot.hell) {
+        state.hell = RULES.hellLaps * SIZE;
+        events.push({ t: "hell", laps: RULES.hellLaps });
+      }
     } else {
       const { index, slot } = pick(RULES.events, random);
       events.push({ t: "wheel", wheel: "event", slots: RULES.events, index, base: cost });
@@ -613,6 +648,15 @@
     state.won += gain;
     state.best = Math.max(state.best || 0, gain);
     return { state, card, events, gain, cost };
+  }
+  // The 確変 wheel: the bet × x, or a run of balls. (Started by the hidden slot of the normal wheel, or by LUCKY.)
+  function spinKakuhen(state, card, me, random, events, cost) {
+    const k = pick(RULES.kakuhen, random),
+      pay = money(cost * k.slot.x);
+    let gain = pay;
+    events.push({ t: "wheel", wheel: "kakuhen", slots: RULES.kakuhen, index: k.index, base: cost, amount: pay });
+    for (let b = 0; b < (k.slot.balls || 0); b++) gain += ball(state, card, me, random, events, cost);
+    return gain;
   }
   // The item wheel: the item goes into the bag (counted ×n; a full bag gets none) and itemCash × the bet is paid besides.
   function spinItem(state, random, events, cost) {
@@ -700,7 +744,7 @@
       jackpots: events.filter((e) => e.t === "jackpot").map((e) => e.kind),
     };
   }
-  const api = { RULES, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, itemsOf, revOf, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
+  const api = { RULES, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, kindNow, itemsOf, revOf, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);
