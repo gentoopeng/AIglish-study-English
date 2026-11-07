@@ -76,8 +76,8 @@
         ...KAKU(1),
         // High risk, high return: a bad slot takes −1 to −5 times the bet, a good one gives up to 5 times.
         ...N(-5, 3), ...N(-2, 2), ...N(-1, 2),
-        ...N(0, 6), ...ITEM(2),
-        ...N(0.5, 3), ...N(1, 3), ...N(2, 2), ...N(3), ...N(4, 2), ...N(5),
+        ...N(0, 6), ...ITEM(5),
+        ...N(0.5, 3), ...N(2, 2), ...N(3), ...N(4, 2), ...N(5),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
