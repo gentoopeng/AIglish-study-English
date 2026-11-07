@@ -1540,6 +1540,21 @@
         [dx, dy] = dense ? at(mid, 74) : [tx, ty];
       const text = el("text", { transform: "translate(" + dx + " " + dy + ") rotate(" + (dense ? mid - 90 : mid) + ")", class: "sg-seg-text is-" + tone(e.wheel, slot) + (dense ? " is-dense" : (label.length > 4 ? " is-long" : "") + (n > 12 ? " is-many" : "")) });
       text.textContent = label;
+      // The ITEM roulette shows each item's picture (dice stacked as in the bag), not its name.
+      if (e.wheel === "item") {
+        const pics = slot.twice ? ["die-gold", "potion"] : Array(ITEM_INFO[slot.item].dice || 1).fill(ITEM_INFO[slot.item].img),
+          size = pics.length > 2 ? 21 : pics.length > 1 ? 24 : 32,
+          group = el("g", { transform: "translate(" + tx + " " + ty + ") rotate(" + mid + ")", class: "sg-seg-pic" });
+        group.append(el("title", {}));
+        group.firstChild.textContent = slot.twice ? "アイテム2個" : ITEM_INFO[slot.item].n;
+        // Several pictures sit one behind the other along the slice (from the hub out), so they stay inside it.
+        pics.forEach((name, k) => {
+          const at = (k - (pics.length - 1) / 2) * (pics.length > 2 ? 19 : 22);
+          group.append(el("image", { href: "assets/sugoroku/" + name + ".png", x: -size / 2, y: at - size / 2, width: size, height: size, transform: "rotate(" + (k % 2 ? 10 : -10) + " 0 " + at + ")" }));
+        });
+        disc.append(group);
+        return;
+      }
       disc.append(text);
     });
     svg.append(disc, el("circle", { r: 20, class: "sg-hub" }));
