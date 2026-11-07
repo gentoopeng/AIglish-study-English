@@ -3157,3 +3157,15 @@ Tests: `tests/sugoroku-model.test.cjs` (new wheel numbers, guard with a + slot, 
 **Now** (`sugoroku-model.js`): `bingoPrize` = 7 (was 8) and `prizeShare` = 1 (was 0.7), so the prize of a line (7 balls at 100 each) is 700 and every ball gets 100; the finisher keeps no extra share of the prize (the wheel's × multiples are still shared 50% by the balls, and mini games, jackpots stay with the finisher). Several lines at once still multiply it by (lines + 1), and a line of one's own balls by 1.1. Return without jackpots: 0.9078 (3 players, 300,000 rolls; was 0.9175).
 
 Tests: `tests/sugoroku-model.test.cjs`, `tests/sugoroku.smoke.cjs`, `tests/sugoroku-shared.smoke.cjs` (100 for each ball).
+
+## 10.40.00.00 すごろくビンゴ: イベントゲームの前に「戻る額の一覧」を出し、1個だけのボールの枠を目立たせた
+
+**What the owner said.** 「ブラックジャックとか当てた時に、額が書いてある額と違って混乱する人が出そう。当てた時に専用ポップで、その場合の配分額を分かりやすくリスト化しよう／1個だけのあたりのボールが主張弱いのでなんとかして」
+
+**Cause.** The wheel only says "BJ"; the game then pays by its own results (a win gives the bet back twice, a blackjack 2.5×, a draw the bet, a loss nothing; chinchiro up to 6×), none of it written anywhere. And the normal wheel's single-ball slot read "×0 +0pt BALL" when it stopped, like a blank.
+
+**Now** (`sugoroku-model.js` `payTable`, `sugoroku.js`, `sugoroku.css`):
+- Before an event game (from the ★ square or a normal wheel's BJ / DICE / チンチロ slot) a pop-up lists every result with what comes back and the difference to the bet (the bet was taken when the die was rolled): ブラックジャック 250 (+150) / 勝ち 200 (+100) / 引き分け 100 (±0) / 負け 0 (−100); ダイスポーカー: 勝ち / 引き分け / 負け; チンチロ: ピンゾロ 600 / ゾロ目 400 / シゴロ 300 / 勝ち 200 / 引き分け 100 / 負け 0. It also says whether a win gives a ball (the ★ square) or not (a normal square's game). A game already begun, and 早送り, skip it. `payTable` is tested against what `settle` pays.
+- The single-ball slot is labelled ●×1 (like ●×5), glows on the wheel, and its result reads 「ボール ●1個ゲット！」 in gold with a pop and the stronger wheel effect, instead of "×0 +0pt".
+
+Tests: `tests/sugoroku-model.test.cjs` (the table and settle agree), `tests/sugoroku.smoke.cjs` (the list before dice poker and chinchiro; the games begin from the button).
