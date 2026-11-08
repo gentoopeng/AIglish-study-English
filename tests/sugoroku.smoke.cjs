@@ -97,6 +97,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.equal(await screen.locator(".sg-tip").count(), 1, "one note at a time");
     // Rolls at 100 chips: chips always = 1000 − bets + what came back.
     assert.equal(await screen.locator(".sg-costs").count(), 0, "no bet box: one fixed bet, nothing to choose");
+    // (Plenty of practice chips, so that a −20 times slot in a random roll cannot empty them.)
+    await page.evaluate(() => localStorage.setItem("aiglish_casino_chips_GUEST-000", "50000"));
     const start = await page.evaluate(() => window.Casino.balance());
     for (let i = 0; i < 4; i++) {
       await screen.locator("[data-sg-roll]").click();
@@ -477,8 +479,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       doneCard = await card();
     assert.equal(done.bingos, before20.bingos + 1);
     // A line of only the guest's balls: (bingo prize 700 + × 20 = 2,000 → 2,700) × 1.1, plus START's
-    // wheel (which can take up to ten bets more).
-    assert.ok(done.won - before20.won >= 2970 - 1000, String(done.won - before20.won));
+    // wheel (which can take up to twenty bets more).
+    assert.ok(done.won - before20.won >= 2970 - 2000, String(done.won - before20.won));
     // The finished row starts again: no balls, the same numbers; amy's ball stays.
     assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.ok(doneCard.cells.slice(0, 7).includes(lastNo));
