@@ -74,10 +74,12 @@
         // The top of the wheel is a 確変 slot: it starts the 確変 wheel below, which holds the
         // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
         ...KAKU(1),
-        // High risk, high return: a bad slot takes 5 to 20 times the bet, a good one gives 4 to 18 times. (The sums are set so that, with the ガード the players hold, the whole game pays back about what it should.)
-        ...N(-5), ...N(-6), ...N(-8), ...N(-10), ...N(-12), ...N(-15), ...N(-20),
+        // Swings stay small: a bad slot takes 2 to 5 times the bet, a good one gives 3 to 5 times (at most 500 at a bet of
+        // 100, well under the JACKPOT's 3,000). The plus slots are many and the minus slots few, so that with the ガード
+        // the players hold the whole game pays back about what it should.
+        ...N(-5, 2), ...N(-4), ...N(-3, 2), ...N(-2, 2),
         ...N(0, 2), ...ITEM(5),
-        ...N(4, 3), ...N(6, 3), ...N(8, 3), ...N(10, 2), ...N(14), ...N(18),
+        ...N(3, 4), ...N(4, 4), ...N(5, 5),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -87,7 +89,7 @@
     // Every spin of the item wheel also pays this many times the bet.
     itemCash: 1,
     // 倍がけ doubles what a roll pays or takes, by at most this many times the bet.
-    x2Cap: 10,
+    x2Cap: 5,
     items: {
       dice2: { name: "ダブルダイス" },
       dice3: { name: "トリプルダイス" },
@@ -101,7 +103,7 @@
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
     // what it paid before the 確変 slots took its top slots.
     kakuhen: spread([
-      ...N(21), ...N(25), ...N(29), ...N(33), ...N(41), ...N(45), ...N(53), ...N(61), ...N(65),
+      ...N(8), ...N(10), ...N(12), ...N(14), ...N(18), ...N(21), ...N(24), ...N(27), ...N(30),
       { x: 0, balls: 8 }, { x: 0, balls: 8 }, { x: 0, balls: 8 },
     ]),
     // The hidden 確変 slot starts the 確変 wheel only 1 time in chanceOdds (otherwise it reads and pays ×0 like
@@ -121,10 +123,10 @@
     owedDays: 30,
     owedMax: 200,
     // Accident wheel: take: multiples of the bet taken on top (0: safe), back: squares back, start: back to START.
-    accident: [{ take: 6 }, { take: 4 }, { take: 3 }, { take: 2 }, { take: 3 }, { back: 3 }, { take: 2 }, { start: true }, { take: 3 }, { take: 0 }, { super: true }],
+    accident: [{ take: 5 }, { take: 4 }, { take: 3 }, { take: 2 }, { take: 3 }, { back: 3 }, { take: 2 }, { start: true }, { take: 3 }, { take: 0 }, { super: true }],
     // The super accident (the square on the board, and one slot of the accident wheel): −10 to −30 times the bet, the player's own balls off the card,
     // the bag emptied, nothing (SAFE), the 確変 wheel (LUCKY), or ヘルモード for hellLaps times round the board (state.hell counts the squares left).
-    superAccident: spread([{ take: 10 }, { take: 15 }, { take: 20 }, { take: 25 }, { take: 30 }, { resetBalls: true }, { resetItems: true }, { take: 0 }, { lucky: true }, { hell: true }]),
+    superAccident: spread([{ take: 3 }, { take: 4 }, { take: 5 }, { take: 5 }, { take: 5 }, { resetBalls: true }, { resetItems: true }, { take: 0 }, { lucky: true }, { hell: true }]),
     hellLaps: 3,
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
@@ -141,7 +143,7 @@
     // the super-jackpot chance leads to the second wheel, where back spins the first again.
     wheels: {
       // The special number: one wheel (the bet × x, or three more balls).
-      special: spread([{ x: 10 }, { x: 10 }, { x: 15 }, { x: 20 }, { x: 20 }, { x: 30 }, { x: 50 }, { x: 0, balls: 6 }, { x: 0, balls: 6 }, { x: 40 }]),
+      special: spread([{ x: 10 }, { x: 10 }, { x: 15 }, { x: 20 }, { x: 20 }, { x: 30 }, { x: 30 }, { x: 0, balls: 6 }, { x: 0, balls: 6 }, { x: 30 }]),
       bingo: null, // (see bingoWheel: made for the bet)
       sjp: [{ jackpot: "sjp" }, { jackpot: "jp" }, { game: "tapex" }, { jackpot: "sjp" }, { back: true }],
     },
@@ -154,7 +156,7 @@
     // light in the gold (perfect) or silver (good) part of the bar; say whether the next card is
     // higher or lower. In 早送り they are not played and pay `auto`.
     // The slots of the bingo wheel besides the jackpot and the super chance (each twice on the wheel).
-    wheelParts: { others: [{ x: 12 }, { game: "timer" }, { x: 20 }, { game: "tap" }, { game: "dice" }, { x: 50 }, { game: "math" }, { x: 32 }] },
+    wheelParts: { others: [{ x: 12 }, { game: "timer" }, { x: 20 }, { game: "tap" }, { game: "dice" }, { x: 30 }, { game: "math" }, { x: 25 }] },
     games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 10, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 25, max: 120 }, dice: { count: 3, per: 50 }, math: { easy: { seconds: 15, prize: 300 }, normal: { seconds: 15, prize: 600 }, hard: { seconds: 20, prize: 1200 } } },
   };
   RULES.normal[50] = RULES.normal[200] = RULES.normal[100];
