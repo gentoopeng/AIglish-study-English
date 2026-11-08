@@ -74,10 +74,10 @@
         // The top of the wheel is a 確変 slot: it starts the 確変 wheel below, which holds the
         // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
         ...KAKU(1),
-        // High risk, high return: a bad slot takes 3 to 10 times the bet, a good one gives up to 18 times (many middle wins instead of a few huge ones).
-        ...N(-10), ...N(-8), ...N(-6), ...N(-5, 2), ...N(-4), ...N(-3),
+        // High risk, high return: a bad slot takes 5 to 20 times the bet, a good one gives 4 to 18 times. (The sums are set so that, with the ガード the players hold, the whole game pays back about what it should.)
+        ...N(-5), ...N(-6), ...N(-8), ...N(-10), ...N(-12), ...N(-15), ...N(-20),
         ...N(0, 2), ...ITEM(5),
-        ...N(3, 3), ...N(5, 3), ...N(7, 3), ...N(9, 2), ...N(12), ...N(18),
+        ...N(4, 3), ...N(6, 3), ...N(8, 3), ...N(10, 2), ...N(14), ...N(18),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },

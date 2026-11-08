@@ -46,8 +46,8 @@ test("the board, card and wheels have the agreed shape", () => {
   for (const cost of S.RULES.costs) {
     const values = new Set(S.RULES.normal[cost].map((x) => x.x));
     assert.equal(S.RULES.accident.filter((x) => x.take === 0).length, 1, "one SAFE on the accident wheel");
-    // High risk, high return: from −10 times the bet to +18; the 確変 wheel holds the biggest multiples and the ball runs.
-    for (const x of [18, 12, 9, 7, 5, 3, 0, -3, -4, -5, -6, -8, -10]) assert.ok(values.has(x), cost + " has ×" + x);
+    // High risk, high return: from −20 times the bet to +18; the 確変 wheel holds the biggest multiples and the ball runs.
+    for (const x of [18, 14, 10, 8, 6, 4, 0, -5, -6, -8, -10, -12, -15, -20]) assert.ok(values.has(x), cost + " has ×" + x);
     assert.equal(S.RULES.normal[cost].filter((slot) => slot.item).length, 5, "five item slots (they pay ×1 and an item)");
     // Some of what is on the wheel really pays the bet back or more (not only the hidden bonus slot).
     assert.ok(S.RULES.normal[cost].filter((slot) => !slot.kakuhen && slot.x >= 1).length >= 3, "a few slots pay ×1 or more");
@@ -313,7 +313,7 @@ test("a mini game waits in state.bonus, blocks rolling and pays its score, 0 whe
   }
 });
 
-test("played the plain way by several players on one card, every bet returns a little under what goes in", () => {
+test("played the plain way by several players on one card, every bet returns a little under what goes in (with the ガード spent on big minuses)", () => {
   const random = rng(11);
   const play = (game) => {
     if (game === "blackjack") {
@@ -336,7 +336,15 @@ test("played the plain way by several players on one card, every bet returns a l
       players.forEach((s, p) => {
         // A player's part of the others' lines comes in as they play.
         const part = S.collect(card, "p" + p);
-        let out = S.roll(s, part.card, cost, random, "p" + p);
+        // The way the screen plays it: a ガード in the bag is spent on a big minus (5 times the bet or more, or a
+        // lost bag / lost balls / ヘルモード), asked after the wheel; the same draws are used again with the choice.
+        const tape = [];
+        let out = S.roll(s, part.card, cost, (n) => (tape.push(random(n)), tape[tape.length - 1]), "p" + p);
+        const minus = S.itemsOf(s).includes("guard") && out.events.find((e) => e.t === "minus");
+        if (minus && ((minus.amount || 0) >= 5 * cost || minus.balls || minus.items || minus.hell)) {
+          let at = 0;
+          out = S.roll(s, part.card, cost, (n) => tape[at++] % n, "p" + p, { guard: true });
+        }
         card = out.card;
         let gain = out.gain + part.amount;
         if (out.state.pending) {
@@ -481,8 +489,8 @@ test("a normal square can take more than the bet, or start an event game", () =>
   const w = S.RULES.normal[100],
     pos = { ...S.newState(), pos: at("normal") - 1 },
     card = S.newCard(seq([0]));
-  const minus = S.roll(pos, card, 100, seq([0, w.findIndex((x) => x.x === -3)]));
-  assert.equal(minus.gain, -300);
+  const minus = S.roll(pos, card, 100, seq([0, w.findIndex((x) => x.x === -5)]));
+  assert.equal(minus.gain, -500);
   const bj = S.roll(pos, card, 100, seq([0, w.findIndex((x) => x.event === "blackjack")]));
   assert.deepEqual(bj.state.pending, { game: "blackjack", bet: 100, plain: true });
   assert.equal(bj.gain, 0);
@@ -557,7 +565,7 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
     normal = at("normal"),
     nw = S.RULES.normal[100],
     minusAt = nw.findIndex((x) => x.x === -5),
-    plusAt = nw.findIndex((x) => x.x === 5),
+    plusAt = nw.findIndex((x) => x.x === 6),
     held = { ...from, items: ["guard", "x2"] };
   // 1. An accident square's −: asked (minus event), then spent: nothing happens and the ガード leaves the bag.
   const asked = S.roll({ ...held, pos: accident - 1 }, card, 100, seq([0, 0]));
@@ -590,17 +598,17 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
   assert.equal(openMinus.gain, -500);
   assert.deepEqual(openMinus.events.find((e) => e.t === "minus"), { t: "minus", kind: "roulette", amount: 500 });
   const keptPlus = S.roll({ ...held, pos: normal - 1 }, card, 100, seq([0, plusAt]), "amy", { guard: true });
-  assert.equal(keptPlus.gain, 500);
+  assert.equal(keptPlus.gain, 600);
   assert.deepEqual(keptPlus.state.items, ["guard", "x2"]);
   // 5. Only the first minus of a roll can be blocked, and one ガード is spent (the second one stays).
   const pair = S.roll({ ...S.newState(), pos: accident - 1, items: ["guard", "guard"] }, card, 100, seq([0, 0]), "amy", { guard: true });
   assert.deepEqual(pair.state.items, ["guard"]);
   // 倍がけ: what the roll pays or takes counts twice (on any square), by at most x2Cap times the bet; it is used up.
-  const plus = w.findIndex((x) => x.x === 5);
+  const plus = w.findIndex((x) => x.x === 6);
   const doubled = S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, plus]), "amy", { items: ["x2"] });
-  assert.equal(doubled.gain, 1000);
+  assert.equal(doubled.gain, 1200);
   assert.deepEqual(doubled.state.items, []);
-  assert.deepEqual(doubled.events.find((e) => e.t === "x2"), { t: "x2", amount: 500 });
+  assert.deepEqual(doubled.events.find((e) => e.t === "x2"), { t: "x2", amount: 600 });
   const minus = w.findIndex((x) => x.x === -5);
   assert.equal(S.roll({ ...from, items: ["x2"] }, card, 100, seq([0, minus]), "amy", { items: ["x2"] }).gain, -1000);
   const onEvent = S.roll({ ...from, pos: at("event") - 1, items: ["x2"] }, card, 100, seq([0, 0]), "amy", { items: ["x2"] });
