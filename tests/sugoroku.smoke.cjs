@@ -426,15 +426,15 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.doesNotMatch(sheet, /確変|激アツ/);
     assert.doesNotMatch(sheet, /×10〜×0/);
     await page.locator(".sg-sheet .sg-game-btn", { hasText: "閉じる" }).click();
-    // Die 1 onto a normal square, the hidden ×0 slot, and the bonus wheel's ×41 (the hidden slot starts it on a draw of 0): two wheels, 4,100 back.
-    const [kakuAt, tenAt] = await page.evaluate(() => [window.SugorokuModel.RULES.normal[100].findIndex((x) => x.kakuhen), window.SugorokuModel.RULES.kakuhen.findIndex((x) => x.x === 41)]);
+    // Die 1 onto a normal square, the hidden ×0 slot, and the bonus wheel's ×30 (the hidden slot starts it on a draw of 0): two wheels, 3,000 back.
+    const [kakuAt, tenAt] = await page.evaluate(() => [window.SugorokuModel.RULES.normal[100].findIndex((x) => x.kakuhen), window.SugorokuModel.RULES.kakuhen.findIndex((x) => x.x === 30)]);
     await fix([0, kakuAt, 0, tenAt]);
     const kakuBefore = await saved();
     await screen.locator("[data-sg-roll]").click();
     await page.locator(".sg-layer.is-kakuhen .sg-wheel-title").waitFor({ state: "attached", timeout: 15000 });
     assert.equal(await page.locator(".sg-layer.is-kakuhen .sg-wheel-title").textContent(), "BONUS");
     await settled();
-    assert.equal((await saved()).won - kakuBefore.won, 4100);
+    assert.equal((await saved()).won - kakuBefore.won, 3000);
     // (The layer is closed by now; shown again only for a picture of the 確変 wheel.)
     await page.evaluate(() => { document.querySelector(".sg-layer").hidden = false; });
     await page.screenshot({ path: "/tmp/sugoroku-kakuhen.png" });
@@ -479,8 +479,8 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       doneCard = await card();
     assert.equal(done.bingos, before20.bingos + 1);
     // A line of only the guest's balls: (bingo prize 700 + × 20 = 2,000 → 2,700) × 1.1, plus START's
-    // wheel (which can take up to twenty bets more).
-    assert.ok(done.won - before20.won >= 2970 - 2000, String(done.won - before20.won));
+    // wheel (which can take up to five bets more).
+    assert.ok(done.won - before20.won >= 2970 - 500, String(done.won - before20.won));
     // The finished row starts again: no balls, the same numbers; amy's ball stays.
     assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.ok(doneCard.cells.slice(0, 7).includes(lastNo));
