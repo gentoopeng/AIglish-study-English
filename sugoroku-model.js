@@ -160,15 +160,15 @@
     // light in the gold (perfect) or silver (good) part of the bar; say whether the next card is
     // higher or lower. In 早送り they are not played and pay `auto`.
     // The slots of the bingo wheel besides the jackpot and the super chance (each twice on the wheel).
-    wheelParts: { others: [{ game: "timer" }, { game: "tap" }, { game: "dice" }, { game: "math" }, { x: 5 }, { x: 10 }, { x: 15 }] },
+    wheelParts: { others: [{ game: "timer" }, { game: "tap" }, { game: "dice" }, { game: "math" }, { x: 10 }, { x: 20 }, { x: 30 }] },
     games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 10, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 100 }, tapex: { seconds: 10, per: 15, max: 100 }, dice: { count: 3, per: 50 }, math: { easy: { seconds: 15, prize: 300 }, normal: { seconds: 15, prize: 600 }, hard: { seconds: 20, prize: 1200 } } },
   };
   RULES.normal[50] = RULES.normal[200] = RULES.normal[100];
   // The bonus roulette after the prize roulette: 10 slots, the finisher's alone (no line bonus on it).
-  // `times` pays that jackpot that many times; x pays the bet × x; the mini games score bingoGameBoost times their points.
+  // Two JACKPOT slots; x pays the bet × x; the mini games score bingoGameBoost times their points.
   function bingoWheel(cost) {
     const others = RULES.wheelParts.others,
-      list = [{ jackpot: "jp", times: 2 }, { jackpot: "jp" }, { next: "sjp" }];
+      list = [{ jackpot: "jp" }, { jackpot: "jp" }, { next: "sjp" }];
     for (const o of others) list.push(o.x ? { x: o.x } : { ...o, boost: RULES.bingoGameBoost });
     return spread(list);
   }
@@ -396,13 +396,11 @@
       if (slot.next) wheel = slot.next;
       else if (slot.back) wheel = "bingo";
       else if (slot.jackpot) {
-        for (let k = 0; k < (slot.times || 1); k++) {
-          state[slot.jackpot === "jp" ? "jps" : "sjps"]++;
-          // Paid by the screen from the casino's pot (CasinoJackpot.win), which may have to wait
-          // for the network; until then it stays here.
-          state.jpWait = (state.jpWait || []).concat([slot.jackpot]);
-          events.push({ t: "jackpot", kind: slot.jackpot });
-        }
+        state[slot.jackpot === "jp" ? "jps" : "sjps"]++;
+        // Paid by the screen from the casino's pot (CasinoJackpot.win), which may have to wait
+        // for the network; until then it stays here.
+        state.jpWait = (state.jpWait || []).concat([slot.jackpot]);
+        events.push({ t: "jackpot", kind: slot.jackpot });
       }
       else if (slot.game) {
         // A mini game is not multiplied by the lines (or the solo bonus): only by bingoGameBoost.
