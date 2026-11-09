@@ -83,3 +83,15 @@ test("a range of word numbers: bounds, the events inside it, and how many of eac
   assert.equal(o.playable(o.inRange(list, 2, 3)).length, 1);
   assert.deepEqual(o.counts(list), { year: 5, century: 0, era: 0 });
 });
+
+test("a range of years: bounds and the events placed inside it", () => {
+  const list = o.events(words, t.parseLine);
+  assert.deepEqual(o.yearBounds(list), { min: 1192, max: 1603 });
+  assert.deepEqual(o.yearBounds([]), { min: 0, max: 0 });
+  assert.deepEqual(o.inYears(list, 1500, 1700).map((e) => e.year), [1582, 1575, 1603, 1600]);
+  assert.deepEqual(o.inYears(list, 1700, 1500).map((e) => e.year), [1582, 1575, 1603, 1600], "reversed ends are put right");
+  assert.equal(o.inYears(list, "", 1300).length, 1, "an empty start means no limit");
+  assert.equal(o.inYears(list, 1500, 1580).length, 1);
+  // Both ranges together keep only what is in both.
+  assert.deepEqual(o.inYears(o.inRange(list, 3, 3), 1601, 1700).map((e) => e.year), [1603]);
+});

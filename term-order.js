@@ -88,13 +88,26 @@
       return Number.isFinite(n) && n >= lo && n <= hi;
     });
   }
+  // The years the events are placed at (the year; the year a century or an era began).
+  function yearBounds(list) {
+    const years = (list || []).map((e) => Number(e.year)).filter(Number.isFinite);
+    return years.length ? { min: Math.min(...years), max: Math.max(...years) } : { min: 0, max: 0 };
+  }
+  // The events placed inside a range of years (empty ends mean no limit; reversed ends are put right).
+  function inYears(list, from, to) {
+    const num = (v) => (v === "" || v === null || v === undefined || !Number.isFinite(Number(v)) ? null : Number(v));
+    let lo = num(from) ?? -Infinity,
+      hi = num(to) ?? Infinity;
+    if (lo > hi) [lo, hi] = [hi, lo];
+    return (list || []).filter((e) => Number.isFinite(Number(e.year)) && Number(e.year) >= lo && Number(e.year) <= hi);
+  }
   // How many events of each kind a list has, for the range screen.
   function counts(list) {
     const out = { year: 0, century: 0, era: 0 };
     for (const e of list || []) out[e.kind || "year"]++;
     return out;
   }
-  const model = { events, round, check, inOrder, distinctYears, playable, bounds, inRange, counts, ROUNDS };
+  const model = { events, round, check, inOrder, distinctYears, playable, bounds, inRange, yearBounds, inYears, counts, ROUNDS };
   root.TermOrder = model;
   if (typeof module !== "undefined") module.exports = model;
   if (!root.document) return;
@@ -186,30 +199,34 @@
     if (!session) return;
     view.dataset.state = "setup";
     const limits = bounds(session.all),
+      years = yearBounds(session.all),
       saved = readRange(session.book),
-      pick = (v, fallback) => (Number.isFinite(Number(v)) && v !== "" && v !== null && v !== undefined ? Math.min(limits.max, Math.max(limits.min, Number(v))) : fallback);
-    const input = (label, value) => {
+      pick = (v, lo, hi, fallback) => (Number.isFinite(Number(v)) && v !== "" && v !== null && v !== undefined ? Math.min(hi, Math.max(lo, Number(v))) : fallback);
+    const input = (label, value, lo, hi) => {
       const el = node("input", "search-input");
       el.type = "number";
-      el.min = String(limits.min);
-      el.max = String(limits.max);
+      el.min = String(lo);
+      el.max = String(hi);
       el.value = String(value);
       el.setAttribute("aria-label", label);
       return el;
     };
-    const from = input("開始番号", pick(saved.from, limits.min)),
-      to = input("終了番号", pick(saved.to, limits.max)),
+    const from = input("開始番号", pick(saved.from, limits.min, limits.max, limits.min), limits.min, limits.max),
+      to = input("終了番号", pick(saved.to, limits.min, limits.max, limits.max), limits.min, limits.max),
+      yearFrom = input("開始年", pick(saved.yearFrom, years.min, years.max, years.min), years.min, years.max),
+      yearTo = input("終了年", pick(saved.yearTo, years.min, years.max, years.max), years.min, years.max),
       note = node("p", "review-description"),
+      chosen = () => inYears(inRange(session.all, from.value, to.value), yearFrom.value, yearTo.value),
       go = button("はじめる", () => {
-        session = { ...session, list: inRange(session.all, from.value, to.value), done: 0, right: 0 };
+        session = { ...session, list: chosen(), done: 0, right: 0 };
         try {
-          localStorage.setItem(rangeKey(session.book), JSON.stringify({ from: Number(from.value), to: Number(to.value) }));
+          localStorage.setItem(rangeKey(session.book), JSON.stringify({ from: Number(from.value), to: Number(to.value), yearFrom: Number(yearFrom.value), yearTo: Number(yearTo.value) }));
         } catch {}
         next();
       }, "review-primary");
     go.dataset.termOrderStart = "";
     const refresh = () => {
-      const list = inRange(session.all, from.value, to.value),
+      const list = chosen(),
         n = counts(list),
         ok = playable(list).length > 0;
       note.textContent = ok
@@ -217,12 +234,22 @@
         : "この範囲では並べ替えができません。同じ種類（年・世紀・時代）で、違うものが3つ以上入る範囲にしてください。";
       go.disabled = !ok;
     };
-    from.oninput = to.oninput = refresh;
-    const field = node("div", "flashcard-setup-field"),
-      row = node("div", "flashcard-setup-range");
-    row.append(from, node("span", "", "〜"), to);
-    field.append(node("span", "", "出題範囲（番号）"), row);
-    body().replaceChildren(node("h3", "", "範囲を選ぶ"), node("p", "review-description", "番号 " + limits.min + "〜" + limits.max + " の中から選べます。"), field, note, go);
+    for (const el of [from, to, yearFrom, yearTo]) el.oninput = refresh;
+    const field = (label, a, b) => {
+      const box = node("div", "flashcard-setup-field"),
+        row = node("div", "flashcard-setup-range");
+      row.append(a, node("span", "", "〜"), b);
+      box.append(node("span", "", label), row);
+      return box;
+    };
+    body().replaceChildren(
+      node("h3", "", "範囲を選ぶ"),
+      node("p", "review-description", "番号 " + limits.min + "〜" + limits.max + "、年 " + years.min + "〜" + years.max + " の中から選べます（両方を使うと、重なるところだけ）。"),
+      field("出題範囲（番号）", from, to),
+      field("出題範囲（年・世紀・時代のはじまりの年）", yearFrom, yearTo),
+      note,
+      go,
+    );
     refresh();
   }
   function next() {
