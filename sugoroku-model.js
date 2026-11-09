@@ -79,7 +79,7 @@
         // the players hold the whole game pays back about what it should.
         ...N(-5, 2), ...N(-4), ...N(-3, 2), ...N(-2, 2),
         ...N(0, 2), ...ITEM(5),
-        ...N(3, 4), ...N(4, 4), ...N(5, 5),
+        ...N(3, 2), ...N(4, 5), ...N(5, 6),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -103,8 +103,8 @@
     // line made leads to the bingo wheels as usual). Tuned so the normal wheel as a whole pays
     // what it paid before the 確変 slots took its top slots.
     kakuhen: spread([
-      ...N(8), ...N(10), ...N(12), ...N(14), ...N(18), ...N(21), ...N(24), ...N(27), ...N(30),
-      { x: 0, balls: 8 }, { x: 0, balls: 8 }, { x: 0, balls: 8 },
+      ...N(4), ...N(5), ...N(6), ...N(8), ...N(10), ...N(12), ...N(14), ...N(16), ...N(20),
+      { x: 0, balls: 4 }, { x: 0, balls: 4 }, { x: 0, balls: 4 },
     ]),
     // The hidden 確変 slot starts the 確変 wheel only 1 time in chanceOdds (otherwise it reads and pays ×0 like
     // the plain ×0 slots): about 1 in 24 of the landings that read ×0, and 1 in about 200 rolls. Rare and big.
