@@ -460,10 +460,10 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.match(await screen.locator(".sg-cell").nth(10).getAttribute("title"), /^Amyのボール/);
     assert.equal(await screen.locator(".sg-cell.is-mine").count(), 6);
     assert.ok((await screen.locator(".sg-cell.is-reach").count()) >= 1);
-    // Die 1 onto START: the lap ball completes the row; the bingo wheel stops on × 20.
-    const wheelAt = (test) => page.evaluate((src) => window.SugorokuModel.RULES.wheels.bingo.findIndex(Function("x", "return " + src)), test);
+    // Die 1 onto START: the lap ball completes the row; the prize roulette stops on × 3, the bonus roulette on × 10.
+    const wheelAt = (test, wheel = "bingo") => page.evaluate(([src, name]) => window.SugorokuModel.RULES.wheels[name].findIndex(Function("x", "return " + src)), [test, wheel]);
     const before20 = await saved();
-    await fix([0, lastNo - 1, await wheelAt("x.x === 20")]);
+    await fix([0, lastNo - 1, await wheelAt("x.x === 3", "prize"), await wheelAt("x.x === 10")]);
     // Every look the wheel layer takes is noted (with reduced motion the bingo wheel is gone again
     // within a few milliseconds, before START's own wheel).
     await page.evaluate(() => {
@@ -478,9 +478,9 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     const done = await saved(),
       doneCard = await card();
     assert.equal(done.bingos, before20.bingos + 1);
-    // A line of only the guest's balls: (bingo prize 700 + × 20 = 2,000 → 2,700) × 1.1, plus START's
-    // wheel (which can take up to five bets more).
-    assert.ok(done.won - before20.won >= 2970 - 500, String(done.won - before20.won));
+    // A line of only the guest's balls: the prize 700 × 3 × 1.1 = 2,310 and the bonus roulette's × 10 (1,000),
+    // plus START's wheel (which can take up to five bets more).
+    assert.ok(done.won - before20.won >= 3310 - 500, String(done.won - before20.won));
     // The finished row starts again: no balls, the same numbers; amy's ball stays.
     assert.deepEqual(doneCard.owners.slice(0, 7), ["", "", "", "", "", "", ""]);
     assert.ok(doneCard.cells.slice(0, 7).includes(lastNo));
@@ -501,7 +501,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await tab.locator(".casino-game.mode-sugoroku").click();
     await screen.locator(".sg-card").first().waitFor();
     // Then START's own wheel on a plain ×0.
-    await fix([0, nextNo - 1, await wheelAt('x.game === "timer"'), zeroAt]);
+    await fix([0, nextNo - 1, await wheelAt("x.x === 1", "prize"), await wheelAt('x.game === "timer"'), zeroAt]);
     const beforeMini = await saved();
     await screen.locator("[data-sg-roll]").click();
     // amy's balls share the line: the split pop-up comes first (amy's six balls, 100 each, and the guest's one).
