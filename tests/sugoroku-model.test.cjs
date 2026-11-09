@@ -60,14 +60,14 @@ test("the board, card and wheels have the agreed shape", () => {
   }
   // One bet: 100.
   assert.deepEqual(S.RULES.costs, [100]);
-  // The bingo wheel (for a bet of 100): ×12 / ×20 / ×25 / ×30, four mini games (each twice), the jackpot and the super chance three times each.
+  // The bingo wheel (for a bet of 100): ×12 / ×20 / ×25 / ×30, four mini games (each twice), the jackpot and the super chance four times each.
   const bingo = S.RULES.wheels.bingo;
-  assert.equal(bingo.length, 22);
+  assert.equal(bingo.length, 24);
   assert.deepEqual(bingo.filter((x) => x.x).map((x) => x.x).sort((a, b) => a - b), [12, 12, 20, 20, 25, 25, 30, 30]);
   assert.deepEqual(bingo.filter((x) => x.game).map((x) => x.game).sort(), ["dice", "dice", "math", "math", "tap", "tap", "timer", "timer"]);
   assert.equal(bingo.filter((x) => x.miss).length, 0);
-  assert.equal(bingo.filter((x) => x.jackpot === "jp").length, 3);
-  assert.equal(bingo.filter((x) => x.next === "sjp").length, 3);
+  assert.equal(bingo.filter((x) => x.jackpot === "jp").length, 4);
+  assert.equal(bingo.filter((x) => x.next === "sjp").length, 4);
   // The super chance: the super jackpot twice, the jackpot, the bigger tapping game, back.
   const sjp = S.RULES.wheels.sjp;
   assert.equal(sjp.length, 5);

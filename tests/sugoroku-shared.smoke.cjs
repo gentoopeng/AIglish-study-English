@@ -384,7 +384,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
 
     // A jackpot win: the pot is taken with this device's unsent bets in, and starts again from
-    // its seed. 1,400,000 bet: the JACKPOT would be 24,000 but stops at 20,000, and the 4,000 past
+    // its seed. 1,400,000 bet: the JACKPOT would be 26,000 but stops at 20,000, and the 6,000 past
     // the cap stays for the SUPER JACKPOT. A second JACKPOT right after gets the seed and what
     // came in since; the SUPER JACKPOT then takes its share, the spill and all.
     const wins = await page.evaluate(async () => {
@@ -402,14 +402,14 @@ const SAVE = "aiglish_sugoroku_sg-a",
     });
     assert.deepEqual(wins, {
       first: 20000,
-      spill: 4000,
-      second: 3300,
-      before: { jp: 3000, sjp: 12000 + 14200 + 4000 },
-      sjp: 30200,
+      spill: 6000,
+      second: 5300,
+      before: { jp: 5000, sjp: 12000 + 14200 + 6000 },
+      sjp: 32200,
       bet: 1420000,
       from: [1420000, 1420000, 0],
-      who: [["jp", "A", 20000], ["jp", "C", 3300], ["sjp", "A", 30200]],
-      now: { jp: 3000, sjp: 12000 },
+      who: [["jp", "A", 20000], ["jp", "C", 5300], ["sjp", "A", 32200]],
+      now: { jp: 5000, sjp: 12000 },
     });
     assert.deepEqual(errors, []);
     console.log("PASS: shared すごろくビンゴ: untrusted card data checked, reach numbers, a failed write charges nothing, a player's part collected once, a line shared and logged, records, 早送り kept, script taps ignored, a ball that came in during a roll shows after it, who else is playing shown, rolls stop when today's study allowance is used, a jackpot win takes the pot and starts it again");

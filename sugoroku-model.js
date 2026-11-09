@@ -166,9 +166,9 @@
   // of bet is worth about the same at every size.
   function bingoWheel(cost) {
     const k = cost / 100,
-      // The jackpot and the super chance have 3 places each at a bet of 100 (the other slots keep their size,
-      // so they are a little less likely: the JACKPOTs come up about 1.4 times as often as with 2 each).
-      count = Math.max(1, Math.round(3 * k)),
+      // The jackpot and the super chance have 4 places each at a bet of 100 (the other slots keep their size,
+      // so they are a little less likely: the JACKPOTs come up about 1.8 times as often as with 2 each).
+      count = Math.max(1, Math.round(4 * k)),
       others = RULES.wheelParts.others,
       size = others.length * 2 + count * 2,
       // What the other slots pay is scaled as if the jackpots had 2 places each at a bet of 100.

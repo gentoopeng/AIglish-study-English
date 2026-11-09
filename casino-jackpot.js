@@ -2,7 +2,7 @@
 // through Poker.settle; poker and duels between players do not count, having no house share to
 // pay for it) adds to one running total in shared/casino_jackpot; the jackpots are a part of
 // what was bet since each was last won:
-//   JACKPOT       = 3,000  + 1.5% of the total since the last JACKPOT, up to 20,000
+//   JACKPOT       = 5,000  + 1.5% of the total since the last JACKPOT, up to 20,000
 //   SUPER JACKPOT = 12,000 + 1% of the total since the last SUPER JACKPOT, up to 150,000
 // Small seeds, so a pot is mostly what was really bet. What the JACKPOT would hold past its
 // cap goes to the SUPER JACKPOT instead (kept in `spill` once the JACKPOT is won, until the
@@ -14,7 +14,7 @@
 // winners at the same moment each get what was there in turn, never the same pot twice.
 (function () {
   "use strict";
-  const RULE = { jp: { seed: 3000, rate: 0.015, max: 20000 }, sjp: { seed: 12000, rate: 0.01, max: 150000 } };
+  const RULE = { jp: { seed: 5000, rate: 0.015, max: 20000 }, sjp: { seed: 12000, rate: 0.01, max: 150000 } };
   const EVERY = 60e3,
     cacheKey = "aiglish_casino_jackpot",
     pendingKey = "aiglish_casino_jackpot_pending";
