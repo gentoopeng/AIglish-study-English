@@ -745,7 +745,7 @@
     const staked = canStake();
     practicePanel.append(
       node("h3", "", "コンピュータと対戦"),
-      node("p", "pk-sub", staked ? "ポイントを賭けて対戦します。はじめのチップの分が参加費で、勝ち負けは1ハンドごとにポイントへ反映されます。" : "ゲストやオフラインでは練習チップで遊べます（ポイントは賭けません）。"),
+      node("p", "pk-sub", "練習チップで遊びます（ポイントは賭けません）。"),
     );
     const bots = pills("pkBots", [1, 2, 3, 4, 5].map((n) => [n, n + "人"]), 1),
       chipsField = amountChoices("pkChips", [50, 100, 200, 500, 1000].map((n) => [n, n + (staked ? "pt" : "枚")]), 100, staked ? "pt" : "枚", staked ? "参加費" : "はじめのチップ"),
@@ -864,12 +864,11 @@
       });
   }
 
-  // A table against the computer: the player plus 1-5 computers. Signed in and online, the
-  // player's chips are points (settled each hand, like a real table); a guest or an offline
-  // device plays with practice chips. The computer always plays at one strength, tuned so a
+  // A table against the computer: the player plus 1-5 computers, played with practice chips (no points are bet). The computer always plays at one strength, tuned so a
   // casual player wins about 4 games in 10 heads-up.
   const BOT_NAMES = ["ペンギン", "シロクマ", "アザラシ", "ラッコ", "キツネ"];
-  const canStake = () => uid() !== "GUEST-000" && !!(window.db && window.fbRunTransaction) && !window.FirestoreReadGuard?.paused?.();
+  // The computer table never stakes points (it used to when signed in): its chips are always practice chips.
+  const canStake = () => false;
   function practice(settings) {
     const staked = canStake();
     if (staked && balance() < settings.buyIn) throw Error("ポイントが足りません（所持 " + fmt(balance()) + "pt）。");
