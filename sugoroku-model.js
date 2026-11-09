@@ -132,19 +132,23 @@
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
     bingoPrize: 7,
     // The bingo wheels' mini games score this many times their points.
-    bingoGameBoost: 2,
+    bingoGameBoost: 1.5,
     // Of the bingo prize, this part is shared by the balls on the line (the finisher's own balls
     // included); the rest is the finisher's.
     prizeShare: 1,
-    // Of what the bingo wheel's ×5 / ×10 / ×20 pays, this part goes to the other players with
-    // balls on the line, by their balls (the prize above is shared in full the same way).
-    wheelShare: 0.5,
+    // The bonus roulette (the second one) is the finisher's alone, nothing of it is shared.
+    wheelShare: 0,
     // After a line: x pays the bet × x; game starts a mini game; miss is the bingo prize alone;
     // the super-jackpot chance leads to the second wheel, where back spins the first again.
     wheels: {
       // The special number: one wheel (the bet × x, or three more balls).
       special: spread([{ x: 10 }, { x: 10 }, { x: 15 }, { x: 20 }, { x: 20 }, { x: 30 }, { x: 30 }, { x: 0, balls: 6 }, { x: 0, balls: 6 }, { x: 30 }]),
-      bingo: null, // (see bingoWheel: made for the bet)
+      // After a line, two roulettes. The first one (prize) is shared: the bingo prize (bingoPrize × the bet, 100 for
+      // each ball of the line at ×1) times the number it stops on, 1 to 5, goes to the owners of the line's balls, and
+      // only this one is multiplied by the line bonuses (two lines at once, a line of one's own balls). The second one
+      // (bingo, the bonus roulette) is the finisher's alone.
+      prize: spread([{ x: 1 }, { x: 1 }, { x: 1 }, { x: 1 }, { x: 1 }, { x: 1 }, { x: 2 }, { x: 3 }, { x: 4 }, { x: 5 }]),
+      bingo: null, // (see bingoWheel)
       sjp: [{ jackpot: "sjp" }, { jackpot: "jp" }, { game: "tapex" }, { jackpot: "sjp" }, { back: true }],
     },
     // Mini games, scored in points (multiplied like the line's other prizes):
@@ -156,26 +160,16 @@
     // light in the gold (perfect) or silver (good) part of the bar; say whether the next card is
     // higher or lower. In 早送り they are not played and pay `auto`.
     // The slots of the bingo wheel besides the jackpot and the super chance (each twice on the wheel).
-    wheelParts: { others: [{ x: 12 }, { game: "timer" }, { x: 20 }, { game: "tap" }, { game: "dice" }, { x: 30 }, { game: "math" }, { x: 25 }] },
+    wheelParts: { others: [{ game: "timer" }, { game: "tap" }, { game: "dice" }, { game: "math" }, { x: 5 }, { x: 10 }, { x: 15 }] },
     games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 10, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 100 }, tapex: { seconds: 10, per: 15, max: 100 }, dice: { count: 3, per: 50 }, math: { easy: { seconds: 15, prize: 300 }, normal: { seconds: 15, prize: 600 }, hard: { seconds: 20, prize: 1200 } } },
   };
   RULES.normal[50] = RULES.normal[200] = RULES.normal[100];
-  // The bingo wheel for a bet (the average bet of the balls on the line): the jackpot and the
-  // super-jackpot chance take as many places as the bet is a multiple of 100 (a half, one, or two
-  // of the 20 places of each), and the other slots pay `scale` times more or less, so one point
-  // of bet is worth about the same at every size.
+  // The bonus roulette after the prize roulette: 10 slots, the finisher's alone (no line bonus on it).
+  // `times` pays that jackpot that many times; x pays the bet × x; the mini games score bingoGameBoost times their points.
   function bingoWheel(cost) {
-    const k = cost / 100,
-      // The jackpot and the super chance have 4 places each at a bet of 100 (the other slots keep their size,
-      // so they are a little less likely: the JACKPOTs come up about 1.8 times as often as with 2 each).
-      count = Math.max(1, Math.round(4 * k)),
-      others = RULES.wheelParts.others,
-      size = others.length * 2 + count * 2,
-      // What the other slots pay is scaled as if the jackpots had 2 places each at a bet of 100.
-      scale = (others.length * 2 + Math.max(1, Math.round(2 * k)) * 2) / 20,
-      list = [];
-    for (let i = 0; i < 2; i++) for (const o of others) list.push(o.x ? { x: Math.round(o.x * scale * 10) / 10 } : { ...o, boost: Math.round(RULES.bingoGameBoost * scale * 100) / 100 });
-    for (let i = 0; i < count; i++) list.push({ jackpot: "jp" }, { next: "sjp" });
+    const others = RULES.wheelParts.others,
+      list = [{ jackpot: "jp", times: 2 }, { jackpot: "jp" }, { next: "sjp" }];
+    for (const o of others) list.push(o.x ? { x: o.x } : { ...o, boost: RULES.bingoGameBoost });
     return spread(list);
   }
   RULES.wheels.bingo = bingoWheel(100);
@@ -386,33 +380,38 @@
       }
       return { kept: pool - given + bonus, total: pool + bonus, shares };
     };
-    const split = share(RULES.bingoPrize * mult, RULES.prizeShare),
-      prize = split.total;
+    // The prize roulette: the bingo prize times 1 to 5, shared by the balls of the line (and the line bonuses).
+    const pick1 = pick(RULES.wheels.prize, random),
+      split = share(RULES.bingoPrize * pick1.slot.x * mult, RULES.prizeShare);
     let gain = split.kept;
-    events.push({ t: "prize", amount: gain, total: prize, shares: split.shares, mult });
+    events.push({ t: "wheel", wheel: "prize", slots: RULES.wheels.prize, index: pick1.index, base: bet, mult, amount: split.kept, total: split.total, shares: split.shares });
+    events.push({ t: "prize", amount: gain, total: split.total, shares: split.shares, mult, x: pick1.slot.x });
+    // The bonus roulette: the finisher's alone.
     for (let wheel = "bingo"; wheel; ) {
-      const slots = wheel === "bingo" ? bingoWheel(grid) : RULES.wheels[wheel],
+      const slots = RULES.wheels[wheel],
         { index, slot } = pick(slots, random);
-      const event = { t: "wheel", wheel, slots, index, base: bet, mult };
+      const event = { t: "wheel", wheel, slots, index, base: bet };
       events.push(event);
       wheel = null;
       if (slot.next) wheel = slot.next;
       else if (slot.back) wheel = "bingo";
       else if (slot.jackpot) {
-        state[slot.jackpot === "jp" ? "jps" : "sjps"]++;
-        // Paid by the screen from the casino's pot (CasinoJackpot.win), which may have to wait
-        // for the network; until then it stays here.
-        state.jpWait = (state.jpWait || []).concat([slot.jackpot]);
-        events.push({ t: "jackpot", kind: slot.jackpot });
+        for (let k = 0; k < (slot.times || 1); k++) {
+          state[slot.jackpot === "jp" ? "jps" : "sjps"]++;
+          // Paid by the screen from the casino's pot (CasinoJackpot.win), which may have to wait
+          // for the network; until then it stays here.
+          state.jpWait = (state.jpWait || []).concat([slot.jackpot]);
+          events.push({ t: "jackpot", kind: slot.jackpot });
+        }
       }
       else if (slot.game) {
         // A mini game is not multiplied by the lines (or the solo bonus): only by bingoGameBoost.
         state.bonus = (state.bonus || []).concat([{ game: slot.game, mult: slot.boost ?? RULES.bingoGameBoost, bet: grid }]);
         events.push({ t: "bonus", game: slot.game, mult: slot.boost ?? RULES.bingoGameBoost });
       } else if (slot.x) {
-        const part = share(slot.x * mult, RULES.wheelShare);
-        Object.assign(event, { amount: part.kept, total: part.total, shares: part.shares });
-        gain += part.kept;
+        const kept = money(bet * slot.x);
+        Object.assign(event, { amount: kept, total: kept, shares: {} });
+        gain += kept;
       }
     }
     return gain;

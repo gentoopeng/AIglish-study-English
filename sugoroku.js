@@ -67,8 +67,8 @@
     }
     return icon;
   }
-  const WHEEL_NAMES = { item: "ITEM ROULETTE", event: "EVENT", accident: "ACCIDENT", bingo: "BINGO", sjp: "SUPER JACKPOT CHANCE", kakuhen: "BONUS", special: "SPECIAL BALL", super: "SUPER ACCIDENT" };
-  const HOT = new Set(["bingo", "sjp", "kakuhen", "special"]);
+  const WHEEL_NAMES = { item: "ITEM ROULETTE", event: "EVENT", accident: "ACCIDENT", prize: "BINGO ROULETTE", bingo: "BINGO BONUS", sjp: "SUPER JACKPOT CHANCE", kakuhen: "BONUS", special: "SPECIAL BALL", super: "SUPER ACCIDENT" };
+  const HOT = new Set(["prize", "bingo", "sjp", "kakuhen", "special"]);
   const MINI = { timer: "10秒ぴったり", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "ストップ", hilo: "ハイ＆ロー" };
   // The normal squares' quick games (paid in multiples of the bet, in the wallet's unit).
   const QUICK_GAMES = new Set(["stop", "hilo"]);
@@ -81,7 +81,7 @@
     "！！：盤面に1つ。踏むと大事故かも。ヘルモードは1周の間、通常マスが！に、！と★が通常マスに入れ替わります。",
     "STARTを通るとボールが1個出ます。",
     "ビンゴカードは2枚で全員共通（左右にスワイプ）。ボールは1〜99の抽選で、空いた番号なら自分のボールが入り、開いた番号なら1.5倍がもらえます。★の数字はスペシャルルーレット。",
-    "1列そろうと、ビンゴ賞金（700）とビンゴルーレット。賞金とルーレットの倍率の5割は、その列のボールの持ち主に、置いたときの賭け額に応じて配られます。ほかの人の分は次に遊んだときに届き、30日で消えます。ミニゲームとジャックポットはそろえた人のもの。",
+    "1列そろうと、ルーレットが2回まわります。1つ目は「ビンゴルーレット」で、ビンゴ賞金（700）の1〜5倍。ボール1個につき100×倍が、その列のボールの持ち主に、置いたときの賭け額に応じて配られます（2列同時や自分のボールだけの列のボーナスはここだけ）。ほかの人の分は次に遊んだときに届き、30日で消えます。2つ目は「ビンゴボーナス」で、ジャックポット×2、スーパージャックポットチャンス、ミニゲーム、倍率などの10項目。こちらはそろえた人だけのものです。",
     "アイテム：ITEMのルーレットで1個（ガードと倍がけの2個の枠も）と150pt。ダブルダイス（サイコロ2個）・トリプルダイス（3個）・ぴったり（出目を選ぶ）・倍がけ（この回の増減と、その回で始まるゲームの結果が2倍）は振る前に押します。ガードは、マイナスが出たときに1回だけ使えます。",
     "ジャックポットは、カジノの賭けから貯まります。",
     "盤面をタップすると、演出を飛ばせます。",
@@ -1316,7 +1316,7 @@
     layer.hidden = false;
     const box = node("div", "sg-sheet sg-split");
     box.append(node("p", "sg-sheet-title", "ビンゴの分け前"));
-    box.append(node("p", "sg-game-rule", "ビンゴ賞金 " + fmt(split.prize) + api.unit() + (split.wheel ? "　ルーレット " + fmt(split.wheel) + api.unit() : "") + "（そろった列のボールの賭け額に応じて分けます）"));
+    box.append(node("p", "sg-game-rule", "ビンゴ賞金 " + fmt(split.prize) + api.unit() + (split.wheel ? "　ボーナス " + fmt(split.wheel) + api.unit() : "") + "（そろった列のボールの賭け額に応じて分けます）"));
     const head = node("div", "sg-split-row is-head");
     for (const t of ["", "ボール", "賞金", "ルーレット", "合計"]) head.append(node("span", "", t));
     box.append(head);
@@ -1566,6 +1566,7 @@
     if (slot.kakuhen) return "zero";
     if (wheel === "item") return slot.twice ? "gold" : slot.item === "ball" ? "gold" : slot.item === "exact" ? "champagne" : "high";
     if (slot.item === true) return "gold";
+    if (wheel === "prize") return slot.x >= 5 ? "gold" : slot.x >= 3 ? "champagne" : slot.x >= 2 ? "high" : "mid";
     if (wheel === "special") return slot.balls ? "ball" : slot.x >= 30 ? "gold" : slot.x >= 15 ? "champagne" : "high";
     if (wheel === "kakuhen") return slot.balls ? "ball" : slot.x >= 10 ? "gold" : slot.x >= 5 ? "champagne" : slot.x >= 3 ? "high" : "mid";
     if (slot.ball) return "ball";
@@ -1586,7 +1587,7 @@
     if (slot.balls) return "●×" + slot.balls;
     if (slot.ball) return "●×1";
     if (slot.next) return "SJP";
-    if (slot.jackpot) return slot.jackpot === "jp" ? "JACKPOT" : "SUPER";
+    if (slot.jackpot) return slot.jackpot === "jp" ? (slot.times > 1 ? "JP×" + slot.times : "JACKPOT") : "SUPER";
     if (slot.game) return { timer: "10秒", tap: "連打", tapex: "連打EX", dice: "サイコロ", math: "暗算", stop: "STOP", hilo: "H&L" }[slot.game];
     if (slot.event) return { blackjack: "BJ", dice: "DICE", chinchiro: "チンチロ" }[slot.event];
     if (slot.miss) return "ハズレ";
@@ -1664,13 +1665,13 @@
     box.append(face);
     const outcome = node("p", "sg-wheel-out");
     box.append(outcome);
-    if (e.mult > 1 && HOT.has(e.wheel)) box.append(node("p", "sg-wheel-base", "賞金とミニゲームは ×" + e.mult));
+    if (e.mult > 1 && e.wheel === "prize") box.append(node("p", "sg-wheel-base", "列のボーナス ×" + e.mult));
     layer.replaceChildren(box);
     const n = e.slots.length,
-      turns = { normal: 4, event: 4, accident: 4, super: 5, bingo: 5, jp: 6, sjp: 7, kakuhen: 5, special: 5, item: 4 }[e.wheel],
+      turns = { normal: 4, event: 4, accident: 4, super: 5, prize: 4, bingo: 5, jp: 6, sjp: 7, kakuhen: 5, special: 5, item: 4 }[e.wheel],
       jitter = (random(60) - 30) / 100,
       angle = turns * 360 - ((e.index + 0.5 + jitter * 0.8) * 360) / n;
-    const full = { normal: 1700, event: 2000, accident: 2000, super: 2600, bingo: 3000, jp: 3800, sjp: 4600, kakuhen: 3200, special: 3200, item: 2200 }[e.wheel],
+    const full = { normal: 1700, event: 2000, accident: 2000, super: 2600, prize: 2800, bingo: 3000, jp: 3800, sjp: 4600, kakuhen: 3200, special: 3200, item: 2200 }[e.wheel],
       time = full * pace();
     box.classList.add("is-spinning");
     disc.style.transition = time ? "transform " + time + "ms cubic-bezier(.15,.6,.1,1)" : "none";
@@ -1707,6 +1708,8 @@
                 : "セーフ"
           : e.wheel === "item"
             ? slot.twice ? slot.items.map((id) => ITEM_INFO[id].n).join("と") + "！" : ITEM_INFO[slot.item].n
+          : e.wheel === "prize"
+            ? "ボール1個につき " + fmt(Math.round(e.base * slot.x * (e.mult || 1))) + api.unit() + "（×" + slot.x + "）　+" + fmt(e.amount) + api.unit() + (e.total > e.amount ? "（みんなに " + fmt(e.total - e.amount) + "）" : "")
           : slot.item === true
             ? "ITEM チャンス"
           : slot.balls
@@ -1716,7 +1719,7 @@
           : slot.next
             ? "SUPER JACKPOT CHANCE"
             : slot.jackpot
-              ? slot.jackpot === "jp" ? "JACKPOT" : "SUPER JACKPOT"
+              ? slot.jackpot === "jp" ? (slot.times > 1 ? "JACKPOT ×" + slot.times + "！" : "JACKPOT") : "SUPER JACKPOT"
               : slot.game
                 ? MINI[slot.game] + " チャレンジ"
                 : slot.event
