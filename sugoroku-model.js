@@ -79,7 +79,7 @@
         // the players hold the whole game pays back about what it should.
         ...N(-5, 2), ...N(-4), ...N(-3, 2), ...N(-2, 2),
         ...N(0, 2), ...ITEM(5),
-        ...N(3, 2), ...N(4, 5), ...N(5, 6),
+        ...N(2, 3), ...N(3, 5), ...N(4, 4), ...N(5),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -127,7 +127,7 @@
     // The super accident (the square on the board, and one slot of the accident wheel): −10 to −30 times the bet, the player's own balls off the card,
     // the bag emptied, nothing (SAFE), the 確変 wheel (LUCKY), or ヘルモード for hellLaps times round the board (state.hell counts the squares left).
     superAccident: spread([{ take: 3 }, { take: 4 }, { take: 5 }, { take: 5 }, { take: 5 }, { resetBalls: true }, { resetItems: true }, { take: 0 }, { lucky: true }, { hell: true }]),
-    hellLaps: 3,
+    hellLaps: 1,
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
     bingoPrize: 7,
@@ -157,7 +157,7 @@
     // higher or lower. In 早送り they are not played and pay `auto`.
     // The slots of the bingo wheel besides the jackpot and the super chance (each twice on the wheel).
     wheelParts: { others: [{ x: 12 }, { game: "timer" }, { x: 20 }, { game: "tap" }, { game: "dice" }, { x: 30 }, { game: "math" }, { x: 25 }] },
-    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 10, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 120 }, tapex: { seconds: 10, per: 25, max: 120 }, dice: { count: 3, per: 50 }, math: { easy: { seconds: 15, prize: 300 }, normal: { seconds: 15, prize: 600 }, hard: { seconds: 20, prize: 1200 } } },
+    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 10, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 100 }, tapex: { seconds: 10, per: 15, max: 100 }, dice: { count: 3, per: 50 }, math: { easy: { seconds: 15, prize: 300 }, normal: { seconds: 15, prize: 600 }, hard: { seconds: 20, prize: 1200 } } },
   };
   RULES.normal[50] = RULES.normal[200] = RULES.normal[100];
   // The bingo wheel for a bet (the average bet of the balls on the line): the jackpot and the

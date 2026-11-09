@@ -654,7 +654,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
-      s.hell = 150;
+      s.hell = 60;
       localStorage.setItem(name, JSON.stringify(s));
     }, SAVE);
     await tab.locator(".casino-game.mode-sugoroku").click();
@@ -664,7 +664,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.equal(hellCounts.accident, calmCounts.normal, "normal squares are ! now");
     assert.equal(hellCounts.normal, calmCounts.accident + calmCounts.event, "! and ★ squares are normal now");
     assert.equal(hellCounts.event, 0);
-    assert.match(await screen.locator(".sg-hell").innerText(), /ヘルモード あと2周/);
+    assert.match(await screen.locator(".sg-hell").innerText(), /ヘルモード あと1周/);
     await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
     await page.evaluate((name) => {
       const s = JSON.parse(localStorage.getItem(name));
