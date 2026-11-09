@@ -508,7 +508,7 @@ test("a save whose returns went below 0 is still a good save", () => {
   assert.equal(S.valid({ ...S.newState(), won: NaN }), false);
 });
 
-test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダイス, ぴったり, ガード, 倍がけ", () => {
+test("items: the item wheel gives an item (kept ×n) and 150 more; ダブルダイス, ぴったり, ガード, 倍がけ", () => {
   const w = S.RULES.normal[100],
     itemAt = w.findIndex((x) => x.item),
     zeroAt = w.findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event && !x.kakuhen && !x.item),
@@ -524,22 +524,22 @@ test("items: the item wheel gives an item (kept ×n) and 100 more; ダブルダ�
   const got = S.roll(from, card, 100, seq([0, itemAt, pickItem("guard")]));
   assert.deepEqual(got.state.items, ["guard"]);
   assert.deepEqual(got.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["normal", "item"]);
-  assert.deepEqual(got.events.find((e) => e.t === "itemGet"), { t: "itemGet", id: "guard", amount: 100 });
-  assert.equal(got.gain, 100, "the item and 100 besides");
-  // The 「2個」 slot: the two items it shows (ガード and 倍がけ), and the 100 only once.
+  assert.deepEqual(got.events.find((e) => e.t === "itemGet"), { t: "itemGet", id: "guard", amount: 150 });
+  assert.equal(got.gain, 150, "the item and 150 besides");
+  // The 「2個」 slot: the two items it shows (ガード and 倍がけ), and the 150 only once.
   const twiceAt = S.RULES.itemWheel.findIndex((x) => x.twice);
   const twin = S.roll(from, card, 100, seq([0, itemAt, twiceAt]));
   assert.deepEqual(twin.state.items, ["guard", "x2"], "the two items the slot shows");
-  assert.deepEqual(twin.events.filter((e) => e.t === "itemGet").map((e) => [e.twice, e.amount]), [[true, 100], [true, 0]]);
-  assert.equal(twin.gain, 100);
+  assert.deepEqual(twin.events.filter((e) => e.t === "itemGet").map((e) => [e.twice, e.amount]), [[true, 150], [true, 0]]);
+  assert.equal(twin.gain, 150);
   // Items are kept as a count: a fourth one still goes in.
   const many = S.roll({ ...from, items: ["dice2", "dice2", "exact"] }, card, 100, seq([0, itemAt, pickItem("dice3")]));
   assert.deepEqual(many.state.items, ["dice2", "dice2", "exact", "dice3"]);
-  assert.equal(many.gain, 100);
-  // Only the very top of the count (itemMax) is refused, and the 100 is still paid.
+  assert.equal(many.gain, 150);
+  // Only the very top of the count (itemMax) is refused, and the 150 is still paid.
   const top = S.roll({ ...from, items: Array(S.RULES.itemMax).fill("guard") }, card, 100, seq([0, itemAt, pickItem("dice3")]));
   assert.equal(top.state.items.length, S.RULES.itemMax);
-  assert.equal(top.gain, 100);
+  assert.equal(top.gain, 150);
   assert.equal(top.events.find((e) => e.t === "itemGet").full, true);
   // ダブルダイス: two dice, the sum moves the piece.
   const two = S.roll({ ...from, pos: 0, items: ["dice2"] }, card, 100, seq([3, 4, zeroAt]), "amy", { items: ["dice2"] });
