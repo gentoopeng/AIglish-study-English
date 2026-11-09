@@ -559,6 +559,28 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       assert.match(await mini.locator(".sg-game-line").innerText(), /当たり　→　125枚/);
     });
     assert.equal(hiloWon, 125);
+    // 同じ数は「ぴったり」と予想した人だけの当たり。HIGHを選んでいて同じ数なら、はずれ。
+    const hiloSameHigh = await quickGame("hilo", async () => {
+      await fix([4, 4]);
+      await mini.locator('[data-sg-game="flip"]').click();
+      await mini.locator('[data-sg-game="high"]').click();
+      assert.match(await mini.locator(".sg-game-line").innerText(), /はずれ　→　0枚/);
+    });
+    assert.equal(hiloSameHigh, 0);
+    const hiloSame = await quickGame("hilo", async () => {
+      await fix([4, 4]);
+      await mini.locator('[data-sg-game="flip"]').click();
+      await mini.locator('[data-sg-game="same"]').click();
+      assert.match(await mini.locator(".sg-game-line").innerText(), /ぴったり！×10　→　1,000枚/);
+    });
+    assert.equal(hiloSame, 1000);
+    const hiloSameMiss = await quickGame("hilo", async () => {
+      await fix([4, 8]);
+      await mini.locator('[data-sg-game="flip"]').click();
+      await mini.locator('[data-sg-game="same"]').click();
+      assert.match(await mini.locator(".sg-game-line").innerText(), /はずれ　→　0枚/);
+    });
+    assert.equal(hiloSameMiss, 0);
     // サイコロ: three dice; the sum × 50 is the score.
     const diceWon = await quickGame("dice", async () => {
       assert.equal(await mini.locator(".sg-mini-dice .sg-mini-die").count(), 3);
