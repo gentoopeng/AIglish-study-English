@@ -30,6 +30,20 @@ const { chromium } = require("playwright"),
     // The study menu offers it only for books in 用語・年号モード.
     await page.getByRole("button", { name: "年代テストの学習方法を選ぶ" }).click();
     await page.getByRole("button", { name: "年代並べ替え", exact: true }).click();
+    // The range screen first: the whole book to begin with; a range with too few events cannot start.
+    const screen = page.locator(".term-order-screen");
+    await screen.locator("[data-term-order-start]").waitFor();
+    assert.equal(await screen.getByLabel("開始番号").inputValue(), "1");
+    assert.equal(await screen.getByLabel("終了番号").inputValue(), "3");
+    assert.match(await screen.locator(".review-description").last().innerText(), /この範囲：5件（年 5・世紀 0・時代 0）/);
+    await screen.getByLabel("開始番号").fill("2");
+    await screen.getByLabel("終了番号").fill("2");
+    assert.equal(await screen.locator("[data-term-order-start]").isDisabled(), true);
+    assert.match(await screen.locator(".review-description").last().innerText(), /並べ替えができません/);
+    await screen.getByLabel("開始番号").fill("1");
+    await screen.getByLabel("終了番号").fill("3");
+    assert.equal(await screen.locator("[data-term-order-start]").isDisabled(), false);
+    await screen.locator("[data-term-order-start]").click();
     await page.locator(".term-order-screen .term-order-item").first().waitFor();
     for (let round = 0; round < 10; round++) {
       const items = page.locator(".term-order-screen .term-order-list button");
@@ -62,7 +76,20 @@ const { chromium } = require("playwright"),
       await page.getByRole("button", { name: round === 9 ? "結果を見る" : "次へ" }).click();
     }
     assert.equal(await page.locator(".term-order-score").textContent(), "9 / 10 問正解");
-    await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    // 範囲を変える: back to the range screen (the last range is kept), here 2〜3 (three different years).
+    await page.getByRole("button", { name: "範囲を変える" }).click();
+    await screen.locator("[data-term-order-start]").waitFor();
+    assert.equal(await screen.getByLabel("開始番号").inputValue(), "1");
+    await screen.getByLabel("開始番号").fill("2");
+    assert.match(await screen.locator(".review-description").last().innerText(), /この範囲：3件/);
+    await screen.locator("[data-term-order-start]").click();
+    await page.locator(".term-order-screen .term-order-item").first().waitFor();
+    assert.equal(await page.locator(".term-order-screen .term-order-list button").count(), 3, "three different years in 2〜3");
+    await page.locator(".term-order-screen").getByRole("button", { name: "終了" }).click();
+    await page.evaluate((id) => window.openTermOrder(id), await page.evaluate(() => textbooksPool.find((b) => b.name === "年代テスト").id));
+    await screen.locator("[data-term-order-start]").waitFor();
+    assert.equal(await screen.getByLabel("開始番号").inputValue(), "2", "the range is remembered for next time");
+    await page.locator(".term-order-screen").getByRole("button", { name: "終了" }).click();
     assert.equal(await page.locator(".term-order-screen").count(), 0);
     // A load that finishes after its screen was closed does not touch the screen opened since.
     const book = await page.evaluate(() => textbooksPool.find((b) => b.name === "年代テスト").id);
@@ -79,6 +106,7 @@ const { chromium } = require("playwright"),
     }, book);
     await page.locator(".term-order-screen").getByRole("button", { name: "終了" }).click();
     await page.evaluate((id) => window.openTermOrder(id), book);
+    await page.locator(".term-order-screen [data-term-order-start]").click();
     await page.locator(".term-order-screen .term-order-item").first().waitFor();
     await page.locator(".term-order-screen .term-order-list button").first().click();
     await page.evaluate(() => window.__releaseStale());

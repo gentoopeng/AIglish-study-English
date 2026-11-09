@@ -69,3 +69,17 @@ test("centuries and eras are events too, put in order by when they began, and a 
   const sorted = o.check(o.round(list.filter((e) => e.kind === "century"), seeded(2))).sorted;
   assert.deepEqual(sorted.map((e) => e.label).slice(0, 2), ["紀元前3世紀", "12世紀"]);
 });
+
+test("a range of word numbers: bounds, the events inside it, and how many of each kind", () => {
+  const list = o.events(words, t.parseLine);
+  assert.deepEqual(o.bounds(list), { min: 1, max: 3 });
+  assert.deepEqual(o.bounds([]), { min: 0, max: 0 });
+  assert.equal(o.inRange(list, 1, 3).length, 5);
+  assert.deepEqual(o.inRange(list, 2, 3).map((e) => e.year), [1192, 1603, 1600]);
+  assert.deepEqual(o.inRange(list, 3, 2).map((e) => e.year), [1192, 1603, 1600], "reversed ends are put right");
+  assert.equal(o.inRange(list, "", "").length, 5, "empty ends mean no limit");
+  assert.equal(o.inRange(list, 2, 2).length, 1);
+  assert.equal(o.playable(o.inRange(list, 2, 2)).length, 0, "one event cannot be put in order");
+  assert.equal(o.playable(o.inRange(list, 2, 3)).length, 1);
+  assert.deepEqual(o.counts(list), { year: 5, century: 0, era: 0 });
+});
