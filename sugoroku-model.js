@@ -79,7 +79,7 @@
         // the players hold the whole game pays back about what it should.
         ...N(-5, 2), ...N(-4), ...N(-3, 2), ...N(-2, 2),
         ...N(0, 2), ...ITEM(5),
-        ...N(2, 3), ...N(3, 5), ...N(4, 4), ...N(5),
+        ...N(2, 6), ...N(3, 4), ...N(4, 3),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
