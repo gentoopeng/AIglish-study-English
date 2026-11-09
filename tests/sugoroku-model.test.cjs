@@ -294,7 +294,7 @@ test("a mini game waits in state.bonus, blocks rolling and pays its score, 0 whe
   assert.equal(S.settleBonus(out.state, null).gain, 0);
   assert.deepEqual(S.settleBonus(out.state, 10).state.bonus, []);
   assert.equal(S.gameScore("tap", 70), 700);
-  assert.equal(S.gameScore("tapex", 70), 1750);
+  assert.equal(S.gameScore("tapex", 70), 1050);
   assert.equal(S.gameScore("dice", 14), 700);
   assert.equal(S.gameScore("math", true), 500, "a game saved before the levels");
   assert.deepEqual(["easy", "normal", "hard"].map((l) => S.gameScore("math", l)), [300, 600, 1200]);
@@ -377,7 +377,7 @@ test("played the plain way by several players on one card, every bet returns a l
 test("tapping counts up to the cap, and odd mini-game results score nothing", () => {
   assert.equal(S.gameScore("tap", 80), 800);
   assert.equal(S.gameScore("tap", 5000), S.RULES.games.tap.max * 10);
-  assert.equal(S.gameScore("tapex", 1e9), S.RULES.games.tapex.max * 25);
+  assert.equal(S.gameScore("tapex", 1e9), S.RULES.games.tapex.max * 15);
   assert.equal(S.gameScore("dice", 99), 900);
   assert.equal(S.gameScore("timer", "x"), 0);
   assert.equal(S.gameScore("timer", Infinity), 0);
@@ -715,9 +715,9 @@ test("the super accident square: −3 to −5 times, balls off, bag emptied, saf
   const lucky = roll(from, base, slotAt((x) => x.lucky), [ten]);
   assert.deepEqual(lucky.events.filter((e) => e.t === "wheel").map((e) => e.wheel), ["super", "kakuhen"]);
   assert.equal(lucky.gain, 2000);
-  // ヘルモード: three times round the board; normal squares act as accidents until it ends.
+  // ヘルモード: hellLaps times round the board; normal squares act as accidents until it ends.
   const hell = roll(from, base, slotAt((x) => x.hell));
-  assert.equal(hell.state.hell, 3 * S.SIZE);
+  assert.equal(hell.state.hell, S.RULES.hellLaps * S.SIZE);
   assert.ok(hell.events.some((e) => e.t === "hell"));
   const normal = at("normal"),
     inHell = S.roll({ ...S.newState(), pos: normal - 1, hell: 50 }, base, 100, seq([0, 0]), "amy");
@@ -752,5 +752,5 @@ test("the super accident square: −3 to −5 times, balls off, bag emptied, saf
   assert.deepEqual(guardedVia.state.items, []);
   // An old save has no hell.
   assert.equal(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0 }).hell, 0);
-  assert.equal(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, hell: 99999 }).hell, 3 * S.SIZE);
+  assert.equal(S.upgrade({ v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, hell: 99999 }).hell, S.RULES.hellLaps * S.SIZE);
 });
