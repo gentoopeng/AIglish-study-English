@@ -75,11 +75,11 @@
         // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
         ...KAKU(1),
         // Swings stay small: a bad slot takes 2 to 5 times the bet, a good one gives 3 to 5 times (at most 500 at a bet of
-        // 100, well under the JACKPOT's 3,000). The plus slots are many and the minus slots few, so that with the ガード
+        // 100, well under the JACKPOT's 5,000). The plus slots are many and the minus slots few, so that with the ガード
         // the players hold the whole game pays back about what it should.
         ...N(-5, 2), ...N(-4), ...N(-3, 2), ...N(-2, 2),
         ...N(0, 2), ...ITEM(5),
-        ...N(2, 6), ...N(3, 4), ...N(4, 3),
+        ...N(2, 4), ...N(3, 5), ...N(4, 4),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
@@ -87,7 +87,7 @@
     // which one comes, and pays itemCash × the bet besides.
     itemMax: 99,
     // Every spin of the item wheel also pays this many times the bet.
-    itemCash: 1,
+    itemCash: 1.5,
     // 倍がけ doubles what a roll pays or takes, by at most this many times the bet.
     x2Cap: 5,
     items: {
