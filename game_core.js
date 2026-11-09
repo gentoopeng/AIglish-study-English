@@ -26,7 +26,7 @@
             var value=String(text||'').trim().toLowerCase();
             return labels.filter(function(label) {
                 return [label.short].concat(label.aliases).some(function(alias) {
-                    if(metadata && value.split(/[\s,、・/|]+/).some(function(part){return part.replace(/\.$/,'')===alias;}))return true;
+                    if(metadata && value.split(/[\s,、・/|;；]+/).some(function(part){return part.replace(/^[(\[（［【〔〈「『<]+|[)\]）］】〕〉」』>:：]+$/g,'').replace(/\./g,'')===alias;}))return true;
                     return false;
                 });
             });

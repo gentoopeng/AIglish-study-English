@@ -73,7 +73,28 @@
     const sorted = order.slice().sort((a, b) => a.year - b.year);
     return { right: order.every((e, i) => e === sorted[i]), marks: order.map((e, i) => e === sorted[i]), sorted };
   }
-  const model = { events, round, check, inOrder, distinctYears, playable, ROUNDS };
+  // The word numbers the events come from (a range is a first and last word number).
+  function bounds(list) {
+    const nums = (list || []).map((e) => Number(e.num)).filter(Number.isFinite);
+    return nums.length ? { min: Math.min(...nums), max: Math.max(...nums) } : { min: 0, max: 0 };
+  }
+  // The events whose word number is inside the range (a missing end means no limit; reversed ends are put right).
+  function inRange(list, from, to) {
+    let lo = Number.isFinite(Number(from)) && from !== "" && from !== null ? Number(from) : -Infinity,
+      hi = Number.isFinite(Number(to)) && to !== "" && to !== null ? Number(to) : Infinity;
+    if (lo > hi) [lo, hi] = [hi, lo];
+    return (list || []).filter((e) => {
+      const n = Number(e.num);
+      return Number.isFinite(n) && n >= lo && n <= hi;
+    });
+  }
+  // How many events of each kind a list has, for the range screen.
+  function counts(list) {
+    const out = { year: 0, century: 0, era: 0 };
+    for (const e of list || []) out[e.kind || "year"]++;
+    return out;
+  }
+  const model = { events, round, check, inOrder, distinctYears, playable, bounds, inRange, counts, ROUNDS };
   root.TermOrder = model;
   if (typeof module !== "undefined") module.exports = model;
   if (!root.document) return;
@@ -143,13 +164,66 @@
         const status = results[e.num]?.[e.key || "y:" + e.mid]?.status;
         return status === "bad" ? 4 : status === "so" ? 2 : 1;
       };
-      session = { book, list, weight, done: 0, right: 0 };
-      next();
+      session = { book, all: list, list, weight, done: 0, right: 0 };
+      setup();
     } catch (error) {
       if (view !== screen) return;
       view.dataset.state = "message";
       body().replaceChildren(node("h3", "", "開けませんでした"), node("p", "review-description", error.message), button("閉じる", close, "review-primary"));
     }
+  }
+  const rangeKey = (book) => "aiglish_term_order_range_" + String(book);
+  const readRange = (book) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(rangeKey(book)) || "null");
+      return saved && typeof saved === "object" ? saved : {};
+    } catch {
+      return {};
+    }
+  };
+  // The range screen: which word numbers the rounds are made from (the whole book to begin with).
+  function setup() {
+    if (!session) return;
+    view.dataset.state = "setup";
+    const limits = bounds(session.all),
+      saved = readRange(session.book),
+      pick = (v, fallback) => (Number.isFinite(Number(v)) && v !== "" && v !== null && v !== undefined ? Math.min(limits.max, Math.max(limits.min, Number(v))) : fallback);
+    const input = (label, value) => {
+      const el = node("input", "search-input");
+      el.type = "number";
+      el.min = String(limits.min);
+      el.max = String(limits.max);
+      el.value = String(value);
+      el.setAttribute("aria-label", label);
+      return el;
+    };
+    const from = input("開始番号", pick(saved.from, limits.min)),
+      to = input("終了番号", pick(saved.to, limits.max)),
+      note = node("p", "review-description"),
+      go = button("はじめる", () => {
+        session = { ...session, list: inRange(session.all, from.value, to.value), done: 0, right: 0 };
+        try {
+          localStorage.setItem(rangeKey(session.book), JSON.stringify({ from: Number(from.value), to: Number(to.value) }));
+        } catch {}
+        next();
+      }, "review-primary");
+    go.dataset.termOrderStart = "";
+    const refresh = () => {
+      const list = inRange(session.all, from.value, to.value),
+        n = counts(list),
+        ok = playable(list).length > 0;
+      note.textContent = ok
+        ? "この範囲：" + list.length + "件（年 " + n.year + "・世紀 " + n.century + "・時代 " + n.era + "）"
+        : "この範囲では並べ替えができません。同じ種類（年・世紀・時代）で、違うものが3つ以上入る範囲にしてください。";
+      go.disabled = !ok;
+    };
+    from.oninput = to.oninput = refresh;
+    const field = node("div", "flashcard-setup-field"),
+      row = node("div", "flashcard-setup-range");
+    row.append(from, node("span", "", "〜"), to);
+    field.append(node("span", "", "出題範囲（番号）"), row);
+    body().replaceChildren(node("h3", "", "範囲を選ぶ"), node("p", "review-description", "番号 " + limits.min + "〜" + limits.max + " の中から選べます。"), field, note, go);
+    refresh();
   }
   function next() {
     if (!session) return;
@@ -219,6 +293,7 @@
         session = { ...session, done: 0, right: 0 };
         next();
       }, "review-primary"),
+      button("範囲を変える", setup, "review-subtle"),
       button("閉じる", close, "review-subtle"),
     );
   }
