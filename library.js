@@ -274,6 +274,8 @@
         if(!window.isAdmin)throw new Error('教材の編集権限を確認してください。');
         if(!cloudAvailable()||owner==='GUEST-000')throw new Error('配信先に接続できません。次の保存時に再試行します。');
         await window.fbSetDoc(window.fbDoc(window.db,'shared','vocab_'+bookId),{custom_words:window.stripVocabProgressFromWords(master),emptyConfirmed:false,updatedAt:new Date().toISOString()},{merge:true});
+        // The copies follow the book through its entry in the index.
+        if (typeof window.__touchSharedBook === 'function') await window.__touchSharedBook(bookId).catch(function(error) { console.warn('配信の更新印は次回に付けます', error); });
     };
     function close() {
         if (!dialog) return;
@@ -816,7 +818,7 @@
     // A copy made from a public word book ("自分用に追加") follows the public one the same way: its
     // owner's changes reach the copy, the player's own changes stay. The public book is looked at
     // once every few hours at most (one read for each copy).
-    var CHECK_EVERY = 6 * 3600e3;
+    var CHECK_EVERY = 30 * 60e3;
     async function followPublicCopies() {
         var owner = userId();
         if (owner === 'GUEST-000' || !window.db || !window.fbGetDoc || !window.CopyFollow) return;
@@ -854,6 +856,8 @@
                         made[String(n)] = { links: Array.isArray(word.links) ? word.links : [], own: !!(old && old.links) };
                         return keepOwn(Object.assign({ num: n }, unit ? { unit: unit } : {}, {
                             word: word.word, meaning: word.meaning, sub: typeof word.sub === 'string' ? word.sub : '',
+                            // Same shape as a distributed book: the word's own 品詞 is kept beside the ones of its meanings.
+                            ...(word.partOfSpeech || word.pos ? { partOfSpeech: String(word.partOfSpeech || word.pos) } : {}),
                             meanings: (Array.isArray(word.meanings) && word.meanings.length ? word.meanings : [{ text: word.meaning }]).map(function(meaning, index) {
                                 return Object.assign({ id: n + '-' + index, text: String(meaning.text || ''), partOfSpeech: String(meaning.partOfSpeech || meaning.pos || word.partOfSpeech || word.pos || '') }, meaning.minor === true ? { minor: true } : {}, meaning.blankOnly === true ? { blankOnly: true } : {});
                             })
@@ -886,6 +890,26 @@
     }
     window.__followPublicCopies = followPublicInTurn;
     window.onAppLoaded(function() { setTimeout(function() { followPublicInTurn().catch(function(error) { console.warn('公開された単語帳の変更を次回に反映します', error); }); }, 8000); });
+    // The creator's changes reach everybody who has the app open: the shared index (one read) and the
+    // public originals of copies are looked at again every few minutes, when the app comes back to the
+    // front, and when the connection returns. Nothing is read while hidden, offline, in a game, as a
+    // guest, or while the cloud quota is paused.
+    var AUTO_EVERY = 10 * 60e3, lastAuto = Date.now();
+    function autoRefresh(afterGap) {
+        var owner = userId();
+        if (document.hidden || owner === 'GUEST-000' || !window.db || navigator.onLine === false) return false;
+        if (window.FirestoreReadGuard && typeof window.FirestoreReadGuard.paused === 'function' && window.FirestoreReadGuard.paused()) return false;
+        if (document.body && document.body.classList.contains('in-game-active')) return false;
+        if (Date.now() - lastAuto < (afterGap ? 60e3 : AUTO_EVERY)) return false;
+        lastAuto = Date.now();
+        if (typeof window.syncTextbooksIndexFromFirestore === 'function') Promise.resolve(window.syncTextbooksIndexFromFirestore()).catch(function(error) { console.warn('配信中の単語帳の確認を次回に回します', error); });
+        followPublicInTurn().catch(function(error) { console.warn('公開された単語帳の確認を次回に回します', error); });
+        return true;
+    }
+    window.__autoRefreshBooks = autoRefresh;
+    setInterval(function() { autoRefresh(false); }, 60e3);
+    document.addEventListener('visibilitychange', function() { if (!document.hidden) autoRefresh(true); });
+    window.addEventListener('online', function() { autoRefresh(true); });
     var render = window.renderVocabLibrarySelection;
     window.renderVocabLibrarySelection = function() { refreshPool(); var hidden = document.getElementById('libraryHiddenBooksButton'); if(hidden){var data=readLibrary();hidden.hidden=!data.books.concat(sharedBooks).some(function(book){return data.hidden.indexOf(book.id)>=0;});} return render.apply(this, arguments); };
     window.onAppLoaded(function() { refreshPool(); window.renderVocabLibrarySelection(); });
