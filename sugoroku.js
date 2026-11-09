@@ -2007,7 +2007,7 @@
     dice: "サイコロ3個の合計×50点。",
     math: "むずかしさを選んで、時間内に答えます。正解で、かんたん300点・ふつう600点・むずかしい1,200点。",
     stop: "動く光を、まん中の金色で止めると2倍、銀色なら0.75倍。外れは0。5秒で外れです。",
-    hilo: "めくったカード（A〜K）より\n次が大きいか小さいかを当てます。\n当たり ×1.25　同じ数 ×10　はずれ 0",
+    hilo: "めくったカード（A〜K）より\n次が大きい（HIGH）か小さい（LOW）か、\nまったく同じ数（ぴったり）かを当てます。\nHIGH・LOW当たり ×1.25　ぴったり当たり ×10　はずれ 0",
   };
   async function bonus() {
     while (view?.state.bonus?.length) {
@@ -2182,22 +2182,25 @@
       go.textContent = "カードをめくる";
       go.dataset.sgGame = "flip";
       let n = 0;
-      const guess = (high) => (e) => {
+      const guess = (pick) => (e) => {
         if (!e.isTrusted || !n) return;
         const m = random(13) + 1;
         next.textContent = face(m);
         next.classList.add("is-open");
         hi.remove();
         lo.remove();
-        const outcome = m === n ? "tie" : m > n === high ? "win" : "lose";
+        same.remove();
+        // 同じ数は「ぴったり」と予想した人だけの当たり（HIGH・LOWは同じ数ではずれ）。
+        const outcome = pick === "same" ? (m === n ? "tie" : "lose") : m !== n && m > n === (pick === "high") ? "win" : "lose";
         end(outcome, { win: "当たり", tie: "ぴったり！×10", lose: "はずれ" }[outcome]);
       };
       const hi = node("button", "sg-game-btn", "HIGH ↑"),
-        lo = node("button", "sg-game-btn", "LOW ↓");
-      for (const [b, high, data] of [[hi, true, "high"], [lo, false, "low"]]) {
+        lo = node("button", "sg-game-btn", "LOW ↓"),
+        same = node("button", "sg-game-btn", "ぴったり ＝");
+      for (const [b, data] of [[hi, "high"], [same, "same"], [lo, "low"]]) {
         b.type = "button";
         b.dataset.sgGame = data;
-        b.onclick = guess(high);
+        b.onclick = guess(data);
       }
       go.onclick = (e) => {
         if (!e.isTrusted || n) return;
@@ -2205,7 +2208,7 @@
         n = random(13) + 1;
         first.textContent = face(n);
         first.classList.add("is-open");
-        go.replaceWith(hi, lo);
+        go.replaceWith(hi, same, lo);
       };
     } else if (item.game === "dice") {
       // Three dice; the sum is the score.
