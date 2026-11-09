@@ -43,6 +43,17 @@ const { chromium } = require("playwright"),
     await screen.getByLabel("開始番号").fill("1");
     await screen.getByLabel("終了番号").fill("3");
     assert.equal(await screen.locator("[data-term-order-start]").isDisabled(), false);
+    // A range of years too (the year; for a century or an era, the year it began): both ranges together.
+    assert.equal(await screen.getByLabel("開始年").inputValue(), "1192");
+    assert.equal(await screen.getByLabel("終了年").inputValue(), "1603");
+    await screen.getByLabel("開始年").fill("1500");
+    await screen.getByLabel("終了年").fill("1700");
+    assert.match(await screen.locator(".review-description").last().innerText(), /この範囲：4件/);
+    await screen.getByLabel("終了年").fill("1580");
+    assert.equal(await screen.locator("[data-term-order-start]").isDisabled(), true, "only the year 1575 is left");
+    await screen.getByLabel("開始年").fill("1192");
+    await screen.getByLabel("終了年").fill("1603");
+    assert.equal(await screen.locator("[data-term-order-start]").isDisabled(), false);
     await screen.locator("[data-term-order-start]").click();
     await page.locator(".term-order-screen .term-order-item").first().waitFor();
     for (let round = 0; round < 10; round++) {
