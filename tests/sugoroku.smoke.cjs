@@ -646,19 +646,19 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       }, SAVE);
       await tab.locator(".casino-game.mode-sugoroku").click();
       await screen.locator(".sg-card").first().waitFor();
-      const minus = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === -4));
+      const minus = await page.evaluate(() => window.SugorokuModel.RULES.normal[100].findIndex((x) => x.x === -2));
       await fix([0, minus]);
       const before = await saved();
       await screen.locator("[data-sg-roll]").click();
       await screen.locator('[data-sg-game="guard-' + choice + '"]').waitFor({ timeout: 15000 });
-      assert.match(await screen.locator(".sg-ask-what").innerText(), /−400/);
+      assert.match(await screen.locator(".sg-ask-what").innerText(), /−200/);
       await screen.locator('[data-sg-game="guard-' + choice + '"]').click();
       await settled();
       const after = await saved();
       return { won: after.won - before.won, items: after.items };
     };
     assert.deepEqual(await guardGame("yes"), { won: 0, items: ["guard"] }, "ガード spent: no minus, one left");
-    assert.deepEqual(await guardGame("no"), { won: -400, items: ["guard", "guard"] }, "not spent: the minus is paid");
+    assert.deepEqual(await guardGame("no"), { won: -200, items: ["guard", "guard"] }, "not spent: the minus is paid");
     // The super accident square is on the board once (the red !!); ヘルモード turns the squares round and shows how long is left.
     await page.locator("dialog.casino-screen.is-sugoroku .cs-close").evaluate((b) => b.click());
     const counts = () => page.evaluate(() => Object.fromEntries(["normal", "accident", "event", "super"].map((k) => [k, document.querySelectorAll(".sg-sq.is-" + k).length])));
