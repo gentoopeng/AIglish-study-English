@@ -686,12 +686,42 @@
       if (!dlg || !wrap || !card || !card.offsetWidth) return;
       // Short screens (about 600px or less) tighten the gaps first.
       dlg.classList.toggle("is-tight", dlg.clientHeight < 620);
-      const last = [...view.body.children].filter((el) => !el.hidden && el.offsetParent !== null && el !== view.layer).pop();
-      if (!last) return;
-      const top = dlg.getBoundingClientRect().top - dlg.scrollTop,
-        pad = parseFloat(getComputedStyle(dlg).paddingBottom) || 0,
-        bottom = last.getBoundingClientRect().bottom - top + pad,
-        room = dlg.clientHeight - bottom,
+      // The size must not depend on what is showing: rows that come and go (the others playing, the ヘルモード
+      // badge, the 出目 picker, the bag, the study hint) are measured as if all were there, so the card keeps
+      // one size and only a new screen size (resize, rotation) changes it. Nothing is painted in between.
+      // (the ヘルモード badge shares the status row, but its box is a little taller than the status text: it is
+      // counted too, with a word in it if it is empty)
+      const tight = dlg.classList.contains("is-tight"),
+        rows = [
+          [view.itemBar, tight ? "26px" : "30px"],
+          [view.facePick, "30px"],
+          [view.hereEl, "2.6em"],
+          [view.studyEl, "1.4em"],
+          [view.hellEl, ""],
+        ].filter(([el]) => el),
+        was = rows.map(([el]) => el.hidden),
+        hellEmpty = view.hellEl && !view.hellEl.textContent;
+      let bottom, room;
+      try {
+        rows.forEach(([el, min]) => {
+          el.hidden = false;
+          el.style.minHeight = min;
+        });
+        if (hellEmpty) view.hellEl.textContent = "HELL";
+        const last = [...view.body.children].filter((el) => !el.hidden && el.offsetParent !== null && el !== view.layer).pop();
+        if (!last) return;
+        const top = dlg.getBoundingClientRect().top - dlg.scrollTop,
+          pad = parseFloat(getComputedStyle(dlg).paddingBottom) || 0;
+        bottom = last.getBoundingClientRect().bottom - top + pad;
+        room = dlg.clientHeight - bottom;
+      } finally {
+        if (hellEmpty) view.hellEl.textContent = "";
+        rows.forEach(([el], k) => {
+          el.style.minHeight = "";
+          el.hidden = was[k];
+        });
+      }
+      const
         ratio = 1, // the card is square (7 × 7 round cells)
         max = view.body.clientWidth,
         next = Math.max(150, Math.min(max, wrap.offsetWidth + room / ratio));
