@@ -74,12 +74,12 @@
         // The top of the wheel is a 確変 slot: it starts the 確変 wheel below, which holds the
         // multiples these slots used to pay (×10, ×5, ×1.5, ×1) and more besides.
         ...KAKU(1),
-        // Swings stay small: a bad slot takes 2 to 5 times the bet, a good one gives 3 to 5 times (at most 500 at a bet of
+        // Swings stay small: a bad slot takes 2 to 4 times the bet, a good one gives 2 to 4 times (at most 400 at a bet of
         // 100, well under the JACKPOT's 5,000). The plus slots are many and the minus slots few, so that with the ガード
         // the players hold the whole game pays back about what it should.
-        ...N(-5, 2), ...N(-4), ...N(-3, 2), ...N(-2, 2),
+        ...N(-4, 3), ...N(-3, 2), ...N(-2, 2),
         ...N(0, 2), ...ITEM(5),
-        ...N(2, 4), ...N(3, 5), ...N(4, 4),
+        ...N(2, 4), ...N(3, 7), ...N(4, 2),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
