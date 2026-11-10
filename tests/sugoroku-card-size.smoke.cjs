@@ -39,6 +39,19 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
     await open();
     const plain = await width();
     assert.ok(plain >= 150, "a card: " + plain);
+    // The card is a square and so are its cells (rows never squashed): the height comes from the width alone.
+    const shape = () => page.evaluate(() => {
+      const r = (e) => e.getBoundingClientRect(),
+        card = r(document.querySelector(".sg-card")),
+        slider = r(document.querySelector(".sg-cards-slider")),
+        cells = [...document.querySelectorAll(".sg-card:first-child .sg-cell")].map(r);
+      return { card: [Math.round(card.width), Math.round(card.height)], slider: [Math.round(slider.width), Math.round(slider.height)], cell: [Math.round(cells[0].width), Math.round(cells[0].height)], lastBottom: Math.round(cells[cells.length - 1].bottom - card.bottom) };
+    });
+    const sq = await shape();
+    assert.equal(sq.card[0], sq.card[1], "the card is square " + JSON.stringify(sq));
+    assert.equal(sq.slider[1], sq.card[1], "the slider shows all of it " + JSON.stringify(sq));
+    assert.ok(Math.abs(sq.cell[0] - sq.cell[1]) <= 1, "round cells " + JSON.stringify(sq));
+    assert.ok(sq.lastBottom <= 0, "the last row is inside the card " + JSON.stringify(sq));
 
     // The same card with a bag of items (the item row shows), after taking ぴったり (the picker of faces shows).
     await open({ items: ["dice2", "dice3", "exact", "guard", "x2"], bonus: [], pending: null, hell: 0 });
