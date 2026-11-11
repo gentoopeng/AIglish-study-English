@@ -1,6 +1,7 @@
 // Requires Playwright, Chromium and a running local HTTP server.
 // Run: node tests/stamps.smoke.cjs
-// Stamps: A makes one (a picture, a name, a price) and the cloud holds it without the picture in its own document; B buys it
+// Stamps: A makes one in the editor (a picture with text, a name, a price): it waits for the 運営 with the price held, nobody else sees it,
+// the 運営 approves (a turned-down one gives the points back once); B buys it
 // (the points leave B as a gift to A, who takes them in once; B's box gets it; a second buy is refused); B sends it in a talk and
 // A sees the picture; the maker changes the price; the 運営 stops and removes one (a stopped one is still used by those who have it, a
 // removed one is not); a guest is told to log in.
@@ -116,32 +117,97 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await a.evaluate(() => window.Stamps.store());
     await dlg(a).getByRole("button", { name: "＋ スタンプを作る" }).click();
     await dlg(a).locator("input[type=file]").setInputFiles({ name: "p.png", mimeType: "image/png", buffer: png });
-    await dlg(a).getByRole("button", { name: "作る" }).click();
+    await dlg(a).getByRole("button", { name: "審査に出す" }).click();
     await dlg(a).locator(".stamps-status.is-bad").waitFor();
     assert.match(await dlg(a).locator(".stamps-status").innerText(), /チェック/, "the rights box has to be ticked");
     await dlg(a).getByLabel("名前").fill("ぱんだ");
     await dlg(a).getByLabel("値段").fill("50");
+    assert.match(await dlg(a).locator(".stamps-cost").innerText(), /50pt を預かります/);
+    // The text: a font, a colour, a size and a place can be chosen (the first text is "スタンプ").
+    await dlg(a).getByLabel("文字", { exact: true }).fill("ぱんだ");
+    await dlg(a).getByLabel("フォント").selectOption("mincho");
+    await dlg(a).getByLabel("文字の色").fill("#ff0000");
+    await dlg(a).getByLabel("大きさ").fill("60");
+    await dlg(a).getByLabel("横の位置（%）").fill("30");
+    await dlg(a).getByRole("button", { name: "＋ 文字を足す" }).click();
+    assert.equal(await dlg(a).locator(".stamps-layer-tab").count(), 2);
+    if (process.env.SHOTS) await a.screenshot({ path: "/tmp/claude-0/stamp_editor.png" });
     await dlg(a).locator(".stamps-rights input").check();
-    await dlg(a).getByRole("button", { name: "作る" }).click();
-    await a.waitForFunction(() => [...document.querySelectorAll(".stamps-card")].some((el) => el.innerText.includes("ぱんだ")), null, { timeout: 15000 });
+    await dlg(a).getByRole("button", { name: "審査に出す" }).click();
+    await dlg(a).locator(".stamps-status", { hasText: "審査に出しました" }).waitFor({ timeout: 15000 }).catch(async (e) => { console.log("STATUS:", await dlg(a).locator(".stamps-status").innerText(), errors); throw e; });
     const made = [...docs.keys()].filter((k) => k.startsWith("stamps/"));
     assert.equal(made.length, 1);
     const id = made[0].split("/")[1];
     const stamp = docs.get("stamps/" + id);
-    assert.deepEqual([stamp.ownerId, stamp.name, stamp.price, stamp.status, stamp.sales], ["st-a", "ぱんだ", 50, "on", 0]);
+    assert.deepEqual([stamp.ownerId, stamp.name, stamp.price, stamp.status, stamp.sales, stamp.feeHeld, stamp.feePaid], ["st-a", "ぱんだ", 50, "pending", 0, 50, 0]);
     assert.equal("image" in stamp, false, "the stamp document holds no picture");
-    assert.match(docs.get("stampImages/" + id).image, /^data:image\/(webp|png|jpeg);base64,/);
-    assert.ok(docs.get("stampImages/" + id).image.length <= 36000);
+    assert.equal(docs.has("stampImages/" + id), false, "nothing approved yet: no picture for the talk");
+    const draftDoc = docs.get("stampDrafts/" + id);
+    assert.match(draftDoc.image, /^data:image\/(webp|png|jpeg);base64,/);
+    assert.ok(draftDoc.image.length <= 36000);
+    assert.equal(draftDoc.design.layers.length, 2);
+    assert.deepEqual([draftDoc.design.layers[0].font, draftDoc.design.layers[0].color, draftDoc.design.layers[0].size, draftDoc.design.layers[0].x], ["mincho", "#ff0000", 60, 0.3]);
+    assert.match(draftDoc.base, /^data:image\//, "the picture it was made on is kept for editing");
+    assert.equal(wallet("st-a"), 450, "the cost (the price) is held at once");
+    const held = docs.get("pointLoans/ADMIN__st-a").entries.find((e) => e.kind === "give");
+    assert.deepEqual([held.from, held.to, held.amount], ["st-a", "ADMIN", 50]);
     assert.deepEqual(docs.get("users/st-a/stampBox/main").ids, [id], "the maker has it from the start");
     // A second one at once is refused (one a minute).
+    await dlg(a).locator(".stamps-close").click();
+    await a.evaluate(() => window.Stamps.store());
     await dlg(a).getByRole("button", { name: "＋ スタンプを作る" }).click();
-    await dlg(a).locator("input[type=file]").setInputFiles({ name: "p.png", mimeType: "image/png", buffer: png });
     await dlg(a).getByLabel("名前").fill("二つ目");
     await dlg(a).locator(".stamps-rights input").check();
-    await dlg(a).getByRole("button", { name: "作る" }).click();
+    await dlg(a).getByRole("button", { name: "審査に出す" }).click();
     await dlg(a).locator(".stamps-status.is-bad").waitFor();
     assert.match(await dlg(a).locator(".stamps-status").innerText(), /続けて作れません/);
     await a.evaluate(() => window.Stamps.close());
+
+    // ---- Waiting: only the maker and the 運営 see it; it cannot be bought or sent ---------------------------
+    await c.evaluate(() => window.Stamps.store());
+    await dlg(c).locator(".stamps-empty").waitFor();
+    assert.equal(await dlg(c).locator(".stamps-card").count(), 0, "others do not see a stamp waiting for approval");
+    await c.evaluate(() => window.Stamps.close());
+    assert.match(await c.evaluate(([id]) => window.PointLoans.buyStamp(id, 50).then(() => "", (e) => e.message), [id]), /売られていません/);
+    await a.evaluate(() => window.Stamps.store());
+    const waitCard = dlg(a).locator(".stamps-card", { hasText: "ぱんだ" });
+    await waitCard.locator(".stamps-note", { hasText: "審査待ち" }).waitFor();
+    await a.evaluate(() => window.Stamps.close());
+    // The maker cannot approve it herself, nor put it on sale by hand, and the 運営 cannot "resume" it into sale.
+    assert.match(await a.evaluate(([id]) => window.PointLoans.reviewStamp(id, "approve").then(() => "", (e) => e.message), [id]), /運営だけ/);
+    assert.match(await a.evaluate(([id]) => window.Stamps.change(id, { status: "on" }).then(() => "", (e) => e.message), [id]), /承認が終わって/);
+    assert.match(await admin.evaluate(([id]) => window.Stamps.moderate(id, "on").then(() => "", (e) => e.message), [id]), /「承認」を使って/);
+    // The 運営 approves: it goes on sale, the picture is put in place, what was held stays paid.
+    await admin.evaluate(() => window.Stamps.store());
+    const queued = dlg(admin).locator(".stamps-card", { hasText: "ぱんだ" });
+    await queued.waitFor();
+    await dlg(admin).locator(".stamps-queue", { hasText: "審査待ち 1件" }).waitFor();
+    await queued.getByRole("button", { name: "承認（運営）" }).click();
+    await admin.waitForFunction(() => !document.querySelector(".stamps-queue"));
+    const approved = docs.get("stamps/" + id);
+    assert.deepEqual([approved.status, approved.feePaid, approved.feeHeld, approved.imageV, approved.draft], ["on", 50, 0, 1, false]);
+    assert.equal(docs.get("stampImages/" + id).image, draftDoc.image);
+    assert.equal(docs.has("stampDrafts/" + id), false, "the waiting copy is gone");
+    assert.equal(wallet("st-a"), 450, "approval takes nothing more");
+    assert.match(await admin.evaluate(([id]) => window.PointLoans.reviewStamp(id, "approve").then(() => "", (e) => e.message), [id]), /確認待ちではありません/, "approving twice does nothing");
+    await admin.evaluate(() => window.Stamps.close());
+
+    // ---- Turned down: the held points come back once, with the reason ----------------------------------------
+    await a.evaluate(() => localStorage.removeItem("aiglish_stamp_made_at_st-a"));
+    const second = await a.evaluate(async () => {
+      const data = window.StampEditor.exportImage({ bg: "#00ff00", base: "", baseImg: null, layers: [] });
+      return window.Stamps.make({ image: data, name: "だめなやつ", price: 30, rights: true });
+    });
+    assert.equal(wallet("st-a"), 420);
+    assert.match(await a.evaluate(() => window.Stamps.make({ name: "x", price: 5000, rights: true, image: "data:image/png;base64,AAAA" }).then(() => "", (e) => e.message)), /続けて作れません/);
+    await admin.evaluate(([second]) => window.Stamps.review(second, "reject", "ほかの人の絵です"), [second]);
+    const rejected = docs.get("stamps/" + second);
+    assert.deepEqual([rejected.status, rejected.feeHeld, rejected.rejectReason], ["rejected", 0, "ほかの人の絵です"]);
+    assert.match(await admin.evaluate(([second]) => window.Stamps.review(second, "reject", "again").then(() => "", (e) => e.message), [second]), /確認待ちではありません/);
+    await a.evaluate(() => window.PointLoans.collect());
+    await a.evaluate(() => window.PointLoans.collect());
+    assert.equal(wallet("st-a"), 450, "the held 30pt came back, once");
+    assert.equal(docs.has("stampDrafts/" + second), false);
 
     // ---- B buys it: two taps, once -------------------------------------------------------------------
     await b.evaluate(() => window.Stamps.store());
@@ -166,10 +232,10 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const pair = docs.get("pointLoans/st-a__st-b");
     const give = pair.entries.find((e) => e.kind === "give");
     assert.deepEqual([give.from, give.to, give.amount, give.note], ["st-b", "st-a", 50, "スタンプ「ぱんだ」"]);
-    assert.equal(wallet("st-a"), 500, "A has not taken it in yet");
+    assert.equal(wallet("st-a"), 450, "A has not taken it in yet");
     await a.evaluate(() => window.PointLoans.collect());
     await a.evaluate(() => window.PointLoans.collect());
-    assert.equal(wallet("st-a"), 550, "A takes it in once");
+    assert.equal(wallet("st-a"), 500, "A takes it in once");
     // Already owned: nothing more to buy.
     assert.equal(await card.getByRole("button", { name: "買う" }).count(), 0);
     assert.match(await b.evaluate(([id]) => window.PointLoans.buyStamp(id, 50).then(() => "", (e) => e.message), [id]), /もう持っています/);
@@ -199,14 +265,29 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.doesNotMatch(await a.locator(".loans-dialog").innerText(), /0pt の記録/);
     await a.evaluate(() => window.PointLoans.close());
 
-    // ---- The maker changes the price; the 運営 stops and removes -----------------------------------------
+    // ---- The maker edits: a higher price goes to the 運営 (the difference is held, the old price stays on sale) ---------------------
     await a.evaluate(() => window.Stamps.store());
     await dlg(a).locator(".stamps-card", { hasText: "ぱんだ" }).waitFor();
-    a.once("dialog", (d) => d.accept("80"));
-    await dlg(a).getByRole("button", { name: "値段を変える" }).click();
-    await a.waitForFunction(() => document.querySelector(".stamps-price")?.textContent === "80pt");
-    assert.equal(docs.get("stamps/" + id).price, 80);
+    await dlg(a).locator(".stamps-card", { hasText: "ぱんだ" }).getByRole("button", { name: "編集" }).click();
+    await dlg(a).getByLabel("名前").waitFor();
+    assert.equal(await dlg(a).getByLabel("文字", { exact: true }).inputValue(), "ぱんだ", "the text design comes back as it was made");
+    await dlg(a).getByLabel("値段").fill("80");
+    assert.match(await dlg(a).locator(".stamps-cost").innerText(), /あと 30pt を預かります/);
+    await dlg(a).getByRole("button", { name: "保存する" }).click();
+    await dlg(a).locator(".stamps-status", { hasText: "運営の確認に出しました" }).waitFor();
+    assert.deepEqual([docs.get("stamps/" + id).price, docs.get("stamps/" + id).review, docs.get("stamps/" + id).next, docs.get("stamps/" + id).feeHeld], [50, "pending", { price: 80 }, 30], "the old price stays on sale");
+    assert.equal(wallet("st-a"), 470, "the 30pt difference is held");
     await a.evaluate(() => window.Stamps.close());
+    // Meanwhile it cannot be edited again; the maker can only wait or withdraw.
+    assert.match(await a.evaluate(([id]) => window.Stamps.change(id, { price: 10 }).then(() => "", (e) => e.message), [id]), /確認中/);
+    await admin.evaluate(([id]) => window.Stamps.review(id, "approve"), [id]);
+    assert.deepEqual([docs.get("stamps/" + id).price, docs.get("stamps/" + id).feePaid, docs.get("stamps/" + id).review, docs.get("stamps/" + id).feeHeld], [80, 80, "", 0]);
+    assert.equal(docs.get("stamps/" + id).imageV, 1, "no new picture: the picture stays");
+    // A lower price is free and at once (and does not lower what was paid).
+    await a.evaluate(([id]) => window.Stamps.edit(id, { price: 60 }), [id]);
+    assert.deepEqual([docs.get("stamps/" + id).price, docs.get("stamps/" + id).feePaid], [60, 80]);
+    await a.evaluate(([id]) => window.Stamps.edit(id, { price: 80 }), [id]);
+    assert.equal(docs.get("stamps/" + id).price, 80, "back up to what was paid: no new cost");
     // C is not the maker: no buttons for it, only a report.
     await c.evaluate(() => window.Stamps.store());
     const cCard = dlg(c).locator(".stamps-card", { hasText: "ぱんだ" });
@@ -225,7 +306,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await aCard.waitFor();
     await aCard.locator(".stamps-reports", { hasText: "通報 1件" }).waitFor();
     await aCard.getByRole("button", { name: "販売を停止（運営）" }).click();
-    await admin.waitForFunction(() => document.querySelector(".stamps-card")?.innerText.includes("運営が停止中"));
+    await admin.waitForFunction(() => [...document.querySelectorAll(".stamps-card")].some((c) => c.innerText.includes("ぱんだ") && c.innerText.includes("運営が停止中")));
     assert.equal(docs.get("stamps/" + id).status, "stopped");
     assert.match(await c.evaluate(([id]) => window.PointLoans.buyStamp(id, 80).then(() => "", (e) => e.message), [id]), /売られていません/);
     await b.evaluate(() => window.PointLoans.close());
@@ -236,7 +317,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const aCard2 = dlg(admin).locator(".stamps-card", { hasText: "ぱんだ" });
     admin.once("dialog", (d) => d.accept());
     await aCard2.getByRole("button", { name: "削除（運営）" }).click();
-    await admin.waitForFunction(() => document.querySelector(".stamps-card")?.innerText.includes("削除されました"));
+    await admin.waitForFunction(() => [...document.querySelectorAll(".stamps-card")].some((c) => c.innerText.includes("ぱんだ") && c.innerText.includes("削除されました")));
     assert.equal(docs.get("stamps/" + id).status, "deleted");
     assert.equal(docs.has("stampImages/" + id), false, "the picture is gone");
     assert.equal(wallet("st-b"), 450, "nothing is refunded");

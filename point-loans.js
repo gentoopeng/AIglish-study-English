@@ -328,6 +328,124 @@
     after(value);
     window.Stamps?.remember?.(ids);
   }
+  // ---- Stamp approval ---------------------------------------------------------------------------------
+  // Sending a stamp in for approval (new, or a changed picture / a higher price) holds the cost: the part of the price not
+  // paid yet leaves the maker's wallet at once, as a "give" to the 運営 (which nobody collects). If the 運営 approves it stays
+  // paid (feePaid); if it is turned down or withdrawn it comes back as a gift from the 運営, once (feeHeld).
+  // `input`: { isNew, doc (new only), name, price, image, base, design } — image/design: the picture waiting for approval.
+  async function submitStamp(id, input) {
+    ready();
+    const SM = window.StampsModel;
+    if (!SM) throw Error("スタンプを使えません。");
+    const me = uid(),
+      at = Date.now(),
+      key = L.pairKey(ADMIN, me);
+    let kept = null;
+    const value = await window.fbRunTransaction(window.db, async (tx) => {
+      const stampDoc = window.fbDoc(window.db, "stamps", id),
+        draftDoc = window.fbDoc(window.db, "stampDrafts", id),
+        boxDoc = window.fbDoc(window.db, "users", me, "stampBox", "main");
+      const stampSnap = await tx.get(stampDoc);
+      const walletSnap = await tx.get(walletRef(me));
+      const boxSnap = input.isNew ? await tx.get(boxDoc) : null;
+      const pairSnap = await tx.get(pairRef(key));
+      const wallet = walletSnap.exists() ? walletSnap.data() : {},
+        have = Number(wallet.balance) || 0;
+      let stamp, plan;
+      if (input.isNew) {
+        if (stampSnap.exists()) throw Error("このスタンプは作ってあります。");
+        stamp = SM.clean(input.doc, id);
+        plan = { name: stamp.name, price: stamp.price, review: true, next: null, hold: stamp.price };
+      } else {
+        stamp = stampSnap.exists() ? SM.clean(stampSnap.data(), id) : null;
+        if (!stamp || stamp.ownerId !== me) throw Error("自分のスタンプだけ変えられます。");
+        plan = SM.planEdit(stamp, { name: input.name, price: input.price, picture: !!input.image });
+        if (!plan.review) throw Error("審査に出す変更ではありません。");
+      }
+      const hold = plan.hold;
+      if (hold > have) throw Error("審査のための費用 " + hold + "pt が足りません（所持 " + have + "pt）。");
+      let record = pairSnap.exists() ? pairSnap.data() : null,
+        paid = null;
+      if (hold > 0) record = L.send(record, { id: newId(), from: me, to: ADMIN, amount: hold, kind: "give", note: "スタンプ審査費「" + stamp.name + "」", at });
+      if (hold < 0) record = L.gift(record, { id: newId(), from: ADMIN, to: me, amount: -hold, note: "スタンプ審査費の差額「" + stamp.name + "」", at });
+      if (hold) {
+        kept = { ...record, people: [ADMIN, me].sort(), names: { ...(record.names || {}), [ADMIN]: ADMIN_NAME, [me]: myNameNow() } };
+        tx.set(pairRef(key), kept);
+        tx.set(inboxRef(me), { pairs: { [key]: { other: ADMIN, name: ADMIN_NAME, at } } }, { merge: true });
+        paid = hold > 0 ? walletWrite(tx, me, wallet, have - hold) : null;
+      }
+      const feeHeld = (input.isNew ? 0 : stamp.feeHeld) + hold;
+      const picture = input.image ? { image: input.image, base: input.base || null, design: input.design || null, ownerId: me, at } : null;
+      if (input.isNew || stamp.status === "pending" || stamp.status === "rejected") {
+        const base = input.isNew ? input.doc : {};
+        tx.set(stampDoc, { ...base, name: plan.name ?? stamp.name, price: plan.price, status: "pending", feeHeld, rejectReason: "", draft: input.isNew ? true : stamp.draft || !!picture, submittedAt: at }, { merge: true });
+      } else {
+        tx.set(stampDoc, { ...(plan.name !== undefined ? { name: plan.name } : {}), review: "pending", next: plan.next, feeHeld, reviewNote: "", draft: stamp.draft || !!picture, submittedAt: at }, { merge: true });
+      }
+      if (picture) tx.set(draftDoc, picture);
+      if (input.isNew) {
+        const ids = SM.box(boxSnap.exists() ? boxSnap.data().ids : []);
+        tx.set(boxDoc, { ids: [...ids, id], updatedAt: at }, { merge: true });
+      }
+      return paid;
+    });
+    if (kept) remember(key, kept);
+    after(value);
+  }
+  // The 運営 approves (decision "approve"), turns down ("reject", with a reason) — or the maker withdraws ("withdraw").
+  // Approving only changes the stamp: the picture waiting is put in place, the price asked for is on sale, and what was
+  // held becomes paid. Turning down or withdrawing gives the held points back to the maker, once.
+  async function reviewStamp(id, decision, reason = "") {
+    ready();
+    const SM = window.StampsModel;
+    if (!SM) throw Error("スタンプを使えません。");
+    const me = uid(),
+      at = Date.now();
+    if (decision === "approve" || decision === "reject") {
+      if (window.isAdmin !== true) throw Error("運営だけができます。");
+    } else if (decision !== "withdraw") throw Error("不明な操作です。");
+    let dropped = false;
+    await window.fbRunTransaction(window.db, async (tx) => {
+      const stampDoc = window.fbDoc(window.db, "stamps", id),
+        draftDoc = window.fbDoc(window.db, "stampDrafts", id);
+      const stampSnap = await tx.get(stampDoc);
+      const stamp = stampSnap.exists() ? SM.clean(stampSnap.data(), id) : null;
+      if (!stamp) throw Error("このスタンプは見つかりません。");
+      const first = stamp.status === "pending";
+      if (!first && stamp.review !== "pending") throw Error("このスタンプは確認待ちではありません。");
+      if (decision === "approve" && stamp.ownerId === me) throw Error("自分のスタンプは承認できません。");
+      if (decision === "withdraw" && stamp.ownerId !== me) throw Error("自分のスタンプだけ取り下げられます。");
+      const draftSnap = stamp.draft ? await tx.get(draftDoc) : null;
+      if (decision === "approve") {
+        const draft = draftSnap?.exists() ? draftSnap.data() : null;
+        if (stamp.draft && !SM.imageOk(draft?.image)) throw Error("審査中の画像が見つかりません。作った人に作り直してもらってください。");
+        const price = first ? stamp.price : stamp.next?.price ?? stamp.price;
+        const done = { price, feePaid: Math.max(stamp.feePaid, price), feeHeld: 0, approvedAt: at, review: "", next: null, draft: false, reviewNote: "", rejectReason: "" };
+        if (first) done.status = "on";
+        if (draft) {
+          done.imageV = stamp.imageV + 1;
+          tx.set(window.fbDoc(window.db, "stampImages", id), { image: draft.image, base: draft.base || null, design: draft.design || null, ownerId: stamp.ownerId });
+          dropped = true;
+        }
+        tx.set(stampDoc, done, { merge: true });
+        return;
+      }
+      // Turned down or withdrawn: what was held goes back (when the maker's account is still there).
+      const ownerSnap = await tx.get(window.fbDoc(window.db, "users", stamp.ownerId));
+      const key = L.pairKey(ADMIN, stamp.ownerId),
+        pairSnap = stamp.feeHeld > 0 ? await tx.get(pairRef(key)) : null;
+      if (stamp.feeHeld > 0 && ownerSnap.exists() && !ownerSnap.data()?.deleted) {
+        const record = L.gift(pairSnap.exists() ? pairSnap.data() : null, { id: newId(), from: ADMIN, to: stamp.ownerId, amount: stamp.feeHeld, note: "スタンプ審査費の返金「" + stamp.name + "」", at });
+        tx.set(pairRef(key), { ...record, people: [ADMIN, stamp.ownerId].sort(), names: { ...(record.names || {}), [ADMIN]: ADMIN_NAME, [stamp.ownerId]: String(stamp.ownerName || stamp.ownerId).slice(0, 24) } });
+        tx.set(inboxRef(stamp.ownerId), { pairs: { [key]: { other: ADMIN, name: ADMIN_NAME, at } } }, { merge: true });
+      }
+      const why = SM.text(decision === "withdraw" ? "取り下げました" : reason, 100) || "運営の基準に合いませんでした";
+      tx.set(stampDoc, first ? { status: "rejected", rejectReason: why, feeHeld: 0, draft: false } : { review: "", next: null, feeHeld: 0, draft: false, reviewNote: why }, { merge: true });
+      dropped = !!stamp.draft;
+    });
+    if (dropped && window.fbDeleteDoc) window.fbDeleteDoc(window.fbDoc(window.db, "stampDrafts", id)).catch(() => {});
+    window.Stamps?.forget?.(id);
+  }
   // Points from the 運営 (the administrator's tool): a gift in the record between the 運営 and the
   // player, collected into the player's wallet like a loan, owed by nobody.
   const ADMIN = "ADMIN",
@@ -1087,5 +1205,5 @@
     });
     window.addEventListener("cloud-quota-paused", stopInbox);
   });
-  window.PointLoans = Object.freeze({ open, person, send, ask, talk, sendStamp, buyStamp, pay, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
+  window.PointLoans = Object.freeze({ open, person, send, ask, talk, sendStamp, buyStamp, submitStamp, reviewStamp, pay, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
 })();
