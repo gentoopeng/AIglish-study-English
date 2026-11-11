@@ -187,7 +187,7 @@
   }
   // The lines of a record that the other side added after `since` and that are not money moving (that is said
   // as points received): their words, requests and offers.
-  const NEWS = new Set(["message", "ask-lend", "ask-give", "ask-repay", "lend-offer"]);
+  const NEWS = new Set(["message", "stamp", "ask-lend", "ask-give", "ask-repay", "lend-offer"]);
   function news(record, me, since) {
     return (record.entries || []).filter((e) => e.from !== me && NEWS.has(e.kind) && (e.at || 0) > since);
   }
@@ -269,6 +269,64 @@
       return record;
     });
     remember(key, written);
+  }
+  // A stamp as a line of talk (the picture itself is read from the stamp).
+  async function sendStamp(other, otherName, stampId) {
+    ready();
+    const me = uid(),
+      key = L.pairKey(me, other),
+      at = Date.now();
+    const written = await window.fbRunTransaction(window.db, async (tx) => {
+      const snap = await tx.get(pairRef(key));
+      const record = shell(L.stamp(snap.exists() ? snap.data() : null, { id: newId(), from: me, to: other, stamp: stampId, at }), me, other, otherName);
+      tx.set(pairRef(key), record);
+      touch(tx, me, other, otherName, key, at);
+      return record;
+    });
+    remember(key, written);
+  }
+  // Buying a stamp is one transaction: the stamp, the buyer's wallet and box, the maker's account and the pair are read;
+  // then the points leave the buyer as a "give" to the maker (the maker takes them in as with any gift), the stamp is
+  // added to the buyer's box and its sales go up by one. `seen`: the price the buyer was shown (refused if it changed).
+  async function buyStamp(stampId, seen) {
+    ready();
+    const SM = window.StampsModel;
+    if (!SM) throw Error("スタンプを使えません。");
+    const me = uid(),
+      at = Date.now();
+    let written = null,
+      key = "",
+      ids = [];
+    const value = await window.fbRunTransaction(window.db, async (tx) => {
+      const stampDoc = window.fbDoc(window.db, "stamps", stampId),
+        boxDoc = window.fbDoc(window.db, "users", me, "stampBox", "main");
+      const stampSnap = await tx.get(stampDoc);
+      const stamp = stampSnap.exists() ? SM.clean(stampSnap.data(), stampId) : null;
+      const [boxSnap, walletSnap] = [await tx.get(boxDoc), await tx.get(walletRef(me))];
+      // A maker whose account is gone cannot take the points in: nothing is sold on their behalf.
+      const ownerSnap = stamp ? await tx.get(window.fbDoc(window.db, "users", stamp.ownerId)) : null;
+      const owned = SM.box(boxSnap.exists() ? boxSnap.data().ids : []),
+        wallet = walletSnap.exists() ? walletSnap.data() : {},
+        have = Number(wallet.balance) || 0;
+      const price = SM.checkBuy({ stamp, id: stampId, me, owned, seen, balance: have, ownerGone: !ownerSnap || !ownerSnap.exists() || !!ownerSnap.data()?.deleted });
+      let paid = null;
+      if (price > 0) {
+        key = L.pairKey(me, stamp.ownerId);
+        const pairSnap = await tx.get(pairRef(key));
+        const record = L.send(pairSnap.exists() ? pairSnap.data() : null, { id: newId(), from: me, to: stamp.ownerId, amount: price, kind: "give", note: "スタンプ「" + stamp.name + "」", at });
+        written = shell(record, me, stamp.ownerId, stamp.ownerName);
+        tx.set(pairRef(key), written);
+        touch(tx, me, stamp.ownerId, stamp.ownerName, key, at);
+        paid = walletWrite(tx, me, wallet, have - price);
+      }
+      ids = [...owned, stampId];
+      tx.set(boxDoc, { ids, updatedAt: at }, { merge: true });
+      tx.set(stampDoc, { sales: stamp.sales + 1 }, { merge: true });
+      return paid;
+    });
+    if (written) remember(key, written);
+    after(value);
+    window.Stamps?.remember?.(ids);
   }
   // Points from the 運営 (the administrator's tool): a gift in the record between the 運営 and the
   // player, collected into the player's wallet like a loan, owed by nobody.
@@ -370,7 +428,7 @@
     for (const { key, e, name } of said.slice(-3)) {
       const who = (name || "相手").replace(/さん$/, "") + "さん";
       window.showToast?.(
-        e.kind === "message" ? who + "：" + String(e.text || "").slice(0, 40) : e.kind === "lend-offer" ? who + "から 貸し出しの提案が届きました" : who + "から お願いが届きました",
+        e.kind === "message" ? who + "：" + String(e.text || "").slice(0, 40) : e.kind === "stamp" ? who + "：スタンプ" : e.kind === "lend-offer" ? who + "から 貸し出しの提案が届きました" : who + "から お願いが届きました",
         "info",
       );
     }
@@ -463,7 +521,7 @@
         );
         // The last line of the talk, as in a chat list.
         const line = rec?.entries?.[rec.entries.length - 1];
-        if (line) b.append(node("small", "loans-last", line.kind === "message" ? line.text : line.kind === "gift" ? fmt(line.amount) + "pt 届きました" : line.kind === "give" ? fmt(line.amount) + "pt " + (line.from === me ? "あげました" : "もらいました") : fmt(line.amount) + "pt の記録"));
+        if (line) b.append(node("small", "loans-last", line.kind === "message" ? line.text : line.kind === "stamp" ? "スタンプ" : line.kind === "gift" ? fmt(line.amount) + "pt 届きました" : line.kind === "give" ? fmt(line.amount) + "pt " + (line.from === me ? "あげました" : "もらいました") : fmt(line.amount) + "pt の記録"));
         if (line) b.append(node("time", "loans-time", dayOf(line.at) === dayOf(Date.now()) ? clock(line.at) : dayOf(line.at)));
         // New lines from the other side since I last looked, as a count (a record not read yet: 新着).
         const fresher = rec ? rec.entries.filter((e) => e.from !== me && (e.at || 0) > (last[key] || 0)).length : 0;
@@ -559,7 +617,10 @@
       compose = node("form", "talk-compose");
     log.setAttribute("aria-label", "トーク");
     sheet.hidden = true;
-    dialog.append(head, standingBar, status, log, sheet, compose);
+    // The tray of stamps (what the player has, and the way to the store) opens above the line to write.
+    const trayBox = node("div", "talk-tray");
+    trayBox.hidden = true;
+    dialog.append(head, standingBar, status, log, sheet, trayBox, compose);
     dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
       closeDialog();
@@ -587,14 +648,49 @@
     plus.type = "button";
     plus.setAttribute("aria-label", "ポイント");
     plus.setAttribute("aria-expanded", "false");
-    plus.onclick = () => toggleSheet(sheet.hidden);
+    plus.onclick = () => {
+      trayBox.hidden = true;
+      stampBtn.setAttribute("aria-expanded", "false");
+      toggleSheet(sheet.hidden);
+    };
     const text = node("input");
     Object.assign(text, { type: "text", maxLength: L.MAX_TEXT, placeholder: "メッセージを入力", enterKeyHint: "send" });
     text.setAttribute("aria-label", "メッセージ");
     const sendText = node("button", "talk-send", "送信");
     sendText.type = "submit";
     compose.append(plus);
-    if (!casino && !admin) compose.append(text, sendText);
+    const stampBtn = node("button", "talk-stamp-btn", "☺");
+    stampBtn.type = "button";
+    stampBtn.setAttribute("aria-label", "スタンプ");
+    stampBtn.setAttribute("aria-expanded", "false");
+    stampBtn.dataset.talk = "stamp";
+    const showTray = () => {
+      window.Stamps?.tray(trayBox, {
+        onPick: async (id) => {
+          status.textContent = "";
+          try {
+            await sendStamp(other, name, id);
+            current = known(key) || current;
+            trayBox.hidden = true;
+            stampBtn.setAttribute("aria-expanded", "false");
+            paint();
+          } catch (error) {
+            status.textContent = error?.message || "送れませんでした。";
+          }
+        },
+        onStore: () => window.Stamps.store(() => showTray()),
+      });
+    };
+    stampBtn.onclick = () => {
+      const on = trayBox.hidden;
+      trayBox.hidden = !on;
+      stampBtn.setAttribute("aria-expanded", String(on));
+      if (on) {
+        if (!sheet.hidden) toggleSheet(false);
+        showTray();
+      }
+    };
+    if (!casino && !admin) compose.append(stampBtn, text, sendText);
     compose.onsubmit = (event) => {
       event.preventDefault();
       const line = text.value.trim();
@@ -771,7 +867,8 @@
       if (!fresh) standingBar.append(node("p", "loans-loading", "最新の記録を確かめています…"));
       const near = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
       log.replaceChildren();
-      let lastDay = "";
+      let lastDay = "",
+        lastFrom = "";
       const readAt = rec.read?.[other] || 0,
         seenLine = casino || admin ? null : [...rec.entries].reverse().find((e) => e.from === me && (e.at || 0) <= readAt);
       for (const e of rec.entries) {
@@ -779,12 +876,15 @@
         if (day !== lastDay) {
           log.append(node("li", "talk-day", day));
           lastDay = day;
+          lastFrom = "";
         }
         const mine = e.from === me,
           li = node("li", "talk-row is-" + (mine ? "mine" : "theirs") + " is-" + e.kind + (L.isMoney(e) || e.kind === "give" || e.kind === "gift" ? (mine ? " is-out" : " is-in") : e.kind === "charge" ? " is-out" : ""));
-        const bubble = node("div", e.kind === "message" ? "talk-bubble" : "talk-card");
+        const bubble = e.kind === "stamp" ? window.Stamps?.bubble(e.stamp) || node("div", "talk-card", "スタンプ") : node("div", e.kind === "message" ? "talk-bubble" : "talk-card");
         if (e.kind === "message") bubble.textContent = e.text;
-        else {
+        else if (e.kind === "stamp") {
+          // (the picture is the whole line)
+        } else {
           // A card like a LINE Pay one: the kind's icon, the amount big, then what happened.
           const icon = node("i", "card-icon");
           icon.append(svgIcon(KIND_ICON[e.kind]));
@@ -842,6 +942,18 @@
         const meta = node("div", "talk-meta");
         if (mine && e === seenLine) meta.append(node("span", "talk-read", "既読"));
         meta.append(node("time", "", clock(e.at)));
+        // As in LINE: their icon beside the first line of a run of theirs (the others keep its place).
+        if (!mine && !casino && !admin) {
+          const first = lastFrom !== e.from;
+          const icon = first
+            ? window.RankingVisuals?.avatar
+              ? window.RankingVisuals.avatar(window.People?.preview?.(other)?.avatar || "", name)
+              : node("span", "talk-initial", String(name).slice(0, 1))
+            : node("span", "talk-avatar-gap");
+          icon.classList.add("talk-line-avatar");
+          li.append(icon);
+        }
+        lastFrom = e.from;
         li.append(bubble, meta);
         log.append(li);
       }
@@ -975,5 +1087,5 @@
     });
     window.addEventListener("cloud-quota-paused", stopInbox);
   });
-  window.PointLoans = Object.freeze({ open, person, send, ask, talk, pay, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
+  window.PointLoans = Object.freeze({ open, person, send, ask, talk, sendStamp, buyStamp, pay, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
 })();

@@ -24,6 +24,7 @@
 //   charge   { kind: "charge", from, to, amount, note } points the 運営 takes back; taken from
 //            `to`'s wallet (not below 0) when collected
 //   message  { kind: "message", from, to, text }        a line of talk between the two
+//   stamp    { kind: "stamp", from, to, stamp }          a stamp (its id; see stamps-model.js) sent as a line of talk
 //
 // The record keeps at most MAX_ENTRIES entries. When it is full the oldest messages go first,
 // then finished requests, so what is owed is kept as long as possible.
@@ -89,7 +90,8 @@
       let extra = list.filter(test).length - keep;
       if (extra > 0) list = list.filter((e) => !(test(e) && extra-- > 0));
     };
-    drop((e) => e.kind === "message", MAX_MESSAGES);
+    // (a stamp is a line of talk like any other: it counts with the messages and goes with them)
+    drop((e) => e.kind === "message" || e.kind === "stamp", MAX_MESSAGES);
     // (Finished requests only: an offer keeps its place until it is accepted, or refused and its points are back.)
     const finished = (e) => e.status && e.status !== "open" && (e.kind !== "lend-offer" || e.status === "done" || (refunded(e) && !!claimed?.[e.id]));
     if (list.length > MAX_ENTRIES) drop(finished, Math.max(0, MAX_ENTRIES - (list.length - list.filter(finished).length)));
@@ -133,6 +135,13 @@
     if (!line) throw Error("メッセージを入れてください。");
     if (from === to) throw Error("自分には送れません。");
     return add(record, { id, kind: "message", from, to, text: line, at });
+  }
+  // A stamp sent as a line of talk (only its id: the picture is read from the stamp itself).
+  function stamp(record, { id, from, to, stamp, at }) {
+    if (!/^[A-Za-z0-9_-]{8,40}$/.test(String(stamp || ""))) throw Error("このスタンプは送れません。");
+    if (from === to) throw Error("自分には送れません。");
+    if (NEVER_COLLECT.includes(to)) throw Error("この相手にはスタンプを送れません。");
+    return add(record, { id, kind: "stamp", from, to, stamp, at });
   }
   // Points given (by the 運営): they reach `to` when collected and are owed by nobody. With
   // kind "charge" the 運営 takes points back instead.
@@ -207,7 +216,7 @@
   // (And, for the lender, the points of a loan offer that was refused or taken back.)
   const unclaimed = (record, me) => (record?.entries || []).filter((e) => ((arrives(e) && e.to === me) || (refunded(e) && e.from === me)) && !record.claimed?.[e.id]);
   const openFor = (record, me) => (record?.entries || []).filter((e) => e.status === "open" && e.to === me);
-  const api = { change, arrives, MAX_ENTRIES, MAX_MESSAGES, MAX_TEXT, say, gift, trim, MAX_AMOUNT, RATES, MAX_RATE, refunded, accept, pairKey, net, owedBy, amountOf, dueOf, send, ask, close, unclaimed, openFor, isMoney };
+  const api = { change, arrives, MAX_ENTRIES, MAX_MESSAGES, MAX_TEXT, say, stamp, gift, trim, MAX_AMOUNT, RATES, MAX_RATE, refunded, accept, pairKey, net, owedBy, amountOf, dueOf, send, ask, close, unclaimed, openFor, isMoney };
   root.PointLoansModel = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window === "undefined" ? globalThis : window);
