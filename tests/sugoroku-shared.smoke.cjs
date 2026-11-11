@@ -315,7 +315,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await screen.locator(".sg-card").first().waitFor();
     await page.waitForFunction(() => document.querySelector(".sg-go").textContent === "勉強すると振れます");
     assert.equal(await screen.locator(".sg-go").isDisabled(), true);
-    assert.match(await screen.locator(".sg-study").innerText(), /あと1分勉強すると賭けられます/);
+    assert.match(await screen.locator(".sg-study").innerText(), /あと2分勉強すると賭けられます/);
     await screen.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
     await page.evaluate(() => localStorage.removeItem("aiglish_casino_staked_sg-a"));
 

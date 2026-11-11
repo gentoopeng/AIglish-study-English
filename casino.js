@@ -127,14 +127,15 @@
 
   // ---- Study first ---------------------------------------------------------------------
   // Points can be bet only after studying: each minute measured today (the study timer, not
-  // time typed in) lets the player bet PER_MINUTE more today, across every game. What was bet
+  // time typed in) lets the player bet PER_MINUTE more today, across every game (counted by the second:
+  // 1 point for each second, 60 for a minute). What was bet
   // each day is counted on this device. Practice chips are not limited.
   //
   // What is not used of a day's allowance (its own minutes) carries on to the following days, worth
   // less each day: all of it the next day, half the day after, then a quarter, an eighth, a sixteenth,
   // and gone after five days. Spending takes the oldest (least valuable) first. A day's allowance
   // carries only from CARRY_FROM on (the day this began): earlier days do not count.
-  const PER_MINUTE = 100,
+  const PER_MINUTE = 60,
     CARRY_DAYS = 5,
     // How far back the replay starts: an allowance from the day before the window may still have been
     // spent by a bet inside it, so the days just before it are replayed too (and their bets kept).
@@ -160,7 +161,15 @@
     const ms = Object.entries(day.sources || {}).reduce((sum, [source, value]) => sum + (source === "legacy" ? 0 : Math.max(0, Number(value) || 0)), 0);
     return Math.floor(Math.min(86400e3, ms) / 60e3);
   }
+  // The same measured time in whole seconds: what a day's allowance is counted from.
+  function secondsOf(day) {
+    if (!day) return 0;
+    const ms = Object.entries(day.sources || {}).reduce((sum, [source, value]) => sum + (source === "legacy" ? 0 : Math.max(0, Number(value) || 0)), 0);
+    return Math.floor(Math.min(86400e3, ms) / 1000);
+  }
   const studyMinutes = (date = studyDay(), days = studyDays()) => minutesOf(days[date]);
+  // What a day's own study lets the player bet: PER_MINUTE a minute, by the second.
+  const studyAllowance = (date = studyDay(), days = studyDays()) => Math.floor((secondsOf(days[date]) * PER_MINUTE) / 60);
   const stakedName = () => "aiglish_casino_staked_" + uid();
   // What was bet on each of the last days: { "2026-11-03": 300, … } (older forms: { day, amount },
   // and { days, carried }, of which only the days are used).
@@ -226,7 +235,7 @@
     const left = {};
     for (let day = -REPLAY_DAYS; day <= -1; day++) {
       const key = dayKey(day);
-      if (key >= CARRY_FROM) left[day] = studyMinutes(key, days) * PER_MINUTE;
+      if (key >= CARRY_FROM) left[day] = studyAllowance(key, days);
       let spend = bets[key] || 0;
       for (let origin = -REPLAY_DAYS; origin <= day && spend > 0; origin++) {
         const own = left[origin] || 0,
@@ -251,13 +260,13 @@
     if (!real()) return Infinity;
     const days = studyDays(),
       bets = stakedDays();
-    return Math.max(0, carriedInto(days, bets) + studyMinutes(studyDay(), days) * PER_MINUTE - stakedOn(studyDay(), bets));
+    return Math.max(0, carriedInto(days, bets) + studyAllowance(studyDay(), days) - stakedOn(studyDay(), bets));
   };
   // What a bet may be now: the balance, and on points no more than today's allowance.
   const stakeRoom = () => Math.min(balance(), allowance());
   // Minutes more to study before `amount` can be bet.
   const minutesFor = (amount) => Math.max(1, Math.ceil((amount - allowance()) / PER_MINUTE));
-  const studyHint = (amount) => "今日賭けられるのは勉強1分につき" + PER_MINUTE + "ptまでです（使い残しは次の日に持ち越せて、2日前の分からは半分ずつに減ります）。あと" + minutesFor(amount) + "分勉強すると賭けられます。";
+  const studyHint = (amount) => "今日賭けられるのは勉強1秒につき1pt（1分で" + PER_MINUTE + "pt）までです（使い残しは次の日に持ち越せて、2日前の分からは半分ずつに減ります）。あと" + minutesFor(amount) + "分勉強すると賭けられます。";
   const allowText = () => (real() ? "今日あと " + fmt(allowance()) + "pt 賭けられます（今日の勉強 " + studyMinutes() + "分" + (carriedLeft() > 0 ? "・持ち越し " + fmt(carriedLeft()) + "pt を含む" : "") + "）" : "");
   const unit = () => (real() ? "pt" : "枚");
   // Today's running total (Japan time), kept apart for points and practice chips.

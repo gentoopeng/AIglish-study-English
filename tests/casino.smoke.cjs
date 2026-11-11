@@ -224,7 +224,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     });
     assert.equal(await tab.locator("[data-casino-unit]").innerText(), "所持ポイント");
     assert.equal(await tab.locator("[data-casino-balance]").innerText(), "300pt");
-    // Points are bet only after studying: 100pt for each minute measured today. With no study
+    // Points are bet only after studying: 1pt for each second (60pt a minute) measured today. With no study
     // yet nothing can be bet, and the table says how long to study.
     const studied = (minutes) =>
       page.evaluate((m) => {
@@ -245,13 +245,13 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.setViewportSize({ width: 375, height: 740 });
     await tab.locator(".mode-blackjack").click();
     await bj.waitFor();
-    assert.match(await bj.locator(".cs-study").innerText(), /勉強1分につき100ptまで.*あと1分勉強すると賭けられます/);
+    assert.match(await bj.locator(".cs-study").innerText(), /勉強1秒につき1pt（1分で60pt）まで.*あと1分勉強すると賭けられます/);
     assert.equal(await bj.getByRole("button", { name: "配る" }).isDisabled(), true);
     await bj.getByRole("button", { name: "ブラックジャックを閉じる" }).click();
-    // One minute: up to 100pt today.
+    // One minute: up to 60pt today.
     await studied(1);
-    assert.equal(await tab.locator("[data-casino-allow]").innerText(), "今日あと 100pt 賭けられます（今日の勉強 1分）");
-    assert.equal(await page.evaluate(() => window.Casino.stakeRoom()), 100);
+    assert.equal(await tab.locator("[data-casino-allow]").innerText(), "今日あと 60pt 賭けられます（今日の勉強 1分）");
+    assert.equal(await page.evaluate(() => window.Casino.stakeRoom()), 60);
     // Ten hours, for the rest of this test.
     await studied(600);
     await stacked(["Ts", "Td", "7h", "9c"]);
@@ -265,7 +265,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const keys = await page.evaluate(() => Object.keys(window.__wallet["users/casino-a/learningPoints/main"].poker));
     assert.equal(keys.length, 1);
     // The 60 bet came off today's allowance.
-    assert.equal(await page.evaluate(() => window.Casino.allowance()), 600 * 100 - 60);
+    assert.equal(await page.evaluate(() => window.Casino.allowance()), 600 * 60 - 60);
     assert.match(keys[0], /^casino:blackjack:.+:bet$/);
     // Points bet in the casino feed the shared jackpots (1.5% and 1% of what was bet).
     await page.waitForFunction(() => window.__wallet["shared/casino_jackpot"]?.bet === 60);
