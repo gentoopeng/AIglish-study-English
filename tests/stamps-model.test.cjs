@@ -122,3 +122,18 @@ test("text design: layers, fonts and colours are kept in range", () => {
   assert.equal(M.cleanDesign({ bg: { color: "#00FF00" } }).bg.color, "#00ff00");
   assert.ok(M.FONTS.length >= 5);
 });
+
+test("送信取り消し: only one's own message or stamp, it stays as unsent and says nothing", () => {
+  let r = L.say(null, { id: "m1", from: "a", to: "b", text: "ひみつ", at: 1 });
+  r = L.stamp(r, { id: "s1", from: "a", to: "b", stamp: "abcdefgh12", at: 2 });
+  r = L.send(r, { id: "g1", from: "a", to: "b", amount: 10, kind: "give", note: "x", at: 3 });
+  const out = L.unsend(r, { id: "m1", by: "a" });
+  assert.deepEqual(out.entries[0], { id: "m1", kind: "unsent", from: "a", to: "b", at: 1 });
+  assert.equal(JSON.stringify(out).includes("ひみつ"), false);
+  assert.equal(L.unsend(out, { id: "s1", by: "a" }).entries[1].kind, "unsent");
+  assert.equal(L.unsend(out, { id: "m1", by: "a" }).entries[0].kind, "unsent", "twice is harmless");
+  assert.throws(() => L.unsend(r, { id: "m1", by: "b" }), /自分が送った/);
+  assert.throws(() => L.unsend(r, { id: "g1", by: "a" }), /取り消せません/, "money cannot be taken back");
+  assert.throws(() => L.unsend(r, { id: "nope", by: "a" }), /取り消せません/);
+  assert.equal(r.entries[0].kind, "message", "the record given is not changed");
+});

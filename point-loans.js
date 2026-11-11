@@ -270,6 +270,22 @@
     });
     remember(key, written);
   }
+  // 送信取り消し of one's own message or stamp.
+  async function unsend(other, otherName, entryId) {
+    ready();
+    const me = uid(),
+      key = L.pairKey(me, other),
+      at = Date.now();
+    const written = await window.fbRunTransaction(window.db, async (tx) => {
+      const snap = await tx.get(pairRef(key));
+      if (!snap.exists()) throw Error("この送信は取り消せません。");
+      const record = shell(L.unsend(snap.data(), { id: entryId, by: me }), me, other, otherName);
+      tx.set(pairRef(key), record);
+      touch(tx, me, other, otherName, key, at);
+      return record;
+    });
+    remember(key, written);
+  }
   // A stamp as a line of talk (the picture itself is read from the stamp).
   async function sendStamp(other, otherName, stampId) {
     ready();
@@ -639,7 +655,7 @@
         );
         // The last line of the talk, as in a chat list.
         const line = rec?.entries?.[rec.entries.length - 1];
-        if (line) b.append(node("small", "loans-last", line.kind === "message" ? line.text : line.kind === "stamp" ? "スタンプ" : line.kind === "gift" ? fmt(line.amount) + "pt 届きました" : line.kind === "give" ? fmt(line.amount) + "pt " + (line.from === me ? "あげました" : "もらいました") : fmt(line.amount) + "pt の記録"));
+        if (line) b.append(node("small", "loans-last", line.kind === "message" ? line.text : line.kind === "stamp" ? "スタンプ" : line.kind === "unsent" ? "送信を取り消しました" : line.kind === "gift" ? fmt(line.amount) + "pt 届きました" : line.kind === "give" ? fmt(line.amount) + "pt " + (line.from === me ? "あげました" : "もらいました") : fmt(line.amount) + "pt の記録"));
         if (line) b.append(node("time", "loans-time", dayOf(line.at) === dayOf(Date.now()) ? clock(line.at) : dayOf(line.at)));
         // New lines from the other side since I last looked, as a count (a record not read yet: 新着).
         const fresher = rec ? rec.entries.filter((e) => e.from !== me && (e.at || 0) > (last[key] || 0)).length : 0;
@@ -998,8 +1014,10 @@
         }
         const mine = e.from === me,
           li = node("li", "talk-row is-" + (mine ? "mine" : "theirs") + " is-" + e.kind + (L.isMoney(e) || e.kind === "give" || e.kind === "gift" ? (mine ? " is-out" : " is-in") : e.kind === "charge" ? " is-out" : ""));
-        const bubble = e.kind === "stamp" ? window.Stamps?.bubble(e.stamp) || node("div", "talk-card", "スタンプ") : node("div", e.kind === "message" ? "talk-bubble" : "talk-card");
-        if (e.kind === "message") bubble.textContent = e.text;
+        const bubble = e.kind === "unsent" ? node("div", "talk-unsent", mine ? "送信を取り消しました" : "相手が送信を取り消しました") : e.kind === "stamp" ? window.Stamps?.bubble(e.stamp) || node("div", "talk-card", "スタンプ") : node("div", e.kind === "message" ? "talk-bubble" : "talk-card");
+        if (e.kind === "unsent") {
+          // (nothing of the line is kept)
+        } else if (e.kind === "message") bubble.textContent = e.text;
         else if (e.kind === "stamp") {
           // (the picture is the whole line)
         } else {
@@ -1073,6 +1091,29 @@
         }
         lastFrom = e.from;
         li.append(bubble, meta);
+        // 送信取り消し: tapping one's own message or stamp shows the button; the line stays as "unsent".
+        if (mine && !casino && !admin && (e.kind === "message" || e.kind === "stamp")) {
+          bubble.classList.add("is-unsendable");
+          bubble.onclick = () => {
+            const open = li.querySelector(".talk-unsend");
+            if (open) return open.remove();
+            const b = node("button", "talk-unsend", "送信を取り消す");
+            b.type = "button";
+            b.onclick = async () => {
+              if (!window.confirm("この送信を取り消します。相手の画面からも消えます。")) return;
+              b.disabled = true;
+              try {
+                await unsend(other, name, e.id);
+                current = known(key) || current;
+                paint();
+              } catch (error) {
+                window.showToast?.(error?.message || "取り消せませんでした。", "error");
+                b.disabled = false;
+              }
+            };
+            li.append(b);
+          };
+        }
         log.append(li);
       }
       if (!rec.entries.length) log.append(node("li", "loans-empty", fresh ? (casino || admin ? "まだ記録はありません。" : "まだトークはありません。メッセージや「＋」から始められます。") : "読み込んでいます…"));
@@ -1205,5 +1246,5 @@
     });
     window.addEventListener("cloud-quota-paused", stopInbox);
   });
-  window.PointLoans = Object.freeze({ open, person, send, ask, talk, sendStamp, buyStamp, submitStamp, reviewStamp, pay, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
+  window.PointLoans = Object.freeze({ open, person, send, ask, talk, sendStamp, unsend, buyStamp, submitStamp, reviewStamp, pay, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
 })();
