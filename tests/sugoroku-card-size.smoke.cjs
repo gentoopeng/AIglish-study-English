@@ -1,7 +1,7 @@
 // Requires Playwright, Chromium and a running local HTTP server.
 // Run: node tests/sugoroku-card-size.smoke.cjs
-// The bingo card keeps one size: it does not change when the 出目 picker, the item bag or the ヘルモード badge
-// come and go (it used to be measured again with whatever was showing); only a new screen size changes it.
+// The bingo card takes the room the screen leaves (the whole width on a tall phone) and is always a square whose
+// cells are round; a shorter screen gives a smaller card, and it fits without scrolling.
 const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
 const base = process.env.APP_URL || "http://127.0.0.1:8000";
@@ -53,19 +53,21 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
     assert.ok(Math.abs(sq.cell[0] - sq.cell[1]) <= 1, "round cells " + JSON.stringify(sq));
     assert.ok(sq.lastBottom <= 0, "the last row is inside the card " + JSON.stringify(sq));
 
-    // The same card with a bag of items (the item row shows), after taking ぴったり (the picker of faces shows).
+    // A tall phone gives the card the whole width (it is not held back for rows that may come).
+    const bodyW = await page.evaluate(() => document.querySelector(".sg-body").clientWidth);
+    assert.equal(plain, bodyW, "the card is as wide as the screen allows");
+    // The card keeps its shape (a square) with the rows below it showing: the bag, the 出目 picker, the ヘルモード badge.
     await open({ items: ["dice2", "dice3", "exact", "guard", "x2"], bonus: [], pending: null, hell: 0 });
-    const withBag = await width();
+    await width();
     await screen.locator('.sg-item[data-item="exact"]').click();
-    const withPicker = await width();
-    await screen.locator('.sg-item[data-item="exact"]').click();
-    const picked = await width();
-    // ヘルモード (the badge shows).
+    await width();
+    const withPicker = await shape();
+    assert.equal(withPicker.card[0], withPicker.card[1], "square with the picker " + JSON.stringify(withPicker));
+    assert.equal(withPicker.slider[1], withPicker.card[1]);
     await open({ items: [], hell: 60, pending: null, bonus: [] });
-    const hell = await width();
-    await open({ items: [], hell: 0, pending: null, bonus: [] });
-    const calm = await width();
-    assert.deepEqual({ withBag, withPicker, picked, hell, calm }, { withBag: plain, withPicker: plain, picked: plain, hell: plain, calm: plain }, "one size whatever shows");
+    await width();
+    const hell = await shape();
+    assert.equal(hell.card[0], hell.card[1], "square in ヘルモード " + JSON.stringify(hell));
 
     // A new screen size does change it, and it fits without scrolling.
     await page.setViewportSize({ width: 375, height: 640 });
@@ -74,7 +76,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice";
     const fits = await page.evaluate(() => { const d = document.querySelector("dialog.casino-screen.is-sugoroku"); return d.scrollHeight <= d.clientHeight + 1; });
     assert.ok(fits, "fits the shorter screen");
     assert.deepEqual(errors, []);
-    console.log("PASS: the bingo card keeps one size while items, the 出目 picker and the ヘルモード badge come and go");
+    console.log("PASS: the bingo card is a full-width square on a tall phone, stays square with the picker and the badge, and shrinks to fit a short screen");
   } finally {
     await browser.close();
   }
