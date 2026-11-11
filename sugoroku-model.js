@@ -264,7 +264,7 @@
   // Which copy of a game is further on: counts a roll and a purchase (a save from before has only its rolls).
   const revOf = (state) => (Number.isFinite(state?.rev) && state.rev >= 0 ? state.rev : Number(state?.rolls) || 0);
   function newState() {
-    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, best: 0, jps: 0, sjps: 0, shared: 0, pending: null, bonus: [], jpWait: [], items: [], hell: 0, rev: 0 };
+    return { v: 3, pos: 0, stake: 0, laps: 0, rolls: 0, bet: 0, won: 0, balls: 0, bingos: 0, best: 0, jps: 0, sjps: 0, shared: 0, pending: null, queue: [], bonus: [], jpWait: [], items: [], hell: 0, rev: 0 };
   }
   // A player's own state; an older save (with its own card) keeps its place and counts.
   function valid(state) {
@@ -279,10 +279,17 @@
       Number.isFinite(state.won)
     );
   }
+  // The event games waiting in a batch: known games only, with a whole bet; anything else is dropped.
+  const GAMES = ["blackjack", "dice", "chinchiro"];
+  const cleanQueue = (queue) =>
+    (Array.isArray(queue) ? queue : [])
+      .filter((g) => g && GAMES.includes(g.game) && Number.isFinite(g.bet) && g.bet > 0 && g.bet <= 100000)
+      .slice(0, 50)
+      .map((g) => ({ game: g.game, bet: Math.floor(g.bet), ...(g.plain === true ? { plain: true } : {}), ...(g.x2 === true ? { x2: true } : {}) }));
   function upgrade(state) {
     const { card, marks, lines, cards, ...rest } = state;
     const count = (k) => (Number.isFinite(rest[k]) && rest[k] >= 0 ? rest[k] : 0);
-    return { ...newState(), ...rest, v: 3, bingos: count("bingos"), best: count("best"), jps: count("jps"), sjps: count("sjps"), shared: count("shared"), bonus: Array.isArray(rest.bonus) ? rest.bonus : [], items: itemsOf({ items: [...itemsOf(rest), ...(count("guard") > 0 ? ["guard"] : [])] }), hell: Math.min(RULES.hellLaps * SIZE, count("hell")), rev: revOf(rest), jpWait: Array.isArray(rest.jpWait) ? rest.jpWait.filter((k) => k === "jp" || k === "sjp") : [] };
+    return { ...newState(), ...rest, v: 3, queue: cleanQueue(rest.queue), bingos: count("bingos"), best: count("best"), jps: count("jps"), sjps: count("sjps"), shared: count("shared"), bonus: Array.isArray(rest.bonus) ? rest.bonus : [], items: itemsOf({ items: [...itemsOf(rest), ...(count("guard") > 0 ? ["guard"] : [])] }), hell: Math.min(RULES.hellLaps * SIZE, count("hell")), rev: revOf(rest), jpWait: Array.isArray(rest.jpWait) ? rest.jpWait.filter((k) => k === "jp" || k === "sjp") : [] };
   }
   const isOpen = (card, i) => card.owners[i] !== "";
   const reach = (card) => LINES.map((_, i) => i).filter((i) => LINES[i].filter((c) => !isOpen(card, c)).length === 1);
@@ -433,6 +440,17 @@
     const base = money(score * game.mult);
     return game.x2 ? base + Math.min(base, money(RULES.x2Cap * (game.bet || 100))) : base;
   }
+  // The next event game of a batch: it moves from state.queue to state.pending (played and settled as any other).
+  function nextQueued(before) {
+    const queue = Array.isArray(before.queue) ? before.queue : [];
+    if (before.pending || !queue.length) throw Error("nothing queued");
+    const state = clone(before);
+    state.queue = cleanQueue(state.queue);
+    if (!state.queue.length) throw Error("nothing queued");
+    state.pending = state.queue.shift();
+    state.rev = revOf(before) + 1;
+    return state;
+  }
   // The first mini game waiting, finished with what was done; done === null when it was left.
   function settleBonus(before, done) {
     if (!before.bonus?.length) throw Error("no bonus");
@@ -503,11 +521,20 @@
   // `use`: { items: [ids to use before this roll], face: 1-6 for ぴったり }.
   function roll(before, sharedCard, cost, random, me = "me", use = {}) {
     if (!RULES.costs.includes(cost)) throw Error("bad cost");
-    if (before.pending || before.bonus?.length) throw Error("a game is waiting");
+    // まとめて振る (use.batch): the mini games waiting in state.bonus do not stop the next roll, and an event game that
+    // would start is put in state.queue instead of state.pending, to be played one by one afterwards. A game
+    // waiting on the screen (state.pending) or a queue left from before still stops a roll that is not part of a batch.
+    const batch = use?.batch === true;
+    if (before.pending || (!batch && (before.bonus?.length || before.queue?.length))) throw Error("a game is waiting");
     const state = clone(before),
       card = clone(sharedCard),
       events = [];
     let gain = 0;
+    // An event game to play: now (on the screen), or in a batch, later in turn.
+    const wait = (game) => {
+      if (batch) state.queue = [...(Array.isArray(state.queue) ? state.queue : []), game];
+      else state.pending = game;
+    };
     state.rev = revOf(before) + 1;
     state.rolls++;
     state.bet += cost;
@@ -591,8 +618,8 @@
       }
       if (slot.event) {
         // A plain game for the bet: a win pays as the game does, a loss takes the bet, no ball.
-        state.pending = { game: slot.event, bet: cost, plain: true, ...(picked.x2 ? { x2: true } : {}) };
-        events.push({ t: "game", game: slot.event, bet: cost, plain: true });
+        wait({ game: slot.event, bet: cost, plain: true, ...(picked.x2 ? { x2: true } : {}) });
+        events.push({ t: "game", game: slot.event, bet: cost, plain: true, ...(batch ? { queued: true } : {}) });
       }
     } else if (kind === "accident") {
       const { index, slot } = pick(RULES.accident, random);
@@ -627,8 +654,8 @@
         events.push({ t: "sure", amount });
         gain += ball(state, card, me, random, events, cost);
       } else {
-        state.pending = { game: slot, bet: cost, ...(picked.x2 ? { x2: true } : {}) };
-        events.push({ t: "game", game: slot, bet: cost });
+        wait({ game: slot, bet: cost, ...(picked.x2 ? { x2: true } : {}) });
+        events.push({ t: "game", game: slot, bet: cost, ...(batch ? { queued: true } : {}) });
       }
     }
     // 倍がけ: what this roll paid or took (the balls and wheels it ran; not a part of a line owed to
@@ -779,7 +806,7 @@
       jackpots: events.filter((e) => e.t === "jackpot").map((e) => e.kind),
     };
   }
-  const api = { RULES, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, kindNow, itemsOf, revOf, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, settleBonus, bonusGain, gameScore, sum, reach };
+  const api = { RULES, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, kindNow, itemsOf, revOf, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, nextQueued, settleBonus, bonusGain, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);
