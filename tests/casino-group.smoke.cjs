@@ -43,10 +43,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
         return true;
       });
       await page.exposeFunction("__gtSubscribe", async (path) => {
-        listeners.set(id, { page, key: path });
+        // (A page can follow several documents: its own list of loans, as well as the room.)
+        listeners.set(id + "|" + path, { page, key: path });
         return docs.get(path) || null;
       });
-      await page.exposeFunction("__gtUnsubscribe", () => listeners.delete(id));
+      await page.exposeFunction("__gtUnsubscribe", (path) => listeners.delete(id + "|" + path));
       await page.goto(base);
       await page.getByRole("button", { name: "ゲストで試す" }).click();
       await page.waitForFunction(() => window.__learningBootReady === true);
@@ -94,7 +95,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
           __gtSubscribe(path).then((value) => callback({ exists: () => !!value, data: () => value }));
           return () => {
             delete __gtListeners[path];
-            __gtUnsubscribe();
+            __gtUnsubscribe(path);
           };
         };
       }, id);
@@ -243,12 +244,12 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await screenOf(a, "dice").getByRole("button", { name: "これで勝負" }).click();
     await screenOf(b, "dice").locator(".cs-group-dice", { hasText: "group-a：決めました" }).waitFor();
     // The maker's phone goes quiet; the last to stand rolls for the dealer instead.
-    const away = listeners.get("group-a");
-    listeners.delete("group-a");
+    const away = [...listeners].filter(([k]) => k.startsWith("group-a|"));
+    away.forEach(([k]) => listeners.delete(k));
     await screenOf(b, "dice").getByRole("button", { name: "これで勝負" }).click();
     await screenOf(b, "dice").locator(".cs-result").waitFor();
     assert.ok(room().game.dealer);
-    listeners.set("group-a", away);
+    away.forEach(([k, v]) => listeners.set(k, v));
     await notify("pokerRooms/" + code3);
     // Each settles alone.
     await screenOf(a, "dice").locator(".cs-result").waitFor();

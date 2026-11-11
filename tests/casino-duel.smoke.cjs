@@ -43,10 +43,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
         return true;
       });
       await page.exposeFunction("__dlSubscribe", async (path) => {
-        listeners.set(id, { page, key: path });
+        // (A page can follow several documents: its own list of loans, as well as the room.)
+        listeners.set(id + "|" + path, { page, key: path });
         return docs.get(path) || null;
       });
-      await page.exposeFunction("__dlUnsubscribe", () => listeners.delete(id));
+      await page.exposeFunction("__dlUnsubscribe", (path) => listeners.delete(id + "|" + path));
       await page.goto(base);
       await page.getByRole("button", { name: "ゲストで試す" }).click();
       await page.waitForFunction(() => window.__learningBootReady === true);
@@ -93,7 +94,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
           __dlSubscribe(path).then((value) => callback({ exists: () => !!value, data: () => value }));
           return () => {
             delete __dlListeners[path];
-            __dlUnsubscribe();
+            __dlUnsubscribe(path);
           };
         };
       }, id);

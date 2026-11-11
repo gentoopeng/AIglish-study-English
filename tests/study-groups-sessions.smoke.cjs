@@ -527,9 +527,11 @@ const { chromium, webkit } = require("playwright"),
     assert.equal(rooms[0][1].groupId, groupId);
     assert.equal(Object.keys(rooms[0][1].players).length, 2);
     for (const p of [a, b]) await p.keyboard.press("Escape");
-    // No group listeners remain when the group dialog or battle closes.
-    assert.equal(await a.evaluate(() => Object.keys(__listeners).length), 0);
-    assert.equal(await b.evaluate(() => Object.keys(__listeners).length), 0);
+    // No group listeners remain when the group dialog or battle closes (what follows the player themselves stays:
+    // the people list on the users tab while it is on screen, and the player's list of loans and talks).
+    const groupListeners = () => Object.keys(__listeners).filter((k) => k !== "users" && !k.startsWith("pointLoanInbox/")).length;
+    assert.equal(await a.evaluate(groupListeners), 0);
+    assert.equal(await b.evaluate(groupListeners), 0);
     await b.getByRole("button", { name: "放課後の学習", exact: true }).click();
     await b.getByRole("button", { name: "メンバー", exact: true }).click();
     await b
@@ -540,7 +542,7 @@ const { chromium, webkit } = require("playwright"),
     await b.locator("dialog.is-talk[open]").waitFor();
     await b.getByRole("button", { name: "トークを閉じる" }).click();
     await b.evaluate(() => window.closeLibraryDialog());
-    await b.waitForFunction(() => Object.keys(__listeners).length === 0);
+    await b.waitForFunction(() => Object.keys(__listeners).filter((k) => k !== "users" && !k.startsWith("pointLoanInbox/")).length === 0);
     // Mid-deck durable checkpoint survives a real reload without replaying a swipe.
     await a.evaluate(() => {
       window.db = null;
