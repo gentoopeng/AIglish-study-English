@@ -104,7 +104,7 @@
   // played twice from two devices), and otherwise at most every 30 seconds and when the page is
   // hidden, to keep cloud writes few.
   const cloud = { key: null, at: 0, timer: 0, state: null };
-  const gate = (state) => JSON.stringify([state.pending || null, state.bonus || [], state.jpWait || [], state.items || []]);
+  const gate = (state) => JSON.stringify([state.pending || null, state.queue || [], state.bonus || [], state.jpWait || [], state.items || []]);
   function saveCloud() {
     clearTimeout(cloud.timer);
     cloud.timer = 0;
@@ -621,7 +621,7 @@
       };
       cloudGame.then(done, done);
       cloudGame.then((remote) => {
-        if (!remote || target !== view || view.busy || S.revOf(remote) <= S.revOf(view.state) || view.state.pending || view.state.bonus?.length) return;
+        if (!remote || target !== view || view.busy || S.revOf(remote) <= S.revOf(view.state) || view.state.pending || view.state.queue?.length || view.state.bonus?.length) return;
         view.state = remote;
         save(remote);
         hud();
@@ -651,7 +651,9 @@
       if (view) view.state = left.state;
     }
     if (view?.state.bonus?.length) await bonus();
+    // (a game left half way, or the games of a batch still queued, carry on)
     if (view?.state.pending) game();
+    else if (view?.state.queue?.length) await playQueue();
     else await collectNow();
   }
   // ヘルモード turns the squares round (normal → !, ! → normal, ★ → normal): redrawn when it starts and ends.
@@ -837,8 +839,13 @@
     view.go = node("button", "sg-go", "サイコロを振る");
     view.go.type = "button";
     view.go.dataset.sgRoll = "";
-    view.go.onclick = roll;
-    controls.append(view.go);
+    view.go.onclick = () => roll();
+    view.batchBtn = node("button", "sg-batch", "まとめて");
+    view.batchBtn.type = "button";
+    view.batchBtn.dataset.sgBatch = "open";
+    view.batchBtn.setAttribute("aria-label", "まとめて振る");
+    view.batchBtn.onclick = () => batchPicker();
+    controls.append(view.go, view.batchBtn);
     view.studyEl = node("p", "sg-study");
     view.studyEl.hidden = true;
 
@@ -954,7 +961,7 @@
     for (const id of held) counts[id] = (counts[id] || 0) + 1;
     view.armed.ids = view.armed.ids.filter((id) => counts[id]);
     if (!view.armed.ids.includes("exact")) view.armed.face = 0;
-    const locked = view.busy || !!view.state.pending;
+    const locked = view.busy || gameWaits(view.state);
     view.itemBar.replaceChildren();
     const kinds = Object.keys(ITEM_INFO).filter((id) => counts[id]);
     // No items: no row at all (the card gets the room).
@@ -995,7 +1002,7 @@
     fitCard();
   }
   function arm(id) {
-    if (view.busy || view.state.pending) return;
+    if (view.busy || gameWaits(view.state)) return;
     const ids = view.armed.ids;
     if (ids.includes(id)) view.armed.ids = ids.filter((x) => x !== id);
     else {
@@ -1044,7 +1051,7 @@
     paintKinds();
     fitCard();
     const needFace = view.armed.ids.includes("exact") && !view.armed.face;
-    view.go.disabled = view.busy || !!view.syncing || (short && !refill) || study || !!state.pending || needFace;
+    view.go.disabled = view.busy || !!view.syncing || (short && !refill) || study || gameWaits(state) || needFace;
     view.go.textContent = refill
       ? "練習チップを" + fmt(api.practiceStart) + "枚に戻す"
       : short
@@ -1059,6 +1066,8 @@
               ? "出目を選んでください"
               : "サイコロを振る";
     view.go.title = study ? api.studyHint(view.cost) : "";
+    // まとめて: at least two rolls must be possible.
+    view.batchBtn.disabled = view.go.disabled || short || study || !!state.bonus?.length || batchMax() < 2;
     if (view.studyEl) {
       view.studyEl.hidden = !api.real() || !api.allowance;
       if (!view.studyEl.hidden) view.studyEl.textContent = study ? api.studyHint(view.cost) : "今日あと " + fmt(api.allowance()) + "pt（" + Math.floor(api.allowance() / view.cost) + "回）振れます";
@@ -1210,17 +1219,191 @@
       layer.replaceChildren(box);
     });
   }
-  async function roll() {
+  // ---- まとめて振る -------------------------------------------------------------------------
+  // Many rolls at once: items are not used, the ガード goes on a big minus by itself, everything that can be quick is
+  // (a roll that makes a line or a jackpot is still shown in full), and the mini games and event games that come up
+  // are kept and played one after another at the end. Every roll is paid and saved as a single one is.
+  const BATCH_MAX = 20;
+  // How many rolls can be asked for: what is in the wallet and, on points, what today's study allows.
+  function batchMax() {
+    const cost = view.cost,
+      afford = Math.floor(api.balance() / cost),
+      allow = api.real() && api.allowance ? Math.floor(api.allowance() / cost) : Infinity;
+    return Math.max(0, Math.min(BATCH_MAX, afford, allow));
+  }
+  function batchPicker() {
+    if (!view || view.busy || gameWaits(view.state) || view.state.bonus?.length) return;
+    const max = batchMax();
+    if (max < 2) return;
+    const layer = view.layer;
+    layer.className = "sg-layer is-game is-batch";
+    layer.hidden = false;
+    let count = Math.min(5, max);
+    const box = node("div", "sg-game");
+    box.append(
+      node("p", "sg-wheel-title", "まとめて振る"),
+      node("p", "sg-game-rule", "サイコロとルーレットを、まとめて進めます。ミニゲームとカードゲームは、振り終わったあとに続けて遊べます。アイテムは使いません。ガードは、大きいマイナス（賭けの4倍以上など）のときだけ自動で使います。"),
+    );
+    const num = node("output", "sg-batch-num", count + "回");
+    const range = node("input");
+    Object.assign(range, { type: "range", min: 1, max, step: 1, value: count });
+    range.setAttribute("aria-label", "振る回数");
+    const total = node("p", "sg-game-rule sg-batch-total", "");
+    const set = (n) => {
+      count = Math.max(1, Math.min(max, Math.round(n)));
+      range.value = String(count);
+      num.textContent = count + "回";
+      total.textContent = "賭け 合計 " + fmt(count * view.cost) + api.unit() + "（最大 " + max + "回）";
+    };
+    const step = (text, label, d) => {
+      const b = node("button", "sg-game-btn sg-batch-step", text);
+      b.type = "button";
+      b.setAttribute("aria-label", label);
+      b.dataset.sgBatch = d > 0 ? "plus" : "minus";
+      b.onclick = () => set(count + d);
+      return b;
+    };
+    range.oninput = () => set(Number(range.value));
+    const row = node("div", "sg-batch-row");
+    row.append(step("−", "1回へらす", -1), num, step("＋", "1回ふやす", 1));
+    const quick = node("div", "sg-game-actions");
+    for (const n of [5, 10, max]) {
+      if (n > max || (n === max && (max === 5 || max === 10))) continue;
+      const b = node("button", "sg-game-btn", n === max ? "最大 " + n : String(n));
+      b.type = "button";
+      b.onclick = () => set(n);
+      quick.append(b);
+    }
+    const go = node("button", "sg-game-btn sg-batch-go", "振る");
+    go.type = "button";
+    go.dataset.sgBatch = "go";
+    go.onclick = () => {
+      layer.hidden = true;
+      rollMany(count);
+    };
+    const cancel = node("button", "sg-game-btn", "やめる");
+    cancel.type = "button";
+    cancel.dataset.sgBatch = "cancel";
+    cancel.onclick = () => (layer.hidden = true);
+    const actions = node("div", "sg-game-actions");
+    actions.append(go, cancel);
+    set(count);
+    box.append(row, range, ...(quick.children.length ? [quick] : []), total, actions);
+    layer.replaceChildren(box);
+  }
+  async function rollMany(count) {
+    const target = view;
+    if (!view || view.busy || gameWaits(view.state) || view.state.bonus?.length) return;
+    const cost = view.cost,
+      first = view.state,
+      money0 = api.balance(),
+      opts = { batch: true },
+      info = { rolls: 0, stopped: "" };
+    view.batching = true;
+    try {
+      for (let i = 0; i < count && view === target; i++) {
+        // Every roll looks again at what is left: an accident can take more than the bet, and the games waiting may
+        // still lose (a double, a ×3): a bet's worth twice over is kept back for each of them.
+        const hold = 2 * cost * (view.state.queue?.length || 0);
+        if (api.balance() < cost + hold) {
+          info.stopped = (api.real() ? "ポイント" : "チップ") + "が足りなくなったので止めました";
+          break;
+        }
+        if (api.real() && api.allowance && api.allowance() < cost) {
+          info.stopped = "今日の勉強で賭けられる分を使い切ったので止めました";
+          break;
+        }
+        if (!(await roll(opts))) {
+          info.stopped = "通信できなかったので止めました";
+          break;
+        }
+        info.rolls++;
+        // A jackpot that could not be paid yet stays waiting: no more rolls until it is (it is tried again on opening).
+        if (view?.state.jpWait?.length) {
+          info.stopped = "ジャックポットの受け取りを待っているので止めました";
+          break;
+        }
+      }
+    } finally {
+      if (view === target) {
+        view.batching = false;
+        view.fast = false;
+      }
+    }
+    if (view !== target) return;
+    if (!info.rolls) {
+      hud();
+      return say(info.stopped || "振れませんでした", "is-loss");
+    }
+    info.guarded = opts.guarded || 0;
+    await batchSummary(first, view.state, info, api.balance() - money0);
+    if (view !== target) return;
+    // Mini games first, then the event games (each as one waiting on its own: a game of this batch is never skipped).
+    if (view.state.bonus?.length) await bonus();
+    await playQueue();
+  }
+  function batchSummary(first, after, info, net) {
+    return new Promise((resolve) => {
+      const layer = view.layer;
+      layer.className = "sg-layer is-game is-batch";
+      layer.hidden = false;
+      const box = node("div", "sg-game");
+      box.append(node("p", "sg-wheel-title", info.rolls + "回 振りました"));
+      const list = node("div", "sg-batch-list");
+      const line = (label, value, cls) => {
+        const r = node("p", "sg-batch-line" + (cls ? " " + cls : ""));
+        r.append(node("span", "", label), node("b", "", value));
+        list.append(r);
+      };
+      line("合計", (net >= 0 ? "+" : "−") + fmt(Math.abs(net)) + api.unit(), net >= 0 ? "is-gain" : "is-loss");
+      const bingos = (after.bingos || 0) - (first.bingos || 0),
+        jp = (after.jps || 0) - (first.jps || 0),
+        sjp = (after.sjps || 0) - (first.sjps || 0);
+      if (bingos > 0) line("ビンゴ", bingos + "列", "is-hot");
+      if (jp > 0) line("JACKPOT", jp + "回", "is-hot");
+      if (sjp > 0) line("SUPER JACKPOT", sjp + "回", "is-hot");
+      if (info.guarded) line("ガードを使った", info.guarded + "回");
+      const minis = after.bonus?.length || 0,
+        games = after.queue?.length || 0;
+      if (minis) line("ミニゲーム", minis + "回 待っています");
+      if (games) line("カードゲーム", games + "回 待っています");
+      box.append(list);
+      if (info.stopped) box.append(node("p", "sg-game-rule", info.stopped));
+      const next = node("button", "sg-game-btn", minis + games ? "続けて遊ぶ" : "閉じる");
+      next.type = "button";
+      next.dataset.sgBatch = "next";
+      next.onclick = () => {
+        layer.hidden = true;
+        resolve();
+      };
+      const actions = node("div", "sg-game-actions");
+      actions.append(next);
+      box.append(actions);
+      layer.replaceChildren(box);
+      hud();
+    });
+  }
+  // A game is waiting to be played: the one on the screen, or the event games of a batch still queued.
+  const gameWaits = (state) => !!state.pending || !!state.queue?.length;
+  // A roll, or one roll of a batch (opts.batch: no items, the ガード is spent by itself on a big minus, the shown
+  // part is quick, and the games that would start are left in the queue). Resolves true when a roll was made.
+  async function roll(opts = {}) {
+    const batch = opts.batch === true;
     if (!view.busy && api.balance() < view.cost && !api.real() && api.resetPractice) {
       api.resetPractice();
-      return hud();
+      hud();
+      return false;
     }
-    if (view.busy || view.state.pending || api.balance() < view.cost) return;
-    if (api.real() && api.allowance && api.allowance() < view.cost) return hud();
+    // (in a batch the games it has queued so far do not stop the next roll)
+    if (view.busy || (batch ? view.state.pending : gameWaits(view.state)) || api.balance() < view.cost) return false;
+    if (api.real() && api.allowance && api.allowance() < view.cost) {
+      hud();
+      return false;
+    }
     const cost = view.cost,
       state = view.state,
       me = api.uid();
-    const use = useNow();
+    const use = batch ? { items: [], batch: true } : useNow();
     // Worked out at once on the card as last seen. Most rolls draw no ball and leave the card
     // alone, so they need no cloud round trip; a ball (or a part waiting for this player) does.
     // (A roll the rules refuse, e.g. two ways of moving, stops here and nothing is spent.)
@@ -1230,11 +1413,12 @@
       local = S.roll(state, view.card, cost, recorder(tape), me, use);
     } catch (error) {
       console.warn("[sugoroku] roll refused", error);
-      view.armed = { ids: [], face: 0 };
+      if (!batch) view.armed = { ids: [], face: 0 };
       hud();
-      return say("そのアイテムの組み合わせでは振れません。選び直してください", "is-loss");
+      say("そのアイテムの組み合わせでは振れません。選び直してください", "is-loss");
+      return false;
     }
-    view.armed = { ids: [], face: 0 };
+    if (!batch) view.armed = { ids: [], face: 0 };
     view.busy = true;
     hud();
     markHere();
@@ -1244,7 +1428,16 @@
     // A minus came and a ガード is held: the roll is shown up to the wheel's result, then the player chooses.
     // (Choosing "use" works the same roll out again with the same draws: everything before the minus is the same.)
     const minusAt = S.itemsOf(state).includes("guard") ? local.events.findIndex((e) => e.t === "minus") : -1;
-    if (minusAt >= 0) {
+    if (minusAt >= 0 && batch) {
+      // In a batch nobody is asked: the ガード is spent on a big minus (4 times the bet or more, the player's own balls or
+      // items lost, ヘルモード) and kept for the small ones, the same draws worked out again with it.
+      const m = local.events[minusAt];
+      if ((m.amount || 0) >= 4 * cost || m.balls || m.items || m.hell) {
+        use.guard = true;
+        local = S.roll(state, view.card, cost, replay(tape), me, use);
+        opts.guarded = (opts.guarded || 0) + 1;
+      }
+    } else if (minusAt >= 0) {
       const ballFirst = local.events.slice(0, minusAt).some((e) => e.t === "ball");
       preCount = ballFirst ? 0 : minusAt;
       if (preCount) {
@@ -1269,7 +1462,7 @@
       // give the same die, steps and wheels up to the first ball, so the die lands at once.
       const k = local.events.findIndex((e) => e.t === "ball");
       shownEarly = Math.max(preCount, k < 0 ? local.events.length : k);
-      view.fast = false;
+      view.fast = batch;
       view.hot = false;
       view.body.classList.add("is-spinning");
       view.state = liveEarly;
@@ -1286,7 +1479,7 @@
         place(state.pos, false);
         hud();
         say("通信できませんでした。もう一度振ってください", "is-loss");
-        return;
+        return false;
       }
       await early;
     }
@@ -1294,17 +1487,21 @@
     out.collected = collected;
     save(out.state);
     pay(out, cost);
+    // A roll that makes a line or a jackpot is shown in full, the others of a batch go by quickly.
+    if (batch) view.fast = !out.events.some((e) => e.t === "line" || e.t === "jackpot");
     await payJackpots(out);
     if (collected) out.events.push({ t: "share", amount: collected });
     await run(out, liveEarly, before, people, result.log, shownEarly);
+    if (batch) return true;
     if (view?.state.bonus?.length) await bonus();
     if (view?.state.pending) game();
+    return true;
   }
   // A part of other players' lines waiting for this player is taken as soon as it is seen (on
   // opening, or when the card changes), not only with the next ball.
   async function collectNow() {
     const me = api.uid();
-    if (!view || view.busy || !view.online || !(view.card.owed?.[me] > 0) || view.state.pending || view.state.bonus?.length) return;
+    if (!view || view.busy || !view.online || !(view.card.owed?.[me] > 0) || view.state.pending || view.state.queue?.length || view.state.bonus?.length) return;
     view.busy = true;
     hud();
     let result;
@@ -1375,7 +1572,7 @@
     const target = view;
     view.busy = true;
     if (!skip) {
-      view.fast = false;
+      if (!view.batching) view.fast = false;
       view.hot = false;
     }
     view.body.classList.add("is-spinning");
@@ -1390,7 +1587,8 @@
     view.lineNames = null;
     try {
       await show(out.events.slice(skip), live);
-      if (target === view && view.lineBalls) await splitSheet(out.events.slice(skip), view.lineBalls, view.lineNames || {});
+      // (in a batch the sheet would stop it: who got what is in the end of the batch, with the card)
+      if (target === view && view.lineBalls && !view.batching) await splitSheet(out.events.slice(skip), view.lineBalls, view.lineNames || {});
     } finally {
       if (target === view) {
         view.state = out.state;
@@ -2028,6 +2226,24 @@
     view.busy = false;
     await run(out, { ...state, pending: null }, before, people, result.log);
     if (view?.state.bonus?.length) await bonus();
+    // The next game of a batch (the one that was waiting on this one, or a queue found on opening).
+    const next = view?.gameDone;
+    if (view) view.gameDone = null;
+    if (next) next();
+    else if (view?.state.queue?.length) await playQueue();
+  }
+  // The event games of a batch, one after another: each is moved from the queue to the screen and played as any
+  // other event game, and the next comes when it is settled.
+  async function playQueue() {
+    const target = view;
+    while (view === target && view?.state.queue?.length && !view.state.pending && !view.busy) {
+      view.state = S.nextQueued(view.state);
+      save(view.state);
+      await new Promise((resolve) => {
+        view.gameDone = resolve;
+        game();
+      });
+    }
   }
 
   // ---- Mini games after a line ------------------------------------------------------------

@@ -419,6 +419,55 @@ test("the ふつうのマス roulette pays back about 0.95 on its own", () => {
   assert.ok(ev > 0.93 && ev < 0.97, "wheel pays back " + ev.toFixed(3));
 });
 
+// まとめて振る: a batch roll goes on while mini games wait, and an event game it meets is queued, not started.
+test("a batch roll: mini games waiting do not stop it, the event game goes to the queue", () => {
+  const card = S.newCard(seq([0]));
+  const onEvent = { ...S.newState(), pos: at("event") - 1 };
+  // The ★ square, the event wheel on the dice game (index 1).
+  const queued = S.roll(onEvent, card, 100, seq([0, 1]), "amy", { batch: true });
+  assert.equal(queued.state.pending, null, "nothing on the screen");
+  assert.deepEqual(queued.state.queue, [{ game: "dice", bet: 100 }]);
+  assert.equal(queued.events.find((e) => e.t === "game").queued, true);
+  // A second one joins the first (in turn).
+  const again = S.roll({ ...queued.state, pos: at("event") - 1 }, card, 100, seq([0, 0]), "amy", { batch: true });
+  assert.deepEqual(again.state.queue.map((g) => g.game), ["dice", "blackjack"]);
+  // A mini game waiting does not stop a batch roll, but it stops a roll that is not part of one.
+  const zero = S.RULES.normal[100].findIndex((x) => x.x === 0 && !x.ball && !x.game && !x.event && !x.kakuhen && !x.item);
+  const withBonus = { ...S.newState(), pos: at("normal") - 1, bonus: [{ game: "timer", mult: 1, bet: 100 }] };
+  assert.equal(S.roll(withBonus, card, 100, seq([0, zero]), "amy", { batch: true }).state.bonus.length, 1);
+  assert.throws(() => S.roll(withBonus, card, 100, seq([0, zero]), "amy"), /a game is waiting/);
+  // The queue stops a roll that is not part of a batch (the games are played first), and a game on the screen stops both.
+  assert.throws(() => S.roll(queued.state, card, 100, seq([0, zero]), "amy"), /a game is waiting/);
+  assert.throws(() => S.roll({ ...S.newState(), pending: { game: "dice", bet: 100 } }, card, 100, seq([0, zero]), "amy", { batch: true }), /a game is waiting/);
+  // Normal rolls still start the game at once.
+  const plain = S.roll(onEvent, card, 100, seq([0, 1]), "amy");
+  assert.deepEqual(plain.state.pending, { game: "dice", bet: 100 });
+  assert.deepEqual(plain.state.queue, []);
+});
+
+test("the queued games come out in order, one at a time, and settle on their own bet", () => {
+  const card = S.newCard(seq([0]));
+  const state = { ...S.newState(), queue: [{ game: "dice", bet: 100 }, { game: "chinchiro", bet: 100, plain: true }] };
+  const first = S.nextQueued(state);
+  assert.deepEqual(first.pending, { game: "dice", bet: 100 });
+  assert.deepEqual(first.queue, [{ game: "chinchiro", bet: 100, plain: true }]);
+  assert.ok(S.revOf(first) > S.revOf(state), "a move, so it is saved to the cloud");
+  assert.throws(() => S.nextQueued(first), /nothing queued/, "not while one is on the screen");
+  assert.throws(() => S.nextQueued(S.newState()), /nothing queued/);
+  // Settled as any other: the bet is kept (a loss of ×2 pays back −1 × the bet).
+  const lost = S.settle(first, card, -2, seq([0]), "amy");
+  assert.equal(lost.gain, -100);
+  assert.equal(lost.state.pending, null);
+  assert.equal(lost.state.queue.length, 1, "the next one waits");
+});
+
+test("a queue read back is cleaned: known games with a whole bet, nothing else", () => {
+  const dirty = { ...S.newState(), queue: [{ game: "dice", bet: 100.7, plain: true }, { game: "poker", bet: 100 }, { game: "dice", bet: -5 }, null, { game: "chinchiro", bet: 1e9 }, { game: "blackjack", bet: 50, x2: true, extra: 1 }] };
+  assert.deepEqual(S.upgrade(dirty).queue, [{ game: "dice", bet: 100, plain: true }, { game: "blackjack", bet: 50, x2: true }]);
+  assert.deepEqual(S.upgrade({ ...S.newState(), queue: "bad" }).queue, []);
+  assert.deepEqual(S.upgrade({ ...S.newState() }).queue, []);
+});
+
 test("tapping counts up to the cap, and odd mini-game results score nothing", () => {
   assert.equal(S.gameScore("tap", 80), 800);
   assert.equal(S.gameScore("tap", 5000), S.RULES.games.tap.max * 10);
