@@ -246,6 +246,36 @@
     wrapper.append(button);
     return wrapper;
   }
+  // One user document as a row of the list (null: not listed – nobody active this week who is not a friend).
+  function makePerson(id, data) {
+    const stats = window.StudyTimeModel.readStats(data),
+      time = timestamp(data.lastActiveAt || stats.lastLoginAt || data.lastLoginAt || data.updatedAt);
+    const friend = (myFriendList || []).some((item) => item.code === id);
+    if (!friend && !(time > 0 && time <= Date.now() && Date.now() - time <= WEEK)) return null;
+    return {
+      id,
+      name: data.playerName || data.userName || data.name || id,
+      avatar: typeof data.avatar === "string" && data.avatar.length <= 48000 ? data.avatar : "",
+      timestamp: time,
+      friend,
+      today: window.StudyTimeModel.rankingSeconds(stats, "daily", Date.now()),
+      doc: { lastActiveAt: time },
+    };
+  }
+  // A friend's name, picture and last seen time kept on the device with the friend list.
+  function syncFriends(list) {
+    let changed = false;
+    for (const friend of myFriendList || []) {
+      const person = list.find((item) => item.id === friend.code);
+      if (person && (friend.name !== person.name || friend.customAvatar !== person.avatar || friend.timestamp !== person.timestamp)) {
+        friend.name = person.name;
+        friend.customAvatar = person.avatar;
+        friend.timestamp = person.timestamp;
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem("core_v4_friend_list", JSON.stringify(myFriendList));
+  }
   // A different account (or the first look) starts from that account's list kept on the device.
   function ensureOwner() {
     if (owner === uid()) return;
@@ -328,41 +358,14 @@
         const status = document.getElementById("usersStatus");
         if (status && users.length) status.textContent = "更新しています…";
         const visit = (id, data) => {
-            if (data.deleted) {
-              removed.add(id);
-              return;
-            }
-            if (id === "GUEST-000") return;
-            const stats = window.StudyTimeModel.readStats(data),
-              time = timestamp(
-                data.lastActiveAt ||
-                  stats.lastLoginAt ||
-                  data.lastLoginAt ||
-                  data.updatedAt,
-              );
-            const friend = (myFriendList || []).some(
-              (item) => item.code === id,
-            );
-            if (
-              !friend &&
-              !(time > 0 && time <= Date.now() && Date.now() - time <= WEEK)
-            )
-              return;
-            list.push({
-              id,
-              name: data.playerName || data.userName || data.name || id,
-              avatar:
-                typeof data.avatar === "string" && data.avatar.length <= 48000
-                  ? data.avatar
-                  : "",
-              timestamp: time,
-              friend,
-              today: window.StudyTimeModel.rankingSeconds(stats, "daily", Date.now()),
-              doc: {
-                lastActiveAt: time,
-              },
-            });
-          };
+          if (data.deleted) {
+            removed.add(id);
+            return;
+          }
+          if (id === "GUEST-000") return;
+          const person = makePerson(id, data);
+          if (person) list.push(person);
+        };
         const current = () =>
           version === cacheVersion &&
           uid() === account &&
@@ -392,27 +395,7 @@
           loadedAt = Date.now();
           shownFromCache = false;
           keepList(account, list, removed);
-          let changed = false;
-          for (const friend of myFriendList || []) {
-            const person = list.find((item) => item.id === friend.code);
-            if (
-              person &&
-              (friend.name !== person.name ||
-                friend.customAvatar !== person.avatar ||
-                friend.timestamp !== person.timestamp)
-            ) {
-              friend.name = person.name;
-              friend.customAvatar = person.avatar;
-              friend.timestamp = person.timestamp;
-              changed = true;
-            }
-          }
-          if (changed) {
-            localStorage.setItem(
-              "core_v4_friend_list",
-              JSON.stringify(myFriendList),
-            );
-          }
+          syncFriends(list);
           render();
         }
       } catch (error) {
@@ -470,12 +453,112 @@
         ? users.find((person) => person.id === id)
         : undefined,
   };
+  // ---- Live while the list is on screen ----------------------------------------------------
+  // Who is online changes on the screen as it happens: while the people list is shown (and the app is in front)
+  // one listener follows the users who checked in during the last 20 minutes (the app checks in every 5 minutes),
+  // so a change costs one read for each person who checks in, and the first look reads those users once. Nothing
+  // is listened to when the list is not on screen, in the background, or while the cloud quota is paused.
+  const LIVE_WINDOW = 20 * 60000,
+    LIVE_LIMIT = 40;
+  let liveStop = null,
+    liveOwner = "",
+    liveDraw = 0,
+    liveClock = 0;
+  function stopLive() {
+    try {
+      if (liveStop) liveStop();
+    } catch {}
+    liveStop = null;
+    liveOwner = "";
+    clearTimeout(liveDraw);
+    clearInterval(liveClock);
+    liveClock = 0;
+  }
+  function startLive() {
+    const account = uid();
+    if (liveStop && liveOwner !== account) stopLive();
+    if (
+      liveStop ||
+      account === "GUEST-000" ||
+      !account ||
+      document.visibilityState !== "visible" ||
+      currentActiveTabId !== "community" ||
+      document.getElementById("communityFriends")?.hidden ||
+      !window.db ||
+      !window.fbOnSnapshot ||
+      !window.fbQuery ||
+      !window.fbWhere ||
+      !window.fbCollection ||
+      window.FirestoreReadGuard?.paused?.()
+    )
+      return;
+    ensureOwner();
+    try {
+      const since = new Date(Date.now() - LIVE_WINDOW).toISOString(),
+        query = window.fbQuery(
+          window.fbCollection(window.db, "users"),
+          window.fbWhere("lastActiveAt", ">=", since),
+          ...(window.fbLimit ? [window.fbLimit(LIVE_LIMIT)] : []),
+        );
+      liveOwner = account;
+      liveStop = window.fbOnSnapshot(
+        query,
+        (snap) => {
+          if (uid() !== account || owner !== account) return stopLive();
+          let changed = false;
+          (typeof snap.docChanges === "function" ? snap.docChanges() : []).forEach((change) => {
+            const id = change.doc.id,
+              data = change.doc.data() || {};
+            if (id === "GUEST-000") return;
+            if (data.deleted) {
+              if (!deletedIds.has(id)) {
+                deletedIds.add(id);
+                users = users.filter((person) => person.id !== id);
+                changed = true;
+              }
+              return;
+            }
+            // (Leaving the 20 minutes is not a change: the row just ages on its own.)
+            if (change.type === "removed") return;
+            const person = makePerson(id, data);
+            if (!person) return;
+            const at = users.findIndex((item) => item.id === id);
+            if (at >= 0) users[at] = person;
+            else users.push(person);
+            changed = true;
+          });
+          if (!changed) return;
+          syncFriends(users);
+          keepList(account, users, deletedIds);
+          clearTimeout(liveDraw);
+          liveDraw = setTimeout(() => currentActiveTabId === "community" && render(), 250);
+        },
+        () => stopLive(),
+      );
+      // The online mark and "n分前" age with the clock: drawn again every 30 seconds while listening.
+      liveClock = setInterval(() => currentActiveTabId === "community" && render(), 30000);
+    } catch (error) {
+      console.warn("オンライン状況の自動更新は使えません", error);
+      stopLive();
+    }
+  }
   window.onTabChange((tab) => {
     if (tab === "community") {
       render();
-      if (!document.getElementById("communityFriends")?.hidden) refresh(false);
-    }
+      if (!document.getElementById("communityFriends")?.hidden) {
+        refresh(false);
+        startLive();
+      }
+    } else stopLive();
   });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      startLive();
+      heartbeat();
+    } else stopLive();
+  });
+  window.addEventListener("cloud-quota-paused", stopLive);
+  window.People.live = { start: startLive, stop: stopLive, active: () => !!liveStop };
   let heartbeatOwner = "",
     heartbeatAt = 0;
   async function heartbeat() {

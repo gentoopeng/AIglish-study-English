@@ -97,3 +97,9 @@ Firestore RESTのrunQueryを利用し、20件ごとに必要なフィールド�
 - Login warm-up selects up to ten random words from an already cached/current book and the configured loading-quiz range. Answers use the existing durable learning journal, flushing every five answers and on closing; no scan/download of other books.
 
 The new social features necessarily add reads when used. They do not remove existing study saves or change the quota limit; validate actual daily usage in Firebase after deployment.
+
+## 開いている間だけの自動反映（ユーザー一覧・ポイントの貸し借り）
+
+ユーザータブを表示している間（アプリが前面にあるとき）だけ、直近20分以内に更新した人（最大40人）を1つのリスナーで見る。最初に1回その人たちを読み、あとは更新した人1人につき1読取。タブを離れる・アプリが背面に行く・クラウド上限で停止中は、リスナーを止める。ポイントの貸し借りの一覧（自分用の1文書）は、アプリが前面にある間リスナーで見て、変更があればその内容から受け取りを進める（追加の読取なし）。10分ごとの確認は、つながりが切れたときの予備として残す。
+
+誰かが「オンライン」になる目安は、5分ごとの更新（ハートビート）で、これは変えていない。オンライン表示や「N分前」は、30秒ごとに描き直して古くなる。

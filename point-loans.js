@@ -889,15 +889,63 @@
     lastCollect = Date.now();
     collect().catch((error) => console.warn("[loans] collect", error));
   }
+  // Live: while the app is in front, the player's list (one document) is followed, so a request, a loan, a repayment
+  // or a line in a talk shows up as it is written, with no extra read (the change itself is the read). The 10-minute
+  // look above stays as the fallback. Nothing is followed in the background or while the cloud quota is paused.
+  let inboxStop = null,
+    inboxOwner = "",
+    collecting = Promise.resolve();
+  function stopInbox() {
+    try {
+      if (inboxStop) inboxStop();
+    } catch {}
+    inboxStop = null;
+    inboxOwner = "";
+  }
+  function inboxLive() {
+    const account = uid();
+    if (inboxStop && inboxOwner !== account) stopInbox();
+    if (inboxStop || account === "GUEST-000" || document.hidden || !window.db || typeof window.fbOnSnapshot !== "function" || window.FirestoreReadGuard?.paused?.()) return;
+    try {
+      inboxOwner = account;
+      inboxStop = window.fbOnSnapshot(
+        inboxRef(account),
+        (snap) => {
+          if (uid() !== account) return stopInbox();
+          const pairs = snap.exists() ? snap.data().pairs || {} : {};
+          try {
+            localStorage.setItem(inboxName(), JSON.stringify(pairs));
+          } catch {}
+          lastCollect = Date.now();
+          // One at a time, so two quick changes never claim the same line twice.
+          collecting = collecting.then(() => collect(pairs)).catch((error) => console.warn("[loans] live collect", error));
+        },
+        () => stopInbox(),
+      );
+    } catch (error) {
+      console.warn("[loans] live", error);
+      stopInbox();
+    }
+  }
   window.onAppLoaded?.(() => {
     const start = Date.now();
     const first = () => {
-      if (uid() !== "GUEST-000") return collectSoon(true);
+      if (uid() !== "GUEST-000") {
+        inboxLive();
+        return collectSoon(true);
+      }
       if (Date.now() - start < 600e3) setTimeout(first, 5000);
     };
     setTimeout(first, 1500);
     setInterval(() => collectSoon(true), 600e3);
-    document.addEventListener("visibilitychange", () => !document.hidden && collectSoon(false));
+    // (a different account, or the cloud back after a pause, starts the follow again)
+    setInterval(inboxLive, 30e3);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return stopInbox();
+      inboxLive();
+      collectSoon(false);
+    });
+    window.addEventListener("cloud-quota-paused", stopInbox);
   });
   window.PointLoans = Object.freeze({ open, person, send, ask, talk, pay, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
 })();
