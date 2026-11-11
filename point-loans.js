@@ -155,15 +155,18 @@
     remember(key, written);
   }
   // Adds what was sent to me into my wallet, once.
-  async function claim(key) {
+  async function claim(key, since) {
     const me = uid();
-    let got = [];
+    let got = [],
+      latest = null;
     const value = await window.fbRunTransaction(window.db, async (tx) => {
       const [walletSnap, pairSnap] = [await tx.get(walletRef(me)), await tx.get(pairRef(key))];
       got = [];
+      latest = null;
       if (!pairSnap.exists()) return null;
       const record = pairSnap.data(),
         due = L.unclaimed(record, me);
+      latest = record;
       remember(key, record);
       if (!due.length) return null;
       // (refund: my own loan offer came back, refused or taken back.)
@@ -177,7 +180,16 @@
       return walletWrite(tx, me, wallet, Math.max(0, (Number(wallet.balance) || 0) + due.reduce((a, e) => a + L.change(e), 0)));
     });
     after(value);
+    // What the other side wrote since `since` (a line, a request, an offer), for a notice: the points are
+    // announced on their own. (An array with a `news` list; callers that only want the points ignore it.)
+    if (since !== undefined && latest) got.news = news(latest, me, since).map((e) => ({ ...e, name: latest.names?.[e.from] || e.from }));
     return got;
+  }
+  // The lines of a record that the other side added after `since` and that are not money moving (that is said
+  // as points received): their words, requests and offers.
+  const NEWS = new Set(["message", "ask-lend", "ask-give", "ask-repay", "lend-offer"]);
+  function news(record, me, since) {
+    return (record.entries || []).filter((e) => e.from !== me && NEWS.has(e.kind) && (e.at || 0) > since);
   }
   // The casino as the other side: a loss that goes past the wallet (an accident in すごろくビンゴ)
   // is a loan from the casino that was spent at once (marked claimed, so it never reaches the
@@ -344,10 +356,23 @@
     const pairs = given || (await inbox()),
       last = seen(),
       got = [];
+    // A notice only for what is new and recent (not the whole of an old talk on the first look), and never for the
+    // talk that is open on screen: it shows there.
+    const fresh = Date.now() - 10 * 60e3,
+      said = [];
     for (const [key, pair] of Object.entries(pairs)) {
       if ((pair.at || 0) <= (last[key] || 0)) continue;
-      got.push(...(await claim(key)));
+      const lines = await claim(key, Math.max(last[key] || 0, fresh));
+      got.push(...lines);
+      if (key !== openKey) for (const e of lines.news || []) said.push({ key, e, name: e.name });
       markSeen(key, pair.at || Date.now());
+    }
+    for (const { key, e, name } of said.slice(-3)) {
+      const who = (name || "相手").replace(/さん$/, "") + "さん";
+      window.showToast?.(
+        e.kind === "message" ? who + "：" + String(e.text || "").slice(0, 40) : e.kind === "lend-offer" ? who + "から 貸し出しの提案が届きました" : who + "から お願いが届きました",
+        "info",
+      );
     }
     for (const g of got)
       window.showToast?.(
@@ -360,8 +385,10 @@
   }
 
   // ---- Screen ----------------------------------------------------------------------------
-  let dialog = null;
+  let dialog = null,
+    openKey = "";
   function closeDialog() {
+    openKey = "";
     dialog?._stop?.();
     dialog?.close();
     dialog?.remove();
@@ -501,6 +528,7 @@
       admin = other === ADMIN,
       who = casino || admin ? name : name + "さん";
     dialog = node("dialog", "study-points-dialog loans-dialog is-talk");
+    openKey = key;
     dialog.setAttribute("aria-label", who + "とのトーク");
     const shown = dialog;
     // Header: back to the list, their icon and name, their profile, close.
