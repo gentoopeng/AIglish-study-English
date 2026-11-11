@@ -91,7 +91,7 @@
       if (extra > 0) list = list.filter((e) => !(test(e) && extra-- > 0));
     };
     // (a stamp is a line of talk like any other: it counts with the messages and goes with them)
-    drop((e) => e.kind === "message" || e.kind === "stamp", MAX_MESSAGES);
+    drop((e) => e.kind === "message" || e.kind === "stamp" || e.kind === "unsent", MAX_MESSAGES);
     // (Finished requests only: an offer keeps its place until it is accepted, or refused and its points are back.)
     const finished = (e) => e.status && e.status !== "open" && (e.kind !== "lend-offer" || e.status === "done" || (refunded(e) && !!claimed?.[e.id]));
     if (list.length > MAX_ENTRIES) drop(finished, Math.max(0, MAX_ENTRIES - (list.length - list.filter(finished).length)));
@@ -135,6 +135,17 @@
     if (!line) throw Error("メッセージを入れてください。");
     if (from === to) throw Error("自分には送れません。");
     return add(record, { id, kind: "message", from, to, text: line, at });
+  }
+  // 送信取り消し: the sender takes back one of their own lines (a message or a stamp). It stays in its place as "unsent" with
+  // nothing of what it said; money, requests and the other person's lines cannot be taken back.
+  function unsend(record, { id, by }) {
+    const next = clone(record || { entries: [] });
+    const at = (next.entries || []).findIndex((e) => e.id === id);
+    const line = next.entries?.[at];
+    if (!line || (line.kind !== "message" && line.kind !== "stamp" && line.kind !== "unsent")) throw Error("この送信は取り消せません。");
+    if (line.from !== by) throw Error("自分が送ったものだけ取り消せます。");
+    if (line.kind !== "unsent") next.entries[at] = { id: line.id, kind: "unsent", from: line.from, to: line.to, at: line.at };
+    return next;
   }
   // A stamp sent as a line of talk (only its id: the picture is read from the stamp itself).
   function stamp(record, { id, from, to, stamp, at }) {
@@ -216,7 +227,7 @@
   // (And, for the lender, the points of a loan offer that was refused or taken back.)
   const unclaimed = (record, me) => (record?.entries || []).filter((e) => ((arrives(e) && e.to === me) || (refunded(e) && e.from === me)) && !record.claimed?.[e.id]);
   const openFor = (record, me) => (record?.entries || []).filter((e) => e.status === "open" && e.to === me);
-  const api = { change, arrives, MAX_ENTRIES, MAX_MESSAGES, MAX_TEXT, say, stamp, gift, trim, MAX_AMOUNT, RATES, MAX_RATE, refunded, accept, pairKey, net, owedBy, amountOf, dueOf, send, ask, close, unclaimed, openFor, isMoney };
+  const api = { change, arrives, MAX_ENTRIES, MAX_MESSAGES, MAX_TEXT, say, stamp, unsend, gift, trim, MAX_AMOUNT, RATES, MAX_RATE, refunded, accept, pairKey, net, owedBy, amountOf, dueOf, send, ask, close, unclaimed, openFor, isMoney };
   root.PointLoansModel = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window === "undefined" ? globalThis : window);

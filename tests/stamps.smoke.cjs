@@ -265,6 +265,21 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.doesNotMatch(await a.locator(".loans-dialog").innerText(), /0pt の記録/);
     await a.evaluate(() => window.PointLoans.close());
 
+    // 送信取り消し: B takes back a message (tap, button, confirm); A sees only that it was taken back; A cannot take back B's line.
+    await b.evaluate(() => window.PointLoans.talk("st-a", "st-a", "まちがえた"));
+    await b.evaluate(() => window.PointLoans.person("st-a", "st-a"));
+    const mineLine = b.locator(".talk-row.is-mine .talk-bubble", { hasText: "まちがえた" });
+    await mineLine.click();
+    b.once("dialog", (d) => d.accept());
+    await b.locator(".talk-unsend").click();
+    await b.locator(".talk-row.is-mine .talk-unsent").waitFor();
+    assert.equal(docs.get("pointLoans/st-a__st-b").entries.some((e) => e.text === "まちがえた"), false, "the words are gone from the record");
+    await a.evaluate(() => window.PointLoans.close());
+    await a.evaluate(() => window.PointLoans.person("st-b", "st-b"));
+    await a.locator(".talk-row.is-theirs .talk-unsent", { hasText: "相手が送信を取り消しました" }).waitFor();
+    const unsentId = docs.get("pointLoans/st-a__st-b").entries.find((e) => e.kind === "unsent").id;
+    assert.match(await a.evaluate(([i]) => window.PointLoans.unsend("st-b", "st-b", i).then(() => "", (e) => e.message), [unsentId]), /自分が送った/);
+    await b.evaluate(() => window.PointLoans.close());
     // ---- The maker edits: a higher price goes to the 運営 (the difference is held, the old price stays on sale) ---------------------
     await a.evaluate(() => window.Stamps.store());
     await dlg(a).locator(".stamps-card", { hasText: "ぱんだ" }).waitFor();
