@@ -39,10 +39,18 @@ const { chromium } = require("playwright"),
       window.fbGetDoc = async (ref) => (window.__reads.push(ref), { exists: () => false, data: () => ({}) });
       window.fbGetDocs = async () => ({ forEach() {}, docs: [] });
       window.fbSetDoc = async () => {};
+      // The talk with live-a: one line from them, which the player has not seen.
+      window.__line = (text) => ({ id: "m-" + text, kind: "message", from: "live-a", to: "live-me", text, at: Date.now() });
+      window.__record = { entries: [], names: { "live-a": "エー", "live-me": "ぼく" }, claimed: {}, updatedAt: Date.now() };
       window.fbRunTransaction = async (_, fn) => {
         window.__txs++;
-        return fn({ get: async () => ({ exists: () => false, data: () => ({}) }), set() {} });
+        return fn({
+          get: async (ref) => (String(ref) === "pointLoans/live-a__live-me" ? { exists: () => true, data: () => structuredClone(window.__record) } : { exists: () => false, data: () => ({}) }),
+          set() {},
+        });
       };
+      window.__toasts = [];
+      window.showToast = (text, kind) => window.__toasts.push([text, kind]);
       myId = "live-me";
     });
 
@@ -50,10 +58,31 @@ const { chromium } = require("playwright"),
     await page.waitForFunction(() => window.__live.some((l) => l.ref === "pointLoanInbox/live-me"), null, { timeout: 15000 });
     const reads0 = await page.evaluate(() => window.__reads.length);
     const txs0 = await page.evaluate(() => window.__txs);
-    // The other side writes a line: the list changes, and what is new is claimed at once, from the change itself.
-    await page.evaluate(() => window.__live.find((l) => l.ref === "pointLoanInbox/live-me").callback({ exists: () => true, data: () => ({ pairs: { "live-a__live-me": { at: Date.now() + 5000 } } }) }));
+    // The other side writes a line: the list changes, what is new is claimed at once from the change itself, and
+    // the line is said on screen wherever the player is (a small notice with their name).
+    await page.evaluate(() => {
+      window.__record.entries = [window.__line("こんにちは")];
+      window.__live.find((l) => l.ref === "pointLoanInbox/live-me").callback({ exists: () => true, data: () => ({ pairs: { "live-a__live-me": { at: Date.now() + 5000 } } }) });
+    });
     await page.waitForFunction((n) => window.__txs > n, txs0, { timeout: 5000 });
     assert.equal((await page.evaluate(() => window.__reads.length)) - reads0, 0, "the change itself is the read: nothing else is fetched");
+    await page.waitForFunction(() => window.__toasts.length > 0, null, { timeout: 5000 });
+    assert.deepEqual(await page.evaluate(() => window.__toasts), [["エーさん：こんにちは", "info"]]);
+    // The talk that is open on screen shows its lines itself: no notice for it.
+    page.evaluate(() => window.PointLoans.person("live-a", "エー")).catch(() => {});
+    await page.waitForFunction(() => window.__live.some((l) => l.ref === "pointLoans/live-a__live-me"), null, { timeout: 5000 });
+    await page.evaluate(() => window.__live.find((l) => l.ref === "pointLoans/live-a__live-me").callback({ exists: () => true, data: () => structuredClone(window.__record) }));
+    await page.waitForSelector("dialog.loans-dialog[open]");
+    const toasts0 = await page.evaluate(() => window.__toasts.length);
+    const txs1 = await page.evaluate(() => window.__txs);
+    await page.evaluate(() => {
+      window.__record.entries = [...window.__record.entries, window.__line("もう一つ")];
+      window.__live.find((l) => l.ref === "pointLoanInbox/live-me").callback({ exists: () => true, data: () => ({ pairs: { "live-a__live-me": { at: Date.now() + 9000 } } }) });
+    });
+    await page.waitForFunction((n) => window.__txs > n, txs1, { timeout: 5000 });
+    await page.waitForTimeout(300);
+    assert.equal(await page.evaluate(() => window.__toasts.length), toasts0, "no notice for the talk that is open");
+    await page.evaluate(() => window.PointLoans.close());
     // In the background nothing is followed; back in front, it is followed again (once).
     const count = () => page.evaluate(() => window.__live.filter((l) => l.ref === "pointLoanInbox/live-me").length);
     const before = await count();
