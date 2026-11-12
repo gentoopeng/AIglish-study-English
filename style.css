@@ -3205,3 +3205,11 @@ html body dialog.vocab-entry-dialog .library-editor-actions button{min-height:42
 .today-study-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .today-study-sub,.today-study-more{border:1px solid var(--border);background:var(--input-bg);color:var(--text-main);font-size:13px;}
 .today-study button:disabled{opacity:.5;cursor:default;}
+
+/* Tap targets: the small controls are at least about 36px tall (they were 12-28px) without changing the layout much. */
+#headerStudyPoints{min-height:36px;display:inline-flex;align-items:center;}
+.duel-rank-switch button{min-height:36px;}
+#rankingRefresh{min-width:40px;min-height:40px;}
+#studyRefreshRanking,#studyEditDay{min-height:36px;padding:8px 6px;}
+.ranking-mini-title{padding:10px 0;margin:-8px 0 -4px;cursor:pointer;}
+.library-toolbar button,#readerPasteButton,#readerClearButton,#readerBooksButton{min-height:38px;}
