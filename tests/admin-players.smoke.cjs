@@ -40,6 +40,8 @@ __adminDocs.set('users/other/saves/orphan/parts/p0',{d:'keep'});
  await page.evaluate(()=>__adminDocs.set('shared/sugoroku_live2',{v:2,cells:[1,2,3],owners:['target','other',''],bets:[100,100,0],people:{target:{n:'対象'}},owed:{other:40},log:[]}));
  await page.locator('.admin-player-row').first().waitFor();
  const clear=page.locator('.admin-sugoroku-button');await clear.click();assert.match(await clear.innerText(),/もう一度押すと/);assert.deepEqual((await page.evaluate(()=>__adminDocs.get('shared/sugoroku_live2'))).owners,['target','other','']);
+ // The 運営's stamp tools are opened from here (the rights are on only while this dialog is open).
+ await page.evaluate(()=>{window.__stampAdmin=null;window.Stamps={...window.Stamps,store:()=>{window.__stampAdmin=window.isAdmin;}};});await page.locator('.admin-stamps-button').click();assert.equal(await page.evaluate(()=>window.__stampAdmin),true);
  await clear.click();await page.getByText('ボールをリセットしました。',{exact:false}).waitFor();
  const wiped=await page.evaluate(()=>__adminDocs.get('shared/sugoroku_live2'));assert.deepEqual([wiped.owners,wiped.bets,wiped.cells,wiped.owed],[['','',''],[0,0,0],[1,2,3],{other:40}]);
  // Opening and closing the すごろくビンゴ, a tester device, and putting today's casino bets back to 0.
