@@ -36,8 +36,8 @@
     try {
       const index = JSON.parse(localStorage.getItem(IMG_INDEX) || "[]").filter((k) => k !== id);
       index.push(id);
-      // At most 40 pictures on the device, the oldest first out (a write that does not fit is simply not kept).
-      for (const old of index.splice(0, Math.max(0, index.length - 40))) (localStorage.removeItem(IMG_KEY(old)), localStorage.removeItem(IMG_VER(old)));
+      // At most 24 pictures on the device (about 0.9MB), the oldest first out (a write that does not fit is simply not kept).
+      for (const old of index.splice(0, Math.max(0, index.length - 24))) (localStorage.removeItem(IMG_KEY(old)), localStorage.removeItem(IMG_VER(old)));
       localStorage.setItem(IMG_KEY(id), image);
       localStorage.setItem(IMG_VER(id), String(v));
       localStorage.setItem(IMG_INDEX, JSON.stringify(index));

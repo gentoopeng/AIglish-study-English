@@ -37,12 +37,35 @@
       if (name && name !== "未分類" && !names.includes(name)) names.push(name);
     return names;
   }
+  // Writes the shelf to this device. The device storage can be full (the AI analyses are big): first the stamp pictures kept on this
+  // device are let go, then only the texts are kept without their analyses; and it says so (it used to fail silently while the screen
+  // said "saved"). Returns "full" (all saved), "slim" (texts only) or "failed" (nothing could be written).
+  function writeDevice(slim) {
+    const shelf = slim ? myBookshelf.map(({ aiAnalysisData, ...rest }) => rest) : myBookshelf;
+    localStorage.setItem("myBookshelf", JSON.stringify(shelf));
+    localStorage.setItem("myFolders", JSON.stringify(myFolders));
+  }
   function persist() {
+    let result = "full";
     try {
-      localStorage.setItem("myBookshelf", JSON.stringify(myBookshelf));
-      localStorage.setItem("myFolders", JSON.stringify(myFolders));
-    } catch {}
+      writeDevice(false);
+    } catch {
+      try {
+        window.Stamps?.reset?.();
+        writeDevice(false);
+      } catch {
+        try {
+          writeDevice(true);
+          result = "slim";
+        } catch {
+          result = "failed";
+        }
+      }
+    }
+    if (result === "slim") window.showToast?.("この端末の容量がいっぱいで、解析結果は端末に保存できませんでした（文章は保存しました）。不要な本棚の項目を消すと、解析も残せます。", "error");
+    if (result === "failed") window.showToast?.("この端末の容量がいっぱいで、本棚を端末に保存できませんでした。不要なデータを消してから、もう一度お試しください。", "error");
     window.markReaderDataChanged();
+    return result;
   }
   // The bookshelf and history live in device keys, but startup restores the last full backup.
   // So a change stamps the device copy as newer than any backup (the restore keeps it, see
@@ -383,8 +406,8 @@
         text,
         aiAnalysisData: copy(data),
       });
-      persist();
-      alert("「" + placeName(place) + "」に保存しました。");
+      const saved = persist();
+      alert(saved === "full" ? "「" + placeName(place) + "」に保存しました。" : saved === "slim" ? "「" + placeName(place) + "」に文章を保存しました（解析結果は、端末の容量がいっぱいで保存できませんでした）。" : "端末の容量がいっぱいで、端末には保存できませんでした。ログインしていれば、クラウドのバックアップには保存します。");
       window.renderBookshelf();
     };
   };
