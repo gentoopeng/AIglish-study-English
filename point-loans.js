@@ -755,6 +755,29 @@
     const trayBox = node("div", "talk-tray");
     trayBox.hidden = true;
     dialog.append(head, standingBar, status, log, sheet, trayBox, compose);
+    // Stay at the newest line: once the talk is at the bottom it follows what makes it longer or shorter (a picture loading, the
+    // tray or the ＋ menu closing, the keyboard); sending a line always goes to the bottom. Scrolling up to read stops this.
+    let atBottom = true;
+    const toBottom = () => {
+      log.scrollTop = log.scrollHeight;
+    };
+    // Only the reader's own scrolling (finger, wheel, keys) decides whether the talk is at the newest line; a scroll that
+    // the page itself made (or the browser, when something grew) never undoes it.
+    let reading = 0;
+    const touching = () => {
+      reading = Date.now() + 400;
+    };
+    for (const type of ["wheel", "touchstart", "touchmove", "pointerdown", "keydown"]) log.addEventListener(type, touching, { passive: true });
+    log.addEventListener("scroll", () => {
+      if (Date.now() > reading) return;
+      atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    });
+    log.addEventListener("load", () => atBottom && toBottom(), true);
+    if (window.ResizeObserver) new ResizeObserver(() => atBottom && toBottom()).observe(log);
+    const sticky = () => {
+      atBottom = true;
+      requestAnimationFrame(() => atBottom && toBottom());
+    };
     dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
       closeDialog();
@@ -807,6 +830,7 @@
             current = known(key) || current;
             trayBox.hidden = true;
             stampBtn.setAttribute("aria-expanded", "false");
+            sticky();
             paint();
           } catch (error) {
             status.textContent = error?.message || "送れませんでした。";
@@ -830,6 +854,7 @@
       const line = text.value.trim();
       if (!line) return;
       text.value = "";
+      sticky();
       act(() => talk(other, name, line))();
     };
     // What the points form is set to, kept across redraws.
@@ -999,7 +1024,7 @@
       standingBar.className = "loans-summary is-" + (n > 0 ? "lent" : n < 0 ? "owe" : "even");
       standingBar.replaceChildren(node("strong", "", fmt(Math.abs(n)) + "pt"), node("p", "", standing(n, name)));
       if (!fresh) standingBar.append(node("p", "loans-loading", "最新の記録を確かめています…"));
-      const near = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+      const near = atBottom || log.scrollHeight - log.scrollTop - log.clientHeight < 80;
       log.replaceChildren();
       let lastDay = "",
         lastFrom = "";
@@ -1117,7 +1142,11 @@
         log.append(li);
       }
       if (!rec.entries.length) log.append(node("li", "loans-empty", fresh ? (casino || admin ? "まだ記録はありません。" : "まだトークはありません。メッセージや「＋」から始められます。") : "読み込んでいます…"));
-      if (near || !paint.done) log.scrollTop = log.scrollHeight;
+      if (near || !paint.done) {
+        toBottom();
+        atBottom = true;
+        requestAnimationFrame(() => atBottom && toBottom());
+      }
       paint.done = true;
       drawSheet();
     }

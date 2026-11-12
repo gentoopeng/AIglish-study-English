@@ -180,8 +180,10 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await c.evaluate(() => window.Stamps.close());
     assert.match(await c.evaluate(([id]) => window.PointLoans.buyStamp(id, 50).then(() => "", (e) => e.message), [id]), /売られていません/);
     await a.evaluate(() => window.Stamps.store());
+    await dlg(a).getByRole("tab", { name: "自分のスタンプ" }).click();
     const waitCard = dlg(a).locator(".stamps-card", { hasText: "ぱんだ" });
     await waitCard.locator(".stamps-note", { hasText: "審査待ち" }).waitFor();
+    await waitCard.locator(".stamps-steps").waitFor();
     await a.evaluate(() => window.Stamps.close());
     // The maker cannot approve it herself, nor put it on sale by hand, and the 運営 cannot "resume" it into sale.
     assert.match(await a.evaluate(([id]) => window.PointLoans.reviewStamp(id, "approve").then(() => "", (e) => e.message), [id]), /運営だけ/);
@@ -189,11 +191,16 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.match(await admin.evaluate(([id]) => window.Stamps.moderate(id, "on").then(() => "", (e) => e.message), [id]), /「承認」を使って/);
     // The 運営 approves: it goes on sale, the picture is put in place, what was held stays paid.
     await admin.evaluate(() => window.Stamps.store());
+    // (the 運営 starts on the waiting list; one stamp at a time, with the reasons to choose from)
+    await dlg(admin).getByRole("tab", { name: /審査待ち（1）/ }).waitFor();
     const queued = dlg(admin).locator(".stamps-card", { hasText: "ぱんだ" });
     await queued.waitFor();
-    await dlg(admin).locator(".stamps-queue", { hasText: "審査待ち 1件" }).waitFor();
-    await queued.getByRole("button", { name: "承認（運営）" }).click();
-    await admin.waitForFunction(() => !document.querySelector(".stamps-queue"));
+    await queued.getByRole("button", { name: "確認する（運営）" }).click();
+    await dlg(admin).locator(".stamps-facts", { hasText: "預かっている費用" }).waitFor();
+    assert.match(await dlg(admin).locator(".stamps-facts").innerText(), /50pt/);
+    if (process.env.SHOTS) await admin.screenshot({ path: "/tmp/claude-0/stamp_review.png" });
+    await dlg(admin).getByRole("button", { name: "承認する" }).click();
+    await dlg(admin).locator(".stamps-status", { hasText: "全部確認しました" }).waitFor();
     const approved = docs.get("stamps/" + id);
     assert.deepEqual([approved.status, approved.feePaid, approved.feeHeld, approved.imageV, approved.draft], ["on", 50, 0, 1, false]);
     assert.equal(docs.get("stampImages/" + id).image, draftDoc.image);
@@ -275,6 +282,24 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.doesNotMatch(await a.locator(".loans-dialog").innerText(), /0pt の記録/);
     await a.evaluate(() => window.PointLoans.close());
 
+    // The talk stays at the newest line after sending (a message, then a stamp whose picture loads late).
+    await b.evaluate(async () => { for (let i = 0; i < 25; i++) await window.PointLoans.talk("st-a", "st-a", "ながい話 " + i); });
+    await b.evaluate(() => window.PointLoans.close());
+    await b.evaluate(() => window.PointLoans.person("st-a", "st-a"));
+    const gap = () => b.evaluate(() => { const l = document.querySelector(".talk-log"); return Math.round(l.scrollHeight - l.scrollTop - l.clientHeight); });
+    await b.waitForFunction(() => { const l = document.querySelector(".talk-log"); return l && l.scrollHeight > l.clientHeight * 1.5; });
+    await b.locator(".talk-compose input").fill("さいごのひとこと");
+    await b.locator(".talk-send").click();
+    await b.locator(".talk-row.is-mine .talk-bubble", { hasText: "さいごのひとこと" }).waitFor();
+    assert.ok((await gap()) <= 4, "at the newest line after a message");
+    await b.locator('[data-talk="stamp"]').click();
+    await b.locator(".talk-tray .stamps-pick img[src^='data:']").waitFor({ timeout: 10000 });
+    await b.locator(".talk-tray .stamps-pick").first().click();
+    await b.waitForFunction(() => [...document.querySelectorAll(".talk-row.is-mine .talk-stamp img")].length > 0 && [...document.querySelectorAll(".talk-row.is-mine .talk-stamp img")].every((i) => i.complete && i.naturalHeight));
+    await b.waitForTimeout(300);
+    assert.ok((await gap()) <= 4, "still at the newest line once the stamp picture has loaded");
+    await b.evaluate(() => window.PointLoans.close());
+
     // 送信取り消し: B takes back a message (tap, button, confirm); A sees only that it was taken back; A cannot take back B's line.
     await b.evaluate(() => window.PointLoans.talk("st-a", "st-a", "まちがえた"));
     await b.evaluate(() => window.PointLoans.person("st-a", "st-a"));
@@ -310,6 +335,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
 
     // ---- The maker edits: a higher price goes to the 運営 (the difference is held, the old price stays on sale) ---------------------
     await a.evaluate(() => window.Stamps.store());
+    await dlg(a).getByRole("tab", { name: "自分のスタンプ" }).click();
     await dlg(a).locator(".stamps-card", { hasText: "ぱんだ" }).waitFor();
     await dlg(a).locator(".stamps-card", { hasText: "ぱんだ" }).getByRole("button", { name: "編集" }).click();
     await dlg(a).getByLabel("名前").waitFor();
@@ -379,7 +405,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // (what this device knew of the stamp is looked at again, as it is every 2 minutes and on a later visit)
     await b.evaluate(([id]) => window.Stamps.get(id, true), [id]);
     await b.evaluate(() => window.PointLoans.person("st-a", "st-a"));
-    await b.locator(".talk-row .talk-stamp.is-gone").waitFor({ timeout: 10000 });
+    await b.locator(".talk-row .talk-stamp.is-gone").first().waitFor({ timeout: 10000 });
     assert.deepEqual(errors, []);
     console.log("PASS: stamps — made (the picture apart), bought once for the price shown, sent in a talk, the maker prices, the 運営 stops and removes");
   } finally {
