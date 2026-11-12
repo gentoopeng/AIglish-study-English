@@ -15,6 +15,7 @@ const { chromium } = require("playwright"),
       await page.route("https://**/*", (r) => r.abort());
       await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
       await page.addInitScript(() => {
+        localStorage.setItem("aiglish_motion", "full"); // (an automated browser gets no motion unless it asks for it)
         localStorage.setItem("b3_tutorial_done", "1");
         localStorage.setItem("aiglish_sound_settings", JSON.stringify({ enabled: false }));
       });

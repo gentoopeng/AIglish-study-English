@@ -1,0 +1,62 @@
+/* App motion (docs/ui-motion-plan.md). A calm, grown-up layer: slow-out curves, no bounce, light that passes once.
+   Everything here only runs when <html data-motion> is "full" or "calm" (app-motion.js; the head script decides it before the first
+   paint). "off" (also the device's "reduce motion") and "test" (an automated browser) get none of it. Only transform-like and opacity
+   properties move: the individual `scale` / `translate` properties are used, so a button that already has a `transform` of its own
+   (centered, rotated...) is not disturbed. "calm" is shorter, with no glow and no sweeping light. */
+:root {
+  --am-fast: 160ms;
+  --am-base: 280ms;
+  --am-slow: 480ms;
+  --am-soft: cubic-bezier(.33, 1, .68, 1);
+  --am-ease: cubic-bezier(.22, .61, .36, 1);
+  --am-io: cubic-bezier(.65, 0, .35, 1);
+  --am-glow: rgba(0, 240, 255, .30);
+  --am-gold: rgba(232, 214, 166, .32);
+}
+html[data-motion="calm"] { --am-fast: 100ms; --am-base: 180ms; --am-slow: 300ms; }
+
+/* ---- Every button answers the finger (a separate `scale` property, so it never fights a button's own transform) ---- */
+html:where([data-motion="full"], [data-motion="calm"]) button,
+html:where([data-motion="full"], [data-motion="calm"]) .nav-item,
+html:where([data-motion="full"], [data-motion="calm"]) [role="button"] {
+  transition-property: scale, translate, background-color, border-color, color, box-shadow, opacity, filter;
+  transition-duration: var(--am-base), var(--am-base), var(--am-base), var(--am-base), var(--am-fast), var(--am-base), var(--am-base), var(--am-base);
+  transition-timing-function: var(--am-soft);
+}
+html:where([data-motion="full"], [data-motion="calm"]) button:not(:disabled):active,
+html:where([data-motion="full"], [data-motion="calm"]) [role="button"]:active {
+  scale: .968;
+  transition-duration: 90ms;
+}
+@media (hover: hover) {
+  html[data-motion="full"] button:not(:disabled):hover,
+  html[data-motion="full"] [role="button"]:hover { filter: brightness(1.07); }
+  html[data-motion="full"] .menu-trigger:hover,
+  html[data-motion="full"] .header-notices:hover,
+  html[data-motion="full"] #headerStudyPoints:hover,
+  html[data-motion="full"] #headerBackgroundButton:hover { box-shadow: 0 0 18px var(--am-glow); }
+}
+/* The keyboard focus ring settles in instead of snapping. */
+html:where([data-motion="full"], [data-motion="calm"]) :focus-visible {
+  transition: outline-offset var(--am-base) var(--am-soft), outline-color var(--am-base);
+  outline-offset: 3px;
+}
+
+/* ---- Fields: the border warms and a soft light spreads when one is focused ---- */
+html:where([data-motion="full"], [data-motion="calm"]) :is(input:not([type="range"], [type="checkbox"], [type="radio"], [type="file"], [type="color"]), textarea, select) {
+  transition: border-color var(--am-base) var(--am-ease), box-shadow var(--am-slow) var(--am-ease), background-color var(--am-base);
+}
+html[data-motion="full"] :is(input:not([type="range"], [type="checkbox"], [type="radio"], [type="file"], [type="color"]), textarea, select):focus {
+  box-shadow: 0 0 0 3px rgba(0, 240, 255, .14), 0 0 22px -6px var(--am-glow);
+}
+
+/* ---- Cards and rows lift a little under a pointer (translate, so their own transforms stay) ---- */
+html:where([data-motion="full"], [data-motion="calm"]) :is(.card, .settings-card, .textbook-list-item, .stamps-card, .today-study) {
+  transition: translate var(--am-slow) var(--am-soft), box-shadow var(--am-slow) var(--am-ease), border-color var(--am-base), background-color var(--am-base);
+}
+@media (hover: hover) {
+  html[data-motion="full"] :is(.card, .textbook-list-item, .stamps-card):hover {
+    translate: 0 -2px;
+    box-shadow: 0 12px 28px -14px rgba(0, 0, 0, .65), 0 0 0 1px rgba(255, 255, 255, .06), 0 0 24px -10px var(--am-glow);
+  }
+}
