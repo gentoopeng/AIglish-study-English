@@ -70,6 +70,36 @@ const { chromium } = require("playwright"),
     });
     assert.match(field, /box-shadow/);
 
+    // Stage 2: tabs fade and rise from the side they lie on (not the casino tab), the pill under the navigation moves, the side menu's
+    // veil fades with a class on <body>, its entries come one after another.
+    await page.evaluate(() => window.switchTab("study"));
+    const tab = await page.evaluate(() => ({
+      dir: document.documentElement.dataset.amDir,
+      tab: getComputedStyle(document.getElementById("view-study")).animationName,
+      child: getComputedStyle(document.querySelector("#view-study > :nth-child(1)")).animationName,
+      pillX: document.getElementById("appMainBottomNavBar").style.getPropertyValue("--am-nav-x"),
+      pillOn: document.getElementById("appMainBottomNavBar").style.getPropertyValue("--am-nav-on"),
+    }));
+    assert.deepEqual([tab.dir, tab.tab, tab.child, tab.pillOn], ["next", "am-tab-in", "am-tab-child", "1"]);
+    await page.evaluate(() => window.switchTab("vocab"));
+    const back = await page.evaluate(() => [document.documentElement.dataset.amDir, document.getElementById("appMainBottomNavBar").style.getPropertyValue("--am-nav-x")]);
+    assert.equal(back[0], "prev");
+    assert.notEqual(back[1], tab.pillX, "the pill moved with the chosen item");
+    await page.evaluate(() => window.switchTab("casino"));
+    assert.notEqual(await page.evaluate(() => getComputedStyle(document.getElementById("view-casino")).animationName), "am-tab-in", "the fixed casino tab is left alone");
+    await page.evaluate(() => window.switchTab("vocab"));
+    await page.evaluate(() => window.toggleSidebar(true));
+    await page.waitForTimeout(700);
+    const side = await page.evaluate(() => {
+      const veil = getComputedStyle(document.getElementById("sidebarOverlay"));
+      return { open: document.body.classList.contains("am-sidebar-open"), opacity: veil.opacity, visibility: veil.visibility, item: getComputedStyle(document.querySelector(".sidebar-menu-list > :nth-child(3)")).animationName };
+    });
+    assert.deepEqual([side.open, side.opacity, side.visibility, side.item], [true, "1", "visible", "am-side-in"]);
+    await page.evaluate(() => window.toggleSidebar(false));
+    await page.waitForTimeout(700);
+    const shut = await page.evaluate(() => ({ open: document.body.classList.contains("am-sidebar-open"), visibility: getComputedStyle(document.getElementById("sidebarOverlay")).visibility }));
+    assert.deepEqual([shut.open, shut.visibility], [false, "hidden"]);
+
     // The setting: calm, then off; it is kept, and the casino layer follows.
     // (one line in the sidebar menu that goes round: おしゃれ → 控えめ → なし)
     const next = () => page.evaluate(() => document.getElementById("motionMenuButton").click());
@@ -82,6 +112,19 @@ const { chromium } = require("playwright"),
     await page.reload();
     await page.waitForFunction(() => window.__learningBootReady === true && window.AppMotion);
     assert.equal((await info(page)).mode, "off", "kept after a restart");
+    assert.deepEqual(errors, []);
+    await page.close();
+
+    // Off (and test): the old behaviour stays — no tab animation, the veil is switched with display.
+    ({ page, errors } = await open({ saved: "off" }));
+    const plain = await page.evaluate(() => {
+      window.switchTab("study");
+      window.toggleSidebar(true);
+      const veilOpen = getComputedStyle(document.getElementById("sidebarOverlay")).display;
+      window.toggleSidebar(false);
+      return { tab: getComputedStyle(document.getElementById("view-study")).animationName, veilOpen, veilShut: getComputedStyle(document.getElementById("sidebarOverlay")).display };
+    });
+    assert.deepEqual(plain, { tab: "none", veilOpen: "block", veilShut: "none" });
     assert.deepEqual(errors, []);
     await page.close();
 

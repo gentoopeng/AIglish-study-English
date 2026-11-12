@@ -49,6 +49,40 @@
     }
   }
   document.getElementById("motionMenuButton")?.addEventListener("click", () => set(NEXT[saved() || "full"]));
+  // ---- Stage 2: tabs and the side menu ----------------------------------------------------------------------------
+  // Which way the new tab lies (the bottom navigation's order), for the sideways start of its blocks, and where the pill under the
+  // chosen navigation item goes. The place is measured once per switch (and when the window changes), never in a loop.
+  const ORDER = ["vocab", "reader", "community", "study", "titles", "casino"];
+  let currentTab = "vocab";
+  function placePill() {
+    const bar = document.getElementById("appMainBottomNavBar"),
+      active = bar?.querySelector(".nav-item.active");
+    if (!bar || !active || !on() || !active.offsetWidth) return;
+    bar.style.setProperty("--am-nav-x", active.offsetLeft - 4 + "px");
+    bar.style.setProperty("--am-nav-w", active.offsetWidth + 8 + "px");
+    bar.style.setProperty("--am-nav-on", "1");
+    // (the first place is taken at once; the sliding starts from the second)
+    if (!bar.classList.contains("am-nav-ready")) requestAnimationFrame(() => requestAnimationFrame(() => bar.classList.add("am-nav-ready")));
+  }
+  window.onTabChange?.((id) => {
+    const from = ORDER.indexOf(currentTab),
+      to = ORDER.indexOf(id);
+    if (from >= 0 && to >= 0 && from !== to) root.setAttribute("data-am-dir", to > from ? "next" : "prev");
+    currentTab = id;
+    placePill();
+  });
+  window.addEventListener("resize", placePill);
+  listeners.add(placePill);
+  // The side menu: the veil fades with a class on <body> (the app sets the veil's display directly, which cannot be animated).
+  const toggleSidebar = window.toggleSidebar;
+  if (typeof toggleSidebar === "function") {
+    window.toggleSidebar = function () {
+      const result = toggleSidebar.apply(this, arguments);
+      document.body.classList.toggle("am-sidebar-open", !!document.getElementById("sidebarMenu")?.classList.contains("open"));
+      return result;
+    };
+  }
+  setTimeout(placePill, 0);
   reducedQuery?.addEventListener?.("change", apply);
   window.AppMotion = Object.freeze({ mode, on, set, onChange: (fn) => (listeners.add(fn), () => listeners.delete(fn)) });
   apply();
