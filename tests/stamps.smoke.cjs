@@ -313,6 +313,16 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.deepEqual([docs.get("stamps/" + id).price, docs.get("stamps/" + id).feePaid], [60, 80]);
     await a.evaluate(([id]) => window.Stamps.edit(id, { price: 80 }), [id]);
     assert.equal(docs.get("stamps/" + id).price, 80, "back up to what was paid: no new cost");
+    // New text on an approved stamp: others keep seeing the approved picture until the 運営 approves, then they get the new one.
+    const before = await b.evaluate(([id]) => window.Stamps.get(id, true).then((st) => window.Stamps.image(id, st.imageV)), [id]);
+    const newPic = await a.evaluate(() => window.StampEditor.exportImage({ bg: "#ff00ff", base: "", baseImg: null, layers: [] }));
+    await a.evaluate(([id, img]) => window.Stamps.edit(id, { image: img, base: "", design: { layers: [{ text: "あたらしい" }] } }), [id, newPic]);
+    assert.equal(docs.get("stamps/" + id).review, "pending");
+    assert.equal(docs.get("stampImages/" + id).image, before, "the approved picture is untouched while it waits");
+    assert.equal(await b.evaluate(([id]) => window.Stamps.get(id, true).then((st) => window.Stamps.image(id, st.imageV)), [id]), before, "others still see the approved one");
+    await admin.evaluate(([id]) => window.Stamps.review(id, "approve"), [id]);
+    assert.equal(docs.get("stamps/" + id).imageV, 2);
+    assert.equal(await b.evaluate(([id]) => window.Stamps.get(id, true).then((st) => window.Stamps.image(id, st.imageV)), [id]), newPic, "after approval others get the new picture");
     // C is not the maker: no buttons for it, only a report.
     await c.evaluate(() => window.Stamps.store());
     const cCard = dlg(c).locator(".stamps-card", { hasText: "ぱんだ" });
@@ -348,7 +358,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(wallet("st-b"), 450, "nothing is refunded");
     await b.evaluate(() => window.Stamps.close?.());
     await b.evaluate(() => window.PointLoans.close());
-    // (what this device knew of the stamp is looked at again, as it is every 10 minutes and on a later visit)
+    // (what this device knew of the stamp is looked at again, as it is every 2 minutes and on a later visit)
     await b.evaluate(([id]) => window.Stamps.get(id, true), [id]);
     await b.evaluate(() => window.PointLoans.person("st-a", "st-a"));
     await b.locator(".talk-row .talk-stamp.is-gone").waitFor({ timeout: 10000 });
