@@ -188,3 +188,20 @@ html[data-motion="full"] .am-loading {
 }
 html.am-hidden .am-loading { animation-play-state: paused; }
 @keyframes am-shimmer { to { background-position: -60% 0; } }
+
+
+/* =============================== Stage 5: calm, and a light touch =============================== */
+
+/* "calm" (and a device that struggles, see app-motion.js) has no blur and no sweeping light: the same movements, drawn plainly. */
+@keyframes cm-reveal-calm { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes cs-deal-calm { 0% { opacity: 0; transform: translate3d(40px, -30px, 0) rotate(6deg); } 100% { opacity: 1; transform: none; } }
+@keyframes cs-rise-calm { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes am-toast-in-calm { from { opacity: 0; translate: 0 -12px; } to { opacity: 1; translate: 0 0; } }
+html[data-motion="calm"] :is(#view-casino.active .casino-head, #view-casino.active .casino-jackpots p, #view-casino.active .casino-game, .casino-screen .cs-bar h2) { animation-name: cm-reveal-calm; }
+html[data-motion="calm"] .cs-deal { animation-name: cs-deal-calm; }
+html[data-motion="calm"] .cs-deal::after, html[data-motion="calm"] .casino-game::after, html[data-motion="calm"] .cs-result.is-win::before,
+html[data-motion="calm"] .casino-screen .cs-body .cs-primary::after { display: none; }
+html[data-motion="calm"] .cs-result { animation-name: cs-rise-calm; }
+html[data-motion="calm"] .am-toast { animation-name: am-toast-in-calm; }
+html[data-motion="calm"] .casino-jackpots b { animation: none; }
+html.am-hidden .am-toast::after { animation-play-state: paused; }
