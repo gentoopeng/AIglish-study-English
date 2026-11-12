@@ -1,0 +1,187 @@
+/* Casino motion: a quiet, grown-up layer over the casino, poker, daifugo and sugoroku screens (loaded after them).
+   Rules of thumb: slow-out easing and no overshoot; short blur-to-sharp reveals instead of pops; gold light sweeps instead of
+   bursts; staggered, never all at once; everything is transform / opacity / filter only; nothing at all for reduced motion. */
+:root {
+  --cm-ease: cubic-bezier(.22, .61, .36, 1);
+  --cm-soft: cubic-bezier(.33, 1, .68, 1);
+  --cm-io: cubic-bezier(.65, 0, .35, 1);
+  --cm-gold: #e8d6a6;
+  --cm-gold-deep: #b89a55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* ---- Screens: the table comes up out of the dark ---- */
+  html body dialog.casino-screen[open],
+  dialog.poker-screen[open],
+  dialog.df-screen[open] {
+    animation: cm-screen-in .6s var(--cm-soft) both;
+  }
+  dialog.casino-screen[open]::backdrop,
+  dialog.poker-screen[open]::backdrop,
+  dialog.df-screen[open]::backdrop {
+    animation: cm-fade .5s var(--cm-ease) both;
+  }
+  .casino-screen .cs-bar { position: relative; }
+  .casino-screen .cs-bar::after {
+    content: ""; position: absolute; left: 0; right: 48px; bottom: -8px; height: 1px; pointer-events: none;
+    background: linear-gradient(90deg, rgba(232, 214, 166, 0), rgba(232, 214, 166, .6) 40%, rgba(232, 214, 166, 0));
+    transform-origin: left center; animation: cm-line 1.1s var(--cm-ease) .2s both;
+  }
+  .casino-screen .cs-bar h2 { animation: cm-reveal .7s var(--cm-soft) .1s both; }
+  /* (the body is drawn again after every move, so only the screen itself comes in: nothing replays on each round) */
+
+  /* ---- Lobby: a staggered reveal and a light sweep across the cards ---- */
+  #view-casino.active .casino-head { animation: cm-reveal .7s var(--cm-soft) both; }
+  #view-casino.active .casino-jackpots p { animation: cm-reveal .7s var(--cm-soft) .08s both; }
+  #view-casino.active .casino-jackpots p + p { animation-delay: .14s; }
+  #view-casino.active .casino-game { animation: cm-reveal .75s var(--cm-soft) both; overflow: hidden; }
+  #view-casino.active .casino-game:nth-child(1) { animation-delay: .16s; }
+  #view-casino.active .casino-game:nth-child(2) { animation-delay: .22s; }
+  #view-casino.active .casino-game:nth-child(3) { animation-delay: .28s; }
+  #view-casino.active .casino-game:nth-child(4) { animation-delay: .34s; }
+  #view-casino.active .casino-game:nth-child(5) { animation-delay: .4s; }
+  #view-casino.active .casino-game:nth-child(6) { animation-delay: .46s; }
+  #view-casino.active .casino-game:nth-child(n+7) { animation-delay: .52s; }
+  .casino-game {
+    transition: transform .45s var(--cm-soft), border-color .4s var(--cm-ease), box-shadow .5s var(--cm-ease), background-color .4s;
+  }
+  .casino-game::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+    background: linear-gradient(108deg, transparent 32%, rgba(255, 243, 208, .13) 50%, transparent 68%);
+    transform: translateX(-130%);
+  }
+  @media (hover: hover) {
+    .casino-game:hover {
+      transform: translateY(-3px); border-color: rgba(232, 214, 166, .55);
+      box-shadow: 0 14px 30px -12px rgba(0, 0, 0, .7), 0 0 0 1px rgba(232, 214, 166, .12), 0 0 26px -6px rgba(232, 214, 166, .25);
+    }
+    .casino-game:hover::after { transform: translateX(130%); transition: transform 1s var(--cm-ease); }
+  }
+  .casino-game:active { transform: scale(.982); transition-duration: .12s; }
+  /* The jackpot figures catch the light, slowly, once in a while. */
+  @supports (-webkit-background-clip: text) or (background-clip: text) {
+    .casino-jackpots b {
+      background: linear-gradient(100deg, #e9dcbb 0%, #e9dcbb 42%, #fffaf0 50%, #e9dcbb 58%, #e9dcbb 100%);
+      background-size: 260% 100%; -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+      animation: cm-shimmer 9s var(--cm-io) 1.2s infinite;
+    }
+  }
+
+  /* ---- Buttons: they answer the finger, and the main one has a quiet sheen ---- */
+  .casino-screen .cs-body button,
+  .casino-screen .cs-close {
+    transition: transform .3s var(--cm-soft), background-color .35s var(--cm-ease), border-color .35s var(--cm-ease),
+      color .3s, box-shadow .4s var(--cm-ease), opacity .35s, filter .3s;
+  }
+  .casino-screen .cs-body button:not(:disabled):active { transform: scale(.972); transition-duration: .1s; }
+  @media (hover: hover) {
+    .casino-screen .cs-body button:not(:disabled):hover { filter: brightness(1.08); }
+    .casino-screen .cs-close:hover { background: rgba(232, 214, 166, .14); border-color: rgba(232, 214, 166, .55); }
+  }
+  .casino-screen .cs-body .cs-primary { position: relative; overflow: hidden; }
+  .casino-screen .cs-body .cs-primary:not(:disabled)::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .42) 50%, transparent 62%);
+    transform: translateX(-140%); animation: cm-sheen 6.5s var(--cm-io) 1.4s infinite;
+  }
+
+  /* ---- Cards: they slide in from the shoe, settle, and catch a little light ---- */
+  .cs-deal {
+    animation: cs-deal .66s var(--cm-soft) var(--d, 0s) both;
+    overflow: hidden;
+  }
+  .cs-deal::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; mix-blend-mode: soft-light;
+    background: linear-gradient(115deg, transparent 28%, rgba(255, 255, 255, .85) 48%, transparent 68%);
+    transform: translateX(-130%); animation: cm-card-sheen 1s var(--cm-ease) calc(var(--d, 0s) + .5s) both;
+  }
+
+  /* ---- Dice: a lazy toss and settle (the dice had no motion at all) ---- */
+  .cs-die.is-rolling { animation: cm-die .86s var(--cm-soft) backwards; }
+  /* (my dice sit in buttons, the dealer's are side by side: either way they land one after another) */
+  .cs-die.is-rolling:nth-child(2), .cs-die-btn:nth-child(2) .cs-die.is-rolling { animation-delay: .07s; }
+  .cs-die.is-rolling:nth-child(3), .cs-die-btn:nth-child(3) .cs-die.is-rolling { animation-delay: .14s; }
+  .cs-die.is-rolling:nth-child(4), .cs-die-btn:nth-child(4) .cs-die.is-rolling { animation-delay: .21s; }
+  .cs-die.is-rolling:nth-child(5), .cs-die-btn:nth-child(5) .cs-die.is-rolling { animation-delay: .28s; }
+  /* a suggested die still tosses, then glows */
+  .cs-die-btn.is-suggested .cs-die.is-rolling { animation: cm-die .86s var(--cm-soft) backwards, cs-hint-glow 2.2s var(--cm-io) 1s 2; }
+  .cs-die-btn:nth-child(2).is-suggested .cs-die.is-rolling { animation-delay: .07s, 1s; }
+  .cs-die-btn:nth-child(3).is-suggested .cs-die.is-rolling { animation-delay: .14s, 1s; }
+  .cs-die-btn:nth-child(4).is-suggested .cs-die.is-rolling { animation-delay: .21s, 1s; }
+  .cs-die-btn:nth-child(5).is-suggested .cs-die.is-rolling { animation-delay: .28s, 1s; }
+  .cs-die { transition: box-shadow .4s var(--cm-ease), transform .4s var(--cm-soft); }
+
+  /* ---- Results: a gold light across the line instead of a pop ---- */
+  .cs-result { animation: cs-rise .6s var(--cm-soft) var(--d, 0s) both; }
+  .cs-result.is-win { animation: cm-win .9s var(--cm-soft) var(--d, 0s) both; }
+  .cs-result.is-win::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+    background: linear-gradient(100deg, transparent 35%, rgba(246, 226, 160, .3) 50%, transparent 65%) 160% 0 / 260% 100% no-repeat;
+    animation: cm-sweep 1.5s var(--cm-ease) calc(var(--d, 0s) + .2s) both;
+  }
+  .cs-result.is-lose { animation: cm-lose .7s var(--cm-soft) var(--d, 0s) both; }
+  .cs-burst i { animation: cs-burst 1.1s var(--cm-soft) calc(var(--d, 0s) + .2s) both; }
+
+  /* ---- Balance: a glow, never a bounce; and the change floats up beside it ---- */
+  .cs-balance .is-up { animation: cs-flash-up 1.2s var(--cm-ease); }
+  .cs-balance .is-down { animation: cs-flash-down 1.2s var(--cm-ease); }
+  .cs-balance { position: relative; }
+  .cm-delta {
+    position: absolute; right: 0; top: 100%; margin-top: 2px; pointer-events: none; white-space: nowrap;
+    font: 700 12px/1 system-ui, sans-serif; letter-spacing: .04em; font-variant-numeric: tabular-nums;
+    animation: cm-delta 1.5s var(--cm-soft) both;
+  }
+  .cm-delta.is-up { color: #f3e2a6; text-shadow: 0 0 10px rgba(240, 214, 140, .6); }
+  .cm-delta.is-down { color: #d9a3a3; }
+
+  /* ---- The roulette wheel decelerates the way a real one does ---- */
+  .cs-wheel-spin { transition-timing-function: cubic-bezier(.08, .72, .14, 1); }
+
+  /* ---- Suggestions pulse softly ---- */
+  .cs-body .cs-actions .is-suggested, .cs-die-btn.is-suggested .cs-die { animation: cs-hint-glow 2.2s var(--cm-io) 2; }
+
+  /* ---- Poker, daifugo, sugoroku: the same calm (their pops lose the overshoot) ---- */
+  .poker-screen .pk-close, .df-screen .df-close { transition: background-color .35s var(--cm-ease), transform .3s var(--cm-soft); }
+  .df-card { transition-timing-function: var(--cm-soft); }
+  .df-seat { transition-timing-function: var(--cm-soft); }
+}
+
+@keyframes cm-screen-in { from { opacity: 0; transform: translateY(16px) scale(.985); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes cm-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cm-line { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+@keyframes cm-reveal { from { opacity: 0; transform: translateY(14px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes cm-shimmer { 0%, 62% { background-position: 130% 0; } 100% { background-position: -130% 0; } }
+@keyframes cm-sheen { 0%, 70% { transform: translateX(-140%); } 100% { transform: translateX(140%); } }
+@keyframes cm-card-sheen { from { transform: translateX(-130%); } to { transform: translateX(130%); } }
+@keyframes cm-die {
+  0% { opacity: .0; transform: translateY(-40px) rotate(-220deg) scale(.9); filter: blur(2px); }
+  38% { opacity: 1; transform: translateY(0) rotate(-100deg); filter: blur(1px); }
+  58% { transform: translateY(-13px) rotate(-30deg); filter: none; }
+  80% { transform: translateY(0) rotate(5deg); }
+  100% { transform: none; }
+}
+@keyframes cm-win { from { opacity: 0; transform: translateY(8px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes cm-lose { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes cm-sweep { from { background-position: 160% 0; } to { background-position: -60% 0; } }
+@keyframes cm-delta { 0% { opacity: 0; transform: translateY(6px); filter: blur(3px); } 18% { opacity: 1; transform: none; filter: none; } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); filter: blur(2px); } }
+
+/* The existing keyframes, redrawn without the bounce (same names, so the old rules pick them up). */
+@keyframes cs-deal { 0% { opacity: 0; transform: translate3d(52px, -40px, 0) rotate(8deg) scale(.94); filter: blur(2px); } 55% { opacity: 1; filter: none; } 100% { opacity: 1; transform: none; } }
+@keyframes cs-rise { from { opacity: 0; transform: translateY(10px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes cs-win { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes cs-burst {
+  0% { opacity: 0; transform: rotate(var(--a)) translateX(2px) scale(.4); }
+  18% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a)) translateX(54px) scale(.2); }
+}
+@keyframes cs-flash-up { 0% { color: #fff6d6; text-shadow: 0 0 16px rgba(240, 214, 140, .9); } 100% { text-shadow: 0 0 0 rgba(240, 214, 140, 0); } }
+@keyframes cs-flash-down { 0% { color: #d9aaaa; opacity: .75; } 100% { opacity: 1; } }
+@keyframes cs-hint-glow { 50% { box-shadow: 0 0 0 4px rgba(226, 207, 155, .1), 0 0 20px rgba(226, 207, 155, .42); } }
+@keyframes cs-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(.85); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes pkPop { 0% { transform: scale(.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes pkBump { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@keyframes pktPop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes sg-pop { from { transform: scale(.85); opacity: 0; } }
+@keyframes sg-ballpop { 0% { transform: scale(.85); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes df-rise { from { opacity: 0; transform: translateY(12px); filter: blur(3px); } }

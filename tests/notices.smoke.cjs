@@ -202,7 +202,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(underW, { 10: "#1b2a40", 50: "#2c4466", 100: "#3d6378", 200: "#b98a4a", 500: "#e6d29a", 1000: "#c9483f" }[prizeW]);
     assert.equal(docs.get("users/nb-c/learningPoints/main").balance, 500 + prizeW);
 
-    // Dice: no throwing animation; with motion allowed they show their numbers at once, still.
+    // Dice: with motion allowed they toss and settle (casino-motion.css, asked for in 10.106); the faces are right from the start.
     const c = await pageFor("dice", "no-preference");
     await c.locator("#nav-casino").click();
     await c.locator("#view-casino.active .mode-chinchiro").click();
@@ -212,7 +212,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const faces = await ch.locator(".cs-bowl .cs-die:not(.is-empty)").evaluateAll((list) => list.map((d) => [Number(d.dataset.value), d.querySelectorAll("i.is-on").length, getComputedStyle(d).animationName]));
     for (const [value, pips, animation] of faces) {
       assert.equal(pips, value);
-      assert.equal(animation, "none");
+      assert.ok(animation === "cm-die" || animation === "none", "dice animation: " + animation);
     }
     assert.deepEqual(errors, []);
     console.log("PASS: bell at the top right with unread badge, admin posts and takes down a notice, notice marked new then read, bonus wheel pays once into the wallet, the wheel really turns on an iPhone and stops on the paid slice, second device refused, guest message, dice shown at once without animation");
