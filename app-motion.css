@@ -60,3 +60,63 @@ html:where([data-motion="full"], [data-motion="calm"]) :is(.card, .settings-card
     box-shadow: 0 12px 28px -14px rgba(0, 0, 0, .65), 0 0 0 1px rgba(255, 255, 255, .06), 0 0 24px -10px var(--am-glow);
   }
 }
+
+/* =============================== Stage 2: moving between screens =============================== */
+
+/* ---- Tabs: the new screen fades in (opacity only: a transform or filter on a whole tab would carry its fixed children with it);
+   its first blocks then rise a little, one after another, from the side the tab lies on. Not for the casino tab (it is fixed and
+   animates its own blocks, casino-motion.css). `backwards` fill: nothing is left behind once it has finished. ---- */
+html:where([data-motion="full"], [data-motion="calm"]) .tab-view.active:not(#view-casino) {
+  animation: am-tab-in var(--am-base) var(--am-ease) backwards;
+}
+html:where([data-motion="full"], [data-motion="calm"]) .tab-view.active:not(#view-casino) > :nth-child(-n+6):not(dialog, [hidden]) {
+  animation: am-tab-child var(--am-slow) var(--am-soft) backwards;
+}
+html:where([data-motion="full"], [data-motion="calm"]) .tab-view.active:not(#view-casino) > :nth-child(2) { animation-delay: 45ms; }
+html:where([data-motion="full"], [data-motion="calm"]) .tab-view.active:not(#view-casino) > :nth-child(3) { animation-delay: 90ms; }
+html:where([data-motion="full"], [data-motion="calm"]) .tab-view.active:not(#view-casino) > :nth-child(4) { animation-delay: 135ms; }
+html:where([data-motion="full"], [data-motion="calm"]) .tab-view.active:not(#view-casino) > :nth-child(5) { animation-delay: 180ms; }
+html:where([data-motion="full"], [data-motion="calm"]) .tab-view.active:not(#view-casino) > :nth-child(6) { animation-delay: 225ms; }
+html[data-am-dir="next"] { --am-dx: 16px; }
+html[data-am-dir="prev"] { --am-dx: -16px; }
+@keyframes am-tab-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes am-tab-child { from { opacity: 0; translate: var(--am-dx, 0px) 10px; } to { opacity: 1; translate: 0 0; } }
+
+/* ---- Bottom navigation: a soft pill slides under the chosen item (one element, moved with transform only; its place is measured
+   once per switch by app-motion.js), and the chosen icon lifts a little. ---- */
+html:where([data-motion="full"], [data-motion="calm"]) .nav-bar .nav-item { position: relative; z-index: 1; }
+html:where([data-motion="full"], [data-motion="calm"]) .nav-bar::before {
+  content: ""; position: absolute; top: 7px; left: 0; height: 46px; width: var(--am-nav-w, 0px); pointer-events: none;
+  border-radius: 14px; border: 1px solid rgba(0, 240, 255, .2);
+  background: linear-gradient(160deg, rgba(0, 240, 255, .12), rgba(99, 102, 241, .08));
+  transform: translateX(var(--am-nav-x, 0px)); opacity: var(--am-nav-on, 0);
+}
+html[data-motion="full"] .nav-bar::before { box-shadow: 0 0 18px -6px var(--am-glow); }
+html:where([data-motion="full"], [data-motion="calm"]) .nav-bar.am-nav-ready::before {
+  transition: transform var(--am-slow) var(--am-soft), opacity var(--am-base) var(--am-ease);
+}
+html:where([data-motion="full"], [data-motion="calm"]) .nav-bar .nav-item > svg {
+  transition: translate var(--am-slow) var(--am-soft), scale var(--am-slow) var(--am-soft), filter var(--am-slow);
+}
+html:where([data-motion="full"], [data-motion="calm"]) .nav-bar .nav-item.active > svg { translate: 0 -1.5px; scale: 1.08; }
+html[data-motion="full"] .nav-bar .nav-item.active > svg { filter: drop-shadow(0 0 5px rgba(0, 240, 255, .5)); }
+
+/* ---- Side menu: the dark veil fades (instead of switching on), and the entries come in one after another ---- */
+html:where([data-motion="full"], [data-motion="calm"]) .sidebar-overlay {
+  display: block !important; opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity var(--am-slow) var(--am-ease), visibility 0s linear var(--am-slow);
+}
+html:where([data-motion="full"], [data-motion="calm"]) body.am-sidebar-open .sidebar-overlay {
+  opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 0s;
+}
+html[data-motion="calm"] .sidebar-overlay { backdrop-filter: none; -webkit-backdrop-filter: none; }
+html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-identity { animation: am-side-in var(--am-slow) var(--am-soft) 60ms backwards; }
+html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-menu-list > * { animation: am-side-in var(--am-slow) var(--am-soft) backwards; }
+html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-menu-list > :nth-child(1) { animation-delay: 110ms; }
+html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-menu-list > :nth-child(2) { animation-delay: 150ms; }
+html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-menu-list > :nth-child(3) { animation-delay: 190ms; }
+html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-menu-list > :nth-child(4) { animation-delay: 230ms; }
+html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-menu-list > :nth-child(5) { animation-delay: 270ms; }
+html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-menu-list > :nth-child(6) { animation-delay: 310ms; }
+html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-menu-list > :nth-child(n+7) { animation-delay: 350ms; }
+@keyframes am-side-in { from { opacity: 0; translate: -14px 0; } to { opacity: 1; translate: 0 0; } }
