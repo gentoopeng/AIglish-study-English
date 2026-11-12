@@ -147,7 +147,7 @@
   .df-seat { transition-timing-function: var(--cm-soft); }
 }
 
-@keyframes cm-screen-in { from { opacity: 0; transform: translateY(16px) scale(.985); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes cm-screen-in { from { opacity: 0; transform: translateY(16px) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes cm-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes cm-line { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
 @keyframes cm-reveal { from { opacity: 0; transform: translateY(14px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
@@ -185,3 +185,6 @@
 @keyframes sg-pop { from { transform: scale(.85); opacity: 0; } }
 @keyframes sg-ballpop { 0% { transform: scale(.85); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes df-rise { from { opacity: 0; transform: translateY(12px); filter: blur(3px); } }
+
+/* The endless lights (jackpot figures, the main button's sheen) rest while the page is hidden. */
+html.am-hidden .casino-jackpots b, html.am-hidden .casino-screen .cs-body .cs-primary::after { animation-play-state: paused; }

@@ -8,7 +8,7 @@ const { chromium } = require("playwright"),
 (async () => {
   const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
   try {
-    async function open({ saved, reduced = false } = {}) {
+    async function open({ saved, reduced = false, forceFull = false } = {}) {
       const page = await browser.newPage({ viewport: { width: 390, height: 800 } }),
         errors = [];
       page.on("pageerror", (e) => errors.push(e.message));
@@ -19,6 +19,8 @@ const { chromium } = require("playwright"),
         localStorage.setItem("aiglish_sound_settings", JSON.stringify({ enabled: false }));
         if (saved && !localStorage.getItem("aiglish_motion")) localStorage.setItem("aiglish_motion", saved);
       }, saved);
+      // (an automated browser starts in "test"; to see the watching, make it start in full without a saved choice)
+      if (forceFull) await page.addInitScript(() => { Object.defineProperty(navigator, "webdriver", { get: () => false }); });
       await page.goto("http://127.0.0.1:8000");
       await page.getByRole("button", { name: "ゲストで試す" }).click();
       await page.waitForFunction(() => window.__learningBootReady === true && window.AppMotion);
@@ -189,6 +191,30 @@ const { chromium } = require("playwright"),
     });
     assert.deepEqual(shimmer, { on: [true, "am-shimmer"], off: false, bar: "am-bar-grow" });
 
+    // Stage 5: calm draws the same movements without blur or sweeping light; the casino screen's entrance has no blur at all (it is
+    // as big as the screen); the endless lights rest while the page is hidden.
+    const keyframes = await page.evaluate(() => {
+      const text = [];
+      for (const sheet of document.styleSheets) {
+        try { for (const rule of sheet.cssRules) if (rule.type === CSSRule.KEYFRAMES_RULE && rule.name === "cm-screen-in") text.push(rule.cssText); } catch {}
+      }
+      return text.join(" ");
+    });
+    assert.ok(keyframes && !/blur/.test(keyframes), "the whole-screen entrance has no blur: " + keyframes);
+    await page.evaluate(() => window.AppMotion.set("calm"));
+    await page.evaluate(() => window.switchTab("casino"));
+    const calm = await page.evaluate(() => {
+      window.showToast("控えめ", "ok");
+      return {
+        card: getComputedStyle(document.querySelector("#view-casino .casino-game")).animationName,
+        toast: getComputedStyle(document.querySelector("#toastHost .am-toast")).animationName,
+        sweep: getComputedStyle(document.querySelector("#view-casino .casino-game"), "::after").display,
+      };
+    });
+    assert.deepEqual(calm, { card: "cm-reveal-calm", toast: "am-toast-in-calm", sweep: "none" });
+    await page.evaluate(() => window.AppMotion.set("full"));
+    await page.evaluate(() => window.switchTab("vocab"));
+
     // The setting: calm, then off; it is kept, and the casino layer follows.
     // (one line in the sidebar menu that goes round: おしゃれ → 控えめ → なし)
     const next = () => page.evaluate(() => document.getElementById("motionMenuButton").click());
@@ -227,6 +253,23 @@ const { chromium } = require("playwright"),
     assert.deepEqual(old, ["", true]);
     assert.deepEqual(errors, []);
     await page.close();
+
+    // A device that struggles: with the CPU slowed down a lot, a player who has not chosen anything goes on in calm by itself; the saved
+    // choice is untouched, and a player who chose full is left alone.
+    for (const choose of ["", "full"]) {
+      ({ page, errors } = await open({ saved: choose || undefined, forceFull: !choose }));
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 40 });
+      for (const tab of ["study", "titles", "community", "vocab", "reader", "study", "vocab"]) {
+        await page.evaluate((t) => window.switchTab(t), tab);
+        await page.waitForTimeout(800);
+      }
+      const mode = await page.evaluate(() => [document.documentElement.dataset.motion, localStorage.getItem("aiglish_motion")]);
+      if (choose) assert.deepEqual(mode, ["full", "full"], "a chosen full is left alone");
+      else assert.deepEqual(mode, ["calm", null], "this session went to calm; the choice (none) is untouched");
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      await page.close();
+    }
 
     // The device's "reduce motion" always means off, even when full was chosen; the setting is locked.
     ({ page, errors } = await open({ saved: "full", reduced: true }));

@@ -196,6 +196,35 @@
     }
   }).observe(document.body, { subtree: true, childList: true, characterData: true });
   document.addEventListener("visibilitychange", () => root.classList.toggle("am-hidden", document.hidden));
+
+  // ---- Stage 5: a device that struggles drops to "calm" by itself --------------------------------------------------------
+  // For a few moves after the app opens, how long the frames take while a tab or a dialog comes in is watched. If most frames are
+  // slow (a low-end phone), this session goes on in "calm" (not saved: the player's own choice is never changed, and a player who
+  // chose "full" is left alone).
+  let slowWindows = 0,
+    watched = 0;
+  function watch() {
+    if (mode() !== "full" || saved() || watched >= 4 || !window.requestAnimationFrame) return;
+    watched++;
+    const times = [];
+    let last = performance.now();
+    const stop = last + 650;
+    const tick = (now) => {
+      times.push(now - last);
+      last = now;
+      if (now < stop) return requestAnimationFrame(tick);
+      const slow = times.filter((t) => t > 48).length;
+      // (a window with few frames, or a hidden page, says nothing)
+      if (!document.hidden && times.length >= 6 && slow / times.length > 0.4) slowWindows++;
+      else slowWindows = Math.max(0, slowWindows - 1);
+      if (slowWindows >= 2 && mode() === "full") root.setAttribute("data-motion", "calm");
+    };
+    requestAnimationFrame(tick);
+  }
+  window.onTabChange?.(() => setTimeout(watch, 0));
+  new MutationObserver((records) => {
+    for (const r of records) if (r.target.hasAttribute("open")) watch();
+  }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
   reducedQuery?.addEventListener?.("change", apply);
   window.AppMotion = Object.freeze({ mode, on, set, onChange: (fn) => (listeners.add(fn), () => listeners.delete(fn)) });
   apply();
