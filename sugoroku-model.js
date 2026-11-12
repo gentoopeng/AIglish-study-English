@@ -76,10 +76,10 @@
         ...KAKU(1),
         // Swings stay small: no plain slot takes or gives more than 2 times the bet (200 at a bet of 100; the 確変 wheel, the
         // games and the balls are the big ones). The plain slots are mostly plus, because the wheel as a whole (what the
-        // ITEM, ball, STOP, ハイ＆ロー, card-game and 確変 slots are worth included) has to pay back about 0.95 of the bet
-        // (see the test "pays back about 0.95").
+        // ITEM, ball, STOP, ハイ＆ロー, card-game and 確変 slots are worth included) has to pay back about 0.90 of the bet
+        // (see the test "pays back about 0.90"). It was 0.95 with five ×2 slots more: players won too much, so two ×2 became ×1.5.
         ...N(-2, 4), ...N(-1), ...N(0, 2), ...ITEM(5),
-        ...N(1, 2), ...N(1.5, 4), ...N(2, 9),
+        ...N(1, 2), ...N(1.5, 8), ...N(2, 5),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
