@@ -68,7 +68,8 @@
   async function image(id, v) {
     if (!M.isId(id)) return "";
     const held = images.get(id);
-    if (held && (v === undefined || held.v === v)) return held.data;
+    // (a picture that was not there is looked for again after a minute, so one bad read does not hide it until the app is reopened)
+    if (held && (v === undefined || held.v === v) && (held.data || Date.now() - (held.at || 0) < 60e3)) return held.data;
     if (!held || v !== undefined) {
       try {
         const kept = localStorage.getItem(IMG_KEY(id)),
@@ -84,7 +85,7 @@
       const snap = await window.fbGetDoc(imageRef(id));
       const value = snap.exists() ? snap.data().image : "";
       const ok = M.imageOk(value) ? value : "";
-      images.set(id, { data: ok, v: v ?? 0 });
+      images.set(id, { data: ok, v: v ?? 0, at: Date.now() });
       if (ok) keepImage(id, ok, v ?? 0);
       return ok;
     } catch (error) {
@@ -131,6 +132,16 @@
       return image(stamp.id, stamp.imageV ? stamp.imageV : undefined);
     }
     return image(stamp.id, stamp.imageV);
+  }
+  // Forget everything kept on this device about stamps (the tray's "読み込み直す"): data, pictures and the list the player has.
+  function reset() {
+    metas.clear();
+    images.clear();
+    boxCache = { owner: "", ids: [], at: 0 };
+    try {
+      for (const id of JSON.parse(localStorage.getItem(IMG_INDEX) || "[]")) (localStorage.removeItem(IMG_KEY(id)), localStorage.removeItem(IMG_VER(id)));
+      localStorage.removeItem(IMG_INDEX);
+    } catch {}
   }
   // Forget what is kept about a stamp (after it was changed).
   function forget(id) {
@@ -601,7 +612,13 @@
     const store_ = node("button", "stamps-store", "ストア");
     store_.type = "button";
     store_.onclick = () => (onStore ? onStore() : store());
-    host.append(grid, store_);
+    const again = node("button", "stamps-store stamps-again", "読み込み直す");
+    again.type = "button";
+    again.onclick = () => {
+      reset();
+      tray(host, { onPick, onStore });
+    };
+    host.append(grid, store_, again);
     const wait = node("p", "stamps-hint", "読み込み中…");
     grid.append(wait);
     mine(true).then(
@@ -609,12 +626,15 @@
         grid.replaceChildren();
         const usable = [];
         for (const id of ids) {
-          // Removed ones are hidden here (their id stays in the list).
+          // Removed ones are hidden here (their id stays in the list). A stamp whose data could not be read now is still shown
+          // (it is the player's own; hiding it on one failed read made bought stamps seem to be missing).
           try {
             const stamp = await get(id);
             // Only what is approved can be sent (the others would show nothing to the one who gets it).
             if (M.usable(stamp, uid(), window.isAdmin === true) && !M.unreviewed(stamp)) usable.push({ id, stamp });
-          } catch {}
+          } catch {
+            usable.push({ id, stamp: null });
+          }
         }
         if (!usable.length) return grid.append(node("p", "stamps-hint", "スタンプがありません。ストアで買うか、自分で作れます。"));
         for (const { id, stamp } of usable) {
@@ -623,7 +643,7 @@
           b.setAttribute("aria-label", "スタンプを送る");
           const picture = img(id);
           b.append(picture);
-          lazy(picture, () => pictureOf(stamp));
+          lazy(picture, () => (stamp ? pictureOf(stamp) : image(id)));
           b.onclick = () => onPick(id);
           grid.append(b);
         }
@@ -632,7 +652,7 @@
     );
   }
   window.Stamps = Object.freeze({
-    get, image, draft, source, prepare, pictureOf, forget, mine, remember, bubble, tray, store, create: create_, make: create, edit, close, report, change, moderate, review, queue,
+    get, image, draft, source, prepare, pictureOf, forget, reset, mine, remember, bubble, tray, store, create: create_, make: create, edit, close, report, change, moderate, review, queue,
     ui: { frame, say, node, priceText },
   });
 })();

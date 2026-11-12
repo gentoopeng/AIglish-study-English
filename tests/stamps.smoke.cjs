@@ -290,6 +290,24 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const unsentId = docs.get("pointLoans/st-a__st-b").entries.find((e) => e.kind === "unsent").id;
     assert.match(await a.evaluate(([i]) => window.PointLoans.unsend("st-b", "st-b", i).then(() => "", (e) => e.message), [unsentId]), /自分が送った/);
     await b.evaluate(() => window.PointLoans.close());
+    // A read that fails once does not make a bought stamp disappear from the tray, and "読み込み直す" starts clean.
+    await b.evaluate(() => window.PointLoans.close());
+    await b.evaluate(() => window.PointLoans.person("st-a", "st-a"));
+    await b.evaluate(() => {
+      window.Stamps.reset();
+      window.__realGet = window.fbGetDoc;
+      window.fbGetDoc = async (ref) => {
+        if (ref.path.startsWith("stamps/")) throw Error("offline");
+        return window.__realGet(ref);
+      };
+    });
+    await b.locator('[data-talk="stamp"]').click();
+    await b.locator(".talk-tray .stamps-pick").waitFor({ timeout: 10000 });
+    await b.evaluate(() => { window.fbGetDoc = window.__realGet; });
+    await b.locator(".talk-tray .stamps-again").click();
+    await b.locator(".talk-tray .stamps-pick img[src^='data:']").waitFor({ timeout: 10000 });
+    await b.evaluate(() => window.PointLoans.close());
+
     // ---- The maker edits: a higher price goes to the 運営 (the difference is held, the old price stays on sale) ---------------------
     await a.evaluate(() => window.Stamps.store());
     await dlg(a).locator(".stamps-card", { hasText: "ぱんだ" }).waitFor();
