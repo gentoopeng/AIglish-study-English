@@ -190,6 +190,28 @@ const { chromium } = require("playwright"),
       return { on, off, bar };
     });
     assert.deepEqual(shimmer, { on: [true, "am-shimmer"], off: false, bar: "am-bar-grow" });
+    // A "loading…" box that gets its real content (a list drawn into it) must not stay transparent: the shimmer comes off at once, and
+    // even if it did not, what is inside keeps its own colour (this made the word book unreadable on a phone).
+    const filled = await page.evaluate(async () => {
+      const box = document.createElement("div");
+      box.style.color = "rgb(255, 255, 255)";
+      box.textContent = "読み込み中…";
+      document.body.append(box);
+      await new Promise((r) => setTimeout(r, 60));
+      const before = box.classList.contains("am-loading");
+      box.textContent = "";
+      const word = document.createElement("span");
+      word.textContent = "follow";
+      box.append(word);
+      await new Promise((r) => setTimeout(r, 60));
+      const after = [box.classList.contains("am-loading"), getComputedStyle(word).webkitTextFillColor];
+      // The safety net on its own: force the class onto a box with content.
+      box.classList.add("am-loading");
+      const forced = getComputedStyle(word).webkitTextFillColor;
+      box.remove();
+      return { before, after, forced };
+    });
+    assert.deepEqual(filled, { before: true, after: [false, "rgb(255, 255, 255)"], forced: "rgb(255, 255, 255)" });
 
     // Stage 5: calm draws the same movements without blur or sweeping light; the casino screen's entrance has no blur at all (it is
     // as big as the screen); the endless lights rest while the page is hidden.
@@ -214,6 +236,20 @@ const { chromium } = require("playwright"),
     assert.deepEqual(calm, { card: "cm-reveal-calm", toast: "am-toast-in-calm", sweep: "none" });
     await page.evaluate(() => window.AppMotion.set("full"));
     await page.evaluate(() => window.switchTab("vocab"));
+
+    // The word book itself, in full motion: its words and meanings are readable (an old shimmer once made them transparent on a phone).
+    const book = await page.evaluate(async () => {
+      textbooksPool = [{ id: "rb", name: "テスト本" }];
+      textbooksCacheMap["rb"] = migrateVocabData(Array.from({ length: 3 }, (_, i) => ({ num: i + 1, word: "follow" + i, meanings: [{ id: i + 1 + "-0", text: "意味" + (i + 1) }] })));
+      window.TextbookFiles.getWords = async () => textbooksCacheMap["rb"];
+      window.switchTab("vocab");
+      await window.selectVocabLibraryBook("rb");
+      await new Promise((r) => setTimeout(r, 1200));
+      const hidden = [...document.querySelectorAll("#vocabBookContents *")].filter((el) => el.children.length === 0 && el.textContent.trim() && getComputedStyle(el).webkitTextFillColor === "rgba(0, 0, 0, 0)");
+      return { shimmering: document.querySelectorAll("#vocabBookContents .am-loading").length, transparent: hidden.length, words: document.querySelectorAll("#vocabBookContents .word-title").length };
+    });
+    assert.deepEqual(book, { shimmering: 0, transparent: 0, words: 3 });
+    await page.evaluate(() => window.showVocabLibrarySelection?.());
 
     // The setting: calm, then off; it is kept, and the casino layer follows.
     // (one line in the sidebar menu that goes round: おしゃれ → 控えめ → なし)

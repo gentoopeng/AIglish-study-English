@@ -174,6 +174,9 @@
         if (mode() === "full" && r.target.parentElement) shimmer(r.target.parentElement);
         continue;
       }
+      // A "loading…" line that gets anything added or removed is checked again: once it has children (a list was drawn into it) it is no
+      // longer a loading line, and the shimmer — which makes the letters transparent — must come off at once.
+      if (r.type === "childList" && r.target.nodeType === 1 && r.target.classList.contains("am-loading")) shimmer(r.target);
       // A line whose text was replaced (a new text node in the same element): it may be a "loading…" line now, or no longer.
       if (mode() === "full" && r.target.nodeType === 1 && [...r.addedNodes].some((n) => n.nodeType === 3)) shimmer(r.target);
       for (const node of r.addedNodes) {
