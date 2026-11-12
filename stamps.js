@@ -31,7 +31,7 @@
   const IMG_KEY = (id) => "aiglish_stamp_image_" + id,
     IMG_VER = (id) => "aiglish_stamp_image_v_" + id,
     IMG_INDEX = "aiglish_stamp_images";
-  const META_TTL = 10 * 60e3;
+  const META_TTL = 2 * 60e3; // (short: a new picture or name approved by the 運営 reaches other players within this time)
   function keepImage(id, image, v = 0) {
     try {
       const index = JSON.parse(localStorage.getItem(IMG_INDEX) || "[]").filter((k) => k !== id);
@@ -330,6 +330,12 @@
       }
     };
     box.append(node("span", "talk-stamp-wait", "…"));
+    // The maker sees the picture waiting for approval; the others still see the approved one, so say so.
+    get(id)
+      .then((stamp) => {
+        if (stamp && stamp.ownerId === uid() && stamp.draft && stamp.status !== "pending") box.title = "変更を審査中です。承認されるまで、相手には今までの絵が見えます。";
+      })
+      .catch(() => {});
     // A removed stamp is not shown even if its picture is still on this device (its data is looked at, kept 10 minutes).
     get(id)
       .then(
@@ -430,7 +436,7 @@
       const mineNow = stamp.ownerId === me;
       const note =
         { pending: "運営の審査待ち", rejected: "審査に通りませんでした", paused: "販売をやめています", stopped: "運営が停止中", deleted: "削除されました" }[stamp.status] ||
-        (stamp.review === "pending" ? "変更を審査中（今までの内容で販売中）" : "");
+        (stamp.review === "pending" ? (mineNow ? "変更を審査中（承認されるまで、ほかの人には今までの絵・値段のまま見えます）" : "変更を審査中（今までの内容で販売中）") : "");
       if (note) li.append(node("em", "stamps-note", note));
       if (stamp.status === "rejected" && stamp.rejectReason && (mineNow || admin)) li.append(node("small", "stamps-reason", "理由: " + stamp.rejectReason));
       if (stamp.review !== "pending" && stamp.reviewNote && mineNow) li.append(node("small", "stamps-reason", "変更は通りませんでした: " + stamp.reviewNote));

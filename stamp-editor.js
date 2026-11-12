@@ -356,7 +356,7 @@
         const picture = changed ? { image: exportImage({ ...state, layers: design.layers }), base: state.base, design } : {};
         if (stamp) {
           const result = await S.edit(stamp.id, { name: name.value, price: price.value, ...picture });
-          message = result === "review" ? "運営の確認に出しました。結果は「ストア」に出ます。" : "保存しました。";
+          message = result === "review" ? "運営の確認に出しました。承認されるまで、ほかの人には今までの内容が見えます。結果は「ストア」のカードに出ます。" : "保存しました。";
         } else {
           await S.make({ ...picture, name: name.value, price: price.value, rights: rights.checked });
           message = "審査に出しました。承認されると売り出せます。結果は、このストアのカードに出ます。";
