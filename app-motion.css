@@ -187,6 +187,9 @@ html[data-motion="full"] .am-loading {
   animation: am-shimmer 2.2s var(--am-io) infinite;
 }
 html.am-hidden .am-loading { animation-play-state: paused; }
+/* Safety net: the shimmer makes the letters transparent, and that is inherited. Whatever is inside a shimmering element keeps its own
+   colour, so nothing can ever be left invisible. */
+.am-loading *, .am-loading::before, .am-loading::after { -webkit-text-fill-color: currentColor !important; }
 @keyframes am-shimmer { to { background-position: -60% 0; } }
 
 
