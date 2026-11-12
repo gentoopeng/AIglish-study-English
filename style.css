@@ -3195,3 +3195,13 @@ html body dialog.vocab-entry-dialog .library-editor-actions button{min-height:42
 .ranking-all button{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:10px;width:100%;padding:10px 0;color:var(--text-main);background:transparent;border:0;border-bottom:1px solid var(--border);text-align:left;cursor:pointer;}
 .ranking-all button.is-self{color:#e5cf91;}.ranking-all button>span:nth-child(2){overflow-wrap:anywhere;}.ranking-all strong{font-variant-numeric:tabular-nums;}
 .ranking-all-empty{margin:8px 0;color:var(--text-sub);font-size:13px;}
+
+/* 今日の学習 (home card, today-study.js) */
+.today-study{display:flex;flex-direction:column;gap:8px;margin:0 0 14px;padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--card-bg);}
+.today-study-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+.today-study-head b{font-size:16px;}.today-study-head small{color:var(--text-sub);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;}
+.today-study button{min-height:44px;border-radius:12px;font:inherit;cursor:pointer;}
+.today-study-main{border:0;background:var(--accent);color:#fff;font-weight:700;font-size:15px;}
+.today-study-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.today-study-sub,.today-study-more{border:1px solid var(--border);background:var(--input-bg);color:var(--text-main);font-size:13px;}
+.today-study button:disabled{opacity:.5;cursor:default;}

@@ -385,6 +385,14 @@
     return merged;
   }
   // A save from an older tab must not move a device's current deck position back.
+  // For the home card (today-study.js): is there a flashcard session to go on with, and go on with it.
+  window.FlashResume = {
+    info(book) {
+      const saved = session(book);
+      return saved ? { index: saved.state.index, total: saved.queue.items.length } : null;
+    },
+    resume: (book) => resume(book),
+  };
   window.LearningSessionsStorage = {
     restore(k, raw) {
       if (/^core_v4_(?:flash_queue|flash_cursor|group_synced)_/.test(k))
