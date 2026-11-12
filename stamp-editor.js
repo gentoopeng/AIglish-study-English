@@ -12,33 +12,38 @@
     return el;
   };
 
-  // Draw the design on `canvas` at `size` pixels. `opaque`: paint white first (for formats that cannot be see-through).
-  function draw(canvas, state, size = SIZE, opaque = false) {
-    canvas.width = canvas.height = size;
+  // The picture is as wide and as tall as the one it is made on (the longer side is `size`); with no picture it is square.
+  // (A very long picture is kept within 1:3.)
+  function dims(state, size = SIZE) {
+    const w = state.baseImg?.naturalWidth || state.baseImg?.width,
+      h = state.baseImg?.naturalHeight || state.baseImg?.height;
+    if (!w || !h) return [size, size];
+    const ratio = Math.min(3, Math.max(1 / 3, w / h));
+    return ratio >= 1 ? [size, Math.max(8, Math.round(size / ratio))] : [Math.max(8, Math.round(size * ratio)), size];
+  }
+  // Draw the design on `canvas` at `size` pixels (the longer side). `opaque`: paint white first (for formats that cannot be
+  // see-through). `guide`: the index of the text to outline (for the preview only).
+  function draw(canvas, state, size = SIZE, opaque = false, guide = -1) {
+    const [W, H] = dims(state, size);
+    canvas.width = W;
+    canvas.height = H;
     const ctx = canvas.getContext("2d"),
       k = size / SIZE;
-    ctx.clearRect(0, 0, size, size);
+    ctx.clearRect(0, 0, W, H);
     if (opaque) {
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, size, size);
+      ctx.fillRect(0, 0, W, H);
     }
     if (state.bg !== "none") {
       ctx.fillStyle = state.bg;
-      ctx.fillRect(0, 0, size, size);
+      ctx.fillRect(0, 0, W, H);
     }
-    if (state.baseImg) {
-      const w = state.baseImg.naturalWidth || state.baseImg.width,
-        h = state.baseImg.naturalHeight || state.baseImg.height;
-      if (w && h) {
-        const scale = Math.min(size / w, size / h);
-        ctx.drawImage(state.baseImg, (size - w * scale) / 2, (size - h * scale) / 2, w * scale, h * scale);
-      }
-    }
-    for (const layer of state.layers) {
-      if (!layer.text) continue;
+    if (state.baseImg) ctx.drawImage(state.baseImg, 0, 0, W, H);
+    state.layers.forEach((layer, i) => {
+      if (!layer.text) return;
       const font = M.fontOf(layer.font);
       ctx.save();
-      ctx.translate(layer.x * size, layer.y * size);
+      ctx.translate(layer.x * W, layer.y * H);
       ctx.rotate((layer.rot * Math.PI) / 180);
       ctx.font = font.weight + " " + layer.size * k + "px " + font.css;
       ctx.textAlign = "center";
@@ -51,8 +56,22 @@
       }
       ctx.fillStyle = layer.color;
       ctx.fillText(layer.text, 0, 0);
+      if (i === guide) {
+        // A dashed frame around the text that is being edited (not part of the picture).
+        const w = ctx.measureText(layer.text).width + 8 * k,
+          h = layer.size * k * 1.2;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = "#ffffffcc";
+        ctx.strokeRect(-w / 2, -h / 2, w, h);
+        ctx.setLineDash([]);
+        ctx.strokeStyle = "#000000aa";
+        ctx.lineDashOffset = 4;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(-w / 2, -h / 2, w, h);
+      }
       ctx.restore();
-    }
+    });
   }
   // The picture to send: WebP first, then PNG, then JPEG, smaller and smaller until it fits.
   function exportImage(state) {
@@ -89,8 +108,10 @@
     let changed = !stamp; // the picture / text were touched (a new stamp always has a picture to approve)
     const canvas = node("canvas", "stamps-canvas");
     canvas.width = canvas.height = SIZE;
+    const stage = node("div", "stamps-stage");
+    stage.append(canvas);
     canvas.setAttribute("aria-label", "スタンプのプレビュー（文字はドラッグで動かせます）");
-    const repaint = () => draw(canvas, state);
+    const repaint = () => draw(canvas, state, SIZE * 2, false, state.sel);
     const touched = () => {
       changed = true;
       repaint();
@@ -129,12 +150,12 @@
     const costNote = () => {
       let text = "";
       try {
-        if (!stamp) text = "審査に出すとき、値段と同じ " + M.priceOf(price.value) + "pt を預かります。承認されるとそのまま費用になり、却下・取り下げなら全額戻ります。";
+        if (!stamp) text = "作る費用として、販売価格と同じ " + M.priceOf(price.value) + "pt を支払います（今すぐ引かれます）。運営が承認するとそのまま費用になり、却下・取り下げなら全額戻ります。";
         else {
           const plan = M.planEdit(stamp, { name: name.value, price: price.value, picture: changed });
           text = plan.review
             ? plan.hold > 0
-              ? "運営の確認が必要です。あと " + plan.hold + "pt を預かります（承認で費用になり、却下・取り下げで戻ります）。確認中も今までの内容で販売できます。"
+              ? "運営の確認が必要です。作る費用の差額 " + plan.hold + "pt（販売価格との差）を支払います。承認で費用になり、却下・取り下げで戻ります。確認中も今までの内容で販売できます。"
               : "運営の確認が必要です。費用はかかりません。確認中も今までの内容で販売できます。"
             : "すぐに反映されます（費用なし）。";
         }
@@ -252,16 +273,20 @@
         field("フォント", font),
         color("文字の色", () => layer.color, (v) => (layer.color = v)),
         range("大きさ", 10, 96, "size"),
+      );
+      const more = node("details", "stamps-more-edit");
+      more.append(
+        node("summary", "", "ふち・かたむき・位置をくわしく"),
         color("ふちの色", () => layer.stroke.color, (v) => (layer.stroke.color = v)),
         range("ふちの太さ", 0, 12, "width", "stroke"),
         range("かたむき", -180, 180, "rot"),
         range("横の位置（%）", 0, 100, "x100"),
         range("縦の位置（%）", 0, 100, "y100"),
-        remove,
       );
+      panel.append(more, remove);
       // The position sliders show 0-100 (the design keeps 0-1).
       for (const [label, key] of [["横の位置（%）", "x"], ["縦の位置（%）", "y"]]) {
-        const el = panel.querySelector('[aria-label="' + label + '"]');
+        const el = more.querySelector('[aria-label="' + label + '"]');
         el.value = Math.round(layer[key] * 100);
         el.oninput = () => {
           layer[key] = Number(el.value) / 100;
@@ -344,17 +369,18 @@
       }
     };
 
-    const baseRow = field("土台の画像（なくてもOK）", file);
+    const baseRow = field("土台の画像（なくてもOK。形はそのまま使います）", file);
     baseRow.append(clearBase);
     body.append(
-      canvas,
-      node("p", "stamps-hint", "文字は絵の上でドラッグして動かせます。"),
-      baseRow,
-      bgRow,
+      stage,
+      node("p", "stamps-hint stamps-drag", "文字は絵の上でドラッグして動かせます。"),
       node("h3", "stamps-sub", "文字"),
       tabs,
       add,
       panel,
+      node("h3", "stamps-sub", "絵と背景"),
+      baseRow,
+      bgRow,
       node("h3", "stamps-sub", "名前と値段"),
       field("名前", name),
       field("値段（pt）", price),
@@ -367,5 +393,5 @@
     repaint();
     costNote();
   }
-  window.StampEditor = Object.freeze({ open, draw, exportImage });
+  window.StampEditor = Object.freeze({ open, draw, exportImage, dims });
 })();

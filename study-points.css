@@ -325,7 +325,7 @@
 .stamps-pick img{width:100%;height:100%;object-fit:contain;}
 .talk-tray .stamps-store{display:block;width:100%;margin-top:10px;min-height:38px;}
 .talk-stamp{max-width:46%;min-width:80px;}
-.talk-stamp img{display:block;width:100%;height:auto;max-height:150px;object-fit:contain;}
+.talk-stamp img{display:block;width:auto;height:auto;max-width:100%;max-height:150px;object-fit:contain;}
 .talk-stamp.is-gone span,.talk-stamp-wait{display:block;padding:10px 12px;border-radius:14px;background:#2e3a4f;color:#c1c6ce;font-size:12px;}
 .talk-line-avatar{flex:none;width:30px !important;height:30px !important;border-radius:50%;overflow:hidden;align-self:flex-start;}
 .talk-avatar-gap{flex:none;width:30px;height:30px;}
@@ -368,3 +368,17 @@ span.talk-line-avatar.talk-initial{display:grid;place-items:center;font-size:13p
 .talk-unsent{max-width:76%;padding:6px 12px;border-radius:14px;font-size:12px;color:#c9c2b4;background:rgba(0,0,0,.28);border:1px dashed rgba(255,255,255,.25);}
 .talk-bubble.is-unsendable,.talk-stamp.is-unsendable{cursor:pointer;}
 .talk-unsend{align-self:center;margin:0 6px;white-space:nowrap;padding:4px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.45);color:#fff;font-size:12px;}
+
+.stamps-stage{position:sticky;top:-12px;z-index:3;display:grid;place-items:center;padding:10px;margin:-4px -14px 0;background:#0f1724;border-bottom:1px solid #ffffff14;}
+.stamps-canvas{display:block;max-width:min(100%,280px);max-height:34dvh;width:auto;height:auto;border-radius:10px;touch-action:none;background:repeating-conic-gradient(#2a3448 0 25%,#1b2434 0 50%) 0 0/16px 16px;}
+.stamps-drag{text-align:center;}
+.stamps-sub{margin:6px 0 0;font-size:14px;color:#e6d29a;}
+.stamps-layers{display:flex;flex-wrap:wrap;gap:6px;}
+.stamps-layer-tab,.stamps-body button:not(.stamps-primary){min-height:40px;padding:0 12px;border-radius:10px;}
+.stamps-layer-tab.is-on{background:#d5bf86;color:#111c2c;border-color:#d5bf86;}
+.stamps-layer-panel{display:flex;flex-direction:column;gap:10px;}
+.stamps-more-edit{display:flex;flex-direction:column;gap:10px;}
+.stamps-more-edit>summary{cursor:pointer;min-height:36px;color:#9aa3b0;font-size:13px;}
+.stamps-field input[type=range]{width:100%;min-height:32px;}
+.stamps-field input[type=color]{width:56px;height:40px;padding:2px;border:1px solid #ffffff1f;border-radius:8px;background:#152033;}
+.stamps-cost{color:#e6d29a;}
