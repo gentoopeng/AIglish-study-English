@@ -463,10 +463,11 @@
           if (!armed) {
             armed = true;
             buy.textContent = priceText(stamp) + "で買う（もう一度）";
+            say(status, "「" + stamp.name + "」を " + priceText(stamp) + " で買います。もう一度押すと買えます。");
             setTimeout(() => {
               armed = false;
               buy.textContent = "買う";
-            }, 4000);
+            }, 10000);
             return;
           }
           buy.disabled = true;

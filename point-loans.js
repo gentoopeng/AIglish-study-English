@@ -306,6 +306,38 @@
   // added to the buyer's box and its sales go up by one. `seen`: the price the buyer was shown (refused if it changed).
   async function buyStamp(stampId, seen) {
     ready();
+    // Points just earned by studying are kept on this device first and reach the cloud a little later; the purchase looks at the
+    // cloud, so they are sent first (not waiting more than a few seconds), or a player with enough points was told they had none.
+    if (Number(seen) > 0 && window.StudyPoints?.flush) {
+      try {
+        await Promise.race([window.StudyPoints.flush(), new Promise((resolve) => setTimeout(resolve, 6000))]);
+      } catch {}
+    }
+    // A busy moment (many buying at once) ends the transaction with "aborted": try again a couple of times.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await buyStampOnce(stampId, seen);
+      } catch (error) {
+        if (error?.code === "aborted" && attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1) + Math.random() * 300));
+          continue;
+        }
+        throw friendly(error);
+      }
+    }
+  }
+  // What a failed purchase says, in words the player can act on (our own messages pass through).
+  function friendly(error) {
+    const code = String(error?.code || "");
+    if (code === "aborted") return Error("いま混み合っています。少し待って、もう一度お試しください。");
+    if (code === "unavailable" || code === "deadline-exceeded" || /network|offline/i.test(String(error?.message))) return Error("通信できませんでした。電波を確認して、もう一度お試しください。");
+    if (code === "permission-denied") return Error("この操作は許可されていません。アプリを開き直してお試しください。");
+    if (code === "resource-exhausted") return Error("クラウドの利用上限に達しています。時間をおいてお試しください。");
+    if (code && !error.message?.match(/[぀-ヿ一-鿿]/)) return Error("買えませんでした（" + code + "）。もう一度お試しください。");
+    return error;
+  }
+  async function buyStampOnce(stampId, seen) {
+    ready();
     const SM = window.StampsModel;
     if (!SM) throw Error("スタンプを使えません。");
     const me = uid(),

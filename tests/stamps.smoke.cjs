@@ -269,6 +269,46 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(wallet("st-b"), 450);
     await b.evaluate(() => window.Stamps.close());
 
+    // Points just earned are sent to the cloud before a purchase: the cloud still shows 10pt, the local flush brings it to 500.
+    docs.set("users/st-c2", { playerName: "st-c2", studyPoints: 10 });
+    docs.set("users/st-c2/learningPoints/main", { balance: 10, revision: 1, history: {} });
+    const flushed = await admin.evaluate(async ([id]) => {
+      let flushes = 0,
+        tries = 0;
+      const realFlush = window.StudyPoints.flush,
+        realTx = window.fbRunTransaction;
+      window.StudyPoints.flush = async () => {
+        flushes++;
+        await window.fbSetDoc(window.fbDoc(null, "users", "st-c2", "learningPoints", "main"), { balance: 500, revision: 2 }, { merge: true });
+        return true;
+      };
+      // One busy moment ("aborted") on the way: it is tried again.
+      window.fbRunTransaction = async (db, fn) => {
+        if (++tries === 1) throw Object.assign(Error("contention"), { code: "aborted" });
+        return realTx(db, fn);
+      };
+      try {
+        await window.PointLoans.buyStamp(id, 50);
+        return { flushes, tries, error: "" };
+      } catch (error) {
+        return { flushes, tries, error: error.message };
+      } finally {
+        window.StudyPoints.flush = realFlush;
+        window.fbRunTransaction = realTx;
+      }
+    }, [id]);
+    assert.deepEqual(flushed, { flushes: 1, tries: 2, error: "" }, "flushed first, retried once after a busy moment, then bought");
+    assert.equal(wallet("st-c2"), 450);
+    // A failure says what to do (a lost connection, not a code).
+    assert.match(
+      await b.evaluate(async () => {
+        const realTx = window.fbRunTransaction;
+        window.fbRunTransaction = async () => { throw Object.assign(Error("x"), { code: "unavailable" }); };
+        try { await window.PointLoans.buyStamp("zzzzzzzz1", 50); return ""; } catch (e) { return e.message; } finally { window.fbRunTransaction = realTx; }
+      }),
+      /電波を確認/,
+    );
+
     // ---- B sends it in the talk with A; A sees the picture --------------------------------------------
     await b.evaluate(() => window.PointLoans.person("st-a", "st-a"));
     await b.locator('[data-talk="stamp"]').click();
@@ -355,7 +395,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await dlg(a).getByRole("button", { name: "保存する" }).click();
     await dlg(a).locator(".stamps-status", { hasText: "運営の確認に出しました" }).waitFor();
     assert.deepEqual([docs.get("stamps/" + id).price, docs.get("stamps/" + id).review, docs.get("stamps/" + id).next, docs.get("stamps/" + id).feeHeld], [50, "pending", { price: 80 }, 30], "the old price stays on sale");
-    assert.equal(wallet("st-a"), 470, "the 30pt difference is held");
+    assert.equal(wallet("st-a"), 520, "the 30pt difference is held (500 + the 50pt the 運営 paid for the stamp, collected, - 30)");
     await a.evaluate(() => window.Stamps.close());
     // Meanwhile it cannot be edited again; the maker can only wait or withdraw.
     assert.match(await a.evaluate(([id]) => window.Stamps.change(id, { price: 10 }).then(() => "", (e) => e.message), [id]), /確認中/);
