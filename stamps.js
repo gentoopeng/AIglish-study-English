@@ -428,11 +428,7 @@
     const make = node("button", "stamps-make", "＋ スタンプを作る");
     make.type = "button";
     make.onclick = () => create_((note) => store(onChange, note));
-    const grid = node("div", "stamps-grid");
-    const more = node("button", "stamps-more", "もっと見る");
-    more.type = "button";
-    more.hidden = true;
-    body.append(make, grid, more);
+    body.append(make);
     let owned = [];
     try {
       owned = await mine();
@@ -515,24 +511,7 @@
       if (admin) {
         if (stamp.status !== "deleted") {
           if (stamp.status === "pending" || stamp.review === "pending") {
-            button("承認（運営）", async () => {
-              try {
-                await review(stamp.id, "approve");
-                store(onChange);
-              } catch (error) {
-                say(status, error.message, true);
-              }
-            }, "stamps-buy");
-            button("却下（運営）", async () => {
-              const reason = window.prompt("却下の理由（作った人に表示されます。費用は返します）", "");
-              if (reason === null) return;
-              try {
-                await review(stamp.id, "reject", reason);
-                store(onChange);
-              } catch (error) {
-                say(status, error.message, true);
-              }
-            }, "stamps-danger");
+            button("確認する（運営）", () => reviewScreen(queueList.some((q) => q.id === stamp.id) ? queueList : [stamp], Math.max(0, queueList.findIndex((q) => q.id === stamp.id))), "stamps-buy");
           } else if (stamp.status === "stopped" || stamp.status === "on" || stamp.status === "paused")
             button(stamp.status === "stopped" ? "販売を再開（運営）" : "販売を停止（運営）", async () => {
               try {
@@ -566,35 +545,197 @@
       if (actions.children.length) li.append(actions);
       return li;
     };
-    let cursor = null;
-    const shownIds = new Set();
-    // The 運営 sees what is waiting first (a query of its own, so it is not buried under newer stamps).
-    if (admin) {
-      try {
-        const waiting = await queue();
-        if (waiting.length) grid.append(node("p", "stamps-queue", "審査待ち " + waiting.length + "件"));
-        for (const stamp of waiting) (shownIds.add(stamp.id), grid.append(card(stamp)));
-      } catch (error) {
-        say(status, error?.message || "審査待ちを読めませんでした。", true);
+    // ---- Tabs: the store (what others sell), the player's own stamps, and for the 運営 what waits for approval ----
+    let queueList = [];
+    const panes = {};
+    const tabsBar = node("div", "stamps-tabs");
+    tabsBar.setAttribute("role", "tablist");
+    body.replaceChildren(make, tabsBar);
+    const tabDefs = [["shop", "ストア"], ["mine", "自分のスタンプ"], ...(admin ? [["review", "審査待ち"]] : [])];
+    const open_ = (key) => {
+      for (const [k, pane] of Object.entries(panes)) {
+        pane.root.hidden = k !== key;
+        pane.tab.classList.toggle("is-on", k === key);
+        pane.tab.setAttribute("aria-selected", String(k === key));
       }
+      if (!panes[key].loaded) panes[key].load();
+    };
+    for (const [key, label] of tabDefs) {
+      const tab = node("button", "stamps-tab", label);
+      tab.type = "button";
+      tab.setAttribute("role", "tab");
+      tab.onclick = () => open_(key);
+      const root = node("div", "stamps-pane");
+      root.hidden = true;
+      const grid = node("div", "stamps-grid");
+      root.append(grid);
+      panes[key] = { tab, root, grid, loaded: false, load: async () => {} };
+      tabsBar.append(tab);
+      body.append(root);
     }
-    const load = async () => {
-      more.disabled = true;
+    const empty = (grid, text) => grid.append(node("p", "stamps-empty", text));
+    // The store: others' stamps that are on sale. A page is the 20 newest of all; pages are read until enough show.
+    {
+      const pane = panes.shop,
+        grid = pane.grid;
+      const more = node("button", "stamps-more", "もっと見る");
+      more.type = "button";
+      more.hidden = true;
+      pane.root.append(more);
+      let cursor = null,
+        busy = false,
+        last = false;
+      const visible = (stamp) => (admin ? true : stamp.status === "on" && stamp.ownerId !== me);
+      pane.load = async () => {
+        if (busy) return;
+        busy = true;
+        pane.loaded = true;
+        more.disabled = true;
+        try {
+          let shown = 0;
+          for (let pages = 0; pages < 6 && shown < 8 && !last; pages++) {
+            const result = await page(cursor);
+            cursor = result.cursor;
+            last = result.last;
+            for (const stamp of result.list) if (visible(stamp)) (grid.append(card(stamp)), shown++);
+          }
+          more.hidden = last;
+          if (!grid.children.length && last) empty(grid, "まだ、ほかの人のスタンプはありません。最初のスタンプを作ってみましょう。");
+        } catch (error) {
+          pane.loaded = false;
+          say(status, error?.message || "読み込めませんでした。", true);
+        } finally {
+          busy = false;
+          more.disabled = false;
+        }
+      };
+      more.onclick = pane.load;
+    }
+    // The player's own stamps, with where each one is (waiting, on sale, turned down...).
+    panes.mine.load = async () => {
+      panes.mine.loaded = true;
       try {
-        const result = await page(cursor);
-        cursor = result.cursor;
-        // (Everybody sees what is for sale; the maker sees their own whatever they are; the 運営 sees all.)
-        for (const stamp of result.list) if (!shownIds.has(stamp.id) && (admin ? true : stamp.status === "on" || (stamp.ownerId === me && stamp.status !== "deleted"))) (shownIds.add(stamp.id), grid.append(card(stamp)));
-        more.hidden = result.last;
-        if (!grid.children.length && result.last) grid.append(node("p", "stamps-empty", "まだスタンプがありません。最初のスタンプを作ってみましょう。"));
+        guard();
+        const list = [];
+        const snap = await window.fbGetDocs(window.fbQuery(window.fbCollection(window.db, "stamps"), window.fbWhere("ownerId", "==", me), window.fbLimit(60)));
+        snap.forEach((d) => {
+          const stamp = M.clean(d.data(), d.id);
+          if (stamp && stamp.status !== "deleted") {
+            stamp.id = d.id;
+            metas.set(d.id, { stamp, at: Date.now() });
+            list.push(stamp);
+          }
+        });
+        list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        for (const stamp of list) {
+          const li = card(stamp);
+          const flow = stepsLine(stamp);
+          if (flow) li.insertBefore(flow, li.querySelector(".stamps-actions"));
+          panes.mine.grid.append(li);
+        }
+        if (!list.length) empty(panes.mine.grid, "まだ作っていません。「＋ スタンプを作る」から作れます。");
       } catch (error) {
+        panes.mine.loaded = false;
         say(status, error?.message || "読み込めませんでした。", true);
-      } finally {
-        more.disabled = false;
       }
     };
-    more.onclick = load;
-    await load();
+    if (admin)
+      panes.review.load = async () => {
+        panes.review.loaded = true;
+        try {
+          queueList = await queue();
+          panes.review.tab.textContent = "審査待ち" + (queueList.length ? "（" + queueList.length + "）" : "");
+          for (const stamp of queueList) panes.review.grid.append(card(stamp));
+          if (queueList.length) {
+            const go = node("button", "stamps-primary", "順番に確認する（" + queueList.length + "件）");
+            go.type = "button";
+            go.onclick = () => reviewScreen(queueList, 0);
+            panes.review.root.prepend(go);
+          } else empty(panes.review.grid, "審査待ちはありません。");
+        } catch (error) {
+          panes.review.loaded = false;
+          say(status, error?.message || "審査待ちを読めませんでした。", true);
+        }
+      };
+    // Where to start: the 運営 with something waiting starts there; a maker coming from the editor sees their own.
+    if (admin) {
+      try {
+        queueList = await queue();
+      } catch {}
+    }
+    open_(admin ? (queueList.length ? "review" : "shop") : note ? "mine" : "shop");
+    if (admin && queueList.length) panes.review.tab.textContent = "審査待ち（" + queueList.length + "）";
+
+    // ---- The 運営's review: one stamp at a time, large, with the reasons to choose from ----
+    function reviewScreen(list, index) {
+      const stamp = list[index];
+      if (!stamp) return store(onChange, "審査待ちを全部確認しました。");
+      const { body: view, status: st } = frame("スタンプの審査（" + (index + 1) + "/" + list.length + "）");
+      const picture = img(stamp.id, "stamps-review-img");
+      lazy(picture, () => pictureOf(stamp));
+      const change_ = stamp.status !== "pending";
+      const facts = node("dl", "stamps-facts");
+      const fact = (k, v) => facts.append(node("dt", "", k), node("dd", "", v));
+      fact("名前", stamp.name);
+      fact("作った人", stamp.ownerName);
+      fact("値段", change_ && stamp.next ? stamp.price + "pt → " + stamp.next.price + "pt" : priceText(stamp));
+      fact("預かっている費用", fmt(stamp.feeHeld) + "pt（承認すると費用になります。却下すると全額返ります）");
+      fact("種類", change_ ? "販売中のスタンプの変更（承認されるまで今までの内容で販売中）" : "新しいスタンプ");
+      reportCount(stamp.id).then((n) => n && fact("通報", n + "件"));
+      const reasons = ["ほかの人の絵・著作物と思われます", "不適切な内容です", "文字が読めません", "迷惑になる内容です"];
+      let chosen = "";
+      const chips = node("div", "stamps-chips");
+      const reasonInput = node("input");
+      Object.assign(reasonInput, { type: "text", maxLength: 100, placeholder: "却下の理由（作った人に表示されます）" });
+      reasonInput.setAttribute("aria-label", "却下の理由");
+      for (const text of reasons) {
+        const chip = node("button", "stamps-chip", text);
+        chip.type = "button";
+        chip.onclick = () => {
+          chosen = text;
+          reasonInput.value = text;
+        };
+        chips.append(chip);
+      }
+      const done = async (decision) => {
+        for (const b of view.querySelectorAll("button")) b.disabled = true;
+        try {
+          await review(stamp.id, decision, decision === "reject" ? reasonInput.value || chosen : "");
+          const rest = list.filter((q) => q.id !== stamp.id);
+          queueList = queueList.filter((q) => q.id !== stamp.id);
+          return reviewScreen(rest, Math.min(index, rest.length - 1));
+        } catch (error) {
+          say(st, error?.message || "できませんでした。", true);
+          for (const b of view.querySelectorAll("button")) b.disabled = false;
+        }
+      };
+      const yes = node("button", "stamps-primary", "承認する");
+      yes.type = "button";
+      yes.onclick = () => done("approve");
+      const no = node("button", "stamps-danger", "却下する（費用は返します）");
+      no.type = "button";
+      no.onclick = () => done("reject");
+      const skip = node("button", "", "あとで（次へ）");
+      skip.type = "button";
+      skip.onclick = () => reviewScreen(list, (index + 1) % list.length);
+      const back = node("button", "", "一覧にもどる");
+      back.type = "button";
+      back.onclick = () => store(onChange);
+      const row = node("div", "stamps-review-actions");
+      row.append(yes, no);
+      view.append(picture, facts, row, node("h3", "stamps-sub", "却下するとき"), chips, reasonInput, skip, back);
+    }
+  }
+  // Where a stamp of the player's is, in three steps.
+  function stepsLine(stamp) {
+    const at = stamp.status === "pending" ? 1 : stamp.status === "rejected" ? 1 : stamp.review === "pending" ? 1 : 2;
+    const el = node("ol", "stamps-steps");
+    ["審査に出す", "運営が確認", stamp.status === "rejected" ? "却下" : "販売中"].forEach((text, i) => {
+      const li = node("li", i <= at ? "is-done" : "", text);
+      if (i === at && stamp.status === "rejected") li.classList.add("is-bad");
+      el.append(li);
+    });
+    return stamp.status === "on" && stamp.review !== "pending" ? null : el;
   }
   // Make a stamp, or change one of the player's own: the editor (stamp-editor.js) has the picture, the text, the name and the price.
   function create_(done) {

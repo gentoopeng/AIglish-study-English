@@ -111,7 +111,15 @@
     const stage = node("div", "stamps-stage");
     stage.append(canvas);
     canvas.setAttribute("aria-label", "スタンプのプレビュー（文字はドラッグで動かせます）");
-    const repaint = () => draw(canvas, state, SIZE * 2, false, state.sel);
+    // How it will look in a talk (small, as the other player sees it).
+    const talkView = node("div", "stamps-talkview");
+    const talkCanvas = node("canvas");
+    talkCanvas.setAttribute("aria-label", "トークでの見え方");
+    talkView.append(talkCanvas, node("small", "", "トークでの見え方"));
+    const repaint = () => {
+      draw(canvas, state, SIZE * 2, false, state.sel);
+      draw(talkCanvas, state, SIZE);
+    };
     const touched = () => {
       changed = true;
       repaint();
@@ -204,6 +212,28 @@
     // Text layers
     const tabs = node("div", "stamps-layers");
     const panel = node("div", "stamps-layer-panel");
+    // Ready-made looks for the selected text (one tap), to start from.
+    const presets = node("div", "stamps-presets");
+    for (const [label, look] of [
+      ["あ", { font: "pop", color: "#ffffff", stroke: { color: "#000000", width: 5 } }],
+      ["あ", { font: "maru", color: "#ffe14d", stroke: { color: "#d2452b", width: 5 } }],
+      ["あ", { font: "gothic", color: "#ff4d6d", stroke: { color: "#ffffff", width: 6 } }],
+      ["あ", { font: "mincho", color: "#222222", stroke: { color: "#ffffff", width: 3 } }],
+      ["あ", { font: "hand", color: "#1e90ff", stroke: { color: "#ffffff", width: 4 } }],
+    ]) {
+      const b = node("button", "stamps-preset", label);
+      b.type = "button";
+      b.setAttribute("aria-label", "文字のスタイル（" + M.fontOf(look.font).name + "）");
+      b.style.cssText = "font-family:" + M.fontOf(look.font).css + ";color:" + look.color + ";-webkit-text-stroke:1px " + look.stroke.color + ";background:#152033;";
+      b.onclick = () => {
+        const layer = current();
+        if (!layer) return;
+        Object.assign(layer, { font: look.font, color: look.color, stroke: { ...look.stroke } });
+        paintPanel();
+        touched();
+      };
+      presets.append(b);
+    }
     const add = node("button", "", "＋ 文字を足す");
     add.type = "button";
     const current = () => state.layers[state.sel];
@@ -374,7 +404,9 @@
     body.append(
       stage,
       node("p", "stamps-hint stamps-drag", "文字は絵の上でドラッグして動かせます。"),
+      talkView,
       node("h3", "stamps-sub", "文字"),
+      presets,
       tabs,
       add,
       panel,
