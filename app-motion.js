@@ -127,6 +127,75 @@
       if (Number.isFinite(now)) last = now;
     }).observe(points, { childList: true, characterData: true, subtree: true });
   }
+  // ---- Stage 4: lists and loading ----------------------------------------------------------------------------------
+  // Rows that appear right after the player went somewhere (a tab, a dialog) come in one after another as they scroll into view.
+  // Rows added any other time (a live update redrawing a list) just appear: nothing replays every few seconds.
+  const REVEAL = ".people-row, .group-list-row, .loans-person, .stamps-card";
+  let wentAt = 0;
+  const went = () => (wentAt = Date.now());
+  window.onTabChange?.(went);
+  new MutationObserver((records) => {
+    for (const r of records) if (r.target.hasAttribute("open")) went();
+  }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+  const io =
+    "IntersectionObserver" in window
+      ? new IntersectionObserver((entries) => {
+          for (const e of entries) {
+            if (!e.isIntersecting) continue;
+            io.unobserve(e.target);
+            release(e.target);
+          }
+        })
+      : null;
+  function release(el) {
+    if (!el.classList.contains("am-wait")) return;
+    el.classList.remove("am-wait");
+    if (!on()) return;
+    el.classList.add("am-go");
+    const done = () => el.classList.remove("am-go");
+    el.addEventListener("animationend", done, { once: true });
+    setTimeout(done, 1500);
+  }
+  const loadingText = /読み込み中|読み込んでいます|確かめています|取得しています|準備しています|確認しています/;
+  function shimmer(el) {
+    const loading = el.children.length === 0 && el.textContent.length <= 40 && loadingText.test(el.textContent);
+    if (loading && !el.classList.contains("am-loading")) {
+      el.style.setProperty("--am-load", getComputedStyle(el).color);
+      el.classList.add("am-loading");
+    } else if (!loading && el.classList.contains("am-loading")) el.classList.remove("am-loading");
+  }
+  new MutationObserver((records) => {
+    if (!on()) return;
+    const fresh = Date.now() - wentAt < 900;
+    let batch = 0;
+    for (const r of records) {
+      // A "loading…" line whose text changed.
+      if (r.type === "characterData") {
+        if (mode() === "full" && r.target.parentElement) shimmer(r.target.parentElement);
+        continue;
+      }
+      // A line whose text was replaced (a new text node in the same element): it may be a "loading…" line now, or no longer.
+      if (mode() === "full" && r.target.nodeType === 1 && [...r.addedNodes].some((n) => n.nodeType === 3)) shimmer(r.target);
+      for (const node of r.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        if (mode() === "full") {
+          if (node.childElementCount < 200) for (const el of [node, ...node.querySelectorAll("p, small, span, div, li")]) shimmer(el);
+          else shimmer(node);
+        }
+        if (!fresh || !io) continue;
+        const rows = node.matches?.(REVEAL) ? [node] : node.querySelectorAll?.(REVEAL) || [];
+        for (const row of rows) {
+          if (row.classList.contains("am-wait") || row.classList.contains("am-go")) continue;
+          row.style.setProperty("--am-delay", Math.min(batch++, 8) * 45 + "ms");
+          row.classList.add("am-wait");
+          io.observe(row);
+          // (if it was never seen, it is let go anyway, so nothing stays hidden)
+          setTimeout(() => release(row), 4000);
+        }
+      }
+    }
+  }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  document.addEventListener("visibilitychange", () => root.classList.toggle("am-hidden", document.hidden));
   reducedQuery?.addEventListener?.("change", apply);
   window.AppMotion = Object.freeze({ mode, on, set, onChange: (fn) => (listeners.add(fn), () => listeners.delete(fn)) });
   apply();
