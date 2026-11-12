@@ -63,7 +63,9 @@ async function refresh(){
  const tester=element('button','この端末だけ、閉じていても遊べるようにする');tester.type='button';tester.className='admin-sugoroku-tester';
  tester.onclick=()=>{try{const on=localStorage.getItem('aiglish_sugoroku_tester')!=='1';on?localStorage.setItem('aiglish_sugoroku_tester','1'):localStorage.removeItem('aiglish_sugoroku_tester');message(on?'この端末では、閉じていても遊べます。':'この端末のテスト用の設定を外しました。');}catch{message('この端末では設定できませんでした。');}};
  const staked=confirmButton('全員の今日の賭け済み額を0に戻す','もう一度押すと、全員の今日の賭け済み額が0に戻ります',()=>resetStaked(null),'戻しました。各端末が、次にカジノを開いたときに反映します。');staked.className='admin-casino-reset';
- body.append(refresh,books,notices,sent,bingo,gate,tester,staked);message('プレイヤーを読み込み中…');
+ // Stamps: the store with the 運営's tools (what waits for approval, approve / reject, stop, remove). The 運営's rights are on only while this dialog is open, so the store is opened from here.
+ const stamps=element('button','スタンプの審査・管理');stamps.type='button';stamps.className='admin-stamps-button';stamps.onclick=()=>{try{guard();if(!window.Stamps)throw Error('スタンプを使えません。');window.Stamps.store();}catch(error){message(error.message);}};
+ body.append(refresh,books,notices,sent,stamps,bingo,gate,tester,staked);message('プレイヤーを読み込み中…');
  try{guard();const players=[];await deadline(playerList((id,data)=>{if(id!=='GUEST-000')players.push({id,name:data.playerName||id,deleted:!!data.deleted});},()=>authorized&&dialog.open&&generation===request));
  if(request!==generation||!authorized)return;
  for(const player of players){const row=element('button');row.type='button';row.className='admin-player-row';row.append(element('strong',player.name),element('small',player.id+(player.deleted?' · 削除済み':'')));row.onclick=()=>edit(player.id);body.append(row);}
