@@ -407,16 +407,16 @@ test("played the plain way by several players on one card, every bet returns a l
   }
 });
 
-// The ふつうのマス roulette on its own pays back about 0.95 of the bet (no ガード, no items used). The plain × slots are
+// The ふつうのマス roulette on its own pays back about 0.90 of the bet (0.95 until 10.107: players won too much) (no ガード, no items used). The plain × slots are
 // counted as they are; the slots that start something are worth what the simulation measured (docs/site-stability.md,
 // 10.85.00.00): a ball 1.6, STOP 0.75, ハイ＆ロー 0.9, ブラックジャック 0.93, 役のサイコロ 0.33, チンチロ 1.02, a 確変 slot
 // 2.5 (the ITEM slot pays itemCash). When a × slot is changed, this tells whether the wheel is still where it should be.
-test("the ふつうのマス roulette pays back about 0.95 on its own", () => {
+test("the ふつうのマス roulette pays back about 0.90 on its own", () => {
   const worth = { ball: 1.6, stop: 0.75, hilo: 0.9, blackjack: 0.93, dice: 0.33, chinchiro: 1.02, kakuhen: 2.5 };
   const wheel = S.RULES.normal[100];
   const ev =
     wheel.reduce((n, slot) => n + (slot.kakuhen ? worth.kakuhen : slot.item ? S.RULES.itemCash : slot.ball ? worth.ball : slot.game ? worth[slot.game] : slot.event ? worth[slot.event] : slot.x), 0) / wheel.length;
-  assert.ok(ev > 0.93 && ev < 0.97, "wheel pays back " + ev.toFixed(3));
+  assert.ok(ev > 0.88 && ev < 0.92, "wheel pays back " + ev.toFixed(3));
 });
 
 // まとめて振る: a batch roll goes on while mini games wait, and an event game it meets is queued, not started.
