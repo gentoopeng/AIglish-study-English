@@ -3954,3 +3954,19 @@ Tests: `tests/casino-motion.smoke.cjs`（ロビーのカードが時間差で現
 
 Tests: `tests/sugoroku-model.test.cjs`（ふつうのマスのルーレットが 0.88〜0.92 の戻り）。
 
+## 10.108.00.00 アプリ全体の動き（第1段階）: 動きの仕組みと、触ったときの反応
+
+**What the owner said.** 「あらゆる動作（ボタンとかメニュー開くのとか）に、おしゃれなWebサイトにあるアニメーションをつけてください。計画を立てて、なるべく高品質に」 → 計画は `docs/ui-motion-plan.md`（Opus のレビューを反映）。5段階で、順に出す。これは第1段階。
+
+**Mode** (`index.html` の head の小さなスクリプト, `app-motion.js`). `<html data-motion>`: `full`（おしゃれ・標準）／`calm`（控えめ: 時間が短く、光なし）／`off`／`test`。最初の描画の前に決める。端末の「動きを減らす」がオンなら、選んでいても必ず `off`（設定は押せない）。選ばなければ `full`。**自動操作のブラウザ（Playwright）は、頼まなければ `test`（動きなし）**: 位置や大きさを測るテストが、動いている最中の値を拾わないため。動きを確かめるテストは `localStorage.aiglish_motion = "full"` で頼む。設定は、サイドバーのメニューの「画面の動き：○○」（押すたびに、おしゃれ→控えめ→なし。設定の画面は、1画面に収める作りで、行を足せなかったため、メニューに置いた）。`aiglish_motion` に保存。`full` / `calm` 以外では、カジノの動きの層（`casino-motion.css`）も止める（リンクを無効化）。
+
+**Touch feedback** (`app-motion.css`, `full` / `calm` のときだけ). 個別のプロパティ（`scale` / `translate`）を使うので、自分の `transform` を持つボタン（中央寄せ・回転など）を乱さない。
+- すべてのボタン: 押すと少し沈む（`scale: .968`）。触れると、少し明るくなる（`full`・マウスのとき）。ヘッダーのボタンは、淡く光る。キーボードのフォーカスの輪が、なめらかに出る。
+- 入力欄: フォーカスで、枠が温まり、柔らかい光が広がる（`full`）。
+- カード・リスト（`.card` `.textbook-list-item` `.stamps-card` ほか）: マウスを乗せると、少し浮く（`translate`）。
+- 既存のクラスにある `transition` は、そのまま（こちらは、より弱い優先度）。
+
+**Not done yet.** 画面の切り替え・下のナビ・サイドバーの暗幕（第2段階）、ダイアログ・トースト（第3段階）、リストの登場・読み込み中（第4段階）、仕上げ（第5段階）。
+
+Tests: `tests/app-motion.smoke.cjs`（頼まなければ test でカジノの層も止まる／full で触った反応が付く／calm・off の設定が変わって保存され、再起動後も残る／端末の「動きを減らす」で、full を選んでいても off で、設定は押せない）。`tests/casino-motion.smoke.cjs` は、`full` を頼むように直した。
+
