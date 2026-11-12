@@ -3983,3 +3983,16 @@ Tests: `tests/app-motion.smoke.cjs`（頼まなければ test でカジノの層
 
 Tests: `tests/app-motion.smoke.cjs` に追加（画面の切り替えの向きと動き・カジノのタブは対象外・ピルが項目に合わせて動く・暗幕のクラスと透明度と見え方・項目の動き・`off` では従来どおり暗幕を `display` で切り替え、タブの動きは無い）。
 
+## 10.110.00.00 アプリ全体の動き（第3段階）: ダイアログ・トースト・ポイント表示
+
+**What the owner said.** 「寝るので計画通り進めてください。めっちゃハイクオリティにお願いします」（`docs/ui-motion-plan.md` の第3段階）
+
+**Now** (`app-motion.css`, `app-motion.js`。`full` / `calm` のときだけ)。
+- **ダイアログの登場**: 暗がりからせり上がる（透明度と、わずかな大きさ `scale .955 → 1`。大きなものにぼかしは付けない。中央寄せの `margin:auto` のダイアログに `translate` は付けない）。対象は、`menu-dialog`（プロフィール・設定）・`library-editor-dialog`・`app-alert`・`book-study-menu`・`background-picker-dialog`・`book-flashcard-dialog`・`study-points-dialog`（ポイント・お知らせ・トーク）・`stamps-dialog`・`weak-review-screen`。以前から動きのあった2つ（`menu-dialog` `library-editor-dialog`）も、同じ動きに揃えた。画面の下から出る `talk-sheet` は、下から滑り上がる。暗幕（`::backdrop`）は、透明度だけで、なじむ（ぼかしは動かさない）。`fill-mode: backwards` なので、終わったあとに `scale` が残らない（残ると、中の固定表示を巻き込む）。**閉じる動きは付けない**（閉じた直後に消すコードが多いため）。
+- **トースト**: アプリのトーストはインラインのスタイルで、CSS では動かせないので、`full` / `calm` の間は `app-motion.js` が、クラス（`am-toast`）で描く。同じ置き場所（`#toastHost`）・同じ色・同じ2.2秒、同時に最大3つ。ぼかしの中から滑り降りて現れ、下の細い線が残り時間を数え、上へ溶けて消える（`animationend`、念のためタイマーでも片づく）。`off` / `test` では、従来のトースト。
+- **ヘッダーのポイント**: 増えると金色に淡く光り、減るとくすむ（`full`）。数字の文字は書き換えず、クラスだけ付ける。
+
+**Not done yet.** リスト・カードの登場、読み込み中の表示（第4段階）、仕上げ（第5段階）。
+
+Tests: `tests/app-motion.smoke.cjs` に追加（`app-alert` と設定のダイアログの登場と暗幕の動き／終わったあとに `scale` が残らない／トーストが3つまで・クラス・自然に消える／ポイントの増減でクラスが付き、数字は変わらない／`off` では従来のトースト）。
+

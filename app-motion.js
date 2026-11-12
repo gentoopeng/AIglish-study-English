@@ -83,6 +83,50 @@
     };
   }
   setTimeout(placePill, 0);
+
+  // ---- Stage 3: toasts, and the points at the top ---------------------------------------------------------------------
+  // The app's toast sets its look with inline styles (which a stylesheet cannot animate), so while motion is on a toast is drawn
+  // here with classes (app-motion.css): the same host, the same colours and time (2.2s), at most three at once.
+  const showToast = window.showToast;
+  if (typeof showToast === "function") {
+    window.showToast = function (message, type) {
+      if (!on()) return showToast.apply(this, arguments);
+      let host = document.getElementById("toastHost");
+      if (!host) {
+        host = document.createElement("div");
+        host.id = "toastHost";
+        host.style.cssText = "position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:99997; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; width:90%; max-width:340px;";
+        document.body.appendChild(host);
+      }
+      while (host.children.length >= 3) host.firstElementChild.remove();
+      const toast = document.createElement("div");
+      toast.className = "am-toast" + (type === "err" ? " is-err" : type === "warn" ? " is-warn" : "");
+      toast.setAttribute("role", "status");
+      toast.textContent = message;
+      host.appendChild(toast);
+      setTimeout(() => {
+        const done = () => toast.remove();
+        toast.classList.add("is-out");
+        toast.addEventListener("animationend", done, { once: true });
+        setTimeout(done, 600);
+      }, 2200);
+    };
+  }
+  // The points: a glow when the number goes up, a dim when it goes down. (Only the class changes; the text is the app's.)
+  const points = document.getElementById("headerStudyPoints");
+  if (points) {
+    let last = parseInt(points.textContent.replace(/[^\d-]/g, ""), 10);
+    new MutationObserver(() => {
+      const now = parseInt(points.textContent.replace(/[^\d-]/g, ""), 10);
+      if (Number.isFinite(last) && Number.isFinite(now) && now !== last && on()) {
+        points.classList.remove("am-up", "am-down");
+        void points.offsetWidth;
+        points.classList.add(now > last ? "am-up" : "am-down");
+        setTimeout(() => points.classList.remove("am-up", "am-down"), 1400);
+      }
+      if (Number.isFinite(now)) last = now;
+    }).observe(points, { childList: true, characterData: true, subtree: true });
+  }
   reducedQuery?.addEventListener?.("change", apply);
   window.AppMotion = Object.freeze({ mode, on, set, onChange: (fn) => (listeners.add(fn), () => listeners.delete(fn)) });
   apply();
