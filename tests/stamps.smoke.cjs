@@ -113,6 +113,15 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const png = await a.screenshot({ clip: { x: 10, y: 10, width: 120, height: 120 } });
     const dlg = (page) => page.locator("dialog.stamps-dialog[open]");
 
+    // A picture that is not square keeps its shape (the longer side is 192) instead of shrinking into a square.
+    assert.deepEqual(
+      await a.evaluate(() => {
+        const img = (w, h) => ({ naturalWidth: w, naturalHeight: h });
+        const d = (w, h) => window.StampEditor.dims({ baseImg: img(w, h) });
+        return [d(200, 100), d(100, 300), d(100, 100), d(100, 1000), window.StampEditor.dims({ baseImg: null })];
+      }),
+      [[192, 96], [64, 192], [192, 192], [64, 192], [192, 192]],
+    );
     // ---- A makes a stamp -----------------------------------------------------------------------------
     await a.evaluate(() => window.Stamps.store());
     await dlg(a).getByRole("button", { name: "＋ スタンプを作る" }).click();
@@ -122,12 +131,13 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.match(await dlg(a).locator(".stamps-status").innerText(), /チェック/, "the rights box has to be ticked");
     await dlg(a).getByLabel("名前").fill("ぱんだ");
     await dlg(a).getByLabel("値段").fill("50");
-    assert.match(await dlg(a).locator(".stamps-cost").innerText(), /50pt を預かります/);
+    assert.match(await dlg(a).locator(".stamps-cost").innerText(), /販売価格と同じ 50pt を支払います/);
     // The text: a font, a colour, a size and a place can be chosen (the first text is "スタンプ").
     await dlg(a).getByLabel("文字", { exact: true }).fill("ぱんだ");
     await dlg(a).getByLabel("フォント").selectOption("mincho");
     await dlg(a).getByLabel("文字の色").fill("#ff0000");
     await dlg(a).getByLabel("大きさ").fill("60");
+    await dlg(a).locator("summary", { hasText: "くわしく" }).click();
     await dlg(a).getByLabel("横の位置（%）").fill("30");
     await dlg(a).getByRole("button", { name: "＋ 文字を足す" }).click();
     assert.equal(await dlg(a).locator(".stamps-layer-tab").count(), 2);
@@ -287,7 +297,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await dlg(a).getByLabel("名前").waitFor();
     assert.equal(await dlg(a).getByLabel("文字", { exact: true }).inputValue(), "ぱんだ", "the text design comes back as it was made");
     await dlg(a).getByLabel("値段").fill("80");
-    assert.match(await dlg(a).locator(".stamps-cost").innerText(), /あと 30pt を預かります/);
+    assert.match(await dlg(a).locator(".stamps-cost").innerText(), /差額 30pt/);
     await dlg(a).getByRole("button", { name: "保存する" }).click();
     await dlg(a).locator(".stamps-status", { hasText: "運営の確認に出しました" }).waitFor();
     assert.deepEqual([docs.get("stamps/" + id).price, docs.get("stamps/" + id).review, docs.get("stamps/" + id).next, docs.get("stamps/" + id).feeHeld], [50, "pending", { price: 80 }, 30], "the old price stays on sale");
