@@ -209,6 +209,16 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.match(await admin.evaluate(([id]) => window.PointLoans.reviewStamp(id, "approve").then(() => "", (e) => e.message), [id]), /確認待ちではありません/, "approving twice does nothing");
     await admin.evaluate(() => window.Stamps.close());
 
+    // The 運営 can approve a stamp it made itself (the admin is the one who makes and checks them).
+    await admin.evaluate(() => localStorage.removeItem("aiglish_stamp_made_at_st-c2"));
+    const own = await admin.evaluate(async () => {
+      const data = window.StampEditor.exportImage({ bg: "#00aaff", base: "", baseImg: null, layers: [] });
+      const made = await window.Stamps.make({ image: data, name: "運営の", price: 0, rights: true });
+      await window.Stamps.review(made, "approve");
+      return made;
+    });
+    assert.equal(docs.get("stamps/" + own).status, "on", "the 運営 approved its own stamp");
+
     // ---- Turned down: the held points come back once, with the reason ----------------------------------------
     await a.evaluate(() => localStorage.removeItem("aiglish_stamp_made_at_st-a"));
     const second = await a.evaluate(async () => {

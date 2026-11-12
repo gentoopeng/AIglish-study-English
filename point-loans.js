@@ -429,7 +429,6 @@
       if (!stamp) throw Error("このスタンプは見つかりません。");
       const first = stamp.status === "pending";
       if (!first && stamp.review !== "pending") throw Error("このスタンプは確認待ちではありません。");
-      if (decision === "approve" && stamp.ownerId === me) throw Error("自分のスタンプは承認できません。");
       if (decision === "withdraw" && stamp.ownerId !== me) throw Error("自分のスタンプだけ取り下げられます。");
       const draftSnap = stamp.draft ? await tx.get(draftDoc) : null;
       if (decision === "approve") {
