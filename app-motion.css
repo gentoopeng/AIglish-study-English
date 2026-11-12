@@ -163,3 +163,28 @@ html[data-motion="full"] #headerStudyPoints.am-up { animation: am-points-up 1.3s
 html[data-motion="full"] #headerStudyPoints.am-down { animation: am-points-down 1s var(--am-ease); }
 @keyframes am-points-up { 0% { color: #fff4cc; text-shadow: 0 0 14px rgba(240, 214, 140, .95); } 100% { text-shadow: 0 0 0 rgba(240, 214, 140, 0); } }
 @keyframes am-points-down { 0% { color: #d9aaaa; opacity: .7; } 100% { opacity: 1; } }
+
+/* =============================== Stage 4: lists and loading =============================== */
+
+/* ---- Lists: rows and cards come in one after another as they scroll into view (app-motion.js: only right after the player went
+   somewhere — a tab, a dialog — never when live updates redraw a list). `am-wait` keeps a row hidden until it is on screen; `am-go`
+   plays the entrance (keyframes without a `to`: it ends on whatever the row looks like anyway, so a dimmed card stays dimmed). ---- */
+html:where([data-motion="full"], [data-motion="calm"]) .am-wait { opacity: 0 !important; }
+html:where([data-motion="full"], [data-motion="calm"]) .am-go { animation: am-row-in var(--am-slow) var(--am-soft) var(--am-delay, 0ms) backwards; }
+@keyframes am-row-in { from { opacity: 0; translate: 0 14px; } }
+
+/* ---- Progress bars grow in from the left (the book list's understanding bar) ---- */
+html:where([data-motion="full"], [data-motion="calm"]) .textbook-list-progress-fill {
+  transform-origin: left center;
+  animation: am-bar-grow calc(var(--am-slow) * 2) var(--am-soft) .12s backwards;
+}
+@keyframes am-bar-grow { from { transform: scaleX(0); } }
+
+/* ---- "Loading…" lines catch the light while they wait (shimmer on the letters; the text is untouched) ---- */
+html[data-motion="full"] .am-loading {
+  background: linear-gradient(100deg, var(--am-load, #94A3B8) 38%, #fff 50%, var(--am-load, #94A3B8) 62%) 100% 0 / 260% 100% no-repeat;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  animation: am-shimmer 2.2s var(--am-io) infinite;
+}
+html.am-hidden .am-loading { animation-play-state: paused; }
+@keyframes am-shimmer { to { background-position: -60% 0; } }

@@ -135,6 +135,60 @@ const { chromium } = require("playwright"),
     });
     assert.deepEqual(glow, [true, true, "120pt"]);
 
+    // Stage 4: rows that appear right after going somewhere wait until they are on screen, then come in (a row added later, as a live
+    // update does, just appears); "loading…" lines shimmer; the book list's bar grows in.
+    const rows = await page.evaluate(async () => {
+      window.switchTab("community");
+      const host = document.getElementById("view-community");
+      const add = (n) => {
+        const box = document.createElement("div");
+        box.id = "am-box";
+        for (let i = 0; i < n; i++) {
+          const row = document.createElement("div");
+          row.className = "people-row";
+          row.style.height = "60px";
+          row.textContent = "row " + i;
+          box.append(row);
+        }
+        host.prepend(box);
+        return box;
+      };
+      const first = add(30);
+      await new Promise((r) => setTimeout(r, 120));
+      const rowsNow = [...first.children];
+      const result = {
+        waitingBelowTheFold: rowsNow[29].classList.contains("am-wait"),
+        visibleOneReleased: !rowsNow[0].classList.contains("am-wait"),
+        animated: [...first.children].slice(0, 3).some((r) => r.classList.contains("am-go")),
+      };
+      first.remove();
+      await new Promise((r) => setTimeout(r, 1100));
+      const late = add(2);
+      await new Promise((r) => setTimeout(r, 60));
+      result.late = [...late.children].some((r) => r.classList.contains("am-wait") || r.classList.contains("am-go"));
+      late.remove();
+      return result;
+    });
+    assert.deepEqual(rows, { waitingBelowTheFold: true, visibleOneReleased: true, animated: true, late: false });
+    const shimmer = await page.evaluate(async () => {
+      const p = document.createElement("p");
+      p.textContent = "読み込み中…";
+      document.body.append(p);
+      await new Promise((r) => setTimeout(r, 60));
+      const on = [p.classList.contains("am-loading"), getComputedStyle(p).animationName];
+      p.textContent = "完了しました";
+      await new Promise((r) => setTimeout(r, 60));
+      const off = p.classList.contains("am-loading");
+      p.remove();
+      const fill = document.createElement("span");
+      fill.className = "textbook-list-progress-fill";
+      document.body.append(fill);
+      const bar = getComputedStyle(fill).animationName;
+      fill.remove();
+      return { on, off, bar };
+    });
+    assert.deepEqual(shimmer, { on: [true, "am-shimmer"], off: false, bar: "am-bar-grow" });
+
     // The setting: calm, then off; it is kept, and the casino layer follows.
     // (one line in the sidebar menu that goes round: おしゃれ → 控えめ → なし)
     const next = () => page.evaluate(() => document.getElementById("motionMenuButton").click());
@@ -160,6 +214,14 @@ const { chromium } = require("playwright"),
       return { tab: getComputedStyle(document.getElementById("view-study")).animationName, veilOpen, veilShut: getComputedStyle(document.getElementById("sidebarOverlay")).display };
     });
     assert.deepEqual(plain, { tab: "none", veilOpen: "block", veilShut: "none" });
+    const quiet = await page.evaluate(async () => {
+      const p = document.createElement("p");
+      p.textContent = "読み込み中…";
+      document.body.append(p);
+      await new Promise((r) => setTimeout(r, 60));
+      return p.classList.contains("am-loading");
+    });
+    assert.equal(quiet, false, "no shimmer when motion is off");
     // (and the app's own toast, drawn with inline styles, stays as it was)
     const old = await page.evaluate(() => { window.showToast("ふつう", "ok"); const t = document.querySelector("#toastHost > div"); return [t.className, t.style.opacity !== undefined]; });
     assert.deepEqual(old, ["", true]);
