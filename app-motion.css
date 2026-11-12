@@ -120,3 +120,46 @@ html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-me
 html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-menu-list > :nth-child(6) { animation-delay: 310ms; }
 html:where([data-motion="full"], [data-motion="calm"]) .sidebar.open .sidebar-menu-list > :nth-child(n+7) { animation-delay: 350ms; }
 @keyframes am-side-in { from { opacity: 0; translate: -14px 0; } to { opacity: 1; translate: 0 0; } }
+
+/* =============================== Stage 3: dialogs, toasts, the points =============================== */
+
+/* ---- Dialogs: they come up out of the dark (opacity and a little size; no blur on something this big, no translate on a dialog that
+   is centered by its margin). `backwards`: nothing stays on the dialog afterwards (a leftover scale would carry its fixed children).
+   There is no closing motion: much of the app removes a dialog the moment it closes. ---- */
+html:where([data-motion="full"], [data-motion="calm"]) :is(
+    dialog.menu-dialog, dialog.library-editor-dialog, dialog.app-alert, dialog.book-study-menu, dialog.background-picker-dialog,
+    dialog.book-flashcard-dialog, dialog.study-points-dialog, dialog.stamps-dialog, dialog.weak-review-screen)[open] {
+  animation: am-dialog-in var(--am-slow) var(--am-soft) backwards;
+}
+html:where([data-motion="full"], [data-motion="calm"]) dialog.talk-sheet[open] { animation: am-sheet-in var(--am-slow) var(--am-soft) backwards; }
+html:where([data-motion="full"], [data-motion="calm"]) :is(
+    dialog.menu-dialog, dialog.library-editor-dialog, dialog.app-alert, dialog.book-study-menu, dialog.background-picker-dialog,
+    dialog.book-flashcard-dialog, dialog.study-points-dialog, dialog.stamps-dialog, dialog.weak-review-screen, dialog.talk-sheet)[open]::backdrop {
+  animation: am-backdrop-in var(--am-slow) var(--am-ease) backwards;
+}
+@keyframes am-dialog-in { from { opacity: 0; scale: .955; } to { opacity: 1; scale: 1; } }
+@keyframes am-sheet-in { from { opacity: 0; translate: 0 26px; } to { opacity: 1; translate: 0 0; } }
+@keyframes am-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---- Toasts (app-motion.js draws them with these classes): they slip down out of a soft blur, a hairline counts the time they stay,
+   and they melt away upward. ---- */
+.am-toast {
+  position: relative; overflow: hidden; padding: 11px 18px 13px; border-radius: 14px; pointer-events: auto; text-align: center;
+  color: #fff; font: 800 13px/1.5 system-ui, -apple-system, "Hiragino Sans", sans-serif; letter-spacing: .3px;
+  background: rgba(16, 185, 129, .95); border: 1px solid #10B981; box-shadow: 0 10px 26px -8px rgba(0, 0, 0, .6), 0 0 16px rgba(16, 185, 129, .4);
+  animation: am-toast-in var(--am-slow) var(--am-soft) backwards;
+}
+.am-toast.is-err { background: rgba(239, 68, 68, .96); border-color: #EF4444; box-shadow: 0 10px 26px -8px rgba(0, 0, 0, .6), 0 0 16px rgba(239, 68, 68, .4); }
+.am-toast.is-warn { background: rgba(245, 158, 11, .96); border-color: #F59E0B; box-shadow: 0 10px 26px -8px rgba(0, 0, 0, .6), 0 0 16px rgba(245, 158, 11, .4); }
+.am-toast::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255, 255, 255, .55); transform-origin: left center; animation: am-toast-bar 2.2s linear forwards; }
+html[data-motion="calm"] .am-toast::after { display: none; }
+.am-toast.is-out { animation: am-toast-out calc(var(--am-base) + 40ms) var(--am-ease) forwards; }
+@keyframes am-toast-in { from { opacity: 0; translate: 0 -16px; scale: .97; filter: blur(6px); } to { opacity: 1; translate: 0 0; scale: 1; filter: blur(0); } }
+@keyframes am-toast-out { to { opacity: 0; translate: 0 -12px; scale: .98; filter: blur(4px); } }
+@keyframes am-toast-bar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* ---- The points at the top: a glow when they go up, a dim when they go down (the number itself is not touched) ---- */
+html[data-motion="full"] #headerStudyPoints.am-up { animation: am-points-up 1.3s var(--am-ease); }
+html[data-motion="full"] #headerStudyPoints.am-down { animation: am-points-down 1s var(--am-ease); }
+@keyframes am-points-up { 0% { color: #fff4cc; text-shadow: 0 0 14px rgba(240, 214, 140, .95); } 100% { text-shadow: 0 0 0 rgba(240, 214, 140, 0); } }
+@keyframes am-points-down { 0% { color: #d9aaaa; opacity: .7; } 100% { opacity: 1; } }

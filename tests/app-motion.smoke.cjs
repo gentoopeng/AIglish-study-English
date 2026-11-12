@@ -100,6 +100,41 @@ const { chromium } = require("playwright"),
     const shut = await page.evaluate(() => ({ open: document.body.classList.contains("am-sidebar-open"), visibility: getComputedStyle(document.getElementById("sidebarOverlay")).visibility }));
     assert.deepEqual([shut.open, shut.visibility], [false, "hidden"]);
 
+    // Stage 3: dialogs come up (opacity / size, no leftover), toasts are drawn with classes and leave by themselves, the points glow.
+    await page.evaluate(() => window.alert("こんにちは"));
+    await page.locator("dialog.app-alert[open]").waitFor();
+    const dlg = await page.evaluate(() => [getComputedStyle(document.querySelector("dialog.app-alert")).animationName, getComputedStyle(document.querySelector("dialog.app-alert"), "::backdrop").animationName]);
+    assert.deepEqual(dlg, ["am-dialog-in", "am-backdrop-in"]);
+    await page.evaluate(() => document.querySelector("dialog.app-alert button").click());
+    await page.waitForTimeout(700);
+    const left = await page.evaluate(() => {
+      document.getElementById("profileDialog").showModal();
+      return getComputedStyle(document.getElementById("profileDialog")).animationName;
+    });
+    assert.equal(left, "am-dialog-in", "the menu dialogs get the same entrance");
+    await page.waitForTimeout(700);
+    assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById("profileDialog")).scale), "none", "nothing is left on the dialog afterwards");
+    await page.evaluate(() => document.getElementById("profileDialog").close());
+    await page.evaluate(() => { window.showToast("保存しました", "ok"); window.showToast("失敗", "err"); window.showToast("注意", "warn"); window.showToast("四つ目", "ok"); });
+    const toasts = await page.evaluate(() => [...document.querySelectorAll("#toastHost .am-toast")].map((t) => [t.textContent, t.className, getComputedStyle(t).animationName]));
+    assert.equal(toasts.length, 3, "at most three at once");
+    assert.deepEqual(toasts.map((t) => t[0]), ["失敗", "注意", "四つ目"]);
+    assert.ok(toasts[0][1].includes("is-err") && toasts[1][1].includes("is-warn"));
+    assert.equal(toasts[2][2], "am-toast-in");
+    await page.waitForFunction(() => !document.querySelector("#toastHost .am-toast"), null, { timeout: 6000 });
+    const glow = await page.evaluate(async () => {
+      const el = document.getElementById("headerStudyPoints");
+      el.textContent = "100pt";
+      await new Promise((r) => setTimeout(r, 50));
+      el.textContent = "150pt";
+      await new Promise((r) => setTimeout(r, 50));
+      const up = el.className.includes("am-up");
+      el.textContent = "120pt";
+      await new Promise((r) => setTimeout(r, 50));
+      return [up, el.className.includes("am-down"), el.textContent];
+    });
+    assert.deepEqual(glow, [true, true, "120pt"]);
+
     // The setting: calm, then off; it is kept, and the casino layer follows.
     // (one line in the sidebar menu that goes round: おしゃれ → 控えめ → なし)
     const next = () => page.evaluate(() => document.getElementById("motionMenuButton").click());
@@ -125,6 +160,9 @@ const { chromium } = require("playwright"),
       return { tab: getComputedStyle(document.getElementById("view-study")).animationName, veilOpen, veilShut: getComputedStyle(document.getElementById("sidebarOverlay")).display };
     });
     assert.deepEqual(plain, { tab: "none", veilOpen: "block", veilShut: "none" });
+    // (and the app's own toast, drawn with inline styles, stays as it was)
+    const old = await page.evaluate(() => { window.showToast("ふつう", "ok"); const t = document.querySelector("#toastHost > div"); return [t.className, t.style.opacity !== undefined]; });
+    assert.deepEqual(old, ["", true]);
     assert.deepEqual(errors, []);
     await page.close();
 
