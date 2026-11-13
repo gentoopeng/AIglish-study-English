@@ -15,8 +15,9 @@
       return "";
     }
   };
-  // What the mode is now: the device's "reduce motion" always wins; else what was chosen; else full (test for an automated browser).
-  const decide = () => (reducedQuery?.matches ? "off" : saved() || (navigator.webdriver ? "test" : "full"));
+  // What the mode is now: what was chosen; else, for a device that asks for less motion, the short and quiet "calm" (it used to be
+  // "off", and players with that setting saw no motion at all); else full (test for an automated browser).
+  const decide = () => saved() || (navigator.webdriver ? "test" : reducedQuery?.matches ? "calm" : "full");
   const mode = () => root.getAttribute("data-motion") || "off";
   const on = () => mode() === "full" || mode() === "calm";
   const listeners = new Set();
@@ -41,14 +42,14 @@
   function sync() {
     const button = document.getElementById("motionMenuButton"),
       value = document.getElementById("motionMenuValue"),
-      locked = !!reducedQuery?.matches;
-    if (value) value.textContent = locked ? "なし（端末の設定）" : NAMES[saved() || "full"];
+      now = saved() || (reducedQuery?.matches ? "calm" : "full");
+    if (value) value.textContent = NAMES[now];
     if (button) {
-      button.disabled = locked;
-      button.setAttribute("aria-label", "画面の動き：" + (locked ? "なし（端末の「動きを減らす」がオン）" : NAMES[saved() || "full"] + "。押すと切り替わります"));
+      button.disabled = false;
+      button.setAttribute("aria-label", "画面の動き：" + NAMES[now] + "。押すと切り替わります");
     }
   }
-  document.getElementById("motionMenuButton")?.addEventListener("click", () => set(NEXT[saved() || "full"]));
+  document.getElementById("motionMenuButton")?.addEventListener("click", () => set(NEXT[saved() || (reducedQuery?.matches ? "calm" : "full")]));
   // ---- Stage 2: tabs and the side menu ----------------------------------------------------------------------------
   // Which way the new tab lies (the bottom navigation's order), for the sideways start of its blocks, and where the pill under the
   // chosen navigation item goes. The place is measured once per switch (and when the window changes), never in a loop.

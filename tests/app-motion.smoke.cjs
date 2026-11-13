@@ -1,7 +1,7 @@
 // Requires Playwright, Chromium and a running local HTTP server.
 // Run: node tests/app-motion.smoke.cjs
 // The app motion layer (app-motion.css / app-motion.js): the mode is decided before the first paint (an automated browser that did
-// not ask gets "test": no motion; the device's "reduce motion" always means "off"), the setting in the sidebar changes and keeps
+// not ask gets "test": no motion; the device's "reduce motion" means "calm" until a choice is made), the setting in the sidebar changes and keeps
 // it, the casino's motion layer follows it, and in full / calm the buttons, fields and cards get their touch feedback.
 const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
@@ -307,10 +307,18 @@ const { chromium } = require("playwright"),
       await page.close();
     }
 
-    // The device's "reduce motion" always means off, even when full was chosen; the setting is locked.
+    // A device that asks for less motion gets the quiet "calm" (not nothing) until a choice is made; a choice is kept; the setting is not locked.
+    ({ page, errors } = await open({ reduced: true, forceFull: true }));
+    state = await info(page);
+    assert.deepEqual([state.mode, state.casinoDisabled, state.selectDisabled], ["calm", false, false]);
+    await page.close();
+    ({ page, errors } = await open({ saved: "off", reduced: true }));
+    state = await info(page);
+    assert.deepEqual([state.mode, state.casinoDisabled, state.selectDisabled], ["off", true, false]);
+    await page.close();
     ({ page, errors } = await open({ saved: "full", reduced: true }));
     state = await info(page);
-    assert.deepEqual([state.mode, state.casinoDisabled, state.selectDisabled], ["off", true, true]);
+    assert.equal(state.mode, "full");
     await page.close();
     console.log("app motion smoke passed");
   } finally {
