@@ -306,7 +306,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
         window.fbRunTransaction = async () => { throw Object.assign(Error("x"), { code: "unavailable" }); };
         try { await window.PointLoans.buyStamp("zzzzzzzz1", 50); return ""; } catch (e) { return e.message; } finally { window.fbRunTransaction = realTx; }
       }),
-      /電波を確認/,
+      /電波を確認.*コード: unavailable/,
     );
 
     // ---- B sends it in the talk with A; A sees the picture --------------------------------------------

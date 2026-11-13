@@ -329,12 +329,19 @@
   // What a failed purchase says, in words the player can act on (our own messages pass through).
   function friendly(error) {
     const code = String(error?.code || "");
-    if (code === "aborted") return Error("いま混み合っています。少し待って、もう一度お試しください。");
-    if (code === "unavailable" || code === "deadline-exceeded" || /network|offline/i.test(String(error?.message))) return Error("通信できませんでした。電波を確認して、もう一度お試しください。");
-    if (code === "permission-denied") return Error("この操作は許可されていません。アプリを開き直してお試しください。");
-    if (code === "resource-exhausted") return Error("クラウドの利用上限に達しています。時間をおいてお試しください。");
-    if (code && !error.message?.match(/[぀-ヿ一-鿿]/)) return Error("買えませんでした（" + code + "）。もう一度お試しください。");
-    return error;
+    // The code stays at the end of the line ("コード: …"), so a report from a player says what really happened.
+    const tag = code ? "（コード: " + code + "）" : "";
+    let made = error;
+    if (code === "aborted") made = Error("いま混み合っています。少し待って、もう一度お試しください。" + tag);
+    else if (code === "unavailable" || code === "deadline-exceeded" || /network|offline/i.test(String(error?.message))) made = Error("通信できませんでした。電波を確認して、もう一度お試しください。" + tag);
+    else if (code === "permission-denied") made = Error("この操作は許可されていません。アプリを開き直してお試しください。" + tag);
+    else if (code === "resource-exhausted") made = Error("クラウドの利用上限に達しています。時間をおいてお試しください。" + tag);
+    else if (code && !error.message?.match(/[぀-ヿ一-鿿]/)) made = Error("買えませんでした。もう一度お試しください。" + tag);
+    // The last failure is kept on this device too (aiglish_last_stamp_error), for finding out later.
+    try {
+      localStorage.setItem("aiglish_last_stamp_error", JSON.stringify({ at: new Date().toISOString(), code, message: String(error?.message || "").slice(0, 200), shown: made.message }));
+    } catch {}
+    return made;
   }
   async function buyStampOnce(stampId, seen) {
     ready();
