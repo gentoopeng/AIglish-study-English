@@ -23,12 +23,58 @@ function element(tag,text){const node=document.createElement(tag);if(text!==unde
 function deadline(task){let timer;return Promise.race([task,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('通信に時間がかかっています。接続後に再実行してください。')),15000))]).finally(()=>clearTimeout(timer));}
 function message(text){dialog.querySelector('[role=status]').textContent=text;}
 function guard(){if(!authorized||!dialog?.open)throw Error('管理者パスワードを入力してください。');if(!window.db||!window.fbRunTransaction)throw Error('接続後にお試しください。');}
+// Backgrounds: the photos every player can pick (the shared catalogue, BackgroundCatalog). The ones shipped with the app are not touched here.
+// Like the stamp tools, the 運営's rights are on only while the admin dialog is open, so this is opened from it and closes with it.
+let backgroundDialog=null;
+function backgroundTool(){
+ guard();if(!window.BackgroundCatalog||!window.ProfileImages)throw Error('背景を使えません。');
+ if(!backgroundDialog){
+  backgroundDialog=element('dialog');backgroundDialog.id='adminBackgroundsDialog';backgroundDialog.className='menu-dialog admin-backgrounds-dialog';backgroundDialog.setAttribute('aria-label','背景の追加・削除');
+  backgroundDialog.innerHTML='<header class="menu-dialog-heading"><h2>背景の追加・削除</h2><button type="button" data-close aria-label="閉じる">×</button></header><label class="admin-background-add">背景を追加<input type="file" accept="image/*" multiple data-add hidden></label><div class="admin-background-list" data-list></div><p role="status" aria-live="polite" data-status></p>';
+  backgroundDialog.querySelector('[data-close]').onclick=()=>backgroundDialog.close();
+  document.body.append(backgroundDialog);
+ }
+ const dlg=backgroundDialog,list=dlg.querySelector('[data-list]'),status=text=>{dlg.querySelector('[data-status]').textContent=text;},input=dlg.querySelector('[data-add]');
+ let working=false;
+ const ok=()=>{if(window.isAdmin!==true||!authorized||!dialog.open||!dlg.open)throw Error('管理者パスワードを入力してください。');};
+ const draw=()=>{
+  const items=(window.BackgroundCatalog.readCache()?.backgrounds)||[];list.replaceChildren();
+  if(!items.length)list.append(element('p','追加した背景はまだありません。（アプリに入っている背景は、ここでは変えません。）'));
+  for(const item of items){
+   const row=element('div');row.className='admin-background-row';const img=element('img');img.alt='';img.src=item.preview||item.image;img.style.objectPosition=item.position+'% center';
+   const del=element('button','削除');del.type='button';let armed=false;
+   del.onclick=async()=>{if(working)return;if(!armed){armed=true;del.textContent='もう一度押すと、全員から消えます';return;}working=true;status('削除しています…');try{ok();await window.BackgroundCatalog.publish({remove:[item.id]});draw();status('削除しました。');}catch(error){status(error.message);armed=false;del.textContent='削除';}finally{working=false;}};
+   row.append(img,del);list.append(row);
+  }
+ };
+ const prepare=async file=>{
+  let image=await window.ProfileImages.imageFile(file,1400,'image/jpeg',()=>true,.7);
+  if(image.length>900000)image=await window.ProfileImages.imageFile(file,1100,'image/jpeg',()=>true,.55);
+  if(image.length>1000000)throw Error('写真が大きすぎます。小さい写真にしてください。');
+  const preview=await window.ProfileImages.imageFile(file,320,'image/jpeg',()=>true,.5);
+  return {id:'shared-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),image,preview,position:50};
+ };
+ input.onchange=async()=>{
+  const files=[...input.files];input.value='';if(!files.length||working)return;working=true;
+  try{
+   for(let i=0;i<files.length;i++){
+    ok();status('追加しています…（'+(i+1)+'/'+files.length+'）');
+    if((window.BackgroundCatalog.readCache()?.backgrounds.length||0)>=12)throw Error('追加できる背景は12枚までです。');
+    await window.BackgroundCatalog.publish({upserts:[await prepare(files[i])]});draw();
+   }
+   status('追加しました。全員の背景の選択に出ます。');
+  }catch(error){status(error.message);}finally{working=false;}
+ };
+ draw();status('読み込んでいます…');
+ window.BackgroundCatalog.refresh(true).then(()=>{if(dlg.open){draw();status('');}},()=>{if(dlg.open)status('最新の一覧を読み込めませんでした。保存済みの一覧を表示しています。');});
+ if(!dlg.open)dlg.showModal();
+}
 function mount(){
  if(dialog)return;
  dialog=element('dialog');dialog.className='menu-dialog admin-players-dialog';dialog.setAttribute('aria-label','管理者ツール');
  dialog.innerHTML='<header class="menu-dialog-heading"><h2>管理者ツール</h2><button type="button" data-close aria-label="管理者ツールを閉じる">×</button></header><div data-body></div><p role="status" aria-live="polite"></p>';
  document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>{generation++;busy=false;authorized=false;window.isAdmin=bookEditing();dialog.close();};
- dialog.addEventListener('close',()=>{if(dialog.open)return;authorized=false;generation++;busy=false;window.isAdmin=bookEditing();dialog.querySelector('[data-body]').replaceChildren();if(window.__learningBootReady){if(currentActiveTabId==='titles')window.renderLeaderboard();else if(currentActiveTabId==='community')window.People.refresh(false);}});
+ dialog.addEventListener('close',()=>{if(dialog.open)return;if(backgroundDialog?.open)backgroundDialog.close();authorized=false;generation++;busy=false;window.isAdmin=bookEditing();dialog.querySelector('[data-body]').replaceChildren();if(window.__learningBootReady){if(currentActiveTabId==='titles')window.renderLeaderboard();else if(currentActiveTabId==='community')window.People.refresh(false);}});
  dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});
 }
 function lock(value){busy=value;dialog.querySelectorAll('button:not([data-close]),input').forEach(node=>node.disabled=value);}
@@ -64,8 +110,9 @@ async function refresh(){
  tester.onclick=()=>{try{const on=localStorage.getItem('aiglish_sugoroku_tester')!=='1';on?localStorage.setItem('aiglish_sugoroku_tester','1'):localStorage.removeItem('aiglish_sugoroku_tester');message(on?'この端末では、閉じていても遊べます。':'この端末のテスト用の設定を外しました。');}catch{message('この端末では設定できませんでした。');}};
  const staked=confirmButton('全員の今日の賭け済み額を0に戻す','もう一度押すと、全員の今日の賭け済み額が0に戻ります',()=>resetStaked(null),'戻しました。各端末が、次にカジノを開いたときに反映します。');staked.className='admin-casino-reset';
  // Stamps: the store with the 運営's tools (what waits for approval, approve / reject, stop, remove). The 運営's rights are on only while this dialog is open, so the store is opened from here.
+ const backgrounds=element('button','背景の追加・削除');backgrounds.type='button';backgrounds.className='admin-backgrounds-button';backgrounds.onclick=()=>{try{backgroundTool();}catch(error){message(error.message);}};
  const stamps=element('button','スタンプの審査・管理');stamps.type='button';stamps.className='admin-stamps-button';stamps.onclick=()=>{try{guard();if(!window.Stamps)throw Error('スタンプを使えません。');window.Stamps.store();}catch(error){message(error.message);}};
- body.append(refresh,books,notices,sent,stamps,bingo,gate,tester,staked);message('プレイヤーを読み込み中…');
+ body.append(refresh,books,notices,sent,stamps,backgrounds,bingo,gate,tester,staked);message('プレイヤーを読み込み中…');
  try{guard();const players=[];await deadline(playerList((id,data)=>{if(id!=='GUEST-000')players.push({id,name:data.playerName||id,deleted:!!data.deleted});},()=>authorized&&dialog.open&&generation===request));
  if(request!==generation||!authorized)return;
  for(const player of players){const row=element('button');row.type='button';row.className='admin-player-row';row.append(element('strong',player.name),element('small',player.id+(player.deleted?' · 削除済み':'')));row.onclick=()=>edit(player.id);body.append(row);}

@@ -2193,6 +2193,13 @@ input,textarea{-webkit-text-stroke:0;}
 .admin-players-dialog input{box-sizing:border-box;width:100%;min-height:42px;border:1px solid var(--border);border-radius:9px;background:#111827;color:#fff;padding:8px;font-size:16px;}
 .admin-players-dialog button{min-height:40px;border:1px solid var(--border);border-radius:9px;background:rgba(255,255,255,.07);color:var(--text-main);padding:8px;}
 .admin-players-dialog button:disabled{opacity:.5;}
+.admin-backgrounds-dialog{width:min(440px,calc(100vw - 28px));max-height:calc(100dvh - 32px);overflow:auto;}
+.admin-backgrounds-dialog button,.admin-background-add{min-height:40px;border:1px solid var(--border);border-radius:9px;background:rgba(255,255,255,.07);color:var(--text-main);padding:8px;}
+.admin-background-add{display:flex;align-items:center;justify-content:center;margin:10px 0;cursor:pointer;}
+.admin-background-list{display:grid;gap:10px;}
+.admin-background-row{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center;}
+.admin-background-row img{width:96px;height:64px;object-fit:cover;border-radius:8px;background:#111827;}
+.admin-background-row button{color:#fca5a5;}
 .admin-player-row{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;}
 .admin-player-row strong{overflow-wrap:anywhere;}
 .admin-player-row small{flex-shrink:0;color:var(--text-sub);}
