@@ -471,7 +471,8 @@
             return;
           }
           buy.disabled = true;
-          say(status, "");
+          // (the points just earned are sent first, which can take a few seconds: say that something is happening)
+          say(status, "購入しています…（数秒かかることがあります）");
           try {
             await window.PointLoans.buyStamp(stamp.id, stamp.price);
             owned = await mine(true);
