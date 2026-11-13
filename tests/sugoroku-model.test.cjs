@@ -407,12 +407,17 @@ test("played the plain way by several players on one card, every bet returns a l
   }
 });
 
-// The ふつうのマス roulette on its own pays back about 0.90 of the bet (0.95 until 10.107: players won too much) (no ガード, no items used). The plain × slots are
+// The ふつうのマス roulette on its own pays back about 0.90 of the bet (0.95 until 10.107: players won too much; the games valued at a 65% win rate since 10.115) (no ガード, no items used). The plain × slots are
 // counted as they are; the slots that start something are worth what the simulation measured (docs/site-stability.md,
 // 10.85.00.00): a ball 1.6, STOP 0.75, ハイ＆ロー 0.9, ブラックジャック 0.93, 役のサイコロ 0.33, チンチロ 1.02, a 確変 slot
 // 2.5 (the ITEM slot pays itemCash). When a × slot is changed, this tells whether the wheel is still where it should be.
 test("the ふつうのマス roulette pays back about 0.90 on its own", () => {
-  const worth = { ball: 1.6, stop: 0.75, hilo: 0.9, blackjack: 0.93, dice: 0.33, chinchiro: 1.02, kakuhen: 2.5 };
+  // From 10.115 the mini games count at a 65% win rate (players really win about that often), not at the simulated bot's:
+  // STOP wins pay perfect 2 or good 0.75 (the middle, 1.375), ハイ＆ロー ×1.25 (ties left out), the card games ×2 (even money, no push).
+  const win = 0.65,
+    g = S.RULES.games,
+    even = 2 * win;
+  const worth = { ball: 1.6, stop: win * ((g.stop.pay.perfect + g.stop.pay.good) / 2), hilo: win * g.hilo.pay.win, blackjack: even, dice: even, chinchiro: even, kakuhen: 2.5 };
   const wheel = S.RULES.normal[100];
   const ev =
     wheel.reduce((n, slot) => n + (slot.kakuhen ? worth.kakuhen : slot.item ? S.RULES.itemCash : slot.ball ? worth.ball : slot.game ? worth[slot.game] : slot.event ? worth[slot.event] : slot.x), 0) / wheel.length;

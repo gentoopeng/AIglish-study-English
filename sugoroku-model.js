@@ -77,9 +77,9 @@
         // Swings stay small: no plain slot takes or gives more than 2 times the bet (200 at a bet of 100; the 確変 wheel, the
         // games and the balls are the big ones). The plain slots are mostly plus, because the wheel as a whole (what the
         // ITEM, ball, STOP, ハイ＆ロー, card-game and 確変 slots are worth included) has to pay back about 0.90 of the bet
-        // (see the test "pays back about 0.90"). It was 0.95 with five ×2 slots more: players won too much, so two ×2 became ×1.5.
-        ...N(-2, 4), ...N(-1), ...N(0, 2), ...ITEM(5),
-        ...N(1, 2), ...N(1.5, 8), ...N(2, 5),
+        // (see the test "pays back about 0.90"). It was 0.95 with five ×2 slots more: players won too much, so two ×2 became ×1.5. 10.115: the games are now valued at a 65% win rate (players do win about that often), which lifted the wheel to about 0.985, so one ×1.5 slot became −2.
+        ...N(-2, 5), ...N(-1), ...N(0, 2), ...ITEM(5),
+        ...N(1, 2), ...N(1.5, 7), ...N(2, 5),
         ...BALL(0, 2), ...GAME("stop", 2), ...GAME("hilo", 2), ...EVENT("blackjack"), ...EVENT("blackjack"), ...EVENT("dice"), ...EVENT("dice"), ...EVENT("chinchiro"), ...EVENT("chinchiro"),
       ]),
     },
