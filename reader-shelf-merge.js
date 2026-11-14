@@ -17,7 +17,8 @@
   // Old entries without an id get a stable one (from the text and the place), so merging twice does not double them.
   const withId = (item) => (item.id === undefined || item.id === null || item.id === "" ? { ...item, id: 1e9 + hash(item.text + "\n" + place(item)) } : item);
   const idsOf = (shelf) => (Array.isArray(shelf) ? shelf : []).filter(usable).map((i) => String(withId(i).id));
-  const meta = (shelf) => ({ v: 2, ids: idsOf(shelf) });
+  // `owner`: the account the device copy belongs to (the shelf keys are per device, not per account).
+  const meta = (shelf, owner) => ({ v: 2, ids: idsOf(shelf), ...(owner ? { owner } : {}) });
   function isNew(side) {
     const m = side && side.meta;
     if (!m || m.v !== 2 || !Array.isArray(m.ids) || !Array.isArray(side.deleted)) return false;
@@ -96,7 +97,7 @@
     const folders = (Array.isArray(side.folders) ? side.folders : []).filter((f) => typeof f === "string").slice().sort();
     return JSON.stringify([items, dead, folders]);
   }
-  const api = { merge, meta, isNew, signature, tombstones };
+  const api = { merge, meta, isNew, signature, tombstones, idsOf };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.ReaderShelfMerge = api;
 })(typeof window === "undefined" ? globalThis : window);

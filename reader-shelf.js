@@ -72,7 +72,7 @@
     localStorage.setItem("myBookshelf", JSON.stringify(shelf));
     localStorage.setItem("myFolders", JSON.stringify(myFolders));
     if (localStorage.getItem(DELETED_KEY) === null) localStorage.setItem(DELETED_KEY, "[]");
-    localStorage.setItem(META_KEY, JSON.stringify(window.ReaderShelfMerge.meta(myBookshelf)));
+    localStorage.setItem(META_KEY, JSON.stringify(window.ReaderShelfMerge.meta(myBookshelf, typeof myId === "string" && myId ? myId : "GUEST-000")));
   }
   function persist() {
     let result = "full";
@@ -533,6 +533,66 @@
     if (cached) draw(cached.items, cached.done);
   }
 
+  // ---- Texts set aside by a restore ("消えた長文を戻す") -------------------------------------------------------------------
+  const LOST_KEY = "aiglish_shelf_lost";
+  const me = () => (typeof myId === "string" && myId ? myId : "GUEST-000");
+  function lostTexts() {
+    const held = readJson(LOST_KEY, null);
+    return held && held.owner === me() && Array.isArray(held.items) ? held.items.filter((i) => usableText(i) && !myBookshelf.some((b) => b.text === i.text)) : [];
+  }
+  function writeLost(items) {
+    try {
+      if (items.length) localStorage.setItem(LOST_KEY, JSON.stringify({ owner: me(), items }));
+      else localStorage.removeItem(LOST_KEY);
+    } catch {}
+  }
+  function showLost() {
+    const modal = dialog("本棚から外れた長文", '<p class="library-editor-hint">起動のとき、バックアップと合わせた結果、本棚から外れた長文です。消した覚えがなければ戻してください（解析結果は付きません）。</p><div class="shelf-lost-list"></div><div class="library-editor-actions library-editor-actions-stack"></div>');
+    const list = modal.querySelector(".shelf-lost-list"), actions = modal.querySelector(".library-editor-actions");
+    const restore = (items) => {
+      for (const i of items) if (!myBookshelf.some((b) => b.text === i.text)) myBookshelf.push({ id: Date.now() + myBookshelf.length, folder: i.folder || "", title: i.title || "無題", text: i.text, aiAnalysisData: null });
+      persist();
+    };
+    const draw = () => {
+      const items = lostTexts();
+      list.replaceChildren();
+      if (!items.length) {
+        writeLost([]);
+        window.closeLibraryDialog();
+        window.renderBookshelf();
+        return;
+      }
+      for (const item of items) {
+        const line = node("div", "shelf-lost-row");
+        const text = node("span", "shelf-lost-text");
+        text.append(node("strong", "", item.title || "無題"), node("small", "", previewOf(item)));
+        line.append(
+          text,
+          button("戻す", () => {
+            restore([item]);
+            draw();
+          }),
+          button("捨てる", () => {
+            writeLost(lostTexts().filter((i) => i.text !== item.text));
+            draw();
+          }),
+        );
+        list.append(line);
+      }
+    };
+    actions.append(
+      button("すべて戻す", () => {
+        restore(lostTexts());
+        draw();
+      }),
+      button("閉じる", () => {
+        window.closeLibraryDialog();
+        window.renderBookshelf();
+      }),
+    );
+    draw();
+  }
+
   function manageText(item) {
     const modal = dialog(
       item.title || "無題",
@@ -760,6 +820,13 @@
         if (shelfQuery.trim()) found();
         else drawFolders();
       };
+      // Texts a restore took off this device's shelf without a delete on record (save-system.js keeps them aside): they can be put back.
+      const lost = lostTexts();
+      if (lost.length) {
+        const notice = node("div", "shelf-lost");
+        notice.append(node("span", "", "起動のときに本棚から外れた長文が" + lost.length + "本あります。"), button("確認して戻す", showLost));
+        container.append(notice);
+      }
       if (myBookshelf.length) container.append(searchBox(draw));
       draw();
       container.append(list);
