@@ -380,6 +380,26 @@
     const body = modal.querySelector(".rt-body");
     for (const text of paragraphs(entry.text)) body.append(node("p", "", text));
     const actions = modal.querySelector(".library-editor-actions");
+    // A published passage whose analysis was shared: opened from that, with no AI of your own.
+    if (entry.by && entry.hasAnalysis && RS)
+      actions.append(
+        button("みんなの解析で開く", async (event) => {
+          const el = event.currentTarget;
+          el.disabled = true;
+          el.textContent = "読み込んでいます…";
+          try {
+            const analysis = await RS.fetchAnalysis(entry.key);
+            if (!analysis) throw Error("none");
+            window.closeLibraryDialog();
+            window.switchReaderSubTab("analysis", "none");
+            window.analyzeText(entry.text, entry.title || "無題", analysis);
+          } catch (error) {
+            el.disabled = false;
+            el.textContent = "みんなの解析で開く";
+            window.showToast?.("みんなの解析を読み込めませんでした。「解析する」で自分で解析できます。", "error");
+          }
+        }),
+      );
     actions.append(
       button("解析する", () => {
         window.closeLibraryDialog();
@@ -440,10 +460,10 @@
             cover: { text: "📄" },
             name: t.title,
             tag: RS.isTextMine(t.key) ? "あなた" : "",
-            sub: t.name + "さん · " + sentenceCount(t.text) + "文" + (dateOf(t.at) ? " · " + dateOf(t.at) : ""),
+            sub: t.name + "さん · " + sentenceCount(t.text) + "文" + (t.hasAnalysis ? " · 解析あり" : "") + (dateOf(t.at) ? " · " + dateOf(t.at) : ""),
             preview: previewOf(t),
             label: t.title + "を読む",
-            onOpen: () => readText({ title: t.title, text: t.text, by: t.by, name: t.name, key: t.key }),
+            onOpen: () => readText({ title: t.title, text: t.text, by: t.by, name: t.name, key: t.key, hasAnalysis: t.hasAnalysis }),
             index,
           }),
         ),
@@ -504,6 +524,7 @@
               window.showToast?.("公開をやめました。", "ok");
             } else {
               const result = await RS.publishText(item.title, item.text);
+              if (result === "ok" || result === "exists") RS.shareAnalysis(item.text, item.aiAnalysisData);
               window.showToast?.(publishMessage[result] || publishMessage.fail, result === "ok" || result === "exists" ? "ok" : "error");
             }
           } catch (error) {
@@ -594,7 +615,7 @@
       });
       const saved = persist();
       if (shareBox && shareBox.checked)
-        RS.publishText(title, text).then((result) => window.showToast?.(publishMessage[result] || publishMessage.fail, result === "ok" || result === "exists" ? "ok" : "error"));
+        RS.publishText(title, text).then((result) => (result === "ok" || result === "exists" ? RS.shareAnalysis(text, data) : 0, result)).then((result) => window.showToast?.(publishMessage[result] || publishMessage.fail, result === "ok" || result === "exists" ? "ok" : "error"));
       alert(saved === "full" ? "「" + placeName(place) + "」に保存しました。" : saved === "slim" ? "「" + placeName(place) + "」に文章を保存しました（解析結果は、端末の容量がいっぱいで保存できませんでした）。" : "端末の容量がいっぱいで、端末には保存できませんでした。ログインしていれば、クラウドのバックアップには保存します。");
       window.renderBookshelf();
     };

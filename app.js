@@ -592,6 +592,8 @@ textHistory = textHistory.filter(h => h.text !== rawText);
          try { localStorage.setItem('textHistory', JSON.stringify(textHistory)); } catch (e) { entry.aiAnalysisData = null; }
          window.markReaderDataChanged?.();
      }
+     // For a published passage, the analysis is shared too (people without an API key can then read it).
+     window.ReaderShared?.shareAnalysis?.(rawText, aiAnalysisResult);
      // A bookshelf text without an analysis (new, edited or failed before) keeps this one.
      if (!preParsedData && Array.isArray(myBookshelf)) {
          let kept = false;
@@ -690,7 +692,7 @@ textHistory = textHistory.filter(h => h.text !== rawText);
          else mainContent.append(' ', span);
      }
      let finalJaText = customJaLines[sIdx] || sData.translation || sData.translations || "（和訳未取得）"; 
-     totalSummaryJa += `${sIdx+1}. ${finalJaText}<br>`;
+     totalSummaryJa += `${sIdx+1}. ${String(finalJaText).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}<br>`;
      const jaSpan = document.createElement('span'); jaSpan.className = 'sentence-ja'; jaSpan.innerText = finalJaText; mainContent.appendChild(jaSpan);
      block.appendChild(mainContent); englishContainer.appendChild(block);
  });
