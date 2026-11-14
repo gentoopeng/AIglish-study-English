@@ -58,20 +58,38 @@
     },
     required: ["questions"],
   };
+  // The rules for solving, shared by the separate request below and the one that goes with the analysis (reader.js).
+  const RULES =
+    "決まり:\n" +
+    "- 答えは、英文に書かれていることだけをもとに決める。英文に書かれていないこと（ふつうの知識や想像）は根拠にしない。英文から決められない問題は、そのことを explanation に書く。\n" +
+    "- 問題が複数あるときは、問題ごとに分けて、出てきた順に入れる。番号がなければ 1, 2, … とふる（number）。\n" +
+    "- question: 問題文をそのまま（英語なら英語のまま）。選択肢は含めない。\n" +
+    "- 選択肢がある問題: answer は選択肢の記号を、問題に書かれたとおりに（①②③④、ア〜エ、A〜D、1〜4 など）。選択肢がない問題: answer は答えを短く。\n" +
+    "- explanation: なぜその答えになるのかを、英文の内容にそって2〜4文で。\n" +
+    "- evidence: 根拠になる英文の部分を、英文からそのまま抜き出す（1〜2文、書き換えない）。根拠が見つからないときは空の文字列。\n" +
+    "- evidenceTranslation: evidence の自然な日本語訳。\n" +
+    "- choices: 選択肢がある問題では、すべての選択肢について label（記号）、correct（正解なら true）、reason（その選択肢が英文に合っている／合っていない理由を、英文に基づいて1文）。選択肢がない問題では空の配列。\n";
   function prompt(passage, questions) {
     return (
       "あなたは高校生に英語の読解を教える先生です。次の「英文」について出された「問題」を解いて、日本語で解説してください。\n\n" +
-      "決まり:\n" +
-      "- 答えは、英文に書かれていることだけをもとに決める。英文に書かれていないこと（ふつうの知識や想像）は根拠にしない。英文から決められない問題は、そのことを explanation に書く。\n" +
-      "- 問題が複数あるときは、問題ごとに分けて、出てきた順に questions に入れる。番号がなければ 1, 2, … とふる（number）。\n" +
-      "- question: 問題文をそのまま（英語なら英語のまま）。選択肢は含めない。\n" +
-      "- 選択肢がある問題: answer は選択肢の記号を、問題に書かれたとおりに（①②③④、ア〜エ、A〜D、1〜4 など）。選択肢がない問題: answer は答えを短く。\n" +
-      "- explanation: なぜその答えになるのかを、英文の内容にそって2〜4文で。\n" +
-      "- evidence: 根拠になる英文の部分を、英文からそのまま抜き出す（1〜2文、書き換えない）。根拠が見つからないときは空の文字列。\n" +
-      "- evidenceTranslation: evidence の自然な日本語訳。\n" +
-      "- choices: 選択肢がある問題では、すべての選択肢について label（記号）、correct（正解なら true）、reason（その選択肢が英文に合っている／合っていない理由を、英文に基づいて1文）。選択肢がない問題では空の配列。\n\n" +
-      "英文:\n" + passage + "\n\n問題:\n" + questions
+      RULES + "\n英文:\n" + passage + "\n\n問題:\n" + questions
     );
+  }
+  // What the AI sent back, cut to a safe size: { questions: [...] } or null.
+  function normalize(list) {
+    if (!Array.isArray(list) || !list.length) return null;
+    const str = (v, n) => String(v == null ? "" : v).slice(0, n);
+    return {
+      questions: list.slice(0, 20).map((q, i) => ({
+        number: str((q && q.number) || i + 1, 12),
+        question: str(q && q.question, 1200),
+        answer: str(q && q.answer, 300),
+        explanation: str(q && q.explanation, 1500),
+        evidence: str(q && q.evidence, 600),
+        evidenceTranslation: str(q && q.evidenceTranslation, 600),
+        choices: (Array.isArray(q && q.choices) ? q.choices : []).slice(0, 10).map((c) => ({ label: str(c && c.label, 12), correct: !!(c && c.correct), reason: str(c && c.reason, 500) })),
+      })),
+    };
   }
   function apiKey() {
     const input = document.getElementById("sidebarApiKeyInput");
@@ -124,17 +142,9 @@
       let data = null;
       try { data = JSON.parse(text); } catch {}
       if (!data || !Array.isArray(data.questions) || !data.questions.length) return { error: describe("unreadable") };
-      const str = (v, n) => String(v == null ? "" : v).slice(0, n);
-      const questionsOut = data.questions.slice(0, 20).map((q, i) => ({
-        number: str(q.number || i + 1, 12),
-        question: str(q.question, 1200),
-        answer: str(q.answer, 300),
-        explanation: str(q.explanation, 1500),
-        evidence: str(q.evidence, 600),
-        evidenceTranslation: str(q.evidenceTranslation, 600),
-        choices: (Array.isArray(q.choices) ? q.choices : []).slice(0, 10).map((c) => ({ label: str(c && c.label, 12), correct: !!(c && c.correct), reason: str(c && c.reason, 500) })),
-      }));
-      return { result: { questions: questionsOut } };
+      const out = normalize(data.questions);
+      if (!out) return { error: describe("unreadable") };
+      return { result: out };
     } catch (e) {
       return { error: describe(e && e.name === "AbortError" ? "timeout" : "network") };
     } finally {
@@ -271,6 +281,17 @@
       if (saved && saved.loading) { run(shownFor, saved.text); return; }
       render(shownFor);
     },
+    // The questions waiting for the next analysis (reader.js sends them along with it, in the same request).
+    pendingText: () => pending,
+    // The answers that came back with the analysis: kept for the passage, and no separate request is needed.
+    adopt(passage, text, answers) {
+      const result = normalize(answers);
+      if (!result || !text || text !== pending) return false;
+      pending = "";
+      set(String(passage || ""), { text, result });
+      return true;
+    },
+    ITEM: SCHEMA.properties.questions.items, RULES, normalize,
     get, solve,
   };
   window.ReaderQuestions = api;
