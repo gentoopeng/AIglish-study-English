@@ -128,6 +128,69 @@
   }
   const isMine = (set) => mine().some((m) => m.path === set.path);
 
+
+  // ---- Shared passages (みんなの長文): the passages people chose to publish from their shelf -------------------------------------
+  //  sharedReaderTexts/{key}: { v, by, name, title, text, at }. The key is the same passage key (so the explanations of its questions
+  //  are found by it). Nothing is read until the list is asked for; a page is 10 documents; written once per passage (create if absent).
+  const TEXT_ON_KEY = "aiglish_reader_share_text", TEXTS_MINE_KEY = "aiglish_reader_texts_mine", TEXT_MAX = 20000, PAGE = 10;
+  const textsEnabled = () => localStorage.getItem(TEXT_ON_KEY) !== "0";
+  const setTextsEnabled = (on) => { try { on ? localStorage.removeItem(TEXT_ON_KEY) : localStorage.setItem(TEXT_ON_KEY, "0"); } catch {} };
+  const textsMine = () => jsonGet(TEXTS_MINE_KEY, []);
+  const isTextMine = (key) => textsMine().includes(key);
+  function cleanText(data, key) {
+    if (!data || typeof data !== "object" || data.v !== 1 || typeof data.text !== "string") return null;
+    const text = data.text.slice(0, TEXT_MAX);
+    if (text.trim().length < 20) return null;
+    const title = String(data.title || "").slice(0, 80);
+    return { key, by: String(data.by || "").slice(0, 40), name: String(data.name || "").slice(0, 30) || "だれか", title: /^\s*(data:|javascript:|https?:)/i.test(title) ? "無題" : title || "無題", text, at: Number(data.at) || 0 };
+  }
+  // "ok" (published), "exists" (already there, by someone), "off" (cannot: sharing off, guest, or no connection), "big", "fail".
+  async function publishText(title, text) {
+    try {
+      if (!signedIn() || !reachable() || !window.fbRunTransaction) return "off";
+      const body = String(text || "");
+      if (body.trim().length < 20) return "fail";
+      if (body.length > TEXT_MAX) return "big";
+      const key = await keyOf(body);
+      if (isTextMine(key)) return "exists";
+      const ref = window.fbDoc(window.db, "sharedReaderTexts", key);
+      const made = await deadline(window.fbRunTransaction(window.db, async (tx) => {
+        const snap = await tx.get(ref);
+        if (snap.exists()) return false;
+        tx.set(ref, { v: 1, by: me(), name: String(typeof myName === "string" ? myName : "").slice(0, 30), title: String(title || "").slice(0, 80), text: body, at: Date.now() });
+        return true;
+      }), 10000);
+      if (made) jsonSet(TEXTS_MINE_KEY, [...textsMine(), key].slice(-200));
+      return made ? "ok" : "exists";
+    } catch { return "fail"; }
+  }
+  let textPages = { items: [], cursor: null, done: false, at: 0 };
+  // The next page of shared passages (newest first), hidden ones left out. { items, done }. Rejects on a network or quota failure.
+  async function listTexts(more) {
+    if (!signedIn() || !reachable() || !window.fbQuery || !window.fbOrderBy || !window.fbLimit) return { items: [], done: true };
+    if (!more && textPages.at && Date.now() - textPages.at < 10 * 60 * 1000 && textPages.items.length) return { items: visibleTexts(), done: textPages.done };
+    if (!more) textPages = { items: [], cursor: null, done: false, at: 0 };
+    if (textPages.done) return { items: visibleTexts(), done: true };
+    const clauses = [window.fbOrderBy("at", "desc")];
+    if (textPages.cursor && window.fbStartAfter) clauses.push(window.fbStartAfter(textPages.cursor));
+    clauses.push(window.fbLimit(PAGE));
+    const snap = await deadline(window.fbGetDocs(window.fbQuery(window.fbCollection(window.db, "sharedReaderTexts"), ...clauses)));
+    for (const d of snap.docs) { const item = cleanText(d.data(), d.id); if (item) textPages.items.push(item); }
+    textPages.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : textPages.cursor;
+    textPages.done = snap.docs.length < PAGE;
+    textPages.at = Date.now();
+    return { items: visibleTexts(), done: textPages.done };
+  }
+  // What was already read (this session, within 10 minutes), so the screen can be redrawn without reading again.
+  const cachedTexts = () => (textPages.items.length && Date.now() - textPages.at < 10 * 60 * 1000 ? { items: visibleTexts(), done: textPages.done } : null);
+  const visibleTexts = () => { const gone = hidden(); return textPages.items.filter((t) => !gone.has("text/" + t.key)); };
+  async function unshareText(key) {
+    if (!isTextMine(key) || !window.fbDeleteDoc) throw Error("この端末で公開した長文ではありません。");
+    await deadline(window.fbDeleteDoc(window.fbDoc(window.db, "sharedReaderTexts", key)));
+    jsonSet(TEXTS_MINE_KEY, textsMine().filter((k) => k !== key));
+    textPages.items = textPages.items.filter((t) => t.key !== key);
+  }
+  const hideText = (key) => hide("text/" + key);
   const available = () => signedIn() && reachable();
-  window.ReaderShared = { enabled, setEnabled, usable, available, list, find, publish, unshare, hide, isMine, clean, keyOf };
+  window.ReaderShared = { textsEnabled, setTextsEnabled, publishText, listTexts, cachedTexts, unshareText, hideText, isTextMine, textKey: keyOf, enabled, setEnabled, usable, available, list, find, publish, unshare, hide, isMine, clean, keyOf };
 })();
