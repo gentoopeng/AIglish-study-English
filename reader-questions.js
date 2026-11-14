@@ -79,7 +79,7 @@
   const RULES =
     "決まり:\n" +
     "- 答えは、英文に書かれていることだけをもとに決める。英文に書かれていないこと（ふつうの知識や想像）は根拠にしない。英文から決められない問題は、そのことを explanation に書く。\n" +
-    "- 問題が複数あるときは、問題ごとに分けて、出てきた順に入れる。番号がなければ 1, 2, … とふる（number）。\n" +
+    "- 問題が複数あるときは、問題ごとに分けて、**問題番号の順に**入れる（文字で書かれた問題と画像の問題が混ざっていても、番号の順。番号が重なるときは画像、文字の順）。番号がなければ 1, 2, … とふる（number。「大問1」「問2」なら、その番号）。\n" +
     "- question: 問題文をそのまま（英語なら英語のまま）。選択肢は含めない。画像に、生徒の名前・学校名・手書きのメモ・ページ番号があっても、書き写さない。\n" +
     "- 選択肢がある問題: answer は選択肢の記号を、問題に書かれたとおりに（①②③④、ア〜エ、A〜D、1〜4 など）。選択肢がない問題: answer は答えを短く。\n" +
     "- explanation: なぜその答えになるのかを、英文の内容にそって2〜4文で。\n" +
@@ -94,7 +94,7 @@
   function questionBlock(q) {
     const n = Array.isArray(q.images) ? q.images.length : 0;
     return (q.text || (n ? "（問題は、添付の画像に書かれています）" : "")) +
-      (n ? "\n\n添付の画像" + n + "枚は、この問題の写真やスクリーンショットです。画像の文字を読み取って、問題として解いてください（question には、読み取った問題文を書く）。図や表があるときは、それも手がかりにする。" : "");
+      (n ? "\n\n添付の画像" + n + "枚は、この問題の写真やスクリーンショットです。画像の文字を読み取って、問題として解いてください（question には、読み取った問題文を書く）。図や表があるときは、それも手がかりにする。" + (q.text ? "上の文字の問題と、画像の問題が、混ざっています。答えは、問題番号の順に並べてください。" : "") : "");
   }
   const imageParts = (images) => (Array.isArray(images) ? images : []).slice(0, IMAGE_MAX).map((src) => ({ inlineData: { mimeType: "image/jpeg", data: String(src).slice(String(src).indexOf(",") + 1) } }));
   function prompt(passage, q) {
@@ -104,10 +104,13 @@
     );
   }
   // What the AI sent back, cut to a safe size: { questions: [...] } or null.
+  // Question numbers as numbers ("大問2" -> [2], "3(1)" -> [3, 1]); null when there is no digit.
+  const numbersOf = (number) => { const m = String(number == null ? "" : number).normalize("NFKC").match(/\d+/g); return m ? m.map(Number) : null; };
+  const compareNumbers = (a, b) => { for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] ?? -1) - (b[i] ?? -1); if (d) return d; } return 0; };
   function normalize(list) {
     if (!Array.isArray(list) || !list.length) return null;
     const str = (v, n) => String(v == null ? "" : v).slice(0, n);
-    return {
+    const out = {
       questions: list.slice(0, 20).map((q, i) => ({
         number: str((q && q.number) || i + 1, 12),
         question: str(q && q.question, 1200),
@@ -123,6 +126,13 @@
         choices: (Array.isArray(q && q.choices) ? q.choices : []).slice(0, 10).map((c) => ({ label: str(c && c.label, 12), correct: !!(c && c.correct), reason: str(c && c.reason, 500) })),
       })),
     };
+    // In the order of the question numbers (questions typed and questions in pictures may come back mixed up); without numbers, as they came.
+    const keys = out.questions.map((q) => numbersOf(q.number));
+    if (keys.every(Boolean)) {
+      const order = out.questions.map((q, i) => i).sort((a, b) => compareNumbers(keys[a], keys[b]) || a - b);
+      out.questions = order.map((i) => out.questions[i]);
+    }
+    return out;
   }
   // Cuts the figures out of the pictures that were sent (each as a small JPEG, long side at most 640px) and puts them in the result:
   // figure.image. A box that does not make sense (outside the picture, or the whole picture) is dropped. Never throws.
@@ -226,6 +236,7 @@
   // Each is cut down to 1400px JPEG here; they are sent with the request and not kept (only the answers are).
   function picker(onChange) {
     const images = [], root = node("div", "rq-images"), strip = node("div", "rq-thumbs");
+    let working = 0;
     const add = node("button", "rq-photo", "📷 画像を追加（写真・スクリーンショット）"), status = node("small", "rq-photo-status"), file = node("input");
     add.type = "button"; file.type = "file"; file.accept = "image/*"; file.multiple = true; file.hidden = true;
     const draw = () => {
@@ -242,16 +253,19 @@
     add.onclick = () => file.click();
     file.onchange = async () => {
       const files = [...file.files]; file.value = ""; let message = "";
-      for (const f of files) {
-        if (images.length >= IMAGE_MAX) { message = "画像は" + IMAGE_MAX + "枚までです。"; break; }
-        status.textContent = "画像を準備しています…";
-        try { images.push(await window.ProfileImages.imageFile(f, 1400, "image/jpeg", () => true, 0.75)); }
-        catch (error) { message = (error && error.message) || "画像を読み込めませんでした。"; }
-      }
+      working++;
+      try {
+        for (const f of files) {
+          if (images.length >= IMAGE_MAX) { message = "画像は" + IMAGE_MAX + "枚までです。"; break; }
+          status.textContent = "画像を準備しています…（終わるまで「解析する」は押せません）";
+          try { images.push(await window.ProfileImages.imageFile(f, 1400, "image/jpeg", () => true, 0.75)); }
+          catch (error) { message = (error && error.message) || "画像を読み込めませんでした。"; }
+        }
+      } finally { working--; }
       status.textContent = message; draw(); onChange && onChange();
     };
     root.append(add, file, strip, status); draw();
-    return { node: root, images: () => images.slice(), clear: () => { images.length = 0; draw(); } };
+    return { node: root, images: () => images.slice(), busy: () => working > 0, clear: () => { images.length = 0; draw(); } };
   }
 
   // ---- The input side: the button under the pasted passage ------------------------------------
@@ -353,6 +367,7 @@
     const go = node("button", "modern-btn rq-go", "解いて解説する");
     go.type = "button";
     go.onclick = () => {
+      if (pk.busy()) { window.showToast ? window.showToast("画像を準備しています。少し待ってから、もう一度押してください。", "error") : alert("画像を準備しています。少し待ってから、もう一度押してください。"); return; }
       const q = { text: input.value.trim(), images: pk.images() };
       if (!hasQ(q)) { input.focus(); return; }
       run(passage, q);
@@ -497,6 +512,8 @@
       set(String(passage || ""), { text: q.text, imageCount: 0, result: { questions: hit.questions }, shared: { name: hit.name, by: hit.by, at: hit.at } });
       return true;
     },
+    // True while a picture is still being prepared (a phone photo takes a few seconds): the analysis waits, so the picture is not left out.
+    busy: () => !!(inputPicker && inputPicker.busy()),
     pending: () => pending,
     questionBlock, imageParts,
     // The answers that came back with the analysis: kept for the passage, and no separate request is needed.

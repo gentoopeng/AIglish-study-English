@@ -112,6 +112,34 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
     await page.waitForFunction(() => !document.querySelector("#readerQuestionsCard .rq-figure"));
     assert.equal(await page.evaluate(() => /data:image/.test(localStorage.getItem("aiglish_reader_questions"))), false);
 
+    // The order of the questions follows their numbers (a picture's questions and typed ones may come back mixed up).
+    const sorted = await page.evaluate(() => {
+      const mk = (number) => ({ number, question: "q" + number, answer: "a", explanation: "e", choices: [] });
+      const nums = (list) => ReaderQuestions.normalize(list.map(mk)).questions.map((q) => q.number);
+      return [nums(["3", "大問1", "2(2)", "2(1)"]), nums(["３", "１", "２"]), nums(["b", "a", "3"])];
+    });
+    assert.deepEqual(sorted, [["大問1", "2(1)", "2(2)", "3"], ["１", "２", "３"], ["b", "a", "3"]], "sorted by number; kept as they came when a number is missing");
+
+    // A picture still being prepared is not left out: pressing 解析する then waits (nothing is sent) until it is ready.
+    await page.evaluate(() => window.closeReader());
+    await page.evaluate(() => { const real = ProfileImages.imageFile; window.__realImageFile = real; ProfileImages.imageFile = (...a) => new Promise((r) => setTimeout(() => r(real(...a)), 1500)); });
+    await page.locator("#englishTextarea").fill("Tom likes tea. He is kind. He smiles.");
+    await page.locator("#readerQuestionsToggle").click().catch(() => {});
+    if (!(await page.locator("#readerQuestionsBox").isVisible())) await page.locator("#readerQuestionsToggle").click();
+    const photo2 = await page.evaluate(() => { const c = document.createElement("canvas"); c.width = 600; c.height = 400; c.getContext("2d").fillRect(0, 0, 600, 400); return c.toDataURL("image/jpeg", 0.9).split(",")[1]; });
+    await page.locator("#readerQuestionsBox input[type=file]").setInputFiles({ name: "q.jpg", mimeType: "image/jpeg", buffer: Buffer.from(photo2, "base64") });
+    const sent = streams;
+    await page.locator("#analysisSubmitBtn").click();
+    await page.waitForTimeout(300);
+    assert.equal(streams, sent, "nothing is sent while the picture is being prepared");
+    assert.match(await page.locator("#readerQuestionsBox .rq-photo-status").innerText(), /画像を準備しています/);
+    await page.locator("#readerQuestionsBox .rq-thumb").waitFor({ timeout: 10000 });
+    await page.locator("#analysisSubmitBtn").click();
+    await card.locator(".rq-answer strong", { hasText: "②" }).waitFor({ timeout: 20000 });
+    assert.equal(streams, sent + 1);
+    assert.equal(lastParts.filter((p) => p.inlineData).length, 1, "the picture went along");
+    await page.evaluate(() => { ProfileImages.imageFile = window.__realImageFile; });
+
     // Another passage has none; the card offers to add questions there, and an error is said and can be retried.
     await page.evaluate(() => window.closeReader());
     await page.locator("#englishTextarea").fill("Mary reads books.");
