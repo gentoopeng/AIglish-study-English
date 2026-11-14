@@ -15,7 +15,7 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
     const ids = (list) => list.map((i) => String(i.id));
     const restart = async ({ device, deviceDeleted, markAt, backupShelf, backupStored, backupDeleted, savedAt }) => {
       await page.evaluate((a) => {
-        const meta = (ids) => JSON.stringify({ v: 2, ids });
+        const meta = (ids) => JSON.stringify({ v: 2, ids, owner: "shelf-user" });
         localStorage.setItem("core_v4_userId", "shelf-user");
         localStorage.setItem("save_studio_shelf-user_main", JSON.stringify({ slot: "main", savedAt: a.savedAt, data: {
           localStorage: { myBookshelf: JSON.stringify(a.backupStored), myFolders: '["未分類"]', textHistory: "[]", aiglish_shelf_meta: meta(a.backupStored.map((i) => String(i.id))), aiglish_shelf_deleted: JSON.stringify(a.backupDeleted) },
@@ -45,6 +45,38 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
     r = await restart({ device: [A, X], deviceDeleted: [], markAt: now, backupShelf: [A, Y], backupStored: [A, Y], backupDeleted: [], savedAt: new Date(now - 30000).toISOString() });
     assert.deepEqual(r.shelf, ["残す", "保存した", "消した"]);
     // (the merged shelf goes to the cloud once, 4 seconds after the start: let that pass before the checks below)
+    await page.waitForTimeout(4500);
+
+    // 3b. A newer backup in the OLD form with an empty shelf (another device that never saved the shelf with this version) does not
+    //     wipe this device's shelf; and a device copy that belongs to another account is not merged into this account's shelf.
+    const oldForm = async (owner) => {
+      await page.evaluate((a) => {
+        localStorage.setItem("core_v4_userId", "shelf-user");
+        localStorage.setItem("save_studio_shelf-user_main", JSON.stringify({ slot: "main", savedAt: new Date(Date.now() + 60000).toISOString(), data: { localStorage: { myBookshelf: "[]", myFolders: '["未分類"]', textHistory: "[]" }, memory: { myBookshelf: [], myFolders: ["未分類"], textHistory: [] } } }));
+        localStorage.setItem("myBookshelf", JSON.stringify(a.device));
+        localStorage.setItem("aiglish_shelf_meta", JSON.stringify({ v: 2, ids: a.device.map((i) => String(i.id)), owner: a.owner }));
+        localStorage.setItem("aiglish_shelf_deleted", "[]");
+        localStorage.removeItem("aiglish_shelf_lost");
+        localStorage.setItem("aiglish_reader_local", JSON.stringify({ owner: "shelf-user", at: Date.now() - 3600000 }));
+      }, { device: [A, X], owner });
+      await page.reload();
+      await page.waitForFunction(() => window.__gameSaveLoadedFor === "shelf-user" && !window.__pendingGameSaveMemory, null, { timeout: 30000 });
+      return page.evaluate(() => ({ shelf: myBookshelf.map((i) => i.title), lost: (JSON.parse(localStorage.getItem("aiglish_shelf_lost") || "null") || { items: [] }).items.map((i) => i.title) }));
+    };
+    assert.deepEqual(await oldForm("shelf-user"), { shelf: ["残す", "保存した"], lost: [] });
+    // Another account's copy on this device: the backup is used as before, and what was this account's by the mark is set aside, not lost.
+    assert.deepEqual(await oldForm("someone-else"), { shelf: [], lost: ["残す", "保存した"] });
+    // …and can be put back from the shelf.
+    await page.evaluate(() => { myId = "shelf-user"; window.saveAfterStudy = async () => ({ cloudSaved: true }); });
+    await page.locator("#nav-reader").click();
+    await page.locator("#readerTabBtnBookshelf").click();
+    await page.locator("#myBookshelfContainer .shelf-lost").getByRole("button", { name: "確認して戻す" }).click();
+    await page.locator(".shelf-lost-row").first().waitFor();
+    assert.equal(await page.locator(".shelf-lost-row").count(), 2);
+    await page.getByRole("button", { name: "すべて戻す" }).click();
+    await page.waitForFunction(() => myBookshelf.length === 2 && !localStorage.getItem("aiglish_shelf_lost"));
+    assert.equal(await page.locator("#myBookshelfContainer .shelf-lost").count(), 0);
+    r = await restart({ device: [A, X], deviceDeleted: [], markAt: now, backupShelf: [A, Y], backupStored: [A, Y], backupDeleted: [], savedAt: new Date(now - 30000).toISOString() });
     await page.waitForTimeout(4500);
 
     // 4. In the app: taking a text off the shelf leaves a tombstone and writes the id list.
