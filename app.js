@@ -569,6 +569,8 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      const progress = typeof window.setLoadingProgress === 'function' ? window.setLoadingProgress : function() {};
      progress(1, '英文を送っています');
      try {
+         // Typed questions someone already solved for this passage are taken from the shared explanations (no AI for them).
+         try { await window.ReaderQuestions?.tryShared?.(rawText, window.ReaderQuestions.pending()); } catch (e) { /* the AI solves them */ }
          const pendingQ = window.ReaderQuestions?.pending?.() || null;
          aiAnalysisResult = await window.callGeminiAnalyzer(rawText, progress, pendingQ ? pendingQ.text : '', pendingQ ? pendingQ.images : []);
          // The answers came with the analysis (one request); they are kept apart from it.

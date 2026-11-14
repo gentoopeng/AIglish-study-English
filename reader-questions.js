@@ -80,7 +80,7 @@
     "決まり:\n" +
     "- 答えは、英文に書かれていることだけをもとに決める。英文に書かれていないこと（ふつうの知識や想像）は根拠にしない。英文から決められない問題は、そのことを explanation に書く。\n" +
     "- 問題が複数あるときは、問題ごとに分けて、出てきた順に入れる。番号がなければ 1, 2, … とふる（number）。\n" +
-    "- question: 問題文をそのまま（英語なら英語のまま）。選択肢は含めない。\n" +
+    "- question: 問題文をそのまま（英語なら英語のまま）。選択肢は含めない。画像に、生徒の名前・学校名・手書きのメモ・ページ番号があっても、書き写さない。\n" +
     "- 選択肢がある問題: answer は選択肢の記号を、問題に書かれたとおりに（①②③④、ア〜エ、A〜D、1〜4 など）。選択肢がない問題: answer は答えを短く。\n" +
     "- explanation: なぜその答えになるのかを、英文の内容にそって2〜4文で。\n" +
     "- evidence: 根拠になる英文の部分を、英文からそのまま抜き出す（1〜2文、書き換えない）。根拠が見つからないときは空の文字列。\n" +
@@ -268,7 +268,10 @@
     };
     inputPicker = picker(refresh);
     input.after(inputPicker.node);
-    toggle.onclick = () => { box.hidden = !box.hidden; refresh(); if (!box.hidden) input.focus(); };
+    const share = shareSwitch();
+    box.append(share);
+    const showShare = () => { share.hidden = !(window.ReaderShared && window.ReaderShared.available()); };
+    toggle.onclick = () => { box.hidden = !box.hidden; showShare(); refresh(); if (!box.hidden) input.focus(); };
     input.addEventListener("input", refresh);
     el("readerClearButton")?.addEventListener("click", () => { input.value = ""; inputPicker.clear(); box.hidden = true; refresh(); });
     refresh();
@@ -280,6 +283,66 @@
   // ---- The result side: the card under the analysed passage ----------------------------------
   let shownFor = "", token = 0;
   const memory = new Map(); // the last questions with their pictures, per passage, for "もう一度解く" (pictures are not kept after a reload)
+  // ---- Sharing (reader-shared.js) ----------------------------------------------------------------
+  function shareSwitch() {
+    const label = node("label", "rq-share"), box = node("input");
+    box.type = "checkbox";
+    box.checked = !window.ReaderShared || window.ReaderShared.enabled();
+    box.onchange = () => { if (window.ReaderShared) window.ReaderShared.setEnabled(box.checked); };
+    label.append(box, node("span", "", "解いた解説を、みんなにも見せる（あなたの名前つき。問題文・答え・解説・本文の短い引用が見えます。写真は送りません。教材の著作権に気をつけてください）"));
+    return label;
+  }
+  const NOT_CHECKED = "AIが作った解説で、確認されていません。間違っている可能性があります。";
+  const dateText = (at) => { const d = new Date(Number(at)); return Number.isFinite(d.getTime()) && at ? d.getMonth() + 1 + "/" + d.getDate() : ""; };
+  function sharedBanner(card, passage, saved) {
+    const note = node("div", "rq-shared-note");
+    note.append(node("strong", "", "みんなの解説（" + (saved.shared.name || "だれか") + "さん）"), node("span", "", NOT_CHECKED));
+    const again = node("button", "", "自分でAIに解かせる"); again.type = "button";
+    again.onclick = () => {
+      if (saved.text) run(passage, { text: saved.text, images: [] });
+      else { set(passage, null); render(passage); }
+    };
+    note.append(again);
+    return note;
+  }
+  function sharedSet(passage, entry) {
+    const RS = window.ReaderShared, box = node("details", "rq-shared-set"), head = node("summary", "", entry.name + "さん · " + entry.questions.length + "問" + (dateText(entry.at) ? " · " + dateText(entry.at) : ""));
+    const body = node("div", "rq-shared-body"), actions = node("div", "rq-tools");
+    const use = node("button", "", "この解説を使う"); use.type = "button";
+    use.onclick = () => { set(passage, { text: "", imageCount: 0, result: { questions: entry.questions }, shared: { name: entry.name, by: entry.by, at: entry.at } }); render(passage); };
+    const hide = node("button", "", "この解説を見えなくする"); hide.type = "button";
+    hide.onclick = () => { RS.hide(entry.path); box.remove(); };
+    actions.append(use, hide);
+    if (RS.isMine(entry)) {
+      const stop = node("button", "", "共有をやめる"); stop.type = "button";
+      stop.onclick = async () => { stop.disabled = true; try { await RS.unshare(entry); box.remove(); } catch (error) { stop.disabled = false; stop.textContent = "共有をやめられませんでした"; } };
+      actions.append(stop);
+    }
+    body.append(node("p", "rq-hint", NOT_CHECKED), ...questionItems(entry.questions, passage), actions);
+    box.append(head, body);
+    return box;
+  }
+  // "みんなの解説を見る": nothing is read until it is pressed.
+  function sharedPanel(passage) {
+    const RS = window.ReaderShared, box = node("div", "rq-shared");
+    if (!RS || !RS.available()) return box;
+    if (!RS.enabled()) { box.append(node("p", "rq-hint", "「みんなにも見せる」をオンにすると、ほかの人の解説も読めます。")); return box; }
+    const open = node("button", "rq-shared-open", "みんなの解説を見る"), out = node("div", "rq-shared-list");
+    open.type = "button";
+    open.onclick = async () => {
+      open.disabled = true; out.replaceChildren(node("p", "rq-hint", "読み込んでいます…"));
+      try {
+        const sets = await RS.list(passage);
+        out.replaceChildren(...(sets.length ? sets.map((entry) => sharedSet(passage, entry)) : [node("p", "rq-hint", "この英文には、まだ共有された解説がありません。")]));
+        open.hidden = true;
+      } catch (error) {
+        out.replaceChildren(node("p", "rq-hint", "みんなの解説を読み込めませんでした。通信か、読み取りの上限かもしれません。時間をおいてお試しください。"));
+        open.disabled = false;
+      }
+    };
+    box.append(open, out);
+    return box;
+  }
   function chooser(card, passage, initial) {
     const box = node("div", "rq-add");
     const label = node("label", "reader-field-label", "問題（選択肢もいっしょに貼り付け、または画像）");
@@ -294,35 +357,12 @@
       if (!hasQ(q)) { input.focus(); return; }
       run(passage, q);
     };
-    box.append(label, pk.node, go);
+    box.append(label, pk.node, shareSwitch(), go);
     return box;
   }
-  function render(passage) {
-    const card = el("readerQuestionsCard");
-    if (!card) return;
-    card.replaceChildren();
-    card.hidden = false;
-    const heading = node("h2", "", "問題の解説");
-    card.append(heading);
-    const saved = get(passage);
-    if (!saved || (!saved.text && !saved.imageCount)) {
-      card.append(node("p", "rq-hint", "この英文の問題を貼り付けると、英文の内容にそって解いて、解説します。"), chooser(card, passage, ""));
-      return;
-    }
-    if (saved.loading) {
-      const status = node("div", "reader-analyzing"); status.setAttribute("role", "status");
-      status.append(node("span", "", "問題を解いています…"));
-      card.append(status);
-      return;
-    }
-    if (saved.error) {
-      const notice = node("div", "reader-key-notice reader-error-notice"); notice.setAttribute("role", "alert");
-      const again = node("button", "", "もう一度解く"); again.type = "button"; again.onclick = () => retry(passage, saved, card);
-      notice.append(node("strong", "", saved.error.title || "問題を解けませんでした"), node("span", "", saved.error.detail || ""), again);
-      card.append(notice, tools(card, passage, saved));
-      return;
-    }
-    for (const q of saved.result.questions) {
+  function questionItems(questions, passage) {
+    const items = [];
+    for (const q of questions) {
       const item = node("section", "rq-item");
       const head = node("div", "rq-head");
       head.append(node("span", "rq-num", q.number), node("span", "rq-question", q.question));
@@ -362,8 +402,37 @@
         }
         item.append(list);
       }
-      card.append(item);
+      items.push(item);
     }
+    return items;
+  }
+  function render(passage) {
+    const card = el("readerQuestionsCard");
+    if (!card) return;
+    card.replaceChildren();
+    card.hidden = false;
+    const heading = node("h2", "", "問題の解説");
+    card.append(heading);
+    const saved = get(passage);
+    if (!saved || (!saved.text && !saved.imageCount && !saved.result)) {
+      card.append(node("p", "rq-hint", "この英文の問題を貼り付けると、英文の内容にそって解いて、解説します。"), chooser(card, passage, ""), sharedPanel(passage));
+      return;
+    }
+    if (saved.loading) {
+      const status = node("div", "reader-analyzing"); status.setAttribute("role", "status");
+      status.append(node("span", "", "問題を解いています…"));
+      card.append(status);
+      return;
+    }
+    if (saved.error) {
+      const notice = node("div", "reader-key-notice reader-error-notice"); notice.setAttribute("role", "alert");
+      const again = node("button", "", "もう一度解く"); again.type = "button"; again.onclick = () => retry(passage, saved, card);
+      notice.append(node("strong", "", saved.error.title || "問題を解けませんでした"), node("span", "", saved.error.detail || ""), again);
+      card.append(notice, tools(card, passage, saved));
+      return;
+    }
+    if (saved.shared) card.append(sharedBanner(card, passage, saved));
+    card.append(...questionItems(saved.result.questions, passage));
     card.append(tools(card, passage, saved));
   }
   function tools(card, passage, saved) {
@@ -385,6 +454,7 @@
     if (out.result) await cropFigures(out.result, q.images);
     if (mine !== token) return;
     set(passage, out.result ? { ...base, result: out.result } : { ...base, error: out.error });
+    if (out.result && window.ReaderShared) window.ReaderShared.publish(passage, out.result, q.images.length ? "" : q.text);
     if (shownFor === passage) render(passage);
   }
   // Asking again: with the pictures of this session, or (after a reload) with the typed text only; pictures have to be chosen again.
@@ -418,6 +488,15 @@
       render(shownFor);
     },
     // The questions waiting for the next analysis (reader.js sends them along with it, in the same request).
+    // Typed questions that someone already solved for this passage (same text): shown as theirs, so the AI is not asked.
+    async tryShared(passage, q) {
+      if (!q || q !== pending || q.images.length || !q.text || !window.ReaderShared || !window.ReaderShared.usable()) return false;
+      const hit = await window.ReaderShared.find(passage, q.text);
+      if (!hit || q !== pending) return false;
+      pending = null;
+      set(String(passage || ""), { text: q.text, imageCount: 0, result: { questions: hit.questions }, shared: { name: hit.name, by: hit.by, at: hit.at } });
+      return true;
+    },
     pending: () => pending,
     questionBlock, imageParts,
     // The answers that came back with the analysis: kept for the passage, and no separate request is needed.
@@ -427,6 +506,7 @@
       pending = null;
       const key = String(passage || ""), base = { text: q.text, imageCount: q.images.length };
       set(key, { ...base, result });
+      if (window.ReaderShared) window.ReaderShared.publish(key, result, q.images.length ? "" : q.text);
       // The figures are cut out right after (the pictures are at hand now); the card shows them when they are ready.
       cropFigures(result, q.images).then(() => { set(key, { ...base, result }); if (shownFor === key) render(key); });
       return true;
