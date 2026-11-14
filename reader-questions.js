@@ -17,7 +17,15 @@
   function writeAll(all) {
     const keys = Object.keys(all).sort((a, b) => (all[b].at || 0) - (all[a].at || 0));
     for (const k of keys.slice(MAX)) delete all[k];
-    try { localStorage.setItem(KEY, JSON.stringify(all)); window.markReaderDataChanged?.(); return true; } catch { return false; }
+    // The cut-out figures make the record bigger: when the device is full, the older passages lose their figures first.
+    const order = keys.slice().reverse();
+    for (let attempt = 0; attempt <= order.length; attempt++) {
+      try { localStorage.setItem(KEY, JSON.stringify(all)); window.markReaderDataChanged?.(); return true; } catch { /* make room */ }
+      const k = order[attempt];
+      if (!k || !all[k] || !all[k].result) continue;
+      for (const q of all[k].result.questions) q.figures = [];
+    }
+    return false;
   }
   const get = (passage) => readAll()[hash(passage)] || null;
   function set(passage, value) {
@@ -41,6 +49,15 @@
             explanation: { type: "STRING" },
             evidence: { type: "STRING" },
             evidenceTranslation: { type: "STRING" },
+            figures: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: { image: { type: "INTEGER" }, box: { type: "ARRAY", items: { type: "INTEGER" } }, caption: { type: "STRING" } },
+                required: ["image", "box", "caption"],
+                propertyOrdering: ["image", "box", "caption"],
+              },
+            },
             choices: {
               type: "ARRAY",
               items: {
@@ -52,7 +69,7 @@
             },
           },
           required: ["number", "question", "answer", "explanation", "evidence", "evidenceTranslation", "choices"],
-          propertyOrdering: ["number", "question", "answer", "explanation", "evidence", "evidenceTranslation", "choices"],
+          propertyOrdering: ["number", "question", "answer", "explanation", "evidence", "evidenceTranslation", "figures", "choices"],
         },
       },
     },
@@ -68,6 +85,7 @@
     "- explanation: なぜその答えになるのかを、英文の内容にそって2〜4文で。\n" +
     "- evidence: 根拠になる英文の部分を、英文からそのまま抜き出す（1〜2文、書き換えない）。根拠が見つからないときは空の文字列。\n" +
     "- evidenceTranslation: evidence の自然な日本語訳。\n" +
+    "- figures: 問題の画像が添付されていて、その中に、問題を解くのに必要な図・表・グラフ・地図・イラストがあるときだけ、その位置を入れる（問題文や選択肢の文字だけの部分は入れない。画像がないときは空の配列）。image: 何枚目の画像か（1から）。box: [上, 左, 下, 右] を、画像の左上を (0,0)、右下を (1000,1000) とした整数で、図や表をちょうど囲む四角。caption: 図の名前を10字ほどで（例：「表1」「地図」「図」）。1つの問題に最大2つ。\n" +
     "- choices: 選択肢がある問題では、すべての選択肢について label（記号）、correct（正解なら true）、reason（その選択肢が英文に合っている／合っていない理由を、英文に基づいて1文）。選択肢がない問題では空の配列。\n";
   // The questions as text for the prompt: what was typed, and a note about the pictures that go with it (a photo or screenshot of the questions).
   const IMAGE_MAX = 4;
@@ -97,9 +115,51 @@
         explanation: str(q && q.explanation, 1500),
         evidence: str(q && q.evidence, 600),
         evidenceTranslation: str(q && q.evidenceTranslation, 600),
+        // Where the figures are (0-1000 of each picture): cut out later, in cropFigures, while the pictures are still at hand.
+        figures: (Array.isArray(q && q.figures) ? q.figures : []).slice(0, 2).map((f) => {
+          const b = Array.isArray(f && f.box) ? f.box.map((v) => Math.max(0, Math.min(1000, Math.round(Number(v) || 0)))) : [];
+          return b.length === 4 && b[2] - b[0] >= 20 && b[3] - b[1] >= 20 ? { src: Math.max(1, Math.round(Number(f.image) || 1)), box: b, caption: str(f.caption, 24) } : null;
+        }).filter(Boolean),
         choices: (Array.isArray(q && q.choices) ? q.choices : []).slice(0, 10).map((c) => ({ label: str(c && c.label, 12), correct: !!(c && c.correct), reason: str(c && c.reason, 500) })),
       })),
     };
+  }
+  // Cuts the figures out of the pictures that were sent (each as a small JPEG, long side at most 640px) and puts them in the result:
+  // figure.image. A box that does not make sense (outside the picture, or the whole picture) is dropped. Never throws.
+  const FIGURE_SIDE = 640;
+  async function cropFigures(result, images) {
+    if (!result) return false;
+    // Without pictures there is nothing to cut (the boxes are dropped).
+    if (!Array.isArray(images) || !images.length) { for (const q of result.questions) q.figures = []; return false; }
+    const loaded = new Map();
+    const load = (i) => {
+      if (!loaded.has(i)) loaded.set(i, new Promise((resolve) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => resolve(null); img.src = images[i]; }));
+      return loaded.get(i);
+    };
+    let changed = false;
+    for (const q of result.questions) {
+      const out = [];
+      for (const f of q.figures || []) {
+        if (f.image) { out.push(f); continue; }
+        try {
+          const img = await load(Math.min(images.length, f.src || 1) - 1);
+          if (!img) continue;
+          const [top, left, bottom, right] = f.box, pad = 0.02;
+          const x0 = Math.max(0, (left / 1000 - pad) * img.naturalWidth), x1 = Math.min(img.naturalWidth, (right / 1000 + pad) * img.naturalWidth);
+          const y0 = Math.max(0, (top / 1000 - pad) * img.naturalHeight), y1 = Math.min(img.naturalHeight, (bottom / 1000 + pad) * img.naturalHeight);
+          const w = x1 - x0, h = y1 - y0;
+          if (w < 24 || h < 24 || (w > img.naturalWidth * 0.96 && h > img.naturalHeight * 0.96)) continue;
+          const scale = Math.min(1, FIGURE_SIDE / Math.max(w, h)), canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(w * scale)); canvas.height = Math.max(1, Math.round(h * scale));
+          const ctx = canvas.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, x0, y0, w, h, 0, 0, canvas.width, canvas.height);
+          out.push({ image: canvas.toDataURL("image/jpeg", 0.7), caption: f.caption });
+          canvas.width = 0; canvas.height = 0; changed = true;
+        } catch { /* no figure for this one */ }
+      }
+      q.figures = out;
+    }
+    return changed || result.questions.some((q) => (q.figures || []).length === 0);
   }
   function apiKey() {
     const input = document.getElementById("sidebarApiKeyInput");
@@ -268,7 +328,25 @@
       head.append(node("span", "rq-num", q.number), node("span", "rq-question", q.question));
       const answer = node("div", "rq-answer");
       answer.append(node("small", "", "答え"), node("strong", "", q.answer));
-      item.append(head, answer, node("p", "rq-explanation", q.explanation));
+      item.append(head);
+      (q.figures || []).forEach((f, fi) => {
+        if (!f.image) return;
+        const fig = node("figure", "rq-figure"), img = node("img"), drop = node("button", "rq-figure-drop", "図を外す");
+        img.src = f.image; img.alt = f.caption || "問題の図";
+        drop.type = "button";
+        drop.onclick = () => {
+          const now = get(passage);
+          if (!now || !now.result) return;
+          const target = now.result.questions.find((x) => x.number === q.number);
+          if (target) target.figures = (target.figures || []).filter((_, i) => i !== fi);
+          set(passage, now); render(passage);
+        };
+        fig.append(img);
+        if (f.caption) fig.append(node("figcaption", "", f.caption));
+        fig.append(drop);
+        item.append(fig);
+      });
+      item.append(answer, node("p", "rq-explanation", q.explanation));
       if (q.evidence) {
         const quote = node("blockquote", "rq-evidence");
         quote.append(node("small", "", "本文の根拠"), node("span", "rq-en", q.evidence));
@@ -303,6 +381,8 @@
     set(passage, { ...base, loading: true });
     render(passage);
     const out = await solve(passage, q);
+    if (mine !== token) return;
+    if (out.result) await cropFigures(out.result, q.images);
     if (mine !== token) return;
     set(passage, out.result ? { ...base, result: out.result } : { ...base, error: out.error });
     if (shownFor === passage) render(passage);
@@ -345,7 +425,10 @@
       const result = normalize(answers);
       if (!result || !q || q !== pending) return false;
       pending = null;
-      set(String(passage || ""), { text: q.text, imageCount: q.images.length, result });
+      const key = String(passage || ""), base = { text: q.text, imageCount: q.images.length };
+      set(key, { ...base, result });
+      // The figures are cut out right after (the pictures are at hand now); the card shows them when they are ready.
+      cropFigures(result, q.images).then(() => { set(key, { ...base, result }); if (shownFor === key) render(key); });
       return true;
     },
     ITEM: SCHEMA.properties.questions.items, RULES, normalize,
