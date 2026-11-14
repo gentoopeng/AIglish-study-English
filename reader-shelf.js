@@ -96,10 +96,43 @@
       .filter(Boolean)
       .join(" · ");
 
+  // A first line of the English (what the text is about, at a glance) and small marks: analysed, has questions.
+  const previewOf = (item) => {
+    const line = String(item.text || "").replace(/\s+/g, " ").trim();
+    return line.length > 70 ? line.slice(0, 70) + "…" : line;
+  };
+  const chipsOf = (item) => {
+    const chips = [];
+    if (item.aiAnalysisData && !item.aiAnalysisData.analysisError) chips.push({ text: "解析済み", kind: "done" });
+    const questions = window.ReaderQuestions?.get?.(item.text);
+    if (questions && questions.result) chips.push({ text: "問題" + questions.result.questions.length + "問", kind: "questions" });
+    return chips;
+  };
+  // The search box of the shelf: matches the title and the English; kept while moving between the shelf's views.
+  let shelfQuery = "";
+  const matches = (item) => {
+    const q = shelfQuery.trim().toLowerCase();
+    return !q || String(item.title || "").toLowerCase().includes(q) || String(item.text || "").toLowerCase().includes(q);
+  };
+  function searchBox(onChange) {
+    const wrap = node("label", "shelf-search"), input = node("input");
+    input.type = "search";
+    input.placeholder = "タイトル・英文で探す";
+    input.autocomplete = "off";
+    input.value = shelfQuery;
+    input.setAttribute("aria-label", "本棚を探す");
+    input.addEventListener("input", () => {
+      shelfQuery = input.value;
+      onChange();
+    });
+    wrap.append(node("span", "shelf-search-icon", "🔍"), input);
+    return wrap;
+  }
+
   // While sorting, rows show ▲▼ instead of ⋯ (sorting ends when the view changes).
   let sorting = false;
   // A row like a word book: the whole row opens it, ⋯ manages it.
-  function row({ cover, name, tag, sub, label, onOpen, onManage, move, compact, index }) {
+  function row({ cover, name, tag, sub, preview, chips, label, onOpen, onManage, move, compact, index }) {
     const entry = node("div", "vocab-library-book-entry shelf-entry" + (compact ? " is-compact" : "")),
       open = node("button", "textbook-list-item");
     open.type = "button";
@@ -122,6 +155,12 @@
     heading.append(node("span", "textbook-list-name", name));
     if (tag) heading.append(node("span", "textbook-list-visibility", tag));
     details.append(heading, node("span", "shelf-entry-sub", sub));
+    if (preview) details.append(node("span", "shelf-entry-preview", preview));
+    if (chips && chips.length) {
+      const bar = node("span", "shelf-entry-chips");
+      for (const chip of chips) bar.append(node("span", "shelf-chip" + (chip.kind ? " is-" + chip.kind : ""), chip.text));
+      details.append(bar);
+    }
     open.append(details);
     entry.append(open);
     if (sorting && move) {
@@ -429,7 +468,7 @@
       currentShelfView = "list";
     if (currentShelfView === "list") {
       container.append(
-        header("", "本棚", [
+        header(myBookshelf.length ? "全" + myBookshelf.length + "本の長文" : "", "本棚", [
           button("＋ フォルダを作る", createFolder),
           button("英文を解析する", () => window.switchReaderSubTab("analysis", "left")),
           ...(names.length > 1 ? [sortButton()] : []),
@@ -437,6 +476,28 @@
       );
       const list = node("div", "vocab-library-list");
       let index = 0;
+      // With something typed in the search box, the matching texts of the whole shelf are shown (with the folder they are in).
+      const found = () => {
+        list.replaceChildren();
+        const hits = myBookshelf.filter(matches).slice().reverse();
+        hits.forEach((item, at) =>
+          list.append(
+            row({
+              cover: { text: "📖" },
+              name: item.title || "無題",
+              sub: folderOf(item) + " · " + textMeta(item),
+              preview: previewOf(item),
+              chips: chipsOf(item),
+              label: (item.title || "無題") + "を開く",
+              onOpen: () => openText(item),
+              onManage: () => manageText(item),
+              index: at,
+            }),
+          ),
+        );
+        if (!hits.length) list.append(node("div", "vocab-library-empty", "「" + shelfQuery.trim() + "」に合う長文はありません。"));
+      };
+      const drawFolders = () => {
       for (const book of books()) {
         const count = myBookshelf.filter((i) => i.bookId === book.id).length;
         list.append(
@@ -471,6 +532,14 @@
         );
       if (!index)
         list.append(node("div", "vocab-library-empty", "まだ何もありません。解析した英文を「本棚に保存」すると、ここに並びます。"));
+      };
+      const draw = () => {
+        list.replaceChildren();
+        if (shelfQuery.trim()) found();
+        else drawFolders();
+      };
+      if (myBookshelf.length) container.append(searchBox(draw));
+      draw();
       container.append(list);
       return;
     }
@@ -485,21 +554,30 @@
     container.append(header(folderName ? "FOLDER" : book ? "SHELF" : "BOOKSHELF", title, tools));
     const list = node("div", "vocab-library-list");
     const shown = items.slice().reverse();
-    shown.forEach((item, index) =>
+    const drawItems = () => {
+      list.replaceChildren();
+      const visible = shown.filter(matches);
+      visible.forEach((item, index) =>
         list.append(
           row({
             cover: { text: "📖" },
             name: item.title || "無題",
             sub: textMeta(item),
+            preview: previewOf(item),
+            chips: chipsOf(item),
             label: (item.title || "無題") + "を開く",
             onOpen: () => openText(item),
             onManage: () => manageText(item),
-            move: mover(shown, index, swapTexts),
+            move: shelfQuery.trim() ? undefined : mover(shown, shown.indexOf(item), swapTexts),
             index,
           }),
         ),
       );
-    if (!items.length) list.append(node("div", "vocab-library-empty", "このフォルダには、まだ長文がありません。"));
+      if (!items.length) list.append(node("div", "vocab-library-empty", "このフォルダには、まだ長文がありません。"));
+      else if (!visible.length) list.append(node("div", "vocab-library-empty", "「" + shelfQuery.trim() + "」に合う長文はありません。"));
+    };
+    if (items.length > 3) container.append(searchBox(drawItems));
+    drawItems();
     container.append(list);
   };
 
