@@ -298,6 +298,9 @@ function collectAllData() {
       if(k==='core_v4_geminiKey'||k==='core_v4_users')continue;
       if (/^core_v4_(?:flash_queue|flash_cursor|group_synced)_/.test(k)) continue;
       if (k.indexOf('core_v4_textbook_file_') === 0) continue;
+      // Copies that are fetched again when needed (shared explanations, stamp pictures) and what this device set aside: they only
+      // made the full save bigger (a save too big for the device is what broke the bookshelf).
+      if (k === 'aiglish_reader_shared_cache' || k === 'aiglish_shelf_lost' || k === 'aiglish_stamp_images' || k.indexOf('aiglish_stamp_image_') === 0) continue;
       if (k.indexOf('save_studio_') === 0 || k === 'aiglish_shared_background_catalog' || k === 'aiglish_profile_shop_catalog' || k === '__aiglish_render_guard' || k === '__aiglish_warmup_guard' || k === '__aiglish_deletion_guard' || k === '__aiglish_startup_diagnostic') continue;
       // 単語帳本体は memory.vocabBooks に正規化して保存する。同じ内容のキャッシュを
       // 何重にも含めるとセーブ容量と通信回数が数倍になるため、再生成可能な複製は除外する。
@@ -1069,7 +1072,9 @@ async function saveAllContents(force) {
   var raw=JSON.stringify(save);
   var localSaved=false, cloudSaved=false, localError=null, cloudError=null;
   try { localStorage.setItem(localKey(),raw);if(window.AppStorage)await window.AppStorage.flush();localSaved=true; }
-  catch(e) { localError=e; console.warn('[save] local save failed',e); }
+  catch(e) { localError=e; console.warn('[save] local save failed',e);
+    // The full save did not fit on the device: it is not left in the write queue (the cloud copy below is the backup then).
+    try{if(window.AppStorage&&window.AppStorage.discard)await window.AppStorage.discard(localKey());}catch(discardError){} }
   if(localSaved){
     try { localStorage.setItem(localMetaKey(id),JSON.stringify({savedAt:save.savedAt,savedAtDisplay:save.savedAtDisplay,source:'local'})); } catch(e) {}
   }

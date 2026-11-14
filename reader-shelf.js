@@ -95,8 +95,31 @@
     if (result === "failed") window.showToast?.("この端末の容量がいっぱいで、本棚を端末に保存できませんでした。不要なデータを消してから、もう一度お試しください。", "error");
     // When nothing could be written, the device copy is NOT marked as the newer one: it is the old shelf, and marking it made the next
     // start keep it over the backup (a saved text gone, a deleted one back). The backup still goes out (it carries the shelf in memory).
-    window.markReaderDataChanged(result !== "failed");
+    // …and the mark waits until the shelf is really on the device (big values are written a moment later, and that can fail too).
+    window.markReaderDataChanged(result !== "failed" ? shelfStored() : false);
     return result;
+  }
+  // true once the shelf is on the device. When it is not (the device has no room for it), the texts alone are tried; if that fails
+  // too, it says so, and the device copy is left as it was (not marked as the newer one).
+  function shelfStored() {
+    const store = window.AppStorage;
+    if (!store || !store.stored || !store.flush) return true;
+    const settle = () => store.flush().catch(() => {});
+    return settle().then(() => {
+      if (store.stored("myBookshelf")) return true;
+      try {
+        writeDevice(true);
+      } catch {}
+      return settle().then(() => {
+        const ok = store.stored("myBookshelf");
+        if (ok) window.showToast?.("この端末の容量がいっぱいで、解析結果は端末に保存できませんでした（文章は保存しました）。", "error");
+        else {
+          store.discard?.("myBookshelf");
+          window.showToast?.("この端末の容量がいっぱいで、本棚を端末に保存できませんでした。不要なデータを消してから、もう一度お試しください。", "error");
+        }
+        return ok;
+      });
+    });
   }
   // The bookshelf and history live in device keys, but startup restores the last full backup.
   // So a change stamps the device copy as newer than any backup (the restore keeps it, see
@@ -104,10 +127,14 @@
   let backupTimer = 0;
   window.markReaderDataChanged = function (written = true) {
     const owner = typeof myId === "string" && myId ? myId : "GUEST-000";
-    if (written)
+    const stamp = () => {
       try {
         localStorage.setItem("aiglish_reader_local", JSON.stringify({ owner, at: Date.now() }));
       } catch {}
+    };
+    // (`written` may be a promise: the mark is set when the shelf is known to be on the device)
+    if (written && typeof written.then === "function") written.then((ok) => ok && stamp(), () => {});
+    else if (written) stamp();
     window.queueBackgroundSave?.();
     if (owner === "GUEST-000") return;
     clearTimeout(backupTimer);
