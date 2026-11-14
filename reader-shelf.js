@@ -40,10 +40,39 @@
   // Writes the shelf to this device. The device storage can be full (the AI analyses are big): first the stamp pictures kept on this
   // device are let go, then only the texts are kept without their analyses; and it says so (it used to fail silently while the screen
   // said "saved"). Returns "full" (all saved), "slim" (texts only) or "failed" (nothing could be written).
+  // What makes the shelf mergeable (reader-shelf-merge.js): a tombstone for each text taken off the shelf, the last thing done to each
+  // folder name, and a list of the shelf's ids written with every save (so a copy changed by an older version of the app is noticed).
+  const DELETED_KEY = "aiglish_shelf_deleted", OPS_KEY = "aiglish_shelf_folder_ops", META_KEY = "aiglish_shelf_meta";
+  const readJson = (key, fallback) => {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || "null");
+      return value == null ? fallback : value;
+    } catch {
+      return fallback;
+    }
+  };
+  // Written before the shelf itself, and small: it gets through even when the device is nearly full.
+  function tombstone(id) {
+    if (id === undefined || id === null) return;
+    try {
+      const list = window.ReaderShelfMerge.tombstones(readJson(DELETED_KEY, []), [{ id, at: Date.now() }], Date.now());
+      localStorage.setItem(DELETED_KEY, JSON.stringify(list));
+    } catch {}
+  }
+  function folderOp(name, deleted) {
+    if (!name || name === "未分類") return;
+    try {
+      const ops = readJson(OPS_KEY, {});
+      ops[name] = { at: Date.now(), deleted: !!deleted };
+      localStorage.setItem(OPS_KEY, JSON.stringify(ops));
+    } catch {}
+  }
   function writeDevice(slim) {
     const shelf = slim ? myBookshelf.map(({ aiAnalysisData, ...rest }) => rest) : myBookshelf;
     localStorage.setItem("myBookshelf", JSON.stringify(shelf));
     localStorage.setItem("myFolders", JSON.stringify(myFolders));
+    if (localStorage.getItem(DELETED_KEY) === null) localStorage.setItem(DELETED_KEY, "[]");
+    localStorage.setItem(META_KEY, JSON.stringify(window.ReaderShelfMerge.meta(myBookshelf)));
   }
   function persist() {
     let result = "full";
@@ -62,20 +91,23 @@
         }
       }
     }
-    if (result === "slim") window.showToast?.("この端末の容量がいっぱいで、解析結果は端末に保存できませんでした（文章は保存しました）。不要な本棚の項目を消すと、解析も残せます。", "error");
+    if (result === "slim") window.showToast?.("この端末の容量がいっぱいで、解析結果は端末に保存できませんでした（文章は保存しました）。不要な本棚の項目やデータを消すと、また保存できます。", "error");
     if (result === "failed") window.showToast?.("この端末の容量がいっぱいで、本棚を端末に保存できませんでした。不要なデータを消してから、もう一度お試しください。", "error");
-    window.markReaderDataChanged();
+    // When nothing could be written, the device copy is NOT marked as the newer one: it is the old shelf, and marking it made the next
+    // start keep it over the backup (a saved text gone, a deleted one back). The backup still goes out (it carries the shelf in memory).
+    window.markReaderDataChanged(result !== "failed");
     return result;
   }
   // The bookshelf and history live in device keys, but startup restores the last full backup.
   // So a change stamps the device copy as newer than any backup (the restore keeps it, see
   // applySavedMemory in save-system.js), and a backup follows shortly.
   let backupTimer = 0;
-  window.markReaderDataChanged = function () {
+  window.markReaderDataChanged = function (written = true) {
     const owner = typeof myId === "string" && myId ? myId : "GUEST-000";
-    try {
-      localStorage.setItem("aiglish_reader_local", JSON.stringify({ owner, at: Date.now() }));
-    } catch {}
+    if (written)
+      try {
+        localStorage.setItem("aiglish_reader_local", JSON.stringify({ owner, at: Date.now() }));
+      } catch {}
     window.queueBackgroundSave?.();
     if (owner === "GUEST-000") return;
     clearTimeout(backupTimer);
@@ -228,6 +260,7 @@
   function createFolder() {
     askFolderName("新しいフォルダ", "", (name) => {
       myFolders = [...myFolders.filter((f) => f !== name), name];
+      folderOp(name, false);
       persist();
       show("folder:" + name);
     });
@@ -244,8 +277,13 @@
         if (next === name) return;
         myFolders = myFolders.map((f) => (f === name ? next : f));
         if (!myFolders.includes(next)) myFolders.push(next);
+        folderOp(name, true);
+        folderOp(next, false);
         myBookshelf.forEach((i) => {
-          if (folderOf(i) === name) i.folder = next;
+          if (folderOf(i) === name) {
+            i.folder = next;
+            i.updatedAt = Date.now();
+          }
         });
         persist();
         show(String(currentShelfView) === "folder:" + name ? "folder:" + next : currentShelfView);
@@ -259,8 +297,12 @@
       );
       confirm.querySelector('[data-shelf="confirm"]').onclick = () => {
         myFolders = myFolders.filter((f) => f !== name);
+        folderOp(name, true);
         myBookshelf.forEach((i) => {
-          if (folderOf(i) === name) i.folder = "未分類";
+          if (folderOf(i) === name) {
+            i.folder = "未分類";
+            i.updatedAt = Date.now();
+          }
         });
         persist();
         window.closeLibraryDialog();
@@ -362,6 +404,7 @@
         item.aiAnalysisData = null;
       }
       item.title = nextTitle;
+      item.updatedAt = Date.now();
       persist();
       window.closeLibraryDialog();
       window.showToast?.("保存しました。", "ok");
@@ -553,6 +596,8 @@
           delete item.bookId;
           item.folder = place.folder;
         }
+        item.updatedAt = Date.now();
+        if (place.folder) folderOp(place.folder, false);
         persist();
         window.closeLibraryDialog();
         window.showToast?.("「" + placeName(place) + "」に移動しました。", "ok");
@@ -565,7 +610,9 @@
         '<p class="library-editor-hint">本棚から外します。履歴には残ります。</p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="button" class="library-editor-danger" data-shelf="confirm">削除する</button></div>',
       );
       confirm.querySelector('[data-shelf="confirm"]').onclick = () => {
-        myBookshelf = myBookshelf.filter((b) => b.id !== item.id);
+        // This one text only (two entries can share an id in old data), and a tombstone unless another entry still uses the id.
+        myBookshelf = myBookshelf.filter((b) => b !== item);
+        if (!myBookshelf.some((b) => b.id === item.id)) tombstone(item.id);
         persist();
         window.closeLibraryDialog();
         window.renderBookshelf();
@@ -613,6 +660,7 @@
         text,
         aiAnalysisData: copy(data),
       });
+      if (place.folder) folderOp(place.folder, false);
       const saved = persist();
       if (shareBox && shareBox.checked)
         RS.publishText(title, text).then((result) => (result === "ok" || result === "exists" ? RS.shareAnalysis(text, data) : 0, result)).then((result) => window.showToast?.(publishMessage[result] || publishMessage.fail, result === "ok" || result === "exists" ? "ok" : "error"));
@@ -802,5 +850,15 @@
     window.markReaderDataChanged();
     window.renderHistoryList();
   };
+  // Another tab of this app changed the shelf: this tab takes it, so it cannot write its older copy back.
+  window.addEventListener("storage", (event) => {
+    if (event.key !== "myBookshelf" && event.key !== "myFolders") return;
+    const shelf = readJson("myBookshelf", null),
+      names = readJson("myFolders", null);
+    if (Array.isArray(shelf)) myBookshelf = shelf;
+    if (Array.isArray(names)) myFolders = names;
+    if (document.querySelector("dialog.library-editor-dialog[open]")) window.closeLibraryDialog?.();
+    window.renderBookshelf();
+  });
   window.ReaderShelf = Object.freeze({ sentenceCount, folders });
 })();
