@@ -569,11 +569,11 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      const progress = typeof window.setLoadingProgress === 'function' ? window.setLoadingProgress : function() {};
      progress(1, '英文を送っています');
      try {
-         const questionText = window.ReaderQuestions?.pendingText?.() || '';
-         aiAnalysisResult = await window.callGeminiAnalyzer(rawText, progress, questionText);
+         const pendingQ = window.ReaderQuestions?.pending?.() || null;
+         aiAnalysisResult = await window.callGeminiAnalyzer(rawText, progress, pendingQ ? pendingQ.text : '', pendingQ ? pendingQ.images : []);
          // The answers came with the analysis (one request); they are kept apart from it.
          if (aiAnalysisResult && !aiAnalysisResult.analysisError && 'questionAnswers' in aiAnalysisResult) {
-             window.ReaderQuestions.adopt(rawText, questionText, aiAnalysisResult.questionAnswers);
+             window.ReaderQuestions.adopt(rawText, pendingQ, aiAnalysisResult.questionAnswers);
              delete aiAnalysisResult.questionAnswers;
          }
          progress(100, '表示しています');

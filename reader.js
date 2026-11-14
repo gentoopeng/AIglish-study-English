@@ -250,7 +250,7 @@
 
     // onProgress(percent, label): the analysis streams in, so the percent follows the sentences
     // translated so far; before the first one, it creeps up slowly while the AI reads.
-    window.callGeminiAnalyzer = async function(text, onProgress, questions) {
+    window.callGeminiAnalyzer = async function(text, onProgress, questions, images) {
         var input = document.getElementById('sidebarApiKeyInput');
         var apiKey = (input && input.value.trim()) || localStorage.getItem('core_v4_geminiKey') || (typeof geminiApiKey !== 'undefined' ? geminiApiKey : '');
         if (!apiKey) {
@@ -281,7 +281,8 @@
         arm();
         try {
             var candidates = vocabCandidates(text);
-            questions = questions && window.ReaderQuestions ? String(questions) : '';
+            var questionImages = Array.isArray(images) ? images : [];
+            questions = window.ReaderQuestions && (questions || questionImages.length) ? window.ReaderQuestions.questionBlock({ text: String(questions || ''), images: questionImages }) : '';
             var prompt = analysisPrompt(text, candidates, questions);
             // With questions, the same request also asks for their answers (one request, not two).
             var schema = ANALYSIS_SCHEMA;
@@ -297,7 +298,7 @@
                 return fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(apiKey), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: config }),
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }].concat(questions ? window.ReaderQuestions.imageParts(questionImages) : []) }], generationConfig: config }),
                     signal: controller ? controller.signal : undefined
                 });
             };

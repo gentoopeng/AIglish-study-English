@@ -6,13 +6,14 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
   try {
     const page = await browser.newPage({ viewport: { width: 393, height: 852 } }), errors = [], prompts = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    let solveStatus = 0, solves = 0, streams = 0, omitAnswers = false;
+    let solveStatus = 0, solves = 0, streams = 0, omitAnswers = false, lastParts = [];
     const answers = [{ number: "1", question: "What does Tom like?", answer: "②", explanation: "本文の1文目に、トムは紅茶が好きだと書かれています。", evidence: "Tom likes tea.", evidenceTranslation: "トムは紅茶が好きだ。", choices: [{ label: "①", correct: false, reason: "コーヒーのことは書かれていません。" }, { label: "②", correct: true, reason: "tea と一致します。" }] }];
     await page.route("https://**/*", (r) => r.abort());
     await page.route("https://generativelanguage.googleapis.com/**", (r) => {
       const url = r.request().url(), body = JSON.parse(r.request().postData() || "{}");
       if (/streamGenerateContent/.test(url)) {
         streams++;
+        lastParts = body.contents[0].parts;
         prompts.push(body.contents[0].parts[0].text);
         const analysis = { fullSummaryAbstract: "要約", sentences: [{ text: "Tom likes tea.", translation: "トムは紅茶が好きだ。", grammarHighlights: [], vocab: [] }] };
         // With questions, the one analysis request carries them too (and asks for their answers in the same reply).
@@ -79,6 +80,24 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
     await card.locator(".rq-answer strong", { hasText: "②" }).waitFor({ timeout: 20000 });
     assert.equal(solves, 1, "asked separately only because the analysis had no answers");
     omitAnswers = false;
+
+    // A question that is a picture (a photo or screenshot): no text needed; it goes along in the same single request.
+    await page.evaluate(() => window.closeReader());
+    const photo = await page.evaluate(() => { const c = document.createElement("canvas"); c.width = 900; c.height = 600; const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, 900, 600); x.fillStyle = "#000"; x.font = "40px sans-serif"; x.fillText("1. What does Tom like?", 40, 100); return c.toDataURL("image/jpeg", 0.9).split(",")[1]; });
+    await page.locator("#englishTextarea").fill("Tom likes tea. He is kind.");
+    await page.locator("#readerQuestionsToggle").click();
+    await page.locator("#readerQuestionsBox input[type=file]").setInputFiles({ name: "q.jpg", mimeType: "image/jpeg", buffer: Buffer.from(photo, "base64") });
+    await page.locator("#readerQuestionsBox .rq-thumb").waitFor();
+    assert.match(await page.locator("#readerQuestionsToggle").innerText(), /問題を閉じる/);
+    const beforeStreams = streams, beforeSolves = solves;
+    await page.locator("#analysisSubmitBtn").click();
+    await card.locator(".rq-answer strong", { hasText: "②" }).waitFor({ timeout: 20000 });
+    assert.deepEqual([streams - beforeStreams, solves - beforeSolves], [1, 0], "a picture question is also one request");
+    assert.equal(lastParts.filter((p) => p.inlineData && p.inlineData.mimeType === "image/jpeg" && p.inlineData.data.length > 100).length, 1, "the picture goes along");
+    assert.match(lastParts[0].text, /添付の画像1枚/);
+    assert.equal(await page.locator("#readerQuestionsBox .rq-thumb").count(), 0, "emptied after use");
+    // The saved question keeps no picture, only the answers.
+    assert.equal(await page.evaluate(() => /base64/.test(localStorage.getItem("aiglish_reader_questions"))), false);
 
     // Another passage has none; the card offers to add questions there, and an error is said and can be retried.
     await page.evaluate(() => window.closeReader());
