@@ -14,7 +14,8 @@ function keys(){if(keysRevision!==revision){const names=new Set(nativeKeys());fo
 // Diagnostic categories by fixed key prefix; never exposes key names, IDs or contents.
 function storageKind(key){return key.startsWith('save_studio_')?'saves':key.startsWith('core_v4_user_vocab_progress_')||key.startsWith('aiglish_learning_recovery_')?'progress':/^core_v4_(?:cache|custom_words|textbook_file)_/.test(key)?'books':key.startsWith('aiglish_app_background_')||key==='aiglish_shared_background_catalog'?'backgrounds':'other';}
 function get(key){key=String(key);return values.has(key)?values.get(key):rawGet(key);}
-function failure(error){const changed=!lastFailure;lastFailure=error;if(changed){console.warn('端末の保存先を利用できません。保存データは消していません。',error);window.dispatchEvent(new CustomEvent('app-storage-error',{detail:'端末への保存を確認できません。空き容量・ブラウザー設定を確認してください。'}));}}
+let lastWarned=0;
+function failure(error){const changed=!lastFailure&&Date.now()-lastWarned>600000;lastFailure=error;if(changed){lastWarned=Date.now();console.warn('端末の保存先を利用できません。保存データは消していません。',error);window.dispatchEvent(new CustomEvent('app-storage-error',{detail:'端末への保存を確認できません。空き容量・ブラウザー設定を確認してください。'}));}}
 function transaction(rows){return new Promise((resolve,reject)=>{if(!database){reject(Error('端末の保存先を開けませんでした。'));return;}const tx=database.transaction('values','readwrite'),store=tx.objectStore('values');for(const [key,value] of rows){if(value===null)store.delete(key);else store.put(value,key);}tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||Error('端末への保存に失敗しました。'));tx.onerror=()=>{};});}
 async function flush(){
  // Early rendering/diagnostic writes may overflow before IndexedDB has opened.
@@ -23,8 +24,18 @@ async function flush(){
  if(retry){clearTimeout(retry);retry=null;}
  if(running){await running;if(pending.size)return flush();return;}
  if(!pending.size)return;
- const rows=[...pending];running=transaction(rows);
- try{await running;lastFailure=null;const committed=[];for(const [key,value] of rows){if(pending.get(key)===value){pending.delete(key);if(nativeWrites.get(key)!==value&&(rawGet(key)===originals.get(key)||rawGet(key)===value))rawRemove(key);nativeWrites.delete(key);originals.delete(key);if(value===null)values.delete(key);committed.push(key);}}revision++;if(channel&&committed.length)channel.postMessage(committed);}
+ const rows=[...pending];
+ const commit=done=>{const committed=[];for(const [key,value] of done){if(pending.get(key)===value){pending.delete(key);if(nativeWrites.get(key)!==value&&(rawGet(key)===originals.get(key)||rawGet(key)===value))rawRemove(key);nativeWrites.delete(key);originals.delete(key);if(value===null)values.delete(key);committed.push(key);}}revision++;if(channel&&committed.length)channel.postMessage(committed);};
+ // One value that cannot be written (a full backup bigger than what the device has left) must not hold the others back: when the
+ // batch fails, each value is written on its own, so the bookshelf and the rest still reach the device. (It used to fail as a whole,
+ // again and again, and a restart then showed the old bookshelf.)
+ running=(async()=>{
+  try{await transaction(rows);commit(rows);return;}catch(error){if(rows.length<2)throw error;}
+  let failed=null;
+  for(const row of rows){if(pending.get(row[0])!==row[1])continue;try{await transaction([row]);commit([row]);}catch(error){failed=error;}}
+  if(failed)throw failed;
+ })();
+ try{await running;lastFailure=null;}
  catch(error){failure(error);throw error;}finally{running=null;}
  if(pending.size)return flush();
 }
@@ -76,7 +87,14 @@ const ready=(async()=>{
 
 })();
 ready.catch(failure);
-window.AppStorage={ready,flush,diagnosticSize(){let chars=0,largest=0,largestKind='';const kinds={};for(const [key,value] of values){if(typeof value==='string'){const kind=storageKind(key);chars+=value.length;kinds[kind]=(kinds[kind]||0)+value.length;if(value.length>largest){largest=value.length;largestKind=kind;}}}return {entries:values.size,chars,largest,largestKind,kinds,pending:pending.size};},get pending(){return pending.size;},get error(){return lastFailure;},setCoordination(key,value){try{rawSet(key,value);revision++;return true;}catch(error){return false;}}};
+// Gives up a value that could not be written (so it is not tried again every 10 seconds): what the device already holds for the key stays.
+async function discard(key){key=String(key);if(!pending.has(key))return;if(running){try{await running;}catch(error){}}if(!pending.has(key))return;
+ pending.delete(key);originals.delete(key);nativeWrites.delete(key);
+ let held=null;try{held=await new Promise(resolve=>{const request=database.transaction('values','readonly').objectStore('values').get(key);request.onsuccess=()=>resolve(request.result===undefined?null:request.result);request.onerror=()=>resolve(null);});}catch(error){}
+ if(pending.has(key))return;if(held===null)values.delete(key);else values.set(key,held);revision++;if(!pending.size)lastFailure=null;}
+// Whether a value written just now is on the device (not waiting, or stuck, in the queue).
+const stored=key=>!pending.has(String(key));
+window.AppStorage={ready,flush,discard,stored,diagnosticSize(){let chars=0,largest=0,largestKind='';const kinds={};for(const [key,value] of values){if(typeof value==='string'){const kind=storageKind(key);chars+=value.length;kinds[kind]=(kinds[kind]||0)+value.length;if(value.length>largest){largest=value.length;largestKind=kind;}}}return {entries:values.size,chars,largest,largestKind,kinds,pending:pending.size};},get pending(){return pending.size;},get error(){return lastFailure;},setCoordination(key,value){try{rawSet(key,value);revision++;return true;}catch(error){return false;}}};
 window.addEventListener('storage',event=>{revision++;if(event.isTrusted&&event.storageArea===native&&event.newValue!==null&&values.has(event.key)&&!pending.has(event.key)){
  // Native removal also occurs after overflow migration; only IDB broadcasts
  // represent a confirmed logical deletion.
