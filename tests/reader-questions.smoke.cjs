@@ -6,12 +6,18 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
   try {
     const page = await browser.newPage({ viewport: { width: 393, height: 852 } }), errors = [], prompts = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    let solveStatus = 0, solves = 0;
+    let solveStatus = 0, solves = 0, streams = 0, omitAnswers = false;
+    const answers = [{ number: "1", question: "What does Tom like?", answer: "②", explanation: "本文の1文目に、トムは紅茶が好きだと書かれています。", evidence: "Tom likes tea.", evidenceTranslation: "トムは紅茶が好きだ。", choices: [{ label: "①", correct: false, reason: "コーヒーのことは書かれていません。" }, { label: "②", correct: true, reason: "tea と一致します。" }] }];
     await page.route("https://**/*", (r) => r.abort());
     await page.route("https://generativelanguage.googleapis.com/**", (r) => {
       const url = r.request().url(), body = JSON.parse(r.request().postData() || "{}");
       if (/streamGenerateContent/.test(url)) {
-        const text = JSON.stringify({ fullSummaryAbstract: "要約", sentences: [{ text: "Tom likes tea.", translation: "トムは紅茶が好きだ。", grammarHighlights: [], vocab: [] }] });
+        streams++;
+        prompts.push(body.contents[0].parts[0].text);
+        const analysis = { fullSummaryAbstract: "要約", sentences: [{ text: "Tom likes tea.", translation: "トムは紅茶が好きだ。", grammarHighlights: [], vocab: [] }] };
+        // With questions, the one analysis request carries them too (and asks for their answers in the same reply).
+        if (/questionAnswers/.test(body.contents[0].parts[0].text) && !omitAnswers) analysis.questionAnswers = answers;
+        const text = JSON.stringify(analysis);
         return r.fulfill({ status: 200, contentType: "text/event-stream", body: "data: " + JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }) + "\r\n\r\n" });
       }
       solves++;
@@ -46,8 +52,10 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
     // The analysis, then the explanation under it.
     const card = page.locator("#readerQuestionsCard");
     await card.locator(".rq-answer strong", { hasText: "②" }).waitFor({ timeout: 20000 });
-    assert.equal(solves, 1);
-    assert.match(prompts[0], /Tom likes tea\.[\s\S]*What does Tom like\?/);
+    // One request did both: the analysis, and the answers inside it (no separate request for the questions).
+    assert.deepEqual([streams, solves], [1, 0]);
+    assert.match(prompts[0], /questionAnswers[\s\S]*Tom likes tea\.[\s\S]*What does Tom like\?/);
+    assert.equal(await page.evaluate(() => JSON.stringify(textHistory[0].aiAnalysisData).includes("questionAnswers")), false, "answers are not stored inside the analysis");
     assert.match(await card.innerText(), /本文の根拠[\s\S]*Tom likes tea\.[\s\S]*× ①[\s\S]*○ ②/);
     const below = await page.evaluate(() => document.getElementById("readerQuestionsCard").getBoundingClientRect().top > document.getElementById("englishContainer").getBoundingClientRect().top);
     assert.ok(below, "explanation is under the analysed passage");
@@ -59,7 +67,18 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
     await page.locator("#englishTextarea").fill("Tom likes tea.");
     await page.locator("#analysisSubmitBtn").click();
     await card.locator(".rq-answer strong", { hasText: "②" }).waitFor({ timeout: 20000 });
-    assert.equal(solves, 1, "kept per passage");
+    assert.deepEqual([streams, solves], [2, 0], "kept per passage: only the analysis is asked again, never the questions");
+
+    // If the analysis comes back without the answers, they are asked for separately.
+    await page.evaluate(() => window.closeReader());
+    omitAnswers = true;
+    await page.locator("#englishTextarea").fill("Tom likes tea. He drinks it daily.");
+    await page.locator("#readerQuestionsToggle").click();
+    await page.locator("#readerQuestionsInput").fill("1. What does Tom like?\n① coffee ② tea");
+    await page.locator("#analysisSubmitBtn").click();
+    await card.locator(".rq-answer strong", { hasText: "②" }).waitFor({ timeout: 20000 });
+    assert.equal(solves, 1, "asked separately only because the analysis had no answers");
+    omitAnswers = false;
 
     // Another passage has none; the card offers to add questions there, and an error is said and can be retried.
     await page.evaluate(() => window.closeReader());

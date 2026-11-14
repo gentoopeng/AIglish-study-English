@@ -212,7 +212,7 @@
         return null;
     };
     var CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩';
-    function analysisPrompt(text, candidates) {
+    function analysisPrompt(text, candidates, questions) {
         var list = candidates.length ? candidates.map(function(c) {
             return '[' + c.alias + '] ' + c.word + ': ' + c.meanings.map(function(m, i) { return (CIRCLED[i] || '(' + (i + 1) + ')') + m; }).join(' ');
         }).join('\n') : '（なし）';
@@ -226,7 +226,8 @@
             '  - meaning: 日本語での説明（1〜2文）\n' +
             '- vocab: 下の「単語帳の単語」のうち、この文に出てくるもの（活用形を含む）で、登録された意味のどれかと同じ意味で使われているものだけ。num は [ ] の中の記号（例：A261）、meaning は何番目の意味か（1から）。同じ単語が複数あるときは、文の意味に合うものを1つだけ選ぶ。違う意味で使われているもの（例：単語帳の意味が「〜のような」なのに、文では「好む」の意味の like）は入れない。\n\n' +
             'fullSummaryAbstract: 英文全体の日本語要約（3文以内）\n\n' +
-            '単語帳の単語:\n' + list + '\n\n英文:\n' + text;
+            (questions ? 'さらに、下の「問題」を、同じ英文をもとに解いて questionAnswers に入れてください（解析と同じ返事の中に入れる）。questionAnswers の各項目の決まり:\n' + window.ReaderQuestions.RULES + '\n' : '') +
+            '単語帳の単語:\n' + list + '\n\n英文:\n' + text + (questions ? '\n\n問題:\n' + questions : '');
     }
     var ANALYSIS_SCHEMA = {
         type: 'OBJECT',
@@ -249,7 +250,7 @@
 
     // onProgress(percent, label): the analysis streams in, so the percent follows the sentences
     // translated so far; before the first one, it creeps up slowly while the AI reads.
-    window.callGeminiAnalyzer = async function(text, onProgress) {
+    window.callGeminiAnalyzer = async function(text, onProgress, questions) {
         var input = document.getElementById('sidebarApiKeyInput');
         var apiKey = (input && input.value.trim()) || localStorage.getItem('core_v4_geminiKey') || (typeof geminiApiKey !== 'undefined' ? geminiApiKey : '');
         if (!apiKey) {
@@ -280,12 +281,19 @@
         arm();
         try {
             var candidates = vocabCandidates(text);
-            var prompt = analysisPrompt(text, candidates);
+            questions = questions && window.ReaderQuestions ? String(questions) : '';
+            var prompt = analysisPrompt(text, candidates, questions);
+            // With questions, the same request also asks for their answers (one request, not two).
+            var schema = ANALYSIS_SCHEMA;
+            if (questions) {
+                schema = JSON.parse(JSON.stringify(ANALYSIS_SCHEMA));
+                schema.properties.questionAnswers = { type: 'ARRAY', items: window.ReaderQuestions.ITEM };
+            }
             // The schema fixes the shape; if a model refuses it (400), the request goes again without it.
             var useSchema = true;
             var send = function(model) {
                 var config = { responseMimeType: "application/json", temperature: 0.2 };
-                if (useSchema) config.responseSchema = ANALYSIS_SCHEMA;
+                if (useSchema) config.responseSchema = schema;
                 return fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(apiKey), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -354,6 +362,9 @@
                     return c ? { book: c.book, num: c.num, meaning: Number(v.meaning) || 0 } : null;
                 }).filter(Boolean);
             });
+            if (questions) {
+                result.questionAnswers = Array.isArray(result.questionAnswers) ? result.questionAnswers : [];
+            }
             return result;
         } catch (e) {
             console.error("Gemini Analyzer Error:", e);
