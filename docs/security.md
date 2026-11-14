@@ -58,3 +58,18 @@ service cloud.firestore {
 ```
 
 The rules above are a starting point. Test them in the Rules Playground before deploying, because a mistake there can lock every user out.
+
+## Shared reader explanations (10.123)
+
+`readerExplanations/{passageKey}/sets/{setKey}` is a new collection that anyone can read and write (the rules are open like the rest). The page only courteously checks: a set is written once (create if absent, in a transaction, with the deleted-account guard), what is read is cut to size and checked (one correct choice, no `data:`/`http` strings). Nothing stops a person from calling Firestore directly, so a spam or overwrite is possible until the rules change. A rule that fits it, if the rules are ever managed here:
+
+```
+match /readerExplanations/{p}/sets/{s} {
+  allow read;
+  allow create: if request.resource.data.v == 1
+    && request.resource.data.keys().hasOnly(['v','by','name','at','inputKey','questions'])
+    && request.resource.data.questions.size() <= 30
+    && request.resource.data.name is string && request.resource.data.name.size() <= 30;
+  allow update, delete: if false;   // (but then "共有をやめる" needs another way, e.g. a hidden flag with a secret)
+}
+```
