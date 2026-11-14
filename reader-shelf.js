@@ -954,5 +954,5 @@
     if (document.querySelector("dialog.library-editor-dialog[open]")) window.closeLibraryDialog?.();
     window.renderBookshelf();
   });
-  window.ReaderShelf = Object.freeze({ sentenceCount, folders });
+  window.ReaderShelf = Object.freeze({ sentenceCount, folders, save: persist });
 })();
