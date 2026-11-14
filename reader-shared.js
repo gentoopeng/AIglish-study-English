@@ -142,7 +142,7 @@
     const text = data.text.slice(0, TEXT_MAX);
     if (text.trim().length < 20) return null;
     const title = String(data.title || "").slice(0, 80);
-    return { key, by: String(data.by || "").slice(0, 40), name: String(data.name || "").slice(0, 30) || "だれか", title: /^\s*(data:|javascript:|https?:)/i.test(title) ? "無題" : title || "無題", text, at: Number(data.at) || 0 };
+    return { key, hasAnalysis: data.hasAnalysis === true, by: String(data.by || "").slice(0, 40), name: String(data.name || "").slice(0, 30) || "だれか", title: /^\s*(data:|javascript:|https?:)/i.test(title) ? "無題" : title || "無題", text, at: Number(data.at) || 0 };
   }
   // "ok" (published), "exists" (already there, by someone), "off" (cannot: sharing off, guest, or no connection), "big", "fail".
   async function publishText(title, text) {
@@ -191,6 +191,56 @@
     textPages.items = textPages.items.filter((t) => t.key !== key);
   }
   const hideText = (key) => hide("text/" + key);
+
+  // ---- Shared analyses: the AI's analysis of a published passage, for people who cannot (or do not want to) run it themselves ----
+  //  sharedReaderAnalyses/{key}: { v, by, name, at, json } (json = the analysis as text, at most 700KB). Read only when opened (1 read).
+  //  The word-book parts of an analysis are personal and are left out; every string is cut to size and loses < and >.
+  const ANALYSIS_DONE_KEY = "aiglish_reader_analysis_shared", ANALYSIS_MAX = 700000;
+  function cleanAnalysis(value) {
+    if (!value || typeof value !== "object" || !Array.isArray(value.sentences) || !value.sentences.length || value.sentences.length > 400 || value.analysisError) return null;
+    const str = (v, n) => String(v == null ? "" : v).slice(0, n).replace(/[<>]/g, "");
+    const sentences = [];
+    for (const x of value.sentences) {
+      if (!x || typeof x.text !== "string" || !x.text.trim()) return null;
+      const highlights = (Array.isArray(x.grammarHighlights) ? x.grammarHighlights : []).slice(0, 6)
+        .filter((h) => h && typeof h.phrase === "string" && h.phrase)
+        .map((h) => ({ phrase: str(h.phrase, 300), label: str(h.label, 60), meaning: str(h.meaning, 600) }));
+      sentences.push({ text: str(x.text, 2000), translation: str(x.translation || x.translations, 2000), grammarHighlights: highlights, vocab: [] });
+    }
+    return { fullSummaryAbstract: str(value.fullSummaryAbstract, 3000), sentences, vocabChecked: false, vocabBooks: [] };
+  }
+  async function shareAnalysis(passage, analysis) {
+    try {
+      if (!signedIn() || !reachable() || !textsEnabled() || !window.fbRunTransaction) return false;
+      const cleaned = cleanAnalysis(analysis);
+      if (!cleaned) return false;
+      const key = await keyOf(passage);
+      const done = jsonGet(ANALYSIS_DONE_KEY, []);
+      if (done.includes(key)) return false;
+      // Only for a passage this person published, or one they opened from みんなの長文.
+      if (!isTextMine(key) && !textPages.items.some((t) => t.key === key)) return false;
+      const json = JSON.stringify(cleaned);
+      if (json.length > ANALYSIS_MAX) return false;
+      const aRef = window.fbDoc(window.db, "sharedReaderAnalyses", key), tRef = window.fbDoc(window.db, "sharedReaderTexts", key);
+      const made = await deadline(window.fbRunTransaction(window.db, async (tx) => {
+        const [a, t] = [await tx.get(aRef), await tx.get(tRef)];
+        if (a.exists()) return false;
+        tx.set(aRef, { v: 1, by: me(), name: String(typeof myName === "string" ? myName : "").slice(0, 30), at: Date.now(), json });
+        if (t.exists()) tx.set(tRef, { hasAnalysis: true }, { merge: true });
+        return true;
+      }), 12000);
+      jsonSet(ANALYSIS_DONE_KEY, [...done, key].slice(-200));
+      for (const t of textPages.items) if (t.key === key) t.hasAnalysis = true;
+      return !!made;
+    } catch { return false; }
+  }
+  // The shared analysis of a passage (one read), or null.
+  async function fetchAnalysis(key) {
+    if (!signedIn() || !reachable() || !window.fbGetDoc) return null;
+    const snap = await deadline(window.fbGetDoc(window.fbDoc(window.db, "sharedReaderAnalyses", key)));
+    if (!snap.exists()) return null;
+    try { return cleanAnalysis(JSON.parse(String(snap.data().json || ""))); } catch { return null; }
+  }
   const available = () => signedIn() && reachable();
-  window.ReaderShared = { textsEnabled, setTextsEnabled, publishText, listTexts, cachedTexts, unshareText, hideText, isTextMine, textKey: keyOf, enabled, setEnabled, usable, available, list, find, publish, unshare, hide, isMine, clean, keyOf };
+  window.ReaderShared = { textsEnabled, setTextsEnabled, publishText, listTexts, cachedTexts, shareAnalysis, fetchAnalysis, unshareText, hideText, isTextMine, textKey: keyOf, enabled, setEnabled, usable, available, list, find, publish, unshare, hide, isMine, clean, keyOf };
 })();
