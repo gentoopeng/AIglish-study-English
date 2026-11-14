@@ -59,6 +59,12 @@
             alert("英文を入力してください");
             return;
         }
+        // 問題の画像を準備している間は、解析を始めない（画像が抜けたまま解析されないように）。
+        if (window.ReaderQuestions && window.ReaderQuestions.busy && window.ReaderQuestions.busy()) {
+            var wait = '問題の画像を準備しています。少し待ってから、もう一度押してください。';
+            if (typeof window.showToast === 'function') window.showToast(wait, 'error'); else alert(wait);
+            return;
+        }
         var titleInputEl = document.getElementById('customTextTitle');
         var assignedTitle = titleInputEl ? titleInputEl.value.trim() : "";
         if (!assignedTitle) {
