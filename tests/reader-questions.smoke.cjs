@@ -7,7 +7,7 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
     const page = await browser.newPage({ viewport: { width: 393, height: 852 } }), errors = [], prompts = [];
     page.on("pageerror", (e) => errors.push(e.message));
     let solveStatus = 0, solves = 0, streams = 0, omitAnswers = false, lastParts = [];
-    const answers = [{ number: "1", question: "What does Tom like?", answer: "②", explanation: "本文の1文目に、トムは紅茶が好きだと書かれています。", evidence: "Tom likes tea.", evidenceTranslation: "トムは紅茶が好きだ。", choices: [{ label: "①", correct: false, reason: "コーヒーのことは書かれていません。" }, { label: "②", correct: true, reason: "tea と一致します。" }] }];
+    const answers = [{ number: "1", question: "What does Tom like?", answer: "②", explanation: "本文の1文目に、トムは紅茶が好きだと書かれています。", evidence: "Tom likes tea.", evidenceTranslation: "トムは紅茶が好きだ。", figures: [{ image: 1, box: [100, 100, 500, 600], caption: "表1" }], choices: [{ label: "①", correct: false, reason: "コーヒーのことは書かれていません。" }, { label: "②", correct: true, reason: "tea と一致します。" }] }];
     await page.route("https://**/*", (r) => r.abort());
     await page.route("https://generativelanguage.googleapis.com/**", (r) => {
       const url = r.request().url(), body = JSON.parse(r.request().postData() || "{}");
@@ -53,6 +53,7 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
     // The analysis, then the explanation under it.
     const card = page.locator("#readerQuestionsCard");
     await card.locator(".rq-answer strong", { hasText: "②" }).waitFor({ timeout: 20000 });
+    assert.equal(await card.locator(".rq-figure").count(), 0, "no figure for a question without a picture");
     // One request did both: the analysis, and the answers inside it (no separate request for the questions).
     assert.deepEqual([streams, solves], [1, 0]);
     assert.match(prompts[0], /questionAnswers[\s\S]*Tom likes tea\.[\s\S]*What does Tom like\?/);
@@ -96,8 +97,20 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
     assert.equal(lastParts.filter((p) => p.inlineData && p.inlineData.mimeType === "image/jpeg" && p.inlineData.data.length > 100).length, 1, "the picture goes along");
     assert.match(lastParts[0].text, /添付の画像1枚/);
     assert.equal(await page.locator("#readerQuestionsBox .rq-thumb").count(), 0, "emptied after use");
-    // The saved question keeps no picture, only the answers.
-    assert.equal(await page.evaluate(() => /base64/.test(localStorage.getItem("aiglish_reader_questions"))), false);
+    // The figure the AI pointed at is cut out of the picture and shown under the question (a small JPEG, not the whole picture).
+    const figure = card.locator(".rq-figure img");
+    await figure.waitFor({ timeout: 10000 });
+    await page.waitForFunction(() => { const i = document.querySelector("#readerQuestionsCard .rq-figure img"); return i && i.complete && i.naturalWidth > 0; });
+    const size = await figure.evaluate((i) => [i.naturalWidth, i.naturalHeight]);
+    assert.ok(size[0] > 300 && size[0] < 700 && size[1] > 200 && size[1] < 500, "cut out from the 900x600 picture, about 500x400 with a little margin: " + size);
+    assert.equal(await card.locator(".rq-figure figcaption").innerText(), "表1");
+    // Only the cut-out is kept (small), not the pictures that were sent.
+    const stored = await page.evaluate(() => localStorage.getItem("aiglish_reader_questions"));
+    assert.ok(/data:image\/jpeg/.test(stored) && stored.length < 150000, "figure kept small: " + stored.length);
+    // It can be taken off; it stays off after reopening.
+    await card.getByRole("button", { name: "図を外す" }).click();
+    await page.waitForFunction(() => !document.querySelector("#readerQuestionsCard .rq-figure"));
+    assert.equal(await page.evaluate(() => /data:image/.test(localStorage.getItem("aiglish_reader_questions"))), false);
 
     // Another passage has none; the card offers to add questions there, and an error is said and can be retried.
     await page.evaluate(() => window.closeReader());
