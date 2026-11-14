@@ -713,6 +713,8 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      englishContainer.prepend(notice);
  }
  window.initLucide();
+ // 問題の解説（「問題を追加」）。ある英文では、前に解いた解説をそのまま出す。
+ window.ReaderQuestions?.show(rawText);
 };
 // showCustomSaveBookshelfPrompt is in reader-shelf.js.
 window.closeWordPopover = function() { document.getElementById('wordPopover').classList.remove('show'); document.getElementById('wordPopover').style.display = 'none'; };

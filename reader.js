@@ -81,6 +81,8 @@
         }
         var submitButton = document.getElementById('analysisSubmitBtn');
         if (submitButton && submitButton.disabled) return;
+        // 「問題を追加」に貼り付けた問題は、解析のあとに解いて解説する（reader-questions.js）。
+        if (window.ReaderQuestions) window.ReaderQuestions.takeInput();
         if (submitButton) {
             submitButton.disabled = true;
             submitButton.dataset.originalHtml = submitButton.innerHTML;
