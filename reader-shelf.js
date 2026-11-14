@@ -369,6 +369,107 @@
     };
   }
 
+  // ---- Reading a text (no analysis) and the passages other people published ---------------------------------------------
+  const paragraphs = (text) => String(text || "").split(/\r?\n\s*\r?\n/).map((p) => p.replace(/\s*\r?\n\s*/g, " ").trim()).filter(Boolean);
+  // entry: { title, text, analysis?, by?, name?, key? } (`by` set: another person's published passage)
+  function readText(entry) {
+    const RS = window.ReaderShared;
+    const modal = dialog(entry.title || "無題", '<p class="rt-meta"></p><div class="rt-body" tabindex="0"></div><div class="library-editor-actions library-editor-actions-stack"></div>');
+    const count = sentenceCount(entry.text);
+    modal.querySelector(".rt-meta").textContent = (entry.by ? entry.name + "さんが公開 · " : "") + count + "文";
+    const body = modal.querySelector(".rt-body");
+    for (const text of paragraphs(entry.text)) body.append(node("p", "", text));
+    const actions = modal.querySelector(".library-editor-actions");
+    actions.append(
+      button("解析する", () => {
+        window.closeLibraryDialog();
+        window.switchReaderSubTab("analysis", "none");
+        window.analyzeText(entry.text, entry.title || "無題", copy(entry.analysis));
+      }),
+    );
+    if (entry.by) {
+      actions.append(
+        button("自分の本棚に入れる", () => {
+          if (myBookshelf.some((i) => i.text === entry.text)) {
+            window.closeLibraryDialog();
+            return window.showToast?.("すでに本棚にあります。", "ok");
+          }
+          myBookshelf.push({ id: Date.now(), folder: "", title: entry.title || "無題", text: entry.text, aiAnalysisData: null });
+          persist();
+          window.closeLibraryDialog();
+          window.showToast?.("「未分類」に入れました。", "ok");
+          window.renderBookshelf();
+        }),
+        button("見えなくする", () => {
+          RS && RS.hideText(entry.key);
+          window.closeLibraryDialog();
+          window.renderBookshelf();
+        }),
+      );
+      if (RS && RS.isTextMine(entry.key))
+        actions.append(
+          button("公開をやめる", async () => {
+            try {
+              await RS.unshareText(entry.key);
+              window.closeLibraryDialog();
+              window.showToast?.("公開をやめました。", "ok");
+              window.renderBookshelf();
+            } catch (error) {
+              window.showToast?.(error.message || "公開をやめられませんでした。", "error");
+            }
+          }, "library-editor-danger"),
+        );
+    }
+    actions.append(button("閉じる", () => window.closeLibraryDialog()));
+  }
+  const publishMessage = { ok: "みんなの長文に公開しました。", exists: "この英文は、すでに公開されています。", big: "長すぎるので公開できませんでした（2万字まで）。", off: "公開できませんでした（ログインと接続が必要です）。", fail: "公開できませんでした。あとでもう一度お試しください。" };
+  function renderSharedView(container) {
+    const RS = window.ReaderShared;
+    container.append(header("COMMUNITY", "みんなの長文", [button("‹ 本棚", () => show("list"), "shelf-back")]));
+    container.append(node("p", "shelf-shared-note", "みんなが本棚から公開した英文です。押すと本文を読めます。ここでの読み取りは、「読み込む」を押したときだけです。解析は、あなたのAPIキーで行います。"));
+    const list = node("div", "vocab-library-list"), status = node("p", "vocab-library-empty", "");
+    const load = button("みんなの長文を読み込む", () => fetchPage(false), "shelf-shared-load");
+    const more = button("もっと見る", () => fetchPage(true), "shelf-shared-load");
+    more.hidden = true;
+    let busy = false;
+    const draw = (items, done) => {
+      list.replaceChildren();
+      items.forEach((t, index) =>
+        list.append(
+          row({
+            cover: { text: "📄" },
+            name: t.title,
+            tag: RS.isTextMine(t.key) ? "あなた" : "",
+            sub: t.name + "さん · " + sentenceCount(t.text) + "文" + (dateOf(t.at) ? " · " + dateOf(t.at) : ""),
+            preview: previewOf(t),
+            label: t.title + "を読む",
+            onOpen: () => readText({ title: t.title, text: t.text, by: t.by, name: t.name, key: t.key }),
+            index,
+          }),
+        ),
+      );
+      status.textContent = items.length ? "" : "まだ公開された長文がありません。";
+      load.hidden = true;
+      more.hidden = done;
+    };
+    async function fetchPage(next) {
+      if (busy) return;
+      busy = true;
+      status.textContent = "読み込んでいます…";
+      try {
+        const page = await RS.listTexts(next);
+        draw(page.items, page.done);
+      } catch (error) {
+        status.textContent = "読み込めませんでした。通信か、読み取りの上限かもしれません。時間をおいてお試しください。";
+      } finally {
+        busy = false;
+      }
+    }
+    container.append(load, list, status, more);
+    const cached = RS.cachedTexts();
+    if (cached) draw(cached.items, cached.done);
+  }
+
   function manageText(item) {
     const modal = dialog(
       item.title || "無題",
@@ -379,6 +480,40 @@
       window.closeLibraryDialog();
       openText(item);
     };
+    // Reading the text (no analysis), and publishing it to / taking it back from みんなの長文.
+    const readButton = button("本文を読む", () => {
+      window.closeLibraryDialog();
+      readText({ title: item.title, text: item.text, analysis: item.aiAnalysisData });
+    });
+    modal.querySelector('[data-shelf="open"]').after(readButton);
+    const RS = window.ReaderShared;
+    if (RS && RS.available()) {
+      const share = button("みんなの長文に公開する", null);
+      share.disabled = true;
+      modal.querySelector('[data-shelf="remove"]').before(share);
+      RS.textKey(item.text).then((key) => {
+        const published = () => RS.isTextMine(key);
+        const label = () => (share.textContent = published() ? "公開をやめる" : "みんなの長文に公開する");
+        label();
+        share.disabled = false;
+        share.onclick = async () => {
+          share.disabled = true;
+          try {
+            if (published()) {
+              await RS.unshareText(key);
+              window.showToast?.("公開をやめました。", "ok");
+            } else {
+              const result = await RS.publishText(item.title, item.text);
+              window.showToast?.(publishMessage[result] || publishMessage.fail, result === "ok" || result === "exists" ? "ok" : "error");
+            }
+          } catch (error) {
+            window.showToast?.(error.message || "うまくいきませんでした。", "error");
+          }
+          label();
+          share.disabled = false;
+        };
+      });
+    }
     modal.querySelector('[data-shelf="edit"]').onclick = () => editText(item);
     modal.querySelector('[data-shelf="move"]').onclick = () => {
       const move = dialog(
@@ -428,6 +563,18 @@
         '<p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" id="cancelSaveBookshelfBtn" data-library-close>キャンセル</button><button type="button" id="confirmSaveBookshelfBtn" class="library-editor-primary">保存</button></div>',
     );
     modal.querySelector(".library-editor-hint").textContent = title || "無題";
+    // Published to みんなの長文 with the save (the switch is kept for next time).
+    const RS = window.ReaderShared;
+    let shareBox = null;
+    if (RS && RS.available()) {
+      const label = node("label", "shelf-share");
+      shareBox = node("input");
+      shareBox.type = "checkbox";
+      shareBox.checked = RS.textsEnabled();
+      shareBox.onchange = () => RS.setTextsEnabled(shareBox.checked);
+      label.append(shareBox, node("span", "", "みんなの長文にも公開する（あなたの名前つきで、英文が全員に見えます。教材の著作権に気をつけてください）"));
+      modal.querySelector(".library-editor-error").before(label);
+    }
     const last = String(currentShelfView).startsWith("folder:") ? currentShelfView : "folder:未分類";
     wirePlace(modal, books().some((b) => b.id === currentShelfView) ? "book:" + currentShelfView : last);
     modal.querySelector("#confirmSaveBookshelfBtn").onclick = () => {
@@ -446,6 +593,8 @@
         aiAnalysisData: copy(data),
       });
       const saved = persist();
+      if (shareBox && shareBox.checked)
+        RS.publishText(title, text).then((result) => window.showToast?.(publishMessage[result] || publishMessage.fail, result === "ok" || result === "exists" ? "ok" : "error"));
       alert(saved === "full" ? "「" + placeName(place) + "」に保存しました。" : saved === "slim" ? "「" + placeName(place) + "」に文章を保存しました（解析結果は、端末の容量がいっぱいで保存できませんでした）。" : "端末の容量がいっぱいで、端末には保存できませんでした。ログインしていれば、クラウドのバックアップには保存します。");
       window.renderBookshelf();
     };
@@ -463,6 +612,7 @@
     if (
       view !== "list" &&
       view !== "unclassified" &&
+      view !== "shared" &&
       !(folderName ? names.includes(folderName) : books().some((b) => b.id === view))
     )
       currentShelfView = "list";
@@ -532,6 +682,9 @@
         );
       if (!index)
         list.append(node("div", "vocab-library-empty", "まだ何もありません。解析した英文を「本棚に保存」すると、ここに並びます。"));
+      // The passages other people published (read only when this is opened and asked for).
+      if (window.ReaderShared && window.ReaderShared.available())
+        list.append(row({ cover: { text: "🌐" }, name: "みんなの長文", tag: "公開", sub: "みんなが公開した英文を読む", onOpen: () => show("shared"), index: index++ }));
       };
       const draw = () => {
         list.replaceChildren();
@@ -543,6 +696,7 @@
       container.append(list);
       return;
     }
+    if (currentShelfView === "shared") return renderSharedView(container);
     const book = folderName || currentShelfView === "unclassified" ? null : books().find((b) => b.id === currentShelfView),
       title = folderName || (book ? book.name : "未分類"),
       items = myBookshelf.filter((i) =>
