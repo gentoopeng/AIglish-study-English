@@ -69,10 +69,20 @@
     "- evidence: 根拠になる英文の部分を、英文からそのまま抜き出す（1〜2文、書き換えない）。根拠が見つからないときは空の文字列。\n" +
     "- evidenceTranslation: evidence の自然な日本語訳。\n" +
     "- choices: 選択肢がある問題では、すべての選択肢について label（記号）、correct（正解なら true）、reason（その選択肢が英文に合っている／合っていない理由を、英文に基づいて1文）。選択肢がない問題では空の配列。\n";
-  function prompt(passage, questions) {
+  // The questions as text for the prompt: what was typed, and a note about the pictures that go with it (a photo or screenshot of the questions).
+  const IMAGE_MAX = 4;
+  const hasQ = (q) => !!q && (!!q.text || (Array.isArray(q.images) && q.images.length > 0));
+  const labelOf = (q) => q.text || "画像の問題（" + q.images.length + "枚）";
+  function questionBlock(q) {
+    const n = Array.isArray(q.images) ? q.images.length : 0;
+    return (q.text || (n ? "（問題は、添付の画像に書かれています）" : "")) +
+      (n ? "\n\n添付の画像" + n + "枚は、この問題の写真やスクリーンショットです。画像の文字を読み取って、問題として解いてください（question には、読み取った問題文を書く）。図や表があるときは、それも手がかりにする。" : "");
+  }
+  const imageParts = (images) => (Array.isArray(images) ? images : []).slice(0, IMAGE_MAX).map((src) => ({ inlineData: { mimeType: "image/jpeg", data: String(src).slice(String(src).indexOf(",") + 1) } }));
+  function prompt(passage, q) {
     return (
       "あなたは高校生に英語の読解を教える先生です。次の「英文」について出された「問題」を解いて、日本語で解説してください。\n\n" +
-      RULES + "\n英文:\n" + passage + "\n\n問題:\n" + questions
+      RULES + "\n英文:\n" + passage + "\n\n問題:\n" + questionBlock(q)
     );
   }
   // What the AI sent back, cut to a safe size: { questions: [...] } or null.
@@ -96,7 +106,7 @@
     return (input && input.value.trim()) || localStorage.getItem("core_v4_geminiKey") || (typeof geminiApiKey !== "undefined" ? geminiApiKey : "");
   }
   // { result } or { error: { title, detail } }
-  async function solve(passage, questions) {
+  async function solve(passage, q) {
     const key = apiKey();
     if (!key) return { error: { title: "APIキーが必要です", detail: "メニューの「設定」でGemini APIキーを保存すると、問題を解けます。" } };
     const describe = window.describeGeminiError || ((s) => ({ title: "AIの解析に失敗しました", detail: "少し待ってから、もう一度お試しください。" }));
@@ -110,7 +120,7 @@
         return fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + encodeURIComponent(key), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt(passage, questions) }] }], generationConfig: config }),
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt(passage, q) }].concat(imageParts(q.images)) }], generationConfig: config }),
           signal: controller ? controller.signal : undefined,
         });
       };
@@ -152,43 +162,79 @@
     }
   }
 
+  // ---- Pictures of the questions (a photo or screenshot) ---------------------------------------
+  // Each is cut down to 1400px JPEG here; they are sent with the request and not kept (only the answers are).
+  function picker(onChange) {
+    const images = [], root = node("div", "rq-images"), strip = node("div", "rq-thumbs");
+    const add = node("button", "rq-photo", "📷 画像を追加（写真・スクリーンショット）"), status = node("small", "rq-photo-status"), file = node("input");
+    add.type = "button"; file.type = "file"; file.accept = "image/*"; file.multiple = true; file.hidden = true;
+    const draw = () => {
+      strip.replaceChildren();
+      images.forEach((src, i) => {
+        const item = node("span", "rq-thumb"), img = node("img"), drop = node("button", "", "×");
+        img.src = src; img.alt = "問題の画像" + (i + 1);
+        drop.type = "button"; drop.setAttribute("aria-label", "画像" + (i + 1) + "を外す");
+        drop.onclick = () => { images.splice(i, 1); draw(); onChange && onChange(); };
+        item.append(img, drop); strip.append(item);
+      });
+      add.disabled = images.length >= IMAGE_MAX;
+    };
+    add.onclick = () => file.click();
+    file.onchange = async () => {
+      const files = [...file.files]; file.value = ""; let message = "";
+      for (const f of files) {
+        if (images.length >= IMAGE_MAX) { message = "画像は" + IMAGE_MAX + "枚までです。"; break; }
+        status.textContent = "画像を準備しています…";
+        try { images.push(await window.ProfileImages.imageFile(f, 1400, "image/jpeg", () => true, 0.75)); }
+        catch (error) { message = (error && error.message) || "画像を読み込めませんでした。"; }
+      }
+      status.textContent = message; draw(); onChange && onChange();
+    };
+    root.append(add, file, strip, status); draw();
+    return { node: root, images: () => images.slice(), clear: () => { images.length = 0; draw(); } };
+  }
+
   // ---- The input side: the button under the pasted passage ------------------------------------
   const el = (id) => document.getElementById(id);
-  let pending = "";
+  let pending = null, inputPicker = null;
   function bindInput() {
     const toggle = el("readerQuestionsToggle"), box = el("readerQuestionsBox"), input = el("readerQuestionsInput");
     if (!toggle || !box || !input) return;
     const refresh = () => {
-      const open = !box.hidden, has = !!input.value.trim();
+      const open = !box.hidden, has = !!input.value.trim() || !!(inputPicker && inputPicker.images().length);
       toggle.setAttribute("aria-expanded", String(open));
       toggle.classList.toggle("has-questions", has);
       toggle.querySelector("span").textContent = open ? "問題を閉じる" : has ? "問題を追加済み（開く）" : "問題を追加";
     };
+    inputPicker = picker(refresh);
+    input.after(inputPicker.node);
     toggle.onclick = () => { box.hidden = !box.hidden; refresh(); if (!box.hidden) input.focus(); };
     input.addEventListener("input", refresh);
-    el("readerClearButton")?.addEventListener("click", () => { input.value = ""; box.hidden = true; refresh(); });
+    el("readerClearButton")?.addEventListener("click", () => { input.value = ""; inputPicker.clear(); box.hidden = true; refresh(); });
     refresh();
   }
+  const node = (tag, className, text) => { const n = document.createElement(tag); if (className) n.className = className; if (text !== undefined) n.textContent = text; return n; };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindInput, { once: true });
   else bindInput();
 
   // ---- The result side: the card under the analysed passage ----------------------------------
   let shownFor = "", token = 0;
-  const node = (tag, className, text) => { const n = document.createElement(tag); if (className) n.className = className; if (text !== undefined) n.textContent = text; return n; };
+  const memory = new Map(); // the last questions with their pictures, per passage, for "もう一度解く" (pictures are not kept after a reload)
   function chooser(card, passage, initial) {
     const box = node("div", "rq-add");
-    const label = node("label", "reader-field-label", "問題（選択肢もいっしょに貼り付け）");
+    const label = node("label", "reader-field-label", "問題（選択肢もいっしょに貼り付け、または画像）");
     const input = node("textarea", "modern-textarea rq-input"); input.maxLength = QUESTION_LIMIT; input.value = initial || "";
     input.placeholder = "例：\n1. What is the main idea of the passage?\n① …\n② …\n③ …\n④ …";
     label.append(input);
+    const pk = picker();
     const go = node("button", "modern-btn rq-go", "解いて解説する");
     go.type = "button";
     go.onclick = () => {
-      const text = input.value.trim();
-      if (!text) { input.focus(); return; }
-      run(passage, text);
+      const q = { text: input.value.trim(), images: pk.images() };
+      if (!hasQ(q)) { input.focus(); return; }
+      run(passage, q);
     };
-    box.append(label, go);
+    box.append(label, pk.node, go);
     return box;
   }
   function render(passage) {
@@ -199,7 +245,7 @@
     const heading = node("h2", "", "問題の解説");
     card.append(heading);
     const saved = get(passage);
-    if (!saved || !saved.text) {
+    if (!saved || (!saved.text && !saved.imageCount)) {
       card.append(node("p", "rq-hint", "この英文の問題を貼り付けると、英文の内容にそって解いて、解説します。"), chooser(card, passage, ""));
       return;
     }
@@ -211,7 +257,7 @@
     }
     if (saved.error) {
       const notice = node("div", "reader-key-notice reader-error-notice"); notice.setAttribute("role", "alert");
-      const again = node("button", "", "もう一度解く"); again.type = "button"; again.onclick = () => run(passage, saved.text);
+      const again = node("button", "", "もう一度解く"); again.type = "button"; again.onclick = () => retry(passage, saved, card);
       notice.append(node("strong", "", saved.error.title || "問題を解けませんでした"), node("span", "", saved.error.detail || ""), again);
       card.append(notice, tools(card, passage, saved));
       return;
@@ -251,44 +297,55 @@
     row.append(redo, clear);
     return row;
   }
-  async function run(passage, text) {
-    const mine = ++token;
-    set(passage, { text, loading: true });
+  async function run(passage, q) {
+    const mine = ++token, base = { text: q.text, imageCount: q.images.length };
+    memory.set(passage, q);
+    set(passage, { ...base, loading: true });
     render(passage);
-    const out = await solve(passage, text);
+    const out = await solve(passage, q);
     if (mine !== token) return;
-    set(passage, out.result ? { text, result: out.result } : { text, error: out.error });
+    set(passage, out.result ? { ...base, result: out.result } : { ...base, error: out.error });
     if (shownFor === passage) render(passage);
+  }
+  // Asking again: with the pictures of this session, or (after a reload) with the typed text only; pictures have to be chosen again.
+  function retry(passage, saved, card) {
+    const q = memory.get(passage) || (saved.text ? { text: saved.text, images: [] } : null);
+    if (q && (!saved.imageCount || q.images.length)) { run(passage, q); return; }
+    card.replaceChildren(node("h2", "", "問題の解説"), node("p", "rq-hint", "画像は残していないので、もう一度選んでください。"), chooser(card, passage, saved.text));
   }
   const api = {
     // The text pasted on the input side, handed to the next analysis.
     takeInput() {
       const input = el("readerQuestionsInput");
-      const text = input ? input.value.trim() : "";
-      pending = text;
+      const q = { text: input ? input.value.trim() : "", images: inputPicker ? inputPicker.images() : [] };
+      pending = hasQ(q) ? q : null;
       // Taken for this analysis: the box is emptied so the next passage does not get these questions.
-      if (input && text) { input.value = ""; input.dispatchEvent(new Event("input")); const box = el("readerQuestionsBox"); if (box) { box.hidden = true; input.dispatchEvent(new Event("input")); } }
-      return text;
+      if (pending && input) { input.value = ""; inputPicker && inputPicker.clear(); const box = el("readerQuestionsBox"); if (box) box.hidden = true; input.dispatchEvent(new Event("input")); }
+      return !!pending;
     },
     // Called when a passage is shown in the reader view.
     show(passage) {
       shownFor = String(passage || "");
       token++;
-      const text = pending; pending = "";
-      if (text) { run(shownFor, text); return; }
+      const q = pending; pending = null;
+      if (q) { run(shownFor, q); return; }
       const saved = get(shownFor);
-      // A solve that was cut off (the page closed) is asked again.
-      if (saved && saved.loading) { run(shownFor, saved.text); return; }
+      // A solve that was cut off (the page closed) is asked again (typed questions only: the pictures are gone).
+      if (saved && saved.loading) {
+        if (saved.text && !saved.imageCount) { run(shownFor, { text: saved.text, images: [] }); return; }
+        set(shownFor, null);
+      }
       render(shownFor);
     },
     // The questions waiting for the next analysis (reader.js sends them along with it, in the same request).
-    pendingText: () => pending,
+    pending: () => pending,
+    questionBlock, imageParts,
     // The answers that came back with the analysis: kept for the passage, and no separate request is needed.
-    adopt(passage, text, answers) {
+    adopt(passage, q, answers) {
       const result = normalize(answers);
-      if (!result || !text || text !== pending) return false;
-      pending = "";
-      set(String(passage || ""), { text, result });
+      if (!result || !q || q !== pending) return false;
+      pending = null;
+      set(String(passage || ""), { text: q.text, imageCount: q.images.length, result });
       return true;
     },
     ITEM: SCHEMA.properties.questions.items, RULES, normalize,
