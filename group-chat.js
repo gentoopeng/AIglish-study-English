@@ -1,3 +1,24 @@
+// Which records of a talk are not shown: between two messages, only the latest of each kind per person (the records are running
+// totals: "○分勉強", "○語の理解度を記録"). A record someone clapped for is always kept. `ordered`: messages and records, oldest first.
+(function (root) {
+  root.GroupChatRecords = {
+    superseded(ordered) {
+      const hidden = new Set(),
+        latest = new Map();
+      for (const item of ordered) {
+        if (item.kind !== "event") {
+          latest.clear();
+          continue;
+        }
+        const key = item.owner + "|" + String(item.text || "").replace(/[0-9,]+/g, "#"),
+          before = latest.get(key);
+        if (before && !Object.keys(before.reactions || {}).length) hidden.add(before.id);
+        latest.set(key, item);
+      }
+      return hidden;
+    },
+  };
+})(typeof window === "undefined" ? globalThis : window);
 // Subscribe to only the latest 10 messages, no older than seven days while this group's dialog is open.
 (function (root) {
   "use strict";
@@ -186,11 +207,15 @@
           list.scrollHeight - list.scrollTop - list.clientHeight < 70,
         fragment = document.createDocumentFragment(),
         others = Math.max(0, Object.keys(state.group.members || {}).length - 1);
-      for (const item of [...state.rows.values(), ...achievements()].sort(
+      const ordered = [...state.rows.values(), ...achievements()].sort(
         (a, b) => a.sentAt - b.sentAt || a.id.localeCompare(b.id),
-      )) {
+      );
+      // The records ("○分勉強", "○語") are running totals, so between two messages only the latest of each kind per person is shown
+      // (a row of them pushed the talk off the screen). A record someone clapped for is always kept.
+      const superseded = root.GroupChatRecords.superseded(ordered);
+      for (const item of ordered) {
         if (item.kind === "event") {
-          fragment.append(eventRow(item));
+          if (!superseded.has(item.id)) fragment.append(eventRow(item));
           continue;
         }
         const row = document.createElement("article");

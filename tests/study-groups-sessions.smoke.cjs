@@ -301,6 +301,23 @@ const { chromium, webkit } = require("playwright"),
     // Achievements are posted in the talk, with a いいね button.
     await a.getByRole("button", { name: "トーク", exact: true }).click();
     assert.ok((await a.locator(".group-chat-event").count()) >= 1);
+    // The records are one quiet line each, and running totals of the same kind by the same person show only the latest
+    // (a clapped one stays).
+    const eventBox = await a.locator(".group-chat-event").first().boundingBox();
+    assert.ok(eventBox.height <= 32, "a record is one small line: " + eventBox.height);
+    const shown = await a.evaluate(() => [...document.querySelectorAll(".group-chat-event p")].map((p) => p.textContent));
+    assert.deepEqual(
+      await a.evaluate(() => {
+        const e = (id, owner, text, reactions = {}) => ({ id, kind: "event", owner, text, reactions });
+        return [...GroupChatRecords.superseded([
+          e("1", "m", "1680分勉強"), e("2", "m", "2800語の理解度を記録"), e("3", "k", "1500分勉強"), e("4", "m", "1710分勉強"), e("5", "k", "1530分勉強", { x: 1 }),
+          { id: "msg", kind: "message" }, e("6", "k", "1560分勉強"), e("7", "m", "1740分勉強", { x: 1 }), e("8", "m", "1770分勉強"),
+        ])].sort();
+      }),
+      ["1", "3"],
+      "older totals of the same kind go; a message starts a new run; a clapped record stays",
+    );
+    assert.equal(shown.filter((t) => /分勉強$/.test(t)).length <= 1 && shown.filter((t) => /語の理解度を記録$/.test(t)).length <= 1, true, "one of each kind: " + shown.join(" / "));
     assert.equal(await a.locator(".group-timeline").count(), 0);
     await a
       .getByRole("button", { name: "いいね 0", exact: true })
