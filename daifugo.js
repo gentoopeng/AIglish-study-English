@@ -685,7 +685,7 @@
     else if (e.t === "reverse") (text = "9リバース"), (cls = "is-flow");
     else if (e.t === "skip") (text = "5飛ばし"), (cls = "is-flow");
     else if (e.t === "give") (text = name(e.by) + " → " + name(e.to) + " " + e.n + "枚"), (cls = "is-flow");
-    else if (e.t === "discard") (text = name(e.by) + " " + e.cards.length + "枚捨てた"), (cls = "is-flow");
+    else if (e.t === "discard") (text = name(e.by) + " " + e.n + "枚捨てた"), (cls = "is-flow");
     else if (e.t === "illegal") (text = name(e.by) + " 反則上がり"), (cls = "is-bad");
     else if (e.t === "fallen") (text = name(e.by) + " 都落ち"), (cls = "is-bad");
     else if (e.t === "out") (text = name(e.by) + " 上がり！"), (cls = "is-out");

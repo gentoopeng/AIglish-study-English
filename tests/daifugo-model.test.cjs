@@ -438,7 +438,7 @@ test("10捨て: the player throws away as many cards as 10s", () => {
   let s = D.play(table({ hands: { a: ["S10", "S3", "S9"] }, opts: { tenDiscard: true } }), "a", ["S10"]);
   assert.deepEqual([s.pending.t, s.pending.count, s.turn], ["ten", 1, "a"]);
   s = D.play(s, "a", ["S3"]);
-  assert.deepEqual([s.hands.a, s.turn, s.log.at(-1)], [["S9"], "b", { t: "discard", by: "a", cards: ["S3"] }]);
+  assert.deepEqual([s.hands.a, s.turn, s.log.at(-1)], [["S9"], "b", { t: "discard", by: "a", n: 1 }]);
   s = D.play(table({ hands: { a: ["S10", "S15"] }, opts: { tenDiscard: true } }), "a", ["S10"]);
   s = D.play(s, "a", ["S15"]);
   assert.deepEqual([s.legal, s.illegal], [["a"], []]);
@@ -479,4 +479,54 @@ test("whole games with every local rule on, and with the rule book's rules off: 
       prev = { ranking: s.ranking };
     }
   }
+});
+
+test("local rules, the corners: 5飛ばし with two left, a finish by 7渡し while the others passed, a passed receiver, four Js, six cards without 8切り, an old game", () => {
+  // Two players left: a 5 jumps the other, and the turn comes back to the one who played; they pass, the other answers.
+  let s = table({ hands: { a: ["S5", "S14"], b: ["H9", "H13"] }, ids: ["a", "b", "c"], opts: { fiveSkip: true } });
+  s.legal = ["c"];
+  s.hands.c = [];
+  s = D.play(s, "a", ["S5"]);
+  assert.deepEqual([s.turn, s.passed], ["a", []]);
+  s = D.pass(s, "a");
+  assert.equal(s.turn, "b");
+  s = D.play(s, "b", ["H9"]);
+  assert.deepEqual([s.field, s.turn], [null, "b"], "the other answered, the one who passed is out of this field: it flows to the other");
+  // Finishing by a 7渡し while the others have passed: the player is out, the field flows to the next one in.
+  s = table({ hands: { a: ["S7", "S4"], b: ["H9", "H13"] }, field: { by: "d", cards: ["S6"] }, opts: { sevenPass: true } });
+  s.passed = ["b", "c", "d"];
+  s = D.play(D.play(s, "a", ["S7"]), "a", ["S4"]);
+  assert.deepEqual([s.legal, s.field, s.turn, s.hands.b.includes("S4"), s.passed], [["a"], null, "b", true, []]);
+  // The receiver had passed: still passed, with the cards.
+  s = table({ hands: { a: ["S7", "S4", "S14"], b: ["H9"] }, field: { by: "d", cards: ["S6"] }, opts: { sevenPass: true } });
+  s.passed = ["b"];
+  s = D.play(D.play(s, "a", ["S7"]), "a", ["S4"]);
+  assert.deepEqual([s.passed, s.hands.b.slice().sort(), s.turn], [["b"], ["H9", "S4"], "c"]);
+  // Four Js with 革命 and 11バック: the two cancel out until the field flows, then the 革命 order holds.
+  s = D.play(table({ hands: { a: ["S11", "H11", "D11", "C11", "S9"] }, opts: { elevenBack: true } }), "a", ["S11", "H11", "D11", "C11"]);
+  assert.deepEqual([s.rev, s.back, D.reversed(s)], [true, true, false]);
+  s = D.pass(D.pass(D.pass(s, "b"), "c"), "d");
+  assert.deepEqual([s.rev, s.back, D.reversed(s)], [true, false, true]);
+  // Six cards with 8切り off still clear the field, under their own name.
+  s = D.play(table({ hands: { a: ["S8", "H8", "D8", "C8", "J1", "J2", "S9"] }, opts: { eight: false } }), "a", ["S8", "H8", "D8", "C8", "J1", "J2"]);
+  assert.deepEqual([s.field, s.log.at(-1)], [null, { t: "flow", why: "シックスカード" }]);
+  // The count of what happened only goes up, past the 60 entries the log keeps.
+  let long = table({ hands: { a: ["S3"], b: ["S4"] } });
+  long.seq = 0;
+  for (let i = 0; i < 70; i++) long = D.pass({ ...long, field: { by: "d", play: D.readings(["H5"], false)[0] }, turn: "a", passed: [] }, "a");
+  assert.equal(long.log.length, 60);
+  assert.ok(long.seq >= 70);
+  // A game dealt by the version before (no back / dir / pending, only 都落ち in its rules) is played to the end.
+  let old = D.start({ ids: ids4, rand: seeded(5) });
+  delete old.back;
+  delete old.dir;
+  delete old.pending;
+  delete old.seq;
+  old.opts = { miyakoochi: true };
+  for (let steps = 0; old.phase === "play"; steps++) {
+    assert.ok(steps < 2000);
+    const cards = D.choose(old, old.turn, seeded(steps + 1));
+    old = cards ? D.play(old, old.turn, cards) : D.pass(old, old.turn);
+  }
+  assert.equal(new Set(old.ranking).size, 4);
 });

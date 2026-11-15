@@ -135,7 +135,7 @@
       ranking: state.ranking,
       top: state.top,
       log: state.log.slice(-12),
-      seq: state.log.length,
+      seq: Number(state.seq) || state.log.length,
       ex: state.exchange ? { pairs: state.exchange.pairs, waiting: state.exchange.pairs.filter((p) => !picks?.[p.high]).map((p) => p.high) } : null,
     };
   }
@@ -185,7 +185,7 @@
         pub = hs.pubs?.[id];
       if (!player || player.bot || id === room.host || !pub) continue;
       const key = await shared(session.keys.priv, pub);
-      out[id] = await seal(key, { no: hs.no, seq: hs.state.log.length, hand: hs.state.hands[id], got: got?.[id] || [] });
+      out[id] = await seal(key, { no: hs.no, seq: Number(hs.state.seq) || hs.state.log.length, hand: hs.state.hands[id], got: got?.[id] || [] });
     }
     return out;
   }

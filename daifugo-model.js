@@ -143,8 +143,8 @@
     // 8切り (a set of 8s, a joker standing in for one included; never a stair), JK pair, 6 cards, 最強階段, スペ3返し
     (play.kind === "set" && play.rank === 8 && rule(state, "eight")) || (play.kind === "set" && play.rank === JOKER_RANK && play.n === 2) || (play.kind === "set" && play.n >= 6) || (play.kind === "stair" && play.top) || isSpade3Return(field, play);
   // What to call the play that cleared the field.
-  const flowName = (play, field) =>
-    isSpade3Return(field, play) ? "スペ3返し" : play.kind === "stair" ? "最強階段" : play.rank === 8 ? "8切り" : play.rank === JOKER_RANK ? "ジョーカーのペア" : "シックスカード";
+  const flowName = (play, field, state) =>
+    isSpade3Return(field, play) ? "スペ3返し" : play.kind === "stair" ? "最強階段" : play.rank === 8 && rule(state, "eight") ? "8切り" : play.rank === JOKER_RANK ? "ジョーカーのペア" : "シックスカード";
   // The play that goes on the field for these cards, or null: the strongest valid reading.
   function resolve(state, cards) {
     // 7渡し / 10捨て waiting: the cards to give or throw away (exactly as many as asked).
@@ -257,6 +257,8 @@
     return null;
   }
   function log(state, entry) {
+    // (`seq` only goes up: the log itself keeps the last 60 entries, so its length stops telling what is new)
+    state.seq = (Number(state.seq) || state.log.length) + 1;
     state.log.push(entry);
     if (state.log.length > 60) state.log.shift();
   }
@@ -336,7 +338,7 @@
       next.hands[pending.to].sort((a, b) => cardsByStrength(a, b, false));
       // (which cards is between the two players: the log says only how many)
       log(next, { t: "give", by: id, to: pending.to, n: cards.length });
-    } else log(next, { t: "discard", by: id, cards: cards.slice() });
+    } else log(next, { t: "discard", by: id, n: cards.length }); // (thrown away face down: only how many)
     return settle(next, id, { why: pending.why, skip: pending.skip });
   }
 
@@ -370,7 +372,7 @@
     log(next, { t: "play", by: id, cards: cards.slice(), kind: found.kind, rev: revolution });
     const set = found.kind === "set" ? found.rank : 0,
       left = next.hands[id].length,
-      why = flows(found, wasField, next) ? flowName(found, wasField) : null;
+      why = flows(found, wasField, next) ? flowName(found, wasField, next) : null;
     // The local rules of the numbers (sets only; a joker standing in counts as the number).
     if (set === 11 && rule(next, "elevenBack") && !next.back) {
       next.back = true;
