@@ -424,14 +424,19 @@ test("7渡し: the player gives as many cards as 7s to the next player, then the
   s = D.play(s, "a", ["S3", "S4"]);
   assert.deepEqual([s.pending, s.turn, s.hands.a, s.hands.b.slice().sort()], [null, "b", ["S9"], ["H10", "H12", "S3", "S4"]]);
   assert.deepEqual(s.log.at(-1), { t: "give", by: "a", to: "b", n: 2 }, "the log does not say which cards");
-  // Giving the last cards away is a finish (and no foul).
-  s = D.play(table({ hands: { a: ["S7", "S15"], b: ["H10"] }, opts: { sevenPass: true } }), "a", ["S7"]);
-  s = D.play(s, "a", ["S15"]);
-  assert.deepEqual([s.legal, s.illegal, s.hands.b.includes("S15")], [["a"], [], true]);
-  // Fewer cards left than 7s: those are given. A 7 as the last card just finishes.
+  // Giving the last cards away is a 反則上がり (the cards still go to the next player); with 反則上がり off it is a finish.
+  s = D.play(table({ hands: { a: ["S7", "S4"], b: ["H10"] }, opts: { sevenPass: true } }), "a", ["S7"]);
+  s = D.play(s, "a", ["S4"]);
+  assert.deepEqual([s.legal, s.illegal, s.hands.b.includes("S4")], [[], ["a"], true]);
+  s = D.play(D.play(table({ hands: { a: ["S7", "S4"], b: ["H10"] }, opts: { sevenPass: true, foul: false } }), "a", ["S7"]), "a", ["S4"]);
+  assert.deepEqual([s.legal, s.illegal], [["a"], []]);
+  // Fewer cards left than 7s: those are given. A 7 as the last card is a foul as well (not without the rule).
   assert.equal(D.play(table({ hands: { a: ["S7", "H7", "S9"] }, opts: { sevenPass: true } }), "a", ["S7", "H7"]).pending.count, 1);
   s = D.play(table({ hands: { a: ["S7"] }, opts: { sevenPass: true } }), "a", ["S7"]);
-  assert.deepEqual([s.pending, s.legal], [null, ["a"]]);
+  assert.deepEqual([s.pending, s.legal, s.illegal], [null, [], ["a"]]);
+  assert.deepEqual(D.play(table({ hands: { a: ["S7"] } }), "a", ["S7"]).legal, ["a"], "a 7 is just a 7 without 7渡し");
+  // The computer player keeps out of it: with a 7 and one more card it plays the other card first.
+  assert.deepEqual(D.choose(table({ hands: { a: ["S7", "S9"] }, opts: { sevenPass: true } }), "a", () => 0.5), ["S9"]);
 });
 
 test("10捨て: the player throws away as many cards as 10s", () => {
@@ -439,9 +444,11 @@ test("10捨て: the player throws away as many cards as 10s", () => {
   assert.deepEqual([s.pending.t, s.pending.count, s.turn], ["ten", 1, "a"]);
   s = D.play(s, "a", ["S3"]);
   assert.deepEqual([s.hands.a, s.turn, s.log.at(-1)], [["S9"], "b", { t: "discard", by: "a", n: 1 }]);
-  s = D.play(table({ hands: { a: ["S10", "S15"] }, opts: { tenDiscard: true } }), "a", ["S10"]);
-  s = D.play(s, "a", ["S15"]);
-  assert.deepEqual([s.legal, s.illegal], [["a"], []]);
+  // Throwing the last card away, or a 10 as the last card, is a 反則上がり.
+  s = D.play(table({ hands: { a: ["S10", "S4"] }, opts: { tenDiscard: true } }), "a", ["S10"]);
+  s = D.play(s, "a", ["S4"]);
+  assert.deepEqual([s.legal, s.illegal], [[], ["a"]]);
+  assert.deepEqual(D.play(table({ hands: { a: ["S10"] }, opts: { tenDiscard: true } }), "a", ["S10"]).illegal, ["a"]);
 });
 
 test("whole games with every local rule on, and with the rule book's rules off: they end, and every card is accounted for", () => {
@@ -496,7 +503,7 @@ test("local rules, the corners: 5飛ばし with two left, a finish by 7渡し wh
   s = table({ hands: { a: ["S7", "S4"], b: ["H9", "H13"] }, field: { by: "d", cards: ["S6"] }, opts: { sevenPass: true } });
   s.passed = ["b", "c", "d"];
   s = D.play(D.play(s, "a", ["S7"]), "a", ["S4"]);
-  assert.deepEqual([s.legal, s.field, s.turn, s.hands.b.includes("S4"), s.passed], [["a"], null, "b", true, []]);
+  assert.deepEqual([s.illegal, s.field, s.turn, s.hands.b.includes("S4"), s.passed], [["a"], null, "b", true, []]);
   // The receiver had passed: still passed, with the cards.
   s = table({ hands: { a: ["S7", "S4", "S14"], b: ["H9"] }, field: { by: "d", cards: ["S6"] }, opts: { sevenPass: true } });
   s.passed = ["b"];

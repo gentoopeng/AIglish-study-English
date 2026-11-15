@@ -157,14 +157,8 @@
   }
 
   // ---- Lobby ----------------------------------------------------------------------------
-  const RULES = [
-    "手札を先になくした人が大富豪、最後に残った人が大貧民です。",
-    "強さは 3 が最弱、2 が最強、ジョーカーは別格。場と同じ枚数で、強いカードだけ出せます。",
-    "同じ数字は2〜4枚まとめて、同じマークで続く3枚以上は階段。ジョーカーは何にでもなります。",
-    "4枚そろえると革命（強さが逆転）。8を出すと場が流れ、ジョーカーにはスペ3だけが勝てます。",
-    "同じマークが続くと縛り。上がりの1枚が 2・8・ジョーカー・スペ3だと反則上がりです。",
-    "精算は終わってから。最下位が1位へ賭け額、下から2番目が上から2番目へ半分。足りない分はカジノから借ります。",
-  ];
+  // The rules as a picture and two small tables (they were six long lines): the order of the cards, the ways to play, what the
+  // special cards do under the rules of this table, and which last cards are a foul.
   function rulesSheet() {
     const sheet = node("div", "df-rules-sheet");
     const head = node("div", "df-rules-head");
@@ -174,19 +168,62 @@
     x.setAttribute("aria-label", "ルールを閉じる");
     x.onclick = () => toggleRules();
     head.append(x);
-    const list = node("ol");
-    for (const line of RULES) list.append(node("li", "", line));
-    sheet.append(head, list);
-    // The rules of this table (or the ones chosen in the lobby), where they differ from the lines above.
+    sheet.append(head);
     const room = T.view()?.room,
-      rules = room ? T.rulesOf(room.settings) : ui.lobby.rules,
-      changed = D.RULES.filter(([key, , on]) => rules[key] !== on);
-    if (changed.length) {
-      sheet.append(node("b", "df-rules-local", room ? "このテーブルのルール" : "選んでいるルール"));
-      const local = node("ul", "df-rules-list");
-      for (const [, name, on, text] of changed) local.append(node("li", "", on ? name + "なし" : name + "：" + text));
-      sheet.append(local);
+      r = room ? T.rulesOf(room.settings) : ui.lobby.rules;
+    const title = (text) => sheet.append(node("h4", "df-rt", text));
+    const table = (rows, cls) => {
+      const t = node("table", "df-rtable" + (cls ? " " + cls : ""));
+      for (const [a, b] of rows) {
+        const tr = node("tr");
+        tr.append(node("th", "", a), node("td", "", b));
+        t.append(tr);
+      }
+      sheet.append(t);
+    };
+    sheet.append(node("p", "df-rgoal", "手札を先になくした人の勝ち。場より強いカードを、同じ枚数で出します。"));
+    // The order, as a row of cards.
+    title("つよさ");
+    const order = node("div", "df-rorder");
+    order.setAttribute("aria-label", "弱い順に 3 4 5 6 7 8 9 10 J Q K A 2 ジョーカー");
+    order.append(node("small", "", "弱"));
+    for (const c of ["3", "4", "5", "…", "K", "A", "2", "🃏"]) order.append(node("span", c === "…" ? "is-gap" : "", c));
+    order.append(node("small", "", "強"));
+    sheet.append(order);
+    title("出し方");
+    table([["1枚", "どれでも"], ["2〜4枚", "同じ数字"], ...(r.stairs ? [["階段", "同じマークで続く3枚以上"]] : []), ["🃏", "どのカードの代わりにもなる"]]);
+    // What the cards do at this table.
+    title("特別なカード");
+    const special = [];
+    if (r.revolution) special.push(["同じ数字4枚", "革命：強さが逆（3人は3枚）"]);
+    if (r.eight) special.push(["8", "8切り：場が流れる"]);
+    if (r.spade3) special.push(["♠3", "🃏1枚に勝てる"]);
+    if (r.shibari) special.push(["同じマーク続き", "縛り：そのマークだけ"]);
+    if (r.elevenBack) special.push(["J", "11バック：流れるまで強さが逆"]);
+    if (r.fiveSkip) special.push(["5", "5飛ばし：枚数ぶん次の人を飛ばす"]);
+    if (r.sevenPass) special.push(["7", "7渡し：枚数ぶん次の人に渡す"]);
+    if (r.tenDiscard) special.push(["10", "10捨て：枚数ぶん捨てる"]);
+    if (r.nineReverse) special.push(["9", "9リバース：順番が逆回り"]);
+    if (r.miyakoochi) special.push(["都落ち", "大富豪が1位を逃すと最下位"]);
+    if (special.length) table(special);
+    else sheet.append(node("p", "df-rnote", "特別なカードはありません。"));
+    // The fouls: the last cards that make a player last.
+    if (r.foul) {
+      title("反則上がり（最後に出すと最下位）");
+      const fouls = ["2（革命中は3）", "🃏"];
+      if (r.eight) fouls.push("8");
+      if (r.spade3) fouls.push("♠3");
+      if (r.sevenPass) fouls.push("7", "7渡しで手札がなくなる");
+      if (r.tenDiscard) fouls.push("10", "10捨てで手札がなくなる");
+      const chips = node("div", "df-rchips");
+      for (const f of fouls) chips.append(node("span", "", f));
+      sheet.append(chips);
     }
+    title("精算");
+    table([["最下位 → 1位", "賭け額"], ["下から2番目 → 2位", "半分"]]);
+    sheet.append(node("p", "df-rnote", "足りない分はカジノから借ります。"));
+    const tags = D.ruleTags(r);
+    if (tags.length) sheet.append(node("p", "df-rnote df-rules-local", (room ? "このテーブル：" : "選んでいるルール：") + tags.join("・")));
     return sheet;
   }
   function toggleRules() {

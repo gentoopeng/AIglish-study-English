@@ -34,7 +34,11 @@ const { chromium } = require("playwright"), assert = require("node:assert/strict
     await screen.waitFor();
     assert.match(await screen.locator(".df-rule-head").innerText(), /8切りなし・11バック/);
     await screen.getByRole("button", { name: "ルールを見る" }).click();
-    assert.match(await screen.locator(".df-rules-sheet").innerText(), /選んでいるルール[\s\S]*8切りなし[\s\S]*7渡し：7を出すと/);
+    assert.match(await screen.locator(".df-rules-sheet").innerText(), /つよさ[\s\S]*特別なカード[\s\S]*7渡し：枚数ぶん次の人に渡す[\s\S]*反則上がり[\s\S]*7渡しで手札がなくなる[\s\S]*選んでいるルール：8切りなし/);
+    // (a table and a row of cards, not long lines; 8切り is off here, so the 8 is not among the special cards)
+    assert.ok((await screen.locator(".df-rules-sheet .df-rtable tr").count()) >= 8);
+    assert.equal(await screen.locator(".df-rules-sheet .df-rorder span").count(), 8);
+    assert.equal(/8切り：/.test(await screen.locator(".df-rules-sheet").innerText()), false);
     await screen.getByRole("button", { name: "ルールを閉じる" }).click();
 
     // Practice games with those rules: dealt into the game, and played to the end through the screen.
