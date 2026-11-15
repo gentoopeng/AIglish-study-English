@@ -121,6 +121,11 @@
       field: state.field,
       lock: state.lock,
       rev: state.rev,
+      // The local rules of this game, and what they have set going (11バック, the way round, a 7渡し / 10捨て being chosen).
+      opts: state.opts,
+      back: !!state.back,
+      dir: state.dir === -1 ? -1 : 1,
+      pending: state.pending ? { t: state.pending.t, by: state.pending.by, count: state.pending.count, to: state.pending.to || null } : null,
       passed: state.passed,
       legal: state.legal,
       illegal: state.illegal,
@@ -130,7 +135,7 @@
       ranking: state.ranking,
       top: state.top,
       log: state.log.slice(-12),
-      seq: state.log.length,
+      seq: Number(state.seq) || state.log.length,
       ex: state.exchange ? { pairs: state.exchange.pairs, waiting: state.exchange.pairs.filter((p) => !picks?.[p.high]).map((p) => p.high) } : null,
     };
   }
@@ -146,12 +151,14 @@
   // ---- The dealer ------------------------------------------------------------------------
   // The dealer plays by the settings it started with (a player cannot change them in the document).
   const cfg = (room, hs) => (hs && hs.settings) || room.settings;
+  // The rules of a table: its local rules (tables made before they existed have only 都落ち).
+  const rulesOf = (settings) => D.normalizeRules({ ...(settings?.rules || {}), ...(settings?.rules ? {} : { miyakoochi: !!settings?.miyakoochi }) });
   const thinkMs = (room, hs) => (cfg(room, hs).think || 30) * 1000;
   const botDelay = () => BOT_MS[0] + fraction() * (BOT_MS[1] - BOT_MS[0]);
   function newGame(room, hs) {
     const ids = hs.ids,
       prev = hs.games.length ? { ranking: hs.games[hs.games.length - 1] } : null;
-    hs.state = D.start({ ids, rand: fraction, prev, opts: { miyakoochi: !!cfg(room, hs).miyakoochi } });
+    hs.state = D.start({ ids, rand: fraction, prev, opts: rulesOf(cfg(room, hs)) });
     hs.picks = {};
     hs.got = null;
     hs.deadline = hs.state.phase === "exchange" ? Date.now() + EXCHANGE_MS : Date.now() + thinkMs(room, hs);
@@ -178,7 +185,7 @@
         pub = hs.pubs?.[id];
       if (!player || player.bot || id === room.host || !pub) continue;
       const key = await shared(session.keys.priv, pub);
-      out[id] = await seal(key, { no: hs.no, seq: hs.state.log.length, hand: hs.state.hands[id], got: got?.[id] || [] });
+      out[id] = await seal(key, { no: hs.no, seq: Number(hs.state.seq) || hs.state.log.length, hand: hs.state.hands[id], got: got?.[id] || [] });
     }
     return out;
   }
@@ -293,7 +300,8 @@
         hs.state = next;
         hs.actAt = 0;
         hs.deadline = now + thinkMs(room, hs);
-        sealIds = [turn];
+        // (a 7渡し also changes the hand of the player who got the cards)
+        sealIds = state.pending?.t === "seven" && state.pending.to ? [turn, state.pending.to] : [turn];
         changed = true;
       }
       if (!changed) return false;
@@ -367,7 +375,8 @@
     games: s.games === 4 ? 4 : 1,
     seats: [3, 4, 5].includes(s.seats) ? s.seats : 4,
     think: THINK.includes(s.think) ? s.think : 30,
-    miyakoochi: !!s.miyakoochi,
+    miyakoochi: !!(s.rules ? s.rules.miyakoochi : s.miyakoochi),
+    rules: D.normalizeRules(s.rules || { miyakoochi: !!s.miyakoochi }),
   });
   const avatarOf = () => {
     try {
@@ -431,7 +440,7 @@
     return enter(code, { host: false, keys });
   }
   // A table against the computer: this device only, no points.
-  function practice(count) {
+  function practice(count, rules) {
     const n = [3, 4, 5].includes(count) ? count : 4,
       code = "0000",
       me = uid();
@@ -446,7 +455,7 @@
       me,
       keys: null,
       hostState: null,
-      room: { kind: KIND, version: 1, code, host: me, status: "playing", createdAt: Date.now(), settings: { stake: 0, games: 1, seats: n, think: 45, miyakoochi: false, practice: true }, players },
+      room: { kind: KIND, version: 1, code, host: me, status: "playing", createdAt: Date.now(), settings: { stake: 0, games: 1, seats: n, think: 45, miyakoochi: !!rules?.miyakoochi, rules: D.normalizeRules(rules || {}), practice: true }, players },
     };
     ticker = setInterval(tick, 400);
     setTimeout(() => {
@@ -713,6 +722,7 @@
     paid: (id) => paidMap()[id] || null,
     payments,
     seatOrder,
+    rulesOf,
     totalsOf,
     _session: () => session,
   };

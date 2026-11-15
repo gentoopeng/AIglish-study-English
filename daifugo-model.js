@@ -35,6 +35,32 @@
   // 4 same ranks make a 革命 (3 in the 3-player game, which has only 3 suits).
   const revolutionSize = (n) => (n === 3 ? 3 : 4);
 
+  // ---- Local rules (ローカルルール) ---------------------------------------------------------
+  // What a table can switch: [key, name, on by default, what it does]. The first six are the rule book's own rules (on unless switched
+  // off); the rest are local rules (off unless switched on). A game keeps its rules in state.opts; a rule missing there (a game dealt
+  // by an older version) counts as its default.
+  const RULES = [
+    ["revolution", "革命", true, "同じ数字4枚（3人のときは3枚）で、強さが逆になります。"],
+    ["eight", "8切り", true, "8を出すと場が流れ、出した人からまた始めます。"],
+    ["shibari", "縛り", true, "同じマークが続くと、場が流れるまでそのマークしか出せません。"],
+    ["stairs", "階段", true, "同じマークで続く3枚以上を、まとめて出せます。"],
+    ["spade3", "スペ3返し", true, "1枚のジョーカーに、スペードの3だけが勝てます。"],
+    ["foul", "反則上がり", true, "2・8・ジョーカー・スペ3（革命中は3）で上がると、最下位になります。"],
+    ["miyakoochi", "都落ち", false, "前のゲームの大富豪は、1位で上がれないと最下位になります。"],
+    ["elevenBack", "11バック", false, "Jを出すと、場が流れるまで強さが逆になります。"],
+    ["fiveSkip", "5飛ばし", false, "5を出すと、出した枚数だけ次の人を飛ばします。"],
+    ["sevenPass", "7渡し", false, "7を出すと、出した枚数だけ手札を次の人に渡します。"],
+    ["tenDiscard", "10捨て", false, "10を出すと、出した枚数だけ手札を捨てます。"],
+    ["nineReverse", "9リバース", false, "9を出すと、順番が逆回りになります。"],
+  ];
+  const RULE_DEFAULT = Object.fromEntries(RULES.map(([key, , on]) => [key, on]));
+  const normalizeRules = (opts) => Object.fromEntries(RULES.map(([key, , on]) => [key, typeof opts?.[key] === "boolean" ? opts[key] : on]));
+  const rule = (state, key) => (typeof state?.opts?.[key] === "boolean" ? state.opts[key] : RULE_DEFAULT[key]);
+  // The rules of a table that differ from the defaults, as names ("8切りなし", "7渡し").
+  const ruleTags = (opts) => RULES.filter(([key, , on]) => normalizeRules(opts)[key] !== on).map(([, name, on]) => (on ? name + "なし" : name));
+  // Is the order of the numbers reversed now? (a 革命, or an 11バック until the field flows; both together cancel out)
+  const reversed = (state) => !!state.rev !== !!state.back;
+
   function deck(n) {
     const setup = SETUP[n];
     if (!setup) throw Error("大富豪は3〜5人で遊びます。");
@@ -92,12 +118,12 @@
     return out;
   }
   // Can `play` answer the cards on the field (a play, or null for an empty field) in this state?
-  function beats(field, play, rev) {
+  function beats(field, play, rev, spade3 = true) {
     if (!field) return true;
     if (play.kind !== field.kind || play.n !== field.n) return false;
     if (field.kind === "stair") return play.a > field.a;
-    // Only the spade 3 stands up to a single joker.
-    if (field.rank === JOKER_RANK) return field.n === 1 && play.cards.length === 1 && play.cards[0] === "S3";
+    // Only the spade 3 stands up to a single joker (スペ3返し).
+    if (field.rank === JOKER_RANK) return spade3 && field.n === 1 && play.cards.length === 1 && play.cards[0] === "S3";
     if (play.rank === JOKER_RANK) return true;
     return strength(play.rank, rev) > strength(field.rank, rev);
   }
@@ -113,17 +139,22 @@
     }
     return true;
   }
-  const flows = (play, field) =>
+  const flows = (play, field, state) =>
     // 8切り (a set of 8s, a joker standing in for one included; never a stair), JK pair, 6 cards, 最強階段, スペ3返し
-    (play.kind === "set" && play.rank === 8) || (play.kind === "set" && play.rank === JOKER_RANK && play.n === 2) || (play.kind === "set" && play.n >= 6) || (play.kind === "stair" && play.top) || isSpade3Return(field, play);
+    (play.kind === "set" && play.rank === 8 && rule(state, "eight")) || (play.kind === "set" && play.rank === JOKER_RANK && play.n === 2) || (play.kind === "set" && play.n >= 6) || (play.kind === "stair" && play.top) || isSpade3Return(field, play);
   // What to call the play that cleared the field.
-  const flowName = (play, field) =>
-    isSpade3Return(field, play) ? "スペ3返し" : play.kind === "stair" ? "最強階段" : play.rank === 8 ? "8切り" : play.rank === JOKER_RANK ? "ジョーカーのペア" : "シックスカード";
+  const flowName = (play, field, state) =>
+    isSpade3Return(field, play) ? "スペ3返し" : play.kind === "stair" ? "最強階段" : play.rank === 8 && rule(state, "eight") ? "8切り" : play.rank === JOKER_RANK ? "ジョーカーのペア" : "シックスカード";
   // The play that goes on the field for these cards, or null: the strongest valid reading.
   function resolve(state, cards) {
+    // 7渡し / 10捨て waiting: the cards to give or throw away (exactly as many as asked).
+    if (state.pending) return Array.isArray(cards) && cards.length === state.pending.count && new Set(cards).size === cards.length ? { kind: "extra", t: state.pending.t, n: cards.length, cards, jokers: 0, suits: [] } : null;
     let best = null;
-    for (const play of readings(cards, state.rev)) {
-      if (!beats(state.field?.play || null, play, state.rev)) continue;
+    const rev = reversed(state),
+      sp3 = rule(state, "spade3");
+    for (const play of readings(cards, rev)) {
+      if (play.kind === "stair" && !rule(state, "stairs")) continue;
+      if (!beats(state.field?.play || null, play, rev, sp3)) continue;
       if (!isSpade3Return(state.field?.play, play) && !underLock(state.lock, play)) continue;
       if (!best || (play.kind === "stair" && play.a > best.a)) best = play;
     }
@@ -131,15 +162,16 @@
   }
   // The final play of a hand that is not allowed (反則上がり), judged in the state before the play.
   function illegalFinish(state, play) {
+    if (!rule(state, "foul") || play.kind === "extra") return false;
     if (play.jokers > 0) return true;
-    if (play.kind === "set" && play.rank === 8) return true;
-    if (play.n === 1 && play.cards[0] === "S3") return true;
+    if (play.kind === "set" && play.rank === 8 && rule(state, "eight")) return true;
+    if (play.n === 1 && play.cards[0] === "S3" && rule(state, "spade3")) return true;
     const ranks = play.cards.map(rankOf);
-    return state.rev ? ranks.includes(3) : ranks.includes(15);
+    return reversed(state) ? ranks.includes(3) : ranks.includes(15);
   }
 
   // ---- Game state ------------------------------------------------------------------------
-  // opts: { miyakoochi: bool }. prev: { ranking: [ids best first] } of the game before, if any.
+  // opts: the table's rules (normalizeRules). prev: { ranking: [ids best first] } of the game before, if any.
   function start({ ids, rand = Math.random, prev = null, first = null, opts = {} }) {
     const n = ids.length;
     if (!SETUP[n]) throw Error("大富豪は3〜5人で遊びます。");
@@ -160,7 +192,11 @@
       illegal: [],
       fallen: null,
       top: prev?.ranking?.[0] || null,
-      opts: { miyakoochi: !!opts.miyakoochi },
+      // 11バック until the field flows; the way round the table (9リバース); what a 7渡し / 10捨て waits for.
+      back: false,
+      dir: 1,
+      pending: null,
+      opts: normalizeRules(opts),
       phase: "play",
       exchange: null,
       ranking: null,
@@ -209,16 +245,20 @@
   }
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const activeIds = (state) => state.ids.filter((id) => !state.legal.includes(id) && !state.illegal.includes(id) && state.fallen !== id);
-  // The next player who is still in, going clockwise from `id`, and (for a field) has not passed.
+  // The next player who is still in, going round the table from `id` (the other way after a 9リバース), and (for a field) has not passed.
   function nextAfter(state, id, skipPassed) {
-    const at = state.ids.indexOf(id);
-    for (let step = 1; step <= state.ids.length; step++) {
-      const other = state.ids[(at + step) % state.ids.length];
+    const n = state.ids.length,
+      at = state.ids.indexOf(id),
+      dir = state.dir === -1 ? -1 : 1;
+    for (let step = 1; step <= n; step++) {
+      const other = state.ids[(((at + step * dir) % n) + n) % n];
       if (activeIds(state).includes(other) && !(skipPassed && state.passed.includes(other))) return other;
     }
     return null;
   }
   function log(state, entry) {
+    // (`seq` only goes up: the log itself keeps the last 60 entries, so its length stops telling what is new)
+    state.seq = (Number(state.seq) || state.log.length) + 1;
     state.log.push(entry);
     if (state.log.length > 60) state.log.shift();
   }
@@ -227,50 +267,30 @@
     state.phase = "done";
     state.field = null;
     state.turn = null;
+    state.pending = null;
     state.ranking = [...state.legal, ...active, ...(state.fallen ? [state.fallen] : []), ...state.illegal.slice().reverse()];
   }
-  // The field is cleared; `leader` leads (or the next player in if they are out).
+  // The field is cleared; `leader` leads (or the next player in if they are out). An 11バック ends with the field.
   function flow(state, leader, why) {
     state.field = null;
     state.lock = null;
+    state.back = false;
     state.passed = [];
     state.turn = activeIds(state).includes(leader) ? leader : nextAfter(state, leader, false);
     log(state, { t: "flow", why });
   }
   const othersPassed = (state, id) => activeIds(state).every((other) => other === id || state.passed.includes(other));
 
-  // `id` plays `cards`. Returns the new state, or throws a message that can be shown.
-  function play(state, id, cards) {
-    if (state.phase !== "play") throw Error("いまは出せません。");
-    if (state.turn !== id) throw Error("あなたの番ではありません。");
-    const hand = state.hands[id];
-    if (!Array.isArray(cards) || !cards.length || new Set(cards).size !== cards.length || cards.some((card) => !hand.includes(card))) throw Error("そのカードは出せません。");
-    const found = resolve(state, cards);
-    if (!found) {
-      if (state.lock && readings(cards, state.rev).some((read) => beats(state.field?.play || null, read, state.rev))) throw Error("縛り中です。同じスートのカードだけ出せます。");
-      throw Error(state.field ? "場のカードより強い、同じ形のカードを出してください。" : "その組み合わせは出せません。");
-    }
-    const next = clone(state),
-      before = state;
-    const wasField = state.field?.play || null;
-    next.hands[id] = hand.filter((card) => !cards.includes(card));
-    // 縛り: the same suits twice in a row (no joker), and it stays until the field flows.
-    if (wasField && !next.lock && wasField.jokers === 0 && found.jokers === 0 && wasField.suits.join() === found.suits.join() && wasField.kind === found.kind) next.lock = found.suits.slice();
-    next.field = { by: id, play: found };
-    let revolution = false;
-    if (found.kind === "set" && found.n >= revolutionSize(next.n) && found.rank !== JOKER_RANK) {
-      next.rev = !next.rev;
-      revolution = true;
-    }
-    log(next, { t: "play", by: id, cards: cards.slice(), kind: found.kind, rev: revolution });
-    const out = next.hands[id].length === 0;
-    if (out) {
-      if (illegalFinish(before, found)) {
+  // After a play (and its 7渡し / 10捨て, if any): is the player out, does the game end, does the field flow, whose turn is it.
+  // `foul`: the finish is a 反則上がり. `why`: the play clears the field. `skip`: players jumped by a 5飛ばし.
+  function settle(next, id, { foul = false, why = null, skip = 0 }) {
+    if (next.hands[id].length === 0) {
+      if (foul) {
         next.illegal.push(id);
         log(next, { t: "illegal", by: id });
       } else {
         // 都落ち: the 大富豪 of the game before drops when another player is first to finish.
-        if (!next.legal.length && next.opts.miyakoochi && next.top && next.top !== id && activeIds(next).includes(next.top)) {
+        if (!next.legal.length && rule(next, "miyakoochi") && next.top && next.top !== id && activeIds(next).includes(next.top)) {
           next.fallen = next.top;
           log(next, { t: "fallen", by: next.top });
         }
@@ -283,22 +303,101 @@
       finishGame(next);
       return next;
     }
-    if (flows(found, wasField)) {
-      flow(next, id, flowName(found, wasField));
+    if (why) {
+      flow(next, id, why);
       return next;
     }
     if (othersPassed(next, id) && activeIds(next).includes(id)) {
       flow(next, id, "全員パス");
       return next;
     }
-    next.turn = nextAfter(next, id, true) || id;
+    let turn = nextAfter(next, id, true) || id;
+    // 5飛ばし: the players jumped have not passed; they play again when the turn comes round.
+    for (let i = 0; i < skip; i++) {
+      next.turn = turn;
+      turn = nextAfter(next, turn, true) || turn;
+    }
+    if (skip) log(next, { t: "skip", n: skip });
+    next.turn = turn;
     // Everyone else is out or has passed: the field flows to the one who played, or to the next in.
     if (!activeIds(next).includes(next.turn)) flow(next, id, "全員パス");
     return next;
   }
+  // The cards of a 7渡し (to the next player) or a 10捨て (out of the game), then the turn goes on.
+  function extra(state, id, cards) {
+    const pending = state.pending,
+      hand = state.hands[id];
+    const word = pending.t === "seven" ? "渡す" : "捨てる";
+    if (pending.by !== id) throw Error("あなたの番ではありません。");
+    if (!Array.isArray(cards) || cards.length !== pending.count || new Set(cards).size !== cards.length || cards.some((card) => !hand.includes(card))) throw Error(word + "カードを" + pending.count + "枚選んでください。");
+    const next = clone(state);
+    next.pending = null;
+    next.hands[id] = hand.filter((card) => !cards.includes(card));
+    if (pending.t === "seven" && pending.to && next.hands[pending.to]) {
+      next.hands[pending.to].push(...cards);
+      next.hands[pending.to].sort((a, b) => cardsByStrength(a, b, false));
+      // (which cards is between the two players: the log says only how many)
+      log(next, { t: "give", by: id, to: pending.to, n: cards.length });
+    } else log(next, { t: "discard", by: id, n: cards.length }); // (thrown away face down: only how many)
+    return settle(next, id, { why: pending.why, skip: pending.skip });
+  }
+
+  // `id` plays `cards`. Returns the new state, or throws a message that can be shown.
+  function play(state, id, cards) {
+    if (state.phase !== "play") throw Error("いまは出せません。");
+    if (state.turn !== id) throw Error("あなたの番ではありません。");
+    if (state.pending) return extra(state, id, cards);
+    const hand = state.hands[id];
+    if (!Array.isArray(cards) || !cards.length || new Set(cards).size !== cards.length || cards.some((card) => !hand.includes(card))) throw Error("そのカードは出せません。");
+    const found = resolve(state, cards);
+    if (!found) {
+      const rev = reversed(state),
+        could = readings(cards, rev).filter((read) => beats(state.field?.play || null, read, rev, rule(state, "spade3")));
+      if (could.length && could.every((read) => read.kind === "stair") && !rule(state, "stairs")) throw Error("このテーブルでは階段は出せません。");
+      if (state.lock && could.length) throw Error("縛り中です。同じスートのカードだけ出せます。");
+      throw Error(state.field ? "場のカードより強い、同じ形のカードを出してください。" : "その組み合わせは出せません。");
+    }
+    const next = clone(state),
+      before = state;
+    const wasField = state.field?.play || null;
+    next.hands[id] = hand.filter((card) => !cards.includes(card));
+    // 縛り: the same suits twice in a row (no joker), and it stays until the field flows.
+    if (rule(next, "shibari") && wasField && !next.lock && wasField.jokers === 0 && found.jokers === 0 && wasField.suits.join() === found.suits.join() && wasField.kind === found.kind) next.lock = found.suits.slice();
+    next.field = { by: id, play: found };
+    let revolution = false;
+    if (rule(next, "revolution") && found.kind === "set" && found.n >= revolutionSize(next.n) && found.rank !== JOKER_RANK) {
+      next.rev = !next.rev;
+      revolution = true;
+    }
+    log(next, { t: "play", by: id, cards: cards.slice(), kind: found.kind, rev: revolution });
+    const set = found.kind === "set" ? found.rank : 0,
+      left = next.hands[id].length,
+      why = flows(found, wasField, next) ? flowName(found, wasField, next) : null;
+    // The local rules of the numbers (sets only; a joker standing in counts as the number).
+    if (set === 11 && rule(next, "elevenBack") && !next.back) {
+      next.back = true;
+      log(next, { t: "back" });
+    }
+    if (set === 9 && rule(next, "nineReverse")) {
+      next.dir = next.dir === -1 ? 1 : -1;
+      log(next, { t: "reverse" });
+    }
+    const skip = set === 5 && rule(next, "fiveSkip") ? found.n : 0;
+    const wait = left > 0 && ((set === 7 && rule(next, "sevenPass") && "seven") || (set === 10 && rule(next, "tenDiscard") && "ten"));
+    if (wait) {
+      // The player chooses the cards next (play() again, with those cards); the turn stays with them until then.
+      const to = wait === "seven" ? nextAfter(next, id, false) : null;
+      if (wait === "ten" || to) {
+        next.pending = { t: wait, by: id, count: Math.min(found.n, left), to, why, skip };
+        return next;
+      }
+    }
+    return settle(next, id, { foul: left === 0 && illegalFinish(before, found), why, skip });
+  }
   function pass(state, id) {
     if (state.phase !== "play") throw Error("いまはパスできません。");
     if (state.turn !== id) throw Error("あなたの番ではありません。");
+    if (state.pending) throw Error((state.pending.t === "seven" ? "渡す" : "捨てる") + "カードを" + state.pending.count + "枚選んでください。");
     if (!state.field) throw Error("最初に出す人はパスできません。");
     const next = clone(state);
     next.passed.push(id);
@@ -318,6 +417,8 @@
       real = hand.filter((card) => !isJoker(card)),
       out = [],
       seen = new Set();
+    // 7渡し / 10捨て waiting: any card can be chosen.
+    if (state.pending) return state.pending.by === id ? hand.map((card) => [card]) : [];
     const add = (cards) => {
       const key = cards.slice().sort().join(",");
       if (seen.has(key)) return;
@@ -341,7 +442,7 @@
     for (let j = 1; j <= jokers.length; j++) add(jokers.slice(0, j));
     for (const suit of SETUP[state.n].suits) {
       const mine = real.filter((card) => suitOf(card) === suit),
-        byStrength = new Map(mine.map((card) => [strength(rankOf(card), state.rev), card]));
+        byStrength = new Map(mine.map((card) => [strength(rankOf(card), reversed(state)), card]));
       for (let n = 3; n <= 14; n++)
         for (let a = 3; a + n - 1 <= 16; a++) {
           const cards = [];
@@ -384,12 +485,14 @@
   // What it would play: the weakest play that wins, keeping jokers and 2s unless it can finish or
   // somebody is nearly out. Returns cards, or null to pass.
   function choose(state, id, rand = Math.random) {
-    const options = plays(state, id);
     const hand = state.hands[id];
+    // 7渡し / 10捨て: the weakest cards go (a joker last).
+    if (state.pending) return state.pending.by === id ? hand.slice().sort((a, b) => cardsByStrength(a, b, reversed(state))).slice(0, state.pending.count) : null;
+    const options = plays(state, id);
     if (!options.length) return null;
     const score = (cards) => {
       const read = resolve(state, cards);
-      const s = read.kind === "stair" ? read.a : read.rank === JOKER_RANK ? 30 : strength(read.rank, state.rev);
+      const s = read.kind === "stair" ? read.a : read.rank === JOKER_RANK ? 30 : strength(read.rank, reversed(state));
       // Prefer getting rid of more cards at the same strength; avoid illegal finishes.
       return s * 10 - cards.length + (cards.length === hand.length && illegalFinish(state, read) ? 1000 : 0) + (rand() - 0.5);
     };
@@ -397,7 +500,7 @@
     const read = resolve(state, lowest);
     const finishing = lowest.length === hand.length;
     const threatened = activeIds(state).some((other) => other !== id && state.hands[other].length <= 2);
-    const strong = read.jokers > 0 || (read.kind === "set" && strength(read.rank, state.rev) >= 15);
+    const strong = read.jokers > 0 || (read.kind === "set" && strength(read.rank, reversed(state)) >= 15);
     if (state.field && strong && !finishing && !threatened && hand.length > 4) return null;
     if (finishing && illegalFinish(state, read) && options.length > 1) {
       const other = options.filter((cards) => cards.length !== hand.length || !illegalFinish(state, resolve(state, cards)));
@@ -406,7 +509,7 @@
     return lowest;
   }
 
-  const api = { SUITS, JOKER_RANK, SETUP, NAMES, isJoker, rankOf, suitOf, strength, deck, shuffle, deal, readings, beats, resolve, illegalFinish, start, exchangePairs, exchange, activeIds, play, pass, plays, gamePoints, standing, payouts, choose, revolutionSize, cardsByStrength };
+  const api = { RULES, normalizeRules, ruleTags, rule, reversed, SUITS, JOKER_RANK, SETUP, NAMES, isJoker, rankOf, suitOf, strength, deck, shuffle, deal, readings, beats, resolve, illegalFinish, start, exchangePairs, exchange, activeIds, play, pass, plays, gamePoints, standing, payouts, choose, revolutionSize, cardsByStrength };
   root.DaifugoModel = Object.freeze(api);
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window === "undefined" ? globalThis : window);

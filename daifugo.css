@@ -219,3 +219,20 @@ html body dialog.df-screen{box-sizing:border-box;overflow-x:hidden;position:fixe
 .df-end .df-hero h2{flex:0 0 auto;}
 .df-panel.is-row .df-seg button{min-width:34px;padding:0 10px;}
 .df-panel.is-row .df-primary{min-width:84px;padding:0 12px;}
+
+/* Local rules: the panel of the lobby (closed: one line with what differs), and the table's own rules in the rules sheet. */
+.df-rule-panel{padding:0;overflow:hidden}
+.df-rule-head{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:10px 14px;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
+.df-rule-head h3{margin:0;flex:none}
+.df-rule-head small{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;opacity:.75}
+.df-rule-head i{flex:none;font-style:normal;font-size:10px;opacity:.6}
+.df-rule-title{margin:6px 14px 6px;font-size:11px;font-weight:700;opacity:.7}
+.df-rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px 10px}
+.df-rule{display:grid;gap:3px;min-height:58px;padding:8px 10px;border:1px solid rgba(255,255,255,.16);border-radius:12px;background:rgba(255,255,255,.04);color:inherit;text-align:left;font:inherit;cursor:pointer;opacity:.62}
+.df-rule b{font-size:13px}
+.df-rule small{font-size:10px;line-height:1.45;opacity:.8}
+.df-rule[aria-pressed=true]{opacity:1;border-color:#e8d6a6;background:rgba(232,214,166,.12)}
+.df-rule[aria-pressed=true] b::after{content:" ✓";color:#e8d6a6}
+.df-rule-reset{display:block;margin:0 14px 14px}
+.df-rules-local{display:block;margin:10px 0 4px;font-size:12px}
+.df-rules-list{margin:0;padding-left:18px;font-size:12px;line-height:1.7}

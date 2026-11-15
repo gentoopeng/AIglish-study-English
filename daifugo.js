@@ -25,7 +25,21 @@
   let screen = null,
     off = null,
     ui = null;
-  const freshUi = () => ({ selected: [], sig: "", gNo: -1, seq: 0, shown: new Set(), fx: [], lobby: { stake: 100, games: 1, seats: 4, think: 30, miyakoochi: false, practice: 4 }, status: "", sort: "power", rejSeen: 0 });
+  // The local rules chosen last time on this device (for the next table or practice).
+  const RULES_KEY = "aiglish_df_rules";
+  const savedRules = () => {
+    try {
+      return D.normalizeRules(JSON.parse(localStorage.getItem(RULES_KEY) || "{}"));
+    } catch {
+      return D.normalizeRules({});
+    }
+  };
+  const keepRules = (rules) => {
+    try {
+      localStorage.setItem(RULES_KEY, JSON.stringify(rules));
+    } catch {}
+  };
+  const freshUi = () => ({ selected: [], sig: "", gNo: -1, seq: 0, shown: new Set(), fx: [], lobby: { stake: 100, games: 1, seats: 4, think: 30, rules: savedRules(), practice: 4 }, status: "", sort: "power", rejSeen: 0 });
 
   // ---- Cards ----------------------------------------------------------------------------
   function cardEl(code, extra) {
@@ -163,6 +177,16 @@
     const list = node("ol");
     for (const line of RULES) list.append(node("li", "", line));
     sheet.append(head, list);
+    // The rules of this table (or the ones chosen in the lobby), where they differ from the lines above.
+    const room = T.view()?.room,
+      rules = room ? T.rulesOf(room.settings) : ui.lobby.rules,
+      changed = D.RULES.filter(([key, , on]) => rules[key] !== on);
+    if (changed.length) {
+      sheet.append(node("b", "df-rules-local", room ? "このテーブルのルール" : "選んでいるルール"));
+      const local = node("ul", "df-rules-list");
+      for (const [, name, on, text] of changed) local.append(node("li", "", on ? name + "なし" : name + "：" + text));
+      sheet.append(local);
+    }
     return sheet;
   }
   function toggleRules() {
@@ -199,6 +223,54 @@
       order = names.map((_, i) => "#" + i);
     return D.payouts(order, stake).map((p) => names[order.indexOf(p.from)] + " → " + names[order.indexOf(p.to)] + " " + fmt(p.amount));
   }
+  // The rules of the next game (practice or a table): the rule book's rules can be switched off, local rules switched on.
+  function rulePanel(l, again) {
+    const panel = node("section", "df-panel df-rule-panel");
+    const tags = D.ruleTags(l.rules);
+    const head = node("button", "df-rule-head");
+    head.type = "button";
+    head.setAttribute("aria-expanded", String(!!ui.ruleOpen));
+    head.append(node("h3", "", "ローカルルール"), node("small", "", tags.length ? tags.join("・") : "標準のルール"), node("i", "", ui.ruleOpen ? "▲" : "▼"));
+    head.onclick = () => {
+      sound("tap");
+      ui.ruleOpen = !ui.ruleOpen;
+      again();
+    };
+    panel.append(head);
+    if (!ui.ruleOpen) return panel;
+    const group = (title, on) => {
+      panel.append(node("p", "df-rule-title", title));
+      const grid = node("div", "df-rule-grid");
+      for (const [key, name, base, text] of D.RULES.filter((r) => r[2] === on)) {
+        const b = node("button", "df-rule");
+        b.type = "button";
+        b.setAttribute("aria-pressed", String(l.rules[key]));
+        b.setAttribute("aria-label", name + (l.rules[key] ? " あり" : " なし"));
+        b.append(node("b", "", name), node("small", "", text));
+        b.onclick = () => {
+          sound("tap");
+          l.rules = { ...l.rules, [key]: !l.rules[key] };
+          keepRules(l.rules);
+          again();
+        };
+        void base;
+        grid.append(b);
+      }
+      panel.append(grid);
+    };
+    group("基本のルール（押すと、なしにできます）", true);
+    group("追加のルール（押すと、ありになります）", false);
+    const reset = node("button", "df-ghost df-rule-reset", "標準に戻す");
+    reset.type = "button";
+    reset.disabled = !tags.length;
+    reset.onclick = () => {
+      l.rules = D.normalizeRules({});
+      keepRules(l.rules);
+      again();
+    };
+    panel.append(reset);
+    return panel;
+  }
   function lobby(view) {
     const l = ui.lobby;
     const again = () => ((ui.sig = ""), render(T.view()));
@@ -219,7 +291,7 @@
     go.onclick = () => {
       sound("confirm");
       ui.sig = "";
-      T.practice(l.practice);
+      T.practice(l.practice, l.rules);
     };
     practice.append(go);
 
@@ -272,14 +344,13 @@
       opt("人数", seg([[3, "3"], [4, "4"], [5, "5"]], l.seats, (v) => ((l.seats = v), again()), "最大人数")),
       opt("ゲーム", seg([[1, "1回"], [4, "4回（1セット）"]], l.games, (v) => ((l.games = v), again()), "ゲーム数")),
       opt("時間", seg(T.THINK.map((s) => [s, s + "秒"]), l.think, (v) => ((l.think = v), again()), "持ち時間")),
-      opt("都落ち", seg([[false, "なし"], [true, "あり"]], l.miyakoochi, (v) => ((l.miyakoochi = v), again()), "都落ち")),
     );
     const create = node("button", "df-primary", "テーブルを作る");
     create.type = "button";
     create.onclick = async () => {
       create.disabled = true;
       try {
-        await T.createTable({ stake: l.stake, games: l.games, seats: l.seats, think: l.think, miyakoochi: l.miyakoochi });
+        await T.createTable({ stake: l.stake, games: l.games, seats: l.seats, think: l.think, rules: l.rules });
       } catch (error) {
         say(window.Poker?.message?.(error) || error.message);
       }
@@ -312,7 +383,7 @@
     enter.onclick = doJoin;
     wrap.append(code, enter);
     join.append(wrap);
-    box.append(practice, make, join, node("p", "df-status", ui.status));
+    box.append(rulePanel(l, again), practice, make, join, node("p", "df-status", ui.status));
     view.append(box);
   }
 
@@ -329,7 +400,7 @@
     big.setAttribute("aria-label", "テーブル番号 " + room.code);
     box.append(big);
     const tags = node("p", "df-tags");
-    for (const t of [fmt(s.stake) + "pt", s.games === 4 ? "4回（1セット）" : "1回", s.think + "秒", s.miyakoochi ? "都落ちあり" : ""]) if (t) tags.append(node("span", "", t));
+    for (const t of [fmt(s.stake) + "pt", s.games === 4 ? "4回（1セット）" : "1回", s.think + "秒", ...D.ruleTags(T.rulesOf(s))]) if (t) tags.append(node("span", "", t));
     box.append(tags);
     const seats = node("ul", "df-seats-list");
     const order = T.seatOrder(room);
@@ -367,7 +438,7 @@
   function pseudo(g, hand, me) {
     const hands = {};
     for (const id of g.ids) hands[id] = id === me ? hand : Array(g.counts[id] || 0).fill("S3");
-    return { n: g.n, ids: g.ids, hands, field: g.field, lock: g.lock, rev: g.rev, turn: g.turn, passed: g.passed, legal: g.legal, illegal: g.illegal, fallen: g.fallen, phase: g.phase, top: g.top, opts: {}, log: [], blind: [], exchange: g.ex ? { pairs: g.ex.pairs, given: {} } : null };
+    return { n: g.n, ids: g.ids, hands, field: g.field, lock: g.lock, rev: g.rev, turn: g.turn, passed: g.passed, legal: g.legal, illegal: g.illegal, fallen: g.fallen, phase: g.phase, top: g.top, opts: g.opts || {}, back: !!g.back, dir: g.dir === -1 ? -1 : 1, pending: g.pending || null, log: [], blind: [], exchange: g.ex ? { pairs: g.ex.pairs, given: {} } : null };
   }
   function playText(play) {
     if (!play) return "";
@@ -408,6 +479,8 @@
     info.append(node("strong", "", "大富豪"), node("small", "", [games > 1 ? room.gNo + "/" + games : "", room.settings.practice ? "練習" : fmt(room.settings.stake) + "pt"].filter(Boolean).join("　")));
     const chipsRow = node("div", "df-state");
     if (g.rev) chipsRow.append(node("span", "df-chip is-rev", "革命中"));
+    if (g.back) chipsRow.append(node("span", "df-chip is-rev", "11バック中"));
+    if (g.dir === -1) chipsRow.append(node("span", "df-chip is-lock", "逆回り"));
     if (g.lock) chipsRow.append(node("span", "df-chip is-lock", "縛り " + g.lock.map((s) => SUIT_MARK[s]).join("")));
     bar.append(info, chipsRow, helpButton());
     box.append(bar);
@@ -548,7 +621,14 @@
         }
       }
       play.disabled = !myTurn || !found;
-      if (found) play.textContent = "出す（" + (playText(found) || rankText(found.rank) + "を1枚") + "）";
+      // 7渡し / 10捨て: the cards to give or throw away are chosen with the same button.
+      const waiting = g.pending && g.pending.by === me ? g.pending : null;
+      if (waiting) {
+        const word = waiting.t === "seven" ? "渡す" : "捨てる";
+        play.textContent = word + "（" + ui.selected.length + "/" + waiting.count + "）";
+        pass.disabled = true;
+        reason = waiting.t === "seven" ? (room.players[waiting.to]?.name || "次の人") + " に渡す " + waiting.count + " 枚を選ぶ" : "捨てる " + waiting.count + " 枚を選ぶ";
+      } else if (found) play.textContent = "出す（" + (playText(found) || rankText(found.rank) + "を1枚") + "）";
       play.onclick = async () => {
         if (!found) return;
         sound("confirm");
@@ -561,6 +641,8 @@
       msg.textContent = reason || (rej && rej.seq !== ui.rejSeen ? rej.text : "") || "";
       if (rej) ui.rejSeen = rej.seq;
     } else if (g.phase === "play" && myOut) msg.textContent = "上がり！";
+    // Someone else is choosing the cards of a 7渡し / 10捨て.
+    if (g.phase === "play" && g.pending && g.pending.by !== me && !msg.textContent) msg.textContent = (room.players[g.pending.by]?.name || "") + " が" + (g.pending.t === "seven" ? "渡す" : "捨てる") + "カードを選んでいます…";
     box.append(msg, actions);
 
     // ---- Results of a game
@@ -576,6 +658,8 @@
     const list = ui.selected;
     if (list.includes(code)) ui.selected = list.filter((c) => c !== code);
     else if (exchangeNeed) ui.selected = list.length < exchangeNeed.count ? [...list, code] : [...list.slice(1), code];
+    // 7渡し / 10捨て: as many cards as asked (one more replaces the oldest).
+    else if (g.pending && g.pending.by === me) ui.selected = list.length < g.pending.count ? [...list, code] : [...list.slice(1), code];
     else {
       const field = g.field?.play;
       // Against a pair or a triple, one tap picks the whole set of that number.
@@ -597,6 +681,11 @@
       cls = "";
     if (e.t === "play" && e.rev) (text = "革命！"), (cls = "is-rev");
     else if (e.t === "flow" && e.why && e.why !== "全員パス") (text = e.why), (cls = e.why === "8切り" ? "is-cut" : "is-flow");
+    else if (e.t === "back") (text = "11バック"), (cls = "is-rev");
+    else if (e.t === "reverse") (text = "9リバース"), (cls = "is-flow");
+    else if (e.t === "skip") (text = "5飛ばし"), (cls = "is-flow");
+    else if (e.t === "give") (text = name(e.by) + " → " + name(e.to) + " " + e.n + "枚"), (cls = "is-flow");
+    else if (e.t === "discard") (text = name(e.by) + " " + e.n + "枚捨てた"), (cls = "is-flow");
     else if (e.t === "illegal") (text = name(e.by) + " 反則上がり"), (cls = "is-bad");
     else if (e.t === "fallen") (text = name(e.by) + " 都落ち"), (cls = "is-bad");
     else if (e.t === "out") (text = name(e.by) + " 上がり！"), (cls = "is-out");
