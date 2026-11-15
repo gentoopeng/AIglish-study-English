@@ -12,7 +12,7 @@ function table({ hands, turn = "a", field = null, rev = false, ids = ids4, lock 
   state.rev = rev;
   state.lock = lock;
   state.top = top;
-  state.opts = { miyakoochi: !!opts.miyakoochi };
+  state.opts = D.normalizeRules(opts);
   if (field) state.field = { by: field.by, play: D.resolve({ ...state, field: null, lock: null }, field.cards) };
   return state;
 }
@@ -332,4 +332,151 @@ test("plays() lists exactly the plays the rules accept", () => {
   // With nothing to beat the field, there is nothing to play.
   const s = table({ hands: { b: ["S4", "S5"] }, field: { by: "a", cards: ["S15"] }, turn: "b" });
   assert.deepEqual(D.plays(s, "b"), []);
+});
+
+// ---- Local rules -----------------------------------------------------------------------
+test("local rules: the defaults are the rule book, and a table says which rules differ", () => {
+  const d = D.normalizeRules({});
+  assert.deepEqual([d.revolution, d.eight, d.shibari, d.stairs, d.spade3, d.foul], [true, true, true, true, true, true]);
+  assert.deepEqual([d.miyakoochi, d.elevenBack, d.fiveSkip, d.sevenPass, d.tenDiscard, d.nineReverse], [false, false, false, false, false, false]);
+  assert.deepEqual(D.ruleTags({}), []);
+  assert.deepEqual(D.ruleTags({ eight: false, sevenPass: true, junk: true }), ["8切りなし", "7渡し"]);
+  assert.equal(D.normalizeRules({ eight: "no" }).eight, true, "only true / false count");
+  // A game dealt by an older version (only 都落ち in its rules) plays by the defaults.
+  assert.equal(D.rule({ opts: { miyakoochi: true } }, "eight"), true);
+  assert.equal(D.rule({ opts: { miyakoochi: true } }, "sevenPass"), false);
+});
+
+test("the rule book's rules can be switched off: 8切り, 縛り, 階段, 革命, スペ3返し, 反則上がり", () => {
+  // 8切りなし: an 8 does not clear the field, and finishing on it is no foul.
+  let s = D.play(table({ hands: { a: ["S8", "S9"] }, opts: { eight: false } }), "a", ["S8"]);
+  assert.equal(s.field.play.rank, 8);
+  assert.equal(s.turn, "b");
+  s = D.play(table({ hands: { a: ["S8"] }, opts: { eight: false } }), "a", ["S8"]);
+  assert.deepEqual([s.legal, s.illegal], [["a"], []]);
+  // 縛りなし: the same suit twice does not lock.
+  s = D.play(table({ hands: { a: ["S5", "S9"] }, field: { by: "d", cards: ["S4"] }, opts: { shibari: false } }), "a", ["S5"]);
+  assert.equal(s.lock, null);
+  assert.deepEqual(D.play(table({ hands: { a: ["S5", "S9"] }, field: { by: "d", cards: ["S4"] } }), "a", ["S5"]).lock, ["S"]);
+  // 階段なし: a stair cannot be played, and is not offered.
+  const noStairs = table({ hands: { a: ["S4", "S5", "S6", "H9"] }, opts: { stairs: false } });
+  assert.throws(() => D.play(noStairs, "a", ["S4", "S5", "S6"]), /階段は出せません/);
+  assert.equal(D.plays(noStairs, "a").some((cards) => cards.length === 3), false);
+  // 革命なし: four of a kind change nothing.
+  s = D.play(table({ hands: { a: ["S5", "H5", "D5", "C5", "S9"] }, opts: { revolution: false } }), "a", ["S5", "H5", "D5", "C5"]);
+  assert.equal(s.rev, false);
+  // スペ3返しなし: nothing beats a joker, and finishing on the spade 3 is no foul.
+  const joker = table({ hands: { a: ["S3", "S9"] }, field: { by: "d", cards: ["J1"] }, opts: { spade3: false } });
+  assert.throws(() => D.play(joker, "a", ["S3"]), /強い/);
+  assert.deepEqual(D.plays(joker, "a"), []);
+  // 反則上がりなし: finishing on a 2 or a joker is fine.
+  s = D.play(table({ hands: { a: ["S15"] }, opts: { foul: false } }), "a", ["S15"]);
+  assert.deepEqual([s.legal, s.illegal], [["a"], []]);
+  assert.deepEqual(D.play(table({ hands: { a: ["S15"] } }), "a", ["S15"]).illegal, ["a"]);
+});
+
+test("11バック: a J turns the order over until the field flows (and back again in a 革命)", () => {
+  let s = D.play(table({ hands: { a: ["S11", "S9"], b: ["H10", "H12", "H3"] }, opts: { elevenBack: true } }), "a", ["S11"]);
+  assert.equal(s.back, true);
+  assert.equal(D.reversed(s), true);
+  assert.throws(() => D.play(s, "b", ["H12"]), /強い/);
+  s = D.play(s, "b", ["H10"]);
+  assert.equal(s.field.play.rank, 10);
+  // Everyone passes: the field flows and the order is back.
+  s = D.pass(s, "c");
+  s = D.pass(s, "d");
+  s = D.pass(s, "a");
+  assert.deepEqual([s.field, s.back, s.turn], [null, false, "b"]);
+  // In a 革命 a J makes the order the usual one for a while.
+  s = D.play(table({ hands: { a: ["S11", "S9"], b: ["H12", "H3"] }, rev: true, opts: { elevenBack: true } }), "a", ["S11"]);
+  assert.equal(D.reversed(s), false);
+  assert.equal(D.play(s, "b", ["H12"]).field.play.rank, 12);
+  // Without the rule a J is a J.
+  assert.equal(D.play(table({ hands: { a: ["S11", "S9"] } }), "a", ["S11"]).back, false);
+});
+
+test("5飛ばし: as many players are jumped as 5s were played, and they have not passed", () => {
+  let s = D.play(table({ hands: { a: ["S5", "S9"] }, opts: { fiveSkip: true } }), "a", ["S5"]);
+  assert.deepEqual([s.turn, s.passed], ["c", []]);
+  s = D.play(table({ hands: { a: ["S5", "H5", "S9"] }, opts: { fiveSkip: true } }), "a", ["S5", "H5"]);
+  assert.equal(s.turn, "d");
+  assert.equal(D.play(table({ hands: { a: ["S5", "S9"] } }), "a", ["S5"]).turn, "b");
+});
+
+test("9リバース: the turn goes the other way round from then on", () => {
+  let s = D.play(table({ hands: { a: ["S9", "S14"], d: ["H10", "H12"] }, opts: { nineReverse: true } }), "a", ["S9"]);
+  assert.deepEqual([s.dir, s.turn], [-1, "d"]);
+  s = D.play(s, "d", ["H10"]);
+  assert.equal(s.turn, "c");
+  // A second 9 turns it back.
+  s = D.play(table({ hands: { a: ["S9", "S14"] }, opts: { nineReverse: true } }), "a", ["S9"]);
+  s.dir = -1;
+  assert.equal(D.play({ ...table({ hands: { a: ["S9", "S14"] }, opts: { nineReverse: true } }), dir: -1 }, "a", ["S9"]).turn, "b");
+});
+
+test("7渡し: the player gives as many cards as 7s to the next player, then the turn goes on", () => {
+  let s = D.play(table({ hands: { a: ["S7", "H7", "S3", "S4", "S9"], b: ["H10", "H12"] }, opts: { sevenPass: true } }), "a", ["S7", "H7"]);
+  assert.deepEqual([s.turn, s.pending.t, s.pending.count, s.pending.to], ["a", "seven", 2, "b"]);
+  assert.throws(() => D.pass(s, "a"), /渡すカードを2枚/);
+  assert.throws(() => D.play(s, "a", ["S3"]), /渡すカードを2枚/);
+  assert.deepEqual(D.plays(s, "a").map((c) => c[0]).sort(), ["S3", "S4", "S9"]);
+  assert.deepEqual(D.choose(s, "a"), ["S3", "S4"], "the computer gives its weakest");
+  s = D.play(s, "a", ["S3", "S4"]);
+  assert.deepEqual([s.pending, s.turn, s.hands.a, s.hands.b.slice().sort()], [null, "b", ["S9"], ["H10", "H12", "S3", "S4"]]);
+  assert.deepEqual(s.log.at(-1), { t: "give", by: "a", to: "b", n: 2 }, "the log does not say which cards");
+  // Giving the last cards away is a finish (and no foul).
+  s = D.play(table({ hands: { a: ["S7", "S15"], b: ["H10"] }, opts: { sevenPass: true } }), "a", ["S7"]);
+  s = D.play(s, "a", ["S15"]);
+  assert.deepEqual([s.legal, s.illegal, s.hands.b.includes("S15")], [["a"], [], true]);
+  // Fewer cards left than 7s: those are given. A 7 as the last card just finishes.
+  assert.equal(D.play(table({ hands: { a: ["S7", "H7", "S9"] }, opts: { sevenPass: true } }), "a", ["S7", "H7"]).pending.count, 1);
+  s = D.play(table({ hands: { a: ["S7"] }, opts: { sevenPass: true } }), "a", ["S7"]);
+  assert.deepEqual([s.pending, s.legal], [null, ["a"]]);
+});
+
+test("10捨て: the player throws away as many cards as 10s", () => {
+  let s = D.play(table({ hands: { a: ["S10", "S3", "S9"] }, opts: { tenDiscard: true } }), "a", ["S10"]);
+  assert.deepEqual([s.pending.t, s.pending.count, s.turn], ["ten", 1, "a"]);
+  s = D.play(s, "a", ["S3"]);
+  assert.deepEqual([s.hands.a, s.turn, s.log.at(-1)], [["S9"], "b", { t: "discard", by: "a", cards: ["S3"] }]);
+  s = D.play(table({ hands: { a: ["S10", "S15"] }, opts: { tenDiscard: true } }), "a", ["S10"]);
+  s = D.play(s, "a", ["S15"]);
+  assert.deepEqual([s.legal, s.illegal], [["a"], []]);
+});
+
+test("whole games with every local rule on, and with the rule book's rules off: they end, and every card is accounted for", () => {
+  const every = { miyakoochi: true, elevenBack: true, fiveSkip: true, sevenPass: true, tenDiscard: true, nineReverse: true };
+  const none = { revolution: false, eight: false, shibari: false, stairs: false, spade3: false, foul: false };
+  for (let seed = 1; seed <= 150; seed++) {
+    const n = 3 + (seed % 3),
+      ids = ["a", "b", "c", "d", "e"].slice(0, n),
+      rand = seeded(seed * 7 + 1);
+    let prev = null;
+    for (let game = 0; game < 2; game++) {
+      let s = D.start({ ids, rand, prev, opts: seed % 3 === 0 ? none : seed % 3 === 1 ? every : { ...every, ...none } });
+      if (s.phase === "exchange") {
+        const picks = {};
+        for (const pair of s.exchange.pairs) picks[pair.high] = s.hands[pair.high].slice().sort((x, y) => D.cardsByStrength(x, y, false)).slice(0, pair.count);
+        s = D.exchange(s, picks);
+      }
+      let steps = 0,
+        thrown = 0;
+      const dealt = ids.reduce((sum, id) => sum + s.hands[id].length, 0);
+      let played = 0;
+      while (s.phase === "play") {
+        assert.ok(++steps < 3000, "the game ends (seed " + seed + ")");
+        const turn = s.turn,
+          before = ids.reduce((sum, id) => sum + s.hands[id].length, 0);
+        const cards = D.choose(s, turn, rand);
+        const wasPending = s.pending;
+        s = cards ? D.play(s, turn, cards) : s.field ? D.pass(s, turn) : D.play(s, turn, D.plays(s, turn)[0]);
+        const after = ids.reduce((sum, id) => sum + s.hands[id].length, 0);
+        if (wasPending?.t === "seven") assert.equal(after, before, "a 7渡し moves cards, it does not remove them");
+        else played += before - after;
+      }
+      assert.equal(played + ids.reduce((sum, id) => sum + s.hands[id].length, 0), dealt);
+      assert.equal(new Set(s.ranking).size, n);
+      prev = { ranking: s.ranking };
+    }
+  }
 });
