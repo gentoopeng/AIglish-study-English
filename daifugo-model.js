@@ -40,19 +40,20 @@
   // off); the rest are local rules (off unless switched on). A game keeps its rules in state.opts; a rule missing there (a game dealt
   // by an older version) counts as its default.
   const RULES = [
-    ["revolution", "革命", true, "同じ数字4枚（3人のときは3枚）で、強さが逆になります。"],
-    ["eight", "8切り", true, "8を出すと場が流れ、出した人からまた始めます。"],
-    ["shibari", "縛り", true, "同じマークが続くと、場が流れるまでそのマークしか出せません。"],
-    ["stairs", "階段", true, "同じマークで続く3枚以上を、まとめて出せます。"],
-    ["spade3", "スペ3返し", true, "1枚のジョーカーに、スペードの3だけが勝てます。"],
-    ["foul", "反則上がり", true, "2・8・ジョーカー・スペ3（革命中は3）で上がると、最下位になります。"],
-    ["miyakoochi", "都落ち", false, "前のゲームの大富豪は、1位で上がれないと最下位になります。"],
-    ["elevenBack", "11バック", false, "Jを出すと、場が流れるまで強さが逆になります。"],
-    ["fiveSkip", "5飛ばし", false, "5を出すと、出した枚数だけ次の人を飛ばします。"],
-    ["sevenPass", "7渡し", false, "7を出すと、出した枚数だけ手札を次の人に渡します。"],
-    ["tenDiscard", "10捨て", false, "10を出すと、出した枚数だけ手札を捨てます。"],
-    ["nineReverse", "9リバース", false, "9を出すと、順番が逆回りになります。"],
+    ["revolution", "革命", true, "同じ数字4枚で、強さが逆（3人は3枚）"],
+    ["eight", "8切り", true, "8で場が流れる"],
+    ["shibari", "縛り", true, "同じマークが続くと、そのマークだけ"],
+    ["stairs", "階段", true, "同じマークの続き3枚以上"],
+    ["spade3", "スペ3返し", true, "ジョーカー1枚に♠3が勝つ"],
+    ["foul", "反則上がり", true, "特別なカードで上がると最下位"],
+    ["miyakoochi", "都落ち", false, "大富豪が1位を逃すと最下位"],
+    ["elevenBack", "11バック", false, "Jで、場が流れるまで強さが逆"],
+    ["fiveSkip", "5飛ばし", false, "5で、枚数ぶん次の人を飛ばす"],
+    ["sevenPass", "7渡し", false, "7で、枚数ぶん次の人に渡す"],
+    ["tenDiscard", "10捨て", false, "10で、枚数ぶん捨てる"],
+    ["nineReverse", "9リバース", false, "9で、順番が逆回り"],
   ];
+
   const RULE_DEFAULT = Object.fromEntries(RULES.map(([key, , on]) => [key, on]));
   const normalizeRules = (opts) => Object.fromEntries(RULES.map(([key, , on]) => [key, typeof opts?.[key] === "boolean" ? opts[key] : on]));
   const rule = (state, key) => (typeof state?.opts?.[key] === "boolean" ? state.opts[key] : RULE_DEFAULT[key]);
@@ -166,6 +167,8 @@
     if (play.jokers > 0) return true;
     if (play.kind === "set" && play.rank === 8 && rule(state, "eight")) return true;
     if (play.n === 1 && play.cards[0] === "S3" && rule(state, "spade3")) return true;
+    // A 7 (7渡し) or a 10 (10捨て) as the last cards is a foul too, like the 8 of an 8切り.
+    if (play.kind === "set" && ((play.rank === 7 && rule(state, "sevenPass")) || (play.rank === 10 && rule(state, "tenDiscard")))) return true;
     const ranks = play.cards.map(rankOf);
     return reversed(state) ? ranks.includes(3) : ranks.includes(15);
   }
@@ -339,7 +342,8 @@
       // (which cards is between the two players: the log says only how many)
       log(next, { t: "give", by: id, to: pending.to, n: cards.length });
     } else log(next, { t: "discard", by: id, n: cards.length }); // (thrown away face down: only how many)
-    return settle(next, id, { why: pending.why, skip: pending.skip });
+    // Giving or throwing away the last cards is a 反則上がり (when that rule is on).
+    return settle(next, id, { foul: next.hands[id].length === 0 && rule(next, "foul"), why: pending.why, skip: pending.skip });
   }
 
   // `id` plays `cards`. Returns the new state, or throws a message that can be shown.
@@ -490,11 +494,15 @@
     if (state.pending) return state.pending.by === id ? hand.slice().sort((a, b) => cardsByStrength(a, b, reversed(state))).slice(0, state.pending.count) : null;
     const options = plays(state, id);
     if (!options.length) return null;
+    // A 7 / 10 that leaves no more cards than it makes the player give or throw away ends in a foul as well.
+    const forced = (cards, read) =>
+      rule(state, "foul") && read.kind === "set" && ((read.rank === 7 && rule(state, "sevenPass")) || (read.rank === 10 && rule(state, "tenDiscard"))) && hand.length - cards.length <= cards.length;
+    const bad = (cards, read) => (cards.length === hand.length && illegalFinish(state, read)) || forced(cards, read);
     const score = (cards) => {
       const read = resolve(state, cards);
       const s = read.kind === "stair" ? read.a : read.rank === JOKER_RANK ? 30 : strength(read.rank, reversed(state));
       // Prefer getting rid of more cards at the same strength; avoid illegal finishes.
-      return s * 10 - cards.length + (cards.length === hand.length && illegalFinish(state, read) ? 1000 : 0) + (rand() - 0.5);
+      return s * 10 - cards.length + (bad(cards, read) ? 1000 : 0) + (rand() - 0.5);
     };
     const lowest = options.slice().sort((a, b) => score(a) - score(b))[0];
     const read = resolve(state, lowest);
@@ -502,10 +510,12 @@
     const threatened = activeIds(state).some((other) => other !== id && state.hands[other].length <= 2);
     const strong = read.jokers > 0 || (read.kind === "set" && strength(read.rank, reversed(state)) >= 15);
     if (state.field && strong && !finishing && !threatened && hand.length > 4) return null;
-    if (finishing && illegalFinish(state, read) && options.length > 1) {
-      const other = options.filter((cards) => cards.length !== hand.length || !illegalFinish(state, resolve(state, cards)));
+    if (bad(lowest, read) && options.length > 1) {
+      const other = options.filter((cards) => !bad(cards, resolve(state, cards)));
       if (other.length) return other.slice().sort((a, b) => score(a) - score(b))[0];
     }
+    // Only fouls left: better to pass while there is a field to pass on.
+    if (bad(lowest, read) && state.field) return null;
     return lowest;
   }
 
