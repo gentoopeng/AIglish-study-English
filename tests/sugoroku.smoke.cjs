@@ -592,7 +592,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.equal(diceWon, 1000);
     // 暗算: the level is chosen first; the easy one pays 300 for a right answer.
     const mathWon = await quickGame("math", async () => {
-      assert.deepEqual(await mini.locator('[data-sg-game^="level-"]').allInnerTexts(), ["かんたん　1,000点", "ふつう　1,000点", "むずかしい　1,200点"]);
+      assert.deepEqual(await mini.locator('[data-sg-game^="level-"]').allInnerTexts(), ["かんたん　1,000点", "ふつう　1,000点", "むずかしい　3,000点"]);
       await mini.locator('[data-sg-game="level-easy"]').click();
       const text = (await mini.locator(".sg-mini-big").innerText()).replace(" =", "");
       const [a, op, b] = text.split(" ");
