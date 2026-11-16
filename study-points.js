@@ -573,7 +573,7 @@
             });
           tx.set(
             window.fbDoc(window.db, "users", id),
-            { studyPoints: value.balance, ...(counted ? { earnedPoints: value.earned } : {}) },
+            { studyPoints: value.balance, ...(counted ? { earnedPoints: value.earned } : {}), ...window.PointTrend?.entry(value.balance) },
             { merge: true },
           );
           return value;
@@ -750,6 +750,7 @@
         {
           studyPoints: Number(data.balance) || 0,
           ...(Number.isSafeInteger(data.earned) ? { earnedPoints: data.earned } : {}),
+          ...window.PointTrend?.entry(Number(data.balance) || 0),
         },
         { merge: true },
       );

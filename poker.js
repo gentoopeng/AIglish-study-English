@@ -183,7 +183,7 @@
           counted = !!window.CasinoStats && !!(game || stat?.sugoroku || jackpot),
           stats = counted ? window.CasinoStats.apply(wallet.casinoStats, { game, delta, bet: stat?.bet, play: !!stat?.play, sugoroku: stat?.sugoroku, jackpot }) : null;
         tx.set(walletRef, { ...value, poker: { ...kept, [key]: now }, casinoLog: log, ...(counted ? { casinoStats: stats } : {}) }, { merge: true });
-        tx.set(window.fbDoc(window.db, "users", account), { studyPoints: value.balance, ...(counted ? { casinoStatsV1: stats } : {}) }, { merge: true });
+        tx.set(window.fbDoc(window.db, "users", account), { studyPoints: value.balance, ...(counted ? { casinoStatsV1: stats } : {}), ...window.PointTrend?.entry(value.balance) }, { merge: true });
         return { ...value, log, stats };
       });
       if (next && uid() === account) keepLog(next.log);

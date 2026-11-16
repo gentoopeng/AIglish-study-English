@@ -39,7 +39,7 @@
     // Lending, paying back, gifts and charges: the day's line in the points history.
     if (moved && P?.addDaily) value.daily = P.addDaily(wallet.daily, P.day(), "loan", moved);
     tx.set(walletRef(id), value, { merge: true });
-    tx.set(window.fbDoc(window.db, "users", id), { studyPoints: balance }, { merge: true });
+    tx.set(window.fbDoc(window.db, "users", id), { studyPoints: balance, ...window.PointTrend?.entry(balance) }, { merge: true });
     return value;
   }
   // Both inboxes learn about the change; the record keeps both names for the history.
