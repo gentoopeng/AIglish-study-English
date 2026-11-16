@@ -361,12 +361,25 @@
       ["前", "前置詞"],
       ["接", "接続詞"],
     ];
+    // 用語・年号モード: the line as it is saved, with what is in the 年・世紀・時代 box at its start ("1582 …", "1467〜1477 …",
+    // "12世紀 …", "平安時代 …"). A "when" typed at the start of the line itself gives way to the box. Throws when the box holds
+    // something that is none of these.
+    function lineText(row) {
+      const raw = row.querySelector("textarea").value,
+        box = row.querySelector(".vocab-entry-year");
+      if (!box || !box.value.trim() || !root.TermQuestions) return raw;
+      const when = root.TermQuestions.whenText(box.value);
+      if (when === null) throw Error("年・世紀・時代は「1582」「1467〜1477」「12世紀」「平安時代」のように入れてください。");
+      const parsed = root.TermQuestions.parseLine(raw);
+      return when + " " + (parsed.when ? parsed.body : raw.trim());
+    }
     function relabel() {
       [...list.children].forEach((row, i) => {
         const n = i + 1,
           remove = row.querySelector(".vocab-entry-remove");
         row.querySelector(".vocab-entry-meaning-no").textContent = String(n);
         row.querySelector("textarea").setAttribute("aria-label", (term ? "説明 " : "意味・答え ") + n);
+        row.querySelector(".vocab-entry-year")?.setAttribute("aria-label", "説明" + n + " の年・世紀・時代");
         row.querySelector(".vocab-entry-pos").setAttribute("aria-label", "意味 " + n + " の品詞");
         row.querySelector(".vocab-entry-minor-chip").setAttribute("aria-label", "意味 " + n + " はあまり使わない意味");
         remove.setAttribute("aria-label", "意味 " + n + " を削除");
@@ -377,7 +390,13 @@
     // worked out in advance.
     function preview(row) {
       const out = row.querySelector(".vocab-entry-preview"),
-        text = row.querySelector("textarea").value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join("\n"),
+        text = (() => {
+          try {
+            return lineText(row);
+          } catch {
+            return row.querySelector("textarea").value;
+          }
+        })().split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join("\n"),
         word = form.querySelector("#vocabEntryWord").value.trim() || "（単語）";
       out.replaceChildren();
       if (!text) return;
@@ -445,6 +464,24 @@
       minor.onclick = () => minor.setAttribute("aria-pressed", String(minor.getAttribute("aria-pressed") !== "true"));
       tools.append(pos, minor);
       if (term) {
+        // The year (or a span of years, a century, an era) of the line, in a box of its own: it is written at the start of the line.
+        const year = el("input", undefined, "vocab-entry-year");
+        year.type = "text";
+        year.maxLength = 14;
+        year.autocomplete = "off";
+        year.placeholder = "年・世紀・時代（例：1582、1467〜1477）";
+        const checkYear = () => {
+          year.classList.toggle("is-invalid", !!year.value.trim() && root.TermQuestions?.whenText(year.value) === null);
+          if (!year.classList.contains("is-invalid")) error.textContent = "";
+          preview(row);
+        };
+        year.oninput = checkYear;
+        year.onchange = () => {
+          const when = root.TermQuestions?.whenText(year.value);
+          if (when) year.value = when;
+          checkYear();
+        };
+        row.append(year);
         // Wraps the selected words in 「」 (or puts 「」 at the cursor), the part to be asked.
         const wrap = chip("「」で囲む", "vocab-entry-wrap");
         wrap.removeAttribute("aria-pressed");
@@ -462,6 +499,9 @@
         tools.append(wrap);
       }
       row.append(head, tools, shown);
+      // (the year box sits above the line it belongs to)
+      const yearBox = row.querySelector(".vocab-entry-year");
+      if (yearBox) row.prepend(yearBox);
       list.append(row);
       requestAnimationFrame(() => input.oninput());
       relabel();
@@ -513,7 +553,7 @@
             word: form.querySelector("#vocabEntryWord").value,
             sub: form.querySelector("#vocabEntrySub").value,
             meanings: [...list.children].map((row) => ({
-              text: row.querySelector("textarea").value,
+              text: lineText(row),
               partOfSpeech: row.dataset.pos || "",
               minor: row.querySelector(".vocab-entry-minor-chip").getAttribute("aria-pressed") === "true",
             })),
