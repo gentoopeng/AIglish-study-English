@@ -55,11 +55,16 @@
           mid: w.meaningId,
           index: w.meaningIndex,
           sig: window.buildWordSignature(lookup.get(String(w.num))),
+          // A question that is not an ordinary word card (用語・年号モード: a year to type, a 「」 blank, an era; 「」の問題だけ; an
+          // English line with a 「」) is kept as it was made. Rebuilt from the word alone it came back as a plain word card:
+          // no year box, no blank, and several questions of one entry all the same card.
+          ...(special(w) ? { card: w } : {}),
         })),
       }),
     );
     checkpoint(true);
   }
+  const special = (w) => !!(w && (w.termKey !== undefined || w.termInput || w.questionFirst || w.reverse !== undefined || w.head !== undefined));
   function finish(keep) {
     if (!active || active.owner !== uid()) return;
     record();
@@ -83,6 +88,8 @@
         const meaning =
           w.meanings?.find((m) => String(m.id) === String(ref.mid)) ||
           w.meanings?.[ref.index];
+        // (kept whole: see begin(). Its meaning id may be none, a question about the whole entry.)
+        if (ref.card && typeof ref.card === "object") return { ...ref.card, num: w.num };
         if (!meaning) return null;
         return {
           num: w.num,
