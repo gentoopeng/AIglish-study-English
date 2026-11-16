@@ -105,7 +105,7 @@
         };
       tx.set(bonusRef(me), { day, prize, segment, at: Date.now() });
       tx.set(walletRef(me), value, { merge: true });
-      tx.set(window.fbDoc(window.db, "users", me), { studyPoints: value.balance, ...(value.earned !== undefined ? { earnedPoints: value.earned } : {}) }, { merge: true });
+      tx.set(window.fbDoc(window.db, "users", me), { studyPoints: value.balance, ...(value.earned !== undefined ? { earnedPoints: value.earned } : {}), ...window.PointTrend?.entry(value.balance) }, { merge: true });
       return { prize, segment, value };
     });
     if (uid() !== me) return result;

@@ -174,10 +174,12 @@
     const tabs = node("div", undefined, "points-tabs");
     for (const [id, label] of [
       ["history", "履歴"],
+      ["trend", "グラフ"],
       ["methods", "獲得方法"],
     ]) {
       const b = node("button", label);
       b.type = "button";
+      b.dataset.pointsTab = id;
       b.setAttribute("aria-pressed", String(id === "history"));
       b.onclick = () => {
         tabs
@@ -186,6 +188,10 @@
         dialog.querySelector("[data-points-history-panel]").hidden =
           id !== "history";
         dialog.querySelector("[data-points-methods]").hidden = id !== "methods";
+        // The graph of the balance, one's own and others' (point-trend.js); read when opened.
+        const trend = dialog.querySelector("[data-points-trend]");
+        trend.hidden = id !== "trend";
+        if (id === "trend") window.PointTrend?.render(trend);
       };
       tabs.append(b);
     }
@@ -261,7 +267,10 @@
     status.dataset.pointsStatus = "";
     status.setAttribute("role", "status");
     footer.append(update, status);
-    dialog.append(header, total, earnedLine, pending, loans, tabs, history, methods, footer);
+    const trend = node("section", undefined, "points-trend");
+    trend.dataset.pointsTrend = "";
+    trend.hidden = true;
+    dialog.append(header, total, earnedLine, pending, loans, tabs, history, trend, methods, footer);
     dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
       close();

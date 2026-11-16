@@ -111,6 +111,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // The loan shows in the talk as A's own card, on the right.
     assert.equal(await dialogOf(a).locator(".talk-row.is-mine .talk-card span").last().innerText(), "50pt 貸した");
     assert.equal(wallet("loan-a"), 450);
+    // The same write keeps the day's balance for the points graph (point-trend.js).
+    const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+    assert.equal(docs.get("users/loan-a").pointTrend?.[today], 450);
     assert.equal(await a.evaluate(() => window.StudyPoints.balance()), 450);
     assert.equal(wallet("loan-b"), 500);
     // A says something; it is a green bubble on the right.

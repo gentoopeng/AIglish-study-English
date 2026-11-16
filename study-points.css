@@ -411,3 +411,26 @@ span.talk-line-avatar.talk-initial{display:grid;place-items:center;font-size:13p
 .stamps-body button.stamps-layer-tab.is-on,.stamps-body button.stamps-tab.is-on{background:#d5bf86;color:#111c2c;border-color:#d5bf86;}
 .stamps-body button:disabled{opacity:.5;}
 .stamps-body input[type=text],.stamps-body input[type=number],.stamps-body select{min-height:40px;padding:6px 12px;border:1px solid #ffffff1f;border-radius:10px;background:#152033;color:#f4eddf;}
+/* The points graph (point-trend.js): one's own balance and others', by day. */
+.points-trend { display: grid; gap: 10px; min-width: 0; }
+.trend-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.trend-seg { display: inline-flex; border: 1px solid #d5bf864d; border-radius: 999px; overflow: hidden; }
+.trend-seg button { padding: 6px 12px; border: 0; background: transparent; color: #f4eddfb3; font: inherit; font-size: 12px; cursor: pointer; }
+.trend-seg [aria-pressed="true"] { background: #d5bf8633; color: #f4eddf; font-weight: 700; }
+.trend-svg { display: block; width: 100%; height: auto; touch-action: manipulation; cursor: crosshair; }
+.trend-grid { stroke: #f4eddf1f; stroke-width: 1; }
+.trend-zero { stroke: #f4eddf66; stroke-width: 1; }
+.trend-cursor { stroke: #f4eddf80; stroke-width: 1; stroke-dasharray: 3 3; }
+.trend-axis { fill: #f4eddf99; font-size: 10px; font-variant-numeric: tabular-nums; }
+.trend-empty { fill: #f4eddf99; font-size: 13px; }
+.trend-pick { margin: 0; min-height: 1.6em; font-size: 12px; color: #f4eddfcc; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.trend-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.trend-legend li { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.trend-swatch { width: 14px; height: 4px; border-radius: 2px; background: var(--trend-color); flex: none; }
+.trend-people summary { cursor: pointer; font-size: 13px; color: #f4eddfcc; padding: 4px 0; }
+.trend-people ol { list-style: none; margin: 6px 0 0; padding: 0; max-height: 30dvh; overflow: auto; overscroll-behavior: contain; }
+.trend-people label { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid #f4eddf1a; cursor: pointer; }
+.trend-people label span { overflow-wrap: anywhere; min-width: 0; }
+.trend-people strong { font-variant-numeric: tabular-nums; color: #d5bf86; }
+.trend-people input { width: 18px; height: 18px; accent-color: #d5bf86; }
+.trend-note { margin: 0; font-size: 12px; color: #f4eddf99; }
