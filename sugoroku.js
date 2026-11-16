@@ -2259,6 +2259,9 @@
       hud();
       const box = node("div", "sg-game sg-mini");
       box.append(node("p", "sg-wheel-title", MINI[item.game] + (item.mult > 1 ? "　×" + item.mult : "") + (item.x2 ? "　倍がけ×2" : "")), node("p", "sg-game-rule", RULE_TEXT[item.game]));
+      // The bingo wheels' games pay at least a floor (a miss included).
+      const least = S.bonusGain(item, 0);
+      if (least > 0) box.append(node("p", "sg-game-rule", "最低でも " + fmt(least) + "点"));
       layer.replaceChildren(box);
       // The score shows for a moment, then the board goes on by itself.
       let over = false;

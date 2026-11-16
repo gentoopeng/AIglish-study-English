@@ -217,7 +217,7 @@ const SAVE = "aiglish_sugoroku_sg-a",
     });
     for (let i = 0; i < 3; i++) await pad.click();
     await page.waitForFunction(() => window.__scores.length > 0);
-    assert.match(await page.evaluate(() => window.__scores[0]), /^3回　→　30点/);
+    assert.match(await page.evaluate(() => window.__scores[0]), /^3回　→　1,000点/, "3 taps score 30, raised to the floor");
     await page.waitForFunction(() => !document.querySelector(".sg-layer.is-mini:not([hidden])"));
 
     // B, opening the casino tab, sees the part waiting on the すごろくビンゴ tile.
