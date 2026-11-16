@@ -425,7 +425,8 @@ ${eventHtml()}
                 "none";
             if (mode === "status" && !statuses.includes(status)) continue;
             sampler.add({
-              word: q.prompt,
+              // (a span of years is answered by its first year in a battle: one box, as for any year)
+              word: q.range ? q.prompt.replace("何年から何年？", "何年から？") : q.prompt,
               meaning: q.answer,
               kind: q.kind,
               duelStatus: status,

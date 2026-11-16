@@ -19,9 +19,19 @@
   const ERA_START = new Map(ERAS);
   // A line starts with a "when": a century (12世紀, 紀元前3世紀), an era (平安時代: the 時代 is
   // needed, so a line that only starts with 明治維新 is not taken for one) or a year (1582, 1582年).
-  const WHEN_LEAD = new RegExp(
-    "^(\\s*)(?:((?:紀元前|前)?\\s*[0-9０-９]{1,2}\\s*世紀|(?:" + ERAS.map((e) => e[0]).join("|") + ")時代)(\\s*)|([0-9０-９]{1,4})(\\s*年?\\s*))",
-  );
+  // A year can also be a span of years: 1467〜1477 (also ~ ～ - － – —, with or without 年 after either).
+  const SPAN = "[〜~～\\-－–—]";
+  const whenLead = (year) => new RegExp("^(\\s*)(?:((?:紀元前|前)?\\s*[0-9０-９]{1,2}\\s*世紀|(?:" + ERAS.map((e) => e[0]).join("|") + ")時代)(\\s*)|(" + year + ")(\\s*年?\\s*))");
+  const WHEN_LEAD = whenLead("[0-9０-９]{1,4}(?:\\s*年?\\s*" + SPAN + "\\s*[0-9０-９]{1,4})?"),
+    WHEN_SINGLE = whenLead("[0-9０-９]{1,4}");
+  // The two years of a span ("1467〜1477", "１４６７年-1477") as numbers, or null (also when the second is not after the first).
+  function yearSpan(text) {
+    const m = new RegExp("^([0-9]{1,4})年?" + SPAN + "([0-9]{1,4})年?$").exec(halfWidth(text).replace(/\s+/g, ""));
+    if (!m) return null;
+    const a = Number(m[1]),
+      b = Number(m[2]);
+    return b > a ? [a, b] : null;
+  }
   const TERM = /「([^「」]+)」/g,
     BLANK = "（＿＿）",
     HISTORY = 20;
@@ -52,12 +62,18 @@
       const name = text.slice(0, -2);
       return ERA_START.has(name) ? { kind: "era", label: name + "時代", value: ERA_START.get(name), answer: name + "時代", unit: "", prefix: "", ask: "何時代" } : null;
     }
+    const span = yearSpan(text);
+    if (span) return { kind: "year", range: true, label: span[0] + "〜" + span[1] + "年", value: span[0], end: span[1], answer: span[0] + "〜" + span[1], unit: "年", prefix: "", ask: "何年から何年" };
+    if (new RegExp(SPAN).test(text.replace(/^[0-9]+年?/, "").slice(0, 1))) return null;
     const year = normalizeYear(text);
     return year === "" ? null : { kind: "year", label: year + "年", value: Number(year), answer: year, unit: "年", prefix: "", ask: "何年" };
   }
   // The "when" at the start of a line: the text around it and what it is, or null.
   function splitWhen(text) {
-    const m = WHEN_LEAD.exec(String(text || ""));
+    let m = WHEN_LEAD.exec(String(text || ""));
+    if (!m) return null;
+    // What looked like a span but is not one ("1582-3"): the year alone, the rest stays in the line.
+    if (m[4] && !describe(m[4])) m = WHEN_SINGLE.exec(String(text || ""));
     if (!m) return null;
     const raw = m[2] || m[4],
       when = describe(raw);
@@ -149,6 +165,7 @@
           answer: p.when.answer,
           unit: p.when.unit,
           prefix: p.when.prefix,
+          range: !!p.when.range,
           input: true,
         });
       // An era is a card: the line without it → the era (rated by the player, not typed).
@@ -211,6 +228,12 @@
     return list;
   }
   function correctYear(typed, answer) {
+    // A span of years: both years, in order (whatever is typed between them).
+    const span = yearSpan(answer);
+    if (span) {
+      const got = (halfWidth(typed).match(/[0-9]+/g) || []).map(Number);
+      return got.length === 2 && got[0] === span[0] && got[1] === span[1];
+    }
     const value = normalizeYear(typed);
     return value !== "" && value === normalizeYear(answer);
   }
@@ -384,6 +407,21 @@
       '<section class="term-answer-question" hidden></section><label for="termYearInput">年号を入力</label><div><input id="termYearInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="例：1582"><button type="submit" data-sound="none">答える</button></div><p role="status"></p>';
     const input = panel.querySelector("input");
     input.addEventListener("input", () => (input.value = normalizeYear(input.value)));
+    // A span of years (1467〜1477) is typed in two boxes: the second one is shown only for such a question.
+    const until = input.cloneNode(),
+      tilde = document.createElement("span");
+    until.id = "termYearInputEnd";
+    until.setAttribute("aria-label", "終わりの年");
+    until.hidden = true;
+    tilde.className = "term-answer-tilde";
+    tilde.textContent = "〜";
+    tilde.hidden = true;
+    input.after(tilde, until);
+    until.addEventListener("input", () => (until.value = normalizeYear(until.value)));
+    // Four digits in the first box move on to the second.
+    input.addEventListener("input", () => {
+      if (!until.hidden && input.value.length >= 4) until.focus();
+    });
     // While typing, the keyboard covers the lower half of the screen and the phone moves the whole
     // page up to keep the box in view, which pushes the question off the top. So the panel moves
     // to the top (where no moving is needed) and carries the question with it.
@@ -414,11 +452,14 @@
       event.preventDefault();
       const item = current();
       if (!item?.termInput || pending) return;
-      if (!normalizeYear(input.value)) {
-        panel.querySelector("p").textContent = "数字で入力してください。";
+      const until = panel.querySelector("#termYearInputEnd"),
+        span = !until.hidden;
+      if (!normalizeYear(input.value) || (span && !normalizeYear(until.value))) {
+        panel.querySelector("p").textContent = span ? "始まりと終わりの年を、数字で入力してください。" : "数字で入力してください。";
         return;
       }
-      const right = correctYear(input.value, item.ja),
+      until.disabled = true;
+      const right = correctYear(span ? input.value + "〜" + until.value : input.value, item.ja),
         card = document.getElementById("activeFlashcard");
       card?.classList.add("flipped");
       input.disabled = true;
@@ -450,11 +491,19 @@
     const input = box.querySelector("input"),
       century = item.termUnit === "世紀";
     // A century is typed as its number (one or two digits), a year as up to four.
-    box.querySelector("label").textContent = (item.termPrefix || "") + (century ? "世紀を入力" : "年号を入力");
+    const span = !!yearSpan(item.ja),
+      until = box.querySelector("#termYearInputEnd");
+    box.querySelector("label").textContent = (item.termPrefix || "") + (century ? "世紀を入力" : span ? "年号を入力（何年から何年）" : "年号を入力");
     input.maxLength = century ? 2 : 4;
-    input.placeholder = century ? "例：12" : "例：1582";
+    input.placeholder = century ? "例：12" : span ? "例：1467" : "例：1582";
     input.value = "";
     input.disabled = false;
+    until.hidden = !span;
+    box.querySelector(".term-answer-tilde").hidden = !span;
+    until.placeholder = "例：1477";
+    until.value = "";
+    until.disabled = false;
+    box.classList.toggle("is-span", span);
     delete box.dataset.result;
     box.querySelector("p").textContent = "";
   }

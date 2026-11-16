@@ -160,3 +160,26 @@ test("a century or an era stays whole when the question is shown", () => {
   assert.deepEqual(keep("x：ローマ（紀元前何世紀？）"), ["x", "（紀元前何世紀？）"]);
   assert.ok(keep("鎌倉時代 初代将軍").includes("鎌倉時代"));
 });
+
+test("a span of years: 1467〜1477 at the start of a line (any dash, full width, 年), its question and its answer", () => {
+  for (const text of ["1467〜1477 「応仁の乱」", "１４６７年～１４７７年「応仁の乱」", "1467-1477「応仁の乱」", "1467 〜 1477年 「応仁の乱」", "1467–1477 「応仁の乱」"]) {
+    const line = t.parseLine(text);
+    assert.deepEqual([line.year, line.when.kind, line.when.range, line.when.label, line.when.value, line.when.end, line.body], ["1467〜1477", "year", true, "1467〜1477年", 1467, 1477, "「応仁の乱」"], text);
+  }
+  // Not a span: the second number is not after the first, or it is not a year at all. The year alone is read, the rest stays.
+  assert.deepEqual([t.parseLine("1582-3 人が").year, t.parseLine("1582-3 人が").body], ["1582", "-3 人が"]);
+  assert.deepEqual([t.parseLine("1477〜1467 逆").year, t.parseLine("1477〜1467 逆").body], ["1477", "〜1467 逆"]);
+  assert.equal(t.parseLine("1582 本能寺の変").when.range, undefined);
+  // The question asks for both years; the answer is both, in order, whatever stands between them.
+  const q = t.questions({ num: 3, word: "応仁の乱", meanings: [{ id: "3-0", text: "1467〜1477 京都で起きた戦乱" }] }).find((x) => x.kind === "year");
+  assert.deepEqual([q.prompt, q.answer, q.range, q.input, q.unit], ["応仁の乱：京都で起きた戦乱（何年から何年？）", "1467〜1477", true, true, "年"]);
+  assert.equal(t.correctYear("1467〜1477", "1467〜1477"), true);
+  assert.equal(t.correctYear("１４６７-１４７７", "1467〜1477"), true);
+  assert.equal(t.correctYear("1467", "1467〜1477"), false);
+  assert.equal(t.correctYear("1477〜1467", "1467〜1477"), false);
+  assert.equal(t.correctYear("1467〜1478", "1467〜1477"), false);
+  // The box of the editors takes it, and writes it one way.
+  assert.equal(t.whenText("1467～1477年"), "1467〜1477");
+  assert.equal(t.whenText("1467-77"), null);
+  assert.equal(t.whenText("1582"), "1582");
+});
