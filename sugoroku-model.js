@@ -131,6 +131,9 @@
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
     bingoPrize: 7,
+    // The prize roulette's number times the line bonuses (two lines at once, a line of one's own balls) is at most this:
+    // at a bet of 100, 7 × 30 × 100 = 21,000, about the JACKPOT's cap.
+    prizeCap: 30,
     // The bingo wheels' mini games score this many times their points, and pay at least bingoGameMin times
     // the bet (a miss, a slow tap or a wrong sum included) — 2 and 10 since 10.136 (1.5 and none before).
     bingoGameBoost: 2,
@@ -146,24 +149,24 @@
       // The special number: one wheel (the bet × x, or three more balls).
       special: spread([{ x: 10 }, { x: 10 }, { x: 15 }, { x: 20 }, { x: 20 }, { x: 30 }, { x: 30 }, { x: 0, balls: 6 }, { x: 0, balls: 6 }, { x: 30 }]),
       // After a line, two roulettes. The first one (prize) is shared: the bingo prize (bingoPrize × the bet, 100 for
-      // each ball of the line at ×1) times the number it stops on, 1 to 5, goes to the owners of the line's balls, and
+      // each ball of the line at ×1) times the number it stops on, 1 to 10 (1 to 5 before 10.137), goes to the owners of the line's balls, and
       // only this one is multiplied by the line bonuses (two lines at once, a line of one's own balls). The second one
       // (bingo, the bonus roulette) is the finisher's alone.
-      prize: spread([{ x: 1 }, { x: 1 }, { x: 1 }, { x: 1 }, { x: 1 }, { x: 1 }, { x: 2 }, { x: 3 }, { x: 4 }, { x: 5 }]),
+      prize: spread([{ x: 1 }, { x: 1 }, { x: 1 }, { x: 1 }, { x: 1 }, { x: 2 }, { x: 2 }, { x: 3 }, { x: 5 }, { x: 10 }]),
       bingo: null, // (see bingoWheel)
       sjp: [{ jackpot: "sjp" }, { jackpot: "jp" }, { game: "tapex" }, { jackpot: "sjp" }, { back: true }],
     },
     // Mini games, scored in points (multiplied like the line's other prizes):
     // timer – stop at 10 seconds: 1,000 less 5 for every 0.01 s off; tap / tapex – taps in 10
-    // seconds × 10 / × 25; dice – three dice, the sum × 50; math – a sum of the chosen level (easy 300 / normal 600 / hard 1,200).
+    // seconds × 10 / × 25; dice – three dice, the sum × 50; math – a sum of the chosen level (easy 600 / normal 1,000 / hard 3,000; 300 / 600 / 1,200 before 10.137).
     // Taps count up to `max` (12 a second is about as fast as a finger goes; a tapping tool
     // gains nothing past it).
     // stop / hilo are the normal squares' quick games, paid in multiples of the bet: stop the
     // light in the gold (perfect) or silver (good) part of the bar; say whether the next card is
     // higher or lower. In 早送り they are not played and pay `auto`.
     // The slots of the bingo wheel besides the jackpot and the super chance (each twice on the wheel).
-    wheelParts: { others: [{ game: "timer" }, { game: "tap" }, { game: "dice" }, { game: "math" }, { x: 10 }, { x: 20 }, { x: 30 }] },
-    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 10, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 100 }, tapex: { seconds: 10, per: 15, max: 100 }, dice: { count: 3, per: 50 }, math: { easy: { seconds: 15, prize: 300 }, normal: { seconds: 15, prize: 600 }, hard: { seconds: 20, prize: 1200 } } },
+    wheelParts: { others: [{ game: "timer" }, { game: "tap" }, { game: "dice" }, { game: "math" }, { x: 10 }, { x: 30 }, { x: 50 }] },
+    games: { stop: { pay: { perfect: 2, good: 0.75, miss: 0 }, auto: 0.5, seconds: 5 }, hilo: { pay: { win: 1.25, tie: 10, lose: 0 }, auto: 0.5 }, timer: { target: 10, max: 1000, per: 5 }, tap: { seconds: 10, per: 10, max: 100 }, tapex: { seconds: 10, per: 15, max: 100 }, dice: { count: 3, per: 50 }, math: { easy: { seconds: 15, prize: 600 }, normal: { seconds: 15, prize: 1000 }, hard: { seconds: 30, prize: 3000 } } },
   };
   RULES.normal[50] = RULES.normal[200] = RULES.normal[100];
   // The bonus roulette after the prize roulette: 10 slots, the finisher's alone (no line bonus on it).
@@ -390,8 +393,10 @@
       return { kept: pool - given + bonus, total: pool + bonus, shares };
     };
     // The prize roulette: the bingo prize times 1 to 5, shared by the balls of the line (and the line bonuses).
-    const pick1 = pick(RULES.wheels.prize, random),
-      split = share(RULES.bingoPrize * pick1.slot.x * mult, RULES.prizeShare);
+    // The number times the line bonuses is at most prizeCap (×10 on four lines at once would be 385 times the bet).
+    const pick1 = pick(RULES.wheels.prize, random);
+    mult = Math.min(mult, RULES.prizeCap / pick1.slot.x);
+    const split = share(RULES.bingoPrize * pick1.slot.x * mult, RULES.prizeShare);
     let gain = split.kept;
     events.push({ t: "wheel", wheel: "prize", slots: RULES.wheels.prize, index: pick1.index, base: bet, mult, amount: split.kept, total: split.total, shares: split.shares });
     events.push({ t: "prize", amount: gain, total: split.total, shares: split.shares, mult, x: pick1.slot.x });
@@ -487,17 +492,22 @@
       return { text: a + " − " + b, answer: a - b };
     }
     if (level === "hard") {
-      const kind = random(3);
+      // Much harder since 10.137 (and it pays 3,000 for 30 seconds): two two-digit products, three-digit numbers, four steps.
+      const kind = random(4);
       if (kind === 0) {
-        const a = n(12, 40), b = n(3, 9), c = n(12, 60), d = n(2, 9);
+        const a = n(23, 89), b = n(13, 49), c = n(13, 69), d = n(12, 39);
         return { text: a + " × " + b + " − " + c + " × " + d, answer: a * b - c * d };
       }
       if (kind === 1) {
-        const a = n(15, 80), b = n(15, 80), c = n(3, 12), d = n(11, 40);
-        return { text: "(" + a + " − " + b + ") × " + c + " + " + d, answer: (a - b) * c + d };
+        const a = n(120, 480), b = n(120, 480), c = n(6, 19), d = n(11, 49), e = n(3, 9);
+        return { text: "(" + a + " − " + b + ") × " + c + " + " + d + " × " + e, answer: (a - b) * c + d * e };
       }
-      const a = n(11, 25), b = n(11, 25), c = n(2, 9), d = n(2, 9);
-      return { text: a + " × " + b + " − " + c + " × " + d + " × " + d, answer: a * b - c * d * d };
+      if (kind === 2) {
+        const a = n(12, 35), b = n(6, 19), c = n(3, 9), d = n(101, 999);
+        return { text: a + " × " + b + " × " + c + " − " + d, answer: a * b * c - d };
+      }
+      const b = n(6, 19), q = n(21, 89), c = n(11, 49), d = n(12, 39);
+      return { text: b * q + " ÷ " + b + " + " + c + " × " + d, answer: q + c * d };
     }
     const kind = random(5);
     if (kind === 0) {

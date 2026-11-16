@@ -61,15 +61,15 @@ test("the board, card and wheels have the agreed shape", () => {
   }
   // One bet: 100.
   assert.deepEqual(S.RULES.costs, [100]);
-  // After a line, two roulettes. The prize roulette (shared): 10 slots, 1 to 5 times the bingo prize, every number there.
+  // After a line, two roulettes. The prize roulette (shared): 10 slots, 1 to 10 times the bingo prize (5 of them ×1).
   const prizeWheel = S.RULES.wheels.prize;
   assert.equal(prizeWheel.length, 10);
-  assert.deepEqual([...new Set(prizeWheel.map((x) => x.x))].sort(), [1, 2, 3, 4, 5]);
-  assert.ok(prizeWheel.filter((x) => x.x === 1).length > prizeWheel.filter((x) => x.x === 5).length, "the small multiples come up more");
-  // The bonus roulette (the finisher's alone): 10 slots – two JACKPOT slots, the super chance, four mini games, ×10 / ×20 / ×30.
+  assert.deepEqual(prizeWheel.map((x) => x.x).sort((a, b) => a - b), [1, 1, 1, 1, 1, 2, 2, 3, 5, 10]);
+  assert.ok(prizeWheel.filter((x) => x.x === 1).length > prizeWheel.filter((x) => x.x === 10).length, "the small multiples come up more");
+  // The bonus roulette (the finisher's alone): 10 slots – two JACKPOT slots, the super chance, four mini games, ×10 / ×30 / ×50.
   const bingo = S.RULES.wheels.bingo;
   assert.equal(bingo.length, 10);
-  assert.deepEqual(bingo.filter((x) => x.x).map((x) => x.x).sort((a, b) => a - b), [10, 20, 30]);
+  assert.deepEqual(bingo.filter((x) => x.x).map((x) => x.x).sort((a, b) => a - b), [10, 30, 50]);
   assert.deepEqual(bingo.filter((x) => x.game).map((x) => x.game).sort(), ["dice", "math", "tap", "timer"]);
   assert.equal(bingo.filter((x) => x.miss).length, 0);
   assert.equal(bingo.filter((x) => x.jackpot === "jp").length, 2, "two JACKPOT slots");
@@ -201,7 +201,7 @@ test("the prize roulette pays each ball of the line its bet times the number", (
     card = { ...base, owners: base.owners.map((o, i) => (row.slice(0, 6).includes(i) ? "ben" : o)) },
     s = { ...S.newState(), pos: at("normal") - 1, stake: 900 };
   const ballAt = S.RULES.normal[100].findIndex((x) => x.ball);
-  for (const x of [1, 2, 3, 4, 5]) {
+  for (const x of [1, 2, 3, 5, 10]) {
     const at5 = S.RULES.wheels.prize.findIndex((w) => w.x === x),
       out = S.roll(s, card, 100, seq([0, ballAt, draw(card.cells[row[6]]), at5, 0, 0]), "amy");
     const prize = out.events.find((e) => e.t === "prize");
@@ -209,6 +209,27 @@ test("the prize roulette pays each ball of the line its bet times the number", (
     // ben's 6 balls get 100 × x each, amy's one ball too.
     assert.deepEqual(prize.shares, { ben: 600 * x });
     assert.equal(prize.amount, 100 * x);
+  }
+});
+
+test("the prize roulette's number times the line bonuses is capped at prizeCap", () => {
+  assert.equal(S.RULES.prizeCap, 30, "7 × 30 × 100 = 21,000 at most");
+  const base = S.newCard(seq([0])),
+    row = S.LINES[4],
+    card = { ...base, owners: base.owners.map((o, i) => (row.slice(0, 6).includes(i) ? "ben" : o)) },
+    s = { ...S.newState(), pos: at("normal") - 1, stake: 900 };
+  const ballAt = S.RULES.normal[100].findIndex((x) => x.ball),
+    at10 = S.RULES.wheels.prize.findIndex((w) => w.x === 10),
+    keep = S.RULES.prizeCap;
+  try {
+    S.RULES.prizeCap = 4;
+    const out = S.roll(s, card, 100, seq([0, ballAt, draw(card.cells[row[6]]), at10, 0, 0]), "amy");
+    const prize = out.events.find((e) => e.t === "prize");
+    assert.equal(prize.total, 700 * 4);
+    assert.deepEqual(prize.shares, { ben: 600 * 4 });
+    assert.equal(out.events.find((e) => e.t === "wheel" && e.wheel === "prize").mult, 0.4);
+  } finally {
+    S.RULES.prizeCap = keep;
   }
 });
 
@@ -339,7 +360,7 @@ test("a mini game waits in state.bonus, blocks rolling and pays its score, at le
   assert.equal(S.gameScore("tapex", 70), 1050);
   assert.equal(S.gameScore("dice", 14), 700);
   assert.equal(S.gameScore("math", true), 500, "a game saved before the levels");
-  assert.deepEqual(["easy", "normal", "hard"].map((l) => S.gameScore("math", l)), [300, 600, 1200]);
+  assert.deepEqual(["easy", "normal", "hard"].map((l) => S.gameScore("math", l)), [600, 1000, 3000]);
   assert.equal(S.gameScore("math", false), 0);
   assert.equal(S.gameScore("math", false), 0);
   // Super chance → the bigger tapping game.
@@ -347,11 +368,17 @@ test("a mini game waits in state.bonus, blocks rolling and pays its score, at le
   assert.deepEqual(ex.state.bonus, [{ game: "tapex", mult: 2, bet: 100 }]);
   // The sums come out whole.
   const random = rng(5);
-  for (let i = 0; i < 200; i++) {
-    const q = S.sum(random);
+  for (let i = 0; i < 600; i++) {
+    const q = S.sum(random, ["easy", "normal", "hard"][i % 3]);
     const value = Function("return " + q.text.replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-"))();
     assert.equal(value, q.answer, q.text);
     assert.ok(Number.isInteger(q.answer));
+  }
+  // The hard level is much harder: every sum has a product of two two-digit numbers, a three-digit number or four steps.
+  for (let i = 0; i < 200; i++) {
+    const q = S.sum(random, "hard");
+    const nums = q.text.match(/\d+/g).map(Number);
+    assert.ok(nums.length >= 4 && (nums.some((v) => v >= 100) || nums.filter((v) => v >= 10).length >= 4), q.text);
   }
 });
 
