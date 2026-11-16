@@ -315,17 +315,26 @@ test("the jackpot is a slot of the bingo wheel, the super chance leads to its ow
   assert.deepEqual(sjp.state.jpWait, ["sjp"]);
 });
 
-test("a mini game waits in state.bonus, blocks rolling and pays its score, 0 when left", () => {
+test("a mini game waits in state.bonus, blocks rolling and pays its score, at least 10 times the bet even when left", () => {
   const out = lineReady([slot("bingo", (x) => x.game === "timer")]);
-  // The bonus roulette's mini game scores bingoGameBoost (1.5) times its points.
-  assert.equal(S.RULES.bingoGameBoost, 1.5);
-  assert.deepEqual(out.state.bonus, [{ game: "timer", mult: 1.5, bet: 100 }]);
+  // The bonus roulette's mini game scores bingoGameBoost (2) times its points, and pays at least bingoGameMin (10) × the bet.
+  assert.equal(S.RULES.bingoGameBoost, 2);
+  assert.equal(S.RULES.bingoGameMin, 10);
+  assert.deepEqual(out.state.bonus, [{ game: "timer", mult: 2, bet: 100 }]);
   assert.throws(() => S.roll(out.state, out.card, 100, seq([0])));
-  assert.equal(S.settleBonus(out.state, 10).gain, 1500);
-  assert.equal(S.settleBonus(out.state, 10.03).gain, Math.round(985 * 1.5));
-  assert.equal(S.settleBonus(out.state, 12.5).gain, 0);
-  assert.equal(S.settleBonus(out.state, null).gain, 0);
+  assert.equal(S.settleBonus(out.state, 10).gain, 2000);
+  assert.equal(S.settleBonus(out.state, 10.03).gain, 985 * 2);
+  assert.equal(S.settleBonus(out.state, 10.6).gain, 1400);
+  assert.equal(S.settleBonus(out.state, 11.1).gain, 1000, "1.1 s off: 450 × 2 = 900 is raised to the floor");
+  assert.equal(S.settleBonus(out.state, 12.5).gain, 1000, "a miss pays the floor");
+  assert.equal(S.settleBonus(out.state, null).gain, 1000, "a game left pays the floor");
   assert.deepEqual(S.settleBonus(out.state, 10).state.bonus, []);
+  // The floor follows the bet; 倍がけ doubles it like any score.
+  assert.equal(S.bonusGain({ game: "math", mult: 2, bet: 200 }, 0), 2000);
+  assert.equal(S.bonusGain({ game: "dice", mult: 2, bet: 100, x2: true }, 0), 1000 + Math.min(1000, S.RULES.x2Cap * 100));
+  // The normal squares' quick games have no floor.
+  assert.equal(S.bonusGain({ game: "stop", mult: 1, bet: 100 }, 0), 0);
+  assert.equal(S.bonusGain({ game: "hilo", mult: 1, bet: 100 }, 0), 0);
   assert.equal(S.gameScore("tap", 70), 700);
   assert.equal(S.gameScore("tapex", 70), 1050);
   assert.equal(S.gameScore("dice", 14), 700);
@@ -335,7 +344,7 @@ test("a mini game waits in state.bonus, blocks rolling and pays its score, 0 whe
   assert.equal(S.gameScore("math", false), 0);
   // Super chance → the bigger tapping game.
   const ex = lineReady([slot("bingo", (x) => x.next), slot("sjp", (x) => x.game === "tapex")]);
-  assert.deepEqual(ex.state.bonus, [{ game: "tapex", mult: 1.5, bet: 100 }]);
+  assert.deepEqual(ex.state.bonus, [{ game: "tapex", mult: 2, bet: 100 }]);
   // The sums come out whole.
   const random = rng(5);
   for (let i = 0; i < 200; i++) {
@@ -403,6 +412,7 @@ test("played the plain way by several players on one card, every bet returns a l
     const rate = won / bet;
     // Without the jackpots (paid from the casino's shared pots on top) and with the ハイ＆ロー always "win" (the card is
     // really guessed right about 7 times in 10, plus the 10× on the same number): a little under what goes in (the ヘルモード costs about 0.1 on top of the wheels' own balance).
+    if (process.env.SG_RATE) console.log("rate", cost, rate.toFixed(3));
     assert.ok(rate > 0.6 && rate < 1, cost + ": " + rate);
   }
 });

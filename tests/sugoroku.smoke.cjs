@@ -517,7 +517,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
     assert.equal((await saved()).bonus[0].started, true);
     await page.waitForTimeout(300);
     await mini.locator('[data-sg-game="stop"]').click();
-    assert.match(await mini.locator(".sg-game-line").innerText(), /ずれ \d+\.\d\d秒　→　\d+点/);
+    assert.match(await mini.locator(".sg-game-line").innerText(), /ずれ \d+\.\d\d秒　→　[\d,]+点/);
     // The score shows for a moment and the board goes on by itself.
     assert.equal(await mini.locator('[data-sg-game="next"]').count(), 0);
     await settled();
@@ -588,10 +588,11 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       await mini.locator(".sg-mini.is-over").waitFor();
       assert.match(await mini.locator(".sg-game-line").innerText(), /\d \+ \d \+ \d = \d+/);
     });
-    assert.ok(diceWon >= 150 && diceWon <= 900 && diceWon % 50 === 0, String(diceWon));
+    // (Played here at ×1: the sum × 50 is at most 900, under the floor of 10 times the bet, so it pays 1,000.)
+    assert.equal(diceWon, 1000);
     // 暗算: the level is chosen first; the easy one pays 300 for a right answer.
     const mathWon = await quickGame("math", async () => {
-      assert.deepEqual(await mini.locator('[data-sg-game^="level-"]').allInnerTexts(), ["かんたん　300点", "ふつう　600点", "むずかしい　1,200点"]);
+      assert.deepEqual(await mini.locator('[data-sg-game^="level-"]').allInnerTexts(), ["かんたん　1,000点", "ふつう　1,000点", "むずかしい　1,200点"]);
       await mini.locator('[data-sg-game="level-easy"]').click();
       const text = (await mini.locator(".sg-mini-big").innerText()).replace(" =", "");
       const [a, op, b] = text.split(" ");
@@ -600,7 +601,7 @@ const SAVE = "aiglish_sugoroku_GUEST-000_practice",
       await mini.locator('[data-sg-game="answer"]').click();
       assert.match(await mini.locator(".sg-game-line").innerText(), /正解/);
     });
-    assert.equal(mathWon, 300);
+    assert.equal(mathWon, 1000, "300 at ×1, raised to the floor");
     // A quick game is played by hand (no automatic half-pay, no 早送り button).
     assert.equal(await screen.getByRole("button", { name: "早送り" }).count(), 0);
     await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();

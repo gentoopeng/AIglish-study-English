@@ -131,8 +131,10 @@
     // Wheels after a line. x: multiples of what was bet since the last line.
     // A line pays this many times the bet whatever the wheel gives (the "bingo prize").
     bingoPrize: 7,
-    // The bingo wheels' mini games score this many times their points.
-    bingoGameBoost: 1.5,
+    // The bingo wheels' mini games score this many times their points, and pay at least bingoGameMin times
+    // the bet (a miss, a slow tap or a wrong sum included) — 2 and 10 since 10.136 (1.5 and none before).
+    bingoGameBoost: 2,
+    bingoGameMin: 10,
     // Of the bingo prize, this part is shared by the balls on the line (the finisher's own balls
     // included); the rest is the finisher's.
     prizeShare: 1,
@@ -436,8 +438,12 @@
     return 0;
   }
   // What a mini game pays for a score: × its multiple, and doubled when 倍がけ was used on the roll (by at most x2Cap × the bet).
+  // The games of the bingo wheels (timer, tap, tapex, dice, math) pay at least bingoGameMin × the bet; the normal
+  // squares' quick games (stop, hilo) have no floor.
+  const BINGO_GAMES = new Set(["timer", "tap", "tapex", "dice", "math"]);
   function bonusGain(game, score) {
-    const base = money(score * game.mult);
+    const floor = BINGO_GAMES.has(game.game) ? money(RULES.bingoGameMin * (game.bet || 100)) : 0,
+      base = Math.max(floor, money(score * game.mult));
     return game.x2 ? base + Math.min(base, money(RULES.x2Cap * (game.bet || 100))) : base;
   }
   // The next event game of a batch: it moves from state.queue to state.pending (played and settled as any other).
