@@ -4435,3 +4435,20 @@ Tests: `tests/sugoroku-model.test.cjs`（ルーレットの枠・×10/×30/×50�
 **Not changed.** 過去の日の残高は作らない。記録は10.138から始まる。
 
 Tests: `tests/point-trend.test.cjs`（日付・消す日・読み戻し・引き継ぎ・増減・目盛り）, `tests/point-trend.smoke.cjs`（狭い読み方はプロフィールのキャッシュに入れない・タブ・上位3人・増減・期間・人の選択の記憶・タップ・読めないとき・スマホ幅）, `tests/point-loans.smoke.cjs`（貸し借りの書き込みに今日の残高）。
+
+## 10.139.00.00 — 用語・年号モードの理解度ゲージを問題の数で
+
+**What the user saw.** 用語・年号モードの単語帳では、学習は問題（年号・「」・用語）ごとなのに、単語帳を選ぶ画面の○△×ーのゲージは単語（意味の行）ごとだった。年号に○をつけても、ゲージが動かなかったり、動き方が合わなかったりした。
+
+**Cause.** `getTextbookMasteryStats`（app.js）は、意味の行の理解度（`core_v4_user_vocab_progress_…` の meanings）を数えていた。問題ごとの結果（`core_v4_term_progress_…`、termKey ごと）を見ていなかった。
+
+**Fix.**
+- `TermProgress.tally(book, words, meaningStatus, wordStatus)`（term-questions.js）を足した。
+  - 単語ごとに `TermQuestions.questions(word)` の全問（どれ？・年号・世紀・時代・「」ひとつずつ）を数える。
+  - 答えた問題は、その問題の記録で数える。まだ答えていない問題は、`fallback`（最初に答える前の行の理解度、なければ今の行の理解度）で数える。
+  - 問題が出ない単語（説明が空など）は、今までどおり意味の行で数える。
+- 用語・年号モードの単語帳では、ゲージ（app.js）と理解度の推移グラフの毎日の記録（learning-sessions.js）が、これを使う。ふつうの単語帳は変わらない。
+
+**Not changed.** ふつうの単語帳の数え方。推移グラフの過去の日は作り直さないので、切り替えた日に、数え方の違いで段差ができる。
+
+Tests: `tests/term-gauge.smoke.cjs`（問題の数え方・記録とfallback・空の行・ふつうの単語帳・一覧の表示）。

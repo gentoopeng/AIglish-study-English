@@ -410,6 +410,18 @@ window.getTextbookMasteryStats = function(bookId) {
   } catch (e) { progress = {}; }
 
   var counts = { ok: 0, so: 0, bad: 0, none: 0 };
+  // 用語・年号モードの教材は、単語ではなく問題（年号・「」・用語）の数で数える。
+  if (window.TermProgress && window.TermQuestions && window.TermProgress.enabled(bookId)) {
+    counts = window.TermProgress.tally(bookId, words, function(word, mid) {
+      var saved = progress[String(word.num)] || null, savedMeaning = saved && saved.meanings ? saved.meanings[mid] : null;
+      var own = (word.meanings || []).find(function(m) { return String(m.id) === mid; });
+      return (savedMeaning ? savedMeaning.status : own && own.status) || 'none';
+    }, function(word) {
+      var saved = progress[String(word.num)] || null;
+      return (saved ? saved.status : word.status) || 'none';
+    });
+    words = [];
+  }
   words.forEach(function(word) {
     var meanings = Array.isArray(word.meanings) ? word.meanings : [];
     var saved = progress[String(word.num)] || null;

@@ -187,7 +187,16 @@
     historyBook = currentTextbook;
     const date = window.StudyTimeModel.dateKey(Date.now()),
       history = read("meaning_history", currentTextbook) || {};
-    const next = counts(vocabList);
+    // A 用語・年号 book is counted by question, as its gauge is.
+    const next =
+      window.TermProgress?.enabled?.(currentTextbook) && window.TermQuestions
+        ? window.TermProgress.tally(
+            currentTextbook,
+            vocabList,
+            (w, mid) => (w.meanings || []).find((m) => String(m.id) === mid)?.status || "none",
+            (w) => w.status || "none",
+          )
+        : counts(vocabList);
     if (
       history[date] &&
       ["ok", "so", "bad", "none"].every((k) => history[date][k] === next[k])
