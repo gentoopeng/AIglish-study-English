@@ -382,7 +382,28 @@
     if (skipped || (!right && previous === "ok")) return save(book, num, questionKey, "bad");
     return read(book);
   }
-  root.TermProgress = Object.freeze({ read, save, key, enabled, battle, fallback, noteBase, noteBaseFor });
+  // The ○△×ー of a book counted by question (the gauges of the book list and the history chart): every
+  // question of every word (whole, year, era, each 「」), rated by its own record or, without one, by the
+  // rating it goes by (fallback). A word with no question counts its lines as before.
+  // `meaningStatus(word, mid)`: the meaning's rating; `wordStatus(word)` for a word without lines.
+  function tally(book, words, meaningStatus, wordStatus) {
+    const counts = { ok: 0, so: 0, bad: 0, none: 0 },
+      store = read(book),
+      add = (status) => counts[Object.hasOwn(counts, status) ? status : "none"]++;
+    for (const word of words || []) {
+      const list = word && model.questions(word),
+        meanings = Array.isArray(word?.meanings) ? word.meanings : [];
+      if (!list?.length) {
+        if (meanings.length) for (const m of meanings) add(meaningStatus(word, String(m.id)));
+        else add(wordStatus(word));
+        continue;
+      }
+      const mine = store[String(word.num)] || {};
+      for (const q of list) add(mine[q.key]?.status || fallback(store, word.num, q.mid, meaningStatus(word, q.mid) || "none"));
+    }
+    return counts;
+  }
+  root.TermProgress = Object.freeze({ read, save, key, enabled, battle, fallback, noteBase, noteBaseFor, tally });
 
   // Flashcards: record each generated question's own result, and type the year for year questions.
   function current() {
