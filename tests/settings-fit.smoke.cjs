@@ -1,7 +1,7 @@
 // Requires Playwright, Chromium and a running local HTTP server.
 // Run: node tests/settings-fit.smoke.cjs
 // The settings screens fit one phone screen (390x740) without scrolling: the whole-app settings
-// (three groups: サウンド, 単語の読み上げ, AI取り込み), the card study settings of a book, and the add-word form
+// (three groups: 起動・サウンド, 単語の読み上げ, AI取り込み), the card study settings of a book, and the add-word form
 // (also with its extra settings open, and with a second meaning). Every control keeps its id.
 const { chromium } = require("playwright"),
   assert = require("node:assert/strict");
@@ -32,8 +32,8 @@ const { chromium } = require("playwright"),
     // The whole-app settings: three groups, every control still there, the key row on one line.
     await page.evaluate(() => window.openSettingsDialog());
     await page.locator("#settingsDialog[open]").waitFor();
-    assert.deepEqual(await page.locator("#settingsDialog .settings-group-title").allInnerTexts(), ["サウンド", "単語の読み上げ", "AI取り込み"]);
-    for (const id of ["musicEnabled", "musicVolume", "musicTrack", "soundEnabled", "soundVolume", "pronounceEnabled", "pronounceAuto", "pronounceRate", "pronounceAccent", "pronounceTest", "handsFreeAnswerDelay", "sidebarApiKeyInput"])
+    assert.deepEqual(await page.locator("#settingsDialog .settings-group-title").allInnerTexts(), ["起動・サウンド", "単語の読み上げ", "AI取り込み"]);
+    for (const id of ["loginWarmupEnabled", "musicEnabled", "musicVolume", "musicTrack", "soundEnabled", "soundVolume", "pronounceEnabled", "pronounceAuto", "pronounceRate", "pronounceAccent", "pronounceTest", "handsFreeAnswerDelay", "sidebarApiKeyInput"])
       assert.equal(await page.locator("#" + id).count(), 1, id);
     ok(await fits("#settingsDialog"), "settings");
     const keyRow = await page.evaluate(() => {

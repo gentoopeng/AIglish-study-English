@@ -8,7 +8,7 @@ window.appScriptsReady=window.AppStorage.ready.then(()=>{window.StartupMonitor?.
 // document URL (a stale cached file is the usual cause), then offer a button.
 function reload(){window.AppStorage.flush().catch(()=>{}).finally(()=>location.replace(location.pathname+'?reload='+Date.now()));}
 const retryKey='aiglish_loader_retried';
-window.appScriptsReady.then(()=>{try{sessionStorage.removeItem(retryKey);}catch{}window.StartupMonitor?.mark?.('scripts-ready');status.hidden=true;buttons.forEach(button=>button.disabled=false);}).catch(error=>{console.error('起動を停止しました。保存データは保持されています。',error);
+window.appScriptsReady.then(()=>{try{sessionStorage.removeItem(retryKey);}catch{}window.StartupMonitor?.mark?.('scripts-ready');status.hidden=true;buttons.forEach(button=>button.disabled=false);}).catch(error=>{window.AppSplash?.hide();console.error('起動を停止しました。保存データは保持されています。',error);
  // The marker survives failed startups however slowly they fail; only success clears it.
  let retried=true;try{retried=sessionStorage.getItem(retryKey)==='1';if(!retried)sessionStorage.setItem(retryKey,'1');}catch{}
  if(!retried){status.textContent='最新のファイルを読み込み直しています…';reload();return;}

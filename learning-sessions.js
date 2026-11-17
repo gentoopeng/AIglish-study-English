@@ -486,6 +486,8 @@
       document.hidden
     )
       return;
+    // Turned off in the settings (設定 › 起動・サウンド), per account and kept with the profile.
+    if (!force && window.UserProfile?.read?.().loginWarmup === false) return;
     if (!force && warmupSuppressed()) return;
     if (
       document.querySelector("dialog[open],#wordDuelScreen") ||
@@ -910,5 +912,22 @@
   window.onTabChange(() => {
     setTimeout(welcome, 400);
   });
+  // 設定 › 起動・サウンド: the switch for the warm-up at login.
+  function warmupSwitch() {
+    const box = typeof document.getElementById === "function" ? document.getElementById("loginWarmupEnabled") : null;
+    if (!box) return;
+    box.checked = window.UserProfile?.read?.().loginWarmup !== false;
+    box.disabled = uid() === "GUEST-000";
+    box.onchange = () => {
+      const data = window.UserProfile.read();
+      data.loginWarmup = box.checked;
+      data.updatedAt = Math.max(Date.now(), Number(data.updatedAt || 0) + 1);
+      window.UserProfile.store(data);
+      Promise.resolve(window.UserProfile.sync()).catch(() => {});
+    };
+  }
+  warmupSwitch();
+  window.onAppLoaded(warmupSwitch);
+  window.addEventListener?.("storage", warmupSwitch);
   window.LoginWarmup = { open: () => welcome(true) };
 })();

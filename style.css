@@ -3200,10 +3200,10 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 #settingsDialog{padding:16px 16px 14px;}
 #settingsDialog .menu-dialog-heading{margin-bottom:6px;}
 #settingsDialog .settings-group-title{margin:10px 2px 6px;font:700 11px/1 system-ui,sans-serif;letter-spacing:.14em;color:var(--text-sub);}
-#settingsDialog .sidebar-sounds{gap:8px;padding:10px 12px;margin-bottom:0;border-radius:14px;}
+#settingsDialog .sidebar-sounds{gap:6px;padding:10px 12px;margin-bottom:0;border-radius:14px;}
 #settingsDialog .settings-card+.settings-group-title{margin-top:10px;}
 #settingsDialog .settings-part{display:grid;gap:7px;}
-#settingsDialog .settings-part+.settings-part{padding-top:9px;border-top:1px solid var(--border);}
+#settingsDialog .settings-part+.settings-part{padding-top:8px;border-top:1px solid var(--border);}
 #settingsDialog .sound-volume{grid-template-columns:3.2em minmax(0,1fr) 38px;gap:8px;}
 #settingsDialog .music-track-row{grid-template-columns:3.2em minmax(0,1fr);}
 #settingsDialog .music-track-select{padding:6px 8px;font-size:12px;}
@@ -3319,3 +3319,33 @@ html body dialog.vocab-entry-dialog .library-editor-actions button{min-height:42
 
 /* 用語・年号モード: the 年・世紀・時代 box of a line in the add / 差し込む form (as wide as the line). */
 html body dialog.vocab-entry-dialog .vocab-entry-meaning .vocab-entry-year{display:block;width:100%;max-width:none;box-sizing:border-box;margin:0 0 6px;}
+
+/* ---- Startup splash and login (10.140): the TangoLabo letters over the player's own background ---- */
+:root{--splash-image:url("assets/background-night.webp");--splash-position:center;}
+#appSplash{position:fixed;inset:0;z-index:6000;display:none;place-items:center;pointer-events:none;background:#070d1a var(--splash-image) var(--splash-position)/cover no-repeat;overflow:hidden;}
+html.app-splashing #appSplash,html.splash-leaving #appSplash{display:grid;}
+html.splash-leaving #appSplash{animation:splash-leave .65s cubic-bezier(.4,0,.2,1) forwards;}
+#appSplash .splash-shade{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 45%,rgba(7,13,26,.25) 0%,rgba(7,13,26,.72) 70%,rgba(7,13,26,.88) 100%);}
+.splash-brand,.auth-brand{position:relative;display:flex;justify-content:center;margin:0;font:800 clamp(40px,12vw,64px)/1.05 "Avenir Next","Hiragino Sans",system-ui,sans-serif;letter-spacing:.01em;color:#fff;text-shadow:0 4px 24px rgba(0,0,0,.45);}
+.splash-brand span,.auth-brand span{display:inline-block;opacity:0;transform:translateY(.45em) scale(.92);filter:blur(6px);animation:splash-letter .7s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(var(--i) * 70ms + 120ms);}
+.splash-brand span:nth-child(n+6),.auth-brand span:nth-child(n+6){color:#e5cf91;}
+#appSplash .splash-line{position:absolute;top:calc(50% + clamp(30px,8vw,44px));left:50%;width:min(52vw,220px);height:2px;margin-left:calc(min(52vw,220px) / -2);border-radius:2px;background:linear-gradient(90deg,transparent,#e5cf91,transparent);transform:scaleX(0);animation:splash-line .9s cubic-bezier(.2,.8,.2,1) .8s forwards;}
+@keyframes splash-letter{to{opacity:1;transform:none;filter:none;}}
+@keyframes splash-line{to{transform:scaleX(1);}}
+@keyframes splash-leave{to{opacity:0;transform:scale(1.04);}}
+/* Signed in on this device: the login form is never shown until app-splash.js finds nobody to start. */
+html.signed-in #auth-gate-screen .auth-card{visibility:hidden;}
+#auth-gate-screen{background:#070d1a;}
+#auth-gate-screen .auth-backdrop{position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,13,26,.35) 0%,rgba(7,13,26,.78) 75%),var(--splash-image) var(--splash-position)/cover no-repeat;}
+#auth-gate-screen .auth-card{position:relative;max-width:380px;padding:30px 26px 24px;background:rgba(15,23,42,.58);border:1px solid rgba(229,207,145,.28);border-radius:28px;box-shadow:0 24px 60px rgba(0,0,0,.45);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2);}
+html:not(.app-splashing) #auth-gate-screen .auth-card{animation:auth-rise .7s cubic-bezier(.2,.8,.2,1) both;}
+.auth-brand{font-size:40px;margin-bottom:6px;}
+.auth-tagline{margin:0 0 20px;font-size:12px;letter-spacing:.12em;color:rgba(244,237,223,.75);}
+#auth-gate-screen .search-input{background:rgba(7,13,26,.55);border:1px solid rgba(244,237,223,.18);border-radius:14px;color:#fff;}
+#auth-gate-screen .search-input:focus{border-color:#e5cf91;outline:none;box-shadow:0 0 0 3px rgba(229,207,145,.2);}
+#auth-gate-screen #authSubmitBtn{height:48px;border-radius:14px;background:linear-gradient(135deg,#e5cf91,#c9a85c)!important;color:#1a1408!important;font-weight:800;box-shadow:0 8px 24px rgba(229,207,145,.25)!important;}
+@keyframes auth-rise{from{opacity:0;transform:translateY(24px) scale(.98);}to{opacity:1;transform:none;}}
+/* Calm, no motion or an automated browser: everything in place at once. */
+html:is([data-motion="calm"],[data-motion="off"],[data-motion="test"]) :is(.splash-brand,.auth-brand) span,html:is([data-motion="calm"],[data-motion="off"],[data-motion="test"]) #appSplash .splash-line,html:is([data-motion="calm"],[data-motion="off"],[data-motion="test"]) #auth-gate-screen .auth-card{animation:none;opacity:1;transform:none;filter:none;}
+html:is([data-motion="off"],[data-motion="test"]).splash-leaving #appSplash{animation:none;opacity:0;}
+@media(max-width:900px){#auth-gate-screen .auth-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(15,23,42,.78);}}

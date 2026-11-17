@@ -53,9 +53,20 @@ function read(id){
 function photoUrl(data){const binary=atob(data.slice(data.indexOf(',')+1)),bytes=new Uint8Array(binary.length);for(let index=0;index<binary.length;index++)bytes[index]=binary.charCodeAt(index);return URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'}));}
 let renderToken=0;
 function releaseBackground(){renderToken++;document.documentElement.style.setProperty('--app-background-image','none');if(backgroundUrl)URL.revokeObjectURL(backgroundUrl);backgroundUrl='';backgroundSource='';}
+// The startup splash and the login screen show the background last used on this device: a bundled
+// asset by its path, a photo as a small copy (under 60KB, so it stays in localStorage).
+const splashKey='aiglish_splash_background';let splashFor='';
+function keepSplash(url,owned,position,id){
+ // A photo is copied once per choice (its blob URL changes on every render); a newer render wins.
+ const mark=(owned?id:url)+'|'+position;if(splashFor===mark)return;splashFor=mark;const token=renderToken;
+ const write=src=>{try{const old=JSON.parse(localStorage.getItem(splashKey)||'null');if(old&&old.src===src&&old.position===position)return;localStorage.setItem(splashKey,JSON.stringify({src,position}));document.documentElement.style.setProperty('--splash-image','url("'+src+'")');document.documentElement.style.setProperty('--splash-position',position+'% center');}catch{}};
+ if(!owned){if(/^assets\/[\w.-]+\.webp$/.test(url))write(url);return;}
+ const image=new Image();image.onload=()=>{if(token!==renderToken)return;try{const w=Math.min(540,image.naturalWidth||540),h=Math.round(w*(image.naturalHeight||1)/(image.naturalWidth||1)),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(image,0,0,w,h);for(const q of [.6,.45,.3]){const data=canvas.toDataURL('image/jpeg',q);if(data.length<60000){write(data);break;}}canvas.width=canvas.height=0;}catch{}};image.src=url;
+}
 function showBackground(url,owned){
  const previous=backgroundUrl;backgroundUrl=owned?url:'';
  document.documentElement.style.setProperty('--app-background-image','url("'+url+'")');
+ const item=settings.mode==='photo'?selected():null;keepSplash(url,owned,item?item.position:50,item?item.id:'default');
  if(previous&&previous!==url)URL.revokeObjectURL(previous);
 }
 function renderBackground(item){
