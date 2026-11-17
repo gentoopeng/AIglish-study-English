@@ -108,6 +108,25 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     });
     assert.equal(await sw.isDisabled(), true);
     await page.screenshot({ path: "/tmp/claude-0/settings.png" });
+    // On an iPhone (iOS stable rendering stops animations page-wide) the letters still show, animated, and
+    // with motion turned off they show at once.
+    for (const motion of ["full", "off"]) {
+      const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1" });
+      await phone.route("https://**/*", (r) => r.abort());
+      await phone.addInitScript((m) => localStorage.setItem("aiglish_motion", m), motion);
+      await phone.goto(base);
+      assert.equal(await phone.evaluate(() => document.documentElement.classList.contains("ios-stable-rendering")), true);
+      await phone.waitForTimeout(motion === "full" ? 1500 : 200);
+      const seen = await phone.evaluate(() => [...document.querySelectorAll("#appSplash .splash-brand span, .auth-brand span")].map((el) => Number(getComputedStyle(el).opacity)));
+      assert.ok(seen.length === 18 || seen.length === 9, String(seen.length));
+      if (seen.length === 18) assert.ok(seen.slice(0, 9).every((o) => o > 0.95), motion + " splash " + seen);
+      // The login screen's letters, once the splash has gone.
+      await phone.waitForFunction(() => !document.getElementById("appSplash"));
+      await phone.waitForTimeout(motion === "full" ? 1500 : 100);
+      const login = await phone.evaluate(() => [...document.querySelectorAll(".auth-brand span")].map((el) => Number(getComputedStyle(el).opacity)));
+      assert.ok(login.every((o) => o > 0.95), motion + " login " + login);
+      await phone.close();
+    }
     assert.deepEqual(errors, []);
     console.log("login-splash smoke ok");
   } finally {

@@ -4481,3 +4481,18 @@ Tests: `tests/term-gauge.smoke.cjs`（問題の数え方・記録とfallback・�
 **Not changed.** ログインのしくみ（ID と暗証番号の確認）。手動の `LoginWarmup.open()`。
 
 Tests: `tests/login-splash.smoke.cjs`（最初の描画のスプラッシュ・ログアウト時はフォーム・ログイン済みはフォームを出さない（決まるまで）・削除されたアカウントはフォーム・背景の記録と読み戻し・写真の小さなコピー・おかしな値は使わない・最初の10単語のスイッチ）, `tests/settings-fit.smoke.cjs`（設定に1行足しても収まる）。
+
+## 10.141.00.00 — iPhone で起動画面とログイン画面の「TangoLabo」の文字が出ない
+
+**What the user saw.** iPhone で開くと、起動画面（とログイン画面）に TangoLabo の文字が出なかった。背景だけが見えていた。
+
+**Cause.**
+- iPhone では、描画を安定させるために `html.ios-stable-rendering`（rendering-safety.js）が、ページ全体のアニメーションを `animation:none!important` で止めている。
+- 10.140 の文字は、ふだんの見た目を「透明・ぼかし・下にずれた状態」にして、アニメーションで見える状態にしていた。アニメーションが止まると、透明のまま残った。
+- パソコンの Chromium のテストでは、このクラスが付かないので見つからなかった。
+
+**Fix.**
+- 文字と金の線は、ふだんの見た目を「見える状態」にして、アニメーションの `from` で隠れた状態から始めるようにした（`animation-fill-mode: both`）。どこでアニメーションが止まっても、文字は出る。
+- 起動画面とログイン画面（`.app-splash`・`.auth-gate`）は、ウォームアップやポーカーと同じく、iPhone でもアニメーションしてよい画面に足した。動かすのは transform と opacity だけ（ぼかしは iPhone では元から止めている）。除外の一覧には ID ではなくクラスで足した（ID だとそのルールの強さが上がり、後ろにある「カードのアニメーションは動かす」などの例外に勝ってしまった。テストで見つけて直した）。
+
+Tests: `tests/login-splash.smoke.cjs` に、iPhone のユーザーエージェントで、動き「ふつう」と「オフ」の両方で、起動画面とログイン画面の文字が見えること（opacity）を足した。直す前は opacity 0 で落ちる。
