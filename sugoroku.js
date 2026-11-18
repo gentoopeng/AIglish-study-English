@@ -1424,7 +1424,9 @@
         local = S.roll(state, view.card, cost, replay(tape), me, use);
       }
     }
-    const touches = local.events.some((e) => e.t === "ball") || view.card.owed?.[me] > 0;
+    // A ball, or anything else that changes the card (ボール消 takes the player's own balls off), goes to the shared
+    // card. Before 10.145 only a ball did: the balls cleared by the super accident stayed on everyone else's card.
+    const touches = local.events.some((e) => e.t === "ball" || e.t === "reset") || S.cardTouched(view.card, local.card) || view.card.owed?.[me] > 0;
     let result,
       shownEarly = preCount,
       early = null;

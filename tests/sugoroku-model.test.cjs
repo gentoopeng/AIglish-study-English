@@ -842,6 +842,9 @@ test("the super accident square: −3 to −5 times, balls off, bag emptied, saf
   assert.deepEqual(cleared.card.owners.slice(0, 3), ["", "ben", ""]);
   assert.deepEqual(cleared.card.bets.slice(0, 3), [0, 100, 0]);
   assert.deepEqual(cleared.events.find((e) => e.t === "reset"), { t: "reset", cells: [0, 2], own: true });
+  // That roll changes the shared card (so it is written to the cloud for everybody); a SAFE one does not.
+  assert.equal(S.cardTouched(owned, cleared.card), true);
+  assert.equal(S.cardTouched(owned, roll(from, owned, slotAt((x) => x.take === 0 && !x.lucky)).card), false);
   // Bag emptied (ガード is not in the bag and stays).
   const lost = roll({ ...from, items: ["dice2", "x2", "x2"] }, base, slotAt((x) => x.resetItems));
   assert.deepEqual(lost.state.items, []);
