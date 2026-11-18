@@ -166,15 +166,11 @@ test("weak review defers cloud sync during play and retains pending work if poin
   assert.equal(values.size, 0);
 });
 
-test("leaving ステータス, the screen the app opens on (10.156), saves what is still waiting from before", async () => {
+test("leaving ステータス, the screen the app opens on (10.156), never starts a cloud save (a restore from a file leaves it by itself)", async () => {
   const { ctx, values, tabs, calls } = setup("status");
+  ctx.queueBackgroundSave();
   values.set("core_v4_autosave_pending_a", "1");
   tabs[0]("vocab");
   await new Promise(setImmediate);
-  assert.equal(calls.filter((c) => c === "cloud").length, 1);
-  // Nothing waiting: leaving it does not save.
-  const quiet = setup("status");
-  quiet.tabs[0]("titles");
-  await new Promise(setImmediate);
-  assert.deepEqual(quiet.calls, []);
+  assert.deepEqual(calls, []);
 });
