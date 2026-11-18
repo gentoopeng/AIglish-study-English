@@ -3371,13 +3371,19 @@ html.app-splashing #appCorner,html.gate-open #appCorner{display:block;}
 #appCorner .app-corner-close{border-color:transparent;background:transparent;color:rgba(244,237,223,.7);}
 /* While the splash is up only the error, if any, is shown at the top (the gauge says the rest). */
 html.app-splashing #appStartupStatus:not(.is-error){display:none;}
+/* Loading takes long (app-splash.js, after 8 seconds): a way out on the splash. */
+#appSplash .splash-help{position:absolute;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(320px,calc(100vw - 48px));display:grid;gap:8px;padding:14px;border:1px solid rgba(229,207,145,.3);border-radius:16px;background:rgba(15,23,42,.85);color:#f4eddf;text-align:center;font:13px/1.5 "Hiragino Sans",system-ui,sans-serif;pointer-events:auto;}
+#appSplash .splash-help[hidden]{display:none;}
+#appSplash .splash-help p{margin:0 0 2px;}
+#appSplash .splash-help button{padding:10px;border:1px solid rgba(244,237,223,.25);border-radius:12px;background:rgba(244,237,223,.08);color:#f4eddf;font:inherit;cursor:pointer;}
+#appSplash .splash-help button[data-splash-login]{background:linear-gradient(135deg,#e5cf91,#c9a85c);color:#1a1408;font-weight:800;border:0;}
 /* Signed in on this device: the login form is never shown until app-splash.js finds nobody to start. */
 html.signed-in #auth-gate-screen .auth-card{visibility:hidden;}
 #auth-gate-screen{background:#070d1a;}
 #auth-gate-screen .auth-backdrop{position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,13,26,.35) 0%,rgba(7,13,26,.78) 75%),var(--splash-image) var(--splash-position)/cover no-repeat;}
 #auth-gate-screen .auth-card{position:relative;max-width:380px;padding:30px 26px 24px;background:rgba(15,23,42,.58);border:1px solid rgba(229,207,145,.28);border-radius:28px;box-shadow:0 24px 60px rgba(0,0,0,.45);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2);}
 html:not(.app-splashing) #auth-gate-screen .auth-card{animation:auth-rise .7s cubic-bezier(.2,.8,.2,1) both;}
-.auth-brand{font-size:40px;margin-bottom:6px;}
+.auth-brand{font-size:40px;margin-bottom:22px;}
 .auth-tagline{margin:0 0 20px;font-size:12px;letter-spacing:.12em;color:rgba(244,237,223,.75);}
 #auth-gate-screen .search-input{background:rgba(7,13,26,.55);border:1px solid rgba(244,237,223,.18);border-radius:14px;color:#fff;}
 #auth-gate-screen .search-input:focus{border-color:#e5cf91;outline:none;box-shadow:0 0 0 3px rgba(229,207,145,.2);}
