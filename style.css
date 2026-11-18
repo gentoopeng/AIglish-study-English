@@ -3323,18 +3323,54 @@ html body dialog.vocab-entry-dialog .vocab-entry-meaning .vocab-entry-year{displ
 
 /* ---- Startup splash and login (10.140): the TangoLabo letters over the player's own background ---- */
 :root{--splash-image:url("assets/background-night.webp");--splash-position:center;}
-#appSplash{position:fixed;inset:0;z-index:6000;display:none;place-items:center;pointer-events:none;background:#070d1a var(--splash-image) var(--splash-position)/cover no-repeat;overflow:hidden;}
-html.app-splashing #appSplash,html.splash-leaving #appSplash{display:grid;}
-html.splash-leaving #appSplash{animation:splash-leave .65s cubic-bezier(.4,0,.2,1) forwards;}
-#appSplash .splash-shade{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 45%,rgba(7,13,26,.25) 0%,rgba(7,13,26,.72) 70%,rgba(7,13,26,.88) 100%);}
-.splash-brand,.auth-brand{position:relative;display:flex;justify-content:center;margin:0;font:800 clamp(40px,12vw,64px)/1.05 "Avenir Next","Hiragino Sans",system-ui,sans-serif;letter-spacing:.01em;color:#fff;text-shadow:0 4px 24px rgba(0,0,0,.45);}
+/* 10.149: a title screen. The background slowly settles (zoom and light), motes of light drift up, the letters rise
+   one by one and a gleam runs across them, the tagline fades in, and a gauge at the foot follows the loading. */
+#appSplash{position:fixed;inset:0;z-index:6000;display:none;pointer-events:none;background:#070d1a;overflow:hidden;}
+html.app-splashing #appSplash,html.splash-leaving #appSplash{display:block;}
+html.splash-leaving #appSplash{animation:splash-leave .75s cubic-bezier(.4,0,.2,1) forwards;}
+#appSplash .splash-bg{position:absolute;inset:-4%;background:var(--splash-image) var(--splash-position)/cover no-repeat;transform-origin:50% 55%;animation:splash-bg 2.6s cubic-bezier(.2,.7,.2,1) both;}
+#appSplash .splash-shade{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 46%,rgba(7,13,26,.12) 0%,rgba(7,13,26,.62) 62%,rgba(7,13,26,.92) 100%),linear-gradient(180deg,rgba(7,13,26,.35),rgba(7,13,26,0) 30%,rgba(7,13,26,0) 70%,rgba(7,13,26,.7));}
+#appSplash .splash-motes i{position:absolute;bottom:-8px;left:var(--x);width:var(--s);height:var(--s);border-radius:50%;background:#f6e7b8;box-shadow:0 0 8px 2px rgba(246,231,184,.55);opacity:0;animation:splash-mote var(--t) linear var(--d) infinite;}
+#appSplash .splash-center{position:absolute;left:0;right:0;top:44%;transform:translateY(-50%);display:grid;justify-items:center;gap:14px;}
+.splash-brand,.auth-brand{position:relative;display:flex;justify-content:center;margin:0;font:800 clamp(44px,13vw,72px)/1.05 "Avenir Next","Hiragino Sans",system-ui,sans-serif;letter-spacing:.01em;color:#fff;text-shadow:0 4px 24px rgba(0,0,0,.45);}
 /* Visible as they stand: the animation brings them in from hidden, so where animation is off (iOS stable rendering, calm motion) they still show. */
-.splash-brand span,.auth-brand span{display:inline-block;animation:splash-letter .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i) * 70ms + 120ms);}
+.splash-brand span,.auth-brand span{display:inline-block;animation:splash-letter .8s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i) * 65ms + 260ms);}
 .splash-brand span:nth-child(n+6),.auth-brand span:nth-child(n+6){color:#e5cf91;}
-#appSplash .splash-line{position:absolute;top:calc(50% + clamp(30px,8vw,44px));left:50%;width:min(52vw,220px);height:2px;margin-left:calc(min(52vw,220px) / -2);border-radius:2px;background:linear-gradient(90deg,transparent,#e5cf91,transparent);animation:splash-line .9s cubic-bezier(.2,.8,.2,1) .8s both;}
-@keyframes splash-letter{from{opacity:0;transform:translateY(.45em) scale(.92);filter:blur(6px);}to{opacity:1;transform:none;filter:none;}}
+/* The gleam: a band of light run once across the letters after they land. */
+#appSplash .splash-brand::after{content:attr(data-text);position:absolute;inset:0;display:flex;justify-content:center;color:transparent;text-shadow:none;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.95) 50%,transparent 65%) 0 0/250% 100% no-repeat;-webkit-background-clip:text;background-clip:text;background-position:120% 0;animation:splash-gleam 1.2s cubic-bezier(.4,0,.2,1) 1.3s both;pointer-events:none;}
+#appSplash .splash-line{width:min(56vw,240px);height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,#e5cf91,transparent);animation:splash-line .9s cubic-bezier(.2,.8,.2,1) .95s both;}
+#appSplash .splash-tagline{margin:0;font:600 12px/1 "Hiragino Sans",system-ui,sans-serif;letter-spacing:.32em;color:rgba(244,237,223,.82);animation:splash-fade .9s ease 1.3s both;}
+#appSplash .splash-foot{position:absolute;left:max(24px,env(safe-area-inset-left));right:max(24px,env(safe-area-inset-right));bottom:calc(36px + env(safe-area-inset-bottom));max-width:440px;margin:0 auto;animation:splash-fade .6s ease .4s both;}
+#appSplash .splash-status{display:flex;justify-content:space-between;margin:0 0 8px;font:600 12px/1.2 "Hiragino Sans",system-ui,sans-serif;letter-spacing:.06em;color:rgba(244,237,223,.85);text-shadow:0 1px 6px rgba(0,0,0,.6);}
+#appSplash .splash-status b{font-variant-numeric:tabular-nums;color:#e5cf91;}
+#appSplash .splash-bar{position:relative;height:6px;border-radius:6px;background:rgba(244,237,223,.14);box-shadow:inset 0 0 0 1px rgba(244,237,223,.12);overflow:hidden;}
+#appSplash .splash-bar i{position:absolute;inset:0;border-radius:inherit;background:linear-gradient(90deg,#c9a85c,#f3dfa2);transform:scaleX(0);transform-origin:left;transition:transform .35s cubic-bezier(.2,.8,.2,1);box-shadow:0 0 10px rgba(229,207,145,.6);}
+#appSplash .splash-bar i::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);transform:translateX(-100%);animation:splash-shine 1.4s linear infinite;}
+@keyframes splash-bg{from{transform:scale(1.12);opacity:.35;}to{transform:scale(1);opacity:1;}}
+@keyframes splash-mote{0%{transform:translateY(0);opacity:0;}15%{opacity:.85;}100%{transform:translateY(-105vh);opacity:0;}}
+@keyframes splash-letter{from{opacity:0;transform:translateY(.5em) rotateX(55deg) scale(.9);filter:blur(6px);}to{opacity:1;transform:none;filter:none;}}
+@keyframes splash-gleam{from{background-position:120% 0;}to{background-position:-20% 0;}}
 @keyframes splash-line{from{transform:scaleX(0);}to{transform:scaleX(1);}}
-@keyframes splash-leave{to{opacity:0;transform:scale(1.04);}}
+@keyframes splash-fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+@keyframes splash-shine{to{transform:translateX(100%);}}
+@keyframes splash-leave{to{opacity:0;transform:scale(1.05);}}
+/* The version and the settings button: on the splash and on the login screen only. */
+#appCorner{display:none;}
+html.app-splashing #appCorner,html.gate-open #appCorner{display:block;}
+#appCorner .app-corner-gear{position:fixed;z-index:6001;top:calc(14px + env(safe-area-inset-top));right:calc(14px + env(safe-area-inset-right));width:42px;height:42px;display:grid;place-items:center;padding:0;border:1px solid rgba(244,237,223,.25);border-radius:50%;background:rgba(7,13,26,.45);color:#f4eddf;cursor:pointer;}
+#appCorner .app-corner-gear svg{width:22px;height:22px;}
+#appCorner .app-corner-version{position:fixed;z-index:6001;right:calc(14px + env(safe-area-inset-right));bottom:calc(10px + env(safe-area-inset-bottom));font:600 10px/1 system-ui,sans-serif;letter-spacing:.06em;color:rgba(244,237,223,.6);pointer-events:none;}
+#appCorner .app-corner-panel{position:fixed;z-index:6002;top:calc(64px + env(safe-area-inset-top));right:calc(14px + env(safe-area-inset-right));width:min(300px,calc(100vw - 28px));box-sizing:border-box;display:grid;gap:10px;padding:16px;border:1px solid rgba(229,207,145,.3);border-radius:18px;background:rgba(15,23,42,.94);color:#f4eddf;box-shadow:0 18px 50px rgba(0,0,0,.5);font:13px/1.5 system-ui,sans-serif;}
+#appCorner .app-corner-panel[hidden]{display:none;}
+#appCorner .app-corner-title{margin:0;font-weight:800;letter-spacing:.08em;}
+#appCorner .app-corner-row{display:grid;gap:6px;margin:0;}
+#appCorner .app-corner-seg{display:flex;border:1px solid rgba(244,237,223,.2);border-radius:999px;overflow:hidden;}
+#appCorner .app-corner-seg button{flex:1;padding:8px 4px;border:0;background:transparent;color:rgba(244,237,223,.75);font:inherit;cursor:pointer;}
+#appCorner .app-corner-seg [aria-pressed="true"]{background:rgba(229,207,145,.25);color:#fff;font-weight:700;}
+#appCorner .app-corner-action,#appCorner .app-corner-close{display:block;padding:10px;border:1px solid rgba(244,237,223,.2);border-radius:12px;background:rgba(244,237,223,.06);color:#f4eddf;text-align:center;text-decoration:none;font:inherit;cursor:pointer;}
+#appCorner .app-corner-close{border-color:transparent;background:transparent;color:rgba(244,237,223,.7);}
+/* While the splash is up only the error, if any, is shown at the top (the gauge says the rest). */
+html.app-splashing #appStartupStatus:not(.is-error){display:none;}
 /* Signed in on this device: the login form is never shown until app-splash.js finds nobody to start. */
 html.signed-in #auth-gate-screen .auth-card{visibility:hidden;}
 #auth-gate-screen{background:#070d1a;}
@@ -3349,5 +3385,8 @@ html:not(.app-splashing) #auth-gate-screen .auth-card{animation:auth-rise .7s cu
 @keyframes auth-rise{from{opacity:0;transform:translateY(24px) scale(.98);}to{opacity:1;transform:none;}}
 /* Calm, no motion or an automated browser: everything in place at once. */
 html:is([data-motion="calm"],[data-motion="off"],[data-motion="test"]) :is(.splash-brand,.auth-brand) span,html:is([data-motion="calm"],[data-motion="off"],[data-motion="test"]) #appSplash .splash-line,html:is([data-motion="calm"],[data-motion="off"],[data-motion="test"]) #auth-gate-screen .auth-card{animation:none;opacity:1;transform:none;filter:none;}
+html:is([data-motion="calm"],[data-motion="off"],[data-motion="test"]) #appSplash :is(.splash-bg,.splash-tagline,.splash-foot){animation:none;opacity:1;transform:none;}
+html:is([data-motion="calm"],[data-motion="off"],[data-motion="test"]) #appSplash .splash-brand::after,html:is([data-motion="off"],[data-motion="test"]) #appSplash .splash-motes,html:is([data-motion="off"],[data-motion="test"]) #appSplash .splash-bar i::after{display:none;}
+html:is([data-motion="off"],[data-motion="test"]) #appSplash .splash-bar i{transition:none;}
 html:is([data-motion="off"],[data-motion="test"]).splash-leaving #appSplash{animation:none;opacity:0;}
 @media(max-width:900px){#auth-gate-screen .auth-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(15,23,42,.78);}}

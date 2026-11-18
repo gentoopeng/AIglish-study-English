@@ -11,9 +11,9 @@
   const html = document.documentElement,
     splash = window.AppSplash,
     gate = document.getElementById("auth-gate-screen"),
-    minimum = html.getAttribute("data-motion") === "full" ? 1700 : 0,
-    started = performance.now();
-  const leave = () => setTimeout(() => splash?.hide(), Math.max(0, minimum - (performance.now() - started)));
+    // (counted from the page's start: performance.now() is time since the page began to load)
+    minimum = html.getAttribute("data-motion") === "full" ? 2300 : 0;
+  const leave = () => setTimeout(() => splash?.hide(), Math.max(0, minimum - performance.now()));
   const savedId = () => {
     try {
       return !!localStorage.getItem("core_v4_userId");
@@ -22,17 +22,26 @@
     }
   };
   let poll = 0;
+  // The version and settings in the corner show on the login screen too (not over the app).
+  const gateShown = () => !!gate && gate.style.display !== "none" && !html.classList.contains("signed-in");
+  const corner = () => html.classList.toggle("gate-open", gateShown());
+  if (gate) new MutationObserver(corner).observe(gate, { attributes: true, attributeFilter: ["style"] });
+  new MutationObserver(corner).observe(html, { attributes: true, attributeFilter: ["class"] });
+  corner();
+  splash?.progress?.(0.88, html.classList.contains("signed-in") ? "ログインしています…" : "まもなく始まります…");
   function update() {
     if (!gate) return leave();
     if (gate.style.display === "none") {
       // The app is shown for the saved account.
       clearInterval(poll);
+      splash?.progress?.(1, "準備ができました");
       return leave();
     }
     if (!html.classList.contains("signed-in") || !savedId() || gate.style.display === "flex") {
       // Nobody to start: the login form.
       html.classList.remove("signed-in");
       clearInterval(poll);
+      splash?.progress?.(1, "準備ができました");
       leave();
     }
   }
