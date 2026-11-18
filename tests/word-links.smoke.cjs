@@ -44,7 +44,8 @@ const { chromium } = require("playwright"),
     // Unknown words and the word itself are refused in plain words.
     await links.locator(".inline-link-input").fill("nothing");
     await links.getByRole("button", { name: "追加", exact: true }).click();
-    assert.match(await links.locator(".inline-links-message").innerText(), /見つかりません/);
+    // (the other books are searched first: none has it, so it is not in any book)
+    await links.locator(".inline-links-message", { hasText: "単語帳にないです" }).waitFor();
     await links.locator(".inline-link-input").fill("consider");
     await links.getByRole("button", { name: "追加", exact: true }).click();
     assert.match(await links.locator(".inline-links-message").innerText(), /自分自身/);
@@ -62,7 +63,7 @@ const { chromium } = require("playwright"),
     // On the card: the part of speech before the meaning, and the links; a link opens that word's card.
     const card = page.locator('#vocabListContainer .word-row-container[data-word-num="1"]');
     assert.equal(await card.locator(".vocab-meaning-pos").first().innerText(), "動");
-    assert.deepEqual(await card.locator(".vocab-word-links").innerText().then((t) => t.replace(/\s+/g, " ").trim()), "同義語 regard 反意語 ignore");
+    assert.deepEqual(await card.locator(".vocab-word-links").innerText().then((t) => t.replace(/\s+/g, " ").trim()), "同義語 regard 反意語 ignore 全単語帳で探す");
     await card.getByRole("button", { name: "同義語「regard」のカードを開く" }).click();
     await page.locator("#flashcardWordDetails.is-open #flashcardDetailContent .word-row-container").waitFor();
     assert.match(await page.locator("#flashcardDetailContent .word-row-container").innerText(), /regard/);
