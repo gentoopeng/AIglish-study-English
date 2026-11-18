@@ -3390,3 +3390,16 @@ html:is([data-motion="calm"],[data-motion="off"],[data-motion="test"]) #appSplas
 html:is([data-motion="off"],[data-motion="test"]) #appSplash .splash-bar i{transition:none;}
 html:is([data-motion="off"],[data-motion="test"]).splash-leaving #appSplash{animation:none;opacity:0;}
 @media(max-width:900px){#auth-gate-screen .auth-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(15,23,42,.78);}}
+
+/* The update screen (10.151): above the splash, the login and the app, until the app is updated. */
+.app-update{position:fixed;inset:0;z-index:7000;display:grid;place-items:center;padding:24px;background:linear-gradient(180deg,rgba(7,13,26,.55),rgba(7,13,26,.9)),var(--splash-image) var(--splash-position)/cover no-repeat,#070d1a;}
+.app-update[hidden]{display:none;}
+.app-update-card{width:min(360px,100%);box-sizing:border-box;padding:28px 24px 22px;border:1px solid rgba(229,207,145,.3);border-radius:26px;background:rgba(15,23,42,.86);color:#f4eddf;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.5);font:14px/1.6 "Hiragino Sans",system-ui,sans-serif;}
+.app-update-brand{margin:0 0 8px;font:800 30px/1 "Avenir Next","Hiragino Sans",system-ui,sans-serif;color:#fff;}
+.app-update-brand span{color:#e5cf91;}
+.app-update-card h2{margin:0 0 6px;font-size:18px;}
+.app-update-versions{margin:0 0 12px;font-variant-numeric:tabular-nums;color:rgba(244,237,223,.75);}
+.app-update-versions b{color:#e5cf91;}
+.app-update-text{margin:0 0 18px;font-size:13px;color:rgba(244,237,223,.85);}
+.app-update-button{width:100%;height:50px;border:0;border-radius:14px;background:linear-gradient(135deg,#e5cf91,#c9a85c);color:#1a1408;font:800 16px/1 "Hiragino Sans",system-ui,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(229,207,145,.25);}
+.app-update-note{margin:12px 0 0;font-size:12px;color:#f8b4a6;}
