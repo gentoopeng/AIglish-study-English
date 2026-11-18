@@ -350,7 +350,10 @@
                 var importText=form.querySelector('#libraryBookWords').value.trim();
                 if(book){var recovered=window.VocabMaster.resolve(id);if(recovered)master=recovered.master;else if(importText[0]!=='[')throw new Error('単語データを読み込んでから編集してください。');}
                 if(book&&importText[0]==='['&&!confirm('バックアップデータで完全に上書きしますか？'))return;
+                var beforeImport=JSON.parse(JSON.stringify(master||[]));
                 master=window.parseVocabImport(importText,master);
+                // Related words that are headwords of the player's other books become links to them (10.154).
+                try{if(window.WordRelationsUi)await window.WordRelationsUi.promote(master,id,beforeImport);}catch(e){console.warn('[relations] promote',e);}
                 await coverReady;
                 var record = { id: id, name: name, cover: cover || '📔', coverType: cover ? 'image' : 'text', personal: true, visibility: form.querySelector('#libraryBookVisibility').value };
                 if (form.querySelector('#libraryBookTermMode').checked) record.termMode = true;
