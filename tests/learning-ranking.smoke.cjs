@@ -12,6 +12,7 @@ await page.evaluate(()=>{
  window.StudyTime.init();window.syncRankingMetrics();
 });
 assert.equal(await page.evaluate(()=>userStats.vocab_rated_count),0);await page.evaluate(()=>{window.recordRankedWord('rank-book',1);window.recordRankedWord('rank-book',1);window.recordRankedSwipe();window.recordRankedSwipe();});assert.equal(await page.evaluate(()=>userStats.vocab_rated_count),1);assert.equal(await page.evaluate(()=>userStats.flash_count),2);
+await page.locator('#nav-vocab').click();// (The app opens on ステータス since 10.156; this test studies from 単語帳, and leaving it saves.)
 await page.locator('#nav-titles').click();// Rankings are fetched only by the refresh button.
 await page.locator('#rankingRefresh').click();await page.locator('[data-podium-metric="time"] .place-1 .podium-name').waitFor();assert.equal(await page.locator('[data-podium-metric="time"] .place-1 .podium-name').textContent(),'青木一郎');assert.equal(await page.locator('[data-podium-metric="time"] .place-1 .podium-name br').count(),1);assert.equal(await page.locator('#rankingPodium img').count(),9);assert.equal(await page.locator('#titles-list, #titlesCollection, #sideSelectTitle, #profTitleLabel').count(),0);assert.match(await page.locator('#nav-titles').textContent(),/ランキング/);
 await page.getByRole('button',{name:'合計勉強時間 1位 青木 一郎の詳細'}).click();assert.equal(await page.locator('dialog[open]').isVisible(),true);assert.deepEqual(await page.locator('dialog dd').allTextContents(),['0pt','未取得','2時間0分','20語','30回']);await page.getByRole('button',{name:'閉じる',exact:true}).click();

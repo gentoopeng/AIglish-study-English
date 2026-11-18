@@ -23,9 +23,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
 
-    // Six tabs fit on a small phone, with the chip icon for the casino.
+    // Seven tabs (ステータス first, 10.156) fit on a small phone, with the chip icon for the casino.
     const nav = await page.locator(".nav-bar .nav-item").evaluateAll((items) => items.map((b) => ({ id: b.id, right: b.getBoundingClientRect().right, wide: b.scrollWidth <= b.clientWidth + 1 })));
-    assert.equal(nav.length, 6);
+    assert.equal(nav.length, 7);
     assert.ok(nav.every((n) => n.right <= 375.5 && n.wide), JSON.stringify(nav));
     await page.locator("#nav-casino").click();
     const tab = page.locator("#view-casino.active");

@@ -53,8 +53,8 @@
   // ---- Stage 2: tabs and the side menu ----------------------------------------------------------------------------
   // Which way the new tab lies (the bottom navigation's order), for the sideways start of its blocks, and where the pill under the
   // chosen navigation item goes. The place is measured once per switch (and when the window changes), never in a loop.
-  const ORDER = ["vocab", "reader", "community", "study", "titles", "casino"];
-  let currentTab = "vocab";
+  const ORDER = ["status", "vocab", "reader", "community", "study", "titles", "casino"];
+  let currentTab = "status";
   function placePill() {
     const bar = document.getElementById("appMainBottomNavBar"),
       active = bar?.querySelector(".nav-item.active");
