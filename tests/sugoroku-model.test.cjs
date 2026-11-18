@@ -270,6 +270,7 @@ test("an event square waits for its game; win, push and loss pay as agreed", () 
   assert.equal(out.gain, 0);
   assert.throws(() => S.roll(out.state, card, 100, seq([0])));
   const win = S.settle(out.state, card, 1, seq([draw(closedOn(card))]), "amy");
+  assert.equal(S.revOf(win.state), S.revOf(out.state) + 1, "a settled game is a newer save");
   assert.equal(win.gain, 200);
   assert.equal(win.state.pending, null);
   assert.equal(win.events.filter((e) => e.t === "ball").length, 1);
@@ -350,6 +351,8 @@ test("a mini game waits in state.bonus, blocks rolling and pays its score, at le
   assert.equal(S.settleBonus(out.state, 12.5).gain, 1000, "a miss pays the floor");
   assert.equal(S.settleBonus(out.state, null).gain, 1000, "a game left pays the floor");
   assert.deepEqual(S.settleBonus(out.state, 10).state.bonus, []);
+  // A settled mini game is a newer save than the one before it (so another device's older copy does not win).
+  assert.equal(S.revOf(S.settleBonus(out.state, 10).state), S.revOf(out.state) + 1);
   // The floor follows the bet; 倍がけ doubles it like any score.
   assert.equal(S.bonusGain({ game: "math", mult: 2, bet: 200 }, 0), 2000);
   assert.equal(S.bonusGain({ game: "dice", mult: 2, bet: 100, x2: true }, 0), 1000 + Math.min(1000, S.RULES.x2Cap * 100));

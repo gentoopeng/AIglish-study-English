@@ -90,6 +90,23 @@
   // ---- Saving ----------------------------------------------------------------------------
   let api = null;
   const saveName = () => "aiglish_sugoroku_" + api.uid() + (api.real() ? "" : "_practice");
+  // Where the open screen's game is kept, fixed when it opens (10.148). Points play and practice have two saves, and
+  // whether play is on points can change while the screen is open (the cloud limit pauses it for five minutes). Chosen
+  // at each save, a real game was written into the practice save (and lost) or a practice game over the real one.
+  let bound = null;
+  // Whether points play and the account are still what the screen opened with. Once not (the cloud limit paused or
+  // resumed points play, or another account), the screen is frozen: nothing more is saved or paid from it, so a game's
+  // result never lands in one wallet while its save is the other's (a practice game paying points, or the reverse).
+  // Opening the screen again starts afresh.
+  const sameMode = () => !!bound && !bound.frozen && api.real() === bound.real && api.uid() === bound.id;
+  function freeze() {
+    if (!bound || bound.frozen) return;
+    bound.frozen = true;
+    try {
+      say(bound.real ? "クラウドにつながらなくなりました。この画面はいったん止めます。少し待って開き直してください（ここまでの記録は残っています）" : "ポイントで遊べるようになりました。いったん閉じて開き直してください", "is-loss");
+    } catch {}
+  }
+  addEventListener("cloud-quota-paused", () => bound?.real && freeze());
   const cloudRef = () => window.fbDoc(window.db, "users", api.uid(), "sync", "sugoroku");
   function readLocal() {
     try {
@@ -103,25 +120,38 @@
   // is written at once when a game, a mini game, a jackpot or an item comes or goes (so none can be
   // played twice from two devices), and otherwise at most every 30 seconds and when the page is
   // hidden, to keep cloud writes few.
-  const cloud = { key: null, at: 0, timer: 0, state: null };
-  const gate = (state) => JSON.stringify([state.pending || null, state.queue || [], state.bonus || [], state.jpWait || [], state.items || []]);
+  const cloud = { key: null, at: 0, timer: 0, state: null, id: null };
+  // ヘルモード starting or ending is written at once too (before 10.148 it waited up to 30 seconds, and a game carried on
+  // from another device in that time came back without it).
+  const gate = (state) => JSON.stringify([state.pending || null, state.queue || [], state.bonus || [], state.jpWait || [], state.items || [], state.hell > 0]);
   function saveCloud() {
     clearTimeout(cloud.timer);
     cloud.timer = 0;
-    const state = cloud.state;
-    if (!state || !api?.real()) return;
+    const state = cloud.state,
+      id = cloud.id;
+    if (!state || !id || !window.db || !window.fbDoc || !window.fbSetDoc) return;
     cloud.state = null;
     cloud.key = gate(state);
     cloud.at = Date.now();
     Promise.resolve()
-      .then(() => window.fbSetDoc(cloudRef(), { state: JSON.stringify(state), rolls: state.rolls, savedAt: Date.now() }))
+      .then(() => window.fbSetDoc(window.fbDoc(window.db, "users", id, "sync", "sugoroku"), { state: JSON.stringify(state), rolls: state.rolls, savedAt: Date.now() }))
       .catch((error) => console.warn("[sugoroku] save", error));
   }
+  let lastSaved = null;
   function save(state) {
+    if (bound && !sameMode()) return void freeze();
+    const where = bound || { key: saveName(), real: api.real(), id: api.uid() };
+    // Every change that matters across devices (a game, a mini game, a jackpot, an item, ヘルモード) makes the save newer
+    // (rev), so an older copy on another device is never taken for the newer one and played again.
+    if (lastSaved && lastSaved.id === where.id && lastSaved.key === where.key && gate(lastSaved.state) !== gate(state) && S.revOf(state) <= S.revOf(lastSaved.state)) state.rev = S.revOf(lastSaved.state) + 1;
+    lastSaved = { id: where.id, key: where.key, state };
     try {
-      localStorage.setItem(saveName(), JSON.stringify(state));
+      localStorage.setItem(where.key, JSON.stringify(state));
     } catch {}
-    if (!api.real()) return;
+    if (!where.real) return;
+    // (Another account's game waiting to go up goes first.)
+    if (cloud.state && cloud.id !== where.id) saveCloud();
+    cloud.id = where.id;
     cloud.state = state;
     if (gate(state) !== cloud.key || Date.now() - cloud.at > 30e3) saveCloud();
     else if (!cloud.timer) cloud.timer = setTimeout(saveCloud, 30e3);
@@ -555,11 +585,20 @@
       try {
         if (open) localStorage.setItem(cacheName, String(Date.now()));
         else localStorage.removeItem(cacheName);
+        localStorage.setItem(cacheName + "_known", open ? "1" : "0");
       } catch {}
       return open;
     } catch (error) {
+      // The answer could not be read: the last one known holds (before 10.148 the game opened as the test version,
+      // on practice chips, and the player's own game seemed gone).
       console.warn("[sugoroku] status", error);
-      return false;
+      try {
+        const known = localStorage.getItem(cacheName + "_known");
+        // (A device that has not kept the answer yet: the time of the last "open" seen, however old, stands for it.)
+        return known ? known === "1" : !!localStorage.getItem(cacheName);
+      } catch {
+        return false;
+      }
     }
   }
   async function play(body, wallet) {
@@ -581,6 +620,8 @@
     // The screen comes up at once from what this device kept (the game, the card as last seen,
     // the player's icon); the cloud copies come in behind it (the card through its listener).
     // Only what this device has never seen is waited for.
+    bound = { key: saveName(), real: api.real(), id: api.uid() };
+    lastSaved = null;
     const id = api.uid(),
       kept = readLocal(),
       cached = shared() ? cachedCard() : null,
@@ -608,9 +649,13 @@
     seeLog();
     draw();
     if (testMode) body.prepend(node("p", "sg-testbanner", "テスト版：練習チップで遊びます。ポイントは動きません。"));
+    // Opened on practice chips only because the cloud limit has paused the cloud: the player's own game is kept as it was.
+    else if (!bound.real && api.uid() !== "GUEST-000" && window.FirestoreReadGuard?.paused?.())
+      body.prepend(node("p", "sg-testbanner", "クラウドの利用上限のため、いまは練習チップで表示しています。自分のすごろく（位置・ヘルモード・アイテム）は消えていません。5分ほどたってから開き直してください。"));
     listen();
     setTimeout(notify, 0);
     // A game played further on another device takes over, if nothing is going on here.
+    let synced = Promise.resolve();
     if (kept) {
       // Until the cloud copy has been compared, no roll starts (it could throw away a purchase made elsewhere).
       view.syncing = true;
@@ -620,8 +665,11 @@
         hud();
       };
       cloudGame.then(done, done);
-      cloudGame.then((remote) => {
-        if (!remote || target !== view || view.busy || S.revOf(remote) <= S.revOf(view.state) || view.state.pending || view.state.queue?.length || view.state.bonus?.length) return;
+      synced = cloudGame.then((remote) => {
+        // The copy from another device is newer (every roll, game, mini game, jackpot and item change raises rev): it is
+        // taken even when this device's own older copy still holds a game or a mini game, which the other device has
+        // already played (before 10.148 that game was kept here and could be played twice).
+        if (!remote || target !== view || view.busy || S.revOf(remote) <= S.revOf(view.state)) return;
         view.state = remote;
         save(remote);
         hud();
@@ -645,8 +693,14 @@
       view.people = { ...view.people, [id]: value };
       paintCard();
     });
-    if (state.jpWait?.length) {
-      const left = { state };
+    // A game, a mini game or a jackpot waiting in this device's copy starts only once the cloud copy has been compared
+    // (at most a few seconds): if another device has played it already, that newer copy is what is shown.
+    if (state.jpWait?.length || state.bonus?.length || state.pending || state.queue?.length) {
+      await Promise.race([synced, new Promise((resolve) => setTimeout(resolve, 8000))]);
+      if (target !== view) return;
+    }
+    if (view.state.jpWait?.length) {
+      const left = { state: view.state };
       await payJackpots(left);
       if (view) view.state = left.state;
     }
@@ -1123,6 +1177,7 @@
   // players' lines collected) less the bet. An accident can take more than there is: with points
   // the rest is owed to the casino (a 請求 in ポイントの貸し借り); on practice chips it stops at 0.
   function pay(out, cost) {
+    if (bound && !sameMode()) return void freeze();
     const net = (out.collected || 0) + out.gain - cost,
       have = api.balance();
     // A part of other players' lines, with points: a notice in the お知らせボックス.
@@ -1150,6 +1205,7 @@
     while (out.state.jpWait?.length) {
       const kind = out.state.jpWait[0];
       let amount = window.CasinoJackpot?.amounts()[kind] || 0;
+      if (bound && !sameMode()) return void freeze();
       if (api.real()) {
         try {
           amount = await window.CasinoJackpot.win(kind, { id: api.uid(), n: (await person()).n });
@@ -1370,6 +1426,11 @@
     if (view.busy || (batch ? view.state.pending : gameWaits(view.state)) || api.balance() < view.cost) return false;
     if (api.real() && api.allowance && api.allowance() < view.cost) {
       hud();
+      return false;
+    }
+    // Points play turned on or off while the screen was open (the cloud limit): this game belongs to the other one.
+    if (bound && !sameMode()) {
+      freeze();
       return false;
     }
     const cost = view.cost,
