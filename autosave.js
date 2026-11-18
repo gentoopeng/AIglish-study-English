@@ -157,7 +157,9 @@
     previous = tab;
     if (
       old !== tab &&
-      ["vocab", "reader", "study", "community"].includes(old) &&
+      // (ステータス, the screen the app opens on since 10.156, too: leaving it saves what is still waiting from
+      // before, as leaving 単語帳 did when the app opened there.)
+      ["status", "vocab", "reader", "study", "community"].includes(old) &&
       (revision !== saved ||
         old === "study" ||
         window.localStorage?.getItem("core_v4_autosave_pending_" + id()))

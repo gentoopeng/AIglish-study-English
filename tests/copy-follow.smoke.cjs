@@ -123,7 +123,7 @@ const { chromium } = require("playwright"),
       window.fbCollection = (...args) => args;
       window.fbGetDoc = async (ref) => (__reads.push(ref.join("/")), { exists: () => ref[1] === "publicTextbooks" && ref.at(-1) === "pub-1", data: () => structuredClone(__pub) });
       window.fbGetDocs = async (ref) => (ref[1] !== "publicTextbooks" ? { forEach: () => {} } : { forEach: (cb) => cb({ id: "pub-1", data: () => structuredClone(__pub) }) });
-      window.showVocabLibrarySelection();
+      window.switchTab("vocab");
     });
     await page.getByRole("button", { name: "みんなの単語帳", exact: true }).click();
     await page.getByRole("button", { name: "自分用に追加" }).click();
@@ -170,7 +170,7 @@ const { chromium } = require("playwright"),
       window.__pub2 = { ownerId: "other-user", name: "もうひとつの公開本", updatedAt: "2026-11-01T00:00:00.000Z", masterJson: JSON.stringify([{ num: 1, word: "p", meaning: "ぴー" }, { num: 2, word: "q", meaning: "きゅー" }]) };
       window.fbGetDocs = async (ref) => (ref[1] !== "publicTextbooks" ? { forEach: () => {} } : { forEach: (cb) => cb({ id: "pub-2", data: () => structuredClone(__pub2) }) });
       window.fbGetDoc = async (ref) => (__reads.push(ref.join("/")), { exists: () => ref[1] === "publicTextbooks" && ref.at(-1) === "pub-2", data: () => structuredClone(__pub2) });
-      window.showVocabLibrarySelection();
+      window.switchTab("vocab");
     });
     await page.getByRole("button", { name: "みんなの単語帳", exact: true }).click();
     await page.getByRole("button", { name: "自分用に追加" }).click();
