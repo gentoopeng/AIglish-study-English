@@ -130,9 +130,10 @@
     return !(m === "off" || m === "test" || matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   };
   // Numbers count up when the card opens (not with motion off).
+  let quiet = false;
   function countUp(node, value, format = comma) {
     node.textContent = format(value);
-    if (!motion() || !Number.isFinite(value) || Math.abs(value) < 2) return;
+    if (quiet || !motion() || !Number.isFinite(value) || Math.abs(value) < 2) return;
     const start = performance.now(),
       span = 900;
     const step = (t) => {
@@ -372,14 +373,23 @@
   }
 
   let timer = 0;
-  function render() {
+  // A redraw while the card is open (new data) is quiet: no entrance, no count-up. And the page keeps its height
+  // while the card is swapped: on iPhone, a page that shrinks for a moment under the player's scroll left the
+  // fixed tab bar and header stuck in the middle of the screen (10.158).
+  function render(opts = {}) {
     const host = document.getElementById("statusBoard");
     if (!host) return;
+    quiet = !!opts.quiet;
     const d = collect();
     const now = new Date();
     const head = el("header", "sb-head");
     head.append(el("span", "sb-head-date", now.getMonth() + 1 + "/" + now.getDate() + " " + WEEK[now.getDay()]));
+    const keep = host.offsetHeight;
+    if (keep) host.style.minHeight = keep + "px";
     host.replaceChildren(head, hero(d), pointsCard(d), studyCard(d), masteryCard(d));
+    host.style.minHeight = "";
+    quiet = false;
+    if (opts.quiet) return;
     host.classList.remove("sb-enter");
     void host.offsetWidth;
     host.classList.add("sb-enter");
@@ -396,9 +406,9 @@
     return [me(), pool, Math.floor(num(stats.study_total_secs) / 300), stats.vocab_rated_count, stats.flash_count, safe(() => localStorage.getItem("core_v4_study_points_" + me()) || "", "")].join("|");
   }
   let last = "";
-  function start() {
+  function start(opts) {
     last = signature();
-    render();
+    render(opts);
     clearInterval(timer);
     // Today's time moves while the card is open: refresh that tile now and then (quietly, no count-up).
     timer = setInterval(() => {
@@ -416,11 +426,14 @@
   // The card is the first screen: drawn at once with what this device has (so it is never blank while a book
   // loads), when the player's data is in, and again whenever what it shows changes (cloud stats, a rating in the
   // warm-up over it, points, another account).
+  let scrolledAt = 0;
+  root.addEventListener?.("scroll", () => (scrolledAt = performance.now()), { passive: true });
   if (active()) start();
-  root.addEventListener?.("learning-data-ready", () => active() && start());
+  root.addEventListener?.("learning-data-ready", () => active() && start({ quiet: !!document.querySelector("#statusBoard .sb-hero") && scrollY > 0 }));
   setInterval(() => {
     if (!active() || document.visibilityState !== "visible" || document.hidden) return;
-    if (signature() !== last) start();
+    // (Not while the player is scrolling: it waits until the page is still.)
+    if (signature() !== last && performance.now() - scrolledAt > 1500) start({ quiet: true });
   }, 1500);
   root.StatusBoard = Object.freeze({ collect, render });
 })(window);

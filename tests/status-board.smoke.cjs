@@ -103,6 +103,23 @@ const { chromium } = require("playwright"),
       userStats.vocab_rated_count = 51;
     });
     await page.waitForFunction(() => document.querySelector("#statusBoard .sb-donut-center strong span")?.textContent === "70");
+    // Scrolled to the bottom when new data comes in: the page keeps its place (and so the fixed tab bar its own),
+    // and the card is redrawn quietly (no entrance again).
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const before = await page.evaluate(() => ({ y: scrollY, h: document.documentElement.scrollHeight }));
+    assert.ok(before.y > 200, "the card is taller than the screen");
+    await page.evaluate(() => {
+      window.__heights = [];
+      new MutationObserver(() => window.__heights.push(document.documentElement.scrollHeight)).observe(document.getElementById("statusBoard"), { childList: true });
+      document.getElementById("statusBoard").classList.remove("sb-enter");
+      userStats.vocab_rated_count = 52;
+    });
+    await page.waitForFunction(() => window.__heights.length > 0);
+    const after = await page.evaluate(() => ({ y: scrollY, heights: window.__heights, enter: document.getElementById("statusBoard").classList.contains("sb-enter"), nav: document.getElementById("appMainBottomNavBar").getBoundingClientRect().bottom }));
+    assert.equal(after.y, before.y);
+    assert.ok(after.heights.every((h) => h >= before.h - 1), JSON.stringify(after.heights));
+    assert.equal(after.enter, false);
+    assert.equal(Math.round(after.nav), 844);
     // iPhone stable rendering: the card is all there at rest, and nothing loops.
     await page.evaluate(() => document.documentElement.classList.add("ios-stable-rendering"));
     await page.locator("#nav-vocab").click();
