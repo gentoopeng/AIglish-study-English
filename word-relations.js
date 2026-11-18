@@ -54,13 +54,36 @@
       for (const name of m[2].split(/[,，、／/;；]+/).map((s) => s.trim()).filter(Boolean)) out.push({ name: text(name, 60), kind: NAMES[m[1]] });
     return out;
   }
+  // A name as an AI gives it, cut to the word itself (10.155): "obey（〜に従う）", "obey: 従う", "obey 〜に従う" and
+  // "山名持豊（宗全）" give the word and, apart, what came with it (it goes to 補足, not to the word).
+  function cleanName(v) {
+    const s = text(v, 160);
+    let name = s,
+      extra = "";
+    if (/^[A-Za-z]/.test(s)) {
+      const at = s.search(/[(（[［【<〈:：=＝]|[^\x00-\x7F]|\s[-–—]\s/);
+      if (at > 0) (name = s.slice(0, at)), (extra = s.slice(at));
+    } else {
+      const m = s.match(/^(.+?)\s*[（(](.+?)[）)]\s*$/);
+      if (m) (name = m[1]), (extra = m[2]);
+    }
+    name = text(name.replace(/[\s,.'’\-–—]+$/, ""), 60);
+    extra = extra.replace(/^[\s(（[［【<〈:：=＝\-–—]+/, "").replace(/[\s)）\]］】>〉]+$/, "").trim();
+    return name ? { name, extra: text(extra, 80) } : { name: text(s, 60), extra: "" };
+  }
   // Puts relations given by name on word `num` of `words` (an import): a name that is a word of this list becomes a
-  // link (both ways), any other name a related word. Returns { links, related } counts.
+  // link (both ways), any other name a related word. What came with a name (a meaning, a note) is added to 補足.
+  // Returns { links, related } counts.
   function applyNames(words, num, names) {
     const me = words.find((w) => String(w.num) === String(num));
     const counts = { links: 0, related: 0 };
     if (!me) return counts;
-    for (const { name, kind } of names) {
+    const notes = [];
+    for (const given of names) {
+      const { name, extra } = cleanName(given.name),
+        kind = kindOf(given.kind);
+      if (!name) continue;
+      if (extra) notes.push(KINDS[kind] + "・" + name + " " + extra);
       const lower = name.toLowerCase(),
         target = words.find((w) => String(w.num) !== String(num) && String(w.word || "").trim().toLowerCase() === lower);
       if (target) {
@@ -73,6 +96,9 @@
         counts.related++;
       }
     }
+    const sub = String(me.sub || "").trim(),
+      add = notes.filter((n) => !sub.includes(n.slice(n.indexOf("・") + 1)));
+    if (add.length) me.sub = [sub, ...add].filter(Boolean).join("／");
     if (!me.links?.length) delete me.links;
     if (!me.related?.length) delete me.related;
     return counts;
@@ -113,7 +139,7 @@
       }
     return out;
   }
-  const api = { KINDS, MAX, kindOf, cleanLinks, cleanRelated, isRelationField, parseRelationField, applyNames, findUses };
+  const api = { KINDS, MAX, kindOf, cleanLinks, cleanRelated, isRelationField, parseRelationField, cleanName, applyNames, findUses };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.WordRelations = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);

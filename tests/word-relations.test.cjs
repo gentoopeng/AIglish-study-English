@@ -54,3 +54,19 @@ test("where a word is used: in words, meanings or notes of every book, an Englis
   assert.deepEqual(R.findUses("続け", books).map((f) => f.num), [7]);
   assert.deepEqual(R.findUses("", books), []);
 });
+
+test("a name an AI gives with a meaning is cut to the word; the meaning goes to 補足 once (10.155)", () => {
+  assert.deepEqual(R.cleanName("obey（〜に従う）"), { name: "obey", extra: "〜に従う" });
+  assert.deepEqual(R.cleanName("obey: 従う"), { name: "obey", extra: "従う" });
+  assert.deepEqual(R.cleanName("heed 注意する"), { name: "heed", extra: "注意する" });
+  assert.deepEqual(R.cleanName("comply with (〜に応じる)"), { name: "comply with", extra: "〜に応じる" });
+  assert.deepEqual(R.cleanName("be obedient to"), { name: "be obedient to", extra: "" });
+  assert.deepEqual(R.cleanName("山名持豊（宗全）"), { name: "山名持豊", extra: "宗全" });
+  assert.deepEqual(R.cleanName("下剋上"), { name: "下剋上", extra: "" });
+  const words = [{ num: 1, word: "follow", sub: "フレーズ・follow her advice／同義語・obey 〜に従う" }, { num: 2, word: "obey" }];
+  R.applyNames(words, 1, [{ name: "obey（〜に従う）", kind: "syn" }, { name: "heed 注意する", kind: "syn" }, { name: "lead", kind: "ant" }]);
+  assert.deepEqual(words[0].links, [{ num: "2", kind: "syn" }]);
+  assert.deepEqual(words[0].related, [{ text: "heed", kind: "syn" }, { text: "lead", kind: "ant" }]);
+  // Already in 補足 (obey) is not written twice.
+  assert.equal(words[0].sub, "フレーズ・follow her advice／同義語・obey 〜に従う／同義語・heed 注意する");
+});
