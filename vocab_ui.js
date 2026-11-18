@@ -256,7 +256,17 @@
         list.forEach(function(item, index) {
             var num = Number(item && item.num), head = String(item && item.word || '').trim();
             if (!Number.isInteger(num) || num < 1 || !head) throw new Error((index + 1) + '件目に番号と単語がありません。');
-            var meanings = (Array.isArray(item.meanings) ? item.meanings : []).map(function(m) {
+            // Senses numbered ①② inside one text (an AI often does this) are separate cards: split them, each
+            // keeping the 品詞 and marks. A two-line phrase (English, then Japanese) is never split.
+            var given = [];
+            (Array.isArray(item.meanings) ? item.meanings : []).forEach(function(m) {
+                m = typeof m === 'string' ? { text: m } : (m || {});
+                var text = String(m.text || '').replace(/\\n/g, '\n').trim();
+                if (text.indexOf('\n') < 0 && /^[①-⑳]/.test(text) && /.[①-⑳]/.test(text))
+                    text.split(/(?=[①-⑳])/).forEach(function(part) { part = part.replace(/^[①-⑳]\s*/, '').trim(); if (part) given.push(Object.assign({}, m, { text: part })); });
+                else given.push(m);
+            });
+            var meanings = given.map(function(m) {
                 m = typeof m === 'string' ? { text: m } : (m || {});
                 var lines = String(m.text || '').replace(/\\n/g, '\n').split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
                 return lines.length ? { text: lines.join('\n'), partOfSpeech: String(m.pos || m.partOfSpeech || '').trim(), minor: m.minor === true, blankOnly: m.blankOnly === true } : null;

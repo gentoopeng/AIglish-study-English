@@ -59,6 +59,11 @@ const { chromium } = require("playwright"),
     assert.ok(provide.sub.includes("provide him with information"));
     // No meaning in the example is a phrase with a concrete object (him, her, the problem …) to answer whole.
     for (const w of books) for (const m of w.meanings) assert.ok(!/\b(him|her|them|me|us|information|the problem)\b/.test(m.split("\n")[0]), w.word + ": " + m);
+    // Senses ①② put in one text by an AI become separate cards; a two-line phrase is not split; the prompts say so.
+    assert.ok(english.includes("1つの text に①②を並べない") && prompt.includes("1つの text に①②を並べない"));
+    const split = await page.evaluate(() => window.parseVocabImport(JSON.stringify({ words: [{ num: 6, word: "develop", meanings: [{ text: "①発達する、〜を発達させる②〜を開発する", pos: "動", minor: true }, { text: "developed country\\n先進国" }, { text: "単独の意味" }] }] }), [])[0]);
+    assert.deepEqual(split.meanings.map((m) => [m.text, m.partOfSpeech || "", !!m.minor]), [["発達する、〜を発達させる", "動", true], ["〜を開発する", "動", true], ["developed country\n先進国", "", false], ["単独の意味", "", false]]);
+    assert.deepEqual(split.meanings.map((m) => m.id), ["6-0", "6-1", "6-2", "6-3"]);
     assert.deepEqual(errors, []);
     console.log("term-prompt smoke ok");
   } finally {
