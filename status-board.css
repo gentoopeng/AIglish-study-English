@@ -1,6 +1,10 @@
 /* ステータス (10.156). Everything rests visible; motion only plays in from a `from` keyframe (transform/opacity),
    so with motion off, in tests or on iOS stable rendering, the card is simply there. */
-#view-status { padding: 4px 0 84px; }
+/* Its own scroller between the header and the tab bar (like ユーザー), so the page itself never scrolls on this screen:
+   on iPhone the fixed tab bar, header and background drifted with the page here (10.159). */
+#view-status.active { position: fixed; top: 56px; bottom: 60px; left: 0; right: 0; z-index: 10; overflow-x: hidden; overflow-y: auto;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 20px 16px 28px; box-sizing: border-box; }
+body.in-game-active #view-status.active { display: none; }
 .status-board {
   --sb-a: #22d3ee; --sb-b: #a78bfa; --sb-c: #f472b6;
   --sb-card: rgba(10, 16, 32, .4); --sb-line: rgba(226, 232, 240, .18);
