@@ -18,6 +18,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       localStorage.setItem("b3_tutorial_done", "1");
       localStorage.setItem("aiglish_sound_settings", JSON.stringify({ enabled: false }));
       // Recorded at the first paint, before any app script.
+      // The gauge's last value before the splash goes.
+      new MutationObserver(() => {
+        const fill = document.querySelector("[data-splash-fill]");
+        if (fill) window.__gauge = [document.querySelector("[data-splash-percent]").textContent, document.querySelector("[data-splash-label]").textContent];
+      }).observe(document, { subtree: true, attributes: true, childList: true, characterData: true });
       document.addEventListener("DOMContentLoaded", () => {
         window.__atFirstPaint = { splashing: document.documentElement.classList.contains("app-splashing"), signedIn: document.documentElement.classList.contains("signed-in"), image: document.documentElement.style.getPropertyValue("--splash-image"), card: getComputedStyle(document.querySelector("#auth-gate-screen .auth-card")).visibility };
       });
@@ -29,8 +34,22 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(first.signedIn, false);
     await page.waitForFunction(() => !document.getElementById("appSplash"));
     assert.equal(await page.locator(".auth-brand").getAttribute("aria-label"), "TangoLabo");
+    assert.deepEqual(await page.evaluate(() => window.__gauge), ["100%", "準備ができました"]);
     assert.ok(await page.locator("#auth-gate-screen .auth-card").isVisible());
     assert.equal(await page.locator("#loginPinInput").getAttribute("autocomplete"), "current-password", "the saved password still fills in");
+    // The corner on the login screen: the version and the settings (motion, reload, startup check).
+    const version = await page.evaluate(() => document.querySelector('meta[name="application-version"]').content);
+    assert.equal(await page.locator(".app-corner-version").innerText(), "ver " + version);
+    assert.ok(await page.locator(".app-corner-gear").isVisible());
+    await page.locator(".app-corner-gear").click();
+    assert.ok(await page.locator(".app-corner-panel").isVisible());
+    await page.locator('[data-motion-pick="calm"]').click();
+    assert.deepEqual(await page.evaluate(() => [localStorage.getItem("aiglish_motion"), document.documentElement.getAttribute("data-motion")]), ["calm", "calm"]);
+    assert.equal(await page.locator('[data-motion-pick="calm"]').getAttribute("aria-pressed"), "true");
+    assert.equal(await page.locator(".app-corner-panel a").getAttribute("href"), "startup-diagnostics.html");
+    await page.locator("[data-corner-close]").click();
+    assert.equal(await page.locator(".app-corner-panel").isVisible(), false);
+    await page.evaluate(() => localStorage.removeItem("aiglish_motion"));
     // The guest button works as before; the background is kept for the next start.
     await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
@@ -46,6 +65,9 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.match(again.image, /background-classroom\.webp/);
     await page.waitForFunction(() => !document.getElementById("appSplash"));
     assert.equal(await page.locator("#auth-gate-screen").isVisible(), false);
+    // Over the app, the corner is gone; the gauge had reached the end.
+    assert.equal(await page.locator(".app-corner-gear").isVisible(), false);
+    assert.equal(await page.locator(".app-corner-version").isVisible(), false);
     // While the app has not decided (the gate still up), a signed-in device never shows the form, even after the splash.
     assert.equal(await page.evaluate(() => {
       document.documentElement.classList.add("signed-in");
