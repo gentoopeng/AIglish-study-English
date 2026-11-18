@@ -316,6 +316,89 @@ const SAVE = "aiglish_sugoroku_sg-a",
     assert.deepEqual(await page.evaluate((at) => at.map((i) => window.__store["shared/sugoroku_live2"].owners[i]), mineOn), ["", ""], "A's balls are off the shared card");
     assert.ok(!(await page.evaluate(() => window.__store["shared/sugoroku_live2"].owners.includes("sg-a"))));
 
+    // ヘルモード starting goes to the cloud copy at once (before 10.148 it could wait 30 seconds, and a game carried on
+    // from another device in that time came back without it).
+    const hellAt = await rule("S.RULES.superAccident.findIndex((x) => x.hell)");
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const S = window.SugorokuModel,
+        s = JSON.parse(localStorage.getItem(name));
+      let p = 0;
+      while (S.kindAt(p + 1) !== "super") p++;
+      Object.assign(s, { pos: p, pending: null, bonus: [], items: [] });
+      localStorage.setItem(name, JSON.stringify(s));
+      delete window.__store["users/sg-a/sync/sugoroku"];
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await settled();
+    await fix([0, hellAt]);
+    await page.evaluate(() => document.querySelector(".sg-go").click());
+    await settled();
+    assert.equal((await saved()).hell, 100);
+    await page.waitForFunction(() => JSON.parse(window.__store["users/sg-a/sync/sugoroku"]?.state || "{}").hell === 100, null, { timeout: 3000 });
+
+    // The cloud limit pauses points play while the screen is open: the game stays where it is kept (not written into
+    // the practice save), and no roll is made until the screen is opened again.
+    const keptBefore = await saved();
+    await page.evaluate(() => {
+      window.__guard = window.FirestoreReadGuard;
+      window.FirestoreReadGuard = { ...window.__guard, paused: () => true };
+    });
+    await page.evaluate(() => document.querySelector(".sg-go").click());
+    await screen.locator(".sg-say", { hasText: "この画面はいったん止めます" }).waitFor({ timeout: 3000 });
+    assert.deepEqual(await saved(), keptBefore, "the real save is untouched");
+    assert.equal(await page.evaluate(() => localStorage.getItem("aiglish_sugoroku_sg-a_practice")), null, "nothing went into the practice save");
+    // Opened while paused: practice chips, said so, and the player's own game is kept as it was.
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await screen.locator(".sg-testbanner", { hasText: "自分のすごろく（位置・ヘルモード・アイテム）は消えていません" }).waitFor();
+    // ... and the pause ends while it is open: a practice game is never written over the real one.
+    await page.evaluate(() => (window.FirestoreReadGuard = window.__guard));
+    await page.evaluate(() => document.querySelector(".sg-go").click());
+    await screen.locator(".sg-say", { hasText: "ポイントで遊べるようになりました" }).waitFor({ timeout: 3000 });
+    assert.deepEqual(await saved(), keptBefore, "the real save is still untouched");
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    // Reopened: the real game, ヘルモード and all.
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await settled();
+    assert.equal(await screen.locator(".sg-testbanner").count(), 0);
+    assert.equal((await saved()).hell, 100);
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+
+    // Whether the game is open cannot be read: the last answer known holds (before, it opened as the test version).
+    await page.evaluate(async () => {
+      // (The "open" seen an hour ago is too old to skip the read.)
+      localStorage.setItem("aiglish_sugoroku_open", String(Date.now() - 3600e3));
+      const real = window.fbGetDoc;
+      window.__realGet = real;
+      window.fbGetDoc = async (path) => (path === "shared/sugoroku_status" ? Promise.reject(Error("offline")) : real(path));
+    });
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await settled();
+    assert.equal(await screen.locator(".sg-testbanner").count(), 0, "not the test version");
+    await page.evaluate(() => (window.fbGetDoc = window.__realGet));
+    // Another device played on (a higher rev, its game already settled): opening here takes that copy, even though
+    // this device's older copy still holds the game (before 10.148 it was kept and could be played twice).
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name)),
+        rev = window.SugorokuModel.revOf(s);
+      localStorage.setItem(name, JSON.stringify({ ...s, pending: { game: "dice", bet: 100 }, rev }));
+      window.__store["users/sg-a/sync/sugoroku"] = { state: JSON.stringify({ ...s, pending: null, hell: 0, pos: 3, rev: rev + 1 }), savedAt: Date.now() };
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await page.waitForFunction((name) => { const s = JSON.parse(localStorage.getItem(name)); return s.pending === null && s.pos === 3; }, SAVE, { timeout: 5000 });
+    await settled();
+    // (ヘルモード off again for what follows.)
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    await page.evaluate((name) => {
+      const s = JSON.parse(localStorage.getItem(name));
+      s.hell = 0;
+      localStorage.setItem(name, JSON.stringify(s));
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await settled();
+
     // Who else is playing: opening the screen marked A as playing. Another player who rolled
     // just now shows above the card; one who stopped five minutes ago, and A, do not.
     const mark = await page.evaluate(() => window.__store["shared/sugoroku_here"]?.["sg-a"]);

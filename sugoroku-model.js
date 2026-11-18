@@ -471,6 +471,7 @@
       gain = bonusGain(game, score);
     state.bonus = rest;
     state.won += gain;
+    state.rev = revOf(before) + 1;
     state.best = Math.max(state.best || 0, gain);
     return { state, events: [{ t: "bonusResult", game: game.game, score, mult: game.mult, amount: gain }], gain };
   }
@@ -782,6 +783,9 @@
     }
     state.won += gain;
     state.best = Math.max(state.best || 0, gain);
+    // A settled game counts as a change of the save (as a roll does), so a copy on another device from before it is
+    // not taken for the newer one and the game played again (10.148).
+    state.rev = revOf(before) + 1;
     return { state, card, events, gain };
   }
 
