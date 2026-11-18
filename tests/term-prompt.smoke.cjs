@@ -36,6 +36,9 @@ const { chromium } = require("playwright"),
     }, example);
     assert.equal(result.length, 3);
     const [nobunaga, onin, shoen] = result;
+    assert.ok(prompt.includes("【links：関係の深い用語】") && prompt.includes("meanings と links に入らない情報はすべて sub"), "term prompt: links");
+    const related = await page.evaluate((json) => window.parseVocabImport(json, []).map((w) => (w.related || []).map((r) => r.text)), example);
+    assert.deepEqual(related, [["豊臣秀吉", "明智光秀"], ["下剋上"], []]);
     assert.deepEqual(nobunaga.questions.filter((q) => q[0] === "year").map((q) => q[1]), ["1560", "1575", "1582"]);
     assert.deepEqual(nobunaga.questions.filter((q) => q[0] === "blank").map((q) => q[1]), ["桶狭間の戦い", "今川義元", "長篠の戦い", "武田勝頼", "明智光秀", "本能寺", "楽市・楽座"]);
     assert.deepEqual(onin.questions.filter((q) => q[0] === "year").map((q) => q[1]), ["1467〜1477"]);
@@ -48,6 +51,13 @@ const { chromium } = require("playwright"),
     // English books: a phrase from the book (provide him with information) is not a question; its pattern is,
     // with the preposition to answer. Both prompts say so, and the English prompt's example does it.
     for (const text of [prompt]) assert.ok(text.includes("provide him with information") && text.includes("+ A 「with」 B"), "term prompt: English rules");
+    await page.locator("#libraryCopyPhotoPrompt").click();
+    await page.waitForFunction(() => window.__copied.length === 2);
+    const photo = await page.evaluate(() => window.__copied.pop());
+    const line = photo.split("\n").find((l) => l.startsWith("1:follow:"));
+    assert.ok(line.endsWith(":同=obey 反=precede") && photo.includes("単語そのものだけを書き"), "photo prompt: relations as words, a 5th part");
+    const lineWord = await page.evaluate((l) => window.parseVocabImport(l, [])[0], line);
+    assert.deepEqual(lineWord.related, [{ text: "obey", kind: "syn" }, { text: "precede", kind: "ant" }]);
     await page.locator("#libraryCopyEnglishPrompt").click();
     await page.waitForFunction(() => window.__copied.length === 2);
     const english = await page.evaluate(() => window.__copied[1]);
@@ -56,6 +66,11 @@ const { chromium } = require("playwright"),
     const books = await page.evaluate((json) => window.parseVocabImport(json, []).map((w) => ({ word: w.word, sub: w.sub, meanings: w.meanings.map((m) => m.text), questions: window.TermQuestions.questions(w).filter((q) => q.kind === "blank").map((q) => q.answer) })), englishExample);
     const provide = books.find((w) => w.word === "provide");
     assert.deepEqual(provide.questions, ["with", "for", "provision"]);
+    // Synonyms and antonyms are words only (10.155): the example's names come in whole, and their meanings are in sub.
+    assert.ok(english.includes("悪い例：{\"word\":\"obey（〜に従う）\"") && english.includes("meanings と links に入らない情報はすべて sub"), "English prompt: words only in links");
+    const follow = await page.evaluate((json) => window.parseVocabImport(json, []).find((w) => w.word === "follow"), englishExample);
+    assert.deepEqual(follow.related, [{ text: "obey", kind: "syn" }, { text: "precede", kind: "ant" }]);
+    assert.match(follow.sub, /同義語・obey/);
     assert.ok(provide.sub.includes("provide him with information"));
     // No meaning in the example is a phrase with a concrete object (him, her, the problem …) to answer whole.
     for (const w of books) for (const m of w.meanings) assert.ok(!/\b(him|her|them|me|us|information|the problem)\b/.test(m.split("\n")[0]), w.word + ": " + m);
