@@ -3,9 +3,11 @@
 #view-status { padding: 4px 0 84px; }
 .status-board {
   --sb-a: #22d3ee; --sb-b: #a78bfa; --sb-c: #f472b6;
-  --sb-card: rgba(12, 18, 36, .78); --sb-line: rgba(148, 163, 184, .16);
-  --sb-text: #e2e8f0; --sb-sub: #94a3b8;
+  --sb-card: rgba(10, 16, 32, .4); --sb-line: rgba(226, 232, 240, .18);
+  --sb-text: #f1f5f9; --sb-sub: #cbd5e1;
   --sb-ok: #34d399; --sb-so: #fbbf24; --sb-bad: #fb7185; --sb-none: rgba(148, 163, 184, .22);
+  /* See-through cards (10.157) sit on bright backgrounds too: a soft shadow keeps the text readable. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .75), 0 0 8px rgba(0, 0, 0, .35);
   display: grid; gap: 14px; max-width: 560px; margin: 0 auto; padding: 0 2px; color: var(--sb-text);
   font-feature-settings: "tnum" 1, "palt" 1;
 }
@@ -17,11 +19,11 @@
   --rk-1: #22d3ee; --rk-2: #6366f1; --rk-glow: rgba(34, 211, 238, .45);
   position: relative; isolation: isolate; overflow: hidden; border-radius: 22px; padding: 18px 16px 16px;
   /* (A plain fallback first: Safari before 16.2 has no color-mix and would drop the whole background.) */
-  background: linear-gradient(160deg, #0f1a33 0%, #070b18 100%);
+  background: linear-gradient(160deg, rgba(15, 26, 51, .5) 0%, rgba(7, 11, 24, .42) 100%);
   background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--rk-1) 26%, transparent), transparent 60%),
               radial-gradient(110% 90% at 100% 100%, color-mix(in srgb, var(--rk-2) 30%, transparent), transparent 62%),
-              linear-gradient(160deg, #0b1226 0%, #070b18 100%);
-  box-shadow: 0 18px 40px -18px var(--rk-glow), inset 0 1px 0 rgba(255, 255, 255, .08);
+              linear-gradient(160deg, rgba(11, 18, 38, .5) 0%, rgba(7, 11, 24, .42) 100%);
+  box-shadow: 0 14px 34px -20px var(--rk-glow), inset 0 1px 0 rgba(255, 255, 255, .1);
 }
 /* A thin border of light that turns slowly around the card. */
 .sb-hero::before {
@@ -55,11 +57,11 @@
   background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .12); }
 .sb-chip-title { color: #fde68a; border-color: rgba(253, 230, 138, .35); background: rgba(253, 230, 138, .08); }
 .sb-id { margin: 6px 0 0; font-size: 10px; color: var(--sb-sub); letter-spacing: .08em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sb-rank { margin-top: 16px; padding: 12px; border-radius: 14px; background: rgba(0, 0, 0, .28); border: 1px solid rgba(255, 255, 255, .07); }
+.sb-rank { margin-top: 16px; padding: 12px; border-radius: 14px; background: rgba(0, 0, 0, .18); border: 1px solid rgba(255, 255, 255, .1); }
 .sb-rank-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .sb-rank-badge { display: inline-flex; align-items: baseline; gap: 8px; }
 .sb-rank-badge small { font-size: 10px; letter-spacing: .3em; font-weight: 900; color: var(--sb-sub); }
-.sb-rank-badge b { font-size: 20px; font-weight: 900; letter-spacing: .06em;
+.sb-rank-badge b { text-shadow: none; font-size: 20px; font-weight: 900; letter-spacing: .06em;
   background: linear-gradient(100deg, #fff 0%, var(--rk-1) 45%, var(--rk-2) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .sb-rank-steps { display: flex; gap: 4px; }
 .sb-rank-steps i { width: 12px; height: 12px; transform: rotate(45deg) scale(.72); border-radius: 2px; background: rgba(255, 255, 255, .12); }
@@ -81,7 +83,7 @@
 
 /* ---------- Cards ---------- */
 .sb-card { position: relative; border-radius: 18px; padding: 14px; background: var(--sb-card); border: 1px solid var(--sb-line);
-  box-shadow: 0 10px 30px -20px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(255, 255, 255, .04); }
+  box-shadow: 0 10px 26px -22px rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .06); }
 .sb-title { margin: 0 0 10px; font-size: 13px; font-weight: 900; letter-spacing: .12em; display: flex; align-items: center; gap: 8px; }
 .sb-title::before { content: ""; width: 4px; height: 14px; border-radius: 2px; background: linear-gradient(var(--sb-a), var(--sb-b)); }
 .sb-label { margin: 0; font-size: 11px; font-weight: 800; color: var(--sb-sub); letter-spacing: .08em; }
@@ -92,7 +94,7 @@
 .sb-points { overflow: hidden; background: radial-gradient(90% 120% at 100% 0%, rgba(34, 211, 238, .14), transparent 60%), var(--sb-card); }
 .sb-points-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .sb-points-value { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
-.sb-points-value span { font-size: 34px; font-weight: 900; letter-spacing: .01em;
+.sb-points-value span { text-shadow: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); font-size: 34px; font-weight: 900; letter-spacing: .01em;
   background: linear-gradient(100deg, #fff, #a5f3fc 50%, #c4b5fd); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .sb-points-value small { font-size: 13px; font-weight: 900; color: var(--sb-a); }
 .sb-delta { font-size: 11px; font-weight: 900; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
