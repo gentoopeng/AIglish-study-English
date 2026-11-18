@@ -246,7 +246,7 @@
     // ================================================================
 
 
-    // Words from an AI (the 英単語帳 prompt): {"words":[{num, word, meanings:[{text, pos, minor}], sub}]}.
+    // Words from an AI (the 英単語帳 and 用語・年号 prompts): {"words":[{num, word, meanings:[{text, pos, minor, blankOnly}], sub}]}.
     // Each meaning becomes one card; a line break in a meaning is kept. Only the numbers given are
     // added or replaced, and a replaced word keeps its unit, display number and links.
     function importAiWords(data, existing) {
@@ -259,11 +259,13 @@
             var meanings = (Array.isArray(item.meanings) ? item.meanings : []).map(function(m) {
                 m = typeof m === 'string' ? { text: m } : (m || {});
                 var lines = String(m.text || '').replace(/\\n/g, '\n').split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
-                return lines.length ? { text: lines.join('\n'), partOfSpeech: String(m.pos || m.partOfSpeech || '').trim(), minor: m.minor === true } : null;
+                return lines.length ? { text: lines.join('\n'), partOfSpeech: String(m.pos || m.partOfSpeech || '').trim(), minor: m.minor === true, blankOnly: m.blankOnly === true } : null;
             }).filter(Boolean).map(function(m, k) {
                 var meaning = { id: num + '-' + k, text: m.text, status: 'none', history: [] };
                 if (m.partOfSpeech) meaning.partOfSpeech = m.partOfSpeech;
                 if (m.minor) meaning.minor = true;
+                // 用語・年号モード: a line that asks only its 「」 terms (the 用語・年号 prompt).
+                if (m.blankOnly) meaning.blankOnly = true;
                 return meaning;
             });
             if (!meanings.length) throw new Error('「' + head + '」に意味がありません。');
