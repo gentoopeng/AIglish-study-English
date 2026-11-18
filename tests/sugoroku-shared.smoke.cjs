@@ -290,6 +290,32 @@ const SAVE = "aiglish_sugoroku_sg-a",
     await page.waitForFunction(() => PersonalNotices.list("sg-a").some((n) => n.title === "Cさんが DOUBLE BINGO"), null, { timeout: 5000 });
     assert.equal(await page.evaluate(() => PersonalNotices.list("sg-a").filter((n) => n.title === "Cさんが DOUBLE BINGO").length), 1);
 
+    // ボール消 (the super accident) takes A's own balls off the shared card for everybody, though no ball is drawn
+    // (before 10.145 only a roll with a ball was written, so the balls stayed on everyone else's card).
+    const superAt = await rule("S.RULES.superAccident.findIndex((x) => x.resetBalls)");
+    await page.getByRole("button", { name: "すごろくビンゴを閉じる" }).click();
+    const mineOn = await page.evaluate((name) => {
+      const S = window.SugorokuModel,
+        card = window.__store["shared/sugoroku_live2"],
+        free = card.owners.map((o, i) => (o === "" ? i : -1)).filter((i) => i >= 0).slice(0, 2);
+      for (const i of free) card.owners[i] = "sg-a";
+      window.__emit();
+      const s = JSON.parse(localStorage.getItem(name));
+      let p = 0;
+      while (S.kindAt(p + 1) !== "super") p++;
+      Object.assign(s, { pos: p, pending: null, bonus: [], items: [] });
+      localStorage.setItem(name, JSON.stringify(s));
+      return free;
+    }, SAVE);
+    await tab.locator(".casino-game.mode-sugoroku").click();
+    await settled();
+    await page.waitForFunction((at) => !!document.querySelectorAll(".sg-cell")[at[0]]?.getAttribute("data-initial"), mineOn, { timeout: 5000 });
+    await fix([0, superAt]);
+    await page.evaluate(() => document.querySelector(".sg-go").click());
+    await settled();
+    assert.deepEqual(await page.evaluate((at) => at.map((i) => window.__store["shared/sugoroku_live2"].owners[i]), mineOn), ["", ""], "A's balls are off the shared card");
+    assert.ok(!(await page.evaluate(() => window.__store["shared/sugoroku_live2"].owners.includes("sg-a"))));
+
     // Who else is playing: opening the screen marked A as playing. Another player who rolled
     // just now shows above the card; one who stopped five minutes ago, and A, do not.
     const mark = await page.evaluate(() => window.__store["shared/sugoroku_here"]?.["sg-a"]);

@@ -822,7 +822,14 @@
       jackpots: events.filter((e) => e.t === "jackpot").map((e) => e.kind),
     };
   }
-  const api = { RULES, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, kindNow, itemsOf, revOf, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, nextQueued, settleBonus, bonusGain, gameScore, sum, reach };
+  // Whether a roll changed the shared card (a ball put on, the player's own balls taken off by the super accident,
+  // a part collected): only such a roll is written to the cloud, so a change other than a ball must count too.
+  function cardTouched(before, after) {
+    if (!before || !after) return true;
+    const same = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
+    return !same(before.owners, after.owners) || !same(before.bets, after.bets) || !same(before.owed, after.owed);
+  }
+  const api = { RULES, cardTouched, bingoSplit, bingoWheel, LINES, CARD, CARDS, CELLS, SIZE, kindAt, kindNow, itemsOf, revOf, newState, newCard, valid, validCard, collect, tidyOwed, upgrade, roll, settle, nextQueued, settleBonus, bonusGain, gameScore, sum, reach };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.SugorokuModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);
