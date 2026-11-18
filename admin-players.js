@@ -164,7 +164,10 @@ async function edit(id){
  const save=element('button','変更を保存');save.type='submit';const back=element('button','一覧に戻る');back.type='button';back.onclick=refreshList;
  const remove=element('button',data.deleted?'完全削除を再確認':'プレイヤーを完全削除');remove.type='button';remove.className='admin-player-delete';
  const playerStaked=confirmButton('このプレイヤーの今日の賭け済み額を0に戻す','もう一度押すと、このプレイヤーの今日の賭け済み額が0に戻ります',()=>resetStaked(id),'戻しました。このプレイヤーの端末が、次にカジノを開いたときに反映します。');playerStaked.className='admin-casino-reset-player';
- form.append(save,back,playerStaked,remove);if(data.deleted){playerStaked.hidden=true;form.querySelectorAll('label').forEach(node=>node.hidden=true);save.hidden=true;}body.append(form);
+ // すごろくビンゴ: this player's balls off the shared card (the others' stay; what anyone is owed stays). For balls a
+ // ボール消 should have taken off before 10.145, which wrote it to this player's own card only.
+ const playerBalls=confirmButton('このプレイヤーのすごろくビンゴのボールを消す','もう一度押すと、このプレイヤーのボールだけが消えます',async()=>{guard();let count=0;await deadline(window.fbRunTransaction(window.db,async tx=>{const ref=window.fbDoc(window.db,'shared','sugoroku_live2'),snap=await tx.get(ref);count=0;if(!snap.exists())return;const c=snap.data();if(!Array.isArray(c.owners))return;c.owners=c.owners.map((o,i)=>{if(o!==id)return o;count++;if(Array.isArray(c.bets))c.bets[i]=0;return '';});if(!count)return;if(c.people&&typeof c.people==='object'){c.people={...c.people};delete c.people[id];}c.updatedAt=Date.now();tx.set(ref,c);}));if(!count)throw Error('このプレイヤーのボールはカードにありません。');},'消しました。開いている画面にもすぐ反映されます。');playerBalls.className='admin-sugoroku-player';
+ form.append(save,back,playerStaked,playerBalls,remove);if(data.deleted){playerStaked.hidden=true;playerBalls.hidden=true;form.querySelectorAll('label').forEach(node=>node.hidden=true);save.hidden=true;}body.append(form);
  // Points from the 運営: add or take back. The player's own device applies it to their wallet
  // (nobody else ever writes a wallet) the next time the app is open; the list says what that
  // device has taken in yet, from the record between 運営 and the player (PointLoans.grant).
