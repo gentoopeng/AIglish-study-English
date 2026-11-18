@@ -46,6 +46,27 @@
     }
   }
   if (gate) new MutationObserver(update).observe(gate, { attributes: true, attributeFilter: ["style"] });
+  // Starting a saved account can wait on the network (the cloud save, the deleted-account check). After 8 seconds the
+  // splash offers a way out: the login form (as the screen before 10.140 showed it all along) or a fresh load.
+  // Before 10.152 there was none: the gauge stood at 88% and, when the splash went, nothing was left to press.
+  const help = document.querySelector("[data-splash-help]");
+  if (help && html.classList.contains("signed-in")) {
+    const showHelp = setTimeout(() => {
+      if (!html.classList.contains("signed-in") || !splash?.shown?.()) return;
+      help.hidden = false;
+    }, 8000);
+    help.querySelector("[data-splash-login]").onclick = () => {
+      clearTimeout(showHelp);
+      clearInterval(poll);
+      html.classList.remove("signed-in");
+      splash?.hide();
+    };
+    help.querySelector("[data-splash-reload]").onclick = () => location.replace(location.pathname + "?reload=" + Date.now());
+    // Still waiting after 45 seconds: the login form comes up by itself (never an empty screen).
+    setTimeout(() => {
+      if (html.classList.contains("signed-in") && splash?.shown?.() && gate && gate.style.display !== "none") help.querySelector("[data-splash-login]").click();
+    }, 45000);
+  }
   // A saved id removed without touching the gate (a deleted account) is caught by looking now and then.
   if (html.classList.contains("signed-in")) poll = setInterval(update, 300);
   setTimeout(() => clearInterval(poll), 60000);

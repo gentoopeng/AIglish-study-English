@@ -110,6 +110,27 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await page.locator("#auth-gate-screen .auth-card").isVisible(), true);
     await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
+    // Starting the saved account hangs (a cloud read that never answers): after 8 seconds the splash offers the login
+    // form and a fresh load; the form then shows and can be used (before 10.152 the gauge stood at 88% for good).
+    const slow = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await slow.route("https://**/*", (r) => r.abort());
+    await slow.addInitScript(() => {
+      localStorage.setItem("b3_tutorial_done", "1");
+      localStorage.setItem("core_v4_userId", "GUEST-000");
+      window.__beforeAppLoadHandlers = [() => new Promise(() => {})];
+    });
+    await slow.goto(base);
+    await slow.locator("[data-splash-help]").waitFor({ timeout: 12000 });
+    const label = await slow.locator("[data-splash-label]").innerText();
+    assert.ok(label.length > 0, label);
+    await slow.locator("[data-splash-login]").click();
+    await slow.waitForFunction(() => !document.getElementById("appSplash"));
+    assert.ok(await slow.locator("#auth-gate-screen .auth-card").isVisible(), "the login form shows");
+    assert.ok(await slow.getByRole("button", { name: "ゲストで試す" }).isVisible());
+    await slow.close();
+    // The tagline under the letters is gone (splash and login).
+    assert.equal(await page.locator(".splash-tagline, .auth-tagline").count(), 0);
+
     // The warm-up switch: on at first, turned off, kept after a restart. A guest cannot change it.
     await page.evaluate(() => {
       myId = "splash-user";

@@ -69,6 +69,10 @@
       .catch(() => {});
   }
   function mark(phase) {
+    // The splash's gauge follows the same steps (index.html).
+    try {
+      window.AppSplash?.stage?.(phase);
+    } catch {}
     state.phase = phase;
     state.ready = phase === "ready";
     persist();
