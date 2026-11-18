@@ -13,6 +13,16 @@ const { chromium } = require("playwright"),
     await page.route("https://**/*", (r) => r.abort());
     await page.addInitScript(() => localStorage.setItem("b3_tutorial_done", "1"));
     await page.goto(process.env.APP_URL || "http://127.0.0.1:8000");
+    // Drawn at once with what the device has, so the first screen is never blank while the data loads.
+    await page.locator("#statusBoard .sb-hero").waitFor({ state: "attached" });
+    // Only local data: no cloud reads.
+    await page.evaluate(() => {
+      window.__cloudReads = 0;
+      for (const name of ["fbGetDoc", "fbGetDocs"]) {
+        const real = window[name];
+        if (typeof real === "function") window[name] = (...a) => (window.__cloudReads++, real(...a));
+      }
+    });
     await page.getByRole("button", { name: "ゲストで試す" }).click();
     await page.waitForFunction(() => window.__learningBootReady === true);
     // The first tab, open on start.
@@ -38,7 +48,10 @@ const { chromium } = require("playwright"),
       const trend = {};
       for (let i = 1; i < 10; i++) trend[window.PointTrend.shift(window.PointTrend.day(), -i)] = 1000 + i * 10;
       localStorage.setItem("aiglish_point_trend_" + myId, JSON.stringify(trend));
-      textbooksPool.splice(0, textbooksPool.length, { id: "s-a", name: "テスト英単語", cover: "📗" }, { id: "s-b", name: "まだの本", cover: "📕" });
+      textbooksPool.splice(0, textbooksPool.length, { id: "s-a", name: "テスト英単語<img src=x onerror=\"window.__xss=1\">", cover: "📗" }, { id: "s-b", name: "まだの本", cover: "📕" });
+      selectedTitle = "<b>称号</b>";
+      window.__opened = [];
+      window.selectVocabLibraryBook = (id) => window.__opened.push(id);
       const counts = { "s-a": { ok: 30, so: 10, bad: 10, none: 50 }, "s-b": { ok: 0, so: 0, bad: 0, none: 40 } };
       window.getTextbookMasteryStats = (id) => counts[id];
       userStats.vocab_rated_count = 50;
@@ -66,9 +79,16 @@ const { chromium } = require("playwright"),
     assert.equal(await board.locator(".sb-bar").count(), 14);
     await page.waitForFunction(() => document.querySelector("#statusBoard .sb-donut-center strong span")?.textContent === "21");
     assert.match(await board.locator(".sb-mini").innerText(), /2冊[\s\S]*140[\s\S]*50[\s\S]*321回/);
-    // Only books with progress are listed; a row opens its book.
-    assert.equal(await board.locator(".sb-book").count(), 2);
-    assert.match(await board.locator(".sb-book").first().innerText(), /テスト英単語[\s\S]*30%/);
+    // Only books with progress are listed (まだの本 has none rated); names and titles are text, never markup.
+    assert.equal(await board.locator(".sb-book").count(), 1);
+    assert.match(await board.locator(".sb-book").first().innerText(), /テスト英単語<img src=x onerror="window.__xss=1">[\s\S]*30%/);
+    assert.match(await board.locator(".sb-chip-title").innerText(), /<b>称号<\/b>/);
+    assert.equal(await page.evaluate(() => window.__xss), undefined);
+    // A row opens its book in 単語帳.
+    await board.locator(".sb-book-head").first().click();
+    assert.deepEqual(await page.evaluate(() => window.__opened), ["s-a"]);
+    assert.ok(await page.locator("#view-vocab").evaluate((v) => v.classList.contains("active")));
+    await page.locator("#nav-status").click();
     // On a phone, nothing sticks out sideways.
     assert.ok(await page.evaluate(() => document.getElementById("statusBoard").scrollWidth <= document.getElementById("statusBoard").clientWidth + 1));
     // Leaving and coming back draws it again; the 単語帳 tab still opens its book list.
@@ -77,6 +97,24 @@ const { chromium } = require("playwright"),
     await page.evaluate(() => (window.StudyPoints.balance = () => 1600));
     await page.locator("#nav-status").click();
     await page.waitForFunction(() => document.querySelector("#statusBoard .sb-points-value span")?.textContent === "1,600");
+    // A rating coming in (the warm-up opens over this card) draws it again by itself.
+    await page.evaluate(() => {
+      window.getTextbookMasteryStats = () => ({ ok: 70, so: 0, bad: 0, none: 30 });
+      userStats.vocab_rated_count = 51;
+    });
+    await page.waitForFunction(() => document.querySelector("#statusBoard .sb-donut-center strong span")?.textContent === "70");
+    // iPhone stable rendering: the card is all there at rest, and nothing loops.
+    await page.evaluate(() => document.documentElement.classList.add("ios-stable-rendering"));
+    await page.locator("#nav-vocab").click();
+    await page.locator("#nav-status").click();
+    await page.waitForTimeout(1500);
+    const rest = await page.evaluate(() => {
+      const css = (s) => getComputedStyle(document.querySelector(s));
+      return { hero: css("#statusBoard .sb-hero").opacity, card: css("#statusBoard .sb-mastery").opacity, orbit: css("#statusBoard .sb-avatar-orbit").animationName, bar: css("#statusBoard .sb-bar i").transform };
+    });
+    assert.deepEqual([rest.hero, rest.card, rest.orbit], ["1", "1", "none"]);
+    assert.notEqual(rest.bar, "matrix(1, 0, 0, 0, 0, 0)", "bars are grown");
+    assert.equal(await page.evaluate(() => window.__cloudReads), 0);
     assert.deepEqual(errors, []);
     console.log("status-board smoke ok");
   } finally {

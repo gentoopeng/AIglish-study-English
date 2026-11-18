@@ -155,6 +155,15 @@
     ring.append(el("span", "sb-avatar-orbit"));
     const avatar = root.RankingVisuals ? root.RankingVisuals.avatar(d.photo, d.name, JSON.stringify({ frame: d.frame })) : el("span", "podium-avatar", d.name.slice(0, 1));
     avatar.classList.add("sb-avatar");
+    // The player's own photo at full size (the shared avatar makes a small preview of a data: image).
+    const img = avatar.querySelector("img");
+    if (img && /^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(d.photo)) {
+      const full = document.createElement("img");
+      full.alt = img.alt;
+      full.decoding = "async";
+      full.src = d.photo;
+      img.replaceWith(full);
+    }
     ring.append(avatar);
     const who = el("div", "sb-who");
     const name = el("h2", "sb-name", d.name);
@@ -333,7 +342,7 @@
     // Each book: a stacked bar, the most worked on first.
     const list = el("ul", "sb-books");
     d.books
-      .filter((b) => b.sum)
+      .filter((b) => b.ok + b.so + b.bad)
       .sort((a, b) => b.ok + b.so + b.bad - (a.ok + a.so + a.bad) || b.sum - a.sum)
       .slice(0, 6)
       .forEach((b, i) => {
@@ -380,17 +389,25 @@
   function active() {
     return document.getElementById("view-status")?.classList.contains("active");
   }
+  // What the card is drawn from, cheaply (no parsing): when it changes, the card is drawn again. It covers the
+  // account, the books arriving, cloud study time and ratings coming in (userStats), and the points record.
+  function signature() {
+    const pool = typeof textbooksPool !== "undefined" && Array.isArray(textbooksPool) ? textbooksPool.length : 0,
+      stats = typeof userStats === "object" && userStats ? userStats : {};
+    // (Study time in 5-minute steps: a warm-up over the card adds seconds all the time.)
+    return [me(), pool, Math.floor(num(stats.study_total_secs) / 300), stats.vocab_rated_count, stats.flash_count, safe(() => localStorage.getItem("core_v4_study_points_" + me()) || "", "")].join("|");
+  }
+  let last = "";
   function start() {
+    last = signature();
     render();
     clearInterval(timer);
-    // Today's time moves while the card is open: refresh it now and then (quietly, no count-up).
+    // Today's time moves while the card is open: refresh that tile now and then (quietly, no count-up).
     timer = setInterval(() => {
       if (!active() || document.visibilityState !== "visible") return;
-      const host = document.getElementById("statusBoard"),
-        d = collect(),
-        tileToday = host?.querySelector(".sb-tone-cyan .sb-tile-value");
-      if (!tileToday) return;
-      tileToday.replaceChildren(...parts(d.study.today).flatMap(([n, u]) => [el("span", "", n), el("small", "", u)]));
+      const tile = document.querySelector("#statusBoard .sb-tone-cyan .sb-tile-value"),
+        stats = typeof userStats === "object" && userStats ? userStats : {};
+      if (tile) tile.replaceChildren(...parts(num(stats.study_today_secs) * 1000).flatMap(([n, u]) => [el("span", "", n), el("small", "", u)]));
     }, 30000);
   }
   if (root.onTabChange)
@@ -398,18 +415,14 @@
       if (tab === "status") start();
       else clearInterval(timer);
     });
-  // On start the card is the first screen: draw it once the player's data is in, and again when the account changes.
-  // (Also when the books or the points arrive later from the cloud.)
-  let last = "";
-  const ready = setInterval(() => {
-    if (!active() || root.__learningBootReady !== true || document.visibilityState !== "visible") return;
-    const pool = typeof textbooksPool !== "undefined" && Array.isArray(textbooksPool) ? textbooksPool.length : 0,
-      sign = me() + "|" + pool + "|" + safe(() => root.StudyPoints.balance(), "");
-    if (sign !== last) {
-      last = sign;
-      start();
-    }
-  }, 600);
-  root.addEventListener?.("pagehide", () => clearInterval(ready));
+  // The card is the first screen: drawn at once with what this device has (so it is never blank while a book
+  // loads), when the player's data is in, and again whenever what it shows changes (cloud stats, a rating in the
+  // warm-up over it, points, another account).
+  if (active()) start();
+  root.addEventListener?.("learning-data-ready", () => active() && start());
+  setInterval(() => {
+    if (!active() || document.visibilityState !== "visible" || document.hidden) return;
+    if (signature() !== last) start();
+  }, 1500);
   root.StatusBoard = Object.freeze({ collect, render });
 })(window);

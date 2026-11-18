@@ -16,6 +16,8 @@
 .sb-hero {
   --rk-1: #22d3ee; --rk-2: #6366f1; --rk-glow: rgba(34, 211, 238, .45);
   position: relative; isolation: isolate; overflow: hidden; border-radius: 22px; padding: 18px 16px 16px;
+  /* (A plain fallback first: Safari before 16.2 has no color-mix and would drop the whole background.) */
+  background: linear-gradient(160deg, #0f1a33 0%, #070b18 100%);
   background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--rk-1) 26%, transparent), transparent 60%),
               radial-gradient(110% 90% at 100% 100%, color-mix(in srgb, var(--rk-2) 30%, transparent), transparent 62%),
               linear-gradient(160deg, #0b1226 0%, #070b18 100%);
@@ -29,6 +31,7 @@
   opacity: .9;
 }
 .sb-hero-aura { position: absolute; width: 260px; height: 260px; right: -90px; top: -110px; border-radius: 50%; z-index: -1;
+  background: radial-gradient(closest-side, var(--rk-glow), transparent);
   background: radial-gradient(closest-side, color-mix(in srgb, var(--rk-1) 40%, transparent), transparent); animation: sb-float 9s ease-in-out infinite alternate; }
 .sb-hero-grid { position: absolute; inset: 0; z-index: -1; opacity: .35; pointer-events: none;
   background-image: linear-gradient(rgba(255, 255, 255, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .05) 1px, transparent 1px);
@@ -45,6 +48,7 @@
 .sb-who { min-width: 0; flex: 1; }
 .sb-kicker { margin: 0 0 2px; font-size: 10px; font-weight: 800; letter-spacing: .32em; color: var(--rk-1); }
 .sb-name { margin: 0; font-size: 24px; line-height: 1.15; font-weight: 900; letter-spacing: .02em; overflow-wrap: anywhere;
+  text-shadow: 0 2px 18px var(--rk-glow);
   text-shadow: 0 2px 18px color-mix(in srgb, var(--rk-1) 45%, transparent); }
 .sb-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .sb-chip { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; color: var(--sb-text);
@@ -103,6 +107,7 @@
 /* Study tiles */
 .sb-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .sb-tile { --tone: var(--sb-a); position: relative; overflow: hidden; padding: 10px 11px; border-radius: 14px;
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .12);
   background: linear-gradient(150deg, color-mix(in srgb, var(--tone) 16%, transparent), rgba(255, 255, 255, .02)); border: 1px solid color-mix(in srgb, var(--tone) 26%, transparent); }
 .sb-tile-icon { position: absolute; right: 8px; top: 6px; font-size: 18px; opacity: .85; }
 .sb-tile-value { display: flex; align-items: baseline; gap: 2px; margin-top: 4px; white-space: nowrap; }
@@ -171,8 +176,13 @@ html:is([data-motion="off"], [data-motion="test"]) .status-board,
 html:is([data-motion="off"], [data-motion="test"]) .status-board *::before,
 html:is([data-motion="off"], [data-motion="test"]) .status-board *::after { animation: none !important; }
 html[data-motion="calm"] .status-board :is(.sb-avatar-orbit, .sb-hero-aura, .sb-tile-icon) { animation: none; }
+/* iPhone stable rendering lets this screen animate (style.css), but only its short entrance: nothing loops on the
+   screen the app opens on. */
+html.ios-stable-rendering .status-board :is(.sb-avatar-orbit, .sb-hero-aura, .sb-tile-icon) { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .status-board *, .status-board *::before, .status-board *::after { animation: none !important; } }
 @media (max-width: 360px) {
   .sb-avatar-ring { width: 80px; height: 80px; } .status-board .sb-avatar.podium-avatar { width: 70px; height: 70px; }
   .sb-name { font-size: 20px; } .sb-donut-wrap { width: 110px; height: 110px; } .sb-mini { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* The renderer recovery mode (after an iPhone crash) shows the card without any motion. */
+html.pwa-recovery-rendering .status-board, html.pwa-recovery-rendering .status-board *, html.pwa-recovery-rendering .status-board *::before, html.pwa-recovery-rendering .status-board *::after { animation: none !important; }

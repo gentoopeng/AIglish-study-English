@@ -2,7 +2,7 @@ const { test } = require("node:test"),
   assert = require("node:assert/strict"),
   vm = require("node:vm"),
   fs = require("node:fs");
-function setup() {
+function setup(startTab = "vocab") {
   const events = {},
     values = new Map(),
     tabs = [],
@@ -11,7 +11,7 @@ function setup() {
   const ctx = {
     myId: "a",
     currentTextbook: "book",
-    currentActiveTabId: "vocab",
+    currentActiveTabId: startTab,
     console: { warn: () => {} },
     setTimeout: () => timers.push("timeout"),
     setInterval: () => timers.push("interval"),
@@ -164,4 +164,17 @@ test("weak review defers cloud sync during play and retains pending work if poin
   ctx.StudyPoints.flush = async () => true;
   assert.equal((await ctx.saveAfterStudy("review-end")).cloudSaved, true);
   assert.equal(values.size, 0);
+});
+
+test("leaving ステータス, the screen the app opens on (10.156), saves what is still waiting from before", async () => {
+  const { ctx, values, tabs, calls } = setup("status");
+  values.set("core_v4_autosave_pending_a", "1");
+  tabs[0]("vocab");
+  await new Promise(setImmediate);
+  assert.equal(calls.filter((c) => c === "cloud").length, 1);
+  // Nothing waiting: leaving it does not save.
+  const quiet = setup("status");
+  quiet.tabs[0]("titles");
+  await new Promise(setImmediate);
+  assert.deepEqual(quiet.calls, []);
 });
