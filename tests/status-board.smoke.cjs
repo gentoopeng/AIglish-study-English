@@ -91,6 +91,7 @@ const { chromium } = require("playwright"),
     await page.locator("#nav-status").click();
     // On a phone, nothing sticks out sideways.
     assert.ok(await page.evaluate(() => document.getElementById("statusBoard").scrollWidth <= document.getElementById("statusBoard").clientWidth + 1));
+    assert.ok(await page.evaluate(() => document.getElementById("view-status").scrollWidth <= document.getElementById("view-status").clientWidth + 1));
     // Leaving and coming back draws it again; the 単語帳 tab still opens its book list.
     await page.locator("#nav-vocab").click();
     assert.ok(await page.locator("#vocabLibrarySelection").isVisible());
@@ -103,23 +104,28 @@ const { chromium } = require("playwright"),
       userStats.vocab_rated_count = 51;
     });
     await page.waitForFunction(() => document.querySelector("#statusBoard .sb-donut-center strong span")?.textContent === "70");
-    // Scrolled to the bottom when new data comes in: the page keeps its place (and so the fixed tab bar its own),
-    // and the card is redrawn quietly (no entrance again).
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    const before = await page.evaluate(() => ({ y: scrollY, h: document.documentElement.scrollHeight }));
-    assert.ok(before.y > 200, "the card is taller than the screen");
+    // The card scrolls in its own view between the header and the tab bar; the page itself never scrolls here
+    // (on iPhone the fixed tab bar drifted with the page). New data while scrolled down: the place is kept and the
+    // card is redrawn quietly (no entrance again).
+    const view = page.locator("#view-status");
+    await view.evaluate((v) => v.scrollTo(0, v.scrollHeight));
+    const before = await page.evaluate(() => ({ y: document.getElementById("view-status").scrollTop, page: document.documentElement.scrollHeight - innerHeight }));
+    assert.ok(before.y > 200, "the card is taller than its view");
+    assert.ok(before.page <= 1, "the page does not scroll: " + before.page);
     await page.evaluate(() => {
-      window.__heights = [];
-      new MutationObserver(() => window.__heights.push(document.documentElement.scrollHeight)).observe(document.getElementById("statusBoard"), { childList: true });
+      window.__redrawn = 0;
+      new MutationObserver(() => window.__redrawn++).observe(document.getElementById("statusBoard"), { childList: true });
       document.getElementById("statusBoard").classList.remove("sb-enter");
       userStats.vocab_rated_count = 52;
     });
-    await page.waitForFunction(() => window.__heights.length > 0);
-    const after = await page.evaluate(() => ({ y: scrollY, heights: window.__heights, enter: document.getElementById("statusBoard").classList.contains("sb-enter"), nav: document.getElementById("appMainBottomNavBar").getBoundingClientRect().bottom }));
+    await page.waitForFunction(() => window.__redrawn > 0);
+    const after = await page.evaluate(() => {
+      const v = document.getElementById("view-status"), r = v.getBoundingClientRect();
+      return { y: v.scrollTop, enter: document.getElementById("statusBoard").classList.contains("sb-enter"), nav: document.getElementById("appMainBottomNavBar").getBoundingClientRect().top, view: [r.top, r.bottom] };
+    });
     assert.equal(after.y, before.y);
-    assert.ok(after.heights.every((h) => h >= before.h - 1), JSON.stringify(after.heights));
     assert.equal(after.enter, false);
-    assert.equal(Math.round(after.nav), 844);
+    assert.ok(after.view[0] === 56 && Math.abs(after.view[1] - after.nav) <= 1.5, "between the header and the tab bar: " + JSON.stringify(after));
     // iPhone stable rendering: the card is all there at rest, and nothing loops.
     await page.evaluate(() => document.documentElement.classList.add("ios-stable-rendering"));
     await page.locator("#nav-vocab").click();

@@ -427,9 +427,10 @@
   // loads), when the player's data is in, and again whenever what it shows changes (cloud stats, a rating in the
   // warm-up over it, points, another account).
   let scrolledAt = 0;
-  root.addEventListener?.("scroll", () => (scrolledAt = performance.now()), { passive: true });
+  // (The card scrolls inside its own view, not the page.)
+  document.getElementById("view-status")?.addEventListener("scroll", () => (scrolledAt = performance.now()), { passive: true });
   if (active()) start();
-  root.addEventListener?.("learning-data-ready", () => active() && start({ quiet: !!document.querySelector("#statusBoard .sb-hero") && scrollY > 0 }));
+  root.addEventListener?.("learning-data-ready", () => active() && start({ quiet: !!document.querySelector("#statusBoard .sb-hero") && document.getElementById("view-status").scrollTop > 0 }));
   setInterval(() => {
     if (!active() || document.visibilityState !== "visible" || document.hidden) return;
     // (Not while the player is scrolling: it waits until the page is still.)
