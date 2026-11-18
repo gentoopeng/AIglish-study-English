@@ -61,6 +61,14 @@ await page.getByRole('button',{name:'もう一度押すと、このプレイヤ�
 {const c=await page.evaluate(()=>__adminDocs.get('shared/sugoroku_live2'));assert.deepEqual([c.owners[3],c.owners[5],c.owners[9]],['','other','']);assert.deepEqual([c.bets[3],c.bets[5],c.bets[9]],[0,100,0]);assert.deepEqual(Object.keys(c.people),['other']);assert.deepEqual(c.owed,{target:50});}
 await page.getByRole('button',{name:'このプレイヤーのすごろくビンゴのボールを消す',exact:true}).click();await page.getByRole('button',{name:'もう一度押すと、このプレイヤーのボールだけが消えます',exact:true}).click();await page.getByText('このプレイヤーのボールはカードにありません。',{exact:true}).waitFor();
 await page.getByRole('button',{name:'一覧に戻る',exact:true}).click();
+ // The same from the main page: the players with balls on the card, most first, each cleared on its own.
+await page.evaluate(()=>{const owners=Array(98).fill('');owners[1]='target';owners[2]='other';owners[4]='other';__adminDocs.set('shared/sugoroku_live2',{v:2,cells:[],owners,bets:owners.map(o=>o?100:0),people:{target:{n:'対象'},other:{n:'ほか'}}});});
+await page.locator('.admin-player-row').first().waitFor();await page.getByRole('button',{name:'すごろくビンゴのボールをプレイヤーごとに消す',exact:true}).click();
+await page.locator('.admin-sugoroku-players li').first().waitFor();assert.deepEqual(await page.locator('.admin-sugoroku-players li > span').allInnerTexts(),['ほか（other）　ボール2個','対象（target）　ボール1個']);
+await page.locator('[data-balls-of="other"]').click();await page.locator('[data-balls-of="other"]').click();await page.getByText('ほかさんのボールを消しました。',{exact:true}).waitFor();
+{const c=await page.evaluate(()=>__adminDocs.get('shared/sugoroku_live2'));assert.deepEqual([c.owners[1],c.owners[2],c.owners[4]],['target','','']);}
+assert.equal(await page.locator('.admin-sugoroku-players li').count(),1);
+await page.getByRole('button',{name:'一覧に戻る',exact:true}).click();
  // Points from the 運営: add or take back. Each is a line in the record between 運営 and the player, listed with whether the player's device has taken it in yet.
 await page.locator('.admin-player-row').filter({hasText:'target'}).click();await page.getByText(/所持ポイント：/).waitFor();await page.getByLabel('操作するポイント',{exact:true}).fill('0');await page.getByRole('button',{name:'増やす',exact:true}).click();await page.getByText('1〜100,000ptで入れてください。',{exact:true}).waitFor();
 await page.getByLabel('操作するポイント',{exact:true}).fill('300');await page.getByLabel('運営からのひとこと',{exact:true}).fill('イベント参加賞');await page.getByRole('button',{name:'増やす',exact:true}).click();await page.getByText(/\+300pt します/).waitFor();

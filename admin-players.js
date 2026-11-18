@@ -97,6 +97,15 @@ async function resetStaked(target){guard();const day=window.StudyTimeModel?.date
 // Two presses: the first asks, the second does it.
 function confirmButton(label,ask,run,done){const button=element('button',label);button.type='button';let armed=false;
  button.onclick=async()=>{if(busy)return;if(!armed){armed=true;button.textContent=ask;return;}armed=false;button.textContent=label;lock(true);message('実行しています…');try{await run();message(done);}catch(error){message(error.message);}finally{lock(false);}};return button;}
+// すごろくビンゴ: one player's balls off the shared card, in one transaction (bets 0, their name off; the
+// others' balls and what anyone is owed stay). Resolves with how many balls went.
+async function clearBalls(id){guard();let count=0;await deadline(window.fbRunTransaction(window.db,async tx=>{const ref=window.fbDoc(window.db,'shared','sugoroku_live2'),snap=await tx.get(ref);count=0;if(!snap.exists())return;const c=snap.data();if(!Array.isArray(c.owners))return;c.owners=c.owners.map((o,i)=>{if(o!==id)return o;count++;if(Array.isArray(c.bets))c.bets[i]=0;return '';});if(!count)return;if(c.people&&typeof c.people==='object'){c.people={...c.people};delete c.people[id];}c.updatedAt=Date.now();tx.set(ref,c);}));return count;}
+// The players with balls on the shared card, each with a button that takes only theirs off (two presses).
+async function ballsByPlayer(){if(busy)return;lock(true);message('カードを読み込み中…');const body=dialog.querySelector('[data-body]');try{guard();const snap=await deadline(window.fbGetDoc(window.fbDoc(window.db,'shared','sugoroku_live2')));const c=snap.exists()?snap.data():{},counts=new Map();for(const o of Array.isArray(c.owners)?c.owners:[])if(typeof o==='string'&&o)counts.set(o,(counts.get(o)||0)+1);
+ body.replaceChildren();const box=element('div');box.className='admin-sugoroku-players';box.append(element('h3','プレイヤーごとにボールを消す'));const back=element('button','一覧に戻る');back.type='button';back.onclick=refreshList;
+ const list=element('ol');for(const [id,n] of [...counts].sort((a,b)=>b[1]-a[1])){const li=element('li'),name=String(c.people?.[id]?.n||id).slice(0,24);li.append(element('span',name+'（'+id+'）　ボール'+n+'個'));
+  const b=confirmButton('この人のボールを消す','もう一度押すと消えます',async()=>{const gone=await clearBalls(id);if(!gone)throw Error(name+'さんのボールはもうありません。');li.remove();},name+'さんのボールを消しました。');b.className='admin-sugoroku-player';b.dataset.ballsOf=id;li.append(b);list.append(li);}
+ if(!counts.size)list.append(element('li','カードにボールはありません。'));box.append(list,back);body.append(box);message('消したい人の「この人のボールを消す」を2回押してください。');}catch(error){message(error.message);}finally{lock(false);}}
 async function refresh(){
  const request=++generation,body=dialog.querySelector('[data-body]');body.replaceChildren();const refresh=element('button','一覧を更新');refresh.type='button';refresh.disabled=busy;refresh.onclick=()=>refreshList();
  const books=element('button',bookEditing()?'単語帳の編集モードを終了':'配信中の単語帳を編集する');books.type='button';books.className='admin-books-button';books.onclick=()=>{if(bookEditing()){setBookEditing(false);books.textContent='配信中の単語帳を編集する';return;}setBookEditing(true);dialog.close();window.switchTab?.('vocab');window.showToast?.('管理者モードです。配信中の単語帳の単語を編集できます。','info');};
@@ -112,7 +121,8 @@ async function refresh(){
  // Stamps: the store with the 運営's tools (what waits for approval, approve / reject, stop, remove). The 運営's rights are on only while this dialog is open, so the store is opened from here.
  const backgrounds=element('button','背景の追加・削除');backgrounds.type='button';backgrounds.className='admin-backgrounds-button';backgrounds.onclick=()=>{try{backgroundTool();}catch(error){message(error.message);}};
  const stamps=element('button','スタンプの審査・管理');stamps.type='button';stamps.className='admin-stamps-button';stamps.onclick=()=>{try{guard();if(!window.Stamps)throw Error('スタンプを使えません。');window.Stamps.store();}catch(error){message(error.message);}};
- body.append(refresh,books,notices,sent,stamps,backgrounds,bingo,gate,tester,staked);message('プレイヤーを読み込み中…');
+ const perPlayer=element('button','すごろくビンゴのボールをプレイヤーごとに消す');perPlayer.type='button';perPlayer.className='admin-sugoroku-players-button';perPlayer.onclick=ballsByPlayer;
+ body.append(refresh,books,notices,sent,stamps,backgrounds,bingo,perPlayer,gate,tester,staked);message('プレイヤーを読み込み中…');
  try{guard();const players=[];await deadline(playerList((id,data)=>{if(id!=='GUEST-000')players.push({id,name:data.playerName||id,deleted:!!data.deleted});},()=>authorized&&dialog.open&&generation===request));
  if(request!==generation||!authorized)return;
  for(const player of players){const row=element('button');row.type='button';row.className='admin-player-row';row.append(element('strong',player.name),element('small',player.id+(player.deleted?' · 削除済み':'')));row.onclick=()=>edit(player.id);body.append(row);}
@@ -166,7 +176,7 @@ async function edit(id){
  const playerStaked=confirmButton('このプレイヤーの今日の賭け済み額を0に戻す','もう一度押すと、このプレイヤーの今日の賭け済み額が0に戻ります',()=>resetStaked(id),'戻しました。このプレイヤーの端末が、次にカジノを開いたときに反映します。');playerStaked.className='admin-casino-reset-player';
  // すごろくビンゴ: this player's balls off the shared card (the others' stay; what anyone is owed stays). For balls a
  // ボール消 should have taken off before 10.145, which wrote it to this player's own card only.
- const playerBalls=confirmButton('このプレイヤーのすごろくビンゴのボールを消す','もう一度押すと、このプレイヤーのボールだけが消えます',async()=>{guard();let count=0;await deadline(window.fbRunTransaction(window.db,async tx=>{const ref=window.fbDoc(window.db,'shared','sugoroku_live2'),snap=await tx.get(ref);count=0;if(!snap.exists())return;const c=snap.data();if(!Array.isArray(c.owners))return;c.owners=c.owners.map((o,i)=>{if(o!==id)return o;count++;if(Array.isArray(c.bets))c.bets[i]=0;return '';});if(!count)return;if(c.people&&typeof c.people==='object'){c.people={...c.people};delete c.people[id];}c.updatedAt=Date.now();tx.set(ref,c);}));if(!count)throw Error('このプレイヤーのボールはカードにありません。');},'消しました。開いている画面にもすぐ反映されます。');playerBalls.className='admin-sugoroku-player';
+ const playerBalls=confirmButton('このプレイヤーのすごろくビンゴのボールを消す','もう一度押すと、このプレイヤーのボールだけが消えます',async()=>{if(!await clearBalls(id))throw Error('このプレイヤーのボールはカードにありません。');},'消しました。開いている画面にもすぐ反映されます。');playerBalls.className='admin-sugoroku-player';
  form.append(save,back,playerStaked,playerBalls,remove);if(data.deleted){playerStaked.hidden=true;playerBalls.hidden=true;form.querySelectorAll('label').forEach(node=>node.hidden=true);save.hidden=true;}body.append(form);
  // Points from the 運営: add or take back. The player's own device applies it to their wallet
  // (nobody else ever writes a wallet) the next time the app is open; the list says what that
