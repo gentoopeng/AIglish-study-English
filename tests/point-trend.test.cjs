@@ -15,7 +15,12 @@ test("a day is a Japan day, and the entry writes today's balance and clears the 
   assert.equal(removed[removed.length - 1], T.shift("2026-11-16", -T.KEEP));
   assert.ok(!removed.includes(T.shift("2026-11-16", -(T.KEEP - 1))), "the oldest kept day stays");
   // Without deleteField (or a bad balance) nothing else is written.
-  assert.deepEqual(T.entry(50, NOW, undefined), { pointTrend: { "2026-11-16": 50 } });
+  assert.deepEqual(T.entry(50, NOW, undefined), { pointTrend: { "2026-11-16": 50 }, pointHours: { "2026-11-16": { "1200": 50 } } });
+  // The half hours: today's slot, and the days before yesterday cleared.
+  const hours = T.entry(1234, NOW, () => del).pointHours;
+  assert.equal(hours["2026-11-16"]["1200"], 1234);
+  assert.ok(!("2026-11-15" in hours), "yesterday is kept");
+  assert.equal(hours["2026-11-14"], del);
   assert.deepEqual(T.entry(-1, NOW), {});
   assert.deepEqual(T.entry(1.5, NOW), {});
 });
@@ -59,4 +64,25 @@ test("the series around midnight in Japan, and with one day only", () => {
   assert.equal(T.day(after), "2026-11-17");
   assert.deepEqual(T.series({ "2026-11-16": 40 }, 2, after, 55).map((p) => [p.day, p.value]), [["2026-11-16", 40], ["2026-11-17", 55]]);
   assert.deepEqual(T.series({ "2026-11-01": 8 }, 1, NOW).map((p) => p.value), [8]);
+});
+
+test("today in half hours or hours: each step carries the balance, starts from yesterday's end, stops at now", () => {
+  // 12:40 in Japan.
+  const now = Date.parse("2026-11-16T03:40:00Z");
+  assert.equal(T.slot(now), "1230");
+  assert.equal(T.slot(Date.parse("2026-11-16T03:29:00Z")), "1200");
+  const hours = { "2026-11-16": { "0900": 120, "1200": 300 }, "2026-11-15": { "2330": 100 }, "bad": { "0900": 1 }, "2026-11-14": { "9999": 5 } };
+  const half = T.hourSeries(hours, {}, 30, now, 350);
+  assert.equal(half.length, 48);
+  assert.deepEqual(half.slice(17, 27).map((p) => [p.day, p.value]), [["08:30", 100], ["09:00", 120], ["09:30", 120], ["10:00", 120], ["10:30", 120], ["11:00", 120], ["11:30", 120], ["12:00", 300], ["12:30", 350], ["13:00", null]]);
+  assert.equal(half[0].value, 100, "midnight starts from yesterday's last half hour");
+  const hourly = T.hourSeries(hours, {}, 60, now, 350);
+  assert.equal(hourly.length, 24);
+  assert.deepEqual(hourly.slice(8, 14).map((p) => [p.day, p.value]), [["08:00", 100], ["09:00", 120], ["10:00", 120], ["11:00", 120], ["12:00", 350], ["13:00", null]]);
+  // Without yesterday's half hours, yesterday's end of day (or the last day before) is the start.
+  assert.equal(T.hourSeries({}, { "2026-11-13": 70 }, 60, now)[0].value, 70);
+  assert.equal(T.hourSeries({}, {}, 60, now)[0].value, null);
+  // The change in each step.
+  assert.deepEqual(T.deltas(hourly).slice(8, 13).map((p) => p.value), [0, 20, 0, 0, 230]);
+  assert.deepEqual(T.cleanHours(hours), { "2026-11-16": { "0900": 120, "1200": 300 }, "2026-11-15": { "2330": 100 } });
 });
