@@ -977,7 +977,10 @@ window.stripVocabProgressFromWords = function(words) {
     var shown=Number(w.no);if(Number.isSafeInteger(shown)&&shown>0&&shown!==Number(w.num))clean.no=shown;
     if(w.unit&&String(w.unit).trim())clean.unit=String(w.unit).replace(/\s+/g,' ').trim().slice(0,60);
     // Links to other words of the book (同義語・反意語・関連), by the other word's number.
-    if(Array.isArray(w.links)&&w.links.length){var links=w.links.filter(function(l){return l&&l.num!=null&&String(l.num)!==String(w.num);}).slice(0,20).map(function(l){return {num:String(l.num),kind:['syn','ant','rel'].indexOf(l.kind)>=0?l.kind:'rel'};});if(links.length)clean.links=links;}
+    // A link to a word of another book carries that book's id and the word's text (10.153); words that are not in any
+    // book are kept apart as related (shown, not opened).
+    if(Array.isArray(w.links)&&w.links.length){var links=window.WordRelations?window.WordRelations.cleanLinks(w.links,w.num):w.links.filter(function(l){return l&&l.num!=null&&(l.book||String(l.num)!==String(w.num));}).slice(0,20).map(function(l){return Object.assign({num:String(l.num),kind:['syn','ant','rel'].indexOf(l.kind)>=0?l.kind:'rel'},l.book?{book:String(l.book),word:String(l.word||'')}:{});});if(links.length)clean.links=links;}
+    if(Array.isArray(w.related)&&w.related.length){var related=window.WordRelations?window.WordRelations.cleanRelated(w.related,w.word):[];if(related.length)clean.related=related;}
     if (Array.isArray(w.meanings) && w.meanings.length > 0) {
       clean.meanings = w.meanings.map(function(m, i) {
         var meaning={ id: m.id || (String(w.num) + "-" + i), text: m.text || "" };

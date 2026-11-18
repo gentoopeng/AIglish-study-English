@@ -3107,10 +3107,10 @@ mark.term-mark:not(.is-rated){box-shadow:inset 0 -1px 0 rgba(228,204,145,.6);bor
 .inline-link-chip button{width:24px;height:24px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:inherit;cursor:pointer;}
 .inline-links-add{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px;align-items:center;}
 .inline-links-add select{height:36px;}
-.inline-links-add .inline-link-input{margin:0;height:36px;}
+.inline-links-add .inline-link-input,.inline-links-add .inline-related-input{margin:0;height:36px;}
 .inline-links-add button{height:36px;padding:0 12px;}
-.inline-links-message{min-height:1em;margin:4px 0 0;font-size:11px;color:#fca5a5;}
-.inline-links-message:empty{display:none;}
+.inline-links-message,.inline-related-message{min-height:1em;margin:4px 0 0;font-size:11px;color:#fca5a5;}
+.inline-links-message:empty,.inline-related-message:empty{display:none;}
 .vocab-entry-dialog.is-term-mode .vocab-entry-meaning-controls>select{grid-column:2;justify-self:start;}
 /* 用語・年号モード rows: the description on its own line, then year, part of speech and delete. */
 .is-term-row textarea.inline-m-input{flex:1 1 100%!important;order:-1;margin-bottom:6px!important;}
@@ -3409,3 +3409,14 @@ html:is([data-motion="off"],[data-motion="test"]).splash-leaving #appSplash{anim
 .app-update-text{margin:0 0 18px;font-size:13px;color:rgba(244,237,223,.85);}
 .app-update-button{width:100%;height:50px;border:0;border-radius:14px;background:linear-gradient(135deg,#e5cf91,#c9a85c);color:#1a1408;font:800 16px/1 "Hiragino Sans",system-ui,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(229,207,145,.25);}
 .app-update-note{margin:12px 0 0;font-size:12px;color:#f8b4a6;}
+/* Related words (10.153): the ones that open (↗, gold) and the ones just shown (dashed, no ↗). */
+.vocab-link::after{content:"↗";margin-left:4px;font-size:11px;opacity:.8;}
+.vocab-link.is-other-book small{margin-left:6px;font-size:10px;font-weight:600;color:#c9c2b0;}
+.vocab-related{display:inline-flex;align-items:center;min-height:28px;padding:2px 10px;border:1px dashed rgba(244,237,223,.35);border-radius:999px;color:#ded8c8;font:500 13px system-ui,sans-serif;}
+.vocab-find-uses{margin-left:auto;min-height:28px;padding:2px 10px;border:1px solid rgba(244,237,223,.2);border-radius:999px;background:transparent;color:#c9c2b0;font:600 12px system-ui,sans-serif;cursor:pointer;}
+.inline-link-chip.is-plain{border-style:dashed;}
+.inline-link-choices{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0;}
+.word-uses-list{list-style:none;margin:8px 0;padding:0;max-height:55dvh;overflow:auto;}
+.word-uses-list .word-use{display:grid;gap:2px;width:100%;padding:10px 4px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text-main);text-align:left;cursor:pointer;}
+.word-uses-list .word-use small{color:var(--text-sub);font-size:11px;}
+.word-uses-list .word-use span{font-size:12px;color:var(--text-sub);overflow-wrap:anywhere;}

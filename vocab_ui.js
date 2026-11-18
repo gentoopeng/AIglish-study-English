@@ -252,7 +252,7 @@
     function importAiWords(data, existing) {
         var list = data && Array.isArray(data.words) ? data.words : null;
         if (!list) throw new Error('「words」の一覧が見つかりません。AIの出力をそのまま貼り付けてください。');
-        var words = JSON.parse(JSON.stringify(existing || []));
+        var words = JSON.parse(JSON.stringify(existing || [])), pendingNames = [];
         list.forEach(function(item, index) {
             var num = Number(item && item.num), head = String(item && item.word || '').trim();
             if (!Number.isInteger(num) || num < 1 || !head) throw new Error((index + 1) + '件目に番号と単語がありません。');
@@ -281,10 +281,17 @@
             if (!meanings.length) throw new Error('「' + head + '」に意味がありません。');
             var word = { num: num, word: head, meaning: meanings.length === 1 ? meanings[0].text : meanings.map(function(m, k) { return (k < 20 ? String.fromCharCode(0x2460 + k) : '(' + (k + 1) + ')') + m.text.split('\n').join(' '); }).join(''), meanings: meanings, sub: String(item.sub || '').trim() };
             var at = words.findIndex(function(w) { return Number(w.num) === num; });
-            if (at >= 0) ['unit', 'no', 'links'].forEach(function(key) { if (words[at][key] !== undefined) word[key] = words[at][key]; });
-            else if (item.unit && window.VocabOrder && window.VocabOrder.cleanUnit(item.unit)) word.unit = window.VocabOrder.cleanUnit(item.unit);
+            if (at >= 0) ['unit', 'no', 'links', 'related'].forEach(function(key) { if (words[at][key] !== undefined) word[key] = words[at][key]; });
+            // Related words by name (10.153): "links":[{"word":"obey","kind":"syn"}] or "related":[…]; a word of this book
+            // becomes a link, any other a related word.
+            var given = [].concat(Array.isArray(item.links) ? item.links : [], Array.isArray(item.related) ? item.related : []).map(function(r) {
+                return typeof r === 'string' ? { name: r, kind: 'rel' } : { name: String((r && (r.word || r.text)) || '').trim().slice(0, 60), kind: r && r.kind };
+            }).filter(function(r) { return r.name; });
+            if (given.length && window.WordRelations) pendingNames.push([num, given.map(function(r) { return { name: r.name, kind: window.WordRelations.kindOf(r.kind) }; })]);
+            if (at < 0 && item.unit && window.VocabOrder && window.VocabOrder.cleanUnit(item.unit)) word.unit = window.VocabOrder.cleanUnit(item.unit);
             if (at >= 0) words[at] = word; else words.push(word);
         });
+        pendingNames.forEach(function(entry) { window.WordRelations.applyNames(words, entry[0], entry[1]); });
         words.sort(function(a, b) { return Number(a.num) - Number(b.num); });
         return words;
     }
@@ -305,17 +312,25 @@
             if (!Array.isArray(parsed) || !parsed.every(function(w) { return w && w.word && Number.isInteger(Number(w.num)) && Number(w.num) > 0; })) throw new Error('JSONには番号と単語を指定してください。');
             return window.migrateVocabData(parsed);
         }
-        var words = JSON.parse(JSON.stringify(existing || []));
+        var words = JSON.parse(JSON.stringify(existing || [])), names = [];
         text.split('\n').forEach(function(line, index) {
             if (!line.trim()) return;
             var parts = line.split(':');
+            // An optional last part with the related words: 「同=follow,obey 反=lead 関=leader」 (10.153).
+            // (only as a fifth part, 番号:単語:意味:サブ情報:同=…, so a サブ情報 that starts with 同= stays サブ情報)
+            var relation = parts.length > 4 && window.WordRelations && window.WordRelations.isRelationField(parts[parts.length - 1]) ? parts.pop() : '';
             if (parts.length < 3 || !Number.isInteger(Number(parts[0])) || Number(parts[0]) < 1 || !parts[1].trim() || !parts[2].trim()) throw new Error((index + 1) + '行目を「番号:単語:意味:サブ情報」で入力してください。');
             var num = parts[0].trim();
             var meaning = parts[2].trim().replace(/(動|名|形|副|代|接|前|自動|他動)[:：]\s*/g, '').replace(/^[ ,　]+/, '');
             var word = window.migrateVocabData([{num:num,word:parts[1].trim(),meaning:meaning,sub:parts.slice(3).join(':').trim(),status:'none',history:[]}])[0];
             var at = words.findIndex(function(w) { return String(w.num) === String(num); });
+            // A replaced word keeps what is its own here: its place, unit and relations (before 10.153 they were lost).
+            if (at >= 0) ['no', 'unit', 'links', 'related'].forEach(function(key) { if (words[at][key] !== undefined) word[key] = words[at][key]; });
             if (at >= 0) words[at] = word; else words.push(word);
+            if (relation) names.push([num, window.WordRelations.parseRelationField(relation)]);
         });
+        // Relations once every word is in: a word of this book is a link (both ways), any other a related word.
+        names.forEach(function(entry) { window.WordRelations.applyNames(words, entry[0], entry[1]); });
         words.sort(function(a,b) { return Number(a.num) - Number(b.num); });
         return words;
     };
@@ -836,65 +851,208 @@
         var lower = t.toLowerCase();
         return vocabList.find(function(w) { return String(w.word || '').trim().toLowerCase() === lower; }) || null;
     }
-    window.renderInlineLinksEditor = function(wordNum, draft) {
+    // The books the player has, by id: { id, name } (deleted ones left out).
+    function booksHere() {
+        var pool = typeof textbooksPool !== 'undefined' && Array.isArray(textbooksPool) ? textbooksPool : [];
+        var seen = {};
+        return pool.filter(function(b) {
+            if (!b || !b.id || seen[b.id]) return false;
+            seen[b.id] = true;
+            return !(window.LibraryState && window.LibraryState.isDeleted && window.LibraryState.isDeleted('book', b.id));
+        }).map(function(b) { return { id: b.id, name: String(b.name || b.id) }; });
+    }
+    function bookName(id) { var b = booksHere().find(function(x) { return x.id === id; }); return b ? b.name : '別の単語帳'; }
+    // A book's words: the open one from the list, any other as stored (it may be read from the cloud).
+    // (Other books are kept for five minutes, so searching again does not read them again.)
+    var wordsCache = {};
+    async function wordsOf(id) {
+        if (id === currentTextbook) return vocabList;
+        var kept = wordsCache[id];
+        if (kept && Date.now() - kept.at < 300000) return kept.words;
+        try { var words = (await window.__getBookMasterWords(id)) || []; wordsCache[id] = { at: Date.now(), words: words }; return words; } catch (e) { return []; }
+    }
+    window.WordRelationsUi = { booksHere: booksHere, wordsOf: wordsOf };
+    // Editing a word's relations (10.153): two lists. Above, words that can be opened (in this book or another one);
+    // a word found in no book is refused there, with a pointer to the list below. Below, words just shown.
+    window.renderInlineLinksEditor = function(wordNum, draft, draftRelated) {
         var holder = document.getElementById('inlineEditLinks-' + wordNum);
         if (!holder) return;
         var word = vocabList.find(function(w) { return String(w.num) === String(wordNum); });
-        var links = draft || (word && Array.isArray(word.links) ? word.links.map(function(l) { return { num: String(l.num), kind: l.kind }; }) : []);
+        var links = draft || (word && Array.isArray(word.links) ? word.links.map(function(l) { return Object.assign({ num: String(l.num), kind: l.kind }, l.book ? { book: l.book, word: l.word || '' } : {}); }) : []);
+        var related = draftRelated || (word && Array.isArray(word.related) ? word.related.map(function(r) { return { text: r.text, kind: r.kind }; }) : []);
         holder.__links = links;
+        holder.__related = related;
         holder.replaceChildren();
-        var title = document.createElement('p'); title.className = 'inline-links-title'; title.textContent = '関連する単語（同義語など）';
+        var again = function() { window.renderInlineLinksEditor(wordNum, links, related); };
+        var kindSelect = function(label, cls) {
+            var kind = document.createElement('select'); kind.className = cls; kind.setAttribute('aria-label', label);
+            Object.keys(LINK_KINDS).forEach(function(key) { kind.append(new Option(LINK_KINDS[key], key)); });
+            return kind;
+        };
+        // 1. Words that can be opened.
+        var title = document.createElement('p'); title.className = 'inline-links-title'; title.textContent = 'ジャンプできる単語（単語帳にある単語。ほかの単語帳も可）';
         var list = document.createElement('div'); list.className = 'inline-links-list';
         links.forEach(function(link, index) {
-            var target = vocabList.find(function(w) { return String(w.num) === link.num; });
-            var chip = document.createElement('span'); chip.className = 'inline-link-chip';
-            chip.textContent = (LINK_KINDS[link.kind] || '関連') + '：' + (target ? target.word : '#' + link.num + '（見つかりません）');
+            var target = link.book ? null : vocabList.find(function(w) { return String(w.num) === link.num; });
+            var name = link.book ? (link.word || '#' + link.num) + '（' + bookName(link.book) + '）' : (target ? target.word : '#' + link.num + '（見つかりません）');
+            var chip = document.createElement('span'); chip.className = 'inline-link-chip is-jump';
+            chip.textContent = (LINK_KINDS[link.kind] || '関連') + '：' + name;
             var remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×';
-            remove.setAttribute('aria-label', (target ? target.word : '#' + link.num) + 'へのリンクを外す');
-            remove.onclick = function(e) { e.stopPropagation(); links.splice(index, 1); window.renderInlineLinksEditor(wordNum, links); };
+            remove.setAttribute('aria-label', name + 'へのリンクを外す');
+            remove.onclick = function(e) { e.stopPropagation(); links.splice(index, 1); again(); };
             chip.append(remove); list.append(chip);
         });
         var row = document.createElement('div'); row.className = 'inline-links-add';
-        var kind = document.createElement('select'); kind.className = 'inline-link-kind'; kind.setAttribute('aria-label', 'リンクの種類');
-        Object.keys(LINK_KINDS).forEach(function(key) { kind.append(new Option(LINK_KINDS[key], key)); });
+        var kind = kindSelect('リンクの種類', 'inline-link-kind');
         var input = document.createElement('input'); input.type = 'text'; input.className = 'search-input inline-link-input';
         input.placeholder = '単語または番号'; input.setAttribute('aria-label', 'リンクする単語または番号');
         var add = document.createElement('button'); add.type = 'button'; add.className = 'list-action-link'; add.textContent = '追加';
         var message = document.createElement('p'); message.className = 'inline-links-message'; message.setAttribute('role', 'status');
-        add.onclick = function(e) {
-            e.stopPropagation();
-            var target = linkTarget(input.value);
-            if (!target) { message.textContent = 'この単語帳に「' + input.value.trim() + '」が見つかりません。単語か番号で入れてください。'; return; }
-            if (String(target.num) === String(wordNum)) { message.textContent = '自分自身にはリンクできません。'; return; }
-            if (links.some(function(l) { return l.num === String(target.num); })) { message.textContent = '「' + target.word + '」はもうリンクしています。'; return; }
+        var choices = document.createElement('div'); choices.className = 'inline-link-choices';
+        var push = function(link, label) {
             if (links.length >= 20) { message.textContent = 'リンクは20個までです。'; return; }
-            links.push({ num: String(target.num), kind: kind.value });
-            window.renderInlineLinksEditor(wordNum, links);
+            if (links.some(function(l) { return l.num === link.num && (l.book || '') === (link.book || ''); })) { message.textContent = '「' + label + '」はもうリンクしています。'; return; }
+            links.push(link);
+            again();
             var next = document.querySelector('#inlineEditLinks-' + wordNum + ' .inline-link-input'); if (next) next.focus();
+        };
+        add.onclick = async function(e) {
+            e.stopPropagation();
+            var typed = input.value.trim();
+            if (!typed) return;
+            choices.replaceChildren();
+            var target = linkTarget(typed);
+            if (target) {
+                if (String(target.num) === String(wordNum)) { message.textContent = '自分自身にはリンクできません。'; return; }
+                return push({ num: String(target.num), kind: kind.value }, target.word);
+            }
+            if (/^[#＃]?[0-9０-９]+$/.test(typed)) { message.textContent = 'この単語帳に「' + typed + '」番の単語が見つかりません。'; return; }
+            // Not in this book: the same word in the player's other books.
+            message.textContent = 'ほかの単語帳を探しています…';
+            var lower = typed.toLowerCase(), found = [];
+            for (var b of booksHere()) {
+                if (b.id === currentTextbook) continue;
+                var words = await wordsOf(b.id);
+                words.forEach(function(w) { if (String(w.word || '').trim().toLowerCase() === lower) found.push({ book: b, word: w }); });
+                if (found.length >= 8) break;
+            }
+            if (!holder.isConnected) return;
+            if (!found.length) { message.textContent = 'どの単語帳にも「' + typed + '」が見つかりません（単語帳にないです）。ジャンプしない関連語なら、下の欄に入れてください。'; return; }
+            message.textContent = 'ほかの単語帳にありました。リンクするものを選んでください。';
+            found.forEach(function(f) {
+                var b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'list-action-link';
+                b2.textContent = f.word.word + '（' + f.book.name + ' #' + (window.VocabOrder ? window.VocabOrder.no(f.word) : f.word.num) + '）';
+                b2.onclick = function(ev) { ev.stopPropagation(); push({ num: String(f.word.num), kind: kind.value, book: f.book.id, word: String(f.word.word || '') }, f.word.word); };
+                choices.append(b2);
+            });
         };
         input.onkeydown = function(e) { if (e.key === 'Enter') { e.preventDefault(); add.click(); } };
         row.append(kind, input, add);
-        holder.append(title, list, row, message);
+        // 2. Words just shown (not in any book is fine).
+        var title2 = document.createElement('p'); title2.className = 'inline-links-title'; title2.textContent = 'ジャンプしない関連語（単語帳にない単語も入れられます）';
+        var list2 = document.createElement('div'); list2.className = 'inline-links-list';
+        related.forEach(function(r, index) {
+            var chip = document.createElement('span'); chip.className = 'inline-link-chip is-plain';
+            chip.textContent = (LINK_KINDS[r.kind] || '関連') + '：' + r.text;
+            var remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×';
+            remove.setAttribute('aria-label', r.text + 'を外す');
+            remove.onclick = function(e) { e.stopPropagation(); related.splice(index, 1); again(); };
+            chip.append(remove); list2.append(chip);
+        });
+        var row2 = document.createElement('div'); row2.className = 'inline-links-add';
+        var kind2 = kindSelect('関連語の種類', 'inline-related-kind');
+        var input2 = document.createElement('input'); input2.type = 'text'; input2.className = 'search-input inline-related-input';
+        input2.placeholder = '単語（自由に入力）'; input2.setAttribute('aria-label', 'ジャンプしない関連語');
+        var add2 = document.createElement('button'); add2.type = 'button'; add2.className = 'list-action-link'; add2.textContent = '追加'; add2.setAttribute('aria-label', '関連語を追加');
+        var message2 = document.createElement('p'); message2.className = 'inline-related-message'; message2.setAttribute('role', 'status');
+        add2.onclick = function(e) {
+            e.stopPropagation();
+            var t = input2.value.replace(/\s+/g, ' ').trim().slice(0, 60);
+            if (!t) return;
+            if (word && t.toLowerCase() === String(word.word || '').trim().toLowerCase()) { message2.textContent = '自分自身は入れられません。'; return; }
+            if (related.some(function(r) { return r.text.toLowerCase() === t.toLowerCase(); })) { message2.textContent = '「' + t + '」はもう入っています。'; return; }
+            if (related.length >= 20) { message2.textContent = '関連語は20個までです。'; return; }
+            related.push({ text: t, kind: kind2.value });
+            again();
+            var next = document.querySelector('#inlineEditLinks-' + wordNum + ' .inline-related-input'); if (next) next.focus();
+        };
+        input2.onkeydown = function(e) { if (e.key === 'Enter') { e.preventDefault(); add2.click(); } };
+        row2.append(kind2, input2, add2);
+        holder.append(title, list, row, choices, message, title2, list2, row2, message2);
     };
-    // Saving a word's links: a 同義語/反意語 link is the same both ways, so the other word gets (or
-    // loses) the link back to this one.
+    // Saving a word's links: a 同義語/反意語 link inside the book is the same both ways, so the other word gets (or
+    // loses) the link back to this one. A link to another book is this word's alone.
     function saveWordLinks(word, links) {
         var before = Array.isArray(word.links) ? word.links : [];
         var mine = String(word.num);
-        if (links.length) word.links = links.slice(0, 20); else delete word.links;
-        before.forEach(function(old) {
-            if (links.some(function(l) { return l.num === String(old.num); })) return;
+        var here = function(l) { return !l.book; };
+        links = window.WordRelations ? window.WordRelations.cleanLinks(links, word.num) : links.slice(0, 20);
+        if (links.length) word.links = links; else delete word.links;
+        before.filter(here).forEach(function(old) {
+            if (links.some(function(l) { return here(l) && l.num === String(old.num); })) return;
             var other = vocabList.find(function(w) { return String(w.num) === String(old.num); });
-            if (other && Array.isArray(other.links)) { other.links = other.links.filter(function(l) { return String(l.num) !== mine; }); if (!other.links.length) delete other.links; }
+            if (other && Array.isArray(other.links)) { other.links = other.links.filter(function(l) { return l.book || String(l.num) !== mine; }); if (!other.links.length) delete other.links; }
         });
-        links.forEach(function(link) {
+        links.filter(here).forEach(function(link) {
             var other = vocabList.find(function(w) { return String(w.num) === link.num; });
             if (!other) return;
-            var back = (other.links || []).filter(function(l) { return String(l.num) !== mine; });
+            var back = (other.links || []).filter(function(l) { return l.book || String(l.num) !== mine; });
             if (back.length < 20) back.push({ num: mine, kind: link.kind });
             other.links = back;
         });
     }
+    function saveRelated(word, related) {
+        var list = window.WordRelations ? window.WordRelations.cleanRelated(related, word.word) : related.slice(0, 20);
+        if (list.length) word.related = list; else delete word.related;
+    }
+    // Opening a word of a book: this book's in its sheet; another book is opened first (it becomes the current one).
+    window.jumpToBookWord = async function(book, num, host) {
+        if (!book || book === currentTextbook) {
+            var w = vocabList.find(function(x) { return String(x.num) === String(num); });
+            if (w) window.openVocabDetailsSheet(w, null, host ? { host: host } : undefined);
+            return !!w;
+        }
+        if (!booksHere().some(function(b) { return b.id === book; })) { alert('その単語帳はもうありません。'); return false; }
+        // Not in the middle of a card session or a game, and not over a word being edited (its changes would be lost).
+        if (document.body.classList.contains('in-game-active')) { alert('学習中はほかの単語帳に移れません。終わってから開いてください。'); return false; }
+        var editing = Array.prototype.some.call(document.querySelectorAll('[id^="wordCardForm-"]'), function(f) { return f.style.display !== 'none'; });
+        if (editing && !confirm('編集中の内容は保存されません。ほかの単語帳に移りますか？')) return false;
+        if (window.__captureManualVocabDraft) window.__captureManualVocabDraft();
+        document.querySelectorAll('dialog[open]').forEach(function(d) { try { d.close(); } catch (e) {} });
+        await window.switchTextbookContext(book);
+        if (window.switchTab) window.switchTab('vocab');
+        var found = vocabList.find(function(x) { return String(x.num) === String(num); });
+        if (!found) { alert('その単語は、もうその単語帳にありません。'); return false; }
+        window.openVocabDetailsSheet(found);
+        return true;
+    };
+    // Where a word is used, in every book (its word, meanings and 補足): a list to open from.
+    window.openWordUses = async function(term) {
+        term = String(term || '').trim();
+        if (!term || !window.openLibraryDialog || !window.WordRelations) return;
+        var modal = window.openLibraryDialog('「' + term + '」が使われている単語', '<p class="library-editor-hint" data-uses-status>全部の単語帳を探しています…</p><ol class="word-uses-list" data-uses-list></ol><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
+        var status = modal.querySelector('[data-uses-status]'), list = modal.querySelector('[data-uses-list]');
+        var books = booksHere(), all = [];
+        for (var i = 0; i < books.length; i++) {
+            if (!modal.isConnected) return;
+            status.textContent = '探しています…（' + (i + 1) + '／' + books.length + '）';
+            all.push({ id: books[i].id, name: books[i].name, words: await wordsOf(books[i].id) });
+        }
+        if (!modal.isConnected) return;
+        var self = vocabList.find(function(w) { return String(w.word || '').trim().toLowerCase() === term.toLowerCase(); });
+        var found = window.WordRelations.findUses(term, all, self ? { book: currentTextbook, num: self.num } : {});
+        status.textContent = found.length ? found.length + '件ありました（' + books.length + '冊を探しました）' : 'ほかに使われている単語はありませんでした（' + books.length + '冊を探しました）';
+        found.forEach(function(f) {
+            var li = document.createElement('li'), b = document.createElement('button');
+            b.type = 'button'; b.className = 'word-use';
+            var head = document.createElement('strong'); head.textContent = f.word;
+            var where = document.createElement('small'); where.textContent = f.name + ' #' + (f.no || f.num) + '・' + f.where;
+            var snip = document.createElement('span'); snip.textContent = f.snippet;
+            b.append(head, where, snip);
+            b.onclick = function() { if (window.closeLibraryDialog) window.closeLibraryDialog(); window.jumpToBookWord(f.book, f.num); };
+            li.append(b); list.append(li);
+        });
+    };
 
     window.renderInlineEditFormMeanings = function(wordNum) {
         var listContainer = document.getElementById('inlineEditMeaningsList-' + wordNum);
@@ -983,6 +1141,7 @@
         if (subInput) vocabList[wIdx].sub = subInput.value.trim();
         var linksHolder = document.getElementById('inlineEditLinks-' + wordNum);
         if (linksHolder && linksHolder.__links) saveWordLinks(vocabList[wIdx], linksHolder.__links);
+        if (linksHolder && linksHolder.__related) saveRelated(vocabList[wIdx], linksHolder.__related);
         var unitInput = document.getElementById('inlineEditUnitInput-' + wordNum);
         if (unitInput && window.VocabOrder) {
             var unit = window.VocabOrder.cleanUnit(unitInput.value);
@@ -1242,24 +1401,45 @@
                 head.append(toggle, history);
             }
         }
-        // Links to other words: tap one to open that word's card.
+        // Related words (10.153): the ones that can be opened (this book, or another book with its name) as buttons with
+        // ↗; the ones just shown as plain marks. And a search for where this word is used in every book.
         var linked = (Array.isArray(w.links) ? w.links : []).map(function(l) {
-            return { kind: l.kind, word: (typeof vocabList !== 'undefined' ? vocabList : []).find(function(x) { return String(x.num) === String(l.num); }) };
-        }).filter(function(x) { return x.word; });
-        if (cardBody && linked.length) {
+            if (l.book) return { kind: l.kind, book: l.book, num: l.num, label: l.word || '#' + l.num };
+            var x = (typeof vocabList !== 'undefined' ? vocabList : []).find(function(v) { return String(v.num) === String(l.num); });
+            return x ? { kind: l.kind, word: x, label: x.word } : null;
+        }).filter(Boolean);
+        var plain = Array.isArray(w.related) ? w.related : [];
+        if (cardBody) {
             var linksRow = document.createElement('div'); linksRow.className = 'vocab-word-links';
             Object.keys(LINK_KINDS).forEach(function(key) {
                 var group = linked.filter(function(x) { return (LINK_KINDS[x.kind] ? x.kind : 'rel') === key; });
-                if (!group.length) return;
+                var shown = plain.filter(function(r) { return (LINK_KINDS[r.kind] ? r.kind : 'rel') === key; });
+                if (!group.length && !shown.length) return;
                 var label = document.createElement('span'); label.className = 'vocab-link-kind'; label.textContent = LINK_KINDS[key];
                 linksRow.append(label);
                 group.forEach(function(x) {
-                    var b = document.createElement('button'); b.type = 'button'; b.className = 'vocab-link'; b.textContent = x.word.word;
-                    b.setAttribute('aria-label', LINK_KINDS[key] + '「' + x.word.word + '」のカードを開く');
-                    b.onclick = function(e) { e.stopPropagation(); var host = card.closest('dialog[open]'); window.openVocabDetailsSheet(x.word, null, host ? { host: host } : undefined); };
+                    var b = document.createElement('button'); b.type = 'button'; b.className = 'vocab-link' + (x.book ? ' is-other-book' : '');
+                    b.textContent = x.label;
+                    if (x.book) { var from = document.createElement('small'); from.textContent = bookName(x.book); b.append(from); }
+                    b.setAttribute('aria-label', LINK_KINDS[key] + '「' + x.label + '」' + (x.book ? '（' + bookName(x.book) + '）' : '') + 'のカードを開く');
+                    b.onclick = function(e) {
+                        e.stopPropagation();
+                        var host = card.closest('dialog[open]');
+                        if (x.book) window.jumpToBookWord(x.book, x.num);
+                        else window.openVocabDetailsSheet(x.word, null, host ? { host: host } : undefined);
+                    };
                     linksRow.append(b);
                 });
+                shown.forEach(function(r) {
+                    var span = document.createElement('span'); span.className = 'vocab-related'; span.textContent = r.text;
+                    span.setAttribute('aria-label', LINK_KINDS[key] + '「' + r.text + '」（単語帳にない単語）');
+                    linksRow.append(span);
+                });
             });
+            var uses = document.createElement('button'); uses.type = 'button'; uses.className = 'vocab-find-uses';
+            uses.textContent = '全単語帳で探す'; uses.setAttribute('aria-label', '「' + w.word + '」が使われている単語を全単語帳から探す');
+            uses.onclick = function(e) { e.stopPropagation(); window.openWordUses(w.word); };
+            linksRow.append(uses);
             var noteSection = cardBody.querySelector('.vocab-note-section') || history || null;
             cardBody.insertBefore(linksRow, noteSection && noteSection.parentNode === cardBody ? noteSection : history || null);
         }
