@@ -92,11 +92,27 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await page.mouse.click(box.x + box.width - 3, box.y + box.height / 2);
     assert.match(await panel.locator(".trend-pick").innerText(), /自分 900pt　あおい 5,000pt　ゆうと 3,000pt　さくら 2,000pt/);
     // The changes per day: yesterday 700 → today 900 is +200.
-    await panel.getByRole("button", { name: "1日の増減" }).click();
-    assert.equal(await panel.locator(".trend-svg").getAttribute("aria-label"), "1日の増減のグラフ");
+    await panel.getByRole("button", { name: "増減", exact: true }).click();
+    assert.equal(await panel.locator(".trend-svg").getAttribute("aria-label"), "増減のグラフ");
     const box2 = await panel.locator(".trend-svg").boundingBox();
     await page.mouse.click(box2.x + box2.width - 3, box2.y + box2.height / 2);
     assert.match(await panel.locator(".trend-pick").innerText(), /自分 \+200pt　あおい \+500pt　ゆうと −200pt　さくら —/);
+    // 今日: the day in half hours (48 points) or hours (24), A's own half hours from this device.
+    await page.evaluate(() => {
+      const T = window.PointTrend;
+      localStorage.setItem("aiglish_point_hours_tr-me", JSON.stringify({ [T.day()]: { "0000": 640 } }));
+    });
+    await panel.getByRole("button", { name: "今日" }).click();
+    await panel.getByRole("button", { name: "残高" }).click();
+    assert.equal(await panel.getByRole("button", { name: "30分ごと" }).getAttribute("aria-pressed"), "true");
+    const counted = (await panel.locator('path[data-trend-line="tr-me"]').getAttribute("d")).match(/[ML]/g).length;
+    assert.ok(counted >= 1 && counted <= 48, String(counted));
+    await panel.getByRole("button", { name: "1時間ごと" }).click();
+    const hourly = (await panel.locator('path[data-trend-line="tr-me"]').getAttribute("d")).match(/[ML]/g).length;
+    assert.ok(hourly <= 24 && hourly >= 1, String(hourly));
+    const labels = await panel.locator(".trend-svg text.trend-axis").evaluateAll((els) => els.map((e) => e.textContent));
+    assert.ok(labels.includes("00:00") && labels.includes("23:00"), labels.join(","));
+    await panel.getByRole("button", { name: "増減", exact: true }).click();
     // Another period, and another person to compare: remembered next time.
     await panel.getByRole("button", { name: "7日" }).click();
     await panel.locator(".trend-people summary").click();
@@ -108,7 +124,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await panel.locator(".trend-svg").waitFor();
     assert.deepEqual(await panel.locator(".trend-legend li").allInnerTexts(), ["自分", "あおい", "さくら", "けん"]);
     assert.equal(await panel.getByRole("button", { name: "7日" }).getAttribute("aria-pressed"), "true");
-    assert.equal(await panel.getByRole("button", { name: "1日の増減" }).getAttribute("aria-pressed"), "true");
+    assert.equal(await panel.getByRole("button", { name: "増減", exact: true }).getAttribute("aria-pressed"), "true");
     // No horizontal scroll at phone width.
     assert.ok(await page.evaluate(() => document.querySelector("dialog.study-points-dialog").scrollWidth <= document.querySelector("dialog.study-points-dialog").clientWidth + 1));
     await page.screenshot({ path: "/tmp/claude-0/point-trend.png" });

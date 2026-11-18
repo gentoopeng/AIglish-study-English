@@ -22,9 +22,14 @@
   function entry(balance, now = Date.now(), remove = root.fbDeleteField) {
     if (!isPoints(balance)) return {};
     const today = day(now),
-      trend = { [today]: balance };
-    if (typeof remove === "function") for (let n = KEEP; n < KEEP + 60; n++) trend[shift(today, -n)] = remove();
-    return { pointTrend: trend };
+      trend = { [today]: balance },
+      hours = { [today]: { [slot(now)]: balance } };
+    if (typeof remove === "function") {
+      for (let n = KEEP; n < KEEP + 60; n++) trend[shift(today, -n)] = remove();
+      // The half hours are kept for today and yesterday: the days before go (a stretch of 10).
+      for (let n = HOURS_KEEP; n < HOURS_KEEP + 10; n++) hours[shift(today, -n)] = remove();
+    }
+    return { pointTrend: trend, pointHours: hours };
   }
   // One value per day for the last `days` days ending today: the balance at the end of that day
   // (a day without a change carries the one before), null before anything was recorded. `current`
@@ -59,7 +64,55 @@
     if (out[out.length - 1] < hi) out.push(out[out.length - 1] + step);
     return out;
   }
-  const model = { KEEP, day, shift, clean, entry, series, deltas, ticks };
+  // ---- Within a day (10.150): the balance every 30 minutes, kept for today and yesterday as
+  // pointHours { "YYYY-MM-DD": { "HHMM": balance } } (Japan time; HHMM is the half hour it fell in).
+  const HOURS_KEEP = 2;
+  const slot = (now = Date.now()) => {
+    const d = new Date(now + 9 * 3600000);
+    return String(d.getUTCHours()).padStart(2, "0") + (d.getUTCMinutes() < 30 ? "00" : "30");
+  };
+  const isSlot = (key) => /^([01]\d|2[0-3])(00|30)$/.test(key);
+  function cleanHours(map) {
+    const out = {};
+    if (!map || typeof map !== "object" || Array.isArray(map)) return out;
+    for (const [d, slots] of Object.entries(map)) {
+      if (!isDay(d) || !slots || typeof slots !== "object" || Array.isArray(slots)) continue;
+      for (const [k, v] of Object.entries(slots)) if (isSlot(k) && isPoints(Number(v))) (out[d] = out[d] || {})[k] = Number(v);
+    }
+    return out;
+  }
+  // Today, in steps of `step` minutes (30 or 60): the balance at the end of each step (a step without a change carries the
+  // one before; the first carries the end of yesterday), the step now with `current`, the steps still to come null.
+  // Each point: { day: "HH:MM" (when the step starts), value }.
+  function hourSeries(hours, trend, step, now = Date.now(), current) {
+    const h = cleanHours(hours),
+      t = clean(trend),
+      today = day(now),
+      yesterday = shift(today, -1),
+      mine = h[today] || {},
+      nowSlot = slot(now),
+      per = step === 60 ? 2 : 1;
+    const before = Object.keys(h[yesterday] || {}).sort();
+    let last = before.length ? h[yesterday][before[before.length - 1]] : Object.hasOwn(t, yesterday) ? t[yesterday] : null;
+    if (last === null) {
+      // Nothing from yesterday: the last day recorded before today, if any.
+      const older = Object.keys(t).filter((k) => k < today).sort();
+      if (older.length) last = t[older[older.length - 1]];
+    }
+    const out = [];
+    for (let i = 0; i < 48; i += per) {
+      const slots = [i, i + per - 1].map((n) => String(Math.floor(n / 2)).padStart(2, "0") + (n % 2 ? "30" : "00"));
+      for (let n = i; n < i + per; n++) {
+        const k = String(Math.floor(n / 2)).padStart(2, "0") + (n % 2 ? "30" : "00");
+        if (Object.hasOwn(mine, k)) last = mine[k];
+      }
+      const label = slots[0].slice(0, 2) + ":" + slots[0].slice(2);
+      if (slots[0] > nowSlot) out.push({ day: label, value: null });
+      else out.push({ day: label, value: slots[0] <= nowSlot && nowSlot <= slots[1] && isPoints(current) ? current : last });
+    }
+    return out;
+  }
+  const model = { KEEP, HOURS_KEEP, day, shift, slot, clean, cleanHours, entry, series, hourSeries, deltas, ticks };
   if (typeof module === "object" && module.exports) {
     module.exports = model;
     return;
@@ -101,14 +154,14 @@
   async function players() {
     if (cache && cache.owner === me() && Date.now() - cache.at < 5 * 60e3) return cache.players;
     const recent = root.UserDirectory?.recent;
-    const rows = recent ? await recent(Date.now() - 30 * DAY, [], { fields: ["playerName", "name", "deleted", "lastActiveAt", "studyPoints", "pointTrend"] }) : null;
+    const rows = recent ? await recent(Date.now() - 30 * DAY, [], { fields: ["playerName", "name", "deleted", "lastActiveAt", "studyPoints", "pointTrend", "pointHours"] }) : null;
     if (!rows) throw Error("ほかの人の記録を読み込めませんでした。");
     // The player's own row carries the days written from other devices.
     const own = rows.find((r) => r.id === me());
-    if (own) mergeOwn(clean(own.data?.pointTrend));
+    if (own) mergeOwn(clean(own.data?.pointTrend), cleanHours(own.data?.pointHours));
     const list = rows
       .filter((r) => r.id && r.id !== me() && r.data && !r.data.deleted)
-      .map((r) => ({ id: r.id, name: String(r.data.playerName || r.data.name || "名前なし").slice(0, 40), points: isPoints(Number(r.data.studyPoints)) ? Number(r.data.studyPoints) : null, trend: clean(r.data.pointTrend) }))
+      .map((r) => ({ id: r.id, name: String(r.data.playerName || r.data.name || "名前なし").slice(0, 40), points: isPoints(Number(r.data.studyPoints)) ? Number(r.data.studyPoints) : null, trend: clean(r.data.pointTrend), hours: cleanHours(r.data.pointHours) }))
       .sort((a, b) => (b.points ?? -1) - (a.points ?? -1));
     cache = { at: Date.now(), owner: me(), players: list };
     return list;
@@ -122,7 +175,11 @@
     try {
       trend = clean(JSON.parse(localStorage.getItem("aiglish_point_trend_" + me()) || "{}"));
     } catch {}
-    return { id: me(), name: "自分", points: isPoints(points) ? points : null, trend, self: true };
+    let hours = {};
+    try {
+      hours = cleanHours(JSON.parse(localStorage.getItem("aiglish_point_hours_" + me()) || "{}"));
+    } catch {}
+    return { id: me(), name: "自分", points: isPoints(points) ? points : null, trend, hours, self: true };
   }
   // Keeps the player's own days on the device too, so the graph shows them before the cloud is read.
   function remember(balance, now = Date.now()) {
@@ -134,9 +191,15 @@
       trend[day(now)] = balance;
       for (const k of Object.keys(trend)) if (k < first) delete trend[k];
       localStorage.setItem(key, JSON.stringify(trend));
+      const hoursKey = "aiglish_point_hours_" + me(),
+        hours = cleanHours(JSON.parse(localStorage.getItem(hoursKey) || "{}")),
+        keepFrom = shift(day(now), -(HOURS_KEEP - 1));
+      (hours[day(now)] = hours[day(now)] || {})[slot(now)] = balance;
+      for (const k of Object.keys(hours)) if (k < keepFrom) delete hours[k];
+      localStorage.setItem(hoursKey, JSON.stringify(hours));
     } catch {}
   }
-  function mergeOwn(trend) {
+  function mergeOwn(trend, hours = {}) {
     if (me() === "GUEST-000") return;
     try {
       const key = "aiglish_point_trend_" + me(),
@@ -146,6 +209,12 @@
       const merged = { ...trend, ...kept };
       for (const k of Object.keys(merged)) if (k < first) delete merged[k];
       localStorage.setItem(key, JSON.stringify(merged));
+      const hoursKey = "aiglish_point_hours_" + me(),
+        keptHours = cleanHours(JSON.parse(localStorage.getItem(hoursKey) || "{}")),
+        keepFrom = shift(day(), -(HOURS_KEEP - 1)),
+        all = {};
+      for (const d of new Set([...Object.keys(hours), ...Object.keys(keptHours)])) if (d >= keepFrom) all[d] = { ...(hours[d] || {}), ...(keptHours[d] || {}) };
+      localStorage.setItem(hoursKey, JSON.stringify(all));
     } catch {}
   }
   function chart(lines, mode, days) {
@@ -155,7 +224,7 @@
       R = 8,
       T = 10,
       B = 22;
-    const box = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "trend-svg", role: "img", "aria-label": mode === "delta" ? "1日の増減のグラフ" : "ポイントの残高のグラフ" });
+    const box = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "trend-svg", role: "img", "aria-label": mode === "delta" ? "増減のグラフ" : "ポイントの残高のグラフ" });
     const values = lines.flatMap((l) => l.points.map((p) => p.value).filter((v) => v !== null));
     if (!values.length) {
       const t = svg("text", { x: W / 2, y: H / 2, "text-anchor": "middle", class: "trend-empty" });
@@ -177,9 +246,9 @@
       box.append(t);
     }
     const dates = lines[0].points.map((p) => p.day);
-    for (const i of [0, Math.floor((days - 1) / 2), days - 1]) {
+    for (const i of [0, Math.round((days - 1) / 2), days - 1]) {
       const t = svg("text", { x: x(i), y: H - 6, "text-anchor": i === 0 ? "start" : i === days - 1 ? "end" : "middle", class: "trend-axis" });
-      t.textContent = dates[i].slice(5).replace("-", "/");
+      t.textContent = /^\d{2}:\d{2}$/.test(dates[i]) ? dates[i] : dates[i].slice(5).replace("-", "/");
       box.append(t);
     }
     for (const line of lines) {
@@ -212,7 +281,7 @@
   // Fills `panel` (the dialog's graph tab). Reads the others only when the tab is opened.
   async function render(panel) {
     const pref = readPref();
-    const state = { days: [7, 30, 90].includes(pref.days) ? pref.days : 30, mode: pref.mode === "delta" ? "delta" : "balance", picked: Array.isArray(pref.picked) ? pref.picked.filter((id) => typeof id === "string").slice(0, MAX - 1) : null, others: [], error: "" };
+    const state = { days: [1, 7, 30, 90].includes(pref.days) ? pref.days : 30, step: pref.step === 60 ? 60 : 30, mode: pref.mode === "delta" ? "delta" : "balance", picked: Array.isArray(pref.picked) ? pref.picked.filter((id) => typeof id === "string").slice(0, MAX - 1) : null, others: [], error: "" };
     panel.replaceChildren(node("p", "読み込み中…", "trend-note"));
     try {
       state.others = await players();
@@ -223,11 +292,12 @@
     // At first: the three players with the most points.
     if (!state.picked) state.picked = state.others.slice(0, 3).map((p) => p.id);
     const draw = () => {
-      writePref({ days: state.days, mode: state.mode, picked: state.picked });
+      writePref({ days: state.days, step: state.step, mode: state.mode, picked: state.picked });
+      const today = state.days === 1;
       const self = mine(),
         chosen = [self, ...state.picked.map((id) => state.others.find((p) => p.id === id)).filter(Boolean)];
       const lines = chosen.map((p, i) => {
-        const list = series(p.trend, state.days, Date.now(), p.points);
+        const list = today ? hourSeries(p.hours, p.trend, state.step, Date.now(), p.points) : series(p.trend, state.days, Date.now(), p.points);
         return { id: p.id, name: p.name, self: !!p.self, color: COLORS[i % COLORS.length], points: state.mode === "delta" ? deltas(list) : list };
       });
       const controls = node("div", undefined, "trend-controls");
@@ -248,21 +318,24 @@
         return g;
       };
       controls.append(
-        group([["balance", "残高"], ["delta", "1日の増減"]], state.mode, (v) => (state.mode = v), "グラフの種類"),
-        group([[7, "7日"], [30, "30日"], [90, "90日"]], state.days, (v) => (state.days = v), "期間"),
+        group([["balance", "残高"], ["delta", "増減"]], state.mode, (v) => (state.mode = v), "グラフの種類"),
+        group([[1, "今日"], [7, "7日"], [30, "30日"], [90, "90日"]], state.days, (v) => (state.days = v), "期間"),
       );
+      // Today: in half hours or hours.
+      if (today) controls.append(group([[30, "30分ごと"], [60, "1時間ごと"]], state.step, (v) => (state.step = v), "区切り"));
       const legend = node("ul", undefined, "trend-legend");
-      const pickLine = node("p", "グラフをタップすると、その日の数字が出ます。", "trend-pick");
+      const pickLine = node("p", today ? "グラフをタップすると、その時間の数字が出ます（増減は、その" + (state.step === 60 ? "1時間" : "30分") + "の増減）。" : "グラフをタップすると、その日の数字が出ます。", "trend-pick");
       for (const l of lines) {
         const li = node("li");
         li.style.setProperty("--trend-color", l.color);
         li.append(node("span", "", "trend-swatch"), node("span", l.name));
         legend.append(li);
       }
-      const graph = chart(lines, state.mode, state.days);
+      const graph = chart(lines, state.mode, lines[0].points.length);
       graph.addEventListener("trend-pick", (e) => {
         const i = e.detail;
-        pickLine.textContent = lines[0].points[i].day.slice(5).replace("-", "/") + "　" + lines.map((l) => l.name + " " + (l.points[i].value === null ? "—" : (state.mode === "delta" && l.points[i].value > 0 ? "+" : "") + fmt(l.points[i].value) + "pt")).join("　");
+        const at = lines[0].points[i].day;
+        pickLine.textContent = (today ? at + "〜" : at.slice(5).replace("-", "/")) + "　" + lines.map((l) => l.name + " " + (l.points[i].value === null ? "—" : (state.mode === "delta" && l.points[i].value > 0 ? "+" : "") + fmt(l.points[i].value) + "pt")).join("　");
       });
       const people = node("details", undefined, "trend-people");
       people.append(node("summary", "くらべる人を選ぶ（" + state.picked.length + "／" + (MAX - 1) + "人）"));
@@ -285,7 +358,7 @@
         list.append(li);
       }
       people.append(list);
-      panel.replaceChildren(controls, graph, pickLine, legend, ...(state.error ? [node("p", state.error, "trend-note")] : []), people, node("p", "1日の終わりの残高を記録します（10.138から）。それより前の日は記録がないので線がありません。", "trend-note"));
+      panel.replaceChildren(controls, graph, pickLine, legend, ...(state.error ? [node("p", state.error, "trend-note")] : []), people, node("p", today ? "今日の残高を30分ごとに記録します（10.150から。今日と昨日の分を残します）。記録のない時間は、その前の残高のままです。" : "1日の終わりの残高を記録します（10.138から）。それより前の日は記録がないので線がありません。", "trend-note"));
     };
     draw();
   }
