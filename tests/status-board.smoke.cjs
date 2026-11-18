@@ -29,7 +29,7 @@ const { chromium } = require("playwright"),
     assert.equal(await page.locator("#appMainBottomNavBar .nav-item").first().getAttribute("id"), "nav-status");
     assert.ok(await page.locator("#view-status").evaluate((v) => v.classList.contains("active")));
     await page.locator("#statusBoard .sb-hero").waitFor();
-    assert.match(await page.locator("#statusBoard .sb-hero").innerText(), /GUEST PLAYER[\s\S]*RANK[\s\S]*「木」まで あと 10分/);
+    assert.match(await page.locator("#statusBoard .sb-hero").innerText(), /GUEST PLAYER[\s\S]*RANK[\s\S]*NEXT 木　10分/);
     // With data: two hours today, a streak of three days, points with a trend, three books.
     await page.evaluate(() => {
       const key = (t) => {
@@ -71,14 +71,14 @@ const { chromium } = require("playwright"),
     const board = page.locator("#statusBoard");
     await page.waitForFunction(() => document.querySelector("#statusBoard .sb-points-value span")?.textContent === "1,500");
     assert.ok(await board.locator(".sb-hero.sb-rank-copper").count());
-    assert.match(await board.locator(".sb-rank-note").innerText(), /「銀」まで あと 14時間/);
+    assert.match(await board.locator(".sb-rank-note").innerText(), /NEXT 銀　14時間/);
     assert.equal(await board.locator(".sb-spark").count(), 1, "the points line");
-    assert.match(await board.locator(".sb-points-foot").innerText(), /総獲得 4,200 pt/);
+    assert.match(await board.locator(".sb-points-foot").innerText(), /累計 4,200 pt/);
     assert.match(await board.locator(".sb-tone-cyan").innerText(), /2\s*時間/);
     assert.match(await board.locator(".sb-tone-flame").innerText(), /3\s*日/);
     assert.equal(await board.locator(".sb-bar").count(), 14);
     await page.waitForFunction(() => document.querySelector("#statusBoard .sb-donut-center strong span")?.textContent === "21");
-    assert.match(await board.locator(".sb-mini").innerText(), /2冊[\s\S]*140[\s\S]*50[\s\S]*321回/);
+    assert.match(await board.locator(".sb-mini").innerText(), /2\s*冊[\s\S]*140[\s\S]*50[\s\S]*321/);
     // Only books with progress are listed (まだの本 has none rated); names and titles are text, never markup.
     assert.equal(await board.locator(".sb-book").count(), 1);
     assert.match(await board.locator(".sb-book").first().innerText(), /テスト英単語<img src=x onerror="window.__xss=1">[\s\S]*30%/);

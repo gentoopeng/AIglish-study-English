@@ -171,8 +171,6 @@
     name.classList.add("sb-name");
     const chips = el("div", "sb-chips");
     if (d.title) chips.append(el("span", "sb-chip sb-chip-title", "👑 " + d.title));
-    const frameName = (root.IconFrameCatalog || []).find((f) => f.id === d.frame)?.name;
-    chips.append(el("span", "sb-chip", frameName ? "フレーム " + frameName : "フレームなし"));
     who.append(el("p", "sb-kicker", d.guest ? "GUEST PLAYER" : "PLAYER STATUS"), name, chips);
     if (!d.guest) who.append(el("p", "sb-id", "ID " + d.id));
     top.append(ring, who);
@@ -188,7 +186,7 @@
     const fill = el("i");
     fill.style.setProperty("--sb-fill", String(d.rank.progress));
     bar.append(fill);
-    const note = el("p", "sb-rank-note", d.rank.next ? "「" + d.rank.next.name + "」まで あと " + spoken(d.rank.left) : "最高ランクに到達しました");
+    const note = el("p", "sb-rank-note", d.rank.next ? "NEXT " + d.rank.next.name + "　" + spoken(d.rank.left) : "MAX");
     rank.append(label, bar, note);
     card.append(top, rank);
     return card;
@@ -198,7 +196,7 @@
     const card = el("section", "sb-card sb-points");
     const head = el("div", "sb-points-head");
     const left = el("div");
-    left.append(el("p", "sb-label", "所持ポイント"));
+    left.append(el("p", "sb-label", "POINTS"));
     const value = el("strong", "sb-points-value");
     const n = el("span");
     if (d.points.balance === null) n.textContent = "—";
@@ -208,7 +206,7 @@
     head.append(left);
     if (d.points.week !== null) {
       const up = d.points.week >= 0;
-      head.append(el("span", "sb-delta " + (up ? "is-up" : "is-down"), (up ? "▲ +" : "▼ ") + comma(d.points.week) + " / 7日"));
+      head.append(el("span", "sb-delta " + (up ? "is-up" : "is-down"), (up ? "▲ +" : "▼ ") + comma(d.points.week) + " 7d"));
     }
     card.append(head);
     // The last 14 days of the balance as a line.
@@ -230,10 +228,11 @@
       const last = xy[xy.length - 1];
       chart.append(svg("circle", { cx: last[0], cy: last[1], r: 3.5, class: "sb-spark-dot" }));
       card.append(chart);
-    } else card.append(el("p", "sb-empty", "ポイントが動くと、ここに14日間のグラフが出ます。"));
+    }
     const foot = el("div", "sb-points-foot");
-    foot.append(el("span", "", "総獲得 " + (d.points.earned === null ? "—" : comma(d.points.earned) + " pt")));
-    const open = el("button", "sb-link", "くわしく ›");
+    foot.append(el("span", "", "累計 " + (d.points.earned === null ? "—" : comma(d.points.earned) + " pt")));
+    const open = el("button", "sb-link", "›");
+    open.setAttribute("aria-label", "ポイントの詳細");
     open.type = "button";
     open.onclick = () => root.openStudyPoints?.();
     foot.append(open);
@@ -260,7 +259,7 @@
       tile("⏱", "今日", parts(s.today), "cyan"),
       tile("📅", "今週", parts(s.week), "violet"),
       tile("∑", "合計", parts(s.total), "gold"),
-      tile("🔥", "連続", [[String(s.streak), "日"]], "flame", s.streak >= 2 ? "このまま続けよう" : "1分で記録がつながる"),
+      tile("🔥", "連続", [[String(s.streak), "日"]], "flame"),
     );
     card.append(grid);
     // The last 14 days as bars, today glowing.
@@ -284,11 +283,11 @@
       row.append(el("dt", "", k), el("dd", "", v));
       facts.append(row);
     };
-    fact("勉強した日", s.days + "日");
-    fact("1日の最高", spoken(s.best));
-    fact("平均（勉強した日）", spoken(s.average));
-    const topDay = s.weekdays.some((v) => v > 0) ? WEEK[s.weekdays.indexOf(Math.max(...s.weekdays))] + "曜日" : "—";
-    fact("よく勉強する曜日", topDay);
+    fact("日数", s.days + "日");
+    fact("最高", spoken(s.best));
+    fact("平均", spoken(s.average));
+    const topDay = s.weekdays.some((v) => v > 0) ? WEEK[s.weekdays.indexOf(Math.max(...s.weekdays))]  : "—";
+    fact("曜日", topDay);
     card.append(facts);
     return card;
   }
@@ -296,7 +295,7 @@
   function masteryCard(d) {
     const m = d.mastery;
     const card = el("section", "sb-card sb-mastery");
-    card.append(el("h3", "sb-title", "単語帳の理解度"));
+    card.append(el("h3", "sb-title", "理解度"));
     const top = el("div", "sb-mastery-top");
     // A ring: ○ △ ×, the rest dark.
     const R = 52,
@@ -317,11 +316,11 @@
     const pn = el("span");
     countUp(pn, pct);
     p.append(pn, el("small", "", "%"));
-    center.append(p, el("span", "", "○ 覚えた"));
+    center.append(p);
     const wrap = el("div", "sb-donut-wrap");
     wrap.append(ring, center);
     const legend = el("ul", "sb-legend");
-    [["ok", "○ 覚えた", m.ok], ["so", "△ あいまい", m.so], ["bad", "× まだ", m.bad], ["none", "ー 未設定", m.none]].forEach(([k, label, v]) => {
+    [["ok", "○", m.ok], ["so", "△", m.so], ["bad", "×", m.bad], ["none", "ー", m.none]].forEach(([k, label, v]) => {
       const li = el("li", "sb-leg-" + k);
       li.append(el("i"), el("span", "", label), el("b", "", comma(v)));
       legend.append(li);
@@ -334,10 +333,10 @@
       x.append(el("strong", "", value), el("span", "", label));
       summary.append(x);
     };
-    mini("単語帳", comma(d.books.length) + "冊");
-    mini("問題・単語", comma(m.sum));
-    mini("理解度を付けた", comma(d.rated));
-    mini("フラッシュ", comma(d.flash) + "回");
+    mini("冊", comma(d.books.length));
+    mini("問題", comma(m.sum));
+    mini("評価", comma(d.rated));
+    mini("フラッシュ", comma(d.flash));
     card.append(summary);
     // Each book: a stacked bar, the most worked on first.
     const list = el("ul", "sb-books");
@@ -369,7 +368,6 @@
         list.append(li);
       });
     if (list.childElementCount) card.append(list);
-    else card.append(el("p", "sb-empty", d.books.length ? "単語帳で理解度を付けると、ここに出ます。" : "単語帳を作るか、「みんなの単語帳」から始めましょう。"));
     return card;
   }
 
@@ -380,7 +378,7 @@
     const d = collect();
     const now = new Date();
     const head = el("header", "sb-head");
-    head.append(el("span", "sb-head-date", now.getMonth() + 1 + "月" + now.getDate() + "日（" + WEEK[now.getDay()] + "）"), el("span", "sb-head-greet", now.getHours() < 5 ? "夜ふかし中" : now.getHours() < 11 ? "おはよう" : now.getHours() < 18 ? "こんにちは" : "こんばんは"));
+    head.append(el("span", "sb-head-date", now.getMonth() + 1 + "/" + now.getDate() + " " + WEEK[now.getDay()]));
     host.replaceChildren(head, hero(d), pointsCard(d), studyCard(d), masteryCard(d));
     host.classList.remove("sb-enter");
     void host.offsetWidth;
