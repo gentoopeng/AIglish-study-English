@@ -45,6 +45,20 @@ const { chromium } = require("playwright"),
     assert.deepEqual(shoen.questions.map((q) => q[0]).filter((k) => k !== "whole" && k !== "blank"), ["year", "era"], "a century and an era");
     // No line gives its headword away.
     for (const w of result) for (const m of w.meanings) assert.ok(!m.text.includes(w.word), w.word + " in " + m.text);
+    // English books: a phrase from the book (provide him with information) is not a question; its pattern is,
+    // with the preposition to answer. Both prompts say so, and the English prompt's example does it.
+    for (const text of [prompt]) assert.ok(text.includes("provide him with information") && text.includes("+ A 「with」 B"), "term prompt: English rules");
+    await page.locator("#libraryCopyEnglishPrompt").click();
+    await page.waitForFunction(() => window.__copied.length === 2);
+    const english = await page.evaluate(() => window.__copied[1]);
+    assert.ok(english.includes("meanings に入れない") && english.includes("+ A 「with」 B"), "English prompt: phrases go to sub");
+    const englishExample = english.slice(english.indexOf('{"words":[\n'), english.indexOf("\n]}") + 3);
+    const books = await page.evaluate((json) => window.parseVocabImport(json, []).map((w) => ({ word: w.word, sub: w.sub, meanings: w.meanings.map((m) => m.text), questions: window.TermQuestions.questions(w).filter((q) => q.kind === "blank").map((q) => q.answer) })), englishExample);
+    const provide = books.find((w) => w.word === "provide");
+    assert.deepEqual(provide.questions, ["with", "for", "provision"]);
+    assert.ok(provide.sub.includes("provide him with information"));
+    // No meaning in the example is a phrase with a concrete object (him, her, the problem …) to answer whole.
+    for (const w of books) for (const m of w.meanings) assert.ok(!/\b(him|her|them|me|us|information|the problem)\b/.test(m.split("\n")[0]), w.word + ": " + m);
     assert.deepEqual(errors, []);
     console.log("term-prompt smoke ok");
   } finally {
