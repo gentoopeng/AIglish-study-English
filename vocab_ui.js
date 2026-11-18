@@ -341,8 +341,11 @@
         var text = input.value.trim();
         if (!text) return;
         if (text[0] === '[' && !confirm("バックアップデータで完全に上書きしますか？")) return;
+        var beforeImport = JSON.parse(JSON.stringify(vocabList || []));
         try { vocabList = window.parseVocabImport(text, vocabList); }
         catch (error) { alert(error.message); return; }
+        // Related words that are headwords of the player's other books become links to them.
+        try { await promote(vocabList, currentTextbook, beforeImport); } catch (e) { console.warn('[relations] promote', e); }
         if(!vocabList.length)window.VocabMaster.confirmEmpty(currentTextbook||"default");
         userStats.vocab_reg = vocabList.length;
         window.saveUserStats();
@@ -871,7 +874,37 @@
         if (kept && Date.now() - kept.at < 300000) return kept.words;
         try { var words = (await window.__getBookMasterWords(id)) || []; wordsCache[id] = { at: Date.now(), words: words }; return words; } catch (e) { return []; }
     }
-    window.WordRelationsUi = { booksHere: booksHere, wordsOf: wordsOf };
+    // A related word that an import added (by name, from a bulk line or the AI) and that is a headword of another of the
+    // player's books becomes a link to it, so it can be opened (10.154). `before`: what the words were before the import
+    // (only the related words added since are looked at; ones the player entered as related stay as they are).
+    function relatedKeys(words) {
+        var keys = {};
+        (words || []).forEach(function(w) { (w.related || []).forEach(function(r) { keys[String(w.num) + '\u0000' + String(r.text).toLowerCase()] = true; }); });
+        return keys;
+    }
+    async function promote(words, selfBook, before) {
+        if (!window.WordRelations) return 0;
+        var old = relatedKeys(before), wanted = [];
+        (words || []).forEach(function(w) { (w.related || []).forEach(function(r) { if (!old[String(w.num) + '\u0000' + String(r.text).toLowerCase()]) wanted.push([w, r]); }); });
+        if (!wanted.length) return 0;
+        // Headwords of the other books (the first book that has it wins).
+        var index = {};
+        for (var b of booksHere()) {
+            if (b.id === selfBook) continue;
+            (await wordsOf(b.id)).forEach(function(x) { var k = String(x.word || '').trim().toLowerCase(); if (k && !index[k]) index[k] = { book: b.id, num: String(x.num), word: String(x.word).trim() }; });
+        }
+        var moved = 0;
+        wanted.forEach(function(pair) {
+            var w = pair[0], r = pair[1], hit = index[String(r.text).trim().toLowerCase()];
+            if (!hit || (w.links || []).length >= 20) return;
+            w.links = window.WordRelations.cleanLinks((w.links || []).concat([{ num: hit.num, kind: r.kind, book: hit.book, word: hit.word }]), w.num, selfBook);
+            w.related = (w.related || []).filter(function(x) { return x !== r; });
+            if (!w.related.length) delete w.related;
+            moved++;
+        });
+        return moved;
+    }
+    window.WordRelationsUi = { booksHere: booksHere, wordsOf: wordsOf, promote: promote };
     // Editing a word's relations (10.153): two lists. Above, words that can be opened (in this book or another one);
     // a word found in no book is refused there, with a pointer to the list below. Below, words just shown.
     window.renderInlineLinksEditor = function(wordNum, draft, draftRelated) {

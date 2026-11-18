@@ -32,30 +32,33 @@ const { chromium } = require("playwright"),
       while (await page.locator("dialog.app-alert[open]").count()) await page.locator("dialog.app-alert[open] button").first().click();
     };
     await make("関連B", "1:comply:従う:\n2:obey:従う:");
-    await make("関連A", "1:follow:従う::同=obey,comply 反=lead\n2:obey:従う:\n3:lead:導く:例文・comply with the rules\n4:guide:案内する:同=これはサブ情報");
+    await make("関連A", "1:follow:従う::同=obey,comply,heed 反=lead\n2:obey:従う:\n3:lead:導く:例文・comply with the rules\n4:guide:案内する:同=これはサブ情報");
     const bookId = (name) => page.evaluate((n) => textbooksPool.find((b) => b.name === n).id, name);
     const idA = await bookId("関連A"),
       idB = await bookId("関連B");
     await page.locator("#vocabLibraryBooks .textbook-list-item").filter({ hasText: "関連A" }).click();
     await page.locator('.word-row-container[data-word-num="1"]').waitFor();
-    // The line's relations: obey and lead are words of this book (links, both ways); comply is not (a related word).
+    // The line's relations: obey and lead are words of this book (links, both ways); comply is a headword of 関連B (a link
+    // to it, 10.154); heed is in no book (a related word).
     const words = await page.evaluate(() => vocabList.map((w) => ({ links: w.links || [], related: w.related || [] })));
-    assert.deepEqual(words[0].links, [{ num: "2", kind: "syn" }, { num: "3", kind: "ant" }]);
-    assert.deepEqual(words[0].related, [{ text: "comply", kind: "syn" }]);
+    assert.deepEqual(words[0].links, [{ num: "2", kind: "syn" }, { num: "3", kind: "ant" }, { num: "1", kind: "syn", book: idB, word: "comply" }]);
+    assert.deepEqual(words[0].related, [{ text: "heed", kind: "syn" }]);
     assert.deepEqual(words[1].links, [{ num: "1", kind: "syn" }]);
     assert.deepEqual(words[2].links, [{ num: "1", kind: "ant" }]);
     // A サブ情報 that starts with 同= stays サブ情報 (relations only as a fifth part).
     assert.deepEqual(await page.evaluate(() => [vocabList[3].sub, vocabList[3].related || null]), ["同=これはサブ情報", null]);
     // On the card: the links as buttons that open, the related word as a plain mark.
     const card = page.locator('#vocabListContainer .word-row-container[data-word-num="1"]');
-    assert.deepEqual(await card.locator(".vocab-link").allInnerTexts(), ["obey", "lead"]);
-    assert.deepEqual(await card.locator(".vocab-related").allInnerTexts(), ["comply"]);
+    assert.deepEqual((await card.locator(".vocab-link").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim()), ["obey", "comply関連B", "lead"]);
+    assert.deepEqual(await card.locator(".vocab-related").allInnerTexts(), ["heed"]);
     assert.equal(await card.locator(".vocab-related").evaluate((el) => el.tagName), "SPAN", "a related word does not open anything");
     // The editor: a related word takes anything; a link to comply (not in this book) is found in 関連B and chosen.
     await card.locator(".card-edit-btn").click();
     const box = page.locator("#inlineEditLinks-1");
     await box.locator(".inline-related-input").fill("guide");
     await box.getByRole("button", { name: "関連語を追加" }).click();
+    // (the link to comply in 関連B is taken off, then found again by searching the other books)
+    await box.getByRole("button", { name: "comply（関連B）へのリンクを外す" }).click();
     await box.locator(".inline-link-input").fill("comply");
     await box.getByRole("button", { name: "追加", exact: true }).click();
     await box.locator(".inline-link-choices button", { hasText: "関連B" }).click();
@@ -67,7 +70,7 @@ const { chromium } = require("playwright"),
     await closeMessages();
     const follow = await page.evaluate(() => ({ links: vocabList[0].links, related: vocabList[0].related }));
     assert.deepEqual(follow.links, [{ num: "2", kind: "syn" }, { num: "3", kind: "ant" }, { num: "1", kind: "syn", book: idB, word: "comply" }]);
-    assert.deepEqual(follow.related, [{ text: "comply", kind: "syn" }, { text: "guide", kind: "syn" }]);
+    assert.deepEqual(follow.related, [{ text: "heed", kind: "syn" }, { text: "guide", kind: "syn" }]);
     // Kept in the saved words (and comply in 関連B was not touched: a link to another book goes one way).
     assert.deepEqual(await page.evaluate(() => window.stripVocabProgressFromWords(vocabList)[0].related), follow.related);
     assert.deepEqual(await page.evaluate(() => window.stripVocabProgressFromWords(vocabList)[0].links[2]), { num: "1", kind: "syn", book: idB, word: "comply" });
