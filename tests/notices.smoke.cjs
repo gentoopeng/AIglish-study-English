@@ -87,7 +87,30 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     assert.equal(await bell.locator(".notice-badge").isHidden(), true);
     await bell.click();
     await box.getByText("ログインすると毎日1回ルーレットでポイントがもらえます。").waitFor();
-    await box.getByText("運営からのお知らせはまだありません。").waitFor();
+    // The notices come first (10.161), with the short update notes of release-notes.js among them, then the bonus.
+    await box.locator(".notice-list .is-release").first().waitFor();
+    const order = await box.locator(".notices-body > *").evaluateAll((els) => els.map((el) => el.tagName + "." + el.className));
+    assert.ok(order.indexOf("H3.") >= 0 && order.indexOf("H3.") < order.findIndex((c) => c.startsWith("SECTION.notice-bonus")), JSON.stringify(order));
+    assert.match(await box.locator(".notice-list .is-release").first().innerText(), /アップデート 10\.\d+/);
+    // A new device is not told about updates from before it was first used (no badge for them); a device that had
+    // seen the box before is told about a new update once, until the box is opened.
+    await box.getByRole("button", { name: /閉じる/ }).first().click();
+    const counted = await a.evaluate(() => {
+      const before = document.querySelector("#headerNotices .notice-badge").hidden;
+      const at = Date.now() - 60000;
+      window.ReleaseNotes = { items: () => [{ id: "release-x", title: "アップデート 99.1", body: "テスト", at, release: true }] };
+      localStorage.removeItem("aiglish_notices_since");
+      localStorage.setItem("aiglish_notices_seen", String(Date.now() - 3600000));
+      window.Notices.badge();
+      return { before, after: document.querySelector("#headerNotices .notice-badge").textContent };
+    });
+    assert.deepEqual(counted, { before: true, after: "1" });
+    await bell.click();
+    await box.locator(".notice-list .is-release.is-new", { hasText: "アップデート 99.1" }).waitFor();
+    await a.waitForFunction(() => Number(localStorage.getItem("aiglish_notices_seen")) >= window.ReleaseNotes.items()[0].at);
+    await box.getByRole("button", { name: /閉じる/ }).first().click();
+    assert.equal(await bell.locator(".notice-badge").isHidden(), true, "read once the box was opened");
+    await bell.click();
     await box.getByRole("button", { name: "閉じる" }).click();
 
     // Signed in: the bonus is waiting.
@@ -115,7 +138,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     // The box: the bonus first, then the notice marked new; opening it marks it read.
     await bell.click();
     await box.locator(".notice-list li.is-new", { hasText: "メンテナンスのお知らせ" }).waitFor();
-    assert.match(await box.locator(".notice-text").innerText(), /2:00〜3:00 は使えません。\nご迷惑/);
+    assert.match(await box.locator(".notice-list li:not(.is-release) .notice-text").innerText(), /2:00〜3:00 は使えません。\nご迷惑/);
     assert.equal(await bell.locator(".notice-badge").innerText(), "1");
     await a.screenshot({ path: "/tmp/notices-box.png" });
 

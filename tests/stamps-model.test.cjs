@@ -137,3 +137,16 @@ test("送信取り消し: only one's own message or stamp, it stays as unsent an
   assert.throws(() => L.unsend(r, { id: "nope", by: "a" }), /取り消せません/);
   assert.equal(r.entries[0].kind, "message", "the record given is not changed");
 });
+
+test("the store lists friends both ways only (10.161)", () => {
+  const M = require("../stamps-model.js");
+  const docs = [
+    { id: "b", data: { friendList: [{ code: "me" }] } },
+    { id: "c", data: { friendList: [{ code: "x" }] } },
+    { id: "d", data: { friendList: [{ code: "me" }], deleted: true } },
+    { id: "e", data: { friendList: [{ code: "me" }] } },
+  ];
+  assert.deepEqual(M.mutualFriends([{ code: "b" }, { code: "c" }, { code: "d" }], "me", docs), ["b"], "e has me, but I do not have e");
+  assert.deepEqual(M.mutualFriends([], "me", docs), []);
+  assert.deepEqual(M.mutualFriends([{ code: "b" }], "me", [{ id: "b", data: {} }]), []);
+});

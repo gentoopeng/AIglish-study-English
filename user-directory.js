@@ -55,5 +55,17 @@ async function recent(since,ids=[],{signal,fields}={}){
  if(signal?.aborted)throw new DOMException('中止しました','AbortError');
  return [...found].map(([id,data])=>({id,data}));
 }
-window.UserDirectory={scan,recent};
+// Given users only (no list query), with only `fields` (10.161: the stamp store reads friends' friend lists).
+// null when the REST endpoint is not known (then read the documents one by one).
+async function byIds(ids,{signal,fields}={}){
+ const project=window.db?.app?.options?.projectId,decode=window.RankingQuery?.fields;
+ if(!/^[a-z0-9-]+$/.test(project||'')||!decode||typeof fetch!=='function'||!Array.isArray(fields)||!fields.length)return null;
+ const list=[...new Set(ids)].filter(id=>id&&/^[^/]{1,128}$/.test(id));if(!list.length)return [];
+ const base='https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents',root='projects/'+project+'/databases/(default)/documents/users/';
+ const request=async body=>{const response=await fetch(base+':batchGet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal});const data=await response.json();if(!response.ok||!Array.isArray(data)){const error=Error(data.error?.message||'ユーザーを取得できませんでした。');error.code=response.status===429?'resource-exhausted':data.error?.status;throw error;}return data;};
+ const read=window.FirestoreReadGuard?.wrap?.(request)||request,out=[];
+ for(let i=0;i<list.length;i+=100){const items=await read({documents:list.slice(i,i+100).map(id=>root+encodeURIComponent(id)),mask:{fieldPaths:fields}});for(const item of items)if(item.found)out.push({id:decodeURIComponent(item.found.name.split('/').pop()),data:decode(item.found.fields)});}
+ return out;
+}
+window.UserDirectory={scan,recent,byIds};
 })();

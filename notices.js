@@ -50,6 +50,16 @@
     store.set(lookedKey, JSON.stringify({ at: Date.now(), items }));
     return items;
   };
+  // The team's notices with the short update notes (release-notes.js, 10.161), newest first.
+  const shown = () => [...notices, ...(window.ReleaseNotes?.items() || [])].sort((a, b) => (b.at || 0) - (a.at || 0));
+  // Unread: update notes count for a week, and on a new device (nothing seen yet here) only those after its first
+  // day: it is not told about every old update.
+  const sinceKey = "aiglish_notices_since";
+  if (!store.get(seenKey) && !store.get(sinceKey)) store.set(sinceKey, String(Date.now()));
+  const unreadCount = () => {
+    const seen = Number(store.get(seenKey)) || 0;
+    return M.unread(notices, seen) + M.unread(window.ReleaseNotes?.items() || [], Math.max(seen, Number(store.get(sinceKey)) || 0, Date.now() - 7 * 864e5));
+  };
   const bonusKey = () => "aiglish_login_bonus_" + uid();
   // { day, prize } of the last bonus taken on this account, as far as this device knows.
   function taken() {
@@ -64,7 +74,7 @@
   function badge() {
     const button = document.getElementById("headerNotices");
     if (!button) return;
-    const count = M.unread(notices, store.get(seenKey)) + (bonusWaiting() ? 1 : 0) + (window.PersonalNotices?.unread(uid()) || 0),
+    const count = unreadCount() + (bonusWaiting() ? 1 : 0) + (window.PersonalNotices?.unread(uid()) || 0),
       mark = button.querySelector(".notice-badge");
     mark.hidden = !count;
     mark.textContent = count > 9 ? "9+" : String(count);
@@ -199,7 +209,21 @@
     const ownSeen = window.PersonalNotices?.seen(uid()) || 0;
     const draw = () => {
       const seenAt = Number(store.get(seenKey)) || 0;
-      body.replaceChildren(bonusCard());
+      // The notices first (they were at the bottom), then today's bonus and what is for this player.
+      body.replaceChildren();
+      const list = node("ol", "notice-list");
+      list.setAttribute("aria-label", "運営からのお知らせ");
+      const all = shown();
+      for (const n of all) {
+        const li = node("li", (n.at > seenAt ? "is-new" : "") + (n.release ? " is-release" : ""));
+        const head = node("p", "notice-head");
+        head.append(node("strong", "", n.title), node("time", "", when(n.at)));
+        li.append(head);
+        if (n.body) li.append(node("p", "notice-text", n.body));
+        list.append(li);
+      }
+      if (!all.length) list.append(node("li", "notice-empty", "運営からのお知らせはまだありません。"));
+      body.append(node("h3", "", "運営から"), list, bonusCard());
       // For this player: points that came in, newest first; new ones are marked until the box is
       // closed (they count as read once it has been opened).
       const mine = window.PersonalNotices?.list(uid()) || [];
@@ -216,25 +240,13 @@
         }
         body.append(node("h3", "", "あなたへ"), own);
       }
-      const list = node("ol", "notice-list");
-      list.setAttribute("aria-label", "運営からのお知らせ");
-      for (const n of notices) {
-        const li = node("li", n.at > seenAt ? "is-new" : "");
-        const head = node("p", "notice-head");
-        head.append(node("strong", "", n.title), node("time", "", when(n.at)));
-        li.append(head);
-        if (n.body) li.append(node("p", "notice-text", n.body));
-        list.append(li);
-      }
-      if (!notices.length) list.append(node("li", "notice-empty", "運営からのお知らせはまだありません。"));
-      body.append(node("h3", "", "運営から"), list);
     };
     draw();
     await load();
     if (!dialog || dialog.getAttribute("aria-label") !== "お知らせ") return;
     draw();
     // Seen once opened; the "new" marks stay for this look.
-    const newest = notices.reduce((a, n) => Math.max(a, n.at || 0), 0);
+    const newest = shown().reduce((a, n) => Math.max(a, n.at || 0), 0);
     if (newest) store.set(seenKey, String(Math.max(newest, Number(store.get(seenKey)) || 0)));
     window.PersonalNotices?.markSeen(uid());
     badge();

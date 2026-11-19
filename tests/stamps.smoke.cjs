@@ -14,8 +14,11 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     const docs = new Map(),
       versions = new Map(),
       errors = [];
-    for (const id of ["st-a", "st-b", "st-c"]) {
-      docs.set("users/" + id, { playerName: id, studyPoints: 500 });
+    // Friends (10.161: the store shows the stamps of friends both ways only). A is a friend of B and C both ways;
+    // D has A in its list, but A does not have D.
+    const FRIENDS = { "st-a": ["st-b", "st-c"], "st-b": ["st-a"], "st-c": ["st-a"], "st-d": ["st-a"] };
+    for (const id of ["st-a", "st-b", "st-c", "st-d"]) {
+      docs.set("users/" + id, { playerName: id, studyPoints: 500, friendList: (FRIENDS[id] || []).map((code) => ({ code, name: code })) });
       docs.set("users/" + id + "/learningPoints/main", { balance: 500, revision: 1, history: {} });
     }
     async function pageFor(id, admin = false) {
@@ -51,9 +54,10 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
       // A guest is told to log in.
       assert.match(await page.evaluate(() => window.Stamps.mine().then(() => "", (e) => e.message)) || "x", /./);
       await page.evaluate(
-        ([id, admin]) => {
+        ([id, admin, friends]) => {
           myId = id;
           myName = id;
+          myFriendList = friends.map((code) => ({ code, name: code }));
           window.isAdmin = admin;
           localStorage.setItem("core_v4_study_points_" + id, JSON.stringify({ balance: 500, revision: 1, publishedRevision: 1 }));
           window.db = {};
@@ -71,7 +75,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
           };
           window.fbGetDocs = async (q) => {
             let rows = await __stList(q.coll);
-            for (const p of q.parts || []) if (p.where) rows = rows.filter((r) => r.value[p.where[0]] === p.where[2]);
+            for (const p of q.parts || []) if (p.where) rows = rows.filter((r) => (p.where[1] === "in" ? p.where[2].includes(r.value[p.where[0]]) : r.value[p.where[0]] === p.where[2]));
             if ((q.parts || []).some((p) => p.orderBy)) rows.sort((x, y) => (y.value.createdAt || 0) - (x.value.createdAt || 0));
             const after = (q.parts || []).find((p) => p.after)?.after;
             if (after) rows = rows.slice(rows.findIndex((r) => r.id === after.id) + 1);
@@ -100,7 +104,7 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
           window.fbSetDoc = async (ref, value, options) => __stCommit({ reads: {}, writes: [{ path: pathOf(ref), value: JSON.parse(JSON.stringify(value)), merge: options?.merge === true }] });
           window.fbDeleteDoc = async (ref) => __stCommit({ reads: {}, writes: [{ path: pathOf(ref), remove: true }] });
         },
-        [id, admin],
+        [id, admin, FRIENDS[id] || []],
       );
       return page;
     }
@@ -427,6 +431,12 @@ const base = process.env.APP_URL || "http://127.0.0.1:8000";
     await dlg(c).locator(".stamps-status", { hasText: "通報しました" }).waitFor();
     assert.deepEqual(Object.keys(docs.get("stampReports/" + id).reporters), ["st-c"]);
     await c.evaluate(() => window.Stamps.close());
+    // D has A as a friend, but A has not added D: A's stamp is not in D's store.
+    const d = await pageFor("st-d");
+    await d.evaluate(() => window.Stamps.store());
+    await dlg(d).locator(".stamps-empty", { hasText: "お互いにフレンドの人のスタンプが並びます" }).waitFor();
+    assert.equal(await dlg(d).locator(".stamps-card", { hasText: "ぱんだ" }).count(), 0);
+    await d.evaluate(() => window.Stamps.close());
     // Somebody who is not the 運営 cannot stop it, even through the function.
     assert.match(await c.evaluate(([id]) => window.Stamps.moderate(id, "stopped").then(() => "", (e) => e.message), [id]), /運営だけ/);
     // The 運営 stops it: nobody can buy it any more, B (who has it) still uses it.

@@ -44,8 +44,9 @@ const { chromium } = require("playwright"),
     assert.deepEqual(await own.locator(".notice-head strong").allInnerTexts(), ["ほかの人のビンゴの分け前 +120pt", "11月2日の勉強時間 合計 300pt"]);
     assert.equal(await box.locator("ol[aria-label='あなた宛てのお知らせ'] li.is-new").count(), 2);
     assert.match(await own.nth(1).innerText(), /60分（1分5pt）/);
-    // The team's notices stay in their own list below.
+    // The team's notices (and the update notes) are in their own list, above (10.161).
     await box.getByRole("heading", { name: "運営から" }).waitFor();
+    assert.deepEqual(await box.locator("h3").allInnerTexts(), ["運営から", "あなたへ"]);
     // Opened, so read: the badge is gone; next time they are not marked new.
     await badge.waitFor({ state: "hidden" });
     await box.getByRole("button", { name: "閉じる" }).click();
