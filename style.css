@@ -3420,3 +3420,9 @@ html:is([data-motion="off"],[data-motion="test"]).splash-leaving #appSplash{anim
 .word-uses-list .word-use{display:grid;gap:2px;width:100%;padding:10px 4px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text-main);text-align:left;cursor:pointer;}
 .word-uses-list .word-use small{color:var(--text-sub);font-size:11px;}
 .word-uses-list .word-use span{font-size:12px;color:var(--text-sub);overflow-wrap:anywhere;}
+/* Friends in a profile (10.162): whether they added you too, and add / remove. */
+.people-friend-box{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 4px;padding:10px 12px;border:1px solid #ffffff22;border-radius:12px;background:#ffffff0a}
+.people-friend-state{margin:0;font-size:12px;color:#cbd5e1;flex:1;min-width:0}
+.people-friend-box button{flex:0 0 auto;border-radius:999px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;border:1px solid transparent}
+.people-friend-add{background:#06c755;color:#fff}
+.people-friend-remove{background:transparent;color:#fda4af;border-color:#fda4af66!important}
