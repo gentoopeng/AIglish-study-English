@@ -18,3 +18,19 @@ test('legacy public counters cannot reintroduce retired accounts into study rank
 test('real profile storage with null userStats reads stats for daily and total podiums',()=>{const now=new Date(2026,9,8,12).getTime(),ledger=m.mergeCurrent(null,null);m.accrue(ledger,'remote',now,now+1500000);const doc={userStats:null,stats:{study_calendar_v2:ledger,study_today_secs:1500,study_today_date:'2026-10-8',study_total_secs:1500}};const parsed=m.readStats(doc);assert.equal(m.rankingSeconds(parsed,'daily',now),1500);assert.equal(m.rankingSeconds(parsed,'total',now),1500);assert.deepEqual(doc.userStats,null);});
 
 test('independent cloud ledger survives empty profile statistics',()=>{const time=new Date(2026,9,8,12).getTime(),ledger=m.mergeCurrent(null,null);m.accrue(ledger,'device',time,time+900000);const recovered=m.readStats({userStats:null,stats:{study_calendar_v2:m.mergeCurrent(null,null)},studyLedgerJson:JSON.stringify(ledger)});assert.equal(m.rankingSeconds(recovered,'daily',time),900);assert.equal(m.total(recovered.study_calendar_v2),900000);});
+
+test('a hand edit can only lower a day: at most what was measured and what is shown now (10.160)',()=>{
+  const ledger=empty(),now=new Date(2026,9,7,12).getTime(),key='2026-10-07';
+  m.accrue(ledger,'a',now,now+600000);m.accrue(ledger,'b',now,now+300000);
+  assert.equal(m.measured(ledger.days[key]),900000);assert.equal(m.editLimit(ledger.days[key]),900000);
+  // The idle sleep takes 5 minutes off by an edit: those cannot be put back by hand.
+  m.editDay(ledger,key,600000,now+900000);
+  assert.equal(m.dayMilliseconds(ledger.days[key]),600000);assert.equal(m.editLimit(ledger.days[key]),600000);
+  // Time studied after it counts again, and the limit grows with it, never past what was measured.
+  m.accrue(ledger,'a',now+900000,now+960000);
+  assert.equal(m.dayMilliseconds(ledger.days[key]),660000);assert.equal(m.editLimit(ledger.days[key]),660000);
+  // An old edit that raised a day (before 10.160) is not lowered by itself, but cannot be raised further either.
+  const raised=empty();m.accrue(raised,'a',now,now+60000);m.editDay(raised,key,7200000,now+60001);
+  assert.equal(m.dayMilliseconds(raised.days[key]),7200000);assert.equal(m.editLimit(raised.days[key]),60000);
+  assert.equal(m.editLimit(undefined),0);
+});
