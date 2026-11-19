@@ -326,6 +326,7 @@
   // Friends both ways (10.161): only their stamps are in the store (a stranger's stamp for sale was awkward).
   // Their friend lists are read once in 10 minutes (only that field), then their stamps on sale.
   let mutualCache = { owner: "", ids: [], at: 0 };
+  window.addEventListener("friends-changed", () => (mutualCache = { owner: "", ids: [], at: 0 }));
   async function mutualFriendIds(fresh) {
     const me = uid(),
       friends = (typeof myFriendList !== "undefined" && Array.isArray(myFriendList) ? myFriendList : []).map((f) => String(f?.code || "")).filter(Boolean);

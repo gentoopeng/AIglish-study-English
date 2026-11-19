@@ -177,6 +177,70 @@
       dd.textContent = value;
       list.append(dt, dd);
     });
+    friendBox(dialog, person, doc, loading);
+  }
+  // Friends (10.162): add or remove this person here, and see whether they have added you too (friends both ways
+  // see each other's stamps in the store).
+  const isFriend = (id) => (myFriendList || []).some((f) => f.code === id);
+  const hasMe = (doc) => (Array.isArray(doc?.friendList) ? doc.friendList : []).some((f) => String(f?.code ?? f ?? "") === uid());
+  async function saveFriends() {
+    localStorage.setItem("core_v4_friend_list", JSON.stringify(myFriendList));
+    window.queueBackgroundSave?.();
+    userStats.friends_count = myFriendList.length;
+    window.dispatchEvent(new Event("friends-changed"));
+    await window.saveUserStats?.();
+    window.checkAndRewardTitleBonusXP?.();
+    window.sortAndRenderFriendList?.();
+  }
+  function friendBox(dialog, person, doc, loading) {
+    dialog.querySelector(".people-friend-box")?.remove();
+    const account = uid();
+    if (person.id === account || account === "GUEST-000" || doc?.deleted) return;
+    const box = document.createElement("div"),
+      state = document.createElement("p"),
+      button = document.createElement("button");
+    box.className = "people-friend-box";
+    state.className = "people-friend-state";
+    button.type = "button";
+    const draw = () => {
+      const mine = isFriend(person.id),
+        theirs = hasMe(doc);
+      state.textContent = loading ? "…" : mine && theirs ? "お互いにフレンドです" : mine ? "フレンドです（相手はまだ追加していません）" : theirs ? "相手はあなたをフレンドに追加しています" : "";
+      button.textContent = mine ? "フレンドを外す" : "フレンドに追加";
+      button.className = mine ? "people-friend-remove" : "people-friend-add";
+    };
+    button.onclick = async () => {
+      if (uid() !== account) return;
+      button.disabled = true;
+      try {
+        if (isFriend(person.id)) {
+          if (!confirm("このフレンドを外しますか？")) return;
+          myFriendList = myFriendList.filter((f) => f.code !== person.id);
+        } else {
+          myFriendList.push({
+            code: person.id,
+            name: doc.playerName || person.name || person.id,
+            title: doc.selectedTitle || "称号なし",
+            avatar: "👤",
+            customAvatar: doc.avatar || person.avatar || "",
+            level: 1,
+            studyTime: 0,
+            lastLoginStr: "",
+            timestamp: Date.now(),
+          });
+        }
+        draw();
+        await saveFriends();
+      } catch (error) {
+        console.warn("フレンドを保存できませんでした", error);
+      } finally {
+        button.disabled = false;
+        draw();
+      }
+    };
+    draw();
+    box.append(state, button);
+    dialog.querySelector(".library-editor-actions")?.before(box);
   }
   // "たった今", "12分前", "3時間前", "2日前".
   function ago(time, now = Date.now()) {
