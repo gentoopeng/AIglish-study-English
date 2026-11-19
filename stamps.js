@@ -323,6 +323,43 @@
     return { list, cursor: snap.docs?.length ? snap.docs[snap.docs.length - 1] : null, last: !snap.docs || snap.docs.length < 20 };
   }
 
+  // Friends both ways (10.161): only their stamps are in the store (a stranger's stamp for sale was awkward).
+  // Their friend lists are read once in 10 minutes (only that field), then their stamps on sale.
+  let mutualCache = { owner: "", ids: [], at: 0 };
+  async function mutualFriendIds(fresh) {
+    const me = uid(),
+      friends = (typeof myFriendList !== "undefined" && Array.isArray(myFriendList) ? myFriendList : []).map((f) => String(f?.code || "")).filter(Boolean);
+    if (!fresh && mutualCache.owner === me && Date.now() - mutualCache.at < 10 * 60e3) return mutualCache.ids;
+    let docs = friends.length ? await window.UserDirectory?.byIds?.(friends, { fields: ["friendList", "deleted"] }) : [];
+    if (!Array.isArray(docs)) {
+      docs = [];
+      for (const id of friends) {
+        const snap = await window.fbGetDoc(window.fbDoc(window.db, "users", id));
+        if (snap.exists()) docs.push({ id, data: snap.data() });
+      }
+    }
+    const ids = M.mutualFriends(friends, me, docs);
+    if (uid() === me) mutualCache = { owner: me, ids, at: Date.now() };
+    return ids;
+  }
+  // The stamps on sale by these friends, newest first (30 owners a query).
+  async function friendsStamps(ids) {
+    guard();
+    const list = [];
+    for (let i = 0; i < ids.length; i += 30) {
+      const snap = await window.fbGetDocs(window.fbQuery(window.fbCollection(window.db, "stamps"), window.fbWhere("ownerId", "in", ids.slice(i, i + 30)), window.fbLimit(300)));
+      snap.forEach((d) => {
+        const stamp = M.clean(d.data(), d.id);
+        if (stamp) {
+          stamp.id = d.id;
+          metas.set(d.id, { stamp, at: Date.now() });
+          list.push(stamp);
+        }
+      });
+    }
+    return list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
+
   // ---- Showing ----------------------------------------------------------------------------------------
   // A stamp in a talk: the picture; a plain card while it loads, and for one that is gone.
   function bubble(id) {
@@ -594,6 +631,16 @@
         pane.loaded = true;
         more.disabled = true;
         try {
+          // A player sees the stamps of friends both ways only (the 運営 still sees every stamp, page by page).
+          if (!admin) {
+            guard();
+            const ids = await mutualFriendIds();
+            const list = ids.length ? (await friendsStamps(ids)).filter(visible) : [];
+            for (const stamp of list) grid.append(card(stamp));
+            more.hidden = true;
+            if (!list.length) empty(grid, ids.length ? "フレンドのスタンプはまだありません。" : "お互いにフレンドの人のスタンプが並びます。");
+            return;
+          }
           let shown = 0;
           for (let pages = 0; pages < 6 && shown < 8 && !last; pages++) {
             const result = await page(cursor);

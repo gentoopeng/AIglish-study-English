@@ -151,7 +151,19 @@
     if (stamp.price > 0 && (Number(balance) || 0) < stamp.price) throw Error("ポイントが足りません（所持 " + (Number(balance) || 0) + "pt）。");
     return stamp.price;
   }
-  const api = { MAX_NAME, MAX_PRICE, MAX_IMAGE, MAX_MADE, MAX_LAYERS, SIZE, COOLDOWN, STATUSES, FONTS, fontOf, isId, imageOk, text, priceOf, make, clean, forSale, unreviewed, usable, feeFor, planEdit, cleanDesign, box, checkBuy };
+  // Friends both ways (10.161): the ids in my friend list whose own friend list has me. `docs`: [{ id, data }] of
+  // those friends' user documents (only friendList is needed). Only their stamps are in the store.
+  function mutualFriends(myFriends, me, docs) {
+    const mine = new Set((Array.isArray(myFriends) ? myFriends : []).map((f) => String(f?.code ?? f ?? "")).filter((id) => id && id !== me));
+    const out = [];
+    for (const { id, data } of Array.isArray(docs) ? docs : []) {
+      if (!mine.has(String(id)) || data?.deleted) continue;
+      const theirs = Array.isArray(data?.friendList) ? data.friendList : [];
+      if (theirs.some((f) => String(f?.code ?? f ?? "") === me)) out.push(String(id));
+    }
+    return [...new Set(out)];
+  }
+  const api = { mutualFriends, MAX_NAME, MAX_PRICE, MAX_IMAGE, MAX_MADE, MAX_LAYERS, SIZE, COOLDOWN, STATUSES, FONTS, fontOf, isId, imageOk, text, priceOf, make, clean, forSale, unreviewed, usable, feeFor, planEdit, cleanDesign, box, checkBuy };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.StampsModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);
