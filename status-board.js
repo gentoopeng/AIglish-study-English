@@ -386,7 +386,9 @@
     head.append(el("span", "sb-head-date", now.getMonth() + 1 + "/" + now.getDate() + " " + WEEK[now.getDay()]));
     const keep = host.offsetHeight;
     if (keep) host.style.minHeight = keep + "px";
-    host.replaceChildren(head, hero(d), pointsCard(d), studyCard(d), masteryCard(d));
+    // The planner (planner.js, 10.163) under the player card: the same node each time, so it keeps its state.
+    const planner = root.Planner ? safe(() => root.Planner.card(), null) : null;
+    host.replaceChildren(...[head, hero(d), planner, pointsCard(d), studyCard(d), masteryCard(d)].filter(Boolean));
     host.style.minHeight = "";
     quiet = false;
     if (opts.quiet) return;

@@ -293,6 +293,8 @@ function collectAllData() {
       if (!k) continue;
       if(k.indexOf('core_v4_word_duel_rating_')===0)continue;
       if(k.indexOf('core_v4_study_points_')===0&&k!=='core_v4_study_points_'+myId)continue;
+      // The planner (10.163): only this account's own (another account's or a guest's on this device stays here).
+      if(k.indexOf('aiglish_planner_')===0&&k!=='aiglish_planner_'+myId)continue;
       if(k==='aiglish_cloud_usage_v1'||k.indexOf('core_v4_group_chat_draft_')===0)continue;
       // Device-only: the API key, and the cached shared account list.
       if(k==='core_v4_geminiKey'||k==='core_v4_users')continue;
@@ -1254,6 +1256,8 @@ function applySavedMemory(memory,id,savedAt) {
     if(memory.myFriendList)localStorage.setItem('core_v4_friend_list',JSON.stringify(memory.myFriendList));
   }catch(e){}
 }
+// (Tests: a backup put back on this device, as a restore does.)
+window.__restoreSaveStorage = function(save,id){ return restoreSaveStorage(save,id); };
 function restoreSaveStorage(save,id){
   if(save&&save.data&&save.data.localStorage){
     var stored=save.data.localStorage;
@@ -1294,6 +1298,18 @@ function restoreSaveStorage(save,id){
         if(window.LearningData&&key.indexOf(ownProgressPrefix)===0&&!key.endsWith('__ts')){
           try{window.LearningData.restore(key.slice(ownProgressPrefix.length),JSON.parse(stored[key]||'{}'));}catch(e){console.warn('[save] rating recovery stopped',e);}
         }
+        continue;
+      }
+      // The planner: only this account's, merged item by item with this device's (window.PlannerModel.merge), so neither
+      // side's new days are lost. When the merge has more than the backup, the next cloud save sends it.
+      if(key.indexOf('aiglish_planner_')===0){
+        if(key!=='aiglish_planner_'+id||!window.PlannerModel)continue;
+        try{
+          var localPlan=JSON.parse(localStorage.getItem(key)||'null'),savedPlan=JSON.parse(stored[key]||'null');
+          var mergedPlan=window.PlannerModel.merge(localPlan||{},savedPlan||{});
+          localStorage.setItem(key,JSON.stringify(Object.assign({},mergedPlan,{updatedAt:Math.max(Number(localPlan&&localPlan.updatedAt)||0,Number(savedPlan&&savedPlan.updatedAt)||0)})));
+          if(JSON.stringify(mergedPlan)!==JSON.stringify(window.PlannerModel.clean(savedPlan||{})))window.queueBackgroundSave?.();
+        }catch(e){}
         continue;
       }
       if(key.indexOf('aiglish_study_ledger_')===0){
