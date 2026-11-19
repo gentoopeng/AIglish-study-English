@@ -168,7 +168,7 @@ body.in-game-active #view-status.active { display: none; }
 /* ---------- Motion (in from, rest visible) ---------- */
 .status-board.sb-enter > * { animation: sb-rise .55s cubic-bezier(.2, .8, .2, 1) both; }
 .status-board.sb-enter > :nth-child(2) { animation-delay: 40ms; } .status-board.sb-enter > :nth-child(3) { animation-delay: 110ms; }
-.status-board.sb-enter > :nth-child(4) { animation-delay: 180ms; } .status-board.sb-enter > :nth-child(5) { animation-delay: 250ms; }
+.status-board.sb-enter > :nth-child(4) { animation-delay: 180ms; } .status-board.sb-enter > :nth-child(5) { animation-delay: 250ms; } .status-board.sb-enter > :nth-child(6) { animation-delay: 320ms; }
 @keyframes sb-rise { from { opacity: 0; transform: translateY(14px); } }
 @keyframes sb-grow-x { from { transform: scaleX(0); } }
 @keyframes sb-grow-y { from { transform: scaleY(0); } }

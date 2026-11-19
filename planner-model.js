@@ -81,7 +81,9 @@
         const old = seen.get(item.id);
         if (!old || item.at >= old.at) seen.set(item.id, item);
       }
-      return [...seen.values()].sort((a, b) => b.at - a.at).slice(0, max);
+      // Removed items do not take the place of live ones: each is capped on its own.
+      const all = [...seen.values()].sort((a, b) => b.at - a.at);
+      return [...all.filter((x) => !x.deleted).slice(0, max), ...all.filter((x) => x.deleted).slice(0, max)];
     };
     const checks = {};
     for (const [key, value] of Object.entries(data?.checks && typeof data.checks === "object" ? data.checks : {})) {
@@ -89,7 +91,11 @@
       if (!plan || !day(date) || !value || typeof value !== "object") continue;
       checks[plan + "|" + day(date)] = { done: value.done === true, at: stamp(value.at) };
     }
-    return { version: 1, events: keep(data?.events, cleanEvent, MAX_EVENTS), plans: keep(data?.plans, cleanPlan, MAX_PLANS), checks };
+    const plans = keep(data?.plans, cleanPlan, MAX_PLANS),
+      known = new Set(plans.map((p) => p.id));
+    // Checks of plans that are gone are dropped (a removed plan keeps its mark only for the merge).
+    for (const k of Object.keys(checks)) if (!known.has(k.split("|")[0])) delete checks[k];
+    return { version: 1, events: keep(data?.events, cleanEvent, MAX_EVENTS), plans, checks };
   }
   // Two copies (two devices): item by item, the newer one wins; a removal wins over an older change.
   function merge(a, b, now = Date.now()) {
@@ -115,12 +121,17 @@
     }
     return out;
   }
+  // A plan's share of a day. `manual`: ticked or unticked by hand (that decides over anything counted by itself).
+  function task(d, plan, part) {
+    const mark = d.checks[plan.id + "|" + part.date];
+    return { plan, ...part, key: plan.id + "|" + part.date, checked: mark?.done === true, manual: !!mark };
+  }
   // What is on a day: its events, and each plan's share of that day.
   function on(data, date) {
     const d = clean(data);
     return {
       events: live(d.events).filter((e) => e.date === date).sort((a, b) => (a.kind === "test" ? -1 : 0) - (b.kind === "test" ? -1 : 0)),
-      tasks: live(d.plans).flatMap((plan) => split(plan).filter((part) => part.date === date).map((part) => ({ plan, ...part, key: plan.id + "|" + date, checked: d.checks[plan.id + "|" + date]?.done === true }))),
+      tasks: live(d.plans).flatMap((plan) => split(plan).filter((part) => part.date === date).map((part) => task(d, plan, part))),
     };
   }
   // Plan days before `date` (up to 14 days back) not ticked off; `isDone(task)` also counts the ones done by ratings.
@@ -131,8 +142,8 @@
     for (const plan of live(d.plans))
       for (const part of split(plan))
         if (part.date < date && part.date >= from) {
-          const task = { plan, ...part, key: plan.id + "|" + part.date, checked: d.checks[plan.id + "|" + part.date]?.done === true };
-          if (!isDone(task)) out.push(task);
+          const t = task(d, plan, part);
+          if (!isDone(t)) out.push(t);
         }
     return out.sort((a, b) => (a.date < b.date ? -1 : 1));
   }
@@ -151,6 +162,8 @@
     d[list] = [{ ...item, at: now }, ...d[list].filter((x) => x.id !== item.id)];
     return clean(d, now);
   };
+  // Is there room for one more (live) event or plan?
+  const room = (data, list) => live(clean(data)[list]).length < (list === "events" ? MAX_EVENTS : MAX_PLANS);
   const addEvent = (data, e, now) => put(data, "events", { ...e, id: e.id || id() }, now);
   const addPlan = (data, p, now) => put(data, "plans", { ...p, id: p.id || id() }, now);
   const remove = (data, list, itemId, now = Date.now()) => put(data, list, { id: itemId, deleted: true }, now);
@@ -180,8 +193,11 @@
       free = [];
     for (const e of Array.isArray(given?.events) ? given.events : []) {
       const item = cleanEvent({ id: id(), at: now, date: day(e?.date, now), kind: e?.kind, title: e?.title, memo: e?.memo });
-      if (item) (next = addEvent(next, item, now), events++);
-      else skipped.push(text(e?.title, 30) || "予定");
+      if (!item) skipped.push(text(e?.title, 30) || "予定");
+      // The same answer pasted twice adds nothing again.
+      else if (live(next.events).some((x) => x.date === item.date && x.title === item.title)) continue;
+      else if (!room(next, "events")) skipped.push(item.title);
+      else (next = addEvent(next, item, now), events++);
     }
     for (const p of Array.isArray(given?.plans) ? given.plans : []) {
       const name = text(p?.book ?? p?.source ?? p?.name, 60);
@@ -191,6 +207,11 @@
         skipped.push(text(p?.title || name, 30) || "計画");
         continue;
       }
+      if (live(next.plans).some((x) => x.source.type === item.source.type && x.source.id === item.source.id && x.source.name === item.source.name && x.from === item.from && x.to === item.to && x.start === item.start && x.end === item.end)) continue;
+      if (!room(next, "plans")) {
+        skipped.push(item.title);
+        continue;
+      }
       if (!book && name) free.push(name);
       next = addPlan(next, item, now);
       plans++;
@@ -198,7 +219,7 @@
     return { data: next, events, plans, skipped, free: [...new Set(free)] };
   }
 
-  const api = { overdue, DAY, KINDS, MAX_EVENTS, MAX_PLANS, dateKey, day, addDays, daysBetween, clean, merge, split, on, marks, addEvent, addPlan, remove, check, importAi, live };
+  const api = { room, overdue, DAY, KINDS, MAX_EVENTS, MAX_PLANS, dateKey, day, addDays, daysBetween, clean, merge, split, on, marks, addEvent, addPlan, remove, check, importAi, live };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PlannerModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);

@@ -72,6 +72,11 @@ const { chromium } = require("playwright"),
       window.Planner.draw();
     });
     assert.ok(await card.locator(".pl-task.is-done", { hasText: "テスト単語帳 1–3" }).count());
+    // Unticked by hand, it stays not done (the hand decides over the ratings).
+    await card.locator(".pl-task", { hasText: "テスト単語帳 1–3" }).locator("input[type=checkbox]").uncheck();
+    assert.equal(await card.locator(".pl-task.is-done", { hasText: "テスト単語帳 1–3" }).count(), 0);
+    assert.equal(await card.locator(".pl-task", { hasText: "テスト単語帳 1–3" }).locator("input[type=checkbox]").isChecked(), false);
+    await card.locator(".pl-task", { hasText: "テスト単語帳 1–3" }).locator("input[type=checkbox]").check();
     // Tomorrow's share, ticked by hand.
     await card.locator(`.pl-day[data-date="${await plus(1)}"]`).click();
     const tomorrow = card.locator(".pl-task", { hasText: "テスト単語帳 4–6" });
@@ -119,6 +124,12 @@ const { chromium } = require("playwright"),
     assert.deepEqual(merged.titles, ["別の端末で書いた", "模試", "英単語テスト<b>"].sort());
     assert.equal(merged.plans, 3);
     assert.notEqual(merged.other, "{}", "another account's planner is not written by this account's restore");
+    // Open: a word book's share opens its cards set to that range.
+    await page.evaluate(() => window.Planner.draw());
+    await card.locator(".pl-task", { hasText: "テスト単語帳 1–3" }).getByRole("button", { name: "開く" }).click();
+    await page.waitForFunction(() => document.querySelector("#flashcardRangeEnd")?.value === "3");
+    assert.equal(await page.locator("#flashcardRangeStart").inputValue(), "1");
+    await page.evaluate(() => { document.querySelectorAll("dialog[open]").forEach((d) => d.close()); window.switchTab("status"); });
     // Open: a work's share opens the work at that range.
     await page.evaluate(() => window.Planner.draw());
     await card.locator(".pl-task", { hasText: "ワーク 1–2" }).getByRole("button", { name: "開く" }).click();

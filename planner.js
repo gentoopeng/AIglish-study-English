@@ -40,12 +40,14 @@
     return true;
   }
   // Changed while the card was open: the cloud save runs when the player leaves the ステータス tab.
-  root.onTabChange?.((tab) => {
-    if (tab !== "status" && dirty) {
-      dirty = false;
-      root.saveAfterStudy?.("planner-end");
-    }
-  });
+  // (Also when the app goes to the background while still here.)
+  const flush = () => {
+    if (!dirty) return;
+    dirty = false;
+    root.saveAfterStudy?.("planner-end");
+  };
+  root.onTabChange?.((tab) => tab !== "status" && flush());
+  document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flush());
 
   // ---- The player's books and works ----
   const works = () => {
@@ -67,7 +69,17 @@
     const pool = typeof textbooksPool !== "undefined" && Array.isArray(textbooksPool) ? textbooksPool : [];
     return [...pool.map((b) => ({ type: "vocab", id: String(b.id), name: String(b.name || "単語帳") })), ...works().map((w) => ({ type: "work", id: String(w.id), name: String(w.name || "ワーク") }))];
   }
+  // What one draw reads, once per book (a book's words and its ratings are large).
+  let memo = null;
+  const once = (k, fn) => {
+    if (!memo) return fn();
+    if (!memo.has(k)) memo.set(k, fn());
+    return memo.get(k);
+  };
   function vocabWords(bookId) {
+    return once("w:" + bookId, () => readWords(bookId));
+  }
+  function readWords(bookId) {
     if (typeof currentTextbook !== "undefined" && bookId === currentTextbook && typeof vocabList !== "undefined" && Array.isArray(vocabList) && vocabList.length) return vocabList;
     for (const k of ["core_v4_user_vocab_book_" + uid() + "_" + bookId, "core_v4_custom_words_" + uid() + "_" + bookId, "core_v4_cache_" + bookId]) {
       try {
@@ -81,15 +93,20 @@
   function progress(task) {
     const { source } = task.plan;
     if (source.type === "vocab") {
+      // A 用語・年号 book keeps its ratings by question elsewhere: not counted here (ticked by hand).
+      if (root.TermProgress?.enabled?.(source.id)) return null;
       const words = vocabWords(source.id).filter((w) => {
         const no = root.VocabOrder ? root.VocabOrder.no(w) : Number(w.num);
         return no >= task.from && no <= task.to;
       });
       if (!words.length) return null;
-      let saved = {};
-      try {
-        saved = JSON.parse(localStorage.getItem(root.getVocabProgressStorageKey ? root.getVocabProgressStorageKey(source.id) : "") || "{}") || {};
-      } catch {}
+      const saved = once("p:" + source.id, () => {
+        try {
+          return JSON.parse(localStorage.getItem(root.getVocabProgressStorageKey ? root.getVocabProgressStorageKey(source.id) : "") || "{}") || {};
+        } catch {
+          return {};
+        }
+      });
       const rated = (w) => {
         const p = saved[String(w.num)];
         if (p && p.status && p.status !== "none") return true;
@@ -99,16 +116,19 @@
       return { done: words.filter(rated).length, total: words.length };
     }
     if (source.type === "work") {
-      const work = works().find((w) => w.id === source.id);
+      const work = once("works", works).find((w) => w.id === source.id);
       if (!work) return null;
       const list = root.WorkbookModel?.visibleUnits ? root.WorkbookModel.visibleUnits(work) : work.units || [];
       const units = list.filter((u) => u && Number(u.num) >= task.from && Number(u.num) <= task.to);
       if (!units.length) return null;
-      return { done: units.filter((u) => u.status && u.status !== "none").length, total: units.length };
+      // Only what was rated on or after the plan's first day counts (a work keeps when each problem was rated).
+      const since = new Date(task.plan.start + "T00:00:00").getTime();
+      return { done: units.filter((u) => u.status && u.status !== "none" && Number(u.lastReview) >= since).length, total: units.length };
     }
     return null;
   }
-  const isDone = (task, p = progress(task)) => task.checked || !!(p && p.total && p.done >= p.total);
+  // Ticked or unticked by hand decides; otherwise done once everything in the range is rated.
+  const isDone = (task, p = progress(task)) => (task.manual ? task.checked : !!(p && p.total && p.done >= p.total));
   function open(task) {
     const { source } = task.plan;
     if (source.type === "work") {
@@ -122,8 +142,8 @@
         const start = document.getElementById("flashcardRangeStart"),
           end = document.getElementById("flashcardRangeEnd");
         if (start && end) {
-          start.value = String(task.from);
-          end.value = String(task.to);
+          start.value = String(Math.max(1, task.from));
+          end.value = String(Math.max(1, task.to));
         }
         const unit = document.getElementById("flashcardUnitSelect");
         if (unit) unit.value = "";
@@ -185,6 +205,14 @@
   }
   function draw() {
     if (!host) return;
+    memo = new Map();
+    try {
+      paint();
+    } finally {
+      memo = null;
+    }
+  }
+  function paint() {
     const data = read(),
       t = today(),
       r = range(),
@@ -354,6 +382,7 @@
       const f = form.elements,
         date = P.day(f.date.value);
       if (!date) return (modal.querySelector(".library-editor-error").textContent = "日付を入れてください。");
+      if (!e && !P.room(read(), "events")) return (modal.querySelector(".library-editor-error").textContent = "予定がいっぱいです（" + P.MAX_EVENTS + "件まで）。古い予定を消してください。");
       if (!write(P.addEvent(read(), { id: e?.id, date, kind: f.kind.value, title: f.title.value, memo: f.memo.value }))) return;
       selected = date;
       root.closeLibraryDialog?.();
@@ -376,7 +405,7 @@
       (list.some((b) => b.type === "vocab") ? '<optgroup label="単語帳">' + list.filter((b) => b.type === "vocab").map((b) => '<option value="vocab:' + esc(b.id) + '">' + esc(b.name) + "</option>").join("") + "</optgroup>" : "") +
       (list.some((b) => b.type === "work") ? '<optgroup label="ワーク">' + list.filter((b) => b.type === "work").map((b) => '<option value="work:' + esc(b.id) + '">' + esc(b.name) + "</option>").join("") + "</optgroup>" : "") +
       '<option value="free:">ほか（自由に書く）</option>';
-    const modal = dialog("計画を作る", '<form class="pl-form"><label>何を<select name="source">' + options + '</select></label><label class="pl-free" hidden>名前<input name="title" maxlength="60" placeholder="例: 教科書 p."></label><div class="pl-row"><label>番号<input name="from" type="number" min="0" required value="1"></label><span>〜</span><label>　<input name="to" type="number" min="0" required value="100"></label></div><div class="pl-row"><label>いつから<input name="start" type="date" required value="' + today() + '"></label><label>いつまで<input name="end" type="date" required value="' + end + '"></label></div><p class="library-editor-hint">毎日同じくらいの量に分けて、その日のやることに出します。</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="submit" class="library-editor-primary">作る</button></div></form>');
+    const modal = dialog("計画を作る", '<form class="pl-form"><label>何を<select name="source">' + options + '</select></label><label class="pl-free" hidden>名前<input name="title" maxlength="60" placeholder="例: 教科書 p."></label><div class="pl-row"><label>番号<input name="from" type="number" min="1" required value="1"></label><span>〜</span><label>　<input name="to" type="number" min="1" required value="100"></label></div><div class="pl-row"><label>いつから<input name="start" type="date" required value="' + today() + '"></label><label>いつまで<input name="end" type="date" required value="' + end + '"></label></div><p class="library-editor-hint">毎日同じくらいの量に分けて、その日のやることに出します。</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="submit" class="library-editor-primary">作る</button></div></form>');
     const form = modal.querySelector("form"),
       f = form.elements;
     const sync = () => {
@@ -391,6 +420,7 @@
       const [type, id] = [f.source.value.split(":")[0], f.source.value.slice(f.source.value.indexOf(":") + 1)];
       const book = list.find((b) => b.type === type && b.id === id);
       const plan = { source: book ? { type, id, name: book.name } : { type: "free", name: f.title.value }, title: book ? book.name : f.title.value, from: Number(f.from.value), to: Number(f.to.value), start: f.start.value, end: f.end.value };
+      if (!P.room(read(), "plans")) return (modal.querySelector(".library-editor-error").textContent = "計画がいっぱいです（" + P.MAX_PLANS + "件まで）。終わった計画を消してください。");
       const planId = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         next = P.addPlan(read(), { ...plan, id: planId });
       if (!P.live(next.plans).some((p) => p.id === planId))

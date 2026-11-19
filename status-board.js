@@ -405,7 +405,7 @@
     const pool = typeof textbooksPool !== "undefined" && Array.isArray(textbooksPool) ? textbooksPool.length : 0,
       stats = typeof userStats === "object" && userStats ? userStats : {};
     // (Study time in 5-minute steps: a warm-up over the card adds seconds all the time.)
-    return [me(), pool, Math.floor(num(stats.study_total_secs) / 300), stats.vocab_rated_count, stats.flash_count, safe(() => localStorage.getItem("core_v4_study_points_" + me()) || "", "")].join("|");
+    return [me(), pool, Math.floor(num(stats.study_total_secs) / 300), stats.vocab_rated_count, stats.flash_count, safe(() => localStorage.getItem("core_v4_study_points_" + me()) || "", ""), safe(() => (localStorage.getItem("aiglish_planner_" + me()) || "").length, 0)].join("|");
   }
   let last = "";
   function start(opts) {

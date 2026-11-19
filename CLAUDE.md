@@ -19,7 +19,7 @@
 2. **Update the docs.**
    - Add an entry at the end of `docs/site-stability.md`: what the user saw, the cause, the fix, and the tests.
    - Update `usage-guide-content.js` when a player can see the change.
-   - Add an entry at the top of `release-notes.js` (shown in the お知らせ 🔔): the version, the release time, and what changed for the player in one or two very short plain Japanese sentences. Keep at most 20 entries.
+   - Add an entry at the top of `release-notes.js` (shown in the お知らせ 🔔): the version, the release time (the real time of shipping, never later), and what changed for the player in one or two very short plain Japanese sentences. Keep at most 20 entries.
 3. **Test.**
    - Start the local server if it is not running: `(setsid nohup python3 -m http.server 8000 >/dev/null 2>&1 < /dev/null &)`.
    - Run every smoke test (`tests/*.smoke.cjs`, about 6 at a time) and `node --test tests/*.test.cjs`.

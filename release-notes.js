@@ -4,7 +4,7 @@
 (function (root) {
   "use strict";
   const NOTES = [
-    { version: "10.163.00.00", at: "2026-11-19T18:00:00+09:00", text: "ステータスに予定のカレンダーができました。テストの日を書いたり、単語帳やワークの範囲を毎日に分けて、やることリストにできます。AIで計画を作って取り込むこともできます。" },
+    { version: "10.163.00.00", at: "2026-11-19T17:55:00+09:00", text: "ステータスに予定のカレンダーができました。テストの日を書いたり、単語帳やワークの範囲を毎日に分けて、やることリストにできます。AIで計画を作って取り込むこともできます。" },
     { version: "10.162.00.00", at: "2026-11-19T15:00:00+09:00", text: "相手のプロフィールで「フレンドに追加」できるようにしました。お互いに追加すると、相手のスタンプがストアに並びます。" },
     { version: "10.161.00.00", at: "2026-11-19T12:00:00+09:00", text: "スタンプストアには、お互いにフレンドの人のスタンプだけが並ぶようにしました。🔔ではお知らせがいちばん上に出て、アップデートの内容もここに届きます。" },
     { version: "10.160.00.00", at: "2026-11-19T09:00:00+09:00", text: "勉強時間の「開始」ボタンをなくしました。時間は勉強している画面でだけ増えます。カレンダーの編集は減らすだけになりました。" },
@@ -15,5 +15,6 @@
   const items = NOTES.slice(0, 20)
     .map((n) => ({ id: "release-" + n.version, title: "アップデート " + n.version.split(".").slice(0, 2).join("."), body: n.text, at: Date.parse(n.at), release: true }))
     .filter((n) => Number.isFinite(n.at));
+  // (`at` must be the real release time, not later: a later one would count as new on a device set up before it.)
   root.ReleaseNotes = Object.freeze({ items: () => items.map((n) => ({ ...n })) });
 })(window);

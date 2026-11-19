@@ -53,7 +53,8 @@ test("two devices merge item by item; a removal reaches the other device and lat
   // After 90 days the removal mark is dropped.
   assert.equal(P.clean(removed, NOW + 91 * P.DAY).events.some((e) => e.id === "y"), false);
   // Checks: the newer one wins.
-  const c1 = P.check({}, "p|2026-11-20", true, NOW), c2 = P.check({}, "p|2026-11-20", false, NOW + 1);
+  const base = P.addPlan({}, { id: "p", source: { type: "free", name: "x" }, from: 1, to: 2, start: "2026-11-20", end: "2026-11-21" }, NOW);
+  const c1 = P.check(base, "p|2026-11-20", true, NOW), c2 = P.check(base, "p|2026-11-20", false, NOW + 1);
   assert.equal(P.merge(c1, c2, NOW + 2).checks["p|2026-11-20"].done, false);
 });
 
@@ -102,4 +103,24 @@ test("an item given without an id (a new one from a form) gets one", () => {
   const d = P.addEvent({}, { id: undefined, date: "2026-11-30", title: "新しい" }, NOW);
   assert.equal(P.live(d.events).length, 1);
   assert.ok(P.live(d.events)[0].id);
+});
+
+test("removed items never push a live one out; the same AI answer twice adds nothing again; checks of gone plans go", () => {
+  let d = P.addEvent({}, { id: "keep", date: "2026-12-01", kind: "test", title: "大事なテスト" }, NOW);
+  for (let i = 0; i < 520; i++) d = P.remove(P.addEvent(d, { id: "n" + i, date: "2026-12-02", title: "x" }, NOW + i * 2 + 1), "events", "n" + i, NOW + i * 2 + 2);
+  assert.deepEqual(P.live(d.events).map((e) => e.id), ["keep"]);
+  assert.equal(P.room(d, "events"), true);
+  const answer = JSON.stringify({ events: [{ date: "2026-12-05", title: "模試" }], plans: [{ book: "本", from: 1, to: 10, start: "2026-11-20", end: "2026-11-25" }] });
+  const once = P.importAi(answer, {}, [], NOW), twice = P.importAi(answer, once.data, [], NOW);
+  assert.deepEqual([twice.events, twice.plans, P.live(twice.data.events).length, P.live(twice.data.plans).length], [0, 0, 1, 1]);
+  let c = P.addPlan({}, { id: "gone", source: { type: "free", name: "x" }, from: 1, to: 2, start: "2026-11-20", end: "2026-11-21" }, NOW);
+  c = P.check(c, "gone|2026-11-20", true, NOW);
+  assert.equal(Object.keys(P.clean(c).checks).length, 1);
+  c = P.remove(c, "plans", "gone", NOW + 1);
+  assert.equal(Object.keys(P.clean(c).checks).length, 1, "kept while the removal mark is");
+  assert.equal(Object.keys(P.clean({ ...c, plans: [] }).checks).length, 0);
+  // A share unticked by hand is marked as a hand decision.
+  const u = P.check(P.addPlan({}, { id: "p", source: { type: "free", name: "x" }, from: 1, to: 2, start: "2026-11-20", end: "2026-11-21" }, NOW), "p|2026-11-20", false, NOW);
+  assert.deepEqual(P.on(u, "2026-11-20").tasks.map((t) => [t.checked, t.manual]), [[false, true]]);
+  assert.deepEqual(P.on(u, "2026-11-21").tasks.map((t) => [t.checked, t.manual]), [[false, false]]);
 });
