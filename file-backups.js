@@ -31,6 +31,7 @@
     "core_v4_study_points_",
     "core_v4_vocab_entry_publications_",
     "aiglish_study_ledger_",
+    "aiglish_planner_",
     "aiglish_learning_recovery_",
     "vv4_works_",
   ];

@@ -386,7 +386,9 @@
     head.append(el("span", "sb-head-date", now.getMonth() + 1 + "/" + now.getDate() + " " + WEEK[now.getDay()]));
     const keep = host.offsetHeight;
     if (keep) host.style.minHeight = keep + "px";
-    host.replaceChildren(head, hero(d), pointsCard(d), studyCard(d), masteryCard(d));
+    // The planner (planner.js, 10.163) under the player card: the same node each time, so it keeps its state.
+    const planner = root.Planner ? safe(() => root.Planner.card(), null) : null;
+    host.replaceChildren(...[head, hero(d), planner, pointsCard(d), studyCard(d), masteryCard(d)].filter(Boolean));
     host.style.minHeight = "";
     quiet = false;
     if (opts.quiet) return;
@@ -403,7 +405,7 @@
     const pool = typeof textbooksPool !== "undefined" && Array.isArray(textbooksPool) ? textbooksPool.length : 0,
       stats = typeof userStats === "object" && userStats ? userStats : {};
     // (Study time in 5-minute steps: a warm-up over the card adds seconds all the time.)
-    return [me(), pool, Math.floor(num(stats.study_total_secs) / 300), stats.vocab_rated_count, stats.flash_count, safe(() => localStorage.getItem("core_v4_study_points_" + me()) || "", "")].join("|");
+    return [me(), pool, Math.floor(num(stats.study_total_secs) / 300), stats.vocab_rated_count, stats.flash_count, safe(() => localStorage.getItem("core_v4_study_points_" + me()) || "", ""), safe(() => (localStorage.getItem("aiglish_planner_" + me()) || "").length, 0)].join("|");
   }
   let last = "";
   function start(opts) {

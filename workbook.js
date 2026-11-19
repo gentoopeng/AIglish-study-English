@@ -352,6 +352,17 @@
         document.getElementById('vocabLibrarySelection').hidden = true; document.getElementById('vocabBookContents').hidden = true; screen.hidden = false;
         renderContents();
     }
+    // The planner (10.163) opens a work at its day's range: problems from..to.
+    window.openWorkbookRange = function (id, from, to) {
+        if (!load().some(w => w.id === id)) return false;
+        if (window.switchTab && typeof currentActiveTabId !== 'undefined' && currentActiveTabId !== 'vocab') window.switchTab('vocab');
+        openWork(id, false);
+        const start = screen.querySelector('#workbookRangeStart'), end = screen.querySelector('#workbookRangeEnd');
+        if (start && end) { start.value = String(from); end.value = String(to); start.dispatchEvent(new Event('input')); }
+        return true;
+    };
+    // The planner reads the works as this screen does (old formats moved over, removed ones left out).
+    window.workbookList = () => load();
     function renderContents() {
         const work = current(); if (!work) { window.showVocabLibrarySelection(); return; }
         const previousSearch = screen.querySelector('#workbookSearch'), query = previousSearch ? previousSearch.value : '';
