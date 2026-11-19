@@ -11,6 +11,11 @@
         const edit=day.edit, sources=day.sources||{};
         return Math.min(DAY,(edit?positive(edit.ms):0)+Object.keys(sources).reduce((total,id)=>total+Math.max(0,positive(sources[id])-positive(edit&&edit.baseline&&edit.baseline[id])),0));
     }
+    // What was measured on a day: every device's own count, without any hand edit (the most an edit may set).
+    function measured(day) {if(!day)return 0;const sources=day.sources||{};return Math.min(DAY,Object.keys(sources).reduce((total,id)=>total+positive(sources[id]),0));}
+    // The most a hand edit may set a day to (10.160): no more than measured, and no more than shown now (the idle
+    // sleep takes its minutes off by an edit, which must not be undone by hand).
+    function editLimit(day) {return Math.min(measured(day),dayMilliseconds(day));}
     function merge(left,right) {
         const result=JSON.parse(JSON.stringify(left||{version:1,days:{},offset:0}));
         if(!right||right.version!==1||typeof right.days!=='object'||!right.days)return result;
@@ -69,7 +74,7 @@
     const RESET_EPOCH='study-reset-2.62';
     function resetLedger(ledger) {return ledger&&ledger.epoch===RESET_EPOCH?ledger:{version:1,epoch:RESET_EPOCH,days:{},offset:0,updatedAt:0};}
     function mergeCurrent(left,right) {return merge(resetLedger(left),resetLedger(right));}
-    const model={dateKey,normalizeDate,dayMilliseconds,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent,weekValues,readStats,rankingSeconds};
+    const model={dateKey,normalizeDate,dayMilliseconds,measured,editLimit,merge,accrue,editDay,total,rangeValue,legacy,resetLedger,mergeCurrent,weekValues,readStats,rankingSeconds};
     window.StudyTimeModel=model;
     let sleepState=null,activitySlices=[];
     let user='',data=null,manual=false,paused=false,active=false,leader=false,lockPending=false,release=null,lastMono=performance.now(),lastWall=Date.now(),lastCloud=0;
@@ -166,7 +171,6 @@
         const live=document.getElementById('studyLiveTime');text(live,format(ms));
         const totalLabel=document.getElementById('totalStudyTimeValue');text(totalLabel,format(total(data)));
         const state=document.getElementById('studyTimerStatus');text(state,active?(leader?'計測中':'別のタブで計測中'):paused?'一時停止中':'待機中');
-        const button=document.getElementById('studyTimerToggle');text(button,manual?'一時停止':'開始');
         const selectedLabel=document.getElementById('studySelectedDay');text(selectedLabel,dayLabel(selected)+'　'+spoken(dayMilliseconds(data.days[selected])));
         const todayButton=document.querySelector('#studyCalendar [data-date="'+dateKey(Date.now())+'"]');
         if(todayButton){text(todayButton.querySelector('small'),cell(ms));todayButton.dataset.level=String(levelOf(ms));}
@@ -182,9 +186,11 @@
         renderDisplay();
     }
     function editDate(date) {
-        if(!data)return;const owner=user;const modal=window.openLibraryDialog('勉強時間を編集', '<form><p class="library-editor-hint">'+date+'</p><label for="studyEditMinutes">勉強時間（分）</label><input id="studyEditMinutes" type="number" min="0" max="1440" step="0.01" required><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="submit" class="library-editor-primary">保存</button></div></form>');
-        modal.querySelector('input').value=Math.round(dayMilliseconds(data.days[date])/600)/100;
-        modal.querySelector('form').onsubmit=event=>{event.preventDefault();try{if(uid()!==owner)throw new Error('ユーザーが切り替わりました。');const minutes=Number(modal.querySelector('input').value);if(!Number.isFinite(minutes)||minutes<0||minutes>1440)throw new Error('0〜1440分で入力してください。');tick();editDay(data,date,minutes*60000,Date.now());persist();sync();renderCalendar();window.renderActivityChart();if(window.saveUserStats)window.saveUserStats();window.closeLibraryDialog();}catch(e){modal.querySelector('.library-editor-error').textContent=e.message;}};
+        // Only down (10.160): at most editLimit (measured, and no more than shown now), so time that was not studied
+        // cannot be added by hand. Whole minutes, rounded down.
+        if(!data)return;const owner=user;tick();const limit=Math.floor(editLimit(data.days[date])/60000);const modal=window.openLibraryDialog('勉強時間を編集', '<form><p class="library-editor-hint">'+date+'</p><label for="studyEditMinutes">勉強時間（分）</label><input id="studyEditMinutes" type="number" min="0" max="'+limit+'" step="1" required><p class="library-editor-hint">今の '+limit+'分 より少なくだけできます</p><p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="submit" class="library-editor-primary">保存</button></div></form>');
+        modal.querySelector('input').value=Math.min(limit,Math.floor(dayMilliseconds(data.days[date])/60000));
+        modal.querySelector('form').onsubmit=event=>{event.preventDefault();try{if(uid()!==owner)throw new Error('ユーザーが切り替わりました。');const minutes=Number(modal.querySelector('input').value);const most=Math.floor(editLimit(data.days[date])/60000);if(!Number.isFinite(minutes)||minutes<0)throw new Error('0分以上で入力してください。');if(minutes>most)throw new Error('今の '+most+'分 より多くはできません。');tick();editDay(data,date,minutes*60000,Date.now());persist();sync();renderCalendar();window.renderActivityChart();if(window.saveUserStats)window.saveUserStats();window.closeLibraryDialog();}catch(e){modal.querySelector('.library-editor-error').textContent=e.message;}};
     }
     function chart() {
         const container=document.getElementById('studyWeekChart');if(!container||!data)return;
@@ -264,7 +270,7 @@
     const oldSave=window.saveUserStats;window.saveUserStats=function(){if(data&&uid()===user&&userStats.study_calendar_v2)data=mergeCurrent(data,userStats.study_calendar_v2);sync();return oldSave.apply(this,arguments);};
     const oldSwitch=window.switchTab;window.switchTab=function(tab){if(tab!=='study')cancelRanking();tick();const result=oldSwitch.apply(this,arguments);active=eligible();lastMono=performance.now();lastWall=Date.now();if(!active)unlock();else claim();if(tab==='study'){renderCalendar();refreshRanking();celebrateStreak();}return result;};
     const oldLogout=window.logoutToGate;window.logoutToGate=async function(){tick();active=false;unlock();return oldLogout.apply(this,arguments);};
-    document.getElementById('studyTimerToggle').onclick=()=>{tick();manual=!manual;paused=!manual;active=eligible();if(active)claim();else unlock();renderDisplay();};
+    // (No 開始 button since 10.160: time counts only on real study screens, see eligible(). `manual` stays false.)
     document.getElementById('studyPreviousMonth').onclick=()=>{month.setMonth(month.getMonth()-1);renderCalendar();};document.getElementById('studyNextMonth').onclick=()=>{month.setMonth(month.getMonth()+1);renderCalendar();};
     document.getElementById('studyPreviousWeek').onclick=()=>{const day=new Date(dateAt(selectedWeek));day.setDate(day.getDate()-7);selectedWeek=dateKey(day);chart();};
     document.getElementById('studyNextWeek').onclick=()=>{const day=new Date(dateAt(selectedWeek));day.setDate(day.getDate()+7);selectedWeek=dateKey(day);chart();};
