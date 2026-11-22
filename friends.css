@@ -45,4 +45,14 @@
 .studying-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 90px; }
 .studying-more { color: #6ee7b7; }
 body.has-studying-bar .container { padding-top: 114px; }
+/* Everyone's progress on the open book (book-progress.js, 10.175). */
+.bkp-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0; padding: 9px 12px; border-radius: 14px; border: 1px solid rgba(52, 211, 153, .35); background: linear-gradient(180deg, rgba(52, 211, 153, .10), rgba(167, 139, 250, .06)); }
+.bkp-label { font-size: 11px; font-weight: 900; letter-spacing: .04em; color: #6ee7b7; }
+.bkp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .10); font-size: 11.5px; }
+.bkp-chip.is-me { border-color: rgba(167, 139, 250, .55); background: rgba(167, 139, 250, .14); }
+.bkp-chip-name { font-weight: 800; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bkp-bar { flex: 0 0 52px; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.bkp-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #34d399, #a78bfa); }
+.bkp-chip-pct { font-variant-numeric: tabular-nums; font-weight: 800; color: #c4b5fd; }
+.bkp-more { font-size: 11px; color: #6ee7b7; font-weight: 800; }
 body.in-game-active .studying-bar { display: none !important; }
