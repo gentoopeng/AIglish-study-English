@@ -1,8 +1,8 @@
-/* book-print.css —— 単語帳の紙印刷 (10.170, 印刷方式を 10.171 で改修): the print button
-   and settings dialog on screen, the in-page preview fallback, and the paper sheet.
-   The sheet itself is normally opened as its own tab (book-print.js carries its own
-   copy of the sheet styles for that page); these rules cover the fallback preview
-   and printing from it. */
+/* book-print.css —— 単語帳の紙印刷 (10.170; 印刷方式 10.171; 設定と表組み 10.172).
+   The sheet normally opens as its own tab (book-print.js carries its own styles for
+   that page). These rules cover the settings dialog (with its live page preview),
+   the in-app preview fallback, and printing from it. Sheet rules are shared by the
+   dialog preview, the fallback preview and the printed page. */
 
 .bp-bar {
   display: flex;
@@ -27,8 +27,8 @@
   border: none;
   border-radius: 16px;
   padding: 0;
-  max-width: min(92vw, 480px);
-  width: 480px;
+  max-width: min(94vw, 560px);
+  width: 560px;
   background: var(--dialog-bg, #171a2e);
   color: var(--text, #fff);
 }
@@ -40,7 +40,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 86vh;
+  max-height: 88vh;
   overflow: auto;
 }
 .bp-dialog-head {
@@ -88,21 +88,26 @@
   font-size: 13.5px;
   flex-wrap: wrap;
 }
+.bp-inline {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
 .bp-colors {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 8px 14px;
 }
 .bp-color {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 13.5px;
   cursor: pointer;
 }
 .bp-swatch {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.35);
   flex-shrink: 0;
@@ -122,7 +127,7 @@
 .bp-count {
   font-size: 13px;
   font-weight: 700;
-  margin: 0;
+  margin: 0 0 6px;
 }
 .bp-actions {
   display: flex;
@@ -150,8 +155,20 @@
   opacity: 0.4;
 }
 
-/* The sheet: hidden on screen, shown as a full-screen preview when the print tab
-   could not be opened, and the only thing on paper when printing from the app. */
+/* The dialog's live preview: the first page, as paper. */
+.bp-preview {
+  background: #e9e9ee;
+  border-radius: 10px;
+  padding: 10px;
+  max-height: 330px;
+  overflow: auto;
+}
+.bp-preview .bp-page {
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+  margin: 0;
+}
+
+/* ---- the sheet (dialog preview, fallback preview, paper) ---- */
 #bookPrintSheet {
   display: none;
 }
@@ -161,19 +178,16 @@ body.bp-previewing #bookPrintSheet {
   inset: 0;
   z-index: 9999;
   overflow: auto;
-  background: #fff;
-  color: #111;
-  padding: 16px;
-  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
+  background: #e9e9ee;
+  padding: 16px 12px 40px;
 }
 .bp-sheet-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  max-width: 860px;
+  margin: 0 auto 14px;
 }
 .bp-sheet-toolbar button {
   font-size: 14px;
@@ -187,8 +201,8 @@ body.bp-previewing #bookPrintSheet {
   background: #ff7a00;
   color: #fff;
 }
-.bp-sheet-close {
-  background: transparent;
+.bp-sheet-back {
+  background: #fff;
   border: 1px solid #bbb;
   color: #111;
 }
@@ -196,56 +210,77 @@ body.bp-previewing #bookPrintSheet {
   font-size: 12px;
   color: #555;
   margin: 0;
+  flex-basis: 100%;
 }
-
-#bookPrintSheet .bp-head h1 {
+.bp-page {
+  background: #fff;
+  color: #111;
+  max-width: 860px;
+  margin: 0 auto 18px;
+  padding: 26px 28px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+  box-sizing: border-box;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.bp-page .bp-head h1 {
   font-size: 18px;
   margin: 0 0 2px;
 }
-#bookPrintSheet .bp-meta {
+.bp-page .bp-meta {
   font-size: 11px;
   color: #555;
   margin: 0 0 10px;
 }
-#bookPrintSheet .bp-table {
+.bp-cols {
+  display: flex;
+  gap: 16px;
+}
+.bp-col {
+  flex: 1;
+  min-width: 0;
+}
+.bp-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  table-layout: fixed;
+  font-size: var(--f, 12.5px);
 }
-#bookPrintSheet .bp-table th,
-#bookPrintSheet .bp-table td {
+.bp-table th,
+.bp-table td {
   border: 1px solid #bbb;
   padding: 5px 7px;
   text-align: left;
   vertical-align: top;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
-#bookPrintSheet .bp-table thead th {
+.bp-table thead th {
   background: #eee;
-  font-size: 11px;
+  font-size: 0.88em;
 }
-#bookPrintSheet .bp-check {
-  width: 24px;
+.bp-table .bp-check {
+  width: 26px;
   text-align: center;
 }
-#bookPrintSheet .bp-no {
-  width: 38px;
+.bp-table .bp-no {
+  width: 42px;
   color: #555;
 }
-#bookPrintSheet .bp-word {
-  width: 32%;
+.bp-table .bp-word {
   font-weight: 700;
 }
-#bookPrintSheet .bp-minor {
-  font-size: 11px;
+.bp-table .bp-word-h {
+  width: 32%;
+}
+.bp-minor {
+  font-size: 0.88em;
   opacity: 0.75;
 }
-#bookPrintSheet .bp-sub {
-  font-size: 11px;
+.bp-sub {
+  font-size: 0.88em;
   color: #444;
-}
-#bookPrintSheet tr {
-  break-inside: avoid;
 }
 
 @media print {
@@ -260,12 +295,19 @@ body.bp-previewing #bookPrintSheet {
     position: static;
     overflow: visible;
     padding: 0;
-    color: #111;
-    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    background: #fff;
   }
   body.bp-printing .bp-sheet-toolbar {
     display: none !important;
+  }
+  body.bp-printing .bp-page {
+    box-shadow: none;
+    margin: 0;
+    padding: 0;
+    max-width: none;
+    page-break-after: always;
+  }
+  body.bp-printing .bp-page-last {
+    page-break-after: auto;
   }
 }
