@@ -29,6 +29,23 @@ test("studying now: active within 15 minutes and studied today", () => {
   assert.equal(FriendsModel.studyingNow(0, 600, now), false);
 });
 
+test("name candidates: by name as you type, exact first, self left out (10.173)", () => {
+  const people = [
+    { id: "ME", name: "たろう", timestamp: 900 },
+    { id: "U1", name: "たろう", timestamp: 100 },
+    { id: "U2", name: "たろう2号", timestamp: 500 },
+    { id: "U3", name: "はなこたろう", timestamp: 800 },
+    { id: "U4", name: "じろう", timestamp: 700 },
+    { id: "U2", name: "たろう2号", timestamp: 500 },
+  ];
+  assert.deepEqual(FriendsModel.nameCandidates(people, "たろう", "ME").map((p) => p.id), ["U1", "U2", "U3"]);
+  assert.deepEqual(FriendsModel.nameCandidates(people, " たろう ", "ME").map((p) => p.id), ["U1", "U2", "U3"], "spaces do not matter");
+  assert.deepEqual(FriendsModel.nameCandidates(people, "", "ME"), []);
+  assert.deepEqual(FriendsModel.nameCandidates(people, "さぶろう", "ME"), []);
+  assert.deepEqual(FriendsModel.nameCandidates(people, "u4", "ME").map((p) => p.id), ["U4"], "an ID finds them too");
+  assert.equal(FriendsModel.nameCandidates(people, "た", "ME", 2).length, 2, "the limit holds");
+});
+
 test("ranking rows: by the week, then today, places from 1", () => {
   const rows = FriendsModel.rankRows([
     { id: "a", name: "A", week: 100, today: 50 },
