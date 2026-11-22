@@ -67,6 +67,7 @@ test("what is on a day, and the dots for a range", () => {
   assert.deepEqual(day.tasks.map((t) => [t.from, t.to, t.checked]), [[4, 6, true]]);
   assert.deepEqual(P.on(d, "2026-11-22").events.map((e) => e.kind), ["test", "note"]);
   assert.deepEqual(P.marks(d, "2026-11-20", "2026-11-22"), { "2026-11-20": { events: 0, tests: 0, tasks: 1 }, "2026-11-21": { events: 0, tests: 0, tasks: 1 }, "2026-11-22": { events: 1, tests: 1, tasks: 1 } });
+  assert.deepEqual(P.details(d, "2026-11-21", "2026-11-22"), { "2026-11-21": [{ kind: "task", title: "本" }], "2026-11-22": [{ kind: "test", title: "単語テスト" }, { kind: "note", title: "早く寝る" }, { kind: "task", title: "本" }] });
 });
 
 test("an AI's plan is imported: books matched by name, others kept as free plans, bad lines skipped", () => {

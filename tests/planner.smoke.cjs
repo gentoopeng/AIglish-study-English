@@ -50,6 +50,7 @@ const { chromium } = require("playwright"),
     await card.getByRole("button", { name: "月", exact: true }).click();
     assert.equal(await card.locator(".pl-grid .pl-day").count(), 42);
     assert.ok(await card.locator(`.pl-day[data-date="${await plus(3)}"].has-test`).count());
+    assert.equal(await card.locator(`.pl-day[data-date="${await plus(3)}"] .pl-chip-test`).innerText(), "英単語テスト<b>");
     await card.getByRole("button", { name: "週", exact: true }).click();
     // A plan: words 1–9 over today and the next two days (3 a day).
     await card.getByRole("button", { name: "今日", exact: true }).click();
