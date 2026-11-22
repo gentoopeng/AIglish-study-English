@@ -771,6 +771,7 @@
     card.addEventListener("pointerdown", (e) => {
       if (index >= queue.length) return;
       if (!e.isPrimary) return;
+      e.preventDefault();
       card.setPointerCapture(e.pointerId);
       pointer = {
         x: e.clientX,
