@@ -301,6 +301,16 @@ window.createTextbookListItem = function(book, index, onSelect) {
 };
 
 
+var vocabBookReorderMode = false;
+function moveVocabBook(id, delta) {
+  var ids = textbooksPool.map(function(b) { return b.id; });
+  var at = ids.indexOf(id), to = at + delta;
+  if (at < 0 || to < 0 || to >= ids.length) return;
+  ids.splice(at, 1);
+  ids.splice(to, 0, id);
+  if (window.setBookOrder) window.setBookOrder(ids);
+  window.renderVocabLibrarySelection();
+}
 window.renderVocabLibrarySelection = function() {
   var selection = document.getElementById('vocabLibrarySelection');
   if (!selection) return;
@@ -315,6 +325,18 @@ window.renderVocabLibrarySelection = function() {
     empty.className = 'vocab-library-empty';
     empty.textContent = 'まだ単語帳がありません。「＋ 単語帳を作る」か「みんなの単語帳」から始められます。';
     books.appendChild(empty);
+  }
+  if (textbooksPool.length > 1) {
+    var reorderRow = document.createElement('div');
+    reorderRow.className = 'vocab-library-reorder-row';
+    var reorderToggle = document.createElement('button');
+    reorderToggle.type = 'button';
+    reorderToggle.className = 'vocab-library-reorder-toggle';
+    reorderToggle.textContent = vocabBookReorderMode ? '並び替えを終わる' : '並び替え';
+    reorderToggle.setAttribute('aria-pressed', String(vocabBookReorderMode));
+    reorderToggle.onclick = function() { vocabBookReorderMode = !vocabBookReorderMode; window.renderVocabLibrarySelection(); };
+    reorderRow.appendChild(reorderToggle);
+    books.appendChild(reorderRow);
   }
   textbooksPool.forEach(function(book, index) {
     var row = window.createTextbookListItem(book, index, window.selectVocabLibraryBook);
@@ -334,7 +356,25 @@ window.renderVocabLibrarySelection = function() {
     manage.textContent = '⋯';
     manage.setAttribute('aria-label', book.name + 'の管理');
     manage.onclick = function() { window.openLibraryBookActions(book.id); };
-    entry.append(row, flash, manage);
+    if (vocabBookReorderMode) {
+      var up = document.createElement('button');
+      up.type = 'button';
+      up.className = 'vocab-library-manage-button vocab-library-move-button';
+      up.textContent = '↑';
+      up.setAttribute('aria-label', book.name + 'を上へ');
+      up.disabled = index === 0;
+      up.onclick = function() { moveVocabBook(book.id, -1); };
+      var down = document.createElement('button');
+      down.type = 'button';
+      down.className = 'vocab-library-manage-button vocab-library-move-button';
+      down.textContent = '↓';
+      down.setAttribute('aria-label', book.name + 'を下へ');
+      down.disabled = index === textbooksPool.length - 1;
+      down.onclick = function() { moveVocabBook(book.id, 1); };
+      entry.append(row, up, down);
+    } else {
+      entry.append(row, flash, manage);
+    }
     books.appendChild(entry);
   });
   var workCount = typeof window.renderWorkbookLibraryItems === 'function'
@@ -384,7 +424,7 @@ window.selectVocabLibraryBook = function(bookId) {
 };
 // 教材選択画面のゲージは、その教材自身の保存済み理解度から計算する。
 // 現在開いている vocabList や全教材共通の統計を流用しない。
-window.getTextbookMasteryStats = function(bookId) {
+window.getTextbookMasteryStats = function(bookId, onlyNums) {
   var words = [];
   if (bookId === currentTextbook && Array.isArray(vocabList) && vocabList.length) {
     words = vocabList;
@@ -399,6 +439,10 @@ window.getTextbookMasteryStats = function(bookId) {
     if (!words.length && textbooksCacheMap && Array.isArray(textbooksCacheMap[bookId])) {
       words = textbooksCacheMap[bookId];
     }
+  }
+  // Only the picked words (10.181, the status graph's selection): everything below counts these.
+  if (onlyNums && onlyNums.size) {
+    words = words.filter(function(word) { return onlyNums.has(String(word.num)); });
   }
 
   var progress = {};
@@ -443,6 +487,19 @@ window.getTextbookMasteryStats = function(bookId) {
     bad: counts.bad,
     none: counts.none
   };
+};
+// The book's words as this device has them (10.181): the same sources the mastery tally reads.
+window.getTextbookWordList = function(bookId) {
+  if (bookId === currentTextbook && Array.isArray(vocabList) && vocabList.length) return vocabList.slice();
+  try {
+    var uid = (typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000';
+    var rawWords = localStorage.getItem('core_v4_user_vocab_book_' + uid + '_' + bookId) ||
+      localStorage.getItem('core_v4_custom_words_' + uid + '_' + bookId) ||
+      localStorage.getItem('core_v4_cache_' + bookId);
+    if (rawWords) { var parsed = JSON.parse(rawWords); if (Array.isArray(parsed) && parsed.length) return parsed; }
+  } catch (e) {}
+  if (typeof textbooksCacheMap !== 'undefined' && textbooksCacheMap && Array.isArray(textbooksCacheMap[bookId])) return textbooksCacheMap[bookId].slice();
+  return [];
 };
 window.switchTextbookContext = async function(bookId) {
 currentTextbook = bookId;

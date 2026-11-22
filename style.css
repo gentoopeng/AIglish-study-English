@@ -3467,3 +3467,10 @@ html:is([data-motion="off"],[data-motion="test"]).splash-leaving #appSplash{anim
 .vocab-hide-modes button[aria-pressed="true"]{background:rgba(103,232,249,.16);border-color:rgba(103,232,249,.55);color:#a5f3fc;}
 #vocabListContainer.hide-word .vocab-word-text,#vocabListContainer.hide-meaning .vocab-meaning-text{opacity:0;user-select:none;-webkit-user-select:none;cursor:pointer;transition:opacity .15s ease;}
 #vocabListContainer.hide-word .vocab-word-text.is-revealed,#vocabListContainer.hide-meaning .vocab-meaning-text.is-revealed{opacity:1;}
+
+/* Book list reordering (10.181). */
+.vocab-library-reorder-row{display:flex;justify-content:flex-end;margin-bottom:8px;}
+.vocab-library-reorder-toggle{padding:7px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;font-size:12px;font-weight:700;cursor:pointer;}
+.vocab-library-reorder-toggle[aria-pressed="true"]{background:rgba(103,232,249,.16);border-color:rgba(103,232,249,.55);color:#a5f3fc;}
+.vocab-library-move-button{font-size:15px;font-weight:900;}
+.vocab-library-move-button:disabled{opacity:.3;}
