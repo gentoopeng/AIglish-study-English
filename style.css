@@ -2012,8 +2012,15 @@ html body .flashcard-face-front,html body .flashcard-face-back{outline:2px solid
 .sidebar-menu-list .sidebar-item:hover{background:rgba(255,255,255,.06);}
 .sidebar-menu-list .sidebar-item svg{color:#a5b4d4;flex:0 0 auto;}
 .sidebar-menu-list .sidebar-item:hover svg{color:#e8ecf6;}
-.sidebar-menu-list .sidebar-item.is-shop svg{color:#fcd34d;}
-.sidebar-menu-list .sidebar-item.is-friends svg{color:#6ee7b7;}
+.sidebar-menu-list .sidebar-item svg:not(:first-child){color:#64748b;}
+.sidebar-menu-list .sidebar-item:hover svg:not(:first-child){color:#94a3b8;}
+#profileMenuButton svg:first-child{color:#7dd3fc;}
+#studyPointsMenuButton svg:first-child{color:#fcd34d;}
+.sidebar-menu-list .sidebar-item.is-shop svg:first-child{color:#fda4af;}
+.sidebar-menu-list .sidebar-item.is-friends svg:first-child{color:#6ee7b7;}
+#settingsMenuButton svg:first-child{color:#c4b5fd;}
+#usageGuideEntryBtn svg:first-child{color:#fdba74;}
+#adminPlayersMenuButton svg:first-child{color:#fca5a5;}
 .header-points-stack{display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.15;margin-left:5px;}
 .header-points-stack #headerStudyPoints{margin-left:0;min-height:20px;}
 .header-bettable{font-size:9px;font-weight:700;color:#f0abfc;white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:.02em;}
