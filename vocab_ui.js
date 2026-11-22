@@ -187,10 +187,10 @@
         var denom = total || 1;
         var pct = function(v) { return total ? Math.round(v / denom * 100) : 0; };
         var segs = [
-            { value: ok, color: '#10B981', label: '⚪︎ 定着' },
-            { value: so, color: '#F59E0B', label: '△ 曖昧' },
-            { value: bad, color: '#EF4444', label: '✕ 不可' },
-            { value: none, color: '#64748B', label: '未学習' }
+            { value: ok, color: '#10B981', label: '○' },
+            { value: so, color: '#F59E0B', label: '△' },
+            { value: bad, color: '#EF4444', label: '✕' },
+            { value: none, color: '#64748B', label: 'ー' }
         ];
         var r = 42,
             c = 2 * Math.PI * r,
