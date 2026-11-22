@@ -45,6 +45,14 @@ const { chromium } = require("playwright"),
     await form.getByRole("button", { name: "保存" }).click();
     assert.match(await card.locator(".pl-countdown").first().innerText(), /あと3日[\s\S]*英単語テスト<b>/);
     assert.match(await card.locator(".pl-countdown").nth(1).innerText(), /あと10日[\s\S]*数学ワーク テスト/);
+    // Picking with 📌: pin only the written test, and the countdown narrows to it.
+    await card.locator(".pl-daybox .pl-pin").click();
+    assert.equal(await card.locator(".pl-countdown").count(), 1);
+    assert.match(await card.locator(".pl-countdown").innerText(), /あと3日[\s\S]*英単語テスト<b>/);
+    // Pin the work's test too (its day is +10): both come back.
+    await card.locator(`.pl-day[data-date="${inDays(10)}"]`).click();
+    await card.locator(".pl-daybox .pl-pin").click();
+    assert.equal(await card.locator(".pl-countdown").count(), 2);
     assert.match(await card.locator(".pl-daybox").innerText(), /テスト[\s\S]*英単語テスト<b>[\s\S]*範囲 1-9\n持ち物 赤シート/);
     // Week and month.
     assert.equal(await card.locator(".pl-grid .pl-day").count(), 7);

@@ -178,16 +178,25 @@
       days = Array.from({ length: 42 }, (_, i) => P.addDays(from, i));
     return { from, to: days[41], days, month: first.getMonth() };
   }
-  // The next tests from today, nearest first: [{ title, date, days }].
-  function upcomingTests(data, limit = 3) {
+  // The tests counted down at the top, nearest first: the ones the player picked (📌 in the day's list);
+  // when nothing is picked, the nearest three.
+  function upcomingTests(data) {
     const t = today();
-    return P.live(view(data).events)
+    const tests = P.live(view(data).events)
       .filter((e) => e.kind === "test" && e.date >= t)
-      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-      .slice(0, limit)
-      .map((e) => ({ ...e, days: P.daysBetween(t, e.date) }));
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const picked = new Set(data.pinned || []);
+    const chosen = picked.size ? tests.filter((e) => picked.has(e.id)) : tests.slice(0, 3);
+    return chosen.map((e) => ({ ...e, days: P.daysBetween(t, e.date) }));
   }
-  const nextTest = (data) => upcomingTests(data, 1)[0] || null;
+  // The next test from today: { title, date, days }.
+  function nextTest(data) {
+    const t = today();
+    const test = P.live(view(data).events)
+      .filter((e) => e.kind === "test" && e.date >= t)
+      .sort((a, b) => (a.date < b.date ? -1 : 1))[0];
+    return test ? { ...test, days: P.daysBetween(t, test.date) } : null;
+  }
 
   // ---- Drawing ----
   // One card for the life of the page: the status board puts this same node back when it redraws, so what the player
@@ -329,6 +338,23 @@
       text.append(el("b", "", e.title));
       if (e.memo) text.append(el("small", "", e.memo));
       li.append(text);
+      if (e.kind === "test") {
+        const on = (data.pinned || []).includes(e.id);
+        const pin = el("button", "pl-pin" + (on ? " is-on" : ""), "📌");
+        pin.type = "button";
+        pin.title = on ? "「あと◯日」に出してる" : "「あと◯日」に出す";
+        pin.setAttribute("aria-label", e.title + "のカウントダウン切り替え");
+        pin.setAttribute("aria-pressed", String(on));
+        pin.onclick = () => {
+          const d = read(),
+            set = new Set(d.pinned || []);
+          if (set.has(e.id)) set.delete(e.id);
+          else set.add(e.id);
+          d.pinned = [...set];
+          if (write(d)) draw();
+        };
+        li.append(pin);
+      }
       if (!e.readonly) {
         const edit = el("button", "pl-mini", "…");
         edit.type = "button";

@@ -241,6 +241,8 @@ html.pwa-recovery-rendering .status-board, html.pwa-recovery-rendering .status-b
 .pl-go, .pl-mini { flex: 0 0 auto; border: 1px solid var(--sb-line); background: rgba(255, 255, 255, .06); color: var(--sb-text); border-radius: 999px; font-size: 11px; font-weight: 800; padding: 4px 10px; cursor: pointer; }
 .pl-go { background: linear-gradient(135deg, rgba(34, 211, 238, .3), rgba(167, 139, 250, .3)); }
 .pl-mini { padding: 4px 8px; }
+.pl-pin { flex: 0 0 auto; border: 0; background: transparent; font-size: 13px; line-height: 1; padding: 4px; cursor: pointer; opacity: .3; filter: grayscale(1); }
+.pl-pin.is-on { opacity: 1; filter: none; }
 .pl-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .pl-tools button { border: 1px solid var(--sb-line); background: rgba(255, 255, 255, .06); color: var(--sb-text); border-radius: 12px; padding: 9px 4px; font-weight: 800; font-size: 12px; cursor: pointer; }
 .pl-tools button:last-child { background: linear-gradient(135deg, rgba(34, 211, 238, .28), rgba(244, 114, 182, .26)); }

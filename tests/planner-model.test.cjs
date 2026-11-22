@@ -125,3 +125,11 @@ test("removed items never push a live one out; the same AI answer twice adds not
   assert.deepEqual(P.on(u, "2026-11-20").tasks.map((t) => [t.checked, t.manual]), [[false, true]]);
   assert.deepEqual(P.on(u, "2026-11-21").tasks.map((t) => [t.checked, t.manual]), [[false, false]]);
 });
+
+test("pinned keeps the picked test ids, cleaned and merged by union", () => {
+  const d = P.clean({ pinned: ["ev1", "work-test-w1", "ev1", ""] });
+  assert.deepEqual(d.pinned, ["ev1", "work-test-w1"]);
+  const merged = P.merge({ pinned: ["a"] }, { pinned: ["b", "a"] });
+  assert.deepEqual([...merged.pinned].sort(), ["a", "b"]);
+  assert.deepEqual(P.clean({}).pinned, []);
+});
