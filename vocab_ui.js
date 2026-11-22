@@ -265,8 +265,9 @@
         var btn = document.createElement('button');
         btn.id = 'vocabStatsBtn';
         btn.type = 'button';
-        btn.textContent = '詳細';
-        btn.style.cssText = "margin-left:auto; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.25); color:#fff; font-size:11px; font-weight:700; padding:6px 10px; border-radius:20px; cursor:pointer; white-space:nowrap; flex-shrink:0;";
+        btn.className = 'vocab-add-word';
+        btn.style.cssText = "margin-left:auto; flex-shrink:0;";
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M8 17v-5M13 17V7M18 17v-8"/></svg><span>詳細</span>';
         btn.onclick = function(e) { e.stopPropagation(); window.showVocabStatsPopup(); };
         if (getComputedStyle(parent).display === 'block') {
             parent.style.display = 'flex';
