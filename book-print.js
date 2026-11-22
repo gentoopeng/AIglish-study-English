@@ -94,7 +94,44 @@
     );
   }
 
-  const api = { COLORS, colorOf, escapeHtml, rowOf, selectWords, unitsOf, sheetHtml };
+  // The styles for a sheet opened in its own tab (10.171): the same table as the
+  // in-page sheet, plus a toolbar that is hidden on paper.
+  const PRINT_CSS = [
+    "body{margin:0;padding:16px;color:#111;font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}",
+    ".bp-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}",
+    ".bp-toolbar button{font-size:15px;font-weight:800;padding:10px 22px;border-radius:999px;border:none;background:#ff7a00;color:#fff;cursor:pointer}",
+    ".bp-toolbar p{font-size:12px;color:#555;margin:0}",
+    ".bp-head h1{font-size:18px;margin:0 0 2px}",
+    ".bp-meta{font-size:11px;color:#555;margin:0 0 10px}",
+    ".bp-table{width:100%;border-collapse:collapse;font-size:12.5px}",
+    ".bp-table th,.bp-table td{border:1px solid #bbb;padding:5px 7px;text-align:left;vertical-align:top;line-height:1.5}",
+    ".bp-table thead th{background:#eee;font-size:11px}",
+    ".bp-check{width:24px;text-align:center}",
+    ".bp-no{width:38px;color:#555}",
+    ".bp-word{width:32%;font-weight:700}",
+    ".bp-minor{font-size:11px;opacity:.75}",
+    ".bp-sub{font-size:11px;color:#444}",
+    "tr{break-inside:avoid}",
+    "@media print{@page{margin:12mm}body{padding:0}.bp-toolbar{display:none}}",
+  ].join("\n");
+
+  // A whole printable page (10.171): printing used to call window.print() on the app
+  // itself, which does nothing in some phone apps / home-screen apps, so the sheet now
+  // opens as its own tab with its own print button and auto-print, and the player can
+  // always fall back to the browser's share menu → Print there.
+  function sheetDocumentHtml(bookName, rows, options) {
+    return (
+      '<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' +
+      escapeHtml(bookName || "単語帳") +
+      " - 印刷用</title><style>" +
+      PRINT_CSS +
+      '</style></head><body><div class="bp-toolbar"><button type="button" onclick="window.print()">🖨 印刷する</button><p>自動で印刷が始まらないときは、このボタンか、ブラウザの「共有」→「プリント」を使ってください。隠す色はそのまま印刷されます。</p></div>' +
+      sheetHtml(bookName, rows, options) +
+      '<script>window.addEventListener("load",function(){setTimeout(function(){try{window.print();}catch(e){}},400);});<\/script></body></html>'
+    );
+  }
+
+  const api = { COLORS, colorOf, escapeHtml, rowOf, selectWords, unitsOf, sheetHtml, sheetDocumentHtml, PRINT_CSS };
   root.BookPrint = Object.freeze(api);
   if (typeof module !== "undefined") module.exports = api;
 
@@ -165,7 +202,7 @@
     ).join("");
     dialog.innerHTML =
       '<form method="dialog" class="bp-form"><header class="bp-dialog-head"><h2>紙に印刷する</h2><button type="button" class="bp-close" aria-label="閉じる">×</button></header>' +
-      '<p class="bp-note">単語帳「' + escapeHtml(currentBookName()) + '」（' + words.length + '語）を、紙で使える一覧にします。隠したい側は色つきで印刷されるので、赤シートや暗記ペンで隠して覚えられます。</p>' +
+      '<p class="bp-note">単語帳「' + escapeHtml(currentBookName()) + '」（' + words.length + '語）を、紙で使える一覧にします。隠したい側は色つきで印刷されるので、赤シートや暗記ペンで隠して覚えられます。「印刷する」を押すと、印刷用ページが新しいタブで開きます。</p>' +
       '<fieldset><legend>隠すところ</legend><label class="bp-radio"><input type="radio" name="bpHide" value="meaning"' + (settings.hide !== "word" ? " checked" : "") + '> 意味を隠す（単語を見て意味を答える）</label>' +
       '<label class="bp-radio"><input type="radio" name="bpHide" value="word"' + (settings.hide === "word" ? " checked" : "") + '> 単語を隠す（意味を見て単語を答える）</label></fieldset>' +
       '<fieldset><legend>隠す色</legend><div class="bp-colors">' + colorSwatches + '</div></fieldset>' +
@@ -216,21 +253,54 @@
   }
 
   function printSheet(words, settings) {
-    document.getElementById("bookPrintSheet")?.remove();
     const rows = words.map((w) => rowOf(w, shownNo(w), settings.includeSub));
+    // First choice (10.171): the sheet as its own tab. window.print() on the app page
+    // itself silently does nothing in home-screen apps and some phone browsers, which
+    // is what the owner hit on 10.170; a normal tab can always print (its own button,
+    // auto-print, or share → Print).
+    let win = null;
+    try {
+      win = window.open("", "_blank");
+    } catch (e) {}
+    if (win && win.document) {
+      try {
+        win.document.open();
+        win.document.write(sheetDocumentHtml(currentBookName(), rows, settings));
+        win.document.close();
+        if (win.focus) win.focus();
+        return;
+      } catch (e) {}
+    }
+    // The tab could not be opened (blocked): show the sheet here as a preview with its
+    // own buttons, so pressing 印刷する always does something visible.
+    showPreview(rows, settings);
+  }
+
+  function showPreview(rows, settings) {
+    document.getElementById("bookPrintSheet")?.remove();
     const sheet = document.createElement("section");
     sheet.id = "bookPrintSheet";
-    sheet.innerHTML = sheetHtml(currentBookName(), rows, settings);
+    sheet.className = "bp-preview";
+    sheet.innerHTML =
+      '<div class="bp-sheet-toolbar"><button type="button" class="bp-sheet-print">🖨 印刷する</button><button type="button" class="bp-sheet-close">閉じる</button><p>印刷が始まらないときは、ブラウザの「共有」→「プリント」でも印刷できます。</p></div>' +
+      sheetHtml(currentBookName(), rows, settings);
     document.body.append(sheet);
-    document.body.classList.add("bp-printing");
-    const cleanup = () => {
+    document.body.classList.add("bp-previewing");
+    sheet.querySelector(".bp-sheet-close").onclick = () => {
       sheet.remove();
-      document.body.classList.remove("bp-printing");
-      window.removeEventListener("afterprint", cleanup);
+      document.body.classList.remove("bp-previewing", "bp-printing");
     };
-    window.addEventListener("afterprint", cleanup);
-    setTimeout(() => window.print(), 30);
-    setTimeout(cleanup, 60000);
+    sheet.querySelector(".bp-sheet-print").onclick = () => {
+      document.body.classList.add("bp-printing");
+      const done = () => {
+        document.body.classList.remove("bp-printing");
+        window.removeEventListener("afterprint", done);
+      };
+      window.addEventListener("afterprint", done);
+      setTimeout(() => window.print(), 30);
+      setTimeout(done, 60000);
+    };
+    sheet.scrollTop = 0;
   }
 
   setInterval(ensureButton, 1000);
