@@ -3459,3 +3459,11 @@ html:is([data-motion="off"],[data-motion="test"]).splash-leaving #appSplash{anim
 /* 単語帳の絞り込みは6個を1列に (10.177) */
 .filter-scroller.vocab-filter-scroller{grid-template-columns:repeat(6,minmax(0,1fr));}
 .filter-scroller.vocab-filter-scroller .pill-btn{padding:7px 2px;}
+
+/* Icon-only book header buttons and the memorisation hide modes (10.179). */
+.vocab-book-heading .vocab-add-word{width:40px;height:40px;min-height:40px;padding:0;justify-content:center;gap:0;}
+.vocab-hide-modes{display:flex;gap:6px;margin:0 0 10px;}
+.vocab-hide-modes button{flex:1 1 0;padding:8px 4px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);color:var(--text-sub);font-size:12px;font-weight:700;cursor:pointer;}
+.vocab-hide-modes button[aria-pressed="true"]{background:rgba(103,232,249,.16);border-color:rgba(103,232,249,.55);color:#a5f3fc;}
+#vocabListContainer.hide-word .vocab-word-text,#vocabListContainer.hide-meaning .vocab-meaning-text{filter:blur(7px);opacity:.55;user-select:none;-webkit-user-select:none;cursor:pointer;transition:filter .15s ease,opacity .15s ease;}
+#vocabListContainer.hide-word .vocab-word-text.is-revealed,#vocabListContainer.hide-meaning .vocab-meaning-text.is-revealed{filter:none;opacity:1;}
