@@ -219,9 +219,31 @@
     memo = new Map();
     try {
       paint();
+      paintCountdown();
     } finally {
       memo = null;
     }
+  }
+  // The countdowns on their own card: they stay near the top of the status tab while the calendar sits at
+  // the bottom (the player's request). The same node each time, like the calendar card.
+  let cdHost = null;
+  function countdownCard() {
+    if (!cdHost) {
+      cdHost = el("section", "sb-card sb-countdowns");
+      cdHost.setAttribute("aria-label", "テストまでの日数");
+    }
+    paintCountdown();
+    return cdHost;
+  }
+  function paintCountdown() {
+    if (!cdHost) return;
+    const rows = upcomingTests(read()).map((test) => {
+      const row = el("p", "pl-countdown" + (test.days <= 3 ? " is-near" : ""));
+      row.append(el("b", "", test.days === 0 ? "今日" : "あと" + test.days + "日"), el("span", "", test.title));
+      return row;
+    });
+    cdHost.replaceChildren(...rows);
+    cdHost.style.display = rows.length ? "" : "none";
   }
   function paint() {
     const data = read(),
@@ -249,11 +271,6 @@
     }
     head.append(title, toggle);
     const nodes = [head];
-    for (const test of upcomingTests(data)) {
-      const countdown = el("p", "pl-countdown" + (test.days <= 3 ? " is-near" : ""));
-      countdown.append(el("b", "", test.days === 0 ? "今日" : "あと" + test.days + "日"), el("span", "", test.title));
-      nodes.push(countdown);
-    }
     // The month or week, with arrows.
     const nav = el("div", "pl-nav");
     const prev = el("button", "", "‹"),
@@ -530,5 +547,5 @@
       }
     };
   }
-  root.Planner = Object.freeze({ card, draw, read, prompt, progress, books, key });
+  root.Planner = Object.freeze({ card, countdown: countdownCard, draw, read, prompt, progress, books, key });
 })(window);

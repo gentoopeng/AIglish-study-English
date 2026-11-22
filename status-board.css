@@ -200,6 +200,7 @@ html.pwa-recovery-rendering .status-board, html.pwa-recovery-rendering .status-b
 .pl-toggle { display: inline-flex; padding: 2px; border-radius: 999px; background: rgba(255, 255, 255, .08); border: 1px solid var(--sb-line); }
 .pl-toggle button { border: 0; background: none; color: var(--sb-sub); font-weight: 800; font-size: 12px; padding: 4px 12px; border-radius: 999px; cursor: pointer; }
 .pl-toggle button.is-on { background: linear-gradient(135deg, #22d3ee, #a78bfa); color: #0b1020; text-shadow: none; }
+.sb-countdowns { display: grid; gap: 8px; padding: 10px; }
 .pl-countdown { margin: 0; display: flex; gap: 8px; align-items: baseline; padding: 8px 12px; border-radius: 12px; background: rgba(167, 139, 250, .14); border: 1px solid rgba(167, 139, 250, .35); font-size: 13px; font-weight: 800; }
 .pl-countdown b { font-size: 18px; color: #c4b5fd; white-space: nowrap; }
 .pl-countdown.is-near { background: rgba(251, 113, 133, .16); border-color: rgba(251, 113, 133, .45); }
