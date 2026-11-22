@@ -5,6 +5,12 @@
 (function() {
     "use strict";
 
+    // A flashcard must never start a native drag (the card lifts off like an image and
+    // the swipe dies): block dragstart from anything inside a card (10.174).
+    document.addEventListener('dragstart', function(e) {
+        if (e.target && e.target.closest && e.target.closest('.flashcard-wrapper-3d')) e.preventDefault();
+    }, true);
+
     // Prefer the selected meaning's grammatical label; words can have different parts of speech per sense.
     window.getFlashcardPartOfSpeech = function(word, meaning) {
         var labels = [
@@ -595,6 +601,7 @@
         }
         cardWrap.addEventListener('pointerdown', function(e) {
             if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+            e.preventDefault();
             activePointerId = e.pointerId;
             cardTouchStartX = e.clientX;
             cardTouchStartY = e.clientY;
