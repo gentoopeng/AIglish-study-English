@@ -223,7 +223,6 @@ html.pwa-recovery-rendering .status-board, html.pwa-recovery-rendering .status-b
 .pl-chip-test { background: #fb7185; color: #33060d; }
 .pl-chip-event { background: #fbbf24; color: #3a2703; }
 .pl-chip-note { background: rgba(148, 163, 184, .9); color: #101828; }
-.pl-chip-task { background: #34d399; color: #032117; }
 .pl-more { font-size: 9px; font-weight: 800; color: var(--sb-sub); padding-left: 2px; }
 .pl-daybox { padding: 10px 12px; border-radius: 14px; background: rgba(0, 0, 0, .16); border: 1px solid var(--sb-line); }
 .pl-daybox h4 { margin: 0 0 6px; font-size: 13px; font-weight: 900; letter-spacing: .04em; }
