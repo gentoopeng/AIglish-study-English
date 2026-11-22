@@ -44,6 +44,20 @@
   const me = () => (typeof myId !== "undefined" && myId ? myId : "GUEST-000");
   const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
+  // The mastery graph's word selection (10.181), kept on this device: {bookId: [num, ...]}.
+  const selKey = () => "aiglish_mastery_selection_" + me();
+  function readSelection() {
+    const raw = safe(() => JSON.parse(localStorage.getItem(selKey()) || "{}"), {});
+    const out = {};
+    if (raw && typeof raw === "object")
+      for (const [k, v] of Object.entries(raw)) if (Array.isArray(v) && v.length) out[k] = v.map(String);
+    return out;
+  }
+  function writeSelection(sel) {
+    safe(() => localStorage.setItem(selKey(), JSON.stringify(sel)), null);
+  }
+  const selectionCount = (sel) => Object.values(sel).reduce((a, v) => a + v.length, 0);
+
   // Everything the card shows, from this device. Pure apart from the reads; tested through the screen.
   function collect(now = Date.now()) {
     const model = root.StudyTimeModel;
@@ -98,10 +112,13 @@
       return from ? last - from.value : null;
     }, null) : null;
     const pool = typeof textbooksPool !== "undefined" && Array.isArray(textbooksPool) ? textbooksPool : [];
+    const selection = readSelection();
+    const selActive = selectionCount(selection) > 0;
     const books = pool.map((b) => {
-      const c = safe(() => root.getTextbookMasteryStats(b.id), null) || { ok: 0, so: 0, bad: 0, none: 0 };
+      const picked = selActive ? new Set(selection[b.id] || []) : null;
+      const c = picked && !picked.size ? { ok: 0, so: 0, bad: 0, none: 0 } : safe(() => root.getTextbookMasteryStats(b.id, picked || undefined), null) || { ok: 0, so: 0, bad: 0, none: 0 };
       const sum = num(c.ok) + num(c.so) + num(c.bad) + num(c.none);
-      return { id: b.id, name: String(b.name || "単語帳"), cover: b.coverType === "image" ? "" : String(b.cover || "📘").slice(0, 4), ok: num(c.ok), so: num(c.so), bad: num(c.bad), none: num(c.none), sum };
+      return { id: b.id, name: String(b.name || "単語帳"), cover: b.coverType === "image" ? "" : String(b.cover || "📘").slice(0, 4), ok: num(c.ok), so: num(c.so), bad: num(c.bad), none: num(c.none), sum, picked: picked ? picked.size : 0 };
     });
     const mastery = books.reduce((a, b) => ({ ok: a.ok + b.ok, so: a.so + b.so, bad: a.bad + b.bad, none: a.none + b.none }), { ok: 0, so: 0, bad: 0, none: 0 });
     mastery.sum = mastery.ok + mastery.so + mastery.bad + mastery.none;
@@ -120,6 +137,8 @@
       points: { balance: Number.isFinite(balance) ? balance : null, earned: Number.isFinite(earned) ? earned : null, series: points, week: pointWeek },
       books,
       mastery,
+      selActive,
+      selCount: selectionCount(selection),
       rated: num(stats.vocab_rated_count),
       flash: num(stats.flash_count),
     };
@@ -296,7 +315,25 @@
   function masteryCard(d) {
     const m = d.mastery;
     const card = el("section", "sb-card sb-mastery");
-    card.append(el("h3", "sb-title", "理解度"));
+    const headRow = el("div", "sb-mastery-head");
+    headRow.append(el("h3", "sb-title", "理解度"));
+    const pickBtn = el("button", "sb-pick-btn", "単語を選ぶ");
+    pickBtn.type = "button";
+    pickBtn.onclick = () => openMasteryPicker();
+    headRow.append(pickBtn);
+    card.append(headRow);
+    if (d.selActive) {
+      const note = el("div", "sb-sel-note");
+      note.append(el("span", "", "選んだ単語のみ（" + comma(d.selCount) + "語）"));
+      const clearBtn = el("button", "sb-sel-clear", "解除");
+      clearBtn.type = "button";
+      clearBtn.onclick = () => {
+        writeSelection({});
+        render({ quiet: true });
+      };
+      note.append(clearBtn);
+      card.append(note);
+    }
     const top = el("div", "sb-mastery-top");
     // A ring: ○ △ ×, the rest dark.
     const R = 52,
@@ -334,7 +371,7 @@
       x.append(el("strong", "", value), el("span", "", label));
       summary.append(x);
     };
-    mini("冊", comma(d.books.length));
+    mini("冊", comma(d.selActive ? d.books.filter((b) => b.picked > 0).length : d.books.length));
     mini("問題", comma(m.sum));
     mini("評価", comma(d.rated));
     mini("フラッシュ", comma(d.flash));
@@ -342,7 +379,7 @@
     // Each book: a stacked bar, the most worked on first.
     const list = el("ul", "sb-books");
     d.books
-      .filter((b) => b.ok + b.so + b.bad)
+      .filter((b) => (d.selActive ? b.picked > 0 : b.ok + b.so + b.bad))
       .sort((a, b) => b.ok + b.so + b.bad - (a.ok + a.so + a.bad) || b.sum - a.sum)
       .slice(0, 6)
       .forEach((b, i) => {
@@ -370,6 +407,105 @@
       });
     if (list.childElementCount) card.append(list);
     return card;
+  }
+
+  // Picking the words the mastery graph is built from (10.181): any number, from any books,
+  // kept on this device. While a selection exists, the graph uses only those words.
+  function openMasteryPicker() {
+    const sel = readSelection();
+    const pool = typeof textbooksPool !== "undefined" && Array.isArray(textbooksPool) ? textbooksPool : [];
+    const dialog = root.openLibraryDialog("グラフに使う単語", '<div class="sb-picker"><p class="sb-picker-note">読み込んでいます…</p></div>');
+    const body = dialog.querySelector(".sb-picker");
+    if (!pool.length) {
+      body.replaceChildren(el("p", "sb-picker-note", "単語帳がまだありません。"));
+      return;
+    }
+    body.replaceChildren();
+    const bar = el("div", "sb-picker-bar");
+    const bookSel = document.createElement("select");
+    bookSel.className = "sb-picker-book";
+    bookSel.setAttribute("aria-label", "単語帳");
+    for (const b of pool) {
+      const opt = document.createElement("option");
+      opt.value = String(b.id);
+      opt.textContent = String(b.name || "単語帳");
+      bookSel.append(opt);
+    }
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "sb-picker-search";
+    search.placeholder = "単語・意味で探す";
+    search.setAttribute("aria-label", "単語・意味で探す");
+    bar.append(bookSel, search);
+    const actions = el("div", "sb-picker-bar");
+    const allBtn = el("button", "sb-pick-btn", "この単語帳をすべて選ぶ");
+    allBtn.type = "button";
+    const noneBtn = el("button", "sb-pick-btn", "この単語帳をすべて外す");
+    noneBtn.type = "button";
+    actions.append(allBtn, noneBtn);
+    const list = el("div", "sb-picker-list");
+    const foot = el("div", "sb-picker-foot");
+    const count = el("span", "sb-picker-count");
+    const done = el("button", "sb-pick-btn is-done", "完了");
+    done.type = "button";
+    foot.append(count, done);
+    body.append(bar, actions, list, foot);
+    const drawCount = () => {
+      count.textContent = "選択中：合計" + comma(selectionCount(sel)) + "語";
+    };
+    const words = () => safe(() => root.getTextbookWordList(bookSel.value), []) || [];
+    function drawList() {
+      const picked = new Set(sel[bookSel.value] || []);
+      const q = search.value.trim().toLowerCase();
+      const matched = words().filter((w) => !q || String(w.word || "").toLowerCase().includes(q) || String(w.meaning || "").toLowerCase().includes(q) || (Array.isArray(w.meanings) && w.meanings.some((m) => String(m.text || "").toLowerCase().includes(q))));
+      list.replaceChildren();
+      if (!matched.length) {
+        list.append(el("p", "sb-picker-note", "単語が見つかりません。"));
+        return;
+      }
+      const shown = matched.slice(0, 300);
+      for (const w of shown) {
+        const row = el("label", "sb-pick-row");
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = picked.has(String(w.num));
+        box.onchange = () => {
+          const set = new Set(sel[bookSel.value] || []);
+          if (box.checked) set.add(String(w.num));
+          else set.delete(String(w.num));
+          if (set.size) sel[bookSel.value] = [...set];
+          else delete sel[bookSel.value];
+          writeSelection(sel);
+          drawCount();
+        };
+        const text = el("span", "sb-pick-text");
+        const first = (Array.isArray(w.meanings) && w.meanings[0] && w.meanings[0].text) || w.meaning || "";
+        text.append(el("b", "", "#" + w.num + " " + String(w.word || "")), el("small", "", String(first)));
+        row.append(box, text);
+        list.append(row);
+      }
+      if (matched.length > shown.length) list.append(el("p", "sb-picker-note", "上位" + shown.length + "件まで表示しています。検索で絞り込んでください（選択数に上限はありません）。"));
+    }
+    allBtn.onclick = () => {
+      const all = words().map((w) => String(w.num));
+      if (all.length) sel[bookSel.value] = all;
+      else delete sel[bookSel.value];
+      writeSelection(sel);
+      drawCount();
+      drawList();
+    };
+    noneBtn.onclick = () => {
+      delete sel[bookSel.value];
+      writeSelection(sel);
+      drawCount();
+      drawList();
+    };
+    bookSel.onchange = drawList;
+    search.oninput = drawList;
+    done.onclick = () => root.closeLibraryDialog?.();
+    dialog.addEventListener("close", () => render({ quiet: true }));
+    drawCount();
+    drawList();
   }
 
   let timer = 0;
@@ -407,7 +543,7 @@
     const pool = typeof textbooksPool !== "undefined" && Array.isArray(textbooksPool) ? textbooksPool.length : 0,
       stats = typeof userStats === "object" && userStats ? userStats : {};
     // (Study time in 5-minute steps: a warm-up over the card adds seconds all the time.)
-    return [me(), pool, Math.floor(num(stats.study_total_secs) / 300), stats.vocab_rated_count, stats.flash_count, safe(() => localStorage.getItem("core_v4_study_points_" + me()) || "", ""), safe(() => (localStorage.getItem("aiglish_planner_" + me()) || "").length, 0)].join("|");
+    return [me(), pool, Math.floor(num(stats.study_total_secs) / 300), stats.vocab_rated_count, stats.flash_count, safe(() => localStorage.getItem("core_v4_study_points_" + me()) || "", ""), safe(() => (localStorage.getItem("aiglish_planner_" + me()) || "").length, 0), safe(() => localStorage.getItem("aiglish_mastery_selection_" + me()) || "", "")].join("|");
   }
   let last = "";
   function start(opts) {

@@ -20,7 +20,24 @@
         sharedBooks.forEach(function(book) { if (!shared.some(function(b) { return b.id === book.id; })) shared.push(book); });
         shared = shared.filter(function(book) { return !(window.LibraryState&&window.LibraryState.isDeleted('book',book.id)); });
         textbooksPool = shared.filter(function(book) { return data.hidden.indexOf(book.id) < 0; }).concat(data.books.filter(function(book){return data.hidden.indexOf(book.id)<0;}));
+        // The player's own order for the list (10.181): a device-kept list of book ids; books not
+        // in it keep their order, after the listed ones.
+        try {
+            var order = JSON.parse(localStorage.getItem('aiglish_book_order_' + userId()) || '[]');
+            if (Array.isArray(order) && order.length) {
+                var rank = new Map(order.map(function(id, i) { return [String(id), i]; }));
+                textbooksPool = textbooksPool.map(function(book, i) { return { book: book, i: i }; }).sort(function(a, b) {
+                    var ra = rank.has(String(a.book.id)) ? rank.get(String(a.book.id)) : Number.MAX_SAFE_INTEGER;
+                    var rb = rank.has(String(b.book.id)) ? rank.get(String(b.book.id)) : Number.MAX_SAFE_INTEGER;
+                    return ra - rb || a.i - b.i;
+                }).map(function(x) { return x.book; });
+            }
+        } catch (e) {}
     }
+    window.setBookOrder = function(ids) {
+        try { localStorage.setItem('aiglish_book_order_' + userId(), JSON.stringify((ids || []).map(String))); } catch (e) {}
+        refreshPool();
+    };
     const pendingCatalogs=new Set();
     function persist(data) {
         pendingCatalogs.add(userId());
