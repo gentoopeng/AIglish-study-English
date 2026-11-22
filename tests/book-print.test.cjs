@@ -51,6 +51,17 @@ test("sheetHtml: the hidden side is coloured, the other side is not", () => {
   assert.equal((byWord.match(/bp-hidden-side/g) || []).length, 1);
 });
 
+test("sheetDocumentHtml: a full printable page with its own print button (10.171)", () => {
+  const rows = [B.rowOf(words[1], 1, false)];
+  const doc = B.sheetDocumentHtml("テスト帳", rows, { hide: "meaning", color: "orange" });
+  assert.match(doc, /^<!doctype html>/);
+  assert.match(doc, /印刷する/);
+  assert.match(doc, /window\.print\(\)/);
+  assert.match(doc, /print-color-adjust:\s*exact/);
+  assert.match(doc, /color:#ff7a00/);
+  assert.match(doc, /@media print/);
+});
+
 test("sheetHtml escapes the book's text", () => {
   const rows = [B.rowOf(w(1, "<b>x</b>", ["<script>"]), 1, false)];
   const html = B.sheetHtml("<帳>", rows, {});
