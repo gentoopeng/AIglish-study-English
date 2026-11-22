@@ -210,19 +210,21 @@ html.pwa-recovery-rendering .status-board, html.pwa-recovery-rendering .status-b
 .pl-nav .pl-today { font-size: 11px; padding: 0 10px; }
 .pl-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .pl-wd { text-align: center; font-size: 10px; font-weight: 800; color: var(--sb-sub); }
-.pl-day { position: relative; display: grid; justify-items: center; align-content: start; gap: 2px; padding: 6px 0 5px; border-radius: 10px; border: 1px solid transparent; background: rgba(255, 255, 255, .04); color: var(--sb-text); cursor: pointer; font: inherit; min-width: 0; }
-.pl-week .pl-day { min-height: 64px; }
-.pl-month .pl-day { min-height: 42px; }
-.pl-day b { font-size: 13px; font-weight: 900; }
-.pl-day small { font-size: 9px; color: var(--sb-sub); font-weight: 800; }
+.pl-day { position: relative; display: grid; justify-items: stretch; align-content: start; gap: 2px; padding: 6px 2px 5px; border-radius: 10px; border: 1px solid transparent; background: rgba(255, 255, 255, .04); color: var(--sb-text); cursor: pointer; font: inherit; min-width: 0; }
+.pl-week .pl-day { min-height: 98px; }
+.pl-month .pl-day { min-height: 62px; }
+.pl-day b { font-size: 13px; font-weight: 900; text-align: center; }
 .pl-day.is-sun b { color: #fda4af; } .pl-day.is-sat b { color: #93c5fd; }
 .pl-day.is-out { opacity: .35; }
 .pl-day.is-today { border-color: rgba(34, 211, 238, .7); box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .25); }
 .pl-day.is-selected { background: linear-gradient(160deg, rgba(34, 211, 238, .28), rgba(167, 139, 250, .22)); border-color: rgba(255, 255, 255, .35); }
-.pl-day.has-test::after { content: ""; position: absolute; top: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: #fb7185; box-shadow: 0 0 6px #fb7185; }
-.pl-dots { display: flex; gap: 3px; min-height: 5px; }
-.pl-dots i { width: 5px; height: 5px; border-radius: 50%; }
-.pl-dot-test { background: #fb7185; } .pl-dot-event { background: #fbbf24; } .pl-dot-task { background: #34d399; }
+.pl-chips { display: grid; gap: 2px; min-width: 0; }
+.pl-chip { font-size: 9px; font-weight: 800; line-height: 1.5; padding: 0 3px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.pl-chip-test { background: #fb7185; color: #33060d; }
+.pl-chip-event { background: #fbbf24; color: #3a2703; }
+.pl-chip-note { background: rgba(148, 163, 184, .9); color: #101828; }
+.pl-chip-task { background: #34d399; color: #032117; }
+.pl-more { font-size: 9px; font-weight: 800; color: var(--sb-sub); padding-left: 2px; }
 .pl-daybox { padding: 10px 12px; border-radius: 14px; background: rgba(0, 0, 0, .16); border: 1px solid var(--sb-line); }
 .pl-daybox h4 { margin: 0 0 6px; font-size: 13px; font-weight: 900; letter-spacing: .04em; }
 .pl-empty { margin: 0; font-size: 12px; color: var(--sb-sub); }

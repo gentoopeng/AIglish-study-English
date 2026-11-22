@@ -216,7 +216,8 @@
     const data = read(),
       t = today(),
       r = range(),
-      marks = P.marks(view(data), r.from, r.to);
+      marks = P.marks(view(data), r.from, r.to),
+      det = P.details(view(data), r.from, r.to);
     const head = el("div", "pl-head");
     const title = el("h3", "sb-title", "予定");
     const toggle = el("div", "pl-toggle");
@@ -283,12 +284,14 @@
       cell.dataset.date = date;
       cell.setAttribute("aria-label", d.getMonth() + 1 + "月" + d.getDate() + "日" + (m ? "（" + [m.tests && "テスト" + m.tests, m.events && "予定" + m.events, m.tasks && "やること" + m.tasks].filter(Boolean).join("・") + "）" : ""));
       cell.append(el("b", "", String(d.getDate())));
-      const dots = el("span", "pl-dots");
-      if (m?.tests) dots.append(el("i", "pl-dot-test"));
-      if (m?.events) dots.append(el("i", "pl-dot-event"));
-      if (m?.tasks) dots.append(el("i", "pl-dot-task"));
-      cell.append(dots);
-      if (mode === "week" && m?.tasks) cell.append(el("small", "", m.tasks + "件"));
+      const items = det[date] || [];
+      if (items.length) {
+        const chips = el("span", "pl-chips");
+        const limit = mode === "week" ? 3 : 2;
+        for (const item of items.slice(0, limit)) chips.append(el("span", "pl-chip pl-chip-" + item.kind, item.title));
+        if (items.length > limit) chips.append(el("span", "pl-more", "+" + (items.length - limit)));
+        cell.append(chips);
+      }
       cell.onclick = () => {
         selected = date;
         draw();

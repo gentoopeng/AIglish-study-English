@@ -156,6 +156,19 @@
     for (const plan of live(d.plans)) for (const part of split(plan)) if (part.date >= from && part.date <= to) at(part.date).tasks++;
     return out;
   }
+  // What is on each day from..to, as labels for the calendar cells: { date: [{ kind, title }] }.
+  // Events keep their kind (tests first within a day); a plan's share of a day is one "task" label with the plan's title.
+  function details(data, from, to) {
+    const d = clean(data),
+      out = {};
+    const at = (date) => (out[date] ||= []);
+    const events = live(d.events)
+      .filter((e) => e.date >= from && e.date <= to)
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.kind === "test" ? -1 : 0) - (b.kind === "test" ? -1 : 0)));
+    for (const e of events) at(e.date).push({ kind: e.kind, title: e.title });
+    for (const plan of live(d.plans)) for (const part of split(plan)) if (part.date >= from && part.date <= to) at(part.date).push({ kind: "task", title: plan.title });
+    return out;
+  }
   // Changes, returning new data (the item gets `at` now).
   const put = (data, list, item, now = Date.now()) => {
     const d = clean(data, now);
@@ -219,7 +232,7 @@
     return { data: next, events, plans, skipped, free: [...new Set(free)] };
   }
 
-  const api = { room, overdue, DAY, KINDS, MAX_EVENTS, MAX_PLANS, dateKey, day, addDays, daysBetween, clean, merge, split, on, marks, addEvent, addPlan, remove, check, importAi, live };
+  const api = { room, overdue, DAY, KINDS, MAX_EVENTS, MAX_PLANS, dateKey, day, addDays, daysBetween, clean, merge, split, on, marks, details, addEvent, addPlan, remove, check, importAi, live };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PlannerModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);
