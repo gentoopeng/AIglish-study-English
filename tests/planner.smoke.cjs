@@ -43,7 +43,8 @@ const { chromium } = require("playwright"),
     await form.locator("input[name=title]").fill("英単語テスト<b>");
     await form.locator("textarea[name=memo]").fill("範囲 1-9\n持ち物 赤シート");
     await form.getByRole("button", { name: "保存" }).click();
-    assert.match(await card.locator(".pl-countdown").innerText(), /あと3日[\s\S]*英単語テスト<b>/);
+    assert.match(await card.locator(".pl-countdown").first().innerText(), /あと3日[\s\S]*英単語テスト<b>/);
+    assert.match(await card.locator(".pl-countdown").nth(1).innerText(), /あと10日[\s\S]*数学ワーク テスト/);
     assert.match(await card.locator(".pl-daybox").innerText(), /テスト[\s\S]*英単語テスト<b>[\s\S]*範囲 1-9\n持ち物 赤シート/);
     // Week and month.
     assert.equal(await card.locator(".pl-grid .pl-day").count(), 7);
@@ -65,6 +66,7 @@ const { chromium } = require("playwright"),
     await plan.getByRole("button", { name: "作る" }).click();
     const task = card.locator(".pl-task", { hasText: "テスト単語帳 1–3" });
     await task.waitFor();
+    assert.equal(await card.locator(`.pl-day[data-date="${today}"] .pl-chip`).count(), 0, "tasks are not shown in the cells");
     assert.match(await task.innerText(), /0\/3/);
     // Rating the day's words ticks it off by itself.
     await page.evaluate(() => {

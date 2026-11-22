@@ -178,14 +178,16 @@
       days = Array.from({ length: 42 }, (_, i) => P.addDays(from, i));
     return { from, to: days[41], days, month: first.getMonth() };
   }
-  // The next test from today: { title, date, days }.
-  function nextTest(data) {
+  // The next tests from today, nearest first: [{ title, date, days }].
+  function upcomingTests(data, limit = 3) {
     const t = today();
-    const test = P.live(view(data).events)
+    return P.live(view(data).events)
       .filter((e) => e.kind === "test" && e.date >= t)
-      .sort((a, b) => (a.date < b.date ? -1 : 1))[0];
-    return test ? { ...test, days: P.daysBetween(t, test.date) } : null;
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+      .slice(0, limit)
+      .map((e) => ({ ...e, days: P.daysBetween(t, e.date) }));
   }
+  const nextTest = (data) => upcomingTests(data, 1)[0] || null;
 
   // ---- Drawing ----
   // One card for the life of the page: the status board puts this same node back when it redraws, so what the player
@@ -238,8 +240,7 @@
     }
     head.append(title, toggle);
     const nodes = [head];
-    const test = nextTest(data);
-    if (test) {
+    for (const test of upcomingTests(data)) {
       const countdown = el("p", "pl-countdown" + (test.days <= 3 ? " is-near" : ""));
       countdown.append(el("b", "", test.days === 0 ? "今日" : "あと" + test.days + "日"), el("span", "", test.title));
       nodes.push(countdown);
@@ -284,7 +285,7 @@
       cell.dataset.date = date;
       cell.setAttribute("aria-label", d.getMonth() + 1 + "月" + d.getDate() + "日" + (m ? "（" + [m.tests && "テスト" + m.tests, m.events && "予定" + m.events, m.tasks && "やること" + m.tasks].filter(Boolean).join("・") + "）" : ""));
       cell.append(el("b", "", String(d.getDate())));
-      const items = det[date] || [];
+      const items = (det[date] || []).filter((item) => item.kind !== "task");
       if (items.length) {
         const chips = el("span", "pl-chips");
         const limit = mode === "week" ? 3 : 2;
