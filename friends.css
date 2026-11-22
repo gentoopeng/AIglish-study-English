@@ -32,3 +32,17 @@
 .fr-found { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, .07); background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02)); margin-top: 6px; }
 .fr-add-btn { flex: 0 0 auto; padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(52, 211, 153, .5); background: rgba(52, 211, 153, .16); color: #6ee7b7; font-weight: 900; font-size: 12px; cursor: pointer; }
 .fr-add-btn:disabled { opacity: .5; }
+.fr-book { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #c4b5fd; min-width: 0; }
+.fr-book-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+.fr-bar { flex: 0 0 64px; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.fr-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #34d399, #a78bfa); }
+.fr-book-pct { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Studying-together bar under the header (friends.js, 10.174). */
+.studying-bar { position: fixed; top: 56px; left: 0; right: 0; z-index: 999; display: flex; align-items: center; gap: 10px; padding: 6px 14px; border: 0; border-bottom: 1px solid rgba(52, 211, 153, .35); background: rgba(9, 26, 20, .92); color: #d1fae5; font-size: 12px; font-weight: 800; cursor: pointer; text-align: left; }
+.studying-bar-label { flex: 0 0 auto; color: #6ee7b7; }
+.studying-chip { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.studying-chip .podium-avatar { width: 22px; height: 22px; font-size: 11px; border-width: 1px; }
+.studying-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 90px; }
+.studying-more { color: #6ee7b7; }
+body.has-studying-bar .container { padding-top: 114px; }
+body.in-game-active .studying-bar { display: none !important; }
