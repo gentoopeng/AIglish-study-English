@@ -253,17 +253,28 @@
   }
 
   function ensureButton() {
-    const container = document.getElementById("vocabListContainer");
-    if (!container || document.getElementById("bookPrintButton")) return;
-    const bar = document.createElement("div");
-    bar.className = "bp-bar";
+    if (document.getElementById("bookPrintButton")) return;
+    // Beside the book's name, in the header row with 追加/編集 (10.177).
+    const title = document.getElementById("vocabBookTitle");
+    const clickable = title && title.closest ? title.closest("[onclick]") : null;
+    const row = clickable && clickable.parentElement ? clickable.parentElement : null;
     const button = document.createElement("button");
     button.type = "button";
     button.id = "bookPrintButton";
-    button.className = "bp-open";
-    button.textContent = "🖨 紙に印刷";
     button.setAttribute("aria-label", "この単語帳を紙に印刷する");
     button.onclick = openDialog;
+    if (row) {
+      button.className = "vocab-add-word bp-print-btn";
+      button.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg><span>印刷</span>';
+      row.append(button);
+      return;
+    }
+    const container = document.getElementById("vocabListContainer");
+    if (!container) return;
+    const bar = document.createElement("div");
+    bar.className = "bp-bar";
+    button.className = "bp-open";
+    button.textContent = "🖨 紙に印刷";
     bar.append(button);
     container.before(bar);
   }

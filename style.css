@@ -3448,3 +3448,7 @@ html:is([data-motion="off"],[data-motion="test"]).splash-leaving #appSplash{anim
 .people-friend-box button{flex:0 0 auto;border-radius:999px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;border:1px solid transparent}
 .people-friend-add{background:#06c755;color:#fff}
 .people-friend-remove{background:transparent;color:#fda4af;border-color:#fda4af66!important}
+
+/* 単語帳の絞り込みは6個を1列に (10.177) */
+.filter-scroller.vocab-filter-scroller{grid-template-columns:repeat(6,minmax(0,1fr));}
+.filter-scroller.vocab-filter-scroller .pill-btn{padding:7px 2px;}
