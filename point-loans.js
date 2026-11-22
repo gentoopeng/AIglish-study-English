@@ -383,6 +383,68 @@
     after(value);
     window.Stamps?.remember?.(ids);
   }
+  // Gifting a stamp to a friend: one transaction like a purchase, except the stamp lands in the
+  // recipient's box and the giver pays. A small note is left in `stampGifts` afterwards (best
+  // effort — the stamp itself has already arrived even if the note cannot be written).
+  async function giftStamp(stampId, to, seen) {
+    ready();
+    if (Number(seen) > 0 && window.StudyPoints?.flush) {
+      try {
+        await Promise.race([window.StudyPoints.flush(), new Promise((resolve) => setTimeout(resolve, 6000))]);
+      } catch {}
+    }
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await giftStampOnce(stampId, to, seen);
+      } catch (error) {
+        if (error?.code === "aborted" && attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1) + Math.random() * 300));
+          continue;
+        }
+        throw friendly(error);
+      }
+    }
+  }
+  async function giftStampOnce(stampId, to, seen) {
+    ready();
+    const SM = window.StampsModel;
+    if (!SM) throw Error("スタンプを使えません。");
+    const me = uid(),
+      at = Date.now();
+    let written = null,
+      key = "";
+    const value = await window.fbRunTransaction(window.db, async (tx) => {
+      const stampDoc = window.fbDoc(window.db, "stamps", stampId),
+        boxDoc = window.fbDoc(window.db, "users", to, "stampBox", "main");
+      const stampSnap = await tx.get(stampDoc);
+      const stamp = stampSnap.exists() ? SM.clean(stampSnap.data(), stampId) : null;
+      const [boxSnap, walletSnap] = [await tx.get(boxDoc), await tx.get(walletRef(me))];
+      const ownerSnap = stamp ? await tx.get(window.fbDoc(window.db, "users", stamp.ownerId)) : null;
+      const recipientSnap = await tx.get(window.fbDoc(window.db, "users", to));
+      const recipientOwned = SM.box(boxSnap.exists() ? boxSnap.data().ids : []),
+        wallet = walletSnap.exists() ? walletSnap.data() : {},
+        have = Number(wallet.balance) || 0;
+      const price = SM.checkGift({ stamp, id: stampId, me, to, recipientOwned, seen, balance: have, ownerGone: !ownerSnap || !ownerSnap.exists() || !!ownerSnap.data()?.deleted, recipientGone: !recipientSnap.exists() || !!recipientSnap.data()?.deleted });
+      let paid = null;
+      if (price > 0) {
+        key = L.pairKey(me, stamp.ownerId);
+        const pairSnap = await tx.get(pairRef(key));
+        const record = L.send(pairSnap.exists() ? pairSnap.data() : null, { id: newId(), from: me, to: stamp.ownerId, amount: price, kind: "give", note: "スタンプ「" + stamp.name + "」のプレゼント", at });
+        written = shell(record, me, stamp.ownerId, stamp.ownerName);
+        tx.set(pairRef(key), written);
+        touch(tx, me, stamp.ownerId, stamp.ownerName, key, at);
+        paid = walletWrite(tx, me, wallet, have - price);
+      }
+      tx.set(boxDoc, { ids: [...recipientOwned, stampId], updatedAt: at }, { merge: true });
+      tx.set(stampDoc, { sales: stamp.sales + 1 }, { merge: true });
+      return paid;
+    });
+    if (written) remember(key, written);
+    after(value);
+    try {
+      await window.fbSetDoc(window.fbDoc(window.db, "stampGifts", newId()), { from: me, to, stampId, at, seen: false });
+    } catch {}
+  }
   // ---- Stamp approval ---------------------------------------------------------------------------------
   // Sending a stamp in for approval (new, or a changed picture / a higher price) holds the cost: the part of the price not
   // paid yet leaves the maker's wallet at once, as a "give" to the 運営 (which nobody collects). If the 運営 approves it stays
@@ -1313,5 +1375,5 @@
     });
     window.addEventListener("cloud-quota-paused", stopInbox);
   });
-  window.PointLoans = Object.freeze({ open, person, send, ask, talk, sendStamp, unsend, buyStamp, submitStamp, reviewStamp, pay, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
+  window.PointLoans = Object.freeze({ open, person, send, ask, talk, sendStamp, unsend, buyStamp, giftStamp, submitStamp, reviewStamp, pay, grant, adminLedger, adminHistory, closeRequest, claim, collect, owe, CASINO, ADMIN, close: closeDialog });
 })();

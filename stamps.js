@@ -467,6 +467,24 @@
     make.type = "button";
     make.onclick = () => create_((note) => store(onChange, note));
     body.append(make);
+    // Gifts that arrived for me: a small banner, marked seen once shown (best effort).
+    (async () => {
+      try {
+        const snap = await window.fbGetDocs(window.fbQuery(window.fbCollection(window.db, "stampGifts"), window.fbWhere("to", "==", me), window.fbLimit(20)));
+        const gifts = [];
+        snap.forEach((d) => {
+          const g = d.data();
+          if (g && !g.seen) gifts.push(d.ref);
+        });
+        if (!gifts.length || !body.isConnected) return;
+        body.insertBefore(node("p", "stamps-gift-banner", "🎁 スタンプのプレゼントが " + gifts.length + " 件届いています。「自分のスタンプ」に入っています。"), body.children[1] || null);
+        for (const ref of gifts) {
+          try {
+            await window.fbSetDoc(ref, { seen: true }, { merge: true });
+          } catch {}
+        }
+      } catch {}
+    })();
     let owned = [];
     try {
       owned = await mine();
@@ -525,6 +543,63 @@
             buy.textContent = "買う";
           }
         }, "stamps-buy");
+        // Gifting: buy the stamp for a friend both ways. Pick the friend in the card, then press
+        // once more to send (the same two-step as buying).
+        let giftBox = null,
+          giftArmed = "";
+        button("贈る", async () => {
+          if (giftBox) {
+            giftBox.remove();
+            giftBox = null;
+            return;
+          }
+          giftBox = node("div", "stamps-gift-picker");
+          giftBox.append(node("small", "", "お互いフレンドから選んでください"));
+          li.append(giftBox);
+          let ids = [];
+          try {
+            ids = await mutualFriendIds();
+          } catch {}
+          if (!giftBox.isConnected) return;
+          if (!ids.length) {
+            giftBox.replaceChildren(node("small", "", "お互いフレンドがいません。"));
+            return;
+          }
+          const names = new Map((typeof myFriendList !== "undefined" && Array.isArray(myFriendList) ? myFriendList : []).map((f) => [String(f?.code || ""), f?.name || String(f?.code || "")]));
+          for (const fid of ids) {
+            const pick = node("button", "", names.get(fid) || fid);
+            pick.type = "button";
+            pick.onclick = async () => {
+              if (giftArmed !== fid) {
+                giftArmed = fid;
+                pick.textContent = (names.get(fid) || fid) + "さんに " + priceText(stamp) + " で贈る（もう一度）";
+                say(status, "「" + stamp.name + "」を " + (names.get(fid) || fid) + " さんに " + priceText(stamp) + " で贈ります。もう一度押すと贈れます。");
+                setTimeout(() => {
+                  if (giftArmed === fid) {
+                    giftArmed = "";
+                    pick.textContent = names.get(fid) || fid;
+                  }
+                }, 10000);
+                return;
+              }
+              pick.disabled = true;
+              say(status, "贈っています…（数秒かかることがあります）");
+              try {
+                await window.PointLoans.giftStamp(stamp.id, fid, stamp.price);
+                say(status, "「" + stamp.name + "」を " + (names.get(fid) || fid) + " さんに贈りました。");
+                giftBox?.remove();
+                giftBox = null;
+                onChange?.();
+              } catch (error) {
+                say(status, error?.message || "贈れませんでした。", true);
+                pick.disabled = false;
+                giftArmed = "";
+                pick.textContent = names.get(fid) || fid;
+              }
+            };
+            giftBox.append(pick);
+          }
+        }, "stamps-gift");
       }
       if (mineStamp && stamp.status !== "stopped" && stamp.status !== "deleted") {
         if (stamp.review === "pending" || stamp.status === "pending") {

@@ -357,6 +357,11 @@ span.talk-line-avatar.talk-initial{display:grid;place-items:center;font-size:13p
 .stamps-actions{display:flex;flex-direction:column;gap:5px;margin-top:4px;}
 .stamps-actions button{min-height:34px;border-radius:10px;font-size:12px;}
 .stamps-buy{background:#d5bf86;color:#111c2c;border:0;font-weight:700;}
+.stamps-gift{background:rgba(167,139,250,.16);color:#d6c9ff;border:1px solid rgba(167,139,250,.45);font-weight:700;}
+.stamps-gift-picker{display:flex;flex-direction:column;gap:5px;margin-top:6px;padding:8px;border-radius:12px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.3);}
+.stamps-gift-picker small{color:#c1c6ce;font-size:11px;}
+.stamps-gift-picker button{min-height:32px;border-radius:9px;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#eef1ff;border:1px solid rgba(255,255,255,.14);}
+.stamps-gift-banner{margin:0 0 10px;padding:9px 12px;border-radius:12px;background:rgba(251,191,36,.13);border:1px solid rgba(251,191,36,.4);color:#fde9b8;font-size:12px;font-weight:700;}
 .stamps-danger{border-color:#e0584a;color:#ffb3a6;}
 .stamps-report{opacity:.7;}
 .stamps-field{display:flex;flex-direction:column;gap:4px;font-size:13px;}

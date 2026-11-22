@@ -170,6 +170,9 @@
       ],
       ["理解度の記録", later(window.LearningRankingModel.wordCount(ranking) + "語")],
       ["フラッシュ", later(window.LearningRankingModel.flashCount(ranking) + "回")],
+      ...(person.id !== account && window.DuelRecords?.get(person.id)
+        ? [["対戦成績", (() => { const r = window.DuelRecords.get(person.id); return r.w + "勝" + r.l + "敗" + (r.d ? r.d + "分" : ""); })()]]
+        : []),
     ].forEach(([label, value]) => {
       const dt = document.createElement("dt"),
         dd = document.createElement("dd");

@@ -1322,6 +1322,19 @@
       localStorage.setItem("aiglish_casino_moved_" + key, "1");
     } catch {}
     move(key, delta);
+    // The head-to-head record rides along with the money: once per round, on this device.
+    if ((part === "pay" || part === "settled") && window.DuelRecords) {
+      const me = uid(),
+        otherId = Object.keys(room.players || {}).find((id) => id !== me);
+      if (otherId)
+        window.DuelRecords.record({
+          key,
+          opponent: otherId,
+          name: room.players[otherId]?.name || "",
+          result: part === "settled" ? "lose" : delta > room.bet ? "win" : "draw",
+          at: Date.now(),
+        });
+    }
   }
   function drawDuel() {
     const { room, body } = duel,

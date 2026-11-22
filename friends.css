@@ -1,0 +1,23 @@
+/* Friends screen (friends.js): weekly ranking among friends + the friend list. */
+.fr-body { display: grid; gap: 18px; }
+.fr-wait { margin: 8px 0; color: var(--sb-muted, #9aa7bd); font-size: 13px; }
+.fr-title { margin: 0 0 8px; font-size: 13px; font-weight: 900; letter-spacing: .04em; color: #e8ecf6; }
+.fr-rank { display: grid; gap: 4px; }
+.fr-rank-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .06); }
+.fr-rank-row.is-me { background: rgba(167, 139, 250, .14); border-color: rgba(167, 139, 250, .4); }
+.fr-place { flex: 0 0 26px; text-align: center; font-weight: 900; font-size: 14px; }
+.fr-rank-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 700; }
+.fr-rank-time { font-size: 13px; color: #c4b5fd; font-variant-numeric: tabular-nums; }
+.fr-list { display: grid; gap: 6px; }
+.fr-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, .07); background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02)); color: inherit; cursor: pointer; }
+.fr-row:active { transform: scale(.99); }
+.fr-text { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.fr-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.fr-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 800; }
+.fr-badge { flex: 0 0 auto; font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 999px; letter-spacing: .03em; }
+.fr-badge.is-studying { background: #34d399; color: #032117; }
+.fr-badge.is-online { background: rgba(52, 211, 153, .18); color: #6ee7b7; border: 1px solid rgba(52, 211, 153, .45); }
+.fr-badge.is-mutual { background: rgba(251, 191, 36, .16); color: #fcd34d; border: 1px solid rgba(251, 191, 36, .4); }
+.fr-meta { font-size: 11px; color: #9aa7bd; font-variant-numeric: tabular-nums; }
+.fr-duel { font-size: 11px; color: #fda4af; font-weight: 700; }
+.fr-note { margin: 0; font-size: 11px; color: #9aa7bd; }

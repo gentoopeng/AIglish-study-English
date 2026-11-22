@@ -2001,6 +2001,16 @@ html body .flashcard-face-front,html body .flashcard-face-back{outline:2px solid
 .sidebar-menu-list .sidebar-item{margin:0;width:100%;padding:17px 18px;gap:14px;border-radius:12px;font-size:14px;}
 .sidebar-menu-list .sidebar-item span{flex:1;text-align:left;}
 .sidebar-menu-list .sidebar-item:hover{background:rgba(255,255,255,.06);}
+.sidebar-menu-list .sidebar-item svg{color:#a5b4d4;flex:0 0 auto;}
+.sidebar-menu-list .sidebar-item:hover svg{color:#e8ecf6;}
+.sidebar-menu-list .sidebar-item.is-shop svg{color:#fcd34d;}
+.sidebar-menu-list .sidebar-item.is-friends svg{color:#6ee7b7;}
+.header-points-stack{display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.15;margin-left:5px;}
+.header-points-stack #headerStudyPoints{margin-left:0;min-height:20px;}
+.header-bettable{font-size:9px;font-weight:700;color:#f0abfc;white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:.02em;}
+#settingsDialog .settings-nav-row{display:flex;align-items:center;gap:10px;width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.045);color:var(--text-main);font-size:13.5px;font-weight:700;cursor:pointer;text-align:left;}
+#settingsDialog .settings-nav-row b{margin-left:auto;color:#c4b5fd;font-weight:900;}
+#settingsDialog .settings-nav-row:active{transform:scale(.99);}
 .sidebar-menu-list .sidebar-item:active{transform:scale(.98);}
 .sidebar .sidebar-version{margin-top:auto;padding:20px 26px;}
 .menu-dialog{box-sizing:border-box;width:min(390px,calc(100vw - 32px));max-height:calc(100dvh - 48px);margin:auto;padding:22px;border:1px solid rgba(148,163,184,.3);border-radius:22px;background:#131d30;color:var(--text-main);overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.35);}

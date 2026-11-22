@@ -20,7 +20,21 @@
     } catch {
       el.textContent = "—pt";
     }
+    renderBettable();
   }
+  // Under the points: how much may still be bet today (the casino's allowance grows with study
+  // time, so this is refreshed on a slow timer too, not only when the balance moves).
+  function renderBettable() {
+    const el = document.getElementById("headerBettable");
+    if (!el) return;
+    let text = "";
+    try {
+      if (owner() !== "GUEST-000" && window.Casino?.allowance) text = "賭け あと" + Math.max(0, Math.floor(window.Casino.allowance())).toLocaleString("ja-JP") + "pt";
+    } catch {}
+    el.textContent = text;
+    el.style.display = text ? "" : "none";
+  }
+  setInterval(renderBettable, 30000);
   function close() {
     dialog?.close();
     dialog?.remove();
