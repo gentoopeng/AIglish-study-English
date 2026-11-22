@@ -386,9 +386,11 @@
     head.append(el("span", "sb-head-date", now.getMonth() + 1 + "/" + now.getDate() + " " + WEEK[now.getDay()]));
     const keep = host.offsetHeight;
     if (keep) host.style.minHeight = keep + "px";
-    // The planner (planner.js, 10.163) under the player card: the same node each time, so it keeps its state.
+    // The planner (planner.js, 10.163) at the bottom of the tab, as the player asked; its countdowns stay
+    // under the player card. Both are the same nodes each time, so they keep their state.
     const planner = root.Planner ? safe(() => root.Planner.card(), null) : null;
-    host.replaceChildren(...[head, hero(d), planner, pointsCard(d), studyCard(d), masteryCard(d)].filter(Boolean));
+    const countdown = root.Planner?.countdown ? safe(() => root.Planner.countdown(), null) : null;
+    host.replaceChildren(...[head, hero(d), countdown, pointsCard(d), studyCard(d), masteryCard(d), planner].filter(Boolean));
     host.style.minHeight = "";
     quiet = false;
     if (opts.quiet) return;
@@ -432,7 +434,12 @@
   // (The card scrolls inside its own view, not the page.)
   document.getElementById("view-status")?.addEventListener("scroll", () => (scrolledAt = performance.now()), { passive: true });
   if (active()) start();
-  root.addEventListener?.("learning-data-ready", () => active() && start({ quiet: !!document.querySelector("#statusBoard .sb-hero") && document.getElementById("view-status").scrollTop > 0 }));
+  // Books arriving in the background are not a reason to draw the card again with its entrance: that read as
+  // the screen refreshing itself. Only a real change in what the card shows redraws it, and always quietly.
+  root.addEventListener?.("learning-data-ready", () => {
+    if (!active() || signature() === last) return;
+    start({ quiet: true });
+  });
   setInterval(() => {
     if (!active() || document.visibilityState !== "visible" || document.hidden) return;
     // (Not while the player is scrolling: it waits until the page is still.)

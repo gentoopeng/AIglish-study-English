@@ -34,7 +34,10 @@ const { chromium } = require("playwright"),
     const card = page.locator(".sb-planner");
     await card.waitFor();
     // The work's test day counts down (the nearest test).
-    assert.match(await card.locator(".pl-countdown").innerText(), /あと10日[\s\S]*数学ワーク テスト/);
+    assert.match(await page.locator("#statusBoard .pl-countdown").innerText(), /あと10日[\s\S]*数学ワーク テスト/);
+    // The countdowns sit near the top on their own card; the calendar card is the board's last card.
+    assert.equal(await card.locator(".pl-countdown").count(), 0);
+    assert.equal(await page.evaluate(() => document.getElementById("statusBoard").lastElementChild.classList.contains("sb-planner")), true);
     // Write a test on a day through the form.
     await card.getByRole("button", { name: "＋ 書く" }).click();
     const form = page.locator("dialog[open] form.pl-form");
@@ -43,16 +46,16 @@ const { chromium } = require("playwright"),
     await form.locator("input[name=title]").fill("英単語テスト<b>");
     await form.locator("textarea[name=memo]").fill("範囲 1-9\n持ち物 赤シート");
     await form.getByRole("button", { name: "保存" }).click();
-    assert.match(await card.locator(".pl-countdown").first().innerText(), /あと3日[\s\S]*英単語テスト<b>/);
-    assert.match(await card.locator(".pl-countdown").nth(1).innerText(), /あと10日[\s\S]*数学ワーク テスト/);
+    assert.match(await page.locator("#statusBoard .pl-countdown").first().innerText(), /あと3日[\s\S]*英単語テスト<b>/);
+    assert.match(await page.locator("#statusBoard .pl-countdown").nth(1).innerText(), /あと10日[\s\S]*数学ワーク テスト/);
     // Picking with 📌: pin only the written test, and the countdown narrows to it.
     await card.locator(".pl-daybox .pl-pin").click();
-    assert.equal(await card.locator(".pl-countdown").count(), 1);
-    assert.match(await card.locator(".pl-countdown").innerText(), /あと3日[\s\S]*英単語テスト<b>/);
+    assert.equal(await page.locator("#statusBoard .pl-countdown").count(), 1);
+    assert.match(await page.locator("#statusBoard .pl-countdown").innerText(), /あと3日[\s\S]*英単語テスト<b>/);
     // Pin the work's test too (its day is +10): both come back.
     await card.locator(`.pl-day[data-date="${inDays(10)}"]`).click();
     await card.locator(".pl-daybox .pl-pin").click();
-    assert.equal(await card.locator(".pl-countdown").count(), 2);
+    assert.equal(await page.locator("#statusBoard .pl-countdown").count(), 2);
     assert.match(await card.locator(".pl-daybox").innerText(), /テスト[\s\S]*英単語テスト<b>[\s\S]*範囲 1-9\n持ち物 赤シート/);
     // Week and month.
     assert.equal(await card.locator(".pl-grid .pl-day").count(), 7);
