@@ -1,7 +1,8 @@
 // The study planner (10.163): what the player writes on days (tests, events, notes) and plans that spread a range
 // of a word book or a workbook over days ("problems 1–120 by the test"). Pure: no screen, no storage.
 //
-// data = { version: 1, events: [Event], plans: [Plan], checks: { "<planId>|<date>": { done, at } } }
+// data = { version: 1, events: [Event], plans: [Plan], checks: { "<planId>|<date>": { done, at } }, pinned: [eventId] }
+// `pinned` holds the ids of the tests the player picked for the "あと◯日" countdown (a work's test id works too).
 //   Event { id, date, kind: "test"|"event"|"note", title, memo, at, deleted? }
 //   Plan  { id, title, source: { type: "vocab"|"work"|"free", id, name }, from, to, start, end, at, deleted? }
 // Every item carries `at` (when it was last changed); two devices merge item by item, the newer one winning, and a
@@ -95,7 +96,8 @@
       known = new Set(plans.map((p) => p.id));
     // Checks of plans that are gone are dropped (a removed plan keeps its mark only for the merge).
     for (const k of Object.keys(checks)) if (!known.has(k.split("|")[0])) delete checks[k];
-    return { version: 1, events: keep(data?.events, cleanEvent, MAX_EVENTS), plans, checks };
+    const pinned = [...new Set((Array.isArray(data?.pinned) ? data.pinned : []).map((v) => text(v, 120)).filter(Boolean))].slice(0, 50);
+    return { version: 1, events: keep(data?.events, cleanEvent, MAX_EVENTS), plans, checks, pinned };
   }
   // Two copies (two devices): item by item, the newer one wins; a removal wins over an older change.
   function merge(a, b, now = Date.now()) {
@@ -103,7 +105,8 @@
       right = clean(b, now);
     const checks = { ...left.checks };
     for (const [key, value] of Object.entries(right.checks)) if (!checks[key] || value.at >= checks[key].at) checks[key] = value;
-    return clean({ events: [...left.events, ...right.events], plans: [...left.plans, ...right.plans], checks }, now);
+    // Picks have no clock of their own: a test picked on either device stays picked.
+    return clean({ events: [...left.events, ...right.events], plans: [...left.plans, ...right.plans], checks, pinned: [...left.pinned, ...right.pinned] }, now);
   }
   const live = (list) => list.filter((item) => !item.deleted);
   // A plan spread over its days: every day from start to end gets about the same share, the first days one more.
