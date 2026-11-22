@@ -141,6 +141,123 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") publish(true);
   });
+  document.addEventListener("learning-data-ready", schedule);
   setTimeout(() => publish(true), 15000);
   root.BookProgress.publish = publish;
+  root.BookProgress.summary = collect;
+
+  // ---- the open book: everyone's progress on it (10.175) ---------------------------
+  // A strip above the word list: my progress on this book and each friend's, from the
+  // summaries on their user documents. Matched by book id, so it lights up for books
+  // friends study under the same id (shared and system books).
+  const PEER_FIELDS = ["playerName", "avatar", "profileCustomizationJson", "bookProgressJson", "deleted"];
+  const peerCache = { at: 0, rows: [] };
+  async function fetchPeers() {
+    const now = Date.now();
+    if (now - peerCache.at < 60000) return peerCache.rows;
+    peerCache.at = now;
+    const ids = (typeof myFriendList !== "undefined" && Array.isArray(myFriendList) ? myFriendList : []).map((f) => String(f?.code || "")).filter((id) => id && id !== uid());
+    if (!ids.length || uid() === "GUEST-000") {
+      peerCache.rows = [];
+      return peerCache.rows;
+    }
+    let docs = null;
+    try {
+      docs = (await root.UserDirectory?.byIds?.(ids, { fields: PEER_FIELDS })) || null;
+    } catch {
+      docs = null;
+    }
+    if (!Array.isArray(docs)) {
+      docs = [];
+      for (const id of ids) {
+        try {
+          const snap = await root.fbGetDoc(root.fbDoc(root.db, "users", id));
+          if (snap.exists()) docs.push({ id, data: snap.data() });
+        } catch {}
+      }
+    }
+    peerCache.rows = docs
+      .filter((d) => !d.data?.deleted)
+      .map((d) => ({ id: d.id, name: d.data.playerName || d.id, avatar: d.data.avatar || "", custom: d.data.profileCustomizationJson, books: parse(d.data) }));
+    return peerCache.rows;
+  }
+
+  function chip(label, book, mine) {
+    const el = document.createElement("span");
+    el.className = "bkp-chip" + (mine ? " is-me" : "");
+    const name = document.createElement("span");
+    name.className = "bkp-chip-name";
+    name.textContent = label;
+    const bar = document.createElement("span");
+    bar.className = "bkp-bar";
+    const fill = document.createElement("i");
+    fill.style.width = book.pct + "%";
+    bar.append(fill);
+    const pct = document.createElement("span");
+    pct.className = "bkp-chip-pct";
+    pct.textContent = book.pct + "%";
+    el.append(name, bar, pct);
+    el.title = label + "：" + book.done + "/" + book.total + "語";
+    return el;
+  }
+
+  let stripBook = null,
+    stripAt = 0,
+    stripBusy = false;
+  async function renderStrip() {
+    const container = document.getElementById("vocabListContainer");
+    if (!container) return;
+    const bookId = typeof currentTextbook !== "undefined" ? currentTextbook : null;
+    if (!bookId) return;
+    if (stripBusy) return;
+    // Same book, drawn recently: leave it (the poll redraws every 30s at most).
+    if (document.getElementById("bookPeersBar") && stripBook === String(bookId) && Date.now() - stripAt < 30000) return;
+    stripBusy = true;
+    try {
+      publish(false);
+      const own = collect().find((b) => b.id === String(bookId));
+      const peers = (await fetchPeers())
+        .map((p) => ({ peer: p, book: p.books.find((b) => b.id === String(bookId)) }))
+        .filter((x) => x.book)
+        .sort((a, b) => b.book.pct - a.book.pct);
+      let strip = document.getElementById("bookPeersBar");
+      if (!own && !peers.length) {
+        strip?.remove();
+        stripBook = null;
+        return;
+      }
+      if (!strip) {
+        strip = document.createElement("section");
+        strip.id = "bookPeersBar";
+        strip.className = "bkp-strip";
+        container.before(strip);
+      }
+      strip.replaceChildren();
+      const label = document.createElement("span");
+      label.className = "bkp-label";
+      label.textContent = "みんなの進み具合";
+      strip.append(label);
+      if (own) strip.append(chip("あなた", own, true));
+      for (const x of peers.slice(0, 6)) strip.append(chip(x.peer.name, x.book, false));
+      if (peers.length > 6) {
+        const more = document.createElement("span");
+        more.className = "bkp-more";
+        more.textContent = "+" + (peers.length - 6) + "人";
+        strip.append(more);
+      }
+      stripBook = String(bookId);
+      stripAt = Date.now();
+    } catch {
+    } finally {
+      stripBusy = false;
+    }
+  }
+  setInterval(() => {
+    const bookId = typeof currentTextbook !== "undefined" ? String(currentTextbook || "") : "";
+    if (document.visibilityState === "visible" && bookId) renderStrip();
+  }, 4000);
+  if (typeof MutationObserver !== "undefined" && document.body)
+    new MutationObserver(() => {
+      if (!document.getElementById("bookPeersBar")) renderStrip();
+    }).observe(document.body, { childList: true, subtree: true });
 })(typeof window !== "undefined" ? window : globalThis);
