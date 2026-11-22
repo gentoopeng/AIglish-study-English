@@ -57,7 +57,35 @@
       .sort((a, b) => (b.week || 0) - (a.week || 0) || (b.today || 0) - (a.today || 0) || String(a.name).localeCompare(String(b.name), "ja"))
       .map((entry, i) => ({ ...entry, place: i + 1 }));
   }
-  const FriendsModel = { studyingNow, rankRows };
+  // Friend search by name (10.173): the directory the people tab loads (players active
+  // this week, plus friends) is matched by name as the player types; an ID also matches.
+  // Exact name first, then names starting with the query, then names containing it,
+  // then the ID; ties go to whoever was active most recently. At most `limit` rows.
+  const normalizeText = (value) => String(value || "").toLowerCase().replace(/[\s　]+/g, "");
+  function nameCandidates(people, query, me, limit = 8) {
+    const q = normalizeText(query);
+    if (!q) return [];
+    const seen = new Set(),
+      hits = [];
+    for (const p of Array.isArray(people) ? people : []) {
+      if (!p || !p.id || p.id === me || seen.has(p.id)) continue;
+      seen.add(p.id);
+      const name = normalizeText(p.name),
+        id = String(p.id).toLowerCase();
+      let rank = -1;
+      if (name === q) rank = 0;
+      else if (name.startsWith(q)) rank = 1;
+      else if (name.includes(q)) rank = 2;
+      else if (id === q) rank = 3;
+      else if (id.startsWith(q) && q.length >= 3) rank = 4;
+      if (rank < 0) continue;
+      hits.push({ ...p, rank });
+    }
+    return hits
+      .sort((a, b) => a.rank - b.rank || (b.timestamp || 0) - (a.timestamp || 0) || String(a.name).localeCompare(String(b.name), "ja"))
+      .slice(0, limit);
+  }
+  const FriendsModel = { studyingNow, rankRows, normalizeText, nameCandidates };
 
   const api = { DuelStore, FriendsModel };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
@@ -119,21 +147,85 @@
     };
   }
 
-  // Adding, without leaving this screen: search by ID, see who it is, then add.
+  // Adding, without leaving this screen (10.173): type a name and candidates appear
+  // as you type (from the people directory: players active this week and friends);
+  // an exact ID still looks the player up directly, for anyone the directory misses.
   function addSection(dialog) {
     const box = node("section", "fr-add");
     box.append(node("h3", "fr-title", "フレンドを追加"));
     const form = node("div", "fr-add-form");
     const input = node("input", "fr-add-input");
     input.type = "text";
-    input.placeholder = "相手のID（相手のプロフィールに出ています）";
-    input.setAttribute("aria-label", "追加したい相手のID");
+    input.placeholder = "名前かIDを入力";
+    input.setAttribute("aria-label", "追加したい相手の名前かID");
     const go = node("button", "fr-add-go", "探す");
     go.type = "button";
     form.append(input, go);
+    box.append(form, node("p", "fr-note", "名前を入れると候補が出ます（最近遊んだ人から探します）。候補にない人は、IDでも探せます。"));
+    const candidates = node("div", "fr-candidates");
+    candidates.setAttribute("aria-live", "polite");
     const result = node("div", "fr-add-result");
-    box.append(form, result);
-    const search = async () => {
+    box.append(candidates, result);
+    let loading = false;
+    const candidateRow = (p) => {
+      const row = node("div", "fr-found");
+      const text = node("span", "fr-text");
+      const nameEl = node("span", "fr-name-text");
+      root.RankingVisuals.name(nameEl, p.name, p.custom);
+      text.append(nameEl, node("small", "fr-meta", p.id + (p.addedMe ? " ・ あなたを追加しています" : "")));
+      row.append(root.RankingVisuals.avatar(p.avatar, p.name, p.custom), text);
+      if (p.friend) row.append(node("span", "fr-badge is-mutual", "フレンド済み"));
+      else {
+        const add = node("button", "fr-add-btn", "フレンドに追加");
+        add.type = "button";
+        add.onclick = async () => {
+          add.disabled = true;
+          try {
+            const name = await root.People.addFriend(p.id);
+            result.replaceChildren(node("small", "fr-meta", "「" + name + "」を追加しました。"));
+            candidates.replaceChildren();
+            setTimeout(() => dialog.isConnected && open(), 700);
+          } catch (error) {
+            result.replaceChildren(node("small", "fr-meta", error?.message || "追加できませんでした。"));
+            add.disabled = false;
+          }
+        };
+        row.append(add);
+      }
+      return row;
+    };
+    const currentCandidates = () => FriendsModel.nameCandidates(root.People?.list?.() || [], input.value, uid());
+    const renderCandidates = () => {
+      const q = input.value.trim();
+      if (!q) {
+        candidates.replaceChildren();
+        return;
+      }
+      const hits = currentCandidates();
+      if (hits.length) {
+        candidates.replaceChildren(...hits.map(candidateRow));
+        return;
+      }
+      // Nobody loaded yet: load the directory once, then show the candidates.
+      if (!loading && !(root.People?.list?.().length) && typeof root.People?.refresh === "function") {
+        loading = true;
+        candidates.replaceChildren(node("small", "fr-meta", "探しています…"));
+        Promise.resolve(root.People.refresh())
+          .catch(() => {})
+          .finally(() => {
+            loading = false;
+            if (dialog.isConnected) renderCandidates();
+          });
+        return;
+      }
+      candidates.replaceChildren(node("small", "fr-meta", "候補が見つかりません。「探す」でIDとして探せます。"));
+    };
+    let debounce = null;
+    input.addEventListener("input", () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(renderCandidates, 200);
+    });
+    const searchById = async () => {
       const id = input.value.trim().toUpperCase();
       result.replaceChildren();
       if (!id) return;
@@ -145,7 +237,7 @@
       try {
         const snap = await root.fbGetDoc(root.fbDoc(root.db, "users", id));
         if (!snap.exists() || snap.data()?.deleted) {
-          result.append(node("small", "fr-meta", "このIDのユーザーは見つかりません。"));
+          result.append(node("small", "fr-meta", "見つかりませんでした。名前かIDを確認してください。"));
           return;
         }
         const p = person(id, snap.data(), uid(), Date.now());
@@ -179,9 +271,17 @@
         go.disabled = false;
       }
     };
-    go.onclick = search;
+    const goSearch = () => {
+      // Name candidates on screen are the answer; with none, treat the input as an ID.
+      if (currentCandidates().length) {
+        renderCandidates();
+        return;
+      }
+      searchById();
+    };
+    go.onclick = goSearch;
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") search();
+      if (e.key === "Enter") goSearch();
     });
     return box;
   }
