@@ -27,6 +27,7 @@
   let notices = [],
     dialog = null,
     spinning = false;
+  const expanded = { ops: false, own: false };
 
   // ---- What this device has seen ---------------------------------------------------------
   const store = {
@@ -209,37 +210,47 @@
     const ownSeen = window.PersonalNotices?.seen(uid()) || 0;
     const draw = () => {
       const seenAt = Number(store.get(seenKey)) || 0;
-      // The notices first (they were at the bottom), then today's bonus and what is for this player.
-      body.replaceChildren();
-      const list = node("ol", "notice-list");
-      list.setAttribute("aria-label", "運営からのお知らせ");
-      const all = shown();
-      for (const n of all) {
-        const li = node("li", (n.at > seenAt ? "is-new" : "") + (n.release ? " is-release" : ""));
+      // The bonus first so it is always in reach; each section shows only its newest
+      // notice, the rest unfold on demand (10.178).
+      body.replaceChildren(bonusCard());
+      const item = (n, isNew, extra) => {
+        const li = node("li", (isNew ? "is-new" : "") + (extra || ""));
         const head = node("p", "notice-head");
         head.append(node("strong", "", n.title), node("time", "", when(n.at)));
         li.append(head);
         if (n.body) li.append(node("p", "notice-text", n.body));
-        list.append(li);
-      }
-      if (!all.length) list.append(node("li", "notice-empty", "運営からのお知らせはまだありません。"));
-      body.append(node("h3", "", "運営から"), list, bonusCard());
+        return li;
+      };
+      const section = (title, label, items, key, render) => {
+        body.append(node("h3", "", title));
+        const list = node("ol", "notice-list");
+        list.setAttribute("aria-label", label);
+        if (!items.length) {
+          list.append(node("li", "notice-empty", "運営からのお知らせはまだありません。"));
+          body.append(list);
+          return;
+        }
+        list.append(render(items[0]));
+        body.append(list);
+        if (items.length < 2) return;
+        const rest = node("ol", "notice-list notice-more");
+        rest.setAttribute("aria-label", label);
+        for (const n of items.slice(1)) rest.append(render(n));
+        rest.hidden = !expanded[key];
+        const toggle = node("button", "notice-more-btn", expanded[key] ? "閉じる" : "以前のお知らせ（" + (items.length - 1) + "件）を見る");
+        toggle.type = "button";
+        toggle.setAttribute("aria-expanded", String(!!expanded[key]));
+        toggle.onclick = () => {
+          expanded[key] = !expanded[key];
+          draw();
+        };
+        body.append(toggle, rest);
+      };
+      section("運営から", "運営からのお知らせ", shown(), "ops", (n) => item(n, n.at > seenAt, n.release ? " is-release" : ""));
       // For this player: points that came in, newest first; new ones are marked until the box is
       // closed (they count as read once it has been opened).
       const mine = window.PersonalNotices?.list(uid()) || [];
-      if (mine.length) {
-        const own = node("ol", "notice-list notice-own");
-        own.setAttribute("aria-label", "あなた宛てのお知らせ");
-        for (const n of mine) {
-          const li = node("li", n.at > ownSeen ? "is-new" : "");
-          const head = node("p", "notice-head");
-          head.append(node("strong", "", n.title), node("time", "", when(n.at)));
-          li.append(head);
-          if (n.body) li.append(node("p", "notice-text", n.body));
-          own.append(li);
-        }
-        body.append(node("h3", "", "あなたへ"), own);
-      }
+      if (mine.length) section("あなたへ", "あなた宛てのお知らせ", mine, "own", (n) => item(n, n.at > ownSeen, ""));
     };
     draw();
     await load();
