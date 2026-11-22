@@ -119,6 +119,112 @@
     };
   }
 
+  // Adding, without leaving this screen: search by ID, see who it is, then add.
+  function addSection(dialog) {
+    const box = node("section", "fr-add");
+    box.append(node("h3", "fr-title", "フレンドを追加"));
+    const form = node("div", "fr-add-form");
+    const input = node("input", "fr-add-input");
+    input.type = "text";
+    input.placeholder = "相手のID（相手のプロフィールに出ています）";
+    input.setAttribute("aria-label", "追加したい相手のID");
+    const go = node("button", "fr-add-go", "探す");
+    go.type = "button";
+    form.append(input, go);
+    const result = node("div", "fr-add-result");
+    box.append(form, result);
+    const search = async () => {
+      const id = input.value.trim().toUpperCase();
+      result.replaceChildren();
+      if (!id) return;
+      if (id === uid()) {
+        result.append(node("small", "fr-meta", "自分のIDです。"));
+        return;
+      }
+      go.disabled = true;
+      try {
+        const snap = await root.fbGetDoc(root.fbDoc(root.db, "users", id));
+        if (!snap.exists() || snap.data()?.deleted) {
+          result.append(node("small", "fr-meta", "このIDのユーザーは見つかりません。"));
+          return;
+        }
+        const p = person(id, snap.data(), uid(), Date.now());
+        const row = node("div", "fr-found");
+        const text = node("span", "fr-text");
+        const nameEl = node("span", "fr-name-text");
+        root.RankingVisuals.name(nameEl, p.name, p.custom);
+        text.append(nameEl, node("small", "fr-meta", id + (p.mutual ? " ・ あなたを追加しています" : "")));
+        row.append(root.RankingVisuals.avatar(p.avatar, p.name, p.custom), text);
+        const mine = (typeof myFriendList !== "undefined" && Array.isArray(myFriendList) ? myFriendList : []).some((f) => f.code === id);
+        if (mine) row.append(node("span", "fr-badge is-mutual", p.mutual ? "お互いフレンド" : "フレンド済み"));
+        else {
+          const add = node("button", "fr-add-btn", "フレンドに追加");
+          add.type = "button";
+          add.onclick = async () => {
+            add.disabled = true;
+            try {
+              const name = await root.People.addFriend(id);
+              result.replaceChildren(node("small", "fr-meta", "「" + name + "」を追加しました。"));
+              setTimeout(() => dialog.isConnected && open(), 700);
+            } catch (error) {
+              result.replaceChildren(node("small", "fr-meta", error?.message || "追加できませんでした。"));
+            }
+          };
+          row.append(add);
+        }
+        result.replaceChildren(row);
+      } catch {
+        result.append(node("small", "fr-meta", "通信できませんでした。"));
+      } finally {
+        go.disabled = false;
+      }
+    };
+    go.onclick = search;
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") search();
+    });
+    return box;
+  }
+
+  // People whose friend list has me but whom I have not added yet: one tap to add back. From the
+  // people tab's loaded list; when that has not loaded, a way to go and look instead.
+  function addedMeSection(dialog) {
+    const list = root.People?.list?.() || [],
+      them = list.filter((p) => p.addedMe && !p.friend && p.id !== uid());
+    if (!them.length && list.length) return null;
+    const box = node("section", "fr-addedme");
+    box.append(node("h3", "fr-title", "あなたを追加した人"));
+    if (!them.length) {
+      const go = node("button", "fr-add-btn", "ユーザータブで探す");
+      go.type = "button";
+      go.onclick = () => {
+        root.closeLibraryDialog?.();
+        root.switchTab?.("community");
+      };
+      box.append(node("p", "fr-wait", "まだ読み込んでいません。ユーザータブを開くと、追加してくれた人がここに出ます。"), go);
+      return box;
+    }
+    for (const p of them) {
+      const row = node("div", "fr-found");
+      const text = node("span", "fr-text");
+      text.append(node("span", "fr-name-text", p.name), node("small", "fr-meta", "あなたをフレンドに追加しています"));
+      const add = node("button", "fr-add-btn", "追加する");
+      add.type = "button";
+      add.onclick = async () => {
+        add.disabled = true;
+        try {
+          await root.People.addFriend(p.id);
+          setTimeout(() => dialog.isConnected && open(), 300);
+        } catch {
+          add.disabled = false;
+        }
+      };
+      row.append(root.RankingVisuals.avatar(p.avatar, p.name), text, add);
+      box.append(row);
+    }
+    return box;
+  }
+
   async function open() {
     const me = uid();
     const dialog = root.openLibraryDialog(
@@ -128,8 +234,17 @@
     const body = dialog.querySelector(".fr-body");
     const say = (text) => body.replaceChildren(node("p", "fr-wait", text));
     if (me === "GUEST-000") return say("ログインするとフレンドが見られます。");
+    body.replaceChildren();
+    body.append(addSection(dialog));
+    const addedMe = addedMeSection(dialog);
+    if (addedMe) body.append(addedMe);
     const friendIds = (typeof myFriendList !== "undefined" && Array.isArray(myFriendList) ? myFriendList : []).map((f) => String(f?.code || "")).filter(Boolean);
-    if (!friendIds.length) return say("まだフレンドがいません。ユーザーのプロフィールや、コミュニティのID検索から追加できます。");
+    if (!friendIds.length) {
+      body.append(node("p", "fr-wait", "まだフレンドがいません。IDで探すか、あなたを追加した人から追加できます。"));
+      return;
+    }
+    const wait = node("p", "fr-wait", "読み込んでいます…");
+    body.append(wait);
     let docs = [];
     try {
       docs = (await root.UserDirectory?.byIds?.(friendIds, { fields: FIELDS })) || null;
@@ -154,8 +269,11 @@
       const id = String(f?.code || "");
       if (id && !byId.has(id)) people.push({ id, name: f.name || id, avatar: f.customAvatar || "", mutual: false, lastActive: 0, online: false, studying: false, today: 0, week: 0, total: 0, points: 0 });
     }
-    if (!people.length) return say("フレンドの情報を読み込めませんでした。");
-    body.replaceChildren();
+    wait.remove();
+    if (!people.length) {
+      body.append(node("p", "fr-wait", "フレンドの情報を読み込めませんでした。"));
+      return;
+    }
 
     // This week's ranking, me included.
     const myStats = root.StudyTimeModel.readStats({ userStats: typeof userStats === "object" ? userStats : {} });

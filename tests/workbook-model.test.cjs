@@ -57,3 +57,14 @@ test('invalid or repeated subquestion references reject the entire import withou
 });
 
 test('empty legacy group headers are hidden without deleting records or hiding real parent work',()=>{const blank=model.cleanUnit({num:2},2),child=model.cleanUnit({num:2,subNumber:1,q:'解く問題'},2),work={from:1,to:3,units:[blank,child,model.cleanUnit({num:3},3)]};assert.equal(model.visibleUnits(work).length,2);assert.equal(work.units.length,3);for(const fields of [{q:'共通条件'},{ans:'答え'},{note:'自分のメモ'},{status:'ok'},{nextReview:now},{review:{mode:'none'}}]){Object.assign(blank,model.cleanUnit({num:2,...fields},2));assert.equal(model.visibleUnits(work).length,3);}});
+
+test('a saved AI explanation survives cleaning; junk and oversize do not',()=>{
+ const u=model.cleanUnit({num:3,ai:{text:'解説です',q:'問題',ans:'答え',at:123}},3);
+ assert.equal(u.ai.text,'解説です');assert.equal(u.ai.q,'問題');assert.equal(u.ai.ans,'答え');assert.equal(u.ai.at,123);
+ assert.equal(model.cleanUnit({num:3,ai:{text:'  '}},3).ai,null);
+ assert.equal(model.cleanUnit({num:3,ai:'文字列'},3).ai,null);
+ assert.equal(model.cleanUnit({num:3,ai:{text:'x'.repeat(20001)}},3).ai,null);
+ assert.equal(model.cleanUnit({num:3},3).ai,null);
+ const pub=model.publicContent({id:'w',name:'n',units:[model.cleanUnit({num:1,ai:{text:'秘',q:'',ans:'',at:1}},1)]});
+ assert.equal('ai' in pub.units[0],false,'public copies never carry the explanation');
+});

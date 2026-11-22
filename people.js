@@ -325,6 +325,8 @@
       avatar: typeof data.avatar === "string" && data.avatar.length <= 48000 ? data.avatar : "",
       timestamp: time,
       friend,
+      // Their friend list has me: the friends screen offers to add them back.
+      addedMe: (Array.isArray(data.friendList) ? data.friendList : []).some((f) => String(f?.code ?? f ?? "") === uid()),
       today: window.StudyTimeModel.rankingSeconds(stats, "daily", Date.now()),
       doc: { lastActiveAt: time },
     };
@@ -505,6 +507,30 @@
       detailJobs.clear();
     },
     list: () => (owner === uid() ? users.map((person) => ({ ...person })) : []),
+    // Add by id (the friends screen's search): the same entry and saving as the profile's button.
+    // Returns the friend's name; throws with the reason when it cannot be done.
+    async addFriend(id) {
+      id = String(id || "").trim().toUpperCase();
+      if (!id || id === uid()) throw Error("そのIDは追加できません。");
+      if (isFriend(id)) return (myFriendList.find((f) => f.code === id)?.name || id);
+      if (!window.db || !window.fbGetDoc) throw Error("通信できませんでした。電波を確認してください。");
+      const snap = await detailSnapshot(id);
+      if (!snap.exists() || snap.data()?.deleted) throw Error("このIDのユーザーは見つかりません。");
+      const doc = snap.data();
+      myFriendList.push({
+        code: id,
+        name: doc.playerName || id,
+        title: doc.selectedTitle || "称号なし",
+        avatar: "👤",
+        customAvatar: doc.avatar || "",
+        level: 1,
+        studyTime: 0,
+        lastLoginStr: "",
+        timestamp: Date.now(),
+      });
+      await saveFriends();
+      return doc.playerName || id;
+    },
     // Another signed-in player opens as a talk (point-loans.js), with the profile a tap away;
     // this player, a guest, or { profile: true } opens the profile.
     open(id, options) {

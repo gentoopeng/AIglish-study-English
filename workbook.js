@@ -32,6 +32,14 @@
     function addDays(time, days) {
         const d = new Date(time); d.setDate(d.getDate() + days); d.setHours(0, 0, 0, 0); return d.getTime();
     }
+    // A saved AI explanation rides on the unit itself, so closing the dialog (or the app) keeps it.
+    // q/ans are kept with it to notice when the question changed after the explanation was made.
+    function cleanAi(raw) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+        const text = String(raw.text || '');
+        if (!text.trim() || text.length > 20000) return null;
+        return {text, q: String(raw.q || ''), ans: String(raw.ans || ''), at: Number(raw.at) || 0};
+    }
     function cleanUnit(raw, fallback) {
         const n = Number(raw.num == null ? fallback : raw.num);
         if (!Number.isInteger(n) || n < 1 || n > 100000) throw new Error('ページ・問題番号は1〜100000の整数にしてください。');
@@ -47,7 +55,8 @@
             history: (Array.isArray(raw.history) ? raw.history : []).filter(s => Object.hasOwn(STATUS, s)).slice(-20),
             lastReview: Number(raw.lastReview) || 0, nextReview: Number(raw.nextReview) || 0,
             step: Math.max(0, Math.min(Number(raw.step) || 0, CURVE.length - 1)),
-            review: raw.review ? policy(raw.review) : null
+            review: raw.review ? policy(raw.review) : null,
+            ai: cleanAi(raw.ai)
         };
     }
     function migrate(work) {
@@ -401,7 +410,7 @@
             '<div class="word-static-info workbook-detail-panel" data-panel-field="memo" hidden><textarea class="workbook-inline-input sub-info-block" data-field="memo" rows="1" aria-label="' + esc(label(work, unit)) + 'の補足" placeholder="補足を入力（公開対象）">' + esc(unit.memo) + '</textarea></div>' +
             '<div class="workbook-unit-footer"' + ((unit.history||[]).length?'':' hidden') + '><div class="workbook-history">' + (unit.history || []).slice(-5).map(s => '<span class="status-' + s + '">' + STATUS[s] + '</span>').join('') + '</div></div>';
         card.querySelector('.vocab-library-manage-button').onclick = () => openUnitEditor(work.id, unit.id);
-        const help = card.querySelector('.workbook-ai-help'); if (help) { help.hidden = !unit.q.trim(); help.onclick = () => { const fresh = load().find(w => w.id === work.id); const target = fresh && fresh.units.find(u => u.id === unit.id); if (target) openExplanation(target); }; }
+        const help = card.querySelector('.workbook-ai-help'); if (help) { help.hidden = !unit.q.trim(); if (unit.ai && unit.ai.text) help.classList.add('has-ai'); help.onclick = () => { const fresh = load().find(w => w.id === work.id); const target = fresh && fresh.units.find(u => u.id === unit.id); if (target) openExplanation(target, work.id); }; }
         card.querySelectorAll('[data-toggle-field]').forEach(button=>{
             const field=button.dataset.toggleField,panel=card.querySelector('[data-panel-field="'+field+'"]');
             panel.id='workbook-detail-'+encodeURIComponent(work.id)+'-'+encodeURIComponent(unit.id)+'-'+field;button.setAttribute('aria-controls',panel.id);
@@ -457,9 +466,47 @@
         }
         return card;
     }
-    async function openExplanation(unit) {
-        const modal = dialog('問題の解説', '<div id="workbookExplanation" class="workbook-explanation" role="status">読み込み中…</div><div class="library-editor-actions"><button type="button" data-library-close>閉じる</button></div>');
-        const body = modal.querySelector('#workbookExplanation');
+    async function openExplanation(unit, workId) {
+        const owner = uid();
+        const modal = dialog('問題の解説', '<div id="workbookExplanation" class="workbook-explanation" role="status">読み込み中…</div><p class="workbook-explanation-note" id="workbookExplanationNote"></p><div class="library-editor-actions"><button type="button" id="workbookExplanationRedo" hidden>作り直す</button><button type="button" id="workbookExplanationErase" hidden>解説を消す</button><button type="button" data-library-close>閉じる</button></div>');
+        const body = modal.querySelector('#workbookExplanation'), note = modal.querySelector('#workbookExplanationNote'), redo = modal.querySelector('#workbookExplanationRedo'), erase = modal.querySelector('#workbookExplanationErase');
+        async function show(text) {
+            if (window.WorkbookMath && WorkbookMath.pieces(text).some(part => part.source)) try { await WorkbookMath.load(); } catch {/* Text and native math still render without the engine. */}
+            if (!body.isConnected) return;
+            if (window.WorkbookExplanation) WorkbookExplanation.render(body, text); else body.textContent = text;
+        }
+        // The explanation is kept on the unit itself: closing this dialog (or the app) no longer loses it,
+        // and it syncs with the work like every other field. Saving never blocks showing it.
+        function saveAi(text) {
+            try {
+                if (owner !== uid()) return;
+                const fresh = load().find(w => w.id === workId), target = fresh && fresh.units.find(u => u.id === unit.id);
+                if (!fresh || !target) return;
+                target.ai = {text, q: target.q, ans: target.ans, at: Date.now()};
+                put(fresh);
+            } catch {/* The explanation still shows; it just is not kept this time. */}
+        }
+        function offerActions() { redo.hidden = false; erase.hidden = false; }
+        function savedNote(saved) {
+            const when = saved.at ? new Date(saved.at) : null, stamp = when ? (when.getMonth() + 1) + '/' + when.getDate() + ' ' + String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0') : '';
+            const stale = saved.q !== unit.q || saved.ans !== unit.ans;
+            note.textContent = '保存した解説です' + (stamp ? '（' + stamp + '）' : '') + (stale ? '。問題文・答えが変わっているので、内容が合わないときは「作り直す」を押してください。' : '。');
+            offerActions();
+        }
+        redo.onclick = () => generate();
+        erase.onclick = () => {
+            try {
+                const fresh = load().find(w => w.id === workId), target = fresh && fresh.units.find(u => u.id === unit.id);
+                if (fresh && target && target.ai) { target.ai = null; put(fresh); }
+            } catch {}
+            body.textContent = '解説を消しました。AIボタンを押すと新しく作れます。';
+            note.textContent = ''; redo.hidden = true; erase.hidden = true;
+        };
+        const saved = unit.ai && unit.ai.text ? unit.ai : null;
+        if (saved) { await show(saved.text); if (body.isConnected) savedNote(saved); return; }
+        generate();
+        async function generate() {
+        redo.hidden = true; erase.hidden = true; note.textContent = ''; body.textContent = '読み込み中…';
         const apiKey = localStorage.getItem('core_v4_geminiKey');
         if (!apiKey) { body.textContent = 'メニューの「Gemini AI APIキー」にキーを設定してください。'; return; }
         try {
@@ -474,15 +521,19 @@
                 const problem = window.describeGeminiError ? window.describeGeminiError(response.status) : { title: '解説を取得できませんでした。', detail: '' };
                 throw new Error(problem.title + '。' + problem.detail);
             }
-            const data = await response.json(),text=((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('\n') || '解説を取得できませんでした。';
-            if(!body.isConnected)return;
-            if(window.WorkbookMath&&WorkbookMath.pieces(text).some(part=>part.source))try{await WorkbookMath.load();}catch{/* Text and native math still render without the engine. */}
-            if(!body.isConnected)return;
-            if(window.WorkbookExplanation)WorkbookExplanation.render(body,text);else body.textContent=text;
+            const data = await response.json(), text = ((data.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('\n') || '解説を取得できませんでした。';
+            saveAi(text);
+            if (!body.isConnected) return;
+            await show(text);
+            if (!body.isConnected) return;
+            note.textContent = 'この解説は保存されました。次からはすぐ開けます。';
+            offerActions();
         } catch (error) {
+            if (!body.isConnected) return;
             // fetch fails with a TypeError when there is no connection.
             const offline = error instanceof TypeError && window.describeGeminiError ? window.describeGeminiError('network') : null;
             body.textContent = offline ? offline.title + '。' + offline.detail : error.message;
+        }
         }
     }
     function openSubquestionEditor(workId, num) {

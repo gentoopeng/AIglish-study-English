@@ -2234,6 +2234,9 @@ html.ios-stable-rendering body .flashcard-note-preview.revealed .flashcard-note-
 .workbook-unit-card .workbook-inline-error:empty{display:none;}
 
 .workbook-unit-actions .workbook-ai-help{margin:0;color:#c7d2fe;}
+.workbook-unit-actions .workbook-ai-help.has-ai{color:#6ee7b7;}
+.workbook-unit-actions .workbook-ai-help.has-ai::after{content:"";display:inline-block;width:5px;height:5px;margin-left:4px;border-radius:50%;background:#34d399;vertical-align:2px;}
+.workbook-explanation-note{margin:8px 2px 0;font-size:11.5px;color:#9aa7bd;min-height:1em;}
 .workbook-math-preview{display:block;width:100%;box-sizing:border-box;border:0;background:transparent;color:inherit;text-align:left;padding:6px 0;border-radius:6px;cursor:text;white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:auto;font:inherit;line-height:1.65;}
 .workbook-math-preview math{font-size:1.08em;}
 .workbook-unit-card .workbook-math-preview.workbook-question{font-size:16px;font-weight:700;color:#fff;}
