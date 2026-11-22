@@ -642,6 +642,7 @@
                 if (frame) { cancelAnimationFrame(frame); frame = 0; }
                 dragStarted = false;
                 liveRipple.style.opacity = 0;
+                clearEdges();
                 window.swipeFlashcard(direction, dx, dy);
             } else if (dragStarted) {
                 // 届かなかったスワイプはめくらずに戻す（直後のclickも無視する）。
@@ -659,6 +660,14 @@
 
         cardWrap.addEventListener('pointercancel', function(e) {
             if (e.pointerId !== activePointerId) return;
+            activePointerId = null;
+            isCardFlicking = false;
+            settle();
+        });
+
+        // ポインタ捕捉が不意に外れた時も、ドラッグ途中の姿勢と色を残さない (10.177)。
+        cardWrap.addEventListener('lostpointercapture', function(e) {
+            if (activePointerId === null || !isCardFlicking) return;
             activePointerId = null;
             isCardFlicking = false;
             settle();
