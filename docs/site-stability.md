@@ -5133,3 +5133,15 @@ Fix:
 
 Tests:
 - `tests/book-progress.test.cjs` 3件＋ `tests/friends-model.test.cjs` 4件、全7件合格。
+
+## 10.176.00.00 — みんなの進み具合は詳細の円グラフ比較へ／絞り込みを記号のみに
+
+What the user saw: 単語リスト上の帯のUIが変。選択肢（○定着など）が直っていない。みんなの進度は単語帳の「詳細」からでいい。自分の円グラフみたいに表示してほしい（比較も）。
+
+Fix:
+- 帯（10.175）を撤去し、単語帳の詳細ポップアップ（showVocabStatsPopup）に「みんなの進み具合」を追加: 自分＋その本をやっているフレンド全員の円グラフ（○緑・△黄・✕赤・ー灰、中心に○率）を○率の高い順に並べ、各行に ○n △n ✕n ーn も併記。フレンドがいなければその旨を小さく出す。
+- 公開要約に counts（意味単位の ○/△/✕/ー 内訳と意味総数）を追加（book-progress.js summarizeBook/parse）。旧要約（counts なし）は比較に出さない。
+- 単語帳画面の絞り込みボタン（index.html の静的ボタン）を記号のみにした: filter-ok ○、filter-so △、filter-bad ✕、filter-none ー（aria-label に元の名前を保持）。メモ・付箋はそのまま。
+
+Tests:
+- `tests/book-progress.test.cjs` に counts の検証を追加。全8件合格（friends-model 4件と合わせて）。
