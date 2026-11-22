@@ -3108,6 +3108,7 @@ window.__bindLoadQuizCardOnce = function(wrap) {
   };
   wrap.addEventListener('pointerdown', function(e) {
     if (!window.__lqCurrent || !e.isPrimary) return;
+    e.preventDefault();
     try { wrap.setPointerCapture(e.pointerId); } catch (err) {}
     pointer = { x: e.clientX, y: e.clientY, t: e.timeStamp };
     moving = false;

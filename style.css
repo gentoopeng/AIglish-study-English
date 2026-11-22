@@ -1144,6 +1144,15 @@ body.in-game-active .container { padding-top: 16px !important; padding-bottom: 1
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
+    /* カード自体に touch-action を持たせる（10.174）: セッション画面の外（予習・読み込みクイズ）でも
+       ブラウザにジェスチャを奪われて「画像のように画面ごと動く」ことがないように。 */
+    touch-action: none !important;
+    -webkit-user-drag: none;
+}
+
+.flashcard-wrapper-3d * {
+    -webkit-user-drag: none !important;
+}
     position: absolute;
     width: 240px;
     height: 240px;

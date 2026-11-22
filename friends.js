@@ -124,7 +124,7 @@
     const m = Math.floor((secs || 0) / 60);
     return m >= 60 ? Math.floor(m / 60) + "時間" + (m % 60 ? (m % 60) + "分" : "") : m + "分";
   };
-  const FIELDS = ["playerName", "avatar", "profileCustomizationJson", "friendList", "deleted", "lastActiveAt", "studyPoints", "userStatsJson", "studyLedgerJson", "selectedTitle"];
+  const FIELDS = ["playerName", "avatar", "profileCustomizationJson", "friendList", "deleted", "lastActiveAt", "studyPoints", "userStatsJson", "studyLedgerJson", "selectedTitle", "bookProgressJson"];
 
   function person(id, doc, me, now) {
     const stats = root.StudyTimeModel.readStats(doc),
@@ -144,6 +144,7 @@
       week: root.StudyTimeModel.rankingSeconds(stats, "weekly", now),
       total: root.StudyTimeModel.rankingSeconds(stats, "total", now),
       points: Number(doc.studyPoints) || 0,
+      books: root.BookProgress?.parse?.(doc) || [],
     };
   }
 
@@ -367,7 +368,7 @@
     // Friends whose documents did not come back still show, from the saved list's names.
     for (const f of typeof myFriendList !== "undefined" ? myFriendList : []) {
       const id = String(f?.code || "");
-      if (id && !byId.has(id)) people.push({ id, name: f.name || id, avatar: f.customAvatar || "", mutual: false, lastActive: 0, online: false, studying: false, today: 0, week: 0, total: 0, points: 0 });
+      if (id && !byId.has(id)) people.push({ id, name: f.name || id, avatar: f.customAvatar || "", mutual: false, lastActive: 0, online: false, studying: false, today: 0, week: 0, total: 0, points: 0, books: [] });
     }
     wait.remove();
     if (!people.length) {
@@ -427,6 +428,16 @@
       text.append(nameLine);
       const meta = node("small", "fr-meta", "今日 " + mins(p.today) + " ・ 今週 " + mins(p.week) + " ・ 合計 " + mins(p.total));
       text.append(meta);
+      const topBook = Array.isArray(p.books) ? p.books[0] : null;
+      if (topBook) {
+        const bookLine = node("span", "fr-book");
+        const bar = node("span", "fr-bar");
+        const fill = node("i", "");
+        fill.style.width = topBook.pct + "%";
+        bar.append(fill);
+        bookLine.append(node("span", "fr-book-name", "📚 " + topBook.name), bar, node("span", "fr-book-pct", topBook.pct + "%（" + topBook.done + "/" + topBook.total + "語）"));
+        text.append(bookLine);
+      }
       const record = root.DuelRecords.get(p.id);
       if (record) text.append(node("small", "fr-duel", "対戦成績 " + record.w + "勝" + record.l + "敗" + (record.d ? record.d + "分" : "")));
       row.append(avatar, text);
@@ -436,6 +447,75 @@
     body.append(listBox);
     body.append(node("p", "fr-note", "スタンプストアに出るのは、お互いフレンドのスタンプだけです。"));
   }
+
+  // Studying together (10.174): while any friend is studying now, a bar under the
+  // header study time says so, with their faces. Checked once a minute while the app
+  // is in front; hidden when nobody is studying (and for guests, who have no friends).
+  const studyingBar = { at: 0, busy: false };
+  async function refreshStudyingBar() {
+    const now = Date.now();
+    if (studyingBar.busy || now - studyingBar.at < 55000) return;
+    const friendIds = (typeof myFriendList !== "undefined" && Array.isArray(myFriendList) ? myFriendList : []).map((f) => String(f?.code || "")).filter((id) => id && id !== uid());
+    if (!friendIds.length || uid() === "GUEST-000") return;
+    studyingBar.busy = true;
+    studyingBar.at = now;
+    try {
+      let docs = null;
+      try {
+        docs = (await root.UserDirectory?.byIds?.(friendIds, { fields: FIELDS })) || null;
+      } catch {
+        docs = null;
+      }
+      if (!Array.isArray(docs)) {
+        docs = [];
+        for (const id of friendIds) {
+          try {
+            const snap = await root.fbGetDoc(root.fbDoc(root.db, "users", id));
+            if (snap.exists()) docs.push({ id, data: snap.data() });
+          } catch {}
+        }
+      }
+      const studying = docs.filter((d) => !d.data?.deleted).map((d) => person(d.id, d.data, uid(), Date.now())).filter((p) => p.studying);
+      renderStudyingBar(studying);
+    } catch {
+    } finally {
+      studyingBar.busy = false;
+    }
+  }
+  function renderStudyingBar(studying) {
+    let bar = document.getElementById("studyingBar");
+    if (!studying.length) {
+      bar?.remove();
+      document.body.classList.remove("has-studying-bar");
+      return;
+    }
+    if (!bar) {
+      bar = node("button", "studying-bar");
+      bar.id = "studyingBar";
+      bar.type = "button";
+      bar.setAttribute("aria-label", "一緒に勉強中のフレンドを見る");
+      bar.onclick = () => open();
+      document.querySelector(".app-header")?.after(bar);
+    }
+    bar.replaceChildren();
+    bar.append(node("span", "studying-bar-label", "📚 一緒に勉強中"));
+    for (const p of studying.slice(0, 4)) {
+      const chip = node("span", "studying-chip");
+      const nameEl = node("span", "studying-chip-name");
+      root.RankingVisuals.name(nameEl, p.name, p.custom);
+      chip.append(root.RankingVisuals.avatar(p.avatar, p.name, p.custom), nameEl);
+      bar.append(chip);
+    }
+    if (studying.length > 4) bar.append(node("span", "studying-more", "+" + (studying.length - 4) + "人"));
+    document.body.classList.add("has-studying-bar");
+  }
+  setInterval(() => {
+    if (document.visibilityState === "visible") refreshStudyingBar();
+  }, 60000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshStudyingBar();
+  });
+  setTimeout(refreshStudyingBar, 8000);
 
   root.Friends = Object.freeze({ open });
 })(typeof window !== "undefined" ? window : globalThis);
