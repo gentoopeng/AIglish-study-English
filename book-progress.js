@@ -1,10 +1,11 @@
 // book-progress.js —— 単語帳の進行度を、フレンドが見られる形で公開する (10.174).
 // Word-level ratings stay in the owner's private vocabProgress collection. What other
 // players may see is only a summary per book — name, size, how many words are fully
-// learned and the percent — written to the owner's user document as bookProgressJson,
-// the same pattern as the other public stats (userStatsJson, learningRankingV2Json).
-// A word counts as learned when every meaning on it is rated ok (or the word itself is,
-// for books without per-meaning ratings). Pure helpers are exported for tests.
+// learned, the percent, and the ○/△/✕/ー counts behind a donut chart — written to the
+// owner's user document as bookProgressJson, the same pattern as the other public
+// stats (userStatsJson, learningRankingV2Json). A word counts as learned when every
+// meaning on it is rated ok. The book's 詳細 popup compares everyone's donuts
+// (10.176). Pure helpers are exported for tests.
 (function (root) {
   "use strict";
 
@@ -15,12 +16,21 @@
     return entry.status === "ok";
   }
 
-  // progress: { [num]: entry } for one book; total: the book's word count.
-  function summarizeBook(book, progress, total, at) {
+  // progress: { [num]: entry } for one book; total: the book's word count;
+  // meaningsTotal: how many meanings the whole book has (the donut's denominator —
+  // the owner's own donut counts meanings, so friends' donuts do the same).
+  function summarizeBook(book, progress, total, at, meaningsTotal) {
     const entries = progress && typeof progress === "object" ? Object.values(progress).filter((e) => e && typeof e === "object" && ("meanings" in e || "status" in e)) : [];
     const size = Number(total) || 0;
     if (!book || !book.id || size <= 0 || !entries.length) return null;
     const done = entries.filter(wordLearned).length;
+    const counts = { ok: 0, so: 0, bad: 0, none: 0, total: Number(meaningsTotal) || size };
+    for (const e of entries) {
+      const ms = e.meanings && typeof e.meanings === "object" ? Object.values(e.meanings) : [];
+      if (ms.length) for (const m of ms) { if (m && counts[m.status] !== undefined && m.status !== "none") counts[m.status]++; }
+      else if (e.status && counts[e.status] !== undefined && e.status !== "none") counts[e.status]++;
+    }
+    counts.none = Math.max(0, counts.total - counts.ok - counts.so - counts.bad);
     return {
       id: String(book.id),
       name: String(book.name || book.id).slice(0, 60),
@@ -28,13 +38,14 @@
       done,
       pct: Math.max(0, Math.min(100, Math.round((done / size) * 100))),
       at: Number(at) || 0,
+      counts,
     };
   }
 
-  // rows: [{ book, progress, total, at }] -> the public list, freshest first.
+  // rows: [{ book, progress, total, at, meaningsTotal }] -> the public list, freshest first.
   function summarizeAll(rows, limit = 6) {
     return (Array.isArray(rows) ? rows : [])
-      .map((r) => summarizeBook(r.book, r.progress, r.total, r.at))
+      .map((r) => summarizeBook(r.book, r.progress, r.total, r.at, r.meaningsTotal))
       .filter(Boolean)
       .sort((a, b) => b.at - a.at || b.pct - a.pct)
       .slice(0, limit);
@@ -53,14 +64,21 @@
     if (!Array.isArray(value)) return [];
     return value
       .filter((b) => b && b.id && b.name && Number(b.total) > 0)
-      .map((b) => ({
-        id: String(b.id),
-        name: String(b.name).slice(0, 60),
-        total: Number(b.total) || 0,
-        done: Math.max(0, Math.min(Number(b.total) || 0, Number(b.done) || 0)),
-        pct: Math.max(0, Math.min(100, Number(b.pct) || 0)),
-        at: Number(b.at) || 0,
-      }))
+      .map((b) => {
+        const c = b.counts && typeof b.counts === "object" ? b.counts : null;
+        const counts = c
+          ? { ok: Math.max(0, Number(c.ok) || 0), so: Math.max(0, Number(c.so) || 0), bad: Math.max(0, Number(c.bad) || 0), none: Math.max(0, Number(c.none) || 0), total: Math.max(0, Number(c.total) || 0) }
+          : null;
+        return {
+          id: String(b.id),
+          name: String(b.name).slice(0, 60),
+          total: Number(b.total) || 0,
+          done: Math.max(0, Math.min(Number(b.total) || 0, Number(b.done) || 0)),
+          pct: Math.max(0, Math.min(100, Number(b.pct) || 0)),
+          at: Number(b.at) || 0,
+          counts,
+        };
+      })
       .slice(0, 6);
   }
 
@@ -82,6 +100,7 @@
       if (!book || !book.id) continue;
       let progress = null,
         total = 0,
+        meaningsTotal = 0,
         at = 0;
       try {
         const key = typeof window.getVocabProgressStorageKey === "function" ? window.getVocabProgressStorageKey(book.id) : null;
@@ -90,10 +109,16 @@
           at = Number(localStorage.getItem(key + "__ts")) || 0;
         }
         const master = JSON.parse(localStorage.getItem("core_v4_cache_" + book.id) || "null");
-        if (Array.isArray(master)) total = master.length;
-        if (!total && book.id === (typeof currentTextbook !== "undefined" ? currentTextbook : null) && typeof vocabList !== "undefined" && Array.isArray(vocabList)) total = vocabList.length;
+        if (Array.isArray(master)) {
+          total = master.length;
+          meaningsTotal = master.reduce((n, w) => n + (Array.isArray(w?.meanings) && w.meanings.length ? w.meanings.length : 1), 0);
+        }
+        if (!total && book.id === (typeof currentTextbook !== "undefined" ? currentTextbook : null) && typeof vocabList !== "undefined" && Array.isArray(vocabList)) {
+          total = vocabList.length;
+          meaningsTotal = vocabList.reduce((n, w) => n + (Array.isArray(w?.meanings) && w.meanings.length ? w.meanings.length : 1), 0);
+        }
       } catch {}
-      if (progress) rows.push({ book, progress, total, at });
+      if (progress) rows.push({ book, progress, total, at, meaningsTotal });
     }
     return summarizeAll(rows);
   }
@@ -146,10 +171,7 @@
   root.BookProgress.publish = publish;
   root.BookProgress.summary = collect;
 
-  // ---- the open book: everyone's progress on it (10.175) ---------------------------
-  // A strip above the word list: my progress on this book and each friend's, from the
-  // summaries on their user documents. Matched by book id, so it lights up for books
-  // friends study under the same id (shared and system books).
+  // ---- friends' summaries, for the book detail popup's comparison (10.176) -------------
   const PEER_FIELDS = ["playerName", "avatar", "profileCustomizationJson", "bookProgressJson", "deleted"];
   const peerCache = { at: 0, rows: [] };
   async function fetchPeers() {
@@ -181,83 +203,5 @@
       .map((d) => ({ id: d.id, name: d.data.playerName || d.id, avatar: d.data.avatar || "", custom: d.data.profileCustomizationJson, books: parse(d.data) }));
     return peerCache.rows;
   }
-
-  function chip(label, book, mine) {
-    const el = document.createElement("span");
-    el.className = "bkp-chip" + (mine ? " is-me" : "");
-    const name = document.createElement("span");
-    name.className = "bkp-chip-name";
-    name.textContent = label;
-    const bar = document.createElement("span");
-    bar.className = "bkp-bar";
-    const fill = document.createElement("i");
-    fill.style.width = book.pct + "%";
-    bar.append(fill);
-    const pct = document.createElement("span");
-    pct.className = "bkp-chip-pct";
-    pct.textContent = book.pct + "%";
-    el.append(name, bar, pct);
-    el.title = label + "：" + book.done + "/" + book.total + "語";
-    return el;
-  }
-
-  let stripBook = null,
-    stripAt = 0,
-    stripBusy = false;
-  async function renderStrip() {
-    const container = document.getElementById("vocabListContainer");
-    if (!container) return;
-    const bookId = typeof currentTextbook !== "undefined" ? currentTextbook : null;
-    if (!bookId) return;
-    if (stripBusy) return;
-    // Same book, drawn recently: leave it (the poll redraws every 30s at most).
-    if (document.getElementById("bookPeersBar") && stripBook === String(bookId) && Date.now() - stripAt < 30000) return;
-    stripBusy = true;
-    try {
-      publish(false);
-      const own = collect().find((b) => b.id === String(bookId));
-      const peers = (await fetchPeers())
-        .map((p) => ({ peer: p, book: p.books.find((b) => b.id === String(bookId)) }))
-        .filter((x) => x.book)
-        .sort((a, b) => b.book.pct - a.book.pct);
-      let strip = document.getElementById("bookPeersBar");
-      if (!own && !peers.length) {
-        strip?.remove();
-        stripBook = null;
-        return;
-      }
-      if (!strip) {
-        strip = document.createElement("section");
-        strip.id = "bookPeersBar";
-        strip.className = "bkp-strip";
-        container.before(strip);
-      }
-      strip.replaceChildren();
-      const label = document.createElement("span");
-      label.className = "bkp-label";
-      label.textContent = "みんなの進み具合";
-      strip.append(label);
-      if (own) strip.append(chip("あなた", own, true));
-      for (const x of peers.slice(0, 6)) strip.append(chip(x.peer.name, x.book, false));
-      if (peers.length > 6) {
-        const more = document.createElement("span");
-        more.className = "bkp-more";
-        more.textContent = "+" + (peers.length - 6) + "人";
-        strip.append(more);
-      }
-      stripBook = String(bookId);
-      stripAt = Date.now();
-    } catch {
-    } finally {
-      stripBusy = false;
-    }
-  }
-  setInterval(() => {
-    const bookId = typeof currentTextbook !== "undefined" ? String(currentTextbook || "") : "";
-    if (document.visibilityState === "visible" && bookId) renderStrip();
-  }, 4000);
-  if (typeof MutationObserver !== "undefined" && document.body)
-    new MutationObserver(() => {
-      if (!document.getElementById("bookPeersBar")) renderStrip();
-    }).observe(document.body, { childList: true, subtree: true });
+  root.BookProgress.peers = fetchPeers;
 })(typeof window !== "undefined" ? window : globalThis);

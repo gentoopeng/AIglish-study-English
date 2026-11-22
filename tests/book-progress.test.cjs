@@ -28,6 +28,16 @@ test("summarizeAll: percent by book size, freshest first, junk dropped", () => {
   assert.deepEqual([list[1].done, list[1].pct], [1, 25]);
 });
 
+test("counts: the donut breakdown counts meanings, untouched are ー (10.176)", () => {
+  const rows = [{ book: { id: "a", name: "本A" }, progress: { 1: entry(["ok", "so"]), 2: entry(["bad"]) }, total: 4, meaningsTotal: 6, at: 1 }];
+  const [b] = B.summarizeAll(rows);
+  assert.deepEqual(b.counts, { ok: 1, so: 1, bad: 1, none: 3, total: 6 });
+  const parsed = B.parse({ bookProgressJson: JSON.stringify([b]) });
+  assert.deepEqual(parsed[0].counts, b.counts);
+  // Summaries published before counts existed parse with counts null.
+  assert.equal(B.parse({ bookProgressJson: JSON.stringify([{ id: "x", name: "y", total: 3, done: 1, pct: 33 }]) })[0].counts, null);
+});
+
 test("parse: a user document round-trips, bad data becomes an empty list", () => {
   const list = B.summarizeAll([{ book: { id: "a", name: "本A" }, progress: { 1: entry(["ok"]) }, total: 2, at: 5 }]);
   const parsed = B.parse({ bookProgressJson: JSON.stringify(list) });

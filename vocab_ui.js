@@ -214,11 +214,46 @@
         box.style.cssText = "background:var(--card-bg); border:1px solid var(--cosmic-cyan); border-radius:16px; padding:20px; width:88%; max-width:340px; color:#fff; box-shadow:0 10px 30px rgba(0,0,0,0.6);";
         var currentBook = (typeof textbooksPool !== 'undefined' && Array.isArray(textbooksPool)) ? textbooksPool.find(function(b) { return b.id === currentTextbook; }) : null;
         var bookName = window.escapeVocabText(currentBook ? currentBook.name : '共通単語帳');
-        box.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;"><div style="font-size:16px; font-weight:900;">単語帳の詳細</div><button id="vocabStatsClose" style="background:none; border:none; color:var(--text-sub); font-size:20px; cursor:pointer; line-height:1;">×</button></div><div style="text-align:center; font-size:12px; color:var(--cosmic-purple-light); font-weight:800; margin-bottom:8px;">📔 ' + bookName + '</div><div style="text-align:center; font-size:13px; margin-bottom:12px;">登録された意味: <strong style="color:var(--cosmic-cyan); font-size:18px;">' + total + '</strong> 件</div><div style="display:flex; justify-content:center; margin-bottom:14px;"><svg width="120" height="120" viewBox="0 0 120 120">' + circles + '<text x="60" y="64" text-anchor="middle" fill="#fff" font-size="16" font-weight="900">' + total + '</text></svg></div>' + listHtml;
+        box.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;"><div style="font-size:16px; font-weight:900;">単語帳の詳細</div><button id="vocabStatsClose" style="background:none; border:none; color:var(--text-sub); font-size:20px; cursor:pointer; line-height:1;">×</button></div><div style="text-align:center; font-size:12px; color:var(--cosmic-purple-light); font-weight:800; margin-bottom:8px;">📔 ' + bookName + '</div><div style="text-align:center; font-size:13px; margin-bottom:12px;">登録された意味: <strong style="color:var(--cosmic-cyan); font-size:18px;">' + total + '</strong> 件</div><div style="display:flex; justify-content:center; margin-bottom:14px;"><svg width="120" height="120" viewBox="0 0 120 120">' + circles + '<text x="60" y="64" text-anchor="middle" fill="#fff" font-size="16" font-weight="900">' + total + '</text></svg></div>' + listHtml + '<div id="vocabStatsPeers"></div>';
         ov.appendChild(box);
         document.body.appendChild(ov);
         ov.querySelector('#vocabStatsClose').onclick = function() { ov.remove(); };
         ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+        // Everyone's donuts on this book, mine included, best ○ rate first (10.176).
+        (async function() {
+            var host = ov.querySelector('#vocabStatsPeers');
+            if (!host || !window.BookProgress || typeof window.BookProgress.peers !== 'function') return;
+            var peers = [];
+            try { peers = await window.BookProgress.peers(); } catch (e) { return; }
+            if (!ov.isConnected || !Array.isArray(peers) || !peers.length) return;
+            var bookId = String(currentTextbook || '');
+            var rows = [{ name: 'あなた', mine: true, counts: { ok: ok, so: so, bad: bad, none: none, total: total } }];
+            peers.forEach(function(p) {
+                var b = (p.books || []).find(function(x) { return x.id === bookId; });
+                if (b && b.counts) rows.push({ name: p.name, mine: false, counts: b.counts });
+            });
+            if (rows.length < 2) {
+                host.innerHTML = '<div style="margin-top:12px; font-size:11.5px; color:var(--text-sub); text-align:center;">この本をやっているフレンドはまだいません</div>';
+                return;
+            }
+            var rate = function(c) { return c.total ? c.ok / c.total : 0; };
+            rows.sort(function(a, b) { return rate(b.counts) - rate(a.counts); });
+            var donut = function(c) {
+                var r2 = 26, circ = 2 * Math.PI * r2, off = 0, parts = '';
+                [[c.ok, '#10B981'], [c.so, '#F59E0B'], [c.bad, '#EF4444'], [c.none, '#64748B']].forEach(function(seg) {
+                    var len = c.total ? seg[0] / c.total * circ : 0;
+                    if (len > 0) parts += '<circle r="' + r2 + '" cx="32" cy="32" fill="none" stroke="' + seg[1] + '" stroke-width="9" stroke-dasharray="' + len + ' ' + (circ - len) + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 32 32)"/>';
+                    off += len;
+                });
+                if (!c.total) parts = '<circle r="' + r2 + '" cx="32" cy="32" fill="none" stroke="#334155" stroke-width="9"/>';
+                return '<svg width="64" height="64" viewBox="0 0 64 64">' + parts + '<text x="32" y="36" text-anchor="middle" fill="#fff" font-size="12" font-weight="900">' + Math.round(rate(c) * 100) + '%</text></svg>';
+            };
+            var html = '<div style="margin-top:14px; font-size:12.5px; font-weight:900;">みんなの進み具合</div>';
+            rows.forEach(function(row) {
+                html += '<div style="display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.08);">' + donut(row.counts) + '<div style="min-width:0;"><div style="font-size:13px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;' + (row.mine ? ' color:var(--cosmic-cyan);' : '') + '">' + window.escapeVocabText(row.name) + '</div><div style="font-size:11.5px; color:var(--text-sub);">○' + row.counts.ok + ' △' + row.counts.so + ' ✕' + row.counts.bad + ' ー' + row.counts.none + '</div></div></div>';
+            });
+            host.innerHTML = html;
+        })();
     };
 
     window.injectVocabStatsButton = function() {
