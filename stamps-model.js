@@ -151,6 +151,22 @@
     if (stamp.price > 0 && (Number(balance) || 0) < stamp.price) throw Error("ポイントが足りません（所持 " + (Number(balance) || 0) + "pt）。");
     return stamp.price;
   }
+  // May this stamp be gifted to `to` now? The giver pays the price (the maker is paid as with a
+  // sale); the recipient must not have it yet. Throws the reason.
+  function checkGift({ stamp, id, me, to, recipientOwned, seen, balance, ownerGone, recipientGone }) {
+    if (!isId(id)) throw Error("このスタンプは贈れません。");
+    if (!stamp) throw Error("このスタンプは見つかりません。");
+    if (!to || to === me) throw Error("贈る相手を選んでください。");
+    if (stamp.ownerId === to) throw Error("作った人はもう持っています。");
+    if ((recipientOwned || []).includes(id)) throw Error("その人はもう持っています。");
+    if (stamp.status === "deleted") throw Error("このスタンプは削除されました。");
+    if (stamp.status !== "on") throw Error("このスタンプは今は売られていません。");
+    if (ownerGone) throw Error("このスタンプを作った人のアカウントがありません。");
+    if (recipientGone) throw Error("その人のアカウントがありません。");
+    if (Number(seen) !== stamp.price) throw Error("値段が変わりました（今は " + stamp.price + "pt）。もう一度確かめてください。");
+    if (stamp.price > 0 && (Number(balance) || 0) < stamp.price) throw Error("ポイントが足りません（所持 " + (Number(balance) || 0) + "pt）。");
+    return stamp.price;
+  }
   // Friends both ways (10.161): the ids in my friend list whose own friend list has me. `docs`: [{ id, data }] of
   // those friends' user documents (only friendList is needed). Only their stamps are in the store.
   function mutualFriends(myFriends, me, docs) {
@@ -163,7 +179,7 @@
     }
     return [...new Set(out)];
   }
-  const api = { mutualFriends, MAX_NAME, MAX_PRICE, MAX_IMAGE, MAX_MADE, MAX_LAYERS, SIZE, COOLDOWN, STATUSES, FONTS, fontOf, isId, imageOk, text, priceOf, make, clean, forSale, unreviewed, usable, feeFor, planEdit, cleanDesign, box, checkBuy };
+  const api = { mutualFriends, MAX_NAME, MAX_PRICE, MAX_IMAGE, MAX_MADE, MAX_LAYERS, SIZE, COOLDOWN, STATUSES, FONTS, fontOf, isId, imageOk, text, priceOf, make, clean, forSale, unreviewed, usable, feeFor, planEdit, cleanDesign, box, checkBuy, checkGift };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.StampsModel = Object.freeze(api);
 })(typeof window !== "undefined" ? window : globalThis);

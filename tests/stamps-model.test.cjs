@@ -150,3 +150,16 @@ test("the store lists friends both ways only (10.161)", () => {
   assert.deepEqual(M.mutualFriends([], "me", docs), []);
   assert.deepEqual(M.mutualFriends([{ code: "b" }], "me", [{ id: "b", data: {} }]), []);
 });
+
+test("what may be gifted: the giver pays, the recipient must not have it yet", () => {
+  const stamp = { ownerId: "maker", name: "ぱんだ", price: 50, status: "on", sales: 0 };
+  const ok = { stamp, id: "abcdefgh", me: "giver", to: "friend", recipientOwned: [], seen: 50, balance: 500, ownerGone: false, recipientGone: false };
+  assert.equal(M.checkGift(ok), 50);
+  assert.equal(M.checkGift({ ...ok, stamp: { ...stamp, price: 0 }, seen: 0, balance: 0 }), 0, "free needs no points");
+  assert.throws(() => M.checkGift({ ...ok, to: "" }), /贈る相手/);
+  assert.throws(() => M.checkGift({ ...ok, to: "giver" }), /贈る相手/);
+  assert.throws(() => M.checkGift({ ...ok, to: "maker" }), /作った人はもう持って/);
+  assert.throws(() => M.checkGift({ ...ok, recipientOwned: ["abcdefgh"] }), /その人はもう持って/);
+  assert.throws(() => M.checkGift({ ...ok, recipientGone: true }), /その人のアカウントがありません/);
+  assert.throws(() => M.checkGift({ ...ok, balance: 49 }), /ポイントが足りません（所持 49pt）/);
+});
