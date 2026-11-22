@@ -1,0 +1,218 @@
+/* book-print.css —— 単語帳の紙印刷 (10.170): the print button and settings dialog on
+   screen, and the paper sheet itself. The sheet is only ever shown to the printer. */
+
+.bp-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px 0;
+}
+.bp-open {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.25));
+  background: var(--surface, rgba(255, 255, 255, 0.08));
+  color: var(--text, #fff);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bp-open:active {
+  transform: scale(0.97);
+}
+
+.bp-dialog {
+  border: none;
+  border-radius: 16px;
+  padding: 0;
+  max-width: min(92vw, 480px);
+  width: 480px;
+  background: var(--dialog-bg, #171a2e);
+  color: var(--text, #fff);
+}
+.bp-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+.bp-form {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 86vh;
+  overflow: auto;
+}
+.bp-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.bp-dialog-head h2 {
+  font-size: 17px;
+  margin: 0;
+}
+.bp-close {
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.bp-note {
+  font-size: 12.5px;
+  line-height: 1.6;
+  opacity: 0.85;
+  margin: 0;
+}
+.bp-form fieldset {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.2));
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+.bp-form legend {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 4px;
+}
+.bp-radio,
+.bp-check-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  flex-wrap: wrap;
+}
+.bp-colors {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bp-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.bp-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+.bp-range input {
+  width: 76px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.25));
+  background: transparent;
+  color: inherit;
+}
+.bp-form select {
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+.bp-count {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+.bp-actions {
+  display: flex;
+  gap: 8px;
+}
+.bp-actions button {
+  flex: 1;
+  height: 42px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.bp-cancel {
+  background: transparent;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.25));
+  color: inherit;
+}
+.bp-print {
+  background: var(--accent, #6366f1);
+  border: none;
+  color: #fff;
+}
+.bp-print:disabled {
+  opacity: 0.4;
+}
+
+/* The sheet itself: hidden on screen, the only thing on paper. */
+#bookPrintSheet {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+  body.bp-printing > *:not(#bookPrintSheet) {
+    display: none !important;
+  }
+  body.bp-printing #bookPrintSheet {
+    display: block !important;
+    color: #111;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #bookPrintSheet .bp-head h1 {
+    font-size: 18px;
+    margin: 0 0 2px;
+  }
+  #bookPrintSheet .bp-meta {
+    font-size: 11px;
+    color: #555;
+    margin: 0 0 10px;
+  }
+  #bookPrintSheet .bp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  #bookPrintSheet .bp-table th,
+  #bookPrintSheet .bp-table td {
+    border: 1px solid #bbb;
+    padding: 5px 7px;
+    text-align: left;
+    vertical-align: top;
+    line-height: 1.5;
+  }
+  #bookPrintSheet .bp-table thead th {
+    background: #eee;
+    font-size: 11px;
+  }
+  #bookPrintSheet .bp-check {
+    width: 24px;
+    text-align: center;
+  }
+  #bookPrintSheet .bp-no {
+    width: 38px;
+    color: #555;
+  }
+  #bookPrintSheet .bp-word {
+    width: 32%;
+    font-weight: 700;
+  }
+  #bookPrintSheet .bp-minor {
+    font-size: 11px;
+    opacity: 0.75;
+  }
+  #bookPrintSheet .bp-sub {
+    font-size: 11px;
+    color: #444;
+  }
+  #bookPrintSheet tr {
+    break-inside: avoid;
+  }
+}
