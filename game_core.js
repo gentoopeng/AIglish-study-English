@@ -107,6 +107,7 @@
         window.updateFlashcardSourceSelectOptions();
         document.getElementById('flashcardSourceSelect').value = bookId;
         window.setFlashcardDirection('en2ja');
+        window.setFlashcardLayout(flashcardLayoutMode);
         window.resetFlashcardStatusFilters();
         var words = typeof textbooksCacheMap !== 'undefined' && textbooksCacheMap[bookId];
         if (!words) {
@@ -212,6 +213,19 @@
         if (word && (!word.meanings || !word.meanings.length) && word.status) return word.status;
         return 'none';
     }
+
+    // Card shape (10.187): the round card, or a wide layout whose long question and
+    // answer stay readable. The choice is kept on this device.
+    var flashcardLayoutMode = 'circle';
+    try { if (localStorage.getItem('aiglish_flashcard_layout') === 'wide') flashcardLayoutMode = 'wide'; } catch (e) {}
+    window.setFlashcardLayout = function(mode) {
+        flashcardLayoutMode = mode === 'wide' ? 'wide' : 'circle';
+        try { localStorage.setItem('aiglish_flashcard_layout', flashcardLayoutMode); } catch (e) {}
+        var btnCircle = document.getElementById('btnCardLayoutCircle');
+        var btnWide = document.getElementById('btnCardLayoutWide');
+        if (btnCircle) btnCircle.classList.toggle('active', flashcardLayoutMode === 'circle');
+        if (btnWide) btnWide.classList.toggle('active', flashcardLayoutMode === 'wide');
+    };
 
     window.setFlashcardDirection = function(mode) {
         flashcardDirectionMode = mode;
@@ -525,6 +539,85 @@
         return null;
     };
 
+    // The wide layout (10.187): the question in a full-width panel, the answer behind a
+    // big round button until it is pressed, then the same grading as the round card
+    // (buttons, or a swipe on the panel). Long sentences stay readable.
+    function renderFlashcardWide(stage, wordData, posLabel) {
+        var enFirst = wordData.questionFirst === true || flashcardDirectionMode === 'en2ja';
+        var frontText = enFirst ? wordData.en : wordData.ja;
+        var backText = enFirst ? wordData.ja : wordData.en;
+        if (!enFirst && wordData.reverse) { frontText = wordData.reverse.front; backText = wordData.reverse.back; }
+        stage.style.height = 'auto';
+        if (posLabel) posLabel.style.top = '';
+        var wrap = document.createElement('div');
+        wrap.className = 'fc-wide';
+        wrap.id = 'activeFlashcard';
+        var q = document.createElement('div');
+        q.className = 'fc-wide-q';
+        var badge = document.createElement('span');
+        badge.className = 'flashcard-number';
+        badge.textContent = '#' + (wordData.shownNo || wordData.num);
+        var qText = document.createElement('div');
+        qText.className = 'fc-wide-text';
+        qText.textContent = frontText;
+        q.append(badge, qText);
+        var reveal = document.createElement('button');
+        reveal.type = 'button';
+        reveal.className = 'fc-wide-reveal';
+        reveal.textContent = '答え';
+        var a = document.createElement('div');
+        a.className = 'fc-wide-a';
+        a.hidden = true;
+        var aText = document.createElement('div');
+        aText.className = 'fc-wide-atext';
+        aText.textContent = backText;
+        a.appendChild(aText);
+        var grade = document.createElement('div');
+        grade.className = 'fc-wide-grade';
+        grade.hidden = true;
+        [['left', '✕ わからない', -140, 0], ['up', '△ あいまい', 0, -140], ['right', '○ わかった', 140, 0]].forEach(function(spec) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.dataset.dir = spec[0];
+            b.textContent = spec[1];
+            b.onclick = function() { window.swipeFlashcard(spec[0], spec[2], spec[3]); };
+            grade.appendChild(b);
+        });
+        var hint = document.createElement('div');
+        hint.className = 'fc-wide-hint';
+        hint.textContent = '丸を押すまで答えは見えません';
+        var revealed = false;
+        reveal.onclick = function() {
+            if (revealed) return;
+            revealed = true;
+            reveal.remove();
+            a.hidden = false;
+            grade.hidden = false;
+            hint.textContent = 'ボタンを押すか、スワイプでも判定できます';
+            window.AppSounds?.play('back');
+        };
+        // Swiping the panel grades too, once the answer is out (same thresholds as the
+        // round card). Drags that start on the scrollable texts are left to scrolling.
+        var startX = 0, startY = 0, startT = 0, tracking = false;
+        wrap.addEventListener('pointerdown', function(e) {
+            if (!revealed || e.target.closest('button') || e.target.closest('.fc-wide-text') || e.target.closest('.fc-wide-atext')) return;
+            tracking = true;
+            startX = e.clientX; startY = e.clientY; startT = Date.now();
+        });
+        wrap.addEventListener('pointerup', function(e) {
+            if (!tracking) return;
+            tracking = false;
+            var dx = e.clientX - startX, dy = e.clientY - startY;
+            var dt = Math.max(1, Date.now() - startT);
+            var dir = window.flashcardSwipeDirection(dx, dy, dx / dt, dy / dt);
+            if (dir) window.swipeFlashcard(dir, dx, dy);
+        });
+        wrap.addEventListener('pointercancel', function() { tracking = false; });
+        wrap.append(q, reveal, a, grade, hint);
+        stage.appendChild(wrap);
+        if (typeof window.initLucide === 'function') window.initLucide();
+    }
+
     window.renderFlashcardDeck = function() {
         var stage = document.getElementById('flashcardDeckStage');
         if (!stage) return;
@@ -557,6 +650,7 @@
         // The part of speech, and whether this is a seldom-used meaning.
         if(posLabel){var posName=wordData.partOfSpeech?wordData.partOfSpeech.name:'',minorText=wordData.minor?'あまり使わない意味':'';posLabel.hidden=!posName&&!minorText;posLabel.textContent=[wordData.partOfSpeech?wordData.partOfSpeech.short:'',minorText].filter(Boolean).join('・');posLabel.title=[posName,minorText].filter(Boolean).join('・');posLabel.setAttribute('aria-label',posLabel.title);}
         window.renderFlashcardHistoryBubbles(wordData);
+        if (flashcardLayoutMode === 'wide') { renderFlashcardWide(stage, wordData, posLabel); return; }
         var cardWrap = document.createElement('div');
         cardWrap.className = "flashcard-wrapper-3d";
         cardWrap.id = "activeFlashcard";
