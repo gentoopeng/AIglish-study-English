@@ -5317,3 +5317,15 @@ Fix:
 
 Tests:
 - 変換後の game_core.js は node --check を通過。ブラウザスモークはこの環境では Chromium が起動せず未実施（実機確認待ち）。
+
+## 10.192.00.00 — 単語帳で理解度をつけると1pt
+
+What the user asked: 単語帳で理解度つけたら1pt足そう。単語カードはそのまま2pt。
+
+Fix:
+- ポイントの獲得方法に「vocab」（単語帳の理解度）を追加：study-point-policy.js の rates に vocab: 1、DAILY_SOURCES にも追加し、ポイント履歴の表示名は「単語帳の理解度」。
+- 単語帳の一覧（とポップオーバー）で ○／△／✕ を付けたとき、保存の直後に StudyPoints.reward('vocab', …) を呼ぶ。ー（未判定）では付かない。
+- 1単語につき1日1回まで（他の獲得方法と共通の日別トークン）：その日に単語カードで2ptもらった単語は、理解度を付けても増えない。逆に理解度で1ptもらった単語をカードで答えると、カード分は今まで通り別枠で2pt入る。
+
+Tests:
+- 変換後の各JSは node --check を通過。変換後の study-point-policy.js を Node で読み、allowed('vocab', 1) = true / allowed('vocab', 2) = false / DAILY_SOURCES に vocab を含むことを確認。単体テストの study-points は獲得方法を列挙していないため影響なし。ブラウザスモークはこの環境では未実施。
