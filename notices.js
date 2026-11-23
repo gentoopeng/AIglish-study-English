@@ -206,12 +206,16 @@
   async function open() {
     spinning = false;
     const body = frame("お知らせ");
-    // What was already seen before this look decides which lines are marked new.
+    // A notice is shown once (10.194): what was already seen before this look stays
+    // hidden, and the seen marks taken at the end of this open make today's items
+    // disappear from the next look. Both marks are captured now so a redraw during
+    // this look (after the end-of-open marking) cannot empty the box mid-read.
     const ownSeen = window.PersonalNotices?.seen(uid()) || 0;
+    const seenAt0 = Number(store.get(seenKey)) || 0;
+    const releaseFloor = Math.max(seenAt0, Number(store.get(sinceKey)) || 0, Date.now() - 7 * 864e5);
     const draw = () => {
-      const seenAt = Number(store.get(seenKey)) || 0;
       // The bonus first so it is always in reach; each section shows only its newest
-      // notice, the rest unfold on demand (10.178).
+      // unseen notice, the rest unfold on demand (10.178).
       body.replaceChildren(bonusCard());
       const item = (n, isNew, extra) => {
         const li = node("li", (isNew ? "is-new" : "") + (extra || ""));
@@ -226,7 +230,7 @@
         const list = node("ol", "notice-list");
         list.setAttribute("aria-label", label);
         if (!items.length) {
-          list.append(node("li", "notice-empty", "運営からのお知らせはまだありません。"));
+          list.append(node("li", "notice-empty", "新しいお知らせはありません。"));
           body.append(list);
           return;
         }
@@ -237,7 +241,7 @@
         rest.setAttribute("aria-label", label);
         for (const n of items.slice(1)) rest.append(render(n));
         rest.hidden = !expanded[key];
-        const toggle = node("button", "notice-more-btn", expanded[key] ? "閉じる" : "以前のお知らせ（" + (items.length - 1) + "件）を見る");
+        const toggle = node("button", "notice-more-btn", expanded[key] ? "閉じる" : "ほかのお知らせ（" + (items.length - 1) + "件）を見る");
         toggle.type = "button";
         toggle.setAttribute("aria-expanded", String(!!expanded[key]));
         toggle.onclick = () => {
@@ -246,11 +250,11 @@
         };
         body.append(toggle, rest);
       };
-      section("運営から", "運営からのお知らせ", shown(), "ops", (n) => item(n, n.at > seenAt, n.release ? " is-release" : ""));
+      section("運営から", "運営からのお知らせ", shown().filter((n) => (n.release ? n.at > releaseFloor : n.at > seenAt0)), "ops", (n) => item(n, true, n.release ? " is-release" : ""));
       // For this player: points that came in, newest first; new ones are marked until the box is
       // closed (they count as read once it has been opened).
-      const mine = window.PersonalNotices?.list(uid()) || [];
-      if (mine.length) section("あなたへ", "あなた宛てのお知らせ", mine, "own", (n) => item(n, n.at > ownSeen, ""));
+      const mine = (window.PersonalNotices?.list(uid()) || []).filter((n) => n.at > ownSeen);
+      if (mine.length) section("あなたへ", "あなた宛てのお知らせ", mine, "own", (n) => item(n, true, ""));
     };
     draw();
     await load();
