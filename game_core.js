@@ -543,9 +543,16 @@
     // big round button until it is pressed, then the same grading as the round card
     // (buttons, or a swipe on the panel). Long sentences stay readable.
     function renderFlashcardWide(stage, wordData, posLabel) {
-        // The round card's edge chips would sit on this full-width panel; hide them (10.191).
-        var playScreen = document.getElementById('flashcard-play-screen');
-        if (playScreen) playScreen.classList.add('fc-wide-active');
+        // The round card's edge chips would sit on this full-width panel; hide them.
+        // The chips live on <body>, not inside this screen, so the 10.191 CSS rule
+        // (a descendant selector) never matched them: hide them directly here, and
+        // set the body class the fixed CSS rule keys on. Their drag feedback only
+        // writes opacity/transform, which display:none overrides.
+        document.body.classList.add('fc-wide-active');
+        ['fcEdgeRippleRight', 'fcEdgeRippleLeft', 'fcEdgeRippleTop'].forEach(function(id) {
+            var chip = document.getElementById(id);
+            if (chip) { chip.dataset.fcWideHidden = '1'; chip.style.display = 'none'; }
+        });
         var enFirst = wordData.questionFirst === true || flashcardDirectionMode === 'en2ja';
         var frontText = enFirst ? wordData.en : wordData.ja;
         var backText = enFirst ? wordData.ja : wordData.en;
@@ -578,17 +585,15 @@
         var grade = document.createElement('div');
         grade.className = 'fc-wide-grade';
         grade.hidden = true;
-        [['left', '✕ わからない', -140, 0], ['up', '△ あいまい', 0, -140], ['right', '○ わかった', 140, 0]].forEach(function(spec) {
+        [['left', '✕', 'わからない', -140, 0], ['up', '△', 'あいまい', 0, -140], ['right', '○', 'わかった', 140, 0]].forEach(function(spec) {
             var b = document.createElement('button');
             b.type = 'button';
             b.dataset.dir = spec[0];
             b.textContent = spec[1];
-            b.onclick = function() { window.swipeFlashcard(spec[0], spec[2], spec[3]); };
+            b.setAttribute('aria-label', spec[2]);
+            b.onclick = function() { window.swipeFlashcard(spec[0], spec[3], spec[4]); };
             grade.appendChild(b);
         });
-        var hint = document.createElement('div');
-        hint.className = 'fc-wide-hint';
-        hint.textContent = '丸を押すまで答えは見えません';
         var revealed = false;
         reveal.onclick = function() {
             if (revealed) return;
@@ -596,7 +601,6 @@
             reveal.remove();
             a.hidden = false;
             grade.hidden = false;
-            hint.textContent = 'ボタンを押すか、スワイプでも判定できます';
             window.AppSounds?.play('back');
         };
         // Swiping the panel grades too, once the answer is out (same thresholds as the
@@ -616,7 +620,7 @@
             if (dir) window.swipeFlashcard(dir, dx, dy);
         });
         wrap.addEventListener('pointercancel', function() { tracking = false; });
-        wrap.append(q, reveal, a, grade, hint);
+        wrap.append(q, reveal, a, grade);
         stage.appendChild(wrap);
         if (typeof window.initLucide === 'function') window.initLucide();
     }
@@ -654,8 +658,11 @@
         if(posLabel){var posName=wordData.partOfSpeech?wordData.partOfSpeech.name:'',minorText=wordData.minor?'あまり使わない意味':'';posLabel.hidden=!posName&&!minorText;posLabel.textContent=[wordData.partOfSpeech?wordData.partOfSpeech.short:'',minorText].filter(Boolean).join('・');posLabel.title=[posName,minorText].filter(Boolean).join('・');posLabel.setAttribute('aria-label',posLabel.title);}
         window.renderFlashcardHistoryBubbles(wordData);
         if (flashcardLayoutMode === 'wide') { renderFlashcardWide(stage, wordData, posLabel); return; }
-        var playScreenOff = document.getElementById('flashcard-play-screen');
-        if (playScreenOff) playScreenOff.classList.remove('fc-wide-active');
+        document.body.classList.remove('fc-wide-active');
+        ['fcEdgeRippleRight', 'fcEdgeRippleLeft', 'fcEdgeRippleTop'].forEach(function(id) {
+            var chip = document.getElementById(id);
+            if (chip && chip.dataset.fcWideHidden) { delete chip.dataset.fcWideHidden; chip.style.display = ''; }
+        });
         var cardWrap = document.createElement('div');
         cardWrap.className = "flashcard-wrapper-3d";
         cardWrap.id = "activeFlashcard";
@@ -1006,6 +1013,7 @@
         if (typeof window.flushChangedVocabData === 'function') window.flushChangedVocabData();
         window.closeFlashcardWordDetails();
         document.body.classList.remove('in-game-active');
+        document.body.classList.remove('fc-wide-active');
         document.getElementById('flashcard-play-screen').style.display = 'none';
         var lbArea = document.getElementById('gameLeaderboardArea');
         if (lbArea) lbArea.style.display = 'flex';
@@ -1022,6 +1030,7 @@
         if (typeof window.flushChangedVocabData === 'function') window.flushChangedVocabData();
         window.closeFlashcardWordDetails();
         document.body.classList.remove('in-game-active');
+        document.body.classList.remove('fc-wide-active');
         var playScreen = document.getElementById('flashcard-play-screen');
         if (playScreen) playScreen.style.display = 'none';
         var resultScreen = document.getElementById('game-result-screen');
