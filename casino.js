@@ -198,6 +198,8 @@
       day = studyDay();
     days[day] = (days[day] || 0) + amount;
     saveStaked(days);
+    syncStaked();
+    queueStakedPublish();
   }
   // The operator can put what was bet on a day back to 0 (shared/casino_reset: { all: { at, day },
   // players: { id: { at, day } } }). This device takes each entry it has not taken yet, at most every five minutes.
@@ -219,6 +221,7 @@
       const days = stakedDays();
       for (const e of fresh) delete days[e.day];
       saveStaked(days);
+      publishStaked(true);
       try {
         localStorage.setItem(resetSeenName(), String(Math.max(...fresh.map((e) => e.at))));
       } catch {}
@@ -227,6 +230,85 @@
       console.warn("[casino] reset", error);
     }
   }
+  // ---- The same record in the cloud (10.186) ------------------------------------------------
+  // What was bet lived only on this device, so another device (or cleared site data) saw a
+  // full allowance again. The record now also lives on the player's own document
+  // (casinoStakedJson): on the first allowance check of a session it is read once and merged
+  // (per day the larger count wins), and changes are published back, throttled. A record
+  // written before an operator reset this device has applied is not merged back.
+  let stakedSyncStarted = false,
+    stakedPublishedJson = "",
+    stakedPublishTimer = 0,
+    stakedLastPublish = 0;
+  const resetSeen = () => {
+    try {
+      return Number(localStorage.getItem(resetSeenName())) || 0;
+    } catch {
+      return 0;
+    }
+  };
+  async function publishStaked(force) {
+    if (uid() === "GUEST-000" || !window.db || !window.fbDoc) return;
+    const write = window.fbSetDocWithRetry || window.fbSetDoc;
+    if (!write) return;
+    const days = stakedDays(),
+      seen = resetSeen(),
+      json = JSON.stringify({ days, resetMark: seen });
+    if (!force && json === stakedPublishedJson) return;
+    if (!force && Date.now() - stakedLastPublish < 15000) {
+      queueStakedPublish();
+      return;
+    }
+    stakedLastPublish = Date.now();
+    try {
+      await write(window.fbDoc(window.db, "users", uid()), { casinoStakedJson: JSON.stringify({ days, at: Date.now(), resetMark: seen }) }, { merge: true });
+      stakedPublishedJson = json;
+    } catch {}
+  }
+  function queueStakedPublish() {
+    if (stakedPublishTimer) return;
+    stakedPublishTimer = setTimeout(() => {
+      stakedPublishTimer = 0;
+      publishStaked(false);
+    }, 6000);
+  }
+  async function syncStaked() {
+    if (stakedSyncStarted) return;
+    if (uid() === "GUEST-000" || !window.db || !window.fbDoc || !window.fbGetDoc) return;
+    stakedSyncStarted = true;
+    try {
+      const snap = await window.fbGetDoc(window.fbDoc(window.db, "users", uid())),
+        raw = snap.exists() ? snap.data()?.casinoStakedJson : null;
+      if (!raw) {
+        publishStaked(true);
+        return;
+      }
+      const cloud = JSON.parse(raw);
+      if (cloud && typeof cloud === "object") {
+        const seen = resetSeen(),
+          stale = (Number(cloud.at) || 0) <= seen && (Number(cloud.resetMark) || 0) < seen;
+        if (!stale) {
+          const days = stakedDays();
+          let changed = false;
+          for (const [day, amount] of Object.entries(cloud.days || {})) {
+            const value = Math.max(0, Number(amount) || 0);
+            if (value > (days[day] || 0)) {
+              days[day] = value;
+              changed = true;
+            }
+          }
+          if (changed) {
+            saveStaked(days);
+            refresh();
+          }
+        }
+      }
+      queueStakedPublish();
+    } catch {}
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") publishStaked(true);
+  });
   // What is left of each earlier day's own allowance as of today (offsets -REPLAY_DAYS … -1; only the
   // last CARRY_DAYS are worth anything today), worked out day
   // by day from the oldest: a day gets its own minutes (if it is CARRY_FROM or later), then what was
@@ -257,6 +339,7 @@
   const carriedLeft = () => (real() ? Math.max(0, carriedInto() - stakedToday()) : 0);
   // What can still be bet today (Infinity on practice chips).
   const allowance = () => {
+    syncStaked();
     if (!real()) return Infinity;
     const days = studyDays(),
       bets = stakedDays();
