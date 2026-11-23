@@ -543,6 +543,9 @@
     // big round button until it is pressed, then the same grading as the round card
     // (buttons, or a swipe on the panel). Long sentences stay readable.
     function renderFlashcardWide(stage, wordData, posLabel) {
+        // The round card's edge chips would sit on this full-width panel; hide them (10.191).
+        var playScreen = document.getElementById('flashcard-play-screen');
+        if (playScreen) playScreen.classList.add('fc-wide-active');
         var enFirst = wordData.questionFirst === true || flashcardDirectionMode === 'en2ja';
         var frontText = enFirst ? wordData.en : wordData.ja;
         var backText = enFirst ? wordData.ja : wordData.en;
@@ -651,6 +654,8 @@
         if(posLabel){var posName=wordData.partOfSpeech?wordData.partOfSpeech.name:'',minorText=wordData.minor?'あまり使わない意味':'';posLabel.hidden=!posName&&!minorText;posLabel.textContent=[wordData.partOfSpeech?wordData.partOfSpeech.short:'',minorText].filter(Boolean).join('・');posLabel.title=[posName,minorText].filter(Boolean).join('・');posLabel.setAttribute('aria-label',posLabel.title);}
         window.renderFlashcardHistoryBubbles(wordData);
         if (flashcardLayoutMode === 'wide') { renderFlashcardWide(stage, wordData, posLabel); return; }
+        var playScreenOff = document.getElementById('flashcard-play-screen');
+        if (playScreenOff) playScreenOff.classList.remove('fc-wide-active');
         var cardWrap = document.createElement('div');
         cardWrap.className = "flashcard-wrapper-3d";
         cardWrap.id = "activeFlashcard";
