@@ -791,13 +791,13 @@
                 } catch (saveError) {
                     console.error('理解度の即時保存に失敗しました:', saveError);
                 }
-                // Rating a word in the book pays 1pt (10.192), once per word per day: the
-                // shared daily token means a word a card already paid 2pt for pays no more.
+                // Rating a meaning in the book pays 1pt (10.192, per meaning since 10.193):
+                // the claim key is word:meaning, once per meaning per day.
                 if (status !== 'none' && window.StudyPoints) {
                     try {
                         var rewardBook = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default';
                         var rewardPool = typeof textbooksPool !== 'undefined' ? textbooksPool : [];
-                        window.StudyPoints.reward('vocab', rewardBook, vocabList[wIdx].num, (typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000', { word: vocabList[wIdx].word, bookName: (rewardPool.find(function(b) { return b.id === rewardBook; }) || {}).name });
+                        window.StudyPoints.reward('vocab', rewardBook, String(vocabList[wIdx].num) + ':' + String(meaningId), (typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000', { word: vocabList[wIdx].word, bookName: (rewardPool.find(function(b) { return b.id === rewardBook; }) || {}).name });
                     } catch (pointError) { console.warn('理解度のポイント記録を確認してください', pointError); }
                 }
                 // 教材切替より前に、変更した教材の状態を同期的に退避する。
