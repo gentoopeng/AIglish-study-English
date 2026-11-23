@@ -1579,6 +1579,9 @@
     };
 
     var vocabPage=0,vocabPageFilter="";
+    // Words shown under the current filter stay shown while those conditions last
+    // (10.196): rating the last matching meaning must not make the row vanish.
+    var vocabStickyNums=new Set(),vocabStickySignature="";
     const vocabPageSize=40;
     // 暗記モード: hide every word or every meaning in the list behind a blur; a tap on one
     // reveals just that one (tap again to hide it). The choice is kept on this device.
@@ -1632,16 +1635,20 @@
             SharedVocabNotes.prepare(vocabList).then(function(){if(currentTextbook===book&&selectedExtras.has('note'))window.renderVocabList();}).catch(function(){if(currentTextbook===book){container.textContent='共有メモを読み込めませんでした。絞り込みを解除するか、接続後にもう一度お試しください。';}});return;
         }
         unitContents(container);
+        var filterSignature=JSON.stringify([currentTextbook,startRange,endRange,searchKeyword,vocabFilter,selectedUnit]);
+        if(filterSignature!==vocabStickySignature){vocabStickySignature=filterSignature;vocabStickyNums=new Set();}
         var filtered = (window.VocabOrder ? window.VocabOrder.sort(vocabList) : vocabList).filter(function(w) {
             var n = window.VocabOrder ? window.VocabOrder.no(w) : parseInt(w.num);
             if (selectedUnitNums && !selectedUnitNums.has(String(w.num))) return false;
             if (!isNaN(n) && (n < startRange || n > endRange)) return false;
+            if(vocabStickyNums.has(String(w.num)))return true;
             if(selectedUnderstanding.size && !(w.meanings||[]).some(function(m){return selectedUnderstanding.has(m.status||'none');}))return false;
             if(selectedExtras.has('sticky')&&!w.sticky)return false;
             if(selectedExtras.has('note')&&!String(w.note||'').trim()&&!(noteScope===2&&window.SharedVocabNotes?.has(w)))return false;
             if (searchKeyword && !(w.word.toLowerCase().includes(searchKeyword) || w.meaning.includes(searchKeyword) || String(w.note || '').toLowerCase().includes(searchKeyword))) return false;
             return true;
         });
+        filtered.forEach(function(w){vocabStickyNums.add(String(w.num));});
         // 並び替えモード: the same filtered words, as short rows to drag or move one place.
         if (window.VocabReorder && window.VocabReorder.active()) { window.VocabReorder.render(container, filtered); return; }
         var signature=JSON.stringify([currentTextbook,startRange,endRange,searchKeyword,vocabFilter,selectedUnit]);
