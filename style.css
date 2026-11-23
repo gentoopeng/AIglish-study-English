@@ -3474,3 +3474,7 @@ html:is([data-motion="off"],[data-motion="test"]).splash-leaving #appSplash{anim
 .vocab-library-reorder-toggle[aria-pressed="true"]{background:rgba(103,232,249,.16);border-color:rgba(103,232,249,.55);color:#a5f3fc;}
 .vocab-library-move-button{font-size:15px;font-weight:900;}
 .vocab-library-move-button:disabled{opacity:.3;}
+
+/* Always-visible login entry on the splash (10.182): under the gauge, quieter than the stall help's gold button. */
+#appSplash .splash-login-row{display:flex;justify-content:center;margin-top:14px;}
+#appSplash .splash-login-row button{padding:9px 18px;border:1px solid rgba(244,237,223,.3);border-radius:999px;background:rgba(15,23,42,.45);color:#f4eddf;font:600 13px/1 "Hiragino Sans",system-ui,sans-serif;letter-spacing:.06em;cursor:pointer;}
