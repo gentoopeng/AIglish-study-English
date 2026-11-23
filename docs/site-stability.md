@@ -5285,3 +5285,14 @@ Fix:
 
 Tests:
 - 変換後の casino-jackpot.js は node --check を通過。RULE の値を参照する単体テストはなし（統計テストの 12000 は集計サンプルで無関係）。
+
+## 10.189.00.00 — 白マーカーの下から文字が透けるのを修正
+
+What the user asked: スクショで「この場合は文字消してね？？」（単語を隠すで #2 氷河時代 の字が白マーカーの下に読めてしまう）。
+
+Fix:
+- 原因はカード全体の text-shadow（.word-row-container）。文字色を透明にしても影が字の形に残り、透けて読めていた。
+- style.css の隠す表示ルールを :not(.is-revealed) に限定し直し、text-shadow:none !important と -webkit-text-fill-color:transparent を追加（子要素にも同じ指定）。白い帯だけが残り、字は完全に消える。タップで表示したときは今まで通り影も戻る。
+
+Tests:
+- CSS のみの変更。ブラウザスモークはこの環境では Chromium が起動せず未実施（実機確認待ち）。
