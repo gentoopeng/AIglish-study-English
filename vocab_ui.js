@@ -228,9 +228,15 @@
             if (!ov.isConnected || !Array.isArray(peers) || !peers.length) return;
             var bookId = String(currentTextbook || '');
             var rows = [{ name: 'あなた', mine: true, counts: { ok: ok, so: so, bad: bad, none: none, total: total } }];
+            var bookTitle = currentBook ? String(currentBook.name || '') : '';
             peers.forEach(function(p) {
-                var b = (p.books || []).find(function(x) { return x.id === bookId; });
-                if (b && b.counts) rows.push({ name: p.name, mine: false, counts: b.counts });
+                var books = p.books || [];
+                // The same book under another id (a copy kept under the same name) counts too (10.184).
+                var b = books.find(function(x) { return x.id === bookId; }) || (bookTitle ? books.find(function(x) { return x.name === bookTitle || x.name === bookTitle.slice(0, 60); }) : null);
+                if (!b) return;
+                // Older summaries carry no ○/△/✕/ー split: draw from the learned-word count instead.
+                var counts = b.counts || { ok: b.done || 0, so: 0, bad: 0, none: Math.max(0, (b.total || 0) - (b.done || 0)), total: b.total || 0 };
+                if (counts.total) rows.push({ name: p.name, mine: false, counts: counts });
             });
             if (rows.length < 2) {
                 host.innerHTML = '<div style="margin-top:12px; font-size:11.5px; color:var(--text-sub); text-align:center;">この本をやっているフレンドはまだいません</div>';
