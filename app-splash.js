@@ -67,6 +67,14 @@
       if (html.classList.contains("signed-in") && splash?.shown?.() && gate && gate.style.display !== "none") help.querySelector("[data-splash-login]").click();
     }, 45000);
   }
+  // Always there (10.182): the login form without waiting for a stall — a guest who wants their
+  // account, or a saved account that will not start. The same way out as the help's button.
+  const alwaysLogin = document.querySelector("[data-splash-login-always]");
+  if (alwaysLogin) alwaysLogin.onclick = () => {
+    clearInterval(poll);
+    html.classList.remove("signed-in");
+    splash?.hide();
+  };
   // A saved id removed without touching the gate (a deleted account) is caught by looking now and then.
   if (html.classList.contains("signed-in")) poll = setInterval(update, 300);
   setTimeout(() => clearInterval(poll), 60000);
