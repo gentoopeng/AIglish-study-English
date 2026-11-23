@@ -3,7 +3,7 @@
 // pay for it) adds to one running total in shared/casino_jackpot; the jackpots are a part of
 // what was bet since each was last won:
 //   JACKPOT       = 5,000  + 1.5% of the total since the last JACKPOT, up to 20,000
-//   SUPER JACKPOT = 12,000 + 1% of the total since the last SUPER JACKPOT, up to 150,000
+//   SUPER JACKPOT = 30,000 + 2% of the total since the last SUPER JACKPOT, up to 300,000
 // Small seeds, so a pot is mostly what was really bet. What the JACKPOT would hold past its
 // cap goes to the SUPER JACKPOT instead (kept in `spill` once the JACKPOT is won, until the
 // SUPER JACKPOT is). The seeds and shares are paid for by the house edge of すごろくビンゴ,
@@ -14,7 +14,7 @@
 // winners at the same moment each get what was there in turn, never the same pot twice.
 (function () {
   "use strict";
-  const RULE = { jp: { seed: 5000, rate: 0.015, max: 20000 }, sjp: { seed: 12000, rate: 0.01, max: 150000 } };
+  const RULE = { jp: { seed: 5000, rate: 0.015, max: 20000 }, sjp: { seed: 30000, rate: 0.02, max: 300000 } };
   const EVERY = 60e3,
     cacheKey = "aiglish_casino_jackpot",
     pendingKey = "aiglish_casino_jackpot_pending";
