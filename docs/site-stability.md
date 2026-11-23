@@ -5357,3 +5357,27 @@ Book cover photos (library.js):
 
 Tests:
 - 変換後の各JSは node --check を通過。ブラウザスモークはこの環境では未実施。
+
+## 10.195.00.00 — 横長カードの端チップ重なり、今度こそ修正／判定ボタンは記号のみに
+
+What the user said: 重なるの治ってない！／わからない とかの日本語もいらん（スクショ付き）。
+
+Root cause of the failed 10.191 fix: the edge chips (#fcEdgeRippleLeft/Right/Top)
+are appended to document.body when a session starts, NOT inside
+#flashcard-play-screen — so the 10.191 rule
+`.flashcard-session-screen.fc-wide-active #fcEdgeRipple…` (a descendant selector)
+could never match them, and they kept painting over the wide answer panel.
+
+Fix:
+- renderFlashcardWide now hides the chips directly (inline display:none, marked
+  with data-fc-wide-hidden) and sets fc-wide-active on <body>; the CSS rule was
+  retargeted to `body.fc-wide-active #fcEdgeRipple…`. The chips' drag feedback
+  only writes opacity/transform, which display:none overrides, so nothing can
+  re-show them mid-session. The round-card path restores them (class removed,
+  inline display cleared for chips it hid), and session finish removes the body
+  class too.
+- The wide layout's grade buttons are symbol-only now (✕／△／○, Japanese kept in
+  aria-labels), drawn larger (20px), and the hint line under them is gone.
+
+Tests:
+- 変換後の各JSは node --check を通過。ブラウザスモークはこの環境では未実施。
