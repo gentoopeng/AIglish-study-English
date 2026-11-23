@@ -327,7 +327,7 @@
             '<label class="library-term-mode"><input type="checkbox" id="libraryBookTermMode">用語・年号モード<small>「」で囲んだ言葉と、行の頭の年号から問題を作ります（日本史・用語集など）。</small></label>' +
             '<label for="libraryBookWords">' + (book ? '単語を追加' : '最初の単語（あとから追加できます）') + '</label><textarea id="libraryBookWords" rows="5" placeholder="1:follow:①〜に従う②〜に続く:as follows 次のように…\n2:read:読む:read a book"></textarea>' +
             '<p class="library-editor-hint">番号:単語:意味:サブ情報（任意）。①②で複数の意味を登録できます。5つ目に「同=follow,obey 反=lead 関=leader」を付けると（例：1:follow:従う:サブ情報:同=obey 反=lead。サブ情報がなければ「::」）、同義語・反意語・関連も登録できます（この単語帳にある単語はジャンプできるリンク、ない単語はジャンプしない関連語になります）。同じ番号は更新されます。JSON配列は全項目の置き換えです。英単語帳用プロンプトの出力（{"words":…}）はそのまま貼り付けると、その番号の単語だけが追加・更新されます（用語・年号モードの単語帳で使います）。<button type="button" id="libraryCopyPhotoPrompt" class="library-prompt-copy">写真から抽出するAI用プロンプトをコピー</button><button type="button" id="libraryCopyEnglishPrompt" class="library-prompt-copy">英単語帳（熟語・派生語・語法を意味ごとのカードに）用プロンプトをコピー</button><button type="button" id="libraryCopyTermPrompt" class="library-prompt-copy">用語・年号モード（日本史・用語集など。年号と「」の問題に）用プロンプトをコピー</button>公開されるのは単語帳の内容だけです。</p><p class="library-editor-error" role="alert"></p>' +
-            '<div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="submit" class="library-editor-primary">' + (book ? '変更を保存' : '単語帳を作る') + '</button></div></form>');
+            '<p class="library-editor-error" role="alert"></p><div class="library-editor-actions"><button type="button" data-library-close>キャンセル</button><button type="submit" class="library-editor-primary">' + (book ? '変更を保存' : '単語帳を作る') + '</button></div></form>');
         var form = modal.querySelector('form');
         var cover = book && book.coverType === 'image' ? book.cover : '';
         var coverReady = Promise.resolve();
@@ -336,11 +336,11 @@
         form.querySelector('#libraryBookCover').onchange=function(){
             var file=this.files[0];if(!file)return;
             coverReady=new Promise(function(resolve,reject){
-                if(!file.type.startsWith('image/')){reject(new Error('画像ファイルを選んでください。'));return;}
+                if(file.type&&!file.type.startsWith('image/')){reject(new Error('画像ファイルを選んでください。'));return;}
                 var reader=new FileReader();reader.onerror=function(){reject(new Error('画像を読み込めませんでした。'));};
                 reader.onload=function(){var image=new Image();image.onerror=function(){reject(new Error('画像を開けませんでした。'));};image.onload=function(){var scale=Math.min(1,240/Math.max(image.width,image.height));var canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);cover=canvas.toDataURL('image/jpeg',.8);previewCover();resolve();};image.src=reader.result;};reader.readAsDataURL(file);
             });
-            coverReady.catch(function(error){form.querySelector('.library-editor-error').textContent=error.message;});
+            coverReady.catch(function(error){var coverError=form.querySelector('.library-editor-error');if(coverError)coverError.textContent=error.message;});
         };
         form.querySelector('#libraryCopyPhotoPrompt').onclick=async function(){var button=this;var prompt="添付写真の教材を、このアプリの単語帳に登録できる形で抽出してください。英語に限らず、古文・漢文・歴史・理科などの単語、用語、一問一答を対象にします。\n\n【情報の選び方】\n・写真に載っている見出し語・用語・設問と、それに対応する主要な意味・答えを抽出します。主要な意味を勝手に増やさず、詳しい説明はサブ情報へ分けてください。\n・目的は定期試験・共通テストの基礎確認です。私が科目・学年・試験範囲・先生の指定を添えた場合は、その範囲を優先してください。範囲が不明な場合は写真の主要な内容を残し、出題されないと断定して省かないでください。\n・意味欄はフラッシュ単語や選択問題の答えになります。短く、単独で理解できる形にし、長い説明文、品詞表記、括弧だらけの注釈を混ぜないでください。区別に必要な条件は短く残してください。\n・同じ意味の言い換えは一つにまとめます。独立して覚える意味・答えだけを①②③で分けてください。この区切りごとに理解度を記録するため、説明の箇条書きには使わないでください。\n・サブ情報はタップして開く詳細欄なので、学習に役立つ情報を十分にまとめてください。写真の解説・用法・例文と訳・熟語・関連語・品詞・活用・注意点・紛らわしい項目との違いを、科目に応じて整理します。歴史なら背景・因果関係・関連人物や年代、理科なら原理・式・条件・単位などを入れてください。\n・写真の重要な補足は省略せずサブ情報へ入れてください。定期試験・共通テストでの理解や区別に役立つ説明・代表例は補って構いませんが、写真からの抽出と補足を「教材の補足」「理解の補足」のように区別してください。確信できない知識、無関係な雑学、範囲外の高度な専門情報を無理に足さず、同じ説明の重複を避けてください。サブ情報は「用法／例文／注意点」などの短い見出しと「・」「／」で読みやすくまとめ、詳しくても1項目1行を守ります。有用な補足が本当にない場合だけ空欄にしてください。\n\n【出力形式】\n1行に1項目、番号:単語・用語・短い設問:意味・答え:サブ情報\n・区切りは半角コロン3個。項目内のコロンは全角に置き換え、項目内で改行しないでください。サブ情報がなければ末尾のコロンだけ残します。\n・同義語・反意語・関連語があれば、5つ目に「同=obey,comply 反=lead 関=leader」の形で付けます（サブ情報がなければ「::」）。ここには単語そのものだけを書き、意味・かっこ書き・例文は付けません。意味や使い分けはサブ情報に「同義語・obey 〜に従う」のように書いてください。アプリが自動で、単語帳にある語はジャンプできるリンクに、ない語はジャンプしない関連語にします。\n・元の正の整数番号を保持します。番号がない場合だけ上から1、2、3…と付けます。同じ番号を複数の行に使わないでください。違う内容の同一番号がある場合は、私に番号の整理を確認してから出力してください。\n・見出し語を長い説明にせず、意味は①〜に従う②〜に続くのように分けます。一つの意味なら①は不要です。\n・写真で判読できない項目は推測せず、その項目を省略します。読み取れる主要な内容は漏らさないでください。\n・コードブロック、見出し、説明、JSON、理解度、履歴、個人メモは出力せず、登録用の行だけを返してください。\n\n形式例（意味は写真を優先し、補足は必要に応じて区別して記載すること）\n1:follow:①〜に従う②〜に続く:用法・follow＋指示や規則で「従う」／例文・Follow the rules. 規則に従いなさい。／熟語・as follows 次のように／同義語・obey 〈命令・規則〉に従う:同=obey 反=precede\n2:あはれなり:①しみじみと趣深い②かわいそうだ:品詞・形容動詞／注意点・文脈に応じて感動か同情かを判断する\n3:大化の改新が始まった年:645年:理解の補足・乙巳の変をきっかけに始まった政治改革／関連人物・中大兄皇子、中臣鎌足\n\nこの出力は同じ番号の項目を更新します。既存の単語帳へ追加する場合は、私が指定した未使用の開始番号や元の番号を守ってください。";try{await navigator.clipboard.writeText(prompt);button.textContent='コピーしました';}catch(e){var fallback=document.createElement('textarea');fallback.className='library-prompt-fallback';fallback.readOnly=true;fallback.value=prompt;button.after(fallback);fallback.select();button.textContent='下の文を選択してコピーしてください';}};
         // English word books: one card per meaning, phrases and patterns as English over Japanese
@@ -371,7 +371,7 @@
                 master=window.parseVocabImport(importText,master);
                 // Related words that are headwords of the player's other books become links to them (10.154).
                 try{if(window.WordRelationsUi)await window.WordRelationsUi.promote(master,id,beforeImport);}catch(e){console.warn('[relations] promote',e);}
-                await coverReady;
+                await coverReady.catch(function(){});
                 var record = { id: id, name: name, cover: cover || '📔', coverType: cover ? 'image' : 'text', personal: true, visibility: form.querySelector('#libraryBookVisibility').value };
                 if (form.querySelector('#libraryBookTermMode').checked) record.termMode = true;
                 await publish(record, master, book);
@@ -395,7 +395,7 @@
                 window.__dirtyManualVocabDrafts[id] = window.__manualVocabDraftRevisions[id];
                 persist(data);
                 close();
-            } catch (error) { form.querySelector('.library-editor-error').textContent = error.message; }
+            } catch (error) { var submitError = form.querySelector('.library-editor-error'); if (submitError) submitError.textContent = error.message; }
             finally { submit.disabled = false; }
         };
     };
