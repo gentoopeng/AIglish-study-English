@@ -5381,3 +5381,21 @@ Fix:
 
 Tests:
 - 変換後の各JSは node --check を通過。ブラウザスモークはこの環境では未実施。
+
+## 10.196.00.00 — 理解度で絞った一覧で、付け替えても単語が消えない
+
+What the user said: 単語帳で理解度で絞った時に理解度押すとその単語が消えます（見た目だけ）。
+
+Cause: the list filter keeps a word only while one of its meanings still has a
+filtered status; rating that last matching meaning re-rendered the list without
+the word. The rating itself was saved fine — the word only vanished from view.
+
+Fix (vocab_ui.js renderVocabList): words shown under the current filter
+conditions stay shown. A sticky set of word numbers is kept alongside the
+existing page signature (book, range, search, filter, unit); the signature
+changing clears it. A word in the set passes the filter, and every word the
+filter shows joins the set — so rating no longer makes a row disappear, while
+changing any filter condition still re-filters from scratch.
+
+Tests:
+- 変換後のJSは node --check を通過。ブラウザスモークはこの環境では未実施。
