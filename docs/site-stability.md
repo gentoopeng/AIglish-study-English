@@ -5237,3 +5237,15 @@ Fix:
 
 Tests:
 - 変換後の vocab_ui.js / friends.js / people.js は node --check を通過。ブラウザスモークはこの環境では Chromium が起動せず未実施。
+
+## 10.185.00.00 — 詳細の比較はフレンド／全ユーザーを選択
+
+What the user asked: フレンドだけじゃなくて全ユーザーでいいかも（選択）。
+
+Fix:
+- 単語帳の詳細「みんなの進み具合」に範囲の切替（フレンド／全ユーザー）を追加。選択は端末に保存（aiglish_stats_peer_scope）。
+- 全ユーザーは BookProgress.everyone()：最近30日に活動したプレイヤーを、フレンドと同じ小さなフィールドマスク（UserDirectory.recent）で読み、同じ本（id、なければ名前）をやっている人を並べる。REST が使えない環境では時間制限つき scan にフォールバック。表示は○率順に30人まで。
+- ゲストでは全ユーザーは空（従来どおり）。
+
+Tests:
+- 変換後の book-progress.js / vocab_ui.js は node --check を通過。ブラウザスモークはこの環境では Chromium が起動せず未実施。

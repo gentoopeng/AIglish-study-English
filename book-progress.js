@@ -203,5 +203,39 @@
       .map((d) => ({ id: d.id, name: d.data.playerName || d.id, avatar: d.data.avatar || "", custom: d.data.profileCustomizationJson, books: parse(d.data) }));
     return peerCache.rows;
   }
+  // Everyone (10.185): players active in the last 30 days, for the detail popup's
+  // all-users scope. Same small field mask as the friends read; cached a minute.
+  const everyoneCache = { at: 0, rows: [] };
+  async function fetchEveryone() {
+    const now = Date.now();
+    if (now - everyoneCache.at < 60000) return everyoneCache.rows;
+    everyoneCache.at = now;
+    if (uid() === "GUEST-000") {
+      everyoneCache.rows = [];
+      return everyoneCache.rows;
+    }
+    let docs = null;
+    try {
+      docs = (await root.UserDirectory?.recent?.(now - 30 * 86400000, [], { fields: PEER_FIELDS })) || null;
+    } catch {
+      docs = null;
+    }
+    if (!Array.isArray(docs)) {
+      docs = [];
+      try {
+        await root.UserDirectory?.scan?.((id, data) => {
+          docs.push({ id, data });
+        });
+      } catch {
+        // The scan is time-boxed; whoever was read still counts.
+      }
+    }
+    const seen = new Set();
+    everyoneCache.rows = docs
+      .filter((d) => d && d.id && d.id !== uid() && !d.data?.deleted && !seen.has(d.id) && seen.add(d.id))
+      .map((d) => ({ id: d.id, name: d.data.playerName || d.id, avatar: d.data.avatar || "", custom: d.data.profileCustomizationJson, books: parse(d.data) }));
+    return everyoneCache.rows;
+  }
   root.BookProgress.peers = fetchPeers;
+  root.BookProgress.everyone = fetchEveryone;
 })(typeof window !== "undefined" ? window : globalThis);

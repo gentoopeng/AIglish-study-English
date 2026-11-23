@@ -220,30 +220,15 @@
         ov.querySelector('#vocabStatsClose').onclick = function() { ov.remove(); };
         ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
         // Everyone's donuts on this book, mine included, best ○ rate first (10.176).
+        // Whose progress joins mine is a choice (10.185): friends, or every player.
         (async function() {
             var host = ov.querySelector('#vocabStatsPeers');
             if (!host || !window.BookProgress || typeof window.BookProgress.peers !== 'function') return;
-            var peers = [];
-            try { peers = await window.BookProgress.peers(); } catch (e) { return; }
-            if (!ov.isConnected || !Array.isArray(peers) || !peers.length) return;
+            var scope = 'friends';
+            try { if (localStorage.getItem('aiglish_stats_peer_scope') === 'all') scope = 'all'; } catch (e) {}
             var bookId = String(currentTextbook || '');
-            var rows = [{ name: 'あなた', mine: true, counts: { ok: ok, so: so, bad: bad, none: none, total: total } }];
             var bookTitle = currentBook ? String(currentBook.name || '') : '';
-            peers.forEach(function(p) {
-                var books = p.books || [];
-                // The same book under another id (a copy kept under the same name) counts too (10.184).
-                var b = books.find(function(x) { return x.id === bookId; }) || (bookTitle ? books.find(function(x) { return x.name === bookTitle || x.name === bookTitle.slice(0, 60); }) : null);
-                if (!b) return;
-                // Older summaries carry no ○/△/✕/ー split: draw from the learned-word count instead.
-                var counts = b.counts || { ok: b.done || 0, so: 0, bad: 0, none: Math.max(0, (b.total || 0) - (b.done || 0)), total: b.total || 0 };
-                if (counts.total) rows.push({ name: p.name, mine: false, counts: counts });
-            });
-            if (rows.length < 2) {
-                host.innerHTML = '<div style="margin-top:12px; font-size:11.5px; color:var(--text-sub); text-align:center;">この本をやっているフレンドはまだいません</div>';
-                return;
-            }
             var rate = function(c) { return c.total ? c.ok / c.total : 0; };
-            rows.sort(function(a, b) { return rate(b.counts) - rate(a.counts); });
             var donut = function(c) {
                 var r2 = 26, circ = 2 * Math.PI * r2, off = 0, parts = '';
                 [[c.ok, '#10B981'], [c.so, '#F59E0B'], [c.bad, '#EF4444'], [c.none, '#64748B']].forEach(function(seg) {
@@ -254,11 +239,62 @@
                 if (!c.total) parts = '<circle r="' + r2 + '" cx="32" cy="32" fill="none" stroke="#334155" stroke-width="9"/>';
                 return '<svg width="64" height="64" viewBox="0 0 64 64">' + parts + '<text x="32" y="36" text-anchor="middle" fill="#fff" font-size="12" font-weight="900">' + Math.round(rate(c) * 100) + '%</text></svg>';
             };
-            var html = '<div style="margin-top:14px; font-size:12.5px; font-weight:900;">みんなの進み具合</div>';
-            rows.forEach(function(row) {
-                html += '<div style="display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.08);">' + donut(row.counts) + '<div style="min-width:0;"><div style="font-size:13px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;' + (row.mine ? ' color:var(--cosmic-cyan);' : '') + '">' + window.escapeVocabText(row.name) + '</div><div style="font-size:11.5px; color:var(--text-sub);">○' + row.counts.ok + ' △' + row.counts.so + ' ✕' + row.counts.bad + ' ー' + row.counts.none + '</div></div></div>';
-            });
-            host.innerHTML = html;
+            var drawToken = 0;
+            async function draw() {
+                var token = ++drawToken;
+                host.innerHTML = '';
+                var head = document.createElement('div');
+                head.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:14px;';
+                var title = document.createElement('div');
+                title.style.cssText = 'font-size:12.5px; font-weight:900;';
+                title.textContent = 'みんなの進み具合';
+                var seg = document.createElement('div');
+                seg.style.cssText = 'display:flex; gap:4px;';
+                [['friends', 'フレンド'], ['all', '全ユーザー']].forEach(function(pair) {
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.textContent = pair[1];
+                    b.setAttribute('aria-pressed', String(scope === pair[0]));
+                    b.style.cssText = 'padding:5px 11px; border-radius:999px; border:1px solid rgba(255,255,255,.25); font-size:11px; font-weight:800; cursor:pointer;' + (scope === pair[0] ? ' background:rgba(103,232,249,.18); color:#a5f3fc; border-color:rgba(103,232,249,.55);' : ' background:none; color:var(--text-sub);');
+                    b.onclick = function() {
+                        if (scope === pair[0]) return;
+                        scope = pair[0];
+                        try { localStorage.setItem('aiglish_stats_peer_scope', scope); } catch (e) {}
+                        draw();
+                    };
+                    seg.appendChild(b);
+                });
+                head.append(title, seg);
+                var body = document.createElement('div');
+                body.innerHTML = '<div style="margin-top:10px; font-size:11.5px; color:var(--text-sub); text-align:center;">読み込み中…</div>';
+                host.append(head, body);
+                var people = [];
+                try { people = scope === 'all' && typeof window.BookProgress.everyone === 'function' ? await window.BookProgress.everyone() : await window.BookProgress.peers(); } catch (e) { people = []; }
+                if (!ov.isConnected || token !== drawToken) return;
+                var rows = [{ name: 'あなた', mine: true, counts: { ok: ok, so: so, bad: bad, none: none, total: total } }];
+                (Array.isArray(people) ? people : []).forEach(function(p) {
+                    var books = p.books || [];
+                    // The same book under another id (a copy kept under the same name) counts too (10.184).
+                    var b = books.find(function(x) { return x.id === bookId; }) || (bookTitle ? books.find(function(x) { return x.name === bookTitle || x.name === bookTitle.slice(0, 60); }) : null);
+                    if (!b) return;
+                    // Older summaries carry no ○/△/✕/ー split: draw from the learned-word count instead.
+                    var counts = b.counts || { ok: b.done || 0, so: 0, bad: 0, none: Math.max(0, (b.total || 0) - (b.done || 0)), total: b.total || 0 };
+                    if (counts.total) rows.push({ name: p.name, mine: false, counts: counts });
+                });
+                if (rows.length < 2) {
+                    body.innerHTML = '<div style="margin-top:12px; font-size:11.5px; color:var(--text-sub); text-align:center;">' + (scope === 'all' ? 'この本をやっている人はまだいません' : 'この本をやっているフレンドはまだいません') + '</div>';
+                    return;
+                }
+                rows.sort(function(a, b) { return rate(b.counts) - rate(a.counts); });
+                var shown = rows.slice(0, 30);
+                var html = '';
+                shown.forEach(function(row) {
+                    html += '<div style="display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.08);">' + donut(row.counts) + '<div style="min-width:0;"><div style="font-size:13px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;' + (row.mine ? ' color:var(--cosmic-cyan);' : '') + '">' + window.escapeVocabText(row.name) + '</div><div style="font-size:11.5px; color:var(--text-sub);">○' + row.counts.ok + ' △' + row.counts.so + ' ✕' + row.counts.bad + ' ー' + row.counts.none + '</div></div></div>';
+                });
+                if (rows.length > shown.length) html += '<div style="margin-top:8px; font-size:11px; color:var(--text-sub); text-align:center;">○率の高い順に' + shown.length + '人まで表示しています</div>';
+                body.innerHTML = html;
+            }
+            draw();
         })();
     };
 
