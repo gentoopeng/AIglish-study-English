@@ -5399,3 +5399,22 @@ changing any filter condition still re-filters from scratch.
 
 Tests:
 - 変換後のJSは node --check を通過。ブラウザスモークはこの環境では未実施。
+
+## 10.197.00.00 — 横長モードではスワイプのヒント自体を消す
+
+What the user said: あと治ってません／このモードの場合はスワイプのやつは（覚えているってやつたち）消してください。
+
+The real culprits, at last: the overlapping ✕覚えていない／✓覚えた／↑上:スキップ
+are NOT the #fcEdgeRipple drag glows that 10.191 and 10.195 chased — they are
+three static hint divs written directly in index.html inside
+#flashcard-play-screen (absolute-positioned at the stage's left/right, plus the
+top skip hint). In the round layout they sit beside the card; in the wide
+layout the full-width panel runs underneath them.
+
+Fix: the three divs gained class="fc-swipe-hint", and style.css hides
+.fc-swipe-hint while body.fc-wide-active is set (the class the wide renderer
+already toggles since 10.195). The round layout keeps its hints. The 10.195
+chip hiding stays — the drag glows should not paint over the panel either.
+
+Tests:
+- 変換後のJSは node --check を通過。ブラウザスモークはこの環境では未実施。
