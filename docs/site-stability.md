@@ -5214,3 +5214,15 @@ Fix:
 
 Tests:
 - 変換後の app-splash.js / usage-guide-content.js は node --check を通過。ブラウザスモークはこの環境では Chromium が起動せず未実施。
+
+## 10.183.00.00 — 単語カードの単元を複数選べるように
+
+What the user asked: 複数単元をまとめて単語カードできるように、チェックボックス式で選べるようにしてほしい。
+
+Fix:
+- 単語カード設定の単元は単一選択のプルダウンだったのを、チェックボックスのリストに変更（#flashcardUnitSelect → #flashcardUnitList）。いくつでも選べて、選んだ単元の単語を全部まとめて出題する。何も選ばなければ「すべての単元を出題」（従来のすべての単元と同じ）。選択中の件数は下に表示。
+- 出題時の絞り込みは、選んだ単元すべての番号の和集合に変更（VocabOrder.findUnit を単元ごとに合算）。
+- 予定（プランナー）から設定を開いたときのリセットも、新しいチェックボックス方式に合わせて resetFlashcardUnits() に変更。
+
+Tests:
+- 変換後の game_core.js / planner.js は node --check を通過。flashcard-settings のスモークは単元セレクトへの参照なし（今回の変更で壊れない）。ブラウザスモークはこの環境では Chromium が起動せず未実施。

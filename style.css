@@ -3478,3 +3478,10 @@ html:is([data-motion="off"],[data-motion="test"]).splash-leaving #appSplash{anim
 /* Always-visible login entry on the splash (10.182): under the gauge, quieter than the stall help's gold button. */
 #appSplash .splash-login-row{display:flex;justify-content:center;margin-top:14px;}
 #appSplash .splash-login-row button{padding:9px 18px;border:1px solid rgba(244,237,223,.3);border-radius:999px;background:rgba(15,23,42,.45);color:#f4eddf;font:600 13px/1 "Hiragino Sans",system-ui,sans-serif;letter-spacing:.06em;cursor:pointer;}
+
+/* Flashcard units: tick any number of them (10.183). */
+.flashcard-unit-list{display:grid;gap:6px;max-height:180px;overflow:auto;}
+.flashcard-unit-option{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.04);font-size:13px;font-weight:600;color:#fff;cursor:pointer;}
+.flashcard-unit-option input{width:17px;height:17px;flex:0 0 auto;accent-color:#67e8f9;}
+.flashcard-unit-option:has(input:checked){border-color:rgba(103,232,249,.55);background:rgba(103,232,249,.1);}
+.flashcard-unit-summary{font-size:11px;font-weight:600;color:var(--text-sub);}

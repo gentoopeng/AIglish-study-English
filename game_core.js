@@ -72,6 +72,22 @@
     var settingsOpener = null;
     var startingBookSettings = false;
 
+    // The units ticked for the cards (10.183): any number; none ticked means every unit.
+    function selectedFlashcardUnitKeys() {
+        return Array.from(document.querySelectorAll('#flashcardUnitList input[type="checkbox"]:checked')).map(function(box) { return box.value; });
+    }
+    function updateFlashcardUnitSummary() {
+        var summary = document.getElementById('flashcardUnitSummary');
+        if (!summary) return;
+        var total = document.querySelectorAll('#flashcardUnitList input[type="checkbox"]').length;
+        var picked = selectedFlashcardUnitKeys().length;
+        summary.textContent = !total ? '' : picked === 0 ? 'すべての単元を出題' : picked + 'つの単元を出題';
+    }
+    window.resetFlashcardUnits = function() {
+        document.querySelectorAll('#flashcardUnitList input[type="checkbox"]').forEach(function(box) { box.checked = false; });
+        updateFlashcardUnitSummary();
+    };
+
     window.openBookFlashcardSettings = function(bookId) {
         if (bookSettingsDialog) return;
         var book = textbooksPool.find(function(item) { return item.id === bookId; });
@@ -97,14 +113,23 @@
             try { words = JSON.parse(localStorage.getItem('core_v4_cache_' + bookId) || '[]'); } catch (e) { words = []; }
         }
         var nums = (words || []).map(function(word) { return window.VocabOrder ? window.VocabOrder.no(word) : Number(word.num); }).filter(Number.isFinite);
-        // Units of this book, if any, can narrow the cards to one unit.
-        var unitSelect = document.getElementById('flashcardUnitSelect'), unitField = document.getElementById('flashcardUnitField');
-        if (unitSelect && unitField && window.VocabOrder) {
+        // Units of this book, if any, narrow the cards: tick any number of them (none ticked = all).
+        var unitList = document.getElementById('flashcardUnitList'), unitField = document.getElementById('flashcardUnitField');
+        if (unitList && unitField && window.VocabOrder) {
             var units = window.VocabOrder.units(words || []);
-            unitSelect.replaceChildren(new Option('すべての単元', ''));
-            units.forEach(function(unit) { unitSelect.append(new Option(unit.name + '（#' + unit.from + '–' + unit.to + '・' + unit.count + '語）', unit.key)); });
-            unitSelect.value = '';
+            unitList.replaceChildren();
+            units.forEach(function(unit) {
+                var row = document.createElement('label');
+                row.className = 'flashcard-unit-option';
+                var box = document.createElement('input');
+                box.type = 'checkbox';
+                box.value = unit.key;
+                box.onchange = updateFlashcardUnitSummary;
+                row.append(box, document.createTextNode(unit.name + '（#' + unit.from + '–' + unit.to + '・' + unit.count + '語）'));
+                unitList.append(row);
+            });
             unitField.hidden = !units.length;
+            updateFlashcardUnitSummary();
         }
         document.getElementById('flashcardRangeStart').value = nums.length ? Math.min.apply(null, nums) : 1;
         document.getElementById('flashcardRangeEnd').value = nums.length ? Math.max.apply(null, nums) : 100;
@@ -210,12 +235,12 @@
         if (sourceSelector) flashcardDataSourceMode = sourceSelector.value;
 
         var pool = [];
-        var unitField = document.getElementById('flashcardUnitField'), unitSelect = document.getElementById('flashcardUnitSelect');
-        var unit = unitField && !unitField.hidden && unitSelect ? unitSelect.value : '';
+        var unitField = document.getElementById('flashcardUnitField');
+        var unitKeys = unitField && !unitField.hidden ? selectedFlashcardUnitKeys() : [];
         // 用語・年号モード: one entry becomes several questions; each is filtered by its own result.
         var termMode = !!(window.TermProgress && window.TermQuestions && window.TermProgress.enabled(currentTextbook));
         var termStore = termMode ? window.TermProgress.read(currentTextbook) : null;
-        // The chosen unit is one run of numbers (units with the same name elsewhere are separate).
+        // The chosen units are runs of numbers (units with the same name elsewhere are separate); their words are pooled.
         // 英単語を先に: an English line with part of it in 「」 (+ A + 「as」 B) gives a second card
         // as well, the English with the 「」 blanked over the Japanese → what was hidden, so the
         // hidden word is asked in this direction too. Both cards are rated on the same meaning.
@@ -223,7 +248,13 @@
             if (flashcardDirectionMode !== 'en2ja' || !q.reverse || q.reverse.front.indexOf(window.TermQuestions.BLANK) < 0) return;
             pool.push(Object.assign({}, item, { en: q.reverse.front, ja: q.reverse.back, questionFirst: true, reverse: undefined }));
         }
-        var unitNums = unit && typeof vocabList !== 'undefined' && window.VocabOrder ? new Set((window.VocabOrder.findUnit(vocabList, unit) || { nums: [] }).nums) : null;
+        var unitNums = null;
+        if (unitKeys.length && typeof vocabList !== 'undefined' && window.VocabOrder) {
+            unitNums = new Set();
+            unitKeys.forEach(function(key) {
+                (window.VocabOrder.findUnit(vocabList, key) || { nums: [] }).nums.forEach(function(n) { unitNums.add(String(n)); });
+            });
+        }
         if (typeof vocabList !== 'undefined') {
             vocabList.forEach(function(w) {
                 var n = window.VocabOrder ? window.VocabOrder.no(w) : parseInt(w.num);

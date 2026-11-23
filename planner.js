@@ -145,8 +145,7 @@
           start.value = String(Math.max(1, task.from));
           end.value = String(Math.max(1, task.to));
         }
-        const unit = document.getElementById("flashcardUnitSelect");
-        if (unit) unit.value = "";
+        root.resetFlashcardUnits?.();
       });
     }
   }
