@@ -791,6 +791,15 @@
                 } catch (saveError) {
                     console.error('理解度の即時保存に失敗しました:', saveError);
                 }
+                // Rating a word in the book pays 1pt (10.192), once per word per day: the
+                // shared daily token means a word a card already paid 2pt for pays no more.
+                if (status !== 'none' && window.StudyPoints) {
+                    try {
+                        var rewardBook = (typeof currentTextbook !== 'undefined' && currentTextbook) ? currentTextbook : 'default';
+                        var rewardPool = typeof textbooksPool !== 'undefined' ? textbooksPool : [];
+                        window.StudyPoints.reward('vocab', rewardBook, vocabList[wIdx].num, (typeof myId !== 'undefined' && myId) ? myId : 'GUEST-000', { word: vocabList[wIdx].word, bookName: (rewardPool.find(function(b) { return b.id === rewardBook; }) || {}).name });
+                    } catch (pointError) { console.warn('理解度のポイント記録を確認してください', pointError); }
+                }
                 // 教材切替より前に、変更した教材の状態を同期的に退避する。
                 // 後段の100msタイマーに任せると、その間に教材を切り替えた場合、
                 // 切替先の教材として保存されて元の教材の変更が失われる。

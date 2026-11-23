@@ -1,9 +1,10 @@
-// One daily content reward per word (or workbook problem): the same for every way of answering.
+// One daily content reward per word (or workbook problem): the same for every way of answering,
+// except rating a word in the word book, which pays 1 (10.192).
 (function (root) {
   "use strict";
-  const rates = Object.freeze({ card: 2, work: 2, quiz: 2, review: 2 });
+  const rates = Object.freeze({ card: 2, work: 2, quiz: 2, review: 2, vocab: 1 });
   // Amounts from before the rates were evened out (10.21.61.00), still valid for records made then.
-  const earlier = Object.freeze({ card: [1], work: [1], quiz: [3], review: [10] });
+  const earlier = Object.freeze({ card: [1], work: [1], quiz: [3], review: [10], vocab: [] });
   const allowed = (source, amount) =>
     Object.hasOwn(rates, source) && (amount === rates[source] || earlier[source].includes(amount));
   const day = (now = Date.now()) =>
@@ -80,7 +81,7 @@
   // The points history kept per day: { "YYYY-MM-DD": { source: { n, p } } }, n how many
   // (words, problems, minutes for time) and p the points (negative for lending out). Written in
   // the same transactions that move the points; the newest DAILY_DAYS days are kept.
-  const DAILY_SOURCES = ["card", "quiz", "review", "work", "time", "bonus", "loan"],
+  const DAILY_SOURCES = ["card", "quiz", "review", "work", "vocab", "time", "bonus", "loan"],
     DAILY_DAYS = 400;
   function cleanDaily(daily) {
     const out = {};
