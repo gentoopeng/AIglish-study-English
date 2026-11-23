@@ -428,16 +428,7 @@
       text.append(nameLine);
       const meta = node("small", "fr-meta", "今日 " + mins(p.today) + " ・ 今週 " + mins(p.week) + " ・ 合計 " + mins(p.total));
       text.append(meta);
-      const topBook = Array.isArray(p.books) ? p.books[0] : null;
-      if (topBook) {
-        const bookLine = node("span", "fr-book");
-        const bar = node("span", "fr-bar");
-        const fill = node("i", "");
-        fill.style.width = topBook.pct + "%";
-        bar.append(fill);
-        bookLine.append(node("span", "fr-book-name", "📚 " + topBook.name), bar, node("span", "fr-book-pct", topBook.pct + "%（" + topBook.done + "/" + topBook.total + "語）"));
-        text.append(bookLine);
-      }
+      // Book progress lives in the book's own detail popup now (10.184), not in this list.
       const record = root.DuelRecords.get(p.id);
       if (record) text.append(node("small", "fr-duel", "対戦成績 " + record.w + "勝" + record.l + "敗" + (record.d ? record.d + "分" : "")));
       row.append(avatar, text);

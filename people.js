@@ -180,30 +180,7 @@
       dd.textContent = value;
       list.append(dt, dd);
     });
-    // Their books' progress (10.174): the public summary on their user document.
-    const books = !loading && window.BookProgress?.parse ? window.BookProgress.parse(doc) : [];
-    if (books.length) {
-      const dt = document.createElement("dt"),
-        dd = document.createElement("dd");
-      dt.textContent = "単語帳の進行度";
-      for (const b of books) {
-        const row = document.createElement("div");
-        row.style.cssText = "display:flex;align-items:center;gap:7px;margin:2px 0;font-size:12px;min-width:0";
-        const name = document.createElement("span");
-        name.textContent = b.name;
-        name.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%";
-        const bar = document.createElement("span");
-        bar.style.cssText = "flex:0 0 64px;height:6px;border-radius:999px;background:rgba(127,127,160,.35);overflow:hidden";
-        const fillEl = document.createElement("i");
-        fillEl.style.cssText = "display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#34d399,#a78bfa);width:" + b.pct + "%";
-        bar.append(fillEl);
-        const pct = document.createElement("span");
-        pct.textContent = b.pct + "%（" + b.done + "/" + b.total + "語）";
-        row.append(name, bar, pct);
-        dd.append(row);
-      }
-      list.append(dt, dd);
-    }
+    // Book progress lives in the book's own detail popup now (10.184), not on profiles.
     friendBox(dialog, person, doc, loading);
   }
   // Friends (10.162): add or remove this person here, and see whether they have added you too (friends both ways
