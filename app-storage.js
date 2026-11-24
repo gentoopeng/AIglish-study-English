@@ -39,6 +39,7 @@ async function flush(){
  catch(error){failure(error);throw error;}finally{running=null;}
  if(pending.size)return flush();
 }
+async function flushKey(key){key=String(key);if(!database)await ready;if(running){try{await running;}catch(error){}}if(!pending.has(key))return true;const value=pending.get(key);await transaction([[key,value]]);if(pending.get(key)===value){pending.delete(key);if(nativeWrites.get(key)!==value&&(rawGet(key)===originals.get(key)||rawGet(key)===value))rawRemove(key);nativeWrites.delete(key);originals.delete(key);if(value===null)values.delete(key);revision++;if(channel)channel.postMessage([key]);}return !pending.has(key);}
 function schedule(){if(!database||running||retry||scheduled)return;scheduled=true;queueMicrotask(()=>{scheduled=false;flush().catch(()=>{if(!retry)retry=setTimeout(()=>{retry=null;schedule();},10000);});});}
 function write(key,value){key=String(key);value=String(value);if(get(key)===value)return;
  const prior=rawGet(key);let synchronous=false;
@@ -94,7 +95,7 @@ async function discard(key){key=String(key);if(!pending.has(key))return;if(runni
  if(pending.has(key))return;if(held===null)values.delete(key);else values.set(key,held);revision++;if(!pending.size)lastFailure=null;}
 // Whether a value written just now is on the device (not waiting, or stuck, in the queue).
 const stored=key=>!pending.has(String(key));
-window.AppStorage={ready,flush,discard,stored,diagnosticSize(){let chars=0,largest=0,largestKind='';const kinds={};for(const [key,value] of values){if(typeof value==='string'){const kind=storageKind(key);chars+=value.length;kinds[kind]=(kinds[kind]||0)+value.length;if(value.length>largest){largest=value.length;largestKind=kind;}}}return {entries:values.size,chars,largest,largestKind,kinds,pending:pending.size};},get pending(){return pending.size;},get error(){return lastFailure;},setCoordination(key,value){try{rawSet(key,value);revision++;return true;}catch(error){return false;}}};
+window.AppStorage={ready,flush,flushKey,discard,stored,diagnosticSize(){let chars=0,largest=0,largestKind='';const kinds={};for(const [key,value] of values){if(typeof value==='string'){const kind=storageKind(key);chars+=value.length;kinds[kind]=(kinds[kind]||0)+value.length;if(value.length>largest){largest=value.length;largestKind=kind;}}}return {entries:values.size,chars,largest,largestKind,kinds,pending:pending.size};},get pending(){return pending.size;},get error(){return lastFailure;},setCoordination(key,value){try{rawSet(key,value);revision++;return true;}catch(error){return false;}}};
 window.addEventListener('storage',event=>{revision++;if(event.isTrusted&&event.storageArea===native&&event.newValue!==null&&values.has(event.key)&&!pending.has(event.key)){
  // Native removal also occurs after overflow migration; only IDB broadcasts
  // represent a confirmed logical deletion.

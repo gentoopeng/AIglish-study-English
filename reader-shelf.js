@@ -155,7 +155,9 @@
   function shelfStored() {
     const store = window.AppStorage;
     if (!store || !store.stored || !store.flush) return true;
-    const settle = () => store.flush().catch(() => {});
+    // The shelf goes first, on its own: the full queue can hold a whole backup (~17MB), and
+    // waiting behind it is what left the shelf unwritten when the app was closed.
+    const settle = () => (store.flushKey ? store.flushKey("myBookshelf").catch(() => store.flush()) : store.flush()).catch(() => {});
     return settle().then(() => {
       if (store.stored("myBookshelf")) return true;
       try {
