@@ -5492,3 +5492,8 @@ Tests:
 
 - Diagnostics from the healing launch (10.207) showed src: local, merge: ok, while the bad launch just before it was no longer recorded -- so the bad launch must have restored the other backup (the cloud one, chosen when its marker is newer), whose shelf was older, while the save on the device held the current shelf all along.
 - autoLoadOnce now keeps the device save aside (window.__altLocalSave) when the cloud backup is chosen, and mergeReaderShelf merges its shelf in as a third side (an old-format device save contributes its texts only, like the existing old-format rule). The restore diagnostics also record the shelf sizes (backup / device / merged) and the device save's time when it joined, so a bad launch explains itself.
+
+## 10.209.00.00 - A restore never unmakes a folder this device still has
+
+- Adding a folder could make the previous folders vanish (only the new one stayed): a folder with no texts lives only in the folder list, and the restore merge could drop it on a backup's folder operations, while the newest folder -- present in every copy -- survived.
+- mergeReaderShelf and mergeReaderMemory now always keep the folder names the device side currently lists (deleting a folder on this device removes it from that list first, so real deletions still stick). The restore diagnostics also record folder counts (backup / device / merged) alongside the shelf counts.
