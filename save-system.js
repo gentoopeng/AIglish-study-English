@@ -1372,8 +1372,19 @@ function mergeReaderShelf(save,id){
     var M=window.ReaderShelfMerge,mark=readerJson(localStorage.getItem('aiglish_reader_local'));
     if(!M||!save||!save.data||!mark||mark.owner!==id)return null;
     var saved=savedReaderSide(save),local=localReaderSide();
-    // The device copy must be this account's own, in the new form (the shelf keys are per device: another account may have used it).
-    if(!M.isNew(local)||!local.meta||local.meta.owner!==id)return null;
+    // The device copy must be this account's own (the shelf keys are per device: another account may have used it).
+    if(local.meta&&local.meta.owner&&local.meta.owner!==id)return null;
+    if(!M.isNew(local)){
+      // The device meta can describe a newer shelf than the one storage actually holds: the meta is a
+      // small native write, while the shelf itself reaches IndexedDB a moment later, and a kill in
+      // between leaves them describing different shelves. The shelf on the device is the real data, and
+      // its tombstones (a key always written with it) say the copy is in the new form: rebuild the meta
+      // from the shelf and merge anyway. Giving up here let the backup replace the shelf whole, which
+      // rolled the shelf back to an old backup. (An old version's copy has no tombstones: still null.)
+      if(!Array.isArray(local.deleted)||!Array.isArray(local.shelf))return null;
+      local.meta=M.meta(local.shelf,id);
+      if(!M.isNew(local))return null;
+    }
     var savedNew=M.isNew(saved)||M.isNew({shelf:saved.storedShelf,deleted:saved.deleted,meta:saved.meta});
     // A backup in the old form (another device that has not saved the shelf with this version, or an old backup) knows nothing of
     // what was deleted: it must not take this device's texts away (it used to replace the shelf whole, even with an empty one). Its
