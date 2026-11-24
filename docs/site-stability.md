@@ -5418,3 +5418,26 @@ chip hiding stays — the drag glows should not paint over the panel either.
 
 Tests:
 - 変換後のJSは node --check を通過。ブラウザスモークはこの環境では未実施。
+
+## 10.198.00.00 — 英文解析：熟語（複数語の見出し）も反映されるように
+
+What the user said: 英文解析の単語帳が一部しか反映されないです。
+
+Cause: the reader matched book entries token by token, so a multi-word
+headword (熟語・フレーズ) could never be found — neither as an AI candidate
+nor when painting the result. Only single-word entries ever reflected. The
+candidate list was also capped at 150 entries per analysis.
+
+Fix:
+- reader-vocab.js: load() now builds a phrase list from headwords containing a
+  space (a lone capital letter such as A or B in the headword is a placeholder
+  matching any one word). New matchPhraseAt(tokens, i), longest first.
+  candidates() runs phrase matching before single words, and the cap is raised
+  150 → 250. find() also tries the -es plural (watches → watch).
+- app.js (analysis rendering): each sentence's tokens are phrase-matched the
+  same way; a phrase the AI confirmed (or the first match for unchecked books)
+  marks its first token with the phrase entry, so it is coloured and tappable
+  like any other book word.
+
+Tests:
+- 変換後の各JSは node --check を通過。ブラウザスモークはこの環境では未実施。
