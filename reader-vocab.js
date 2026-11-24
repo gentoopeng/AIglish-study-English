@@ -75,13 +75,15 @@
     index = new Map(),
     stems = new Map(),
     words = new Map();
+  let phrases = [];
   async function load() {
     // Read again each time, so edits to a book show at the next analysis.
     masters.clear();
     const ids = selected(),
       nextIndex = new Map(),
       nextStems = new Map(),
-      nextWords = new Map();
+      nextWords = new Map(),
+      nextPhrases = [];
     const lists = await Promise.all(ids.map((id) => wordsOf(id)));
     ids.forEach((book, b) => {
       const letter = String.fromCharCode(65 + (b % 26));
@@ -97,12 +99,25 @@
           if (!nextStems.has(stem)) nextStems.set(stem, []);
           nextStems.get(stem).push(entry);
         }
+        // Multi-word headwords (idioms, phrases) are matched as a sequence by
+        // matchPhraseAt; a lone capital letter in the headword (A, B) is a
+        // placeholder standing for any one word of the text.
+        const rawParts = String(w.word || "").trim().split(/\s+/);
+        if (rawParts.length > 1) {
+          const parts = rawParts.map((p) => {
+            const letters = p.replace(/[^A-Za-z]/g, "");
+            if (letters.length === 1 && letters === letters.toUpperCase() && letters !== "I") return null;
+            return window.readerCleanToken ? window.readerCleanToken(p) : p.toLowerCase();
+          });
+          if (parts.every((p) => p === null || p)) nextPhrases.push({ entry, parts });
+        }
       }
     });
     books = ids;
     index = nextIndex;
     stems = nextStems;
     words = nextWords;
+    phrases = nextPhrases.sort((a, b) => b.parts.length - a.parts.length);
   }
   // Every entry the token can be: the word itself, its stem, or a plain inflection.
   function find(cleanKey) {
@@ -112,6 +127,7 @@
     const stem = window.stemWord ? window.stemWord(w) : "";
     if (stem && stem.length >= 4 && stems.has(stem)) return stems.get(stem);
     const forms = [];
+    if (/es$/.test(w)) forms.push(w.slice(0, -2));
     if (/s$/.test(w)) forms.push(w.slice(0, -1));
     if (/ies$/.test(w)) forms.push(w.slice(0, -3) + "y");
     if (/ied$/.test(w)) forms.push(w.slice(0, -3) + "y");
@@ -129,21 +145,40 @@
     }
     return words.get(entry.book + "\n" + entry.num) || null;
   }
+  // The phrase entry starting at token i of a cleaned token list, if any.
+  function matchPhraseAt(tokens, i) {
+    for (const ph of phrases) {
+      const n = ph.parts.length;
+      if (i + n > tokens.length) continue;
+      let ok = true;
+      for (let j = 0; j < n; j++) {
+        const part = ph.parts[j];
+        if (part === null ? !tokens[i + j] : part !== tokens[i + j]) { ok = false; break; }
+      }
+      if (ok) return { entry: ph.entry, length: n };
+    }
+    return null;
+  }
   // For the AI: each entry in the text once, with its meanings.
   function candidates(text) {
     const seen = new Map();
-    for (const token of String(text).split(/\s+/)) {
-      const key = window.readerCleanToken ? window.readerCleanToken(token) : token.toLowerCase();
-      for (const entry of find(key)) {
-        if (seen.size >= 150 || seen.has(entry.alias)) continue;
-        const w = word(entry);
-        if (!w) continue;
-        const meanings = (w.meanings && w.meanings.length ? w.meanings.map((m) => m.text) : [w.meaning || ""]).map((t) =>
-          String(t || "").replace(/\s+/g, " ").trim().slice(0, 60),
-        );
-        seen.set(entry.alias, { alias: entry.alias, book: entry.book, num: entry.num, word: String(w.word || ""), meanings });
-      }
+    const add = (entry) => {
+      if (seen.size >= 250 || seen.has(entry.alias)) return;
+      const w = word(entry);
+      if (!w) return;
+      const meanings = (w.meanings && w.meanings.length ? w.meanings.map((m) => m.text) : [w.meaning || ""]).map((t) =>
+        String(t || "").replace(/\s+/g, " ").trim().slice(0, 60),
+      );
+      seen.set(entry.alias, { alias: entry.alias, book: entry.book, num: entry.num, word: String(w.word || ""), meanings });
+    };
+    const tokens = String(text).split(/\s+/).map((t) => (window.readerCleanToken ? window.readerCleanToken(t) : t.toLowerCase()));
+    // Phrases first: a phrase entry takes its place before its words are
+    // considered on their own.
+    for (let i = 0; i < tokens.length; i++) {
+      const m = matchPhraseAt(tokens, i);
+      if (m) { add(m.entry); i += m.length - 1; }
     }
+    for (const key of tokens) for (const entry of find(key)) add(entry);
     return [...seen.values()];
   }
 
@@ -212,6 +247,7 @@
     find,
     word,
     candidates,
+    matchPhraseAt,
     paint,
     statusClass,
     nameOf,

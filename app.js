@@ -719,7 +719,24 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      const checkedBooks = Array.isArray(aiAnalysisResult && aiAnalysisResult.vocabBooks) ? aiAnalysisResult.vocabBooks : [typeof currentTextbook === 'string' ? currentTextbook : ''];
      const vocabChecked = !!(aiAnalysisResult && aiAnalysisResult.vocabChecked);
      let currentRange = null, gSpan = null;
+     // Phrase entries (idioms) the same way the candidates were found: a phrase
+     // the AI confirmed — or the first match for a book the AI did not check —
+     // marks its first token, so it paints and taps like any other book word.
+     const phrasePicks = new Map();
+     if (window.ReaderVocab && window.ReaderVocab.matchPhraseAt) {
+         const cleanList = [...sentenceText.matchAll(/\S+/g)].map(m => typeof window.readerCleanToken === 'function' ? window.readerCleanToken(m[0]) : m[0].toLowerCase());
+         for (let ti = 0; ti < cleanList.length; ti++) {
+             const m = window.ReaderVocab.matchPhraseAt(cleanList, ti);
+             if (!m) continue;
+             const entry = m.entry, isChecked = vocabChecked && checkedBooks.includes(entry.book);
+             const used = isChecked ? usedVocab.find(v => String(v.num) === entry.num && (v.book ? v.book === entry.book : entry.book === checkedBooks[0])) : null;
+             if (!isChecked || used) phrasePicks.set(ti, { entry, sense: used ? Number(used.meaning) || 0 : 0 });
+             ti += m.length - 1;
+         }
+     }
+     let tokenIdx = -1;
      for (const token of sentenceText.matchAll(/\S+/g)) {
+         tokenIdx++;
          const range = ranges.find(r => token.index >= r.start && token.index < r.end) || null;
          if (range !== currentRange) {
              currentRange = range; gSpan = null;
@@ -744,6 +761,8 @@ textHistory = textHistory.filter(h => h.text !== rawText);
                  if (used) { pick = entry; sense = Number(used.meaning) || 0; break; }
              } else if (!pick) pick = entry;
          }
+         const phrasePick = phrasePicks.get(tokenIdx);
+         if (phrasePick) { pick = phrasePick.entry; sense = phrasePick.sense; }
          if (!pick && matches.length) span.dataset.vocabSkip = '1';
          if (pick) {
              span.dataset.vocabBook = pick.book; span.dataset.vocabNum = pick.num; span.dataset.sense = String(sense);
