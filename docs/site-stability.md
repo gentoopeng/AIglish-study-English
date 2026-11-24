@@ -5518,3 +5518,7 @@ Tests:
 ## 10.214.00.00 - Flashcards: choose which term-mode question kinds to include
 
 - At the user's request, the card start screen gained a question-kind setting for term-mode books: まるごと (whole entry), 何年？ (year/century, typed), 何時代？ (era) and 「」穴埋め (blanks) can each be toggled off. The field shows only for term-mode books, the choice is kept on the device (aiglish_flashcard_kinds), and starting with nothing selected is refused like the status filters. startFlashcardSession's term branch now skips unselected kinds (hidden twin cards follow their parent question).
+
+## 10.215.00.00 - A deleted folder no longer comes back through its texts
+
+- Reproduced in the harness: the shelf merge deliberately lets a surviving filed text revive its folder name, so when a backup still held a text filed under a folder this device had deleted (the backup's folder operations had lost the deletion), the folder returned with the text inside -- which is what the user kept seeing in the save dialog. The restore now honours this device's own deletion records: when the device ops record a folder as deleted and the device list does not contain it, texts the merge brought in under that name are moved to 未分類, the name stays out of the folder list, and the delete record is refreshed so it keeps winning. Folders the device lists (including re-created ones, 10.209) are untouched, and the merge module's own rule is unchanged.
