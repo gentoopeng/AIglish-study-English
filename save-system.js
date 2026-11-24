@@ -1271,6 +1271,7 @@ function restoreSaveStorage(save,id){
     else if(!keepReader){var savedSide=savedReaderSide(save);keepLostReaderTexts(save,id,savedSide.shelf,savedSide.deleted);}
     for(var key in stored){
       if(key==='aiglish_reader_local')continue; // This device's own change mark.
+      if(key.indexOf('core_v4_profile_customization_')===0)continue; // The profile (name/photo) is this device's own, synced by profile.js; a backup must not bring back a name from before a rename.
       if(key==='aiglish_shelf_lost')continue; // What this device set aside.
       if((shelfMerged||keepReader)&&shelfKeys.indexOf(key)>=0)continue;
       if(keepReader&&key==='textHistory')continue;
