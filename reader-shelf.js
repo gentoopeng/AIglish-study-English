@@ -42,7 +42,7 @@
   // said "saved"). Returns "full" (all saved), "slim" (texts only) or "failed" (nothing could be written).
   // What makes the shelf mergeable (reader-shelf-merge.js): a tombstone for each text taken off the shelf, the last thing done to each
   // folder name, and a list of the shelf's ids written with every save (so a copy changed by an older version of the app is noticed).
-  const DELETED_KEY = "aiglish_shelf_deleted", OPS_KEY = "aiglish_shelf_folder_ops", META_KEY = "aiglish_shelf_meta";
+  const DELETED_KEY = "aiglish_shelf_deleted", OPS_KEY = "aiglish_shelf_folder_ops", META_KEY = "aiglish_shelf_meta", COVERS_KEY = "aiglish_shelf_folder_covers";
   const readJson = (key, fallback) => {
     try {
       const value = JSON.parse(localStorage.getItem(key) || "null");
@@ -66,6 +66,57 @@
       ops[name] = { at: Date.now(), deleted: !!deleted };
       localStorage.setItem(OPS_KEY, JSON.stringify(ops));
     } catch {}
+  }
+  // Folder cover photos ({ name: { image, at } }), merged with the shelf (reader-shelf-merge.js).
+  function folderCovers() {
+    const covers = readJson(COVERS_KEY, {});
+    return covers && typeof covers === "object" && !Array.isArray(covers) ? covers : {};
+  }
+  function folderCover(name) {
+    const c = folderCovers()[name];
+    return c && typeof c.image === "string" && c.image ? c.image : "";
+  }
+  function writeFolderCover(name, image) {
+    try {
+      const covers = folderCovers();
+      if (image) covers[name] = { image, at: Date.now() };
+      else delete covers[name];
+      localStorage.setItem(COVERS_KEY, JSON.stringify(covers));
+    } catch {}
+    window.markReaderDataChanged?.();
+  }
+  // Picks a photo and shrinks it like a book cover (240px, JPEG) before storing it.
+  function pickFolderCover(name, modal) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const error = modal && modal.querySelector(".library-editor-error");
+      const fail = (msg) => { if (error) error.textContent = msg; };
+      const reader = new FileReader();
+      reader.onerror = () => fail("写真を読み込めませんでした。");
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => fail("写真を読み込めませんでした。");
+        img.onload = () => {
+          try {
+            const scale = Math.min(1, 240 / Math.max(img.width || 1, img.height || 1));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round((img.width || 1) * scale));
+            canvas.height = Math.max(1, Math.round((img.height || 1) * scale));
+            canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+            writeFolderCover(name, canvas.toDataURL("image/jpeg", 0.8));
+            window.closeLibraryDialog();
+            show(currentShelfView);
+          } catch { fail("写真を保存できませんでした。"); }
+        };
+        img.src = String(reader.result || "");
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
   }
   function writeDevice(slim) {
     const shelf = slim ? myBookshelf.map(({ aiAnalysisData, ...rest }) => rest) : myBookshelf;
@@ -297,8 +348,13 @@
       modal = dialog(
         name,
         '<div class="library-editor-actions library-editor-actions-stack"><button type="button" data-shelf="rename">名前を変更</button>' +
-          '<button type="button" data-shelf="remove" class="library-editor-danger">フォルダを削除</button><button type="button" data-library-close>閉じる</button></div>',
+          '<button type="button" data-shelf="cover">写真を変更</button>' +
+          (folderCover(name) ? '<button type="button" data-shelf="coverRemove">写真を消す</button>' : '') +
+          '<button type="button" data-shelf="remove" class="library-editor-danger">フォルダを削除</button><button type="button" data-library-close>閉じる</button></div><p class="library-editor-error" role="alert"></p>',
       );
+    modal.querySelector('[data-shelf="cover"]').onclick = () => pickFolderCover(name, modal);
+    const coverRemove = modal.querySelector('[data-shelf="coverRemove"]');
+    if (coverRemove) coverRemove.onclick = () => { writeFolderCover(name, ""); window.closeLibraryDialog(); show(currentShelfView); };
     modal.querySelector('[data-shelf="rename"]').onclick = () =>
       askFolderName("フォルダの名前を変更", name, (next) => {
         if (next === name) return;
@@ -306,6 +362,8 @@
         if (!myFolders.includes(next)) myFolders.push(next);
         folderOp(name, true);
         folderOp(next, false);
+        const photo = folderCover(name);
+        if (photo) { writeFolderCover(next, photo); writeFolderCover(name, ""); }
         myBookshelf.forEach((i) => {
           if (folderOf(i) === name) {
             i.folder = next;
@@ -325,6 +383,7 @@
       confirm.querySelector('[data-shelf="confirm"]').onclick = () => {
         myFolders = myFolders.filter((f) => f !== name);
         folderOp(name, true);
+        writeFolderCover(name, "");
         myBookshelf.forEach((i) => {
           if (folderOf(i) === name) {
             i.folder = "未分類";
@@ -821,7 +880,7 @@
         const items = myBookshelf.filter((i) => folderOf(i) === name);
         list.append(
           row({
-            cover: { text: "📁" },
+            cover: folderCover(name) ? { image: folderCover(name) } : { text: "📁" },
             name,
             sub: items.length ? items.length + "本の長文 · " + (items[items.length - 1].title || "無題") : "空のフォルダ",
             onOpen: () => show("folder:" + name),

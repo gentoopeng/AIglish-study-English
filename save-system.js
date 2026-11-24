@@ -1265,7 +1265,7 @@ function restoreSaveStorage(save,id){
     // they are; the backup's copy (and its old change mark) must not overwrite them first.
     var keepReader=!!newerReaderData(id,save.savedAt);
     // When both copies of the shelf can be merged (reader-shelf-merge.js), they are: neither replaces the other.
-    var shelfMerged=mergeReaderShelf(save,id),shelfKeys=['myBookshelf','myFolders','aiglish_shelf_meta','aiglish_shelf_deleted','aiglish_shelf_folder_ops'];
+    var shelfMerged=mergeReaderShelf(save,id),shelfKeys=['myBookshelf','myFolders','aiglish_shelf_meta','aiglish_shelf_deleted','aiglish_shelf_folder_ops','aiglish_shelf_folder_covers'];
     window.__readerShelfMerge=shelfMerged?{id:id,merged:shelfMerged}:null;
     if(shelfMerged)keepLostReaderTexts(save,id,shelfMerged.shelf,shelfMerged.deleted);
     else if(!keepReader){var savedSide=savedReaderSide(save);keepLostReaderTexts(save,id,savedSide.shelf,savedSide.deleted);}
@@ -1358,14 +1358,14 @@ function restoreSaveStorage(save,id){
 // ---- The reader's shelf: merged with the backup (reader-shelf-merge.js) -------------------------------------------------
 function readerJson(text){try{return JSON.parse(text||'null');}catch(e){return null;}}
 function localReaderSide(){
-  return {shelf:readerJson(localStorage.getItem('myBookshelf'))||[],folders:readerJson(localStorage.getItem('myFolders'))||[],deleted:readerJson(localStorage.getItem('aiglish_shelf_deleted')),ops:readerJson(localStorage.getItem('aiglish_shelf_folder_ops'))||{},meta:readerJson(localStorage.getItem('aiglish_shelf_meta'))};
+  return {shelf:readerJson(localStorage.getItem('myBookshelf'))||[],folders:readerJson(localStorage.getItem('myFolders'))||[],deleted:readerJson(localStorage.getItem('aiglish_shelf_deleted')),ops:readerJson(localStorage.getItem('aiglish_shelf_folder_ops'))||{},covers:readerJson(localStorage.getItem('aiglish_shelf_folder_covers'))||{},meta:readerJson(localStorage.getItem('aiglish_shelf_meta'))};
 }
 // The merged shelf, or null when the old rule has to decide (another account's device copy, or a copy an older version of the app
 // wrote: it leaves no trace of what was deleted, so "which copy is newer" is all there is).
 function savedReaderSide(save){
   var stored=save.data.localStorage||{},memory=save.data.memory||{},storedShelf=readerJson(stored.myBookshelf);
   // The backup's memory copy is the shelf as it was (the device key can be older, or without the analyses, when the device was full).
-  return {storedShelf:storedShelf||[],shelf:Array.isArray(memory.myBookshelf)?memory.myBookshelf:(storedShelf||[]),folders:Array.isArray(memory.myFolders)?memory.myFolders:(readerJson(stored.myFolders)||[]),deleted:readerJson(stored.aiglish_shelf_deleted),ops:readerJson(stored.aiglish_shelf_folder_ops)||{},meta:readerJson(stored.aiglish_shelf_meta)};
+  return {storedShelf:storedShelf||[],shelf:Array.isArray(memory.myBookshelf)?memory.myBookshelf:(storedShelf||[]),folders:Array.isArray(memory.myFolders)?memory.myFolders:(readerJson(stored.myFolders)||[]),deleted:readerJson(stored.aiglish_shelf_deleted),ops:readerJson(stored.aiglish_shelf_folder_ops)||{},covers:readerJson(stored.aiglish_shelf_folder_covers)||{},meta:readerJson(stored.aiglish_shelf_meta)};
 }
 function mergeReaderShelf(save,id){
   try{
@@ -1378,7 +1378,7 @@ function mergeReaderShelf(save,id){
     // A backup in the old form (another device that has not saved the shelf with this version, or an old backup) knows nothing of
     // what was deleted: it must not take this device's texts away (it used to replace the shelf whole, even with an empty one). Its
     // texts are added; what this device deleted stays deleted (this device's tombstones).
-    if(!savedNew)saved={shelf:saved.shelf,folders:saved.folders,deleted:[],ops:{},meta:null};
+    if(!savedNew)saved={shelf:saved.shelf,folders:saved.folders,deleted:[],ops:{},covers:{},meta:null};
     var localNewer=Number(mark.at)>(Date.parse(save.savedAt||'')||0);
     var merged=localNewer?M.merge(local,saved):M.merge(saved,local);
     merged.meta=M.meta(merged.shelf,id);
@@ -1403,7 +1403,7 @@ function keepLostReaderTexts(save,id,finalShelf,deleted){
   }catch(e){}
 }
 function writeReaderShelf(merged){
-  var small=function(){try{localStorage.setItem('aiglish_shelf_deleted',JSON.stringify(merged.deleted));localStorage.setItem('aiglish_shelf_folder_ops',JSON.stringify(merged.ops));localStorage.setItem('myFolders',JSON.stringify(merged.folders));}catch(e){}};
+  var small=function(){try{localStorage.setItem('aiglish_shelf_deleted',JSON.stringify(merged.deleted));localStorage.setItem('aiglish_shelf_folder_ops',JSON.stringify(merged.ops));localStorage.setItem('aiglish_shelf_folder_covers',JSON.stringify(merged.covers||{}));localStorage.setItem('myFolders',JSON.stringify(merged.folders));}catch(e){}};
   small();
   try{localStorage.setItem('myBookshelf',JSON.stringify(merged.shelf));}
   catch(e){try{localStorage.setItem('myBookshelf',JSON.stringify(merged.shelf.map(function(item){var rest=Object.assign({},item);delete rest.aiAnalysisData;return rest;})));}catch(e2){return;}}
@@ -1412,7 +1412,7 @@ function writeReaderShelf(merged){
 var readerMergeBackupQueued=false;
 function mergeReaderMemory(state){
   try{
-    var M=window.ReaderShelfMerge,local=localReaderSide(),current={shelf:(typeof myBookshelf!=='undefined'&&Array.isArray(myBookshelf))?myBookshelf:[],folders:(typeof myFolders!=='undefined'&&Array.isArray(myFolders))?myFolders:[],deleted:local.deleted||[],ops:local.ops};
+    var M=window.ReaderShelfMerge,local=localReaderSide(),current={shelf:(typeof myBookshelf!=='undefined'&&Array.isArray(myBookshelf))?myBookshelf:[],folders:(typeof myFolders!=='undefined'&&Array.isArray(myFolders))?myFolders:[],deleted:local.deleted||[],ops:local.ops,covers:local.covers||{}};
     var result=M.merge(state.merged,current);
     result.meta=M.meta(result.shelf,state.id);
     writeReaderShelf(result);
