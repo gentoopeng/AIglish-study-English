@@ -782,7 +782,7 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      let finalJaText = customJaLines[sIdx] || sData.translation || sData.translations || "（和訳未取得）"; 
      totalSummaryJa += `${sIdx+1}. ${String(finalJaText).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}<br>`;
      const jaSpan = document.createElement('span'); jaSpan.className = 'sentence-ja'; jaSpan.innerText = finalJaText; mainContent.appendChild(jaSpan);
-     block.appendChild(mainContent); englishContainer.appendChild(block);
+     block.appendChild(mainContent); if (window.ReaderSpeech) window.ReaderSpeech.decorate(block, sentenceText); englishContainer.appendChild(block);
  });
  document.getElementById('summaryJaContainer').innerHTML = totalSummaryJa; window.setTranslationMode(currentTranslationMode);
  // When the AI failed: what happened, and a button to try again.
@@ -812,11 +812,12 @@ textHistory = textHistory.filter(h => h.text !== rawText);
  }
  window.initLucide();
  // 問題の解説（「問題を追加」）。ある英文では、前に解いた解説をそのまま出す。
+ if (window.ReaderSpeech) window.ReaderSpeech.mount(englishContainer);
  window.ReaderQuestions?.show(rawText);
 };
 // showCustomSaveBookshelfPrompt is in reader-shelf.js.
 window.closeWordPopover = function() { document.getElementById('wordPopover').classList.remove('show'); document.getElementById('wordPopover').style.display = 'none'; };
-window.closeReader = function() { document.getElementById('text-input-view').style.display = 'block'; document.getElementById('text-reader-view').style.display = 'none'; currentActiveAiAnalysisCache = null; };
+window.closeReader = function() { window.ReaderSpeech?.stop(); document.getElementById('text-input-view').style.display = 'block'; document.getElementById('text-reader-view').style.display = 'none'; currentActiveAiAnalysisCache = null; };
 // 🌟 修正：実在ユーザー厳格判定＆本物プロフィール・アイコン取得フレンド追加処理
 window.searchAndAddFriend = async function() {
 const inputEl = document.getElementById('friendSearchInput');

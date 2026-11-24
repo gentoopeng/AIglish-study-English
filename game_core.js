@@ -438,6 +438,13 @@
         if (word && typeof window.createVocabCard === 'function') {
             // 単語帳と同じ生成関数を使う。似せた別UIではなく、完全に同じカードを表示する。
             content.appendChild(window.createVocabCard(word));
+            if (window.ReaderSpeech) {
+                var speakBtn = document.createElement('button');
+                speakBtn.type = 'button'; speakBtn.className = 'flashcard-detail-speak';
+                speakBtn.innerHTML = '<i data-lucide="volume-2" size="15"></i> 発音を聞く';
+                speakBtn.onclick = function() { window.ReaderSpeech.speakWord(word.word); };
+                content.appendChild(speakBtn);
+            }
             if (typeof window.initLucide === 'function') window.initLucide();
         } else {
             var unavailable = document.createElement('div');
