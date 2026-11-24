@@ -5477,3 +5477,8 @@ Tests:
 
 - The reader's sentences gained a pencil button: it edits just that sentence (the rest of the text is untouched), shelf copies of the text follow the edit with a fresh updatedAt, and only the edited sentence's translation/grammar/vocab is cleared. Re-rendering reuses the kept analysis, so no new AI call is made.
 - The bookshelf rollback reported again after 10.203 could not be reproduced from the code paths left; the restore now records its decision (window.__restoreDiag: which save was chosen, the change mark, whether the shelf merge ran or why it did not) and the startup monitor includes it in its snapshot, so the diagnostics page shows it after a bad start.
+
+## 10.206.00.00 - The bookshelf writes to storage first, ahead of the full backup
+
+- The shelf rollback kept recurring on a device whose full backup is ~17MB (the whole store is ~37MB, and a write was still pending minutes into a session): every shelf save waited in the same IndexedDB queue as the giant backup, so closing the app could leave the shelf itself unwritten while its small keys (folders, meta, the change mark) were already through -- the next start then had only older copies to merge.
+- app-storage.js gained AppStorage.flushKey(key) (one row, same commit bookkeeping as flush); reader-shelf.js shelfStored() now settles the shelf through it, falling back to the full flush. The merge/restore logic is unchanged.
