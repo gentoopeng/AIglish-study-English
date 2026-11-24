@@ -5506,3 +5506,7 @@ Tests:
 ## 10.211.00.00 - Folder rescue: only the device's own delete record holds a folder back
 
 - The 10.210 rescue refinement compared the backup's delete time with the device change mark, but on a slow device the mark can lag the folder operations, so a re-created folder could be held back by a backup's older delete after all. The rule is now simply: a name in the device folder list is kept unless this device's own folder operations record its deletion.
+
+## 10.212.00.00 - A rescued folder records its own keep so later merges keep it too
+
+- The 10.211 rescue rule (keep a listed folder unless the device ops record its deletion) undid itself: the first restore wrote the merged ops -- including the backup's stale delete record -- back to the device, so the second restore of the same launch read that record as the device's own and dropped the folder again. A rescue now stamps a fresh not-deleted operation for the folder, so every later merge keeps it on the strength of that record; a real later deletion is newer still and wins as before.

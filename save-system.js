@@ -1421,8 +1421,8 @@ function mergeReaderShelf(save,id){
         diag.alt=alt.savedAt||'';
       }catch(e){}
     }
-    var localOps=local.ops||{};
-    for(var fi=0;fi<local.folders.length;fi++){var fname=local.folders[fi];if(!fname||fname==='未分類'||merged.folders.indexOf(fname)>=0)continue;var lop=localOps[fname];if(lop&&lop.deleted)continue;merged.folders.push(fname);}
+    if(!merged.ops)merged.ops={};
+    for(var fi=0;fi<local.folders.length;fi++){var fname=local.folders[fi];if(!fname||fname==='未分類'||merged.folders.indexOf(fname)>=0)continue;merged.folders.push(fname);merged.ops[fname]={at:Date.now(),deleted:false};}
     diag.shelf={saved:saved.shelf.length,device:local.shelf.length,merged:merged.shelf.length};
     diag.folders={saved:saved.folders.length,device:local.folders.length,merged:merged.folders.length};
     merged.meta=M.meta(merged.shelf,id);
@@ -1459,8 +1459,8 @@ function mergeReaderMemory(state){
   try{
     var M=window.ReaderShelfMerge,local=localReaderSide(),current={shelf:(typeof myBookshelf!=='undefined'&&Array.isArray(myBookshelf))?myBookshelf:[],folders:(typeof myFolders!=='undefined'&&Array.isArray(myFolders))?myFolders:[],deleted:local.deleted||[],ops:local.ops,covers:local.covers||{}};
     var result=M.merge(state.merged,current);
-    var localOps2=local.ops||{};
-    for(var fi2=0;fi2<current.folders.length;fi2++){var fname2=current.folders[fi2];if(!fname2||fname2==='未分類'||result.folders.indexOf(fname2)>=0)continue;var lop2=localOps2[fname2];if(lop2&&lop2.deleted)continue;result.folders.push(fname2);}
+    if(!result.ops)result.ops={};
+    for(var fi2=0;fi2<current.folders.length;fi2++){var fname2=current.folders[fi2];if(!fname2||fname2==='未分類'||result.folders.indexOf(fname2)>=0)continue;result.folders.push(fname2);result.ops[fname2]={at:Date.now(),deleted:false};}
     result.meta=M.meta(result.shelf,state.id);
     writeReaderShelf(result);
     // The cloud gets the merged shelf once (only when it differs from the backup in more than the order).
