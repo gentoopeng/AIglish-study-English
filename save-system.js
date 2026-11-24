@@ -1421,8 +1421,8 @@ function mergeReaderShelf(save,id){
         diag.alt=alt.savedAt||'';
       }catch(e){}
     }
-    var mergedOps=merged.ops||{},localOps=local.ops||{};
-    for(var fi=0;fi<local.folders.length;fi++){var fname=local.folders[fi];if(!fname||fname==='未分類'||merged.folders.indexOf(fname)>=0)continue;var mop=mergedOps[fname],lop=localOps[fname];if(mop&&mop.deleted&&(Number(mop.at)||0)>(Number(mark&&mark.at)||0)&&!(lop&&!lop.deleted))continue;merged.folders.push(fname);}
+    var localOps=local.ops||{};
+    for(var fi=0;fi<local.folders.length;fi++){var fname=local.folders[fi];if(!fname||fname==='未分類'||merged.folders.indexOf(fname)>=0)continue;var lop=localOps[fname];if(lop&&lop.deleted)continue;merged.folders.push(fname);}
     diag.shelf={saved:saved.shelf.length,device:local.shelf.length,merged:merged.shelf.length};
     diag.folders={saved:saved.folders.length,device:local.folders.length,merged:merged.folders.length};
     merged.meta=M.meta(merged.shelf,id);
@@ -1459,8 +1459,8 @@ function mergeReaderMemory(state){
   try{
     var M=window.ReaderShelfMerge,local=localReaderSide(),current={shelf:(typeof myBookshelf!=='undefined'&&Array.isArray(myBookshelf))?myBookshelf:[],folders:(typeof myFolders!=='undefined'&&Array.isArray(myFolders))?myFolders:[],deleted:local.deleted||[],ops:local.ops,covers:local.covers||{}};
     var result=M.merge(state.merged,current);
-    var resultOps=result.ops||{},markNow=readerJson(localStorage.getItem('aiglish_reader_local')),localOps2=local.ops||{};
-    for(var fi2=0;fi2<current.folders.length;fi2++){var fname2=current.folders[fi2];if(!fname2||fname2==='未分類'||result.folders.indexOf(fname2)>=0)continue;var mop2=resultOps[fname2],lop2=localOps2[fname2];if(mop2&&mop2.deleted&&(Number(mop2.at)||0)>(Number(markNow&&markNow.at)||0)&&!(lop2&&!lop2.deleted))continue;result.folders.push(fname2);}
+    var localOps2=local.ops||{};
+    for(var fi2=0;fi2<current.folders.length;fi2++){var fname2=current.folders[fi2];if(!fname2||fname2==='未分類'||result.folders.indexOf(fname2)>=0)continue;var lop2=localOps2[fname2];if(lop2&&lop2.deleted)continue;result.folders.push(fname2);}
     result.meta=M.meta(result.shelf,state.id);
     writeReaderShelf(result);
     // The cloud gets the merged shelf once (only when it differs from the backup in more than the order).
