@@ -5467,3 +5467,8 @@ Tests:
 
 - Reproduced with a browser harness: when the app is killed after a shelf edit's small keys (myFolders, aiglish_shelf_meta) are written but before the shelf itself (a large value) reaches IndexedDB, the meta describes a newer shelf than storage holds. At the next start, mergeReaderShelf's isNew gate failed on that mismatch and returned null; with the change mark also older than the newest backup, the restore then replaced the whole shelf with the backup -- the user's "rolls back to quite old data" (folders and already-stored texts alike).
 - mergeReaderShelf now rebuilds the device meta from the device shelf itself in that case (the mark's owner and a present tombstone list still prove the copy is this account's, in the new form; an old version's copy has no tombstones and still returns null), so the merge runs and the stored shelf survives. Only the edit that never reached storage is lost, as it must be.
+
+## 10.204.00.00 - Read-aloud: sentences, shadowing, loops, word pronunciation
+
+- New reader-speech.js (browser speech synthesis; no API key): each rendered sentence gets a speaker button (app.js decorate hook), and a player bar is mounted above the sentences with through / shadowing / loop modes and 0.75/1/1.25 speeds (kept on the device). Shadowing waits about as long as the sentence took to say; loop repeats each sentence 3 times (a tapped sentence loops until stopped). The sentence being read is highlighted; closing the reader stops playback.
+- The word detail sheet (game_core.js openVocabDetailsSheet, shared by the wordbook, the reader and flashcards) gained a 発音を聞く button; Japanese headwords are read as Japanese.
