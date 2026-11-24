@@ -611,6 +611,17 @@ if(tabId === 'vocab') window.showVocabLibrarySelection();
 // 📖 単語帳関連
 // ==========================================================================
 // 🌟 単語ステータス更新（獲得EXPのリアルタイム反映処理）
+function replaceSentenceInText(raw, sentenceTexts, idx, replacement) {
+    var cursor = 0, pos = -1, end = -1;
+    for (var k = 0; k <= idx; k++) {
+        var pat = String(sentenceTexts[k] || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+        if (!pat) return null;
+        var m = new RegExp(pat).exec(raw.slice(cursor));
+        if (!m) return null;
+        pos = cursor + m.index; end = pos + m[0].length; cursor = end;
+    }
+    return raw.slice(0, pos) + replacement + raw.slice(end);
+}
 window.analyzeText = async function(rawText, assignedTitle = null, preParsedData = null) {
 if(!rawText) return; currentActiveReaderText = rawText; currentActiveTitle = assignedTitle || "無題のテキスト";
 const customJaEl = document.getElementById('customJapanesetextarea');
@@ -685,6 +696,36 @@ textHistory = textHistory.filter(h => h.text !== rawText);
  saveButton.innerHTML = '<i data-lucide="folder-plus" size="13"></i> 本棚に保存';
  const titleForSave = currentActiveTitle;
  saveButton.onclick = () => window.showCustomSaveBookshelfPrompt(rawText, titleForSave);
+ window.editReaderSentence = function(idx) {
+     const current = sentencesData[idx]; if (!current) return;
+     const overlay = document.createElement('div'); overlay.className = 'reader-sentence-edit-overlay';
+     overlay.innerHTML = '<div class="reader-sentence-edit-card"><div class="reader-sentence-edit-title">文を編集</div><textarea class="reader-sentence-edit-input" rows="4"></textarea><div class="reader-sentence-edit-error"></div><div class="reader-sentence-edit-actions"><button type="button" data-act="cancel">キャンセル</button><button type="button" data-act="save" class="primary">保存</button></div></div>';
+     const input = overlay.querySelector('textarea'); input.value = current.text || '';
+     document.body.appendChild(overlay);
+     overlay.querySelector('[data-act="cancel"]').onclick = () => overlay.remove();
+     overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+     overlay.querySelector('[data-act="save"]').onclick = () => {
+         const next = input.value.trim();
+         if (!next) { overlay.querySelector('.reader-sentence-edit-error').textContent = '文が空です。'; return; }
+         if (next === String(current.text || '').trim()) { overlay.remove(); return; }
+         const texts = sentencesData.map(s => s.text || '');
+         const replaced = replaceSentenceInText(rawText, texts, idx, next);
+         const newText = replaced !== null ? replaced : texts.map((t, j) => j === idx ? next : t).join(' ');
+         let updated = null;
+         if (aiAnalysisResult && Array.isArray(aiAnalysisResult.sentences)) {
+             updated = JSON.parse(JSON.stringify(aiAnalysisResult));
+             if (updated.sentences[idx]) updated.sentences[idx] = Object.assign({}, updated.sentences[idx], { text: next, translations: '（和訳未取得）', grammarHighlights: [], vocab: [] });
+         }
+         if (Array.isArray(myBookshelf)) {
+             let kept = false;
+             myBookshelf.forEach(item => { if (item.text === rawText) { item.text = newText; item.updatedAt = Date.now(); if (updated) item.aiAnalysisData = JSON.parse(JSON.stringify(updated)); kept = true; } });
+             if (kept) { try { localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); } catch (e) {} window.markReaderDataChanged?.(); }
+         }
+         overlay.remove();
+         window.analyzeText(newText, currentActiveTitle, updated);
+     };
+     input.focus();
+ };
  const analysedSentences = (aiAnalysisResult && Array.isArray(aiAnalysisResult.sentences)) ? aiAnalysisResult.sentences : null;
  const sentenceTotal = analysedSentences ? analysedSentences.length : (window.ReaderShelf ? window.ReaderShelf.sentenceCount(rawText) : 0);
  const hasGrammar = !!analysedSentences && analysedSentences.some(x => x && Array.isArray(x.grammarHighlights) && x.grammarHighlights.length);
@@ -782,7 +823,9 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      let finalJaText = customJaLines[sIdx] || sData.translation || sData.translations || "（和訳未取得）"; 
      totalSummaryJa += `${sIdx+1}. ${String(finalJaText).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}<br>`;
      const jaSpan = document.createElement('span'); jaSpan.className = 'sentence-ja'; jaSpan.innerText = finalJaText; mainContent.appendChild(jaSpan);
-     block.appendChild(mainContent); if (window.ReaderSpeech) window.ReaderSpeech.decorate(block, sentenceText); englishContainer.appendChild(block);
+     block.appendChild(mainContent); if (window.ReaderSpeech) window.ReaderSpeech.decorate(block, sentenceText);
+     const editBtn = document.createElement('button'); editBtn.type = 'button'; editBtn.className = 'sentence-edit-btn'; editBtn.setAttribute('aria-label', 'この文を編集'); editBtn.innerHTML = '<i data-lucide="pencil" size="14"></i>'; editBtn.onclick = () => window.editReaderSentence(sIdx); block.appendChild(editBtn);
+     englishContainer.appendChild(block);
  });
  document.getElementById('summaryJaContainer').innerHTML = totalSummaryJa; window.setTranslationMode(currentTranslationMode);
  // When the AI failed: what happened, and a button to try again.

@@ -136,6 +136,7 @@
       images,
       largestImagePixels,
       storage: window.AppStorage?.diagnosticSize?.(),
+      restore: window.__restoreDiag || null,
     };
     persist();
   }
