@@ -1423,6 +1423,14 @@ function mergeReaderShelf(save,id){
     }
     if(!merged.ops)merged.ops={};
     for(var fi=0;fi<local.folders.length;fi++){var fname=local.folders[fi];if(!fname||fname==='未分類'||merged.folders.indexOf(fname)>=0)continue;merged.folders.push(fname);merged.ops[fname]={at:Date.now(),deleted:false};}
+    var devOps=local.ops||{};
+    for(var dname of Object.keys(devOps)){
+      var dop=devOps[dname];
+      if(!dop||!dop.deleted||dname==='未分類'||local.folders.indexOf(dname)>=0)continue;
+      merged.shelf=merged.shelf.map(function(it){return it&&!it.bookId&&it.folder===dname?Object.assign({},it,{folder:'未分類'}):it;});
+      merged.folders=merged.folders.filter(function(f){return f!==dname;});
+      merged.ops[dname]={at:Date.now(),deleted:true};
+    }
     diag.shelf={saved:saved.shelf.length,device:local.shelf.length,merged:merged.shelf.length};
     diag.folders={saved:saved.folders.length,device:local.folders.length,merged:merged.folders.length};
     merged.meta=M.meta(merged.shelf,id);
@@ -1461,6 +1469,14 @@ function mergeReaderMemory(state){
     var result=M.merge(state.merged,current);
     if(!result.ops)result.ops={};
     for(var fi2=0;fi2<current.folders.length;fi2++){var fname2=current.folders[fi2];if(!fname2||fname2==='未分類'||result.folders.indexOf(fname2)>=0)continue;result.folders.push(fname2);result.ops[fname2]={at:Date.now(),deleted:false};}
+    var devOps2=local.ops||{};
+    for(var dname2 of Object.keys(devOps2)){
+      var dop2=devOps2[dname2];
+      if(!dop2||!dop2.deleted||dname2==='未分類'||local.folders.indexOf(dname2)>=0)continue;
+      result.shelf=result.shelf.map(function(it){return it&&!it.bookId&&it.folder===dname2?Object.assign({},it,{folder:'未分類'}):it;});
+      result.folders=result.folders.filter(function(f){return f!==dname2;});
+      result.ops[dname2]={at:Date.now(),deleted:true};
+    }
     result.meta=M.meta(result.shelf,state.id);
     writeReaderShelf(result);
     // The cloud gets the merged shelf once (only when it differs from the backup in more than the order).
