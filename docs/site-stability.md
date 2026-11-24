@@ -5510,3 +5510,7 @@ Tests:
 ## 10.212.00.00 - A rescued folder records its own keep so later merges keep it too
 
 - The 10.211 rescue rule (keep a listed folder unless the device ops record its deletion) undid itself: the first restore wrote the merged ops -- including the backup's stale delete record -- back to the device, so the second restore of the same launch read that record as the device's own and dropped the folder again. A rescue now stamps a fresh not-deleted operation for the folder, so every later merge keeps it on the strength of that record; a real later deletion is newer still and wins as before.
+
+## 10.213.00.00 - Startup: the shelf tab patch waits for the bookshelf renderer
+
+- The user sent a splash-screen error from a slow launch: TypeError: window.renderBookshelf is not a function (app.js:3713). The shelf tab patch booted on a fixed 400ms timer, but on a slow device reader-shelf.js -- which defines window.renderBookshelf -- has not executed yet at that point, so the boot step died with the error on screen. The boot now retries until the renderer exists (up to about 9 seconds) instead of throwing, and the other unguarded renderBookshelf calls in app.js check typeof first, like the existing guarded call sites.
