@@ -5502,3 +5502,7 @@ Tests:
 
 - A folder deleted on the device came back (it showed in the save dialog again): when the shelf merge could not run for a launch, the restore replaced ALL shelf keys wholesale from the backup -- including the folder operations and tombstones the merge relies on -- so the backup's older copies resurrected the folder and destroyed the record of its deletion.
 - restoreSaveStorage now always skips the shelf keys when the device shelf belongs to this account (its change mark or meta says so), merged or not, and applySavedMemory falls back to the device shelf in that case. A manual file restore still replaces the shelf (it removes the change mark first), and another account's device shelf is still not kept. The 10.209 folder rescue is also refined: a delete recorded after the device's last change mark still wins over the device list.
+
+## 10.211.00.00 - Folder rescue: only the device's own delete record holds a folder back
+
+- The 10.210 rescue refinement compared the backup's delete time with the device change mark, but on a slow device the mark can lag the folder operations, so a re-created folder could be held back by a backup's older delete after all. The rule is now simply: a name in the device folder list is kept unless this device's own folder operations record its deletion.
