@@ -5472,3 +5472,8 @@ Tests:
 
 - New reader-speech.js (browser speech synthesis; no API key): each rendered sentence gets a speaker button (app.js decorate hook), and a player bar is mounted above the sentences with through / shadowing / loop modes and 0.75/1/1.25 speeds (kept on the device). Shadowing waits about as long as the sentence took to say; loop repeats each sentence 3 times (a tapped sentence loops until stopped). The sentence being read is highlighted; closing the reader stops playback.
 - The word detail sheet (game_core.js openVocabDetailsSheet, shared by the wordbook, the reader and flashcards) gained a 発音を聞く button; Japanese headwords are read as Japanese.
+
+## 10.205.00.00 - Edit a single sentence; restore decisions recorded
+
+- The reader's sentences gained a pencil button: it edits just that sentence (the rest of the text is untouched), shelf copies of the text follow the edit with a fresh updatedAt, and only the edited sentence's translation/grammar/vocab is cleared. Re-rendering reuses the kept analysis, so no new AI call is made.
+- The bookshelf rollback reported again after 10.203 could not be reproduced from the code paths left; the restore now records its decision (window.__restoreDiag: which save was chosen, the change mark, whether the shelf merge ran or why it did not) and the startup monitor includes it in its snapshot, so the diagnostics page shows it after a bad start.

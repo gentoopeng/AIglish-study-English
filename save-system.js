@@ -1368,12 +1368,16 @@ function savedReaderSide(save){
   return {storedShelf:storedShelf||[],shelf:Array.isArray(memory.myBookshelf)?memory.myBookshelf:(storedShelf||[]),folders:Array.isArray(memory.myFolders)?memory.myFolders:(readerJson(stored.myFolders)||[]),deleted:readerJson(stored.aiglish_shelf_deleted),ops:readerJson(stored.aiglish_shelf_folder_ops)||{},covers:readerJson(stored.aiglish_shelf_folder_covers)||{},meta:readerJson(stored.aiglish_shelf_meta)};
 }
 function mergeReaderShelf(save,id){
+  var diag=window.__restoreDiag||(window.__restoreDiag={});
   try{
     var M=window.ReaderShelfMerge,mark=readerJson(localStorage.getItem('aiglish_reader_local'));
-    if(!M||!save||!save.data||!mark||mark.owner!==id)return null;
+    if(!M){diag.merge='module';return null;}
+    if(!save||!save.data){diag.merge='nosave';return null;}
+    if(!mark){diag.merge='nomark';return null;}
+    if(mark.owner!==id){diag.merge='mark-owner';return null;}
     var saved=savedReaderSide(save),local=localReaderSide();
     // The device copy must be this account's own (the shelf keys are per device: another account may have used it).
-    if(local.meta&&local.meta.owner&&local.meta.owner!==id)return null;
+    if(local.meta&&local.meta.owner&&local.meta.owner!==id){diag.merge='meta-owner';return null;}
     if(!M.isNew(local)){
       // The device meta can describe a newer shelf than the one storage actually holds: the meta is a
       // small native write, while the shelf itself reaches IndexedDB a moment later, and a kill in
@@ -1381,9 +1385,9 @@ function mergeReaderShelf(save,id){
       // its tombstones (a key always written with it) say the copy is in the new form: rebuild the meta
       // from the shelf and merge anyway. Giving up here let the backup replace the shelf whole, which
       // rolled the shelf back to an old backup. (An old version's copy has no tombstones: still null.)
-      if(!Array.isArray(local.deleted)||!Array.isArray(local.shelf))return null;
+      if(!Array.isArray(local.deleted)||!Array.isArray(local.shelf)){diag.merge='old-format';return null;}
       local.meta=M.meta(local.shelf,id);
-      if(!M.isNew(local))return null;
+      if(!M.isNew(local)){diag.merge='meta-mismatch';return null;}
     }
     var savedNew=M.isNew(saved)||M.isNew({shelf:saved.storedShelf,deleted:saved.deleted,meta:saved.meta});
     // A backup in the old form (another device that has not saved the shelf with this version, or an old backup) knows nothing of
@@ -1394,8 +1398,9 @@ function mergeReaderShelf(save,id){
     var merged=localNewer?M.merge(local,saved):M.merge(saved,local);
     merged.meta=M.meta(merged.shelf,id);
     merged.changed=M.signature(merged)!==M.signature(saved);
+    diag.merge='ok';
     return merged;
-  }catch(e){console.warn('[save] shelf merge skipped',e);return null;}
+  }catch(e){diag.merge='error';console.warn('[save] shelf merge skipped',e);return null;}
 }
 // Texts this account had on this device that the restore is about to take away without a delete on record: kept aside (texts only,
 // at most 30), so they can be put back from the shelf ("消えた長文を戻す"). Nothing is ever lost silently.
@@ -1473,6 +1478,7 @@ async function autoLoadOnce() {
   if(save&&window.TextbookFiles)await window.TextbookFiles.prepareRestore(save,id);
   if(loginUid()!==id)return;
   if(!window.__learningBootReady)window.StartupMonitor?.mark?.('save-storage-restore');
+  try{var mk=JSON.parse(localStorage.getItem('aiglish_reader_local')||'null');window.__restoreDiag={src:cloudSave?'cloud':(save?'local':'none'),savedAt:save?save.savedAt:'',markAt:mk&&mk.at?new Date(mk.at).toISOString():''};}catch(e){}
   restoreSaveStorage(save,id);
   if(save&&save.data&&save.data.memory){
     window.__pendingGameSaveMemory={id:id,savedAt:save.savedAt||'',data:save.data.memory};
