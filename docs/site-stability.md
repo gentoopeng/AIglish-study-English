@@ -5482,3 +5482,8 @@ Tests:
 
 - The shelf rollback kept recurring on a device whose full backup is ~17MB (the whole store is ~37MB, and a write was still pending minutes into a session): every shelf save waited in the same IndexedDB queue as the giant backup, so closing the app could leave the shelf itself unwritten while its small keys (folders, meta, the change mark) were already through -- the next start then had only older copies to merge.
 - app-storage.js gained AppStorage.flushKey(key) (one row, same commit bookkeeping as flush); reader-shelf.js shelfStored() now settles the shelf through it, falling back to the full flush. The merge/restore logic is unchanged.
+
+## 10.207.00.00 - A renamed player keeps one name everywhere
+
+- The display name lives in two places (the profile's nickname and the account document's playerName, which the ranking reads), and they could disagree with the pre-rename name sticking around: restoring a backup overwrote the device's profile copy with the backup's older one, and the boot-time profile merge was only queued for a periodic sync that end-only cloud saves disable, so a lagging playerName was never healed.
+- restoreSaveStorage no longer restores core_v4_profile_customization_* from a backup (profile.js owns that copy and its sync, like the reader shelf). profile.js now force-syncs at boot when the merged nickname differs from the document's playerName (or the profile itself differs), so the document -- and with it the ranking -- converges to the current name.
