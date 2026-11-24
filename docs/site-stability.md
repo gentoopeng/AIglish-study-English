@@ -5497,3 +5497,8 @@ Tests:
 
 - Adding a folder could make the previous folders vanish (only the new one stayed): a folder with no texts lives only in the folder list, and the restore merge could drop it on a backup's folder operations, while the newest folder -- present in every copy -- survived.
 - mergeReaderShelf and mergeReaderMemory now always keep the folder names the device side currently lists (deleting a folder on this device removes it from that list first, so real deletions still stick). The restore diagnostics also record folder counts (backup / device / merged) alongside the shelf counts.
+
+## 10.210.00.00 - A backup restore no longer overwrites this device's own shelf records
+
+- A folder deleted on the device came back (it showed in the save dialog again): when the shelf merge could not run for a launch, the restore replaced ALL shelf keys wholesale from the backup -- including the folder operations and tombstones the merge relies on -- so the backup's older copies resurrected the folder and destroyed the record of its deletion.
+- restoreSaveStorage now always skips the shelf keys when the device shelf belongs to this account (its change mark or meta says so), merged or not, and applySavedMemory falls back to the device shelf in that case. A manual file restore still replaces the shelf (it removes the change mark first), and another account's device shelf is still not kept. The 10.209 folder rescue is also refined: a delete recorded after the device's last change mark still wins over the device list.

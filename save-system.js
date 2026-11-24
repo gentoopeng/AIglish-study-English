@@ -1226,6 +1226,16 @@ function applySavedMemory(memory,id,savedAt) {
   // done since) is merged in once more, and the result is what the app uses and what the device keeps.
   var shelfMerge=window.__readerShelfMerge&&window.__readerShelfMerge.id===id?mergeReaderMemory(window.__readerShelfMerge):null;
   if(shelfMerge){memory.myBookshelf=shelfMerge.shelf;memory.myFolders=shelfMerge.folders;}
+  else{
+    try{
+      var ownMark=readerJson(localStorage.getItem('aiglish_reader_local')),ownMeta=readerJson(localStorage.getItem('aiglish_shelf_meta'));
+      if((ownMark&&ownMark.owner===id)||(ownMeta&&ownMeta.owner===id)){
+        var deviceShelf=readerJson(localStorage.getItem('myBookshelf')),deviceFolders=readerJson(localStorage.getItem('myFolders'));
+        if(Array.isArray(deviceShelf))memory.myBookshelf=deviceShelf;
+        if(Array.isArray(deviceFolders))memory.myFolders=deviceFolders;
+      }
+    }catch(e){}
+  }
   if(readerLocal)(shelfMerge?['textHistory']:['textHistory','myBookshelf','myFolders']).forEach(function(key){if(readerLocal[key])memory[key]=readerLocal[key];});
   if(window.LibraryState)window.LibraryState.sanitizeSave({memory:memory},id);
   try{if(memory.totalExp!=null)totalExp=memory.totalExp;}catch(e){}
@@ -1266,6 +1276,8 @@ function restoreSaveStorage(save,id){
     var keepReader=!!newerReaderData(id,save.savedAt);
     // When both copies of the shelf can be merged (reader-shelf-merge.js), they are: neither replaces the other.
     var shelfMerged=mergeReaderShelf(save,id),shelfKeys=['myBookshelf','myFolders','aiglish_shelf_meta','aiglish_shelf_deleted','aiglish_shelf_folder_ops','aiglish_shelf_folder_covers'];
+    var shelfDeviceOwned=false;
+    try{var ownMark2=readerJson(localStorage.getItem('aiglish_reader_local')),ownMeta2=readerJson(localStorage.getItem('aiglish_shelf_meta'));shelfDeviceOwned=!!((ownMark2&&ownMark2.owner===id)||(ownMeta2&&ownMeta2.owner===id));}catch(e){}
     window.__readerShelfMerge=shelfMerged?{id:id,merged:shelfMerged}:null;
     if(shelfMerged)keepLostReaderTexts(save,id,shelfMerged.shelf,shelfMerged.deleted);
     else if(!keepReader){var savedSide=savedReaderSide(save);keepLostReaderTexts(save,id,savedSide.shelf,savedSide.deleted);}
@@ -1273,7 +1285,7 @@ function restoreSaveStorage(save,id){
       if(key==='aiglish_reader_local')continue; // This device's own change mark.
       if(key.indexOf('core_v4_profile_customization_')===0)continue; // The profile (name/photo) is this device's own, synced by profile.js; a backup must not bring back a name from before a rename.
       if(key==='aiglish_shelf_lost')continue; // What this device set aside.
-      if((shelfMerged||keepReader)&&shelfKeys.indexOf(key)>=0)continue;
+      if((shelfMerged||keepReader||shelfDeviceOwned)&&shelfKeys.indexOf(key)>=0)continue;
       if(keepReader&&key==='textHistory')continue;
       // Solved questions: per passage, the newer of the two (the backup does not replace what this device solved since).
       if(key==='aiglish_reader_questions'){try{var localQ=JSON.parse(localStorage.getItem(key)||'{}')||{},savedQ=JSON.parse(stored[key]||'{}')||{};for(var qk in savedQ){if(!localQ[qk]||(Number(savedQ[qk]&&savedQ[qk].at)||0)>(Number(localQ[qk].at)||0))localQ[qk]=savedQ[qk];}localStorage.setItem(key,JSON.stringify(localQ));}catch(e){}continue;}
@@ -1409,7 +1421,8 @@ function mergeReaderShelf(save,id){
         diag.alt=alt.savedAt||'';
       }catch(e){}
     }
-    for(var fi=0;fi<local.folders.length;fi++){var fname=local.folders[fi];if(fname&&fname!=='未分類'&&merged.folders.indexOf(fname)<0)merged.folders.push(fname);}
+    var mergedOps=merged.ops||{},localOps=local.ops||{};
+    for(var fi=0;fi<local.folders.length;fi++){var fname=local.folders[fi];if(!fname||fname==='未分類'||merged.folders.indexOf(fname)>=0)continue;var mop=mergedOps[fname],lop=localOps[fname];if(mop&&mop.deleted&&(Number(mop.at)||0)>(Number(mark&&mark.at)||0)&&!(lop&&!lop.deleted))continue;merged.folders.push(fname);}
     diag.shelf={saved:saved.shelf.length,device:local.shelf.length,merged:merged.shelf.length};
     diag.folders={saved:saved.folders.length,device:local.folders.length,merged:merged.folders.length};
     merged.meta=M.meta(merged.shelf,id);
@@ -1446,7 +1459,8 @@ function mergeReaderMemory(state){
   try{
     var M=window.ReaderShelfMerge,local=localReaderSide(),current={shelf:(typeof myBookshelf!=='undefined'&&Array.isArray(myBookshelf))?myBookshelf:[],folders:(typeof myFolders!=='undefined'&&Array.isArray(myFolders))?myFolders:[],deleted:local.deleted||[],ops:local.ops,covers:local.covers||{}};
     var result=M.merge(state.merged,current);
-    for(var fi2=0;fi2<current.folders.length;fi2++){var fname2=current.folders[fi2];if(fname2&&fname2!=='未分類'&&result.folders.indexOf(fname2)<0)result.folders.push(fname2);}
+    var resultOps=result.ops||{},markNow=readerJson(localStorage.getItem('aiglish_reader_local')),localOps2=local.ops||{};
+    for(var fi2=0;fi2<current.folders.length;fi2++){var fname2=current.folders[fi2];if(!fname2||fname2==='未分類'||result.folders.indexOf(fname2)>=0)continue;var mop2=resultOps[fname2],lop2=localOps2[fname2];if(mop2&&mop2.deleted&&(Number(mop2.at)||0)>(Number(markNow&&markNow.at)||0)&&!(lop2&&!lop2.deleted))continue;result.folders.push(fname2);}
     result.meta=M.meta(result.shelf,state.id);
     writeReaderShelf(result);
     // The cloud gets the merged shelf once (only when it differs from the backup in more than the order).
