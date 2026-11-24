@@ -1,6 +1,6 @@
 // The reader's bookshelf, merged instead of "the newer copy replaces the other" (which lost a saved text and brought a deleted one
 // back when an older copy won). Pure functions; used at restore (save-system.js) and by reader-shelf.js. Also runs under node (tests).
-//   side = { shelf: [items], folders: [names], deleted: [{ id, at }], ops: { name: { at, deleted } }, meta: { v, ids } }
+//   side = { shelf: [items], folders: [names], deleted: [{ id, at }], ops: { name: { at, deleted } }, covers: { name: { image, at } }, meta: { v, ids } }
 //   - an item removed from the shelf leaves a tombstone ({ id, at }); a tombstone always wins for its id (saving the text again makes a
 //     new id), so clocks that differ between devices cannot bring a deleted text back;
 //   - items are joined by id; the same id on both sides: the later `updatedAt` (set on edit / move) wins;
@@ -88,14 +88,24 @@
       folders.push(name);
     }
     if (!folders.includes("未分類")) folders.unshift("未分類");
-    return { shelf, folders, deleted, ops, meta: meta(shelf) };
+    // Folder cover photos: the newest setting for a name wins; a cover whose folder is gone
+    // (deleted or renamed away) does not survive.
+    const covers = {};
+    for (const side of [first, second]) for (const [name, c] of Object.entries((side && side.covers) || {})) {
+      if (!c || typeof c.image !== "string" || !c.image || typeof name !== "string") continue;
+      const at = Number(c.at) || 0;
+      if (!covers[name] || covers[name].at < at) covers[name] = { image: c.image, at };
+    }
+    for (const name of Object.keys(covers)) if (name === "未分類" || !folders.includes(name)) delete covers[name];
+    return { shelf, folders, deleted, ops, covers, meta: meta(shelf) };
   }
   // What matters for "did the merge change anything" (not the order): ids with their text, title, place; the tombstones; the folders.
   function signature(side) {
     const items = (Array.isArray(side.shelf) ? side.shelf : []).filter(usable).map(withId).map((i) => [String(i.id), i.title || "", place(i), hash(i.text), analysed(i) ? 1 : 0].join("|")).sort();
     const dead = (Array.isArray(side.deleted) ? side.deleted : []).map((t) => String(t.id)).sort();
     const folders = (Array.isArray(side.folders) ? side.folders : []).filter((f) => typeof f === "string").slice().sort();
-    return JSON.stringify([items, dead, folders]);
+    const covers = Object.entries(side.covers || {}).filter(([, c]) => c && typeof c.image === "string" && c.image).map(([n, c]) => n + "|" + hash(c.image)).sort();
+    return JSON.stringify([items, dead, folders, covers]);
   }
   const api = { merge, meta, isNew, signature, tombstones, idsOf };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

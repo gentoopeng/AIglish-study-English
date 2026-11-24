@@ -5452,3 +5452,8 @@ Tests:
 - While no sentence has been translated yet, the progress label now counts the elapsed wait (「AIの応答を待っています（◯秒）」), so a working wait is distinguishable from a failure.
 - If nothing arrives and the request times out, the analysis retries once automatically with the other model first, saying so in the progress label.
 - If the stream stalls mid-answer, the complete sentences that already arrived are salvaged (salvageSentences scans the partial JSON) and shown with their real translations, marked 「途中まで解析できました」; only the remaining sentences fall back to the placeholder. Partial results keep analysisError: true, so they are never cached as a finished analysis.
+
+## 10.201.00.00 - Bookshelf folders can have a cover photo
+
+- A bookshelf folder's ⋯ (フォルダの管理) dialog gained 写真を変更 / 写真を消す: the photo is shrunk like a book cover (240px JPEG) and shown in place of the 📁 in the shelf list. Renaming a folder carries its photo over; deleting the folder drops it.
+- Photos live in a new device key aiglish_shelf_folder_covers ({ name: { image, at } }) and ride the shelf merge: reader-shelf-merge sides gain `covers` (newest per name wins; covers for folders that no longer exist are dropped; signature() includes them so a photo-only change still counts as a change), and save-system.js routes the key through localReaderSide / savedReaderSide / writeReaderShelf / mergeReaderMemory and the restore shelfKeys list.

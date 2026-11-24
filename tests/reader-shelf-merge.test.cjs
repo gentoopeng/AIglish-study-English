@@ -85,3 +85,14 @@ test("old tombstones go, and at most 500 are kept (the newest)", () => {
   assert.equal(r.some((t) => t.id === "old"), false);
   assert.equal(r.some((t) => t.id === 519), false);
 });
+
+test("folder covers: the newest wins, and a cover for a deleted folder goes", () => {
+  const a = { ...side([item(1, "a")], [], ["未分類", "英語"]), covers: { "英語": { image: "data:old", at: now - 5000 } } };
+  const b = { ...side([item(1, "a")], [], ["未分類", "英語"]), covers: { "英語": { image: "data:new", at: now - 1000 } } };
+  assert.deepEqual(M.merge(a, b, now).covers, { "英語": { image: "data:new", at: now - 1000 } });
+  assert.deepEqual(M.merge(b, a, now).covers, { "英語": { image: "data:new", at: now - 1000 } });
+  const gone = { ...side([item(1, "a")], [], ["未分類", "英語"]), covers: { "英語": { image: "data:x", at: now - 1000 } } };
+  const deleted = { ...side([item(1, "a")], [], ["未分類"], { "英語": { at: now, deleted: true } }) };
+  assert.deepEqual(M.merge(gone, deleted, now).covers, {});
+  assert.notEqual(M.signature({ ...side([]), covers: {} }), M.signature({ ...side([]), covers: { "英語": { image: "data:x", at: 1 } } }));
+});
