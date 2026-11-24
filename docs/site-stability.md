@@ -5487,3 +5487,8 @@ Tests:
 
 - The display name lives in two places (the profile's nickname and the account document's playerName, which the ranking reads), and they could disagree with the pre-rename name sticking around: restoring a backup overwrote the device's profile copy with the backup's older one, and the boot-time profile merge was only queued for a periodic sync that end-only cloud saves disable, so a lagging playerName was never healed.
 - restoreSaveStorage no longer restores core_v4_profile_customization_* from a backup (profile.js owns that copy and its sync, like the reader shelf). profile.js now force-syncs at boot when the merged nickname differs from the document's playerName (or the profile itself differs), so the document -- and with it the ranking -- converges to the current name.
+
+## 10.208.00.00 - When the cloud backup is restored, the device save's shelf joins the merge
+
+- Diagnostics from the healing launch (10.207) showed src: local, merge: ok, while the bad launch just before it was no longer recorded -- so the bad launch must have restored the other backup (the cloud one, chosen when its marker is newer), whose shelf was older, while the save on the device held the current shelf all along.
+- autoLoadOnce now keeps the device save aside (window.__altLocalSave) when the cloud backup is chosen, and mergeReaderShelf merges its shelf in as a third side (an old-format device save contributes its texts only, like the existing old-format rule). The restore diagnostics also record the shelf sizes (backup / device / merged) and the device save's time when it joined, so a bad launch explains itself.

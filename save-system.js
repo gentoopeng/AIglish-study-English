@@ -1397,6 +1397,19 @@ function mergeReaderShelf(save,id){
     if(!savedNew)saved={shelf:saved.shelf,folders:saved.folders,deleted:[],ops:{},covers:{},meta:null};
     var localNewer=Number(mark.at)>(Date.parse(save.savedAt||'')||0);
     var merged=localNewer?M.merge(local,saved):M.merge(saved,local);
+    // The backup on this device joins in as well when the cloud backup was chosen: its shelf
+    // can be newer than the cloud one's, and a merge only ever unions (per-item stamps and
+    // this device's tombstones decide), so nothing the cloud copy has is lost either.
+    var alt=window.__altLocalSave;
+    if(alt&&alt!==save){
+      try{
+        var altSide=savedReaderSide(alt),altNew=M.isNew(altSide)||M.isNew({shelf:altSide.storedShelf,deleted:altSide.deleted,meta:altSide.meta});
+        if(!altNew)altSide={shelf:altSide.shelf,folders:altSide.folders,deleted:[],ops:{},covers:{}};
+        merged=M.merge(merged,altSide);
+        diag.alt=alt.savedAt||'';
+      }catch(e){}
+    }
+    diag.shelf={saved:saved.shelf.length,device:local.shelf.length,merged:merged.shelf.length};
     merged.meta=M.meta(merged.shelf,id);
     merged.changed=M.signature(merged)!==M.signature(saved);
     diag.merge='ok';
@@ -1473,6 +1486,7 @@ async function autoLoadOnce() {
   }else{
     save=localSave;
   }
+  window.__altLocalSave=(save&&localSave&&save!==localSave)?localSave:null;
   if(loginUid()!==id)return;
   if(save&&window.LibraryState)window.LibraryState.sanitizeSave(save,id);
   if(!window.__learningBootReady)window.StartupMonitor?.mark?.('textbook-restore');
