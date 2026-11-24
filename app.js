@@ -3605,7 +3605,7 @@ window.switchReaderSubTab = function(tabName, animDir) {
     if (animClass) bSec.classList.add(animClass);
     setActive(btnA, false);
     setActive(btnB, true);
-    window.renderBookshelf();
+    if (typeof window.renderBookshelf === 'function') window.renderBookshelf();
   }
 };
 
@@ -3692,7 +3692,7 @@ window.onAppLoaded(function() {
     if (!window.__bookshelfIndexSyncPromise) {
       window.__bookshelfIndexSyncPromise = Promise.resolve(window.syncBookshelfIndexFromFirestore()).then(function() {
         window.updateAdminEditShelfSelectOptions();
-        window.renderBookshelf();
+        if (typeof window.renderBookshelf === 'function') window.renderBookshelf();
       }).catch(function(e) {
         console.warn('本棚のバックグラウンド同期に失敗しました:', e);
       });
@@ -3707,6 +3707,10 @@ window.onAppLoaded(function() {
 // ------------------------------------------------------------------
 (function initShelfTabPatch() {
   function boot() {
+    if (typeof window.renderBookshelf !== 'function') {
+      if ((boot.retries = (boot.retries || 0) + 1) <= 30) setTimeout(boot, 300);
+      return;
+    }
     window.initReaderSubTabStructure();
     window.injectShelfAdminPanel();
     window.updateAdminEditShelfSelectOptions();
