@@ -7,7 +7,7 @@
   const storeKey = () => "aiglish_reader_books_" + uid();
   const usable = () =>
     (typeof textbooksPool !== "undefined" ? textbooksPool : []).filter(
-      (b) => b && b.id && !b.termMode && !window.LibraryState?.isDeleted?.("book", b.id),
+      (b) => b && b.id && !window.LibraryState?.isDeleted?.("book", b.id),
     );
   const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩";
 

@@ -5441,3 +5441,7 @@ Fix:
 
 Tests:
 - 変換後の各JSは node --check を通過。ブラウザスモークはこの環境では未実施。
+
+## 10.199.00.00 - Reader book picker lists every book
+
+- The reader's 「参照する単語帳」 picker (and the candidate loading behind it) filtered the book pool with `!b.termMode`, which hid the shared English textbook システム英単語 from the picker for every user because its shared-index entry carries the term-mode flag, and hid any term-mode book (such as an idiom book) as well. reader-vocab.js `usable()` no longer excludes term-mode books: a Japanese term book's headwords never match English text, so including them cannot affect analysis, and every book in the pool can now be chosen. Hidden and deleted books stay excluded through the pool itself.
