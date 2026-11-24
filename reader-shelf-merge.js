@@ -56,7 +56,11 @@
         return;
       }
       const a = stamp(held), b = stamp(item);
-      const win = b > a || (b === a && !analysed(held) && analysed(item)) ? item : held;
+      // On a tie, the copy carrying more of the user's work wins: an analysis first (as
+      // before), then a place -- a text filed in a folder must not fall back to 未分類
+      // just because the unfiled copy happened to be the first side.
+      const filed = (x) => place(x) !== "folder:";
+      const win = b > a || (b === a && ((!analysed(held) && analysed(item)) || (!filed(held) && filed(item)))) ? item : held;
       // (an analysis is never lost to a copy that has none, when the text is the same)
       byId.set(key, win === held || analysed(win) || win.text !== (win === item ? held : item).text ? win : { ...win, aiAnalysisData: (win === item ? held : item).aiAnalysisData || win.aiAnalysisData });
     };
@@ -86,6 +90,10 @@
       if (typeof name !== "string" || !name || folders.includes(name)) continue;
       if (ops[name] && ops[name].deleted && name !== "未分類") continue;
       folders.push(name);
+    }
+    for (const item of shelf) {
+      const f = item.folder;
+      if (f && f !== "未分類" && !folders.includes(f)) folders.push(f);
     }
     if (!folders.includes("未分類")) folders.unshift("未分類");
     // Folder cover photos: the newest setting for a name wins; a cover whose folder is gone

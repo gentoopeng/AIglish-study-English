@@ -5457,3 +5457,8 @@ Tests:
 
 - A bookshelf folder's ⋯ (フォルダの管理) dialog gained 写真を変更 / 写真を消す: the photo is shrunk like a book cover (240px JPEG) and shown in place of the 📁 in the shelf list. Renaming a folder carries its photo over; deleting the folder drops it.
 - Photos live in a new device key aiglish_shelf_folder_covers ({ name: { image, at } }) and ride the shelf merge: reader-shelf-merge sides gain `covers` (newest per name wins; covers for folders that no longer exist are dropped; signature() includes them so a photo-only change still counts as a change), and save-system.js routes the key through localReaderSide / savedReaderSide / writeReaderShelf / mergeReaderMemory and the restore shelfKeys list.
+
+## 10.202.00.00 - Filed texts no longer fall out of their folder at start
+
+- Reproduced with a browser harness against the live build: when the device and the backup hold the same text with equal stamps (no updatedAt -- the normal state of a text saved straight into a folder) and the backup is the merge's first side (its savedAt is newer than the device mark), the backup's unfiled copy won the tie, so the text fell back to 未分類 while the text itself stayed -- the user's "folders disappear, the texts remain". Which side is first depends on unrelated saves, so it looked random.
+- reader-shelf-merge.js: on a stamp tie the filed copy (folder or shelf book) now beats the unfiled one, like the existing analysed-copy rule; and the merged folder list keeps every name a surviving text still uses, even when a newer delete op for that name won the ops merge.

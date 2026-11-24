@@ -96,3 +96,16 @@ test("folder covers: the newest wins, and a cover for a deleted folder goes", ()
   assert.deepEqual(M.merge(gone, deleted, now).covers, {});
   assert.notEqual(M.signature({ ...side([]), covers: {} }), M.signature({ ...side([]), covers: { "英語": { image: "data:x", at: 1 } } }));
 });
+
+test("a stamp tie: the filed copy wins over the unfiled one, whichever side is first", () => {
+  const filedItem = item(9, "x", { folder: "共テ" });
+  const unfiled = item(9, "x");
+  const a = side([filedItem], [], ["未分類", "共テ"]);
+  const b = side([unfiled], [], ["未分類"]);
+  assert.equal(M.merge(a, b, now).shelf[0].folder, "共テ");
+  assert.equal(M.merge(b, a, now).shelf[0].folder, "共テ");
+  // A name a surviving text still uses stays in the folder list even when neither
+  // side's folder list has it (its delete op was the newer one).
+  const gone = { ...side([filedItem], [], ["未分類"]), ops: { "共テ": { at: now, deleted: true } } };
+  assert.ok(M.merge(gone, b, now).folders.includes("共テ"));
+});
