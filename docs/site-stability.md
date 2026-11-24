@@ -5514,3 +5514,7 @@ Tests:
 ## 10.213.00.00 - Startup: the shelf tab patch waits for the bookshelf renderer
 
 - The user sent a splash-screen error from a slow launch: TypeError: window.renderBookshelf is not a function (app.js:3713). The shelf tab patch booted on a fixed 400ms timer, but on a slow device reader-shelf.js -- which defines window.renderBookshelf -- has not executed yet at that point, so the boot step died with the error on screen. The boot now retries until the renderer exists (up to about 9 seconds) instead of throwing, and the other unguarded renderBookshelf calls in app.js check typeof first, like the existing guarded call sites.
+
+## 10.214.00.00 - Flashcards: choose which term-mode question kinds to include
+
+- At the user's request, the card start screen gained a question-kind setting for term-mode books: まるごと (whole entry), 何年？ (year/century, typed), 何時代？ (era) and 「」穴埋め (blanks) can each be toggled off. The field shows only for term-mode books, the choice is kept on the device (aiglish_flashcard_kinds), and starting with nothing selected is refused like the status filters. startFlashcardSession's term branch now skips unselected kinds (hidden twin cards follow their parent question).

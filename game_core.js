@@ -66,6 +66,14 @@
 
     var flashcardSelectedStatuses = { ok: true, so: true, bad: true, none: true };
 
+    // Question kinds for term-mode books (whole entry, year, era, blanks): each can be
+    // left out at the start screen. The choice is kept on this device.
+    var flashcardSelectedKinds = { whole: true, year: true, era: true, blank: true };
+    try {
+        var savedKinds = JSON.parse(localStorage.getItem('aiglish_flashcard_kinds') || 'null');
+        if (savedKinds) Object.keys(flashcardSelectedKinds).forEach(function(k) { if (typeof savedKinds[k] === 'boolean') flashcardSelectedKinds[k] = savedKinds[k]; });
+    } catch (e) {}
+
     var bookSettingsDialog = null;
     var settingsHome = null;
     var settingsNext = null;
@@ -132,6 +140,7 @@
             unitField.hidden = !units.length;
             updateFlashcardUnitSummary();
         }
+        window.syncFlashcardKindField(bookId);
         document.getElementById('flashcardRangeStart').value = nums.length ? Math.min.apply(null, nums) : 1;
         document.getElementById('flashcardRangeEnd').value = nums.length ? Math.max.apply(null, nums) : 100;
         settings.style.display = 'block';
@@ -163,6 +172,11 @@
         }
         if (!Object.keys(flashcardSelectedStatuses).some(function(key) { return flashcardSelectedStatuses[key]; })) {
             alert('出題する理解度を1つ以上選択してください。');
+            return;
+        }
+        var kindField = document.getElementById('flashcardKindField');
+        if (kindField && !kindField.hidden && !Object.keys(flashcardSelectedKinds).some(function(key) { return flashcardSelectedKinds[key]; })) {
+            alert('出題する問題を1つ以上選択してください。');
             return;
         }
         if (bookSettingsDialog) {
@@ -206,6 +220,34 @@
         if (!Object.prototype.hasOwnProperty.call(flashcardSelectedStatuses, status)) return;
         flashcardSelectedStatuses[status] = !flashcardSelectedStatuses[status];
         updateFlashcardStatusFilterUi();
+    };
+
+    function updateFlashcardKindFilterUi() {
+        var labels = { whole: 'まるごと', year: '何年？', era: '何時代？', blank: '「」穴埋め' };
+        var selected = [];
+        document.querySelectorAll('.flashcard-kind-filter').forEach(function(button) {
+            var enabled = !!flashcardSelectedKinds[button.dataset.kind];
+            button.classList.toggle('active', enabled);
+            button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+            if (enabled) selected.push(labels[button.dataset.kind]);
+        });
+        var summary = document.getElementById('flashcardKindSummary');
+        if (summary) summary.textContent = selected.length === 4 ? 'すべての問題を出題' : selected.length ? selected.join('・') + 'のみ出題' : '問題を1つ以上選択してください';
+    }
+
+    window.toggleFlashcardKindFilter = function(kind) {
+        if (!Object.prototype.hasOwnProperty.call(flashcardSelectedKinds, kind)) return;
+        flashcardSelectedKinds[kind] = !flashcardSelectedKinds[kind];
+        try { localStorage.setItem('aiglish_flashcard_kinds', JSON.stringify(flashcardSelectedKinds)); } catch (e) {}
+        updateFlashcardKindFilterUi();
+    };
+
+    // The kind field belongs to term-mode books only; shown when their settings open.
+    window.syncFlashcardKindField = function(bookId) {
+        var field = document.getElementById('flashcardKindField');
+        if (!field) return;
+        field.hidden = !(window.TermProgress && window.TermProgress.enabled(bookId));
+        updateFlashcardKindFilterUi();
     };
 
     function getFlashcardMeaningStatus(meaning, word) {
@@ -276,6 +318,7 @@
                 if (unitNums && !unitNums.has(String(w.num))) return;
                 if (termMode) {
                     window.TermQuestions.questions(w).forEach(function(q) {
+                        if (!flashcardSelectedKinds[q.kind]) return;
                         var result = (termStore[String(w.num)] || {})[q.key];
                         // A question not yet answered in this mode goes by its meaning's rating (what the
                         // word list shows), so ratings from before the mode was turned on still count.
