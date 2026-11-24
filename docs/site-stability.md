@@ -5445,3 +5445,10 @@ Tests:
 ## 10.199.00.00 - Reader book picker lists every book
 
 - The reader's 「参照する単語帳」 picker (and the candidate loading behind it) filtered the book pool with `!b.termMode`, which hid the shared English textbook システム英単語 from the picker for every user because its shared-index entry carries the term-mode flag, and hid any term-mode book (such as an idiom book) as well. reader-vocab.js `usable()` no longer excludes term-mode books: a Japanese term book's headwords never match English text, so including them cannot affect analysis, and every book in the pool can now be chosen. Hidden and deleted books stay excluded through the pool itself.
+
+## 10.200.00.00 - Reader analysis survives a slow or stalled AI
+
+- The Gemini inactivity timeout in reader.js callGeminiAnalyzer rose from 45s to 90s, so a busy model's slow first token no longer kills the analysis as often.
+- While no sentence has been translated yet, the progress label now counts the elapsed wait (「AIの応答を待っています（◯秒）」), so a working wait is distinguishable from a failure.
+- If nothing arrives and the request times out, the analysis retries once automatically with the other model first, saying so in the progress label.
+- If the stream stalls mid-answer, the complete sentences that already arrived are salvaged (salvageSentences scans the partial JSON) and shown with their real translations, marked 「途中まで解析できました」; only the remaining sentences fall back to the placeholder. Partial results keep analysisError: true, so they are never cached as a finished analysis.

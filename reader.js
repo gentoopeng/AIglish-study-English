@@ -124,7 +124,7 @@
     // or 'timeout' / 'network' / 'unreadable'; apiText is Google's own (English) message, if any.
     function describeGeminiError(status, apiText) {
         var code = typeof status === 'number' ? '（エラーコード ' + status + '）' : '';
-        if (status === 'timeout') return { title: 'AIから応答がありません', detail: '45秒以上なにも返ってきませんでした。通信状態を確認して、もう一度お試しください。' };
+        if (status === 'timeout') return { title: 'AIから応答がありません', detail: '応答がなかったので別のモデルでも試しましたが、だめでした。通信状態を確認して、少し待ってからもう一度お試しください。' };
         if (status === 'network') return { title: 'AIに接続できません', detail: 'インターネットにつながっているか確認して、もう一度お試しください。' };
         if (status === 'unreadable') return { title: 'AIの返事を読み取れませんでした', detail: 'ときどき起きる失敗です。もう一度解析すると、たいてい直ります。' };
         if (status === 401 || status === 403 || (status === 400 && /api key|API_KEY/i.test(apiText || '')))
@@ -150,6 +150,26 @@
                 return { text: sentence.trim(), translation: "（AI和訳を取得できませんでした）", grammarHighlights: [] };
             })
         };
+    }
+
+    // Complete sentence objects out of a half-streamed answer (used when the stream stalls
+    // mid-answer): scans the sentences array for balanced {...} objects and keeps the ones
+    // that already carry a translation.
+    function salvageSentences(jsonText) {
+        var key = String(jsonText || '').indexOf('"sentences"');
+        if (key < 0) return [];
+        var start = jsonText.indexOf('[', key);
+        if (start < 0) return [];
+        var out = [], depth = 0, objStart = -1, inStr = false, esc = false;
+        for (var i = start + 1; i < jsonText.length; i++) {
+            var ch = jsonText[i];
+            if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+            if (ch === '"') { inStr = true; continue; }
+            if (ch === '{') { if (depth === 0) objStart = i; depth++; }
+            else if (ch === '}') { depth--; if (depth === 0 && objStart >= 0) { try { var o = JSON.parse(jsonText.slice(objStart, i + 1)); if (o && typeof o.text === 'string' && typeof o.translation === 'string' && o.translation) out.push(o); } catch (ignore) {} objStart = -1; } }
+            else if (ch === ']' && depth === 0) break;
+        }
+        return out;
     }
 
     // Reads a streamed (SSE) answer and returns its text; onText gets the text so far.
@@ -266,6 +286,7 @@
         var report = typeof onProgress === 'function' ? onProgress : function() {};
         var expected = Math.max(1, (String(text).replace(/\n/g, ' ').match(/[^.?!]+[.?!]+|[^.?!]+$/g) || []).filter(function(s) { return s.trim(); }).length);
         var shown = 1, done = 0, label = 'AIが英文を読んでいます';
+        var streamedText = '', startedAt = Date.now(), isRetry = arguments[4] === true;
         function show(value, nextLabel) {
             shown = Math.max(shown, Math.min(97, value));
             if (nextLabel) label = nextLabel;
@@ -275,14 +296,21 @@
         var creep = setInterval(function() {
             var ceiling = done ? 12 + 85 * Math.min(1, (done + 0.9) / expected) : 12;
             if (shown < ceiling) show(shown + (done ? 0.4 : 0.35));
+            if (!done) {
+                var sec = Math.floor((Date.now() - startedAt) / 1000);
+                if (sec >= 3 && (label === 'AIが英文を読んでいます' || label.indexOf('AIの応答を待っています') === 0)) {
+                    label = 'AIの応答を待っています（' + sec + '秒）';
+                    report(Math.round(shown), label);
+                }
+            }
         }, 400);
         var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         var timeoutId = null;
-        // Times out when nothing arrives for 45 seconds (a long text may take longer in total).
+        // Times out when nothing arrives for 90 seconds (a long text may take longer in total).
         function arm() {
             if (!controller) return;
             clearTimeout(timeoutId);
-            timeoutId = setTimeout(function() { controller.abort(); }, 45000);
+            timeoutId = setTimeout(function() { controller.abort(); }, 90000);
         }
         arm();
         try {
@@ -311,7 +339,7 @@
             // gemini-2.5-flash first (the newest model behind gemini-flash-latest is often busy).
             // A busy model (5xx) is asked once more after a short wait; a busy, used-up (429) or
             // retired (404) model hands over to the other one.
-            var models = ['gemini-2.5-flash', 'gemini-flash-latest'], response;
+            var models = isRetry ? ['gemini-flash-latest', 'gemini-2.5-flash'] : ['gemini-2.5-flash', 'gemini-flash-latest'], response;
             var busy = function(status) { return status === 500 || status === 502 || status === 503 || status === 504; };
             for (var m = 0; m < models.length; m++) {
               for (var attempt = 0; attempt < 2; attempt++) {
@@ -342,6 +370,7 @@
             }
             show(8, 'AIが英文を読んでいます');
             var responseText = (await readStream(response, function(sofar) {
+                streamedText = sofar;
                 var finished = (sofar.match(/"translation"\s*:\s*"(?:[^"\\]|\\.)*"/g) || []).length;
                 if (finished > done) {
                     done = finished;
@@ -375,7 +404,43 @@
             return result;
         } catch (e) {
             console.error("Gemini Analyzer Error:", e);
-            return buildAnalysisFallback(text, describeGeminiError(e && e.name === 'AbortError' ? 'timeout' : 'network'));
+            var timedOut = e && e.name === 'AbortError';
+            // Salvage whatever complete sentences already streamed in before the stall, so a
+            // timeout mid-answer still shows those translations instead of nothing at all.
+            var salvaged = salvageSentences(streamedText);
+            if (salvaged.length) {
+                var byAlias2 = {};
+                (candidates || []).forEach(function(c) { byAlias2[c.alias.toUpperCase()] = c; });
+                salvaged.forEach(function(sentence) {
+                    if (!Array.isArray(sentence.grammarHighlights)) sentence.grammarHighlights = [];
+                    sentence.vocab = (Array.isArray(sentence.vocab) ? sentence.vocab : []).map(function(v) {
+                        var c = v && byAlias2[String(v.num).replace(/[\[\]#\s]/g, '').toUpperCase()];
+                        return c ? { book: c.book, num: c.num, meaning: Number(v.meaning) || 0 } : null;
+                    }).filter(Boolean);
+                });
+                var rest = buildAnalysisFallback(text, describeGeminiError('timeout'));
+                var summaryMatch = streamedText.match(/"fullSummaryAbstract"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                var summary = '';
+                if (summaryMatch) { try { summary = JSON.parse('"' + summaryMatch[1] + '"'); } catch (ignore) {} }
+                return {
+                    analysisError: true,
+                    partial: true,
+                    errorTitle: '途中まで解析できました',
+                    errorDetail: 'AIの応答が途中で止まったので、届いていた' + salvaged.length + '文だけ表示しています。残りは、少し待ってもう一度解析すると出ることがあります。',
+                    fullSummaryAbstract: summary,
+                    sentences: salvaged.concat(rest.sentences.slice(salvaged.length)),
+                    vocabChecked: false,
+                    vocabBooks: window.ReaderVocab ? window.ReaderVocab.books() : []
+                };
+            }
+            // Nothing arrived at all: try once more, other model first, before giving up.
+            if (timedOut && !isRetry) {
+                clearInterval(creep);
+                if (timeoutId) clearTimeout(timeoutId);
+                report(Math.round(shown), '応答がなかったので、別のAIモデルでもう一度試しています');
+                return await window.callGeminiAnalyzer(text, onProgress, questions, images, true);
+            }
+            return buildAnalysisFallback(text, describeGeminiError(timedOut ? 'timeout' : 'network'));
         } finally {
             clearInterval(creep);
             if (timeoutId) clearTimeout(timeoutId);
