@@ -678,7 +678,7 @@ textHistory = textHistory.filter(h => h.text !== rawText);
      if (!preParsedData && Array.isArray(myBookshelf)) {
          let kept = false;
          myBookshelf.forEach(item => { if (item.text === rawText && (!item.aiAnalysisData || item.aiAnalysisData.analysisError)) { item.aiAnalysisData = JSON.parse(JSON.stringify(aiAnalysisResult)); kept = true; } });
-         if (kept) { try { localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); } catch (e) {} window.markReaderDataChanged?.(); }
+         if (kept) { try { localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); } catch (e) {} (window.markReaderShelfWritten || window.markReaderDataChanged)?.(); }
      }
  }
  if (geminiApiKey && !aiAnalysisResult) {
@@ -719,7 +719,7 @@ textHistory = textHistory.filter(h => h.text !== rawText);
          if (Array.isArray(myBookshelf)) {
              let kept = false;
              myBookshelf.forEach(item => { if (item.text === rawText) { item.text = newText; item.updatedAt = Date.now(); if (updated) item.aiAnalysisData = JSON.parse(JSON.stringify(updated)); kept = true; } });
-             if (kept) { try { localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); } catch (e) {} window.markReaderDataChanged?.(); }
+             if (kept) { try { localStorage.setItem('myBookshelf', JSON.stringify(myBookshelf)); } catch (e) {} (window.markReaderShelfWritten || window.markReaderDataChanged)?.(); }
          }
          overlay.remove();
          window.analyzeText(newText, currentActiveTitle, updated);

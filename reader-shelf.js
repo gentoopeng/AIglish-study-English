@@ -178,15 +178,28 @@
   // So a change stamps the device copy as newer than any backup (the restore keeps it, see
   // applySavedMemory in save-system.js), and a backup follows shortly.
   let backupTimer = 0;
+  const stampReaderMark = () => {
+    const owner = typeof myId === "string" && myId ? myId : "GUEST-000";
+    try {
+      localStorage.setItem("aiglish_reader_local", JSON.stringify({ owner, at: Date.now() }));
+    } catch {}
+  };
+  let shelfSettlePending = null;
   window.markReaderDataChanged = function (written = true) {
     const owner = typeof myId === "string" && myId ? myId : "GUEST-000";
-    const stamp = () => {
-      try {
-        localStorage.setItem("aiglish_reader_local", JSON.stringify({ owner, at: Date.now() }));
-      } catch {}
-    };
+    // A change on this device is recorded at once, in a small key that reaches the device
+    // synchronously. The restore compares backups against this as well: the confirmed mark
+    // below can lag seconds behind on a slow device (it waits for the shelf itself to be
+    // written), and a backup made in between must not look newer than the change.
+    try {
+      localStorage.setItem("aiglish_reader_changed", JSON.stringify({ owner, at: Date.now() }));
+    } catch {}
+    const stamp = stampReaderMark;
     // (`written` may be a promise: the mark is set when the shelf is known to be on the device)
-    if (written && typeof written.then === "function") written.then((ok) => ok && stamp(), () => {});
+    if (written && typeof written.then === "function") {
+      shelfSettlePending = written;
+      written.then((ok) => { if (shelfSettlePending === written) shelfSettlePending = null; if (ok) stamp(); }, () => {});
+    }
     else if (written) stamp();
     window.queueBackgroundSave?.();
     if (owner === "GUEST-000") return;
@@ -194,6 +207,19 @@
     backupTimer = setTimeout(() => {
       if ((typeof myId === "string" ? myId : "") === owner) window.saveAfterStudy?.("reader-shelf");
     }, 1500);
+  };
+  // Leaving the app is the last chance for a shelf write still in flight: settle it
+  // again and stamp the mark if the shelf is on the device by then.
+  const settleReaderShelfOnHide = () => {
+    if (!shelfSettlePending) return;
+    shelfStored().then((ok) => { if (ok) stampReaderMark(); }, () => {});
+  };
+  document.addEventListener("visibilitychange", () => { if (document.hidden) settleReaderShelfOnHide(); });
+  window.addEventListener("pagehide", settleReaderShelfOnHide);
+  // For code that writes the shelf directly (app.js attaches an analysis to a shelf
+  // text): the same confirmed-until-stored marking as persist().
+  window.markReaderShelfWritten = function () {
+    window.markReaderDataChanged(shelfStored());
   };
   const copy = (value) => (value ? JSON.parse(JSON.stringify(value)) : null);
   const sentenceCount = (text) =>
