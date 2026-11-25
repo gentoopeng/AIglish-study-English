@@ -116,14 +116,31 @@
   // The points: a glow when the number goes up, a dim when it goes down. (Only the class changes; the text is the app's.)
   const points = document.getElementById("headerStudyPoints");
   if (points) {
-    let last = parseInt(points.textContent.replace(/[^\d-]/g, ""), 10);
+    // (the floating gain below lives in the number's own subtree, so it is taken out before the number is read)
+    const readPoints = () => {
+      const clone = points.cloneNode(true);
+      clone.querySelectorAll(".am-points-float").forEach((el) => el.remove());
+      return parseInt(clone.textContent.replace(/[^\d-]/g, ""), 10);
+    };
+    let last = readPoints();
     new MutationObserver(() => {
-      const now = parseInt(points.textContent.replace(/[^\d-]/g, ""), 10);
+      const now = readPoints();
       if (Number.isFinite(last) && Number.isFinite(now) && now !== last && on()) {
         points.classList.remove("am-up", "am-down");
         void points.offsetWidth;
         points.classList.add(now > last ? "am-up" : "am-down");
         setTimeout(() => points.classList.remove("am-up", "am-down"), 1400);
+        // The gain itself floats up from the number (full only; calm keeps just the glow).
+        if (now > last && mode() === "full") {
+          const gain = document.createElement("span");
+          gain.className = "am-points-float";
+          gain.textContent = "+" + (now - last);
+          gain.setAttribute("aria-hidden", "true");
+          points.appendChild(gain);
+          const drop = () => gain.remove();
+          gain.addEventListener("animationend", drop, { once: true });
+          setTimeout(drop, 2000);
+        }
       }
       if (Number.isFinite(now)) last = now;
     }).observe(points, { childList: true, characterData: true, subtree: true });
@@ -131,7 +148,7 @@
   // ---- Stage 4: lists and loading ----------------------------------------------------------------------------------
   // Rows that appear right after the player went somewhere (a tab, a dialog) come in one after another as they scroll into view.
   // Rows added any other time (a live update redrawing a list) just appear: nothing replays every few seconds.
-  const REVEAL = ".people-row, .group-list-row, .loans-person, .stamps-card";
+  const REVEAL = ".people-row, .group-list-row, .loans-person, .stamps-card, .word-row-container, .shelf-entry, .vocab-library-book-entry";
   let wentAt = 0;
   const went = () => (wentAt = Date.now());
   window.onTabChange?.(went);
@@ -190,6 +207,8 @@
         const rows = node.matches?.(REVEAL) ? [node] : node.querySelectorAll?.(REVEAL) || [];
         for (const row of rows) {
           if (row.classList.contains("am-wait") || row.classList.contains("am-go")) continue;
+          // (a long list — a whole word book — marks only its first rows; the rest simply appear, so a slow phone is not buried in observers and timers)
+          if (batch >= 14) break;
           row.style.setProperty("--am-delay", Math.min(batch++, 8) * 45 + "ms");
           row.classList.add("am-wait");
           io.observe(row);

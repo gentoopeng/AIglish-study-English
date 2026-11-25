@@ -208,3 +208,28 @@ html[data-motion="calm"] .cs-result { animation-name: cs-rise-calm; }
 html[data-motion="calm"] .am-toast { animation-name: am-toast-in-calm; }
 html[data-motion="calm"] .casino-jackpots b { animation: none; }
 html.am-hidden .am-toast::after { animation-play-state: paused; }
+
+/* =============================== Stage 6: the points gain, and the app's own overlay cards =============================== */
+
+/* ---- When the points go up, the gain itself floats up from the number (full only, like the glow; app-motion.js spawns it) ---- */
+html[data-motion="full"] #headerStudyPoints { position: relative; }
+.am-points-float {
+  position: absolute; right: 0; bottom: 55%; z-index: 5; pointer-events: none;
+  font: 800 12px/1 system-ui, -apple-system, "Hiragino Sans", sans-serif; color: #ffe9a8;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .55), 0 0 10px rgba(240, 214, 140, .6);
+  animation: am-points-float 1.5s var(--am-ease) forwards;
+}
+@keyframes am-points-float {
+  0% { opacity: 0; translate: 0 4px; scale: .8; }
+  18% { opacity: 1; translate: 0 0; scale: 1.05; }
+  30% { scale: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; translate: 0 -20px; }
+}
+
+/* ---- Overlay cards the app builds as plain divs (not <dialog>): the sentence editor and the login confirm.
+   Both are created fresh each time they open, so the entrance plays on its own; the veil fades in with the card. ---- */
+html:where([data-motion="full"], [data-motion="calm"]) .reader-sentence-edit-overlay,
+html:where([data-motion="full"], [data-motion="calm"]) .login-confirm-overlay { animation: am-backdrop-in var(--am-slow) var(--am-ease) backwards; }
+html:where([data-motion="full"], [data-motion="calm"]) .reader-sentence-edit-card,
+html:where([data-motion="full"], [data-motion="calm"]) .login-confirm-card { animation: am-dialog-in var(--am-slow) var(--am-soft) backwards; }

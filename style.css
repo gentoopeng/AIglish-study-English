@@ -1930,6 +1930,43 @@ html.ios-stable-rendering body .duel-clock.is-urgent{animation:duel-pulse 1s eas
 }
 }
 
+/* App motion on iOS (10.217): the motion layer's entrances are short and move only transform/opacity,
+   so they are allowed back on Apple touch devices under the same data-motion gate as everywhere else.
+   Blur, filters and backdrop captures stay off; "オフ" and the device's reduce-motion setting still stop all of it. */
+@layer rendering-safety {
+@media(prefers-reduced-motion:no-preference){
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .tab-view.active:not(#view-casino){animation:am-tab-in var(--am-base) var(--am-ease) backwards!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .tab-view.active:not(#view-casino)>:nth-child(-n+6):not(dialog,[hidden]){animation:am-tab-child var(--am-slow) var(--am-soft) backwards!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .tab-view.active:not(#view-casino)>:nth-child(2){animation-delay:45ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .tab-view.active:not(#view-casino)>:nth-child(3){animation-delay:90ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .tab-view.active:not(#view-casino)>:nth-child(4){animation-delay:135ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .tab-view.active:not(#view-casino)>:nth-child(5){animation-delay:180ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .tab-view.active:not(#view-casino)>:nth-child(6){animation-delay:225ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body :is(dialog.menu-dialog,dialog.library-editor-dialog,dialog.app-alert,dialog.book-study-menu,dialog.background-picker-dialog,dialog.book-flashcard-dialog,dialog.study-points-dialog,dialog.stamps-dialog,dialog.weak-review-screen)[open]{animation:am-dialog-in var(--am-slow) var(--am-soft) backwards!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body dialog.talk-sheet[open]{animation:am-sheet-in var(--am-slow) var(--am-soft) backwards!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body :is(dialog.menu-dialog,dialog.library-editor-dialog,dialog.app-alert,dialog.book-study-menu,dialog.background-picker-dialog,dialog.book-flashcard-dialog,dialog.study-points-dialog,dialog.stamps-dialog,dialog.weak-review-screen,dialog.talk-sheet)[open]::backdrop{animation:am-backdrop-in var(--am-slow) var(--am-ease) backwards!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .am-go{animation:am-row-in var(--am-slow) var(--am-soft) var(--am-delay,0ms) backwards!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .textbook-list-progress-fill{animation:am-bar-grow calc(var(--am-slow)*2) var(--am-soft) .12s backwards!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .sidebar-overlay{transition:opacity var(--am-slow) var(--am-ease),visibility 0s linear var(--am-slow)!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body.am-sidebar-open .sidebar-overlay{transition-delay:0s,0s!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .sidebar.open .sidebar-identity{animation:am-side-in var(--am-slow) var(--am-soft) 60ms backwards!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .sidebar.open .sidebar-menu-list>*{animation:am-side-in var(--am-slow) var(--am-soft) backwards!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .sidebar.open .sidebar-menu-list>:nth-child(1){animation-delay:110ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .sidebar.open .sidebar-menu-list>:nth-child(2){animation-delay:150ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .sidebar.open .sidebar-menu-list>:nth-child(3){animation-delay:190ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .sidebar.open .sidebar-menu-list>:nth-child(4){animation-delay:230ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .sidebar.open .sidebar-menu-list>:nth-child(5){animation-delay:270ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .sidebar.open .sidebar-menu-list>:nth-child(6){animation-delay:310ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .sidebar.open .sidebar-menu-list>:nth-child(n+7){animation-delay:350ms!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .nav-bar.am-nav-ready::before{transition:transform var(--am-slow) var(--am-soft),opacity var(--am-base) var(--am-ease)!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .reader-sentence-edit-overlay,html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .login-confirm-overlay{animation:am-backdrop-in var(--am-slow) var(--am-ease) backwards!important;}
+html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .reader-sentence-edit-card,html:is([data-motion="full"],[data-motion="calm"]).ios-stable-rendering body .login-confirm-card{animation:am-dialog-in var(--am-slow) var(--am-soft) backwards!important;}
+html[data-motion="full"].ios-stable-rendering body .am-points-float{animation:am-points-float 1.5s var(--am-ease) forwards!important;}
+html[data-motion="full"].ios-stable-rendering body #headerStudyPoints.am-up{animation:am-points-up 1.3s var(--am-ease)!important;}
+html[data-motion="full"].ios-stable-rendering body #headerStudyPoints.am-down{animation:am-points-down 1s var(--am-ease)!important;}
+}
+}
+
 
 /* A single static surface, without home/profile/shop renderers. */
 html body::after{z-index:0!important;}
