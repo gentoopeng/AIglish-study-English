@@ -1282,7 +1282,7 @@ function restoreSaveStorage(save,id){
     if(shelfMerged)keepLostReaderTexts(save,id,shelfMerged.shelf,shelfMerged.deleted);
     else if(!keepReader){var savedSide=savedReaderSide(save);keepLostReaderTexts(save,id,savedSide.shelf,savedSide.deleted);}
     for(var key in stored){
-      if(key==='aiglish_reader_local')continue; // This device's own change mark.
+      if(key==='aiglish_reader_local'||key==='aiglish_reader_changed')continue; // This device's own change marks.
       if(key.indexOf('core_v4_profile_customization_')===0)continue; // The profile (name/photo) is this device's own, synced by profile.js; a backup must not bring back a name from before a rename.
       if(key==='aiglish_shelf_lost')continue; // What this device set aside.
       if((shelfMerged||keepReader||shelfDeviceOwned)&&shelfKeys.indexOf(key)>=0)continue;
@@ -1384,6 +1384,8 @@ function mergeReaderShelf(save,id){
   var diag=window.__restoreDiag||(window.__restoreDiag={});
   try{
     var M=window.ReaderShelfMerge,mark=readerJson(localStorage.getItem('aiglish_reader_local'));
+    var changedMark=readerJson(localStorage.getItem('aiglish_reader_changed'));
+    if((!mark||mark.owner!==id)&&changedMark&&changedMark.owner===id&&(!mark||Number(changedMark.at)>Number(mark.at||0)))mark=changedMark;
     if(!M){diag.merge='module';return null;}
     if(!save||!save.data){diag.merge='nosave';return null;}
     if(!mark){diag.merge='nomark';return null;}
@@ -1407,7 +1409,7 @@ function mergeReaderShelf(save,id){
     // what was deleted: it must not take this device's texts away (it used to replace the shelf whole, even with an empty one). Its
     // texts are added; what this device deleted stays deleted (this device's tombstones).
     if(!savedNew)saved={shelf:saved.shelf,folders:saved.folders,deleted:[],ops:{},covers:{},meta:null};
-    var localNewer=Number(mark.at)>(Date.parse(save.savedAt||'')||0);
+    var localNewer=Math.max(Number(mark.at)||0,(changedMark&&changedMark.owner===id)?Number(changedMark.at)||0:0)>(Date.parse(save.savedAt||'')||0);
     var merged=localNewer?M.merge(local,saved):M.merge(saved,local);
     // The backup on this device joins in as well when the cloud backup was chosen: its shelf
     // can be newer than the cloud one's, and a merge only ever unions (per-item stamps and
@@ -1490,6 +1492,8 @@ function mergeReaderMemory(state){
 function newerReaderData(id,savedAt){
   try{
     var mark=JSON.parse(localStorage.getItem('aiglish_reader_local')||'null');
+    var changed=JSON.parse(localStorage.getItem('aiglish_reader_changed')||'null');
+    if(changed&&changed.owner===id&&(!mark||Number(changed.at)>Number(mark.at||0)))mark=changed;
     if(!mark||mark.owner!==id||!(Number(mark.at)>(Date.parse(savedAt||'')||0)))return null;
     var read=function(key){var value=JSON.parse(localStorage.getItem(key)||'null');return Array.isArray(value)?value:null;};
     return {textHistory:read('textHistory'),myBookshelf:read('myBookshelf'),myFolders:read('myFolders')};
